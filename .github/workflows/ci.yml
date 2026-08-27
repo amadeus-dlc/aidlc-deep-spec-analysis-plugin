@@ -13,14 +13,14 @@ jobs:
       run:
         working-directory: deep-spec-analysis
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # aidlc-workflows supplies the validate/build toolchain
           submodules: true
 
       # node >= 23 so the SMT sensor's z3 child process can run
       # (z3-solver's pthread WASM build aborts in-process under bun)
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
 
