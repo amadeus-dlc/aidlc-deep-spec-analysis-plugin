@@ -16,7 +16,7 @@
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -95,12 +95,11 @@ describe("deep-spec-ir-valid", () => {
 
 describe("backend conformance (expected findings, byte-for-byte)", () => {
   const canonical = join(fixtures, "conformance", "deep-spec-analysis-formal-model.md");
-  let record = "";
   let modelPath = "";
   let verifyDir = "";
 
   beforeAll(() => {
-    ({ record, modelPath, verifyDir } = makeRecord(canonical));
+    ({ modelPath, verifyDir } = makeRecord(canonical));
   });
 
   test("smt backend reproduces expected smt.json", () => {
