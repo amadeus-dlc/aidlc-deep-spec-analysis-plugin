@@ -1,0 +1,10 @@
+# OS / editor
+.DS_Store
+.idea/
+
+# Dependencies (nested .gitignore files also cover these per-package)
+node_modules/
+
+# Disposable AI-DLC install sandbox — regenerated via
+# `aidlc-plugin-test.ts . --install ../deep-spec-analysis-sandbox` (see docs/layout.md)
+deep-spec-analysis-sandbox/

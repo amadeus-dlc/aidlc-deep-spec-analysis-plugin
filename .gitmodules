@@ -1,0 +1,3 @@
+[submodule "aidlc-workflows"]
+	path = aidlc-workflows
+	url = git@j5ik2o.github.com:awslabs/aidlc-workflows.git
