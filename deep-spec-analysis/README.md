@@ -1,0 +1,90 @@
+# deep-spec-analysis — AIDLC plugin
+
+Kiro-style **Deep Spec Analysis** for AI-DLC v2: neurosymbolic requirements
+verification as an additive plugin. The LLM formalizes `requirements.md`
+into a backend-neutral IR; deterministic solver backends (z3/SMT and Quint)
+check it for contradictions, completeness gaps, and scenario violations; and
+every finding comes back to the human as a structured A/B question. Core is
+never modified — disable the plugin and the vanilla workflow remains.
+
+## What it adds
+
+| Piece | File | Purpose |
+|---|---|---|
+| Stage | `stages/inception/deep-spec-analysis-verify.md` | Inception stage after `requirements-analysis` (scopes: `enterprise`, `feature`). Produces `deep-spec-analysis-formal-model` + `deep-spec-analysis-report`. |
+| Contract 1 (IR) | `tools/data/deep-spec-ir-schema.json` | Backend-neutral formal model: schema / obligations (EARS natures) / scenarios / background. No SMT-LIB or Quint anywhere in it. |
+| Contract 2 (findings) | `tools/data/deep-spec-findings-schema.json` | Normalized per-backend results at `<record>/inception/deep-spec-analysis-verify/deep-spec-verify/<backend>.json`: findings, `skipped[]` with reasons (no silence), `unavailable`, canonical sort. |
+| IR sensor | `sensors/aidlc-deep-spec-ir-valid.md` + `tools/aidlc-sensor-deep-spec-ir-valid.ts` | Schema conformance + semantic checks + frRefs reverse-verified against requirements.md. |
+| SMT backend | `sensors/aidlc-deep-spec-verify-smt.md` + `tools/aidlc-sensor-deep-spec-verify-smt.ts` | IR→SMT-LIB compiled in TypeScript, z3 (`z3-solver` WASM) executed in a child process. Conflicts (unsat cores), completeness gaps (witness models), scenario checks. `method: exhaustive`. |
+| Quint backend | `sensors/aidlc-deep-spec-verify-quint.md` + `tools/aidlc-sensor-deep-spec-verify-quint.ts` | IR→Quint compiled in TypeScript, `quint` CLI shell-out. Reachable invariant violations (step traces), deadlock gaps, leads-to temporal (bounded), scenario re-check. `method: bounded` with Apalache, else seeded `simulation`. |
+| Cross-check | written by both backends | `deep-spec-verify/cross-check.json` — scenario verdicts compared across backends; a `cross-check-disagreement` flags a formalization/compiler defect, distinct from a requirements defect (FR8.2). |
+| Knowledge | `knowledge/aidlc-product-agent/deep-spec-ir-authoring.md` | IR authoring rules for the product agent. |
+| Downstream | `contributions/inception/domain-design.md` | Adds `deep-spec-analysis-report` as an optional consume of core `domain-design` + a step honoring accepted findings. |
+| Doctor | `tools/deep-spec-analysis-doctor.ts` | Advisory availability checks (z3-solver, node, quint, Apalache) with install commands. |
+
+## Install & prerequisites
+
+Required runtime: **bun** only. The backends degrade gracefully — everything
+below is optional and advisory (`/aidlc --doctor` will tell you):
+
+```bash
+# SMT backend (z3): package in the project + a node runtime for the child process
+bun add z3-solver          # in the AIDLC project root
+# node >= 23 on PATH (z3-solver's pthread WASM build aborts in-process under current bun)
+
+# Quint backend
+npm i -g @informalsystems/quint
+# optional, upgrades simulation -> bounded model checking:
+#   install a JDK 17+ and run any `quint verify` once (downloads Apalache to ~/.quint)
+```
+
+Build/install the plugin like any AIDLC plugin:
+
+```bash
+bun <checkout>/core/tools/aidlc-plugin-validate.ts .
+bun <checkout>/core/tools/aidlc-plugin-build.ts . claude       # dist/claude/
+bun <checkout>/core/tools/aidlc-plugin-test.ts . --install <project> --harness claude
+```
+
+## How the stage runs
+
+1. The product agent EARS-classifies each FR/NFR and writes the IR into
+   `deep-spec-analysis-formal-model.md` (one ```json fence).
+2. The three write-fired sensors run in order: IR validation, then both
+   backends, which write contract-2 findings under `deep-spec-verify/`.
+3. The stage globs `deep-spec-verify/*.json` (backend-agnostic), converts
+   each finding into an `[Answer]:` question — `A.` keep as-is / `B.` adopt
+   the proposed revision / `X.` Other — and records the human's decisions.
+4. `deep-spec-analysis-report.md` carries the coverage table (checked /
+   skipped-with-reason / unavailable / unverified per obligation × backend)
+   and ready-to-apply revision proposals. `requirements.md` is never edited.
+
+Failures never block: a missing solver, a timeout, or an uncompilable
+obligation becomes an `unavailable`/`skipped` record and a line in the
+report. Determinism: same IR + same environment ⇒ byte-identical sensor
+output (fixed seeds, canonical sorting, no timestamps).
+
+## Tests
+
+```bash
+bun install   # pins z3-solver + @informalsystems/quint for conformance
+bun test
+```
+
+`tests/conformance.test.ts` drives both backends over the canonical fixture
+(`tests/fixtures/conformance/`) and compares against expected findings
+byte-for-byte, twice; it also exercises degradation (missing solver,
+IR-version mismatch) and a forged cross-check disagreement.
+
+## Future split (NFR4)
+
+The internal structure keeps a strict backend = 1 sensor + 1 tool mapping so
+a later 3-way split (`deep-spec-analysis` core / `-smt` / `-quint`) is
+mechanical: move each backend's manifest+tool pair into its own plugin root,
+add its `plugin.json`, and re-point the stage's `sensors:` list (the one
+line per backend). Contracts 1 and 2 are the only coupling: backends never
+import each other and cross-check reads sibling files generically.
+
+See `docs/decisions.md` for spike results (z3-under-bun, quint determinism),
+resolved open questions, and deviations from the original requirements
+draft.

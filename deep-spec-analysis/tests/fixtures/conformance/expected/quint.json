@@ -1,0 +1,72 @@
+{
+  "backend": "quint",
+  "irVersion": "1.0.0",
+  "irHash": "2500954abd61579ac534e81c105590db42515a4d86acca10640af7edf5dc5c74",
+  "method": "simulation",
+  "findings": [
+    {
+      "kind": "conflict",
+      "frRefs": [
+        "FR-4",
+        "FR-5",
+        "FR-6",
+        "FR-7"
+      ],
+      "targets": [
+        "OB-7"
+      ],
+      "witness": {
+        "trace": [
+          {
+            "order.amount": 0,
+            "order.expedited": false,
+            "order.status": "submitted"
+          },
+          {
+            "order.amount": 0,
+            "order.expedited": false,
+            "order.status": "shipped"
+          }
+        ]
+      },
+      "detail": "The event machine can reach a state that violates OB-7 (step trace attached): the event rules do not preserve the obligation."
+    },
+    {
+      "kind": "scenario-violation",
+      "frRefs": [
+        "FR-1",
+        "FR-2"
+      ],
+      "targets": [
+        "OB-1",
+        "OB-2",
+        "SC-2"
+      ],
+      "witness": {
+        "model": {
+          "order.amount": 2,
+          "order.expedited": true,
+          "order.status": "approved"
+        }
+      },
+      "detail": "Accept scenario SC-2 describes a state the obligations rule out — the requirements reject an example that should be accepted."
+    }
+  ],
+  "skipped": [
+    {
+      "target": "OB-8",
+      "reason": "capability",
+      "detail": "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them"
+    },
+    {
+      "target": "SC-3",
+      "reason": "capability",
+      "detail": "quint scenario evaluation requires bindings for every declared attribute"
+    },
+    {
+      "target": "SC-4",
+      "reason": "capability",
+      "detail": "scenarios with a When-event are not checked by the quint backend in v1"
+    }
+  ]
+}

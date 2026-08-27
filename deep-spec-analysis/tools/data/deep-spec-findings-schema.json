@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "deep-spec-findings-schema.json",
+  "title": "Deep Spec normalized findings (contract 2)",
+  "description": "Per-backend verification result file, written to <record>/<phase>/<stage>/deep-spec-verify/<backend>.json. Canonically sorted, byte-deterministic for a given IR and environment. Nothing is silently dropped: every obligation or scenario a backend did not check appears in skipped[] with a reason.",
+  "type": "object",
+  "required": ["backend", "irVersion", "irHash", "method", "findings", "skipped"],
+  "additionalProperties": false,
+  "properties": {
+    "backend": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Backend identifier; equals the findings file basename without .json."
+    },
+    "irVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "description": "irVersion of the consumed IR document."
+    },
+    "irHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of the canonical (key-sorted) JSON serialization of the consumed IR. Cross-checking only compares sibling findings files with an identical irHash."
+    },
+    "method": {
+      "enum": ["exhaustive", "bounded", "simulation"],
+      "description": "exhaustive: full symbolic check (SMT). bounded: bounded model checking (Quint+Apalache). simulation: seeded random simulation (quint run)."
+    },
+    "unavailable": {
+      "type": "object",
+      "required": ["reason"],
+      "additionalProperties": false,
+      "description": "Present when the backend could not run at all (solver missing, runtime missing, IR unreadable). The stage treats every obligation as unverified by this backend.",
+      "properties": {
+        "reason": { "type": "string" }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/finding" }
+    },
+    "skipped": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/skippedEntry" }
+    },
+    "crossChecked": {
+      "type": "array",
+      "description": "Which sibling backends were compared, and on which targets. Records the cross-check surface even when no disagreement was found (no-silence).",
+      "items": {
+        "type": "object",
+        "required": ["backend", "targets"],
+        "additionalProperties": false,
+        "properties": {
+          "backend": { "type": "string" },
+          "targets": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/targetId" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "targetId": {
+      "type": "string",
+      "pattern": "^(OB|SC)-[0-9]+$"
+    },
+    "finding": {
+      "type": "object",
+      "required": ["kind", "frRefs", "targets", "witness", "detail"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["conflict", "completeness-gap", "scenario-violation", "cross-check-disagreement"]
+        },
+        "frRefs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "FR/NFR ids implicated, sorted, deduplicated. Traces the finding back to requirements.md."
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/targetId" },
+          "description": "Obligation/scenario ids implicated, sorted."
+        },
+        "witness": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["model"],
+              "additionalProperties": false,
+              "description": "A single state (attribute path -> value) demonstrating the finding.",
+              "properties": {
+                "model": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "oneOf": [{ "type": "boolean" }, { "type": "integer" }, { "type": "string" }]
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["trace"],
+              "additionalProperties": false,
+              "description": "A step-execution trace (state sequence) demonstrating the finding.",
+              "properties": {
+                "trace": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "oneOf": [{ "type": "boolean" }, { "type": "integer" }, { "type": "string" }]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": ["core"],
+              "additionalProperties": false,
+              "description": "An unsat core: the minimal implicated constraint labels (obligation/background/type-bound ids).",
+              "properties": {
+                "core": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          ]
+        },
+        "detail": { "type": "string" }
+      }
+    },
+    "skippedEntry": {
+      "type": "object",
+      "required": ["target", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "target": { "$ref": "#/definitions/targetId" },
+        "reason": {
+          "enum": ["capability", "compile-error", "ir-version-mismatch", "timeout", "unavailable"],
+          "description": "capability: outside this backend's nature/feature coverage. compile-error: could not be compiled to the backend language. ir-version-mismatch: IR major version unsupported. timeout: per-obligation or per-run budget exhausted. unavailable: solver/runtime absent."
+        },
+        "detail": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "backend": "smt",
+  "irVersion": "1.0.0",
+  "irHash": "2500954abd61579ac534e81c105590db42515a4d86acca10640af7edf5dc5c74",
+  "method": "exhaustive",
+  "findings": [
+    {
+      "kind": "conflict",
+      "frRefs": [
+        "FR-1",
+        "FR-2"
+      ],
+      "targets": [
+        "OB-1",
+        "OB-2"
+      ],
+      "witness": {
+        "core": [
+          "ant_OB_1",
+          "ob_OB_1",
+          "ob_OB_2"
+        ]
+      },
+      "detail": "The condition of obligation OB-1 can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch."
+    },
+    {
+      "kind": "conflict",
+      "frRefs": [
+        "FR-4",
+        "FR-5"
+      ],
+      "targets": [
+        "OB-4",
+        "OB-5"
+      ],
+      "witness": {
+        "core": [
+          "e_OB_4",
+          "e_OB_5"
+        ]
+      },
+      "detail": "Events OB-4 and OB-5 for trigger \"submit\" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both."
+    },
+    {
+      "kind": "completeness-gap",
+      "frRefs": [
+        "FR-6"
+      ],
+      "targets": [
+        "OB-6"
+      ],
+      "witness": {
+        "model": {
+          "order.amount": 0,
+          "order.expedited": false,
+          "order.status": "draft"
+        }
+      },
+      "detail": "No rule for trigger \"ship\" applies to the witness state: the behavior of this input region is unspecified."
+    },
+    {
+      "kind": "scenario-violation",
+      "frRefs": [
+        "FR-2"
+      ],
+      "targets": [
+        "OB-2",
+        "SC-2"
+      ],
+      "witness": {
+        "core": [
+          "ob_OB_2",
+          "sc_SC_2"
+        ]
+      },
+      "detail": "Accept scenario SC-2 describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted."
+    }
+  ],
+  "skipped": [
+    {
+      "target": "OB-8",
+      "reason": "capability",
+      "detail": "nature \"state-temporal\" is checked by a state-machine backend, not the SMT backend"
+    },
+    {
+      "target": "SC-4",
+      "reason": "capability",
+      "detail": "scenarios with a When-event are not checked by the SMT backend in v1"
+    }
+  ]
+}

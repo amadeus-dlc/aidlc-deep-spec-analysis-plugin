@@ -1,0 +1,359 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "deep-spec-ir-schema.json",
+  "title": "Deep Spec IR (contract 1)",
+  "description": "Backend-neutral intermediate representation of a formalized requirements model. Produced by the deep-spec-analysis stage (LLM), consumed by deterministic verification backends. MUST NOT contain backend-specific syntax (SMT-LIB, Quint).",
+  "type": "object",
+  "required": ["irVersion", "schema", "obligations", "scenarios", "background"],
+  "additionalProperties": false,
+  "properties": {
+    "irVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "description": "SemVer of the IR contract this document conforms to. Backends refuse (skip-all) on major mismatch."
+    },
+    "schema": {
+      "type": "object",
+      "required": ["entities"],
+      "additionalProperties": false,
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/entity" }
+        },
+        "relations": {
+          "type": "array",
+          "description": "Documentation-level relations between entities. Not compiled by v1 backends.",
+          "items": { "$ref": "#/definitions/relation" }
+        }
+      }
+    },
+    "obligations": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/obligation" }
+    },
+    "scenarios": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/scenario" }
+    },
+    "background": {
+      "type": "array",
+      "description": "Domain constraints assumed true in every check (e.g. value ranges, mutual exclusions that are definitional rather than required behavior).",
+      "items": { "$ref": "#/definitions/backgroundConstraint" }
+    },
+    "unformalized": {
+      "type": "array",
+      "description": "Requirements that could not be formalized, with the reason. Never silently dropped.",
+      "items": { "$ref": "#/definitions/unformalizedEntry" }
+    }
+  },
+  "definitions": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9_]*$"
+    },
+    "attrPath": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9_]*\\.[a-z][a-zA-Z0-9_]*$",
+      "description": "entity.attribute reference path."
+    },
+    "frRef": {
+      "type": "string",
+      "pattern": "^(FR|NFR)-?[0-9]+(\\.[0-9]+)*$",
+      "description": "An FR/NFR identifier that must exist verbatim in requirements.md."
+    },
+    "frRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/frRef" }
+    },
+    "entity": {
+      "type": "object",
+      "required": ["name", "attributes"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/definitions/identifier" },
+        "description": { "type": "string" },
+        "attributes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/attribute" }
+        }
+      }
+    },
+    "attribute": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/definitions/identifier" },
+        "description": { "type": "string" },
+        "type": { "$ref": "#/definitions/attrType" }
+      }
+    },
+    "attrType": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "bool" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "int" },
+            "min": { "type": "integer" },
+            "max": { "type": "integer" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "values"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "enum" },
+            "values": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "#/definitions/identifier" }
+            }
+          }
+        }
+      ]
+    },
+    "relation": {
+      "type": "object",
+      "required": ["name", "from", "to"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/definitions/identifier" },
+        "from": { "$ref": "#/definitions/identifier" },
+        "to": { "$ref": "#/definitions/identifier" },
+        "description": { "type": "string" }
+      }
+    },
+    "expr": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["op", "args"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "enum": ["and", "or"] },
+            "args": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/definitions/expr" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "args"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "not" },
+            "args": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": { "$ref": "#/definitions/expr" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "args"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "enum": ["implies", "iff", "eq", "ne", "lt", "le", "gt", "ge", "add", "sub", "mul"] },
+            "args": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": { "$ref": "#/definitions/expr" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "path"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "ref" },
+            "path": { "$ref": "#/definitions/attrPath" },
+            "prime": {
+              "type": "boolean",
+              "description": "true = post-state value. Only legal inside an event obligation's effect or a scenario expect clause."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "bool" },
+            "value": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "int" },
+            "value": { "type": "integer" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "enum" },
+            "value": { "$ref": "#/definitions/identifier" }
+          }
+        }
+      ]
+    },
+    "obligation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["id", "nature", "frRefs", "assert"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/definitions/obligationId" },
+            "nature": { "enum": ["invariant", "numeric"] },
+            "frRefs": { "$ref": "#/definitions/frRefs" },
+            "ears": { "type": "string", "description": "EARS-normalized requirement text (human readable)." },
+            "assert": { "$ref": "#/definitions/expr" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "nature", "frRefs", "trigger", "guard", "effect"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/definitions/obligationId" },
+            "nature": { "const": "event" },
+            "frRefs": { "$ref": "#/definitions/frRefs" },
+            "ears": { "type": "string" },
+            "trigger": { "$ref": "#/definitions/identifier" },
+            "guard": { "$ref": "#/definitions/expr" },
+            "effect": { "$ref": "#/definitions/expr" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "nature", "frRefs", "temporal"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/definitions/obligationId" },
+            "nature": { "const": "state-temporal" },
+            "frRefs": { "$ref": "#/definitions/frRefs" },
+            "ears": { "type": "string" },
+            "temporal": { "$ref": "#/definitions/temporalSpec" }
+          }
+        }
+      ]
+    },
+    "obligationId": {
+      "type": "string",
+      "pattern": "^OB-[0-9]+$"
+    },
+    "temporalSpec": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["pattern", "assert"],
+          "additionalProperties": false,
+          "properties": {
+            "pattern": { "const": "always" },
+            "assert": { "$ref": "#/definitions/expr" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["pattern", "from", "to"],
+          "additionalProperties": false,
+          "properties": {
+            "pattern": { "const": "leads-to" },
+            "from": { "$ref": "#/definitions/expr" },
+            "to": { "$ref": "#/definitions/expr" }
+          }
+        }
+      ]
+    },
+    "scenario": {
+      "type": "object",
+      "required": ["id", "kind", "frRefs", "bindings"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^SC-[0-9]+$"
+        },
+        "kind": { "enum": ["accept", "reject"] },
+        "frRefs": { "$ref": "#/definitions/frRefs" },
+        "title": { "type": "string" },
+        "bindings": {
+          "type": "object",
+          "description": "Gherkin Given: attribute path -> literal value.",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z][a-zA-Z0-9_]*\\.[a-z][a-zA-Z0-9_]*$" },
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "boolean" },
+              { "type": "integer" },
+              { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_]*$" }
+            ]
+          }
+        },
+        "event": {
+          "type": "object",
+          "description": "Gherkin When: an event trigger fired against the bound state.",
+          "required": ["trigger"],
+          "additionalProperties": false,
+          "properties": {
+            "trigger": { "$ref": "#/definitions/identifier" }
+          }
+        },
+        "expect": {
+          "$ref": "#/definitions/expr",
+          "description": "Gherkin Then: expected condition. May use primed refs when event is present."
+        }
+      }
+    },
+    "backgroundConstraint": {
+      "type": "object",
+      "required": ["id", "assert"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^BG-[0-9]+$"
+        },
+        "text": { "type": "string" },
+        "assert": { "$ref": "#/definitions/expr" }
+      }
+    },
+    "unformalizedEntry": {
+      "type": "object",
+      "required": ["frRefs", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "frRefs": { "$ref": "#/definitions/frRefs" },
+        "reason": { "type": "string" },
+        "text": { "type": "string" }
+      }
+    }
+  }
+}

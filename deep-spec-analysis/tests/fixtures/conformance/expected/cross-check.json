@@ -1,0 +1,24 @@
+{
+  "backend": "cross-check",
+  "irVersion": "1.0.0",
+  "irHash": "2500954abd61579ac534e81c105590db42515a4d86acca10640af7edf5dc5c74",
+  "method": "exhaustive",
+  "findings": [],
+  "skipped": [],
+  "crossChecked": [
+    {
+      "backend": "quint",
+      "targets": [
+        "SC-1",
+        "SC-2"
+      ]
+    },
+    {
+      "backend": "smt",
+      "targets": [
+        "SC-1",
+        "SC-2"
+      ]
+    }
+  ]
+}
