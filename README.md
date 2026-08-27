@@ -54,4 +54,4 @@ bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude   # → dist/cl
 
 ## License
 
-Not decided yet — until a `LICENSE` file lands, all rights reserved.
+MIT. See [LICENSE](LICENSE).
