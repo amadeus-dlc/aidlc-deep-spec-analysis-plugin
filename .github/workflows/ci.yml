@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: deep-spec-analysis
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # aidlc-workflows supplies the validate/build toolchain
+          submodules: true
+
+      # node >= 23 so the SMT sensor's z3 child process can run
+      # (z3-solver's pthread WASM build aborts in-process under bun)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install pinned dev dependencies (solvers, types, tsc)
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Conformance tests (byte-exact findings, determinism)
+        run: bun test
+
+      - name: Validate plugin
+        run: bun ../aidlc-workflows/core/tools/aidlc-plugin-validate.ts .
+
+      - name: Build every harness projection
+        run: |
+          for h in claude codex copilot cursor kiro kiro-ide opencode; do
+            bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . "$h"
+          done

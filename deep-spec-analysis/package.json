@@ -5,6 +5,7 @@
   "devDependencies": {
     "@informalsystems/quint": "0.32.0",
     "@types/bun": "1.4.0",
+    "typescript": "7.0.2",
     "z3-solver": "5.2.0"
   }
 }
