@@ -27,7 +27,7 @@ The build emits a **real host plugin** per harness under `deep-spec-analysis/dis
 git clone --recurse-submodules https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin.git
 cd aidlc-deep-spec-analysis-plugin/deep-spec-analysis
 bun install
-bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude   # → dist/claude/
+bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude   # → dist/claude/   (codex, cursor, … for other harnesses)
 ```
 
 ### Install into your AI-DLC project
@@ -39,7 +39,14 @@ In Claude Code, inside the target project:
 /plugin install aidlc-deep-spec-analysis@aidlc-plugins
 ```
 
-On the next session start the plugin's hook composes the stage, sensors, tools, and knowledge into the project's `.claude/` tree. Nothing outside that project is touched; disabling the plugin recomposes the vanilla workflow. `/aidlc --doctor` reports solver availability.
+With Codex CLI (build with `codex` instead of `claude`), inside the target project:
+
+```sh
+codex plugin marketplace add <workspace>/deep-spec-analysis/dist/codex
+codex plugin add aidlc-deep-spec-analysis@aidlc-plugins   # approve the one-time hook trust prompt
+```
+
+On the next session start the plugin's hook composes the stage, sensors, tools, and knowledge into the project's harness tree (`.claude/`; `.codex/` on Codex, where the hook fires lazily on the first interaction). Nothing outside that project is touched; disabling the plugin recomposes the vanilla workflow. `/aidlc --doctor` reports solver availability.
 
 ## Development
 
