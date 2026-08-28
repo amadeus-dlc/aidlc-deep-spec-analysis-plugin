@@ -1,4 +1,4 @@
-# deep-spec-analysis
+# aidlc-deep-spec-analysis-plugin
 
 Neurosymbolic requirements verification for [AI-DLC v2](https://github.com/awslabs/aidlc-workflows), packaged as an additive plugin. An LLM formalizes `requirements.md` into a backend-neutral IR; deterministic solver backends — z3 (SMT) and [Quint](https://quint-lang.org/) — check it for contradictions, completeness gaps, and scenario violations; every finding returns to the human as a structured A/B question. Core is never modified: disable the plugin and the vanilla workflow remains.
 
@@ -21,8 +21,8 @@ This is the development workspace. The plugin itself lives in [`deep-spec-analys
 ### Install
 
 ```sh
-git clone --recurse-submodules https://github.com/j5ik2o/deep-spec-analysis.git
-cd deep-spec-analysis/deep-spec-analysis
+git clone --recurse-submodules https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin.git
+cd aidlc-deep-spec-analysis-plugin/deep-spec-analysis
 bun install
 ```
 
@@ -50,7 +50,7 @@ bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude   # → dist/cl
 
 ## Getting help
 
-- Issues: <https://github.com/j5ik2o/deep-spec-analysis/issues>
+- Issues: <https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/issues>
 
 ## License
 
