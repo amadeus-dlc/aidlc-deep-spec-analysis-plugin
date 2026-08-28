@@ -84,7 +84,7 @@ flowchart LR
     DIST -->|/plugin install| HOOK
 ```
 
-導入は Claude Code なら `/plugin marketplace add` + `/plugin install aidlc-deep-spec-analysis@aidlc-plugins`、Codex CLI なら `dist/codex/` を対象に `codex plugin marketplace add` + `codex plugin add aidlc-deep-spec-analysis@aidlc-plugins`（初回のみ hook の信頼承認。hook は最初の対話で遅延発火し、`.codex/` ツリーへ compose する）。手順は [README](../README.md) の Quickstart。プロジェクトの外には何も置かれず、無効化すれば vanilla に再 compose される——core は無改変のまま。
+導入は Claude Code なら `/plugin marketplace add` + `/plugin install aidlc-deep-spec-analysis@aidlc-plugins`、Codex CLI なら `dist/codex/` を対象に `codex plugin marketplace add` + `codex plugin add aidlc-deep-spec-analysis@aidlc-plugins`（初回のみ hook の信頼承認。hook は最初の対話で遅延発火し、`.codex/` ツリーへ compose する）。ストアを持たないハーネス（Kiro など）は手動コピー：`dist/<harness>/` をプロジェクトへ `cp` で投下し、`aidlc plugin sync`（または hook の `compose.ts` を直接 bun 実行）で compose する。この経路には導入時の信頼ゲートがなく、コピーすること自体が信頼の判断になる点に注意。手順は [README](../README.md) の Quickstart。プロジェクトの外には何も置かれず、無効化すれば vanilla に再 compose される——core は無改変のまま。
 
 ## §5 ワークスペースの 3 区画
 

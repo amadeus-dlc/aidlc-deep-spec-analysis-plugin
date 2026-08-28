@@ -46,6 +46,20 @@ codex plugin marketplace add <workspace>/deep-spec-analysis/dist/codex
 codex plugin add aidlc-deep-spec-analysis@aidlc-plugins   # approve the one-time hook trust prompt
 ```
 
+Manually, for a harness without a plugin store (Kiro shown; build the matching `dist/<harness>/` and set `AIDLC_HARNESS_DIR` to that harness's runtime dir):
+
+```sh
+PLUGIN_ROOT=<workspace>/deep-spec-analysis/dist/kiro
+cp -r "$PLUGIN_ROOT"/. <project>/
+AIDLC_PLUGIN_ROOT="$PLUGIN_ROOT" AIDLC_PROJECT_DIR=<project> AIDLC_HARNESS_DIR=.kiro \
+  aidlc plugin sync
+# without the aidlc CLI, run the compose hook directly:
+AIDLC_PLUGIN_ROOT="$PLUGIN_ROOT" AIDLC_PROJECT_DIR=<project> AIDLC_HARNESS_DIR=.kiro \
+  bun "$PLUGIN_ROOT/hooks/compose.ts"
+```
+
+> The manual drop has no install-time trust gate — unlike the Claude/Codex store flows, copying the tree *is* the trust decision. Only drop a build you would run code from.
+
 On the next session start the plugin's hook composes the stage, sensors, tools, and knowledge into the project's harness tree (`.claude/`; `.codex/` on Codex, where the hook fires lazily on the first interaction). Nothing outside that project is touched; disabling the plugin recomposes the vanilla workflow. `/aidlc --doctor` reports solver availability.
 
 ## Development
