@@ -57,7 +57,10 @@ bun <checkout>/core/tools/aidlc-plugin-test.ts . --install <project> --harness c
    the proposed revision / `X.` Other — and records the human's decisions.
 4. `deep-spec-analysis-report.md` carries the coverage table (checked /
    skipped-with-reason / unavailable / unverified per obligation × backend)
-   and ready-to-apply revision proposals. `requirements.md` is never edited.
+   and the applied revisions. `B.`-accepted revisions are applied to
+   `requirements.md` by the stage itself (the same product-agent persona
+   that owns the artifact upstream), then re-verified in a second sensor
+   pass; nothing is ever edited beyond the human-approved text.
 
 Failures never block: a missing solver, a timeout, or an uncompilable
 obligation becomes an `unavailable`/`skipped` record and a line in the

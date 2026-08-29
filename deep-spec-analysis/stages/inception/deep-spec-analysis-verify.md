@@ -40,7 +40,8 @@ solver backends check the IR for contradictions, completeness gaps, and
 scenario violations, and write normalized findings. You then translate every
 finding back into requirement language and put it to the human as a
 structured A/B decision. You never write SMT-LIB or Quint, you never edit
-requirements.md, and no finding blocks anything without a human choice.
+`requirements.md` beyond the revisions the human explicitly accepted
+(`B.` answers), and no finding blocks anything without a human choice.
 
 ## Steps
 
@@ -114,9 +115,26 @@ implicated obligation, not a requirements edit.
 
 Then follow stage-protocol §3 to collect answers (Guide me / I'll edit the
 file / Chat) and run the Consolidated Summary Confirmation. Zero findings →
-no questions file; skip straight to Step 6.
+no questions file; skip straight to Step 7.
 
-### Step 6: Write the Analysis Report
+### Step 6: Apply Accepted Revisions
+
+Every `B.` answer is an explicit, twice-confirmed human approval (the
+individual answer, then the Consolidated Summary Confirmation) of a concrete
+revision you proposed. Apply them now — the human never hand-edits:
+
+- Edit `requirements.md` (the consumes path) as `aidlc-product-agent` — the
+  same lead persona that owns it in requirements-analysis — changing exactly
+  the implicated FR/NFR text to the approved revision, verbatim. Keep ids
+  stable; requirements answered `A.`/`X.` and everything else stay untouched.
+  Never apply an edit the human did not approve.
+- Close the loop: redo Step 2 against the revised requirements (rewrite the
+  formal model; the sensors re-fire) and collect the second-pass findings.
+  Accepted revisions are expected to resolve their findings; if a revision
+  provokes a NEW finding, put it to the human per Step 5 before reporting.
+- Zero `B.` answers → skip this step.
+
+### Step 7: Write the Analysis Report
 
 Write `deep-spec-analysis-report.md`:
 
@@ -124,28 +142,31 @@ Write `deep-spec-analysis-report.md`:
   and their methods, findings count by kind.
 - **Verification Coverage** — a table: every obligation/scenario × every
   backend → checked / skipped (reason) / unavailable / unverified. Skips and
-  unavailability are stated verbatim — no silence.
+  unavailability are stated verbatim — no silence. When Step 6 ran, this is
+  the second-pass (post-revision) coverage.
 - **Findings and Decisions** — per finding: kind, implicated FR/NFR ids and
-  text, witness summary, the human's recorded decision (A/B/X), and — for
-  every `B.` — the concrete proposed revision to requirements.md, written as
-  a ready-to-apply edit. **Do not edit requirements.md itself**: upstream
-  artifacts are write-frozen; revisions flow through the human back into a
-  requirements change.
+  text, witness summary, the human's recorded decision (A/B/X).
+- **Applied Revisions** — for every `B.`: the requirement id, its
+  before/after text as applied in Step 6, and the second-pass verification
+  result confirming the finding is resolved (or the follow-up decision when
+  it was not). Nothing is ever edited beyond the approved text — no silent
+  revisions.
 - **Unformalized Requirements** — the IR's `unformalized[]`, verbatim, with
   reasons.
 
 Reference the upstream `requirements.md` explicitly so traceability holds.
 
-### Step 7: Completion Handoff
+### Step 8: Completion Handoff
 
 Run `bun {{HARNESS_DIR}}/tools/aidlc-orchestrate.ts report --stage deep-spec-analysis-verify --result awaiting-approval`.
 That `report` call owns every lifecycle transition and advancement; never
 perform one in prose, and never narrate this bookkeeping to the user.
 
-### Step 8: Present Completion & Request Approval
+### Step 9: Present Completion & Request Approval
 
 Present the completion per stage-protocol §2 with the :microscope: emoji:
-summary of obligations checked, findings by kind, decisions recorded, and
+summary of obligations checked, findings by kind, decisions recorded,
+revisions applied (with their second-pass confirmation), and
 unverified/skipped coverage. Review path: `<record>/inception/deep-spec-analysis-verify/`.
 Then the standard 2-option approval gate (Approve / Request Changes) and END
 THE TURN.

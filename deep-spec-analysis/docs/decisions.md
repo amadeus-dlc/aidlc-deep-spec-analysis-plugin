@@ -83,6 +83,15 @@
   せず aidlc 同梱の `plugin-targets.json` を参照。`--dry-run` は
   `aidlc-plugin-test.ts --install` に委譲。ストア経由と違い信頼ゲートを通らない点は
   README/architecture.md に明記。
+8. **B承認済み改訂の自動適用**（2026-08-29追加、当初設計からの変更）— 当初は
+  「requirements.md は編集しない。改訂はready-to-apply提案としてレポートに載せるのみ」
+  だったが、B承認後の適用を人間の手作業に残すのはUX欠陥（ユーザー指摘）。Step 6として、
+  B回答（個別回答＋Consolidated Summary Confirmationの二重承認）済みの改訂をステージ
+  自身が requirements.md へ verbatim 適用し、formal model を書き直してセンサー再発火
+  →解消確認（第2パス）まで行う設計に変更。成果物所有モデルとの整合: requirements-analysis
+  と本ステージの lead は同一の `aidlc-product-agent`。安全性質は維持: 適用されるのは
+  承認文面のみ、A/X・未指摘箇所は不変、レポートの Applied Revisions に before/after を
+  記録、決定論的センサー群は引き続き読み取り専用。
 
 ## 検証マトリクス（実測、2026-08-28）
 
