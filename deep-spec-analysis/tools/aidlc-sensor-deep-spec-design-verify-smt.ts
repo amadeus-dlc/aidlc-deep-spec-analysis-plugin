@@ -1,0 +1,160 @@
+// deep-spec-design-verify-smt sensor — SMT backend for the design IR
+// (contract 3, method: exhaustive).
+//
+// COMPILE-DOWN REUSE: each unit of the design IR is lowered to a contract-1
+// document (transitions -> event obligations with the implicit state==from /
+// state'=to encoding; ignores -> explicit no-op events) and the PROVEN v1 SMT
+// backend is executed on it as a child process. Findings come back remapped
+// into design vocabulary (DOB/TR/SM/DSC ids, per-unit attribution).
+//
+// The two design-only checks ride v1's antecedent-vacuity query through
+// synthetic tautological invariants (see deep-spec-design-lib.ts):
+//   unreachable — implies(guard, true): an unsatisfiable antecedent IS a dead
+//                 rule/transition;
+//   redundancy  — implies(and(guardB, not(guardA)), true) with canonically
+//                 equal effects: guardB => guardA proven means B is subsumed.
+//
+// A machine declaring deterministic: false has its same-(state,trigger)
+// overlap conflicts converted to skipped[reason: waived] — a human-gated
+// model waiver, never silence.
+//
+// Determinism: the lowering is canonical, the v1 backend is byte-
+// deterministic, and the remap sorts canonically; identical design IR +
+// identical environment => byte-identical output. Findings land in
+// <dirname(output)>/deep-spec-design-verify/smt.json (contract 2,
+// self-validated).
+
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+import { type Json, parseFlags, sha256 } from "./deep-spec-lib.ts";
+import {
+  DESIGN_IR_MAJOR_SUPPORTED,
+  DESIGN_MODEL_BASENAME,
+  DESIGN_VERIFY_DIRNAME,
+  type DFinding,
+  type DSkipped,
+  allUnitTargets,
+  designIrHashOf,
+  extractSingleJsonFence,
+  lowerUnit,
+  parseDesignIr,
+  recomputeDesignCrossCheck,
+  remapUnitDoc,
+  runSiblingBackend,
+  writeDesignDoc,
+} from "./deep-spec-design-lib.ts";
+
+const BACKEND = "smt";
+const UNIT_WALL_TIMEOUT_MS = 55_000;
+const RUN_BUDGET_MS = 60_000;
+
+function main(): void {
+  const flags = parseFlags(process.argv.slice(2));
+  if (!flags.outputPath) {
+    process.stderr.write("deep-spec-design-verify-smt: --output-path is required\n");
+    process.exit(1);
+  }
+  if (basename(flags.outputPath) !== DESIGN_MODEL_BASENAME || !existsSync(flags.outputPath)) {
+    process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`);
+    process.exit(0);
+  }
+  const verifyDir = join(dirname(flags.outputPath), DESIGN_VERIFY_DIRNAME);
+
+  const fence = extractSingleJsonFence(readFileSync(flags.outputPath, "utf-8"));
+  let raw: Json = null;
+  try {
+    raw = fence === null ? null : (JSON.parse(fence) as Json);
+  } catch {
+    raw = null;
+  }
+  const parsed = raw === null ? "formal model does not contain exactly one readable ```json fence" : parseDesignIr(raw);
+  if (typeof parsed === "string") {
+    writeDesignDoc(verifyDir, {
+      backend: BACKEND,
+      irVersion: "0.0.0",
+      irHash: sha256(""),
+      method: "exhaustive",
+      unavailable: { reason: `design IR unreadable: ${parsed} — see the deep-spec-design-ir-valid sensor for details` },
+      findings: [],
+      skipped: [],
+    });
+    process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "ir-unreadable" })}\n`);
+    process.exit(0);
+  }
+  const ir = parsed;
+  const irHash = designIrHashOf(raw);
+
+  const major = Number.parseInt(ir.irVersion.split(".")[0] ?? "", 10);
+  if (major !== DESIGN_IR_MAJOR_SUPPORTED) {
+    const skipped: DSkipped[] = ir.units.flatMap((u) =>
+      allUnitTargets(u).map((t) => ({
+        target: t,
+        reason: "ir-version-mismatch",
+        unit: u.unit,
+        detail: `design IR major version ${major} is not supported by this backend (supports ${DESIGN_IR_MAJOR_SUPPORTED}.x.x)`,
+      })),
+    );
+    writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: "exhaustive", findings: [], skipped });
+    recomputeDesignCrossCheck(verifyDir, ir, irHash);
+    process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: skipped.length, note: "ir-version-mismatch" })}\n`);
+    process.exit(0);
+  }
+
+  const findings: DFinding[] = [];
+  const skipped: DSkipped[] = [];
+  const started = Date.now();
+
+  for (const u of ir.units) {
+    if (Date.now() - started > RUN_BUDGET_MS) {
+      for (const t of allUnitTargets(u)) {
+        skipped.push({ target: t, reason: "timeout", unit: u.unit, detail: "the per-run solver budget was exhausted before this unit" });
+      }
+      continue;
+    }
+    const lowered = lowerUnit(u, { synthetics: true });
+    const run = runSiblingBackend("smt", lowered.v1Doc, UNIT_WALL_TIMEOUT_MS);
+    if (run.exit === 127) {
+      const reason =
+        (run.doc && typeof run.doc === "object" && !Array.isArray(run.doc) && typeof (run.doc as { unavailable?: { reason?: string } }).unavailable?.reason === "string"
+          ? (run.doc as { unavailable: { reason: string } }).unavailable.reason
+          : null) ?? "z3 could not be executed by the lowered v1 backend";
+      writeDesignDoc(verifyDir, {
+        backend: BACKEND,
+        irVersion: ir.irVersion,
+        irHash,
+        method: "exhaustive",
+        unavailable: { reason },
+        findings: [],
+        skipped: ir.units.flatMap((unit) =>
+          allUnitTargets(unit).map((t) => ({ target: t, reason: "unavailable", unit: unit.unit, detail: "z3 could not be executed" })),
+        ),
+      });
+      recomputeDesignCrossCheck(verifyDir, ir, irHash);
+      process.exit(127);
+    }
+    if (run.doc === null) {
+      for (const t of allUnitTargets(u)) {
+        skipped.push({ target: t, reason: "unavailable", unit: u.unit, detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` });
+      }
+      continue;
+    }
+    const remapped = remapUnitDoc(u, lowered, run.doc);
+    if (remapped.unavailable !== null) {
+      for (const t of allUnitTargets(u)) {
+        skipped.push({ target: t, reason: "unavailable", unit: u.unit, detail: remapped.unavailable });
+      }
+      continue;
+    }
+    findings.push(...remapped.findings);
+    skipped.push(...remapped.skipped);
+  }
+
+  writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: "exhaustive", findings, skipped });
+  recomputeDesignCrossCheck(verifyDir, ir, irHash);
+  process.stdout.write(
+    `${JSON.stringify({ pass: findings.length === 0, findings_count: findings.length, skipped_count: skipped.length, method: "exhaustive" })}\n`,
+  );
+  process.exit(0);
+}
+
+main();
