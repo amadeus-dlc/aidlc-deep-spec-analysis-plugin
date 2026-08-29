@@ -3,7 +3,7 @@
 // を解決する。不在は not-found、fence/JSON/構造の不成立は corrupt で返し、
 // corrupt.cause には降格文書に逐語で載る凍結文言が材料として入る。
 
-import type { Result } from "../../kernel/domain/index.ts";
+import type { Result } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { RequirementsModel } from "../domain/index.ts";
 

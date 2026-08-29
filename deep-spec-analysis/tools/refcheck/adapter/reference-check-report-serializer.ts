@@ -7,7 +7,8 @@
 // 直列化形をスキーマ検証し、不適合なら降格した集約を返す。verdict は
 // この戻り値から導出させることで、stdout とファイルの矛盾を構造的に防ぐ。
 
-import { type Result, sha256 } from "../../kernel/domain/index.ts";
+import type { Result } from "../../kernel/infrastructure/index.ts";
+import { sha256 } from "../../kernel/domain/index.ts";
 import { canonicalStringify } from "../../kernel/adapter/canonical-json.ts";
 import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/schema-validator.ts";

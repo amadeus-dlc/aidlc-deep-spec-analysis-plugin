@@ -8,26 +8,22 @@
 // into design vocabulary (DOB/TR/SM/DSC ids, per-unit attribution).
 //
 // The two design-only checks ride v1's antecedent-vacuity query through
-// synthetic tautological invariants (see deep-spec-design-lib.ts):
+// synthetic tautological invariants (see design/domain/lower-unit.ts):
 //   unreachable — implies(guard, true): an unsatisfiable antecedent IS a dead
 //                 rule/transition;
 //   redundancy  — implies(and(guardB, not(guardA)), true) with canonically
 //                 equal effects: guardB => guardA proven means B is subsumed.
 //
-// A machine declaring deterministic: false has its same-(state,trigger)
-// overlap conflicts converted to skipped[reason: waived] — a human-gated
-// model waiver, never silence.
-//
-// Determinism: the lowering is canonical, the v1 backend is byte-
-// deterministic, and the remap sorts canonically; identical design IR +
-// identical environment => byte-identical output. Findings land in
-// <dirname(output)>/deep-spec-design-verify/smt.json (contract 2,
-// self-validated).
+// 編成ルート：設計 lowering・remap・文書組成は design/{domain,adapter} が
+// 所有し、この entry は取得 → ユニットごとの lowering → 兄弟実行 → remap →
+// 組成 → 永続化 → クロスチェック再計算を編成する。Phase 3（refinement）は
+// refinement-lib（PR6 で解体予定の legacy）を entry からのみ呼ぶ逐語温存。
+// verdict は conformed（＝書かれた姿）から導出する。
 
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { findRecordRoot, parseFlags, relArtifact } from "./kernel/adapter/index.ts";
-import { type Json } from "./kernel/adapter/index.ts";
 import { sha256 } from "./kernel/domain/index.ts";
 import {
   REFINEMENT_MAP_BASENAME,
@@ -38,23 +34,28 @@ import {
   runUnitRefinementSmt,
 } from "./deep-spec-refinement-lib.ts";
 import {
-  DESIGN_IR_MAJOR_SUPPORTED,
-  DESIGN_MODEL_BASENAME,
-  DESIGN_VERIFY_DIRNAME,
-  type DFinding,
-  type DSkipped,
-  allUnitTargets,
-  designIrHashOf,
-  extractSingleJsonFence,
+  type DesignFinding,
+  type DesignInputEntry,
+  type DesignSkipped,
+  DesignReport,
+  DesignReportId,
+  SUPPORTED_DESIGN_IR_MAJOR,
+  designBackendUnavailableReport,
+  designCrossCheckReport,
+  designIrUnreadableReport,
+  designVersionMismatchReport,
   lowerUnit,
-  parseDesignIr,
-  recomputeDesignCrossCheck,
   remapUnitDoc,
-  runSiblingBackend,
-  writeDesignDoc,
-} from "./deep-spec-design-lib.ts";
+} from "./design/domain/index.ts";
+import {
+  DesignModelRepositoryImpl,
+  DesignReportRepositoryImpl,
+  SiblingBackendClientImpl,
+} from "./design/adapter/index.ts";
 
 const BACKEND = "smt";
+const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
+const DESIGN_VERIFY_DIRNAME = "deep-spec-design-verify";
 const UNIT_WALL_TIMEOUT_MS = 55_000;
 const RUN_BUDGET_MS = 60_000;
 
@@ -64,127 +65,122 @@ function main(): void {
     process.stderr.write("deep-spec-design-verify-smt: --output-path is required\n");
     process.exit(1);
   }
-  if (basename(flags.outputPath) !== DESIGN_MODEL_BASENAME || !existsSync(flags.outputPath)) {
+  if (basename(flags.outputPath) !== DESIGN_MODEL_BASENAME) {
     process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`);
     process.exit(0);
   }
   const verifyDir = join(dirname(flags.outputPath), DESIGN_VERIFY_DIRNAME);
+  const toolsDir = dirname(fileURLToPath(import.meta.url));
+  const reports = new DesignReportRepositoryImpl(join(toolsDir, "data", "deep-spec-findings-schema.json"));
+  const sibling = new SiblingBackendClientImpl({ toolsDirectory: toolsDir, workingDirectory: process.cwd() });
+  const id = DesignReportId.of(verifyDir, BACKEND);
+  const persist = (report: DesignReport): DesignReport => {
+    const conformed = reports.conformedOf(report);
+    const saved = reports.save(conformed);
+    if (!saved.ok) {
+      process.stderr.write(`deep-spec-design-verify-smt: ${saved.error.path}: ${saved.error.kind}${"cause" in saved.error ? ` (${saved.error.cause})` : ""}\n`);
+      process.exit(1);
+    }
+    return conformed;
+  };
 
-  const fence = extractSingleJsonFence(readFileSync(flags.outputPath, "utf-8"));
-  let raw: Json = null;
-  try {
-    raw = fence === null ? null : (JSON.parse(fence) as Json);
-  } catch {
-    raw = null;
-  }
-  const parsed = raw === null ? "formal model does not contain exactly one readable ```json fence" : parseDesignIr(raw);
-  if (typeof parsed === "string") {
-    writeDesignDoc(verifyDir, {
-      backend: BACKEND,
-      irVersion: "0.0.0",
-      irHash: sha256(""),
-      method: "exhaustive",
-      unavailable: { reason: `design IR unreadable: ${parsed} — see the deep-spec-design-ir-valid sensor for details` },
-      findings: [],
-      skipped: [],
-    });
+  const acquired = new DesignModelRepositoryImpl().findByPath(flags.outputPath);
+  if (!acquired.ok) {
+    if (acquired.error.kind === "not-found") {
+      process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`);
+      process.exit(0);
+    }
+    if (acquired.error.kind === "io-failed") {
+      process.stderr.write(`deep-spec-design-verify-smt: ${acquired.error.path}: ${acquired.error.kind} (${acquired.error.cause})\n`);
+      process.exit(1);
+    }
+    persist(designIrUnreadableReport(id, "exhaustive", acquired.error.cause));
     process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "ir-unreadable" })}\n`);
     process.exit(0);
   }
-  const ir = parsed;
-  const irHash = designIrHashOf(raw);
+  const { model, irHash } = acquired.value;
+  const recomputeCrossCheck = (): void => {
+    const siblings = reports.findAllByDirectory(verifyDir);
+    // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
+    if (!siblings.ok) return;
+    persist(designCrossCheckReport(DesignReportId.of(verifyDir, "cross-check"), model, irHash, siblings.value));
+  };
 
-  const major = Number.parseInt(ir.irVersion.split(".")[0] ?? "", 10);
-  if (major !== DESIGN_IR_MAJOR_SUPPORTED) {
-    const skipped: DSkipped[] = ir.units.flatMap((u) =>
-      allUnitTargets(u).map((t) => ({
-        target: t,
-        reason: "ir-version-mismatch",
-        unit: u.unit,
-        detail: `design IR major version ${major} is not supported by this backend (supports ${DESIGN_IR_MAJOR_SUPPORTED}.x.x)`,
-      })),
-    );
-    writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: "exhaustive", findings: [], skipped });
-    recomputeDesignCrossCheck(verifyDir, ir, irHash);
-    process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: skipped.length, note: "ir-version-mismatch" })}\n`);
+  if (!model.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR)) {
+    // 旧実装は conform 前の skip 数を verdict 行に載せていた（自己検証降格が
+    // 起きても stdout は元の件数のまま）——凍結挙動として組成時の件数を使う。
+    const mismatch = designVersionMismatchReport(id, model, irHash, "exhaustive");
+    persist(mismatch);
+    recomputeCrossCheck();
+    process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: mismatch.skippedCount(), note: "ir-version-mismatch" })}\n`);
     process.exit(0);
   }
 
-  const findings: DFinding[] = [];
-  const skipped: DSkipped[] = [];
-  // Per-unit completion evidence (contract-2 checked[]): a unit appears iff
-  // its design verification actually RAN — the doctor distinguishes a clean
-  // unit from one that never ran (PR #7 review follow-up).
+  const findings: DesignFinding[] = [];
+  const skipped: DesignSkipped[] = [];
+  // ユニットごとの完了証跡（契約2 checked[]）：設計検証が実際に走ったユニット
+  // だけが載る——doctor がクリーンなユニットと未実行を区別する（PR #7 追補）。
   const checkedUnits: string[] = [];
   const started = Date.now();
 
-  for (const u of ir.units) {
+  for (const u of model.units()) {
     if (Date.now() - started > RUN_BUDGET_MS) {
-      for (const t of allUnitTargets(u)) {
-        skipped.push({ target: t, reason: "timeout", unit: u.unit, detail: "the per-run solver budget was exhausted before this unit" });
+      for (const t of u.allTargets()) {
+        skipped.push({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" });
       }
       continue;
     }
     const lowered = lowerUnit(u, { synthetics: true });
-    // Never let a child outlive the run budget: the dispatcher would kill the
-    // sensor mid-write and leave no findings document at all.
+    // 子に run budget を超えて生き延びさせない：ディスパッチャがセンサーを
+    // 書込途中で殺し、findings 文書が一切残らなくなる。
     const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (Date.now() - started));
     if (remaining < 3_000) {
-      for (const t of allUnitTargets(u)) {
-        skipped.push({ target: t, reason: "timeout", unit: u.unit, detail: "the per-run solver budget was exhausted before this unit" });
+      for (const t of u.allTargets()) {
+        skipped.push({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" });
       }
       continue;
     }
-    const run = runSiblingBackend("smt", lowered.v1Doc, remaining);
+    const run = sibling.runLowered("smt", u, lowered, remaining);
     if (run.exit === 127) {
       const reason =
-        (run.doc && typeof run.doc === "object" && !Array.isArray(run.doc) && typeof (run.doc as { unavailable?: { reason?: string } }).unavailable?.reason === "string"
-          ? (run.doc as { unavailable: { reason: string } }).unavailable.reason
-          : null) ?? "z3 could not be executed by the lowered v1 backend";
-      writeDesignDoc(verifyDir, {
-        backend: BACKEND,
-        irVersion: ir.irVersion,
-        irHash,
-        method: "exhaustive",
-        unavailable: { reason },
-        findings: [],
-        skipped: ir.units.flatMap((unit) =>
-          allUnitTargets(unit).map((t) => ({ target: t, reason: "unavailable", unit: unit.unit, detail: "z3 could not be executed" })),
-        ),
-      });
-      recomputeDesignCrossCheck(verifyDir, ir, irHash);
+        (run.doc?.kind === "unavailable" ? run.doc.reason : null) ?? "z3 could not be executed by the lowered v1 backend";
+      persist(designBackendUnavailableReport(id, model, irHash, "exhaustive", reason, "z3 could not be executed"));
+      recomputeCrossCheck();
+      // 127 = tool-unavailable to the dispatcher; the findings file already
+      // records the degradation for the stage.
       process.exit(127);
     }
     if (run.doc === null) {
-      for (const t of allUnitTargets(u)) {
-        skipped.push({ target: t, reason: "unavailable", unit: u.unit, detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` });
+      for (const t of u.allTargets()) {
+        skipped.push({ target: t, reason: "unavailable", unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` });
       }
       continue;
     }
-    const remapped = remapUnitDoc(u, lowered, run.doc);
+    const remapped = remapUnitDoc(u, lowered, run.doc ?? { kind: "unreadable" });
     if (remapped.unavailable !== null) {
-      for (const t of allUnitTargets(u)) {
-        skipped.push({ target: t, reason: "unavailable", unit: u.unit, detail: remapped.unavailable });
+      for (const t of u.allTargets()) {
+        skipped.push({ target: t, reason: "unavailable", unit: u.name(), detail: remapped.unavailable });
       }
       continue;
     }
     findings.push(...remapped.findings);
     skipped.push(...remapped.skipped);
-    checkedUnits.push(`unit:${u.unit}`);
+    checkedUnits.push(`unit:${u.name()}`);
   }
 
   // --- Phase 3: refinement against the verified requirements IR -------------
-  // Activated by the presence of the requirements formal model; a map that is
-  // missing, stale, or unit-less produces explicit skips, never silence.
+  // 要件形式モデルの存在で発火。欠落・陳腐化・ユニット欠けの map は明示 skip
+  // を生む——沈黙しない。（refinement-lib は PR6 で解体予定の legacy——entry
+  // からのみ呼ぶ逐語温存。）
   const recordRoot = findRecordRoot(dirname(flags.outputPath));
   const stageDir = dirname(flags.outputPath);
   const req = recordRoot === null ? null : loadRequirementsIr(recordRoot);
-  let inputs: { artifact: string; sha256: string }[] | undefined;
+  let inputs: DesignInputEntry[] | undefined;
   if (req !== null) {
     const reqTargets = [...req.obligations.map((o) => o.id), ...req.scenarios.map((s) => s.id)];
     const skipAll = (reason: string, detail: string): void => {
-      for (const u of ir.units) {
-        for (const t of reqTargets) skipped.push({ target: t, reason, unit: u.unit, detail });
+      for (const u of model.units()) {
+        for (const t of reqTargets) skipped.push({ target: t, reason, unit: u.name(), detail });
       }
     };
     const { map, error: mapError } = loadRefinementMap(stageDir);
@@ -203,21 +199,21 @@ function main(): void {
         { artifact: mapArtifact, sha256: sha256(readFileSync(mapPath, "utf-8")) },
         { artifact: relArtifact(recordRoot, reqModelPath), sha256: sha256(readFileSync(reqModelPath, "utf-8")) },
       ];
-      // The refinement pass shares the dispatcher's 75s ceiling with the
-      // design pass: never start a child that cannot finish inside it.
+      // refinement パスはディスパッチャの 75s 上限を design パスと分け合う：
+      // その内側で終われない子を決して起動しない。
       const REFINEMENT_DEADLINE_MS = 65_000;
-      for (const u of ir.units) {
-        const unitMap = map.units.find((m) => m.unit === u.unit);
+      for (const u of model.units()) {
+        const unitMap = map.units.find((m) => m.unit === u.name());
         if (!unitMap) {
           for (const t of reqTargets) {
-            skipped.push({ target: t, reason: "absent-input", unit: u.unit, detail: `the refinement map has no entry for unit ${u.unit}` });
+            skipped.push({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` });
           }
           continue;
         }
         const refRemaining = REFINEMENT_DEADLINE_MS - (Date.now() - started);
         if (refRemaining < 5_000) {
           for (const t of reqTargets) {
-            skipped.push({ target: t, reason: "timeout", unit: u.unit, detail: "the per-run solver budget was exhausted before the refinement pass" });
+            skipped.push({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before the refinement pass" });
           }
           continue;
         }
@@ -225,7 +221,7 @@ function main(): void {
         const res = runUnitRefinementSmt(u, req, plan, mapArtifact, Math.min(30_000, refRemaining));
         if (res.unavailable !== null) {
           for (const t of reqTargets) {
-            skipped.push({ target: t, reason: "unavailable", unit: u.unit, detail: res.unavailable });
+            skipped.push({ target: t, reason: "unavailable", unit: u.name(), detail: res.unavailable });
           }
           continue;
         }
@@ -235,10 +231,21 @@ function main(): void {
     }
   }
 
-  const emitted = writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: "exhaustive", inputs, checked: checkedUnits, findings, skipped });
-  recomputeDesignCrossCheck(verifyDir, ir, irHash);
+  const written = persist(
+    DesignReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash,
+      method: "exhaustive",
+      findings,
+      skipped,
+      ...(inputs !== undefined ? { inputs } : {}),
+      checked: checkedUnits,
+    }),
+  );
+  recomputeCrossCheck();
   process.stdout.write(
-    `${JSON.stringify({ pass: !emitted.unavailable && emitted.findingsCount === 0, findings_count: emitted.findingsCount, skipped_count: emitted.skippedCount, method: "exhaustive" })}\n`,
+    `${JSON.stringify({ pass: written.passes(), findings_count: written.findingsCount(), skipped_count: written.skippedCount(), method: "exhaustive" })}\n`,
   );
   process.exit(0);
 }

@@ -15,7 +15,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { type Result, err, ok, sha256 } from "../tools/kernel/domain/index.ts";
+import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
+import { expressionUsesPrime, sha256 } from "../tools/kernel/domain/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 import {
   FormalModelRepositoryImpl,
@@ -32,7 +33,6 @@ import {
   VerificationReportId,
   type VerificationFinding,
   crossCheckReport,
-  expressionUsesPrime,
   interpretSmtVerdicts,
   irUnreadableReport,
   solverUnavailableReport,

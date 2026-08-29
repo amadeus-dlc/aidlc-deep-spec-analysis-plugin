@@ -5,7 +5,7 @@
 
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { AttributeDeclaration } from "./attribute-declaration.ts";
-import type { Expression } from "./expression.ts";
+import type { Expression } from "../../kernel/domain/expression.ts";
 import type { Obligation } from "./obligation.ts";
 import type { Scenario } from "./scenario.ts";
 

@@ -7,13 +7,12 @@
 // コンパイル時 skip を戻り値で返す（生成されるモジュール本文・skip 文言は
 // バイト同一）。
 
+import { type Expression, expressionUsesPrime } from "../../kernel/domain/index.ts";
 import {
   type AttributeDeclaration,
-  type Expression,
   type QuintMachineFacts,
   type RequirementsModel,
   type VerificationSkipped,
-  expressionUsesPrime,
 } from "../domain/index.ts";
 
 class CompileError extends Error {

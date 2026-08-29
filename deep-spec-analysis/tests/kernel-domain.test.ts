@@ -14,17 +14,14 @@ import {
   type Json,
   validateSchema,
 } from "../tools/kernel/adapter/index.ts";
+import { type Result, err, ok, unreachable } from "../tools/kernel/infrastructure/index.ts";
 import {
-  type Result,
-  err,
   idCompare,
   normalizeName,
-  ok,
   requirementIds,
   safeTarget,
   sha256,
   sortedUnique,
-  unreachable,
 } from "../tools/kernel/domain/index.ts";
 
 describe("result", () => {

@@ -1,7 +1,6 @@
 // requirements/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
 export { type AttributeDeclaration } from "./attribute-declaration.ts";
-export { type Expression, expressionUsesPrime } from "./expression.ts";
 export { type Obligation } from "./obligation.ts";
 export { type Scenario } from "./scenario.ts";
 export {

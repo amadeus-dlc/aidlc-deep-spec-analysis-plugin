@@ -5,7 +5,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Result, err, ok } from "../../kernel/domain/index.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import type { Json } from "../../kernel/adapter/json-value.ts";
 import { readContractSchema } from "../../kernel/adapter/contract-schema.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";

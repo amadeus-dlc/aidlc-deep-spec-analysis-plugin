@@ -4,9 +4,9 @@
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
+import type { Expression } from "../../kernel/domain/index.ts";
 import type {
   AttributeDeclaration,
-  Expression,
   Obligation,
   RequirementsModelSeed,
   Scenario,

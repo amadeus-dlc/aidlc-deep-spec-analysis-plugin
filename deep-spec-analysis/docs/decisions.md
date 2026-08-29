@@ -537,3 +537,69 @@ goldens are untouched.
   and the golden-identical seeded run with the doctor at 0 errors; a
   five-lens adversarial review workflow compared old and new for byte
   drift before merge.
+
+## Infrastructure ruling — language-extension foundations get their own layer (2026-08-30)
+
+Two standing rulings landed during PR5 and were applied repo-wide
+immediately:
+
+- **`Result` is not ubiquitous language.** Technical foundations that
+  extend the language (the hand-rolled `Result`/`ok`/`err`/`unreachable`)
+  now live in `kernel/infrastructure` — a new innermost layer that
+  depends on nothing (not even `node:*`) and that every other layer may
+  reach. It is explicitly NOT the Onion outer ring: **RPC clients and
+  persistence stay in the interface-adapter layer as gateway
+  responsibilities** and must never move to infrastructure. The
+  architecture rules enforce both directions (infrastructure imports
+  nothing above it; every `node:` import inside it is a violation), with
+  red examples.
+- **A repository implementation must implement its port interface.**
+  Every `XxxRepositoryImpl` / `XxxClientImpl` now declares
+  `implements XxxRepository` / `implements XxxClient` against a
+  use-case-layer port — the design context gained its
+  `design/usecase` ports (`DesignModelRepository`,
+  `DesignReportRepository`, `SiblingBackendClient`) the moment its Impls
+  existed, not in a later PR. Ports speak domain vocabulary only: the
+  sibling-backend port takes the typed lowering and returns the typed
+  verdict surface, and the contract-1 serialization/ITF knowledge stays
+  inside the Impl.
+
+## DDD migration PR5 — design-lib dissolves into the design vertical (2026-08-30, #18)
+
+The 821-line design-lib is deleted (tombstoned in the installer) and the
+two design-verify sensors run on `design/{domain,usecase,adapter}`. The
+`Expression` tree moved to `kernel/domain` (contract-shared vocabulary;
+requirements imports rewired — no compat re-export). Base-vs-head parity
+diff empty; goldens untouched.
+
+- **design/domain** owns the meaning: `DesignModel`/`DesignUnit`
+  aggregates (unit ordering as a compose invariant; `allTargets`/
+  `enumValuesOf` as queries), the typed lowering (`lowerUnit` — OB/SC/BG
+  numbering, synthetic vacuity/shadow tautologies, the ledger maps),
+  `expressionCanonicalKey` (byte-equal to the kernel canonical JSON —
+  machine-proved by test), `remapUnitDoc` (unreachable/redundancy
+  conversion, mutual-subsumption collapse, deterministic:false waivers,
+  OB-n detail/core rewriting — wording verbatim), the `DesignReport`
+  aggregate (inputs/checked sorting as compose invariants), the 11-kind
+  order VO, the design cross-check, and the degradation factories.
+- **design/adapter** owns the formats: the tolerant contract-3 parser,
+  the model repository (legacy `existsSync` gate reproduced), the
+  lowered-document serializer, the sibling-backend client (frozen
+  wrapper text and spawn contract; tools dir/cwd injected; an optional
+  spawn-environment overlay for deterministic test harnesses — entries
+  omit it, preserving inheritance), the sibling-verdict parser, the
+  reachability probe (variant + reached decision), and the design-report
+  serializer/repository.
+- **Entries stay orchestrators for one more PR**: Phase 3 (refinement)
+  still calls refinement-lib — legacy, entry-only, verbatim — and the
+  interactor use cases for the design sensors land in PR6 together with
+  the refinement dissolve. refinement-lib was bridged to the new
+  `DesignUnit` class API (field access → queries) and to
+  kernel/design imports; design-ir-valid inlined its two tiny design-lib
+  imports.
+- **Proofs**: a new in-process suite reproduces the design goldens
+  (smt + quint + converged cross-check) over real v1 sibling spawns;
+  design/domain holds the 90% per-file floor (mostly 100%); the
+  kind-rank proof reads the design order VO; the live sandbox upgrade
+  removed design-lib via the tombstone, transported the design tree, and
+  reproduced the quint design golden with the doctor at 0 errors.

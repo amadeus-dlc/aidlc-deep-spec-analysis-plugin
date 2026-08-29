@@ -7,7 +7,7 @@
 // 副作用なしで返す。呼び手はこれを verdict の根拠にすることで、stdout と
 // ファイルの矛盾を構造的に防ぐ。save は常に conformed な姿を書く。
 
-import type { Result } from "../../kernel/domain/index.ts";
+import type { Result } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { ReferenceCheckReport, ReferenceCheckReportId } from "../domain/index.ts";
 

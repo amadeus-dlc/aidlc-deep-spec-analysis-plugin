@@ -2,7 +2,7 @@
 //
 // リポジトリには 2 系統の rank 表が存在する:
 //   - v1 バックエンド（verify-smt / verify-quint）: 4 kind、未知は 9
-//   - 共有 lib / design-lib: 11 kind、未知は 99
+//   - 拡張系（refcheck / design）: 11 kind、未知は 99
 // 将来の統一が byte-safe であるための必要条件は「v1 が出力し得る全 kind
 // 対で相対順序が一致し、かつ未知 fallback が既知 rank を全て超える」こと。
 // 表は非公開 const のため、ソーステキストから正規表現で抽出して照合する
@@ -34,7 +34,7 @@ function extractKindRank(file: string): { table: Map<string, number>; fallback: 
 
 // PR4 で verify-quint の重複表が消え、v1 表の定義は 1 箇所に収束した。
 const V1_FILES = ["requirements/domain/verification-finding-order.ts"];
-const EXTENDED_FILES = ["refcheck/domain/catalog-order.ts", "deep-spec-design-lib.ts"];
+const EXTENDED_FILES = ["refcheck/domain/catalog-order.ts", "design/domain/design-finding-order.ts"];
 
 describe("kind-rank order preservation", () => {
   test("the v1 backend table is the single shared domain VO", () => {

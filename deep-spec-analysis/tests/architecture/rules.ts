@@ -26,7 +26,6 @@ export const LEGACY_FILES: ReadonlySet<string> = new Set([
   "aidlc-sensor-deep-spec-design-verify-smt.ts",
   "aidlc-sensor-deep-spec-design-verify-quint.ts",
   "deep-spec-analysis-doctor.ts",
-  "deep-spec-design-lib.ts",
   "deep-spec-refinement-lib.ts",
 ]);
 
@@ -37,7 +36,10 @@ export const ENTRY_FILES: ReadonlySet<string> = new Set(
 );
 
 const CONTEXTS = ["kernel", "requirements", "design", "refinement", "refcheck", "doctor"] as const;
-const LAYERS = ["domain", "usecase", "adapter"] as const;
+// infrastructure は「言語を拡張する技術基盤」専用の最内層（オーナー裁定
+// 2026-08-30）：手巻き Result 等、ユビキタス言語でない純基盤を置く。
+// RPC クライアント・永続化は置かない——それらは adapter のゲートウェイ責務。
+const LAYERS = ["infrastructure", "domain", "usecase", "adapter"] as const;
 
 type Layer = (typeof LAYERS)[number];
 
@@ -195,18 +197,36 @@ function isModuleOrSubpath(spec: string, module: string): boolean {
   return spec === module || spec.startsWith(`${module}/`);
 }
 
+// bare 形式（"fs" / "crypto" 等）も node: 接頭辞へ正規化してから判定する。
+// bare の組み込みは onlySanctionedImports でも弾かれるが、I/O 規律の検査自体が
+// すり抜けるのは規則単体の検出力の穴なので、二重に塞ぐ。
+const NODE_BUILTINS: ReadonlySet<string> = new Set([
+  "fs", "crypto", "child_process", "os", "path", "url", "process", "util", "stream", "buffer",
+]);
+
+function normalizeNodeSpecifier(spec: string): string | null {
+  if (spec.startsWith("node:")) return spec;
+  const head = spec.split("/")[0] ?? "";
+  return NODE_BUILTINS.has(head) ? `node:${spec}` : null;
+}
+
 export function noIoInPureLayers(relPath: string, source: string): Violation[] {
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string") return [];
   const out: Violation[] = [];
-  for (const spec of importSpecifiers(source)) {
-    if (!spec.startsWith("node:")) continue;
+  for (const rawSpec of importSpecifiers(source)) {
+    const spec = normalizeNodeSpecifier(rawSpec);
+    if (spec === null) continue;
+    // infrastructure は純粋な言語拡張——node への依存自体を持たない。
+    if (loc.layer === "infrastructure") {
+      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `infrastructure imports "${rawSpec}"` });
+    }
     if (loc.layer === "domain" && spec !== "node:crypto") {
-      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `domain imports "${spec}"` });
+      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `domain imports "${rawSpec}"` });
     }
     // サブパス（node:fs/promises 等）も同一モジュールとして拒否する。
     if (loc.layer === "usecase" && ["node:fs", "node:child_process", "node:os"].some((m) => isModuleOrSubpath(spec, m))) {
-      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `usecase imports "${spec}"` });
+      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `usecase imports "${rawSpec}"` });
     }
   }
   return out;
@@ -237,16 +257,18 @@ export function noExportStar(relPath: string, rawSource: string): Violation[] {
 }
 
 // ルール: 層とコンテキストの依存方向。
-//   domain  → 同一コンテキスト domain・kernel/domain
-//   usecase → 同一コンテキスト {usecase,domain}・kernel/{usecase,domain}
+//   infrastructure → 同層のみ（言語拡張基盤：ドメインを知らない）
+//   domain  → 同一コンテキスト domain・kernel/domain（＋infrastructure）
+//   usecase → 同一コンテキスト {usecase,domain}・kernel/{usecase,domain}（＋infrastructure）
 //   adapter → 同一コンテキスト {adapter,usecase,domain}・kernel 全層
 // 公認のコンテキスト横断エッジは 2 本のみ:
 //   refinement/domain → {requirements,design}/domain
 //   design/usecase    → refinement/domain
 const ALLOWED_LAYER_TARGETS: { [k in Layer]: readonly Layer[] } = {
-  domain: ["domain"],
-  usecase: ["usecase", "domain"],
-  adapter: ["adapter", "usecase", "domain"],
+  infrastructure: ["infrastructure"],
+  domain: ["domain", "infrastructure"],
+  usecase: ["usecase", "domain", "infrastructure"],
+  adapter: ["adapter", "usecase", "domain", "infrastructure"],
 };
 
 const SANCTIONED_CROSS_CONTEXT: readonly { from: string; to: string }[] = [

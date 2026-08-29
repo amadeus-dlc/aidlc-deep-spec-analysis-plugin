@@ -3,7 +3,7 @@
 // 契約適合は実 serializer を使う——「不適合を書かない」という Repository の
 // 不変条件はダブルでも本物でなければならない。
 
-import { type Result, err, ok } from "../../tools/kernel/domain/index.ts";
+import { type Result, err, ok } from "../../tools/kernel/infrastructure/index.ts";
 import type { Schema } from "../../tools/kernel/adapter/index.ts";
 import type { SchemaUnreadable } from "../../tools/kernel/adapter/index.ts";
 import type { RepositoryError } from "../../tools/kernel/usecase/index.ts";
