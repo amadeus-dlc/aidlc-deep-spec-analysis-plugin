@@ -13,24 +13,27 @@ This is the development workspace. The plugin itself lives in [`deep-spec-analys
 
 ## Quickstart
 
-The build emits a **real host plugin** per harness under `deep-spec-analysis/dist/<harness>/` (Claude Code, Codex, Copilot, Cursor, Kiro, Kiro IDE, opencode). Claude Code is shown here.
-
 ### Requirements
 
 - [bun](https://bun.sh/)
 - A target project with [AI-DLC v2](https://github.com/awslabs/aidlc-workflows) installed
 - Optional, for the solver backends in the target project: node ≥ 23 (z3 child process), `@informalsystems/quint`, JDK 17+ (Apalache bounded checking) — setup in the [plugin README](deep-spec-analysis/README.md)
 
-### Build
+### Install into your AI-DLC project
 
 ```sh
 git clone --recurse-submodules https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin.git
-cd aidlc-deep-spec-analysis-plugin/deep-spec-analysis
-bun install
-bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude   # → dist/claude/   (codex, cursor, … for other harnesses)
+cd aidlc-deep-spec-analysis-plugin
+bun deep-spec-analysis/scripts/install.ts --project <your-aidlc-project>   # --harness codex, kiro, … (default: claude)
 ```
 
-### Install into your AI-DLC project
+The installer builds the harness projection under `deep-spec-analysis/dist/<harness>/` — a **real host plugin** (Claude Code, Codex, Copilot, Cursor, Kiro, Kiro IDE, opencode) — copies it into the project, and composes the stage, sensors, tools, and knowledge into the project's harness tree (`.claude/`, `.codex/`, …). Add `--dry-run` to verify the compose without touching the project. Nothing outside that project is touched; disabling the plugin recomposes the vanilla workflow. `/aidlc --doctor` reports solver availability.
+
+> The installer is a folder-drop: it has no install-time trust gate, so only point it at a build you would run code from. For a store-mediated trust prompt, use the host plugin flows below instead.
+
+### Alternative: install through the host plugin store
+
+Build the projection first, from `deep-spec-analysis/`: `bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude` (or `codex`).
 
 In Claude Code, inside the target project:
 
@@ -39,32 +42,25 @@ In Claude Code, inside the target project:
 /plugin install aidlc-deep-spec-analysis@aidlc-plugins
 ```
 
-With Codex CLI (build with `codex` instead of `claude`), inside the target project:
+With Codex CLI, inside the target project:
 
 ```sh
 codex plugin marketplace add <workspace>/deep-spec-analysis/dist/codex
 codex plugin add aidlc-deep-spec-analysis@aidlc-plugins   # approve the one-time hook trust prompt
 ```
 
-Manually, for a harness without a plugin store (Kiro shown; build the matching `dist/<harness>/` and set `AIDLC_HARNESS_DIR` to that harness's runtime dir):
-
-```sh
-PLUGIN_ROOT=<workspace>/deep-spec-analysis/dist/kiro
-cp -r "$PLUGIN_ROOT"/. <project>/
-AIDLC_PLUGIN_ROOT="$PLUGIN_ROOT" AIDLC_PROJECT_DIR=<project> AIDLC_HARNESS_DIR=.kiro \
-  aidlc plugin sync
-# without the aidlc CLI, run the compose hook directly:
-AIDLC_PLUGIN_ROOT="$PLUGIN_ROOT" AIDLC_PROJECT_DIR=<project> AIDLC_HARNESS_DIR=.kiro \
-  bun "$PLUGIN_ROOT/hooks/compose.ts"
-```
-
-> The manual drop has no install-time trust gate — unlike the Claude/Codex store flows, copying the tree *is* the trust decision. Only drop a build you would run code from.
-
-On the next session start the plugin's hook composes the stage, sensors, tools, and knowledge into the project's harness tree (`.claude/`; `.codex/` on Codex, where the hook fires lazily on the first interaction). Nothing outside that project is touched; disabling the plugin recomposes the vanilla workflow. `/aidlc --doctor` reports solver availability.
+On the next session start the plugin's SessionStart hook composes into `.claude/` (`.codex/` on Codex, where the hook fires lazily on the first interaction).
 
 ## Development
 
-The clone + `bun install` above is also the full development setup — it fetches this package's dev dependencies only and installs nothing into any project. Verify changes with:
+Setup is the Quickstart clone plus dev dependencies:
+
+```sh
+cd deep-spec-analysis
+bun install        # dev dependencies only — installs nothing into any project
+```
+
+Verify changes with:
 
 ```sh
 bun test                                                    # byte-exact conformance suite
