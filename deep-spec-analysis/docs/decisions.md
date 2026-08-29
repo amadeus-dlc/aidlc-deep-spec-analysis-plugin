@@ -282,3 +282,44 @@ function even though every rejection test executes it. Fixed by covering
 the one genuinely untested branch (a bare dash followed by a deeper
 block) and making the constructor explicit (behavior unchanged, now
 instrumented). Kernel lands at 100% functions / 99.7% lines.
+
+## DDD migration PR2a — deep-spec-lib dissolved (2026-08-30, #15)
+
+`deep-spec-lib.ts` is gone. Its remains split by ownership, verbatim:
+
+- **refcheck/domain**: the contract-2 refcheck vocabulary (RefEntry,
+  Finding, Skipped, InputEntry, RefcheckDoc/EmitResult, CATALOG_VERSION)
+  and the extended 11-kind catalog order (sortFindings/sortSkipped).
+  Types stay interfaces here — the VO re-modeling (a Finding that owns
+  its render key order) waits for PR2b, when the construction sites in
+  the sensors are reworked; today the key order lives at those sites.
+- **refcheck/usecase + adapter**: `ReferenceCheckReportRepository` (the
+  first port) and its Impl carrying the old emitRefcheckDoc verbatim —
+  self-validation, unavailable degrade, canonical render. The findings
+  schema path is INJECTED by the composition root: layered files no
+  longer touch `import.meta` (the architecture rule now enforces this
+  for real, since the code moved out of the exempt legacy set).
+- **kernel/adapter**: parseFlags, findRecordRoot/relArtifact,
+  readIfExists, and `renderVerdictLine` — the pure half of the old
+  `verdictOut`; the sensors (composition roots) now own the
+  `process.stdout.write` + `process.exit` themselves.
+- No re-exports anywhere; every importer re-pointed in the same commit;
+  the LEGACY allowlist shrank by one (12 files remain).
+- The architecture rules learned to strip comments before matching —
+  Japanese doc comments mentioning `process.argv` or `export *` were
+  false-positives the moment real layered adapters appeared (green
+  examples added alongside the fix).
+
+### PR2a addendum — tombstones: no backward-compat residue in upgraded installs
+
+Owner rule (2026-08-30): leave no backward-compatibility code behind.
+Audit found one real residue: compose is no-clobber and the upgrade
+refresh can only delete files the CURRENT dist still ships, so a retired
+file (deep-spec-lib.ts) would sit orphaned in every upgraded install
+forever. The installer now carries a REMOVED_PAYLOADS tombstone list —
+retiring a file means adding it there in the same change — and deletes
+those paths on upgrade ("upgrade cleanup"). Regression-proven in the
+e2e upgrade scenario: a planted stale deep-spec-lib.ts vanishes on
+re-install. The staged interfaces awaiting PR2b re-modeling are tracked
+work (#15), not compatibility code — the distinction is: no second
+mouth for the same purpose, no orphaned artifacts.

@@ -481,7 +481,7 @@ describe("phase-1 refcheck sensors compose into the sandbox", () => {
       "aidlc-sensor-deep-spec-refcheck-domain.ts",
       "aidlc-sensor-deep-spec-refcheck-contract.ts",
       "aidlc-sensor-deep-spec-refcheck-functional.ts",
-      "deep-spec-lib.ts",
+      "refcheck/domain/index.ts",
       "kernel/domain/index.ts",
     ]) {
       expect(existsSync(join(sandbox, ".claude", "tools", tool))).toBe(true);
@@ -660,6 +660,21 @@ describe("upgrade path — re-running the installer refreshes stale plugin files
     ) as { checked: string[]; unavailable?: unknown };
     expect(doc.unavailable).toBeUndefined();
     expect(doc.checked).toHaveLength(8);
+  });
+
+  test("a retired payload file from a previous version is tombstoned away on upgrade", () => {
+    // compose は no-clobber・refresh は現 dist の同名ファイルしか消せないため、
+    // 廃止ファイルは tombstone（REMOVED_PAYLOADS）が消す。後方互換の残骸を
+    // アップグレード先に残さないことの回帰証明。
+    const retired = join(sandbox, ".claude", "tools", "deep-spec-lib.ts");
+    writeFileSync(retired, "// v0.5.x までの合成物を装った孤児\n");
+    const res = spawnSync("bun", [installer, "--project", sandbox, "--skip-build"], {
+      encoding: "utf-8",
+      timeout: 300_000,
+    });
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("upgrade cleanup");
+    expect(existsSync(retired)).toBe(false);
   });
 });
 

@@ -26,7 +26,6 @@ export const LEGACY_FILES: ReadonlySet<string> = new Set([
   "aidlc-sensor-deep-spec-design-verify-smt.ts",
   "aidlc-sensor-deep-spec-design-verify-quint.ts",
   "deep-spec-analysis-doctor.ts",
-  "deep-spec-lib.ts",
   "deep-spec-design-lib.ts",
   "deep-spec-refinement-lib.ts",
 ]);
@@ -57,7 +56,61 @@ export function locationOf(relPath: string): Location | "entry" | "legacy" | "da
   return null;
 }
 
-export function importSpecifiers(source: string): string[] {
+// コメントを除去してから検査する（説明文中の「process.argv」「export *」等への
+// 過剰一致の防止）。正規表現置換では文字列リテラル内の // をコメント開始と
+// 誤認して以降のコードを検査から落とすため、文字列・テンプレートリテラルを
+// 状態として追跡する字句走査で除去する。正規表現リテラル内の // は未対応
+//（除算と構文的に区別できず、実コードでの出現も想定されない既知の限界）。
+export function stripComments(source: string): string {
+  let out = "";
+  type State = "code" | "single" | "double" | "template" | "line" | "block";
+  let state: State = "code";
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i] ?? "";
+    const next = source[i + 1] ?? "";
+    if (state === "code") {
+      if (c === "/" && next === "/") {
+        state = "line";
+        i++;
+      } else if (c === "/" && next === "*") {
+        state = "block";
+        i++;
+      } else {
+        if (c === "'") state = "single";
+        else if (c === '"') state = "double";
+        else if (c === "`") state = "template";
+        out += c;
+      }
+    } else if (state === "line") {
+      if (c === "\n") {
+        state = "code";
+        out += c;
+      }
+    } else if (state === "block") {
+      if (c === "*" && next === "/") {
+        state = "code";
+        i++;
+      } else if (c === "\n") {
+        out += c;
+      }
+    } else {
+      // 文字列内: エスケープを 1 文字飛ばし、閉じ引用符で code へ戻る。
+      if (c === "\\") {
+        out += c + next;
+        i++;
+        continue;
+      }
+      if ((state === "single" && c === "'") || (state === "double" && c === '"') || (state === "template" && c === "`")) {
+        state = "code";
+      }
+      out += c;
+    }
+  }
+  return out;
+}
+
+export function importSpecifiers(rawSource: string): string[] {
+  const source = stripComments(rawSource);
   const specs: string[] = [];
   // import 文の構造（default / namespace / named / side-effect / export-from /
   // 動的 import）に厳密一致させる。緩い「from "…" を拾う」方式は本文の
@@ -161,9 +214,10 @@ export function noIoInPureLayers(relPath: string, source: string): Violation[] {
 
 // ルール: process.* と import.meta は entry（合成ルート）だけが触れてよい。
 // 層構造のファイルに現れたら、注入し忘れた環境依存の証拠。
-export function processOnlyInEntries(relPath: string, source: string): Violation[] {
+export function processOnlyInEntries(relPath: string, rawSource: string): Violation[] {
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string") return [];
+  const source = stripComments(rawSource);
   const out: Violation[] = [];
   if (/\bprocess\s*\./.test(source)) {
     out.push({ path: relPath, rule: "process-only-in-entries", detail: "references process.*" });
@@ -175,8 +229,8 @@ export function processOnlyInEntries(relPath: string, source: string): Violation
 }
 
 // ルール: export * 禁止（facade は明示列挙の named re-export のみ）。
-export function noExportStar(relPath: string, source: string): Violation[] {
-  if (/^\s*export\s*\*/m.test(source)) {
+export function noExportStar(relPath: string, rawSource: string): Violation[] {
+  if (/^\s*export\s*\*/m.test(stripComments(rawSource))) {
     return [{ path: relPath, rule: "no-export-star", detail: "export * leaks the file tree as API" }];
   }
   return [];

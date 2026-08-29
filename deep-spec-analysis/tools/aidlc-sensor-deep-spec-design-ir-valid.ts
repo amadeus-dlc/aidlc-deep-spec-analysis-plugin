@@ -23,7 +23,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { findRecordRoot, readIfExists } from "./deep-spec-lib.ts";
+import { findRecordRoot, readIfExists } from "./kernel/adapter/index.ts";
 import { type Json, isObject, validateSchema } from "./kernel/domain/index.ts";
 import { DESIGN_MODEL_BASENAME, extractSingleJsonFence } from "./deep-spec-design-lib.ts";
 

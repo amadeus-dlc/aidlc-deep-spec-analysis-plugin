@@ -90,6 +90,20 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(processOnlyInEntries("kernel/adapter/x.ts", "const v = 1;")).toHaveLength(0);
   });
 
+  test("a // inside a string literal does not hide the rest of the line from the rules", () => {
+    expect(processOnlyInEntries("kernel/adapter/x.ts", 'const s = "x//y"; process.env.X;')).not.toHaveLength(0);
+    expect(processOnlyInEntries("kernel/adapter/x.ts", "const s = `a//b`; const p = import.meta.url;")).not.toHaveLength(0);
+    expect(processOnlyInEntries("kernel/adapter/x.ts", 'const url = "https://example.com";')).toHaveLength(0);
+    expect(processOnlyInEntries("kernel/adapter/x.ts", 'const esc = "quote:\\" // still string"; process.exit(1);')).not.toHaveLength(0);
+  });
+
+  test("a comment mentioning process or import.meta or export * is not a violation", () => {
+    expect(processOnlyInEntries("kernel/adapter/x.ts", "// process.argv は entry の責務\nconst v = 1;")).toHaveLength(0);
+    expect(processOnlyInEntries("kernel/adapter/x.ts", "/* import.meta を触らない */\nconst v = 1;")).toHaveLength(0);
+    expect(noExportStar("kernel/domain/index.ts", '// export * は禁止\nexport { X } from "./x.ts";')).toHaveLength(0);
+    expect(onlySanctionedImports("kernel/domain/x.ts", '// import { z } from "zod"; と書いてはならない\nconst v = 1;')).toHaveLength(0);
+  });
+
   test("no-export-star flags a wildcard re-export, passes an explicit facade", () => {
     expect(noExportStar("kernel/domain/index.ts", 'export * from "./digest.ts";')).not.toHaveLength(0);
     expect(noExportStar("kernel/domain/index.ts", 'export { Digest } from "./digest.ts";')).toHaveLength(0);
@@ -109,7 +123,7 @@ describe("rule red/green examples (detection power proof)", () => {
 
   test("locationOf classifies entries, legacy files, data, and layered paths", () => {
     expect(locationOf("aidlc-sensor-deep-spec-ir-valid.ts")).toBe("entry");
-    expect(locationOf("deep-spec-lib.ts")).toBe("legacy");
+    expect(locationOf("deep-spec-design-lib.ts")).toBe("legacy");
     expect(locationOf("data/deep-spec-ir-schema.json")).toBe("data");
     expect(locationOf("kernel/domain/digest.ts")).toEqual({ context: "kernel", layer: "domain" });
   });
