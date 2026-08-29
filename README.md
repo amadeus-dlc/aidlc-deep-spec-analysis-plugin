@@ -92,6 +92,7 @@ bun ../aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc-projec
 
 ## Documentation
 
+- Usage guide — fresh projects and mid-project adoption, in Japanese: [docs/usage.md](docs/usage.md)
 - Illustrated architecture overview, in Japanese: [docs/architecture.md](docs/architecture.md)
 - Plugin design and stage walkthrough: [deep-spec-analysis/README.md](deep-spec-analysis/README.md)
 - Design decisions, spike results, deviations from the draft: [deep-spec-analysis/docs/decisions.md](deep-spec-analysis/docs/decisions.md)
