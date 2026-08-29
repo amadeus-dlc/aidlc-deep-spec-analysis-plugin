@@ -274,3 +274,29 @@ touch で編集自体が隠れる）。検証後の要件変更に気づけな�
 | intent-e2e（+4件） | ✔ | 要件編集後、モデル mtime を 1 時間未来に押し出しても実ディスパッチャがモデルを拒否。doctor はコンテンツのみで verified → stale に遷移し、正確なバイト列の復元で復帰 |
 | **実サンドボックス実射** | ✔ | バニラ導入 → feature intent → digest 刻印モデル → ディスパッチャ：ir-valid passed・SMT が planted completeness gap を検出・Quint bounded（実 Apalache）clean・doctor 1/1 verified。ドリフト＋未来日付モデル：ir-valid が新旧 sha256 を明記して failed・doctor stale 0/1。エラー中の digest で restamp → passed・1/1。陳腐化した v0.4.0 composed スキーマはフィールドを拒否（`unexpected property "sourceDigest"`）し、インストーラの upgrade refresh が修復。おまけ：実射中に実際の著述ミス（`prime` を `primed` と誤記）も ir-valid が検出 |
 | リグレッション | ✔ | 全 85 テスト green・validator VALID（0 errors）・claude ハーネスビルド OK |
+
+## DDD 移行 PR0 — パリティハーネス・順序証明・アーキテクチャルール（2026-08-29、ロードマップ #12）
+
+tools/ ツリーを Domain Primitive / Always-Valid Domain Model とクリーン
+アーキテクチャ（コンテキスト優先 `tools/<context>/{domain,usecase,adapter}/`、
+entry はディスパッチャの basename 解決のためフラット維持）へ移行する。
+PR0 は安全網のみを導入し、production 変更はゼロ：
+
+- **パリティスナップショット**（`tests/parity/snapshot.ts`）：全 9 センサーを
+  全 fixture シナリオへ発火し、観測面の全体——findings ファイルのバイト・
+  stdout verdict 行の逐語・exit code——を決定論的ツリーに記録する。PR ごとの
+  儀式で base commit のスナップショットと `diff -r` して空を要求する。これは
+  golden 15 ファイルより厳密に広い保護（verdict 行と exit code は golden に
+  含まれない）。node と pinned quint が無ければ実行を拒否し、劣化環境の出力を
+  「正」として記録する事故を防ぐ。
+- **パリティ決定論テスト**（`AIDLC_PARITY=1`、opt-in）：同一コミットの
+  スナップショット 2 回がバイト同一であること。
+- **KIND_RANK 順序証明**（`tests/kind-rank.test.ts`）：v1 の 4-kind 表
+  （未知→9）と拡張 11-kind 表（未知→99）を実ソースから正規表現抽出し、
+  順序互換を機械証明。移行では統一せず 2 つの順序 VO として保持する
+  （バイト安全 ＞ 統一）。
+- **アーキテクチャルール**（`tests/architecture/rules.ts`＋テスト）：層 DAG・
+  公認 import 集合・entry 限定の `process.*`/`import.meta`・`export *` 禁止・
+  テストペイロード禁止を純粋関数化し、**実ツリー適用前にインライン red
+  example で検出力を証明**（ルール集の DoD）。現行フラット 13 ファイルは
+  縮小専用の LEGACY allowlist に載り、PR10 で空になる。

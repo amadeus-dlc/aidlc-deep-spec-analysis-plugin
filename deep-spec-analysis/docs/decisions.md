@@ -210,3 +210,32 @@ unnoticed. Decisions:
 | intent-e2e (+4 tests) | ✔ | real dispatcher refuses the model after a requirements edit even with the model mtime pushed 1h into the future; doctor flips verified → stale on content alone and back on restoring the exact bytes |
 | **Live sandbox exercise** | ✔ | vanilla install → feature intent → digest-stamped model → dispatcher: ir-valid passed, SMT caught the planted completeness gap, Quint bounded (real Apalache) clean, doctor 1/1 verified. Drift + future-dated model: ir-valid failed naming old and new sha256, doctor stale 0/1. Restamp with the digest from the error → passed, 1/1. Stale v0.4.0 composed schema rejected the field (`unexpected property "sourceDigest"`) and the installer's upgrade refresh healed it. Bonus: ir-valid caught a real authoring mistake (`primed` for `prime`) during the exercise |
 | Regression | ✔ | all 85 tests green, validator VALID (0 errors), claude harness build OK |
+
+## DDD migration PR0 — parity harness, order proof, architecture rules (2026-08-29, roadmap #12)
+
+The tools/ tree is being migrated to Domain Primitives / Always-Valid Domain
+Model with Clean Architecture layers (context-first: `tools/<context>/{domain,
+usecase,adapter}/`, entries stay flat — the dispatcher resolves basenames).
+PR0 lands the safety net only, zero production change:
+
+- **Parity snapshot** (`tests/parity/snapshot.ts`): fires all nine sensors
+  over every fixture scenario and records the full observable surface —
+  findings-file bytes, the verbatim stdout verdict line, and the exit code —
+  into a deterministic tree. The per-PR ritual diffs a base-commit snapshot
+  against the refactored one (`diff -r` must be empty), which protects
+  strictly more than the 15 goldens (verdict lines and exit codes are not in
+  them). It refuses to run without node and the pinned quint, so a degraded
+  environment can never be recorded as truth.
+- **Parity determinism test** (`AIDLC_PARITY=1`, opt-in): two snapshots of
+  the same commit must be byte-identical.
+- **KIND_RANK order proof** (`tests/kind-rank.test.ts`): the 4-kind v1 table
+  (unknown→9) and the 11-kind extended table (unknown→99) are extracted from
+  the actual sources by regex and proven order-compatible. The migration
+  still keeps them as two comparator VOs (byte-safety over unification).
+- **Architecture rules** (`tests/architecture/rules.ts` + test): pure
+  `(path, source) → violations` functions for the layer DAG, the sanctioned
+  import set, the entries-only `process.*`/`import.meta` rule, no
+  `export *`, and the no-test-payload rule — every rule proven by an inline
+  red example before it scans the real tree (the rule-set's DoD). The 13
+  current flat files ride a LEGACY allowlist that must only shrink; PR10
+  empties it.
