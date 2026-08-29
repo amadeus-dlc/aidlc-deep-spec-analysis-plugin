@@ -61,6 +61,12 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(onlySanctionedImports("kernel/domain/x.ts", 'const detail = `enum mapping from "${src}" is not total`;')).toHaveLength(0);
   });
 
+  test("a dynamic import with a non-literal argument is flagged (template literal and concatenation)", () => {
+    expect(onlySanctionedImports("kernel/adapter/x.ts", "const m = await import(`zod`);")).not.toHaveLength(0);
+    expect(onlySanctionedImports("kernel/adapter/x.ts", 'const m = await import("./" + name);')).not.toHaveLength(0);
+    expect(onlySanctionedImports("kernel/adapter/x.ts", 'const m = await import("z3-solver");')).toHaveLength(0);
+  });
+
   test("no-entry-imports flags an import of a composition root", () => {
     expect(noEntryImports("kernel/adapter/x.ts", 'import { m } from "../../aidlc-sensor-deep-spec-ir-valid.ts";')).not.toHaveLength(0);
     expect(noEntryImports("kernel/adapter/x.ts", 'import { m } from "./y.ts";')).toHaveLength(0);
@@ -71,6 +77,11 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(noIoInPureLayers("design/usecase/x.ts", 'import { spawnSync } from "node:child_process";')).not.toHaveLength(0);
     expect(noIoInPureLayers("kernel/domain/digest.ts", 'import { createHash } from "node:crypto";')).toHaveLength(0);
     expect(noIoInPureLayers("kernel/adapter/x.ts", 'import { readFileSync } from "node:fs";')).toHaveLength(0);
+  });
+
+  test("a node:fs subpath does not slip past the usecase ban", () => {
+    expect(noIoInPureLayers("design/usecase/x.ts", 'import { readFile } from "node:fs/promises";')).not.toHaveLength(0);
+    expect(noIoInPureLayers("kernel/domain/x.ts", 'import { readFile } from "node:fs/promises";')).not.toHaveLength(0);
   });
 
   test("process-only-in-entries flags process.env and import.meta in layered files", () => {
@@ -90,6 +101,10 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(layerDirection("refinement/domain/x.ts", 'import { y } from "../../requirements/domain/y.ts";')).toHaveLength(0);
     expect(layerDirection("design/usecase/x.ts", 'import { y } from "../../refinement/domain/y.ts";')).toHaveLength(0);
     expect(layerDirection("design/usecase/x.ts", 'import { y } from "../domain/y.ts";')).toHaveLength(0);
+  });
+
+  test("a relative import escaping tools/ (unclassified target) is flagged", () => {
+    expect(layerDirection("kernel/domain/x.ts", 'import { h } from "../../../tests/helper.ts";')).not.toHaveLength(0);
   });
 
   test("locationOf classifies entries, legacy files, data, and layered paths", () => {
@@ -120,5 +135,26 @@ describe("the real tools/ tree", () => {
   test("the legacy allowlist only shrinks — no unlisted flat file appears", () => {
     const flat = files.filter((rel) => !rel.includes("/"));
     for (const rel of flat) expect(LEGACY_FILES.has(rel)).toBe(true);
+  });
+
+  test("the legacy allowlist never grows beyond the original 13 files (removals only)", () => {
+    // 移行開始時点（2026-08-29、ロードマップ #12）の固定集合。ここへの追加は
+    // 移行の逆行なので、allowlist へ新ファイルを足す変更はこのテストで落ちる。
+    const original = new Set([
+      "aidlc-sensor-deep-spec-ir-valid.ts",
+      "aidlc-sensor-deep-spec-verify-smt.ts",
+      "aidlc-sensor-deep-spec-verify-quint.ts",
+      "aidlc-sensor-deep-spec-refcheck-domain.ts",
+      "aidlc-sensor-deep-spec-refcheck-contract.ts",
+      "aidlc-sensor-deep-spec-refcheck-functional.ts",
+      "aidlc-sensor-deep-spec-design-ir-valid.ts",
+      "aidlc-sensor-deep-spec-design-verify-smt.ts",
+      "aidlc-sensor-deep-spec-design-verify-quint.ts",
+      "deep-spec-analysis-doctor.ts",
+      "deep-spec-lib.ts",
+      "deep-spec-design-lib.ts",
+      "deep-spec-refinement-lib.ts",
+    ]);
+    for (const rel of LEGACY_FILES) expect(original.has(rel)).toBe(true);
   });
 });

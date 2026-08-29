@@ -38,7 +38,10 @@ describe("parity harness", () => {
         expect(firstFiles.length).toBeGreaterThan(0);
         expect(listFiles(second)).toEqual(firstFiles);
         for (const rel of firstFiles) {
-          expect(readFileSync(join(second, rel), "utf-8")).toBe(readFileSync(join(first, rel), "utf-8"));
+          // バイト同一の表明なので UTF-8 デコードを介さず Buffer で比較する
+          // （不正バイト列が同じ置換文字へ潰れる偽陽性の回避）。
+          const identical = readFileSync(join(second, rel)).equals(readFileSync(join(first, rel)));
+          expect(`${rel}: ${identical}`).toBe(`${rel}: true`);
         }
       } finally {
         rmSync(first, { recursive: true, force: true });

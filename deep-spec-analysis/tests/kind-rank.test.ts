@@ -62,6 +62,9 @@ describe("kind-rank order preservation", () => {
   test("both unknown fallbacks exceed every known rank in their table", () => {
     for (const file of [...V1_FILES, ...EXTENDED_FILES]) {
       const { table, fallback } = extractKindRank(file);
+      // fallback は歴史的な固定値（v1=9・拡張=99）。golden に効く定数なので
+      // 「既知 rank より大きい」だけでなく値そのものを固定する。
+      expect(fallback).toBe(V1_FILES.includes(file) ? 9 : 99);
       for (const [kind, rank] of table) {
         expect(`${file} ${kind} ${rank < fallback}`).toBe(`${file} ${kind} true`);
       }

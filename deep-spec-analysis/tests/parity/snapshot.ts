@@ -198,8 +198,11 @@ export function assertSolversPresent(): void {
   if (node.error || node.status !== 0) {
     throw new Error("parity snapshot requires a node runtime (z3 child) — refusing to record degraded output as truth");
   }
-  if (!existsSync(quintBin)) {
-    throw new Error(`parity snapshot requires the pinned quint at ${quintBin} — run bun install first`);
+  // 存在確認では実行不能バイナリを見逃す（unavailable 降格が 2 回一致して
+  // パリティを通ってしまう）ため、実際に --version を走らせて確かめる。
+  const quint = spawnSync(quintBin, ["--version"], { encoding: "utf-8", timeout: 30_000 });
+  if (quint.error || quint.status !== 0) {
+    throw new Error(`parity snapshot requires a runnable pinned quint at ${quintBin} — run bun install first`);
   }
 }
 

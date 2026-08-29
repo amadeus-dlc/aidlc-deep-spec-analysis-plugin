@@ -108,6 +108,17 @@ export function onlySanctionedImports(relPath: string, source: string): Violatio
     const sanctioned = spec.startsWith("node:") || spec.startsWith("./") || spec.startsWith("../") || ALLOWED_NPM.has(spec);
     if (!sanctioned) out.push({ path: relPath, rule: "only-sanctioned-imports", detail: `import "${spec}"` });
   }
+  // 動的 import の引数が引用符リテラルでないもの（テンプレートリテラル・
+  // 文字列連結・変数）は解析不能＝検査回避経路になるため一律違反にする。
+  const dynamicAll = [...source.matchAll(/\bimport\s*\(/g)].length;
+  const dynamicLiteral = [...source.matchAll(/import\(\s*["'][^"']+["']\s*\)/g)].length;
+  if (dynamicAll > dynamicLiteral) {
+    out.push({
+      path: relPath,
+      rule: "only-sanctioned-imports",
+      detail: `${dynamicAll - dynamicLiteral} dynamic import(s) with a non-literal argument`,
+    });
+  }
   return out;
 }
 
@@ -127,6 +138,10 @@ export function noEntryImports(relPath: string, source: string): Violation[] {
 
 // ルール: domain 層は I/O を知らない。node:* は node:crypto（純計算の sha256）
 // のみ許可。usecase 層は fs / child_process / os を禁止。
+function isModuleOrSubpath(spec: string, module: string): boolean {
+  return spec === module || spec.startsWith(`${module}/`);
+}
+
 export function noIoInPureLayers(relPath: string, source: string): Violation[] {
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string") return [];
@@ -136,7 +151,8 @@ export function noIoInPureLayers(relPath: string, source: string): Violation[] {
     if (loc.layer === "domain" && spec !== "node:crypto") {
       out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `domain imports "${spec}"` });
     }
-    if (loc.layer === "usecase" && ["node:fs", "node:child_process", "node:os"].includes(spec)) {
+    // サブパス（node:fs/promises 等）も同一モジュールとして拒否する。
+    if (loc.layer === "usecase" && ["node:fs", "node:child_process", "node:os"].some((m) => isModuleOrSubpath(spec, m))) {
       out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `usecase imports "${spec}"` });
     }
   }
@@ -193,10 +209,14 @@ export function layerDirection(relPath: string, source: string): Violation[] {
     if (!spec.startsWith(".")) continue;
     const target = resolveRelative(relPath, spec);
     const targetLoc = locationOf(target);
-    if (targetLoc === null || typeof targetLoc === "string") {
-      if (targetLoc !== null) {
-        out.push({ path: relPath, rule: "layer-direction", detail: `layered file imports non-layered "${target}"` });
-      }
+    if (targetLoc === null) {
+      // 未分類ターゲット（tools/ 外への脱出や層に属さないファイル）を
+      // 素通しにすると検査全体の回避経路になるため違反にする。
+      out.push({ path: relPath, rule: "layer-direction", detail: `layered file imports unclassified "${target}"` });
+      continue;
+    }
+    if (typeof targetLoc === "string") {
+      out.push({ path: relPath, rule: "layer-direction", detail: `layered file imports non-layered "${target}"` });
       continue;
     }
     const sameOrKernel = targetLoc.context === loc.context || targetLoc.context === "kernel";
