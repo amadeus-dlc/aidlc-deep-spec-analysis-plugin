@@ -199,3 +199,11 @@ bounded モード限定・キャップ制（`AIDLC_DEEP_SPEC_QUINT_UNREACH_CAP`�
 | **実サンドボックス実射**（後入れアップグレード） | ✔ | upgrade refresh 18 ファイル→compose、ディスパッチャ実射で smt 7 findings、**Quint bounded 自動検出（実 Apalache）で unreachable "archived" を検出**＋DOB-1 の 2 状態 trace＋キャップ超過分の明示 skip（10.4 秒）、cross-check DSC-1 一致、doctor が feature intent のユニットを unverified→verified（1/1）遷移・**classic intent はスコープ除外（仕様どおり）** |
 | v1・フェーズ① リグレッション | ✔ | 全 72 テスト green、既存 golden バイト同一 |
 | validator / ビルド | ✔ | VALID（errors 0）、7 ハーネス全ビルド OK |
+
+### フェーズ② レビュー追補（2026-08-29、PR #7 の CodeRabbit 指摘 7 件への対応）
+
+- **実行予算の子プロセス伝播**（実バグ）: これまで予算判定は子プロセス起動「前」だけで、予算末期に起動した子が満額の wall timeout まで走り、センサー本体が dispatcher の timeout で殺されて findings 文書ゼロという最悪劣化があり得た。両バックエンドとも `min(単体wall, 予算残)` を子の timeout に渡し、残 3 秒未満はユニット/プローブを `timeout` skip する。
+- **UNREACH_CAP の run 全体共有**（実バグ）: プローブ数カウンタがユニットごとに実質リセットされ、複数ユニットでキャップ超過し得た。カウンタをユニットループ外へ。
+- **ir-valid の強制強化 3 件**: (a) enum リテラルは二項比較の兄弟 `ref` 属性に束縛して照合（他属性に同名値があるだけで通る any-enum ショートカットを廃止。v1 ir-valid は出荷済み意味論として現状維持——バックエンドの compile-error skip が防波堤）。(b) int 属性の min/max 欠落をエラー化（著述契約の MANDATORY を機構的に強制。スキーマ側を必須化しないのは契約1 との共有定義バイト同一を守るため）。(c) unit 名が construction ディレクトリに一致しない場合、brRefs ゼロでもエラー（typo で BR カバレッジ検査が丸ごと沈黙する穴を閉鎖）。
+- **doctor**: cross-check.json 単独では verified と数えない（実バックエンド文書を要求）。ユニット単位の完了記録（clean と未実行の判別）は契約2 に per-unit checked の語彙が要るためフェーズ③の検討事項として持ち越し。
+- 不正 fixture のサマリを実際の planted 欠陥（BR カバレッジ 4 件を含む）と一致させ、新 3 検査の負テストを追加。

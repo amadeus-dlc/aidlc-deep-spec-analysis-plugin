@@ -88,6 +88,9 @@ function semanticErrors(units: Json[], outputPath: string): string[] {
         const t = isObject(attr.type) ? attr.type : {};
         const kind = typeof t.kind === "string" ? t.kind : "";
         const values = Array.isArray(t.values) ? (t.values.filter((v) => typeof v === "string") as string[]) : undefined;
+        if (kind === "int" && (typeof t.min !== "number" || typeof t.max !== "number")) {
+          errors.push(where(`${ent.name}.${attr.name}: int attributes require min and max — the Quint backend needs bounded domains`));
+        }
         if (kind === "int" && typeof t.min === "number" && typeof t.max === "number" && t.min > t.max) {
           errors.push(where(`${ent.name}.${attr.name}: min > max`));
         }
@@ -96,6 +99,19 @@ function semanticErrors(units: Json[], outputPath: string): string[] {
     }
     const checkExpr = (e: Json, ctx: string, primesAllowed: boolean): void => {
       if (!isObject(e)) return;
+      // An enum literal in a binary comparison binds to its sibling ref: the
+      // value must belong to THAT attribute, not to any enum somewhere in the
+      // unit (a "closed" literal on ticket.channel must not legalize
+      // "closed" against ticket.status).
+      const boundEnum = new Map<Expr, string>();
+      walkExpr(e as unknown as Expr, (node) => {
+        const args = node.args ?? [];
+        if (args.length === 2) {
+          const ref = args.find((a) => a.op === "ref" && typeof a.path === "string");
+          const en = args.find((a) => a.op === "enum");
+          if (ref && en) boundEnum.set(en, ref.path as string);
+        }
+      });
       walkExpr(e as unknown as Expr, (node) => {
         if (node.op === "ref" && typeof node.path === "string") {
           if (!attrTypes.has(node.path)) errors.push(where(`${ctx}: unresolvable reference "${node.path}"`));
@@ -104,8 +120,19 @@ function semanticErrors(units: Json[], outputPath: string): string[] {
           }
         }
         if (node.op === "enum" && typeof node.value === "string") {
-          const known = [...attrTypes.values()].some((t) => t.kind === "enum" && t.values?.includes(node.value as string));
-          if (!known) errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of any declared enum attribute`));
+          const sibling = boundEnum.get(node);
+          const siblingType = sibling === undefined ? undefined : attrTypes.get(sibling);
+          if (siblingType !== undefined) {
+            if (siblingType.kind !== "enum") {
+              errors.push(where(`${ctx}: enum literal "${node.value}" is compared against non-enum attribute "${sibling}"`));
+            } else if (!(siblingType.values ?? []).includes(node.value)) {
+              errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of "${sibling}"`));
+            }
+          } else if (sibling === undefined) {
+            const known = [...attrTypes.values()].some((t) => t.kind === "enum" && t.values?.includes(node.value as string));
+            if (!known) errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of any declared enum attribute`));
+          }
+          // An unresolvable sibling ref is already reported by the ref check.
         }
       });
     };
@@ -223,6 +250,12 @@ function semanticErrors(units: Json[], outputPath: string): string[] {
     }
 
     // brRefs reverse-verification + BR coverage against this unit's rules.md.
+    // A unit name that matches no construction directory is an error even
+    // with zero brRefs: a typo would otherwise erase the whole BR coverage
+    // check silently ("Silence is a contract violation").
+    if (recordRoot !== null && !existsSync(join(recordRoot, "construction", unitName))) {
+      errors.push(where(`no construction/${unitName}/ directory exists under this record — the unit name matches no unit-of-work, so BR coverage cannot be verified`));
+    }
     const rulesPath = recordRoot === null ? null : join(recordRoot, "construction", unitName, "functional-design", "rules.md");
     const rulesMd = rulesPath === null ? null : readIfExists(rulesPath);
     if (rulesMd === null) {

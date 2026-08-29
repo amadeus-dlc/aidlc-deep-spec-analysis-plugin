@@ -391,7 +391,11 @@ function scanFunctionalCoverage(): { eligible: number; problems: UnitCoverageRow
           modelUnits = new Set();
         }
         try {
-          hasFindings = readdirSync(join(stageDir, "deep-spec-design-verify")).some((f) => f.endsWith(".json"));
+          // cross-check.json alone is not verification evidence — require a
+          // real backend document.
+          hasFindings = readdirSync(join(stageDir, "deep-spec-design-verify")).some(
+            (f) => f.endsWith(".json") && f !== "cross-check.json",
+          );
         } catch {
           hasFindings = false;
         }

@@ -112,7 +112,16 @@ function main(): void {
       continue;
     }
     const lowered = lowerUnit(u, { synthetics: true });
-    const run = runSiblingBackend("smt", lowered.v1Doc, UNIT_WALL_TIMEOUT_MS);
+    // Never let a child outlive the run budget: the dispatcher would kill the
+    // sensor mid-write and leave no findings document at all.
+    const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (Date.now() - started));
+    if (remaining < 3_000) {
+      for (const t of allUnitTargets(u)) {
+        skipped.push({ target: t, reason: "timeout", unit: u.unit, detail: "the per-run solver budget was exhausted before this unit" });
+      }
+      continue;
+    }
+    const run = runSiblingBackend("smt", lowered.v1Doc, remaining);
     if (run.exit === 127) {
       const reason =
         (run.doc && typeof run.doc === "object" && !Array.isArray(run.doc) && typeof (run.doc as { unavailable?: { reason?: string } }).unavailable?.reason === "string"

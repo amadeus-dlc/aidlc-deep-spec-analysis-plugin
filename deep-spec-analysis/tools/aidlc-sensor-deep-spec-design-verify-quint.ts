@@ -164,6 +164,8 @@ function main(): void {
   const skipped: DSkipped[] = [];
   let method: string | null = null;
   const started = Date.now();
+  // The probe cap is PER RUN, not per unit (AIDLC_DEEP_SPEC_QUINT_UNREACH_CAP).
+  let probesUsed = 0;
 
   for (const u of ir.units) {
     if (Date.now() - started > RUN_BUDGET_MS) {
@@ -173,7 +175,16 @@ function main(): void {
       continue;
     }
     const lowered = lowerUnit(u, { synthetics: false });
-    const run = runSiblingBackend("quint", lowered.v1Doc, UNIT_WALL_TIMEOUT_MS);
+    // Never let a child outlive the run budget: the dispatcher would kill the
+    // sensor mid-write and leave no findings document at all.
+    const mainRemaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (Date.now() - started));
+    if (mainRemaining < 3_000) {
+      for (const t of allUnitTargets(u)) {
+        skipped.push({ target: t, reason: "timeout", unit: u.unit, detail: "the per-run backend budget was exhausted before this unit" });
+      }
+      continue;
+    }
+    const run = runSiblingBackend("quint", lowered.v1Doc, mainRemaining);
     if (run.exit === 127) {
       const reason =
         (isObject(run.doc) && isObject(run.doc.unavailable) && typeof run.doc.unavailable.reason === "string"
@@ -211,7 +222,6 @@ function main(): void {
     skipped.push(...remapped.skipped);
 
     // Unreachable-state detection (FR8.4): bounded mode only, budget-capped.
-    let used = findings.filter((f) => f.kind === "unreachable").length + 0;
     for (const sm of [...u.machines].sort((a, b) => (a.id < b.id ? -1 : 1))) {
       const attrPath = lowered.attrPathOfMachine.get(sm.id) ?? `${sm.entity}.${sm.attribute}`;
       const candidates = enumValuesOf(u, attrPath)
@@ -229,13 +239,14 @@ function main(): void {
       }
       const leftover: string[] = [];
       for (const state of candidates) {
-        if (used >= UNREACH_CAP || Date.now() - started > UNREACH_BUDGET_MS) {
+        const probeRemaining = Math.min(UNIT_WALL_TIMEOUT_MS, UNREACH_BUDGET_MS - (Date.now() - started));
+        if (probesUsed >= UNREACH_CAP || probeRemaining < 3_000) {
           leftover.push(state);
           continue;
         }
-        used += 1;
+        probesUsed += 1;
         const variant = reachabilityVariant(lowered.v1Doc, attrPath, state);
-        const probeRun = runSiblingBackend("quint", variant, UNIT_WALL_TIMEOUT_MS);
+        const probeRun = runSiblingBackend("quint", variant, probeRemaining);
         if (probeRun.exit !== 0 || probeRun.doc === null || (isObject(probeRun.doc) && isObject(probeRun.doc.unavailable))) {
           leftover.push(state);
           continue;
@@ -255,7 +266,7 @@ function main(): void {
       if (leftover.length > 0) {
         skipped.push({
           target: sm.id,
-          reason: used >= UNREACH_CAP ? "timeout" : "unavailable",
+          reason: probesUsed >= UNREACH_CAP ? "timeout" : "unavailable",
           unit: u.unit,
           detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id} (per-run cap ${UNREACH_CAP} / budget reached, or the probe run failed)`,
         });
