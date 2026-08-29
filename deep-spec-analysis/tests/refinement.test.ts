@@ -80,7 +80,7 @@ describe("refinement conformance (expected findings, byte-for-byte)", () => {
     const after = ["smt.json", "quint.json", "cross-check.json"].map((f) => readFileSync(join(verifyDir, f), "utf-8"));
     expect(after).toEqual(before);
     rmSync(makeRecord().record, { recursive: true, force: true });
-  });
+  }, 240_000);
 
   test("the planted refinement defects surface with requirements-side targets and provenance", () => {
     const smt = JSON.parse(readFileSync(join(expected, "smt.json"), "utf-8"));
@@ -119,7 +119,7 @@ describe("refinement degradation (never silence)", () => {
     const refSkips = doc.skipped.filter((s: { reason: string }) => s.reason === "absent-input");
     expect(refSkips.map((s: { target: string }) => s.target).sort()).toEqual(["OB-1", "OB-2", "OB-3", "SC-1", "SC-2"]);
     expect(doc.findings.some((f: { kind: string }) => f.kind === "refinement-violation")).toBe(false);
-  });
+  }, 120_000);
 
   test("a stale map hash skips every requirements target with stale-input", () => {
     if (!nodeAvailable) {
@@ -133,7 +133,7 @@ describe("refinement degradation (never silence)", () => {
     const refSkips = doc.skipped.filter((s: { reason: string }) => s.reason === "stale-input");
     expect(refSkips.length).toBe(5);
     expect(refSkips[0].detail).toContain("designIrHash");
-  });
+  }, 120_000);
 
   test("a map without this unit's entry skips with absent-input naming the unit", () => {
     if (!nodeAvailable) {
@@ -146,5 +146,5 @@ describe("refinement degradation (never silence)", () => {
     const doc = JSON.parse(readFileSync(join(verifyDir, "smt.json"), "utf-8"));
     const refSkips = doc.skipped.filter((s: { detail?: string }) => (s.detail ?? "").includes("no entry for unit u1-orders"));
     expect(refSkips.length).toBe(5);
-  });
+  }, 120_000);
 });

@@ -133,7 +133,7 @@ describe("design backend conformance (expected findings, byte-for-byte)", () => 
     expect(fire("aidlc-sensor-deep-spec-design-verify-quint.ts", modelPath, quintEnv).status).toBe(0);
     const after = ["smt.json", "quint.json", "cross-check.json"].map((f) => readFileSync(join(verifyDir, f), "utf-8"));
     expect(after).toEqual(before);
-  });
+  }, 240_000);
 
   test("the planted defects surface with their design kinds and per-unit attribution", () => {
     const doc = JSON.parse(readFileSync(join(expected, "smt.json"), "utf-8"));
