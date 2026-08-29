@@ -5,6 +5,8 @@ adds:
   consumes:
     - artifact: deep-spec-analysis-report
       required: false
+  sensors:
+    - deep-spec-refcheck-domain
 fragments:
   - anchor: end-of-steps
     order: 100
@@ -32,3 +34,19 @@ component catalogue:
 Reference `deep-spec-analysis-report.md` explicitly wherever it changed a
 decision. When the artifact is absent, skip this step silently — the stage
 is scope-dependent.
+
+#### Fix or record reference-integrity findings (deep-spec-refcheck)
+
+Writing `components.md` fires the `deep-spec-refcheck-domain` sensor, which
+checks the seven well-formedness rules of the component catalogue (name
+uniqueness, declared references, no self-dependency, depends_on/dependents
+symmetry, single entity ownership, declared reference targets, acyclicity)
+and writes `deep-spec-refcheck/components.json` next to the artifact.
+
+Before presenting the summary confirmation, read that file. For every
+finding, either **fix** the catalogue (structural defects — a dangling
+component name, an asymmetric dependency, a cycle — are authoring errors,
+not judgment calls) or, when the flagged shape is genuinely intended,
+**record** it as an accepted risk in `decisions.md` with the finding's
+detail quoted. Do not leave a finding unaddressed and unrecorded. When the
+findings file does not exist (sensor not composed), skip silently.

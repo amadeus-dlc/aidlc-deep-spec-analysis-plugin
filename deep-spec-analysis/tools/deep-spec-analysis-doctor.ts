@@ -41,6 +41,13 @@ installed("tools/aidlc-sensor-deep-spec-verify-quint.ts", "error");
 installed("tools/data/deep-spec-ir-schema.json", "error");
 installed("tools/data/deep-spec-findings-schema.json", "error");
 installed("knowledge/aidlc-product-agent/deep-spec-ir-authoring.md", "error");
+installed("sensors/aidlc-deep-spec-refcheck-domain.md", "error");
+installed("sensors/aidlc-deep-spec-refcheck-contract.md", "error");
+installed("sensors/aidlc-deep-spec-refcheck-functional.md", "error");
+installed("tools/aidlc-sensor-deep-spec-refcheck-domain.ts", "error");
+installed("tools/aidlc-sensor-deep-spec-refcheck-contract.ts", "error");
+installed("tools/aidlc-sensor-deep-spec-refcheck-functional.ts", "error");
+installed("tools/deep-spec-lib.ts", "error");
 
 function probe(cmd: string, args: string[]): boolean {
   const res = spawnSync(cmd, args, { encoding: "utf-8", timeout: 5000 });
@@ -189,5 +196,113 @@ checks.push({
   fix: "See the per-intent rows above for the exact command each unverified intent needs.",
   severity: "advisory",
 });
+
+// Structural-debt scan (phase 1, report-only): run the deep-spec-refcheck
+// tools against every existing design artifact without writing anything, so
+// a late adopter sees reference/structure debt from the very first doctor
+// run — before any stage ever fires a sensor. Advisory: debt never blocks.
+interface DebtRow {
+  space: string;
+  intent: string;
+  artifact: string;
+  findings: number;
+}
+
+function refcheckReportOnly(tool: string, artifactPath: string): number | null {
+  const script = join(root, "tools", tool);
+  if (!existsSync(script)) return null;
+  const res = spawnSync("bun", [script, "--stage", "doctor", "--output-path", artifactPath, "--report-only"], {
+    encoding: "utf-8",
+    timeout: 15_000,
+  });
+  if (res.error || res.status !== 0) return null;
+  try {
+    const lines = (res.stdout ?? "").trim().split("\n");
+    const verdict = JSON.parse(lines[lines.length - 1] ?? "{}") as { findings_count?: number };
+    return typeof verdict.findings_count === "number" ? verdict.findings_count : null;
+  } catch {
+    return null;
+  }
+}
+
+function scanDesignDebt(): { scanned: number; rows: DebtRow[] } {
+  const rows: DebtRow[] = [];
+  let scanned = 0;
+  const spacesDir = join(projectDir, "aidlc", "spaces");
+  let spaces: string[] = [];
+  try {
+    spaces = readdirSync(spacesDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    return { scanned, rows };
+  }
+  for (const space of spaces) {
+    const intentsDir = join(spacesDir, space, "intents");
+    let intents: string[] = [];
+    try {
+      intents = readdirSync(intentsDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+        .map((e) => e.name);
+    } catch {
+      continue;
+    }
+    for (const intent of intents) {
+      const record = join(intentsDir, intent);
+      const scan = (tool: string, artifactPath: string, label: string): void => {
+        if (!existsSync(artifactPath)) return;
+        const findings = refcheckReportOnly(tool, artifactPath);
+        if (findings === null) return;
+        scanned += 1;
+        if (findings > 0) rows.push({ space, intent, artifact: label, findings });
+      };
+      scan("aidlc-sensor-deep-spec-refcheck-domain.ts", join(record, "inception", "domain-design", "components.md"),
+        "inception/domain-design/components.md");
+      scan("aidlc-sensor-deep-spec-refcheck-contract.ts", join(record, "inception", "contract-design", "contract-summary.md"),
+        "inception/contract-design/contract-summary.md");
+      const constructionDir = join(record, "construction");
+      let units: string[] = [];
+      try {
+        units = readdirSync(constructionDir, { withFileTypes: true })
+          .filter((e) => e.isDirectory())
+          .map((e) => e.name)
+          .sort();
+      } catch {
+        units = [];
+      }
+      for (const unit of units) {
+        const fdDir = join(constructionDir, unit, "functional-design");
+        const trigger = ["entities.md", "rules.md", "functional-spec.md"]
+          .map((f) => join(fdDir, f))
+          .find((p) => existsSync(p));
+        if (trigger !== undefined) {
+          scan("aidlc-sensor-deep-spec-refcheck-functional.ts", trigger, `construction/${unit}/functional-design`);
+        }
+      }
+    }
+  }
+  return { scanned, rows };
+}
+
+const debt = scanDesignDebt();
+for (const row of debt.rows) {
+  checks.push({
+    pass: false,
+    label: `deep-spec-analysis: ${row.space}/${row.intent} ${row.artifact} has ${row.findings} reference-integrity finding(s)`,
+    fix:
+      "Open the artifact and fix (or record as an accepted risk) each finding; " +
+      "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
+    severity: "advisory",
+  });
+}
+if (debt.scanned > 0) {
+  const total = debt.rows.reduce((n, r) => n + r.findings, 0);
+  checks.push({
+    pass: total === 0,
+    label: `deep-spec-analysis: design refcheck — ${total} structural finding(s) across ${debt.scanned} design artifact(s) scanned (report-only)`,
+    fix: "See the per-artifact rows above.",
+    severity: "advisory",
+  });
+}
 
 process.stdout.write(`${JSON.stringify({ checks })}\n`);
