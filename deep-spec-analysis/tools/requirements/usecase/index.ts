@@ -5,3 +5,6 @@ export { type VerificationReportRepository } from "./verification-report-reposit
 export { type SmtCheck, type SmtSolverResult, type Z3SolverClient } from "./z3-solver-client.ts";
 export { type VerifySmtOutcome } from "./verify-smt-outcome.ts";
 export { type VerifyRequirementsSmtInput, VerifyRequirementsSmtUseCase } from "./verify-requirements-smt-usecase.ts";
+export { type QuintCheckResult, type QuintClient } from "./quint-client.ts";
+export { type VerifyQuintOutcome } from "./verify-quint-outcome.ts";
+export { type VerifyRequirementsQuintInput, VerifyRequirementsQuintUseCase } from "./verify-requirements-quint-usecase.ts";

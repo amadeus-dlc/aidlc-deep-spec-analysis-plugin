@@ -1,13 +1,16 @@
-// deep-spec-verify-smt の interactor。Repository / Client を保持し、execute は
-// 成果物パス（識別）を受けて内部で形式モデルを解決し、SMT 検証 → 解釈 →
+// deep-spec-verify-quint の interactor。Repository / Client を保持し、execute は
+// 成果物パス（識別）を受けて内部で形式モデルを解決し、Quint 検証 → 解釈 →
 // レポート組成 → 契約適合 → 永続化 → クロスチェック再計算までを起動する。
 //
-// 経路の凍結挙動（旧 parentMain と同値）:
+// 経路の凍結挙動（旧 main と同値）:
 //   - モデル不在 → not-applicable（文書を書かない）
-//   - IR 不成立 → ir-unreadable 降格文書を書く（クロスチェックは再計算しない）
-//   - major 不一致 → 全対象 skip の文書＋クロスチェック再計算
-//   - ソルバ実行不能 → unavailable 文書＋クロスチェック再計算（entry が 127）
-//   - 検証成立 → findings 文書＋クロスチェック再計算。verdict は conformed
+//   - IR 不成立 → ir-unreadable 降格文書（method "simulation"、クロスチェック
+//     は再計算しない）
+//   - major 不一致 → 全対象 skip の文書（method "simulation"）＋クロスチェック
+//   - quint CLI 不在 → unavailable 文書＋クロスチェック（entry が 127）
+//   - 機械コンパイル不能 → 全対象 compile-error の文書＋クロスチェック
+//     （entry は note つき exit 0）
+//   - 検証成立 → findings 文書＋クロスチェック。verdict は conformed
 //     （＝書かれた姿）から導出する。
 
 import type { Result } from "../../kernel/domain/index.ts";
@@ -19,71 +22,79 @@ import {
   VerificationReportId,
   type RequirementsModel,
   crossCheckReport,
-  interpretSmtVerdicts,
+  interpretQuintVerdicts,
   irUnreadableReport,
-  solverUnavailableReport,
+  machineUncompilableReport,
+  quintUnavailableReport,
   versionMismatchReport,
 } from "../domain/index.ts";
 import type { FormalModelRepository } from "./formal-model-repository.ts";
+import type { QuintClient } from "./quint-client.ts";
 import type { VerificationReportRepository } from "./verification-report-repository.ts";
-import type { VerifySmtOutcome } from "./verify-smt-outcome.ts";
-import type { Z3SolverClient } from "./z3-solver-client.ts";
+import type { VerifyQuintOutcome } from "./verify-quint-outcome.ts";
 
-const BACKEND = "smt";
+const BACKEND = "quint";
 const CROSS_CHECK_BACKEND = "cross-check";
 
-export interface VerifyRequirementsSmtInput {
+export interface VerifyRequirementsQuintInput {
   readonly modelPath: string;
   readonly verifyDirectory: string;
 }
 
-export class VerifyRequirementsSmtUseCase {
+export class VerifyRequirementsQuintUseCase {
   readonly #formalModels: FormalModelRepository;
   readonly #reports: VerificationReportRepository;
-  readonly #solver: Z3SolverClient;
+  readonly #quint: QuintClient;
 
-  constructor(formalModels: FormalModelRepository, reports: VerificationReportRepository, solver: Z3SolverClient) {
+  constructor(formalModels: FormalModelRepository, reports: VerificationReportRepository, quint: QuintClient) {
     this.#formalModels = formalModels;
     this.#reports = reports;
-    this.#solver = solver;
+    this.#quint = quint;
   }
 
-  execute(input: VerifyRequirementsSmtInput): VerifySmtOutcome {
+  execute(input: VerifyRequirementsQuintInput): VerifyQuintOutcome {
     const id = VerificationReportId.of(input.verifyDirectory, BACKEND);
     const acquired = this.#formalModels.findByPath(input.modelPath);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#persist(irUnreadableReport(id, "exhaustive", acquired.error.cause));
+      const saved = this.#persist(irUnreadableReport(id, "simulation", acquired.error.cause));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
     }
     const { model, irHash } = acquired.value;
 
     if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
-      const saved = this.#persist(versionMismatchReport(id, model, irHash, "exhaustive"));
+      const saved = this.#persist(versionMismatchReport(id, model, irHash, "simulation"));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
       if (!cross.ok) return { kind: "save-failed", error: cross.error };
       return { kind: "version-mismatch" };
     }
 
-    const run = this.#solver.check(model);
-    if (run.result.kind === "unavailable") {
-      const saved = this.#persist(solverUnavailableReport(id, model, irHash, run.facts.skipped, run.result.reason));
+    const checked = this.#quint.check(model);
+    if (checked.kind === "cli-unavailable") {
+      const saved = this.#persist(quintUnavailableReport(id, model, irHash));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
       if (!cross.ok) return { kind: "save-failed", error: cross.error };
-      return { kind: "solver-unavailable" };
+      return { kind: "backend-unavailable" };
+    }
+    if (checked.kind === "machine-uncompilable") {
+      const saved = this.#persist(machineUncompilableReport(id, model, irHash, checked.method, checked.error));
+      if (!saved.ok) return { kind: "save-failed", error: saved.error };
+      const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
+      if (!cross.ok) return { kind: "save-failed", error: cross.error };
+      return { kind: "machine-uncompilable" };
     }
 
-    const interpreted = interpretSmtVerdicts(model, run.facts, run.result.verdicts);
+    const interpreted = interpretQuintVerdicts(model, checked.facts, checked.compileSkips, checked.method, checked.runs);
     const conformed = this.#reports.conformedOf(
       VerificationReport.compose({
         id,
         irVersion: model.irVersion(),
         irHash,
-        method: "exhaustive",
+        method: checked.method,
         findings: interpreted.findings,
         skipped: interpreted.skipped,
       }),
@@ -97,6 +108,7 @@ export class VerifyRequirementsSmtUseCase {
       pass: conformed.passes(),
       findingsCount: conformed.findingsCount(),
       skippedCount: conformed.skippedCount(),
+      method: checked.method,
     };
   }
 

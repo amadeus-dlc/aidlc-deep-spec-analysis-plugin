@@ -32,14 +32,20 @@ function extractKindRank(file: string): { table: Map<string, number>; fallback: 
   return { table, fallback: Number(fallbackMatch[1]) };
 }
 
-const V1_FILES = ["requirements/domain/verification-finding-order.ts", "aidlc-sensor-deep-spec-verify-quint.ts"];
+// PR4 で verify-quint の重複表が消え、v1 表の定義は 1 箇所に収束した。
+const V1_FILES = ["requirements/domain/verification-finding-order.ts"];
 const EXTENDED_FILES = ["refcheck/domain/catalog-order.ts", "deep-spec-design-lib.ts"];
 
 describe("kind-rank order preservation", () => {
-  test("the two v1 backend tables are identical", () => {
-    const [smt, quint] = V1_FILES.map(extractKindRank);
-    expect([...smt.table.entries()].sort()).toEqual([...quint.table.entries()].sort());
-    expect(smt.fallback).toBe(quint.fallback);
+  test("the v1 backend table is the single shared domain VO", () => {
+    const v1 = extractKindRank(V1_FILES[0]);
+    expect([...v1.table.keys()].sort()).toEqual([
+      "completeness-gap",
+      "conflict",
+      "cross-check-disagreement",
+      "scenario-violation",
+    ]);
+    expect(v1.fallback).toBe(9);
   });
 
   test("the two extended tables are identical", () => {

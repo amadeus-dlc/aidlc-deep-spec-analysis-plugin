@@ -24,11 +24,18 @@ export {
 } from "./verification-report.ts";
 export { type SmtQueryStatus, type SmtQueryVerdict } from "./solver-verdict.ts";
 export { type SmtEventPairProbe, type SmtPlanFacts } from "./smt-plan-facts.ts";
-export {
-  SUPPORTED_IR_MAJOR,
-  irUnreadableReport,
-  solverUnavailableReport,
-  versionMismatchReport,
-} from "./smt-degradation.ts";
+export { SUPPORTED_IR_MAJOR, irUnreadableReport, versionMismatchReport } from "./verification-degradation.ts";
+export { solverUnavailableReport } from "./smt-degradation.ts";
+export { machineUncompilableReport, quintUnavailableReport } from "./quint-degradation.ts";
 export { type InterpretedVerdicts, interpretSmtVerdicts } from "./smt-verdict-interpretation.ts";
 export { crossCheckReport } from "./cross-check.ts";
+export { type DecodedValue, type TraceState } from "./trace-state.ts";
+export { evaluateExpression } from "./expression-evaluation.ts";
+export { type QuintMachineComponent, type QuintMachineFacts } from "./quint-machine-facts.ts";
+export {
+  type QuintMachineRunVerdict,
+  type QuintRuns,
+  type QuintScenarioVerdict,
+  type QuintTemporalVerdict,
+} from "./quint-verdict.ts";
+export { type InterpretedQuintVerdicts, interpretQuintVerdicts } from "./quint-verdict-interpretation.ts";

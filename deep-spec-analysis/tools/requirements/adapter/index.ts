@@ -12,3 +12,11 @@ export {
   renderVerificationReportBytes,
 } from "./verification-report-serializer.ts";
 export { VerificationReportRepositoryImpl } from "./verification-report-repository-impl.ts";
+export {
+  type CompiledQuintMachine,
+  type QuintCompilation,
+  compileQuintMachine,
+  qVar,
+} from "./quint-module-compiler.ts";
+export { decodeItfTrace, itfStatus } from "./itf-decoder.ts";
+export { type QuintClientConfig, QuintClientImpl } from "./quint-client-impl.ts";
