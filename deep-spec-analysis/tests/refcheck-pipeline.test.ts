@@ -122,6 +122,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
         reportDirectory: join(dirname(componentsPath), "deep-spec-refcheck"),
         reportOnly: true,
       });
+      expect(outcome.kind).toBe("verified");
       expect(outcome.kind === "verified" && outcome.pass).toBe(false);
       const written = new ReferenceCheckReportRepositoryImpl(schemaPath).findById(
         ReferenceCheckReportId.of(join(dirname(componentsPath), "deep-spec-refcheck"), "components"),

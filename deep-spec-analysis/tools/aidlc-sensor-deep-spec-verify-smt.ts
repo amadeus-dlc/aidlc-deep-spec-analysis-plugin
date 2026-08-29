@@ -92,8 +92,9 @@ function parentMain(): void {
 }
 
 if (process.argv.includes("--smt-child")) {
-  process.stdout.write(await solveSmtChild());
-  process.exit(0);
+  // 親は stdout の最終行を JSON として解析する。パイプ書込の完了前に exit
+  // すると出力が切れて unavailable 扱いになり得るため、flush 後に終了する。
+  process.stdout.write(await solveSmtChild(), () => process.exit(0));
 } else {
   parentMain();
 }

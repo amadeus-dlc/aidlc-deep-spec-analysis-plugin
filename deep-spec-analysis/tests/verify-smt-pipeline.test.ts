@@ -130,7 +130,9 @@ describe("the verify-smt interactor over the InMemory double", () => {
       solver({ facts: EMPTY_FACTS, result: { kind: "solved", verdicts: new Map() } }),
     ).execute({ modelPath: "/x", verifyDirectory: DIR });
     expect(outcome.kind).toBe("not-applicable");
-    expect(reports.findAllByDirectory(DIR).ok && []).toEqual([]);
+    const stored = reports.findAllByDirectory(DIR);
+    expect(stored.ok).toBe(true);
+    expect(stored.ok ? [...stored.value] : null).toEqual([]);
   });
 
   test("a corrupt model writes the frozen ir-unreadable degradation without cross-check", () => {
@@ -217,6 +219,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
       reports,
       solver({ facts, result: { kind: "solved", verdicts } }),
     ).execute({ modelPath: "/x", verifyDirectory: DIR });
+    expect(outcome.kind).toBe("verified");
     expect(outcome.kind === "verified" && outcome.pass).toBe(false);
     expect(outcome.kind === "verified" && outcome.findingsCount).toBe(1);
     const written = reports.findById(VerificationReportId.of(DIR, "smt"));
