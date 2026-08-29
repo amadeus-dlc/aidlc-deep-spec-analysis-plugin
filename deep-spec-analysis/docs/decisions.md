@@ -71,9 +71,13 @@
   どのguardも成立しない状態の存在」を検査。トリガー自体が不可能な状態も含むため
   過剰報告になり得るが、EARSの「未規定領域は人間に問う」という本プラグインの
   哲学に合致（A: 暗黙no-op容認 / B: 規定追加、の質問になる）。
-7. **同梱インストーラ = `scripts/install.ts`**（2026-08-29追加）— 上流の正式フロー
-  （`aidlc-plugin-build.ts` → `dist/<harness>/` をプロジェクトへフォルダドロップ →
-  `aidlc plugin sync`、CLI欠如時は `hooks/compose.ts` を直接bun実行）を1コマンドに自動化。
+7. **同梱インストーラ = `scripts/install.ts`**（2026-08-29追加）— `aidlc-plugin-build.ts`
+  → compose（`aidlc plugin sync`、CLI欠如時は `hooks/compose.ts` を直接bun実行）を
+  1コマンドに自動化。投下の要否は `plugin-targets.json` の `kind` で分岐：store系
+  （claude/codex/copilot/opencode）は `dist/` から直接composeしプロジェクトへ何も
+  コピーしない。フォルダドロップは kiro/kiro-ide/cursor のみ（ホストの流儀）。
+  当初は全ハーネスでドロップしていたが、store系ではプロジェクトルートに
+  stages/ 等の残骸を作るだけと判明し kind分岐に修正。
   `tools/` はcompose対象としてプロジェクトへ配布されるため、配布対象外の `scripts/` に
   配置（tsconfig includeに追加、CI typecheck対象）。ハーネス→leaf対応はハードコード
   せず aidlc 同梱の `plugin-targets.json` を参照。`--dry-run` は

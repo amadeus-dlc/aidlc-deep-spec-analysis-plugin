@@ -27,7 +27,7 @@ cd aidlc-deep-spec-analysis-plugin
 bun deep-spec-analysis/scripts/install.ts --project <your-aidlc-project>   # --harness codex, kiro, … (default: claude)
 ```
 
-The installer builds the harness projection under `deep-spec-analysis/dist/<harness>/` — a **real host plugin** (Claude Code, Codex, Copilot, Cursor, Kiro, Kiro IDE, opencode) — copies it into the project, and composes the stage, sensors, tools, and knowledge into the project's harness tree (`.claude/`, `.codex/`, …). Add `--dry-run` to verify the compose without touching the project. Nothing outside that project is touched; disabling the plugin recomposes the vanilla workflow. `/aidlc --doctor` reports solver availability.
+The installer builds the harness projection under `deep-spec-analysis/dist/<harness>/` — a **real host plugin** (Claude Code, Codex, Copilot, Cursor, Kiro, Kiro IDE, opencode) — and composes the stage, sensors, tools, and knowledge into the project's harness tree (`.claude/`, `.codex/`, …). Store harnesses (Claude Code, Codex, Copilot, opencode) compose directly from `dist/` and nothing is copied into the project; the storeless kinds (Kiro, Kiro IDE, Cursor) first get the projection folder-dropped into the project root, as those hosts expect. Add `--dry-run` to verify the compose without touching the project. Nothing outside that project is touched; disabling the plugin recomposes the vanilla workflow. `/aidlc --doctor` reports solver availability.
 
 > The installer is a folder-drop: it has no install-time trust gate, so only point it at a build you would run code from. For a store-mediated trust prompt, use the host plugin flows below instead.
 

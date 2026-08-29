@@ -22,6 +22,11 @@ const USAGE =
 interface PluginTarget {
   harnessName: string;
   harnessLeaf: string;
+  // "store" hosts (claude, codex, copilot, opencode) keep the plugin outside
+  // the project, so compose reads straight from dist/ and nothing is copied.
+  // The storeless kinds (kiro, kiro-ide, cursor) expect the projection
+  // folder-dropped into the project root.
+  kind: "store" | "kiro" | "kiro-ide" | "cursor";
 }
 
 function fail(message: string): never {
@@ -141,10 +146,16 @@ if (dryRun) {
   process.exit(0);
 }
 
-// ---- drop + compose ---------------------------------------------------------
+// ---- drop (storeless harnesses only) + compose ------------------------------
 
-console.log(`\n▸ copy ${distDir} → ${projectDir}`);
-cpSync(distDir, projectDir, { recursive: true });
+if (target.kind === "store") {
+  console.log(
+    `\n▸ ${harness} is a store harness — composing directly from dist/, nothing is copied into the project`,
+  );
+} else {
+  console.log(`\n▸ copy ${distDir} → ${projectDir} (folder-drop, ${target.kind} layout)`);
+  cpSync(distDir, projectDir, { recursive: true });
+}
 
 const composeEnv = {
   AIDLC_PLUGIN_ROOT: distDir,
