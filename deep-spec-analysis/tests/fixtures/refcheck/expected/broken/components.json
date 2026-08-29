@@ -1,0 +1,193 @@
+{
+  "backend": "components",
+  "irVersion": "1.0.0",
+  "irHash": "f2ba86e278f0c0cd122b809b49b955594e8ab1b74b8eafd91933b78abc05bf94",
+  "method": "static",
+  "inputs": [
+    {
+      "artifact": "inception/domain-design/components.md",
+      "sha256": "7f7a3cf0b50b5c6b571f7871212c49870929747589e68f25ed0c5f38adc34b16"
+    }
+  ],
+  "checked": [
+    "check:DD-0"
+  ],
+  "findings": [
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "component:OrderService",
+        "component:PaymentService"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[0].depends_on[0].component",
+            "value": "PaymentService"
+          },
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[1].dependents",
+            "value": "OrderService"
+          }
+        ]
+      },
+      "detail": "DD-4: \"OrderService\" depends on \"PaymentService\" but \"PaymentService\" does not list \"OrderService\" in dependents"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "component:OrderService",
+        "component:PaymentService"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[1].depends_on[0].component",
+            "value": "OrderService"
+          },
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[0].dependents",
+            "value": "PaymentService"
+          }
+        ]
+      },
+      "detail": "DD-4: \"PaymentService\" depends on \"OrderService\" but \"OrderService\" does not list \"PaymentService\" in dependents"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "component:OrderService",
+        "component:PaymentService"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[0].depends_on",
+            "value": "PaymentService"
+          },
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[1].depends_on",
+            "value": "OrderService"
+          }
+        ]
+      },
+      "detail": "DD-7: dependency cycle: OrderService -> PaymentService -> OrderService"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "component:badName"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[2].name",
+            "value": "badName"
+          }
+        ]
+      },
+      "detail": "DD-1: component name \"badName\" is not PascalCase"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "component:badName"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[2].depends_on[0].component",
+            "value": "badName"
+          }
+        ]
+      },
+      "detail": "DD-3: component \"badName\" lists itself as a dependency"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "entity:Order"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[0].entities[0]",
+            "value": "OrderService"
+          },
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[2].entities[0]",
+            "value": "badName"
+          }
+        ]
+      },
+      "detail": "DD-5: entity \"Order\" is owned by 2 components (OrderService, badName) — must be exactly one"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "entity:Payment"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[1].entities[0].identifier"
+          }
+        ]
+      },
+      "detail": "DD-5: entity \"Payment\" has no identifier"
+    },
+    {
+      "kind": "reference-broken",
+      "frRefs": [],
+      "targets": [
+        "component:GhostService"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[0].depends_on[1].component",
+            "value": "GhostService"
+          }
+        ]
+      },
+      "detail": "DD-2: \"OrderService\" references undeclared component \"GhostService\""
+    },
+    {
+      "kind": "reference-broken",
+      "frRefs": [],
+      "targets": [
+        "entity:Invoice"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "components[0].entities[0].references[0].entity",
+            "value": "Invoice"
+          }
+        ]
+      },
+      "detail": "DD-6: entity \"Order\" references \"Invoice\" as owned by \"PaymentService\", but \"PaymentService\" declares no such entity"
+    }
+  ],
+  "skipped": []
+}

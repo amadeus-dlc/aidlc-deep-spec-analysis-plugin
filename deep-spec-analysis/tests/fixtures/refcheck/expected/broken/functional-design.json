@@ -1,0 +1,316 @@
+{
+  "backend": "functional-design",
+  "irVersion": "1.0.0",
+  "irHash": "37d756e3d113d7b404a5e5a7a0bac2ceb421d6e2d242f9ec5d4fe4f0bb442366",
+  "method": "static",
+  "inputs": [
+    {
+      "artifact": "construction/u1-orders/functional-design/entities.md",
+      "sha256": "526d1af2e928c2a1b684199e05494893379eefb5bae396008f30e62f1c2c3ae0"
+    },
+    {
+      "artifact": "construction/u1-orders/functional-design/functional-spec.md",
+      "sha256": "1c89f831b8f2f81d9b0e00fb200b0f1b2bfa3c24dfce7c90629db22e01e79857"
+    },
+    {
+      "artifact": "construction/u1-orders/functional-design/rules.md",
+      "sha256": "c46e48971e88eccd22cae88dfc151edb09f28739e0345d069c5c803f87eceed8"
+    },
+    {
+      "artifact": "construction/u2-billing/functional-design/entities.md",
+      "sha256": "bebb22edf374a6dbd339319c144f7c027e2581e778cd563ac1b3ea4a2826d18b"
+    },
+    {
+      "artifact": "inception/domain-design/components.md",
+      "sha256": "7f7a3cf0b50b5c6b571f7871212c49870929747589e68f25ed0c5f38adc34b16"
+    },
+    {
+      "artifact": "inception/requirements-analysis/requirements.md",
+      "sha256": "c3bb6d821d2d26270fe6288356d50f95d71b698c2487d2b90173900a579d7c74"
+    }
+  ],
+  "checked": [
+    "check:FD-E1",
+    "check:XS-3"
+  ],
+  "findings": [
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "BR1.1"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/rules.md",
+            "element": "rules[1].id",
+            "value": "BR1.1"
+          }
+        ]
+      },
+      "detail": "FD-R2: rule id \"BR1.1\" is declared more than once",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "BR1.3"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/rules.md",
+            "element": "rules[4].category",
+            "value": "magic"
+          }
+        ]
+      },
+      "detail": "FD-R5: category \"magic\" is not one of validation | authorization | constraint | calculation | policy",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "BR1.4"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/rules.md",
+            "element": "rules[5]"
+          }
+        ]
+      },
+      "detail": "FD-R1: rule is missing required key(s): statement",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "attr:Order.amount"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/entities.md",
+            "element": "entities[0].attributes[2]",
+            "value": "min 5 > max 3"
+          }
+        ]
+      },
+      "detail": "FD-E3: \"Order.amount\": min 5 exceeds max 3",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "attr:Order.price"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/entities.md",
+            "element": "entities[0].attributes[3]",
+            "value": "decimal"
+          }
+        ]
+      },
+      "detail": "FD-E2: \"Order.price\" declares allowed values but its type \"decimal\" is not an enumerable type",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "check:FD-E5"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/entities.md",
+            "element": "entities[0].relationships[1]",
+            "value": "many"
+          }
+        ]
+      },
+      "detail": "FD-E5: cardinality \"many\" is not in the closed set 1:1 | 1:N | N:1 | N:M",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "check:FD-R2"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/rules.md",
+            "element": "rules[2].id",
+            "value": "BRx"
+          }
+        ]
+      },
+      "detail": "FD-R2: rule id \"BRx\" does not match BR{group}.{seq}",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "reference-broken",
+      "frRefs": [
+        "FR-99"
+      ],
+      "targets": [
+        "BR1.2"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/rules.md",
+            "element": "rules[3].source",
+            "value": "FR-99"
+          }
+        ]
+      },
+      "detail": "FD-R3: source id(s) FR-99 do not exist in requirements.md",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "reference-broken",
+      "frRefs": [],
+      "targets": [
+        "BR1.2"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/rules.md",
+            "element": "rules[3]",
+            "value": "Ghost.field"
+          }
+        ]
+      },
+      "detail": "FD-R4: applies-to \"Ghost.field\" does not resolve to a declared entity or entity.attribute",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "reference-broken",
+      "frRefs": [],
+      "targets": [
+        "attr:Order.customerRef"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/entities.md",
+            "element": "entities[0].attributes[4]",
+            "value": "Ghost"
+          }
+        ]
+      },
+      "detail": "FD-E6: \"Order.customerRef\" references \"Ghost\" which is not a declared entity",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "reference-broken",
+      "frRefs": [],
+      "targets": [
+        "entity:Ghost"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/entities.md",
+            "element": "entities[0].relationships[0]",
+            "value": "Ghost"
+          }
+        ]
+      },
+      "detail": "FD-E4: relationship endpoint \"Ghost\" is not a declared entity",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "consistency-mismatch",
+      "frRefs": [],
+      "targets": [
+        "attr:Order.status"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/functional-spec.md",
+            "element": "State Machine: Order (fence line 9)",
+            "value": "cancelled"
+          }
+        ]
+      },
+      "detail": "FD-S1: diagram state(s) cancelled are not allowed values of Order.status in entities.md",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "consistency-mismatch",
+      "frRefs": [],
+      "targets": [
+        "attr:Order.status"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/u1-orders/functional-design/entities.md",
+            "element": "entities[0].attributes[1]",
+            "value": "shipped"
+          }
+        ]
+      },
+      "detail": "FD-S2: allowed value(s) shipped of Order.status appear in no diagram state",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "consistency-mismatch",
+      "frRefs": [],
+      "targets": [
+        "entity:Order"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "entity Order (component OrderService)"
+          },
+          {
+            "artifact": "construction/u1-orders/functional-design/entities.md",
+            "element": "entity Order"
+          },
+          {
+            "artifact": "construction/u2-billing/functional-design/entities.md",
+            "element": "entity Order"
+          }
+        ]
+      },
+      "detail": "XS-1: domain entity \"Order\" is defined in 2 units (u1-orders, u2-billing) — ownership is duplicated",
+      "unit": "u1-orders"
+    },
+    {
+      "kind": "consistency-mismatch",
+      "frRefs": [],
+      "targets": [
+        "entity:Payment"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/domain-design/components.md",
+            "element": "entity Payment (component PaymentService)"
+          }
+        ]
+      },
+      "detail": "XS-2: domain entity \"Payment\" is defined in no unit's entities.md — it was dropped on the way to functional design",
+      "unit": "u1-orders"
+    }
+  ],
+  "skipped": []
+}

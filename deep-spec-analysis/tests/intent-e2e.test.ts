@@ -382,3 +382,67 @@ describe("sensors against the real intent record", () => {
     expect(cross.findings).toHaveLength(0);
   });
 });
+
+describe("phase-1 refcheck sensors compose and fire in the sandbox", () => {
+  test("the refcheck sensors, tools, and shared lib are composed into the harness tree", () => {
+    for (const sensor of [
+      "aidlc-deep-spec-refcheck-domain.md",
+      "aidlc-deep-spec-refcheck-contract.md",
+      "aidlc-deep-spec-refcheck-functional.md",
+    ]) {
+      expect(existsSync(join(sandbox, ".claude", "sensors", sensor))).toBe(true);
+    }
+    for (const tool of [
+      "aidlc-sensor-deep-spec-refcheck-domain.ts",
+      "aidlc-sensor-deep-spec-refcheck-contract.ts",
+      "aidlc-sensor-deep-spec-refcheck-functional.ts",
+      "deep-spec-lib.ts",
+    ]) {
+      expect(existsSync(join(sandbox, ".claude", "tools", tool))).toBe(true);
+    }
+  });
+
+  test("the contributions wire the refcheck sensors into the core design stages", () => {
+    const stages: [string, string][] = [
+      ["inception/domain-design.md", "deep-spec-refcheck-domain"],
+      ["inception/contract-design.md", "deep-spec-refcheck-contract"],
+      ["construction/functional-design.md", "deep-spec-refcheck-functional"],
+    ];
+    for (const [stage, sensor] of stages) {
+      const composed = readFileSync(join(sandbox, ".claude", "aidlc-common", "stages", stage), "utf-8");
+      expect(composed).toContain(sensor);
+    }
+  });
+
+  test("the composed domain refcheck sensor finds the planted structural defects", () => {
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+    const domainDir = join(intentsDir, active, "inception", "domain-design");
+    mkdirSync(domainDir, { recursive: true });
+    const componentsPath = join(domainDir, "components.md");
+    cpSync(join(pluginRoot, "tests", "fixtures", "refcheck", "broken", "inception", "domain-design", "components.md"), componentsPath);
+    const run = inSandbox([
+      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-refcheck-domain.ts"),
+      "--stage", "domain-design", "--output-path", componentsPath,
+    ]);
+    expect(run.status).toBe(0);
+    expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, method: "static" });
+    const doc = JSON.parse(readFileSync(join(domainDir, "deep-spec-refcheck", "components.json"), "utf-8"));
+    const details = doc.findings.map((f: { detail: string }) => f.detail).join("\n");
+    expect(details).toContain("DD-2");
+    expect(details).toContain("dependency cycle");
+    expect(doc.findings.every((f: { kind: string }) => ["structure-invalid", "reference-broken", "consistency-mismatch"].includes(f.kind))).toBe(true);
+  });
+
+  test("the doctor's report-only scan surfaces the structural debt", () => {
+    const run = inSandbox(["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")]);
+    expect(run.status).toBe(0);
+    const { checks } = JSON.parse(run.stdout) as { checks: { pass: boolean; label: string; severity: string }[] };
+    const summary = checks.find((c) => c.label.includes("design refcheck —"));
+    expect(summary).toBeDefined();
+    expect(summary?.pass).toBe(false);
+    const row = checks.find((c) => c.label.includes("components.md has") && c.label.includes("reference-integrity finding"));
+    expect(row).toBeDefined();
+    expect(row?.severity).toBe("advisory");
+  });
+});
