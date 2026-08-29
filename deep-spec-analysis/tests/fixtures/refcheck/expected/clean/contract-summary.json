@@ -1,0 +1,23 @@
+{
+  "backend": "contract-summary",
+  "irVersion": "1.0.0",
+  "irHash": "732b45dabffb94cf6fac7df3d86c1b86615bf66c9be907fbabea26bed14f1899",
+  "method": "static",
+  "inputs": [
+    {
+      "artifact": "inception/contract-design/contract-summary.md",
+      "sha256": "9a1e015aa5166661b16782027ec637e088bcb2366b04093e574330bf0f7e3075"
+    },
+    {
+      "artifact": "inception/units-generation/unit-of-work-dependency.md",
+      "sha256": "38df86a2ae4043bcdd76bbeadfeee7fe020fd3ac87d12068e8ce104b1219c83f"
+    }
+  ],
+  "checked": [
+    "check:CD-1",
+    "check:CD-2",
+    "check:CD-3"
+  ],
+  "findings": [],
+  "skipped": []
+}

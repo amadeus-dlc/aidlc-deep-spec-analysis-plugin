@@ -1,0 +1,24 @@
+{
+  "backend": "components",
+  "irVersion": "1.0.0",
+  "irHash": "ca8560c67c9d75d3cad1f89276860ab969d1129709967354b255aec75ea9bf98",
+  "method": "static",
+  "inputs": [
+    {
+      "artifact": "inception/domain-design/components.md",
+      "sha256": "b11e2fd30c85dcfc5bac12abe70b0071d6ed5f0bb4ead4d1fc204292d035da72"
+    }
+  ],
+  "checked": [
+    "check:DD-0",
+    "check:DD-1",
+    "check:DD-2",
+    "check:DD-3",
+    "check:DD-4",
+    "check:DD-5",
+    "check:DD-6",
+    "check:DD-7"
+  ],
+  "findings": [],
+  "skipped": []
+}

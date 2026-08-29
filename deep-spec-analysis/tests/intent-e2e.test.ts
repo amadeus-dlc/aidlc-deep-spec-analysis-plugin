@@ -24,6 +24,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -380,5 +381,199 @@ describe("sensors against the real intent record", () => {
       expect(entry?.targets?.sort()).toEqual(["SC-3", "SC-5"]);
     }
     expect(cross.findings).toHaveLength(0);
+  });
+});
+
+describe("phase-1 refcheck sensors compose into the sandbox", () => {
+  test("the refcheck sensors, tools, and shared lib are composed into the harness tree", () => {
+    for (const sensor of [
+      "aidlc-deep-spec-refcheck-domain.md",
+      "aidlc-deep-spec-refcheck-contract.md",
+      "aidlc-deep-spec-refcheck-functional.md",
+    ]) {
+      expect(existsSync(join(sandbox, ".claude", "sensors", sensor))).toBe(true);
+    }
+    for (const tool of [
+      "aidlc-sensor-deep-spec-refcheck-domain.ts",
+      "aidlc-sensor-deep-spec-refcheck-contract.ts",
+      "aidlc-sensor-deep-spec-refcheck-functional.ts",
+      "deep-spec-lib.ts",
+    ]) {
+      expect(existsSync(join(sandbox, ".claude", "tools", tool))).toBe(true);
+    }
+  });
+
+  test("the contributions wire the refcheck sensors into the core design stages", () => {
+    const stages: [string, string][] = [
+      ["inception/domain-design.md", "deep-spec-refcheck-domain"],
+      ["inception/contract-design.md", "deep-spec-refcheck-contract"],
+      ["construction/functional-design.md", "deep-spec-refcheck-functional"],
+    ];
+    for (const [stage, sensor] of stages) {
+      const composed = readFileSync(join(sandbox, ".claude", "aidlc-common", "stages", stage), "utf-8");
+      expect(composed).toContain(sensor);
+    }
+  });
+});
+
+// The full new-feature scenario, driven through the REAL sensor dispatcher
+// (aidlc-sensor.ts fire) — the exact path a stage write triggers in
+// production, including the manifest glob filters (`**/functional-design/*.md`
+// on the dispatcher's bespoke matcher): a design record planted with one
+// defect per artifact family is verified, the doctor reports the debt (also
+// for a unit nothing fired on), the artifacts are fixed, and the loop closes
+// with every family checked and the doctor quiet again.
+describe("phase-1 refcheck scenario — a defective design record through the real dispatcher, then fixed", () => {
+  const refcheckFixtures = join(pluginRoot, "tests", "fixtures", "refcheck");
+  let record = "";
+
+  const DESIGN_FILES: string[][] = [
+    ["inception", "domain-design", "components.md"],
+    ["inception", "contract-design", "contract-summary.md"],
+    ["inception", "units-generation", "unit-of-work-dependency.md"],
+    ["construction", "u1-orders", "functional-design", "entities.md"],
+    ["construction", "u1-orders", "functional-design", "rules.md"],
+    ["construction", "u1-orders", "functional-design", "functional-spec.md"],
+    ["construction", "u2-billing", "functional-design", "entities.md"],
+  ];
+
+  const FIRES: [string, string, string[]][] = [
+    ["deep-spec-refcheck-domain", "domain-design", ["inception", "domain-design", "components.md"]],
+    ["deep-spec-refcheck-contract", "contract-design", ["inception", "contract-design", "contract-summary.md"]],
+    ["deep-spec-refcheck-functional", "functional-design", ["construction", "u1-orders", "functional-design", "entities.md"]],
+  ];
+
+  function copyDesignRecord(variant: "broken" | "clean"): void {
+    for (const rel of DESIGN_FILES) {
+      const dst = join(record, ...rel);
+      mkdirSync(dirname(dst), { recursive: true });
+      cpSync(join(refcheckFixtures, variant, ...rel), dst);
+    }
+  }
+
+  function dispatcherFire(sensorId: string, stage: string, outputPath: string): { result: string } {
+    const run = inSandbox([
+      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
+      "fire", sensorId, "--stage", stage, "--output-path", outputPath,
+    ]);
+    expect(run.status).toBe(0); // sensor outcomes are advisory — only dispatch errors exit non-zero
+    const lines = run.stdout.trim().split("\n");
+    return JSON.parse(lines[lines.length - 1] ?? "{}") as { result: string };
+  }
+
+  function readFindings(rel: string[]): {
+    findings: { kind: string; detail: string; unit?: string }[];
+    checked: string[];
+    unavailable?: { reason: string };
+  } {
+    return JSON.parse(readFileSync(join(record, ...rel), "utf-8"));
+  }
+
+  function doctorChecks(): { pass: boolean; label: string }[] {
+    const run = inSandbox(["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")]);
+    expect(run.status).toBe(0);
+    return (JSON.parse(run.stdout) as { checks: { pass: boolean; label: string }[] }).checks;
+  }
+
+  beforeAll(() => {
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+    record = join(intentsDir, active);
+    copyDesignRecord("broken");
+  });
+
+  test("the dispatcher accepts all three sensors (glob filters pass) and each reports findings", () => {
+    for (const [id, stage, rel] of FIRES) {
+      expect(dispatcherFire(id, stage, join(record, ...rel)).result).toBe("failed");
+    }
+  });
+
+  test("each findings document carries the planted defects, never a degraded file", () => {
+    const domain = readFindings(["inception", "domain-design", "deep-spec-refcheck", "components.json"]);
+    const details = (d: { findings: { detail: string }[] }): string => d.findings.map((f) => f.detail).join("\n");
+    expect(domain.unavailable).toBeUndefined();
+    expect(details(domain)).toContain("dependency cycle");
+    expect(details(domain)).toContain("GhostService");
+
+    const contract = readFindings(["inception", "contract-design", "deep-spec-refcheck", "contract-summary.json"]);
+    expect(contract.unavailable).toBeUndefined();
+    expect(details(contract)).toContain("ghost-unit");
+    expect(details(contract)).toContain('"u3-ui" -> "u1-orders"');
+
+    const functional = readFindings(["construction", "u1-orders", "functional-design", "deep-spec-refcheck", "functional-design.json"]);
+    expect(functional.unavailable).toBeUndefined();
+    expect(details(functional)).toContain("FR-99");
+    expect(details(functional)).toContain("cancelled");
+    expect(details(functional)).toContain("ownership is duplicated");
+    expect(functional.findings.every((f) => f.unit === "u1-orders")).toBe(true);
+  });
+
+  test("the doctor lists every defective artifact — including the unit nothing fired on", () => {
+    const checks = doctorChecks();
+    const labels = checks
+      .filter((c) => c.label.includes("reference-integrity finding"))
+      .map((c) => c.label)
+      .join("\n");
+    expect(labels).toContain("components.md");
+    expect(labels).toContain("contract-summary.md");
+    expect(labels).toContain("u1-orders/functional-design");
+    expect(labels).toContain("u2-billing/functional-design");
+    const summary = checks.find((c) => c.label.includes("design refcheck —"));
+    expect(summary?.pass).toBe(false);
+  });
+
+  test("fixing the artifacts closes the loop: sensors pass, all families checked, doctor quiet", () => {
+    copyDesignRecord("clean");
+    for (const [id, stage, rel] of FIRES) {
+      expect(dispatcherFire(id, stage, join(record, ...rel)).result).toBe("passed");
+    }
+    const domain = readFindings(["inception", "domain-design", "deep-spec-refcheck", "components.json"]);
+    expect(domain.findings).toHaveLength(0);
+    expect(domain.checked).toHaveLength(8);
+    const functional = readFindings(["construction", "u1-orders", "functional-design", "deep-spec-refcheck", "functional-design.json"]);
+    expect(functional.findings).toHaveLength(0);
+    expect(functional.checked).toHaveLength(16);
+
+    const checks = doctorChecks();
+    expect(checks.filter((c) => c.label.includes("reference-integrity finding"))).toHaveLength(0);
+    const summary = checks.find((c) => c.label.includes("design refcheck —"));
+    expect(summary?.pass).toBe(true);
+  });
+});
+
+describe("upgrade path — re-running the installer refreshes stale plugin files", () => {
+  // The framework's compose hook copies payload files no-clobber: a plugin
+  // UPGRADE would otherwise leave the previous version's schema and tools in
+  // the harness tree next to the new version's files. The skew is fatal in a
+  // quiet way: a new sensor self-validating against a stale findings schema
+  // degrades every document it writes to `unavailable`. Discovered on a real
+  // sandbox (a tmp-fresh install can never hit it); the installer now removes
+  // its own payload files before composing.
+  test("a stale composed findings schema is re-placed by the installer", () => {
+    const schema = join(sandbox, ".claude", "tools", "data", "deep-spec-findings-schema.json");
+    expect(readFileSync(schema, "utf-8")).toContain('"static"');
+    writeFileSync(schema, '{"stale": true}\n');
+    const res = spawnSync("bun", [installer, "--project", sandbox, "--skip-build"], {
+      encoding: "utf-8",
+      timeout: 300_000,
+    });
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("upgrade refresh");
+    expect(readFileSync(schema, "utf-8")).toContain('"static"');
+    // The refreshed tree still verifies end-to-end: the composed sensor runs
+    // against the (now clean) record and writes a healthy, non-degraded doc.
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+    const record = join(intentsDir, active);
+    const run = inSandbox([
+      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-refcheck-domain.ts"),
+      "--stage", "domain-design", "--output-path", join(record, "inception", "domain-design", "components.md"),
+    ]);
+    expect(run.status).toBe(0);
+    const doc = JSON.parse(
+      readFileSync(join(record, "inception", "domain-design", "deep-spec-refcheck", "components.json"), "utf-8"),
+    ) as { checked: string[]; unavailable?: unknown };
+    expect(doc.unavailable).toBeUndefined();
+    expect(doc.checked).toHaveLength(8);
   });
 });

@@ -1,0 +1,52 @@
+{
+  "backend": "functional-design",
+  "irVersion": "1.0.0",
+  "irHash": "d0967c4571927d35eb9f46ba82b7633418287db8a6cdad6236287671cdd8734c",
+  "method": "static",
+  "inputs": [
+    {
+      "artifact": "construction/u1-orders/functional-design/entities.md",
+      "sha256": "4289136f478103b4717b313637dbab61f703a05b6f9303c4cd72427058e1f8c7"
+    },
+    {
+      "artifact": "construction/u1-orders/functional-design/functional-spec.md",
+      "sha256": "ffcc91a3496103d11db90e82dbc7a9238652f37146ce05fed728cf4e2dca3852"
+    },
+    {
+      "artifact": "construction/u1-orders/functional-design/rules.md",
+      "sha256": "1d1e2083eb7a7b27bbf796e3b78f61550eeda6565733466a7f76058dea8548ba"
+    },
+    {
+      "artifact": "construction/u2-billing/functional-design/entities.md",
+      "sha256": "92865dfe6c2a21c972cf86a47bb7be1e18c52eb4b9f3d469477cb62f1b468503"
+    },
+    {
+      "artifact": "inception/domain-design/components.md",
+      "sha256": "b11e2fd30c85dcfc5bac12abe70b0071d6ed5f0bb4ead4d1fc204292d035da72"
+    },
+    {
+      "artifact": "inception/requirements-analysis/requirements.md",
+      "sha256": "951e3d0585734fcb3963b9683d5a2215b7bc6d974f11380ff7c8aca08151f24d"
+    }
+  ],
+  "checked": [
+    "check:FD-E1",
+    "check:FD-E2",
+    "check:FD-E3",
+    "check:FD-E4",
+    "check:FD-E5",
+    "check:FD-E6",
+    "check:FD-R1",
+    "check:FD-R2",
+    "check:FD-R3",
+    "check:FD-R4",
+    "check:FD-R5",
+    "check:FD-S1",
+    "check:FD-S2",
+    "check:XS-1",
+    "check:XS-2",
+    "check:XS-3"
+  ],
+  "findings": [],
+  "skipped": []
+}

@@ -10,6 +10,7 @@ This is the development workspace. The plugin itself lives in [`deep-spec-analys
 - **No silent gaps** — every obligation is either checked, skipped with a reason, or reported `unavailable`; the coverage table shows exactly what was and wasn't verified.
 - **Deterministic** — same IR + same environment ⇒ byte-identical sensor output (fixed seeds, canonical sorting, no timestamps), enforced by byte-exact conformance tests.
 - **Graceful degradation** — missing solvers never block the stage; they become advisory findings and `/aidlc --doctor` hints.
+- **Design-artifact integrity (phase 1 of the design-verification extension)** — solver-free refcheck sensors fire while `domain-design`, `contract-design`, and `functional-design` write their artifacts, catching dangling references, asymmetric or cyclic dependencies, phantom FR sources, state machines that disagree with the entity model, and entity drift between design stages ([requirements: #2](https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/issues/2)).
 
 ## Quickstart
 
@@ -27,7 +28,7 @@ cd aidlc-deep-spec-analysis-plugin
 bun deep-spec-analysis/scripts/install.ts --project <your-aidlc-project>   # --harness codex, kiro, … (default: claude)
 ```
 
-The installer builds the harness projection under `deep-spec-analysis/dist/<harness>/` — a **real host plugin** (Claude Code, Codex, Copilot, Cursor, Kiro, Kiro IDE, opencode) — and composes the stage, sensors, tools, and knowledge into the project's harness tree (`.claude/`, `.codex/`, …). Store harnesses (Claude Code, Codex, Copilot, opencode) compose directly from `dist/` and nothing is copied into the project; the storeless kinds (Kiro, Kiro IDE, Cursor) first get the projection folder-dropped into the project root, as those hosts expect. Add `--dry-run` to verify the compose without touching the project. Nothing outside that project is touched; disabling the plugin recomposes the vanilla workflow. `/aidlc --doctor` reports solver availability.
+The installer builds the harness projection under `deep-spec-analysis/dist/<harness>/` — a **real host plugin** (Claude Code, Codex, Copilot, Cursor, Kiro, Kiro IDE, opencode) — and composes the stage, sensors, tools, and knowledge into the project's harness tree (`.claude/`, `.codex/`, …). Store harnesses (Claude Code, Codex, Copilot, opencode) compose directly from `dist/` and nothing is copied into the project; the storeless kinds (Kiro, Kiro IDE, Cursor) first get the projection folder-dropped into the project root, as those hosts expect. Add `--dry-run` to verify the compose without touching the project. Nothing outside that project is touched; disabling the plugin recomposes the vanilla workflow. Re-running the installer is also the **upgrade path**: it refreshes the plugin's own previously composed files before composing (the compose hook itself never overwrites existing files), so a new plugin version never leaves stale schemas or tools behind. `/aidlc --doctor` reports solver availability.
 
 > The installer is a folder-drop: it has no install-time trust gate, so only point it at a build you would run code from. For a store-mediated trust prompt, use the host plugin flows below instead.
 

@@ -1,0 +1,102 @@
+{
+  "backend": "contract-summary",
+  "irVersion": "1.0.0",
+  "irHash": "38544b162fcea902de67f6330eced1ec9635a9b995cd12b8c1e3ceed1bd8e670",
+  "method": "static",
+  "inputs": [
+    {
+      "artifact": "inception/contract-design/contract-summary.md",
+      "sha256": "064f915e8aa541a1ba827c1fb2f504c6cd00b9de2cae4241f97fee9d6fb27c09"
+    },
+    {
+      "artifact": "inception/units-generation/unit-of-work-dependency.md",
+      "sha256": "c43f7b338ac929e69f5747b4124d2f6a42be4f62e876e9767d634189147d3793"
+    }
+  ],
+  "checked": [],
+  "findings": [
+    {
+      "kind": "structure-invalid",
+      "frRefs": [],
+      "targets": [
+        "contract:block-1"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/contract-design/contract-summary.md",
+            "element": "yaml fence #1 (line 13)",
+            "value": "openapi"
+          }
+        ]
+      },
+      "detail": "CD-2: OpenAPI spec block carries `openapi:` but no `paths:`"
+    },
+    {
+      "kind": "reference-broken",
+      "frRefs": [],
+      "targets": [
+        "contract:2",
+        "unit:ghost-unit"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/contract-design/contract-summary.md",
+            "element": "contracts table row 2 (line 8)",
+            "value": "ghost-unit"
+          },
+          {
+            "artifact": "inception/units-generation/unit-of-work-dependency.md",
+            "element": "units"
+          }
+        ]
+      },
+      "detail": "CD-1: Provider Unit \"ghost-unit\" is not a declared unit"
+    },
+    {
+      "kind": "reference-broken",
+      "frRefs": [],
+      "targets": [
+        "contract:3",
+        "unit:Order-Service"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/contract-design/contract-summary.md",
+            "element": "contracts table row 3 (line 9)",
+            "value": "Order Service"
+          },
+          {
+            "artifact": "inception/units-generation/unit-of-work-dependency.md",
+            "element": "units"
+          }
+        ]
+      },
+      "detail": "CD-1: Provider Unit \"Order Service\" is not a declared unit"
+    },
+    {
+      "kind": "consistency-mismatch",
+      "frRefs": [],
+      "targets": [
+        "unit:u1-orders",
+        "unit:u3-ui"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/units-generation/unit-of-work-dependency.md",
+            "element": "units (u3-ui depends_on u1-orders)"
+          },
+          {
+            "artifact": "inception/contract-design/contract-summary.md",
+            "element": "contracts table"
+          }
+        ]
+      },
+      "detail": "CD-3: unit dependency edge \"u3-ui\" -> \"u1-orders\" has no contracts-table row in either orientation"
+    }
+  ],
+  "skipped": []
+}

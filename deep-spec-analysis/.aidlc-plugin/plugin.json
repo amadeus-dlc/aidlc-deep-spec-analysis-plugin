@@ -1,6 +1,6 @@
 {
   "name": "deep-spec-analysis",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Neurosymbolic deep spec analysis for AI-DLC: LLM formalization of requirements into a backend-neutral IR, deterministic contradiction/completeness/scenario checking via SMT (z3) and Quint backends, and A/B human-gated findings triage.",
   "author": {
     "name": "j5ik2o"

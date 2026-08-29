@@ -120,3 +120,45 @@ LLM会話層（形式化・A/Bゲート・レポート）はfixture代替のた�
 | headless `/aidlc`（`claude -p`）実走 | △ | オーケストレータ起動〜プラン選択ゲートまで動作。aidlcはゲート駆動設計のため非対話完走は不可（ゲート毎に `--resume` 注入が必要）。sandboxのdist設定はBedrock強制（`CLAUDE_CODE_USE_BEDROCK=1`）のため、非AWS環境では `settings.local.json` での上書きが必要 |
 | **後入れ**（プラグイン導入前に作られたintentへの検査） | ✔ | バニラ素体でfeatureスコープintent作成（32ステージ・verifyステージ言及なし）→ 後からインストーラ導入 → `aidlc-orchestrate next --stage deep-spec-analysis-verify --single` が受理（load-steering→run-stage、consumesは既存レコードの requirements.md に解決）→ センサーが同レコードで5 findings全件検出。classicスコープは singleモードでも明示拒否（"skipped for scope classic"）。`tests/intent-e2e.test.ts` の late adoption ブロックで毎回回帰検証 |
 | **未検査要件の自動検出**（人間の注意力に依存しない後入れ） | ✔ | doctorに検査カバレッジスキャンを追加：全space×全intentを走査し、ステージ定義の `scopes:` に該当し requirements.md を持つのに検査記録が無い intent を advisory 行で列挙（切替＋`--single` の実行コマンド付き）、検査後に requirements.md が更新された intent は stale として検出。インストーラは compose 直後に同スキャンを実行して導入時点の検査負債を表示。未検査→検出、検査後→`1/1 verified`、touch後→stale の全遷移を実測・テスト化 |
+
+## 設計検証拡張フェーズ①（refcheck）の設計判断（2026-08-29、v0.2.0）
+
+要件の正典は [issue #2（要件定義全文）](https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/issues/2) と [issue #3（フェーズ①）](https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/issues/3)。実装：ソルバー不要・LLM不要の参照整合センサー3本（`deep-spec-refcheck-{domain,contract,functional}`）を contributions の `adds.sensors` で domain-design / contract-design / functional-design に合流させ、findings 契約（契約2）を是正・拡張し、doctor に report-only 構造負債スキャンを追加した。ステージ追加はゼロ（②③で1本）。
+
+### 未解決事項の決着（issue #3 に割り付けた Q）
+
+- **Q3（YAML解析）**: 自作の決定論的サブセットパーサ（`tools/deep-spec-lib.ts`）。センサーはターゲットプロジェクトの `node_modules` に依存せず動く必要があり、vendored 依存は不可。サブセット外（アンカー・エイリアス・タグ・フローマップ）は `structure-invalid`／`unrecognized-format` に落ち、解釈の推測はしない。
+- **Q4（mermaidサブセット）**: `stateDiagram-v2` の単純状態＋遷移のみ。composite state / choice / fork / join は機械ごと `unrecognized-format` skip。frontend-components.md は①では対象外（要件 O10 のまま）。
+- **Q7（mandatory-fix化）**: ①は全て advisory。write 発火センサーの blocking はフレームワークが強制しない事実に合わせ、ゲートはコアステージへの end-of-steps fragment（「summary confirmation 前に fix or record」）が担う。
+- **Q8（contributionスコープ）**: ターゲットステージの全スコープに追従。`when:` は不評価のため絞る機構がそもそも無く、refcheck は bun のみ・10秒級・advisory なので広く付けて害がない。
+
+### 要件（issue #2 FR）からの逸脱・精緻化
+
+1. **kind 追加は3種のみ**（`structure-invalid` / `reference-broken` / `consistency-mismatch`）。FR1.4 の7種一括でなく、②③の kind は各フェーズが追加する——契約の変更をフェーズ境界に揃える。
+2. **トップレベル `checked[]` を契約2に追加**。check-family 粒度の no-silence（FR2.9/FR5.5「クリーンでも現れる」）を載せる欄が契約2に無かったため。クリーン run と未実行 family がファイル単体で区別できる。
+3. **skip reason `absent-input` を追加**。隣接成果物の欠如は `unavailable`（ソルバー/ランタイム不在）とも `unrecognized-format` とも意味が違う。
+4. **プラグイン同梱 lib `tools/deep-spec-lib.ts`**。C9「自己完結」は「framework/core ツールを import しない」の意味に精緻化：同一 compose デルタで配布される自前 lib は可（coreの `aidlc-lib.ts` と同型のパターン）。v1 の smt/quint も契約2自己検証のためこの lib の `validateSchema` を使う。
+5. **CD-1/CD-3 のユニット出典は `unit-of-work-dependency.md` の `units:` エッジブロック**（FR4.1 の字面は unit-of-work.md）。フレームワーク自身が batch fan-out を計算する機械可読ソースであり、散文パースより頑健。
+6. **FD-S のライフサイクル属性決定則**: 見出しの `Entity.attr` 明示 > `status`/`state` 名で allowed values を持つ属性 > allowed values を持つ唯一の属性 > 判定不能は `unrecognized-format` skip。
+7. **重複報告の排除**: DD-7 は自己ループを報告しない（DD-3 の担当）。XS 走査は components.md 側の重複宣言を正規化名で1回に畳む（重複自体は DD-5 の担当）。
+8. **是正1・是正2（v1 既知問題）**: witness に `verdicts` 変種を正式定義し cross-check.json の契約逸脱を解消（バックエンド別判定は本質情報であり、model/trace/core への書き換えは情報を捨てる上に v1 golden を壊す——契約側を実装の意図に追いつかせた）。全 contract-2 writer（v1 の smt/quint 含む）に書き込み前の自己スキーマ検証を義務化（不適合→検証エラーを理由に `unavailable` 降格）、全 golden findings のスキーマ適合を `tests/refcheck.test.ts` が恒久的にアサート。
+9. **バージョン**: 要件書 FR16 の「①=v1.1.0」はノミナル。実系列は 0.x のため ①=**v0.2.0**（同じくマイナーバンプ）。
+
+### 検証マトリクス（実測、2026-08-29）
+
+| 対象 | 結果 | 証拠 |
+|---|---|---|
+| refcheck conformance（`tests/refcheck.test.ts`、22件） | ✔ | broken/clean 両レコードの golden バイト一致（3センサー×2）、再実行バイト同一（NFR1）、clean golden の checked が全 family を列挙（DD-0 構造検査＋DD-1..7 の 7 規則で DD×8 / CD×3 / FD+XS×16）、劣化（サブセット外YAML→FD-E1＋家族skip、components.md欠如→XS absent-input、unitsブロック欠如→CD-1/CD-3 absent-input）、`--report-only` 無書き込み、not-applicable素通り |
+| **全 golden のスキーマ適合**（是正2b） | ✔ | v1 conformance golden（smt/quint/cross-check）＋refcheck golden 全ファイルが拡張後の deep-spec-findings-schema.json に適合 |
+| v1 リグレッション | ✔ | conformance 11件不変・golden バイト同一（自己検証追加後も出力契約不変）、intent-e2e 既存12件不変 |
+| intent-e2e フェーズ①ブロック（+4件） | ✔ | compose がセンサー3本＋lib を `.claude/` へ配置、contributions が3コアステージの `sensors:` に合流、合成済みセンサーが sandbox の実レコードで planted defects（DD-2・循環）を検出、doctor の report-only スキャンが負債行（advisory）を表示 |
+| validator / ビルド | ✔ | `aidlc-plugin-validate` VALID（errors 0）、7ハーネス全ビルドOK |
+
+### 実サンドボックス実射で発見した欠陥と是正（2026-08-29、v0.2.0 追補）
+
+tmp から作る自動 E2E は常にバニラツリー開始のため踏めない欠陥を、ワークスペースの実サンドボックス（`deep-spec-analysis-sandbox/`、v0.1.0 が compose 済み）への後入れアップグレードで発見した：
+
+- **事象**: フレームワークの compose フックは payload コピーが **no-clobber**（新規ファイルは置くが既存ファイルは絶対に上書きしない）。v0.1.0 → v0.2.0 のアップグレードでは、新規の refcheck センサー群は配置される一方、**変更された既存ファイル（findings スキーマ・自己検証入り smt/quint）は旧版のまま残り**、新旧混在になる。結果、新センサーが旧スキーマで自己検証し `/method: not one of ["exhaustive","bounded","simulation"]` で**全文書が unavailable に降格**——フェーズ①がアップグレード環境で全滅する。`plugin-sync` はこの経路（インストーラ直 compose）では "no installed plugins" で無力。
+- **是正**: `scripts/install.ts` に **upgrade refresh** を追加——compose 前に、dist projection が出荷する payload（sensors/ tools/ knowledge/ agents/ scopes/ stages/）と同名の既存ファイルだけを harness ツリーから除去し、no-clobber コピーに最新版を再配置させる。プラグイン以外のファイルには一切触れず（additive-only 維持）、contribution のステージ合流は内容ベースで自己更新するため対象外。compose が再配置に失敗すれば既存の sentinel 検査が即失敗する（静かな欠落は起きない）。
+- **回帰テスト**: `tests/intent-e2e.test.ts` の upgrade-path ブロック——composed スキーマを故意に stale 化 → インストーラ再実行 → `upgrade refresh` 行の出力・スキーマ最新化・composed センサーの実射成功をアサート。
+- **実射マトリクス（実サンドボックス、ディスパッチャ `aidlc-sensor.ts fire` 経由）**: 3 センサーとも registry 登録・glob 照合（`**/functional-design/*.md` の bespoke マッチャ含む）・発火 OK。欠陥入り成果物で domain 9 / contract 4 / functional 15 findings、doctor の report-only スキャンは手動発火していない u2-billing も自力発見（計 31 findings / 4 成果物、全 advisory）。
