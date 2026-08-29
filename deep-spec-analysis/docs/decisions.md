@@ -148,7 +148,7 @@ LLM会話層（形式化・A/Bゲート・レポート）はfixture代替のた�
 
 | 対象 | 結果 | 証拠 |
 |---|---|---|
-| refcheck conformance（`tests/refcheck.test.ts`、22件） | ✔ | broken/clean 両レコードの golden バイト一致（3センサー×2）、再実行バイト同一（NFR1）、clean golden の checked が全 family を列挙（DD×8 / CD×3 / FD+XS×16）、劣化（サブセット外YAML→FD-E1＋家族skip、components.md欠如→XS absent-input、unitsブロック欠如→CD-1/CD-3 absent-input）、`--report-only` 無書き込み、not-applicable素通り |
+| refcheck conformance（`tests/refcheck.test.ts`、22件） | ✔ | broken/clean 両レコードの golden バイト一致（3センサー×2）、再実行バイト同一（NFR1）、clean golden の checked が全 family を列挙（DD-0 構造検査＋DD-1..7 の 7 規則で DD×8 / CD×3 / FD+XS×16）、劣化（サブセット外YAML→FD-E1＋家族skip、components.md欠如→XS absent-input、unitsブロック欠如→CD-1/CD-3 absent-input）、`--report-only` 無書き込み、not-applicable素通り |
 | **全 golden のスキーマ適合**（是正2b） | ✔ | v1 conformance golden（smt/quint/cross-check）＋refcheck golden 全ファイルが拡張後の deep-spec-findings-schema.json に適合 |
 | v1 リグレッション | ✔ | conformance 11件不変・golden バイト同一（自己検証追加後も出力契約不変）、intent-e2e 既存12件不変 |
 | intent-e2e フェーズ①ブロック（+4件） | ✔ | compose がセンサー3本＋lib を `.claude/` へ配置、contributions が3コアステージの `sensors:` に合流、合成済みセンサーが sandbox の実レコードで planted defects（DD-2・循環）を検出、doctor の report-only スキャンが負債行（advisory）を表示 |

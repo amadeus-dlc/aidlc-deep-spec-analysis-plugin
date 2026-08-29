@@ -8,11 +8,10 @@ components:
     summary: Owns the order lifecycle.
     responsibilities:
       - Order lifecycle
-    depends_on:
+    depends_on: []
+    dependents:
       - component: BillingService
-        interaction: request invoicing on ship
-        style: async
-    dependents: []
+        interaction: consumes order.shipped events
     entities:
       - name: Order
         identifier: orderId
@@ -21,10 +20,11 @@ components:
     summary: Issues invoices.
     responsibilities:
       - Invoicing
-    depends_on: []
-    dependents:
+    depends_on:
       - component: OrderService
-        interaction: request invoicing on ship
+        interaction: consumes order.shipped events
+        style: event
+    dependents: []
     entities:
       - name: Invoice
         identifier: invoiceId

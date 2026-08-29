@@ -15,9 +15,9 @@ fragments:
 
 Writing `contract-summary.md` fires the `deep-spec-refcheck-contract`
 sensor, which checks that contracts-table units exist in the units-generation
-edge block, that every fenced spec block parses with its family discriminator
-(`openapi:` + `paths`, `asyncapi:`, shared-schema), and that every inter-unit
-dependency edge has a contract row. It writes
+edge block, that every fenced spec block parses (with `openapi:` blocks also
+required to carry `paths:`; AsyncAPI and shared-schema blocks are checked for
+parseability), and that every inter-unit dependency edge has a contract row. It writes
 `deep-spec-refcheck/contract-summary.json` next to the artifact.
 
 Before presenting the summary confirmation, read that file. For every

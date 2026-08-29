@@ -52,6 +52,7 @@ import {
   readIfExists,
   relArtifact,
   requirementIds,
+  safeTarget,
   sha256,
   sortedUnique,
   verdictOut,
@@ -347,14 +348,14 @@ function main(): void {
         const seenEntities = new Set<string>();
         for (const e of entities.entities) {
           if (seenEntities.has(e.name)) {
-            finding("FD-E1", "structure-invalid", [`entity:${e.name}`], [ref(entitiesArt, `${e.element}.name`, e.name)],
+            finding("FD-E1", "structure-invalid", [safeTarget("entity", e.name)], [ref(entitiesArt, `${e.element}.name`, e.name)],
               `entity "${e.name}" is declared more than once`);
           }
           seenEntities.add(e.name);
           const seenAttrs = new Set<string>();
           for (const a of e.attrs) {
             if (seenAttrs.has(a.name)) {
-              finding("FD-E1", "structure-invalid", [`attr:${e.name}.${a.name}`], [ref(entitiesArt, `${a.element}.name`, a.name)],
+              finding("FD-E1", "structure-invalid", [safeTarget("attr", `${e.name}.${a.name}`)], [ref(entitiesArt, `${a.element}.name`, a.name)],
                 `attribute "${e.name}.${a.name}" is declared more than once`);
             }
             seenAttrs.add(a.name);
@@ -369,7 +370,7 @@ function main(): void {
     for (const e of entities.entities) {
       for (const a of e.attrs) {
         const t = (a.type ?? "").toLowerCase();
-        const attrId = `attr:${e.name}.${a.name}`;
+        const attrId = safeTarget("attr", `${e.name}.${a.name}`);
         // FD-E2: type-token coherence
         if (a.allowed !== null && (NUMERICISH.has(t) || DATEISH.has(t) || BOOLISH.has(t))) {
           finding("FD-E2", "structure-invalid", [attrId], [ref(entitiesArt, a.element, t)],
@@ -421,7 +422,7 @@ function main(): void {
     for (const r of allRels) {
       for (const endpoint of [r.from, r.to]) {
         if (endpoint !== null && !declaredEntities.has(endpoint)) {
-          finding("FD-E4", "reference-broken", [`entity:${endpoint}`], [ref(entitiesArt, r.element, endpoint)],
+          finding("FD-E4", "reference-broken", [safeTarget("entity", endpoint)], [ref(entitiesArt, r.element, endpoint)],
             `relationship endpoint "${endpoint}" is not a declared entity`);
         }
       }
@@ -481,7 +482,8 @@ function main(): void {
           rules = (v.rules as Json[]).map((raw, i) => {
             const element = `rules[${i}]`;
             if (!isObject(raw)) return { id: null, element, category: null, appliesTo: null, sourceIds: [], missing: ["<entry is not a mapping>"] };
-            const missing = ["id", "statement", "category", "source"].filter((k) => !(k in raw));
+            const missing = ["id", "statement", "category"].filter((k) => !(k in raw));
+            if (!("source" in raw) && !("sources" in raw)) missing.push("source");
             const source = pick(raw, ["source", "sources"]);
             const sourceText = Array.isArray(source)
               ? (source as Json[]).filter((s): s is string => typeof s === "string").join(" ")
@@ -612,7 +614,7 @@ function main(): void {
       }
       const ent = entities.entities.find((e) => normalizeName(e.name) === normalizeName(entName ?? ""));
       if (!ent) {
-        finding("FD-S1", "consistency-mismatch", [`entity:${entName}`], [ref(specArt, el, entName)],
+        finding("FD-S1", "consistency-mismatch", [safeTarget("entity", entName ?? "")], [ref(specArt, el, entName)],
           `state machine names entity "${entName}" which is not declared in entities.md`);
         continue;
       }
@@ -626,7 +628,7 @@ function main(): void {
           `${el}: no lifecycle attribute with allowed values could be determined for entity "${ent.name}"`);
         continue;
       }
-      const attrId = `attr:${ent.name}.${attr.name}`;
+      const attrId = safeTarget("attr", `${ent.name}.${attr.name}`);
       const allowedNorm = new Map(attr.allowed.map((v) => [normalizeName(v), v]));
       const stateNorm = new Map(m.states.map((s) => [normalizeName(s), s]));
       const rogue = m.states.filter((s) => !allowedNorm.has(normalizeName(s))).sort();
@@ -699,12 +701,12 @@ function main(): void {
         seenDomain.add(key);
         const definers = [...unitEntities.entries()].filter(([, m]) => m.has(key)).map(([u]) => u);
         if (definers.length >= 2) {
-          finding("XS-1", "consistency-mismatch", [`entity:${de.name}`],
+          finding("XS-1", "consistency-mismatch", [safeTarget("entity", de.name)],
             [ref(compArt, `entity ${de.name} (component ${de.component})`),
               ...definers.map((u) => ref(`construction/${u}/functional-design/entities.md`, `entity ${de.name}`))],
             `domain entity "${de.name}" is defined in ${definers.length} units (${definers.join(", ")}) — ownership is duplicated`);
         } else if (definers.length === 0 && unitEntities.size > 0) {
-          finding("XS-2", "consistency-mismatch", [`entity:${de.name}`],
+          finding("XS-2", "consistency-mismatch", [safeTarget("entity", de.name)],
             [ref(compArt, `entity ${de.name} (component ${de.component})`)],
             `domain entity "${de.name}" is defined in no unit's entities.md — it was dropped on the way to functional design`);
         }
@@ -715,7 +717,7 @@ function main(): void {
             const mineNorm = new Set(mine.attrs.map(normalizeName));
             const dropped = de.attributes.filter((a) => !mineNorm.has(normalizeName(a))).sort();
             if (dropped.length > 0) {
-              finding("XS-3", "consistency-mismatch", [`entity:${de.name}`],
+              finding("XS-3", "consistency-mismatch", [safeTarget("entity", de.name)],
                 dropped.map((a) => ref(compArt, `entity ${de.name}.attributes`, a)),
                 `domain-design declares attribute(s) ${dropped.join(", ")} on "${de.name}" that this unit's entities.md does not carry`);
             }
@@ -732,7 +734,7 @@ function main(): void {
   const skippedFamilies = new Set(skipped.map((s) => (s.target.startsWith("check:") ? s.target.slice(6) : "")));
   const checked = FAMILIES.filter((f) => !failedFamilies.has(f) && !skippedFamilies.has(f)).map((f) => `check:${f}`);
 
-  emitRefcheckDoc(join(fdDir, "deep-spec-refcheck"), {
+  const result = emitRefcheckDoc(join(fdDir, "deep-spec-refcheck"), {
     backend: BACKEND,
     inputs,
     checked,
@@ -740,7 +742,8 @@ function main(): void {
     skipped,
   }, flags.reportOnly);
 
-  verdictOut(findings.length === 0, findings.length, skipped.length, flags.reportOnly ? "report-only" : undefined);
+  verdictOut(!result.unavailable && result.findingsCount === 0, result.findingsCount, result.skippedCount,
+    flags.reportOnly ? "report-only" : undefined);
 }
 
 main();

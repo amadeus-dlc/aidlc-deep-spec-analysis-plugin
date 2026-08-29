@@ -1,7 +1,7 @@
 {
   "backend": "functional-design",
   "irVersion": "1.0.0",
-  "irHash": "f8f63360e886f1173ae42db1c7d4a2bd7ef951726568222157adf7d2e69ac333",
+  "irHash": "d0967c4571927d35eb9f46ba82b7633418287db8a6cdad6236287671cdd8734c",
   "method": "static",
   "inputs": [
     {
@@ -22,7 +22,7 @@
     },
     {
       "artifact": "inception/domain-design/components.md",
-      "sha256": "f5ea666db8609c4e32efe01ac5229b0722becbb6e32e180048313508e166c3e0"
+      "sha256": "b11e2fd30c85dcfc5bac12abe70b0071d6ed5f0bb4ead4d1fc204292d035da72"
     },
     {
       "artifact": "inception/requirements-analysis/requirements.md",

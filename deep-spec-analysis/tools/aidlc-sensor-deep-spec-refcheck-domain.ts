@@ -38,6 +38,7 @@ import {
   parseYamlSubset,
   relArtifact,
   sha256,
+  safeTarget,
   sortedUnique,
   idCompare,
   verdictOut,
@@ -245,12 +246,12 @@ function main(): void {
     const seen = new Map<string, Comp>();
     for (const c of comps) {
       if (!/^[A-Z][A-Za-z0-9]*$/.test(c.name)) {
-        finding("DD-1", "structure-invalid", [`component:${c.name}`], [ref(`${c.element}.name`, c.name)],
+        finding("DD-1", "structure-invalid", [safeTarget("component", c.name)], [ref(`${c.element}.name`, c.name)],
           `component name "${c.name}" is not PascalCase`);
       }
       const prior = seen.get(c.name);
       if (prior) {
-        finding("DD-1", "structure-invalid", [`component:${c.name}`],
+        finding("DD-1", "structure-invalid", [safeTarget("component", c.name)],
           [ref(`${prior.element}.name`, c.name), ref(`${c.element}.name`, c.name)],
           `component name "${c.name}" is declared more than once`);
       }
@@ -261,14 +262,14 @@ function main(): void {
     for (const c of comps) {
       for (const r of [...c.dependsOn, ...c.dependents]) {
         if (!declared.has(r.component)) {
-          finding("DD-2", "reference-broken", [`component:${r.component}`], [ref(r.element, r.component)],
+          finding("DD-2", "reference-broken", [safeTarget("component", r.component)], [ref(r.element, r.component)],
             `"${c.name}" references undeclared component "${r.component}"`);
         }
       }
       for (const e of c.entities) {
         for (const r of e.references) {
           if (!declared.has(r.ownedBy)) {
-            finding("DD-2", "reference-broken", [`component:${r.ownedBy}`], [ref(`${r.element}.owned_by`, r.ownedBy)],
+            finding("DD-2", "reference-broken", [safeTarget("component", r.ownedBy)], [ref(`${r.element}.owned_by`, r.ownedBy)],
               `entity "${e.name}" references owner component "${r.ownedBy}" which is not declared`);
           }
         }
@@ -279,7 +280,7 @@ function main(): void {
     for (const c of comps) {
       for (const r of [...c.dependsOn, ...c.dependents]) {
         if (r.component === c.name) {
-          finding("DD-3", "structure-invalid", [`component:${c.name}`], [ref(r.element, c.name)],
+          finding("DD-3", "structure-invalid", [safeTarget("component", c.name)], [ref(r.element, c.name)],
             `component "${c.name}" lists itself as a dependency`);
         }
       }
@@ -292,7 +293,7 @@ function main(): void {
         const other = byName.get(r.component);
         if (!other || r.component === c.name) continue;
         if (!other.dependents.some((d) => d.component === c.name)) {
-          finding("DD-4", "structure-invalid", [`component:${c.name}`, `component:${r.component}`],
+          finding("DD-4", "structure-invalid", [safeTarget("component", c.name), safeTarget("component", r.component)],
             [ref(r.element, r.component), ref(`${other.element}.dependents`, c.name)],
             `"${c.name}" depends on "${r.component}" but "${r.component}" does not list "${c.name}" in dependents`);
         }
@@ -301,7 +302,7 @@ function main(): void {
         const other = byName.get(r.component);
         if (!other || r.component === c.name) continue;
         if (!other.dependsOn.some((d) => d.component === c.name)) {
-          finding("DD-4", "structure-invalid", [`component:${c.name}`, `component:${r.component}`],
+          finding("DD-4", "structure-invalid", [safeTarget("component", c.name), safeTarget("component", r.component)],
             [ref(r.element, r.component), ref(`${other.element}.depends_on`, c.name)],
             `"${c.name}" lists "${r.component}" as a dependent but "${r.component}" does not depend on "${c.name}"`);
         }
@@ -316,14 +317,14 @@ function main(): void {
         list.push({ comp: c, entity: e });
         owners.set(e.name, list);
         if (e.identifier === null || e.identifier === "") {
-          finding("DD-5", "structure-invalid", [`entity:${e.name}`], [ref(`${e.element}.identifier`)],
+          finding("DD-5", "structure-invalid", [safeTarget("entity", e.name)], [ref(`${e.element}.identifier`)],
             `entity "${e.name}" has no identifier`);
         }
       }
     }
     for (const [name, list] of [...owners.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
       if (list.length > 1) {
-        finding("DD-5", "structure-invalid", [`entity:${name}`],
+        finding("DD-5", "structure-invalid", [safeTarget("entity", name)],
           list.map((o) => ref(o.entity.element, o.comp.name)),
           `entity "${name}" is owned by ${list.length} components (${list.map((o) => o.comp.name).join(", ")}) — must be exactly one`);
       }
@@ -336,7 +337,7 @@ function main(): void {
           const owner = byName.get(r.ownedBy);
           if (!owner) continue; // DD-2 already reported the undeclared owner
           if (!owner.entities.some((oe) => oe.name === r.entity)) {
-            finding("DD-6", "reference-broken", [`entity:${r.entity}`], [ref(`${r.element}.entity`, r.entity)],
+            finding("DD-6", "reference-broken", [safeTarget("entity", r.entity)], [ref(`${r.element}.entity`, r.entity)],
               `entity "${e.name}" references "${r.entity}" as owned by "${r.ownedBy}", but "${r.ownedBy}" declares no such entity`);
           }
         }
@@ -346,7 +347,7 @@ function main(): void {
     // --- DD-7: acyclic depends_on graph -------------------------------------
     // Self-loops are DD-3's finding; DD-7 reports only genuine multi-node cycles.
     for (const cycle of findCycles(comps).filter((c) => c.length > 1)) {
-      finding("DD-7", "structure-invalid", cycle.map((n) => `component:${n}`),
+      finding("DD-7", "structure-invalid", cycle.map((n) => safeTarget("component", n)),
         cycle.map((n, i) => ref(`${byName.get(n)?.element ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])),
         `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
     }
@@ -356,7 +357,7 @@ function main(): void {
   const skippedFamilies = new Set(skipped.map((s) => (s.target.startsWith("check:") ? s.target.slice(6) : "")));
   const checked = FAMILIES.filter((f) => !failedFamilies.has(f) && !skippedFamilies.has(f)).map((f) => `check:${f}`);
 
-  emitRefcheckDoc(join(dirname(flags.outputPath), "deep-spec-refcheck"), {
+  const result = emitRefcheckDoc(join(dirname(flags.outputPath), "deep-spec-refcheck"), {
     backend: BACKEND,
     inputs,
     checked,
@@ -364,7 +365,8 @@ function main(): void {
     skipped,
   }, flags.reportOnly);
 
-  verdictOut(findings.length === 0, findings.length, skipped.length, flags.reportOnly ? "report-only" : undefined);
+  verdictOut(!result.unavailable && result.findingsCount === 0, result.findingsCount, result.skippedCount,
+    flags.reportOnly ? "report-only" : undefined);
 }
 
 main();

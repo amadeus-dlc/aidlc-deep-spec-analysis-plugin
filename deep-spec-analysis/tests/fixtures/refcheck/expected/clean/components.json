@@ -1,12 +1,12 @@
 {
   "backend": "components",
   "irVersion": "1.0.0",
-  "irHash": "6b32f2b377c915446b58a688591414ca792b60a71db09bba0ed21059504de10d",
+  "irHash": "ca8560c67c9d75d3cad1f89276860ab969d1129709967354b255aec75ea9bf98",
   "method": "static",
   "inputs": [
     {
       "artifact": "inception/domain-design/components.md",
-      "sha256": "f5ea666db8609c4e32efe01ac5229b0722becbb6e32e180048313508e166c3e0"
+      "sha256": "b11e2fd30c85dcfc5bac12abe70b0071d6ed5f0bb4ead4d1fc204292d035da72"
     }
   ],
   "checked": [

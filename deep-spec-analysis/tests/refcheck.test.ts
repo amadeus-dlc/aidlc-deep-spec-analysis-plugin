@@ -166,6 +166,31 @@ describe("refcheck degradation (never a crash, never silence)", () => {
     rmSync(record, { recursive: true, force: true });
   });
 
+  test("free-text unit names sanitize into valid target ids instead of degrading the document", () => {
+    // A table cell like "Order Service" must not produce a schema-invalid
+    // target id — that would trip self-validation and degrade the WHOLE
+    // document to `unavailable`, erasing every finding exactly when the
+    // sensor is most valuable. The token is sanitized; the raw string
+    // survives in the witness.
+    const doc = JSON.parse(readFileSync(join(expected, "broken", "contract-summary.json"), "utf-8"));
+    expect(doc.unavailable).toBeUndefined();
+    const f = doc.findings.find((x: { detail: string }) => x.detail.includes("Order Service"));
+    expect(f.targets).toContain("unit:Order-Service");
+    expect(f.witness.refs.some((r: { value?: string }) => r.value === "Order Service")).toBe(true);
+  });
+
+  test("rules using the `sources` synonym do not trip the required-key check", () => {
+    const record = makeRecord("clean");
+    const rules = join(record, "construction", "u1-orders", "functional-design", "rules.md");
+    writeFileSync(rules, readFileSync(rules, "utf-8").replace("    source: FR-2", "    sources: [FR-2]"));
+    const run = fire(TOOLS.functional, join(record, ...PATHS.functional));
+    expect(run.status).toBe(0);
+    const doc = JSON.parse(readFileSync(join(record, ...OUT.functional), "utf-8"));
+    expect(doc.findings.filter((f: { detail: string }) => f.detail.startsWith("FD-R1"))).toEqual([]);
+    expect(doc.checked).toContain("check:FD-R1");
+    rmSync(record, { recursive: true, force: true });
+  });
+
   test("writes that are not the sensor's artifact pass through", () => {
     const record = makeRecord("clean");
     const other = join(record, "inception", "domain-design", "notes.md");

@@ -6,6 +6,7 @@
 |---|---|---|---|---|
 | 1 | u1-orders | u2-billing | REST | u1-orders |
 | 2 | ghost-unit | External: Stripe | REST | u1-orders |
+| 3 | Order Service | u2-billing | REST | u1-orders |
 
 ## Contract 1 — Orders API
 

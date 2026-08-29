@@ -40,6 +40,7 @@ import {
   parseYamlSubset,
   readIfExists,
   relArtifact,
+  safeTarget,
   sha256,
   sortedUnique,
   verdictOut,
@@ -169,17 +170,17 @@ function main(): void {
       for (const row of rows) {
         const el = `contracts table row ${row.id} (line ${row.line})`;
         if (row.provider !== "" && !declared.has(row.provider)) {
-          finding("CD-1", "reference-broken", [`contract:${row.id}`, `unit:${row.provider}`],
+          finding("CD-1", "reference-broken", [`contract:${row.id}`, safeTarget("unit", row.provider)],
             [ref(artifact, el, row.provider), ref(depArtifact, "units")],
             `Provider Unit "${row.provider}" is not a declared unit`);
         }
         if (row.consumer !== "" && !declared.has(row.consumer) && !/^external\b/i.test(row.consumer)) {
-          finding("CD-1", "reference-broken", [`contract:${row.id}`, `unit:${row.consumer}`],
+          finding("CD-1", "reference-broken", [`contract:${row.id}`, safeTarget("unit", row.consumer)],
             [ref(artifact, el, row.consumer), ref(depArtifact, "units")],
             `Consumer "${row.consumer}" is neither a declared unit nor \`External: …\``);
         }
         if (row.owner !== "" && !declared.has(row.owner)) {
-          finding("CD-1", "reference-broken", [`contract:${row.id}`, `unit:${row.owner}`],
+          finding("CD-1", "reference-broken", [`contract:${row.id}`, safeTarget("unit", row.owner)],
             [ref(artifact, el, row.owner), ref(depArtifact, "units")],
             `Owner "${row.owner}" is not a declared unit`);
         }
@@ -221,7 +222,7 @@ function main(): void {
       for (const dep of [...u.dependsOn].sort()) {
         if (!units.some((d) => d.name === dep)) continue; // dangling edge is units-generation's problem
         if (!covered.has(`${dep} ${u.name}`)) {
-          finding("CD-3", "consistency-mismatch", [`unit:${dep}`, `unit:${u.name}`],
+          finding("CD-3", "consistency-mismatch", [safeTarget("unit", dep), safeTarget("unit", u.name)],
             [ref(depArtifact, `units (${u.name} depends_on ${dep})`), ref(artifact, "contracts table")],
             `unit dependency edge "${u.name}" -> "${dep}" has no contracts-table row in either orientation`);
         }
@@ -233,7 +234,7 @@ function main(): void {
   const skippedFamilies = new Set(skipped.map((s) => (s.target.startsWith("check:") ? s.target.slice(6) : "")));
   const checked = FAMILIES.filter((f) => !failedFamilies.has(f) && !skippedFamilies.has(f)).map((f) => `check:${f}`);
 
-  emitRefcheckDoc(join(dirname(flags.outputPath), "deep-spec-refcheck"), {
+  const result = emitRefcheckDoc(join(dirname(flags.outputPath), "deep-spec-refcheck"), {
     backend: BACKEND,
     inputs,
     checked,
@@ -241,7 +242,8 @@ function main(): void {
     skipped,
   }, flags.reportOnly);
 
-  verdictOut(findings.length === 0, findings.length, skipped.length, flags.reportOnly ? "report-only" : undefined);
+  verdictOut(!result.unavailable && result.findingsCount === 0, result.findingsCount, result.skippedCount,
+    flags.reportOnly ? "report-only" : undefined);
 }
 
 main();

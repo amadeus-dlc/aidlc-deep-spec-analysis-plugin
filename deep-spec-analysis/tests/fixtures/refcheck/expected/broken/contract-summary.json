@@ -1,12 +1,12 @@
 {
   "backend": "contract-summary",
   "irVersion": "1.0.0",
-  "irHash": "b9f468d844d497a45ec8017c27979046db3056980df8f4d644611fd9603970ee",
+  "irHash": "38544b162fcea902de67f6330eced1ec9635a9b995cd12b8c1e3ceed1bd8e670",
   "method": "static",
   "inputs": [
     {
       "artifact": "inception/contract-design/contract-summary.md",
-      "sha256": "40b6c6061b7fe607520d241e858340cb65ace69f4a565a3ad00b0e92907a876a"
+      "sha256": "064f915e8aa541a1ba827c1fb2f504c6cd00b9de2cae4241f97fee9d6fb27c09"
     },
     {
       "artifact": "inception/units-generation/unit-of-work-dependency.md",
@@ -25,7 +25,7 @@
         "refs": [
           {
             "artifact": "inception/contract-design/contract-summary.md",
-            "element": "yaml fence #1 (line 12)",
+            "element": "yaml fence #1 (line 13)",
             "value": "openapi"
           }
         ]
@@ -53,6 +53,28 @@
         ]
       },
       "detail": "CD-1: Provider Unit \"ghost-unit\" is not a declared unit"
+    },
+    {
+      "kind": "reference-broken",
+      "frRefs": [],
+      "targets": [
+        "contract:3",
+        "unit:Order-Service"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "inception/contract-design/contract-summary.md",
+            "element": "contracts table row 3 (line 9)",
+            "value": "Order Service"
+          },
+          {
+            "artifact": "inception/units-generation/unit-of-work-dependency.md",
+            "element": "units"
+          }
+        ]
+      },
+      "detail": "CD-1: Provider Unit \"Order Service\" is not a declared unit"
     },
     {
       "kind": "consistency-mismatch",

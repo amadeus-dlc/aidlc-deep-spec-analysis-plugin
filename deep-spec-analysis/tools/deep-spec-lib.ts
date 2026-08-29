@@ -500,11 +500,30 @@ function findingsSchemaPath(): string {
   return join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json");
 }
 
+export interface EmitResult {
+  findingsCount: number;
+  skippedCount: number;
+  unavailable: boolean;
+}
+
+// Namespaced target ids (unit:…, component:…, entity:…) must satisfy the
+// findings schema's targetId pattern, but the raw names they are built from
+// come out of free-form artifact text (a markdown table cell, a yaml scalar)
+// and may carry spaces or other out-of-alphabet characters. Sanitize the
+// token deterministically — the raw string always survives in the witness
+// refs `value` — so a defective name can never invalidate the whole document.
+export function safeTarget(prefix: string, raw: string): string {
+  const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
+  return `${prefix}:${token === "" ? "unknown" : token}`;
+}
+
 // Assembles the contract-2 document (canonical key order, canonical sorts),
 // self-validates it against the findings schema (FR: a writer never emits a
 // non-conforming file — on failure it degrades to an `unavailable` document
-// carrying the validation error), and writes it unless reportOnly.
-export function emitRefcheckDoc(outDir: string, doc: RefcheckDoc, reportOnly: boolean): void {
+// carrying the validation error), and writes it unless reportOnly. Returns
+// the counts of the document actually written, so the caller's stdout
+// verdict can never contradict the file.
+export function emitRefcheckDoc(outDir: string, doc: RefcheckDoc, reportOnly: boolean): EmitResult {
   const inputs = [...doc.inputs].sort((a, b) => (a.artifact < b.artifact ? -1 : a.artifact > b.artifact ? 1 : 0));
   const irHash = sha256(canonicalStringify(inputs as unknown as Json));
   const assemble = (d: RefcheckDoc): { [k: string]: Json } => {
@@ -546,9 +565,15 @@ export function emitRefcheckDoc(outDir: string, doc: RefcheckDoc, reportOnly: bo
       skipped: [],
     });
   }
-  if (reportOnly) return;
-  mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, `${doc.backend}.json`), `${JSON.stringify(ordered, null, 2)}\n`, "utf-8");
+  if (!reportOnly) {
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, `${doc.backend}.json`), `${JSON.stringify(ordered, null, 2)}\n`, "utf-8");
+  }
+  return {
+    findingsCount: (ordered.findings as Json[]).length,
+    skippedCount: (ordered.skipped as Json[]).length,
+    unavailable: "unavailable" in ordered,
+  };
 }
 
 // --- record-root and requirements resolution ---------------------------------
