@@ -85,6 +85,24 @@ beforeAll(() => {
   // Solver resolution: the installed sensors resolve z3-solver/quint from the
   // project root, so borrow this repository's exact-pinned node_modules.
   symlinkSync(join(pluginRoot, "node_modules"), join(sandbox, "node_modules"));
+
+  // Late-adoption setup: mint one intent BEFORE the plugin exists, so the
+  // suite can prove a project that adopted AI-DLC first and this plugin later
+  // can still verify that intent's requirements.
+  const legacy = spawnSync(
+    "bun",
+    [
+      join(sandbox, ".claude", "tools", "aidlc-utility.ts"), "intent-create",
+      "--scope", "feature",
+      "--arguments", "プラグイン導入前から進行中のintent（後入れ検証用）",
+      "--label", "intent-e2e legacy",
+    ],
+    { encoding: "utf-8", timeout: 180_000, cwd: sandbox },
+  );
+  if (legacy.status !== 0) {
+    throw new Error(`pre-install intent-create failed: ${legacy.stderr || legacy.stdout}`);
+  }
+
   const res = spawnSync("bun", [installer, "--project", sandbox], {
     encoding: "utf-8",
     timeout: 300_000,
@@ -115,6 +133,63 @@ describe("installer onto a vanilla install", () => {
     }
     const graph = readFileSync(join(sandbox, ".claude", "tools", "data", "stage-graph.json"), "utf-8");
     expect(graph).toContain("deep-spec-analysis-verify");
+  });
+});
+
+describe("late adoption — the plugin verifies an intent that predates it", () => {
+  let legacyRecord = "";
+
+  beforeAll(() => {
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+    legacyRecord = join(intentsDir, active);
+  });
+
+  test("the pre-install intent's plan does not know the stage", () => {
+    const state = readFileSync(join(legacyRecord, "aidlc-state.md"), "utf-8");
+    expect(state).not.toContain("deep-spec-analysis-verify");
+  });
+
+  test("after the late install, the single-stage engine run accepts that intent", () => {
+    mkdirSync(join(legacyRecord, "inception", "requirements-analysis"), { recursive: true });
+    cpSync(
+      join(fixtures, "requirements.md"),
+      join(legacyRecord, "inception", "requirements-analysis", "requirements.md"),
+    );
+    const run = inSandbox([
+      "bun", join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
+      "next", "--stage", "deep-spec-analysis-verify", "--single",
+    ]);
+    expect(run.status).toBe(0);
+    const directive = JSON.parse(run.stdout.trim().split("\n")[0]);
+    expect(directive.kind).toBe("load-steering");
+    expect(directive.stage).toBe("deep-spec-analysis-verify");
+  });
+
+  test("the sensors detect the contradictions in the pre-existing intent's record", () => {
+    if (!nodeAvailable) {
+      console.warn("node runtime missing — skipping late-adoption SMT assertions");
+      return;
+    }
+    const verify = join(legacyRecord, "inception", "deep-spec-analysis-verify");
+    mkdirSync(verify, { recursive: true });
+    const model = join(verify, "deep-spec-analysis-formal-model.md");
+    cpSync(join(fixtures, "deep-spec-analysis-formal-model.md"), model);
+    const run = inSandbox([
+      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-verify-smt.ts"),
+      "--stage", "deep-spec-analysis-verify", "--output-path", model,
+    ]);
+    expect(run.status).toBe(0);
+    expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, findings_count: 5 });
+    const smt = JSON.parse(readFileSync(join(verify, "deep-spec-verify", "smt.json"), "utf-8"));
+    const kinds = smt.findings.map((f: { kind: string }) => f.kind).sort();
+    expect(kinds).toEqual([
+      "completeness-gap",
+      "conflict",
+      "conflict",
+      "conflict",
+      "scenario-violation",
+    ]);
   });
 });
 

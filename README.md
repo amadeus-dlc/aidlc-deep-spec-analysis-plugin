@@ -33,6 +33,16 @@ The installer builds the harness projection under `deep-spec-analysis/dist/<harn
 
 Note: the stage declares `scopes: [enterprise, feature]`, so it only runs for intents created with those scopes — a `classic`-scope intent marks it SKIP by design.
 
+### Adopting mid-project
+
+You don't need to have started with this plugin. Composition is additive, so installing into a project whose AI-DLC workflow is already underway changes nothing else — and **intents that predate the install can still be verified**. Run the stage in isolation against an existing intent's requirements, without advancing its workflow:
+
+```
+/aidlc --stage deep-spec-analysis-verify --single
+```
+
+(also packaged as the composed `/deep-spec-analysis-verify` skill). The engine resolves the intent's existing `requirements.md`, the sensors write their findings under that intent's record, and the workflow's Current Stage is never touched. Intents created after the install pick the stage up automatically. The one restriction is scope: a `classic`-scope intent is refused even in single mode — move it to `feature` or `enterprise` first. The whole late-adoption path is regression-tested in `tests/intent-e2e.test.ts`.
+
 ### Alternative: install through the host plugin store
 
 Build the projection first, from `deep-spec-analysis/`: `bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude` (or `codex`).

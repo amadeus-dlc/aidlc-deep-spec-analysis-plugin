@@ -41,6 +41,8 @@ flowchart LR
 
 Inception フェーズに `deep-spec-analysis-verify` ステージとして挿し込まれ、次の順で進む。なおステージは `scopes: [enterprise, feature]` を宣言しているため、この2スコープの intent でのみ実行される（`classic` スコープの intent ではエンジンが SKIP に振る——実 intent で確認済みの仕様）。
 
+**後入れ対応**：compose は追加合成なので、AI-DLC 運用中のプロジェクトへ途中からインストールしても機能する。導入前から存在する intent に対しても `/aidlc --stage deep-spec-analysis-verify --single`（compose される `/deep-spec-analysis-verify` スキルと同じもの）で、ワークフローを進めずに既存の requirements.md へ検査だけをかけられる。findings はその intent のレコード配下に書かれる。制約はスコープのみ（classic は single モードでも拒否）。この後入れ経路は `tests/intent-e2e.test.ts` が毎回回帰検証する。
+
 1. **形式化** — product agent が各 FR / NFR を EARS 分類し、IR を `deep-spec-analysis-formal-model.md` の単一 JSON フェンスに書き込む。
 2. **センサー発火** — 書き込みを検知して 3 センサーが順に走る：IR スキーマ検証 → SMT（z3）→ Quint。findings は `deep-spec-verify/*.json` に書かれる。
 3. **人間ゲート** — ステージが findings を質問に変換する — **A.** 現状維持 / **B.** 改訂案を採用 / **X.** その他。全件が人間の回答を待つ。
