@@ -98,6 +98,10 @@
 
 ## intent実作成E2E検証（実測、2026-08-29、sandboxにて）
 
+以下の手動検証は `tests/intent-e2e.test.ts` として自動化済み（`bun test` でCI毎回実行）。
+LLM会話層（形式化・A/Bゲート・レポート）はfixture代替のため、正確には
+「決定論経路のintentレベル統合テスト」であり、フルE2Eではない。
+
 | 検査 | 実施 | 結果 |
 |---|---|---|
 | インストーラでバニラAI-DLC素体へ導入 | ✔ | store系=非投下で `.claude/` へcompose、drops 0、ルート無汚染 |
