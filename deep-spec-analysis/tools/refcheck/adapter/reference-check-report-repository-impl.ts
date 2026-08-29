@@ -1,17 +1,25 @@
 // ReferenceCheckReportRepository の実 Gateway 実装。
 // 保存先／読出元は集約識別子（directory + fileName）から導出する。
-// 直列化・解体は serializer の責務、ここは I/O と RepositoryError への写像。
+// 契約適合（conformedOf）は serializer の知識で実装し、save は常に
+// conformed な姿を書く——「不適合ファイルを決して出さない」の実装点。
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Result, err, ok } from "../../kernel/domain/index.ts";
 import type { Json } from "../../kernel/adapter/json-value.ts";
+import { readContractSchema } from "../../kernel/adapter/contract-schema.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { ReferenceCheckReport, ReferenceCheckReportId } from "../domain/index.ts";
 import type { ReferenceCheckReportRepository } from "../usecase/index.ts";
-import { parseReportDocument, renderReportBytes } from "./reference-check-report-serializer.ts";
+import { conformToContract, parseReportDocument, renderReportBytes } from "./reference-check-report-serializer.ts";
 
 export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportRepository {
+  readonly #findingsSchemaPath: string;
+
+  constructor(findingsSchemaPath: string) {
+    this.#findingsSchemaPath = findingsSchemaPath;
+  }
+
   findById(aggregateId: ReferenceCheckReportId): Result<ReferenceCheckReport, RepositoryError> {
     const path = join(aggregateId.directory(), aggregateId.fileName());
     if (!existsSync(path)) {
@@ -30,11 +38,16 @@ export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportR
     return report;
   }
 
+  conformedOf(report: ReferenceCheckReport): ReferenceCheckReport {
+    return conformToContract(report, readContractSchema(this.#findingsSchemaPath));
+  }
+
   save(report: ReferenceCheckReport): Result<void, RepositoryError> {
-    const path = join(report.id().directory(), report.id().fileName());
+    const conformed = this.conformedOf(report);
+    const path = join(conformed.id().directory(), conformed.id().fileName());
     try {
-      mkdirSync(report.id().directory(), { recursive: true });
-      writeFileSync(path, renderReportBytes(report), "utf-8");
+      mkdirSync(conformed.id().directory(), { recursive: true });
+      writeFileSync(path, renderReportBytes(conformed), "utf-8");
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });

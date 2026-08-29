@@ -1,51 +1,70 @@
-// contract-summary.md の refcheck ユースケース — 型付き入力の上で CD 検査を
-// 走らせ、ReferenceCheckReport 集約を組む純粋なアプリケーション操作。
-// inputs[] の記録規則（対象 md ＋ dep が読めたときのみ dep）は凍結挙動。
+// contract-summary.md の refcheck ユースケース。
+// Repository を保持し、execute は成果物パス（識別）を受けて内部で集約を解決し、
+// CD 検査 → 組成 → 契約適合 → 永続化を起動する。
 
-import { sha256 } from "../../kernel/domain/index.ts";
 import {
   CheckFamilyLedger,
   CONTRACT_FAMILIES,
-  type ContractsTableOutcome,
-  type DeclaredUnitsOutcome,
+  type InputEntry,
   ReferenceCheckReport,
   ReferenceCheckReportId,
-  type SpecBlockAssessment,
   runContractChecks,
 } from "../domain/index.ts";
-import type { InputEntry } from "../domain/index.ts";
+import type { CheckOutcome } from "./check-outcome.ts";
+import type { DesignRecordRepository } from "./design-record-repository.ts";
+import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
 
 export interface CheckContractSummaryInput {
+  readonly artifactPath: string;
   readonly reportDirectory: string;
-  readonly artifact: string;
-  readonly artifactText: string;
-  readonly depArtifact: string;
-  readonly depText: string | null;
-  readonly declaredUnits: DeclaredUnitsOutcome;
-  readonly contractsTable: ContractsTableOutcome;
-  readonly specBlocks: readonly SpecBlockAssessment[];
+  readonly reportOnly: boolean;
 }
 
 export class CheckContractSummaryUseCase {
-  execute(input: CheckContractSummaryInput): ReferenceCheckReport {
+  readonly #designRecords: DesignRecordRepository;
+  readonly #reports: ReferenceCheckReportRepository;
+
+  constructor(designRecords: DesignRecordRepository, reports: ReferenceCheckReportRepository) {
+    this.#designRecords = designRecords;
+    this.#reports = reports;
+  }
+
+  execute(input: CheckContractSummaryInput): CheckOutcome {
+    const record = this.#designRecords.findByArtifact(input.artifactPath);
+    if (!record.ok) return { kind: "not-applicable" };
+    const contractsTable = record.value.contractsTable();
+    const specBlocks = record.value.specBlocks();
+    const declaredUnits = record.value.declaredUnits();
+    if (contractsTable === null || specBlocks === null || declaredUnits === null) return { kind: "not-applicable" };
+
     const ledger = new CheckFamilyLedger(CONTRACT_FAMILIES);
     runContractChecks({
-      artifact: input.artifact,
-      depArtifact: input.depArtifact,
-      declaredUnits: input.declaredUnits,
-      contractsTable: input.contractsTable,
-      specBlocks: input.specBlocks,
+      artifact: record.value.target().artifact,
+      depArtifact: declaredUnits.artifactName,
+      declaredUnits: declaredUnits.document === null ? { kind: "absent" } : declaredUnits.document.outcome,
+      contractsTable,
+      specBlocks,
     }, ledger);
-    const inputs: InputEntry[] = [{ artifact: input.artifact, sha256: sha256(input.artifactText) }];
-    if (input.depText !== null) {
-      inputs.push({ artifact: input.depArtifact, sha256: sha256(input.depText) });
-    }
-    return ReferenceCheckReport.compose({
+
+    const inputs: InputEntry[] = [record.value.target()];
+    if (declaredUnits.document !== null) inputs.push(declaredUnits.document.input);
+    const report = ReferenceCheckReport.compose({
       id: ReferenceCheckReportId.of(input.reportDirectory, "contract-summary"),
       inputs,
       checked: ledger.checkedTargets(),
       findings: ledger.findings(),
       skipped: ledger.skipped(),
     });
+    const conformed = this.#reports.conformedOf(report);
+    if (!input.reportOnly) {
+      const saved = this.#reports.save(conformed);
+      if (!saved.ok) return { kind: "save-failed", error: saved.error };
+    }
+    return {
+      kind: "verified",
+      pass: conformed.passes(),
+      findingsCount: conformed.findingsCount(),
+      skippedCount: conformed.skippedCount(),
+    };
   }
 }

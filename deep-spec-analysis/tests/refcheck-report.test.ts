@@ -104,7 +104,7 @@ describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", ()
   test("save then findById reconstitutes the written truth byte-for-byte", () => {
     const dir = mkdtempSync(join(tmpdir(), "refcheck-repo-"));
     try {
-      const repository = new ReferenceCheckReportRepositoryImpl();
+      const repository = new ReferenceCheckReportRepositoryImpl(schemaPath);
       const report = seed(dir);
       expect(repository.save(report).ok).toBe(true);
       const found = repository.findById(report.id());
@@ -119,7 +119,7 @@ describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", ()
   test("findById on an absent id is a not-found error, and corrupt bytes are a corrupt error", () => {
     const dir = mkdtempSync(join(tmpdir(), "refcheck-repo-"));
     try {
-      const repository = new ReferenceCheckReportRepositoryImpl();
+      const repository = new ReferenceCheckReportRepositoryImpl(schemaPath);
       const absent = repository.findById(ReferenceCheckReportId.of(dir, "components"));
       expect(!absent.ok && absent.error.kind).toBe("not-found");
       writeFileSync(join(dir, "components.json"), "not json at all");

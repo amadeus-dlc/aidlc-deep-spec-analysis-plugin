@@ -1,86 +1,81 @@
-// functional-design の refcheck ユースケース — 型付き入力の上で FD/XS 検査を
-// 走らせ、ReferenceCheckReport 集約を組む純粋なアプリケーション操作。
-// inputs[] の記録規則（存在した成果物のみ・自ユニットの entities.md と同一
-// パスの兄弟は重複記録しない）は凍結挙動をここで再現する。
+// functional-design の refcheck ユースケース。
+// Repository を保持し、execute は成果物パス（識別）を受けて内部で集約を解決し、
+// FD/XS 検査 → 組成 → 契約適合 → 永続化を起動する。inputs[] の集合は集約が
+// 凍結取得規則で解決済みの文書からそのまま導かれる。
 
-import { sha256 } from "../../kernel/domain/index.ts";
 import {
   CheckFamilyLedger,
-  type DomainEntitiesOutcome,
-  type EntitiesOutcome,
   FUNCTIONAL_FAMILIES,
-  type FunctionalSpecOutcome,
   type InputEntry,
   ReferenceCheckReport,
   ReferenceCheckReportId,
-  type RulesOutcome,
-  type SiblingUnitEntities,
   runFunctionalChecks,
 } from "../domain/index.ts";
-
-export interface NamedArtifact {
-  readonly artifact: string;
-  readonly text: string;
-}
+import type { CheckOutcome } from "./check-outcome.ts";
+import type { DesignRecordRepository } from "./design-record-repository.ts";
+import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
 
 export interface CheckFunctionalDesignInput {
+  readonly artifactPath: string;
   readonly reportDirectory: string;
-  readonly unit: string | undefined;
-  readonly entitiesArtifact: string;
-  readonly entitiesDocument: NamedArtifact | null;
-  readonly entities: EntitiesOutcome;
-  readonly rulesArtifact: string;
-  readonly rulesDocument: NamedArtifact | null;
-  readonly rules: RulesOutcome;
-  readonly specArtifact: string;
-  readonly specDocument: NamedArtifact | null;
-  readonly spec: FunctionalSpecOutcome;
-  readonly requirementsDocument: NamedArtifact | null;
-  readonly requirementIdsKnown: ReadonlySet<string> | null;
-  readonly componentsArtifact: string;
-  readonly componentsDocument: NamedArtifact | null;
-  readonly domainEntities: DomainEntitiesOutcome;
-  readonly siblingUnits: SiblingUnitEntities;
-  // 兄弟ユニットの entities.md（入力記録用。自ユニットの entities.md と同一
-  // パスのものは除外済みで渡される）。
-  readonly siblingDocuments: readonly NamedArtifact[];
+  readonly reportOnly: boolean;
 }
 
 export class CheckFunctionalDesignUseCase {
-  execute(input: CheckFunctionalDesignInput): ReferenceCheckReport {
-    const ledger = new CheckFamilyLedger(FUNCTIONAL_FAMILIES, input.unit);
+  readonly #designRecords: DesignRecordRepository;
+  readonly #reports: ReferenceCheckReportRepository;
+
+  constructor(designRecords: DesignRecordRepository, reports: ReferenceCheckReportRepository) {
+    this.#designRecords = designRecords;
+    this.#reports = reports;
+  }
+
+  execute(input: CheckFunctionalDesignInput): CheckOutcome {
+    const record = this.#designRecords.findByArtifact(input.artifactPath);
+    if (!record.ok) return { kind: "not-applicable" };
+    const fd = record.value.functional();
+    if (fd === null) return { kind: "not-applicable" };
+
+    const ledger = new CheckFamilyLedger(FUNCTIONAL_FAMILIES, fd.unit);
     runFunctionalChecks({
-      unit: input.unit,
-      entitiesArtifact: input.entitiesArtifact,
-      entities: input.entities,
-      rulesArtifact: input.rulesArtifact,
-      rules: input.rules,
-      specArtifact: input.specArtifact,
-      spec: input.spec,
-      requirementIdsKnown: input.requirementIdsKnown,
-      componentsArtifact: input.componentsArtifact,
-      domainEntities: input.domainEntities,
-      siblingUnits: input.siblingUnits,
+      unit: fd.unit,
+      entitiesArtifact: fd.entitiesArtifact,
+      entities: fd.entities === null ? { kind: "absent" } : fd.entities.outcome,
+      rulesArtifact: fd.rulesArtifact,
+      rules: fd.rules === null ? { kind: "absent" } : fd.rules.outcome,
+      specArtifact: fd.specArtifact,
+      spec: fd.spec === null ? { kind: "absent" } : fd.spec.outcome,
+      requirementIdsKnown: fd.requirements === null ? null : fd.requirements.outcome,
+      componentsArtifact: fd.componentsArtifact,
+      domainEntities: fd.components === null ? { kind: "absent" } : fd.components.outcome,
+      siblingUnits: fd.siblingUnits,
     }, ledger);
 
     const inputs: InputEntry[] = [];
-    const record = (doc: NamedArtifact | null): void => {
-      if (doc !== null) inputs.push({ artifact: doc.artifact, sha256: sha256(doc.text) });
-    };
-    record(input.entitiesDocument);
-    record(input.rulesDocument);
-    // FD-R3 が実際に走った（requirements が読めた）ときだけ記録する凍結挙動。
-    if (input.requirementIdsKnown !== null) record(input.requirementsDocument);
-    record(input.specDocument);
-    record(input.componentsDocument);
-    for (const doc of input.siblingDocuments) record(doc);
+    if (fd.entities !== null) inputs.push(fd.entities.input);
+    if (fd.rules !== null) inputs.push(fd.rules.input);
+    if (fd.requirements !== null) inputs.push(fd.requirements.input);
+    if (fd.spec !== null) inputs.push(fd.spec.input);
+    if (fd.components !== null) inputs.push(fd.components.input);
+    inputs.push(...fd.siblingInputs);
 
-    return ReferenceCheckReport.compose({
+    const report = ReferenceCheckReport.compose({
       id: ReferenceCheckReportId.of(input.reportDirectory, "functional-design"),
       inputs,
       checked: ledger.checkedTargets(),
       findings: ledger.findings(),
       skipped: ledger.skipped(),
     });
+    const conformed = this.#reports.conformedOf(report);
+    if (!input.reportOnly) {
+      const saved = this.#reports.save(conformed);
+      if (!saved.ok) return { kind: "save-failed", error: saved.error };
+    }
+    return {
+      kind: "verified",
+      pass: conformed.passes(),
+      findingsCount: conformed.findingsCount(),
+      skippedCount: conformed.skippedCount(),
+    };
   }
 }
