@@ -84,6 +84,12 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(noIoInPureLayers("kernel/domain/x.ts", 'import { readFile } from "node:fs/promises";')).not.toHaveLength(0);
   });
 
+  test("infrastructure is a pure language extension: every node import is flagged, even node:crypto", () => {
+    expect(noIoInPureLayers("kernel/infrastructure/x.ts", 'import { createHash } from "node:crypto";')).not.toHaveLength(0);
+    expect(noIoInPureLayers("kernel/infrastructure/x.ts", 'import { readFileSync } from "node:fs";')).not.toHaveLength(0);
+    expect(noIoInPureLayers("kernel/infrastructure/result.ts", "export const ok = 1;")).toHaveLength(0);
+  });
+
   test("process-only-in-entries flags process.env and import.meta in layered files", () => {
     expect(processOnlyInEntries("kernel/adapter/x.ts", "const v = process.env.X;")).not.toHaveLength(0);
     expect(processOnlyInEntries("kernel/adapter/x.ts", "const p = import.meta.url;")).not.toHaveLength(0);
@@ -121,9 +127,17 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(layerDirection("kernel/domain/x.ts", 'import { h } from "../../../tests/helper.ts";')).not.toHaveLength(0);
   });
 
+  test("infrastructure knows nothing above it, and every layer may reach it", () => {
+    expect(layerDirection("kernel/infrastructure/x.ts", 'import { y } from "../domain/y.ts";')).not.toHaveLength(0);
+    expect(layerDirection("kernel/infrastructure/x.ts", 'import { y } from "../adapter/y.ts";')).not.toHaveLength(0);
+    expect(layerDirection("kernel/domain/x.ts", 'import { ok } from "../infrastructure/result.ts";')).toHaveLength(0);
+    expect(layerDirection("requirements/usecase/x.ts", 'import { ok } from "../../kernel/infrastructure/index.ts";')).toHaveLength(0);
+    expect(layerDirection("refcheck/adapter/x.ts", 'import { ok } from "../../kernel/infrastructure/index.ts";')).toHaveLength(0);
+  });
+
   test("locationOf classifies entries, legacy files, data, and layered paths", () => {
     expect(locationOf("aidlc-sensor-deep-spec-ir-valid.ts")).toBe("entry");
-    expect(locationOf("deep-spec-design-lib.ts")).toBe("legacy");
+    expect(locationOf("deep-spec-refinement-lib.ts")).toBe("legacy");
     expect(locationOf("data/deep-spec-ir-schema.json")).toBe("data");
     expect(locationOf("kernel/domain/digest.ts")).toEqual({ context: "kernel", layer: "domain" });
   });
@@ -166,7 +180,6 @@ describe("the real tools/ tree", () => {
       "aidlc-sensor-deep-spec-design-verify-quint.ts",
       "deep-spec-analysis-doctor.ts",
       "deep-spec-lib.ts",
-      "deep-spec-design-lib.ts",
       "deep-spec-refinement-lib.ts",
     ]);
     for (const rel of LEGACY_FILES) expect(original.has(rel)).toBe(true);

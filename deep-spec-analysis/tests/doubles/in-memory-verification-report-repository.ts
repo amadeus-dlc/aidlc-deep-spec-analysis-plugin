@@ -4,7 +4,7 @@
 // findAllByDirectory は実装と同じ凍結取得規則（cross-check 除外・ファイル名順）
 // をキー空間上で再現する。
 
-import { type Result, err, ok } from "../../tools/kernel/domain/index.ts";
+import { type Result, err, ok } from "../../tools/kernel/infrastructure/index.ts";
 import type { Schema, SchemaUnreadable } from "../../tools/kernel/adapter/index.ts";
 import { conformToFindingsContract } from "../../tools/requirements/adapter/index.ts";
 import type { VerificationReport, VerificationReportId } from "../../tools/requirements/domain/index.ts";

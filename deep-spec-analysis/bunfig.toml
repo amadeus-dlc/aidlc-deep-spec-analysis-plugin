@@ -14,7 +14,6 @@ coveragePathIgnorePatterns = [
   "tools/aidlc-sensor-*.ts",
   "tools/deep-spec-analysis-doctor.ts",
   "tools/deep-spec-lib.ts",
-  "tools/deep-spec-design-lib.ts",
   "tools/deep-spec-refinement-lib.ts",
   "tools/data/**",
   # 数値ゲートの憲章は「domain 層に 90%」。adapter/usecase は契約テストで
@@ -25,4 +24,6 @@ coveragePathIgnorePatterns = [
   "tools/refcheck/usecase/**",
   "tools/requirements/adapter/**",
   "tools/requirements/usecase/**",
+  "tools/design/adapter/**",
+  "tools/design/usecase/**",
 ]

@@ -3,7 +3,7 @@
 // 落ちる寛容評価（旧 evalExpr の凍結挙動）。
 // 旧 aidlc-sensor-deep-spec-verify-quint.ts の evalExpr からの逐語移植。
 
-import type { Expression } from "./expression.ts";
+import type { Expression } from "../../kernel/domain/expression.ts";
 import type { DecodedValue, TraceState } from "./trace-state.ts";
 
 export function evaluateExpression(e: Expression, state: TraceState): DecodedValue {

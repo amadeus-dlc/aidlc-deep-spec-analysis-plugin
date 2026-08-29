@@ -13,8 +13,8 @@
 //   - 検証成立 → findings 文書＋クロスチェック。verdict は conformed
 //     （＝書かれた姿）から導出する。
 
-import type { Result } from "../../kernel/domain/index.ts";
-import { ok } from "../../kernel/domain/index.ts";
+import type { Result } from "../../kernel/infrastructure/index.ts";
+import { ok } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
   SUPPORTED_IR_MAJOR,

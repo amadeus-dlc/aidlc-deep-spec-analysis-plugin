@@ -3,7 +3,7 @@
 // 解析（形式知識）を Impl が行い、型付き集約を返す。対象が読めないときは
 // not-found（呼び手が not-applicable を選ぶ期待分岐）。
 
-import type { Result } from "../../kernel/domain/index.ts";
+import type { Result } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { DesignRecord } from "../domain/index.ts";
 

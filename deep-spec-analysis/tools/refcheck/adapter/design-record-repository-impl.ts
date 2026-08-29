@@ -7,7 +7,8 @@
 // 対象が読めないときは not-found（呼び手が not-applicable を選ぶ）。
 
 import { basename, dirname, join } from "node:path";
-import { type Result, err, ok, requirementIds, sha256 } from "../../kernel/domain/index.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import { requirementIds, sha256 } from "../../kernel/domain/index.ts";
 import {
   findRecordRoot,
   listSubdirectories,

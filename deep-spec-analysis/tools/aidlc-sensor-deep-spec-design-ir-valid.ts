@@ -23,9 +23,16 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { findRecordRoot, readIfExists } from "./kernel/adapter/index.ts";
+import { extractFences, findRecordRoot, readIfExists } from "./kernel/adapter/index.ts";
 import { isObject, type Json, validateSchema } from "./kernel/adapter/index.ts";
-import { DESIGN_MODEL_BASENAME, extractSingleJsonFence } from "./deep-spec-design-lib.ts";
+
+const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
+
+// 旧 design-lib の extractSingleJsonFence と同値（唯一の json fence のみ採用）。
+function extractSingleJsonFence(md: string): string | null {
+  const fences = extractFences(md, "json");
+  return fences.length === 1 ? (fences[0]?.body ?? null) : null;
+}
 
 const IR_MAJOR_SUPPORTED = 1;
 const MAX_REPORTED_ERRORS = 25;

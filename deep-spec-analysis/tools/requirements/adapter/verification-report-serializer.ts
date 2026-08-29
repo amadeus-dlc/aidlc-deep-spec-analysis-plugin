@@ -5,7 +5,7 @@
 // 責務。conformToFindingsContract が「書き手は不適合ファイルを決して出さない」
 // の実装（refcheck と同じ規律・同じ凍結文言）。
 
-import type { Result } from "../../kernel/domain/index.ts";
+import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
 import type { SchemaUnreadable } from "../../kernel/adapter/index.ts";

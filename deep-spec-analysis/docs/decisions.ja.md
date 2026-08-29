@@ -552,3 +552,59 @@ diff は空、golden は無変更。
   凍結文書）と golden 同一の seeded 実行を再現し doctor 0 errors。
   マージ前に 5 レンズの敵対的レビュー Workflow で新旧のバイトドリフトを
   照合した。
+
+## インフラストラクチャ裁定 — 言語拡張基盤は独立の層を持つ（2026-08-30）
+
+PR5 の途中で恒久裁定が 2 つ下り、即座にリポジトリ全体へ適用した：
+
+- **`Result` はユビキタス言語ではない。** 言語を拡張する技術基盤
+  （手巻き `Result`/`ok`/`err`/`unreachable`）は新設の最内層
+  `kernel/infrastructure` に置く。この層は何にも依存しない（`node:*` も
+  不可）が、他のすべての層から到達できる。Onion の外殻ではないことが
+  要点：**RPC クライアントと永続化はインターフェイスアダプタ層の
+  ゲートウェイ責務のまま**であり、決して infrastructure に置かない。
+  アーキテクチャルールは両方向（infrastructure は上位を import しない・
+  層内の `node:` import は違反）を red example つきで強制する。
+- **Repository 実装は必ずポート interface を implements する。**
+  すべての `XxxRepositoryImpl` / `XxxClientImpl` は use-case 層のポート
+  に対して `implements` を宣言する——design コンテキストは Impl が
+  生まれた瞬間に `design/usecase` ポート（`DesignModelRepository`・
+  `DesignReportRepository`・`SiblingBackendClient`）を得た（後の PR
+  送りにしない）。ポートは domain 語彙だけを話す：兄弟バックエンドの
+  ポートは型付き lowering を受けて型付き判定面を返し、契約1 直列化・
+  ITF の知識は Impl 内に留まる。
+
+## DDD 移行 PR5 — design-lib が design 縦割りへ解体（2026-08-30、#18）
+
+821 行の design-lib を削除（インストーラで tombstone 化）し、2 つの
+design-verify センサーは `design/{domain,usecase,adapter}` の上で動く。
+`Expression` ツリーは契約共有語彙として `kernel/domain` へ移動
+（requirements の import は直繋ぎ替え——互換再輸出なし）。base↔head
+パリティ diff は空、golden は無変更。
+
+- **design/domain** が意味を所有：`DesignModel`/`DesignUnit` 集約
+  （ユニット順序は compose の不変条件・`allTargets`/`enumValuesOf` は
+  クエリ）、型付き lowering（`lowerUnit`——OB/SC/BG 採番・合成
+  vacuity/shadow トートロジー・台帳 map）、`expressionCanonicalKey`
+  （kernel 正準 JSON とバイト同一——テストが機械証明）、`remapUnitDoc`
+  （unreachable/redundancy 変換・相互包摂の畳み込み・deterministic:false
+  waiver・OB-n の detail/core 書き換え——文言逐語）、`DesignReport` 集約
+  （inputs/checked ソートも compose の不変条件）、11-kind 順位 VO、設計
+  クロスチェック、降格ファクトリ群。
+- **design/adapter** が形式を所有：寛容な契約3 パーサ、モデル Repository
+  （旧 `existsSync` ゲート再現）、lowered 文書 serializer、兄弟
+  バックエンドクライアント（wrapper 文言と spawn 契約は凍結・toolsDir/
+  cwd は注入・決定論テスト用の任意 spawn 環境オーバーレイ——entry は
+  未指定で旧来の継承のまま）、兄弟判定パーサ、到達性プローブ（変種＋
+  到達判定）、design-report serializer/Repository。
+- **entry はあと 1 PR だけ編成役**：Phase 3（refinement）は legacy の
+  refinement-lib を entry からのみ逐語で呼び、design センサーの
+  interactor 化は refinement 解体と同時に PR6 で行う。refinement-lib は
+  新 `DesignUnit` クラス API（フィールド → クエリ）と kernel/design
+  import へ橋渡し済み。design-ir-valid は design-lib からの 2 つの小
+  import をインライン化した。
+- **証明**：新しい in-process スイートが実 v1 兄弟 spawn 越しに設計
+  golden（smt＋quint＋収束後 cross-check）を再現。design/domain は
+  per-file 90% 床を保持（ほぼ 100%）。kind-rank 証明は設計順位 VO を
+  読む。実 sandbox のアップグレードで tombstone が design-lib を除去し、
+  design ツリーが運搬され、quint 設計 golden を再現、doctor 0 errors。

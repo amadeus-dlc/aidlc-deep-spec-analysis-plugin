@@ -203,6 +203,7 @@ function refreshPluginPayloads(): number {
 // 残さない——ファイルを廃止したら同じ変更でこのリストに追記すること。
 const REMOVED_PAYLOADS: string[][] = [
   ["tools", "deep-spec-lib.ts"], // DDD 移行 PR2a で refcheck/ と kernel/ へ解体
+  ["tools", "deep-spec-design-lib.ts"], // DDD 移行 PR5 で design/ へ解体
 ];
 
 function removeTombstonedPayloads(): number {

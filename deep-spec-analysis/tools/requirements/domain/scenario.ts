@@ -1,6 +1,6 @@
 // 受け入れ／拒否シナリオ。逐語移動。
 
-import type { Expression } from "./expression.ts";
+import type { Expression } from "../../kernel/domain/expression.ts";
 
 export interface Scenario {
   id: string;

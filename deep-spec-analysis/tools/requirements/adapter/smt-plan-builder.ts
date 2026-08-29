@@ -4,14 +4,12 @@
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の smtVar / smtName / enumCode /
 // smtOf / buildPlan からの逐語移植（IrDoc → RequirementsModel の読み替えのみ）。
 
-import { idCompare } from "../../kernel/domain/index.ts";
+import { type Expression, expressionUsesPrime, idCompare } from "../../kernel/domain/index.ts";
 import {
-  type Expression,
   type Obligation,
   type RequirementsModel,
   type SmtPlanFacts,
   type VerificationSkipped,
-  expressionUsesPrime,
 } from "../domain/index.ts";
 
 // 子プロセスへ渡す 1 クエリ分の台本。プロトコル（JSON 形）は refinement-lib も

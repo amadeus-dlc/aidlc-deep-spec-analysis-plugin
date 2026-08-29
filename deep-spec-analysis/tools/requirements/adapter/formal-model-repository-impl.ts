@@ -4,7 +4,8 @@
 // corrupt.cause の文言は降格文書（golden 凍結）に逐語で載る。
 
 import { existsSync, readFileSync } from "node:fs";
-import { type Result, err, ok, sha256 } from "../../kernel/domain/index.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import { sha256 } from "../../kernel/domain/index.ts";
 import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import { RequirementsModel } from "../domain/index.ts";

@@ -1,0 +1,125 @@
+// 契約3 設計 IR（生 Json）→ DesignModelComposition の寛容パース。欠損・型不一致
+// のエントリは黙って落とす（旧 parseDesignIr の凍結挙動——design-ir-valid
+// センサーが別途厳密検査を担う）。集約として成立しない形は凍結文言の文字列で
+// 返す。ユニットのソートは DesignModel.compose の不変条件。
+// 旧 deep-spec-design-lib.ts の parseDesignIr からの逐語移植。
+
+import { type Json, isObject } from "../../kernel/adapter/index.ts";
+import type { Expression } from "../../kernel/domain/index.ts";
+import {
+  type DesignMachine,
+  type DesignModelComposition,
+  type DesignObligation,
+  type DesignScenario,
+  type DesignTransition,
+  type DesignValue,
+  DesignUnit,
+} from "../domain/index.ts";
+
+const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
+
+export function parseDesignModel(raw: Json): DesignModelComposition | string {
+  if (!isObject(raw)) return "design IR is not a JSON object";
+  if (raw.irKind !== "design") return 'document is not a design IR (missing `"irKind": "design"`)';
+  const irVersion = typeof raw.irVersion === "string" ? raw.irVersion : "";
+  if (!/^\d+\.\d+\.\d+$/.test(irVersion)) return "design IR lacks a semver irVersion";
+  if (!Array.isArray(raw.units) || raw.units.length === 0) return "design IR carries no units[]";
+  const units: DesignUnit[] = [];
+  for (const rawUnit of raw.units) {
+    if (!isObject(rawUnit) || typeof rawUnit.unit !== "string") continue;
+    const schema = isObject(rawUnit.schema) ? rawUnit.schema : {};
+    const rawEntities = Array.isArray(schema.entities) ? schema.entities : [];
+    const attrPaths = new Set<string>();
+    for (const ent of rawEntities) {
+      if (!isObject(ent) || typeof ent.name !== "string") continue;
+      for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
+        if (isObject(attr) && typeof attr.name === "string") attrPaths.add(`${ent.name}.${attr.name}`);
+      }
+    }
+    const obligations: DesignObligation[] = [];
+    for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
+      if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
+      obligations.push({
+        id: ob.id,
+        nature: ob.nature,
+        origin: typeof ob.origin === "string" ? ob.origin : "",
+        brRefs: strArr(ob.brRefs),
+        frRefs: strArr(ob.frRefs),
+        assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
+        trigger: typeof ob.trigger === "string" ? ob.trigger : undefined,
+        guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
+        effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
+        temporal: isObject(ob.temporal) ? (ob.temporal as unknown as DesignObligation["temporal"]) : undefined,
+      });
+    }
+    const machines: DesignMachine[] = [];
+    for (const sm of Array.isArray(rawUnit.stateMachines) ? rawUnit.stateMachines : []) {
+      if (!isObject(sm) || typeof sm.id !== "string" || typeof sm.entity !== "string" || typeof sm.attribute !== "string") continue;
+      const transitions: DesignTransition[] = [];
+      for (const tr of Array.isArray(sm.transitions) ? sm.transitions : []) {
+        if (!isObject(tr) || typeof tr.id !== "string") continue;
+        if (typeof tr.from !== "string" || typeof tr.to !== "string" || typeof tr.trigger !== "string") continue;
+        transitions.push({
+          id: tr.id,
+          from: tr.from,
+          to: tr.to,
+          trigger: tr.trigger,
+          guard: isObject(tr.guard) ? (tr.guard as unknown as Expression) : undefined,
+          effect: isObject(tr.effect) ? (tr.effect as unknown as Expression) : undefined,
+          brRefs: strArr(tr.brRefs),
+        });
+      }
+      const ignores: DesignMachine["ignores"] = [];
+      for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
+        if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
+        ignores.push({ state: ig.state, trigger: ig.trigger, reason: typeof ig.reason === "string" ? ig.reason : "" });
+      }
+      machines.push({
+        id: sm.id,
+        entity: sm.entity,
+        attribute: sm.attribute,
+        initial: strArr(sm.initial),
+        transitions,
+        ignores,
+        deterministic: sm.deterministic !== false,
+      });
+    }
+    const scenarios: DesignScenario[] = [];
+    for (const sc of Array.isArray(rawUnit.scenarios) ? rawUnit.scenarios : []) {
+      if (!isObject(sc) || typeof sc.id !== "string") continue;
+      const kind = sc.kind === "accept" || sc.kind === "reject" ? sc.kind : null;
+      if (kind === null || !isObject(sc.bindings)) continue;
+      const bindings: DesignScenario["bindings"] = {};
+      for (const [k, v] of Object.entries(sc.bindings)) {
+        if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
+      }
+      scenarios.push({
+        id: sc.id,
+        kind,
+        brRefs: strArr(sc.brRefs),
+        frRefs: strArr(sc.frRefs),
+        bindings,
+        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: sc.event.trigger } : undefined,
+        expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
+      });
+    }
+    const background: { id: string; assert: Expression }[] = [];
+    for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
+      if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
+      background.push({ id: bg.id, assert: bg.assert as unknown as Expression });
+    }
+    units.push(
+      DesignUnit.reconstitute({
+        unit: rawUnit.unit,
+        rawEntities: rawEntities as unknown as DesignValue,
+        attrPaths,
+        obligations,
+        machines,
+        scenarios,
+        background,
+      }),
+    );
+  }
+  if (units.length === 0) return "design IR carries no parseable units";
+  return { irVersion, units };
+}

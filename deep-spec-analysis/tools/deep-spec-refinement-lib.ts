@@ -51,14 +51,20 @@ import {
   sha256,
   sortedUnique,
 } from "./kernel/domain/index.ts";
+import { type Expression as Expr } from "./kernel/domain/index.ts";
+import { extractFences } from "./kernel/adapter/index.ts";
 import {
-  type DFinding,
-  type DSkipped,
+  type DesignFinding as DFinding,
   type DesignMachine,
-  type DesignUnit,
-  type Expr,
-  extractSingleJsonFence,
-} from "./deep-spec-design-lib.ts";
+  type DesignSkipped as DSkipped,
+  DesignUnit,
+} from "./design/domain/index.ts";
+
+// 旧 design-lib の extractSingleJsonFence と同値（唯一の json fence のみ採用）。
+function extractSingleJsonFence(md: string): string | null {
+  const fences = extractFences(md, "json");
+  return fences.length === 1 ? (fences[0]?.body ?? null) : null;
+}
 
 export const REFINEMENT_MAP_BASENAME = "deep-spec-analysis-refinement-map.md";
 export const REQUIREMENTS_MODEL_RELPATH = ["inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md"];
@@ -361,7 +367,7 @@ export function planUnitRefinement(u: DesignUnit, unitMap: UnitMap, req: ReqIr, 
       frRefs: sortedUnique(frRefs, idCompare),
       targets: sortedUnique(targets, idCompare),
       witness: { refs: [{ artifact: mapArtifact, element: `units[${unitMap.unit}]` }] } as unknown as Json,
-      unit: u.unit,
+      unit: u.name(),
       detail,
     });
   };
@@ -382,8 +388,8 @@ export function planUnitRefinement(u: DesignUnit, unitMap: UnitMap, req: ReqIr, 
       if (reqAttr.kind !== "enum") {
         gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap entry "${m.req}" uses enumMap but the requirements attribute is ${reqAttr.kind}`);
       }
-      if (!u.attrPaths.has(m.enumMap.from)) {
-        gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap.from "${m.enumMap.from}" is not a design attribute of unit ${u.unit}`);
+      if (!u.attrPaths().has(m.enumMap.from)) {
+        gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap.from "${m.enumMap.from}" is not a design attribute of unit ${u.name()}`);
         continue;
       }
       const fromValues = designEnumValues(u, m.enumMap.from);
@@ -403,8 +409,8 @@ export function planUnitRefinement(u: DesignUnit, unitMap: UnitMap, req: ReqIr, 
       const refs = new Set<string>();
       exprRefs(m.expr, refs);
       for (const r of [...refs].sort()) {
-        if (!u.attrPaths.has(r)) {
-          gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap expression for "${m.req}" references "${r}", which is not a design attribute of unit ${u.unit}`);
+        if (!u.attrPaths().has(r)) {
+          gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap expression for "${m.req}" references "${r}", which is not a design attribute of unit ${u.name()}`);
         }
       }
     }
@@ -423,8 +429,8 @@ export function planUnitRefinement(u: DesignUnit, unitMap: UnitMap, req: ReqIr, 
   const ctx: AlphaCtx = { byReq, reqAttrByPath };
   const eventByTrigger = new Map(unitMap.eventMap.map((e) => [e.reqTrigger, e] as const));
   const designIds = new Set<string>([
-    ...u.obligations.map((o) => o.id),
-    ...u.machines.flatMap((m: DesignMachine) => m.transitions.map((t) => t.id)),
+    ...u.obligations().map((o) => o.id),
+    ...u.machines().flatMap((m: DesignMachine) => m.transitions.map((t) => t.id)),
   ]);
 
   const attrsCovered = (e: Expr | undefined): { ok: boolean; missing: string[] } => {
@@ -526,8 +532,9 @@ export function planUnitRefinement(u: DesignUnit, unitMap: UnitMap, req: ReqIr, 
 }
 
 function designEnumValues(u: DesignUnit, attrPath: string): string[] | null {
-  if (!Array.isArray(u.rawEntities)) return null;
-  for (const ent of u.rawEntities) {
+  const rawEntities = u.rawEntities();
+  if (!Array.isArray(rawEntities)) return null;
+  for (const ent of rawEntities) {
     if (!isObject(ent) || typeof ent.name !== "string") continue;
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string" || !isObject(attr.type)) continue;
@@ -549,8 +556,9 @@ interface DesignSmtCtx {
 
 export function designSmtCtx(u: DesignUnit): DesignSmtCtx {
   const attrs: ReqAttr[] = [];
-  if (Array.isArray(u.rawEntities)) {
-    for (const ent of u.rawEntities) {
+  const rawEntities = u.rawEntities();
+  if (Array.isArray(rawEntities)) {
+    for (const ent of rawEntities) {
       if (!isObject(ent) || typeof ent.name !== "string") continue;
       for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
         if (!isObject(attr) || typeof attr.name !== "string" || !isObject(attr.type)) continue;
@@ -677,14 +685,14 @@ export function designBase(ctx: DesignSmtCtx, u: DesignUnit, primed: boolean): {
     }
   }
   if (!primed) {
-    for (const bg of u.background) {
+    for (const bg of u.background()) {
       try {
         constraints.push({ name: `bg_${bg.id.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: smtOfExpr(ctx, bg.assert) });
       } catch {
         // uncompilable background is dropped here; the design pass reports it
       }
     }
-    for (const ob of u.obligations) {
+    for (const ob of u.obligations()) {
       if ((ob.nature === "invariant" || ob.nature === "numeric") && ob.assert) {
         try {
           constraints.push({ name: `inv_${ob.id.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: smtOfExpr(ctx, ob.assert) });
@@ -792,7 +800,7 @@ export interface DesignEvent {
 export function designEventCatalog(u: DesignUnit): Map<string, DesignEvent> {
   const out = new Map<string, DesignEvent>();
   const eqRef = (path: string, value: string): Expr => ({ op: "eq", args: [{ op: "ref", path }, { op: "enum", value }] });
-  for (const sm of u.machines) {
+  for (const sm of u.machines()) {
     const attrPath = `${sm.entity}.${sm.attribute}`;
     for (const tr of sm.transitions) {
       const guard: Expr = tr.guard ? { op: "and", args: [eqRef(attrPath, tr.from), tr.guard] } : eqRef(attrPath, tr.from);
@@ -813,7 +821,7 @@ export function designEventCatalog(u: DesignUnit): Map<string, DesignEvent> {
       out.set(tr.id, { guard, effectAssign });
     }
   }
-  for (const ob of u.obligations) {
+  for (const ob of u.obligations()) {
     if (ob.nature !== "event" || !ob.guard || !ob.effect) continue;
     const effectAssign = new Map<string, Expr>();
     try {
@@ -845,7 +853,7 @@ export function runUnitRefinementSmt(u: DesignUnit, req: ReqIr, plan: UnitRefPla
   const findings: DFinding[] = [...plan.gaps];
   const skipped: DSkipped[] = [];
   const skip = (target: string, reason: string, detail: string): void => {
-    skipped.push({ target, reason, unit: u.unit, detail });
+    skipped.push({ target, reason, unit: u.name(), detail });
   };
   for (const [id, st] of [...plan.obligationStatus.entries()].sort((a, b) => idCompare(a[0], b[0]))) {
     if (st.kind === "waived") skip(id, "waived", st.reason);
@@ -1015,8 +1023,8 @@ export function runUnitRefinementSmt(u: DesignUnit, req: ReqIr, plan: UnitRefPla
           frRefs: frOf(p.reqId),
           targets: [p.reqId],
           witness: { model: decodeDesignModel(ctx, r.model ?? {}, false) } as unknown as Json,
-          unit: u.unit,
-          detail: `A design-legal state of unit ${u.unit} violates requirements obligation ${p.reqId} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`,
+          unit: u.name(),
+          detail: `A design-legal state of unit ${u.name()} violates requirements obligation ${p.reqId} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`,
         });
       }
     } else if (p.kind === "scenario") {
@@ -1027,8 +1035,8 @@ export function runUnitRefinementSmt(u: DesignUnit, req: ReqIr, plan: UnitRefPla
           frRefs: frOf(p.reqId),
           targets: [p.reqId],
           witness: { core: (r.core ?? []).sort() } as unknown as Json,
-          unit: u.unit,
-          detail: `Accept scenario ${p.reqId} has no design-legal counterpart in unit ${u.unit} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
+          unit: u.name(),
+          detail: `Accept scenario ${p.reqId} has no design-legal counterpart in unit ${u.name()} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
         });
       }
       if (sc?.kind === "reject" && r.status === "sat") {
@@ -1037,8 +1045,8 @@ export function runUnitRefinementSmt(u: DesignUnit, req: ReqIr, plan: UnitRefPla
           frRefs: frOf(p.reqId),
           targets: [p.reqId],
           witness: { model: decodeDesignModel(ctx, r.model ?? {}, false) } as unknown as Json,
-          unit: u.unit,
-          detail: `Reject scenario ${p.reqId} is still admitted by unit ${u.unit} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`,
+          unit: u.name(),
+          detail: `Reject scenario ${p.reqId} is still admitted by unit ${u.name()} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`,
         });
       }
     } else if (p.kind === "enabledness") {
@@ -1048,7 +1056,7 @@ export function runUnitRefinementSmt(u: DesignUnit, req: ReqIr, plan: UnitRefPla
           frRefs: frOf(p.reqId),
           targets: sortedUnique([p.reqId, ...(plan.eventTransitions.get(p.reqId) ?? [])], idCompare),
           witness: { model: decodeDesignModel(ctx, r.model ?? {}, false) } as unknown as Json,
-          unit: u.unit,
+          unit: u.name(),
           detail: `The requirements event ${p.reqId} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
         });
       }
@@ -1061,8 +1069,8 @@ export function runUnitRefinementSmt(u: DesignUnit, req: ReqIr, plan: UnitRefPla
           frRefs: frOf(p.reqId),
           targets: sortedUnique([p.reqId, p.designId ?? ""], idCompare).filter((t) => t !== ""),
           witness: { trace: [preState, postState] } as unknown as Json,
-          unit: u.unit,
-          detail: `Design step ${p.designId} of unit ${u.unit}, taken where requirements event ${p.reqId} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,
+          unit: u.name(),
+          detail: `Design step ${p.designId} of unit ${u.name()}, taken where requirements event ${p.reqId} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,
         });
       }
     }

@@ -3,7 +3,7 @@
 // 全属性が束縛された init 可能シナリオの集合がここに載る。
 // モジュール本文と変数名対応はアダプタのコンパイラが所有する。
 
-import type { Expression } from "./expression.ts";
+import type { Expression } from "../../kernel/domain/expression.ts";
 
 export interface QuintMachineComponent {
   readonly id: string;

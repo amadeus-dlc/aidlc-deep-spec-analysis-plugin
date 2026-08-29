@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { err } from "../tools/kernel/domain/index.ts";
+import { err } from "../tools/kernel/infrastructure/index.ts";
 import {
   ReferenceCheckReportRepositoryImpl,
   conformToContract,
