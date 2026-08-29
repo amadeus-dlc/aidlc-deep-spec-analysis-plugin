@@ -1,0 +1,42 @@
+// FormalModelRepository の実 Gateway 実装。形式モデル markdown から唯一の
+// ```json fence を取り出し、寛容パースで RequirementsModel を再構成する。
+// irHash（生 IR の正準 JSON の sha256）はここで導出——正準化は形式知識。
+// corrupt.cause の文言は降格文書（golden 凍結）に逐語で載る。
+
+import { readFileSync } from "node:fs";
+import { type Result, err, ok, sha256 } from "../../kernel/domain/index.ts";
+import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
+import type { RepositoryError } from "../../kernel/usecase/index.ts";
+import { RequirementsModel } from "../domain/index.ts";
+import type { AcquiredFormalModel, FormalModelRepository } from "../usecase/index.ts";
+import { parseFormalModel } from "./formal-model-parser.ts";
+
+export class FormalModelRepositoryImpl implements FormalModelRepository {
+  findByPath(modelPath: string): Result<AcquiredFormalModel, RepositoryError> {
+    let md: string;
+    try {
+      md = readFileSync(modelPath, "utf-8");
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+        return err({ kind: "not-found", path: modelPath });
+      }
+      return err({ kind: "io-failed", operation: "read", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
+    }
+    const fences = extractFences(md, "json");
+    const body = fences.length === 1 ? (fences[0]?.body ?? null) : null;
+    let rawIr: Json = null;
+    try {
+      rawIr = body === null ? null : (JSON.parse(body) as Json);
+    } catch {
+      rawIr = null;
+    }
+    if (rawIr === null) {
+      return err({ kind: "corrupt", path: modelPath, cause: "formal model does not contain exactly one readable ```json fence" });
+    }
+    const seed = parseFormalModel(rawIr);
+    if (typeof seed === "string") {
+      return err({ kind: "corrupt", path: modelPath, cause: seed });
+    }
+    return ok({ model: RequirementsModel.reconstitute(seed), irHash: sha256(canonicalStringify(rawIr)) });
+  }
+}

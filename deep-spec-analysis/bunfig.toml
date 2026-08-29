@@ -23,4 +23,6 @@ coveragePathIgnorePatterns = [
   "tools/kernel/adapter/**",
   "tools/refcheck/adapter/**",
   "tools/refcheck/usecase/**",
+  "tools/requirements/adapter/**",
+  "tools/requirements/usecase/**",
 ]
