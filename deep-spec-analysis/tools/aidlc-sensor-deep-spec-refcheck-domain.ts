@@ -27,22 +27,24 @@ import { basename, dirname, join } from "node:path";
 import {
   type Finding,
   type InputEntry,
-  type Json,
   type RefEntry,
   type Skipped,
   emitRefcheckDoc,
-  extractFences,
   findRecordRoot,
-  isObject,
   parseFlags,
-  parseYamlSubset,
   relArtifact,
-  sha256,
-  safeTarget,
-  sortedUnique,
-  idCompare,
   verdictOut,
 } from "./deep-spec-lib.ts";
+import {
+  type Json,
+  extractFences,
+  idCompare,
+  isObject,
+  parseYamlSubset,
+  safeTarget,
+  sha256,
+  sortedUnique,
+} from "./kernel/domain/index.ts";
 
 const BACKEND = "components";
 const TARGET_BASENAME = "components.md";

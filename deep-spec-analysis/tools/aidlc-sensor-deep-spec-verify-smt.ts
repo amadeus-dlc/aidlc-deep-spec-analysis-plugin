@@ -31,7 +31,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateSchema } from "./deep-spec-lib.ts";
+import { validateSchema } from "./kernel/domain/index.ts";
 
 const BACKEND = "smt";
 const FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";

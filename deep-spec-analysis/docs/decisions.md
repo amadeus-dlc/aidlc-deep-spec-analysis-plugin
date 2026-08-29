@@ -239,3 +239,46 @@ PR0 lands the safety net only, zero production change:
   red example before it scans the real tree (the rule-set's DoD). The 13
   current flat files ride a LEGACY allowlist that must only shrink; PR10
   empties it.
+
+## DDD migration PR1 — the kernel/domain extraction and the coverage floor (2026-08-29, #14)
+
+First layered directory. `tools/kernel/domain/` now holds the verbatim moves
+of every pure function that used to live at the top of `deep-spec-lib.ts`
+(Json/isObject, canonicalStringify, sha256, idCompare/sortedUnique,
+extractFences, the YAML-subset parser, parseMarkdownTables, the draft-07
+subset validateSchema, safeTarget, requirementIds, normalizeName) plus the
+new house `Result` (`ok`/`err`/`unreachable`, no combinators). Decisions:
+
+- **Verbatim move, one concept per file, explicit `index.ts` facade** (no
+  `export *`). Moved code keeps its original English comments — rewriting
+  comments inside a byte-frozen move would be diff noise; the Japanese
+  comment policy applies to new and re-modeled code (headers here are
+  Japanese already).
+- **No re-exports from `deep-spec-lib.ts`** (the no-shim rule): all eleven
+  importer files and the two test imports were re-pointed in the same
+  commit. The lib keeps only what later PRs will dissolve (contract-2
+  findings vocabulary + writer, record-root/relArtifact, CLI contract).
+- **domain 90% coverage floor is live**: `bunfig.toml` scopes coverage to
+  the layered domain (sensors/legacy libs/tests excluded — CLIs run as
+  child processes and are covered by goldens), CI runs `bun test
+  --coverage`, and the gate was red-proven (threshold 0.999 → exit 1).
+  Kernel lands at 99%+ via a new exact-message unit suite — YAML rejection
+  strings and schema-validator keyword messages are asserted verbatim
+  because they surface in golden `detail`s and `errors[]`.
+- Doctor gains the kernel canary row (`tools/kernel/domain/index.ts`); the
+  e2e composed-file list asserts the nested path arrives — the first
+  in-repo proof that subdirectories under `tools/` ship end-to-end.
+
+### PR1 addendum — the CI coverage failure and its two-layer cause
+
+CI failed on the first PR1 push with 0 test failures and a 99% coverage
+table. Root causes: (1) the local "gate passes" measurement had read the
+exit code of `tail` through a pipe, not bun's — the gate had in fact been
+failing locally too (the ritual now measures exit codes without pipes);
+(2) bun enforces `coverageThreshold` **per file**, and `yaml-subset.ts`
+sat at 88.89% function coverage because bun counts the implicit
+constructor of `class YamlError extends Error {}` as an uncovered
+function even though every rejection test executes it. Fixed by covering
+the one genuinely untested branch (a bare dash followed by a deeper
+block) and making the constructor explicit (behavior unchanged, now
+instrumented). Kernel lands at 100% functions / 99.7% lines.

@@ -35,7 +35,7 @@ jobs:
         run: bunx tsc --noEmit
 
       - name: Conformance tests (byte-exact findings, determinism)
-        run: bun test
+        run: bun test --coverage
 
       - name: Validate plugin
         run: bun ../aidlc-workflows/core/tools/aidlc-plugin-validate.ts .

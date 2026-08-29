@@ -38,25 +38,27 @@ import { basename, dirname, join } from "node:path";
 import {
   type Finding,
   type InputEntry,
-  type Json,
   type RefEntry,
   type Skipped,
   emitRefcheckDoc,
-  extractFences,
   findRecordRoot,
+  parseFlags,
+  readIfExists,
+  relArtifact,
+  verdictOut,
+} from "./deep-spec-lib.ts";
+import {
+  type Json,
+  extractFences,
   idCompare,
   isObject,
   normalizeName,
-  parseFlags,
   parseYamlSubset,
-  readIfExists,
-  relArtifact,
   requirementIds,
   safeTarget,
   sha256,
   sortedUnique,
-  verdictOut,
-} from "./deep-spec-lib.ts";
+} from "./kernel/domain/index.ts";
 
 const BACKEND = "functional-design";
 const FAMILIES = [

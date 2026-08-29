@@ -49,6 +49,8 @@ installed("tools/aidlc-sensor-deep-spec-refcheck-domain.ts", "error");
 installed("tools/aidlc-sensor-deep-spec-refcheck-contract.ts", "error");
 installed("tools/aidlc-sensor-deep-spec-refcheck-functional.ts", "error");
 installed("tools/deep-spec-lib.ts", "error");
+// kernel コンテキストの canary（DDD 移行 PR1 — facade が在ればツリーが運ばれている）
+installed("tools/kernel/domain/index.ts", "error");
 installed("sensors/aidlc-deep-spec-design-ir-valid.md", "error");
 installed("sensors/aidlc-deep-spec-design-verify-smt.md", "error");
 installed("sensors/aidlc-deep-spec-design-verify-quint.md", "error");

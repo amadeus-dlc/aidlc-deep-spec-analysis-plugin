@@ -482,6 +482,7 @@ describe("phase-1 refcheck sensors compose into the sandbox", () => {
       "aidlc-sensor-deep-spec-refcheck-contract.ts",
       "aidlc-sensor-deep-spec-refcheck-functional.ts",
       "deep-spec-lib.ts",
+      "kernel/domain/index.ts",
     ]) {
       expect(existsSync(join(sandbox, ".claude", "tools", tool))).toBe(true);
     }

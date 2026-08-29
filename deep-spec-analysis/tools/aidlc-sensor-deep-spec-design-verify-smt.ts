@@ -26,7 +26,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { type Json, findRecordRoot, parseFlags, relArtifact, sha256 } from "./deep-spec-lib.ts";
+import { findRecordRoot, parseFlags, relArtifact } from "./deep-spec-lib.ts";
+import { type Json, sha256 } from "./kernel/domain/index.ts";
 import {
   REFINEMENT_MAP_BASENAME,
   REQUIREMENTS_MODEL_RELPATH,
