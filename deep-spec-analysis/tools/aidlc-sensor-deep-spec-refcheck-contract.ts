@@ -24,18 +24,8 @@
 
 import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import {
-  type Finding,
-  type InputEntry,
-  type RefEntry,
-  type Skipped,
-  emitRefcheckDoc,
-  findRecordRoot,
-  parseFlags,
-  readIfExists,
-  relArtifact,
-  verdictOut,
-} from "./deep-spec-lib.ts";
+import { fileURLToPath } from "node:url";
+import { findRecordRoot, parseFlags, readIfExists, relArtifact, renderVerdictLine } from "./kernel/adapter/index.ts";
 import {
   type Json,
   extractFences,
@@ -47,6 +37,13 @@ import {
   sha256,
   sortedUnique,
 } from "./kernel/domain/index.ts";
+import {
+  type Finding,
+  type InputEntry,
+  type RefEntry,
+  type Skipped,
+} from "./refcheck/domain/index.ts";
+import { ReferenceCheckReportRepositoryImpl } from "./refcheck/adapter/index.ts";
 
 const BACKEND = "contract-summary";
 const TARGET_BASENAME = "contract-summary.md";
@@ -236,7 +233,10 @@ function main(): void {
   const skippedFamilies = new Set(skipped.map((s) => (s.target.startsWith("check:") ? s.target.slice(6) : "")));
   const checked = FAMILIES.filter((f) => !failedFamilies.has(f) && !skippedFamilies.has(f)).map((f) => `check:${f}`);
 
-  const result = emitRefcheckDoc(join(dirname(flags.outputPath), "deep-spec-refcheck"), {
+  const reportRepository = new ReferenceCheckReportRepositoryImpl(
+    join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"),
+  );
+  const result = reportRepository.save(join(dirname(flags.outputPath), "deep-spec-refcheck"), {
     backend: BACKEND,
     inputs,
     checked,
@@ -244,8 +244,9 @@ function main(): void {
     skipped,
   }, flags.reportOnly);
 
-  verdictOut(!result.unavailable && result.findingsCount === 0, result.findingsCount, result.skippedCount,
-    flags.reportOnly ? "report-only" : undefined);
+  process.stdout.write(renderVerdictLine(!result.unavailable && result.findingsCount === 0, result.findingsCount,
+    result.skippedCount, flags.reportOnly ? "report-only" : undefined));
+  process.exit(0);
 }
 
 main();

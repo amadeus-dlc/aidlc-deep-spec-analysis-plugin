@@ -339,3 +339,26 @@ Error {}` の暗黙コンストラクタを bun が「未実行の関数」と�
 （実際は全拒否テストで実行されている）。真に未検査だった分岐（`-` 単独＋
 深いネストブロック）のテスト追加と、コンストラクタの明示化（挙動不変・計測
 に乗る）で解消。kernel は関数 100% / 行 99.7%。
+
+## DDD 移行 PR2a — deep-spec-lib 解体（2026-08-30、#15）
+
+`deep-spec-lib.ts` を削除した。残余は所有権で分割し逐語移動：
+
+- **refcheck/domain**: 契約2 の refcheck 語彙（RefEntry・Finding・Skipped・
+  InputEntry・RefcheckDoc/EmitResult・CATALOG_VERSION）と拡張 11-kind
+  カタログ順序（sortFindings/sortSkipped）。型は interface のまま——
+  VO 化（render キー順を型が所有する Finding）はセンサーの構築サイトを
+  作り替える PR2b で行う。今日のキー順は構築サイトが持っている。
+- **refcheck/usecase + adapter**: 最初のポート
+  `ReferenceCheckReportRepository` と、その Impl（旧 emitRefcheckDoc を
+  逐語内包——自己検証・unavailable 降格・正準描画）。findings スキーマの
+  パスは合成ルートから**注入**——層構造のファイルは `import.meta` を
+  触らない（コードが LEGACY 免除集合から出たことで、アーキテクチャ
+  ルールが実際に強制し始めた）。
+- **kernel/adapter**: parseFlags・findRecordRoot/relArtifact・
+  readIfExists・`renderVerdictLine`（旧 `verdictOut` の純粋半分。
+  `process.stdout.write`＋`process.exit` はセンサー＝合成ルートが所有）。
+- 再輸出なし・importer 全直繋ぎ替え・LEGACY allowlist は 1 減（残 12）。
+- アーキテクチャルールに**コメント除去**を追加——`process.argv` 等に言及
+  する日本語 doc コメントが、実レイヤードアダプタの登場と同時に偽陽性化
+  したため（修正と併せて green example を追加）。

@@ -29,7 +29,7 @@ function extractKindRank(file: string): { table: Map<string, number>; fallback: 
 }
 
 const V1_FILES = ["aidlc-sensor-deep-spec-verify-smt.ts", "aidlc-sensor-deep-spec-verify-quint.ts"];
-const EXTENDED_FILES = ["deep-spec-lib.ts", "deep-spec-design-lib.ts"];
+const EXTENDED_FILES = ["refcheck/domain/catalog-order.ts", "deep-spec-design-lib.ts"];
 
 describe("kind-rank order preservation", () => {
   test("the two v1 backend tables are identical", () => {
