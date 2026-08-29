@@ -372,6 +372,12 @@ function main(): void {
           continue;
         }
         const remapped = remapUnitDoc(u, lowered, run.doc);
+        if (remapped.unavailable !== null) {
+          for (const e of extras) {
+            skipped.push({ target: e.reqId, reason: "unavailable", unit: u.unit, detail: `refinement pass degraded: ${remapped.unavailable}` });
+          }
+          continue;
+        }
         const reqIdSet = new Set(extras.map((e) => e.reqId));
         let hitExtra = false;
         let designConflict = false;

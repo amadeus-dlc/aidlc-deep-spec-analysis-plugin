@@ -196,6 +196,9 @@ function main(): void {
         { artifact: mapArtifact, sha256: sha256(readFileSync(mapPath, "utf-8")) },
         { artifact: relArtifact(recordRoot, reqModelPath), sha256: sha256(readFileSync(reqModelPath, "utf-8")) },
       ];
+      // The refinement pass shares the dispatcher's 75s ceiling with the
+      // design pass: never start a child that cannot finish inside it.
+      const REFINEMENT_DEADLINE_MS = 65_000;
       for (const u of ir.units) {
         const unitMap = map.units.find((m) => m.unit === u.unit);
         if (!unitMap) {
@@ -204,8 +207,15 @@ function main(): void {
           }
           continue;
         }
+        const refRemaining = REFINEMENT_DEADLINE_MS - (Date.now() - started);
+        if (refRemaining < 5_000) {
+          for (const t of reqTargets) {
+            skipped.push({ target: t, reason: "timeout", unit: u.unit, detail: "the per-run solver budget was exhausted before the refinement pass" });
+          }
+          continue;
+        }
         const plan = planUnitRefinement(u, unitMap, req, mapArtifact);
-        const res = runUnitRefinementSmt(u, req, plan, mapArtifact);
+        const res = runUnitRefinementSmt(u, req, plan, mapArtifact, Math.min(30_000, refRemaining));
         if (res.unavailable !== null) {
           for (const t of reqTargets) {
             skipped.push({ target: t, reason: "unavailable", unit: u.unit, detail: res.unavailable });

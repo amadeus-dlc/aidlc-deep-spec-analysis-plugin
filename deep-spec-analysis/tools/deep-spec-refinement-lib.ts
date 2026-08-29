@@ -710,10 +710,10 @@ export function assembleQuery(
 
 // Executes queries on the PROVEN v1 z3 child (--smt-child of the v1 SMT
 // sensor): runtime fallback, budgets, and result protocol are v1's.
-export function runRefinementChild(queries: RefChildQuery[]): { results: Map<string, RefChildResult> | null; unavailable: string | null } {
+export function runRefinementChild(queries: RefChildQuery[], budgetMs: number = CHILD_BUDGET_MS): { results: Map<string, RefChildResult> | null; unavailable: string | null } {
   const toolsDir = dirname(fileURLToPath(import.meta.url));
   const childHost = join(toolsDir, "aidlc-sensor-deep-spec-verify-smt.ts");
-  const payload = JSON.stringify({ queries, timeoutMs: PER_QUERY_TIMEOUT_MS, budgetMs: CHILD_BUDGET_MS });
+  const payload = JSON.stringify({ queries, timeoutMs: PER_QUERY_TIMEOUT_MS, budgetMs });
   const override = process.env.AIDLC_DEEP_SPEC_SMT_RUNTIME;
   const runtimes = override ? [override] : ["node", "bun"];
   const attempts: string[] = [];
@@ -721,7 +721,7 @@ export function runRefinementChild(queries: RefChildQuery[]): { results: Map<str
     const res = spawnSync(runtime, [childHost, "--smt-child"], {
       input: payload,
       encoding: "utf-8",
-      timeout: CHILD_BUDGET_MS + 15_000,
+      timeout: budgetMs + 15_000,
       cwd: process.cwd(),
     });
     if (res.error && (res.error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -839,7 +839,7 @@ export interface UnitRefinementResult {
 // Enum comparisons produced by alphaExpr always pair a ref with an enum
 // literal, which smtOfExpr resolves against the ref's attribute — the same
 // encoding contract as the v1 compiler.
-export function runUnitRefinementSmt(u: DesignUnit, req: ReqIr, plan: UnitRefPlan, mapArtifact: string): UnitRefinementResult {
+export function runUnitRefinementSmt(u: DesignUnit, req: ReqIr, plan: UnitRefPlan, mapArtifact: string, budgetMs: number = CHILD_BUDGET_MS): UnitRefinementResult {
   const findings: DFinding[] = [...plan.gaps];
   const skipped: DSkipped[] = [];
   const skip = (target: string, reason: string, detail: string): void => {
@@ -989,7 +989,7 @@ export function runUnitRefinementSmt(u: DesignUnit, req: ReqIr, plan: UnitRefPla
   }
 
   if (queries.length === 0) return { findings, skipped, unavailable: null };
-  const child = runRefinementChild(queries);
+  const child = runRefinementChild(queries, budgetMs);
   if (child.results === null) return { findings, skipped, unavailable: child.unavailable ?? "z3 unavailable" };
   const results = child.results;
 

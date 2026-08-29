@@ -208,10 +208,13 @@ concrete revision you proposed. Apply them now — the human never hand-edits:
   (functional-spec.md's mermaid ER diagram or rules summary), regenerate the
   affected derived views in the same edit — never let source and view drift.
 - NEVER edit `requirements.md` or `deep-spec-analysis-formal-model.md`.
-- Close the loop: redo Step 3 for the affected units (rewrite the formal
-  model; the sensors re-fire) and collect the second-pass findings. A
-  revision that provokes a NEW finding goes back through Step 5 before
-  reporting.
+- Close the loop: redo Steps 3 AND 3b for the affected units — an applied
+  revision changes the design IR, so the refinement map's `designIrHash`
+  must be recomputed (and its mappings adjusted if the revision changed the
+  design vocabulary) BEFORE rewriting the formal model; otherwise every
+  refinement check in the second pass degrades to `stale-input`. Then the
+  sensors re-fire and the second-pass findings are collected. A revision
+  that provokes a NEW finding goes back through Step 5 before reporting.
 - Zero `B.` answers → skip this step.
 
 ### Step 7: Write the Functional Analysis Report
