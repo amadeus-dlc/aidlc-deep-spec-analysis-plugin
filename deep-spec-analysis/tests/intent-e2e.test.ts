@@ -698,3 +698,77 @@ describe("phase-2 design verification — routing, single-run, dispatcher fire, 
     expect(summary?.label).toContain("0/3 eligible units verified");
   });
 });
+
+// Phase-3 scenario: with a verified requirements model and a human-gated
+// refinement map in place, the composed design backends run the refinement
+// checks through the REAL dispatcher, and the doctor flags refinement-stale
+// evidence when the requirements are re-verified afterwards.
+describe("phase-3 refinement — dispatcher fire and refinement-stale coverage", () => {
+  const refFixtures = join(pluginRoot, "tests", "fixtures", "refinement", "record");
+  let record = "";
+  let stageDir = "";
+  let modelPath = "";
+  let reqModelPath = "";
+
+  beforeAll(() => {
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+    record = join(intentsDir, active);
+    stageDir = join(record, "construction", "deep-spec-analysis-functional-verify");
+    modelPath = join(stageDir, "deep-spec-analysis-functional-formal-model.md");
+    reqModelPath = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
+    mkdirSync(join(record, "construction", "u1-orders", "functional-design"), { recursive: true });
+    cpSync(join(refFixtures, "construction", "u1-orders", "functional-design", "rules.md"),
+      join(record, "construction", "u1-orders", "functional-design", "rules.md"));
+    mkdirSync(dirname(reqModelPath), { recursive: true });
+    cpSync(join(refFixtures, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md"), reqModelPath);
+    mkdirSync(stageDir, { recursive: true });
+    cpSync(join(refFixtures, "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"), modelPath);
+    cpSync(join(refFixtures, "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-refinement-map.md"),
+      join(stageDir, "deep-spec-analysis-refinement-map.md"));
+  });
+
+  test("the composed backends run the refinement checks through the dispatcher", () => {
+    if (!nodeAvailable) {
+      console.warn("node runtime missing — skipping refinement assertions");
+      return;
+    }
+    const fireP3 = (id: string): { result: string } => {
+      const run = inSandbox([
+        "bun", join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
+        "fire", id, "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath,
+      ]);
+      expect(run.status).toBe(0);
+      const lines = run.stdout.trim().split("\n");
+      return JSON.parse(lines[lines.length - 1] ?? "{}") as { result: string };
+    };
+    expect(fireP3("deep-spec-design-ir-valid").result).toBe("passed");
+    expect(fireP3("deep-spec-design-verify-smt").result).toBe("failed");
+    const smt = JSON.parse(readFileSync(join(stageDir, "deep-spec-design-verify", "smt.json"), "utf-8"));
+    const kinds = new Set(smt.findings.map((f: { kind: string }) => f.kind));
+    expect(kinds.has("refinement-violation")).toBe(true);
+    expect(kinds.has("mapping-gap")).toBe(true);
+    const rv = smt.findings.find((f: { kind: string }) => f.kind === "refinement-violation");
+    expect(rv.targets).toContain("OB-1");
+    expect(rv.frRefs).toContain("FR-1");
+    expect((smt.inputs ?? []).length).toBe(3);
+    expect(smt.skipped.some((s: { target: string; reason: string }) => s.target === "OB-3" && s.reason === "waived")).toBe(true);
+  });
+
+  test("the doctor flags refinement-stale evidence after the requirements are re-verified", () => {
+    if (!nodeAvailable) {
+      console.warn("node runtime missing — depends on the run above");
+      return;
+    }
+    const run1 = inSandbox(["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")]);
+    const before = (JSON.parse(run1.stdout) as { checks: { label: string }[] }).checks;
+    expect(before.some((c) => c.label.includes("refinement evidence is stale"))).toBe(false);
+
+    writeFileSync(reqModelPath, `${readFileSync(reqModelPath, "utf-8")}\n<!-- re-verified -->\n`);
+    const run2 = inSandbox(["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")]);
+    const after = (JSON.parse(run2.stdout) as { checks: { label: string; fix?: string }[] }).checks;
+    const row = after.find((c) => c.label.includes("refinement evidence is stale"));
+    expect(row).toBeDefined();
+    expect(row?.fix).toContain("deep-spec-analysis-functional-verify --single");
+  });
+});
