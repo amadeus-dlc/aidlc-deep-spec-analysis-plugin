@@ -90,6 +90,13 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(noIoInPureLayers("kernel/infrastructure/result.ts", "export const ok = 1;")).toHaveLength(0);
   });
 
+  test("bare node builtins do not slip past the IO discipline (normalized to node:)", () => {
+    expect(noIoInPureLayers("kernel/infrastructure/x.ts", 'import { createHash } from "crypto";')).not.toHaveLength(0);
+    expect(noIoInPureLayers("kernel/domain/x.ts", 'import { readFileSync } from "fs";')).not.toHaveLength(0);
+    expect(noIoInPureLayers("design/usecase/x.ts", 'import { readFile } from "fs/promises";')).not.toHaveLength(0);
+    expect(noIoInPureLayers("kernel/domain/x.ts", 'import { createHash } from "crypto";')).toHaveLength(0);
+  });
+
   test("process-only-in-entries flags process.env and import.meta in layered files", () => {
     expect(processOnlyInEntries("kernel/adapter/x.ts", "const v = process.env.X;")).not.toHaveLength(0);
     expect(processOnlyInEntries("kernel/adapter/x.ts", "const p = import.meta.url;")).not.toHaveLength(0);

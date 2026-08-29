@@ -197,22 +197,36 @@ function isModuleOrSubpath(spec: string, module: string): boolean {
   return spec === module || spec.startsWith(`${module}/`);
 }
 
+// bare 形式（"fs" / "crypto" 等）も node: 接頭辞へ正規化してから判定する。
+// bare の組み込みは onlySanctionedImports でも弾かれるが、I/O 規律の検査自体が
+// すり抜けるのは規則単体の検出力の穴なので、二重に塞ぐ。
+const NODE_BUILTINS: ReadonlySet<string> = new Set([
+  "fs", "crypto", "child_process", "os", "path", "url", "process", "util", "stream", "buffer",
+]);
+
+function normalizeNodeSpecifier(spec: string): string | null {
+  if (spec.startsWith("node:")) return spec;
+  const head = spec.split("/")[0] ?? "";
+  return NODE_BUILTINS.has(head) ? `node:${spec}` : null;
+}
+
 export function noIoInPureLayers(relPath: string, source: string): Violation[] {
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string") return [];
   const out: Violation[] = [];
-  for (const spec of importSpecifiers(source)) {
-    if (!spec.startsWith("node:")) continue;
+  for (const rawSpec of importSpecifiers(source)) {
+    const spec = normalizeNodeSpecifier(rawSpec);
+    if (spec === null) continue;
     // infrastructure は純粋な言語拡張——node への依存自体を持たない。
     if (loc.layer === "infrastructure") {
-      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `infrastructure imports "${spec}"` });
+      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `infrastructure imports "${rawSpec}"` });
     }
     if (loc.layer === "domain" && spec !== "node:crypto") {
-      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `domain imports "${spec}"` });
+      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `domain imports "${rawSpec}"` });
     }
     // サブパス（node:fs/promises 等）も同一モジュールとして拒否する。
     if (loc.layer === "usecase" && ["node:fs", "node:child_process", "node:os"].some((m) => isModuleOrSubpath(spec, m))) {
-      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `usecase imports "${spec}"` });
+      out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `usecase imports "${rawSpec}"` });
     }
   }
   return out;
