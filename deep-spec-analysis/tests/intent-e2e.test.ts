@@ -384,7 +384,7 @@ describe("sensors against the real intent record", () => {
   });
 });
 
-describe("phase-1 refcheck sensors compose and fire in the sandbox", () => {
+describe("phase-1 refcheck sensors compose into the sandbox", () => {
   test("the refcheck sensors, tools, and shared lib are composed into the harness tree", () => {
     for (const sensor of [
       "aidlc-deep-spec-refcheck-domain.md",
@@ -414,37 +414,130 @@ describe("phase-1 refcheck sensors compose and fire in the sandbox", () => {
       expect(composed).toContain(sensor);
     }
   });
+});
 
-  test("the composed domain refcheck sensor finds the planted structural defects", () => {
-    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
-    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
-    const domainDir = join(intentsDir, active, "inception", "domain-design");
-    mkdirSync(domainDir, { recursive: true });
-    const componentsPath = join(domainDir, "components.md");
-    cpSync(join(pluginRoot, "tests", "fixtures", "refcheck", "broken", "inception", "domain-design", "components.md"), componentsPath);
+// The full new-feature scenario, driven through the REAL sensor dispatcher
+// (aidlc-sensor.ts fire) — the exact path a stage write triggers in
+// production, including the manifest glob filters (`**/functional-design/*.md`
+// on the dispatcher's bespoke matcher): a design record planted with one
+// defect per artifact family is verified, the doctor reports the debt (also
+// for a unit nothing fired on), the artifacts are fixed, and the loop closes
+// with every family checked and the doctor quiet again.
+describe("phase-1 refcheck scenario — a defective design record through the real dispatcher, then fixed", () => {
+  const refcheckFixtures = join(pluginRoot, "tests", "fixtures", "refcheck");
+  let record = "";
+
+  const DESIGN_FILES: string[][] = [
+    ["inception", "domain-design", "components.md"],
+    ["inception", "contract-design", "contract-summary.md"],
+    ["inception", "units-generation", "unit-of-work-dependency.md"],
+    ["construction", "u1-orders", "functional-design", "entities.md"],
+    ["construction", "u1-orders", "functional-design", "rules.md"],
+    ["construction", "u1-orders", "functional-design", "functional-spec.md"],
+    ["construction", "u2-billing", "functional-design", "entities.md"],
+  ];
+
+  const FIRES: [string, string, string[]][] = [
+    ["deep-spec-refcheck-domain", "domain-design", ["inception", "domain-design", "components.md"]],
+    ["deep-spec-refcheck-contract", "contract-design", ["inception", "contract-design", "contract-summary.md"]],
+    ["deep-spec-refcheck-functional", "functional-design", ["construction", "u1-orders", "functional-design", "entities.md"]],
+  ];
+
+  function copyDesignRecord(variant: "broken" | "clean"): void {
+    for (const rel of DESIGN_FILES) {
+      const dst = join(record, ...rel);
+      mkdirSync(dirname(dst), { recursive: true });
+      cpSync(join(refcheckFixtures, variant, ...rel), dst);
+    }
+  }
+
+  function dispatcherFire(sensorId: string, stage: string, outputPath: string): { result: string } {
     const run = inSandbox([
-      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-refcheck-domain.ts"),
-      "--stage", "domain-design", "--output-path", componentsPath,
+      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
+      "fire", sensorId, "--stage", stage, "--output-path", outputPath,
     ]);
-    expect(run.status).toBe(0);
-    expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, method: "static" });
-    const doc = JSON.parse(readFileSync(join(domainDir, "deep-spec-refcheck", "components.json"), "utf-8"));
-    const details = doc.findings.map((f: { detail: string }) => f.detail).join("\n");
-    expect(details).toContain("DD-2");
-    expect(details).toContain("dependency cycle");
-    expect(doc.findings.every((f: { kind: string }) => ["structure-invalid", "reference-broken", "consistency-mismatch"].includes(f.kind))).toBe(true);
-  });
+    expect(run.status).toBe(0); // sensor outcomes are advisory — only dispatch errors exit non-zero
+    const lines = run.stdout.trim().split("\n");
+    return JSON.parse(lines[lines.length - 1] ?? "{}") as { result: string };
+  }
 
-  test("the doctor's report-only scan surfaces the structural debt", () => {
+  function readFindings(rel: string[]): {
+    findings: { kind: string; detail: string; unit?: string }[];
+    checked: string[];
+    unavailable?: { reason: string };
+  } {
+    return JSON.parse(readFileSync(join(record, ...rel), "utf-8"));
+  }
+
+  function doctorChecks(): { pass: boolean; label: string }[] {
     const run = inSandbox(["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")]);
     expect(run.status).toBe(0);
-    const { checks } = JSON.parse(run.stdout) as { checks: { pass: boolean; label: string; severity: string }[] };
+    return (JSON.parse(run.stdout) as { checks: { pass: boolean; label: string }[] }).checks;
+  }
+
+  beforeAll(() => {
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+    record = join(intentsDir, active);
+    copyDesignRecord("broken");
+  });
+
+  test("the dispatcher accepts all three sensors (glob filters pass) and each reports findings", () => {
+    for (const [id, stage, rel] of FIRES) {
+      expect(dispatcherFire(id, stage, join(record, ...rel)).result).toBe("failed");
+    }
+  });
+
+  test("each findings document carries the planted defects, never a degraded file", () => {
+    const domain = readFindings(["inception", "domain-design", "deep-spec-refcheck", "components.json"]);
+    const details = (d: { findings: { detail: string }[] }): string => d.findings.map((f) => f.detail).join("\n");
+    expect(domain.unavailable).toBeUndefined();
+    expect(details(domain)).toContain("dependency cycle");
+    expect(details(domain)).toContain("GhostService");
+
+    const contract = readFindings(["inception", "contract-design", "deep-spec-refcheck", "contract-summary.json"]);
+    expect(contract.unavailable).toBeUndefined();
+    expect(details(contract)).toContain("ghost-unit");
+    expect(details(contract)).toContain('"u3-ui" -> "u1-orders"');
+
+    const functional = readFindings(["construction", "u1-orders", "functional-design", "deep-spec-refcheck", "functional-design.json"]);
+    expect(functional.unavailable).toBeUndefined();
+    expect(details(functional)).toContain("FR-99");
+    expect(details(functional)).toContain("cancelled");
+    expect(details(functional)).toContain("ownership is duplicated");
+    expect(functional.findings.every((f) => f.unit === "u1-orders")).toBe(true);
+  });
+
+  test("the doctor lists every defective artifact — including the unit nothing fired on", () => {
+    const checks = doctorChecks();
+    const labels = checks
+      .filter((c) => c.label.includes("reference-integrity finding"))
+      .map((c) => c.label)
+      .join("\n");
+    expect(labels).toContain("components.md");
+    expect(labels).toContain("contract-summary.md");
+    expect(labels).toContain("u1-orders/functional-design");
+    expect(labels).toContain("u2-billing/functional-design");
     const summary = checks.find((c) => c.label.includes("design refcheck —"));
-    expect(summary).toBeDefined();
     expect(summary?.pass).toBe(false);
-    const row = checks.find((c) => c.label.includes("components.md has") && c.label.includes("reference-integrity finding"));
-    expect(row).toBeDefined();
-    expect(row?.severity).toBe("advisory");
+  });
+
+  test("fixing the artifacts closes the loop: sensors pass, all families checked, doctor quiet", () => {
+    copyDesignRecord("clean");
+    for (const [id, stage, rel] of FIRES) {
+      expect(dispatcherFire(id, stage, join(record, ...rel)).result).toBe("passed");
+    }
+    const domain = readFindings(["inception", "domain-design", "deep-spec-refcheck", "components.json"]);
+    expect(domain.findings).toHaveLength(0);
+    expect(domain.checked).toHaveLength(8);
+    const functional = readFindings(["construction", "u1-orders", "functional-design", "deep-spec-refcheck", "functional-design.json"]);
+    expect(functional.findings).toHaveLength(0);
+    expect(functional.checked).toHaveLength(16);
+
+    const checks = doctorChecks();
+    expect(checks.filter((c) => c.label.includes("reference-integrity finding"))).toHaveLength(0);
+    const summary = checks.find((c) => c.label.includes("design refcheck —"));
+    expect(summary?.pass).toBe(true);
   });
 });
 
@@ -467,17 +560,20 @@ describe("upgrade path — re-running the installer refreshes stale plugin files
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("upgrade refresh");
     expect(readFileSync(schema, "utf-8")).toContain('"static"');
-    // The refreshed tree still verifies: the composed sensor works end-to-end.
+    // The refreshed tree still verifies end-to-end: the composed sensor runs
+    // against the (now clean) record and writes a healthy, non-degraded doc.
     const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
     const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
-    const componentsPath = join(intentsDir, active, "inception", "domain-design", "components.md");
+    const record = join(intentsDir, active);
     const run = inSandbox([
       "bun", join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-refcheck-domain.ts"),
-      "--stage", "domain-design", "--output-path", componentsPath,
+      "--stage", "domain-design", "--output-path", join(record, "inception", "domain-design", "components.md"),
     ]);
     expect(run.status).toBe(0);
-    const verdict = JSON.parse(run.stdout) as { pass: boolean; findings_count: number };
-    expect(verdict.pass).toBe(false);
-    expect(verdict.findings_count).toBeGreaterThan(0);
+    const doc = JSON.parse(
+      readFileSync(join(record, "inception", "domain-design", "deep-spec-refcheck", "components.json"), "utf-8"),
+    ) as { checked: string[]; unavailable?: unknown };
+    expect(doc.unavailable).toBeUndefined();
+    expect(doc.checked).toHaveLength(8);
   });
 });
