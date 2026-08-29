@@ -107,5 +107,5 @@ LLM会話層（形式化・A/Bゲート・レポート）はfixture代替のた�
 | インストーラでバニラAI-DLC素体へ導入 | ✔ | store系=非投下で `.claude/` へcompose、drops 0、ルート無汚染 |
 | `intent-create --scope classic` | ✔ | intent minted。**2.10 deep-spec-analysis-verify は SKIP**（stage `scopes: [enterprise, feature]` によるscope routing——仕様どおり） |
 | `intent-create --scope feature` | ✔ | 34ステージ中 2.10 が **EXECUTE** でon-path |
-| 実intentレコードでのセンサー3連発火（`--stage`/`--output-path` 実契約） | ✔ | ir-valid: pass / SMT(exhaustive): findings 4（FR1×FR2・FR1×FR3・FR2×FR3のconflict + 在庫不足域のcompleteness-gap＝仕込んだ欠陥を全件正検出）/ Quint(bounded=Apalache): When-eventシナリオはv1 capability skipとして明示、cross-check crossChecked空で整合 |
+| 実intentレコードでのセンサー3連発火（`--stage`/`--output-path` 実契約） | ✔ | ir-valid: pass / SMT(exhaustive): findings 5（同一トリガーconflict×3 unsat core付き + completeness-gap 具体的反例状態付き + SC-5 scenario-violation）/ Quint: findings 2（**OB-4不変条件をイベント機械が破る2状態トレース**＝SMTにない状態機械レンズ + SC-5 scenario-violation でSMTと判定一致）/ cross-check: SC-3・SC-5を両バックエンドが照合しdisagreementゼロ / When-event型シナリオと部分bindings rejectは明示的capability skip |
 | headless `/aidlc`（`claude -p`）実走 | △ | オーケストレータ起動〜プラン選択ゲートまで動作。aidlcはゲート駆動設計のため非対話完走は不可（ゲート毎に `--resume` 注入が必要）。sandboxのdist設定はBedrock強制（`CLAUDE_CODE_USE_BEDROCK=1`）のため、非AWS環境では `settings.local.json` での上書きが必要 |

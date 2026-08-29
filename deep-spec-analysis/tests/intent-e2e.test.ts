@@ -172,37 +172,108 @@ describe("sensors against the real intent record", () => {
     expect(JSON.parse(run.stdout)).toMatchObject({ pass: true, findings_count: 0 });
   });
 
-  test("smt finds every planted conflict and the completeness gap", () => {
+  interface Finding {
+    kind: string;
+    frRefs: string[];
+    targets?: string[];
+    detail: string;
+    witness?: { core?: string[]; model?: Record<string, unknown>; trace?: Record<string, unknown>[] };
+  }
+
+  function dumpFindings(backend: string, findings: Finding[]) {
+    for (const f of findings) {
+      console.log(`[${backend}] ${f.kind} ${f.frRefs.join("+")} (${(f.targets ?? []).join(",")}) — ${f.detail}`);
+      if (f.witness) console.log(`  witness: ${JSON.stringify(f.witness)}`);
+    }
+  }
+
+  test("smt finds the conflicts, the gap, and the broken scenario — with evidence", () => {
     if (!nodeAvailable) {
       console.warn("node runtime missing — skipping SMT assertions");
       return;
     }
     const run = fireInstalledSensor("aidlc-sensor-deep-spec-verify-smt.ts");
     expect(run.status).toBe(0);
-    expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, findings_count: 4 });
+    expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, findings_count: 5 });
 
     const smt = JSON.parse(readFileSync(join(verifyDir, "smt.json"), "utf-8"));
-    const conflicts = smt.findings
-      .filter((f: { kind: string }) => f.kind === "conflict")
-      .map((f: { frRefs: string[] }) => [...f.frRefs].sort().join("+"))
-      .sort();
-    expect(conflicts).toEqual(["FR-1+FR-2", "FR-1+FR-3", "FR-2+FR-3"]);
-    const gaps = smt.findings.filter((f: { kind: string }) => f.kind === "completeness-gap");
+    const findings: Finding[] = smt.findings;
+    dumpFindings("smt", findings);
+
+    // Every finding carries human-readable detail.
+    for (const f of findings) expect(f.detail.length).toBeGreaterThan(20);
+
+    // Three same-trigger conflicts, each attributed to its FR pair via an unsat core.
+    const conflicts = findings.filter((f) => f.kind === "conflict");
+    expect(conflicts.map((f) => [...f.frRefs].sort().join("+")).sort()).toEqual([
+      "FR-1+FR-2",
+      "FR-1+FR-3",
+      "FR-2+FR-3",
+    ]);
+    for (const c of conflicts) expect(c.witness?.core?.length).toBe(2);
+
+    // One completeness gap with a concrete witness state over every attribute.
+    const gaps = findings.filter((f) => f.kind === "completeness-gap");
     expect(gaps).toHaveLength(1);
     expect([...gaps[0].frRefs].sort()).toEqual(["FR-1", "FR-2", "FR-3"]);
+    expect(Object.keys(gaps[0].witness?.model ?? {}).sort()).toEqual([
+      "order.blocked",
+      "order.expensive",
+      "order.qty",
+      "order.status",
+      "order.stock",
+    ]);
+
+    // The broken accept SC-5 is rejected by the OB-4 invariant.
+    const violations = findings.filter((f) => f.kind === "scenario-violation");
+    expect(violations).toHaveLength(1);
+    expect(violations[0].targets).toContain("OB-4");
+    expect(violations[0].targets).toContain("SC-5");
+
+    // When-event scenarios are an explicit v1 capability skip, never silent.
+    expect(smt.skipped.map((s: { target: string }) => s.target).sort()).toEqual(["SC-1", "SC-2"]);
+    for (const s of smt.skipped) expect(s.reason).toBe("capability");
   });
 
-  test("quint skips When-event scenarios explicitly and stays consistent", () => {
+  test("quint finds the unpreserved invariant via a step trace and agrees on the broken scenario", () => {
     const run = fireInstalledSensor("aidlc-sensor-deep-spec-verify-quint.ts", quintEnv);
     expect(run.status).toBe(0);
-    expect(JSON.parse(run.stdout)).toMatchObject({ findings_count: 0, skipped_count: 2 });
+    expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, findings_count: 2 });
 
     const quint = JSON.parse(readFileSync(join(verifyDir, "quint.json"), "utf-8"));
-    expect(quint.findings).toHaveLength(0);
-    for (const skip of quint.skipped) expect(skip.reason).toBe("capability");
+    const findings: Finding[] = quint.findings;
+    dumpFindings("quint", findings);
 
+    // The event machine reaches a state violating OB-4 (a blocked order gets
+    // allocated by OB-1) — evidenced by an attached step trace ending in the
+    // violating state. This is the state-machine lens the SMT backend lacks.
+    const conflicts = findings.filter((f) => f.kind === "conflict");
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].targets).toContain("OB-4");
+    const trace = conflicts[0].witness?.trace ?? [];
+    expect(trace.length).toBeGreaterThanOrEqual(2);
+    expect(trace[trace.length - 1]["order.status"]).toBe("allocated");
+    expect(trace[trace.length - 1]["order.blocked"]).toBe(true);
+
+    // Same SC-5 verdict as the SMT backend, with a concrete witness model.
+    const violations = findings.filter((f) => f.kind === "scenario-violation");
+    expect(violations).toHaveLength(1);
+    expect(violations[0].targets).toContain("SC-5");
+    expect(violations[0].witness?.model?.["order.blocked"]).toBe(true);
+
+    // Explicit capability skips: When-event scenarios and the partial-bindings reject.
+    expect(quint.skipped.map((s: { target: string }) => s.target).sort()).toEqual(["SC-1", "SC-2", "SC-4"]);
+    for (const s of quint.skipped) expect(s.reason).toBe("capability");
+  });
+
+  test("cross-check compares both backends' scenario verdicts and finds agreement", () => {
     const cross = JSON.parse(readFileSync(join(verifyDir, "cross-check.json"), "utf-8"));
+    console.log(`[cross-check] crossChecked: ${JSON.stringify(cross.crossChecked)}`);
+    // Both backends checked SC-3 (legal) and SC-5 (broken); no disagreement findings.
+    for (const backend of ["smt", "quint"]) {
+      const entry = cross.crossChecked.find((e: { backend: string }) => e.backend === backend);
+      expect(entry?.targets?.sort()).toEqual(["SC-3", "SC-5"]);
+    }
     expect(cross.findings).toHaveLength(0);
-    expect(cross.crossChecked).toHaveLength(0);
   });
 });

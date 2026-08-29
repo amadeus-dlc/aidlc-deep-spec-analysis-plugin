@@ -3,11 +3,15 @@
 ## Model Summary
 
 在庫引当サービスの形式化。1エンティティ（order）、イベント義務3件（FR-1〜FR-3、
-すべて注文処理トリガー `place_order` 上のルール）、シナリオ2件、背景制約1件。
+すべて注文処理トリガー `place_order` 上のルール）、不変条件1件（OB-4）、
+シナリオ5件（When-event型2件＋静的3件）、背景制約1件。
 FR-1/FR-2/FR-3 はガードが重なり得る（例: 在庫十分×ブロック顧客×高額）が効果が
-互いに矛盾するため、同一トリガー上の衝突として検出されることを期待する。また
+互いに矛盾するため、同一トリガー上の衝突として検出されることを期待する。
 「在庫不足かつ非ブロックかつ非高額」の入力領域はどの FR も挙動を規定しておらず、
-完全性ギャップとして検出されることを期待する。
+完全性ギャップとして検出されることを期待する。静的シナリオのうち SC-5 は
+OB-4 に反する状態を合法と主張する壊れた accept であり、scenario-violation として
+両バックエンドに検出されることを期待する（cross-check の照合対象）。
+When-event 型の SC-1 / SC-2 は v1 では両バックエンドとも capability skip となる。
 
 ## Formal Model (IR)
 
@@ -74,6 +78,19 @@ FR-1/FR-2/FR-3 はガードが重なり得る（例: 在庫十分×ブロック�
         ]
       },
       "effect": { "op": "eq", "args": [{ "op": "ref", "path": "order.status", "prime": true }, { "op": "enum", "value": "awaiting_approval" }] }
+    },
+    {
+      "id": "OB-4",
+      "nature": "invariant",
+      "frRefs": ["FR-2"],
+      "ears": "The system shall never keep a blocklisted customer's order in the allocated state.",
+      "assert": {
+        "op": "implies",
+        "args": [
+          { "op": "ref", "path": "order.blocked" },
+          { "op": "ne", "args": [{ "op": "ref", "path": "order.status" }, { "op": "enum", "value": "allocated" }] }
+        ]
+      }
     }
   ],
   "scenarios": [
@@ -94,6 +111,27 @@ FR-1/FR-2/FR-3 はガードが重なり得る（例: 在庫十分×ブロック�
       "bindings": { "order.status": "pending", "order.stock": 3, "order.qty": 1, "order.blocked": true, "order.expensive": true },
       "event": { "trigger": "place_order" },
       "expect": { "op": "eq", "args": [{ "op": "ref", "path": "order.status", "prime": true }, { "op": "enum", "value": "rejected" }] }
+    },
+    {
+      "id": "SC-3",
+      "kind": "accept",
+      "frRefs": ["FR-1"],
+      "title": "非ブロック顧客の引当済み注文は合法な状態である",
+      "bindings": { "order.status": "allocated", "order.blocked": false, "order.expensive": false, "order.stock": 3, "order.qty": 1 }
+    },
+    {
+      "id": "SC-4",
+      "kind": "reject",
+      "frRefs": ["FR-2"],
+      "title": "ブロック顧客の注文が引当済み状態にあることは不可能でなければならない",
+      "bindings": { "order.status": "allocated", "order.blocked": true }
+    },
+    {
+      "id": "SC-5",
+      "kind": "accept",
+      "frRefs": ["FR-2"],
+      "title": "（壊れた主張）ブロック顧客の引当済み注文も合法である",
+      "bindings": { "order.status": "allocated", "order.blocked": true, "order.expensive": false, "order.stock": 2, "order.qty": 1 }
     }
   ],
   "background": [
