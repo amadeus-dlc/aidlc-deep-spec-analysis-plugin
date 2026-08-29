@@ -20,13 +20,18 @@
 // stripped, canonical sorting; identical IR + identical environment =>
 // byte-identical output.
 //
-// Self-contained — no imports from the framework or sibling plugin tools.
+// Self-contained from the framework's point of view — no imports from the
+// framework or its core tools; the only import is the plugin's own bundled
+// deep-spec-lib.ts, which ships in the same compose delta (contract-2
+// self-validation).
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { validateSchema } from "./deep-spec-lib.ts";
 
 const BACKEND = "quint";
 const FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";
@@ -277,17 +282,52 @@ interface FindingsDoc {
 
 function writeFindingsDoc(verifyDir: string, doc: FindingsDoc): void {
   mkdirSync(verifyDir, { recursive: true });
-  const ordered: { [k: string]: Json } = {
-    backend: doc.backend,
-    irVersion: doc.irVersion,
-    irHash: doc.irHash,
-    method: doc.method,
+  const assemble = (d: FindingsDoc): { [k: string]: Json } => {
+    const ordered: { [k: string]: Json } = {
+      backend: d.backend,
+      irVersion: d.irVersion,
+      irHash: d.irHash,
+      method: d.method,
+    };
+    if (d.unavailable) ordered.unavailable = d.unavailable as unknown as Json;
+    ordered.findings = d.findings as unknown as Json;
+    ordered.skipped = d.skipped as unknown as Json;
+    if (d.crossChecked) ordered.crossChecked = d.crossChecked as unknown as Json;
+    return ordered;
   };
-  if (doc.unavailable) ordered.unavailable = doc.unavailable as unknown as Json;
-  ordered.findings = doc.findings as unknown as Json;
-  ordered.skipped = doc.skipped as unknown as Json;
-  if (doc.crossChecked) ordered.crossChecked = doc.crossChecked as unknown as Json;
-  writeFileSync(join(verifyDir, `${doc.backend}.json`), `${JSON.stringify(ordered, null, 2)}\n`, "utf-8");
+  // Contract-2 self-validation: a writer must never emit a non-conforming
+  // findings file. On failure the document degrades to `unavailable` with
+  // the validation error as the reason — never a silently-invalid file.
+  let ordered = assemble(doc);
+  try {
+    const schemaPath = join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json");
+    const schemaDoc = JSON.parse(readFileSync(schemaPath, "utf-8"));
+    const errors: string[] = [];
+    validateSchema(schemaDoc as never, schemaDoc as never, ordered as never, "", errors);
+    if (errors.length > 0) {
+      ordered = assemble({
+        backend: doc.backend,
+        irVersion: doc.irVersion,
+        irHash: doc.irHash,
+        method: doc.method,
+        unavailable: { reason: `self-validation against deep-spec-findings-schema.json failed: ${errors[0]}` },
+        findings: [],
+        skipped: [],
+      });
+    }
+  } catch (err) {
+    ordered = assemble({
+      backend: doc.backend,
+      irVersion: doc.irVersion,
+      irHash: doc.irHash,
+      method: doc.method,
+      unavailable: { reason: `findings schema unreadable: ${err instanceof Error ? err.message : String(err)}` },
+      findings: [],
+      skipped: [],
+    });
+  }
+  writeFileSync(join(verifyDir, `${doc.backend}.json`), `${JSON.stringify(ordered, null, 2)}
+`, "utf-8");
 }
 
 // Recompute deep-spec-verify/cross-check.json as a pure function of the IR
