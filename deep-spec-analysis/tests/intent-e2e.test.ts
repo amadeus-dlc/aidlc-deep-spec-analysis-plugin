@@ -577,3 +577,124 @@ describe("upgrade path — re-running the installer refreshes stale plugin files
     expect(doc.checked).toHaveLength(8);
   });
 });
+
+// Phase-2 scenario: the functional-verify stage composes into the graph and
+// routes by scope; the engine accepts a late-adoption --single run; the
+// composed design backends verify a native state-machine model through the
+// REAL dispatcher; and the doctor tracks per-unit design-verification
+// coverage through unverified -> verified -> stale.
+describe("phase-2 design verification — routing, single-run, dispatcher fire, unit coverage", () => {
+  const designFixtures = join(pluginRoot, "tests", "fixtures", "design");
+  let record = "";
+  let stageDir = "";
+  let modelPath = "";
+
+  function doctorChecksP2(): { pass: boolean; label: string }[] {
+    const run = inSandbox(["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")]);
+    expect(run.status).toBe(0);
+    return (JSON.parse(run.stdout) as { checks: { pass: boolean; label: string }[] }).checks;
+  }
+
+  beforeAll(() => {
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+    record = join(intentsDir, active);
+    stageDir = join(record, "construction", "deep-spec-analysis-functional-verify");
+    modelPath = join(stageDir, "deep-spec-analysis-functional-formal-model.md");
+    // A third unit with a functional-design record (its rules.md feeds the
+    // ir-valid BR coverage check and the doctor eligibility scan).
+    const fd = join(record, "construction", "u1-tickets", "functional-design");
+    mkdirSync(fd, { recursive: true });
+    cpSync(join(designFixtures, "record", "construction", "u1-tickets", "functional-design", "rules.md"), join(fd, "rules.md"));
+  });
+
+  test("the functional-verify stage is in the compiled graph and routes by scope", () => {
+    const graph = readFileSync(join(sandbox, ".claude", "tools", "data", "stage-graph.json"), "utf-8");
+    expect(graph).toContain("deep-spec-analysis-functional-verify");
+    expect(stateOfNewestIntent()).toContain("deep-spec-analysis-functional-verify — EXECUTE");
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const classicState = readdirSync(intentsDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => {
+        try {
+          return readFileSync(join(intentsDir, e.name, "aidlc-state.md"), "utf-8");
+        } catch {
+          return "";
+        }
+      })
+      .find((s) => s.includes("**Scope**: classic"));
+    expect(classicState).toBeDefined();
+    expect(classicState).toContain("deep-spec-analysis-functional-verify — SKIP");
+  });
+
+  test("the doctor reports every unit as unverified before any design verification", () => {
+    const checks = doctorChecksP2();
+    expect(checks.some((c) => c.label.includes("/u1-tickets has functional-design artifacts with no deep-spec design verification"))).toBe(true);
+    const summary = checks.find((c) => c.label.includes("design verification coverage"));
+    expect(summary?.pass).toBe(false);
+    expect(summary?.label).toContain("0/3 eligible units verified");
+  });
+
+  test("the engine accepts a single-stage run for the functional verify stage", () => {
+    const run = inSandbox([
+      "bun", join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
+      "next", "--stage", "deep-spec-analysis-functional-verify", "--single",
+    ]);
+    expect(run.status).toBe(0);
+    const directive = JSON.parse(run.stdout.trim().split("\n")[0]);
+    expect(directive.kind).toBe("load-steering");
+    expect(directive.stage).toBe("deep-spec-analysis-functional-verify");
+  });
+
+  test("the composed design backends verify the native state-machine model through the dispatcher", () => {
+    if (!nodeAvailable) {
+      console.warn("node runtime missing — skipping design-backend assertions");
+      return;
+    }
+    mkdirSync(stageDir, { recursive: true });
+    cpSync(
+      join(designFixtures, "record", "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"),
+      modelPath,
+    );
+    const fireP2 = (id: string, env: { [k: string]: string } = {}): { result: string } => {
+      const run = inSandbox([
+        "bun", join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
+        "fire", id, "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath,
+      ], env);
+      expect(run.status).toBe(0);
+      const lines = run.stdout.trim().split("\n");
+      return JSON.parse(lines[lines.length - 1] ?? "{}") as { result: string };
+    };
+    expect(fireP2("deep-spec-design-ir-valid").result).toBe("passed");
+    expect(fireP2("deep-spec-design-verify-smt").result).toBe("failed");
+    expect(fireP2("deep-spec-design-verify-quint", {
+      AIDLC_DEEP_SPEC_QUINT_METHOD: "simulation",
+      AIDLC_DEEP_SPEC_QUINT_BIN: join(sandbox, "node_modules", ".bin", "quint"),
+    }).result).toBe("failed");
+    const smt = JSON.parse(readFileSync(join(stageDir, "deep-spec-design-verify", "smt.json"), "utf-8"));
+    const kinds = new Set(smt.findings.map((f: { kind: string }) => f.kind));
+    expect(kinds.has("conflict")).toBe(true);
+    expect(kinds.has("unreachable")).toBe(true);
+    expect(kinds.has("redundancy")).toBe(true);
+    expect(kinds.has("completeness-gap")).toBe(true);
+    expect(smt.findings.every((f: { unit: string }) => f.unit === "u1-tickets")).toBe(true);
+  });
+
+  test("the doctor's per-unit coverage flips to verified, then stale after an artifact touch", () => {
+    if (!nodeAvailable) {
+      console.warn("node runtime missing — coverage depends on the backend run above");
+      return;
+    }
+    let checks = doctorChecksP2();
+    let summary = checks.find((c) => c.label.includes("design verification coverage"));
+    expect(summary?.label).toContain("1/3 eligible units verified");
+    expect(checks.some((c) => c.label.includes("/u1-tickets has functional-design artifacts"))).toBe(false);
+
+    const rules = join(record, "construction", "u1-tickets", "functional-design", "rules.md");
+    writeFileSync(rules, `${readFileSync(rules, "utf-8")}\n<!-- touched -->\n`);
+    checks = doctorChecksP2();
+    expect(checks.some((c) => c.label.includes("/u1-tickets changed its functional-design artifacts after the last design verification"))).toBe(true);
+    summary = checks.find((c) => c.label.includes("design verification coverage"));
+    expect(summary?.label).toContain("0/3 eligible units verified");
+  });
+});
