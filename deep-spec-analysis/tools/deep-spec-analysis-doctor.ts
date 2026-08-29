@@ -50,8 +50,11 @@ installed("tools/aidlc-sensor-deep-spec-refcheck-contract.ts", "error");
 installed("tools/aidlc-sensor-deep-spec-refcheck-functional.ts", "error");
 // コンテキストごとの canary（DDD 移行 — facade が在ればツリーが運ばれている）
 installed("tools/kernel/domain/index.ts", "error");
+installed("tools/kernel/usecase/index.ts", "error");
 installed("tools/kernel/adapter/index.ts", "error");
 installed("tools/refcheck/domain/index.ts", "error");
+installed("tools/refcheck/usecase/index.ts", "error");
+installed("tools/refcheck/adapter/index.ts", "error");
 installed("sensors/aidlc-deep-spec-design-ir-valid.md", "error");
 installed("sensors/aidlc-deep-spec-design-verify-smt.md", "error");
 installed("sensors/aidlc-deep-spec-design-verify-quint.md", "error");

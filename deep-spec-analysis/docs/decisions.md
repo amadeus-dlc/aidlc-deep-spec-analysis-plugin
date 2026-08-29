@@ -378,3 +378,37 @@ dissolution.
   written) and document parsing for reconstitution. Degrade wording is
   assembled by the emitter (the adapter), per the error-handling rule;
   the domain carries it as a value.
+
+## DDD migration PR2b-2 — the refcheck sensors become layered verticals (2026-08-30, #15)
+
+The three refcheck sensors are now full Clean-Architecture verticals, and
+the Json-expulsion ruling shaped the split: **parsing is adapter work,
+checking is domain work over typed models**.
+
+- **refcheck/adapter parsers** own every format walk: the component
+  catalogue, the units edge block, contracts-table rows, spec-block
+  assessment, the entities/rules models, the mermaid state-machine
+  sketches, domain entities for XS, and the sibling-unit index. Each
+  returns a typed outcome union (wrong-fence-count / unparseable /
+  extracted …) so parse failures reach the domain as data, not strings.
+- **refcheck/domain checks** (DD / CD / FD / XS) run purely over those
+  models through the new **CheckFamilyLedger** — the typed replacement
+  for the `detail.split(":")[0]` family recovery: the family travels as
+  a field, the ledger renders the frozen `"<family>: …"` details and
+  `check:<family>` skip targets itself, and derives `checked[]` from
+  its own failed/skipped sets. AttrDecl maps the old raw-Json fields to
+  the exact semantics the checks distinguish (declared-ness, numeric
+  value, string default) — lossless by construction.
+- **Use cases** are pure application orchestration: run the checks,
+  record the inputs manifest under the frozen acquisition rules
+  (requirements only when rules were usable; siblings only when the
+  domain catalogue parsed; the own-unit entities file never recorded
+  twice), and compose the aggregate. **Entries are wiring pipelines**
+  (acquire → parse → execute → conform → save → verdict): 390/249/753
+  lines became 82/88/~130.
+- **In-process golden equivalence**: a new suite drives the full layered
+  pipeline over the broken/clean fixtures without child processes and
+  byte-compares against the goldens — the same bytes now have two
+  independent routes (spawned CLI and in-process), and the coverage
+  floor holds on real branch coverage (refcheck/domain ≥93% functions,
+  100% lines on the check modules).

@@ -418,3 +418,29 @@ domain 層）を bunfig に明文化し、adapter/usecase は契約・spawn ス�
   irHash）・契約適合（`conformToContract`——凍結文言で集約を降格させ、verdict
   が「書かれるもの」から導出される性質を維持）・再構成用の文書解体を持つ。
   降格文言は emitter（adapter）が組み、ドメインは値として保持する。
+
+## DDD 移行 PR2b-2 — refcheck センサーのレイヤード縦割り化（2026-08-30、#15）
+
+refcheck 3 センサーを完全なクリーンアーキテクチャ縦割りにした。Json 追放
+裁定が分割線を決めた：**解析はアダプタ、検査は型付きモデル上のドメイン**。
+
+- **refcheck/adapter のパーサ群**が形式歩きを全所有：コンポーネント
+  カタログ・units エッジブロック・contracts テーブル行・spec ブロック評定・
+  entities/rules モデル・mermaid 状態機械スケッチ・XS 用 domain エンティティ・
+  兄弟ユニット索引。各々が型付き outcome ユニオン（wrong-fence-count /
+  unparseable / extracted …）を返し、解析失敗は文字列でなくデータとして
+  ドメインに届く。
+- **refcheck/domain の検査**（DD/CD/FD/XS）は新設 **CheckFamilyLedger** を
+  通じた純検査——`detail.split(":")[0]` による family 復元の型置換：family は
+  フィールドで運ばれ、凍結描画（`"<family>: …"`・`check:<family>`）と
+  checked[] 導出を台帳自身が行う。AttrDecl は旧生 Json フィールドを検査が
+  区別する意味論（宣言有無・数値・文字列 default）へ無損失に写した。
+- **ユースケースは純粋なアプリケーション操作**：検査実行・凍結された取得
+  規則下の inputs 記録（requirements は rules が使えたときだけ・兄弟は
+  カタログが解析できたときだけ・自ユニット entities は二重記録しない）・
+  集約の compose。**entry は配線パイプライン**（取得→解析→実行→適合→保存→
+  verdict）：390/249/753 行 → 82/88/約130 行。
+- **in-process golden 同値**：新スイートがレイヤード全経路を子プロセスなしで
+  broken/clean fixture に走らせ golden とバイト比較——同一バイトへの独立経路が
+  2 本になり、カバレッジ床は実分岐カバレッジで成立（refcheck/domain は検査
+  モジュール行 100%・関数 93%+）。
