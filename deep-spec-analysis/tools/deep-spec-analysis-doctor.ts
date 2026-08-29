@@ -57,6 +57,9 @@ installed("tools/aidlc-sensor-deep-spec-design-verify-quint.ts", "error");
 installed("tools/deep-spec-design-lib.ts", "error");
 installed("tools/data/deep-spec-design-ir-schema.json", "error");
 installed("knowledge/aidlc-architect-agent/deep-spec-design-ir-authoring.md", "error");
+installed("tools/deep-spec-refinement-lib.ts", "error");
+installed("tools/data/deep-spec-refinement-map-schema.json", "error");
+installed("knowledge/aidlc-architect-agent/deep-spec-refinement-map-authoring.md", "error");
 
 function probe(cmd: string, args: string[]): boolean {
   const res = spawnSync(cmd, args, { encoding: "utf-8", timeout: 5000 });
@@ -413,6 +416,20 @@ function scanFunctionalCoverage(): { eligible: number; problems: UnitCoverageRow
           if (existsSync(p)) newest = Math.max(newest, statSync(p).mtimeMs);
         }
         if (newest > modelMtime) problems.push({ space, intent, unit, state: "stale" });
+      }
+      // refinement-stale (phase 3): the requirements were re-verified AFTER
+      // the design verification — its refinement evidence no longer speaks
+      // for the current requirements.
+      const reqModel = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
+      if (modelMtime > 0 && hasFindings && existsSync(reqModel) && statSync(reqModel).mtimeMs > modelMtime) {
+        checks.push({
+          pass: false,
+          label: `deep-spec-analysis: intent ${space}/${intent} re-verified its requirements after the last design verification (refinement evidence is stale)`,
+          fix:
+            `Make it the active intent (\`bun ${harnessDir}/tools/aidlc-utility.ts intent ${intent}\`), ` +
+            "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
+          severity: "advisory",
+        });
       }
     }
   }
