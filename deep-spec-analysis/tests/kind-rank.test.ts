@@ -32,7 +32,7 @@ function extractKindRank(file: string): { table: Map<string, number>; fallback: 
   return { table, fallback: Number(fallbackMatch[1]) };
 }
 
-const V1_FILES = ["aidlc-sensor-deep-spec-verify-smt.ts", "aidlc-sensor-deep-spec-verify-quint.ts"];
+const V1_FILES = ["requirements/domain/verification-finding-order.ts", "aidlc-sensor-deep-spec-verify-quint.ts"];
 const EXTENDED_FILES = ["refcheck/domain/catalog-order.ts", "deep-spec-design-lib.ts"];
 
 describe("kind-rank order preservation", () => {

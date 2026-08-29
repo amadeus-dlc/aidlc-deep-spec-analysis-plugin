@@ -444,3 +444,59 @@ refcheck 3 センサーを完全なクリーンアーキテクチャ縦割りに
   broken/clean fixture に走らせ golden とバイト比較——同一バイトへの独立経路が
   2 本になり、カバレッジ床は実分岐カバレッジで成立（refcheck/domain は検査
   モジュール行 100%・関数 93%+）。
+
+## Interactor 裁定 — ユースケースは Repository を保持し、execute は識別を受ける（2026-08-30、#16）
+
+移行の途中で恒久裁定が下った：**ユースケースはコンストラクタ注入で
+Repository を保持し、`execute` は識別（ID・値オブジェクト）だけを受けて
+内部で集約を解決してからビジネスロジックを起動する。** 以前の形——entry が
+取得・パースまで済ませ、型付き入力を「純粋な」ユースケースに渡す——は
+アプリケーションの仕事を合成ルートに置くもので、却下された。
+
+- refcheck の 3 ユースケースを interactor として再構築
+  （`ctor(designRecords, reports)`・`execute({artifactPath,
+  reportDirectory, reportOnly})`）。新しい **DesignRecord** 集約が検査対象
+  成果物と随伴文書の型付きスナップショットで、**DesignRecordRepository**
+  が凍結取得規則（rules が使えたときだけ requirements、カタログが解けた
+  ときだけ兄弟、自ユニットの entities は二重記録しない）で解決する。
+- **ReferenceCheckReportRepository** に `conformedOf` を追加——「この
+  Repository は契約不適合の文書を決して書かない」という不変条件のクエリ面。
+  `save` は内部で適合させ、verdict は conformed な集約から導くため、
+  stdout とファイルは構造的に矛盾できない。
+- entry は純配線（flags → basename ゲート → Impl 構築 → execute → 閉じた
+  **CheckOutcome** ユニオンの switch）へ縮み、`tests/doubles/` の InMemory
+  Repository だけで interactor が動くことをユースケーステストが証明する。
+
+## DDD 移行 PR3 — verify-smt が requirements の縦割りになる（2026-08-30、#16）
+
+バイトリスク最高のセンサー（1,136 行：寛容 IR パース・SMT-LIB コンパイラ・
+z3 子プロトコル・unsat core 解釈・クロスチェック）が、interactor 形の
+requirements コンテキスト縦割りになった。base↔head パリティスナップショットの
+diff は空、golden は無変更。
+
+- **requirements/domain** が意味を所有：`RequirementsModel`（型付き
+  義務/シナリオ/属性の集約）、`VerificationReport`（`compose` が正準
+  ソートを適用する v1 集約）、4-kind 順位表（11-kind 表と統一しない独立
+  VO のまま）、降格ファクトリ（ir-unreadable / version-mismatch /
+  solver-unavailable、凍結文言つき）、`interpretSmtVerdicts`（大域一貫性・
+  前件空虚・イベント対・ギャップ・シナリオ——全 detail 文字列を逐語所有）、
+  `crossCheckReport`（兄弟文書間のシナリオ判定合意）。
+- **requirements/adapter** が形式を所有：寛容 IR パーサと irHash 導出
+  （`FormalModelRepositoryImpl`）、SMT-LIB 計画ビルダ（`smtVar`/`smtName`/
+  `enumCode`/`smtOf` 逐語、仮定間接化、形式を含まない `SmtPlanFacts` を
+  返す）、z3 子エンジン（`solveSmtChild`——refinement-lib も spawn する
+  凍結 stdin/stdout プロトコル）、ソルバクライアント（node 優先 spawn、
+  stderr 200 字尾つき v1 attempt 文言、witness モデルはドメインに届く前に
+  decode）、v1 レポート serializer/Repository（`findAllByDirectory` ＝
+  クロスチェックの取得規則）。
+- **entry** は配線と描画のみ：env 読取（`AIDLC_DEEP_SPEC_SMT_TIMEOUT_MS`・
+  `AIDLC_DEEP_SPEC_SMT_RUNTIME`）、自パス、スキーマパス、凍結 verdict 行
+  4 形（v1 の NA は `skipped_count` を持たない）、ソルバ実行不能時の
+  exit 127。
+- **証明**：in-process golden スイートが実 Impl（実 z3 子）で interactor を
+  駆動して `smt.json` と収束後の `cross-check.json` をバイト一致で照合。
+  requirements/domain はカバレッジ 100%。kiro ハーネスの実 sandbox で
+  z3 なし降格（dispatcher `tool-unavailable`）と golden 同一の検証成立の
+  両経路を再現し、doctor は 0 errors。
+- Issue #28（負荷時の稀な z3 witness 非決定性）は設計上オープンのまま：
+  決定化オプションは golden バイトを変えるため、この移行では禁じ手。

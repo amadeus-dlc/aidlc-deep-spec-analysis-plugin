@@ -11,3 +11,4 @@ export {
   parseFunctionalSpecDocument,
   parseRulesDocument,
 } from "./functional-design-parser.ts";
+export { DesignRecordRepositoryImpl } from "./design-record-repository-impl.ts";

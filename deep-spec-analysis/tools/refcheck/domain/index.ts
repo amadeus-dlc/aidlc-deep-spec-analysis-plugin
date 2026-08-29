@@ -40,3 +40,4 @@ export {
   type SiblingUnitEntities,
 } from "./functional-design.ts";
 export { FUNCTIONAL_FAMILIES, runFunctionalChecks, type FunctionalChecksInput } from "./functional-checks.ts";
+export { DesignRecord, type DesignRecordSeed, type LoadedDocument } from "./design-record.ts";

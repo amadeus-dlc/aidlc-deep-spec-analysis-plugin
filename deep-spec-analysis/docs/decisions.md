@@ -412,3 +412,70 @@ checking is domain work over typed models**.
   independent routes (spawned CLI and in-process), and the coverage
   floor holds on real branch coverage (refcheck/domain ≥93% functions,
   100% lines on the check modules).
+
+## Interactor ruling — use cases hold repositories, execute receives identities (2026-08-30, #16)
+
+A standing ruling landed mid-migration: **a use case holds its
+repositories via constructor injection, and `execute` receives only
+identifying values (IDs, value objects), resolving aggregates internally
+before invoking domain logic.** The earlier shape — the entry acquiring
+and parsing everything, then handing fully-typed inputs to a "pure" use
+case — put application work in the composition root and was rejected.
+
+- The three refcheck use cases were rebuilt as interactors
+  (`ctor(designRecords, reports)`, `execute({artifactPath,
+  reportDirectory, reportOnly})`). The new **DesignRecord** aggregate is
+  the typed snapshot of the checked artifact and its companions;
+  **DesignRecordRepository** resolves it under the frozen acquisition
+  rules (requirements only when rules were usable, siblings only when
+  the catalogue parsed, the own-unit entities file never recorded
+  twice).
+- **ReferenceCheckReportRepository** gained `conformedOf` — the query
+  face of "this repository never persists a non-conforming document" —
+  and `save` now conforms internally; verdicts derive from the conformed
+  aggregate, so stdout and the file cannot disagree.
+- Entries shrank to pure wiring (flags → basename gate → Impl
+  construction → execute → outcome switch on the closed **CheckOutcome**
+  union), and a use-case test proves the interactor runs against the
+  `tests/doubles/` InMemory repository alone.
+
+## DDD migration PR3 — verify-smt becomes the requirements vertical (2026-08-30, #16)
+
+The highest-byte-risk sensor (1,136 lines: tolerant IR parse, SMT-LIB
+compiler, z3 child protocol, unsat-core interpretation, cross-check) is
+now a layered requirements-context vertical in the interactor shape,
+with the base-vs-head parity snapshot diff empty and the goldens
+untouched.
+
+- **requirements/domain** owns the meaning: `RequirementsModel`
+  (aggregate over typed obligations/scenarios/attributes),
+  `VerificationReport` (v1 aggregate whose `compose` applies the
+  canonical finding/skip sort), the 4-kind order table (kept as its own
+  VO — never unified with the 11-kind table), the degradation factories
+  (ir-unreadable / version-mismatch / solver-unavailable with their
+  frozen wording), `interpretSmtVerdicts` (global consistency, vacuity,
+  event pairs, gaps, scenarios — every detail string verbatim), and
+  `crossCheckReport` (scenario-verdict agreement over sibling reports).
+- **requirements/adapter** owns the formats: the tolerant IR parser and
+  irHash derivation (`FormalModelRepositoryImpl`), the SMT-LIB plan
+  builder (verbatim `smtVar`/`smtName`/`enumCode`/`smtOf`, assumption
+  indirection, returning format-free `SmtPlanFacts`), the z3 child
+  engine (`solveSmtChild` — the frozen stdin/stdout protocol
+  refinement-lib also spawns), the solver client (node-preferred spawn
+  with the v1 attempt wording incl. the 200-char stderr tail, decoding
+  witness models before they reach the domain), and the v1 report
+  serializer/repository (`findAllByDirectory` = the cross-check
+  acquisition rule).
+- **The entry** wires and renders: env reads
+  (`AIDLC_DEEP_SPEC_SMT_TIMEOUT_MS`, `AIDLC_DEEP_SPEC_SMT_RUNTIME`),
+  self path, schema path, the four frozen verdict-line shapes (v1 NA
+  carries no `skipped_count`), and exit 127 on solver unavailability.
+- **Proofs**: the in-process golden suite drives the interactor over
+  real Impls (real z3 child) and byte-matches `smt.json` and the
+  converged `cross-check.json`; requirements/domain sits at 100%
+  coverage; a live kiro-harness sandbox reproduced both the
+  no-z3 degradation (dispatcher `tool-unavailable`) and the
+  golden-identical verified run, with the doctor at 0 errors.
+- Issue #28 (rare z3 witness nondeterminism under load) stays open by
+  design: any determinization option would change golden bytes, which
+  this migration is forbidden to do.
