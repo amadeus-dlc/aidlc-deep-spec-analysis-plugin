@@ -13,3 +13,4 @@ export { type Schema, validateSchema } from "./schema-validator.ts";
 export { safeTarget } from "./target-id.ts";
 export { requirementIds } from "./requirement-ids.ts";
 export { normalizeName } from "./name-normalize.ts";
+export { type RepositoryError } from "./repository-error.ts";

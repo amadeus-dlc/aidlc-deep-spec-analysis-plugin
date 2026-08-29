@@ -36,7 +36,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { findRecordRoot, parseFlags, readIfExists, relArtifact, renderVerdictLine } from "./kernel/adapter/index.ts";
+import { findRecordRoot, parseFlags, readIfExists, relArtifact, renderVerdictLine , readContractSchema} from "./kernel/adapter/index.ts";
 import {
   type Json,
   extractFences,
@@ -55,6 +55,7 @@ import {
   type RefEntry,
   type Skipped,
 } from "./refcheck/domain/index.ts";
+import { ReferenceCheckReport, ReferenceCheckReportId } from "./refcheck/domain/index.ts";
 import { ReferenceCheckReportRepositoryImpl } from "./refcheck/adapter/index.ts";
 
 const BACKEND = "functional-design";
@@ -733,19 +734,24 @@ function main(): void {
   const skippedFamilies = new Set(skipped.map((s) => (s.target.startsWith("check:") ? s.target.slice(6) : "")));
   const checked = FAMILIES.filter((f) => !failedFamilies.has(f) && !skippedFamilies.has(f)).map((f) => `check:${f}`);
 
-  const reportRepository = new ReferenceCheckReportRepositoryImpl(
-    join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"),
-  );
-  const result = reportRepository.save(join(fdDir, "deep-spec-refcheck"), {
-    backend: BACKEND,
+  const report = ReferenceCheckReport.compose({
+    id: ReferenceCheckReportId.of(join(fdDir, "deep-spec-refcheck"), BACKEND),
     inputs,
     checked,
     findings,
     skipped,
-  }, flags.reportOnly);
+    findingsSchema: readContractSchema(join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json")),
+  });
+  if (!flags.reportOnly) {
+    const saved = new ReferenceCheckReportRepositoryImpl().save(report);
+    if (!saved.ok) {
+      process.stderr.write(`deep-spec-refcheck: failed to write ${saved.error.path}: ${saved.error.kind}${"cause" in saved.error ? ` (${saved.error.cause})` : ""}\n`);
+      process.exit(1);
+    }
+  }
 
-  process.stdout.write(renderVerdictLine(!result.unavailable && result.findingsCount === 0, result.findingsCount,
-    result.skippedCount, flags.reportOnly ? "report-only" : undefined));
+  process.stdout.write(renderVerdictLine(report.passes(), report.findingsCount(),
+    report.skippedCount(), flags.reportOnly ? "report-only" : undefined));
   process.exit(0);
 }
 

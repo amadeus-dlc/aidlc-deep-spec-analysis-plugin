@@ -17,4 +17,10 @@ coveragePathIgnorePatterns = [
   "tools/deep-spec-design-lib.ts",
   "tools/deep-spec-refinement-lib.ts",
   "tools/data/**",
+  # 数値ゲートの憲章は「domain 層に 90%」。adapter/usecase は契約テストで
+  # 検証するが、per-file 閾値の対象には含めない（I/O 分岐の網羅は spawn 系
+  # スイートと sandbox が担う）。
+  "tools/kernel/adapter/**",
+  "tools/refcheck/adapter/**",
+  "tools/refcheck/usecase/**",
 ]
