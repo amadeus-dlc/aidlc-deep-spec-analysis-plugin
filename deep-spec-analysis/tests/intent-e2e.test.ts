@@ -678,6 +678,8 @@ describe("phase-2 design verification — routing, single-run, dispatcher fire, 
     expect(kinds.has("redundancy")).toBe(true);
     expect(kinds.has("completeness-gap")).toBe(true);
     expect(smt.findings.every((f: { unit: string }) => f.unit === "u1-tickets")).toBe(true);
+    // Per-unit completion evidence: the doctor's verified verdict rests on this.
+    expect(smt.checked).toEqual(["unit:u1-tickets"]);
   });
 
   test("the doctor's per-unit coverage flips to verified, then stale after an artifact touch", () => {

@@ -17,6 +17,9 @@
       "sha256": "8dc8848ec64bf128df9a8e730d5e3499abd2c1e9e8848d6ee5f4e9b90cfc8342"
     }
   ],
+  "checked": [
+    "unit:u1-orders"
+  ],
   "findings": [
     {
       "kind": "refinement-violation",

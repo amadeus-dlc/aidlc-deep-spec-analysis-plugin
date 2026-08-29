@@ -170,6 +170,8 @@ function main(): void {
 
   const findings: DFinding[] = [];
   const skipped: DSkipped[] = [];
+  // Per-unit completion evidence (contract-2 checked[]) — see the SMT tool.
+  const checkedUnits: string[] = [];
   let method: string | null = null;
   const started = Date.now();
   // The probe cap is PER RUN, not per unit (AIDLC_DEEP_SPEC_QUINT_UNREACH_CAP).
@@ -228,6 +230,7 @@ function main(): void {
     method = method ?? remapped.method;
     findings.push(...remapped.findings);
     skipped.push(...remapped.skipped);
+    checkedUnits.push(`unit:${u.unit}`);
 
     // Unreachable-state detection (FR8.4): bounded mode only, budget-capped.
     for (const sm of [...u.machines].sort((a, b) => (a.id < b.id ? -1 : 1))) {
@@ -413,7 +416,7 @@ function main(): void {
   }
 
   const finalMethod = method ?? "simulation";
-  const emitted = writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: finalMethod, inputs, findings, skipped });
+  const emitted = writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: finalMethod, inputs, checked: checkedUnits, findings, skipped });
   recomputeDesignCrossCheck(verifyDir, ir, irHash);
   process.stdout.write(
     `${JSON.stringify({ pass: !emitted.unavailable && emitted.findingsCount === 0, findings_count: emitted.findingsCount, skipped_count: emitted.skippedCount, method: finalMethod })}\n`,

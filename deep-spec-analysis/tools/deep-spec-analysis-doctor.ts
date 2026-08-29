@@ -381,6 +381,11 @@ function scanFunctionalCoverage(): { eligible: number; problems: UnitCoverageRow
       const modelPath = join(stageDir, "deep-spec-analysis-functional-formal-model.md");
       let modelUnits = new Set<string>();
       let modelMtime = 0;
+      // Per-unit completion evidence: a unit is verified only when a real
+      // backend document (not cross-check, not unavailable) lists it in
+      // checked[] — a clean unit and a unit the backends never reached are
+      // different things (PR #7 review follow-up).
+      const completedUnits = new Set<string>();
       let hasFindings = false;
       if (existsSync(modelPath)) {
         try {
@@ -394,18 +399,28 @@ function scanFunctionalCoverage(): { eligible: number; problems: UnitCoverageRow
           modelUnits = new Set();
         }
         try {
-          // cross-check.json alone is not verification evidence — require a
-          // real backend document.
-          hasFindings = readdirSync(join(stageDir, "deep-spec-design-verify")).some(
-            (f) => f.endsWith(".json") && f !== "cross-check.json",
-          );
+          const verifyDir = join(stageDir, "deep-spec-design-verify");
+          for (const f of readdirSync(verifyDir)) {
+            if (!f.endsWith(".json") || f === "cross-check.json") continue;
+            try {
+              const doc = JSON.parse(readFileSync(join(verifyDir, f), "utf-8"));
+              if (doc && typeof doc === "object" && !doc.unavailable) {
+                hasFindings = true;
+                for (const t of Array.isArray(doc.checked) ? doc.checked : []) {
+                  if (typeof t === "string" && t.startsWith("unit:")) completedUnits.add(t.slice(5));
+                }
+              }
+            } catch {
+              // unreadable sibling — its writer reports its own state
+            }
+          }
         } catch {
           hasFindings = false;
         }
       }
       for (const unit of unitDirs) {
         eligible += 1;
-        if (!modelUnits.has(unit) || !hasFindings) {
+        if (!modelUnits.has(unit) || !hasFindings || !completedUnits.has(unit)) {
           problems.push({ space, intent, unit, state: "unverified" });
           continue;
         }

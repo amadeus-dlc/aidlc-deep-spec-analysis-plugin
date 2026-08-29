@@ -664,6 +664,7 @@ export interface DesignDoc {
   method: string;
   unavailable?: { reason: string };
   inputs?: { artifact: string; sha256: string }[];
+  checked?: string[];
   findings: DFinding[];
   skipped: DSkipped[];
   crossChecked?: { backend: string; targets: string[] }[];
@@ -688,6 +689,7 @@ export function writeDesignDoc(verifyDir: string, doc: DesignDoc): DesignEmitRes
     if (d.inputs) {
       ordered.inputs = [...d.inputs].sort((a, b) => (a.artifact < b.artifact ? -1 : a.artifact > b.artifact ? 1 : 0)) as unknown as Json;
     }
+    if (d.checked) ordered.checked = sortedUnique(d.checked, idCompare) as unknown as Json;
     ordered.findings = sortDesignFindings(d.findings) as unknown as Json;
     ordered.skipped = sortDesignSkipped(d.skipped) as unknown as Json;
     if (d.crossChecked) ordered.crossChecked = d.crossChecked as unknown as Json;

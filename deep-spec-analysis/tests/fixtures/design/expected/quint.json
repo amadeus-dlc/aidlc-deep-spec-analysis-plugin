@@ -3,6 +3,9 @@
   "irVersion": "1.0.0",
   "irHash": "fab23432eb465f21f56a341c6cb32185751c938667ae78cf20a15aae11d4ac31",
   "method": "simulation",
+  "checked": [
+    "unit:u1-tickets"
+  ],
   "findings": [
     {
       "kind": "conflict",

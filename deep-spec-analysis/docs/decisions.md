@@ -233,3 +233,7 @@ bounded モード限定・キャップ制（`AIDLC_DEEP_SPEC_QUINT_UNREACH_CAP`�
 | intent-e2e フェーズ③ブロック（+2件） | ✔ | 実ディスパッチャ経由で ir-valid passed / smt failed（refinement-violation・mapping-gap・inputs 3・OB-3 waived）、doctor が要件再検証後に refinement-stale 行（`--single` 修復コマンド付き） |
 | **実サンドボックス実射**（v0.3.0 からのアップグレード） | ✔ | upgrade refresh 28 ファイル→compose、ディスパッチャ実射：SMT＝静的 refinement-violation OB-1・SC-2・enabledness・mapping-gap、**Quint bounded（実 Apalache）＝到達 trace 付き refinement-violation OB-1**（closing/0→closed/0）＋simulation では出なかった deadlock gap も検出、doctor refinement-stale 遷移、検証後は掃除済み |
 | リグレッション | ✔ | 全 79 テスト green、v1・①・② golden バイト同一、validator VALID、7 ハーネス全ビルド OK |
+
+### マージ済み PR コメントの完全対応監査（2026-08-29）
+
+全 PR のレビューコメントを再監査：#6=6/6、#7=7/7、#8=0、#9=有効 3 対応＋誤検出 1 検証。唯一の部分対応だった **#7 の 7 件目（doctor のユニット単位判定）を完全対応**：設計バックエンドは検証を実際に完走したユニットを契約2 の `checked[]` に `unit:<name>` として記録し（フェーズ①で導入した check-family 台帳と同じ語彙・targetId の unit: 名前空間）、doctor の verified 判定は「バックエンド JSON の存在」から「非 unavailable なバックエンド文書の checked[] にそのユニットが載っていること」へ厳格化——clean なユニットと一度も走らなかったユニットがファイル単体で区別できるようになった。golden 再生成、e2e に completion-evidence アサーション追加。

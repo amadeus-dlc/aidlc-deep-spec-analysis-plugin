@@ -110,6 +110,10 @@ function main(): void {
 
   const findings: DFinding[] = [];
   const skipped: DSkipped[] = [];
+  // Per-unit completion evidence (contract-2 checked[]): a unit appears iff
+  // its design verification actually RAN — the doctor distinguishes a clean
+  // unit from one that never ran (PR #7 review follow-up).
+  const checkedUnits: string[] = [];
   const started = Date.now();
 
   for (const u of ir.units) {
@@ -164,6 +168,7 @@ function main(): void {
     }
     findings.push(...remapped.findings);
     skipped.push(...remapped.skipped);
+    checkedUnits.push(`unit:${u.unit}`);
   }
 
   // --- Phase 3: refinement against the verified requirements IR -------------
@@ -228,7 +233,7 @@ function main(): void {
     }
   }
 
-  const emitted = writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: "exhaustive", inputs, findings, skipped });
+  const emitted = writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: "exhaustive", inputs, checked: checkedUnits, findings, skipped });
   recomputeDesignCrossCheck(verifyDir, ir, irHash);
   process.stdout.write(
     `${JSON.stringify({ pass: !emitted.unavailable && emitted.findingsCount === 0, findings_count: emitted.findingsCount, skipped_count: emitted.skippedCount, method: "exhaustive" })}\n`,
