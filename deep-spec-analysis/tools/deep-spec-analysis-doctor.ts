@@ -48,6 +48,15 @@ installed("tools/aidlc-sensor-deep-spec-refcheck-domain.ts", "error");
 installed("tools/aidlc-sensor-deep-spec-refcheck-contract.ts", "error");
 installed("tools/aidlc-sensor-deep-spec-refcheck-functional.ts", "error");
 installed("tools/deep-spec-lib.ts", "error");
+installed("sensors/aidlc-deep-spec-design-ir-valid.md", "error");
+installed("sensors/aidlc-deep-spec-design-verify-smt.md", "error");
+installed("sensors/aidlc-deep-spec-design-verify-quint.md", "error");
+installed("tools/aidlc-sensor-deep-spec-design-ir-valid.ts", "error");
+installed("tools/aidlc-sensor-deep-spec-design-verify-smt.ts", "error");
+installed("tools/aidlc-sensor-deep-spec-design-verify-quint.ts", "error");
+installed("tools/deep-spec-design-lib.ts", "error");
+installed("tools/data/deep-spec-design-ir-schema.json", "error");
+installed("knowledge/aidlc-architect-agent/deep-spec-design-ir-authoring.md", "error");
 
 function probe(cmd: string, args: string[]): boolean {
   const res = spawnSync(cmd, args, { encoding: "utf-8", timeout: 5000 });
@@ -102,8 +111,8 @@ checks.push({
 // instead of having to remember. Advisory: coverage debt never blocks.
 const FALLBACK_STAGE_SCOPES = ["enterprise", "feature"];
 
-function stageScopes(): string[] {
-  const stageFile = join(root, "aidlc-common", "stages", "inception", "deep-spec-analysis-verify.md");
+function scopesOfStage(...stagePath: string[]): string[] {
+  const stageFile = join(root, "aidlc-common", "stages", ...stagePath);
   try {
     const frontmatter = readFileSync(stageFile, "utf-8").split("\n---")[0];
     const m = frontmatter.match(/^scopes:\n((?:\s+- .+\n)+)/m);
@@ -112,6 +121,10 @@ function stageScopes(): string[] {
     // fall through to the authored default
   }
   return FALLBACK_STAGE_SCOPES;
+}
+
+function stageScopes(): string[] {
+  return scopesOfStage("inception", "deep-spec-analysis-verify.md");
 }
 
 interface CoverageRow {
@@ -301,6 +314,128 @@ if (debt.scanned > 0) {
     pass: total === 0,
     label: `deep-spec-analysis: design refcheck — ${total} structural finding(s) across ${debt.scanned} design artifact(s) scanned (report-only)`,
     fix: "See the per-artifact rows above.",
+    severity: "advisory",
+  });
+}
+
+// Design verification coverage (phase 2): per-unit. A unit is verified when
+// it appears in the units[] manifest of the functional formal model AND the
+// stage record carries backend findings; stale when any of its three design
+// artifacts changed after the model was written. Advisory, like everything
+// else: coverage debt never blocks.
+interface UnitCoverageRow {
+  space: string;
+  intent: string;
+  unit: string;
+  state: "unverified" | "stale";
+}
+
+function scanFunctionalCoverage(): { eligible: number; problems: UnitCoverageRow[] } {
+  const problems: UnitCoverageRow[] = [];
+  let eligible = 0;
+  const scopes = new Set(scopesOfStage("construction", "deep-spec-analysis-functional-verify.md"));
+  const spacesDir = join(projectDir, "aidlc", "spaces");
+  let spaces: string[] = [];
+  try {
+    spaces = readdirSync(spacesDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    return { eligible, problems };
+  }
+  for (const space of spaces) {
+    const intentsDir = join(spacesDir, space, "intents");
+    let intents: string[] = [];
+    try {
+      intents = readdirSync(intentsDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+        .map((e) => e.name);
+    } catch {
+      continue;
+    }
+    for (const intent of intents) {
+      const record = join(intentsDir, intent);
+      let state = "";
+      try {
+        state = readFileSync(join(record, "aidlc-state.md"), "utf-8");
+      } catch {
+        continue;
+      }
+      const scope = state.match(/^- \*\*Scope\*\*: (\S+)/m)?.[1];
+      if (!scope || !scopes.has(scope)) continue;
+      const constructionDir = join(record, "construction");
+      let unitDirs: string[] = [];
+      try {
+        unitDirs = readdirSync(constructionDir, { withFileTypes: true })
+          .filter((e) => e.isDirectory() && existsSync(join(constructionDir, e.name, "functional-design")))
+          .map((e) => e.name)
+          .sort();
+      } catch {
+        continue;
+      }
+      if (unitDirs.length === 0) continue;
+      const stageDir = join(constructionDir, "deep-spec-analysis-functional-verify");
+      const modelPath = join(stageDir, "deep-spec-analysis-functional-formal-model.md");
+      let modelUnits = new Set<string>();
+      let modelMtime = 0;
+      let hasFindings = false;
+      if (existsSync(modelPath)) {
+        try {
+          modelMtime = statSync(modelPath).mtimeMs;
+          const fence = readFileSync(modelPath, "utf-8").match(/```json\n([\s\S]*?)```/);
+          const ir = fence ? JSON.parse(fence[1] ?? "{}") : {};
+          for (const u of Array.isArray(ir.units) ? ir.units : []) {
+            if (u && typeof u.unit === "string") modelUnits.add(u.unit);
+          }
+        } catch {
+          modelUnits = new Set();
+        }
+        try {
+          hasFindings = readdirSync(join(stageDir, "deep-spec-design-verify")).some((f) => f.endsWith(".json"));
+        } catch {
+          hasFindings = false;
+        }
+      }
+      for (const unit of unitDirs) {
+        eligible += 1;
+        if (!modelUnits.has(unit) || !hasFindings) {
+          problems.push({ space, intent, unit, state: "unverified" });
+          continue;
+        }
+        const fdDir = join(constructionDir, unit, "functional-design");
+        let newest = 0;
+        for (const f of ["entities.md", "rules.md", "functional-spec.md"]) {
+          const p = join(fdDir, f);
+          if (existsSync(p)) newest = Math.max(newest, statSync(p).mtimeMs);
+        }
+        if (newest > modelMtime) problems.push({ space, intent, unit, state: "stale" });
+      }
+    }
+  }
+  return { eligible, problems };
+}
+
+const functionalCoverage = scanFunctionalCoverage();
+for (const row of functionalCoverage.problems) {
+  const noun = row.state === "unverified"
+    ? "has functional-design artifacts with no deep-spec design verification"
+    : "changed its functional-design artifacts after the last design verification";
+  checks.push({
+    pass: false,
+    label: `deep-spec-analysis: unit ${row.space}/${row.intent}/${row.unit} ${noun}`,
+    fix:
+      `Make it the active intent (\`bun ${harnessDir}/tools/aidlc-utility.ts intent ${row.intent}\`), ` +
+      "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",
+    severity: "advisory",
+  });
+}
+if (functionalCoverage.eligible > 0) {
+  checks.push({
+    pass: functionalCoverage.problems.length === 0,
+    label:
+      `deep-spec-analysis: design verification coverage — ${functionalCoverage.eligible - functionalCoverage.problems.length}/${functionalCoverage.eligible} ` +
+      "eligible units verified (scopes: " + scopesOfStage("construction", "deep-spec-analysis-functional-verify.md").join(", ") + ")",
+    fix: "See the per-unit rows above for the exact command each unverified unit needs.",
     severity: "advisory",
   });
 }
