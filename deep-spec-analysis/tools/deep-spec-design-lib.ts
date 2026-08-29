@@ -663,12 +663,20 @@ export interface DesignDoc {
   irHash: string;
   method: string;
   unavailable?: { reason: string };
+  inputs?: { artifact: string; sha256: string }[];
+  checked?: string[];
   findings: DFinding[];
   skipped: DSkipped[];
   crossChecked?: { backend: string; targets: string[] }[];
 }
 
-export function writeDesignDoc(verifyDir: string, doc: DesignDoc): void {
+export interface DesignEmitResult {
+  findingsCount: number;
+  skippedCount: number;
+  unavailable: boolean;
+}
+
+export function writeDesignDoc(verifyDir: string, doc: DesignDoc): DesignEmitResult {
   mkdirSync(verifyDir, { recursive: true });
   const assemble = (d: DesignDoc): { [k: string]: Json } => {
     const ordered: { [k: string]: Json } = {
@@ -678,6 +686,10 @@ export function writeDesignDoc(verifyDir: string, doc: DesignDoc): void {
       method: d.method,
     };
     if (d.unavailable) ordered.unavailable = d.unavailable as unknown as Json;
+    if (d.inputs) {
+      ordered.inputs = [...d.inputs].sort((a, b) => (a.artifact < b.artifact ? -1 : a.artifact > b.artifact ? 1 : 0)) as unknown as Json;
+    }
+    if (d.checked) ordered.checked = sortedUnique(d.checked, idCompare) as unknown as Json;
     ordered.findings = sortDesignFindings(d.findings) as unknown as Json;
     ordered.skipped = sortDesignSkipped(d.skipped) as unknown as Json;
     if (d.crossChecked) ordered.crossChecked = d.crossChecked as unknown as Json;
@@ -712,6 +724,11 @@ export function writeDesignDoc(verifyDir: string, doc: DesignDoc): void {
     });
   }
   writeFileSync(join(verifyDir, `${doc.backend}.json`), `${JSON.stringify(ordered, null, 2)}\n`, "utf-8");
+  return {
+    findingsCount: (ordered.findings as Json[]).length,
+    skippedCount: (ordered.skipped as Json[]).length,
+    unavailable: "unavailable" in ordered,
+  };
 }
 
 // --- design cross-check ------------------------------------------------------

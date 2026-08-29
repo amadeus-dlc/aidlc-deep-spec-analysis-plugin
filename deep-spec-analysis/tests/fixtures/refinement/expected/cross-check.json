@@ -1,0 +1,9 @@
+{
+  "backend": "cross-check",
+  "irVersion": "1.0.0",
+  "irHash": "7106691451957f9b3c33f9fd201865194f0a1f959e4c9a8b953dc600bb31052a",
+  "method": "exhaustive",
+  "findings": [],
+  "skipped": [],
+  "crossChecked": []
+}

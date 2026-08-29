@@ -57,6 +57,9 @@ installed("tools/aidlc-sensor-deep-spec-design-verify-quint.ts", "error");
 installed("tools/deep-spec-design-lib.ts", "error");
 installed("tools/data/deep-spec-design-ir-schema.json", "error");
 installed("knowledge/aidlc-architect-agent/deep-spec-design-ir-authoring.md", "error");
+installed("tools/deep-spec-refinement-lib.ts", "error");
+installed("tools/data/deep-spec-refinement-map-schema.json", "error");
+installed("knowledge/aidlc-architect-agent/deep-spec-refinement-map-authoring.md", "error");
 
 function probe(cmd: string, args: string[]): boolean {
   const res = spawnSync(cmd, args, { encoding: "utf-8", timeout: 5000 });
@@ -378,6 +381,11 @@ function scanFunctionalCoverage(): { eligible: number; problems: UnitCoverageRow
       const modelPath = join(stageDir, "deep-spec-analysis-functional-formal-model.md");
       let modelUnits = new Set<string>();
       let modelMtime = 0;
+      // Per-unit completion evidence: a unit is verified only when a real
+      // backend document (not cross-check, not unavailable) lists it in
+      // checked[] — a clean unit and a unit the backends never reached are
+      // different things (PR #7 review follow-up).
+      const completedUnits = new Set<string>();
       let hasFindings = false;
       if (existsSync(modelPath)) {
         try {
@@ -391,18 +399,28 @@ function scanFunctionalCoverage(): { eligible: number; problems: UnitCoverageRow
           modelUnits = new Set();
         }
         try {
-          // cross-check.json alone is not verification evidence — require a
-          // real backend document.
-          hasFindings = readdirSync(join(stageDir, "deep-spec-design-verify")).some(
-            (f) => f.endsWith(".json") && f !== "cross-check.json",
-          );
+          const verifyDir = join(stageDir, "deep-spec-design-verify");
+          for (const f of readdirSync(verifyDir)) {
+            if (!f.endsWith(".json") || f === "cross-check.json") continue;
+            try {
+              const doc = JSON.parse(readFileSync(join(verifyDir, f), "utf-8"));
+              if (doc && typeof doc === "object" && !doc.unavailable) {
+                hasFindings = true;
+                for (const t of Array.isArray(doc.checked) ? doc.checked : []) {
+                  if (typeof t === "string" && t.startsWith("unit:")) completedUnits.add(t.slice(5));
+                }
+              }
+            } catch {
+              // unreadable sibling — its writer reports its own state
+            }
+          }
         } catch {
           hasFindings = false;
         }
       }
       for (const unit of unitDirs) {
         eligible += 1;
-        if (!modelUnits.has(unit) || !hasFindings) {
+        if (!modelUnits.has(unit) || !hasFindings || !completedUnits.has(unit)) {
           problems.push({ space, intent, unit, state: "unverified" });
           continue;
         }
@@ -413,6 +431,20 @@ function scanFunctionalCoverage(): { eligible: number; problems: UnitCoverageRow
           if (existsSync(p)) newest = Math.max(newest, statSync(p).mtimeMs);
         }
         if (newest > modelMtime) problems.push({ space, intent, unit, state: "stale" });
+      }
+      // refinement-stale (phase 3): the requirements were re-verified AFTER
+      // the design verification — its refinement evidence no longer speaks
+      // for the current requirements.
+      const reqModel = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
+      if (modelMtime > 0 && hasFindings && existsSync(reqModel) && statSync(reqModel).mtimeMs > modelMtime) {
+        checks.push({
+          pass: false,
+          label: `deep-spec-analysis: intent ${space}/${intent} re-verified its requirements after the last design verification (refinement evidence is stale)`,
+          fix:
+            `Make it the active intent (\`bun ${harnessDir}/tools/aidlc-utility.ts intent ${intent}\`), ` +
+            "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
+          severity: "advisory",
+        });
       }
     }
   }

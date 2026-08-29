@@ -207,3 +207,33 @@ bounded モード限定・キャップ制（`AIDLC_DEEP_SPEC_QUINT_UNREACH_CAP`�
 - **ir-valid の強制強化 3 件**: (a) enum リテラルは二項比較の兄弟 `ref` 属性に束縛して照合（他属性に同名値があるだけで通る any-enum ショートカットを廃止。v1 ir-valid は出荷済み意味論として現状維持——バックエンドの compile-error skip が防波堤）。(b) int 属性の min/max 欠落をエラー化（著述契約の MANDATORY を機構的に強制。スキーマ側を必須化しないのは契約1 との共有定義バイト同一を守るため）。(c) unit 名が construction ディレクトリに一致しない場合、brRefs ゼロでもエラー（typo で BR カバレッジ検査が丸ごと沈黙する穴を閉鎖）。
 - **doctor**: cross-check.json 単独では verified と数えない（実バックエンド文書を要求）。ユニット単位の完了記録（clean と未実行の判別）は契約2 に per-unit checked の語彙が要るためフェーズ③の検討事項として持ち越し。
 - 不正 fixture のサマリを実際の planted 欠陥（BR カバレッジ 4 件を含む）と一致させ、新 3 検査の負テストを追加。
+
+## 設計検証拡張フェーズ③（refinement 検査）の設計判断（2026-08-29、v0.4.0）
+
+要件の正典は [issue #2](https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/issues/2) と [issue #5（フェーズ③）](https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/issues/5)。実装：精緻化写像（契約4、`deep-spec-refinement-map-schema.json`）、`deep-spec-refinement-lib.ts`（写像検証・ᾱ 代入・SMT クエリビルダ・Quint 追加不変条件）、両設計バックエンドへの refinement パス配線、ステージの写像著述ステップ、doctor の refinement-stale。
+
+### アーキテクチャ
+
+- **写像は第一級成果物**（`deep-spec-analysis-refinement-map.md`、単一 json フェンス）。LLM が起案し人間がゲートし、決定論ツールが検証する——IR と同じニューロシンボリック分業を 1 段上へ。方向は標準的データ精緻化：各**要件**属性を**設計**属性上の式（bool/int）または全域 enumMap（enum、合流可）で定義し、ᾱ 代入を機械的にする。
+- **発火は既存の formal-model write のまま**：要件 formal model の存在で③が活性化し、写像・要件 IR は同胞読み込み。写像欠如→`absent-input`、ハッシュ乖離→`stale-input`、ユニット項目欠如→`absent-input`——全て明示 skip（無沈黙）。findings 文書は `inputs[]` に 3 成果物（機能モデル・写像・要件モデル）のファイルハッシュを刻む。
+- **SMT は v1 の汎用 z3 子プロセス（`--smt-child`）を直接ペイロード起動**：本 lib は SMT-LIB スクリプトを組むだけで、ランタイムフォールバック・予算・model/core 復号プロトコルは v1 のまま。検査：不変条件精緻化 sat(designLegal ∧ ¬ᾱ(P))（過剰報告方向は v1 の completeness-gap と同じ哲学）／enabledness sat(ᾱg ∧ ¬∨designGuards)／イベント 1 ステップ模擬（2 状態スクリプト：設計フレーム込みの完全ステップ ∧ ᾱg(pre) ∧ ¬(f̄ ∧ 要件フレーム)）／シナリオ再生（accept=unsat→core、reject=sat→model）。
+- **Quint は ᾱ(P) を追加不変条件としてロワリングに載せた第 2 実行**：違反 trace の帰責成分が要件側なら到達可能な refinement-violation。設計不変条件の到達可能違反が先に出る場合は「マスクされている」と明示 skip（capability、設計 conflict の解消が先）。イベント模擬・enabledness・シナリオ再生は v1 では SMT 専任（capability skip 明記）、③にクロスチェック面は無い。
+- **mapping-gap は写像と両 IR の純関数**なので両バックエンド文書に同一内容で載る（質問時に重複排除）。
+
+### Q2 の決着（イベント模擬の抽象フレーム意味論）
+
+要件 effect が代入しない要件属性は ᾱ(a)(pre) == ᾱ(a)(post) を要求する（enumMap 属性は「同じ要件値クラスに属す ⇔」の iff 連言に展開）。写像されていない属性のフレーム等式は検査不能のため課さない（著述ガイドに明記）。
+
+### 検証マトリクス（実測、2026-08-29）
+
+| 対象 | 結果 | 証拠 |
+|---|---|---|
+| refinement conformance（`tests/refinement.test.ts`、5件） | ✔ | smt/quint/cross-check golden バイト一致＋再実行同一。planted 欠陥全種：**refinement-violation OB-1（静的 model ＋ Quint 到達 trace の両建て）**・SC-2（reject 許容）・enabledness gap（OB-2+TR-2）・mapping-gap（属性閉包）・OB-3 waived（unmapped 台帳の理由文言）。劣化：写像欠如→absent-input×5、ハッシュ改竄→stale-input（乖離側を明記）、ユニット項目欠如→absent-input |
+| 自己検証の実効 | ✔ | フェーズ③ kind をスキーマに追加する前の実行で、書き込み側自己検証が文書を unavailable に降格し kind 欠落を検出（是正2 の再発防止が実際に機能）。あわせて設計ツールの stdout も「書かれた文書の真実」を返すよう統一 |
+| intent-e2e フェーズ③ブロック（+2件） | ✔ | 実ディスパッチャ経由で ir-valid passed / smt failed（refinement-violation・mapping-gap・inputs 3・OB-3 waived）、doctor が要件再検証後に refinement-stale 行（`--single` 修復コマンド付き） |
+| **実サンドボックス実射**（v0.3.0 からのアップグレード） | ✔ | upgrade refresh 28 ファイル→compose、ディスパッチャ実射：SMT＝静的 refinement-violation OB-1・SC-2・enabledness・mapping-gap、**Quint bounded（実 Apalache）＝到達 trace 付き refinement-violation OB-1**（closing/0→closed/0）＋simulation では出なかった deadlock gap も検出、doctor refinement-stale 遷移、検証後は掃除済み |
+| リグレッション | ✔ | 全 79 テスト green、v1・①・② golden バイト同一、validator VALID、7 ハーネス全ビルド OK |
+
+### マージ済み PR コメントの完全対応監査（2026-08-29）
+
+全 PR のレビューコメントを再監査：#6=6/6、#7=7/7、#8=0、#9=有効 3 対応＋誤検出 1 検証。唯一の部分対応だった **#7 の 7 件目（doctor のユニット単位判定）を完全対応**：設計バックエンドは検証を実際に完走したユニットを契約2 の `checked[]` に `unit:<name>` として記録し（フェーズ①で導入した check-family 台帳と同じ語彙・targetId の unit: 名前空間）、doctor の verified 判定は「バックエンド JSON の存在」から「非 unavailable なバックエンド文書の checked[] にそのユニットが載っていること」へ厳格化——clean なユニットと一度も走らなかったユニットがファイル単体で区別できるようになった。golden 再生成、e2e に completion-evidence アサーション追加。

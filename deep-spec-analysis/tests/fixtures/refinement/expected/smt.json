@@ -1,0 +1,132 @@
+{
+  "backend": "smt",
+  "irVersion": "1.0.0",
+  "irHash": "7106691451957f9b3c33f9fd201865194f0a1f959e4c9a8b953dc600bb31052a",
+  "method": "exhaustive",
+  "inputs": [
+    {
+      "artifact": "construction/deep-spec-analysis-functional-verify/deep-spec-analysis-functional-formal-model.md",
+      "sha256": "b4d8d288f174947a5f9c5c62573c23941c1212669204366200dba292fccdf787"
+    },
+    {
+      "artifact": "construction/deep-spec-analysis-functional-verify/deep-spec-analysis-refinement-map.md",
+      "sha256": "83ba67ab1d6f00aa00e834d78ce356b0655a91c5da7e5bddacc48e68401989fb"
+    },
+    {
+      "artifact": "inception/deep-spec-analysis-verify/deep-spec-analysis-formal-model.md",
+      "sha256": "8dc8848ec64bf128df9a8e730d5e3499abd2c1e9e8848d6ee5f4e9b90cfc8342"
+    }
+  ],
+  "checked": [
+    "unit:u1-orders"
+  ],
+  "findings": [
+    {
+      "kind": "completeness-gap",
+      "frRefs": [
+        "FR-2"
+      ],
+      "targets": [
+        "OB-2",
+        "TR-2"
+      ],
+      "witness": {
+        "model": {
+          "ticket.phase": "new",
+          "ticket.value": 0
+        }
+      },
+      "unit": "u1-orders",
+      "detail": "The requirements event OB-2 applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers."
+    },
+    {
+      "kind": "completeness-gap",
+      "frRefs": [],
+      "targets": [
+        "TR-1"
+      ],
+      "witness": {
+        "model": {
+          "ticket.phase": "closing",
+          "ticket.value": 0
+        }
+      },
+      "unit": "u1-orders",
+      "detail": "No rule for trigger \"finish\" applies to the witness state: the behavior of this input region is unspecified."
+    },
+    {
+      "kind": "completeness-gap",
+      "frRefs": [],
+      "targets": [
+        "TR-2"
+      ],
+      "witness": {
+        "model": {
+          "ticket.phase": "new",
+          "ticket.value": 0
+        }
+      },
+      "unit": "u1-orders",
+      "detail": "No rule for trigger \"confirm\" applies to the witness state: the behavior of this input region is unspecified."
+    },
+    {
+      "kind": "refinement-violation",
+      "frRefs": [
+        "FR-1"
+      ],
+      "targets": [
+        "OB-1"
+      ],
+      "witness": {
+        "model": {
+          "ticket.phase": "closed",
+          "ticket.value": 0
+        }
+      },
+      "unit": "u1-orders",
+      "detail": "A design-legal state of unit u1-orders violates requirements obligation OB-1 under the refinement map (witness design state attached). The design admits what the verified requirements forbid."
+    },
+    {
+      "kind": "refinement-violation",
+      "frRefs": [
+        "FR-1"
+      ],
+      "targets": [
+        "SC-2"
+      ],
+      "witness": {
+        "model": {
+          "ticket.phase": "closed",
+          "ticket.value": 0
+        }
+      },
+      "unit": "u1-orders",
+      "detail": "Reject scenario SC-2 is still admitted by unit u1-orders under the refinement map: the design does not exclude an example the requirements reject (witness design state attached)."
+    },
+    {
+      "kind": "mapping-gap",
+      "frRefs": [],
+      "targets": [
+        "attr:order.note"
+      ],
+      "witness": {
+        "refs": [
+          {
+            "artifact": "construction/deep-spec-analysis-functional-verify/deep-spec-analysis-refinement-map.md",
+            "element": "units[u1-orders]"
+          }
+        ]
+      },
+      "unit": "u1-orders",
+      "detail": "requirements attribute \"order.note\" is neither mapped by attrMap nor listed in unmapped[] — silence is a contract violation"
+    }
+  ],
+  "skipped": [
+    {
+      "target": "OB-3",
+      "reason": "waived",
+      "unit": "u1-orders",
+      "detail": "depends on the unmapped audit flag"
+    }
+  ]
+}

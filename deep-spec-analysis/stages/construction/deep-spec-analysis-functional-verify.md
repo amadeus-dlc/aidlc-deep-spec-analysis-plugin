@@ -13,6 +13,8 @@ summary_confirmation: if-present
 produces:
   - deep-spec-analysis-functional-formal-model
   - deep-spec-analysis-functional-report
+optional_produces:
+  - deep-spec-analysis-refinement-map
 consumes:
   - artifact: requirements
     required: true
@@ -118,6 +120,32 @@ unformalized counts), and a `## Formal Model (IR)` section holding exactly
 one ```json fence with the design IR document (`irKind: "design"`, one
 `units[]` entry per unit). Nothing else goes in the fence.
 
+### Step 3b: Author the Refinement Map (when the requirements were verified)
+
+When the intent carries a verified requirements formal model
+(`<record>/inception/deep-spec-analysis-verify/deep-spec-analysis-formal-model.md`),
+author the refinement map (contract 4) BEFORE writing the formal model, so
+the sensors run the refinement checks on the same write:
+
+- Write `deep-spec-analysis-refinement-map.md` in this stage's record dir:
+  an H1 title, a short `## Map Summary`, and a `## Refinement Map (contract 4)`
+  section holding exactly one ```json fence. Authoring rules are in
+  `{{HARNESS_DIR}}/knowledge/aidlc-architect-agent/deep-spec-refinement-map-authoring.md`.
+- Per unit: `attrMap` defines every REQUIREMENTS attribute over DESIGN
+  attributes (an expression for bool/int, a total `enumMap` for enums —
+  merging design values is allowed); `eventMap` names the design transitions
+  that simulate each requirements event (or records a human-approved
+  `waived`); `unmapped[]` is the no-silence ledger for everything this unit
+  deliberately does not represent.
+- Set `requirementsIrHash` and `designIrHash` to the sha256 of the canonical
+  (key-sorted) JSON of the two IR fences — a later drift in either document
+  turns every refinement check into an explicit `stale-input` skip.
+- The closure rule is mechanical: every requirements obligation, scenario,
+  and attribute must be mapped, waived, or in `unmapped[]` — anything else
+  becomes a `mapping-gap` finding.
+- No requirements formal model → skip this step; the backends will not run
+  refinement checks and nothing is silently claimed.
+
 ### Step 4: React to Sensor Verdicts, then Collect Findings
 
 Three sensors fire on the write, in order: `deep-spec-design-ir-valid`
@@ -180,10 +208,13 @@ concrete revision you proposed. Apply them now — the human never hand-edits:
   (functional-spec.md's mermaid ER diagram or rules summary), regenerate the
   affected derived views in the same edit — never let source and view drift.
 - NEVER edit `requirements.md` or `deep-spec-analysis-formal-model.md`.
-- Close the loop: redo Step 3 for the affected units (rewrite the formal
-  model; the sensors re-fire) and collect the second-pass findings. A
-  revision that provokes a NEW finding goes back through Step 5 before
-  reporting.
+- Close the loop: redo Steps 3 AND 3b for the affected units — an applied
+  revision changes the design IR, so the refinement map's `designIrHash`
+  must be recomputed (and its mappings adjusted if the revision changed the
+  design vocabulary) BEFORE rewriting the formal model; otherwise every
+  refinement check in the second pass degrades to `stale-input`. Then the
+  sensors re-fire and the second-pass findings are collected. A revision
+  that provokes a NEW finding goes back through Step 5 before reporting.
 - Zero `B.` answers → skip this step.
 
 ### Step 7: Write the Functional Analysis Report
@@ -203,6 +234,11 @@ Write `deep-spec-analysis-functional-report.md`:
 - **Applied Revisions** — for every `B.`: the artifact, before/after text,
   derived views regenerated, and the second-pass verification result.
 - **Unformalized Design** — every unit's `unformalized[]` ledger, verbatim.
+- **Refinement Coverage** — when the refinement checks ran: per unit, every
+  requirements obligation/scenario × status (checked per backend /
+  refinement-violation / mapping-gap / waived / skipped with reason), plus
+  the map's `unmapped[]` ledger verbatim. When they did not run, say why
+  (no requirements model / no map / stale hashes) — never silence.
 - **Requirements-side Suggestions** — findings whose resolution belongs
   upstream, with suggested wording and the `deep-spec-analysis-verify`
   re-run command (never applied by this stage).
