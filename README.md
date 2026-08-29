@@ -1,6 +1,8 @@
 # aidlc-deep-spec-analysis-plugin
 
-Neurosymbolic requirements verification for [AI-DLC v2](https://github.com/awslabs/aidlc-workflows), packaged as an additive plugin. An LLM formalizes `requirements.md` into a backend-neutral IR; deterministic solver backends — z3 (SMT) and [Quint](https://quint-lang.org/) — check it for contradictions, completeness gaps, and scenario violations; every finding returns to the human as a structured A/B question. Core is never modified: disable the plugin and the vanilla workflow remains.
+English | [日本語](README.ja.md)
+
+Neurosymbolic requirements verification for [AI-DLC v2](https://github.com/awslabs/aidlc-workflows), packaged as an additive plugin. An LLM formalizes `requirements.md` into a backend-neutral IR; deterministic solver backends — z3 (SMT) and [Quint](https://quint-lang.org/) — check it for contradictions, completeness gaps, and scenario violations; every finding returns to the human as a structured A/B question. Core is never modified: disable the plugin and the vanilla workflow remains. Inspired by Kiro's [Deep Spec Analysis](https://kiro.dev/blog/deep-spec-analysis/).
 
 This is the development workspace. The plugin itself lives in [`deep-spec-analysis/`](deep-spec-analysis/) — see its [README](deep-spec-analysis/README.md) for the full design.
 
@@ -97,8 +99,8 @@ bun ../aidlc-workflows/core/tools/aidlc-plugin-test.ts . --install <aidlc-projec
 
 ## Documentation
 
-- Usage guide — fresh projects and mid-project adoption, in Japanese: [docs/usage.md](docs/usage.md)
-- Illustrated architecture overview, in Japanese: [docs/architecture.md](docs/architecture.md)
+- Usage guide — fresh projects and mid-project adoption: [docs/usage.md](docs/usage.md)
+- Illustrated architecture overview: [docs/architecture.md](docs/architecture.md)
 - Plugin design and stage walkthrough: [deep-spec-analysis/README.md](deep-spec-analysis/README.md)
 - Design decisions, spike results, deviations from the draft: [deep-spec-analysis/docs/decisions.md](deep-spec-analysis/docs/decisions.md)
 

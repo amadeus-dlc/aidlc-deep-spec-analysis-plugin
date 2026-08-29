@@ -1,106 +1,108 @@
-# Deep Spec Analysis のしくみ
+# How Deep Spec Analysis works
 
-要件書を LLM が形式化し、ソルバーが決定論的に検査し、発見は必ず人間の二択に戻す——ニューロシンボリック要件検証を [AI-DLC v2](https://github.com/awslabs/aidlc-workflows) に足すプラグイン。core は一切変更しない。
+English | [日本語](architecture.ja.md)
 
-- プラグイン: `aidlc-deep-spec-analysis@aidlc-plugins`
-- バックエンド: SMT (z3) + Quint
-- 決定論: 同一 IR + 同一環境 ⇒ バイト一致の出力
+An LLM formalizes the requirements document, solvers check it deterministically, and every discovery goes back to the human as a two-way choice — a neurosymbolic requirements-verification plugin added on top of [AI-DLC v2](https://github.com/awslabs/aidlc-workflows). Core is never modified.
 
-## §1 ニューロシンボリックのループ
+- Plugin: `aidlc-deep-spec-analysis@aidlc-plugins`
+- Backends: SMT (z3) + Quint
+- Determinism: identical IR + identical environment ⇒ byte-identical output
 
-確率的な仕事（自然言語の形式化）は LLM に、決定論的な仕事（矛盾・完全性・シナリオの検査）はソルバーに割り当てる。両者の受け渡し点がバックエンド中立の IR で、検査結果は人間の判断（A/B/X）を経てのみ要件に還流する——B承認された改訂はステージが適用し、再検証まで行う。
+## §1 The neurosymbolic loop
+
+Probabilistic work (formalizing natural language) goes to the LLM; deterministic work (checking contradictions, completeness, scenarios) goes to the solvers. The hand-off point between the two is the backend-neutral IR, and verification results flow back into the requirements only through a human decision (A/B/X) — B-approved revisions are applied by the stage, re-verification included.
 
 ```mermaid
 flowchart LR
-    REQ["requirements.md<br/>（要件書）"]
-    LLM["LLM 形式化<br/>product agent · EARS 分類"]
-    IR["formal-model.md<br/>バックエンド中立 IR"]
-    subgraph SENSORS["決定論的検査（センサー）"]
-        VAL["IR スキーマ検証"]
-        Z3["z3<br/>SMT · 網羅"]
-        QUINT["Quint<br/>模擬 / 有界"]
+    REQ["requirements.md"]
+    LLM["LLM formalization<br/>product agent · EARS classification"]
+    IR["formal-model.md<br/>backend-neutral IR"]
+    subgraph SENSORS["deterministic checks (sensors)"]
+        VAL["IR schema validation"]
+        Z3["z3<br/>SMT · exhaustive"]
+        QUINT["Quint<br/>simulation / bounded"]
         VAL --> Z3
         VAL --> QUINT
-        Z3 <-->|相互照合| QUINT
+        Z3 <-->|cross-check| QUINT
     end
-    FIND["deep-spec-verify/*.json<br/>（findings）"]
-    ABX["A / B / X 質問"]
-    HUMAN["人間が判断"]
-    REQ -->|読む| LLM
-    LLM -->|IR を書く| IR
-    IR -->|書き込みで発火| SENSORS
+    FIND["deep-spec-verify/*.json<br/>(findings)"]
+    ABX["A / B / X questions"]
+    HUMAN["human decides"]
+    REQ -->|read| LLM
+    LLM -->|writes the IR| IR
+    IR -->|write fires| SENSORS
     SENSORS --> FIND
     FIND --> ABX
     ABX --> HUMAN
-    HUMAN -.->|"B承認の改訂を適用（再検証つき）"| REQ
+    HUMAN -.->|"apply B-approved revisions (with re-verification)"| REQ
 ```
 
-要件はループを一周して人間に戻る。B（改訂案採用）と答えた改訂はステージが `requirements.md` に適用し、センサーを再実行して解消を確認する。無断の書き換えはない——適用されるのは人間が承認した文面だけで、決定論的なセンサー群自体は読み取り専用。
+The requirements travel the loop once and come back to the human. Revisions answered B (adopt the proposed revision) are applied to `requirements.md` by the stage, which re-runs the sensors to confirm resolution. There are no unsanctioned rewrites — only human-approved text is ever applied, and the deterministic sensors themselves are read-only.
 
-## §2 ステージの実行順序
+## §2 Where the stage runs
 
-Inception フェーズに `deep-spec-analysis-verify` ステージとして挿し込まれ、次の順で進む。なおステージは `scopes: [enterprise, feature]` を宣言しているため、この2スコープの intent でのみ実行される（`classic` スコープの intent ではエンジンが SKIP に振る——実 intent で確認済みの仕様）。
+It is inserted into the Inception phase as the `deep-spec-analysis-verify` stage and proceeds in this order. The stage declares `scopes: [enterprise, feature]`, so it runs only for intents with those two scopes (a `classic`-scope intent routes it to SKIP — behavior confirmed against a real intent).
 
-**後入れ対応**：compose は追加合成なので、AI-DLC 運用中のプロジェクトへ途中からインストールしても機能する。導入前から存在する intent に対しても `/aidlc --stage deep-spec-analysis-verify --single`（compose される `/deep-spec-analysis-verify` スキルと同じもの）で、ワークフローを進めずに既存の requirements.md へ検査だけをかけられる。findings はその intent のレコード配下に書かれる。制約はスコープのみ（classic は single モードでも拒否）。さらに**検査漏れの把握は自動**：インストーラは導入直後にカバレッジスキャンで未検査 intent を実行コマンド付きで列挙し、以後は `/aidlc --doctor` が「N/M eligible intents verified」の行と未検査・stale（検査後に要件が変更された）intent の advisory 行を出し続ける。この後入れ経路は検出機構込みで `tests/intent-e2e.test.ts` が毎回回帰検証する。
+**Late adoption**: compose is additive, so installing into a project already running AI-DLC works mid-flight. Intents that predate the install can still have their existing requirements.md verified — without advancing the workflow — via `/aidlc --stage deep-spec-analysis-verify --single` (the same thing as the composed `/deep-spec-analysis-verify` skill). Findings are written under that intent's record. The only restriction is scope (classic is refused even in single mode). Furthermore, **spotting the verification debt is automatic**: right after install, the installer's coverage scan lists unverified intents with the exact command to run, and from then on `/aidlc --doctor` keeps printing an "N/M eligible intents verified" row plus advisory rows for unverified and stale intents (requirements changed after their last verification). This late-adoption path, detection included, is regression-tested on every run by `tests/intent-e2e.test.ts`.
 
-1. **形式化** — product agent が各 FR / NFR を EARS 分類し、IR を `deep-spec-analysis-formal-model.md` の単一 JSON フェンスに書き込む。
-2. **センサー発火** — 書き込みを検知して 3 センサーが順に走る：IR スキーマ検証 → SMT（z3）→ Quint。findings は `deep-spec-verify/*.json` に書かれる。
-3. **人間ゲート** — ステージが findings を質問に変換する — **A.** 現状維持 / **B.** 改訂案を採用 / **X.** その他。全件が人間の回答を待つ。
-4. **改訂の適用** — Bで承認された改訂をステージが `requirements.md` に適用し（承認文面のみ・verbatim）、形式化とセンサーを再実行して解消を確認する。
-5. **レポート** — `deep-spec-analysis-report.md` にカバレッジ表（義務 × バックエンド）と、適用済み改訂の before/after・第2パス検証結果が並ぶ。
+1. **Formalize** — the product agent EARS-classifies each FR/NFR and writes the IR into a single JSON fence in `deep-spec-analysis-formal-model.md`.
+2. **Sensors fire** — the write triggers three sensors in order: IR schema validation → SMT (z3) → Quint. Findings are written to `deep-spec-verify/*.json`.
+3. **Human gate** — the stage converts findings into questions: **A.** keep as-is / **B.** adopt the proposed revision / **X.** other. Every finding waits for a human answer.
+4. **Apply revisions** — the stage applies B-approved revisions to `requirements.md` (approved text only, verbatim), then re-runs formalization and the sensors to confirm resolution.
+5. **Report** — `deep-spec-analysis-report.md` carries the coverage table (obligation × backend) and the applied revisions with before/after plus the second-pass verification result.
 
-## §3 何を検査し、何を約束するか
+## §3 What is checked, what is promised
 
-| 検査 | 内容 |
+| Check | Content |
 |---|---|
-| 矛盾 (contradiction) | 要件同士が同時に満たせない組み合わせを SMT が網羅的に探す |
-| 完全性ギャップ (completeness) | どの要件も挙動を定めていない入力領域の穴を検出する |
-| シナリオ違反 (scenario) | 期待シナリオの成立を両バックエンドで検証し、判定を相互照合して形式化ミス自体も炙り出す |
+| Contradiction (conflict) | SMT exhaustively searches for combinations of requirements that cannot hold together |
+| Completeness gap | Detects input regions whose behavior no requirement defines |
+| Scenario violation | Both backends verify that expected scenarios hold, and cross-check each other's verdicts — surfacing formalization mistakes themselves |
 
-沈黙のギャップは作らない——各義務は必ず次の 4 状態のいずれかとしてカバレッジ表に現れる。
+No silent gaps: every obligation appears in the coverage table in exactly one of four states.
 
-| 状態 | 意味 |
+| State | Meaning |
 |---|---|
-| `checked` | 検査済み |
-| `skipped` | 理由付きスキップ |
-| `unavailable` | ソルバー不在 |
-| `unverified` | 未検証と明示 |
+| `checked` | Verified |
+| `skipped` | Skipped with a reason |
+| `unavailable` | Solver missing |
+| `unverified` | Explicitly unverified |
 
-ソルバーが無くてもステージは止まらず、助言的 finding と `/aidlc --doctor` のヒントに落ちる。決定論も約束のひとつ：同じ IR と同じ環境なら出力はバイト一致する（固定シード・正準ソート・タイムスタンプなし）。conformance テストがバイト単位で担保する。
+Even without solvers the stage never stops; the situation degrades into advisory findings and `/aidlc --doctor` hints. Determinism is one of the promises: given the same IR and the same environment, output is byte-identical (fixed seeds, canonical sorting, no timestamps) — enforced byte-for-byte by the conformance tests.
 
-## §4 配布 — ビルドから compose まで
+## §4 Distribution — from build to compose
 
-ビルド成果物はハーネスごとの「本物のホストプラグイン」。Claude Code なら通常のプラグインとして導入し、セッション開始時の hook がプロジェクトの `.claude/` ツリーへ合成（compose）する。
+The build artifacts are "real host plugins", one per harness. On Claude Code you install it like any plugin, and a session-start hook composes it into the project's `.claude/` tree.
 
 ```mermaid
 flowchart LR
-    subgraph DEV["このワークスペース（開発側）"]
+    subgraph DEV["this workspace (development)"]
         SRC["authored source<br/>stages/ · sensors/<br/>tools/ · knowledge/ · contributions/"]
-        DIST["dist/claude/<br/>本物の Claude Code プラグイン<br/>.claude-plugin/ · hooks/compose.ts"]
+        DIST["dist/claude/<br/>a real Claude Code plugin<br/>.claude-plugin/ · hooks/compose.ts"]
         SRC -->|aidlc-plugin-build.ts| DIST
     end
-    subgraph PROJ["利用者の AI-DLC プロジェクト"]
-        HOOK["SessionStart hook<br/>起動ごとに compose"]
-        TREE[".claude/ ツリー<br/>sensors/ tools/ stages/<br/>knowledge/ skills/"]
-        HOOK -->|マージ| TREE
+    subgraph PROJ["user's AI-DLC project"]
+        HOOK["SessionStart hook<br/>composes on every launch"]
+        TREE[".claude/ tree<br/>sensors/ tools/ stages/<br/>knowledge/ skills/"]
+        HOOK -->|merge| TREE
     end
     DIST -->|/plugin install| HOOK
 ```
 
-最短の導入は同梱インストーラ：`bun deep-spec-analysis/scripts/install.ts --project <project> [--harness claude]` が build → compose を一括実行する（store系ハーネスは `dist/` から直接 compose しプロジェクトへは何もコピーしない。ストアなしの Kiro / Kiro IDE / Cursor のみ、ホストの流儀どおり projection をプロジェクトルートへフォルダドロップしてから compose。`--dry-run` で事前検証。compose は冪等なので再実行も安全）。ストア経由なら Claude Code は `/plugin marketplace add` + `/plugin install aidlc-deep-spec-analysis@aidlc-plugins`、Codex CLI なら `dist/codex/` を対象に `codex plugin marketplace add` + `codex plugin add aidlc-deep-spec-analysis@aidlc-plugins`（初回のみ hook の信頼承認。hook は最初の対話で遅延発火し、`.codex/` ツリーへ compose する）。ストアを持たないハーネス（Kiro など）は手動コピー：`dist/<harness>/` をプロジェクトへ `cp` で投下し、`aidlc plugin sync`（または hook の `compose.ts` を直接 bun 実行）で compose する。この経路には導入時の信頼ゲートがなく、コピーすること自体が信頼の判断になる点に注意。手順は [README](../README.md) の Quickstart。プロジェクトの外には何も置かれず、無効化すれば vanilla に再 compose される——core は無改変のまま。
+The shortest install is the bundled installer: `bun deep-spec-analysis/scripts/install.ts --project <project> [--harness claude]` runs build → compose in one go (store harnesses compose straight from `dist/` and copy nothing into the project; only the storeless Kiro / Kiro IDE / Cursor get the projection folder-dropped into the project root first, as those hosts expect. `--dry-run` validates in advance; compose is idempotent, so re-running is safe). Via a store, Claude Code uses `/plugin marketplace add` + `/plugin install aidlc-deep-spec-analysis@aidlc-plugins`; Codex CLI targets `dist/codex/` with `codex plugin marketplace add` + `codex plugin add aidlc-deep-spec-analysis@aidlc-plugins` (a one-time hook trust prompt; the hook fires lazily on the first interaction and composes into the `.codex/` tree). Harnesses without a store (Kiro, etc.) install by manual copy: `cp` the `dist/<harness>/` projection into the project and compose with `aidlc plugin sync` (or by running the hook's `compose.ts` directly under bun). Note that this path has no install-time trust gate — copying is itself the trust decision. Steps are in the [README](../README.md) Quickstart. Nothing is placed outside the project, and disabling the plugin recomposes back to vanilla — core stays unmodified.
 
-## §5 ワークスペースの 3 区画
+## §5 The three-part workspace
 
-リポジトリは「作る場所」「道具の供給元」「試す場所」を分けている。
+The repository separates "where you build", "where the tooling comes from", and "where you try it".
 
 ```text
 aidlc-deep-spec-analysis-plugin/
-├── deep-spec-analysis/          # プラグイン本体（authored source + tests + dist/）
-│   ├── stages/ sensors/ tools/  # ステージ定義・3 センサー・doctor
-│   ├── tests/                   # バイト一致 conformance スイート
-│   └── docs/decisions.md        # 設計判断の正典
-├── aidlc-workflows/             # フレームワーク submodule — validate/build/test の供給元。編集しない
-└── deep-spec-analysis-sandbox/  # compose 検証のターゲット（gitignored・使い捨て）
+├── deep-spec-analysis/          # the plugin itself (authored source + tests + dist/)
+│   ├── stages/ sensors/ tools/  # stage definitions · sensors · doctor
+│   ├── tests/                   # byte-exact conformance suites
+│   └── docs/decisions.md        # the canonical record of design decisions
+├── aidlc-workflows/             # framework submodule — supplies validate/build/test; never edited
+└── deep-spec-analysis-sandbox/  # compose-verification target (gitignored, disposable)
 ```
 
-ツールチェーンはすべて submodule 側から借りる：`aidlc-plugin-validate.ts`（規約検査）→ `aidlc-plugin-build.ts`（7 ハーネスへ emit）→ `aidlc-plugin-test.ts --install`（compose のドライラン。ターゲットは変更しない）。
+The entire toolchain is borrowed from the submodule: `aidlc-plugin-validate.ts` (convention checks) → `aidlc-plugin-build.ts` (emits to 7 harnesses) → `aidlc-plugin-test.ts --install` (a compose dry-run that never modifies the target).

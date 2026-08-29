@@ -1,11 +1,15 @@
 # deep-spec-analysis — AIDLC plugin
 
+English | [日本語](README.ja.md)
+
 Kiro-style **Deep Spec Analysis** for AI-DLC v2: neurosymbolic requirements
 verification as an additive plugin. The LLM formalizes `requirements.md`
 into a backend-neutral IR; deterministic solver backends (z3/SMT and Quint)
 check it for contradictions, completeness gaps, and scenario violations; and
 every finding comes back to the human as a structured A/B question. Core is
 never modified — disable the plugin and the vanilla workflow remains.
+Inspired by Kiro's
+[Deep Spec Analysis](https://kiro.dev/blog/deep-spec-analysis/).
 
 ## What it adds
 
