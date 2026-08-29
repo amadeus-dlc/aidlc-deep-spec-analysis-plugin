@@ -15,6 +15,7 @@ ship trigger (OB-6), an invariant the event machine fails to preserve
 ```json
 {
   "irVersion": "1.0.0",
+  "sourceDigest": "800302a36b3e68472ab2ab9beb1f70472d70dcc8457881acf1c21a7b53cf3f42",
   "schema": {
     "entities": [
       {

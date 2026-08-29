@@ -3,7 +3,7 @@ id: deep-spec-ir-valid
 kind: deterministic
 command: bun {{HARNESS_DIR}}/tools/aidlc-sensor-deep-spec-ir-valid.ts
 default_severity: advisory
-description: Validates the deep-spec formal model IR against the contract-1 JSON Schema and reverse-checks every frRefs id against requirements.md (deep-spec-analysis plugin, advisory)
+description: Validates the deep-spec formal model IR against the contract-1 JSON Schema, reverse-checks every frRefs id against requirements.md, and verifies the sourceDigest anchor (sha256 of requirements.md) so a drifted source is rejected (deep-spec-analysis plugin, advisory)
 category: document-shape
 matches: "**/deep-spec-analysis-formal-model.md"
 input_schema:

@@ -9,9 +9,9 @@ AI-DLC v2 のための Kiro 流 **Deep Spec Analysis**：追加合成プラグ�
 | 部品 | ファイル | 目的 |
 |---|---|---|
 | ステージ | `stages/inception/deep-spec-analysis-verify.md` | `requirements-analysis` 直後の Inception ステージ（scopes: `enterprise`, `feature`）。`deep-spec-analysis-formal-model` + `deep-spec-analysis-report` を生成 |
-| 契約1（IR） | `tools/data/deep-spec-ir-schema.json` | バックエンド中立の形式モデル：schema / obligations（EARS nature）/ scenarios / background。SMT-LIB や Quint は一切含まない |
+| 契約1（IR） | `tools/data/deep-spec-ir-schema.json` | バックエンド中立の形式モデル：schema / obligations（EARS nature）/ scenarios / background。`sourceDigest`（requirements.md の sha256）で正確なソーステキストにアンカーされる。SMT-LIB や Quint は一切含まない |
 | 契約2（findings） | `tools/data/deep-spec-findings-schema.json` | `<record>/inception/deep-spec-analysis-verify/deep-spec-verify/<backend>.json` の正規化された各バックエンド結果：findings、理由付き `skipped[]`（無沈黙）、`unavailable`、正準ソート |
-| IR センサー | `sensors/aidlc-deep-spec-ir-valid.md` + `tools/aidlc-sensor-deep-spec-ir-valid.ts` | スキーマ適合＋意味検査＋frRefs の requirements.md 逆引き検証 |
+| IR センサー | `sensors/aidlc-deep-spec-ir-valid.md` + `tools/aidlc-sensor-deep-spec-ir-valid.ts` | スキーマ適合＋意味検査＋frRefs の requirements.md 逆引き検証＋`sourceDigest` の再計算照合（ソースドリフトを拒否。エラーが期待値を提示） |
 | SMT バックエンド | `sensors/aidlc-deep-spec-verify-smt.md` + `tools/aidlc-sensor-deep-spec-verify-smt.ts` | TypeScript で IR→SMT-LIB へコンパイルし、z3（`z3-solver` WASM）を子プロセス実行。矛盾（unsat core）・完全性ギャップ（witness モデル）・シナリオ検査。`method: exhaustive` |
 | Quint バックエンド | `sensors/aidlc-deep-spec-verify-quint.md` + `tools/aidlc-sensor-deep-spec-verify-quint.ts` | TypeScript で IR→Quint へコンパイルし、`quint` CLI にシェルアウト。到達可能な不変条件違反（ステップトレース）・デッドロックギャップ・leads-to temporal（bounded）・シナリオ再検査。Apalache 検出時 `method: bounded`、それ以外はシード固定の `simulation` |
 | クロスチェック | 両バックエンドが書く | `deep-spec-verify/cross-check.json` — シナリオ判定をバックエンド間で照合。`cross-check-disagreement` は要件の欠陥ではなく形式化/コンパイラの欠陥を示す（FR8.2） |
@@ -21,7 +21,7 @@ AI-DLC v2 のための Kiro 流 **Deep Spec Analysis**：追加合成プラグ�
 | 設計検証ステージ（フェーズ②） | `stages/construction/deep-spec-analysis-functional-verify.md` | `functional-design` 後の Construction 集約ステージ（scopes: `enterprise`, `feature`）：全ユニットのエンティティ/ルール/状態機械を設計 IR（契約3、`tools/data/deep-spec-design-ir-schema.json`——遷移・`ignores[]`・`initial` を持つネイティブ状態機械）へ形式化し、設計バックエンドを実行、A/B/X ゲート、承認済み設計改訂の適用（上流凍結：requirements には決して触れない） |
 | 設計バックエンド（フェーズ②） | `sensors/aidlc-deep-spec-design-{ir-valid,verify-smt,verify-quint}.md` + `tools/aidlc-sensor-deep-spec-design-*.ts` + `tools/deep-spec-design-lib.ts` | コンパイルダウン再利用：各ユニットを契約1 文書へロワリングし、実証済み v1 バックエンドを子プロセス実行。findings は設計語彙（DOB/TR/SM/DSC、ユニット帰責）へリマップ。合成 vacuity 相乗りによる新 kind：`unreachable`（デッドガード；bounded モードの到達不能状態も、予算キャップ付き）と `redundancy`（シャドーイング、相互ペアは畳み込み）。`deterministic: false` の機械は `waived` skip |
 | refinement（フェーズ③） | `tools/data/deep-spec-refinement-map-schema.json` + `tools/deep-spec-refinement-lib.ts` + knowledge | 人間がゲートする抽象化関数（契約4：attrMap 式／全域 enumMap、eventMap、無沈黙台帳 unmapped[]、二重コンテンツハッシュアンカー）と、それが設計バックエンド内で可能にする検査：ᾱ 代入した要件不変条件（静的は v1 z3 子プロセス、到達可能は Quint トレース）、イベントの enabledness と抽象フレーム付き 1 ステップ模擬、シナリオ再生、`mapping-gap` 閉包 findings。写像の欠如・陳腐化は明示 skip になり、決して沈黙しない |
-| doctor | `tools/deep-spec-analysis-doctor.ts` | 可用性の advisory 検査（z3-solver・node・quint・Apalache、導入コマンド付き）、要件検証カバレッジ（unverified/stale intent）、既存設計成果物の report-only 構造負債スキャン |
+| doctor | `tools/deep-spec-analysis-doctor.ts` | 可用性の advisory 検査（z3-solver・node・quint・Apalache、導入コマンド付き）、要件検証カバレッジ（unverified/stale intent——stale 判定は `sourceDigest` のコンテンツハッシュ、mtime はレガシーフォールバックのみ）、既存設計成果物の report-only 構造負債スキャン |
 
 ## インストールと前提
 

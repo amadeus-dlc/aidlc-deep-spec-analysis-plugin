@@ -64,6 +64,11 @@ pointing at the exact FR/NFR ids. Map Gherkin acceptance criteria to
 `background[]`. Any requirement you cannot formalize goes into
 `unformalized[]` with the reason — never drop one silently.
 
+Stamp the IR's `sourceDigest` with the sha256 of the requirements.md you
+formalized (run `shasum -a 256 <path>` — never guess it): this anchors the
+verification to the exact source text, and `deep-spec-ir-valid` rejects a
+missing or drifted digest.
+
 Then write the `deep-spec-analysis-formal-model` artifact with your file-write tool
 (the sensors fire on that write): an H1 title, a short `## Model Summary`
 section (entities, obligation count by nature, scenario count, unformalized
@@ -129,7 +134,8 @@ revision you proposed. Apply them now — the human never hand-edits:
   stable; requirements answered `A.`/`X.` and everything else stay untouched.
   Never apply an edit the human did not approve.
 - Close the loop: redo Step 2 against the revised requirements (rewrite the
-  formal model; the sensors re-fire) and collect the second-pass findings.
+  formal model — including a fresh `sourceDigest` of the now-revised
+  requirements.md; the sensors re-fire) and collect the second-pass findings.
   Accepted revisions are expected to resolve their findings; if a revision
   provokes a NEW finding, put it to the human per Step 5 before reporting.
 - Zero `B.` answers → skip this step.
