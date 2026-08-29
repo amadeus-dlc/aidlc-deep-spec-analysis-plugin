@@ -26,7 +26,15 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { type Json, parseFlags, sha256 } from "./deep-spec-lib.ts";
+import { type Json, findRecordRoot, parseFlags, relArtifact, sha256 } from "./deep-spec-lib.ts";
+import {
+  REFINEMENT_MAP_BASENAME,
+  REQUIREMENTS_MODEL_RELPATH,
+  loadRefinementMap,
+  loadRequirementsIr,
+  planUnitRefinement,
+  runUnitRefinementSmt,
+} from "./deep-spec-refinement-lib.ts";
 import {
   DESIGN_IR_MAJOR_SUPPORTED,
   DESIGN_MODEL_BASENAME,
@@ -158,10 +166,62 @@ function main(): void {
     skipped.push(...remapped.skipped);
   }
 
-  writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: "exhaustive", findings, skipped });
+  // --- Phase 3: refinement against the verified requirements IR -------------
+  // Activated by the presence of the requirements formal model; a map that is
+  // missing, stale, or unit-less produces explicit skips, never silence.
+  const recordRoot = findRecordRoot(dirname(flags.outputPath));
+  const stageDir = dirname(flags.outputPath);
+  const req = recordRoot === null ? null : loadRequirementsIr(recordRoot);
+  let inputs: { artifact: string; sha256: string }[] | undefined;
+  if (req !== null) {
+    const reqTargets = [...req.obligations.map((o) => o.id), ...req.scenarios.map((s) => s.id)];
+    const skipAll = (reason: string, detail: string): void => {
+      for (const u of ir.units) {
+        for (const t of reqTargets) skipped.push({ target: t, reason, unit: u.unit, detail });
+      }
+    };
+    const { map, error: mapError } = loadRefinementMap(stageDir);
+    if (map === null) {
+      skipAll("absent-input", mapError ?? `no refinement map (${REFINEMENT_MAP_BASENAME}) was authored for this record`);
+    } else if (map.requirementsIrHash !== req.hash) {
+      skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
+    } else if (map.designIrHash !== irHash) {
+      skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR — re-author the map");
+    } else {
+      const mapPath = join(stageDir, REFINEMENT_MAP_BASENAME);
+      const reqModelPath = join(recordRoot as string, ...REQUIREMENTS_MODEL_RELPATH);
+      const mapArtifact = relArtifact(recordRoot, mapPath);
+      inputs = [
+        { artifact: relArtifact(recordRoot, flags.outputPath), sha256: sha256(readFileSync(flags.outputPath, "utf-8")) },
+        { artifact: mapArtifact, sha256: sha256(readFileSync(mapPath, "utf-8")) },
+        { artifact: relArtifact(recordRoot, reqModelPath), sha256: sha256(readFileSync(reqModelPath, "utf-8")) },
+      ];
+      for (const u of ir.units) {
+        const unitMap = map.units.find((m) => m.unit === u.unit);
+        if (!unitMap) {
+          for (const t of reqTargets) {
+            skipped.push({ target: t, reason: "absent-input", unit: u.unit, detail: `the refinement map has no entry for unit ${u.unit}` });
+          }
+          continue;
+        }
+        const plan = planUnitRefinement(u, unitMap, req, mapArtifact);
+        const res = runUnitRefinementSmt(u, req, plan, mapArtifact);
+        if (res.unavailable !== null) {
+          for (const t of reqTargets) {
+            skipped.push({ target: t, reason: "unavailable", unit: u.unit, detail: res.unavailable });
+          }
+          continue;
+        }
+        findings.push(...res.findings);
+        skipped.push(...res.skipped);
+      }
+    }
+  }
+
+  const emitted = writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: "exhaustive", inputs, findings, skipped });
   recomputeDesignCrossCheck(verifyDir, ir, irHash);
   process.stdout.write(
-    `${JSON.stringify({ pass: findings.length === 0, findings_count: findings.length, skipped_count: skipped.length, method: "exhaustive" })}\n`,
+    `${JSON.stringify({ pass: !emitted.unavailable && emitted.findingsCount === 0, findings_count: emitted.findingsCount, skipped_count: emitted.skippedCount, method: "exhaustive" })}\n`,
   );
   process.exit(0);
 }

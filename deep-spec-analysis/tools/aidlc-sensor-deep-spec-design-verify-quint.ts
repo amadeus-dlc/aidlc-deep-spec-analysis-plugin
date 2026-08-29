@@ -26,7 +26,15 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { type Json, isObject, parseFlags, sha256 } from "./deep-spec-lib.ts";
+import { type Json, findRecordRoot, isObject, parseFlags, relArtifact, sha256 } from "./deep-spec-lib.ts";
+import {
+  REFINEMENT_MAP_BASENAME,
+  REQUIREMENTS_MODEL_RELPATH,
+  loadRefinementMap,
+  loadRequirementsIr,
+  planUnitRefinement,
+  refinementQuintExtras,
+} from "./deep-spec-refinement-lib.ts";
 import {
   DESIGN_IR_MAJOR_SUPPORTED,
   DESIGN_MODEL_BASENAME,
@@ -274,11 +282,135 @@ function main(): void {
     }
   }
 
+  // --- Phase 3 (dynamic): alpha(P) joins the machine's invariant surface ----
+  // A violation trace whose violated component is a mapped requirements
+  // obligation is a REACHABLE refinement break. Scenario replay, event
+  // simulation, and enabledness are SMT-only in v1 (capability skips). The
+  // mapping-gap findings are a pure function of the map and both IRs, so both
+  // backend documents carry them identically (deduped at question time).
+  const recordRoot = findRecordRoot(dirname(flags.outputPath));
+  const stageDir = dirname(flags.outputPath);
+  const req = recordRoot === null ? null : loadRequirementsIr(recordRoot);
+  let inputs: { artifact: string; sha256: string }[] | undefined;
+  if (req !== null) {
+    const reqTargets = [...req.obligations.map((o) => o.id), ...req.scenarios.map((s) => s.id)];
+    const skipAll = (reason: string, detail: string): void => {
+      for (const u of ir.units) {
+        for (const t of reqTargets) skipped.push({ target: t, reason, unit: u.unit, detail });
+      }
+    };
+    const { map, error: mapError } = loadRefinementMap(stageDir);
+    if (map === null) {
+      skipAll("absent-input", mapError ?? `no refinement map (${REFINEMENT_MAP_BASENAME}) was authored for this record`);
+    } else if (map.requirementsIrHash !== req.hash) {
+      skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
+    } else if (map.designIrHash !== irHash) {
+      skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR — re-author the map");
+    } else {
+      const mapPath = join(stageDir, REFINEMENT_MAP_BASENAME);
+      const reqModelPath = join(recordRoot as string, ...REQUIREMENTS_MODEL_RELPATH);
+      const mapArtifact = relArtifact(recordRoot, mapPath);
+      inputs = [
+        { artifact: relArtifact(recordRoot, flags.outputPath), sha256: sha256(readFileSync(flags.outputPath, "utf-8")) },
+        { artifact: mapArtifact, sha256: sha256(readFileSync(mapPath, "utf-8")) },
+        { artifact: relArtifact(recordRoot, reqModelPath), sha256: sha256(readFileSync(reqModelPath, "utf-8")) },
+      ];
+      for (const u of ir.units) {
+        const unitMap = map.units.find((m) => m.unit === u.unit);
+        if (!unitMap) {
+          for (const t of reqTargets) {
+            skipped.push({ target: t, reason: "absent-input", unit: u.unit, detail: `the refinement map has no entry for unit ${u.unit}` });
+          }
+          continue;
+        }
+        const plan = planUnitRefinement(u, unitMap, req, mapArtifact);
+        findings.push(...plan.gaps);
+        for (const [id, st] of [...plan.obligationStatus.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+          if (st.kind === "waived") skipped.push({ target: id, reason: "waived", unit: u.unit, detail: st.reason });
+          else if (st.kind === "capability") skipped.push({ target: id, reason: "capability", unit: u.unit, detail: st.detail });
+          else if (st.kind === "checkable") {
+            const ob = req.obligations.find((o) => o.id === id);
+            if (ob?.nature === "event") {
+              skipped.push({ target: id, reason: "capability", unit: u.unit, detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" });
+            }
+          }
+        }
+        for (const [id, st] of [...plan.scenarioStatus.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+          if (st.kind === "waived") skipped.push({ target: id, reason: "waived", unit: u.unit, detail: st.reason });
+          else if (st.kind === "capability") skipped.push({ target: id, reason: "capability", unit: u.unit, detail: st.detail });
+          else if (st.kind === "checkable") {
+            skipped.push({ target: id, reason: "capability", unit: u.unit, detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)" });
+          }
+        }
+        const extras = refinementQuintExtras(plan, req);
+        if (extras.length === 0) continue;
+        const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (Date.now() - started));
+        if (remaining < 3_000) {
+          for (const e of extras) {
+            skipped.push({ target: e.reqId, reason: "timeout", unit: u.unit, detail: "the per-run backend budget was exhausted before the refinement pass" });
+          }
+          continue;
+        }
+        const lowered = lowerUnit(u, { synthetics: false });
+        const baseObligations = (isObject(lowered.v1Doc) && Array.isArray((lowered.v1Doc as { obligations?: Json }).obligations)
+          ? ((lowered.v1Doc as { obligations: Json[] }).obligations as Json[])
+          : []);
+        let n = baseObligations.length;
+        const extraIds = new Map<string, string>();
+        for (const e of extras) {
+          n += 1;
+          const lowId = `OB-${n}`;
+          baseObligations.push({ id: lowId, nature: "invariant", frRefs: e.frRefs as unknown as Json, assert: e.expr as unknown as Json });
+          lowered.map.set(lowId, { design: e.reqId, kind: "passthrough" });
+          extraIds.set(e.reqId, lowId);
+        }
+        const run = runSiblingBackend("quint", lowered.v1Doc, remaining);
+        if (run.exit !== 0 || run.doc === null) {
+          for (const e of extras) {
+            skipped.push({ target: e.reqId, reason: "unavailable", unit: u.unit, detail: `refinement pass could not run (${run.note.slice(0, 120)})` });
+          }
+          continue;
+        }
+        const remapped = remapUnitDoc(u, lowered, run.doc);
+        const reqIdSet = new Set(extras.map((e) => e.reqId));
+        let hitExtra = false;
+        let designConflict = false;
+        for (const f of remapped.findings) {
+          if (f.kind !== "conflict") continue;
+          const reqHits = f.targets.filter((t) => reqIdSet.has(t));
+          if (reqHits.length > 0) {
+            hitExtra = true;
+            findings.push({
+              kind: "refinement-violation",
+              frRefs: f.frRefs,
+              targets: reqHits,
+              witness: f.witness,
+              unit: u.unit,
+              detail: `The design machine of unit ${u.unit} reaches a state that violates requirements obligation ${reqHits.join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,
+            });
+          } else {
+            designConflict = true;
+          }
+        }
+        if (!hitExtra && designConflict) {
+          for (const e of extras) {
+            skipped.push({
+              target: e.reqId,
+              reason: "capability",
+              unit: u.unit,
+              detail: "the machine reachably violates its own design invariants first (see the design conflict findings) — refinement reachability is masked until those are resolved",
+            });
+          }
+        }
+      }
+    }
+  }
+
   const finalMethod = method ?? "simulation";
-  writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: finalMethod, findings, skipped });
+  const emitted = writeDesignDoc(verifyDir, { backend: BACKEND, irVersion: ir.irVersion, irHash, method: finalMethod, inputs, findings, skipped });
   recomputeDesignCrossCheck(verifyDir, ir, irHash);
   process.stdout.write(
-    `${JSON.stringify({ pass: findings.length === 0, findings_count: findings.length, skipped_count: skipped.length, method: finalMethod })}\n`,
+    `${JSON.stringify({ pass: !emitted.unavailable && emitted.findingsCount === 0, findings_count: emitted.findingsCount, skipped_count: emitted.skippedCount, method: finalMethod })}\n`,
   );
   process.exit(0);
 }
