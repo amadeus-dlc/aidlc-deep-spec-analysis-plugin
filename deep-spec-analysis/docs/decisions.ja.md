@@ -327,3 +327,15 @@ normalizeName）を逐語移動し、ハウス `Result`（`ok`/`err`/`unreachabl
 - doctor に kernel canary 行（`tools/kernel/domain/index.ts`）を追加、e2e の
   compose 済みファイル表明にネストパスを追加——tools/ サブディレクトリが
   端から端まで運ばれることのリポジトリ内初の実証。
+
+### PR1 補遺 — CI カバレッジ失敗と二層の原因
+
+初回 push の CI がテスト失敗 0・カバレッジ表 99% のまま fail した。原因は
+二層：(1) ローカルの「ゲート通過」測定がパイプ越しに `tail` の exit code を
+読んでいた（実はローカルでも fail していた。儀式はパイプなしで exit を測る
+よう改めた）。(2) bun の `coverageThreshold` は**ファイル単位**で強制され、
+`yaml-subset.ts` が関数カバレッジ 88.89% だった——`class YamlError extends
+Error {}` の暗黙コンストラクタを bun が「未実行の関数」として数えるため
+（実際は全拒否テストで実行されている）。真に未検査だった分岐（`-` 単独＋
+深いネストブロック）のテスト追加と、コンストラクタの明示化（挙動不変・計測
+に乗る）で解消。kernel は関数 100% / 行 99.7%。

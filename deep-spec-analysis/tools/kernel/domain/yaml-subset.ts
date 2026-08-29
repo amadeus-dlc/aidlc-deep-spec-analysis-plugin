@@ -17,7 +17,13 @@ interface YamlLine {
   n: number;
 }
 
-class YamlError extends Error {}
+class YamlError extends Error {
+  // 既定コンストラクタのままだと bun のカバレッジ計測が「未実行の関数」として
+  // 数えてしまう（実際は throw 経路で毎回実行される）ため明示する。挙動は不変。
+  constructor(message: string) {
+    super(message);
+  }
+}
 
 export function parseYamlSubset(src: string): { value?: Yaml; error?: string } {
   const raw = src.split("\n");

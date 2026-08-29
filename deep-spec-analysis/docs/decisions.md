@@ -268,3 +268,17 @@ new house `Result` (`ok`/`err`/`unreachable`, no combinators). Decisions:
 - Doctor gains the kernel canary row (`tools/kernel/domain/index.ts`); the
   e2e composed-file list asserts the nested path arrives — the first
   in-repo proof that subdirectories under `tools/` ship end-to-end.
+
+### PR1 addendum — the CI coverage failure and its two-layer cause
+
+CI failed on the first PR1 push with 0 test failures and a 99% coverage
+table. Root causes: (1) the local "gate passes" measurement had read the
+exit code of `tail` through a pipe, not bun's — the gate had in fact been
+failing locally too (the ritual now measures exit codes without pipes);
+(2) bun enforces `coverageThreshold` **per file**, and `yaml-subset.ts`
+sat at 88.89% function coverage because bun counts the implicit
+constructor of `class YamlError extends Error {}` as an uncovered
+function even though every rejection test executes it. Fixed by covering
+the one genuinely untested branch (a bare dash followed by a deeper
+block) and making the constructor explicit (behavior unchanged, now
+instrumented). Kernel lands at 100% functions / 99.7% lines.

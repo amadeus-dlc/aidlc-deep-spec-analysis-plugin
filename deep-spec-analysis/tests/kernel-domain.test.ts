@@ -127,6 +127,11 @@ describe("yaml-subset — accepted shapes", () => {
     expect(r.value).toEqual({ components: [{ name: "A", owns: ["x"] }, { name: "B" }] });
   });
 
+  test("a bare dash followed by a deeper block nests the block as the item", () => {
+    const r = parseYamlSubset("seq:\n  -\n    name: A\n");
+    expect(r.value).toEqual({ seq: [{ name: "A" }] });
+  });
+
   test("literal and folded blocks join with newline and space respectively", () => {
     const lit = parseYamlSubset("text: |\n  one\n  two\n");
     expect(lit.value).toEqual({ text: "one\ntwo" });
