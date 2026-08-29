@@ -197,10 +197,36 @@ function refreshPluginPayloads(): number {
   return refreshed;
 }
 
+// 廃止済みペイロードの tombstone: かつて配布し、もう dist に存在しないファイル。
+// compose は no-clobber・refresh は「現 dist に在るもの」しか消せないため、
+// ここに載せない限りアップグレード先へ孤児として残り続ける。後方互換の残骸を
+// 残さない——ファイルを廃止したら同じ変更でこのリストに追記すること。
+const REMOVED_PAYLOADS: string[][] = [
+  ["tools", "deep-spec-lib.ts"], // DDD 移行 PR2a で refcheck/ と kernel/ へ解体
+];
+
+function removeTombstonedPayloads(): number {
+  let removed = 0;
+  for (const parts of REMOVED_PAYLOADS) {
+    const dst = join(projectDir, target.harnessLeaf, ...parts);
+    if (existsSync(dst)) {
+      rmSync(dst, { force: true });
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 const refreshed = refreshPluginPayloads();
 if (refreshed > 0) {
   console.log(
     `\n▸ upgrade refresh: removed ${refreshed} previously composed plugin file(s) so compose re-places the current versions`,
+  );
+}
+const tombstoned = removeTombstonedPayloads();
+if (tombstoned > 0) {
+  console.log(
+    `\n▸ upgrade cleanup: removed ${tombstoned} retired plugin file(s) that this version no longer ships`,
   );
 }
 

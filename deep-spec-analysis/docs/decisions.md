@@ -309,3 +309,17 @@ instrumented). Kernel lands at 100% functions / 99.7% lines.
   Japanese doc comments mentioning `process.argv` or `export *` were
   false-positives the moment real layered adapters appeared (green
   examples added alongside the fix).
+
+### PR2a addendum — tombstones: no backward-compat residue in upgraded installs
+
+Owner rule (2026-08-30): leave no backward-compatibility code behind.
+Audit found one real residue: compose is no-clobber and the upgrade
+refresh can only delete files the CURRENT dist still ships, so a retired
+file (deep-spec-lib.ts) would sit orphaned in every upgraded install
+forever. The installer now carries a REMOVED_PAYLOADS tombstone list —
+retiring a file means adding it there in the same change — and deletes
+those paths on upgrade ("upgrade cleanup"). Regression-proven in the
+e2e upgrade scenario: a planted stale deep-spec-lib.ts vanishes on
+re-install. The staged interfaces awaiting PR2b re-modeling are tracked
+work (#15), not compatibility code — the distinction is: no second
+mouth for the same purpose, no orphaned artifacts.
