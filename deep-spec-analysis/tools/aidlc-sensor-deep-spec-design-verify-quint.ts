@@ -114,9 +114,12 @@ function main(): void {
   };
 
   if (!model.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR)) {
-    const written = persist(designVersionMismatchReport(id, model, irHash, "simulation"));
+    // 旧実装は conform 前の skip 数を verdict 行に載せていた（自己検証降格が
+    // 起きても stdout は元の件数のまま）——凍結挙動として組成時の件数を使う。
+    const mismatch = designVersionMismatchReport(id, model, irHash, "simulation");
+    persist(mismatch);
     recomputeCrossCheck();
-    process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: written.skippedCount(), note: "ir-version-mismatch" })}\n`);
+    process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: mismatch.skippedCount(), note: "ir-version-mismatch" })}\n`);
     process.exit(0);
   }
 
