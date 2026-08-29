@@ -192,3 +192,45 @@ console.log(
     "the deep-spec-analysis-verify stage is now part of Inception.\n" +
     "  Next: run /aidlc --doctor in that project to check solver availability.",
 );
+
+// Late-adoption safety net: immediately surface every existing intent whose
+// requirements the plugin can verify but has not — instead of leaving that
+// discovery to human attention. The installed doctor owns the scan; render
+// its verification-coverage rows here.
+const doctor = spawnSync(
+  "bun",
+  [join(projectDir, target.harnessLeaf, "tools", "deep-spec-analysis-doctor.ts")],
+  {
+    encoding: "utf-8",
+    timeout: 60_000,
+    cwd: projectDir,
+    env: {
+      ...process.env,
+      AIDLC_PROJECT_DIR: projectDir,
+      AIDLC_HARNESS_DIR: target.harnessLeaf,
+    },
+  },
+);
+if (doctor.status === 0) {
+  try {
+    const rows: { pass: boolean; label: string; fix?: string }[] =
+      JSON.parse(doctor.stdout).checks;
+    const debt = rows.filter(
+      (c) => !c.pass && (c.label.includes("no deep-spec verification") || c.label.includes("after the last deep-spec verification")),
+    );
+    if (debt.length > 0) {
+      console.log("\n⚠ Existing intents with unverified requirements:");
+      for (const row of debt) {
+        console.log(`  - ${row.label}`);
+        if (row.fix) console.log(`    → ${row.fix}`);
+      }
+    } else {
+      const summary = rows.find((c) => c.label.includes("verification coverage"));
+      if (summary) console.log(`\n${summary.label}`);
+    }
+  } catch {
+    console.log("⚠ could not parse the doctor's coverage report — run /aidlc --doctor manually");
+  }
+} else {
+  console.log("⚠ doctor coverage scan failed — run /aidlc --doctor manually");
+}

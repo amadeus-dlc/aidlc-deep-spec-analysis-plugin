@@ -48,6 +48,7 @@ const quintEnv = {
 
 let sandbox = "";
 let installOk = false;
+let installOut = "";
 
 function inSandbox(
   command: string[],
@@ -102,12 +103,22 @@ beforeAll(() => {
   if (legacy.status !== 0) {
     throw new Error(`pre-install intent-create failed: ${legacy.stderr || legacy.stdout}`);
   }
+  // The legacy intent already has requirements when the plugin arrives — the
+  // exact state whose verification debt the installer must surface.
+  const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+  const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+  mkdirSync(join(intentsDir, active, "inception", "requirements-analysis"), { recursive: true });
+  cpSync(
+    join(fixtures, "requirements.md"),
+    join(intentsDir, active, "inception", "requirements-analysis", "requirements.md"),
+  );
 
   const res = spawnSync("bun", [installer, "--project", sandbox], {
     encoding: "utf-8",
     timeout: 300_000,
   });
   installOk = res.status === 0;
+  installOut = res.stdout ?? "";
   if (!installOk) {
     throw new Error(`installer failed (${res.status}): ${res.stderr || res.stdout}`);
   }
@@ -150,12 +161,14 @@ describe("late adoption — the plugin verifies an intent that predates it", () 
     expect(state).not.toContain("deep-spec-analysis-verify");
   });
 
+  test("the installer surfaces the pre-existing intent's verification debt", () => {
+    // Late adoption must not rely on human attention: the install itself
+    // names the unverified intent and the exact command to verify it.
+    expect(installOut).toContain("has requirements with no deep-spec verification");
+    expect(installOut).toContain("deep-spec-analysis-verify --single");
+  });
+
   test("after the late install, the single-stage engine run accepts that intent", () => {
-    mkdirSync(join(legacyRecord, "inception", "requirements-analysis"), { recursive: true });
-    cpSync(
-      join(fixtures, "requirements.md"),
-      join(legacyRecord, "inception", "requirements-analysis", "requirements.md"),
-    );
     const run = inSandbox([
       "bun", join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
       "next", "--stage", "deep-spec-analysis-verify", "--single",
@@ -190,6 +203,23 @@ describe("late adoption — the plugin verifies an intent that predates it", () 
       "conflict",
       "scenario-violation",
     ]);
+  });
+
+  test("the doctor's coverage row flips to verified once the sensors have run", () => {
+    if (!nodeAvailable) {
+      console.warn("node runtime missing — the coverage flip depends on the SMT run above");
+      return;
+    }
+    const run = inSandbox(
+      ["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")],
+      { AIDLC_PROJECT_DIR: sandbox, AIDLC_HARNESS_DIR: ".claude" },
+    );
+    expect(run.status).toBe(0);
+    const rows: { pass: boolean; label: string }[] = JSON.parse(run.stdout).checks;
+    const summary = rows.find((c) => c.label.includes("verification coverage"));
+    expect(summary?.pass).toBe(true);
+    expect(summary?.label).toContain("1/1 eligible intents verified");
+    expect(rows.some((c) => c.label.includes("no deep-spec verification"))).toBe(false);
   });
 });
 

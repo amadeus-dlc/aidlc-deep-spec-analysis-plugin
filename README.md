@@ -41,7 +41,9 @@ You don't need to have started with this plugin. Composition is additive, so ins
 /aidlc --stage deep-spec-analysis-verify --single
 ```
 
-(also packaged as the composed `/deep-spec-analysis-verify` skill). The engine resolves the intent's existing `requirements.md`, the sensors write their findings under that intent's record, and the workflow's Current Stage is never touched. Intents created after the install pick the stage up automatically. The one restriction is scope: a `classic`-scope intent is refused even in single mode — move it to `feature` or `enterprise` first. The whole late-adoption path is regression-tested in `tests/intent-e2e.test.ts`.
+(also packaged as the composed `/deep-spec-analysis-verify` skill). The engine resolves the intent's existing `requirements.md`, the sensors write their findings under that intent's record, and the workflow's Current Stage is never touched. Intents created after the install pick the stage up automatically. The one restriction is scope: a `classic`-scope intent is refused even in single mode — move it to `feature` or `enterprise` first.
+
+And you don't have to *remember* any of that: the installer ends with a coverage scan that lists every eligible intent whose requirements have no verification yet (with the exact command each one needs), and `/aidlc --doctor` keeps reporting that coverage afterwards — including intents whose requirements changed after their last verification. The whole late-adoption path, detection included, is regression-tested in `tests/intent-e2e.test.ts`.
 
 ### Alternative: install through the host plugin store
 

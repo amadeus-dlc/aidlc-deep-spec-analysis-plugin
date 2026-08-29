@@ -58,6 +58,18 @@ composeは追加合成なので、**AI-DLC運用中のプロジェクトへ途�
 
 つまり「最初から入れていなくても、既存の要件に対して後から検査できる」。この経路は `deep-spec-analysis/tests/intent-e2e.test.ts` のlate adoptionブロックが毎回回帰検証している。
 
+**未検査の把握は人間の注意力に頼らない**。検査漏れは次の2箇所で自動検出される：
+
+- **インストーラの導入直後** — compose完了後にカバレッジスキャンが走り、対象スコープで `requirements.md` があるのに検査記録が無いintentを、実行コマンド付きで列挙する：
+
+  ```
+  ⚠ Existing intents with unverified requirements:
+    - deep-spec-analysis: intent default/260829-xxx has requirements with no deep-spec verification
+      → Make it the active intent (...), then run `/aidlc --stage deep-spec-analysis-verify --single` ...
+  ```
+
+- **`/aidlc --doctor`（以後いつでも）** — doctorに検査カバレッジ行（`verification coverage — N/M eligible intents verified`）が出続け、未検査intentは1件ずつadvisory行として列挙される。さらに**検査後に要件が変更されたintentはstale（要再検査）として検出**される。対象スコープはハードコードではなくステージ定義の `scopes:` から読む。
+
 ## 成果物の読み方
 
 すべて対象intentのレコード `<record>/inception/deep-spec-analysis-verify/` 配下に書かれる。

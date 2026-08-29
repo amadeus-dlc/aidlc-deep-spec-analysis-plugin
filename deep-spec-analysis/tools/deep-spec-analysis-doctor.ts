@@ -7,7 +7,7 @@
 // blocks the workflow.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const projectDir = process.env.AIDLC_PROJECT_DIR || process.cwd();
@@ -85,6 +85,108 @@ checks.push({
   pass: javaOk && apalacheDist,
   label: "deep-spec-analysis: Apalache available (quint verify, method: bounded)",
   fix: "Install a JDK (17+) and run any `quint verify` once so quint downloads its Apalache distribution into ~/.quint (or set APALACHE_DIST). Without it the Quint backend uses seeded simulation (method: simulation) and skips leads-to temporal obligations.",
+  severity: "advisory",
+});
+
+// Verification coverage: enumerate every intent whose scope the stage serves
+// and whose requirements exist, and flag the ones with no (or stale) deep-spec
+// verification. This is what makes late adoption safe — a project that
+// installs the plugin mid-flight is TOLD which requirements are unverified
+// instead of having to remember. Advisory: coverage debt never blocks.
+const FALLBACK_STAGE_SCOPES = ["enterprise", "feature"];
+
+function stageScopes(): string[] {
+  const stageFile = join(root, "aidlc-common", "stages", "inception", "deep-spec-analysis-verify.md");
+  try {
+    const frontmatter = readFileSync(stageFile, "utf-8").split("\n---")[0];
+    const m = frontmatter.match(/^scopes:\n((?:\s+- .+\n)+)/m);
+    if (m) return m[1].match(/- (\S+)/g)!.map((s) => s.slice(2));
+  } catch {
+    // fall through to the authored default
+  }
+  return FALLBACK_STAGE_SCOPES;
+}
+
+interface CoverageRow {
+  space: string;
+  intent: string;
+  state: "unverified" | "stale";
+}
+
+function scanVerificationCoverage(): { eligible: number; problems: CoverageRow[] } {
+  const problems: CoverageRow[] = [];
+  let eligible = 0;
+  const scopes = new Set(stageScopes());
+  const spacesDir = join(projectDir, "aidlc", "spaces");
+  let spaces: string[] = [];
+  try {
+    spaces = readdirSync(spacesDir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    return { eligible, problems };
+  }
+  for (const space of spaces) {
+    const intentsDir = join(spacesDir, space, "intents");
+    let intents: string[] = [];
+    try {
+      intents = readdirSync(intentsDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+        .map((e) => e.name);
+    } catch {
+      continue;
+    }
+    for (const intent of intents) {
+      const record = join(intentsDir, intent);
+      let state = "";
+      try {
+        state = readFileSync(join(record, "aidlc-state.md"), "utf-8");
+      } catch {
+        continue;
+      }
+      const scope = state.match(/^- \*\*Scope\*\*: (\S+)/m)?.[1];
+      if (!scope || !scopes.has(scope)) continue;
+      const requirements = join(record, "inception", "requirements-analysis", "requirements.md");
+      if (!existsSync(requirements)) continue;
+      eligible += 1;
+      const model = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
+      const verifyDir = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-verify");
+      let hasFindings = false;
+      try {
+        hasFindings = readdirSync(verifyDir).some((f) => f.endsWith(".json"));
+      } catch {
+        hasFindings = false;
+      }
+      if (!existsSync(model) || !hasFindings) {
+        problems.push({ space, intent, state: "unverified" });
+      } else if (statSync(requirements).mtimeMs > statSync(model).mtimeMs) {
+        problems.push({ space, intent, state: "stale" });
+      }
+    }
+  }
+  return { eligible, problems };
+}
+
+const coverage = scanVerificationCoverage();
+for (const row of coverage.problems) {
+  const noun = row.state === "unverified"
+    ? "has requirements with no deep-spec verification"
+    : "changed its requirements after the last deep-spec verification";
+  checks.push({
+    pass: false,
+    label: `deep-spec-analysis: intent ${row.space}/${row.intent} ${noun}`,
+    fix:
+      `Make it the active intent (\`bun ${harnessDir}/tools/aidlc-utility.ts intent ${row.intent}\`), ` +
+      "then run `/aidlc --stage deep-spec-analysis-verify --single` to verify its requirements without advancing the workflow.",
+    severity: "advisory",
+  });
+}
+checks.push({
+  pass: coverage.problems.length === 0,
+  label:
+    `deep-spec-analysis: verification coverage — ${coverage.eligible - coverage.problems.length}/${coverage.eligible} ` +
+    "eligible intents verified (scopes: " + stageScopes().join(", ") + ")",
+  fix: "See the per-intent rows above for the exact command each unverified intent needs.",
   severity: "advisory",
 });
 
