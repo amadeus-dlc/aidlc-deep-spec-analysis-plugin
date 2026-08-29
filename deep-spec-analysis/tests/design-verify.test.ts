@@ -86,6 +86,9 @@ describe("deep-spec-design-ir-valid", () => {
     expect(all).toContain("assigns the machine's own attribute");
     expect(all).toContain('brRef "BR9.9" does not exist');
     expect(all).toContain("BR coverage: rule BR1.3");
+    expect(all).toContain("int attributes require min and max");
+    expect(all).toContain('enum literal "email" is not a value of "ticket.status"');
+    expect(all).toContain("no construction/u9-ghost/ directory exists");
   });
 
   test("passes through writes that are not the functional formal model", () => {
