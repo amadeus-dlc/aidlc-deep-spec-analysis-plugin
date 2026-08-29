@@ -1,66 +1,68 @@
-# Deep Spec Analysis 使い方ガイド
+# Deep Spec Analysis usage guide
 
-インストール後の実際の使い方を、新規プロジェクト・後入れ（運用中プロジェクトへの途中導入）の両方について説明する。インストール手順そのものは [README の Quickstart](../README.md#quickstart)、仕組みの図解は [architecture.md](architecture.md) を参照。
+English | [日本語](usage.ja.md)
 
-## 前提
+How to actually use the plugin after installation, for both fresh projects and mid-project (late) adoption. For the installation steps themselves see the [README Quickstart](../README.md#quickstart); for an illustrated view of the mechanism see [architecture.md](architecture.md).
 
-1. **プラグインが対象プロジェクトへ導入済みであること** — 未導入なら README の Quickstart（インストーラ1コマンド）から。
-2. **ソルバーの準備（任意・推奨）** — 対象プロジェクトで:
+## Prerequisites
+
+1. **The plugin is installed into the target project** — if not, start from the README Quickstart (the one-command installer).
+2. **Solver setup (optional, recommended)** — in the target project:
 
    ```sh
-   bun add z3-solver          # SMTバックエンド（プロジェクトルートに追加）
-   # node >= 23 がPATHにあること（z3はnode子プロセスで実行される）
-   npm i -g @informalsystems/quint   # Quintバックエンド
-   # 任意: JDK 17+ を入れて quint verify を一度実行すると
-   # Apalache が ~/.quint に入り、simulation → bounded 検査に格上げされる
+   bun add z3-solver          # SMT backend (added at the project root)
+   # node >= 23 on PATH (z3 runs in a node child process)
+   npm i -g @informalsystems/quint   # Quint backend
+   # optional: install a JDK 17+ and run `quint verify` once —
+   # Apalache lands in ~/.quint and simulation upgrades to bounded checking
    ```
 
-   ソルバーが無くてもステージは止まらない。無いバックエンドは `unavailable` としてカバレッジ表に記録され、`/aidlc --doctor` が導入コマンドを提示する。
-3. **確認** — 対象プロジェクトのClaude Codeセッションで `/aidlc --doctor` を実行し、プラグインのdoctor行（z3 / node / quint / Apalache の可用性）を見る。
+   The stage never stops without solvers. A missing backend is recorded as `unavailable` in the coverage table, and `/aidlc --doctor` prints the install commands.
+3. **Confirm** — run `/aidlc --doctor` in a Claude Code session of the target project and check the plugin's doctor rows (z3 / node / quint / Apalache availability).
 
-## 新規に使う（intentを最初から）
+## Fresh use (an intent from the start)
 
-**鍵はスコープ選択**。ステージは `scopes: [enterprise, feature]` を宣言しているので、この2スコープのintentでのみ実行される。`classic` などそれ以外のスコープでは計画時にSKIPされる（仕様）。
+**The key is scope selection.** The stage declares `scopes: [enterprise, feature]`, so it only runs for intents with those two scopes. Other scopes such as `classic` are SKIPped at planning time (by design).
 
-1. `/aidlc "作りたいものの説明"` でワークフローを開始し、スコープに **feature** または **enterprise** を選ぶ。
-2. Inceptionフェーズを通常どおり進める。`requirements-analysis` ステージが `requirements.md` を確定すると、その直後に `deep-spec-analysis-verify` ステージが自動で走る:
-   - product agent が各FR/NFRをEARS分類し、バックエンド中立IRを `deep-spec-analysis-formal-model.md` に書き込む
-   - 書き込みを検知して3センサーが順に発火（IRスキーマ検証 → SMT → Quint）し、findingsを `deep-spec-verify/*.json` に書く
-   - findingsが1件ずつ **A / B / X の質問**としてあなたに返る
-3. 質問に答える:
-   - **A. 現状維持** — 指摘を認識したうえで要件をそのまま維持する
-   - **B. 改訂案を採用** — 承認した改訂は**ステージが `requirements.md` に適用し、センサーを再実行して解消まで確認する**。手作業は不要。適用されるのはあなたがBで承認した文面だけで、A/Xにした要件や指摘のない箇所には一切触れない
-   - **X. その他** — 自由回答
-4. `deep-spec-analysis-report.md` を読む。義務×バックエンドのカバレッジ表と、適用済み改訂のbefore/after（第2パスの検証結果つき）が並ぶ。
-5. 続く `domain-design` ステージは、このレポートがあればコンポーネント設計の確定前にfindingsを尊重するよう指示される（プラグインのオーバーレイによる）。
+1. Start the workflow with `/aidlc "description of what you want to build"` and pick **feature** or **enterprise** as the scope.
+2. Walk the Inception phase as usual. Once the `requirements-analysis` stage finalizes `requirements.md`, the `deep-spec-analysis-verify` stage runs right after it:
+   - the product agent EARS-classifies each FR/NFR and writes the backend-neutral IR into `deep-spec-analysis-formal-model.md`
+   - the write fires the three sensors in order (IR schema validation → SMT → Quint), which write findings to `deep-spec-verify/*.json`
+   - the findings come back to you one by one as **A / B / X questions**
+3. Answer the questions:
+   - **A. Keep as-is** — acknowledge the finding and keep the requirement unchanged
+   - **B. Adopt the revision** — an approved revision is **applied to `requirements.md` by the stage itself, and the sensors re-run to confirm resolution**. No hand-editing. Only the text you approved with B is applied; requirements answered A/X and untouched areas are never modified
+   - **X. Other** — free-form answer
+4. Read `deep-spec-analysis-report.md`: the obligation × backend coverage table and the applied revisions with before/after (including the second-pass verification result).
+5. The subsequent `domain-design` stage is instructed (via the plugin's overlay) to honor the report's findings before finalizing the component design, when the report exists.
 
-## 後入れで使う（運用中のプロジェクトへ途中導入）
+## Late adoption (installing into a project already underway)
 
-composeは追加合成なので、**AI-DLC運用中のプロジェクトへ途中からインストールしても他には何も影響しない**。導入タイミングとintentの関係は次の3通り。
+Compose is additive, so **installing mid-flight into a project already running AI-DLC affects nothing else**. The relationship between install timing and intents:
 
-| intentの状態 | 挙動 |
+| Intent state | Behavior |
 |---|---|
-| 導入後に作るintent（feature/enterprise） | ステージが自動で実行計画に入る。「新規に使う」と同じ |
-| **導入前から進行中のintent**（feature/enterprise） | 実行計画にはステージが無いが、単一ステージ実行で後から検査できる（下記） |
-| classicスコープのintent | 通常フローでもsingleモードでも拒否される。feature/enterpriseへのスコープ変更（またはintentの作り直し）が必要 |
+| Intents created after the install (feature/enterprise) | The stage joins the execution plan automatically. Same as "fresh use" |
+| **Intents already in progress before the install** (feature/enterprise) | The plan has no stage entry, but a single-stage run verifies them after the fact (below) |
+| classic-scope intents | Refused in both the normal flow and single mode. Change the scope to feature/enterprise (or recreate the intent) |
 
-導入前から進行中のintentへ検査をかけるには、対象intentをアクティブにした状態で:
+To verify an intent that predates the install, make it the active intent and run:
 
 ```
 /aidlc --stage deep-spec-analysis-verify --single
 ```
 
-（composeで生成される `/deep-spec-analysis-verify` スキルは同じものの包装。）このsingle実行は:
+(The `/deep-spec-analysis-verify` skill generated by compose is the same thing, packaged.) This single run:
 
-- そのintentの既存 `requirements.md`（`<record>/inception/requirements-analysis/`）を読む
-- findingsとレポートをそのintentのレコード配下に書く
-- **ワークフローのCurrent Stageを一切進めない** — 検査だけして止まる
+- reads that intent's existing `requirements.md` (`<record>/inception/requirements-analysis/`)
+- writes findings and the report under that intent's record
+- **never advances the workflow's Current Stage** — it verifies and stops
 
-つまり「最初から入れていなくても、既存の要件に対して後から検査できる」。この経路は `deep-spec-analysis/tests/intent-e2e.test.ts` のlate adoptionブロックが毎回回帰検証している。
+In other words: even without the plugin from day one, existing requirements can be verified after the fact. This path is regression-tested on every run by the late-adoption block of `deep-spec-analysis/tests/intent-e2e.test.ts`.
 
-**未検査の把握は人間の注意力に頼らない**。検査漏れは次の2箇所で自動検出される：
+**Spotting unverified intents never relies on human attention.** Verification debt is detected automatically in two places:
 
-- **インストーラの導入直後** — compose完了後にカバレッジスキャンが走り、対象スコープで `requirements.md` があるのに検査記録が無いintentを、実行コマンド付きで列挙する：
+- **Right after the installer runs** — a coverage scan runs after compose and lists every in-scope intent that has `requirements.md` but no verification record, with the exact command to run:
 
   ```
   ⚠ Existing intents with unverified requirements:
@@ -68,28 +70,27 @@ composeは追加合成なので、**AI-DLC運用中のプロジェクトへ途�
       → Make it the active intent (...), then run `/aidlc --stage deep-spec-analysis-verify --single` ...
   ```
 
-- **`/aidlc --doctor`（以後いつでも）** — doctorに検査カバレッジ行（`verification coverage — N/M eligible intents verified`）が出続け、未検査intentは1件ずつadvisory行として列挙される。さらに**検査後に要件が変更されたintentはstale（要再検査）として検出**される。対象スコープはハードコードではなくステージ定義の `scopes:` から読む。
+- **`/aidlc --doctor` (any time afterwards)** — the doctor keeps printing a verification-coverage row (`verification coverage — N/M eligible intents verified`) plus one advisory row per unverified intent. **Intents whose requirements changed after their last verification are detected as stale** (re-verification needed). The eligible scopes are not hardcoded — they are read from the stage definition's `scopes:`.
 
-## 成果物の読み方
+## Reading the outputs
 
-すべて対象intentのレコード `<record>/inception/deep-spec-analysis-verify/` 配下に書かれる。
+Everything is written under the target intent's record at `<record>/inception/deep-spec-analysis-verify/`.
 
-- **`deep-spec-analysis-formal-model.md`** — LLMが書いた形式化の結果（単一のJSONフェンスにIR）。検査の入力。
-- **`deep-spec-verify/smt.json` / `quint.json` / `cross-check.json`** — 各バックエンドのfindings。種類は3つ:
+- **`deep-spec-analysis-formal-model.md`** — the LLM's formalization result (the IR in a single JSON fence). The input to verification.
+- **`deep-spec-verify/smt.json` / `quint.json` / `cross-check.json`** — per-backend findings. Three kinds:
 
-  | kind | 意味 | 証拠（witness） |
+  | kind | Meaning | Evidence (witness) |
   |---|---|---|
-  | `conflict` | 要件同士が同時に満たせない | unsat core（帰責されたFR/OB）、Quintは違反へ至る実行トレース |
-  | `completeness-gap` | どの要件も挙動を定めていない入力領域 | 具体的な反例状態 |
-  | `scenario-violation` | 期待シナリオが要件群と両立しない | 反例モデル |
+  | `conflict` | Requirements that cannot hold together | unsat core (implicated FR/OB ids); Quint attaches an execution trace to the violation |
+  | `completeness-gap` | An input region no requirement covers | a concrete counterexample state |
+  | `scenario-violation` | An expected scenario is incompatible with the requirements | a counterexample model |
 
-  `cross-check.json` は両バックエンドが共に検査したシナリオの判定を照合し、不一致（形式化ミスの兆候）があればfindingとして報告する。
-- **`deep-spec-analysis-report.md`** — カバレッジ表と改訂案。各義務は必ず次の4状態のいずれかで現れる（沈黙のギャップは作らない）:
-  `checked`（検査済み）/ `skipped`（理由付きスキップ。例: When-eventシナリオはv1未対応）/ `unavailable`（ソルバー不在）/ `unverified`（未検証と明示）。
+  `cross-check.json` compares the verdicts of scenarios both backends checked, and reports any disagreement (a sign of a formalization defect) as a finding.
+- **`deep-spec-analysis-report.md`** — the coverage table and proposed revisions. Every obligation appears in exactly one of four states (no silent gaps): `checked` / `skipped` (with a reason, e.g. When-event scenarios are unsupported in v1) / `unavailable` (solver missing) / `unverified` (explicitly unverified).
 
-## トラブルシューティング
+## Troubleshooting
 
-- **findingsが出ない・バックエンドがunavailable** — `/aidlc --doctor` でz3/node/quint/Apalacheの可用性と導入コマンドを確認。
-- **ステージが計画に現れない** — intentのスコープを確認（`<record>/aidlc-state.md` の `Stages to Skip`）。classicなどスコープ外ならSKIPが仕様。
-- **同じIRで結果が変わる** — 起きない設計（固定シード・正準ソート・タイムスタンプなし）。同一IR＋同一環境なら出力はバイト一致する。変わったなら環境差分（ソルバーの有無・バージョン）を疑う。
-- **`requirements.md` が勝手に書き換わる不安** — 無断の編集は起きない。書き換わるのはBで承認（個別回答＋最終サマリ確認の二重ゲート）した改訂の文面だけで、決定論的なセンサー群は読み取り専用。適用内容はレポートの Applied Revisions に before/after で記録される。
+- **No findings appear / a backend is unavailable** — check z3/node/quint/Apalache availability and the install commands with `/aidlc --doctor`.
+- **The stage does not appear in the plan** — check the intent's scope (`Stages to Skip` in `<record>/aidlc-state.md`). SKIP is by design for out-of-scope intents such as classic.
+- **Different results for the same IR** — designed not to happen (fixed seeds, canonical sorting, no timestamps). Identical IR + identical environment produce byte-identical output; if something changed, suspect an environment difference (solver presence/version).
+- **Worried `requirements.md` might be rewritten silently** — unsanctioned edits never happen. The only text ever applied is a revision you approved with B (double-gated: the individual answer plus the final summary confirmation); the deterministic sensors are read-only. Every applied change is recorded with before/after in the report's Applied Revisions.
