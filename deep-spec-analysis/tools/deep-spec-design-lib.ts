@@ -28,13 +28,15 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  type Json,
   canonicalStringify,
-  idCompare,
   isObject,
+  type Json,
+  validateSchema,
+} from "./kernel/adapter/index.ts";
+import {
+  idCompare,
   sha256,
   sortedUnique,
-  validateSchema,
 } from "./kernel/domain/index.ts";
 
 export const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";

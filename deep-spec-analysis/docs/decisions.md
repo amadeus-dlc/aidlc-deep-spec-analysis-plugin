@@ -358,3 +358,23 @@ per-file 90% applies to domain; adapter/usecase are verified by contract
 and spawn suites, not the numeric gate. The same receipt pattern still
 lives in the legacy design-lib writer — scheduled for the PR5
 dissolution.
+
+### PR2b-1 addendum — two further rulings: RepositoryError placement and the Json expulsion
+
+- **RepositoryError lives in the use-case layer** as part of the output
+  port, not in the domain. Repositories are classically a domain
+  responsibility, but placing them (or their vocabulary) in the domain
+  invites domain objects to reach for repositories internally — so the
+  whole repository surface is kept at arm's length in `kernel/usecase`.
+- **Json is not ubiquitous language.** The serialization format — the
+  `Json` union, canonical JSON, the JSON-Schema validator, the
+  YAML-subset and markdown parsers — is interface-adapter knowledge and
+  was expelled from `kernel/domain` (which now holds only Result,
+  sha256, id ordering, target sanitization, requirement-id extraction
+  and name normalization). The aggregate speaks typed vocabulary only;
+  a new adapter serializer owns rendering (canonical key order, irHash),
+  contract conformance (`conformToContract` — degrading the aggregate
+  with the frozen wording, so the verdict still derives from what is
+  written) and document parsing for reconstitution. Degrade wording is
+  assembled by the emitter (the adapter), per the error-handling rule;
+  the domain carries it as a value.

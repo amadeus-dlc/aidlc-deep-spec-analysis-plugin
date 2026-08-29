@@ -1,9 +1,9 @@
-// ReferenceCheckReport 集約と Repository の契約テスト（DDD 移行 PR2b、#15）。
+// ReferenceCheckReport 集約・serializer・Repository の契約テスト（PR2b、#15）。
 //
-// compose の 3 経路（適合・自己検証降格・スキーマ不可読降格）は unavailable
-// 文言が golden バイトに載るため逐語で固定する。Repository は save→findById の
-// 往復同一性（書かれた真実の再構成）と、不在・破損の RepositoryError 変種を
-// 契約として検証する。
+// ドメインは型付き語彙のみ（Json 追放後）。直列化・契約適合・降格文言は
+// adapter の serializer が持ち、文言は golden バイトに載るため逐語で固定する。
+// Repository は save→findById の往復（書かれた真実の再構成→再描画のバイト
+// 同一）と、不在・破損の RepositoryError 変種を契約として検証する。
 
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -12,7 +12,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
 import { err } from "../tools/kernel/domain/index.ts";
-import { ReferenceCheckReportRepositoryImpl } from "../tools/refcheck/adapter/index.ts";
+import {
+  ReferenceCheckReportRepositoryImpl,
+  conformToContract,
+  renderReportBytes,
+} from "../tools/refcheck/adapter/index.ts";
 import { type Finding, ReferenceCheckReport, ReferenceCheckReportId } from "../tools/refcheck/domain/index.ts";
 
 const schemaPath = join(
@@ -27,7 +31,6 @@ function seed(directory: string, overrides: Partial<Parameters<typeof ReferenceC
     checked: ["check:DD-0"],
     findings: [],
     skipped: [],
-    findingsSchema: schema,
     ...overrides,
   });
 }
@@ -43,46 +46,69 @@ describe("ReferenceCheckReportId", () => {
   });
 });
 
-describe("ReferenceCheckReport.compose", () => {
-  test("a conforming seed passes and renders the canonical document", () => {
-    const report = seed("/tmp/r");
+describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
+  test("compose sorts the domain state and answers the verdict queries", () => {
+    const report = seed("/tmp/r", {
+      checked: ["check:DD-1", "check:DD-0", "check:DD-1"],
+      inputs: [
+        { artifact: "b.md", sha256: "b".repeat(64) },
+        { artifact: "a.md", sha256: "a".repeat(64) },
+      ],
+    });
     expect(report.passes()).toBe(true);
     expect(report.isUnavailable()).toBe(false);
     expect(report.findingsCount()).toBe(0);
     expect(report.skippedCount()).toBe(0);
+    expect(report.checked()).toEqual(["check:DD-0", "check:DD-1"]);
+    expect(report.inputs().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
+    expect(report.unavailableReason()).toBe(null);
     expect(report.id().backendName()).toBe("components");
-    const doc = JSON.parse(report.renderBytes());
-    expect(Object.keys(doc)).toEqual(["backend", "irVersion", "irHash", "method", "inputs", "checked", "findings", "skipped"]);
-    expect(doc.method).toBe("static");
   });
 
-  test("a non-conforming document degrades to unavailable with the frozen wording", () => {
+  test("degraded keeps the inputs, empties the content, and fails the verdict", () => {
+    const degraded = seed("/tmp/r").degraded("why");
+    expect(degraded.isUnavailable()).toBe(true);
+    expect(degraded.passes()).toBe(false);
+    expect(degraded.unavailableReason()).toBe("why");
+    expect(degraded.checked()).toEqual([]);
+    expect(degraded.findingsCount()).toBe(0);
+    expect(degraded.inputs()).toHaveLength(1);
+  });
+});
+
+describe("serializer (adapter owns the format knowledge)", () => {
+  test("a conforming report renders the canonical document and survives conformance untouched", () => {
+    const report = seed("/tmp/r");
+    expect(conformToContract(report, schema)).toBe(report);
+    const doc = JSON.parse(renderReportBytes(report));
+    expect(Object.keys(doc)).toEqual(["backend", "irVersion", "irHash", "method", "inputs", "checked", "findings", "skipped"]);
+    expect(doc.method).toBe("static");
+    expect(doc.irHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("a non-conforming document degrades with the frozen wording", () => {
     const badFinding = { kind: "no-such-kind", frRefs: [], targets: ["check:DD-0"], witness: { refs: [] }, detail: "DD-0: x" } as Finding;
-    const report = seed("/tmp/r", { findings: [badFinding] });
-    expect(report.isUnavailable()).toBe(true);
-    expect(report.passes()).toBe(false);
-    expect(report.findingsCount()).toBe(0);
-    const doc = JSON.parse(report.renderBytes());
-    expect(doc.unavailable.reason).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
+    const conformed = conformToContract(seed("/tmp/r", { findings: [badFinding] }), schema);
+    expect(conformed.isUnavailable()).toBe(true);
+    expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
+    expect(JSON.parse(renderReportBytes(conformed)).unavailable.reason).toStartWith("self-validation against ");
   });
 
   test("an unreadable schema degrades with the frozen wording carrying the cause", () => {
-    const report = seed("/tmp/r", { findingsSchema: err({ cause: "boom" }) });
-    expect(report.isUnavailable()).toBe(true);
-    expect(JSON.parse(report.renderBytes()).unavailable.reason).toBe("findings schema unreadable: boom");
+    const conformed = conformToContract(seed("/tmp/r"), err({ cause: "boom" }));
+    expect(conformed.unavailableReason()).toBe("findings schema unreadable: boom");
   });
 });
 
 describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", () => {
-  test("save then findById reconstitutes the identical written truth", () => {
+  test("save then findById reconstitutes the written truth byte-for-byte", () => {
     const dir = mkdtempSync(join(tmpdir(), "refcheck-repo-"));
     try {
       const repository = new ReferenceCheckReportRepositoryImpl();
       const report = seed(dir);
-      const saved = repository.save(report);
-      expect(saved.ok).toBe(true);
+      expect(repository.save(report).ok).toBe(true);
       const found = repository.findById(report.id());
-      expect(found.ok && found.value.renderBytes()).toBe(report.renderBytes());
+      expect(found.ok && renderReportBytes(found.value)).toBe(renderReportBytes(report));
       expect(found.ok && found.value.id().equals(report.id())).toBe(true);
       expect(found.ok && found.value.passes()).toBe(true);
     } finally {
@@ -99,7 +125,7 @@ describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", ()
       writeFileSync(join(dir, "components.json"), "not json at all");
       const corrupt = repository.findById(ReferenceCheckReportId.of(dir, "components"));
       expect(!corrupt.ok && corrupt.error.kind).toBe("corrupt");
-      writeFileSync(join(dir, "components.json"), JSON.stringify({ backend: "other", findings: [], skipped: [] }));
+      writeFileSync(join(dir, "components.json"), JSON.stringify({ backend: "other", inputs: [], checked: [], findings: [], skipped: [] }));
       const mismatched = repository.findById(ReferenceCheckReportId.of(dir, "components"));
       expect(!mismatched.ok && mismatched.error.kind).toBe("corrupt");
     } finally {

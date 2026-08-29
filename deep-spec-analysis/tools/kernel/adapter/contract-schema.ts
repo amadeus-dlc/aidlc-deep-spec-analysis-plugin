@@ -4,7 +4,8 @@
 // Error.message をそのまま運ぶ。
 
 import { readFileSync } from "node:fs";
-import { type Result, type Schema, err, ok } from "../domain/index.ts";
+import { type Result, err, ok } from "../domain/index.ts";
+import type { Schema } from "./schema-validator.ts";
 
 export interface SchemaUnreadable {
   readonly cause: string;

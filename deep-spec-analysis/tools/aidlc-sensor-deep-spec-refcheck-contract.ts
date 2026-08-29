@@ -25,14 +25,21 @@
 import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { findRecordRoot, parseFlags, readIfExists, relArtifact, renderVerdictLine , readContractSchema} from "./kernel/adapter/index.ts";
 import {
   type Json,
   extractFences,
-  idCompare,
+  findRecordRoot,
   isObject,
+  parseFlags,
   parseMarkdownTables,
   parseYamlSubset,
+  readContractSchema,
+  readIfExists,
+  relArtifact,
+  renderVerdictLine,
+} from "./kernel/adapter/index.ts";
+import {
+  idCompare,
   safeTarget,
   sha256,
   sortedUnique,
@@ -44,7 +51,7 @@ import {
   type Skipped,
 } from "./refcheck/domain/index.ts";
 import { ReferenceCheckReport, ReferenceCheckReportId } from "./refcheck/domain/index.ts";
-import { ReferenceCheckReportRepositoryImpl } from "./refcheck/adapter/index.ts";
+import { ReferenceCheckReportRepositoryImpl, conformToContract } from "./refcheck/adapter/index.ts";
 
 const BACKEND = "contract-summary";
 const TARGET_BASENAME = "contract-summary.md";
@@ -240,18 +247,20 @@ function main(): void {
     checked,
     findings,
     skipped,
-    findingsSchema: readContractSchema(join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json")),
   });
+  const conformed = conformToContract(report, readContractSchema(
+    join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"),
+  ));
   if (!flags.reportOnly) {
-    const saved = new ReferenceCheckReportRepositoryImpl().save(report);
+    const saved = new ReferenceCheckReportRepositoryImpl().save(conformed);
     if (!saved.ok) {
       process.stderr.write(`deep-spec-refcheck: failed to write ${saved.error.path}: ${saved.error.kind}${"cause" in saved.error ? ` (${saved.error.cause})` : ""}\n`);
       process.exit(1);
     }
   }
 
-  process.stdout.write(renderVerdictLine(report.passes(), report.findingsCount(),
-    report.skippedCount(), flags.reportOnly ? "report-only" : undefined));
+  process.stdout.write(renderVerdictLine(conformed.passes(), conformed.findingsCount(),
+    conformed.skippedCount(), flags.reportOnly ? "report-only" : undefined));
   process.exit(0);
 }
 

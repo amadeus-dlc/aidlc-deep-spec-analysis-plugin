@@ -403,3 +403,18 @@ corrupt・backend 不一致破損を固定。カバレッジゲートの憲章�
 domain 層）を bunfig に明文化し、adapter/usecase は契約・spawn スイートが
 検証する。同じレシート形が残る legacy design-lib のライタは PR5 の解体で
 同様に処置する。
+
+### PR2b-1 補遺 — 追加裁定 2 件：RepositoryError の配置と Json の追放
+
+- **RepositoryError は use-case 層**（アウトプットポートの一部）に置く。
+  Repository は本来ドメインの責務とされるが、ドメイン層に置くとドメイン
+  オブジェクト内部から Repository を使うリスクが生まれるため、Repository の
+  語彙ごとドメインから遠ざける（`kernel/usecase`）。
+- **Json はユビキタス言語ではない**。直列化形式——`Json` ユニオン・正準 JSON・
+  JSON Schema 検証器・YAML サブセット/markdown パーサ——はインターフェイス
+  アダプタ層の知識であり、`kernel/domain` から追放した（domain に残るのは
+  Result・sha256・id 順序・target サニタイズ・要件 id 抽出・名前正規化のみ）。
+  集約は型付き語彙だけを話し、新設の adapter serializer が描画（正準キー順・
+  irHash）・契約適合（`conformToContract`——凍結文言で集約を降格させ、verdict
+  が「書かれるもの」から導出される性質を維持）・再構成用の文書解体を持つ。
+  降格文言は emitter（adapter）が組み、ドメインは値として保持する。
