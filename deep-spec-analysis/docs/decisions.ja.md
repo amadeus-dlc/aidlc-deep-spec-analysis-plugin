@@ -500,3 +500,55 @@ diff は空、golden は無変更。
   両経路を再現し、doctor は 0 errors。
 - Issue #28（負荷時の稀な z3 witness 非決定性）は設計上オープンのまま：
   決定化オプションは golden バイトを変えるため、この移行では禁じ手。
+
+## DDD 移行 PR4 — verify-quint が requirements 縦割りへ解体（2026-08-30、#17）
+
+第二の v1 バックエンドが 1,154 行の自己完結コピーを失い、interactor 形で
+requirements コンテキストに合流した。バイト同一の重複（寛容 IR パース・
+正準ソート表・findings 文書ライタ・クロスチェック再計算）はすべて削除し、
+PR3 が確立したモジュールを再利用する。base↔head パリティスナップショットの
+diff は空、golden は無変更。
+
+- **共有の背骨をそのまま再利用**：`FormalModelRepository`・
+  `VerificationReport`＋Repository（適合 save）・`crossCheckReport`・
+  4-kind 順位 VO。バックエンド非依存の降格 2 種（ir-unreadable・
+  version-mismatch）は明示 `method` 引数つきで
+  `verification-degradation.ts` へ——quint はこれらの経路で
+  `"simulation"`、smt は `"exhaustive"` を凍結する。`smt-degradation.ts` /
+  `quint-degradation.ts` にはバックエンド固有語彙だけが残る
+  （`z3 could not be executed` と `quint CLI missing`、および quint の
+  machine-uncompilable＝**検出済み** method 下での全対象 compile-error
+  文書）。
+- **requirements/domain** が quint の意味を獲得：`evaluateExpression`
+  （帰属評価のための寛容純評価）、decode 済み `TraceState` 語彙
+  （witness ユニオンが `{trace}` を持つ）、`QuintMachineFacts`、
+  `interpretQuintVerdicts`——3 フェーズ（機械不変量：デッドロックと違反
+  成分帰属、leads-to 時相：蓄積 skip ガード、全属性束縛シナリオ判定）を
+  detail 文字列逐語で所有。
+- **requirements/adapter** が quint の形式を獲得：モジュールコンパイラ
+  （生成テキスト逐語。**CQS 修正**——旧 `compileMachine` は引数の
+  `skipped[]` を破壊していたが、新コンパイラはコンパイル時 skip を
+  戻り値で返す）、ITF デコーダ、`QuintClientImpl`（probe・java/Apalache
+  の method 検出・tmpdir 編成・凍結 seed/予算/タイムアウト定数・型付き
+  判定写像）。env 読取（`AIDLC_DEEP_SPEC_QUINT_BIN`・
+  `AIDLC_DEEP_SPEC_QUINT_METHOD`・`APALACHE_DIST`・`HOME`）は entry へ。
+- **意図的な非観測逸脱**（記録済み・パリティと 5 レンズ敵対的レビューで
+  検証済み）：from/to がモジュールへコンパイルされなかった leads-to
+  義務の時相実行は spawn しない（旧実装は無駄に実行していた——出力は
+  同一）、死んだ `QuintRun.ok` / `temporalIds` フィールドは削除、
+  そして退化入力（義務 id / シナリオ id の重複 IR）ではクライアントが
+  一意 id ごとに 1 回 spawn する（旧実装は IR エントリごと。解釈が
+  エントリごとに同一判定を再生するため、決定論実行の文書バイトは同一）。
+  レビューは裁定済みの「verdict は conformed（書かれた姿）から導出」も
+  再確認し、実在した挙動差 1 件を修正させた：モデル Repository が旧
+  `existsSync` ゲートを正確に再現する（stat できないパス——例：親
+  ディレクトリの権限拒否——は not-applicable / exit 0 であり I/O エラー
+  ではない）。
+- **証明**：in-process golden スイートが実 Impl（実 quint CLI・seeded
+  simulation）で interactor を駆動して `quint.json` と収束後の
+  `cross-check.json` をバイト一致で照合。requirements/domain は
+  per-file カバレッジ 100% を維持。kind-rank 証明は単一の共有 v1 表を
+  固定。実 sandbox で CLI なし降格（dispatcher `tool-unavailable`・
+  凍結文書）と golden 同一の seeded 実行を再現し doctor 0 errors。
+  マージ前に 5 レンズの敵対的レビュー Workflow で新旧のバイトドリフトを
+  照合した。

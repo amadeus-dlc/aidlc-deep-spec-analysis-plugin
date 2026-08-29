@@ -479,3 +479,61 @@ untouched.
 - Issue #28 (rare z3 witness nondeterminism under load) stays open by
   design: any determinization option would change golden bytes, which
   this migration is forbidden to do.
+
+## DDD migration PR4 — verify-quint dissolves into the requirements vertical (2026-08-30, #17)
+
+The second v1 backend loses its 1,154-line self-contained copy and joins
+the requirements context in the interactor shape, deleting every
+byte-identical duplicate (tolerant IR parse, canonical sort tables,
+findings-doc writer, cross-check recomputation) in favor of the modules
+PR3 established. The base-vs-head parity snapshot diff is empty and the
+goldens are untouched.
+
+- **Shared spine reused as-is**: `FormalModelRepository`,
+  `VerificationReport` + repository (conforming save), `crossCheckReport`,
+  and the 4-kind order VO. The two backend-agnostic degradations
+  (ir-unreadable, version-mismatch) moved to
+  `verification-degradation.ts` with an explicit `method` parameter —
+  quint freezes `"simulation"` on those paths where smt freezes
+  `"exhaustive"` — leaving `smt-degradation.ts` / `quint-degradation.ts`
+  with only their backend-specific vocabularies (`z3 could not be
+  executed` vs `quint CLI missing`, plus quint's machine-uncompilable
+  all-targets compile-error document under the *detected* method).
+- **requirements/domain** gains the quint meaning: `evaluateExpression`
+  (tolerant pure evaluation for attribution), the decoded `TraceState`
+  vocabulary (the witness union now carries `{trace}`),
+  `QuintMachineFacts`, and `interpretQuintVerdicts` — the three phases
+  (machine invariants incl. deadlock and violated-component attribution,
+  leads-to temporals with the accumulated-skip guard, fully-bound
+  scenario verdicts) with every detail string verbatim.
+- **requirements/adapter** gains the quint formats: the module compiler
+  (verbatim emitted text; the **CQS fix** — legacy `compileMachine`
+  mutated its `skipped[]` argument, the new compiler returns its compile
+  skips), the ITF decoder, and `QuintClientImpl` (probe, java/Apalache
+  method detection, tmpdir orchestration, frozen seed/budget/timeout
+  constants, typed verdict mapping). Env reads
+  (`AIDLC_DEEP_SPEC_QUINT_BIN`, `AIDLC_DEEP_SPEC_QUINT_METHOD`,
+  `APALACHE_DIST`, `HOME`) moved to the entry.
+- **Deliberate non-observable deviations** (documented, verified by
+  parity and by a five-lens adversarial review): temporal runs are no
+  longer spawned for leads-to obligations whose from/to never compiled
+  into the module (legacy ran them uselessly; output identical); the
+  dead `QuintRun.ok` / `temporalIds` fields are gone; and for the
+  degenerate duplicate-obligation-id / duplicate-scenario-id IR, the
+  client spawns one quint run per unique id where legacy spawned one per
+  IR entry — the interpretation replays the single verdict per entry,
+  so the document bytes are identical in every deterministic run. The
+  review also re-confirmed the ruling-approved verdict derivation from
+  the conformed (written) report, and caught one real divergence that
+  was fixed: the model repository now reproduces the legacy `existsSync`
+  gate exactly (an unstat-able path — e.g. a permission-denied parent
+  directory — resolves to not-applicable/exit 0, not an I/O error).
+- **Proofs**: the in-process golden suite drives the interactor over
+  real Impls (real quint CLI, seeded simulation) and byte-matches
+  `quint.json` plus the converged `cross-check.json`;
+  requirements/domain stays at 100% per-file coverage; the kind-rank
+  proof now pins the single shared v1 table; the live sandbox reproduced
+  the no-CLI degradation (dispatcher `tool-unavailable`, frozen document)
+  and the golden-identical seeded run with the doctor at 0 errors; a
+  five-lens adversarial review workflow compared old and new for byte
+  drift before merge.

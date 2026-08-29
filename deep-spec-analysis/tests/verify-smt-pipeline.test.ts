@@ -433,7 +433,7 @@ describe("cross-check computation", () => {
 
 describe("degradation reports and ordering", () => {
   test("irUnreadableReport freezes the reason, the 0.0.0 version, and the empty-input hash", () => {
-    const r = irUnreadableReport(VerificationReportId.of("/v", "smt"), "IR is not a JSON object");
+    const r = irUnreadableReport(VerificationReportId.of("/v", "smt"), "exhaustive", "IR is not a JSON object");
     expect(r.unavailableReason()).toBe("IR unreadable: IR is not a JSON object — see the deep-spec-ir-valid sensor for details");
     expect(r.irVersion()).toBe("0.0.0");
     expect(r.irHash()).toBe(sha256(""));
@@ -450,7 +450,7 @@ describe("degradation reports and ordering", () => {
     });
     expect(m.supportsMajor(1)).toBe(false);
     expect(m.majorVersion()).toBe(3);
-    const vm = versionMismatchReport(VerificationReportId.of("/v", "smt"), m, "h");
+    const vm = versionMismatchReport(VerificationReportId.of("/v", "smt"), m, "h", "exhaustive");
     expect(vm.skipped().map((s) => s.target)).toEqual(["OB-2", "SC-1"]);
     const su = solverUnavailableReport(
       VerificationReportId.of("/v", "smt"),
