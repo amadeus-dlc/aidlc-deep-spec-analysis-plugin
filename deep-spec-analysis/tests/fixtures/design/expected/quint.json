@@ -1,0 +1,49 @@
+{
+  "backend": "quint",
+  "irVersion": "1.0.0",
+  "irHash": "fab23432eb465f21f56a341c6cb32185751c938667ae78cf20a15aae11d4ac31",
+  "method": "simulation",
+  "findings": [
+    {
+      "kind": "conflict",
+      "frRefs": [
+        "FR-1"
+      ],
+      "targets": [
+        "DOB-1"
+      ],
+      "witness": {
+        "trace": [
+          {
+            "ticket.escalated": false,
+            "ticket.flagged": false,
+            "ticket.priority": 1,
+            "ticket.status": "open"
+          },
+          {
+            "ticket.escalated": false,
+            "ticket.flagged": false,
+            "ticket.priority": 1,
+            "ticket.status": "triaged"
+          },
+          {
+            "ticket.escalated": true,
+            "ticket.flagged": false,
+            "ticket.priority": 1,
+            "ticket.status": "triaged"
+          }
+        ]
+      },
+      "unit": "u1-tickets",
+      "detail": "The event machine can reach a state that violates DOB-1 (step trace attached): the event rules do not preserve the obligation."
+    }
+  ],
+  "skipped": [
+    {
+      "target": "SM-1",
+      "reason": "capability",
+      "unit": "u1-tickets",
+      "detail": "unreachable-state detection for SM-1 requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: archived, closed, triaged)"
+    }
+  ]
+}

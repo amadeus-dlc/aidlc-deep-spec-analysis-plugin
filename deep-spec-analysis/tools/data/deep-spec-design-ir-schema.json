@@ -1,0 +1,476 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "deep-spec-design-ir-schema.json",
+  "title": "Deep Spec design IR (contract 3)",
+  "description": "Backend-neutral intermediate representation of a formalized functional design: one entry per unit-of-work, formalizing that unit's entities.md, rules.md, and functional-spec.md state machines. Produced by the deep-spec-analysis-functional-verify stage (LLM), consumed by deterministic verification backends. State machines are native (transitions, ignores, initial states) and compile down to the contract-1 event/enum encoding. The `irKind` discriminator keeps design IRs out of the requirements backends and vice versa. MUST NOT contain backend-specific syntax (SMT-LIB, Quint). The expression grammar and attribute types are byte-identical duplicates of contract 1 (asserted by the conformance suite).",
+  "type": "object",
+  "required": ["irVersion", "irKind", "units"],
+  "additionalProperties": false,
+  "properties": {
+    "irVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "description": "SemVer of the design IR contract line (independent of contract 1). Backends refuse (skip-all) on major mismatch."
+    },
+    "irKind": {
+      "const": "design",
+      "description": "Discriminator: this document is a design IR. Requirements backends ignore documents carrying it; design backends require it."
+    },
+    "inputs": {
+      "type": "array",
+      "description": "Provenance of the formalization: record-relative paths and content hashes of the artifacts each unit was formalized from, canonically sorted by artifact.",
+      "items": {
+        "type": "object",
+        "required": ["artifact", "sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "artifact": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/unit" }
+    }
+  },
+  "definitions": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9_]*$"
+    },
+    "attrPath": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9_]*\\.[a-z][a-zA-Z0-9_]*$",
+      "description": "entity.attribute reference path."
+    },
+    "frRef": {
+      "type": "string",
+      "pattern": "^(FR|NFR)-?[0-9]+(\\.[0-9]+)*$",
+      "description": "An FR/NFR identifier that must exist verbatim in requirements.md."
+    },
+    "frRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/frRef" }
+    },
+    "brRef": {
+      "type": "string",
+      "pattern": "^BR[0-9]+\\.[0-9]+$",
+      "description": "A business-rule identifier that must exist verbatim in this unit's rules.md."
+    },
+    "brRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/brRef" }
+    },
+    "entity": {
+      "type": "object",
+      "required": ["name", "attributes"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/definitions/identifier" },
+        "description": { "type": "string" },
+        "attributes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/attribute" }
+        }
+      }
+    },
+    "attribute": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/definitions/identifier" },
+        "description": { "type": "string" },
+        "type": { "$ref": "#/definitions/attrType" }
+      }
+    },
+    "attrType": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "bool" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "int" },
+            "min": { "type": "integer" },
+            "max": { "type": "integer" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "values"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "enum" },
+            "values": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "#/definitions/identifier" }
+            }
+          }
+        }
+      ]
+    },
+    "expr": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["op", "args"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "enum": ["and", "or"] },
+            "args": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/definitions/expr" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "args"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "not" },
+            "args": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": { "$ref": "#/definitions/expr" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "args"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "enum": ["implies", "iff", "eq", "ne", "lt", "le", "gt", "ge", "add", "sub", "mul"] },
+            "args": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": { "$ref": "#/definitions/expr" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "path"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "ref" },
+            "path": { "$ref": "#/definitions/attrPath" },
+            "prime": {
+              "type": "boolean",
+              "description": "true = post-state value. Only legal inside an event obligation's effect, a transition's effect, or a scenario expect clause."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "bool" },
+            "value": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "int" },
+            "value": { "type": "integer" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "enum" },
+            "value": { "$ref": "#/definitions/identifier" }
+          }
+        }
+      ]
+    },
+    "temporalSpec": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["pattern", "assert"],
+          "additionalProperties": false,
+          "properties": {
+            "pattern": { "const": "always" },
+            "assert": { "$ref": "#/definitions/expr" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["pattern", "from", "to"],
+          "additionalProperties": false,
+          "properties": {
+            "pattern": { "const": "leads-to" },
+            "from": { "$ref": "#/definitions/expr" },
+            "to": { "$ref": "#/definitions/expr" }
+          }
+        }
+      ]
+    },
+    "unit": {
+      "type": "object",
+      "required": ["unit", "schema", "obligations", "stateMachines", "scenarios", "background", "unformalized"],
+      "additionalProperties": false,
+      "properties": {
+        "unit": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+          "description": "The unit-of-work name (its construction directory name)."
+        },
+        "schema": {
+          "type": "object",
+          "required": ["entities"],
+          "additionalProperties": false,
+          "properties": {
+            "entities": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/entity" }
+            }
+          }
+        },
+        "obligations": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/designObligation" }
+        },
+        "stateMachines": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/stateMachine" }
+        },
+        "scenarios": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/designScenario" }
+        },
+        "background": {
+          "type": "array",
+          "description": "Definitional truths from the entity model (never attributed a finding).",
+          "items": { "$ref": "#/definitions/designBackground" }
+        },
+        "unformalized": {
+          "type": "array",
+          "description": "Rules, attributes, or workflows that could not be formalized, with the reason. Never silently dropped.",
+          "items": { "$ref": "#/definitions/designUnformalized" }
+        }
+      }
+    },
+    "designObligation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["id", "nature", "origin", "assert"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/definitions/designObligationId" },
+            "nature": { "enum": ["invariant", "numeric"] },
+            "origin": { "$ref": "#/definitions/origin" },
+            "brRefs": { "$ref": "#/definitions/brRefs" },
+            "frRefs": { "$ref": "#/definitions/frRefs" },
+            "statement": { "type": "string", "description": "Human-readable statement of the obligation (quoted in the report)." },
+            "assert": { "$ref": "#/definitions/expr" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "nature", "origin", "trigger", "guard", "effect"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/definitions/designObligationId" },
+            "nature": { "const": "event" },
+            "origin": { "$ref": "#/definitions/origin" },
+            "brRefs": { "$ref": "#/definitions/brRefs" },
+            "frRefs": { "$ref": "#/definitions/frRefs" },
+            "statement": { "type": "string" },
+            "trigger": { "$ref": "#/definitions/identifier" },
+            "guard": { "$ref": "#/definitions/expr" },
+            "effect": { "$ref": "#/definitions/expr" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "nature", "origin", "temporal"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "$ref": "#/definitions/designObligationId" },
+            "nature": { "const": "state-temporal" },
+            "origin": { "$ref": "#/definitions/origin" },
+            "brRefs": { "$ref": "#/definitions/brRefs" },
+            "frRefs": { "$ref": "#/definitions/frRefs" },
+            "statement": { "type": "string" },
+            "temporal": { "$ref": "#/definitions/temporalSpec" }
+          }
+        }
+      ]
+    },
+    "designObligationId": {
+      "type": "string",
+      "pattern": "^DOB-[0-9]+$"
+    },
+    "origin": {
+      "enum": ["entities", "rules", "functional-spec"],
+      "description": "Which source-of-truth artifact this obligation formalizes. brRefs are required when origin is \"rules\" (checked by the design-ir-valid sensor)."
+    },
+    "stateMachine": {
+      "type": "object",
+      "required": ["id", "entity", "attribute", "initial", "transitions"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^SM-[0-9]+$"
+        },
+        "entity": { "$ref": "#/definitions/identifier" },
+        "attribute": {
+          "$ref": "#/definitions/identifier",
+          "description": "The lifecycle attribute. Must resolve to a declared enum attribute; its values ARE the state set."
+        },
+        "initial": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/definitions/identifier" }
+        },
+        "transitions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/definitions/transition" }
+        },
+        "ignores": {
+          "type": "array",
+          "description": "Intended no-reactions: (state, trigger) cells deliberately left without a transition. Compiled to explicit no-op events so intended silence never reports as a deadlock or completeness gap.",
+          "items": {
+            "type": "object",
+            "required": ["state", "trigger", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "state": { "$ref": "#/definitions/identifier" },
+              "trigger": { "$ref": "#/definitions/identifier" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
+        "deterministic": {
+          "type": "boolean",
+          "description": "Default true. false waives the same-(state,trigger) overlap check for this machine (reported as skipped with reason waived)."
+        }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "required": ["id", "from", "to", "trigger"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^TR-[0-9]+$",
+          "description": "Unique within the unit (across all of its machines)."
+        },
+        "from": { "$ref": "#/definitions/identifier" },
+        "to": { "$ref": "#/definitions/identifier" },
+        "trigger": { "$ref": "#/definitions/identifier" },
+        "guard": {
+          "$ref": "#/definitions/expr",
+          "description": "Additional guard beyond the implicit state == from. Prime-free."
+        },
+        "effect": {
+          "$ref": "#/definitions/expr",
+          "description": "Additional effect beyond the implicit state' = to: a conjunction of primed assignments over OTHER attributes (never the machine's own attribute)."
+        },
+        "brRefs": { "$ref": "#/definitions/brRefs" },
+        "statement": { "type": "string" }
+      }
+    },
+    "designScenario": {
+      "type": "object",
+      "required": ["id", "kind", "bindings"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^DSC-[0-9]+$"
+        },
+        "kind": { "enum": ["accept", "reject"] },
+        "brRefs": { "$ref": "#/definitions/brRefs" },
+        "frRefs": { "$ref": "#/definitions/frRefs" },
+        "title": { "type": "string" },
+        "bindings": {
+          "type": "object",
+          "description": "attribute path -> literal value. Fully-bound, event-free scenarios are the cross-check surface.",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z][a-zA-Z0-9_]*\\.[a-z][a-zA-Z0-9_]*$" },
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "boolean" },
+              { "type": "integer" },
+              { "type": "string", "pattern": "^[a-z][a-zA-Z0-9_]*$" }
+            ]
+          }
+        },
+        "event": {
+          "type": "object",
+          "required": ["trigger"],
+          "additionalProperties": false,
+          "properties": {
+            "trigger": { "$ref": "#/definitions/identifier" }
+          }
+        },
+        "expect": {
+          "$ref": "#/definitions/expr",
+          "description": "Expected condition. May use primed refs when event is present."
+        }
+      }
+    },
+    "designBackground": {
+      "type": "object",
+      "required": ["id", "assert"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^DBG-[0-9]+$"
+        },
+        "text": { "type": "string" },
+        "assert": { "$ref": "#/definitions/expr" }
+      }
+    },
+    "designUnformalized": {
+      "type": "object",
+      "required": ["targets", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "description": "What could not be formalized: BR ids, entity.attribute paths, or workflow names.",
+          "items": { "type": "string" }
+        },
+        "reason": { "type": "string" },
+        "text": { "type": "string" }
+      }
+    }
+  }
+}

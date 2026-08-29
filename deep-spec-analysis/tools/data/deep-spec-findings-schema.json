@@ -101,9 +101,11 @@
             "cross-check-disagreement",
             "structure-invalid",
             "reference-broken",
-            "consistency-mismatch"
+            "consistency-mismatch",
+            "unreachable",
+            "redundancy"
           ],
-          "description": "structure-invalid: an artifact violates its own declared well-formedness. reference-broken: an identifier does not resolve where it is declared to resolve. consistency-mismatch: two artifacts/views that must agree, disagree. The first four kinds are the v1 solver vocabulary, unchanged."
+          "description": "structure-invalid: an artifact violates its own declared well-formedness. reference-broken: an identifier does not resolve where it is declared to resolve. consistency-mismatch: two artifacts/views that must agree, disagree. unreachable: a rule/transition whose guard can never hold (dead), or a state no execution reaches within the bound. redundancy: a rule/transition provably subsumed by a sibling (same trigger, narrower guard, identical effect). The first four kinds are the v1 solver vocabulary, unchanged."
         },
         "frRefs": {
           "type": "array",

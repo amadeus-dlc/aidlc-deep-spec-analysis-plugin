@@ -1,0 +1,126 @@
+{
+  "backend": "smt",
+  "irVersion": "1.0.0",
+  "irHash": "fab23432eb465f21f56a341c6cb32185751c938667ae78cf20a15aae11d4ac31",
+  "method": "exhaustive",
+  "findings": [
+    {
+      "kind": "conflict",
+      "frRefs": [],
+      "targets": [
+        "TR-1",
+        "TR-2"
+      ],
+      "witness": {
+        "core": [
+          "e_TR_1",
+          "e_TR_2"
+        ]
+      },
+      "unit": "u1-tickets",
+      "detail": "Events TR-1 and TR-2 for trigger \"triage\" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both."
+    },
+    {
+      "kind": "completeness-gap",
+      "frRefs": [],
+      "targets": [
+        "DOB-2"
+      ],
+      "witness": {
+        "model": {
+          "ticket.escalated": false,
+          "ticket.flagged": false,
+          "ticket.priority": 0,
+          "ticket.status": "open"
+        }
+      },
+      "unit": "u1-tickets",
+      "detail": "No rule for trigger \"escalate\" applies to the witness state: the behavior of this input region is unspecified."
+    },
+    {
+      "kind": "completeness-gap",
+      "frRefs": [],
+      "targets": [
+        "DOB-3",
+        "DOB-4"
+      ],
+      "witness": {
+        "model": {
+          "ticket.escalated": false,
+          "ticket.flagged": false,
+          "ticket.priority": 0,
+          "ticket.status": "open"
+        }
+      },
+      "unit": "u1-tickets",
+      "detail": "No rule for trigger \"flag\" applies to the witness state: the behavior of this input region is unspecified."
+    },
+    {
+      "kind": "completeness-gap",
+      "frRefs": [],
+      "targets": [
+        "SM-1",
+        "TR-3",
+        "TR-4"
+      ],
+      "witness": {
+        "model": {
+          "ticket.escalated": false,
+          "ticket.flagged": false,
+          "ticket.priority": 1,
+          "ticket.status": "archived"
+        }
+      },
+      "unit": "u1-tickets",
+      "detail": "No rule for trigger \"close\" applies to the witness state: the behavior of this input region is unspecified."
+    },
+    {
+      "kind": "completeness-gap",
+      "frRefs": [],
+      "targets": [
+        "TR-1",
+        "TR-2"
+      ],
+      "witness": {
+        "model": {
+          "ticket.escalated": false,
+          "ticket.flagged": false,
+          "ticket.priority": 0,
+          "ticket.status": "triaged"
+        }
+      },
+      "unit": "u1-tickets",
+      "detail": "No rule for trigger \"triage\" applies to the witness state: the behavior of this input region is unspecified."
+    },
+    {
+      "kind": "unreachable",
+      "frRefs": [],
+      "targets": [
+        "TR-4"
+      ],
+      "witness": {
+        "core": [
+          "ant_TR_4"
+        ]
+      },
+      "unit": "u1-tickets",
+      "detail": "The guard of TR-4 can never hold under the entity constraints and invariants (witness core attached): the transition is dead."
+    },
+    {
+      "kind": "redundancy",
+      "frRefs": [],
+      "targets": [
+        "DOB-3",
+        "DOB-4"
+      ],
+      "witness": {
+        "core": [
+          "ant_DOB_3_DOB_4"
+        ]
+      },
+      "unit": "u1-tickets",
+      "detail": "DOB-3 and DOB-4 are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect — one of them can be removed."
+    }
+  ],
+  "skipped": []
+}

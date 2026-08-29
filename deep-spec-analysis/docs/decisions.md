@@ -162,3 +162,40 @@ tmp から作る自動 E2E は常にバニラツリー開始のため踏めな�
 - **是正**: `scripts/install.ts` に **upgrade refresh** を追加——compose 前に、dist projection が出荷する payload（sensors/ tools/ knowledge/ agents/ scopes/ stages/）と同名の既存ファイルだけを harness ツリーから除去し、no-clobber コピーに最新版を再配置させる。プラグイン以外のファイルには一切触れず（additive-only 維持）、contribution のステージ合流は内容ベースで自己更新するため対象外。compose が再配置に失敗すれば既存の sentinel 検査が即失敗する（静かな欠落は起きない）。
 - **回帰テスト**: `tests/intent-e2e.test.ts` の upgrade-path ブロック——composed スキーマを故意に stale 化 → インストーラ再実行 → `upgrade refresh` 行の出力・スキーマ最新化・composed センサーの実射成功をアサート。
 - **実射マトリクス（実サンドボックス、ディスパッチャ `aidlc-sensor.ts fire` 経由）**: 3 センサーとも registry 登録・glob 照合（`**/functional-design/*.md` の bespoke マッチャ含む）・発火 OK。欠陥入り成果物で domain 9 / contract 4 / functional 15 findings、doctor の report-only スキャンは手動発火していない u2-billing も自力発見（計 31 findings / 4 成果物、全 advisory）。
+
+## 設計検証拡張フェーズ②（設計IR + SMT/Quint 単独検査）の設計判断（2026-08-29、v0.3.0）
+
+要件の正典は [issue #2](https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/issues/2) と [issue #4（フェーズ②）](https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/issues/4)。実装：設計 IR（契約3、`deep-spec-design-ir-schema.json`）、検証ステージ `deep-spec-analysis-functional-verify`（construction・for_each なし集約型）、センサー trio `deep-spec-design-{ir-valid,verify-smt,verify-quint}`、doctor のユニット単位カバレッジスキャン。
+
+### 中核アーキテクチャ：コンパイルダウン再利用
+
+設計 IR の各ユニットを契約1 文書へロワリングし（遷移→暗黙 `state==from` ガード＋`state'=to` 効果の event obligation、ignores→明示ノーオップ event）、**実証済みの v1 バックエンドを子プロセスとして実行**、findings を設計語彙（DOB/TR/SM/DSC・ユニット帰責）へリマップする。ソルバー配管の複製はゼロ。共有機構は `tools/deep-spec-design-lib.ts`（プラグイン同梱 lib、フェーズ①の precedent を踏襲）。
+
+新検査 2 種は**恒真の合成不変条件で v1 の前件空虚（vacuity）検査に相乗り**して獲得：
+
+- `unreachable`（デッドガード）: `implies(guard, true)` — 前件（ガード）の充足不能＝死
+- `redundancy`（シャドーイング）: `implies(and(guardB, not(guardA)), true)` — 空虚⇔ guardB⇒guardA、効果の正準同値と合わせて包摂。相互包摂は「同値」1 findings に畳み込み、デッド要素の空虚な包摂は抑止
+
+恒真式なので global／gap／シナリオ判定を一切変えない（実測確認済み）。
+
+### Quint 到達不能状態検査（Q1 の決着）
+
+bounded モード限定・キャップ制（`AIDLC_DEEP_SPEC_QUINT_UNREACH_CAP`、既定 2）。機械の非 initial 状態ごとに「イベント＋単一不変条件 `attr != state`」の変種ロワリングで v1 bounded verify を実行し、**違反 trace の終端がその状態のときだけ「到達」**と判定（conflict の有無だけでは不十分——実装時に発見：設計不変条件を invAll に残すと任意の到達可能違反がプローブを覆い隠し全状態が「到達済み」誤判定になる。変種では設計不変条件を完全に除外——無制約探索で到達しないなら真に到達不能、の健全方向）。キャップ超過・プローブ失敗は理由付き skip（無沈黙）。実測：Apalache の JVM 温存でプローブ約 1 秒/件、キャップ 2 で全体 10 秒程度。simulation モードは capability skip（ランダム模擬の非観測は証拠でない）。
+
+### 要件（issue #2 FR）からの逸脱・精緻化
+
+1. **`initial` は探索を制約しない（v0.3.0）**: FR6.7 の「initial → init 制約」はコンパイルダウン先の v1 init（全合法状態）に注入点が無く未実装。帰結は保守的（不変条件保存は過剰報告方向・到達不能は過小報告方向でいずれも健全）。ir-valid は initial の値域チェックを行う。フェーズ③または v1 バックエンドへの init 制約追加時に再訪。
+2. **redundancy の効果同値は正準文字列比較**（FR7.5 の「意味的等価」の保守近似——構文が異なる意味的同値効果は報告しない。偽陽性ゼロ方向）。
+3. **contract-2 逸脱ゼロ化の継続**: kind に `unreachable` / `redundancy` を追加（フェーズ計画どおり additive）。
+4. **TR id はユニット内一意**（Q10 前半の決着。機械横断で密）。ユニット間の DSC/TR 衝突は findings の `unit` 欄で判別（FR1.10 の設計意図どおり）。
+5. **バージョン**: ②= v0.3.0（0.x 系列）。
+
+### 検証マトリクス（実測、2026-08-29）
+
+| 対象 | 結果 | 証拠 |
+|---|---|---|
+| design conformance（`tests/design-verify.test.ts`、12件） | ✔ | ir-valid 正/負 fixture（重複TR・initial域外・自属性代入・幻BR・BRカバレッジ沈黙を全検出）、SMT golden バイト一致（conflict TR-1/TR-2・unreachable TR-4・相互 redundancy DOB-3/DOB-4・gap×4、ignore セル無誤報）、Quint simulation golden＋cross-check 収束、再実行バイト同一、契約1/3 共有定義のバイト同一（expr は prime 説明文のみ差、構造同一をテスト）、**v1 モデル⇔設計モデルの相互不発火**、irKind 欠如→unavailable、quint 不在→exit 127、版不一致→skip-all |
+| intent-e2e フェーズ②ブロック（+5件） | ✔ | ステージがグラフ登録・feature=EXECUTE / classic=SKIP、`--single` 受理（load-steering）、**実ディスパッチャ経由で trio 発火**（ir-valid passed / smt failed 全4種 kind / quint failed）、doctor ユニット単位カバレッジ 0/3→1/3→touch 後 stale で 0/3 |
+| **実サンドボックス実射**（後入れアップグレード） | ✔ | upgrade refresh 18 ファイル→compose、ディスパッチャ実射で smt 7 findings、**Quint bounded 自動検出（実 Apalache）で unreachable "archived" を検出**＋DOB-1 の 2 状態 trace＋キャップ超過分の明示 skip（10.4 秒）、cross-check DSC-1 一致、doctor が feature intent のユニットを unverified→verified（1/1）遷移・**classic intent はスコープ除外（仕様どおり）** |
+| v1・フェーズ① リグレッション | ✔ | 全 72 テスト green、既存 golden バイト同一 |
+| validator / ビルド | ✔ | VALID（errors 0）、7 ハーネス全ビルド OK |
