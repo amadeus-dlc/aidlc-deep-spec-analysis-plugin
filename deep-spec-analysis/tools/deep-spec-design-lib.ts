@@ -35,7 +35,7 @@ import {
   sha256,
   sortedUnique,
   validateSchema,
-} from "./deep-spec-lib.ts";
+} from "./kernel/domain/index.ts";
 
 export const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 export const DESIGN_VERIFY_DIRNAME = "deep-spec-design-verify";

@@ -31,7 +31,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateSchema } from "./deep-spec-lib.ts";
+import { validateSchema } from "./kernel/domain/index.ts";
 
 const BACKEND = "quint";
 const FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";

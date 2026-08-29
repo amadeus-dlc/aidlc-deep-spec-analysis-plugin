@@ -48,7 +48,7 @@ import {
   sha256,
   sortedUnique,
   validateSchema,
-} from "./deep-spec-lib.ts";
+} from "./kernel/domain/index.ts";
 import {
   type DFinding,
   type DSkipped,

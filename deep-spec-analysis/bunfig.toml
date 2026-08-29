@@ -1,0 +1,20 @@
+# テスト設定 — domain 層の 90% カバレッジ床（DDD 移行の品質ゲート、issue #14）。
+#
+# 計測対象は tools/ のレイヤード domain 層のみ。センサー CLI・レガシー lib・
+# scripts・テスト補助はカバレッジ計測から除外する（CLI は子プロセス実行で
+# in-process 計測に乗らず、golden/e2e スイートが実効カバレッジを担う）。
+# CI は `bun test --coverage` で走り、床を割ると exit 非ゼロで落ちる。
+
+[test]
+coverageThreshold = 0.9
+coverageSkipTestFiles = true
+coveragePathIgnorePatterns = [
+  "tests/**",
+  "scripts/**",
+  "tools/aidlc-sensor-*.ts",
+  "tools/deep-spec-analysis-doctor.ts",
+  "tools/deep-spec-lib.ts",
+  "tools/deep-spec-design-lib.ts",
+  "tools/deep-spec-refinement-lib.ts",
+  "tools/data/**",
+]

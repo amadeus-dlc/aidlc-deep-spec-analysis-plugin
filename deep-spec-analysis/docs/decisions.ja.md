@@ -300,3 +300,30 @@ PR0 は安全網のみを導入し、production 変更はゼロ：
   テストペイロード禁止を純粋関数化し、**実ツリー適用前にインライン red
   example で検出力を証明**（ルール集の DoD）。現行フラット 13 ファイルは
   縮小専用の LEGACY allowlist に載り、PR10 で空になる。
+
+## DDD 移行 PR1 — kernel/domain 抽出とカバレッジ床（2026-08-29、#14）
+
+最初のレイヤードディレクトリ。`tools/kernel/domain/` に、`deep-spec-lib.ts`
+先頭部の純粋関数群（Json/isObject・canonicalStringify・sha256・idCompare/
+sortedUnique・extractFences・YAML サブセットパーサ・parseMarkdownTables・
+draft-07 サブセット validateSchema・safeTarget・requirementIds・
+normalizeName）を逐語移動し、ハウス `Result`（`ok`/`err`/`unreachable`、
+コンビネータなし）を新設した。決定：
+
+- **逐語移動・1 ファイル 1 概念・明示列挙の `index.ts` facade**（`export *`
+  禁止）。移動コードは元の英語コメントを保持——バイト凍結の移動でコメントを
+  書き換えるのは diff ノイズであり、日本語コメント方針は新規・再モデル化
+  コードに適用する（本 PR の新規ヘッダは日本語）。
+- **`deep-spec-lib.ts` からの再輸出なし**（shim 禁止）：importer 11 ファイル
+  とテスト 2 import を同一コミットで直繋ぎ替え。lib には後続 PR で解体する
+  残余（契約2 findings 語彙＋ライタ・record-root/relArtifact・CLI 契約）のみ
+  が残る。
+- **domain 90% カバレッジ床が稼働**：`bunfig.toml` で計測対象をレイヤード
+  domain に限定（センサー CLI・レガシー lib・tests は除外——CLI は子プロセス
+  実行で in-process 計測に乗らず、golden が実効カバレッジを担う）、CI は
+  `bun test --coverage`、ゲートは red 証明済み（threshold 0.999 → exit 1）。
+  kernel は新設の逐語文言単体スイートで 99%+——YAML 拒否文言とスキーマ検証の
+  キーワード別文言は golden の detail/errors[] に出るため完全一致で固定。
+- doctor に kernel canary 行（`tools/kernel/domain/index.ts`）を追加、e2e の
+  compose 済みファイル表明にネストパスを追加——tools/ サブディレクトリが
+  端から端まで運ばれることのリポジトリ内初の実証。
