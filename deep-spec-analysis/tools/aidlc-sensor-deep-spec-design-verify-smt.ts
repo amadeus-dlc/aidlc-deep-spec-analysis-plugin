@@ -27,7 +27,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { findRecordRoot, parseFlags, relArtifact } from "./kernel/adapter/index.ts";
-import { type Json, sha256 } from "./kernel/domain/index.ts";
+import { type Json } from "./kernel/adapter/index.ts";
+import { sha256 } from "./kernel/domain/index.ts";
 import {
   REFINEMENT_MAP_BASENAME,
   REQUIREMENTS_MODEL_RELPATH,

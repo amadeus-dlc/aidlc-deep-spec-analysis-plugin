@@ -6,23 +6,25 @@
 
 import { describe, expect, test } from "bun:test";
 import {
-  type Json,
-  type Result,
   canonicalStringify,
-  err,
   extractFences,
-  idCompare,
   isObject,
-  normalizeName,
-  ok,
   parseMarkdownTables,
   parseYamlSubset,
+  type Json,
+  validateSchema,
+} from "../tools/kernel/adapter/index.ts";
+import {
+  type Result,
+  err,
+  idCompare,
+  normalizeName,
+  ok,
   requirementIds,
   safeTarget,
   sha256,
   sortedUnique,
   unreachable,
-  validateSchema,
 } from "../tools/kernel/domain/index.ts";
 
 describe("result", () => {

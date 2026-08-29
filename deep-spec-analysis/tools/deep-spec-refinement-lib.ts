@@ -41,13 +41,15 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  type Json,
   canonicalStringify,
-  idCompare,
   isObject,
+  type Json,
+  validateSchema,
+} from "./kernel/adapter/index.ts";
+import {
+  idCompare,
   sha256,
   sortedUnique,
-  validateSchema,
 } from "./kernel/domain/index.ts";
 import {
   type DFinding,

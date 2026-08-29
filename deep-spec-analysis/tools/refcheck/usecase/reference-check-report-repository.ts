@@ -1,11 +1,12 @@
-// ReferenceCheckReport の永続化ポート。実装はアダプタ層の
-// ReferenceCheckReportRepositoryImpl（契約2 自己検証＋unavailable 降格＋
-// 正準描画を内部詳細として持つ）。save は書かれた文書の実数を返す——
-// 呼び手の verdict がファイルと矛盾し得ないための命令レシート
-//（公認の CQS 逸脱、設計文書 §5 参照）。
+// ReferenceCheckReport 集約の永続化・再構成ポート（Repository は集約の I/O 責務）。
+// 保存先／読出元は集約識別子から実装が導出する。不在・I/O 失敗・破損は
+// kernel 共有の RepositoryError（材料のみ）で返す。
 
-import type { EmitResult, RefcheckDoc } from "../domain/index.ts";
+import type { Result } from "../../kernel/domain/index.ts";
+import type { RepositoryError } from "../../kernel/usecase/index.ts";
+import type { ReferenceCheckReport, ReferenceCheckReportId } from "../domain/index.ts";
 
 export interface ReferenceCheckReportRepository {
-  save(outDir: string, doc: RefcheckDoc, reportOnly: boolean): EmitResult;
+  findById(aggregateId: ReferenceCheckReportId): Result<ReferenceCheckReport, RepositoryError>;
+  save(report: ReferenceCheckReport): Result<void, RepositoryError>;
 }

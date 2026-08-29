@@ -6,4 +6,5 @@ export { type Finding } from "./finding.ts";
 export { type Skipped } from "./skipped.ts";
 export { type InputEntry } from "./input-entry.ts";
 export { sortFindings, sortSkipped } from "./catalog-order.ts";
-export { type RefcheckDoc, type EmitResult } from "./report-doc.ts";
+export { ReferenceCheckReport, type ReferenceCheckReportSeed } from "./reference-check-report.ts";
+export { ReferenceCheckReportId } from "./reference-check-report-id.ts";

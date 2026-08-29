@@ -1,92 +1,43 @@
 // ReferenceCheckReportRepository の実 Gateway 実装。
-// 旧 deep-spec-lib.ts の emitRefcheckDoc を逐語で内包する（組立の正準キー順・
-// 自己検証・unavailable 降格・`JSON.stringify(・, null, 2) + "\n"` の描画は
-// すべて golden バイトを決める凍結挙動）。findings スキーマのパスは合成ルート
-// （entry）から注入される——層構造のファイルは import.meta を触らない。
+// 保存先／読出元は集約識別子（directory + fileName）から導出する。
+// 直列化・解体は serializer の責務、ここは I/O と RepositoryError への写像。
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  type Json,
-  type Schema,
-  canonicalStringify,
-  idCompare,
-  sha256,
-  sortedUnique,
-  validateSchema,
-} from "../../kernel/domain/index.ts";
-import {
-  CATALOG_VERSION,
-  type EmitResult,
-  type RefcheckDoc,
-  sortFindings,
-  sortSkipped,
-} from "../domain/index.ts";
+import { type Result, err, ok } from "../../kernel/domain/index.ts";
+import type { Json } from "../../kernel/adapter/json-value.ts";
+import type { RepositoryError } from "../../kernel/usecase/index.ts";
+import type { ReferenceCheckReport, ReferenceCheckReportId } from "../domain/index.ts";
 import type { ReferenceCheckReportRepository } from "../usecase/index.ts";
+import { parseReportDocument, renderReportBytes } from "./reference-check-report-serializer.ts";
 
 export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportRepository {
-  readonly #findingsSchemaPath: string;
-
-  constructor(findingsSchemaPath: string) {
-    this.#findingsSchemaPath = findingsSchemaPath;
+  findById(aggregateId: ReferenceCheckReportId): Result<ReferenceCheckReport, RepositoryError> {
+    const path = join(aggregateId.directory(), aggregateId.fileName());
+    if (!existsSync(path)) {
+      return err({ kind: "not-found", path });
+    }
+    let raw: Json;
+    try {
+      raw = JSON.parse(readFileSync(path, "utf-8")) as Json;
+    } catch (e) {
+      return err({ kind: "corrupt", path, cause: e instanceof Error ? e.message : String(e) });
+    }
+    const report = parseReportDocument(aggregateId, raw);
+    if (!report.ok) {
+      return err({ kind: "corrupt", path, cause: report.error.cause });
+    }
+    return report;
   }
 
-  // Assembles the contract-2 document (canonical key order, canonical sorts),
-  // self-validates it against the findings schema (FR: a writer never emits a
-  // non-conforming file — on failure it degrades to an `unavailable` document
-  // carrying the validation error), and writes it unless reportOnly. Returns
-  // the counts of the document actually written, so the caller's stdout
-  // verdict can never contradict the file.
-  save(outDir: string, doc: RefcheckDoc, reportOnly: boolean): EmitResult {
-    const inputs = [...doc.inputs].sort((a, b) => (a.artifact < b.artifact ? -1 : a.artifact > b.artifact ? 1 : 0));
-    const irHash = sha256(canonicalStringify(inputs as unknown as Json));
-    const assemble = (d: RefcheckDoc): { [k: string]: Json } => {
-      const ordered: { [k: string]: Json } = {
-        backend: d.backend,
-        irVersion: CATALOG_VERSION,
-        irHash,
-        method: "static",
-      };
-      if (d.unavailable) ordered.unavailable = d.unavailable as unknown as Json;
-      ordered.inputs = inputs as unknown as Json;
-      ordered.checked = sortedUnique(d.checked, idCompare) as unknown as Json;
-      ordered.findings = sortFindings(d.findings) as unknown as Json;
-      ordered.skipped = sortSkipped(d.skipped) as unknown as Json;
-      return ordered;
-    };
-    let ordered = assemble(doc);
+  save(report: ReferenceCheckReport): Result<void, RepositoryError> {
+    const path = join(report.id().directory(), report.id().fileName());
     try {
-      const schemaDoc = JSON.parse(readFileSync(this.#findingsSchemaPath, "utf-8")) as Schema;
-      const errors: string[] = [];
-      validateSchema(schemaDoc, schemaDoc, ordered as Json, "", errors);
-      if (errors.length > 0) {
-        ordered = assemble({
-          backend: doc.backend,
-          unavailable: { reason: `self-validation against deep-spec-findings-schema.json failed: ${errors[0]}` },
-          inputs: doc.inputs,
-          checked: [],
-          findings: [],
-          skipped: [],
-        });
-      }
-    } catch (err) {
-      ordered = assemble({
-        backend: doc.backend,
-        unavailable: { reason: `findings schema unreadable: ${err instanceof Error ? err.message : String(err)}` },
-        inputs: doc.inputs,
-        checked: [],
-        findings: [],
-        skipped: [],
-      });
+      mkdirSync(report.id().directory(), { recursive: true });
+      writeFileSync(path, renderReportBytes(report), "utf-8");
+      return ok(undefined);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
     }
-    if (!reportOnly) {
-      mkdirSync(outDir, { recursive: true });
-      writeFileSync(join(outDir, `${doc.backend}.json`), `${JSON.stringify(ordered, null, 2)}\n`, "utf-8");
-    }
-    return {
-      findingsCount: (ordered.findings as Json[]).length,
-      skippedCount: (ordered.skipped as Json[]).length,
-      unavailable: "unavailable" in ordered,
-    };
   }
 }

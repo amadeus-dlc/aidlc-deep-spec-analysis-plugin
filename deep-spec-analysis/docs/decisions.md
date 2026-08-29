@@ -323,3 +323,58 @@ e2e upgrade scenario: a planted stale deep-spec-lib.ts vanishes on
 re-install. The staged interfaces awaiting PR2b re-modeling are tracked
 work (#15), not compatibility code — the distinction is: no second
 mouth for the same purpose, no orphaned artifacts.
+
+## DDD migration PR2b-1 — ReferenceCheckReport becomes a real aggregate (2026-08-30, #15)
+
+Three owner rulings landed mid-flight and reshaped the repository design:
+
+1. **The command-receipt form was rejected as a CQS violation.** PR2a's
+   `save(outDir, doc, reportOnly): EmitResult` (documented then as a
+   sanctioned deviation) is gone. The document is now the aggregate
+   `ReferenceCheckReport`: Always-Valid at construction — canonical key
+   order, schema self-validation and the unavailable degrade all happen
+   inside `compose` (the sole fresh-construction entrance, infallible
+   because degrading IS the spec), and the verdict predicate `passes()`
+   is a query the type owns. The sensor's stdout verdict derives from
+   the aggregate, so it still can never contradict the file.
+2. **No per-port error types.** A repository speaks the shared kernel
+   `RepositoryError` — a closed three-variant vocabulary (`not-found`,
+   `io-failed`, `corrupt`), materials only. Absence is an error variant,
+   not a null.
+3. **A repository is the aggregate's I/O responsibility — persistence
+   AND reconstitution.** The port is the pair
+   `findById(aggregateId): Result<ReferenceCheckReport, RepositoryError>`
+   / `save(report): Result<void, RepositoryError>`, keyed by the new
+   identity VO `ReferenceCheckReportId` (directory + backend); the Impl
+   derives paths from the identity alone. `reconstitute` rebuilds the
+   aggregate from written truth with minimal structural checks (written
+   documents were self-validated at save time).
+
+`report-doc.ts` (RefcheckDoc/EmitResult) is deleted — no compat residue.
+A contract test runs the real Impl over a tmpdir: save→findById
+round-trip byte identity, not-found, corrupt, and backend-mismatch
+corruption. The coverage gate's charter was re-asserted in bunfig:
+per-file 90% applies to domain; adapter/usecase are verified by contract
+and spawn suites, not the numeric gate. The same receipt pattern still
+lives in the legacy design-lib writer — scheduled for the PR5
+dissolution.
+
+### PR2b-1 addendum — two further rulings: RepositoryError placement and the Json expulsion
+
+- **RepositoryError lives in the use-case layer** as part of the output
+  port, not in the domain. Repositories are classically a domain
+  responsibility, but placing them (or their vocabulary) in the domain
+  invites domain objects to reach for repositories internally — so the
+  whole repository surface is kept at arm's length in `kernel/usecase`.
+- **Json is not ubiquitous language.** The serialization format — the
+  `Json` union, canonical JSON, the JSON-Schema validator, the
+  YAML-subset and markdown parsers — is interface-adapter knowledge and
+  was expelled from `kernel/domain` (which now holds only Result,
+  sha256, id ordering, target sanitization, requirement-id extraction
+  and name normalization). The aggregate speaks typed vocabulary only;
+  a new adapter serializer owns rendering (canonical key order, irHash),
+  contract conformance (`conformToContract` — degrading the aggregate
+  with the frozen wording, so the verdict still derives from what is
+  written) and document parsing for reconstitution. Degrade wording is
+  assembled by the emitter (the adapter), per the error-handling rule;
+  the domain carries it as a value.

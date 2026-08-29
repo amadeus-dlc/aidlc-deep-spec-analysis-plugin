@@ -375,3 +375,46 @@ tombstone リスト（REMOVED_PAYLOADS——ファイル廃止と同じ変更で
 なお PR2b の再モデル化を待つ interface 群は issue #15 で完了追跡される staged
 work であり互換コードではない——判定基準は「同じ目的の第二の口・孤児成果物を
 作らない」こと。
+
+## DDD 移行 PR2b-1 — ReferenceCheckReport の真の集約化（2026-08-30、#15）
+
+作業中に 3 つのオーナー裁定が入り、Repository 設計を作り直した：
+
+1. **命令レシート形は CQS 違反として却下**。PR2a の
+   `save(outDir, doc, reportOnly): EmitResult`（当時「公認逸脱」と記録）は
+   廃止。文書そのものを集約 `ReferenceCheckReport` にした——正準キー順・
+   スキーマ自己検証・unavailable 降格は `compose`（唯一の新規構築口。降格が
+   仕様の一部なので失敗しない）の**構築時に完結**する Always-Valid。verdict
+   述語 `passes()` も型が所有するクエリで、stdout verdict は集約から導出
+   されるため「ファイルと矛盾しない」性質は保存。
+2. **ポートごとの固有エラー型を作らない**。Repository は kernel 共有の
+   `RepositoryError`（not-found / io-failed / corrupt の閉じた 3 変種、
+   材料のみ）を話す。不在は null でなくエラー変種。
+3. **Repository は集約の I/O 責務＝永続化と再構成の対**。ポートは
+   `findById(aggregateId): Result<ReferenceCheckReport, RepositoryError>` と
+   `save(report): Result<void, RepositoryError>` の対で、識別 VO
+   `ReferenceCheckReportId`（directory＋backend）だけから実装がパスを導出。
+   `reconstitute` は書かれた真実からの再構成（書込時に自己検証済みのため
+   最小限の構造検査のみ）。
+
+`report-doc.ts`（RefcheckDoc/EmitResult）は削除——互換残骸なし。契約テストは
+実 Impl を tmpdir で走らせ、save→findById のバイト往復同一・not-found・
+corrupt・backend 不一致破損を固定。カバレッジゲートの憲章（per-file 90% は
+domain 層）を bunfig に明文化し、adapter/usecase は契約・spawn スイートが
+検証する。同じレシート形が残る legacy design-lib のライタは PR5 の解体で
+同様に処置する。
+
+### PR2b-1 補遺 — 追加裁定 2 件：RepositoryError の配置と Json の追放
+
+- **RepositoryError は use-case 層**（アウトプットポートの一部）に置く。
+  Repository は本来ドメインの責務とされるが、ドメイン層に置くとドメイン
+  オブジェクト内部から Repository を使うリスクが生まれるため、Repository の
+  語彙ごとドメインから遠ざける（`kernel/usecase`）。
+- **Json はユビキタス言語ではない**。直列化形式——`Json` ユニオン・正準 JSON・
+  JSON Schema 検証器・YAML サブセット/markdown パーサ——はインターフェイス
+  アダプタ層の知識であり、`kernel/domain` から追放した（domain に残るのは
+  Result・sha256・id 順序・target サニタイズ・要件 id 抽出・名前正規化のみ）。
+  集約は型付き語彙だけを話し、新設の adapter serializer が描画（正準キー順・
+  irHash）・契約適合（`conformToContract`——凍結文言で集約を降格させ、verdict
+  が「書かれるもの」から導出される性質を維持）・再構成用の文書解体を持つ。
+  降格文言は emitter（adapter）が組み、ドメインは値として保持する。

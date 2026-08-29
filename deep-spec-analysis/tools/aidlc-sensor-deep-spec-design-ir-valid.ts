@@ -24,7 +24,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findRecordRoot, readIfExists } from "./kernel/adapter/index.ts";
-import { type Json, isObject, validateSchema } from "./kernel/domain/index.ts";
+import { isObject, type Json, validateSchema } from "./kernel/adapter/index.ts";
 import { DESIGN_MODEL_BASENAME, extractSingleJsonFence } from "./deep-spec-design-lib.ts";
 
 const IR_MAJOR_SUPPORTED = 1;
