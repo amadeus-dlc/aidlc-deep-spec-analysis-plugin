@@ -10,6 +10,7 @@ This is the development workspace. The plugin itself lives in [`deep-spec-analys
 - **No silent gaps** — every obligation is either checked, skipped with a reason, or reported `unavailable`; the coverage table shows exactly what was and wasn't verified.
 - **Deterministic** — same IR + same environment ⇒ byte-identical sensor output (fixed seeds, canonical sorting, no timestamps), enforced by byte-exact conformance tests.
 - **Graceful degradation** — missing solvers never block the stage; they become advisory findings and `/aidlc --doctor` hints.
+- **Design-artifact integrity (phase 1 of the design-verification extension)** — solver-free refcheck sensors fire while `domain-design`, `contract-design`, and `functional-design` write their artifacts, catching dangling references, asymmetric or cyclic dependencies, phantom FR sources, state machines that disagree with the entity model, and entity drift between design stages ([requirements: #2](https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/issues/2)).
 
 ## Quickstart
 
