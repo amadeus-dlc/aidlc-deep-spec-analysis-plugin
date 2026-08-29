@@ -24,6 +24,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -444,5 +445,39 @@ describe("phase-1 refcheck sensors compose and fire in the sandbox", () => {
     const row = checks.find((c) => c.label.includes("components.md has") && c.label.includes("reference-integrity finding"));
     expect(row).toBeDefined();
     expect(row?.severity).toBe("advisory");
+  });
+});
+
+describe("upgrade path — re-running the installer refreshes stale plugin files", () => {
+  // The framework's compose hook copies payload files no-clobber: a plugin
+  // UPGRADE would otherwise leave the previous version's schema and tools in
+  // the harness tree next to the new version's files. The skew is fatal in a
+  // quiet way: a new sensor self-validating against a stale findings schema
+  // degrades every document it writes to `unavailable`. Discovered on a real
+  // sandbox (a tmp-fresh install can never hit it); the installer now removes
+  // its own payload files before composing.
+  test("a stale composed findings schema is re-placed by the installer", () => {
+    const schema = join(sandbox, ".claude", "tools", "data", "deep-spec-findings-schema.json");
+    expect(readFileSync(schema, "utf-8")).toContain('"static"');
+    writeFileSync(schema, '{"stale": true}\n');
+    const res = spawnSync("bun", [installer, "--project", sandbox, "--skip-build"], {
+      encoding: "utf-8",
+      timeout: 300_000,
+    });
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("upgrade refresh");
+    expect(readFileSync(schema, "utf-8")).toContain('"static"');
+    // The refreshed tree still verifies: the composed sensor works end-to-end.
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+    const componentsPath = join(intentsDir, active, "inception", "domain-design", "components.md");
+    const run = inSandbox([
+      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-refcheck-domain.ts"),
+      "--stage", "domain-design", "--output-path", componentsPath,
+    ]);
+    expect(run.status).toBe(0);
+    const verdict = JSON.parse(run.stdout) as { pass: boolean; findings_count: number };
+    expect(verdict.pass).toBe(false);
+    expect(verdict.findings_count).toBeGreaterThan(0);
   });
 });

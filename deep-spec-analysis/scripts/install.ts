@@ -12,8 +12,8 @@
 // Usage: bun deep-spec-analysis/scripts/install.ts --project <path>
 //        [--harness claude] [--dry-run] [--skip-build]
 
-import { cpSync, existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { cpSync, existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const USAGE =
@@ -144,6 +144,64 @@ if (dryRun) {
   ]);
   console.log("\n✓ dry run passed — rerun without --dry-run to install");
   process.exit(0);
+}
+
+// ---- upgrade refresh --------------------------------------------------------
+// The compose hook copies payload files no-clobber: new files land, but a
+// file that already exists in the harness tree is never overwritten. That is
+// the right default for a user-owned tree — and the wrong one for a plugin
+// UPGRADE, where it leaves the previous version's schema and tools coexisting
+// with the new version's files. The skew is not hypothetical: a newly added
+// sensor loading a stale findings schema self-validates against the old
+// contract and degrades every document it writes to `unavailable`. Before
+// composing, remove the plugin's OWN payload files from the harness tree so
+// compose re-places the current versions. Only files this plugin's projection
+// ships are touched; contribution merges into core stages are content-based
+// and refresh themselves.
+
+const PAYLOAD_MAP: [string, string[]][] = [
+  ["sensors", ["sensors"]],
+  ["tools", ["tools"]],
+  ["knowledge", ["knowledge"]],
+  ["agents", ["agents"]],
+  ["scopes", ["scopes"]],
+  ["stages", ["aidlc-common", "stages"]],
+];
+
+function walkFiles(root: string): string[] {
+  const out: string[] = [];
+  const visit = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name);
+      if (entry.isDirectory()) visit(p);
+      else out.push(relative(root, p));
+    }
+  };
+  visit(root);
+  return out.sort();
+}
+
+function refreshPluginPayloads(): number {
+  let refreshed = 0;
+  for (const [srcDir, dstParts] of PAYLOAD_MAP) {
+    const srcRoot = join(distDir, srcDir);
+    if (!existsSync(srcRoot)) continue;
+    for (const rel of walkFiles(srcRoot)) {
+      const dst = join(projectDir, target.harnessLeaf, ...dstParts, rel);
+      if (existsSync(dst)) {
+        rmSync(dst, { force: true });
+        refreshed += 1;
+      }
+    }
+  }
+  return refreshed;
+}
+
+const refreshed = refreshPluginPayloads();
+if (refreshed > 0) {
+  console.log(
+    `\n▸ upgrade refresh: removed ${refreshed} previously composed plugin file(s) so compose re-places the current versions`,
+  );
 }
 
 // ---- drop (storeless harnesses only) + compose ------------------------------

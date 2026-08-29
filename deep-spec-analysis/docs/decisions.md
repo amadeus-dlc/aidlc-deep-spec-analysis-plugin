@@ -153,3 +153,12 @@ LLM会話層（形式化・A/Bゲート・レポート）はfixture代替のた�
 | v1 リグレッション | ✔ | conformance 11件不変・golden バイト同一（自己検証追加後も出力契約不変）、intent-e2e 既存12件不変 |
 | intent-e2e フェーズ①ブロック（+4件） | ✔ | compose がセンサー3本＋lib を `.claude/` へ配置、contributions が3コアステージの `sensors:` に合流、合成済みセンサーが sandbox の実レコードで planted defects（DD-2・循環）を検出、doctor の report-only スキャンが負債行（advisory）を表示 |
 | validator / ビルド | ✔ | `aidlc-plugin-validate` VALID（errors 0）、7ハーネス全ビルドOK |
+
+### 実サンドボックス実射で発見した欠陥と是正（2026-08-29、v0.2.0 追補）
+
+tmp から作る自動 E2E は常にバニラツリー開始のため踏めない欠陥を、ワークスペースの実サンドボックス（`deep-spec-analysis-sandbox/`、v0.1.0 が compose 済み）への後入れアップグレードで発見した：
+
+- **事象**: フレームワークの compose フックは payload コピーが **no-clobber**（新規ファイルは置くが既存ファイルは絶対に上書きしない）。v0.1.0 → v0.2.0 のアップグレードでは、新規の refcheck センサー群は配置される一方、**変更された既存ファイル（findings スキーマ・自己検証入り smt/quint）は旧版のまま残り**、新旧混在になる。結果、新センサーが旧スキーマで自己検証し `/method: not one of ["exhaustive","bounded","simulation"]` で**全文書が unavailable に降格**——フェーズ①がアップグレード環境で全滅する。`plugin-sync` はこの経路（インストーラ直 compose）では "no installed plugins" で無力。
+- **是正**: `scripts/install.ts` に **upgrade refresh** を追加——compose 前に、dist projection が出荷する payload（sensors/ tools/ knowledge/ agents/ scopes/ stages/）と同名の既存ファイルだけを harness ツリーから除去し、no-clobber コピーに最新版を再配置させる。プラグイン以外のファイルには一切触れず（additive-only 維持）、contribution のステージ合流は内容ベースで自己更新するため対象外。compose が再配置に失敗すれば既存の sentinel 検査が即失敗する（静かな欠落は起きない）。
+- **回帰テスト**: `tests/intent-e2e.test.ts` の upgrade-path ブロック——composed スキーマを故意に stale 化 → インストーラ再実行 → `upgrade refresh` 行の出力・スキーマ最新化・composed センサーの実射成功をアサート。
+- **実射マトリクス（実サンドボックス、ディスパッチャ `aidlc-sensor.ts fire` 経由）**: 3 センサーとも registry 登録・glob 照合（`**/functional-design/*.md` の bespoke マッチャ含む）・発火 OK。欠陥入り成果物で domain 9 / contract 4 / functional 15 findings、doctor の report-only スキャンは手動発火していない u2-billing も自力発見（計 31 findings / 4 成果物、全 advisory）。
