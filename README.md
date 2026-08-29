@@ -31,6 +31,8 @@ The installer builds the harness projection under `deep-spec-analysis/dist/<harn
 
 > The installer is a folder-drop: it has no install-time trust gate, so only point it at a build you would run code from. For a store-mediated trust prompt, use the host plugin flows below instead.
 
+Note: the stage declares `scopes: [enterprise, feature]`, so it only runs for intents created with those scopes — a `classic`-scope intent marks it SKIP by design.
+
 ### Alternative: install through the host plugin store
 
 Build the projection first, from `deep-spec-analysis/`: `bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . claude` (or `codex`).

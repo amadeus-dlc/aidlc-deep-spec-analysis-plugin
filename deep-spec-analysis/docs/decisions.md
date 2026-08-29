@@ -95,3 +95,13 @@
 | クロスチェック収束・不一致検出 | ✔ | 正常時findings空・改竄sibling注入でSC-2のdisagreement検出 |
 | NFR1バイト同一（再実行） | ✔ | smt/quint/cross-check 3ファイルともdiffなし |
 | NFR3劣化（quint欠如・runtime欠如・irVersion不一致） | ✔ | unavailable/skippedに閉じ、exit 127/0で停止なし |
+
+## intent実作成E2E検証（実測、2026-08-29、sandboxにて）
+
+| 検査 | 実施 | 結果 |
+|---|---|---|
+| インストーラでバニラAI-DLC素体へ導入 | ✔ | store系=非投下で `.claude/` へcompose、drops 0、ルート無汚染 |
+| `intent-create --scope classic` | ✔ | intent minted。**2.10 deep-spec-analysis-verify は SKIP**（stage `scopes: [enterprise, feature]` によるscope routing——仕様どおり） |
+| `intent-create --scope feature` | ✔ | 34ステージ中 2.10 が **EXECUTE** でon-path |
+| 実intentレコードでのセンサー3連発火（`--stage`/`--output-path` 実契約） | ✔ | ir-valid: pass / SMT(exhaustive): findings 4（FR1×FR2・FR1×FR3・FR2×FR3のconflict + 在庫不足域のcompleteness-gap＝仕込んだ欠陥を全件正検出）/ Quint(bounded=Apalache): When-eventシナリオはv1 capability skipとして明示、cross-check crossChecked空で整合 |
+| headless `/aidlc`（`claude -p`）実走 | △ | オーケストレータ起動〜プラン選択ゲートまで動作。aidlcはゲート駆動設計のため非対話完走は不可（ゲート毎に `--resume` 注入が必要）。sandboxのdist設定はBedrock強制（`CLAUDE_CODE_USE_BEDROCK=1`）のため、非AWS環境では `settings.local.json` での上書きが必要 |

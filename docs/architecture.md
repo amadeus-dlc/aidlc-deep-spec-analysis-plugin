@@ -39,7 +39,7 @@ flowchart LR
 
 ## §2 ステージの実行順序
 
-Inception フェーズに `deep-spec-analysis-verify` ステージとして挿し込まれ、次の順で進む。
+Inception フェーズに `deep-spec-analysis-verify` ステージとして挿し込まれ、次の順で進む。なおステージは `scopes: [enterprise, feature]` を宣言しているため、この2スコープの intent でのみ実行される（`classic` スコープの intent ではエンジンが SKIP に振る——実 intent で確認済みの仕様）。
 
 1. **形式化** — product agent が各 FR / NFR を EARS 分類し、IR を `deep-spec-analysis-formal-model.md` の単一 JSON フェンスに書き込む。
 2. **センサー発火** — 書き込みを検知して 3 センサーが順に走る：IR スキーマ検証 → SMT（z3）→ Quint。findings は `deep-spec-verify/*.json` に書かれる。
