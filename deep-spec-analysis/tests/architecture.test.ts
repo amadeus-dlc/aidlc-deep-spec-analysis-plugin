@@ -90,6 +90,13 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(processOnlyInEntries("kernel/adapter/x.ts", "const v = 1;")).toHaveLength(0);
   });
 
+  test("a // inside a string literal does not hide the rest of the line from the rules", () => {
+    expect(processOnlyInEntries("kernel/adapter/x.ts", 'const s = "x//y"; process.env.X;')).not.toHaveLength(0);
+    expect(processOnlyInEntries("kernel/adapter/x.ts", "const s = `a//b`; const p = import.meta.url;")).not.toHaveLength(0);
+    expect(processOnlyInEntries("kernel/adapter/x.ts", 'const url = "https://example.com";')).toHaveLength(0);
+    expect(processOnlyInEntries("kernel/adapter/x.ts", 'const esc = "quote:\\" // still string"; process.exit(1);')).not.toHaveLength(0);
+  });
+
   test("a comment mentioning process or import.meta or export * is not a violation", () => {
     expect(processOnlyInEntries("kernel/adapter/x.ts", "// process.argv は entry の責務\nconst v = 1;")).toHaveLength(0);
     expect(processOnlyInEntries("kernel/adapter/x.ts", "/* import.meta を触らない */\nconst v = 1;")).toHaveLength(0);

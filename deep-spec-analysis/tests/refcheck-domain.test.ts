@@ -31,6 +31,17 @@ describe("catalog-order", () => {
     expect(sorted[0]?.kind).toBe("cross-check-disagreement");
   });
 
+  test("a prototype-inherited name as kind falls back like any unknown kind (no NaN ranks)", () => {
+    const sorted = sortFindings([
+      finding("toString", ["X-1"], "t"),
+      finding("constructor", ["X-2"], "c"),
+      finding("conflict", ["OB-1"], "k"),
+    ]);
+    expect(sorted[0]?.kind).toBe("conflict");
+    // 両者とも fallback 99 で同順位 → targets 文字列比較で "X-1" が先。
+    expect(sorted.slice(1).map((f) => f.kind)).toEqual(["toString", "constructor"]);
+  });
+
   test("skips sort by id order on target, then by reason", () => {
     const skips: Skipped[] = [
       { target: "check:FD-E10", reason: "b" },

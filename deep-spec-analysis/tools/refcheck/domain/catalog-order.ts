@@ -21,9 +21,15 @@ const KIND_RANK: { [k: string]: number } = {
   "cross-check-disagreement": 10,
 };
 
+// kind は任意文字列なので、素の index アクセスだと "toString" 等が prototype の
+// 継承プロパティを拾い NaN 比較になる。所有プロパティのみで順位を引く。
+function rankOf(kind: string): number {
+  return Object.hasOwn(KIND_RANK, kind) ? (KIND_RANK[kind] as number) : 99;
+}
+
 export function sortFindings(findings: Finding[]): Finding[] {
   return [...findings].sort((a, b) => {
-    const kr = (KIND_RANK[a.kind] ?? 99) - (KIND_RANK[b.kind] ?? 99);
+    const kr = rankOf(a.kind) - rankOf(b.kind);
     if (kr !== 0) return kr;
     const ta = a.targets.join(",");
     const tb = b.targets.join(",");

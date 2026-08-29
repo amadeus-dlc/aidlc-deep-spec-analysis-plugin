@@ -23,7 +23,11 @@ function extractKindRank(file: string): { table: Map<string, number>; fallback: 
   for (const entry of block[1].matchAll(/"?([a-z-]+)"?\s*:\s*(\d+)/g)) {
     table.set(entry[1], Number(entry[2]));
   }
-  const fallbackMatch = source.match(/KIND_RANK\[[^\]]+\]\s*\?\?\s*(\d+)/);
+  // fallback の綴りは 2 形式ある: 旧 `KIND_RANK[k] ?? 99` と、prototype 汚染
+  // 対策後の `Object.hasOwn(KIND_RANK, k) ? (KIND_RANK[k] as number) : 99`。
+  const fallbackMatch =
+    source.match(/KIND_RANK\[[^\]]+\]\s*\?\?\s*(\d+)/) ??
+    source.match(/Object\.hasOwn\(KIND_RANK,[^)]*\)\s*\?\s*\(KIND_RANK\[[^\]]+\]\s+as\s+number\)\s*:\s*(\d+)/);
   if (!fallbackMatch) throw new Error(`${file}: KIND_RANK fallback not found`);
   return { table, fallback: Number(fallbackMatch[1]) };
 }
