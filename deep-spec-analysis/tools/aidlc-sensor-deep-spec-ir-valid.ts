@@ -7,7 +7,10 @@
 //   3. semantic well-formedness beyond the schema: unique ids, resolvable
 //      attribute references, enum literal membership, prime legality;
 //   4. every frRefs entry exists verbatim in the upstream requirements.md
-//      (reverse traceability).
+//      (reverse traceability);
+//   5. sourceDigest matches the sha256 of the upstream requirements.md bytes
+//      (source anchoring — a drifted or missing digest is an error, and the
+//      message carries the expected value so fixing it is mechanical).
 //
 // Sensor contract: parses only --stage / --output-path; pass-through
 // (exit 0, pass:true) on writes that are not the formal model; one JSON
@@ -17,6 +20,7 @@
 // ships in its own delta and must not depend on a sibling core tool being
 // present).
 
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -426,11 +430,26 @@ function main(): void {
     if (reqPath === null) {
       errors.push("requirements.md not found under this intent record — frRefs cannot be reverse-verified");
     } else {
-      const known = requirementIds(readFileSync(reqPath, "utf-8"));
+      const reqBytes = readFileSync(reqPath);
+      const known = requirementIds(reqBytes.toString("utf-8"));
       const missing = [...frRefOwners.keys()].filter((id) => !known.has(id)).sort();
       for (const id of missing) {
         const owners = (frRefOwners.get(id) ?? []).sort().join(", ");
         errors.push(`frRef "${id}" (used by ${owners}) does not exist in requirements.md`);
+      }
+
+      // Source anchoring: the IR must carry the sha256 of the exact
+      // requirements.md bytes it was formalized from, so later edits to the
+      // requirements are detectable by content, not by mtime heuristics.
+      const actualDigest = createHash("sha256").update(reqBytes).digest("hex");
+      if (typeof ir.sourceDigest !== "string") {
+        errors.push(
+          `IR has no sourceDigest — requirements drift would be undetectable; add "sourceDigest": "${actualDigest}" (sha256 of requirements.md) to the IR`,
+        );
+      } else if (ir.sourceDigest !== actualDigest) {
+        errors.push(
+          `sourceDigest ${ir.sourceDigest} does not match requirements.md (sha256 ${actualDigest}) — the requirements changed since formalization; re-formalize against the current text and restamp the digest`,
+        );
       }
     }
   }

@@ -24,6 +24,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -221,6 +222,89 @@ describe("late adoption — the plugin verifies an intent that predates it", () 
     expect(summary?.pass).toBe(true);
     expect(summary?.label).toContain("1/1 eligible intents verified");
     expect(rows.some((c) => c.label.includes("no deep-spec verification"))).toBe(false);
+  });
+});
+
+// The sourceDigest anchor scenario: requirements.md is edited AFTER a
+// verification, and the model file's mtime is pushed into the future so the
+// old mtime heuristic would swear the verification is fresh. The content
+// hash must still catch the drift — through the real dispatcher (ir-valid
+// refuses the model) and through the doctor (the intent turns stale).
+describe("sourceDigest anchoring — requirements drift is caught by content, not mtime", () => {
+  let record = "";
+  let requirements = "";
+  let model = "";
+  let original = "";
+
+  beforeAll(() => {
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+    record = join(intentsDir, active);
+    requirements = join(record, "inception", "requirements-analysis", "requirements.md");
+    model = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
+    original = readFileSync(requirements, "utf-8");
+    // The late-adoption SMT test is node-gated; make the verified state
+    // deterministic here regardless (model present + at least one findings
+    // file — the doctor only checks presence).
+    const verifyDir = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-verify");
+    mkdirSync(verifyDir, { recursive: true });
+    if (!existsSync(model)) cpSync(join(fixtures, "deep-spec-analysis-formal-model.md"), model);
+    if (!readdirSync(verifyDir).some((f) => f.endsWith(".json"))) {
+      cpSync(join(pluginRoot, "tests", "fixtures", "conformance", "expected", "quint.json"), join(verifyDir, "quint.json"));
+    }
+    // Drift the source, then make the mtime heuristic lie about it.
+    writeFileSync(requirements, `${original}\n- FR-9: 監査ログを5年間保持しなければならない。\n`);
+    const future = new Date(Date.now() + 3_600_000);
+    utimesSync(model, future, future);
+  });
+
+  afterAll(() => {
+    // Restore, so every later doctor scan sees this intent verified again.
+    writeFileSync(requirements, original);
+  });
+
+  test("the real dispatcher refuses the model against the drifted requirements", () => {
+    const run = inSandbox([
+      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
+      "fire", "deep-spec-ir-valid", "--stage", "deep-spec-analysis-verify", "--output-path", model,
+    ]);
+    expect(run.status).toBe(0);
+    const lines = run.stdout.trim().split("\n");
+    expect(JSON.parse(lines[lines.length - 1] ?? "{}")).toMatchObject({ result: "failed" });
+  });
+
+  test("the sensor names the drift and hands back the expected digest", () => {
+    const run = inSandbox([
+      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-ir-valid.ts"),
+      "--stage", "deep-spec-analysis-verify", "--output-path", model,
+    ]);
+    expect(run.status).toBe(0);
+    const verdict = JSON.parse(run.stdout) as { pass: boolean; errors: string[] };
+    expect(verdict.pass).toBe(false);
+    const all = verdict.errors.join("\n");
+    expect(all).toContain("sourceDigest");
+    expect(all).toMatch(/does not match requirements\.md \(sha256 [0-9a-f]{64}\)/);
+  });
+
+  test("the doctor flags the intent stale even though the model mtime is fresher", () => {
+    const run = inSandbox(
+      ["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")],
+      { AIDLC_PROJECT_DIR: sandbox, AIDLC_HARNESS_DIR: ".claude" },
+    );
+    expect(run.status).toBe(0);
+    const rows: { pass: boolean; label: string }[] = JSON.parse(run.stdout).checks;
+    expect(rows.some((c) => c.label.includes("changed its requirements after the last deep-spec verification"))).toBe(true);
+  });
+
+  test("restoring the exact source text clears the staleness without re-running", () => {
+    writeFileSync(requirements, original);
+    const run = inSandbox(
+      ["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")],
+      { AIDLC_PROJECT_DIR: sandbox, AIDLC_HARNESS_DIR: ".claude" },
+    );
+    expect(run.status).toBe(0);
+    const rows: { pass: boolean; label: string }[] = JSON.parse(run.stdout).checks;
+    expect(rows.some((c) => c.label.includes("changed its requirements after the last deep-spec verification"))).toBe(false);
   });
 });
 

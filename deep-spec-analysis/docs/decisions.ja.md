@@ -239,3 +239,38 @@ bounded モード限定・キャップ制（`AIDLC_DEEP_SPEC_QUINT_UNREACH_CAP`�
 ### マージ済み PR コメントの完全対応監査（2026-08-29）
 
 全 PR のレビューコメントを再監査：#6=6/6、#7=7/7、#8=0、#9=有効 3 対応＋誤検出 1 検証。唯一の部分対応だった **#7 の 7 件目（doctor のユニット単位判定）を完全対応**：設計バックエンドは検証を実際に完走したユニットを契約2 の `checked[]` に `unit:<name>` として記録し（フェーズ①で導入した check-family 台帳と同じ語彙・targetId の unit: 名前空間）、doctor の verified 判定は「バックエンド JSON の存在」から「非 unavailable なバックエンド文書の checked[] にそのユニットが載っていること」へ厳格化——clean なユニットと一度も走らなかったユニットがファイル単体で区別できるようになった。golden 再生成、e2e に completion-evidence アサーション追加。
+
+## sourceDigest — IR を正確な要件テキストにアンカーする（2026-08-29、v0.5.0）
+
+ギャップ：IR と requirements.md を結ぶ機械的リンクは frRefs の id 逆検証
+（id の実在のみ、本文は未検査）と doctor の mtime ヒューリスティックだけ
+だった——そして mtime は嘘をつく（git checkout がリセットする・編集後の
+touch で編集自体が隠れる）。検証後の要件変更に気づけない可能性があった。
+決定：
+
+- **契約1 にトップレベルの任意フィールド `sourceDigest`** を追加——
+  requirements.md の生バイトの sha256（hex）。スキーマ上は任意（必須化は
+  破壊的メジャー変更で既存モデルを全て無効化する上、フェーズ②の
+  コンパイルダウンで生成される契約1 文書は要件ファイルを持たない）。
+  **センサーでは必須**：`deep-spec-ir-valid` は欠落・乖離をエラーにし、
+  エラーメッセージが再計算した期待値を提示するため修正は機械的
+  （エージェントは `shasum -a 256` で計算し、決して記憶から書かない——
+  契約4 の irHash アンカーと同じパターン）。
+- **doctor の stale 判定をコンテンツベース化**：モデルに digest があれば
+  stale ⇔ ハッシュ不一致で、mtime は無視。digest を持たないレガシー
+  モデルは従来の mtime フォールバック——遡及ノイズなし。次回の再検証で
+  センサーが要求するためアンカーが付与される。
+- ステージは Step 2 で digest を刻印し、Step 6 のループクローズの
+  書き直しで再刻印する（B 承認改訂は requirements.md を編集するため、
+  第 2 パスは必然的に再アンカーになる）。
+- conformance golden を再生成：fixture IR にフィールドが加わり埋め込みの
+  `irHash` が変わった——期待ファイル 3 つの差分はそれのみ。
+
+### 検証マトリクス（実測、2026-08-29）
+
+| 対象 | 結果 | 証拠 |
+|---|---|---|
+| conformance（+2件） | ✔ | 乖離ソースを新旧両 digest 明記で拒否・digest 除去を追加すべき正確な値付きで拒否・golden バイト同一 ×2 |
+| intent-e2e（+4件） | ✔ | 要件編集後、モデル mtime を 1 時間未来に押し出しても実ディスパッチャがモデルを拒否。doctor はコンテンツのみで verified → stale に遷移し、正確なバイト列の復元で復帰 |
+| **実サンドボックス実射** | ✔ | バニラ導入 → feature intent → digest 刻印モデル → ディスパッチャ：ir-valid passed・SMT が planted completeness gap を検出・Quint bounded（実 Apalache）clean・doctor 1/1 verified。ドリフト＋未来日付モデル：ir-valid が新旧 sha256 を明記して failed・doctor stale 0/1。エラー中の digest で restamp → passed・1/1。陳腐化した v0.4.0 composed スキーマはフィールドを拒否（`unexpected property "sourceDigest"`）し、インストーラの upgrade refresh が修復。おまけ：実射中に実際の著述ミス（`prime` を `primed` と誤記）も ir-valid が検出 |
+| リグレッション | ✔ | 全 85 テスト green・validator VALID（0 errors）・claude ハーネスビルド OK |

@@ -175,3 +175,38 @@ Requirements attributes the effect does not assign must satisfy alpha(a)(pre) ==
 ### Full-coverage audit of merged-PR review comments (2026-08-29)
 
 Re-audited every PR's review comments: #6 = 6/6, #7 = 7/7, #8 = 0, #9 = 3 valid addressed + 1 false positive verified. The one partially-addressed item — **the 7th comment of #7 (per-unit judgment in the doctor) — is now fully addressed**: the design backends record every unit whose verification actually ran in contract 2's `checked[]` as `unit:<name>` (the same vocabulary as the phase-1 check-family ledger, riding the targetId unit: namespace), and the doctor's verified verdict tightened from "a backend JSON exists" to "the unit appears in the checked[] of a non-unavailable backend document" — a clean unit and a never-ran unit are now distinguishable from the file alone. Goldens regenerated; a completion-evidence assertion added to the e2e.
+
+## sourceDigest — anchoring the IR to the exact requirements text (2026-08-29, v0.5.0)
+
+The gap: the only machine link between the IR and requirements.md was the
+frRefs id reverse-check (ids exist, text unchecked) plus the doctor's mtime
+heuristic — and mtimes lie (git checkouts reset them; a touch after an edit
+hides the edit entirely). A requirements change after verification could go
+unnoticed. Decisions:
+
+- **Contract 1 gains an optional top-level `sourceDigest`** — sha256 (hex)
+  of the raw requirements.md bytes. Schema-optional (a required field would
+  be a breaking major bump and would invalidate every existing model, and
+  the lowered contract-1 docs of the phase-2 compile-down never see a
+  requirements file); **sensor-required**: `deep-spec-ir-valid` errors on a
+  missing or drifted digest, and the error carries the recomputed expected
+  value so the fix is mechanical (the agent computes with `shasum -a 256`,
+  never from memory — the same pattern as contract 4's irHash anchors).
+- **The doctor's staleness went content-based**: when the model carries a
+  digest, stale ⇔ hash mismatch, mtimes ignored. Legacy models without one
+  keep the old mtime fallback — no retroactive noise; their next
+  re-verification stamps the anchor because the sensor now demands it.
+- The stage stamps the digest at Step 2 and restamps it in the Step 6
+  close-the-loop rewrite (B-revisions edit requirements.md, so the second
+  pass necessarily re-anchors).
+- Conformance goldens regenerated: the fixture IR gained the field, so the
+  embedded `irHash` changed — the only diff in all three expected files.
+
+### Verification matrix (measured, 2026-08-29)
+
+| Target | Result | Evidence |
+|---|---|---|
+| conformance (+2 tests) | ✔ | drifted source rejected with both digests named; stripped digest rejected with the exact value to add; goldens byte-identical twice |
+| intent-e2e (+4 tests) | ✔ | real dispatcher refuses the model after a requirements edit even with the model mtime pushed 1h into the future; doctor flips verified → stale on content alone and back on restoring the exact bytes |
+| **Live sandbox exercise** | ✔ | vanilla install → feature intent → digest-stamped model → dispatcher: ir-valid passed, SMT caught the planted completeness gap, Quint bounded (real Apalache) clean, doctor 1/1 verified. Drift + future-dated model: ir-valid failed naming old and new sha256, doctor stale 0/1. Restamp with the digest from the error → passed, 1/1. Stale v0.4.0 composed schema rejected the field (`unexpected property "sourceDigest"`) and the installer's upgrade refresh healed it. Bonus: ir-valid caught a real authoring mistake (`primed` for `prime`) during the exercise |
+| Regression | ✔ | all 85 tests green, validator VALID (0 errors), claude harness build OK |

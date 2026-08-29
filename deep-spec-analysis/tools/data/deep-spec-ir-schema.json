@@ -12,6 +12,11 @@
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
       "description": "SemVer of the IR contract this document conforms to. Backends refuse (skip-all) on major mismatch."
     },
+    "sourceDigest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 (hex, lowercase) of the raw bytes of the requirements.md this IR was formalized from. Anchors the IR to the exact source text: deep-spec-ir-valid recomputes and rejects on mismatch, and the doctor uses it for content-based (mtime-independent) staleness."
+    },
     "schema": {
       "type": "object",
       "required": ["entities"],

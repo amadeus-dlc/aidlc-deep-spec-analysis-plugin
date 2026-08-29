@@ -21,9 +21,18 @@ themselves; your output is the JSON IR only.
 
 ## IR document shape
 
-Top level: `irVersion` (use `"1.0.0"`), `schema`, `obligations`, `scenarios`,
-`background`, optional `unformalized`. Full contract:
-`{{HARNESS_DIR}}/tools/data/deep-spec-ir-schema.json`.
+Top level: `irVersion` (use `"1.0.0"`), `sourceDigest`, `schema`,
+`obligations`, `scenarios`, `background`, optional `unformalized`. Full
+contract: `{{HARNESS_DIR}}/tools/data/deep-spec-ir-schema.json`.
+
+`sourceDigest` anchors the IR to the exact requirements text you formalized:
+set it to the sha256 (hex) of the requirements.md file bytes — compute it
+with `shasum -a 256 <path-to-requirements.md>`, never from memory. The
+`deep-spec-ir-valid` sensor recomputes and rejects a missing or drifted
+digest (its error message carries the expected value, so correcting it is
+mechanical), and the doctor uses it to detect requirement edits made after
+verification. Whenever you rewrite the formal model after requirements.md
+changed (e.g. after applying accepted revisions), restamp it.
 
 ### schema — entities and attributes
 
@@ -98,6 +107,7 @@ contract violation; the report prints this list verbatim.
 ```json
 {
   "irVersion": "1.0.0",
+  "sourceDigest": "<sha256 of requirements.md — shasum -a 256>",
   "schema": {
     "entities": [
       {

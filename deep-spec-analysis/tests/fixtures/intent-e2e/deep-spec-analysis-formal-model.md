@@ -18,6 +18,7 @@ When-event 型の SC-1 / SC-2 は v1 では両バックエンドとも capabilit
 ```json
 {
   "irVersion": "1.0.0",
+  "sourceDigest": "e7b0e2c44a223d5cfd4061f084f08ad434542f38125eaf55b1c82d140966808d",
   "schema": {
     "entities": [
       {

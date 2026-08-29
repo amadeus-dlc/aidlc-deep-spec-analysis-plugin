@@ -83,6 +83,29 @@ describe("deep-spec-ir-valid", () => {
     expect(all).toContain('frRef "FR-99"');
   });
 
+  test("rejects a drifted requirements source via sourceDigest", () => {
+    const { record, modelPath } = makeRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
+    const req = join(record, "inception", "requirements-analysis", "requirements.md");
+    writeFileSync(req, `${readFileSync(req, "utf-8")}\n- FR-9: 監査ログを5年間保持しなければならない。\n`);
+    const run = fireSensor("aidlc-sensor-deep-spec-ir-valid.ts", modelPath);
+    expect(run.status).toBe(0);
+    const verdict = JSON.parse(run.stdout);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.errors.join("\n")).toMatch(/sourceDigest [0-9a-f]{64} does not match requirements\.md \(sha256 [0-9a-f]{64}\)/);
+  });
+
+  test("rejects a model without sourceDigest and hands back the value to add", () => {
+    const { modelPath } = makeRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
+    const stripped = readFileSync(modelPath, "utf-8").replace(/^\s*"sourceDigest": "[0-9a-f]{64}",\n/m, "");
+    expect(stripped).not.toContain("sourceDigest");
+    writeFileSync(modelPath, stripped);
+    const run = fireSensor("aidlc-sensor-deep-spec-ir-valid.ts", modelPath);
+    expect(run.status).toBe(0);
+    const verdict = JSON.parse(run.stdout);
+    expect(verdict.pass).toBe(false);
+    expect(verdict.errors.join("\n")).toMatch(/add "sourceDigest": "[0-9a-f]{64}"/);
+  });
+
   test("passes through writes that are not the formal model", () => {
     const { record } = makeRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     const other = join(record, "inception", "deep-spec-analysis-verify", "notes.md");

@@ -17,7 +17,9 @@ Run with `bun install && bun test` from the plugin root.
   the phase-1 refcheck scenario (broken record → doctor debt → fixed →
   doctor quiet), phase-2 design verification (graph routing, `--single`,
   per-unit doctor coverage unverified → verified → stale, completion
-  evidence), and phase-3 refinement (dispatcher fire, refinement-stale).
+  evidence), phase-3 refinement (dispatcher fire, refinement-stale), and the
+  `sourceDigest` anchor (a requirements edit is caught by content hash even
+  when the model's mtime claims freshness).
   The LLM conversation layer (formalization, A/B gate, report) is out of
   scope — fixtures stand in for it, so this is an integration suite, not a
   full E2E.

@@ -7,6 +7,7 @@
 // blocks the workflow.
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -182,8 +183,20 @@ function scanVerificationCoverage(): { eligible: number; problems: CoverageRow[]
       }
       if (!existsSync(model) || !hasFindings) {
         problems.push({ space, intent, state: "unverified" });
-      } else if (statSync(requirements).mtimeMs > statSync(model).mtimeMs) {
-        problems.push({ space, intent, state: "stale" });
+      } else {
+        // Content-based staleness: when the formal model carries a
+        // sourceDigest, compare it against the sha256 of the current
+        // requirements.md bytes — an edit is caught even if mtimes lie
+        // (git checkouts, touch). Models from before the anchor existed
+        // fall back to the mtime heuristic; their next re-verification
+        // stamps the digest (deep-spec-ir-valid enforces it).
+        const anchored = readFileSync(model, "utf-8")
+          .match(/```json\n([\s\S]*?)```/)?.[1]
+          ?.match(/"sourceDigest"\s*:\s*"([0-9a-f]{64})"/)?.[1];
+        const drifted = anchored
+          ? createHash("sha256").update(readFileSync(requirements)).digest("hex") !== anchored
+          : statSync(requirements).mtimeMs > statSync(model).mtimeMs;
+        if (drifted) problems.push({ space, intent, state: "stale" });
       }
     }
   }

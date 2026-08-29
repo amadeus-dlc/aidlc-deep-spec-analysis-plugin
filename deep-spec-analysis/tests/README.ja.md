@@ -17,8 +17,9 @@
   リフレッシュ）、フェーズ①の refcheck シナリオ（壊れたレコード → doctor の
   負債 → 修正 → doctor 静穏）、フェーズ②の設計検証（グラフルーティング・
   `--single`・doctor のユニット単位カバレッジ unverified → verified → stale・
-  完了記録）、フェーズ③の refinement（ディスパッチャ実射・refinement-stale）
-  をカバーする。LLM 会話層（形式化・A/B ゲート・レポート）は範囲外で
+  完了記録）、フェーズ③の refinement（ディスパッチャ実射・refinement-stale）、
+  そして `sourceDigest` アンカー（モデルの mtime が新しくても要件編集を
+  コンテンツハッシュで検出）をカバーする。LLM 会話層（形式化・A/B ゲート・レポート）は範囲外で
   fixture が代替するため、これはフル E2E ではなく統合スイートである。
 - `conformance.test.ts` — v1 の契約 conformance スイート：両バックエンドを
   `fixtures/conformance/`（静的ルールと状態機械の欠陥を意図的に埋め込んだ
