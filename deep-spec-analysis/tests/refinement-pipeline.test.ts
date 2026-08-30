@@ -484,8 +484,13 @@ describe("event catalog and effect assignments", () => {
 });
 
 describe("refinement verdict interpretation", () => {
+  // plan と interpret に同一の requirements を渡す（本番経路と同じ整合）。
   const req = requirements({
-    obligations: [{ id: "OB-1", nature: "invariant", frRefs: ["FR-2", "FR-1"], assert: { op: "bool", value: true } }],
+    attributes: [{ path: "R.flag", kind: "bool" }],
+    obligations: [
+      { id: "OB-1", nature: "invariant", frRefs: ["FR-2", "FR-1"], assert: { op: "bool", value: true } },
+      { id: "OB-2", nature: "event", frRefs: [], trigger: "go", guard: { op: "ref", path: "R.flag" }, effect: { op: "eq", args: [{ op: "ref", path: "R.flag", prime: true }, { op: "bool", value: true }] } },
+    ],
     scenarios: [
       { id: "SC-1", kind: "accept", frRefs: ["FR-3"], bindings: {} },
       { id: "SC-2", kind: "reject", frRefs: [], bindings: {} },
@@ -510,16 +515,10 @@ describe("refinement verdict interpretation", () => {
       },
     ],
   });
-  const planReq = requirements({
-    attributes: [{ path: "R.flag", kind: "bool" }],
-    obligations: [
-      { id: "OB-2", nature: "event", frRefs: [], trigger: "go", guard: { op: "ref", path: "R.flag" }, effect: { op: "eq", args: [{ op: "ref", path: "R.flag", prime: true }, { op: "bool", value: true }] } },
-    ],
-  });
   const plan = UnitRefinementPlan.of(
     planUnit,
     refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")], eventMap: [{ reqTrigger: "go", transitions: ["TR-1", "TR-2"] }] }),
-    planReq,
+    req,
     "m.md",
   );
   const facts = (entries: [string, RefinementProbe][]): RefinementSolverFacts =>
@@ -666,5 +665,37 @@ describe("refinement collections (first-class operations)", () => {
     expect([...inv].length).toBe(1);
     expect([...inv.reqIds()]).toEqual(["OB-1"]);
     expect(inv.toArray()[0]?.reqId).toBe("OB-1");
+  });
+});
+
+describe("catalog misses in the enabledness path (frozen null-drop)", () => {
+  test("a mapped design id outside the catalog is silently dropped, not a compile-error", () => {
+    // 宣言済みだがカタログに載らない設計 id（event でない義務）へ写像しても、
+    // 旧 Map.get の undefined 落ちと同じく黙って除外される——義務全体が
+    // compile-error skip に化けてはならない。
+    const u = unit({
+      attrPaths: new Set(["D.flag"]),
+      rawEntities: [{ name: "D", attributes: [{ name: "flag", type: { kind: "bool" } }] }],
+      obligations: [{ id: "DOB-9", nature: "invariant", origin: "", brRefs: [], frRefs: [] }],
+    });
+    const req = requirements({
+      attributes: [{ path: "R.flag", kind: "bool" }],
+      obligations: [
+        { id: "OB-2", nature: "event", frRefs: [], trigger: "go", guard: { op: "ref", path: "R.flag" }, effect: { op: "eq", args: [{ op: "ref", path: "R.flag", prime: true }, { op: "bool", value: true }] } },
+      ],
+    });
+    const plan = UnitRefinementPlan.of(
+      u,
+      refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")], eventMap: [{ reqTrigger: "go", transitions: ["DOB-9"] }] }),
+      req,
+      "m.md",
+    );
+    expect(plan.statusOfObligation("OB-2")).toEqual({ kind: "checkable" });
+    const built = buildRefinementQueries(u, req, plan);
+    const enabledness = built.queries.find((q) => q.id === "re:OB-2");
+    expect(enabledness).toBeDefined();
+    // 発火可能な設計ガードなし → notEnabled は "true"（黙った除外の凍結面）。
+    expect(enabledness?.script).toContain("(assert (=> ne_OB_2 true))");
+    expect(built.facts.compileSkips().toArray()).toEqual([]);
   });
 });

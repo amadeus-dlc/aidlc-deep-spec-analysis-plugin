@@ -278,7 +278,7 @@ export function buildRefinementQueries(
         // ひとつも発火可能でない。
         const designGuards = mapped
           .map((id) => catalog.eventOf(id))
-          .filter((d): d is DesignEvent => d !== undefined)
+          .filter((d): d is DesignEvent => d !== null)
           .map((d) => smtOfExpr(ctx, d.guard));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
         const qe = assembleQuery(
