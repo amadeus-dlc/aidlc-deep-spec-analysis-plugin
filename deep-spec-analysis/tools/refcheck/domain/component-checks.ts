@@ -46,7 +46,7 @@ export function runComponentChecks(
   } else {
     comps = outcome.components;
     for (const e of outcome.shapeErrors) {
-      ledger.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [ref(e.element.value())], e.detail);
+      ledger.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [ref(e.element.asString())], e.detail);
     }
     if (outcome.shapeErrors.count() > 0 && comps.count() === 0) dd0Failed = true;
   }
@@ -62,15 +62,15 @@ export function runComponentChecks(
   // --- DD-1: name uniqueness + PascalCase -------------------------------
   const seen = new Map<string, Component>();
   for (const c of comps) {
-    const cName = c.name.value();
+    const cName = c.name.asString();
     if (!/^[A-Z][A-Za-z0-9]*$/.test(cName)) {
-      ledger.finding(DD_1, "structure-invalid", [safeTarget("component", cName)], [ref(`${c.element.value()}.name`, cName)],
+      ledger.finding(DD_1, "structure-invalid", [safeTarget("component", cName)], [ref(`${c.element.asString()}.name`, cName)],
         `component name "${cName}" is not PascalCase`);
     }
     const prior = seen.get(cName);
     if (prior) {
       ledger.finding(DD_1, "structure-invalid", [safeTarget("component", cName)],
-        [ref(`${prior.element.value()}.name`, cName), ref(`${c.element.value()}.name`, cName)],
+        [ref(`${prior.element.asString()}.name`, cName), ref(`${c.element.asString()}.name`, cName)],
         `component name "${cName}" is declared more than once`);
     }
     seen.set(cName, c);
@@ -80,15 +80,15 @@ export function runComponentChecks(
   for (const c of comps) {
     for (const r of [...c.dependsOn, ...c.dependents]) {
       if (!comps.declares(r.component)) {
-        ledger.finding(DD_2, "reference-broken", [safeTarget("component", r.component.value())], [ref(r.element.value(), r.component.value())],
-          `"${c.name.value()}" references undeclared component "${r.component.value()}"`);
+        ledger.finding(DD_2, "reference-broken", [safeTarget("component", r.component.asString())], [ref(r.element.asString(), r.component.asString())],
+          `"${c.name.asString()}" references undeclared component "${r.component.asString()}"`);
       }
     }
     for (const e of c.entities) {
       for (const r of e.references) {
         if (!comps.declares(r.ownedBy)) {
-          ledger.finding(DD_2, "reference-broken", [safeTarget("component", r.ownedBy.value())], [ref(`${r.element.value()}.owned_by`, r.ownedBy.value())],
-            `entity "${e.name.value()}" references owner component "${r.ownedBy.value()}" which is not declared`);
+          ledger.finding(DD_2, "reference-broken", [safeTarget("component", r.ownedBy.asString())], [ref(`${r.element.asString()}.owned_by`, r.ownedBy.asString())],
+            `entity "${e.name.asString()}" references owner component "${r.ownedBy.asString()}" which is not declared`);
         }
       }
     }
@@ -98,8 +98,8 @@ export function runComponentChecks(
   for (const c of comps) {
     for (const r of [...c.dependsOn, ...c.dependents]) {
       if (r.component.equals(c.name)) {
-        ledger.finding(DD_3, "structure-invalid", [safeTarget("component", c.name.value())], [ref(r.element.value(), c.name.value())],
-          `component "${c.name.value()}" lists itself as a dependency`);
+        ledger.finding(DD_3, "structure-invalid", [safeTarget("component", c.name.asString())], [ref(r.element.asString(), c.name.asString())],
+          `component "${c.name.asString()}" lists itself as a dependency`);
       }
     }
   }
@@ -110,18 +110,18 @@ export function runComponentChecks(
       const other = comps.byName(r.component);
       if (!other || r.component.equals(c.name)) continue;
       if (!other.dependents.listsComponent(c.name)) {
-        ledger.finding(DD_4, "structure-invalid", [safeTarget("component", c.name.value()), safeTarget("component", r.component.value())],
-          [ref(r.element.value(), r.component.value()), ref(`${other.element.value()}.dependents`, c.name.value())],
-          `"${c.name.value()}" depends on "${r.component.value()}" but "${r.component.value()}" does not list "${c.name.value()}" in dependents`);
+        ledger.finding(DD_4, "structure-invalid", [safeTarget("component", c.name.asString()), safeTarget("component", r.component.asString())],
+          [ref(r.element.asString(), r.component.asString()), ref(`${other.element.asString()}.dependents`, c.name.asString())],
+          `"${c.name.asString()}" depends on "${r.component.asString()}" but "${r.component.asString()}" does not list "${c.name.asString()}" in dependents`);
       }
     }
     for (const r of c.dependents) {
       const other = comps.byName(r.component);
       if (!other || r.component.equals(c.name)) continue;
       if (!other.dependsOn.listsComponent(c.name)) {
-        ledger.finding(DD_4, "structure-invalid", [safeTarget("component", c.name.value()), safeTarget("component", r.component.value())],
-          [ref(r.element.value(), r.component.value()), ref(`${other.element.value()}.depends_on`, c.name.value())],
-          `"${c.name.value()}" lists "${r.component.value()}" as a dependent but "${r.component.value()}" does not depend on "${c.name.value()}"`);
+        ledger.finding(DD_4, "structure-invalid", [safeTarget("component", c.name.asString()), safeTarget("component", r.component.asString())],
+          [ref(r.element.asString(), r.component.asString()), ref(`${other.element.asString()}.depends_on`, c.name.asString())],
+          `"${c.name.asString()}" lists "${r.component.asString()}" as a dependent but "${r.component.asString()}" does not depend on "${c.name.asString()}"`);
       }
     }
   }
@@ -130,20 +130,20 @@ export function runComponentChecks(
   const owners = new Map<string, { comp: Component; entity: ComponentEntity }[]>();
   for (const c of comps) {
     for (const e of c.entities) {
-      const list = owners.get(e.name.value()) ?? [];
+      const list = owners.get(e.name.asString()) ?? [];
       list.push({ comp: c, entity: e });
-      owners.set(e.name.value(), list);
-      if (e.identifier === null || e.identifier.value() === "") {
-        ledger.finding(DD_5, "structure-invalid", [safeTarget("entity", e.name.value())], [ref(`${e.element.value()}.identifier`)],
-          `entity "${e.name.value()}" has no identifier`);
+      owners.set(e.name.asString(), list);
+      if (e.identifier === null || e.identifier.asString() === "") {
+        ledger.finding(DD_5, "structure-invalid", [safeTarget("entity", e.name.asString())], [ref(`${e.element.asString()}.identifier`)],
+          `entity "${e.name.asString()}" has no identifier`);
       }
     }
   }
   for (const [name, list] of [...owners.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     if (list.length > 1) {
       ledger.finding(DD_5, "structure-invalid", [safeTarget("entity", name)],
-        list.map((o) => ref(o.entity.element.value(), o.comp.name.value())),
-        `entity "${name}" is owned by ${list.length} components (${list.map((o) => o.comp.name.value()).join(", ")}) — must be exactly one`);
+        list.map((o) => ref(o.entity.element.asString(), o.comp.name.asString())),
+        `entity "${name}" is owned by ${list.length} components (${list.map((o) => o.comp.name.asString()).join(", ")}) — must be exactly one`);
     }
   }
 
@@ -154,8 +154,8 @@ export function runComponentChecks(
         const owner = comps.byName(r.ownedBy);
         if (!owner) continue; // DD-2 already reported the undeclared owner
         if (!owner.entities.declaresEntity(r.entity)) {
-          ledger.finding(DD_6, "reference-broken", [safeTarget("entity", r.entity.value())], [ref(`${r.element.value()}.entity`, r.entity.value())],
-            `entity "${e.name.value()}" references "${r.entity.value()}" as owned by "${r.ownedBy.value()}", but "${r.ownedBy.value()}" declares no such entity`);
+          ledger.finding(DD_6, "reference-broken", [safeTarget("entity", r.entity.asString())], [ref(`${r.element.asString()}.entity`, r.entity.asString())],
+            `entity "${e.name.asString()}" references "${r.entity.asString()}" as owned by "${r.ownedBy.asString()}", but "${r.ownedBy.asString()}" declares no such entity`);
         }
       }
     }
@@ -165,7 +165,7 @@ export function runComponentChecks(
   // Self-loops are DD-3's finding; DD-7 reports only genuine multi-node cycles.
   for (const cycle of comps.dependencyCycles().filter((c) => c.length > 1)) {
     ledger.finding(DD_7, "structure-invalid", cycle.map((n) => safeTarget("component", n)),
-      cycle.map((n, i) => ref(`${comps.byName(ComponentName.reconstitute(n))?.element.value() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])),
+      cycle.map((n, i) => ref(`${comps.byName(ComponentName.reconstitute(n))?.element.asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])),
       `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
   }
 }

@@ -22,13 +22,13 @@ import {
 } from "../domain/index.ts";
 
 function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
-  // ContentHash は境界（描画）で value() へ落とす——DP のままでは正準 JSON に
+  // ContentHash は境界（描画）で asString() へ落とす——DP のままでは正準 JSON に
   // 乗らない。キー順（artifact, sha256）は旧リテラルの挿入順そのもの。
-  const inputs = report.inputs().map((i) => ({ artifact: i.artifact, sha256: i.sha256.value() })) as unknown as Json;
+  const inputs = report.inputs().map((i) => ({ artifact: i.artifact, sha256: i.sha256.asString() })) as unknown as Json;
   const ordered: { [k: string]: Json } = {
     backend: report.id().backendName(),
     irVersion: CATALOG_VERSION,
-    irHash: ContentHash.ofText(canonicalStringify(inputs)).value(),
+    irHash: ContentHash.ofText(canonicalStringify(inputs)).asString(),
     method: "static",
   };
   const reason = report.unavailableReason();

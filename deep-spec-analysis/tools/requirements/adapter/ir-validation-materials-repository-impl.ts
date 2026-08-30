@@ -124,7 +124,7 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
   }
 
   acquire(id: FormalModelId): IrMaterialsAcquisition {
-    const outputPath = id.artifactPath().value();
+    const outputPath = id.artifactPath().asString();
     if (basename(outputPath) !== FORMAL_MODEL_BASENAME || !existsSync(outputPath)) {
       return { kind: "not-applicable" };
     }

@@ -310,9 +310,9 @@ describe("lowering (typed compile-down)", () => {
     // 2 ユニットの compose はユニット名昇順を不変条件として適用する。
     const m = model([unit({ unit: "u2" }), unit({ unit: "u1" })]);
     expect(m.units().toArray().map((x) => x.name())).toEqual(["u1", "u2"]);
-    expect(m.irVersion().value()).toBe("1.0.0");
+    expect(m.irVersion().asString()).toBe("1.0.0");
     expect(m.id().equals(DesignModelId.of(ap("/test/deep-spec-analysis-functional-formal-model.md")))).toBe(true);
-    expect(m.units().toArray()[0]?.id().value()).toBe(m.units().toArray()[0]?.name() ?? "");
+    expect(m.units().toArray()[0]?.id().asString()).toBe(m.units().toArray()[0]?.name() ?? "");
   });
 
   test("the canonical expression key matches the kernel canonical JSON byte for byte", () => {
@@ -498,8 +498,8 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(report.passes()).toBe(false);
     expect(report.findingsCount()).toBe(1);
     expect(report.skippedCount()).toBe(0);
-    expect(report.irVersion().value()).toBe("1.0.0");
-    expect(report.irHash().value()).toBe("a".repeat(64));
+    expect(report.irVersion().asString()).toBe("1.0.0");
+    expect(report.irHash().asString()).toBe("a".repeat(64));
     expect(report.method()).toBe("exhaustive");
     expect(report.unavailableReason()).toBe(null);
     expect(report.crossChecked()).toBe(null);
@@ -579,7 +579,7 @@ describe("report ordering, cross-check, and degradations", () => {
 
     const unread = designIrUnreadableReport(DesignReportId.of(ap("/v"), "smt"), "exhaustive", "design IR carries no units[]");
     expect(unread.unavailableReason()).toBe("design IR unreadable: design IR carries no units[] — see the deep-spec-design-ir-valid sensor for details");
-    expect(unread.irVersion().value()).toBe("0.0.0");
+    expect(unread.irVersion().asString()).toBe("0.0.0");
     expect(unread.irHash().equals(ContentHash.ofText(""))).toBe(true);
 
     const mismatch = designVersionMismatchReport(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation");

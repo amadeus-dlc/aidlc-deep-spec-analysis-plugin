@@ -83,7 +83,7 @@ import {
 
 describe("functional-design vocabulary domain primitives", () => {
   test("token DPs: parse rejects the empty string, reconstitute is verbatim, equals is by value", () => {
-    const cases: { parse: (raw: string) => { ok: boolean }; reconstitute: (raw: string) => { value(): string } }[] = [
+    const cases: { parse: (raw: string) => { ok: boolean }; reconstitute: (raw: string) => { asString(): string } }[] = [
       EntityName, AttributeName, ElementPath, TypeName, AllowedValue,
       CardinalityNotation, RuleCategory, AppliesTo, SourceId, MachineSpec, StateName, ComponentName, ReferenceTarget,
     ];
@@ -92,7 +92,7 @@ describe("functional-design vocabulary domain primitives", () => {
       expect(bad.ok).toBe(false);
       const good = dp.parse("Order");
       expect(good.ok).toBe(true);
-      expect(dp.reconstitute("x").value()).toBe("x");
+      expect(dp.reconstitute("x").asString()).toBe("x");
     }
     expect(EntityName.reconstitute("A").equals(EntityName.reconstitute("A"))).toBe(true);
     expect(AttributeName.reconstitute("a").equals(AttributeName.reconstitute("b"))).toBe(false);
@@ -118,7 +118,7 @@ describe("functional-design vocabulary domain primitives", () => {
     expect(BusinessRuleId.parse("BR1.2").ok).toBe(true);
     expect(BusinessRuleId.parse("nope").ok).toBe(false);
     expect(BusinessRuleId.reconstitute("BR1.2").equals(BusinessRuleId.reconstitute("BR1.2"))).toBe(true);
-    expect(BusinessRuleId.reconstitute("BR1.2").value()).toBe("BR1.2");
+    expect(BusinessRuleId.reconstitute("BR1.2").asString()).toBe("BR1.2");
     expect(RuleCategory.reconstitute("Validation").normalized()).toBe("validation");
     expect(AttributeName.reconstitute("Status").normalized()).toBe("status");
     expect(AllowedValue.reconstitute("Open").normalized()).toBe("open");
@@ -127,7 +127,7 @@ describe("functional-design vocabulary domain primitives", () => {
     expect(spec.entityToken()).toBe("Order");
     expect(spec.attributeToken()).toBe("status");
     expect(MachineSpec.reconstitute("Order").attributeToken()).toBe(undefined);
-    expect(spec.value()).toBe("Order.status");
+    expect(spec.asString()).toBe("Order.status");
 
     const numDef = AttributeDefault.reconstitute(5);
     expect(numDef.isNumber()).toBe(true);
@@ -141,13 +141,13 @@ describe("functional-design vocabulary domain primitives", () => {
 
     expect(NumericBound.parse(3).ok).toBe(true);
     expect(NumericBound.parse(Number.NaN).ok).toBe(false);
-    expect(NumericBound.reconstitute(3).value()).toBe(3);
+    expect(NumericBound.reconstitute(3).asNumber()).toBe(3);
     expect(NumericBound.reconstitute(3).equals(NumericBound.reconstitute(3))).toBe(true);
-    expect(ReferenceTarget.reconstitute("Order.id").value()).toBe("Order.id");
-    expect(ElementPath.reconstitute("entities[0]").value()).toBe("entities[0]");
-    expect(SourceId.reconstitute("FR-1").value()).toBe("FR-1");
-    expect(AppliesTo.reconstitute("Order").value()).toBe("Order");
-    expect(ComponentName.reconstitute("Core").value()).toBe("Core");
+    expect(ReferenceTarget.reconstitute("Order.id").asString()).toBe("Order.id");
+    expect(ElementPath.reconstitute("entities[0]").asString()).toBe("entities[0]");
+    expect(SourceId.reconstitute("FR-1").asString()).toBe("FR-1");
+    expect(AppliesTo.reconstitute("Order").asString()).toBe("Order");
+    expect(ComponentName.reconstitute("Core").asString()).toBe("Core");
   });
 });
 
@@ -234,10 +234,10 @@ describe("first-class collections", () => {
 
   test("collection-owned set knowledge: names, duplicates, membership, index lookups", () => {
     const attrs = AttrDecls.of([attr("status", ["open"]), attr("qty"), attr("status")]);
-    expect(attrs.names().map((n) => n.value())).toEqual(["status", "qty", "status"]);
-    expect(attrs.duplicatesByName().map((a) => a.name().value())).toEqual(["status"]);
-    expect(attrs.named("qty")?.name().value()).toBe("qty");
-    expect(attrs.lifecycleAttr()?.name().value()).toBe("status");
+    expect(attrs.names().map((n) => n.asString())).toEqual(["status", "qty", "status"]);
+    expect(attrs.duplicatesByName().map((a) => a.name().asString())).toEqual(["status"]);
+    expect(attrs.named("qty")?.name().asString()).toBe("qty");
+    expect(attrs.lifecycleAttr()?.name().asString()).toBe("status");
 
     const decls = EntityDecls.of([entity("Order"), entity("Order")]);
     expect(decls.duplicatesByName().length).toBe(1);
@@ -250,7 +250,7 @@ describe("first-class collections", () => {
     const index = SiblingUnitIndex.of(new Map([["u1", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: AttributeNames.of([AttributeName.reconstitute("qty")]) }]])]]));
     expect(index.hasAnyUnit()).toBe(true);
     expect(index.definersOf("order")).toEqual(["u1"]);
-    expect(index.entityDeclaredIn("u1", "order")?.name.value()).toBe("Order");
+    expect(index.entityDeclaredIn("u1", "order")?.name.asString()).toBe("Order");
     expect(index.entityDeclaredIn("u9", "order")).toBe(undefined);
     expect(SiblingUnitIndex.of(new Map()).hasAnyUnit()).toBe(false);
 
@@ -267,7 +267,7 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(CheckFamily.parse("").ok).toBe(false);
     const dd = CheckFamily.parse("DD-1");
     if (!dd.ok) throw new Error("unreachable");
-    expect(dd.value.value()).toBe("DD-1");
+    expect(dd.value.asString()).toBe("DD-1");
     expect(dd.value.equals(CheckFamily.reconstitute("DD-1"))).toBe(true);
     expect(dd.value.prefixedDetail("boom")).toBe("DD-1: boom");
     expect(dd.value.asCheckTarget()).toBe("check:DD-1");
@@ -275,7 +275,7 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
 
   test("CheckFamilies derives checked targets in declaration order under add", () => {
     const fams = CheckFamilies.reconstitute(["A-1"]).add(CheckFamily.reconstitute("A-2")).add(CheckFamily.reconstitute("A-3"));
-    expect([...fams].map((f) => f.value())).toEqual(["A-1", "A-2", "A-3"]);
+    expect([...fams].map((f) => f.asString())).toEqual(["A-1", "A-2", "A-3"]);
     expect(fams.toArray().length).toBe(3);
     expect(fams.checkedTargetsExcluding(new Set(["A-2"]), new Set(["A-3"]))).toEqual(["check:A-1"]);
   });
@@ -288,7 +288,7 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     const names = UnitNames.reconstitute(["b"]).add(UnitName.reconstitute("a"));
     expect(names.declares("a")).toBe(true);
     expect(names.declares("z")).toBe(false);
-    expect([...names.sortedByValue()].map((n) => n.value())).toEqual(["a", "b"]);
+    expect([...names.sortedByValue()].map((n) => n.asString())).toEqual(["a", "b"]);
     expect(names.toArray().length).toBe(2);
   });
 
@@ -297,7 +297,7 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(BlockIndex.parse(-1).ok).toBe(false);
     const ln = LineNumber.parse(7);
     if (!ln.ok) throw new Error("unreachable");
-    expect(ln.value.value()).toBe(7);
+    expect(ln.value.asNumber()).toBe(7);
     expect(ln.value.equals(LineNumber.reconstitute(7))).toBe(true);
     const bi = BlockIndex.parse(2);
     if (!bi.ok) throw new Error("unreachable");
@@ -333,7 +333,7 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     const decls = UnitDecls.of([]).add(decl).add({ name: UnitName.reconstitute("a"), dependsOn: UnitNames.reconstitute([]) });
     expect(decls.declares("b")).toBe(true);
     expect(decls.declares("z")).toBe(false);
-    expect([...decls.sortedByName()].map((d) => d.name.value())).toEqual(["a", "b"]);
+    expect([...decls.sortedByName()].map((d) => d.name.asString())).toEqual(["a", "b"]);
     expect(decls.names().declares("a")).toBe(true);
     expect(decls.toArray().length).toBe(2);
     const block = { index: BlockIndex.reconstitute(1), line: LineNumber.reconstitute(1), issue: null };

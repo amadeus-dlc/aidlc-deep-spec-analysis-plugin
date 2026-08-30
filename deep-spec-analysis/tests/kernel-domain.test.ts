@@ -71,7 +71,7 @@ describe("canonical-json + content-hash", () => {
   });
 
   test("sha256 matches the known digest of the empty string", () => {
-    expect(ContentHash.ofText("").value()).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    expect(ContentHash.ofText("").asString()).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
   });
 });
 

@@ -955,3 +955,19 @@ functional type-class connotation intended or implemented.
 
 Proofs: 308 tests green; goldens untouched; the parity snapshot
 `diff -r` stays empty; every collection above the 90% floor.
+
+## Accessor-naming ruling — DP accessors say the representation, not the field (2026-08-30)
+
+The owner ruled that `value(): string` on a domain primitive exposes the
+internal structure (the `#value` field) through the public face. The
+accessor is a representation conversion, so it is named as one:
+`asString()` for string-valued DPs and `asNumber()` for number-valued
+ones (`LineNumber`, `BlockIndex`, `NumericBound`). Renamed across every
+DP in all five contexts (25 declarations, ~300 call sites); role-named
+accessors (`backendName()`, `fileName()`, `majorVersion()`) already
+follow the principle and stay. The private `#value` field is untouched —
+the ruling is about the public vocabulary. Future DPs follow `asString`/
+`asNumber` from birth (recorded in the #46 ledger invariants).
+
+Proofs: 322 tests green; goldens untouched; parity snapshot `diff -r`
+stays empty; coverage floor holds.

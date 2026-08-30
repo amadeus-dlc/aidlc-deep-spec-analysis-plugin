@@ -25,15 +25,15 @@ import {
 function orderedDocument(report: DesignReport): { [k: string]: Json } {
   const ordered: { [k: string]: Json } = {
     backend: report.id().backendName(),
-    irVersion: report.irVersion().value(),
-    irHash: report.irHash().value(),
+    irVersion: report.irVersion().asString(),
+    irHash: report.irHash().asString(),
     method: report.method(),
   };
   const reason = report.unavailableReason();
   if (reason !== null) ordered.unavailable = { reason };
   const inputs = report.inputs();
-  // ContentHash は境界（描画）で value() へ落とす（キー順は旧挿入順）。
-  if (inputs !== null) ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact, sha256: i.sha256.value() })) as unknown as Json;
+  // ContentHash は境界（描画）で asString() へ落とす（キー順は旧挿入順）。
+  if (inputs !== null) ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact, sha256: i.sha256.asString() })) as unknown as Json;
   const checked = report.checked();
   if (checked !== null) ordered.checked = checked.toArray() as unknown as Json;
   ordered.findings = report.findings().toArray() as unknown as Json;

@@ -151,13 +151,13 @@ export class Components {
   // distinct cycle once, canonicalized to start at its lexicographically
   // smallest member.（旧 findCycles の逐語移設——グラフは Components の知識）
   dependencyCycles(): string[][] {
-    const declared = new Set(this.#values.map((c) => c.name.value()));
+    const declared = new Set(this.#values.map((c) => c.name.asString()));
     const adj = new Map<string, string[]>();
-    for (const c of [...this.#values].sort((a, b) => (a.name.value() < b.name.value() ? -1 : 1))) {
+    for (const c of [...this.#values].sort((a, b) => (a.name.asString() < b.name.asString() ? -1 : 1))) {
       adj.set(
-        c.name.value(),
+        c.name.asString(),
         sortedUnique(
-          c.dependsOn.toArray().map((d) => d.component.value()).filter((n) => declared.has(n)),
+          c.dependsOn.toArray().map((d) => d.component.asString()).filter((n) => declared.has(n)),
           idCompare,
         ),
       );

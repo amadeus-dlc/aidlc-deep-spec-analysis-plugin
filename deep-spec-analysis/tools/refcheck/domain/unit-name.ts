@@ -26,7 +26,7 @@ export class UnitName {
     return this.#value === other.#value;
   }
 
-  value(): string {
+  asString(): string {
     return this.#value;
   }
 }
@@ -56,12 +56,12 @@ export class UnitNames {
   }
 
   declares(value: string): boolean {
-    return this.#values.some((v) => v.value() === value);
+    return this.#values.some((v) => v.asString() === value);
   }
 
   // CD-3 の走査順（辞書順）はコレクション知識。
   sortedByValue(): UnitNames {
-    return new UnitNames([...this.#values].sort((a, b) => (a.value() < b.value() ? -1 : 1)));
+    return new UnitNames([...this.#values].sort((a, b) => (a.asString() < b.asString() ? -1 : 1)));
   }
 
   toArray(): readonly UnitName[] {

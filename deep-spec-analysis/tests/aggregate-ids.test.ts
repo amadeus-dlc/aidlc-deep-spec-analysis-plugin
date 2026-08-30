@@ -25,7 +25,7 @@ describe("ArtifactPath", () => {
   test("parse accepts any non-empty path and keeps the raw value", () => {
     const parsed = ArtifactPath.parse("/a/b.md");
     expect(parsed.ok).toBe(true);
-    if (parsed.ok) expect(parsed.value.value()).toBe("/a/b.md");
+    if (parsed.ok) expect(parsed.value.asString()).toBe("/a/b.md");
   });
 
   test("equals compares by value", () => {
@@ -37,14 +37,14 @@ describe("ArtifactPath", () => {
 describe("aggregate ids resolve forward, by their own identity", () => {
   test("FormalModelId", () => {
     const id = FormalModelId.of(ap("/r/model.md"));
-    expect(id.artifactPath().value()).toBe("/r/model.md");
+    expect(id.artifactPath().asString()).toBe("/r/model.md");
     expect(id.equals(FormalModelId.of(ap("/r/model.md")))).toBe(true);
     expect(id.equals(FormalModelId.of(ap("/r/other.md")))).toBe(false);
   });
 
   test("DesignModelId", () => {
     const id = DesignModelId.of(ap("/r/design.md"));
-    expect(id.artifactPath().value()).toBe("/r/design.md");
+    expect(id.artifactPath().asString()).toBe("/r/design.md");
     expect(id.equals(DesignModelId.of(ap("/r/design.md")))).toBe(true);
     expect(id.equals(DesignModelId.of(ap("/r/other.md")))).toBe(false);
   });
@@ -52,14 +52,14 @@ describe("aggregate ids resolve forward, by their own identity", () => {
   test("RefinementMaterialsId is anchored 1:1 to its design model", () => {
     const model = DesignModelId.of(ap("/r/design.md"));
     const id = RefinementMaterialsId.ofModel(model);
-    expect(id.modelArtifactPath().value()).toBe("/r/design.md");
+    expect(id.modelArtifactPath().asString()).toBe("/r/design.md");
     expect(id.equals(RefinementMaterialsId.ofModel(model))).toBe(true);
     expect(id.equals(RefinementMaterialsId.ofModel(DesignModelId.of(ap("/r/other.md"))))).toBe(false);
   });
 
   test("DesignRecordId", () => {
     const id = DesignRecordId.of(ap("/r/components.md"));
-    expect(id.artifactPath().value()).toBe("/r/components.md");
+    expect(id.artifactPath().asString()).toBe("/r/components.md");
     expect(id.equals(DesignRecordId.of(ap("/r/components.md")))).toBe(true);
     expect(id.equals(DesignRecordId.of(ap("/r/contract-summary.md")))).toBe(false);
   });
@@ -68,14 +68,14 @@ describe("aggregate ids resolve forward, by their own identity", () => {
 describe("DesignUnitId and RefinementMapId", () => {
   test("DesignUnitId is the unit entity's identity, compared by value", () => {
     const id = DesignUnitId.of("u1-orders");
-    expect(id.value()).toBe("u1-orders");
+    expect(id.asString()).toBe("u1-orders");
     expect(id.equals(DesignUnitId.of("u1-orders"))).toBe(true);
     expect(id.equals(DesignUnitId.of("u2-billing"))).toBe(false);
   });
 
   test("RefinementMapId is the contract-4 map aggregate's identity", () => {
     const id = RefinementMapId.of(ap("/r/deep-spec-analysis-refinement-map.md"));
-    expect(id.artifactPath().value()).toBe("/r/deep-spec-analysis-refinement-map.md");
+    expect(id.artifactPath().asString()).toBe("/r/deep-spec-analysis-refinement-map.md");
     expect(id.equals(RefinementMapId.of(ap("/r/deep-spec-analysis-refinement-map.md")))).toBe(true);
     expect(id.equals(RefinementMapId.of(ap("/other/deep-spec-analysis-refinement-map.md")))).toBe(false);
   });
@@ -93,14 +93,14 @@ describe("ContentHash", () => {
   });
 
   test("ofText matches the known digest of the empty string, and equals compares by value", () => {
-    expect(ContentHash.ofText("").value()).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    expect(ContentHash.ofText("").asString()).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     expect(ContentHash.ofText("").equals(ContentHash.ofText(""))).toBe(true);
     expect(ContentHash.ofBytes(new Uint8Array([])).equals(ContentHash.ofText(""))).toBe(true);
     expect(ContentHash.ofText("a").equals(ContentHash.ofText("b"))).toBe(false);
   });
 
   test("reconstitute is the verbatim rehydration door for frozen documents", () => {
-    expect(ContentHash.reconstitute("").value()).toBe("");
+    expect(ContentHash.reconstitute("").asString()).toBe("");
   });
 });
 
@@ -109,7 +109,7 @@ describe("IrVersion", () => {
     const ok = IrVersion.parse("1.2.3");
     expect(ok.ok).toBe(true);
     if (ok.ok) {
-      expect(ok.value.value()).toBe("1.2.3");
+      expect(ok.value.asString()).toBe("1.2.3");
       expect(ok.value.majorVersion()).toBe(1);
       expect(ok.value.supportsMajor(1)).toBe(true);
       expect(ok.value.supportsMajor(2)).toBe(false);
