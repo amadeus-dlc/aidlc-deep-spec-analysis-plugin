@@ -36,7 +36,7 @@ import {
   type DesignMachine,
   type DesignObligation,
   type DesignScenario,
-  type DesignValue, type DesignUnit as DesignUnitType, DesignModelId, DesignUnit, DesignUnitId, RefinementMaterialsId } from "../tools/design/domain/index.ts";
+  type DesignValue, type DesignUnit as DesignUnitType, DesignModelId, DesignSkips, DesignUnit, DesignUnitId, RefinementMaterialsId } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -47,22 +47,33 @@ import {
 } from "../tools/design/adapter/index.ts";
 import { VerifyDesignQuintUseCase, VerifyDesignSmtUseCase } from "../tools/design/usecase/index.ts";
 import {
+  AlphaContext,
   AlphaError,
-  type RefinementQueryVerdict,
-  type RefinementSolverFacts,
+  AttributeMappings,
+  DesignEventCatalog,
+  EffectAssignments,
+  EventMappings,
+  RefinementAttributes,
+  RefinementObligations,
+  RefinementQueryVerdicts,
+  RefinementQuintInvariants,
+  RefinementUnitMaps,
   RefinementRequirements,
-  type RefinementRequirementsSeed,
+  RefinementScenarios,
+  RefinementSolverFacts,
+  ReqAttributeValues,
+  TransitionRefs,
+  UnitRefinementPlan,
+  UnmappedDeclarations,
+  type AttributeMapping,
+  type EventMapping,
+  type RefinementAttribute,
+  type RefinementObligation,
+  type RefinementProbe,
+  type RefinementQueryVerdict,
+  type RefinementScenario,
   type RefinementUnitMap,
-  alphaEquality,
-  alphaExpr,
-  designEnumValues,
-  designEventCatalog,
-  interpretRefinementVerdicts,
-  planUnitRefinement,
-  quintRefinementStatusSkips,
-  refinementQuintInvariants,
-  reqEffectAssignments,
-  smtRefinementStatusSkips,
+  type UnmappedTarget,
 } from "../tools/refinement/domain/index.ts";
 import { FormalModelRepositoryImpl, buildSmtPlan } from "../tools/requirements/adapter/index.ts";
 
@@ -153,7 +164,7 @@ describe("SMT script characterization (the PR8 safety net)", () => {
     const context = new RefinementMaterialsRepositoryImpl(mapSchemaPath).findById(RefinementMaterialsId.ofModel(DesignModelId.of(ap(modelPath))));
     expect(acquired.ok && context.kind === "active" && context.map.kind === "loaded").toBe(true);
     if (!acquired.ok || context.kind !== "active" || context.map.kind !== "loaded") return;
-    expect(context.map.map.units().length).toBeGreaterThan(0);
+    expect(context.map.map.units().toArray().length).toBeGreaterThan(0);
     expect(context.map.map.unitMapOf(DesignUnitId.of("no-such-unit"))).toBe(undefined);
     expect(context.map.map.id().artifactPath().asString().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
     expect(context.requirements.id().artifactPath().asString().endsWith("deep-spec-analysis-formal-model.md")).toBe(true);
@@ -161,7 +172,7 @@ describe("SMT script characterization (the PR8 safety net)", () => {
     for (const u of acquired.value.model.units()) {
       const unitMap = context.map.map.unitMapOf(u.id());
       if (!unitMap) continue;
-      const plan = planUnitRefinement(u, unitMap, context.requirements, context.map.mapArtifact);
+      const plan = UnitRefinementPlan.of(u, unitMap, context.requirements, context.map.mapArtifact);
       queries.push(...(buildRefinementQueries(u, context.requirements, plan).queries as unknown as Json[]));
     }
     snapshot("refinement-queries.json", queries as unknown as Json);
@@ -190,15 +201,37 @@ function unit(seed: {
   });
 }
 
-function requirements(seed: Partial<RefinementRequirementsSeed>): RefinementRequirements {
+// テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
+type RawReqAttribute = Omit<RefinementAttribute, "values"> & { values?: string[] };
+function requirements(seed: {
+  attributes?: RawReqAttribute[];
+  obligations?: RefinementObligation[];
+  scenarios?: RefinementScenario[];
+}): RefinementRequirements {
   return RefinementRequirements.reconstitute({
     id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
     hash: ContentHash.reconstitute("a".repeat(64)),
-    attributes: [],
-    obligations: [],
-    scenarios: [],
-    ...seed,
+    attributes: RefinementAttributes.of(
+      (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : ReqAttributeValues.of(a.values) })),
+    ),
+    obligations: RefinementObligations.of(seed.obligations ?? []),
+    scenarios: RefinementScenarios.of(seed.scenarios ?? []),
   });
+}
+
+type RawEventMapping = Omit<EventMapping, "transitions"> & { transitions: string[] };
+function refUnitMap(seed: {
+  unit?: string;
+  attrMap?: AttributeMapping[];
+  eventMap?: RawEventMapping[];
+  unmapped?: UnmappedTarget[];
+}): RefinementUnitMap {
+  return {
+    unit: DesignUnitId.of(seed.unit ?? "u1"),
+    attrMap: AttributeMappings.of(seed.attrMap ?? []),
+    eventMap: EventMappings.of((seed.eventMap ?? []).map((e) => ({ ...e, transitions: TransitionRefs.of(e.transitions) }))),
+    unmapped: UnmappedDeclarations.of(seed.unmapped ?? []),
+  };
 }
 
 const exprMapping = (req: string, path: string) =>
@@ -207,17 +240,16 @@ const enumMapping = (req: string, from: string, cases: { [d: string]: string }) 
   ({ kind: "enum-cases", req, from, cases }) as const;
 
 describe("alpha substitution", () => {
-  const ctx = {
-    byReq: new Map<string, ReturnType<typeof exprMapping> | ReturnType<typeof enumMapping> | { kind: "unspecified"; req: string }>([
+  const ctx = AlphaContext.of(
+    new Map<string, AttributeMapping>([
       ["R.flag", exprMapping("R.flag", "D.flag")],
       ["R.state", enumMapping("R.state", "D.phase", { draft: "open", review: "open", done: "closed" })],
       ["R.none", { kind: "unspecified", req: "R.none" }],
     ]),
-    reqAttrByPath: new Map(),
-  };
+  );
 
   test("enum eq expands to the disjunction of design values mapping to the literal", () => {
-    const out = alphaExpr(ctx, { op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "open" }] }, false);
+    const out = ctx.substitute({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "open" }] }, false);
     expect(out).toEqual({
       op: "or",
       args: [
@@ -225,37 +257,37 @@ describe("alpha substitution", () => {
         { op: "eq", args: [{ op: "ref", path: "D.phase" }, { op: "enum", value: "review" }] },
       ],
     });
-    const single = alphaExpr(ctx, { op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "closed" }] }, false);
+    const single = ctx.substitute({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "closed" }] }, false);
     expect(single).toEqual({ op: "eq", args: [{ op: "ref", path: "D.phase" }, { op: "enum", value: "done" }] });
-    const none = alphaExpr(ctx, { op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "ghost" }] }, false);
+    const none = ctx.substitute({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "ghost" }] }, false);
     expect(none).toEqual({ op: "bool", value: false });
-    const ne = alphaExpr(ctx, { op: "ne", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "closed" }] }, false);
+    const ne = ctx.substitute({ op: "ne", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "closed" }] }, false);
     expect(ne.op).toBe("not");
-    const primed = alphaExpr(ctx, { op: "eq", args: [{ op: "ref", path: "R.state", prime: true }, { op: "enum", value: "closed" }] }, false);
+    const primed = ctx.substitute({ op: "eq", args: [{ op: "ref", path: "R.state", prime: true }, { op: "enum", value: "closed" }] }, false);
     expect(primed).toEqual({ op: "eq", args: [{ op: "ref", path: "D.phase", prime: true }, { op: "enum", value: "done" }] });
   });
 
   test("expression mappings substitute (primed in post context) and errors are frozen", () => {
-    expect(alphaExpr(ctx, { op: "ref", path: "R.flag" }, false)).toEqual({ op: "ref", path: "D.flag" });
-    expect(alphaExpr(ctx, { op: "ref", path: "R.flag" }, true)).toEqual({ op: "ref", path: "D.flag", prime: true });
-    expect(alphaExpr(ctx, { op: "and", args: [{ op: "ref", path: "R.flag" }, { op: "bool", value: true }] }, false).args?.[0]).toEqual({ op: "ref", path: "D.flag" });
-    expect(() => alphaExpr(ctx, { op: "ref", path: "R.missing" }, false)).toThrow(AlphaError);
-    expect(() => alphaExpr(ctx, { op: "ref", path: "R.state" }, false))
+    expect(ctx.substitute({ op: "ref", path: "R.flag" }, false)).toEqual({ op: "ref", path: "D.flag" });
+    expect(ctx.substitute({ op: "ref", path: "R.flag" }, true)).toEqual({ op: "ref", path: "D.flag", prime: true });
+    expect(ctx.substitute({ op: "and", args: [{ op: "ref", path: "R.flag" }, { op: "bool", value: true }] }, false).args?.[0]).toEqual({ op: "ref", path: "D.flag" });
+    expect(() => ctx.substitute({ op: "ref", path: "R.missing" }, false)).toThrow(AlphaError);
+    expect(() => ctx.substitute({ op: "ref", path: "R.state" }, false))
       .toThrow('enum-mapped requirements attribute "R.state" is only legal inside eq/ne against an enum literal');
-    expect(() => alphaExpr(ctx, { op: "ref", path: "R.none" }, false))
+    expect(() => ctx.substitute({ op: "ref", path: "R.none" }, false))
       .toThrow('attrMap entry for "R.none" declares neither an expression nor enum cases');
   });
 
   test("alphaEquality builds frame equalities: expression eq, enum class-iff, null for unmapped/unspecified", () => {
-    expect(alphaEquality(ctx, "R.flag")).toEqual({
+    expect(ctx.equalityFor("R.flag")).toEqual({
       op: "eq",
       args: [{ op: "ref", path: "D.flag" }, { op: "ref", path: "D.flag", prime: true }],
     });
-    const enumEq = alphaEquality(ctx, "R.state");
+    const enumEq = ctx.equalityFor("R.state");
     expect(enumEq?.op).toBe("and");
     expect(enumEq?.args?.length).toBe(2); // closed / open の 2 類
-    expect(alphaEquality(ctx, "R.missing")).toBe(null);
-    expect(alphaEquality(ctx, "R.none")).toBe(null);
+    expect(ctx.equalityFor("R.missing")).toBe(null);
+    expect(ctx.equalityFor("R.none")).toBe(null);
   });
 });
 
@@ -299,8 +331,7 @@ describe("plan classification and gap findings", () => {
       { id: "SC-4", kind: "accept", frRefs: [], bindings: { "R.waived": 1 } },
     ],
   });
-  const unitMap: RefinementUnitMap = {
-    unit: "u1",
+  const unitMap: RefinementUnitMap = refUnitMap({
     attrMap: [
       enumMapping("R.state", "D.phase", { draft: "open", done: "closed" }),
       exprMapping("R.flag", "D.flag"),
@@ -314,30 +345,29 @@ describe("plan classification and gap findings", () => {
       { target: "R.waived", reason: "" },
       { target: "OB-9", reason: "future work" },
     ],
-  };
+  });
 
   test("statuses classify checkable / waived / capability / gap, and gaps become findings", () => {
-    const plan = planUnitRefinement(designUnit, unitMap, req, "construction/x/map.md");
-    expect(plan.obligationStatus.get("OB-1")).toEqual({ kind: "checkable" });
-    expect(plan.obligationStatus.get("OB-2")).toEqual({ kind: "checkable" });
-    expect(plan.eventTransitions.get("OB-2")).toEqual(["TR-1"]);
-    expect(plan.obligationStatus.get("OB-3")).toEqual({ kind: "capability", detail: "temporal refinement is outside v1 scope" });
-    expect(plan.obligationStatus.get("OB-4")).toEqual({ kind: "waived", reason: "depends on unmapped attribute(s) R.orphan" });
-    expect(plan.obligationStatus.get("OB-5")?.kind).toBe("gap");
-    expect(plan.obligationStatus.get("OB-6")).toEqual({ kind: "capability", detail: 'nature "mystery" has no refinement check' });
-    expect(plan.scenarioStatus.get("SC-1")).toEqual({ kind: "checkable" });
-    expect(plan.scenarioStatus.get("SC-2")).toEqual({ kind: "waived", reason: "binds unmapped attribute(s) R.orphan" });
-    expect(plan.scenarioStatus.get("SC-3")).toEqual({ kind: "capability", detail: "event scenarios are not replayed in v1" });
-    expect(plan.scenarioStatus.get("SC-4")).toEqual({ kind: "waived", reason: "binds unmapped attribute(s) R.waived" });
-    const gapDetails = plan.gaps.map((g) => g.detail);
+    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, "construction/x/map.md");
+    expect(plan.statusOfObligation("OB-1")).toEqual({ kind: "checkable" });
+    expect(plan.statusOfObligation("OB-2")).toEqual({ kind: "checkable" });
+    expect(plan.mappedTransitionsOf("OB-2")).toEqual(["TR-1"]);
+    expect(plan.statusOfObligation("OB-3")).toEqual({ kind: "capability", detail: "temporal refinement is outside v1 scope" });
+    expect(plan.statusOfObligation("OB-4")).toEqual({ kind: "waived", reason: "depends on unmapped attribute(s) R.orphan" });
+    expect(plan.statusOfObligation("OB-5")?.kind).toBe("gap");
+    expect(plan.statusOfObligation("OB-6")).toEqual({ kind: "capability", detail: 'nature "mystery" has no refinement check' });
+    expect(plan.statusOfScenario("SC-1")).toEqual({ kind: "checkable" });
+    expect(plan.statusOfScenario("SC-2")).toEqual({ kind: "waived", reason: "binds unmapped attribute(s) R.orphan" });
+    expect(plan.statusOfScenario("SC-3")).toEqual({ kind: "capability", detail: "event scenarios are not replayed in v1" });
+    expect(plan.statusOfScenario("SC-4")).toEqual({ kind: "waived", reason: "binds unmapped attribute(s) R.waived" });
+    const gapDetails = plan.gaps().toArray().map((g) => g.detail);
     expect(gapDetails.some((d) => d.includes('requirements event trigger "ghost" has no eventMap entry'))).toBe(true);
-    expect(plan.gaps.every((g) => g.kind === "mapping-gap" && g.unit === "u1")).toBe(true);
-    expect(plan.gaps[0]?.witness).toEqual({ refs: [{ artifact: "construction/x/map.md", element: "units[u1]" }] });
+    expect(plan.gaps().toArray().every((g) => g.kind === "mapping-gap" && g.unit === "u1")).toBe(true);
+    expect(plan.gaps().toArray()[0]?.witness).toEqual({ refs: [{ artifact: "construction/x/map.md", element: "units[u1]" }] });
   });
 
   test("map defects each produce their frozen gap wording", () => {
-    const badMap: RefinementUnitMap = {
-      unit: "u1",
+    const badMap: RefinementUnitMap = refUnitMap({
       attrMap: [
         exprMapping("R.flag", "D.flag"),
         exprMapping("R.flag", "D.flag"), // 重複
@@ -350,7 +380,7 @@ describe("plan classification and gap findings", () => {
       ],
       eventMap: [{ reqTrigger: "finish", transitions: ["TR-404"] }],
       unmapped: [],
-    };
+    });
     const reqLocal = requirements({
       attributes: [
         { path: "R.flag", kind: "bool" },
@@ -365,8 +395,8 @@ describe("plan classification and gap findings", () => {
         { id: "OB-2", nature: "event", frRefs: [], trigger: "finish", guard: { op: "ref", path: "R.flag" }, effect: { op: "eq", args: [{ op: "ref", path: "R.flag", prime: true }, { op: "bool", value: true }] } },
       ],
     });
-    const plan = planUnitRefinement(designUnit, badMap, reqLocal, "m.md");
-    const details = plan.gaps.map((g) => g.detail).join("\n");
+    const plan = UnitRefinementPlan.of(designUnit, badMap, reqLocal, "m.md");
+    const details = plan.gaps().toArray().map((g) => g.detail).join("\n");
     expect(details).toContain('attrMap maps "R.flag" more than once');
     expect(details).toContain('attrMap entry "R.ghost" names no attribute of the requirements IR');
     expect(details).toContain('enumMap.from "D.missing" is not a design attribute of unit u1');
@@ -379,19 +409,19 @@ describe("plan classification and gap findings", () => {
     expect(details).toContain("silence is a contract violation");
   });
 
-  test("designEnumValues distinguishes missing/non-enum (null) from declared values", () => {
-    expect(designEnumValues(designUnit, "D.phase")).toEqual(["draft", "done"]);
-    expect(designEnumValues(designUnit, "D.flag")).toBe(null);
-    expect(designEnumValues(designUnit, "D.missing")).toBe(null);
+  test("declaredEnumValuesOf distinguishes missing/non-enum (null) from declared values", () => {
+    expect(designUnit.declaredEnumValuesOf("D.phase")).toEqual(["draft", "done"]);
+    expect(designUnit.declaredEnumValuesOf("D.flag")).toBe(null);
+    expect(designUnit.declaredEnumValuesOf("D.missing")).toBe(null);
   });
 
   test("status skips differ by backend flavor (frozen wordings)", () => {
-    const plan = planUnitRefinement(designUnit, unitMap, req, "m.md");
-    const smtSkips = smtRefinementStatusSkips(plan, "u1").map((s) => `${s.target}:${s.reason}`);
+    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, "m.md");
+    const smtSkips = plan.smtStatusSkips("u1").toArray().map((s) => `${s.target}:${s.reason}`);
     expect(smtSkips).toContain("OB-3:capability");
     expect(smtSkips).toContain("OB-4:waived");
     expect(smtSkips).not.toContain("OB-2:capability");
-    const quintSkips = quintRefinementStatusSkips(plan, req, "u1");
+    const quintSkips = plan.quintStatusSkips(req, "u1").toArray();
     expect(quintSkips.find((s) => s.target === "OB-2")?.detail)
       .toBe("event simulation and enabledness are checked by the SMT refinement pass only in v1");
     expect(quintSkips.find((s) => s.target === "SC-1")?.detail)
@@ -399,10 +429,10 @@ describe("plan classification and gap findings", () => {
   });
 
   test("quint extras carry alpha(P) for checkable invariants only", () => {
-    const plan = planUnitRefinement(designUnit, unitMap, req, "m.md");
-    const extras = refinementQuintInvariants(plan, req);
-    expect(extras.map((e) => e.reqId)).toEqual(["OB-1"]);
-    expect(extras[0]?.expr).toEqual({ op: "ref", path: "D.flag" });
+    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, "m.md");
+    const extras = plan.quintInvariants(req);
+    expect(extras.toArray().map((e) => e.reqId)).toEqual(["OB-1"]);
+    expect(extras.toArray()[0]?.expr).toEqual({ op: "ref", path: "D.flag" });
   });
 });
 
@@ -437,37 +467,64 @@ describe("event catalog and effect assignments", () => {
         { id: "DOB-3", nature: "invariant", origin: "", brRefs: [], frRefs: [] },
       ],
     });
-    const catalog = designEventCatalog(u);
-    expect(catalog.get("TR-1")?.guard.op).toBe("and");
-    expect(catalog.get("TR-1")?.effectAssign.get("D.s")).toEqual({ op: "enum", value: "b" });
-    expect(catalog.get("TR-1")?.effectAssign.get("D.n")).toEqual({ op: "int", value: 1 });
+    const catalog = DesignEventCatalog.of(u);
+    expect(catalog.eventOf("TR-1")?.guard.op).toBe("and");
+    expect(catalog.eventOf("TR-1")?.effectAssign.rhsOf("D.s")).toEqual({ op: "enum", value: "b" });
+    expect(catalog.eventOf("TR-1")?.effectAssign.rhsOf("D.n")).toEqual({ op: "int", value: 1 });
     // 分解不能な追加効果は暗黙代入だけが残る（設計パスが報告する）。
-    expect(catalog.get("TR-2")?.effectAssign.size).toBe(1);
-    expect(catalog.get("DOB-1")?.effectAssign.get("D.n")).toEqual({ op: "int", value: 2 });
+    expect(catalog.eventOf("TR-2")?.effectAssign.count()).toBe(1);
+    expect(catalog.eventOf("DOB-1")?.effectAssign.rhsOf("D.n")).toEqual({ op: "int", value: 2 });
     // 分解不能な event 義務はカタログに載らない。
-    expect(catalog.has("DOB-2")).toBe(false);
-    expect(catalog.has("DOB-3")).toBe(false);
+    expect(catalog.eventOf("DOB-2")).toBe(null);
+    expect(catalog.eventOf("DOB-3")).toBe(null);
 
-    expect(() => reqEffectAssignments({ op: "or", args: [] })).toThrow("requirements effect is not a conjunction of primed assignments");
-    expect(() => reqEffectAssignments({ op: "eq", args: [{ op: "ref", path: "x" }, { op: "int", value: 1 }] })).toThrow(AlphaError);
+    expect(() => EffectAssignments.ofEffect({ op: "or", args: [] })).toThrow("requirements effect is not a conjunction of primed assignments");
+    expect(() => EffectAssignments.ofEffect({ op: "eq", args: [{ op: "ref", path: "x" }, { op: "int", value: 1 }] })).toThrow(AlphaError);
   });
 });
 
 describe("refinement verdict interpretation", () => {
+  // plan と interpret に同一の requirements を渡す（本番経路と同じ整合）。
   const req = requirements({
-    obligations: [{ id: "OB-1", nature: "invariant", frRefs: ["FR-2", "FR-1"], assert: { op: "bool", value: true } }],
+    attributes: [{ path: "R.flag", kind: "bool" }],
+    obligations: [
+      { id: "OB-1", nature: "invariant", frRefs: ["FR-2", "FR-1"], assert: { op: "bool", value: true } },
+      { id: "OB-2", nature: "event", frRefs: [], trigger: "go", guard: { op: "ref", path: "R.flag" }, effect: { op: "eq", args: [{ op: "ref", path: "R.flag", prime: true }, { op: "bool", value: true }] } },
+    ],
     scenarios: [
       { id: "SC-1", kind: "accept", frRefs: ["FR-3"], bindings: {} },
       { id: "SC-2", kind: "reject", frRefs: [], bindings: {} },
     ],
   });
-  const plan = { ctx: { byReq: new Map(), reqAttrByPath: new Map() }, obligationStatus: new Map(), scenarioStatus: new Map(), eventTransitions: new Map([["OB-2", ["TR-1", "TR-2"]]]), gaps: [] };
-  const facts = (entries: [string, { kind: "invariant" | "scenario" | "enabledness" | "simulation"; reqId: string; designId?: string }][]): RefinementSolverFacts => ({
-    pending: new Map(entries),
-    compileSkips: [],
+  // mappedTransitionsOf("OB-2") が ["TR-1", "TR-2"] になる実 plan を組む
+  // （露出 Map スタブは plan のクラス化で死亡）。
+  const planUnit = unit({
+    attrPaths: new Set(["D.flag"]),
+    machines: [
+      {
+        id: "SM-1",
+        entity: "D",
+        attribute: "s",
+        initial: [],
+        deterministic: true,
+        ignores: [],
+        transitions: [
+          { id: "TR-1", from: "a", to: "b", trigger: "go", brRefs: [] },
+          { id: "TR-2", from: "a", to: "b", trigger: "go", brRefs: [] },
+        ],
+      },
+    ],
   });
+  const plan = UnitRefinementPlan.of(
+    planUnit,
+    refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")], eventMap: [{ reqTrigger: "go", transitions: ["TR-1", "TR-2"] }] }),
+    req,
+    "m.md",
+  );
+  const facts = (entries: [string, RefinementProbe][]): RefinementSolverFacts =>
+    RefinementSolverFacts.of({ pending: new Map(entries), compileSkips: DesignSkips.of([]) });
   const run = (f: RefinementSolverFacts, results: [string, RefinementQueryVerdict][]) =>
-    interpretRefinementVerdicts("u1", req, plan, f, new Map(results));
+    f.interpret(RefinementQueryVerdicts.of(new Map(results)), req, plan, "u1");
 
   test("each probe kind emits its frozen finding on the deciding verdict", () => {
     const out = run(
@@ -486,18 +543,18 @@ describe("refinement verdict interpretation", () => {
         ["rs2:OB-2:TR-1", { status: "sat", decodedModel: { "D.s": "a" }, decodedPostModel: { "D.s": "b" } }],
       ],
     );
-    expect(out.findings.map((f) => `${f.kind}:${f.targets.join(",")}`)).toEqual([
+    expect(out.findings.toArray().map((f) => `${f.kind}:${f.targets.join(",")}`)).toEqual([
       "refinement-violation:OB-1",
       "refinement-violation:SC-1",
       "refinement-violation:SC-2",
       "completeness-gap:OB-2,TR-1,TR-2",
       "refinement-violation:OB-2,TR-1",
     ]);
-    expect(out.findings[0]?.frRefs).toEqual(["FR-1", "FR-2"]);
-    expect(out.findings[1]?.witness).toEqual({ core: ["inv_a", "inv_b"] });
-    expect(out.findings[4]?.witness).toEqual({ trace: [{ "D.s": "a" }, { "D.s": "b" }] });
-    expect(out.findings[0]?.detail).toContain("The design admits what the verified requirements forbid.");
-    expect(out.findings[4]?.detail).toContain("produces an abstract post-state that violates the requirements effect or the abstract frame");
+    expect(out.findings.toArray()[0]?.frRefs).toEqual(["FR-1", "FR-2"]);
+    expect(out.findings.toArray()[1]?.witness).toEqual({ core: ["inv_a", "inv_b"] });
+    expect(out.findings.toArray()[4]?.witness).toEqual({ trace: [{ "D.s": "a" }, { "D.s": "b" }] });
+    expect(out.findings.toArray()[0]?.detail).toContain("The design admits what the verified requirements forbid.");
+    expect(out.findings.toArray()[4]?.detail).toContain("produces an abstract post-state that violates the requirements effect or the abstract frame");
   });
 
   test("quiet verdicts emit nothing; undecided and missing become the frozen timeout skip", () => {
@@ -518,8 +575,127 @@ describe("refinement verdict interpretation", () => {
         ["rs2:OB-2:TR-1", { status: "unknown" }],
       ],
     );
-    expect(out.findings).toEqual([]);
-    expect(out.skipped.map((s) => `${s.target}:${s.reason}`)).toEqual(["OB-2:timeout", "OB-9:timeout"]);
-    expect(out.skipped[0]?.detail).toBe("refinement query rs2:OB-2:TR-1 exceeded the solver budget or errored");
+    expect(out.findings.toArray()).toEqual([]);
+    expect(out.skipped.toArray().map((s) => `${s.target}:${s.reason}`)).toEqual(["OB-2:timeout", "OB-9:timeout"]);
+    expect(out.skipped.toArray()[0]?.detail).toBe("refinement query rs2:OB-2:TR-1 exceeded the solver budget or errored");
+  });
+});
+
+describe("refinement collections (first-class operations)", () => {
+  test("of/add/iterator/toArray and the map-side set knowledge", () => {
+    const am = AttributeMappings.of([]).add(exprMapping("R.a", "D.a"));
+    expect([...am].length).toBe(1);
+    expect(am.toArray()[0]?.req).toBe("R.a");
+
+    const tr = TransitionRefs.of(["TR-2"]).add("TR-10");
+    expect([...tr]).toEqual(["TR-2", "TR-10"]);
+    expect(tr.isEmpty()).toBe(false);
+    expect(TransitionRefs.of([]).isEmpty()).toBe(true);
+    expect(tr.unknownAmong(new Set(["TR-2"]))).toEqual(["TR-10"]);
+    // unknownAmong は素の辞書順、sortedCanonically は idCompare（数値尾）。
+    expect(tr.sortedCanonically()).toEqual(["TR-2", "TR-10"]);
+    expect(tr.toArray()).toEqual(["TR-2", "TR-10"]);
+
+    const em = EventMappings.of([]).add({ reqTrigger: "go", transitions: TransitionRefs.of(["TR-1"]) })
+      .add({ reqTrigger: "go", transitions: TransitionRefs.of(["TR-9"]) });
+    expect([...em].length).toBe(2);
+    // 重複トリガは最後の宣言が勝つ（旧 new Map の凍結挙動）。
+    expect([...(em.ofTrigger("go")?.transitions ?? TransitionRefs.of([]))]).toEqual(["TR-9"]);
+    expect(em.ofTrigger("ghost")).toBe(undefined);
+    expect(em.toArray().length).toBe(2);
+
+    const un = UnmappedDeclarations.of([{ target: "R.x", reason: "first" }]).add({ target: "R.x", reason: "last" });
+    expect([...un].length).toBe(2);
+    expect(un.covers("R.x")).toBe(true);
+    expect(un.covers("R.y")).toBe(false);
+    expect(un.coversAll(["R.x"])).toBe(true);
+    expect(un.coversAll(["R.x", "R.y"])).toBe(false);
+    // 理由の索引も最後の宣言が勝つ。
+    expect(un.reasonOf("R.x")).toBe("last");
+    expect(un.reasonOf("R.y")).toBe(undefined);
+    expect(un.toArray().length).toBe(2);
+
+    const m1 = refUnitMap({ unit: "u1" });
+    const maps = RefinementUnitMaps.of([]).add(m1).add(refUnitMap({ unit: "u1", attrMap: [exprMapping("R.b", "D.b")] }));
+    expect([...maps].length).toBe(2);
+    // 重複ユニットは最初の宣言が勝つ（旧 find の凍結挙動）。
+    expect(maps.mapOf(DesignUnitId.of("u1"))).toBe(m1);
+    expect(maps.mapOf(DesignUnitId.of("zz"))).toBe(undefined);
+    expect(maps.toArray().length).toBe(2);
+  });
+
+  test("requirements-view collections own their index knowledge", () => {
+    const vals = ReqAttributeValues.of(["open"]).add("closed");
+    expect([...vals]).toEqual(["open", "closed"]);
+    expect(vals.includes("closed")).toBe(true);
+    expect(vals.includes("ghost")).toBe(false);
+    expect(vals.toArray()).toEqual(["open", "closed"]);
+
+    const attrs = RefinementAttributes.of([{ path: "R.b", kind: "bool" }])
+      .add({ path: "R.a", kind: "int" })
+      .add({ path: "R.a", kind: "bool" });
+    expect([...attrs].length).toBe(3);
+    expect(attrs.covers("R.a")).toBe(true);
+    expect(attrs.covers("R.z")).toBe(false);
+    // path 索引は最後の宣言が勝つ。
+    expect(attrs.byPath("R.a")?.kind).toBe("bool");
+    expect(attrs.byPath("R.z")).toBe(undefined);
+    expect(attrs.sortedByPath().toArray().map((a) => a.path)).toEqual(["R.a", "R.a", "R.b"]);
+
+    const obs = RefinementObligations.of([{ id: "OB-2", nature: "invariant", frRefs: [] }])
+      .add({ id: "OB-1", nature: "event", frRefs: [] })
+      .add({ id: "OB-1", nature: "numeric", frRefs: [] });
+    expect([...obs].length).toBe(3);
+    expect(obs.byId("OB-1")?.nature).toBe("numeric");
+    expect(obs.byId("OB-9")).toBe(undefined);
+    expect(obs.sortedCanonically().toArray().map((o) => o.id)).toEqual(["OB-1", "OB-1", "OB-2"]);
+
+    const scs = RefinementScenarios.of([{ id: "SC-2", kind: "accept", frRefs: [], bindings: {} }])
+      .add({ id: "SC-1", kind: "reject", frRefs: [], bindings: {} })
+      .add({ id: "SC-1", kind: "accept", frRefs: [], bindings: {} });
+    expect([...scs].length).toBe(3);
+    expect(scs.byId("SC-1")?.kind).toBe("accept");
+    expect(scs.byId("SC-9")).toBe(undefined);
+    expect(scs.toArray().length).toBe(3);
+  });
+
+  test("quint invariant collection knows its req ids", () => {
+    const inv = RefinementQuintInvariants.of([]).add({ reqId: "OB-1", frRefs: [], expr: { op: "bool", value: true } });
+    expect(inv.isEmpty()).toBe(false);
+    expect([...inv].length).toBe(1);
+    expect([...inv.reqIds()]).toEqual(["OB-1"]);
+    expect(inv.toArray()[0]?.reqId).toBe("OB-1");
+  });
+});
+
+describe("catalog misses in the enabledness path (frozen null-drop)", () => {
+  test("a mapped design id outside the catalog is silently dropped, not a compile-error", () => {
+    // 宣言済みだがカタログに載らない設計 id（event でない義務）へ写像しても、
+    // 旧 Map.get の undefined 落ちと同じく黙って除外される——義務全体が
+    // compile-error skip に化けてはならない。
+    const u = unit({
+      attrPaths: new Set(["D.flag"]),
+      rawEntities: [{ name: "D", attributes: [{ name: "flag", type: { kind: "bool" } }] }],
+      obligations: [{ id: "DOB-9", nature: "invariant", origin: "", brRefs: [], frRefs: [] }],
+    });
+    const req = requirements({
+      attributes: [{ path: "R.flag", kind: "bool" }],
+      obligations: [
+        { id: "OB-2", nature: "event", frRefs: [], trigger: "go", guard: { op: "ref", path: "R.flag" }, effect: { op: "eq", args: [{ op: "ref", path: "R.flag", prime: true }, { op: "bool", value: true }] } },
+      ],
+    });
+    const plan = UnitRefinementPlan.of(
+      u,
+      refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")], eventMap: [{ reqTrigger: "go", transitions: ["DOB-9"] }] }),
+      req,
+      "m.md",
+    );
+    expect(plan.statusOfObligation("OB-2")).toEqual({ kind: "checkable" });
+    const built = buildRefinementQueries(u, req, plan);
+    const enabledness = built.queries.find((q) => q.id === "re:OB-2");
+    expect(enabledness).toBeDefined();
+    // 発火可能な設計ガードなし → notEnabled は "true"（黙った除外の凍結面）。
+    expect(enabledness?.script).toContain("(assert (=> ne_OB_2 true))");
+    expect(built.facts.compileSkips().toArray()).toEqual([]);
   });
 });

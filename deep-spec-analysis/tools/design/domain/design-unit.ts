@@ -149,6 +149,24 @@ export class DesignUnit {
     );
   }
 
+  // 属性パスの enum 宣言値——null は「属性が見つからない／enum でない」の区別
+  // （空配列と混ぜない——refinement の gap 文言の分岐が異なる）。旧 refinement
+  // 自由関数 designEnumValues のメソッド化（OOUI 裁定）。
+  declaredEnumValuesOf(attrPath: string): string[] | null {
+    if (!Array.isArray(this.#rawEntities)) return null;
+    for (const ent of this.#rawEntities) {
+      if (!isRecord(ent) || typeof ent.name !== "string") continue;
+      for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
+        if (!isRecord(attr) || typeof attr.name !== "string" || !isRecord(attr.type)) continue;
+        if (`${ent.name}.${attr.name}` !== attrPath) continue;
+        if (attr.type.kind !== "enum") return null;
+        const values = attr.type.values;
+        return Array.isArray(values) ? (values.filter((v): v is string => typeof v === "string") as string[]) : null;
+      }
+    }
+    return null;
+  }
+
   // 属性パスの enum 宣言値（未宣言・非 enum は空）。旧 enumValuesOf の逐語移植。
   enumValuesOf(attrPath: string): string[] {
     if (!Array.isArray(this.#rawEntities)) return [];

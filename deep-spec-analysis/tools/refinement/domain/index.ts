@@ -9,7 +9,11 @@ export {
   type RefinementObligation,
   type RefinementRequirementsSeed,
   type RefinementScenario,
+  RefinementAttributes,
+  RefinementObligations,
   RefinementRequirements,
+  RefinementScenarios,
+  ReqAttributeValues,
 } from "./refinement-requirements.ts";
 export {
   type AttributeMapping,
@@ -17,29 +21,26 @@ export {
   type RefinementMapSeed,
   type RefinementUnitMap,
   type UnmappedTarget,
+  AttributeMappings,
+  EventMappings,
   RefinementMap,
+  RefinementUnitMaps,
+  TransitionRefs,
+  UnmappedDeclarations,
 } from "./refinement-map.ts";
-export { type AlphaContext, AlphaError, alphaEquality, alphaExpr } from "./alpha-substitution.ts";
+export { AlphaContext, AlphaError } from "./alpha-substitution.ts";
+export { type RefinementStatus, UnitRefinementPlan } from "./refinement-plan.ts";
+export { EffectAssignments } from "./effect-assignments.ts";
+export { type DesignEvent, DesignAssignments, DesignEventCatalog } from "./design-event-catalog.ts";
 export {
-  type RefinementStatus,
-  type UnitRefinementPlan,
-  designEnumValues,
-  planUnitRefinement,
-} from "./refinement-plan.ts";
-export { reqEffectAssignments } from "./effect-assignments.ts";
-export { type DesignEvent, designEventCatalog } from "./design-event-catalog.ts";
-export {
+  type InterpretedRefinementVerdicts,
   type RefinementProbe,
   type RefinementQueryStatus,
   type RefinementQueryVerdict,
-  type RefinementSolverFacts,
+  RefinementQueryVerdicts,
+  RefinementSolverFacts,
 } from "./refinement-solver-verdict.ts";
-export {
-  type InterpretedRefinementVerdicts,
-  interpretRefinementVerdicts,
-} from "./refinement-verdict-interpretation.ts";
-export { quintRefinementStatusSkips, smtRefinementStatusSkips } from "./refinement-status-skips.ts";
-export { type RefinementQuintInvariant, refinementQuintInvariants } from "./quint-invariants.ts";
+export { type RefinementQuintInvariant, RefinementQuintInvariants } from "./quint-invariants.ts";
 export { RefinementMapId } from "./refinement-map-id.ts";
 // RefinementRequirements の恒等 — 契約1 集約の識別子そのもの（プロファイルは
 // 恒等を変えない）。所有は requirements/domain。design のアダプタは refinement

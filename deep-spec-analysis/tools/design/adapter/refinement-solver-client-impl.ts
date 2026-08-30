@@ -7,6 +7,7 @@
 // 旧 runRefinementChild からの逐語移植。
 
 import { spawnSync } from "node:child_process";
+import { RefinementQueryVerdicts } from "../../refinement/domain/index.ts";
 import type {
   RefinementQueryVerdict,
   RefinementRequirements,
@@ -56,7 +57,7 @@ export class RefinementSolverClientImpl implements RefinementSolverClient {
         core: r.core,
       });
     }
-    return { facts: built.facts, result: { kind: "solved", verdicts } };
+    return { facts: built.facts, result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(verdicts) } };
   }
 
   #runChild(queries: RefinementChildQuery[], budgetMs: number): { results: Map<string, RefinementChildResult> | null; unavailable: string | null } {

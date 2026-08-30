@@ -32,9 +32,7 @@ import {
   RefinementMaterialsId,
 } from "../domain/index.ts";
 import {
-  interpretRefinementVerdicts,
-  planUnitRefinement,
-  smtRefinementStatusSkips,
+  UnitRefinementPlan,
 } from "../../refinement/domain/index.ts";
 import type { DesignModelRepository } from "./design-model-repository.ts";
 import type { DesignReportRepository } from "./design-report-repository.ts";
@@ -190,7 +188,7 @@ export class VerifyDesignSmtUseCase {
             }
             continue;
           }
-          const plan = planUnitRefinement(u, unitMap, req, context.map.mapArtifact);
+          const plan = UnitRefinementPlan.of(u, unitMap, req, context.map.mapArtifact);
           const check = this.#refinementSolverClient.check(u, req, plan, Math.min(30_000, refRemaining));
           if (check.result.kind === "unavailable") {
             // 旧挙動：unavailable のユニットは gap / status / compile skip を
@@ -200,11 +198,11 @@ export class VerifyDesignSmtUseCase {
             }
             continue;
           }
-          findings.push(...plan.gaps);
-          skipped.push(...smtRefinementStatusSkips(plan, u.name()));
-          skipped.push(...check.facts.compileSkips);
+          findings.push(...plan.gaps());
+          skipped.push(...plan.smtStatusSkips(u.name()));
+          skipped.push(...check.facts.compileSkips());
           if (check.result.kind === "solved") {
-            const interpreted = interpretRefinementVerdicts(u.name(), req, plan, check.facts, check.result.verdicts);
+            const interpreted = check.facts.interpret(check.result.verdicts, req, plan, u.name());
             findings.push(...interpreted.findings);
             skipped.push(...interpreted.skipped);
           }

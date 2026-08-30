@@ -10,18 +10,16 @@
 // decodeDesignModel とクエリ構築部からの逐語移植。
 
 import type { Expression } from "../../kernel/domain/index.ts";
-import { idCompare } from "../../kernel/domain/index.ts";
+import { DesignSkips } from "../domain/index.ts";
 import type { DesignSkipped, DesignUnit, DesignValue } from "../domain/index.ts";
 import {
   type DesignEvent,
   type RefinementProbe,
   type RefinementRequirements,
-  type RefinementSolverFacts,
+  RefinementSolverFacts,
   type UnitRefinementPlan,
-  alphaEquality,
-  alphaExpr,
-  designEventCatalog,
-  reqEffectAssignments,
+  DesignEventCatalog,
+  EffectAssignments,
 } from "../../refinement/domain/index.ts";
 
 interface RefinementAttr {
@@ -248,7 +246,7 @@ export function buildRefinementQueries(
   const post = designBase(ctx, u, true);
   const modelVars = ctx.attrs.map((a) => ({ name: smtVar(a.path, false), sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool" }));
   const modelVarsBoth = [...modelVars, ...ctx.attrs.map((a) => ({ name: smtVar(a.path, true), sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool" }))];
-  const catalog = designEventCatalog(u);
+  const catalog = DesignEventCatalog.of(u);
   const queries: RefinementChildQuery[] = [];
   const pending = new Map<string, RefinementProbe>();
   const compileSkips: DesignSkipped[] = [];
@@ -256,13 +254,14 @@ export function buildRefinementQueries(
     compileSkips.push({ target, reason: "compile-error", unit: u.name(), detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` });
   };
 
-  for (const [obId, st] of [...plan.obligationStatus.entries()].sort((a, b) => idCompare(a[0], b[0]))) {
+  const alphaCtx = plan.alphaContext();
+  for (const [obId, st] of plan.sortedObligationStatuses()) {
     if (st.kind !== "checkable") continue;
     const ob = req.obligationById(obId);
     if (!ob) continue;
     if ((ob.nature === "invariant" || ob.nature === "numeric") && ob.assert) {
       try {
-        const alphaP = alphaExpr(plan.ctx, ob.assert, false);
+        const alphaP = alphaCtx.substitute(ob.assert, false);
         const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: `neg_${obId.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: `(not ${smtOfExpr(ctx, alphaP)})` }], modelVars);
         queries.push(q);
         pending.set(q.id, { kind: "invariant", reqId: obId });
@@ -272,14 +271,14 @@ export function buildRefinementQueries(
       continue;
     }
     if (ob.nature === "event" && ob.guard && ob.effect) {
-      const mapped = plan.eventTransitions.get(obId) ?? [];
+      const mapped = plan.mappedTransitionsOf(obId);
       try {
-        const alphaG = alphaExpr(plan.ctx, ob.guard, false);
+        const alphaG = alphaCtx.substitute(ob.guard, false);
         // enabledness：alpha(guard) は成り立つが、写像済み設計イベントが
         // ひとつも発火可能でない。
         const designGuards = mapped
-          .map((id) => catalog.get(id))
-          .filter((d): d is DesignEvent => d !== undefined)
+          .map((id) => catalog.eventOf(id))
+          .filter((d): d is DesignEvent => d !== null)
           .map((d) => smtOfExpr(ctx, d.guard));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
         const qe = assembleQuery(
@@ -299,21 +298,21 @@ export function buildRefinementQueries(
         // が成り立つところで踏んだ 1 歩の抽象 post が、要件効果か抽象フレーム
         // （Q2：未代入の要件属性は抽象値を保つ。unmapped 属性のフレーム等式は
         // 検査不能なので省く）に反する。
-        const assigned = reqEffectAssignments(ob.effect);
+        const assigned = EffectAssignments.ofEffect(ob.effect);
         const frameParts: string[] = [];
-        for (const a of [...req.attributes()].sort((x, y) => (x.path < y.path ? -1 : 1))) {
-          if (assigned.has(a.path)) continue;
-          const eq = alphaEquality(plan.ctx, a.path);
+        for (const a of req.attributes().sortedByPath()) {
+          if (assigned.covers(a.path)) continue;
+          const eq = alphaCtx.equalityFor(a.path);
           if (eq !== null) frameParts.push(smtOfExpr(ctx, eq));
         }
-        const fBar = smtOfExpr(ctx, alphaExpr(plan.ctx, ob.effect, false));
+        const fBar = smtOfExpr(ctx, alphaCtx.substitute(ob.effect, false));
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
-          const ev = catalog.get(designId);
+          const ev = catalog.eventOf(designId);
           if (!ev) continue;
           const stepParts: string[] = [smtOfExpr(ctx, ev.guard)];
           for (const attr of ctx.attrs) {
-            const rhs = ev.effectAssign.get(attr.path);
+            const rhs = ev.effectAssign.rhsOf(attr.path);
             const target = smtVar(attr.path, true);
             if (rhs) {
               const rhsSmt = rhs.op === "enum" && typeof rhs.value === "string"
@@ -345,7 +344,7 @@ export function buildRefinementQueries(
     }
   }
 
-  for (const [scId, st] of [...plan.scenarioStatus.entries()].sort((a, b) => idCompare(a[0], b[0]))) {
+  for (const [scId, st] of plan.sortedScenarioStatuses()) {
     if (st.kind !== "checkable") continue;
     const sc = req.scenarioById(scId);
     if (!sc) continue;
@@ -354,7 +353,7 @@ export function buildRefinementQueries(
       for (const [path, value] of Object.entries(sc.bindings).sort(([x], [y]) => (x < y ? -1 : 1))) {
         const lit: Expression = typeof value === "boolean" ? { op: "bool", value } : typeof value === "number" ? { op: "int", value } : { op: "enum", value };
         const constraint: Expression = { op: "eq", args: [{ op: "ref", path }, lit] };
-        parts.push(smtOfExpr(ctx, alphaExpr(plan.ctx, constraint, false)));
+        parts.push(smtOfExpr(ctx, alphaCtx.substitute(constraint, false)));
       }
       const q = assembleQuery(
         `rs:${scId}`,
@@ -369,5 +368,5 @@ export function buildRefinementQueries(
     }
   }
 
-  return { queries, facts: { pending, compileSkips }, context: ctx };
+  return { queries, facts: RefinementSolverFacts.of({ pending, compileSkips: DesignSkips.of(compileSkips) }), context: ctx };
 }
