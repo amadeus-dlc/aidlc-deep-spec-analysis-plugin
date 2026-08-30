@@ -48,10 +48,19 @@ import {
 import {
   FormalModelId,
   FrReferenceIndex,
-  type IrModelDecl,
+  type IrBackgroundDecl,
+  type IrObligationDecl,
+  type IrScenarioDecl,
+  IrAttributeDecls,
+  IrBackgroundDecls,
+  IrBindingPairs,
+  IrDeclaredValues,
+  IrEntityDecls,
+  IrModelDecl,
+  IrObligationDecls,
+  IrScenarioDecls,
   RequirementsSourceId,
   SourceAnchor,
-  modelWellFormednessErrors,
 } from "../tools/requirements/domain/index.ts";
 import { ValidateIrUseCase, type ValidateIrOutcome } from "../tools/requirements/usecase/index.ts";
 
@@ -353,27 +362,50 @@ describe("BrReferenceIndex", () => {
 });
 
 describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
-  const emptyView: IrModelDecl = { entities: [], obligations: [], scenarios: [], background: [] };
+  // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
+  type RawIrAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
+  type RawIrEntity = { name: string; attributes: RawIrAttr[] };
+  type RawIrScenario = Omit<IrScenarioDecl, "bindings"> & { bindings: (readonly [string, unknown])[] };
+  function irView(overrides: {
+    entities?: RawIrEntity[];
+    obligations?: IrObligationDecl[];
+    scenarios?: RawIrScenario[];
+    background?: IrBackgroundDecl[];
+  }): IrModelDecl {
+    return IrModelDecl.reconstitute({
+      entities: IrEntityDecls.of(
+        (overrides.entities ?? []).map((e) => ({
+          name: e.name,
+          attributes: IrAttributeDecls.of(
+            e.attributes.map((a) => ({ ...a, values: a.values === undefined ? undefined : IrDeclaredValues.of(a.values) })),
+          ),
+        })),
+      ),
+      obligations: IrObligationDecls.of(overrides.obligations ?? []),
+      scenarios: IrScenarioDecls.of(
+        (overrides.scenarios ?? []).map((sc) => ({ ...sc, bindings: IrBindingPairs.of(sc.bindings) })),
+      ),
+      background: IrBackgroundDecls.of(overrides.background ?? []),
+    });
+  }
 
   test("a well-formed model is silent", () => {
     expect(
-      modelWellFormednessErrors({
-        ...emptyView,
+      irView({
         entities: [{ name: "order", attributes: [{ name: "qty", kind: "int", min: 0, max: 5 }] }],
         obligations: [{ id: "OB-1", assert: { op: "ref", path: "order.qty" } }],
-      }),
+      }).wellFormednessErrors(),
     ).toEqual([]);
   });
 
   test("duplicate entities and attributes, and an inverted int range", () => {
     expect(
-      modelWellFormednessErrors({
-        ...emptyView,
+      irView({
         entities: [
           { name: "order", attributes: [{ name: "qty", kind: "int", min: 9, max: 1 }, { name: "qty", kind: "bool" }] },
           { name: "order", attributes: [] },
         ],
-      }),
+      }).wellFormednessErrors(),
     ).toEqual([
       "schema: order.qty: min > max",
       'schema: duplicate attribute "order.qty"',
@@ -383,8 +415,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
 
   test("unresolvable references, illegal primes and unknown enum literals", () => {
     expect(
-      modelWellFormednessErrors({
-        ...emptyView,
+      irView({
         entities: [{ name: "order", attributes: [{ name: "status", kind: "enum", values: ["open"] }] }],
         obligations: [
           {
@@ -399,7 +430,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
             },
           },
         ],
-      }),
+      }).wellFormednessErrors(),
     ).toEqual([
       'obligation OB-1: unresolvable reference "order.total"',
       'obligation OB-1: primed reference "order.status" is only legal in event effects and event-scenario expectations',
@@ -409,8 +440,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
 
   test("primes are legal inside an effect, and temporal branches are walked", () => {
     expect(
-      modelWellFormednessErrors({
-        ...emptyView,
+      irView({
         entities: [{ name: "order", attributes: [{ name: "qty", kind: "int", min: 0, max: 2 }] }],
         obligations: [
           {
@@ -424,18 +454,17 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
             },
           },
         ],
-      }),
+      }).wellFormednessErrors(),
     ).toEqual(['obligation OB-1: unresolvable reference "order.ghost"']);
   });
 
   test("duplicate ids are reported across obligations, scenarios and background", () => {
     expect(
-      modelWellFormednessErrors({
-        ...emptyView,
+      irView({
         obligations: [{ id: "X-1" }],
         scenarios: [{ id: "X-1", bindings: [], hasEvent: false }],
         background: [{ id: "X-1" }],
-      }),
+      }).wellFormednessErrors(),
     ).toEqual([
       'scenario X-1: duplicate id "X-1"',
       'background X-1: duplicate id "X-1"',
@@ -444,8 +473,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
 
   test("scenario bindings are typed against the attribute catalogue", () => {
     expect(
-      modelWellFormednessErrors({
-        ...emptyView,
+      irView({
         entities: [
           {
             name: "order",
@@ -469,7 +497,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
             expect: { op: "ref", path: "order.qty", prime: true },
           },
         ],
-      }),
+      }).wellFormednessErrors(),
     ).toEqual([
       'scenario SC-1: binding value 1.5 does not fit int attribute "order.qty"',
       'scenario SC-1: binding value "closed" does not fit enum attribute "order.status"',
@@ -479,7 +507,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
 
   test("background assertions are walked", () => {
     expect(
-      modelWellFormednessErrors({ ...emptyView, background: [{ id: "BG-1", assert: { op: "ref", path: "a.b" } }] }),
+      irView({ background: [{ id: "BG-1", assert: { op: "ref", path: "a.b" } }] }).wellFormednessErrors(),
     ).toEqual(['background BG-1: unresolvable reference "a.b"']);
   });
 });

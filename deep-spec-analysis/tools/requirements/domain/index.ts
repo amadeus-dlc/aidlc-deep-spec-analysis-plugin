@@ -47,12 +47,19 @@ export {
   type IrAttributeDecl,
   type IrBackgroundDecl,
   type IrEntityDecl,
-  type IrModelDecl,
+  type IrModelDeclSeed,
   type IrObligationDecl,
   type IrScenarioDecl,
   type IrTemporalDecl,
+  IrAttributeDecls,
+  IrBackgroundDecls,
+  IrBindingPairs,
+  IrDeclaredValues,
+  IrEntityDecls,
+  IrModelDecl,
+  IrObligationDecls,
+  IrScenarioDecls,
 } from "./ir-model-decl.ts";
-export { modelWellFormednessErrors } from "./model-well-formedness.ts";
 export { type FrRefClaim, FrReferenceIndex } from "./fr-reference-index.ts";
 export { SourceAnchor } from "./source-anchor.ts";
 export { RequirementsSourceId } from "./requirements-source-id.ts";
