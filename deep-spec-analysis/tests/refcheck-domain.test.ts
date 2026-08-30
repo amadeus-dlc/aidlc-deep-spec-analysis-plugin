@@ -226,7 +226,7 @@ describe("first-class collections", () => {
     expect([...RelDecls.of([]).add(RelDecl.reconstitute({ element: ElementPath.reconstitute("r[0]"), from: null, to: null, cardinality: null, hasDirection: false }))].length).toBe(1);
     expect(RuleDecls.of([]).add(RuleDecl.reconstitute({ id: null, element: ElementPath.reconstitute("rules[0]"), category: null, appliesTo: null, sourceIds: SourceIds.of([]), missing: [] })).toArray().length).toBe(1);
     expect(ShapeErrors.of([]).add({ element: ElementPath.reconstitute("entities"), detail: "x" }).toArray().length).toBe(1);
-    const sketch = StateMachineSketch.reconstitute({ spec: MachineSpec.reconstitute("Order"), states: StateNames.of([]), fenceLine: 1, unsupported: null });
+    const sketch = StateMachineSketch.reconstitute({ spec: MachineSpec.reconstitute("Order"), states: StateNames.of([]), fenceLine: LineNumber.reconstitute(1), unsupported: null });
     expect(StateMachineSketches.of([]).add(sketch).isEmpty()).toBe(false);
     const de = DomainEntitySketch.reconstitute({ name: EntityName.reconstitute("Order"), component: ComponentName.reconstitute("Core"), attributes: AttributeNames.of([]) });
     expect(DomainEntitySketches.of([]).add(de).toArray().length).toBe(1);
