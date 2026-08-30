@@ -5,6 +5,7 @@
 // をキー空間上で再現する。
 
 import { type Result, err, ok } from "../../tools/kernel/infrastructure/index.ts";
+import type { ArtifactPath } from "../../tools/kernel/domain/index.ts";
 import type { Schema, SchemaUnreadable } from "../../tools/kernel/adapter/index.ts";
 import { conformToFindingsContract } from "../../tools/requirements/adapter/index.ts";
 import type { VerificationReport, VerificationReportId } from "../../tools/requirements/domain/index.ts";
@@ -20,7 +21,7 @@ export class InMemoryVerificationReportRepository implements VerificationReportR
   }
 
   #keyOf(id: VerificationReportId): string {
-    return `${id.directory()}/${id.fileName()}`;
+    return `${id.directory().value()}/${id.fileName()}`;
   }
 
   findById(aggregateId: VerificationReportId): Result<VerificationReport, RepositoryError> {
@@ -31,8 +32,8 @@ export class InMemoryVerificationReportRepository implements VerificationReportR
     return ok(found);
   }
 
-  findAllByDirectory(directory: string): Result<readonly VerificationReport[], RepositoryError> {
-    const prefix = `${directory}/`;
+  findAllByDirectory(directory: ArtifactPath): Result<readonly VerificationReport[], RepositoryError> {
+    const prefix = `${directory.value()}/`;
     const hits = [...this.#store.entries()]
       .filter(([key]) => key.startsWith(prefix) && key !== `${prefix}cross-check.json`)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

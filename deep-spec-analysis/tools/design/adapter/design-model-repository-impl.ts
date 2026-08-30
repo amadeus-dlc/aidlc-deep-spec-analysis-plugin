@@ -9,12 +9,13 @@ import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { sha256 } from "../../kernel/domain/index.ts";
 import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
-import { DesignModel } from "../domain/index.ts";
+import { DesignModel, type DesignModelId } from "../domain/index.ts";
 import type { AcquiredDesignModel, DesignModelRepository } from "../usecase/index.ts";
 import { parseDesignModel } from "./design-model-parser.ts";
 
 export class DesignModelRepositoryImpl implements DesignModelRepository {
-  findByPath(modelPath: string): Result<AcquiredDesignModel, RepositoryError> {
+  findById(id: DesignModelId): Result<AcquiredDesignModel, RepositoryError> {
+    const modelPath = id.artifactPath().value();
     let md: string;
     try {
       md = readFileSync(modelPath, "utf-8");

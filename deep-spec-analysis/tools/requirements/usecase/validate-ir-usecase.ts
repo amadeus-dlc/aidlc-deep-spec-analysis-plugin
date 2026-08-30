@@ -7,6 +7,7 @@
 // 意味検査と逆トレーサビリティは、スキーマ検証まで無傷の IR にのみ走る。
 
 import {
+  type FormalModelId,
   FrReferenceIndex,
   SUPPORTED_IR_MAJOR,
   SourceAnchor,
@@ -27,8 +28,8 @@ export class ValidateIrUseCase {
     this.#source = source;
   }
 
-  execute(outputPath: string): ValidateIrOutcome {
-    const acquired = this.#materials.acquire(outputPath);
+  execute(modelId: FormalModelId): ValidateIrOutcome {
+    const acquired = this.#materials.acquire(modelId);
     if (acquired.kind === "not-applicable") return { kind: "not-applicable" };
     if (acquired.kind === "unreadable") {
       return { kind: "verdict", pass: false, errors: acquired.errors };
@@ -49,7 +50,7 @@ export class ValidateIrUseCase {
       errors.push(...modelWellFormednessErrors(materials.view));
 
       const index = FrReferenceIndex.of(materials.frClaims);
-      const source = this.#source.resolve(materials.sourceId);
+      const source = this.#source.findById(materials.sourceId);
       if (source === null) {
         errors.push("requirements.md not found under this intent record — frRefs cannot be reverse-verified");
       } else {

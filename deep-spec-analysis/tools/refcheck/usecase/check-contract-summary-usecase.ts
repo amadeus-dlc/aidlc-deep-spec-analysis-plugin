@@ -3,6 +3,8 @@
 // CD 検査 → 組成 → 契約適合 → 永続化を起動する。
 
 import {
+  type CheckExecutionMode,
+  type DesignRecordId,
   CheckFamilyLedger,
   CONTRACT_FAMILIES,
   type InputEntry,
@@ -10,14 +12,15 @@ import {
   ReferenceCheckReportId,
   runContractChecks,
 } from "../domain/index.ts";
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./design-record-repository.ts";
 import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
 
 export interface CheckContractSummaryInput {
-  readonly artifactPath: string;
-  readonly reportDirectory: string;
-  readonly reportOnly: boolean;
+  readonly recordId: DesignRecordId;
+  readonly reportDirectory: ArtifactPath;
+  readonly mode: CheckExecutionMode;
 }
 
 export class CheckContractSummaryUseCase {
@@ -30,7 +33,7 @@ export class CheckContractSummaryUseCase {
   }
 
   execute(input: CheckContractSummaryInput): CheckOutcome {
-    const record = this.#designRecords.findByArtifact(input.artifactPath);
+    const record = this.#designRecords.findById(input.recordId);
     if (!record.ok) return { kind: "not-applicable" };
     const contractsTable = record.value.contractsTable();
     const specBlocks = record.value.specBlocks();
@@ -56,7 +59,7 @@ export class CheckContractSummaryUseCase {
       skipped: ledger.skipped(),
     });
     const conformed = this.#reports.conformedOf(report);
-    if (!input.reportOnly) {
+    if (input.mode === "persist") {
       const saved = this.#reports.save(conformed);
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
     }

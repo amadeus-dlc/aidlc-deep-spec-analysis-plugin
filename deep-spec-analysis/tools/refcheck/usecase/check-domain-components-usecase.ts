@@ -4,20 +4,23 @@
 // 永続化までを起動する。verdict は conformed（＝書かれる姿）から導出。
 
 import {
+  type CheckExecutionMode,
+  type DesignRecordId,
   CheckFamilyLedger,
   COMPONENT_FAMILIES,
   ReferenceCheckReport,
   ReferenceCheckReportId,
   runComponentChecks,
 } from "../domain/index.ts";
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./design-record-repository.ts";
 import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
 
 export interface CheckDomainComponentsInput {
-  readonly artifactPath: string;
-  readonly reportDirectory: string;
-  readonly reportOnly: boolean;
+  readonly recordId: DesignRecordId;
+  readonly reportDirectory: ArtifactPath;
+  readonly mode: CheckExecutionMode;
 }
 
 export class CheckDomainComponentsUseCase {
@@ -30,7 +33,7 @@ export class CheckDomainComponentsUseCase {
   }
 
   execute(input: CheckDomainComponentsInput): CheckOutcome {
-    const record = this.#designRecords.findByArtifact(input.artifactPath);
+    const record = this.#designRecords.findById(input.recordId);
     if (!record.ok) return { kind: "not-applicable" };
     const catalog = record.value.componentCatalog();
     if (catalog === null) return { kind: "not-applicable" };
@@ -45,7 +48,7 @@ export class CheckDomainComponentsUseCase {
       skipped: ledger.skipped(),
     });
     const conformed = this.#reports.conformedOf(report);
-    if (!input.reportOnly) {
+    if (input.mode === "persist") {
       const saved = this.#reports.save(conformed);
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
     }

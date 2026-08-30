@@ -41,3 +41,5 @@ export {
 } from "./functional-design.ts";
 export { FUNCTIONAL_FAMILIES, runFunctionalChecks, type FunctionalChecksInput } from "./functional-checks.ts";
 export { DesignRecord, type DesignRecordSeed, type LoadedDocument } from "./design-record.ts";
+export { DesignRecordId } from "./design-record-id.ts";
+export { type CheckExecutionMode } from "./check-execution-mode.ts";

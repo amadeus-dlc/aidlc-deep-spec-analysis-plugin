@@ -15,6 +15,14 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
+import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+// テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
+function ap(raw: string): ArtifactPath {
+  const parsed = ArtifactPath.parse(raw);
+  if (!parsed.ok) throw new Error(`test fixture path is empty: ${raw}`);
+  return parsed.value;
+}
+
 import {
   DesignRecordRepositoryImpl,
   ReferenceCheckReportRepositoryImpl,
@@ -42,6 +50,7 @@ import {
   runComponentChecks,
   runContractChecks,
   runFunctionalChecks,
+  DesignRecordId,
 } from "../tools/refcheck/domain/index.ts";
 import { InMemoryReferenceCheckReportRepository } from "./doubles/in-memory-reference-check-report-repository.ts";
 
@@ -71,9 +80,9 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 
         const componentsPath = join(record, "inception", "domain-design", "components.md");
         const domainOutcome = new CheckDomainComponentsUseCase(designRecords, reports).execute({
-          artifactPath: componentsPath,
-          reportDirectory: join(dirname(componentsPath), "deep-spec-refcheck"),
-          reportOnly: false,
+          recordId: DesignRecordId.of(ap(componentsPath)),
+          reportDirectory: ap(join(dirname(componentsPath), "deep-spec-refcheck")),
+          mode: "persist",
         });
         expect(domainOutcome.kind).toBe("verified");
         expect(readFileSync(join(dirname(componentsPath), "deep-spec-refcheck", "components.json"), "utf-8"))
@@ -81,9 +90,9 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 
         const contractPath = join(record, "inception", "contract-design", "contract-summary.md");
         const contractOutcome = new CheckContractSummaryUseCase(designRecords, reports).execute({
-          artifactPath: contractPath,
-          reportDirectory: join(dirname(contractPath), "deep-spec-refcheck"),
-          reportOnly: false,
+          recordId: DesignRecordId.of(ap(contractPath)),
+          reportDirectory: ap(join(dirname(contractPath), "deep-spec-refcheck")),
+          mode: "persist",
         });
         expect(contractOutcome.kind).toBe("verified");
         expect(readFileSync(join(dirname(contractPath), "deep-spec-refcheck", "contract-summary.json"), "utf-8"))
@@ -91,9 +100,9 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 
         const entitiesPath = join(record, "construction", "u1-orders", "functional-design", "entities.md");
         const functionalOutcome = new CheckFunctionalDesignUseCase(designRecords, reports).execute({
-          artifactPath: entitiesPath,
-          reportDirectory: join(dirname(entitiesPath), "deep-spec-refcheck"),
-          reportOnly: false,
+          recordId: DesignRecordId.of(ap(entitiesPath)),
+          reportDirectory: ap(join(dirname(entitiesPath), "deep-spec-refcheck")),
+          mode: "persist",
         });
         expect(functionalOutcome.kind).toBe("verified");
         expect(readFileSync(join(dirname(entitiesPath), "deep-spec-refcheck", "functional-design.json"), "utf-8"))
@@ -107,9 +116,9 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
   test("an unreadable target resolves to not-applicable, and report-only writes nothing", () => {
     const { designRecords, reports } = realRepositories();
     const missing = new CheckDomainComponentsUseCase(designRecords, reports).execute({
-      artifactPath: "/nonexistent/components.md",
-      reportDirectory: "/nonexistent/deep-spec-refcheck",
-      reportOnly: false,
+      recordId: DesignRecordId.of(ap("/nonexistent/components.md")),
+      reportDirectory: ap("/nonexistent/deep-spec-refcheck"),
+      mode: "persist",
     });
     expect(missing.kind).toBe("not-applicable");
 
@@ -118,14 +127,14 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
       cpSync(join(fixtures, "broken"), record, { recursive: true });
       const componentsPath = join(record, "inception", "domain-design", "components.md");
       const outcome = new CheckDomainComponentsUseCase(designRecords, reports).execute({
-        artifactPath: componentsPath,
-        reportDirectory: join(dirname(componentsPath), "deep-spec-refcheck"),
-        reportOnly: true,
+        recordId: DesignRecordId.of(ap(componentsPath)),
+        reportDirectory: ap(join(dirname(componentsPath), "deep-spec-refcheck")),
+        mode: "report-only",
       });
       expect(outcome.kind).toBe("verified");
       expect(outcome.kind === "verified" && outcome.pass).toBe(false);
       const written = new ReferenceCheckReportRepositoryImpl(schemaPath).findById(
-        ReferenceCheckReportId.of(join(dirname(componentsPath), "deep-spec-refcheck"), "components"),
+        ReferenceCheckReportId.of(ap(join(dirname(componentsPath), "deep-spec-refcheck")), "components"),
       );
       expect(!written.ok && written.error.kind).toBe("not-found");
     } finally {
@@ -139,11 +148,11 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
       cpSync(join(fixtures, "clean"), record, { recursive: true });
       const reports = new InMemoryReferenceCheckReportRepository(schema);
       const componentsPath = join(record, "inception", "domain-design", "components.md");
-      const reportDirectory = join(dirname(componentsPath), "deep-spec-refcheck");
+      const reportDirectory = ap(join(dirname(componentsPath), "deep-spec-refcheck"));
       const outcome = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImpl(), reports).execute({
-        artifactPath: componentsPath,
+        recordId: DesignRecordId.of(ap(componentsPath)),
         reportDirectory,
-        reportOnly: false,
+        mode: "persist",
       });
       expect(outcome.kind === "verified" && outcome.pass).toBe(true);
       const stored = reports.findById(ReferenceCheckReportId.of(reportDirectory, "components"));
@@ -165,7 +174,7 @@ function domainReport(
   const ledger = new CheckFamilyLedger(families, unit);
   run(ledger);
   return ReferenceCheckReport.compose({
-    id: ReferenceCheckReportId.of("/tmp/r", backend),
+    id: ReferenceCheckReportId.of(ap("/tmp/r"), backend),
     inputs: [{ artifact: "x.md", sha256: "a".repeat(64) }],
     checked: ledger.checkedTargets(),
     findings: ledger.findings(),

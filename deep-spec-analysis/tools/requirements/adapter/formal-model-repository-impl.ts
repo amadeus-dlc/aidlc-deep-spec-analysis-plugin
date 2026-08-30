@@ -8,12 +8,13 @@ import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { sha256 } from "../../kernel/domain/index.ts";
 import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
-import { RequirementsModel } from "../domain/index.ts";
+import { type FormalModelId, RequirementsModel } from "../domain/index.ts";
 import type { AcquiredFormalModel, FormalModelRepository } from "../usecase/index.ts";
 import { parseFormalModel } from "./formal-model-parser.ts";
 
 export class FormalModelRepositoryImpl implements FormalModelRepository {
-  findByPath(modelPath: string): Result<AcquiredFormalModel, RepositoryError> {
+  findById(id: FormalModelId): Result<AcquiredFormalModel, RepositoryError> {
+    const modelPath = id.artifactPath().value();
     let md: string;
     try {
       md = readFileSync(modelPath, "utf-8");

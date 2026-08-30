@@ -730,3 +730,38 @@ a path, but it must be typed and conceptualized as the aggregate's ID.**
   (`findByPath` on the formal-model and design-model repositories) already
   satisfy the value-may-be-a-path clause; typing those identities is
   follow-up alignment, tracked for the closeout.
+
+## Repository ruling, addendum — findById is the primary lookup, and inputs carry value objects (2026-08-30)
+
+Two further owner rulings landed right after PR7 merged, and were applied
+repo-wide in one sweep:
+
+1. **A repository's lookup is `findById(aggregateId)`.** A reverse-only
+   lookup (`findByArtifact(artifactPath)`, `findByPath(modelPath)`,
+   `findByModelPath`) means the aggregate's ID plays no role in the
+   design — the identity was never modeled. Every lookup port now
+   resolves forward by a typed aggregate ID: `DesignRecordId` (refcheck),
+   `FormalModelId` (requirements), `DesignModelId` (design), and
+   `RefinementContextId` (anchored 1:1 to its design model via
+   `ofModel` — the anchoring is in the type). The PR7-era
+   `RequirementsSourceRepository.resolve` was renamed `findById`, and the
+   two validator materials gateways acquire by the model IDs.
+2. **Use-case Input bodies carry value objects, never primitives.**
+   `ArtifactPath.parse(raw): Result<ArtifactPath, ArtifactPathError>`
+   (kernel/domain) is the boundary's single constructor: the entries
+   parse `--output-path` once — the parse failure IS the old
+   "--output-path is required" branch — and the value never degrades
+   back to a primitive on its way through the use case. Inputs are now
+   `{ modelId, verifyDirectory: ArtifactPath }` /
+   `{ recordId, reportDirectory: ArtifactPath, mode }`;
+   `reportOnly: boolean` became the closed vocabulary
+   `CheckExecutionMode = "persist" | "report-only"`; the three report
+   IDs take `ArtifactPath` for their directory half, and
+   `findAllByDirectory` takes `ArtifactPath`. Primitives survive in
+   exactly two places: the raw flags before the entry parses, and the
+   adapters' fs boundary (`value()` at join/read/mkdir — the sanctioned
+   outward crossing, marked 境界).
+
+Proofs: the base↔head parity snapshot `diff -r` is empty against the
+pre-PR7 base (45 files); 296 tests green; every new VO holds 100% line
+coverage; goldens untouched.

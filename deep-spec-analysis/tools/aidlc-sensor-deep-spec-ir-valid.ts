@@ -27,17 +27,20 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseFlags } from "./kernel/adapter/index.ts";
+import { ArtifactPath } from "./kernel/domain/index.ts";
 import {
   IrValidationMaterialsRepositoryImpl,
   RequirementsSourceRepositoryImpl,
 } from "./requirements/adapter/index.ts";
+import { FormalModelId } from "./requirements/domain/index.ts";
 import { ValidateIrUseCase } from "./requirements/usecase/index.ts";
 
 const MAX_REPORTED_ERRORS = 25;
 
 function main(): void {
   const flags = parseFlags(process.argv.slice(2));
-  if (!flags.outputPath) {
+  const target = ArtifactPath.parse(flags.outputPath);
+  if (!target.ok) {
     process.stderr.write("deep-spec-ir-valid: --output-path is required\n");
     process.exit(1);
   }
@@ -48,7 +51,7 @@ function main(): void {
     new RequirementsSourceRepositoryImpl(),
   );
 
-  const outcome = useCase.execute(flags.outputPath);
+  const outcome = useCase.execute(FormalModelId.of(target.value));
   if (outcome.kind === "not-applicable") {
     process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, errors: [], note: "not-applicable" })}\n`);
     process.exit(0);

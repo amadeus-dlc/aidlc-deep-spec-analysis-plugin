@@ -5,6 +5,7 @@
 // enabledness は v1 では SMT 専用の capability skip）を編成する。
 // mapping-gap は map と両 IR の純関数なので両バックエンド文書が同一に運ぶ。
 
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { ok } from "../../kernel/infrastructure/index.ts";
 import type { Clock, RepositoryError } from "../../kernel/usecase/index.ts";
@@ -22,6 +23,7 @@ import {
   designVersionMismatchReport,
   lowerUnit,
   remapUnitDoc,
+  RefinementContextId,
 } from "../domain/index.ts";
 import {
   planUnitRefinement,
@@ -68,7 +70,7 @@ export class VerifyDesignQuintUseCase {
 
   execute(input: VerifyDesignInput): VerifyDesignOutcome {
     const id = DesignReportId.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#designModels.findByPath(input.modelPath);
+    const acquired = this.#designModels.findById(input.modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
@@ -194,7 +196,7 @@ export class VerifyDesignQuintUseCase {
     }
 
     // --- Phase 3（動的）：alpha(P) が機械の不変量面に合流する -----------------
-    const context = this.#refinementContexts.findByModelPath(input.modelPath);
+    const context = this.#refinementContexts.findById(RefinementContextId.ofModel(input.modelId));
     let inputs: readonly DesignInputEntry[] | undefined;
     if (context.kind === "active") {
       const req = context.requirements;
@@ -320,7 +322,7 @@ export class VerifyDesignQuintUseCase {
 
   // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
   // チェックを再計算する（最後の書き手が勝ち、全書き手が同一バイトへ収束）。
-  #recomputeCrossCheck(model: DesignModel, irHash: string, directory: string): Result<void, RepositoryError> {
+  #recomputeCrossCheck(model: DesignModel, irHash: string, directory: ArtifactPath): Result<void, RepositoryError> {
     const siblings = this.#reports.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);

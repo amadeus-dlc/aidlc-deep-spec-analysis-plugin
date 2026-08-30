@@ -713,3 +713,37 @@ PR7 レビュー中にオーナー裁定が下り、即時適用した：**Repos
 - パラメータが解決対象集約自身の成果物パスであるポート（形式モデル／設計
   モデルの `findByPath`）は「値はパスでよい」条項を既に満たす。これらの
   恒等の型付けはクローズアウトで整合を取る追補として記録する。
+
+## Repository 裁定・補遺 — findById が正引きの主経路、Input は値オブジェクトを運ぶ（2026-08-30）
+
+PR7 マージ直後にオーナー裁定がさらに 2 つ下り、一括でリポジトリ全体へ
+適用した：
+
+1. **Repository の解決は `findById(aggregateId)`。** 逆引きしか無い
+   （`findByArtifact(artifactPath)`・`findByPath(modelPath)`・
+   `findByModelPath`）ということは、集約の ID が設計の中で何の役にも
+   立っていない——恒等がモデリングされていないということである。全解決
+   ポートは型付き集約 ID による正引きになった：`DesignRecordId`
+   （refcheck）、`FormalModelId`（requirements）、`DesignModelId`
+   （design）、そして `RefinementContextId`（`ofModel` による設計モデル
+   への 1:1 錨着——錨着が型に現れる）。PR7 期の
+   `RequirementsSourceRepository.resolve` は `findById` に改名し、
+   バリデータ 2 本の材料ゲートウェイもモデル ID で取得する。
+2. **ユースケース Input のボディは値オブジェクトを運び、基本データ型を
+   使わない。** `ArtifactPath.parse(raw): Result<ArtifactPath,
+   ArtifactPathError>`（kernel/domain）が境界の唯一の構築口：entry は
+   `--output-path` を一度だけ parse し——parse の失敗こそが旧
+   「--output-path is required」分岐である——その値はユースケースを
+   通る間、二度と基本データ型へ戻らない。Input は
+   `{ modelId, verifyDirectory: ArtifactPath }` /
+   `{ recordId, reportDirectory: ArtifactPath, mode }` になり、
+   `reportOnly: boolean` は閉じた語彙 `CheckExecutionMode =
+   "persist" | "report-only"` へ、レポート ID 3 種の directory 半分と
+   `findAllByDirectory` は `ArtifactPath` を受ける。基本データ型が
+   生き残るのは正確に 2 箇所——entry が parse する前の生 flags と、
+   アダプタの fs 境界（join/read/mkdir での `value()`——境界と注記した
+   公認の外向き横断）だけである。
+
+証明：base↔head パリティスナップショットの `diff -r` は PR7 以前の
+base に対して空（45 ファイル）。296 tests green。新 VO は全て行カバレッジ
+100%。golden 無変更。

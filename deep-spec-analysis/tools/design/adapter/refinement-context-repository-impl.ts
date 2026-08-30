@@ -5,6 +5,7 @@
 // 旧 refinement-lib の loadRequirementsIr / loadRefinementMap と旧 entry の
 // inputs 組成からの逐語移植。
 
+import type { RefinementContextId } from "../domain/index.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { sha256 } from "../../kernel/domain/index.ts";
@@ -53,7 +54,8 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
     this.#mapSchemaPath = mapSchemaPath;
   }
 
-  findByModelPath(modelPath: string): RefinementPhaseContext {
+  findById(id: RefinementContextId): RefinementPhaseContext {
+    const modelPath = id.modelArtifactPath().value();
     const recordRoot = findRecordRoot(dirname(modelPath));
     const requirements = recordRoot === null ? null : this.#loadRequirements(recordRoot);
     if (recordRoot === null || requirements === null) return { kind: "inactive" };

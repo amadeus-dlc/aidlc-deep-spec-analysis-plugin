@@ -30,7 +30,7 @@ import type {
   DesignTransitionView,
   DesignUnitView,
 } from "../domain/index.ts";
-import { SUPPORTED_DESIGN_IR_MAJOR } from "../domain/index.ts";
+import { type DesignModelId, SUPPORTED_DESIGN_IR_MAJOR } from "../domain/index.ts";
 import type {
   DesignIrMaterialsAcquisition,
   DesignIrValidationMaterialsRepository,
@@ -170,7 +170,8 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
     this.#schemaPath = config.schemaPath;
   }
 
-  acquire(outputPath: string): DesignIrMaterialsAcquisition {
+  acquire(id: DesignModelId): DesignIrMaterialsAcquisition {
+    const outputPath = id.artifactPath().value();
     if (basename(outputPath) !== DESIGN_MODEL_BASENAME || !existsSync(outputPath)) {
       return { kind: "not-applicable" };
     }

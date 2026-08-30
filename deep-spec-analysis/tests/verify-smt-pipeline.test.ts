@@ -16,8 +16,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
-import { expressionUsesPrime, sha256 } from "../tools/kernel/domain/index.ts";
+import { ArtifactPath, expressionUsesPrime, sha256 } from "../tools/kernel/domain/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
+
+// テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
+function ap(raw: string): ArtifactPath {
+  const parsed = ArtifactPath.parse(raw);
+  if (!parsed.ok) throw new Error(`test fixture path is empty: ${raw}`);
+  return parsed.value;
+}
 import {
   FormalModelRepositoryImpl,
   VerificationReportRepositoryImpl,
@@ -39,6 +46,7 @@ import {
   sortVerificationFindings,
   sortVerificationSkipped,
   versionMismatchReport,
+  FormalModelId,
 } from "../tools/requirements/domain/index.ts";
 import {
   type AcquiredFormalModel,
@@ -87,7 +95,7 @@ describe("in-process golden equivalence (interactor over real Impls, real z3 chi
           runtimeOverride: undefined,
           workingDirectory: pluginRoot,
         }),
-      ).execute({ modelPath, verifyDirectory: verifyDir });
+      ).execute({ modelId: FormalModelId.of(ap(modelPath)), verifyDirectory: ap(verifyDir) });
 
       expect(outcome.kind).toBe("verified");
       expect(readFileSync(join(verifyDir, "smt.json"), "utf-8"))
@@ -103,7 +111,7 @@ describe("in-process golden equivalence (interactor over real Impls, real z3 chi
 // --- interactor の全経路（InMemory ダブル＋素の値のみ） ----------------------
 
 function formalModels(result: Result<AcquiredFormalModel, RepositoryError>): FormalModelRepository {
-  return { findByPath: () => result };
+  return { findById: () => result };
 }
 
 function solver(check: SmtCheck): Z3SolverClient {
@@ -128,9 +136,9 @@ describe("the verify-smt interactor over the InMemory double", () => {
       formalModels(err({ kind: "not-found", path: "/x" })),
       reports,
       solver({ facts: EMPTY_FACTS, result: { kind: "solved", verdicts: new Map() } }),
-    ).execute({ modelPath: "/x", verifyDirectory: DIR });
+    ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("not-applicable");
-    const stored = reports.findAllByDirectory(DIR);
+    const stored = reports.findAllByDirectory(ap(DIR));
     expect(stored.ok).toBe(true);
     expect(stored.ok ? [...stored.value] : null).toEqual([]);
   });
@@ -141,14 +149,14 @@ describe("the verify-smt interactor over the InMemory double", () => {
       formalModels(err({ kind: "corrupt", path: "/x", cause: "IR lacks a semver irVersion" })),
       reports,
       solver({ facts: EMPTY_FACTS, result: { kind: "solved", verdicts: new Map() } }),
-    ).execute({ modelPath: "/x", verifyDirectory: DIR });
+    ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("model-unreadable");
-    const written = reports.findById(VerificationReportId.of(DIR, "smt"));
+    const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
     expect(written.ok && written.value.unavailableReason())
       .toBe("IR unreadable: IR lacks a semver irVersion — see the deep-spec-ir-valid sensor for details");
     expect(written.ok && written.value.irVersion()).toBe("0.0.0");
     expect(written.ok && written.value.irHash()).toBe(sha256(""));
-    expect(reports.findById(VerificationReportId.of(DIR, "cross-check")).ok).toBe(false);
+    expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(false);
   });
 
   test("an unsupported IR major writes all-targets skips and recomputes cross-check", () => {
@@ -162,14 +170,14 @@ describe("the verify-smt interactor over the InMemory double", () => {
       formalModels(ok({ model: m, irHash: "a".repeat(64) })),
       reports,
       solver({ facts: EMPTY_FACTS, result: { kind: "solved", verdicts: new Map() } }),
-    ).execute({ modelPath: "/x", verifyDirectory: DIR });
+    ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("version-mismatch");
-    const written = reports.findById(VerificationReportId.of(DIR, "smt"));
+    const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
     expect(written.ok && written.value.skipped().map((s) => `${s.target}:${s.reason}`))
       .toEqual(["OB-1:ir-version-mismatch", "SC-1:ir-version-mismatch"]);
     expect(written.ok && written.value.skipped()[0]?.detail)
       .toBe("IR major version 2 is not supported by this backend (supports 1.x.x)");
-    expect(reports.findById(VerificationReportId.of(DIR, "cross-check")).ok).toBe(true);
+    expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(true);
   });
 
   test("an unavailable solver writes the degradation with plan skips and the caller exits 127", () => {
@@ -188,9 +196,9 @@ describe("the verify-smt interactor over the InMemory double", () => {
       formalModels(ok({ model: m, irHash: "a".repeat(64) })),
       reports,
       solver({ facts, result: { kind: "unavailable", reason: "no runtime could execute the z3 child process (node: not on PATH)" } }),
-    ).execute({ modelPath: "/x", verifyDirectory: DIR });
+    ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("solver-unavailable");
-    const written = reports.findById(VerificationReportId.of(DIR, "smt"));
+    const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
     expect(written.ok && written.value.unavailableReason())
       .toBe("no runtime could execute the z3 child process (node: not on PATH)");
     expect(written.ok && written.value.skipped().map((s) => `${s.target}:${s.reason}`))
@@ -218,15 +226,15 @@ describe("the verify-smt interactor over the InMemory double", () => {
       formalModels(ok({ model: m, irHash: "a".repeat(64) })),
       reports,
       solver({ facts, result: { kind: "solved", verdicts } }),
-    ).execute({ modelPath: "/x", verifyDirectory: DIR });
+    ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("verified");
     expect(outcome.kind === "verified" && outcome.pass).toBe(false);
     expect(outcome.kind === "verified" && outcome.findingsCount).toBe(1);
-    const written = reports.findById(VerificationReportId.of(DIR, "smt"));
+    const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
     expect(written.ok && written.value.findings()[0]?.kind).toBe("scenario-violation");
     const bytes = written.ok ? renderVerificationReportBytes(written.value) : "";
     expect(Object.keys(JSON.parse(bytes))).toEqual(["backend", "irVersion", "irHash", "method", "findings", "skipped"]);
-    const cross = reports.findById(VerificationReportId.of(DIR, "cross-check"));
+    const cross = reports.findById(VerificationReportId.of(ap(DIR), "cross-check"));
     expect(cross.ok && cross.value.crossChecked()).toEqual([]);
   });
 });
@@ -368,7 +376,7 @@ describe("cross-check computation", () => {
       { id: "SC-2", kind: "reject", frRefs: [], bindings: {} },
     ],
   });
-  const id = VerificationReportId.of("/tmp/verify", "cross-check");
+  const id = VerificationReportId.of(ap("/tmp/verify"), "cross-check");
   const sibling = (backend: string, input: {
     irHash?: string;
     unavailable?: string;
@@ -376,7 +384,7 @@ describe("cross-check computation", () => {
     skippedTargets?: string[];
   }): VerificationReport =>
     VerificationReport.reconstitute({
-      id: VerificationReportId.of("/tmp/verify", backend),
+      id: VerificationReportId.of(ap("/tmp/verify"), backend),
       irVersion: "1.0.0",
       irHash: input.irHash ?? "h1",
       method: "exhaustive",
@@ -433,7 +441,7 @@ describe("cross-check computation", () => {
 
 describe("degradation reports and ordering", () => {
   test("irUnreadableReport freezes the reason, the 0.0.0 version, and the empty-input hash", () => {
-    const r = irUnreadableReport(VerificationReportId.of("/v", "smt"), "exhaustive", "IR is not a JSON object");
+    const r = irUnreadableReport(VerificationReportId.of(ap("/v"), "smt"), "exhaustive", "IR is not a JSON object");
     expect(r.unavailableReason()).toBe("IR unreadable: IR is not a JSON object — see the deep-spec-ir-valid sensor for details");
     expect(r.irVersion()).toBe("0.0.0");
     expect(r.irHash()).toBe(sha256(""));
@@ -450,10 +458,10 @@ describe("degradation reports and ordering", () => {
     });
     expect(m.supportsMajor(1)).toBe(false);
     expect(m.majorVersion()).toBe(3);
-    const vm = versionMismatchReport(VerificationReportId.of("/v", "smt"), m, "h", "exhaustive");
+    const vm = versionMismatchReport(VerificationReportId.of(ap("/v"), "smt"), m, "h", "exhaustive");
     expect(vm.skipped().map((s) => s.target)).toEqual(["OB-2", "SC-1"]);
     const su = solverUnavailableReport(
-      VerificationReportId.of("/v", "smt"),
+      VerificationReportId.of(ap("/v"), "smt"),
       m,
       "h",
       [{ target: "OB-2", reason: "compile-error", detail: "invariant obligation lacks an assert expression" }],
@@ -500,9 +508,9 @@ describe("degradation reports and ordering", () => {
   });
 
   test("the aggregate composes sorted, degrades empty, and reconstitutes verbatim", () => {
-    const id = VerificationReportId.of("/v", "smt");
-    expect(id.equals(VerificationReportId.of("/v", "smt"))).toBe(true);
-    expect(id.equals(VerificationReportId.of("/w", "smt"))).toBe(false);
+    const id = VerificationReportId.of(ap("/v"), "smt");
+    expect(id.equals(VerificationReportId.of(ap("/v"), "smt"))).toBe(true);
+    expect(id.equals(VerificationReportId.of(ap("/w"), "smt"))).toBe(false);
     expect(id.fileName()).toBe("smt.json");
     const composed = VerificationReport.compose({
       id,

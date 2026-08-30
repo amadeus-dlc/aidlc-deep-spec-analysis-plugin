@@ -17,7 +17,16 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Json } from "../tools/kernel/adapter/index.ts";
 import { SystemClock } from "../tools/kernel/adapter/index.ts";
-import { type DesignUnit as DesignUnitType, DesignUnit } from "../tools/design/domain/index.ts";
+import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { FormalModelId } from "../tools/requirements/domain/index.ts";
+// テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
+function ap(raw: string): ArtifactPath {
+  const parsed = ArtifactPath.parse(raw);
+  if (!parsed.ok) throw new Error(`test fixture path is empty: ${raw}`);
+  return parsed.value;
+}
+
+import { type DesignUnit as DesignUnitType, DesignModelId, DesignUnit, RefinementContextId } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -91,7 +100,7 @@ describe("in-process golden equivalence (both interactors, phase 3 included)", (
         w.contexts,
         w.solver,
         new SystemClock(),
-      ).execute({ modelPath: w.modelPath, verifyDirectory: w.verifyDir });
+      ).execute({ modelId: DesignModelId.of(ap(w.modelPath)), verifyDirectory: ap(w.verifyDir) });
       expect(smt.kind).toBe("verified");
       expect(readFileSync(join(w.verifyDir, "smt.json"), "utf-8")).toBe(golden("smt.json"));
 
@@ -102,7 +111,7 @@ describe("in-process golden equivalence (both interactors, phase 3 included)", (
         w.contexts,
         new SystemClock(),
         2,
-      ).execute({ modelPath: w.modelPath, verifyDirectory: w.verifyDir });
+      ).execute({ modelId: DesignModelId.of(ap(w.modelPath)), verifyDirectory: ap(w.verifyDir) });
       expect(quint.kind).toBe("verified");
       expect(readFileSync(join(w.verifyDir, "quint.json"), "utf-8")).toBe(golden("quint.json"));
       expect(readFileSync(join(w.verifyDir, "cross-check.json"), "utf-8")).toBe(golden("cross-check.json"));
@@ -119,8 +128,8 @@ describe("SMT script characterization (the PR8 safety net)", () => {
   };
 
   test("the v1 plan builder emits byte-identical scripts for the conformance model", () => {
-    const acquired = new FormalModelRepositoryImpl().findByPath(
-      join(pluginRoot, "tests", "fixtures", "conformance", "deep-spec-analysis-formal-model.md"),
+    const acquired = new FormalModelRepositoryImpl().findById(
+      FormalModelId.of(ap(join(pluginRoot, "tests", "fixtures", "conformance", "deep-spec-analysis-formal-model.md"))),
     );
     expect(acquired.ok).toBe(true);
     if (!acquired.ok) return;
@@ -130,8 +139,8 @@ describe("SMT script characterization (the PR8 safety net)", () => {
 
   test("the second (refinement) compiler emits byte-identical scripts for the refinement fixture", () => {
     const modelPath = join(fixtures, "record", ...MODEL_RELPATH);
-    const acquired = new DesignModelRepositoryImpl().findByPath(modelPath);
-    const context = new RefinementContextRepositoryImpl(mapSchemaPath).findByModelPath(modelPath);
+    const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(modelPath)));
+    const context = new RefinementContextRepositoryImpl(mapSchemaPath).findById(RefinementContextId.ofModel(DesignModelId.of(ap(modelPath))));
     expect(acquired.ok && context.kind === "active" && context.map.kind === "loaded").toBe(true);
     if (!acquired.ok || context.kind !== "active" || context.map.kind !== "loaded") return;
     expect(context.map.map.units().length).toBeGreaterThan(0);

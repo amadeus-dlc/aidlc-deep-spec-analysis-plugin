@@ -4,6 +4,7 @@
 // `JSON.stringify(・, null, 2) + "\n"` の描画・findings スキーマ自己検証・
 // 降格文言（golden 凍結）は本モジュールの責務。
 
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
@@ -63,7 +64,7 @@ export function conformDesignReport(
 // ファイル名から補う（旧 recomputeDesignCrossCheck の読込と同値）。読めない形
 // は null（呼び手が黙って除く）。findings は isObject 選別（旧同）。
 export function parseSiblingDesignReportDocument(
-  directory: string,
+  directory: ArtifactPath,
   fileName: string,
   raw: Json,
 ): DesignReport | null {
