@@ -21,7 +21,7 @@ export interface EventMapping {
   readonly waived?: { readonly reason: string };
 }
 
-export interface UnmappedEntry {
+export interface UnmappedTarget {
   readonly target: string;
   readonly reason: string;
 }
@@ -30,7 +30,7 @@ export interface RefinementUnitMap {
   readonly unit: string;
   readonly attrMap: readonly AttributeMapping[];
   readonly eventMap: readonly EventMapping[];
-  readonly unmapped: readonly UnmappedEntry[];
+  readonly unmapped: readonly UnmappedTarget[];
 }
 
 export interface RefinementMapSeed {

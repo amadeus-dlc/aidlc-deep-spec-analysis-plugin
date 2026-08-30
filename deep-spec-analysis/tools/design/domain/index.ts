@@ -11,8 +11,8 @@ export { type DesignFinding, type DesignSkipped } from "./design-finding.ts";
 export { sortDesignFindings, sortDesignSkipped } from "./design-finding-order.ts";
 export { expressionCanonicalKey } from "./expression-canonical-key.ts";
 export {
-  type LowEntry,
-  type LowKind,
+  type LoweredOrigin,
+  type LoweringKind,
   type LoweredBackground,
   type LoweredObligation,
   type LoweredScenario,
@@ -21,10 +21,10 @@ export {
 } from "./lower-unit.ts";
 export {
   type RemappedUnit,
-  type SiblingVerdictDoc,
+  type SiblingVerdictDocument,
   type SiblingVerdictFinding,
   type SiblingVerdictSkip,
-  remapUnitDoc,
+  remapUnitDocument,
 } from "./remap-unit-doc.ts";
 export { DesignReportId } from "./design-report-id.ts";
 export {
@@ -42,19 +42,19 @@ export {
   designVersionMismatchReport,
 } from "./design-degradation.ts";
 export {
-  type DesignAttributeView,
-  type DesignBackgroundView,
-  type DesignEntityView,
-  type DesignIgnoreView,
-  type DesignMachineView,
-  type DesignObligationView,
-  type DesignScenarioView,
-  type DesignTemporalView,
-  type DesignTransitionView,
-  type DesignUnitView,
-} from "./design-ir-view.ts";
+  type DesignAttributeDecl,
+  type DesignBackgroundDecl,
+  type DesignEntityDecl,
+  type DesignIgnoreDecl,
+  type DesignMachineDecl,
+  type DesignObligationDecl,
+  type DesignScenarioDecl,
+  type DesignTemporalDecl,
+  type DesignTransitionDecl,
+  type DesignUnitDecl,
+} from "./design-ir-decl.ts";
 export { BrReferenceIndex } from "./br-reference-index.ts";
 export { designWellFormednessErrors } from "./design-well-formedness.ts";
 export { DesignModelId } from "./design-model-id.ts";
 export { DesignUnitId } from "./design-unit-id.ts";
-export { RefinementContextId } from "./refinement-context-id.ts";
+export { RefinementMaterialsId } from "./refinement-materials-id.ts";

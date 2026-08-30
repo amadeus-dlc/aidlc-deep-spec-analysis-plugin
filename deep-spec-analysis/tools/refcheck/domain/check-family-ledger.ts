@@ -11,7 +11,7 @@
 
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { Finding } from "./finding.ts";
-import type { RefEntry } from "./ref-entry.ts";
+import type { WitnessRef } from "./witness-ref.ts";
 import type { Skipped } from "./skipped.ts";
 
 export class CheckFamilyLedger {
@@ -27,7 +27,7 @@ export class CheckFamilyLedger {
     this.#unit = unit;
   }
 
-  finding(family: string, kind: string, targets: string[], refs: RefEntry[], detail: string, frRefs: string[] = []): void {
+  finding(family: string, kind: string, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
     const f: Finding = {
       kind,
       frRefs: sortedUnique(frRefs, idCompare),

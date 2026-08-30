@@ -22,17 +22,17 @@ import {
   designIrUnreadableReport,
   designVersionMismatchReport,
   lowerUnit,
-  remapUnitDoc,
-  RefinementContextId,
+  remapUnitDocument,
+  RefinementMaterialsId,
 } from "../domain/index.ts";
 import {
   planUnitRefinement,
   quintRefinementStatusSkips,
-  refinementQuintExtras,
+  refinementQuintInvariants,
 } from "../../refinement/domain/index.ts";
 import type { DesignModelRepository } from "./design-model-repository.ts";
 import type { DesignReportRepository } from "./design-report-repository.ts";
-import type { RefinementContextRepository } from "./refinement-context-repository.ts";
+import type { RefinementMaterialsRepository } from "./refinement-context-repository.ts";
 import type { SiblingBackendClient } from "./sibling-backend-client.ts";
 import type { VerifyDesignInput } from "./verify-design-smt-usecase.ts";
 import type { VerifyDesignOutcome } from "./verify-design-outcome.ts";
@@ -48,7 +48,7 @@ export class VerifyDesignQuintUseCase {
   readonly #designModelRepository: DesignModelRepository;
   readonly #designReportRepository: DesignReportRepository;
   readonly #siblingBackendClient: SiblingBackendClient;
-  readonly #refinementContextRepository: RefinementContextRepository;
+  readonly #refinementMaterialsRepository: RefinementMaterialsRepository;
   readonly #clock: Clock;
   readonly #unreachCap: number;
 
@@ -56,14 +56,14 @@ export class VerifyDesignQuintUseCase {
     designModelRepository: DesignModelRepository,
     designReportRepository: DesignReportRepository,
     siblingBackendClient: SiblingBackendClient,
-    refinementContextRepository: RefinementContextRepository,
+    refinementMaterialsRepository: RefinementMaterialsRepository,
     clock: Clock,
     unreachCap: number,
   ) {
     this.#designModelRepository = designModelRepository;
     this.#designReportRepository = designReportRepository;
     this.#siblingBackendClient = siblingBackendClient;
-    this.#refinementContextRepository = refinementContextRepository;
+    this.#refinementMaterialsRepository = refinementMaterialsRepository;
     this.#clock = clock;
     this.#unreachCap = unreachCap;
   }
@@ -131,7 +131,7 @@ export class VerifyDesignQuintUseCase {
         }
         continue;
       }
-      const remapped = remapUnitDoc(u, lowered, run.doc);
+      const remapped = remapUnitDocument(u, lowered, run.doc);
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
           skipped.push({ target: t, reason: "unavailable", unit: u.name(), detail: remapped.unavailable });
@@ -196,7 +196,7 @@ export class VerifyDesignQuintUseCase {
     }
 
     // --- Phase 3（動的）：alpha(P) が機械の不変量面に合流する -----------------
-    const context = this.#refinementContextRepository.findById(RefinementContextId.ofModel(input.modelId));
+    const context = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
     let inputs: readonly DesignInputAnchor[] | undefined;
     if (context.kind === "active") {
       const req = context.requirements;
@@ -225,7 +225,7 @@ export class VerifyDesignQuintUseCase {
           const plan = planUnitRefinement(u, unitMap, req, context.map.mapArtifact);
           findings.push(...plan.gaps);
           skipped.push(...quintRefinementStatusSkips(plan, req, u.name()));
-          const extras = refinementQuintExtras(plan, req);
+          const extras = refinementQuintInvariants(plan, req);
           if (extras.length === 0) continue;
           const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (this.#clock.now() - started));
           if (remaining < 3_000) {
@@ -249,7 +249,7 @@ export class VerifyDesignQuintUseCase {
             }
             continue;
           }
-          const remapped = remapUnitDoc(u, lowered, run.doc);
+          const remapped = remapUnitDocument(u, lowered, run.doc);
           if (remapped.unavailable !== null) {
             for (const e of extras) {
               skipped.push({ target: e.reqId, reason: "unavailable", unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` });

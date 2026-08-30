@@ -10,11 +10,11 @@ import type {
   SpecBlockAssessment,
   UnitDecl,
 } from "./contract-summary.ts";
-import type { RefEntry } from "./ref-entry.ts";
+import type { WitnessRef } from "./witness-ref.ts";
 
 export const CONTRACT_FAMILIES = ["CD-1", "CD-2", "CD-3"];
 
-export interface ContractChecksInput {
+export interface ContractCheckMaterials {
   readonly artifact: string;
   readonly depArtifact: string;
   readonly declaredUnits: DeclaredUnitsOutcome;
@@ -22,9 +22,9 @@ export interface ContractChecksInput {
   readonly specBlocks: readonly SpecBlockAssessment[];
 }
 
-export function runContractChecks(input: ContractChecksInput, ledger: CheckFamilyLedger): void {
+export function runContractChecks(input: ContractCheckMaterials, ledger: CheckFamilyLedger): void {
   const { artifact, depArtifact } = input;
-  const ref = (art: string, element: string, value?: string): RefEntry =>
+  const ref = (art: string, element: string, value?: string): WitnessRef =>
     value === undefined ? { artifact: art, element } : { artifact: art, element, value };
 
   // --- declared units (unit-of-work-dependency.md edge block) --------------

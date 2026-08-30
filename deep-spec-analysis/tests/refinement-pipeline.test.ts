@@ -26,11 +26,11 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { type DesignUnit as DesignUnitType, DesignModelId, DesignUnit, DesignUnitId, RefinementContextId } from "../tools/design/domain/index.ts";
+import { type DesignUnit as DesignUnitType, DesignModelId, DesignUnit, DesignUnitId, RefinementMaterialsId } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
-  RefinementContextRepositoryImpl,
+  RefinementMaterialsRepositoryImpl,
   RefinementSolverClientImpl,
   SiblingBackendClientImpl,
   buildRefinementQueries,
@@ -50,7 +50,7 @@ import {
   interpretRefinementVerdicts,
   planUnitRefinement,
   quintRefinementStatusSkips,
-  refinementQuintExtras,
+  refinementQuintInvariants,
   reqEffectAssignments,
   smtRefinementStatusSkips,
 } from "../tools/refinement/domain/index.ts";
@@ -77,7 +77,7 @@ function wiring(record: string) {
     workingDirectory: pluginRoot,
     spawnEnvironment: { ...process.env, AIDLC_DEEP_SPEC_QUINT_METHOD: "simulation", AIDLC_DEEP_SPEC_QUINT_BIN: quintBin },
   });
-  const contexts = new RefinementContextRepositoryImpl(mapSchemaPath);
+  const contexts = new RefinementMaterialsRepositoryImpl(mapSchemaPath);
   const solver = new RefinementSolverClientImpl({
     childHostPath: join(toolsDir, "aidlc-sensor-deep-spec-verify-smt.ts"),
     perQueryTimeoutMs: 2000,
@@ -140,7 +140,7 @@ describe("SMT script characterization (the PR8 safety net)", () => {
   test("the second (refinement) compiler emits byte-identical scripts for the refinement fixture", () => {
     const modelPath = join(fixtures, "record", ...MODEL_RELPATH);
     const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(modelPath)));
-    const context = new RefinementContextRepositoryImpl(mapSchemaPath).findById(RefinementContextId.ofModel(DesignModelId.of(ap(modelPath))));
+    const context = new RefinementMaterialsRepositoryImpl(mapSchemaPath).findById(RefinementMaterialsId.ofModel(DesignModelId.of(ap(modelPath))));
     expect(acquired.ok && context.kind === "active" && context.map.kind === "loaded").toBe(true);
     if (!acquired.ok || context.kind !== "active" || context.map.kind !== "loaded") return;
     expect(context.map.map.units().length).toBeGreaterThan(0);
@@ -383,7 +383,7 @@ describe("plan classification and gap findings", () => {
 
   test("quint extras carry alpha(P) for checkable invariants only", () => {
     const plan = planUnitRefinement(designUnit, unitMap, req, "m.md");
-    const extras = refinementQuintExtras(plan, req);
+    const extras = refinementQuintInvariants(plan, req);
     expect(extras.map((e) => e.reqId)).toEqual(["OB-1"]);
     expect(extras[0]?.expr).toEqual({ op: "ref", path: "D.flag" });
   });

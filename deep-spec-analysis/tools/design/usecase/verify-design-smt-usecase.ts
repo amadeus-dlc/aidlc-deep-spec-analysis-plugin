@@ -23,9 +23,9 @@ import {
   designIrUnreadableReport,
   designVersionMismatchReport,
   lowerUnit,
-  remapUnitDoc,
+  remapUnitDocument,
   type DesignModelId,
-  RefinementContextId,
+  RefinementMaterialsId,
 } from "../domain/index.ts";
 import {
   interpretRefinementVerdicts,
@@ -34,7 +34,7 @@ import {
 } from "../../refinement/domain/index.ts";
 import type { DesignModelRepository } from "./design-model-repository.ts";
 import type { DesignReportRepository } from "./design-report-repository.ts";
-import type { RefinementContextRepository } from "./refinement-context-repository.ts";
+import type { RefinementMaterialsRepository } from "./refinement-context-repository.ts";
 import type { RefinementSolverClient } from "./refinement-solver-client.ts";
 import type { SiblingBackendClient } from "./sibling-backend-client.ts";
 import type { VerifyDesignOutcome } from "./verify-design-outcome.ts";
@@ -56,7 +56,7 @@ export class VerifyDesignSmtUseCase {
   readonly #designModelRepository: DesignModelRepository;
   readonly #designReportRepository: DesignReportRepository;
   readonly #siblingBackendClient: SiblingBackendClient;
-  readonly #refinementContextRepository: RefinementContextRepository;
+  readonly #refinementMaterialsRepository: RefinementMaterialsRepository;
   readonly #refinementSolverClient: RefinementSolverClient;
   readonly #clock: Clock;
 
@@ -64,14 +64,14 @@ export class VerifyDesignSmtUseCase {
     designModelRepository: DesignModelRepository,
     designReportRepository: DesignReportRepository,
     siblingBackendClient: SiblingBackendClient,
-    refinementContextRepository: RefinementContextRepository,
+    refinementMaterialsRepository: RefinementMaterialsRepository,
     refinementSolverClient: RefinementSolverClient,
     clock: Clock,
   ) {
     this.#designModelRepository = designModelRepository;
     this.#designReportRepository = designReportRepository;
     this.#siblingBackendClient = siblingBackendClient;
-    this.#refinementContextRepository = refinementContextRepository;
+    this.#refinementMaterialsRepository = refinementMaterialsRepository;
     this.#refinementSolverClient = refinementSolverClient;
     this.#clock = clock;
   }
@@ -138,7 +138,7 @@ export class VerifyDesignSmtUseCase {
         }
         continue;
       }
-      const remapped = remapUnitDoc(u, lowered, run.doc);
+      const remapped = remapUnitDocument(u, lowered, run.doc);
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
           skipped.push({ target: t, reason: "unavailable", unit: u.name(), detail: remapped.unavailable });
@@ -153,7 +153,7 @@ export class VerifyDesignSmtUseCase {
     // --- Phase 3: 検証済み要件 IR に対する refinement ------------------------
     // 要件形式モデルの存在で発火。欠落・陳腐化・ユニット欠けの map は明示 skip
     // を生む——沈黙しない。
-    const context = this.#refinementContextRepository.findById(RefinementContextId.ofModel(input.modelId));
+    const context = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
     let inputs: readonly DesignInputAnchor[] | undefined;
     if (context.kind === "active") {
       const req = context.requirements;

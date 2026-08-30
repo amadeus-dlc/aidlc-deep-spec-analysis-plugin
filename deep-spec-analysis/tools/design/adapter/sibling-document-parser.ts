@@ -1,15 +1,15 @@
-// v1 兄弟バックエンドの生 findings 文書 → 型付き判定面（SiblingVerdictDoc）。
-// 選別規則は旧 remapUnitDoc の読込部の凍結挙動：非オブジェクト → unreadable、
+// v1 兄弟バックエンドの生 findings 文書 → 型付き判定面（SiblingVerdictDocument）。
+// 選別規則は旧 remapUnitDocument の読込部の凍結挙動：非オブジェクト → unreadable、
 // unavailable.reason → unavailable、findings は {kind:string, targets:array}
 // のエントリのみ、frRefs は文字列選別、detail は文字列でなければ ""、witness
 // は素通し。skipped は {target:string, reason:string} のみ。
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
-import type { DesignValue, SiblingVerdictDoc, SiblingVerdictFinding, SiblingVerdictSkip } from "../domain/index.ts";
+import type { DesignValue, SiblingVerdictDocument, SiblingVerdictFinding, SiblingVerdictSkip } from "../domain/index.ts";
 
 const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
 
-export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDoc {
+export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
   if (!isObject(raw)) return { kind: "unreadable" };
   if (isObject(raw.unavailable) && typeof raw.unavailable.reason === "string") {
     return { kind: "unavailable", reason: raw.unavailable.reason, method: typeof raw.method === "string" ? raw.method : null };

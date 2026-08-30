@@ -20,15 +20,15 @@ import {
 } from "../../kernel/adapter/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import type {
-  DesignAttributeView,
-  DesignBackgroundView,
-  DesignEntityView,
-  DesignIgnoreView,
-  DesignMachineView,
-  DesignObligationView,
-  DesignScenarioView,
-  DesignTransitionView,
-  DesignUnitView,
+  DesignAttributeDecl,
+  DesignBackgroundDecl,
+  DesignEntityDecl,
+  DesignIgnoreDecl,
+  DesignMachineDecl,
+  DesignObligationDecl,
+  DesignScenarioDecl,
+  DesignTransitionDecl,
+  DesignUnitDecl,
 } from "../domain/index.ts";
 import { type DesignModelId, SUPPORTED_DESIGN_IR_MAJOR } from "../domain/index.ts";
 import type {
@@ -51,12 +51,12 @@ function strArrayOrUndefined(v: Json): string[] | undefined {
   return Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : undefined;
 }
 
-function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordRoot: string | null): DesignUnitView {
-  const entities: DesignEntityView[] = [];
+function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordRoot: string | null): DesignUnitDecl {
+  const entities: DesignEntityDecl[] = [];
   const schema = isObject(rawUnit.schema) ? rawUnit.schema : {};
   for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
     if (!isObject(ent) || typeof ent.name !== "string") continue;
-    const attributes: DesignAttributeView[] = [];
+    const attributes: DesignAttributeDecl[] = [];
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string") continue;
       const t = isObject(attr.type) ? attr.type : {};
@@ -71,7 +71,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     entities.push({ name: ent.name, attributes });
   }
 
-  const obligations: DesignObligationView[] = [];
+  const obligations: DesignObligationDecl[] = [];
   for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string") continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
@@ -93,12 +93,12 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     });
   }
 
-  const stateMachines: DesignMachineView[] = [];
+  const stateMachines: DesignMachineDecl[] = [];
   for (const sm of Array.isArray(rawUnit.stateMachines) ? rawUnit.stateMachines : []) {
     if (!isObject(sm) || typeof sm.id !== "string") continue;
     const attrPath = `${typeof sm.entity === "string" ? sm.entity : "?"}.${typeof sm.attribute === "string" ? sm.attribute : "?"}`;
     const initial = (Array.isArray(sm.initial) ? sm.initial : []).filter((s) => typeof s === "string") as string[];
-    const transitions: DesignTransitionView[] = [];
+    const transitions: DesignTransitionDecl[] = [];
     for (const tr of Array.isArray(sm.transitions) ? sm.transitions : []) {
       if (!isObject(tr) || typeof tr.id !== "string") continue;
       transitions.push({
@@ -111,7 +111,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
         effect: asExpression(tr.effect ?? null),
       });
     }
-    const ignores: DesignIgnoreView[] = [];
+    const ignores: DesignIgnoreDecl[] = [];
     for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
       if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
       ignores.push({ state: ig.state, trigger: ig.trigger });
@@ -119,7 +119,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     stateMachines.push({ id: sm.id, attrPath, initial, transitions, ignores });
   }
 
-  const scenarios: DesignScenarioView[] = [];
+  const scenarios: DesignScenarioDecl[] = [];
   for (const sc of Array.isArray(rawUnit.scenarios) ? rawUnit.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
@@ -132,7 +132,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     });
   }
 
-  const background: DesignBackgroundView[] = [];
+  const background: DesignBackgroundDecl[] = [];
   for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string") continue;
     background.push({ id: bg.id, assert: asExpression(bg.assert ?? null) });
@@ -220,7 +220,7 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
     const major = Number.parseInt(irVersion.split(".")[0] ?? "", 10);
     const semanticGateOpen = schemaErrors.length === 0 && !(Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR);
 
-    const units: DesignUnitView[] = [];
+    const units: DesignUnitDecl[] = [];
     if (semanticGateOpen) {
       const recordRoot = findRecordRoot(dirname(outputPath));
       for (const rawUnit of Array.isArray(ir.units) ? ir.units : []) {

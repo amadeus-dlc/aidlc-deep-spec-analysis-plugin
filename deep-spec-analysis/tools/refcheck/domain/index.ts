@@ -1,7 +1,7 @@
 // refcheck/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
 export { CATALOG_VERSION } from "./catalog-version.ts";
-export { type RefEntry } from "./ref-entry.ts";
+export { type WitnessRef } from "./witness-ref.ts";
 export { type Finding } from "./finding.ts";
 export { type Skipped } from "./skipped.ts";
 export { type InputAnchor } from "./input-anchor.ts";
@@ -24,22 +24,30 @@ export {
   type ContractsTableOutcome,
   type SpecBlockAssessment,
 } from "./contract-summary.ts";
-export { CONTRACT_FAMILIES, runContractChecks, type ContractChecksInput } from "./contract-checks.ts";
+export { CONTRACT_FAMILIES, runContractChecks, type ContractCheckMaterials } from "./contract-checks.ts";
 export {
-  type AttrDecl,
-  type RelDecl,
-  type EntityDecl,
-  type EntitiesModel,
-  type EntitiesOutcome,
-  type RuleDecl,
-  type RulesOutcome,
-  type StateMachineSketch,
-  type FunctionalSpecOutcome,
-  type DomainEntitySketch,
+  type AttrDeclSeed,
+  type DeclaredEntitiesSeed,
   type DomainEntitiesOutcome,
+  type DomainEntitySketchSeed,
+  type EntitiesOutcome,
+  type EntityDeclSeed,
+  type FunctionalSpecOutcome,
+  type RelDeclSeed,
+  type RuleDeclSeed,
+  type RulesOutcome,
+  type ShapeError,
   type SiblingUnitEntities,
+  type StateMachineSketchSeed,
+  AttrDecl,
+  DeclaredEntities,
+  DomainEntitySketch,
+  EntityDecl,
+  RelDecl,
+  RuleDecl,
+  StateMachineSketch,
 } from "./functional-design.ts";
-export { FUNCTIONAL_FAMILIES, runFunctionalChecks, type FunctionalChecksInput } from "./functional-checks.ts";
+export { FUNCTIONAL_FAMILIES, runFunctionalChecks, type FunctionalCheckMaterials } from "./functional-checks.ts";
 export { DesignRecord, type DesignRecordSeed, type LoadedDocument } from "./design-record.ts";
 export { DesignRecordId } from "./design-record-id.ts";
 export { type CheckExecutionMode } from "./check-execution-mode.ts";

@@ -890,3 +890,43 @@ Two more rulings landed in the same review session and were applied:
 Proofs: 305+ tests green; the vocabulary file holds 100% line coverage;
 goldens untouched; the parity snapshot `diff -r` stays empty against the
 pre-PR7 base (the refcheck scenarios exercise these messages heavily).
+
+## Tell-Don't-Ask ruling — domain objects are abstract data types, not data structures (2026-08-30)
+
+The owner ruled that an anemic domain model is unacceptable: a domain
+interface carrying only properties means its behavior has escaped
+outside, and every caller is *asking* (pulling data out and deciding
+elsewhere) instead of *telling*. Domain objects must enclose their
+complex domain knowledge behind a narrow surface.
+
+Applied first at the flagged epicenter, the functional-design cluster:
+the seven property bags became behavior-bearing classes, and the escaped
+predicates moved home —
+
+- `AttrDecl` now judges its own coherence: the FD-E2 type-class
+  conflicts (`declaresAllowedValuesOnNonEnumerableType`,
+  `declaresBoundsOnNonNumericType`, `declaresUniqueOnCollectionType`),
+  the FD-E3 range/default coherence (`boundsInverted`,
+  `defaultBelowMin`/`defaultAboveMax`, `defaultOutsideAllowed`), the
+  lifecycle candidacy, and the FD-S diagram diffs (`rogueDiagramStates`,
+  `allowedValuesAbsentFrom`). The type-class sets moved into `TypeName`
+  (`classifiesNumeric`/`Date`/`Bool`/`Collection`), the cardinality
+  closed set into `CardinalityNotation.isInClosedSet`, the category set
+  into `RuleCategory.isKnownCategory`.
+- `EntityDecl` owns `duplicateAttrDecls`, `lifecycleAttr` (the former
+  free function died into it), `attrNamed`. `DeclaredEntities` owns
+  `duplicateEntityDecls`, `allRels`, `containsEntityNamed`, the FD-E6
+  `resolvesReference`, the FD-R4 `resolvesAppliesTo`,
+  `entityByNormalizedName`, `lifecycleEntities`. `RuleDecl` owns
+  `findingTarget` (the five-fold BR-shape ternary died into it),
+  `sourceIdValuesMissingFrom`, `categoryOutsideClosedSet`.
+  `StateMachineSketch` owns its frozen `locationLabel`;
+  `DomainEntitySketch` owns `catalogLabel` and `attributesDroppedIn`.
+- The check runners are now pure coordinators: they iterate, tell the
+  declarations to yield their violations, and render the frozen
+  messages. Formatting stays on 境界 accessors so every message is
+  byte-identical (proven by the untouched goldens and the still-empty
+  parity snapshot).
+- Finding-emission order changed within a family (duplicates now come
+  from collection methods); this is unobservable because the report
+  aggregate's compose owns canonical sorting — the goldens confirm.

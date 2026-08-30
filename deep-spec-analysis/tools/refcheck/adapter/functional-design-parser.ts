@@ -24,18 +24,22 @@ import {
   StateName,
   TypeName,
 } from "../domain/index.ts";
-import type {
+import {
   AttrDecl,
-  DomainEntitiesOutcome,
+  DeclaredEntities,
   DomainEntitySketch,
-  EntitiesModel,
-  EntitiesOutcome,
-  FunctionalSpecOutcome,
+  EntityDecl,
   RelDecl,
   RuleDecl,
-  RulesOutcome,
-  SiblingUnitEntities,
   StateMachineSketch,
+} from "../domain/index.ts";
+import type {
+  DomainEntitiesOutcome,
+  EntitiesOutcome,
+  FunctionalSpecOutcome,
+  RulesOutcome,
+  ShapeError,
+  SiblingUnitEntities,
 } from "../domain/index.ts";
 
 function str(v: Json): string | null {
@@ -55,20 +59,21 @@ function extractRel(raw: Json, element: string, implicitFrom: string | null): Re
   const to = str(pick(raw, ["to", "target", "entity"]));
   const cardinality = str(pick(raw, ["cardinality"]));
   const hasDirection = (from !== null && to !== null) || str(pick(raw, ["direction"])) !== null;
-  return {
+  return RelDecl.reconstitute({
     element: ElementPath.reconstitute(element),
     from: from === null ? null : EntityName.reconstitute(from),
     to: to === null ? null : EntityName.reconstitute(to),
     cardinality: cardinality === null ? null : CardinalityNotation.reconstitute(cardinality),
     hasDirection,
-  };
+  });
 }
 
-function extractEntities(value: Json): EntitiesModel {
-  const model: EntitiesModel = { entities: [], rels: [], shapeErrors: [] };
+function extractEntities(value: Json): DeclaredEntities {
+  const collected: { entities: EntityDecl[]; rels: RelDecl[]; shapeErrors: ShapeError[] } = { entities: [], rels: [], shapeErrors: [] };
+  const model = collected;
   if (!isObject(value) || !Array.isArray(value.entities)) {
     model.shapeErrors.push({ element: ElementPath.reconstitute("entities"), detail: "top-level `entities:` list is missing" });
-    return model;
+    return DeclaredEntities.reconstitute(collected);
   }
   value.entities.forEach((raw, i) => {
     const element = `entities[${i}]`;
@@ -106,7 +111,7 @@ function extractEntities(value: Json): EntitiesModel {
         const minRaw = pick(a, ["min"]);
         const maxRaw = pick(a, ["max"]);
         const references = str(pick(a, ["references", "reference", "ref"]));
-        attrs.push({
+        attrs.push(AttrDecl.reconstitute({
           name: AttributeName.reconstitute(aname),
           element: ElementPath.reconstitute(ael),
           type: type === null ? null : TypeName.reconstitute(type),
@@ -118,7 +123,7 @@ function extractEntities(value: Json): EntitiesModel {
           maxDeclared: maxRaw !== null,
           min: typeof minRaw === "number" ? NumericBound.reconstitute(minRaw) : null,
           max: typeof maxRaw === "number" ? NumericBound.reconstitute(maxRaw) : null,
-        });
+        }));
       });
     }
     const rels: RelDecl[] = [];
@@ -128,7 +133,7 @@ function extractEntities(value: Json): EntitiesModel {
         if (rel) rels.push(rel);
       });
     }
-    model.entities.push({ name: EntityName.reconstitute(name), element: ElementPath.reconstitute(element), attrs, rels });
+    model.entities.push(EntityDecl.reconstitute({ name: EntityName.reconstitute(name), element: ElementPath.reconstitute(element), attrs, rels }));
   });
   if (Array.isArray(value.relationships)) {
     (value.relationships as Json[]).forEach((r, j) => {
@@ -136,7 +141,7 @@ function extractEntities(value: Json): EntitiesModel {
       if (rel) model.rels.push(rel);
     });
   }
-  return model;
+  return DeclaredEntities.reconstitute(collected);
 }
 
 export function parseEntitiesDocument(md: string | null): EntitiesOutcome {
@@ -163,7 +168,7 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
   const rules: RuleDecl[] = (v.rules as Json[]).map((raw, i) => {
     const element = `rules[${i}]`;
     if (!isObject(raw)) {
-      return { id: null, element: ElementPath.reconstitute(element), category: null, appliesTo: null, sourceIds: [], missing: ["<entry is not a mapping>"] };
+      return RuleDecl.reconstitute({ id: null, element: ElementPath.reconstitute(element), category: null, appliesTo: null, sourceIds: [], missing: ["<entry is not a mapping>"] });
     }
     const missing = ["id", "statement", "category"].filter((k) => !(k in raw));
     if (!("source" in raw) && !("sources" in raw)) missing.push("source");
@@ -174,14 +179,14 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
     const id = str(raw.id);
     const category = str(raw.category);
     const appliesTo = str(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
-    return {
+    return RuleDecl.reconstitute({
       id: id === null ? null : BusinessRuleId.reconstitute(id),
       element: ElementPath.reconstitute(element),
       category: category === null ? null : RuleCategory.reconstitute(category),
       appliesTo: appliesTo === null ? null : AppliesTo.reconstitute(appliesTo),
       sourceIds: [...requirementIds(sourceText)].map((v) => SourceId.reconstitute(v)),
       missing,
-    };
+    });
   });
   return { kind: "extracted", rules };
 }
@@ -219,12 +224,12 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecOu
           }
         }
       }
-      machines.push({
+      machines.push(StateMachineSketch.reconstitute({
         spec: MachineSpec.reconstitute((h[1] ?? "").trim()),
         states: [...states].sort().map((v) => StateName.reconstitute(v)),
         fenceLine: j + 1,
         unsupported,
-      });
+      }));
       break;
     }
   }
@@ -247,11 +252,11 @@ export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOu
         const attributes = Array.isArray(e.attributes)
           ? (e.attributes as Json[]).filter((a): a is string => typeof a === "string")
           : [];
-        out.push({
+        out.push(DomainEntitySketch.reconstitute({
           name: EntityName.reconstitute(e.name),
           component: ComponentName.reconstitute(raw.name),
           attributes: attributes.map((v) => AttributeName.reconstitute(v)),
-        });
+        }));
       }
     }
   }
@@ -268,9 +273,9 @@ export function buildSiblingUnitEntities(texts: readonly { unit: string; text: s
     const parsed = parseYamlSubset(fence.body);
     if (parsed.error !== undefined) continue; // its own unit's run reports the parse error
     const model = extractEntities(parsed.value ?? null);
-    const map = new Map<string, { name: EntityName; attrs: AttributeName[] }>();
-    for (const e of model.entities) {
-      map.set(e.name.normalized(), { name: e.name, attrs: e.attrs.map((a) => a.name) });
+    const map = new Map<string, { name: EntityName; attrs: readonly AttributeName[] }>();
+    for (const e of model.entities()) {
+      map.set(e.name().normalized(), { name: e.name(), attrs: e.attrs().map((a) => a.name()) });
     }
     unitEntities.set(unit, map);
   }

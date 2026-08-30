@@ -7,14 +7,14 @@
 
 import { type Expression, walkExpression } from "../../kernel/domain/index.ts";
 import { BrReferenceIndex } from "./br-reference-index.ts";
-import type { DesignUnitView } from "./design-ir-view.ts";
+import type { DesignUnitDecl } from "./design-ir-decl.ts";
 
 interface AttributeType {
   readonly kind: string;
   readonly values?: readonly string[];
 }
 
-export function designWellFormednessErrors(units: readonly DesignUnitView[]): string[] {
+export function designWellFormednessErrors(units: readonly DesignUnitDecl[]): string[] {
   const errors: string[] = [];
   const unitNames = new Set<string>();
 

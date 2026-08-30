@@ -5,7 +5,7 @@
 import { idCompare, safeTarget, sortedUnique } from "../../kernel/domain/index.ts";
 import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import type { Component, ComponentCatalogOutcome, ComponentEntity } from "./component-catalog.ts";
-import type { RefEntry } from "./ref-entry.ts";
+import type { WitnessRef } from "./witness-ref.ts";
 
 export const COMPONENT_FAMILIES = ["DD-0", "DD-1", "DD-2", "DD-3", "DD-4", "DD-5", "DD-6", "DD-7"];
 
@@ -60,7 +60,7 @@ export function runComponentChecks(
   artifact: string,
   ledger: CheckFamilyLedger,
 ): void {
-  const ref = (element: string, value?: string): RefEntry =>
+  const ref = (element: string, value?: string): WitnessRef =>
     value === undefined ? { artifact, element } : { artifact, element, value };
 
   // --- DD-0: fence shape --------------------------------------------------

@@ -26,7 +26,7 @@ export {
 export {
   REFINEMENT_MAP_BASENAME,
   REQUIREMENTS_MODEL_RELPATH,
-  RefinementContextRepositoryImpl,
+  RefinementMaterialsRepositoryImpl,
 } from "./refinement-context-repository-impl.ts";
 export { type RefinementSolverClientConfig, RefinementSolverClientImpl } from "./refinement-solver-client-impl.ts";
 export {

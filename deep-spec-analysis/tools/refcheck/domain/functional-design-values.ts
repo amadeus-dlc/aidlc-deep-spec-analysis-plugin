@@ -63,7 +63,17 @@ export class TypeName {
   value(): string { return this.#value; }
   // 型クラス（numeric/date/bool/…）の照合は小文字正規化で行う（凍結挙動）。
   normalized(): string { return this.#value.toLowerCase(); }
+  // 型クラスの分類は型名語彙の知識（旧 functional-checks のローカル集合の移設）。
+  classifiesNumeric(): boolean { return NUMERICISH.has(this.normalized()); }
+  classifiesDate(): boolean { return DATEISH.has(this.normalized()); }
+  classifiesBool(): boolean { return BOOLISH.has(this.normalized()); }
+  classifiesCollection(): boolean { return COLLECTIONISH.has(this.normalized()); }
 }
+
+const NUMERICISH = new Set(["int", "integer", "number", "decimal", "float", "double", "long"]);
+const DATEISH = new Set(["date", "datetime", "timestamp", "time"]);
+const BOOLISH = new Set(["bool", "boolean"]);
+const COLLECTIONISH = new Set(["list", "array", "map", "object", "collection", "set"]);
 
 export class AllowedValue {
   readonly #value: string;
@@ -116,7 +126,10 @@ export class CardinalityNotation {
   value(): string { return this.#value; }
   // 閉集合（1:1 | 1:N | N:1 | N:M）との照合形：大文字化・空白除去（凍結挙動）。
   normalizedToken(): string { return this.#value.toUpperCase().replace(/\s/g, ""); }
+  isInClosedSet(): boolean { return CARDINALITIES.has(this.normalizedToken()); }
 }
+
+const CARDINALITIES = new Set(["1:1", "1:N", "N:1", "N:M"]);
 
 export class BusinessRuleId {
   readonly #value: string;
@@ -143,7 +156,10 @@ export class RuleCategory {
   equals(other: RuleCategory): boolean { return this.#value === other.#value; }
   value(): string { return this.#value; }
   normalized(): string { return this.#value.toLowerCase(); }
+  isKnownCategory(): boolean { return CATEGORIES.has(this.normalized()); }
 }
+
+const CATEGORIES = new Set(["validation", "authorization", "constraint", "calculation", "policy"]);
 
 export class AppliesTo {
   readonly #value: string;

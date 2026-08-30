@@ -1,11 +1,11 @@
-// RefinementContextRepository の実 Gateway 実装。レコードルート歩行・要件形式
+// RefinementMaterialsRepository の実 Gateway 実装。レコードルート歩行・要件形式
 // モデルの寛容読取（不読は null → inactive）・refinement map の fence/JSON/
 // 契約4 スキーマ検証（凍結エラーメッセージ 4 種）・inputs 台帳（3 成果物の
 // 相対パス＋sha256）をここで解決する。契約4 スキーマのパスは entry が注入する。
 // 旧 refinement-lib の loadRequirementsIr / loadRefinementMap と旧 entry の
 // inputs 組成からの逐語移植。
 
-import type { RefinementContextId } from "../domain/index.ts";
+import type { RefinementMaterialsId } from "../domain/index.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ArtifactPath, ContentHash, sha256 } from "../../kernel/domain/index.ts";
@@ -28,14 +28,14 @@ import {
   type RefinementObligation,
   type RefinementScenario,
   type RefinementUnitMap,
-  type UnmappedEntry,
+  type UnmappedTarget,
   RefinementMap,
   RefinementRequirements,
 } from "../../refinement/domain/index.ts";
 import type {
-  RefinementContextRepository,
+  RefinementMaterialsRepository,
   RefinementMapAcquisition,
-  RefinementPhaseContext,
+  RefinementMaterials,
 } from "../usecase/index.ts";
 
 export const REFINEMENT_MAP_BASENAME = "deep-spec-analysis-refinement-map.md";
@@ -49,14 +49,14 @@ function extractSingleJsonFence(md: string): string | null {
   return fences.length === 1 ? (fences[0]?.body ?? null) : null;
 }
 
-export class RefinementContextRepositoryImpl implements RefinementContextRepository {
+export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRepository {
   readonly #mapSchemaPath: string;
 
   constructor(mapSchemaPath: string) {
     this.#mapSchemaPath = mapSchemaPath;
   }
 
-  findById(id: RefinementContextId): RefinementPhaseContext {
+  findById(id: RefinementMaterialsId): RefinementMaterials {
     const modelPath = id.modelArtifactPath().value();
     const recordRoot = findRecordRoot(dirname(modelPath));
     const requirements = recordRoot === null ? null : this.#loadRequirements(recordRoot);
@@ -187,7 +187,7 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
           waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
         });
       }
-      const unmapped: UnmappedEntry[] = [];
+      const unmapped: UnmappedTarget[] = [];
       for (const un of Array.isArray(u.unmapped) ? u.unmapped : []) {
         if (isObject(un) && typeof un.target === "string") {
           unmapped.push({ target: un.target, reason: typeof un.reason === "string" ? un.reason : "" });

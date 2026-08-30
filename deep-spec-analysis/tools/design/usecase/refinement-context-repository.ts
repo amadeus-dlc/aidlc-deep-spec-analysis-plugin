@@ -11,7 +11,7 @@
 // 陳腐化（requirementsIrHash / designIrHash の不一致）の判定はユースケースの
 // フロー制御——ポートは判定しない。
 
-import type { DesignInputAnchor, RefinementContextId } from "../domain/index.ts";
+import type { DesignInputAnchor, RefinementMaterialsId } from "../domain/index.ts";
 import type { RefinementMap, RefinementRequirements } from "../../refinement/domain/index.ts";
 
 export type RefinementMapAcquisition =
@@ -23,7 +23,7 @@ export type RefinementMapAcquisition =
       readonly inputs: readonly DesignInputAnchor[];
     };
 
-export type RefinementPhaseContext =
+export type RefinementMaterials =
   | { readonly kind: "inactive" }
   | {
       readonly kind: "active";
@@ -31,6 +31,6 @@ export type RefinementPhaseContext =
       readonly map: RefinementMapAcquisition;
     };
 
-export interface RefinementContextRepository {
-  findById(id: RefinementContextId): RefinementPhaseContext;
+export interface RefinementMaterialsRepository {
+  findById(id: RefinementMaterialsId): RefinementMaterials;
 }

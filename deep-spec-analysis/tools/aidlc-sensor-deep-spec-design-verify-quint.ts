@@ -22,7 +22,7 @@ import { VerifyDesignQuintUseCase } from "./design/usecase/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
-  RefinementContextRepositoryImpl,
+  RefinementMaterialsRepositoryImpl,
   SiblingBackendClientImpl,
 } from "./design/adapter/index.ts";
 
@@ -46,7 +46,7 @@ function main(): void {
     new DesignModelRepositoryImpl(),
     new DesignReportRepositoryImpl(join(toolsDir, "data", "deep-spec-findings-schema.json")),
     new SiblingBackendClientImpl({ toolsDirectory: toolsDir, workingDirectory: process.cwd() }),
-    new RefinementContextRepositoryImpl(join(toolsDir, "data", "deep-spec-refinement-map-schema.json")),
+    new RefinementMaterialsRepositoryImpl(join(toolsDir, "data", "deep-spec-refinement-map-schema.json")),
     new SystemClock(),
     Number(process.env.AIDLC_DEEP_SPEC_QUINT_UNREACH_CAP) || 2,
   );

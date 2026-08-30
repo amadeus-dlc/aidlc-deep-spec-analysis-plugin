@@ -6,12 +6,12 @@
 // not-applicable は形式モデル以外への書き込み（センサーの pass-through）。
 // unreadable は材料が組めない失敗で、errors は verdict にそのまま載る凍結文言。
 
-import type { FormalModelId, FrRefClaim, IrModelView, RequirementsSourceId } from "../domain/index.ts";
+import type { FormalModelId, FrRefClaim, IrModelDecl, RequirementsSourceId } from "../domain/index.ts";
 
 export interface IrValidationMaterials {
   readonly irVersion: string;
   readonly schemaErrors: readonly string[];
-  readonly view: IrModelView;
+  readonly view: IrModelDecl;
   readonly frClaims: readonly FrRefClaim[];
   // IR の sourceDigest。文字列でなければ null。
   readonly declaredDigest: string | null;

@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { ArtifactPath, ContentHash, IrVersion, sha256 } from "../tools/kernel/domain/index.ts";
-import { DesignModelId, DesignUnitId, RefinementContextId } from "../tools/design/domain/index.ts";
+import { DesignModelId, DesignUnitId, RefinementMaterialsId } from "../tools/design/domain/index.ts";
 import { RefinementMapId } from "../tools/refinement/domain/index.ts";
 import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
 import { FormalModelId } from "../tools/requirements/domain/index.ts";
@@ -49,12 +49,12 @@ describe("aggregate ids resolve forward, by their own identity", () => {
     expect(id.equals(DesignModelId.of(ap("/r/other.md")))).toBe(false);
   });
 
-  test("RefinementContextId is anchored 1:1 to its design model", () => {
+  test("RefinementMaterialsId is anchored 1:1 to its design model", () => {
     const model = DesignModelId.of(ap("/r/design.md"));
-    const id = RefinementContextId.ofModel(model);
+    const id = RefinementMaterialsId.ofModel(model);
     expect(id.modelArtifactPath().value()).toBe("/r/design.md");
-    expect(id.equals(RefinementContextId.ofModel(model))).toBe(true);
-    expect(id.equals(RefinementContextId.ofModel(DesignModelId.of(ap("/r/other.md"))))).toBe(false);
+    expect(id.equals(RefinementMaterialsId.ofModel(model))).toBe(true);
+    expect(id.equals(RefinementMaterialsId.ofModel(DesignModelId.of(ap("/r/other.md"))))).toBe(false);
   });
 
   test("DesignRecordId", () => {

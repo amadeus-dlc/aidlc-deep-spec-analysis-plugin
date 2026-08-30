@@ -44,7 +44,7 @@ import {
   COMPONENT_FAMILIES,
   CONTRACT_FAMILIES,
   FUNCTIONAL_FAMILIES,
-  type FunctionalChecksInput,
+  type FunctionalCheckMaterials,
   ReferenceCheckReport,
   ReferenceCheckReportId,
   runComponentChecks,
@@ -241,7 +241,7 @@ describe("skip branches the fixtures do not exercise", () => {
   });
 });
 
-function functionalInput(overrides: Partial<FunctionalChecksInput>): FunctionalChecksInput {
+function functionalInput(overrides: Partial<FunctionalCheckMaterials>): FunctionalCheckMaterials {
   return {
     unit: "u1",
     entitiesArtifact: "e.md",
@@ -258,7 +258,7 @@ function functionalInput(overrides: Partial<FunctionalChecksInput>): FunctionalC
   };
 }
 
-function functionalReport(overrides: Partial<FunctionalChecksInput>): ReferenceCheckReport {
+function functionalReport(overrides: Partial<FunctionalCheckMaterials>): ReferenceCheckReport {
   const input = functionalInput(overrides);
   return domainReport(FUNCTIONAL_FAMILIES, (l) => runFunctionalChecks(input, l), "functional-design", input.unit);
 }

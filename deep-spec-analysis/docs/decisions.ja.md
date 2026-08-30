@@ -862,3 +862,38 @@ PR #40 の型付き集約 ID は解決には使われていたが、解決され
 証明：305+ tests green。語彙ファイルは行カバレッジ 100%。golden 無変更。
 パリティスナップショットは PR7 以前の base に対し `diff -r` 空のまま
 （refcheck シナリオがこれらの文言を濃密に通す）。
+
+## Tell-Don't-Ask 裁定 — ドメインオブジェクトは抽象データ型であり、データ構造ではない（2026-08-30）
+
+オーナー裁定：貧血ドメインモデルは許容できない。プロパティしか持たない
+ドメイン interface は振る舞いが外へ逃げた証拠であり、呼び手は皆
+**尋ねて**（データを取り出し外で判断して）いる。ドメインオブジェクトは
+複雑なドメイン知識を狭い面の内側に閉じ込めるべし。
+
+まず指摘の震源である functional-design クラスタへ適用：プロパティ袋
+7 型は振る舞いを持つクラスになり、逃げていた述語が家に帰った——
+
+- `AttrDecl` は自分の整合を自分で判定する：FD-E2 の型クラス衝突
+  （`declaresAllowedValuesOnNonEnumerableType`・
+  `declaresBoundsOnNonNumericType`・`declaresUniqueOnCollectionType`）、
+  FD-E3 の範囲・既定値整合（`boundsInverted`・`defaultBelowMin`/
+  `defaultAboveMax`・`defaultOutsideAllowed`）、ライフサイクル候補性、
+  FD-S の図差分（`rogueDiagramStates`・`allowedValuesAbsentFrom`）。
+  型クラス集合は `TypeName`（`classifiesNumeric`/`Date`/`Bool`/
+  `Collection`）へ、基数の閉集合は `CardinalityNotation.isInClosedSet`
+  へ、category の閉集合は `RuleCategory.isKnownCategory` へ移った。
+- `EntityDecl` は `duplicateAttrDecls`・`lifecycleAttr`（旧自由関数は
+  この中で死んだ）・`attrNamed` を所有。`DeclaredEntities` は
+  `duplicateEntityDecls`・`allRels`・`containsEntityNamed`・FD-E6 の
+  `resolvesReference`・FD-R4 の `resolvesAppliesTo`・
+  `entityByNormalizedName`・`lifecycleEntities` を所有。`RuleDecl` は
+  `findingTarget`（5 連の BR 形三項演算子はこの中で死んだ）・
+  `sourceIdValuesMissingFrom`・`categoryOutsideClosedSet` を所有。
+  `StateMachineSketch` は凍結書式の `locationLabel` を、
+  `DomainEntitySketch` は `catalogLabel` と `attributesDroppedIn` を所有。
+- 検査ランナーは純粋なコーディネータになった：巡回し、宣言に違反を
+  **告げさせ**、凍結文言を描画するだけ。書式は境界アクセサに残るため
+  全文言はバイト同一（golden 無変更とパリティ空 diff で実証）。
+- 族内の finding 発行順は変わった（重複が集合メソッド由来になったため）
+  が、レポート集約の compose が正準ソートを所有するため観測不能——
+  golden が確認している。

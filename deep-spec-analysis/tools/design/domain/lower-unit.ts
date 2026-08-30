@@ -18,11 +18,11 @@ import type { DesignObligation } from "./design-obligation.ts";
 import type { DesignUnit } from "./design-unit.ts";
 import { expressionCanonicalKey } from "./expression-canonical-key.ts";
 
-export type LowKind = "passthrough" | "transition" | "ignore" | "vac-dead" | "vac-shadow";
+export type LoweringKind = "passthrough" | "transition" | "ignore" | "vac-dead" | "vac-shadow";
 
-export interface LowEntry {
+export interface LoweredOrigin {
   design: string;
-  kind: LowKind;
+  kind: LoweringKind;
   pair?: [string, string];
 }
 
@@ -55,7 +55,7 @@ export interface LoweredUnit {
   obligations: LoweredObligation[];
   scenarios: LoweredScenario[];
   background: LoweredBackground[];
-  map: Map<string, LowEntry>;
+  map: Map<string, LoweredOrigin>;
   scenarioMap: Map<string, string>;
   machineOfTransition: Map<string, DesignMachine>;
   attrPathOfMachine: Map<string, string>;
@@ -67,7 +67,7 @@ const eqRef = (path: string, prime: boolean, value: string): Expression => ({
 });
 
 export function lowerUnit(u: DesignUnit, opts: { synthetics: boolean }): LoweredUnit {
-  const map = new Map<string, LowEntry>();
+  const map = new Map<string, LoweredOrigin>();
   const scenarioMap = new Map<string, string>();
   const machineOfTransition = new Map<string, DesignMachine>();
   const attrPathOfMachine = new Map<string, string>();
@@ -77,7 +77,7 @@ export function lowerUnit(u: DesignUnit, opts: { synthetics: boolean }): Lowered
     n += 1;
     return `OB-${n}`;
   };
-  const push = (ob: Omit<LoweredObligation, "id">, entry: LowEntry): string => {
+  const push = (ob: Omit<LoweredObligation, "id">, entry: LoweredOrigin): string => {
     const id = nextId();
     obligations.push({ id, ...ob });
     map.set(id, entry);

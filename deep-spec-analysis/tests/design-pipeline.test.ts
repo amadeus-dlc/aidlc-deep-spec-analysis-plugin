@@ -26,7 +26,7 @@ function ap(raw: string): ArtifactPath {
 import {
   type DesignFinding,
   type DesignModelComposition,
-  type SiblingVerdictDoc,
+  type SiblingVerdictDocument,
   DesignModel,
   DesignReport,
   DesignReportId,
@@ -37,7 +37,7 @@ import {
   designVersionMismatchReport,
   expressionCanonicalKey,
   lowerUnit,
-  remapUnitDoc,
+  remapUnitDocument,
   sortDesignFindings,
   sortDesignSkipped,
   DesignModelId,
@@ -82,14 +82,14 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
 
       for (const backend of ["smt", "quint"] as const) {
         const findings: DesignFinding[] = [];
-        const skipped: ReturnType<typeof remapUnitDoc>["skipped"] = [];
+        const skipped: ReturnType<typeof remapUnitDocument>["skipped"] = [];
         const checkedUnits: string[] = [];
         let method: string | null = null;
         for (const u of model.units()) {
           const lowered = lowerUnit(u, { synthetics: backend === "smt" });
           const run = sibling.runLowered(backend, u, lowered, 55_000);
           expect(run.exit).toBe(0);
-          const remapped = remapUnitDoc(u, lowered, run.doc ?? { kind: "unreadable" });
+          const remapped = remapUnitDocument(u, lowered, run.doc ?? { kind: "unreadable" });
           expect(remapped.unavailable).toBe(null);
           method = method ?? remapped.method;
           findings.push(...remapped.findings);
@@ -323,12 +323,12 @@ describe("remap (design vocabulary attribution)", () => {
   const doc = (input: {
     findings?: { kind: string; frRefs: string[]; targets: string[]; witness: Json; detail: string }[];
     skipped?: { target: string; reason: string; detail?: string }[];
-  }): SiblingVerdictDoc =>
+  }): SiblingVerdictDocument =>
     ({ kind: "readable", method: "exhaustive", findings: (input.findings ?? []) as never, skipped: input.skipped ?? [] });
 
   test("unavailable and unreadable sibling documents pass straight through", () => {
-    expect(remapUnitDoc(u, low, { kind: "unreadable" }).unavailable).toBe("sibling backend produced no findings document");
-    expect(remapUnitDoc(u, low, { kind: "unavailable", reason: "boom", method: "simulation" })).toEqual({
+    expect(remapUnitDocument(u, low, { kind: "unreadable" }).unavailable).toBe("sibling backend produced no findings document");
+    expect(remapUnitDocument(u, low, { kind: "unavailable", reason: "boom", method: "simulation" })).toEqual({
       findings: [],
       skipped: [],
       unavailable: "boom",
@@ -338,7 +338,7 @@ describe("remap (design vocabulary attribution)", () => {
 
   test("a vac-dead conflict becomes unreachable with the transition/rule wording", () => {
     const deadId = [...low.map.entries()].find(([, e]) => e.kind === "vac-dead" && e.design === "TR-1")?.[0] as string;
-    const out = remapUnitDoc(u, low, doc({
+    const out = remapUnitDocument(u, low, doc({
       findings: [{ kind: "conflict", frRefs: ["FR-1"], targets: [deadId], witness: { core: [`ant_${deadId.replace("-", "_")}`] }, detail: "x" }],
     }));
     expect(out.findings[0]?.kind).toBe("unreachable");
@@ -349,12 +349,12 @@ describe("remap (design vocabulary attribution)", () => {
 
   test("mutual shadow pairs collapse into one equivalence finding; one-way stays subsumption", () => {
     const ids = [...low.map.entries()].filter(([, e]) => e.kind === "vac-shadow");
-    const oneWay = remapUnitDoc(u, low, doc({
+    const oneWay = remapUnitDocument(u, low, doc({
       findings: [{ kind: "conflict", frRefs: [], targets: [ids[0]?.[0] as string], witness: { core: [] }, detail: "x" }],
     }));
     expect(oneWay.findings[0]?.kind).toBe("redundancy");
     expect(oneWay.findings[0]?.detail).toContain("is subsumed by");
-    const mutual = remapUnitDoc(u, low, doc({
+    const mutual = remapUnitDocument(u, low, doc({
       findings: ids.map(([id]) => ({ kind: "conflict", frRefs: [], targets: [id], witness: { core: [] }, detail: "x" })),
     }));
     expect(mutual.findings.length).toBe(1);
@@ -363,7 +363,7 @@ describe("remap (design vocabulary attribution)", () => {
 
   test("a same-machine conflict under deterministic:false is waived once per target", () => {
     const trIds = [...low.map.entries()].filter(([, e]) => e.kind === "transition").map(([id]) => id);
-    const out = remapUnitDoc(u, low, doc({
+    const out = remapUnitDocument(u, low, doc({
       findings: [
         { kind: "conflict", frRefs: [], targets: trIds, witness: { core: [] }, detail: "overlap" },
         { kind: "conflict", frRefs: [], targets: trIds, witness: { core: [] }, detail: "overlap again" },
@@ -378,7 +378,7 @@ describe("remap (design vocabulary attribution)", () => {
 
   test("details and witness cores are rewritten into design ids, and skips are deduped per (target, reason)", () => {
     const trLow = [...low.map.entries()].find(([, e]) => e.kind === "transition" && e.design === "TR-1")?.[0] as string;
-    const out = remapUnitDoc(u, low, doc({
+    const out = remapUnitDocument(u, low, doc({
       findings: [{
         kind: "completeness-gap",
         frRefs: ["FR-9"],
