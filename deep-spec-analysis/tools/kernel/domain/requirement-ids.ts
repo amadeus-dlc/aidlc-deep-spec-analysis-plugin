@@ -38,8 +38,3 @@ export class RequirementIds {
     return [...this.#values];
   }
 }
-
-// 旧 API — 全消費側が RequirementIds へ移行済みのため、抽出はクラスが唯一の口。
-export function requirementIds(text: string): RequirementIds {
-  return RequirementIds.extractFrom(text);
-}

@@ -3,7 +3,7 @@
 // equals は値による恒等比較。domain 90% 床のための分岐網羅。
 
 import { describe, expect, test } from "bun:test";
-import { ArtifactPath, ContentHash, IrVersion, sha256 } from "../tools/kernel/domain/index.ts";
+import { ArtifactPath, ContentHash, IrVersion } from "../tools/kernel/domain/index.ts";
 import { DesignModelId, DesignUnitId, RefinementMaterialsId } from "../tools/design/domain/index.ts";
 import { RefinementMapId } from "../tools/refinement/domain/index.ts";
 import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
@@ -94,9 +94,9 @@ describe("ContentHash", () => {
 
   test("ofText matches the known digest of the empty string, and equals compares by value", () => {
     expect(ContentHash.ofText("").value()).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
-    expect(sha256("").equals(ContentHash.ofText(""))).toBe(true);
-    expect(ContentHash.ofBytes(new Uint8Array([])).equals(sha256(""))).toBe(true);
-    expect(sha256("a").equals(sha256("b"))).toBe(false);
+    expect(ContentHash.ofText("").equals(ContentHash.ofText(""))).toBe(true);
+    expect(ContentHash.ofBytes(new Uint8Array([])).equals(ContentHash.ofText(""))).toBe(true);
+    expect(ContentHash.ofText("a").equals(ContentHash.ofText("b"))).toBe(false);
   });
 
   test("reconstitute is the verbatim rehydration door for frozen documents", () => {

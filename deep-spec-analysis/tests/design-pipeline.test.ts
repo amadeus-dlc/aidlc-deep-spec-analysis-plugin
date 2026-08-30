@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
 import type { Json } from "../tools/kernel/adapter/index.ts";
-import { ContentHash, IrVersion, ArtifactPath, sha256 } from "../tools/kernel/domain/index.ts";
+import { ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -550,7 +550,7 @@ describe("report ordering, cross-check, and degradations", () => {
     const unread = designIrUnreadableReport(DesignReportId.of(ap("/v"), "smt"), "exhaustive", "design IR carries no units[]");
     expect(unread.unavailableReason()).toBe("design IR unreadable: design IR carries no units[] — see the deep-spec-design-ir-valid sensor for details");
     expect(unread.irVersion().value()).toBe("0.0.0");
-    expect(unread.irHash().equals(sha256(""))).toBe(true);
+    expect(unread.irHash().equals(ContentHash.ofText(""))).toBe(true);
 
     const mismatch = designVersionMismatchReport(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation");
     expect(mismatch.skipped().map((s) => `${s.unit}:${s.target}:${s.reason}`)).toEqual([

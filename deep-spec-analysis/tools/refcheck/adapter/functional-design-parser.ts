@@ -2,7 +2,7 @@
 // ここに封じ、型付き outcome へ解く。抽出ロジックは旧センサーの逐語移動
 //（AttrDecl の生 Json フィールドのみ、検査が区別する意味論へ無損失に写像）。
 
-import { requirementIds } from "../../kernel/domain/index.ts";
+import { RequirementIds, } from "../../kernel/domain/index.ts";
 import { extractFences } from "../../kernel/adapter/markdown-fences.ts";
 import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
 import { parseYamlSubset } from "../../kernel/adapter/yaml-subset.ts";
@@ -208,7 +208,7 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
       element: ElementPath.reconstitute(element),
       category: category === null ? null : RuleCategory.reconstitute(category),
       appliesTo: appliesTo === null ? null : AppliesTo.reconstitute(appliesTo),
-      sourceIds: SourceIds.of([...requirementIds(sourceText)].map((v) => SourceId.reconstitute(v))),
+      sourceIds: SourceIds.of([...RequirementIds.extractFrom(sourceText)].map((v) => SourceId.reconstitute(v))),
       missing,
     });
   });

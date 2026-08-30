@@ -8,7 +8,7 @@
 
 import { basename, dirname, join } from "node:path";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
-import { requirementIds, sha256 } from "../../kernel/domain/index.ts";
+import { ContentHash, RequirementIds, } from "../../kernel/domain/index.ts";
 import {
   findRecordRoot,
   listSubdirectories,
@@ -45,7 +45,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const isFunctional = basename(fdDir) === "functional-design";
     const recordRoot = findRecordRoot(isFunctional ? fdDir : dirname(artifactPath));
     const rel = (p: string): string => relArtifact(recordRoot, p);
-    const input = (p: string, text: string): InputAnchor => ({ artifact: rel(p), sha256: sha256(text) });
+    const input = (p: string, text: string): InputAnchor => ({ artifact: rel(p), sha256: ContentHash.ofText(text) });
 
     const seed: DesignRecordSeed = {
       id,
@@ -68,7 +68,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     return {
       artifactName: relArtifact(recordRoot, depPath),
       document: {
-        input: { artifact: relArtifact(recordRoot, depPath), sha256: sha256(depMd) },
+        input: { artifact: relArtifact(recordRoot, depPath), sha256: ContentHash.ofText(depMd) },
         outcome: parseDeclaredUnits(depMd),
       },
     };
@@ -79,7 +79,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const load = <T>(path: string, parse: (text: string) => T): { input: InputAnchor; outcome: T } | null => {
       const text = readIfExists(path);
       if (text === null) return null;
-      return { input: { artifact: rel(path), sha256: sha256(text) }, outcome: parse(text) };
+      return { input: { artifact: rel(path), sha256: ContentHash.ofText(text) }, outcome: parse(text) };
     };
 
     const unitDir = dirname(fdDir);
@@ -95,7 +95,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     // requirements.md は rules が使えるときだけ読む（凍結された取得条件）。
     const reqPath = recordRoot === null ? null : join(recordRoot, "inception", "requirements-analysis", "requirements.md");
     const requirements = rules !== null && rules.outcome.kind === "extracted" && reqPath !== null
-      ? load(reqPath, (t) => requirementIds(t))
+      ? load(reqPath, (t) => RequirementIds.extractFrom(t))
       : null;
 
     const componentsPath = recordRoot === null ? null : join(recordRoot, "inception", "domain-design", "components.md");
@@ -126,7 +126,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
       siblingUnits: buildSiblingUnitEntities(siblingTexts),
       siblingInputs: siblingTexts
         .filter((s) => s.path !== entitiesPath)
-        .map((s) => ({ artifact: rel(s.path), sha256: sha256(s.text) })),
+        .map((s) => ({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) })),
     };
   }
 }

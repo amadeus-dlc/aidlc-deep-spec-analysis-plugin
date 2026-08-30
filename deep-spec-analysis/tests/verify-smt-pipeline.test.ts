@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
-import { ArtifactPath, ContentHash, IrVersion, expressionUsesPrime, sha256 } from "../tools/kernel/domain/index.ts";
+import { ArtifactPath, ContentHash, IrVersion, expressionUsesPrime } from "../tools/kernel/domain/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -171,7 +171,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     expect(written.ok && written.value.unavailableReason())
       .toBe("IR unreadable: IR lacks a semver irVersion — see the deep-spec-ir-valid sensor for details");
     expect(written.ok && written.value.irVersion().value()).toBe("0.0.0");
-    expect(written.ok && written.value.irHash().equals(sha256(""))).toBe(true);
+    expect(written.ok && written.value.irHash().equals(ContentHash.ofText(""))).toBe(true);
     expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(false);
   });
 
@@ -460,7 +460,7 @@ describe("degradation reports and ordering", () => {
     const r = irUnreadableReport(VerificationReportId.of(ap("/v"), "smt"), "exhaustive", "IR is not a JSON object");
     expect(r.unavailableReason()).toBe("IR unreadable: IR is not a JSON object — see the deep-spec-ir-valid sensor for details");
     expect(r.irVersion().value()).toBe("0.0.0");
-    expect(r.irHash().equals(sha256(""))).toBe(true);
+    expect(r.irHash().equals(ContentHash.ofText(""))).toBe(true);
     expect(r.isUnavailable()).toBe(true);
     expect(r.findingsCount()).toBe(0);
     expect(r.skippedCount()).toBe(0);

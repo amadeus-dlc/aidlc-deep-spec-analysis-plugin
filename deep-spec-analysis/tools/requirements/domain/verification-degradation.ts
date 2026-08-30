@@ -3,8 +3,8 @@
 // ごとに凍結（smt は "exhaustive"、quint はこの 2 経路では "simulation"）で、
 // 呼び手のユースケースが自分の定数を渡す。
 
-import { type ContentHash, IrVersion } from "../../kernel/domain/index.ts";
-import { sha256 } from "../../kernel/domain/index.ts";
+import { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
+import { } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import { VerificationReport } from "./verification-report.ts";
@@ -18,7 +18,7 @@ export function irUnreadableReport(id: VerificationReportId, method: string, cau
   return VerificationReport.compose({
     id,
     irVersion: IrVersion.reconstitute("0.0.0"),
-    irHash: sha256(""),
+    irHash: ContentHash.ofText(""),
     method,
     findings: VerificationFindings.of([]),
     skipped: VerificationSkips.of([]),

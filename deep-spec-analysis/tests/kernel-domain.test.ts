@@ -4,6 +4,7 @@
 // ir-valid の errors[]・契約2 の unavailable.reason として golden バイトに
 // 現れるため、文言は「含む」ではなく完全一致で固定する。
 
+import { ContentHash, RequirementIds } from "../tools/kernel/domain/index.ts";
 import { describe, expect, test } from "bun:test";
 import {
   canonicalStringify,
@@ -18,9 +19,7 @@ import { type Result, err, ok, unreachable } from "../tools/kernel/infrastructur
 import {
   idCompare,
   normalizeName,
-  requirementIds,
   safeTarget,
-  sha256,
   sortedUnique,
 } from "../tools/kernel/domain/index.ts";
 
@@ -72,7 +71,7 @@ describe("canonical-json + content-hash", () => {
   });
 
   test("sha256 matches the known digest of the empty string", () => {
-    expect(sha256("").value()).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    expect(ContentHash.ofText("").value()).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
   });
 });
 
@@ -256,7 +255,7 @@ describe("target-id / requirement-ids / name-normalize", () => {
   });
 
   test("requirementIds finds FR/NFR ids with optional dash and dotted segments", () => {
-    expect([...requirementIds("FR-1 covers NFR2.1 but FRX-9 does not; FR-1 repeats")].sort()).toEqual(["FR-1", "NFR2.1"]);
+    expect([...RequirementIds.extractFrom("FR-1 covers NFR2.1 but FRX-9 does not; FR-1 repeats")].sort()).toEqual(["FR-1", "NFR2.1"]);
   });
 
   test("normalizeName casefolds and strips non-alphanumerics", () => {

@@ -1,7 +1,7 @@
 // ContentHash — sha256 hex ダイジェストの語彙（64 桁小文字 16 進）。
 // parse が strict な構築口（境界の検証）、reconstitute は凍結文書からの
 // 逐語再水和専用——集約の compose/reconstitute と同じ二面性で、寛容読みの
-// 責務はアダプタに残る。sha256() は常に正な値を生むため直接構築する
+// 責務はアダプタに残る。ContentHash.ofText() は常に正な値を生むため直接構築する
 // （型ごとの new は 1 箇所：private constructor のみ）。
 
 import { createHash } from "node:crypto";
@@ -42,10 +42,4 @@ export class ContentHash {
   value(): string {
     return this.#value;
   }
-}
-
-// 旧 sha256() — ContentHash へ移行済み。契約1/2/3/4 の全ダイジェスト生成が
-// ofText を使うため、この自由関数は ContentHash を返す形で残す。
-export function sha256(text: string): ContentHash {
-  return ContentHash.ofText(text);
 }
