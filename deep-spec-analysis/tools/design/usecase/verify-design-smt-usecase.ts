@@ -22,12 +22,7 @@ import {
   DesignReportId,
   type DesignModel,
   SUPPORTED_DESIGN_IR_MAJOR,
-  designBackendUnavailableReport,
-  designCrossCheckReport,
-  designIrUnreadableReport,
-  designVersionMismatchReport,
-  lowerUnit,
-  remapUnitDocument,
+  LoweredUnit,
   type DesignModelId,
   RefinementMaterialsId,
 } from "../domain/index.ts";
@@ -84,7 +79,7 @@ export class VerifyDesignSmtUseCase {
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#persist(designIrUnreadableReport(id, "exhaustive", acquired.error.cause));
+      const saved = this.#persist(DesignReport.irUnreadable(id, "exhaustive", acquired.error.cause));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
     }
@@ -92,7 +87,7 @@ export class VerifyDesignSmtUseCase {
 
     if (!model.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR)) {
       // 旧実装は conform 前の skip 数を verdict 行に載せていた——凍結挙動。
-      const mismatch = designVersionMismatchReport(id, model, irHash, "exhaustive");
+      const mismatch = DesignReport.versionMismatch(id, model, irHash, "exhaustive");
       const saved = this.#persist(mismatch);
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
@@ -114,7 +109,7 @@ export class VerifyDesignSmtUseCase {
         }
         continue;
       }
-      const lowered = lowerUnit(u, { synthetics: true });
+      const lowered = LoweredUnit.of(u, { synthetics: true });
       // 子に run budget を超えて生き延びさせない：ディスパッチャがセンサーを
       // 書込途中で殺し、findings 文書が一切残らなくなる。
       const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
@@ -128,7 +123,7 @@ export class VerifyDesignSmtUseCase {
       if (run.exit === 127) {
         const reason =
           (run.doc?.kind === "unavailable" ? run.doc.reason : null) ?? "z3 could not be executed by the lowered v1 backend";
-        const saved = this.#persist(designBackendUnavailableReport(id, model, irHash, "exhaustive", reason, "z3 could not be executed"));
+        const saved = this.#persist(DesignReport.backendUnavailable(id, model, irHash, "exhaustive", reason, "z3 could not be executed"));
         if (!saved.ok) return { kind: "save-failed", error: saved.error };
         const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
         if (!cross.ok) return { kind: "save-failed", error: cross.error };
@@ -140,7 +135,7 @@ export class VerifyDesignSmtUseCase {
         }
         continue;
       }
-      const remapped = remapUnitDocument(u, lowered, run.doc);
+      const remapped = lowered.remapVerdicts(u, run.doc);
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
           skipped.push({ target: t, reason: "unavailable", unit: u.name(), detail: remapped.unavailable });
@@ -245,6 +240,6 @@ export class VerifyDesignSmtUseCase {
     const siblings = this.#designReportRepository.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);
-    return this.#persist(designCrossCheckReport(DesignReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash, siblings.value));
+    return this.#persist(siblings.value.crossChecked(DesignReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
   }
 }

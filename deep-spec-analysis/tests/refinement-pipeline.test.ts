@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Json } from "../tools/kernel/adapter/index.ts";
 import { SystemClock } from "../tools/kernel/adapter/index.ts";
-import { ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { FrRefs, ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
 import { FormalModelId } from "../tools/requirements/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
@@ -36,7 +36,19 @@ import {
   type DesignMachine,
   type DesignObligation,
   type DesignScenario,
-  type DesignValue, type DesignUnit as DesignUnitType, DesignModelId, DesignSkips, DesignUnit, DesignUnitId, RefinementMaterialsId } from "../tools/design/domain/index.ts";
+  type DesignIgnore,
+  type DesignTransition,
+  type DesignValue, type DesignUnit as DesignUnitType,
+  BrRefs,
+  DesignIgnores,
+  DesignModelId,
+  DesignSkips,
+  DesignTransitions,
+  DesignUnit,
+  DesignUnitId,
+  InitialStates,
+  RefinementMaterialsId,
+} from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -181,22 +193,42 @@ describe("SMT script characterization (the PR8 safety net)", () => {
 
 // --- ドメイン検査の分岐固定（純関数の直接駆動） ------------------------------
 
+// テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
+type RawDesignObligation = Omit<DesignObligation, "brRefs" | "frRefs"> & { brRefs: string[]; frRefs: string[] };
+type RawDesignTransition = Omit<DesignTransition, "brRefs"> & { brRefs: string[] };
+type RawDesignMachine = Omit<DesignMachine, "initial" | "transitions" | "ignores"> & {
+  initial: string[];
+  transitions: RawDesignTransition[];
+  ignores: DesignIgnore[];
+};
+type RawDesignScenario = Omit<DesignScenario, "brRefs" | "frRefs"> & { brRefs: string[]; frRefs: string[] };
 function unit(seed: {
   unit?: string;
   rawEntities?: DesignValue;
   attrPaths?: Set<string>;
-  obligations?: DesignObligation[];
-  machines?: DesignMachine[];
-  scenarios?: DesignScenario[];
+  obligations?: RawDesignObligation[];
+  machines?: RawDesignMachine[];
+  scenarios?: RawDesignScenario[];
   background?: DesignBackgroundAssumption[];
 }): DesignUnitType {
   return DesignUnit.reconstitute({
     unit: seed.unit ?? "u1",
     rawEntities: seed.rawEntities ?? [],
     attrPaths: AttrPaths.of([...(seed.attrPaths ?? new Set<string>())]),
-    obligations: DesignObligations.of(seed.obligations ?? []),
-    machines: DesignMachines.of(seed.machines ?? []),
-    scenarios: DesignScenarios.of(seed.scenarios ?? []),
+    obligations: DesignObligations.of(
+      (seed.obligations ?? []).map((o) => ({ ...o, brRefs: BrRefs.of(o.brRefs), frRefs: FrRefs.of(o.frRefs) })),
+    ),
+    machines: DesignMachines.of(
+      (seed.machines ?? []).map((m) => ({
+        ...m,
+        initial: InitialStates.of(m.initial),
+        transitions: DesignTransitions.of(m.transitions.map((t) => ({ ...t, brRefs: BrRefs.of(t.brRefs) }))),
+        ignores: DesignIgnores.of(m.ignores),
+      })),
+    ),
+    scenarios: DesignScenarios.of(
+      (seed.scenarios ?? []).map((s) => ({ ...s, brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
+    ),
     background: DesignBackgroundAssumptions.of(seed.background ?? []),
   });
 }
@@ -543,14 +575,14 @@ describe("refinement verdict interpretation", () => {
         ["rs2:OB-2:TR-1", { status: "sat", decodedModel: { "D.s": "a" }, decodedPostModel: { "D.s": "b" } }],
       ],
     );
-    expect(out.findings.toArray().map((f) => `${f.kind}:${f.targets.join(",")}`)).toEqual([
+    expect(out.findings.toArray().map((f) => `${f.kind}:${f.targets.joined(",")}`)).toEqual([
       "refinement-violation:OB-1",
       "refinement-violation:SC-1",
       "refinement-violation:SC-2",
       "completeness-gap:OB-2,TR-1,TR-2",
       "refinement-violation:OB-2,TR-1",
     ]);
-    expect(out.findings.toArray()[0]?.frRefs).toEqual(["FR-1", "FR-2"]);
+    expect(out.findings.toArray()[0]?.frRefs.toArray()).toEqual(["FR-1", "FR-2"]);
     expect(out.findings.toArray()[1]?.witness).toEqual({ core: ["inv_a", "inv_b"] });
     expect(out.findings.toArray()[4]?.witness).toEqual({ trace: [{ "D.s": "a" }, { "D.s": "b" }] });
     expect(out.findings.toArray()[0]?.detail).toContain("The design admits what the verified requirements forbid.");

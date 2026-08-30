@@ -1,12 +1,13 @@
 // 設計シナリオ（受け入れ／拒否、BR/FR 両参照つき）。逐語移動。
 
-import type { Expression } from "../../kernel/domain/index.ts";
+import type { Expression, FrRefs } from "../../kernel/domain/index.ts";
+import type { BrRefs } from "./design-ir-decl.ts";
 
 export interface DesignScenario {
   id: string;
   kind: "accept" | "reject";
-  brRefs: string[];
-  frRefs: string[];
+  brRefs: BrRefs;
+  frRefs: FrRefs;
   bindings: { [path: string]: boolean | number | string };
   event?: { trigger: string };
   expect?: Expression;

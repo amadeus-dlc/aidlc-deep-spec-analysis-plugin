@@ -6,7 +6,7 @@
 // detail 文言は golden 凍結）は facts 自身の振る舞い（OOUI 裁定——旧
 // interpretRefinementVerdicts の逐語移植）。
 
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import { DesignFindings, DesignSkips } from "../../design/domain/index.ts";
 import type { DesignFinding, DesignSkipped, DesignValue } from "../../design/domain/index.ts";
 import type { UnitRefinementPlan } from "./refinement-plan.ts";
@@ -95,8 +95,8 @@ export class RefinementSolverFacts {
         if (r.status === "sat") {
           findings.push({
             kind: "refinement-violation",
-            frRefs: frOf(p.reqId),
-            targets: [p.reqId],
+            frRefs: FrRefs.of(frOf(p.reqId)),
+            targets: TargetIds.of([p.reqId]),
             witness: { model: r.decodedModel ?? {} },
             unit: unitName,
             detail: `A design-legal state of unit ${unitName} violates requirements obligation ${p.reqId} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`,
@@ -107,8 +107,8 @@ export class RefinementSolverFacts {
         if (sc?.kind === "accept" && r.status === "unsat") {
           findings.push({
             kind: "refinement-violation",
-            frRefs: frOf(p.reqId),
-            targets: [p.reqId],
+            frRefs: FrRefs.of(frOf(p.reqId)),
+            targets: TargetIds.of([p.reqId]),
             witness: { core: [...(r.core ?? [])].sort() },
             unit: unitName,
             detail: `Accept scenario ${p.reqId} has no design-legal counterpart in unit ${unitName} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
@@ -117,8 +117,8 @@ export class RefinementSolverFacts {
         if (sc?.kind === "reject" && r.status === "sat") {
           findings.push({
             kind: "refinement-violation",
-            frRefs: frOf(p.reqId),
-            targets: [p.reqId],
+            frRefs: FrRefs.of(frOf(p.reqId)),
+            targets: TargetIds.of([p.reqId]),
             witness: { model: r.decodedModel ?? {} },
             unit: unitName,
             detail: `Reject scenario ${p.reqId} is still admitted by unit ${unitName} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`,
@@ -128,8 +128,8 @@ export class RefinementSolverFacts {
         if (r.status === "sat") {
           findings.push({
             kind: "completeness-gap",
-            frRefs: frOf(p.reqId),
-            targets: sortedUnique([p.reqId, ...plan.mappedTransitionsOf(p.reqId)], idCompare),
+            frRefs: FrRefs.of(frOf(p.reqId)),
+            targets: TargetIds.of(sortedUnique([p.reqId, ...plan.mappedTransitionsOf(p.reqId)], idCompare)),
             witness: { model: r.decodedModel ?? {} },
             unit: unitName,
             detail: `The requirements event ${p.reqId} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
@@ -139,8 +139,8 @@ export class RefinementSolverFacts {
         if (r.status === "sat") {
           findings.push({
             kind: "refinement-violation",
-            frRefs: frOf(p.reqId),
-            targets: sortedUnique([p.reqId, p.designId ?? ""], idCompare).filter((t) => t !== ""),
+            frRefs: FrRefs.of(frOf(p.reqId)),
+            targets: TargetIds.of(sortedUnique([p.reqId, p.designId ?? ""], idCompare).filter((t) => t !== "")),
             witness: { trace: [r.decodedModel ?? {}, r.decodedPostModel ?? {}] },
             unit: unitName,
             detail: `Design step ${p.designId} of unit ${unitName}, taken where requirements event ${p.reqId} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,

@@ -38,6 +38,10 @@ export class TargetIds {
     return this.#values.length;
   }
 
+  includes(value: string): boolean {
+    return this.#values.includes(value);
+  }
+
   // finding の targets 面の凍結正準形（一意化 + id 順）。
   sortedUniqueCanonically(): TargetIds {
     return new TargetIds(sortedUnique([...this.#values], idCompare));

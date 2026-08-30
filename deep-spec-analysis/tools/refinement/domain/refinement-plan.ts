@@ -5,7 +5,7 @@
 // からの逐語移植——自由関数は UnitRefinementPlan.of（構築）と plan 自身の
 // 照会・skip 導出メソッドになった（OOUI 裁定）。
 
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignFindings, DesignSkips } from "../../design/domain/index.ts";
 import type { DesignFinding, DesignSkipped, DesignUnit } from "../../design/domain/index.ts";
@@ -55,8 +55,8 @@ export class UnitRefinementPlan {
     const gap = (targets: string[], detail: string, frRefs: string[] = []): void => {
       gaps.push({
         kind: "mapping-gap",
-        frRefs: sortedUnique(frRefs, idCompare),
-        targets: sortedUnique(targets, idCompare),
+        frRefs: FrRefs.of(sortedUnique(frRefs, idCompare)),
+        targets: TargetIds.of(sortedUnique(targets, idCompare)),
         witness: { refs: [{ artifact: mapArtifact, element: `units[${unitMap.unit.asString()}]` }] },
         unit: u.name(),
         detail,
