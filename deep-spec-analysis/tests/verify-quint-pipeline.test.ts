@@ -36,6 +36,8 @@ import {
   type Obligation,
   type AttributeDeclaration,
   AttributeDeclarations,
+  AttributeValues,
+  FrRefs,
   Obligations,
   Scenarios,
   BackgroundAssumptions,
@@ -65,19 +67,25 @@ const fixtures = join(pluginRoot, "tests", "fixtures", "conformance");
 const schemaPath = join(pluginRoot, "tools", "data", "deep-spec-findings-schema.json");
 const schema = readContractSchema(schemaPath);
 
+// テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
+type RawAttributeDeclaration = Omit<AttributeDeclaration, "values"> & { values?: string[] };
+type RawObligation = Omit<Obligation, "frRefs"> & { frRefs: string[] };
+type RawScenario = Omit<Scenario, "frRefs"> & { frRefs: string[] };
 function model(seed: {
   irVersion?: IrVersion;
-  attributes?: AttributeDeclaration[];
-  obligations?: Obligation[];
-  scenarios?: Scenario[];
+  attributes?: RawAttributeDeclaration[];
+  obligations?: RawObligation[];
+  scenarios?: RawScenario[];
   background?: BackgroundAssumption[];
 }): RequirementsModel {
   return RequirementsModel.reconstitute({
     id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
     irVersion: seed.irVersion ?? IrVersion.reconstitute("1.0.0"),
-    attributes: AttributeDeclarations.of(seed.attributes ?? []),
-    obligations: Obligations.of(seed.obligations ?? []),
-    scenarios: Scenarios.of(seed.scenarios ?? []),
+    attributes: AttributeDeclarations.of(
+      (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
+    ),
+    obligations: Obligations.of((seed.obligations ?? []).map((o) => ({ ...o, frRefs: FrRefs.of(o.frRefs) }))),
+    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => ({ ...s, frRefs: FrRefs.of(s.frRefs) }))),
     background: BackgroundAssumptions.of(seed.background ?? []),
   });
 }

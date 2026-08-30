@@ -136,7 +136,7 @@ export function decodeSolverModel(
     } else {
       const m = raw.match(/^\(-\s*(\d+)\)$/);
       const n = m ? -Number.parseInt(m[1] ?? "0", 10) : Number.parseInt(raw, 10);
-      if (attr.kind === "enum" && attr.values) out[attr.path] = attr.values[n] ?? n;
+      if (attr.kind === "enum" && attr.values) out[attr.path] = attr.values.valueAt(n) ?? n;
       else out[attr.path] = n;
     }
   }
@@ -162,7 +162,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     const bounds = (primed: boolean): string | null => {
       const v = smtVar(attr.path, primed);
       if (attr.kind === "enum" && attr.values) {
-        return `(and (>= ${v} 0) (<= ${v} ${attr.values.length - 1}))`;
+        return `(and (>= ${v} 0) (<= ${v} ${attr.values.count() - 1}))`;
       }
       if (attr.kind === "int" && (attr.min !== undefined || attr.max !== undefined)) {
         const parts: string[] = [];

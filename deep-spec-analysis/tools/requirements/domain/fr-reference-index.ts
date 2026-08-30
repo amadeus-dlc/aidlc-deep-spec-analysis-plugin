@@ -5,10 +5,11 @@
 // 旧 ir-valid の collectFrRefs ＋ 照合ループからの逐語移植。
 
 import type { RequirementIds } from "../../kernel/domain/index.ts";
+import type { FrRefs } from "./fr-refs.ts";
 
 export interface FrRefClaim {
   readonly owner: string;
-  readonly frRefs: readonly string[];
+  readonly frRefs: FrRefs;
 }
 
 export class FrReferenceIndex {

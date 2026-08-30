@@ -332,7 +332,7 @@ export class VerificationReports {
             verdicts[b.backend] = vb ? "violated" : "clean";
             findings.push({
               kind: "cross-check-disagreement",
-              frRefs: sortedUnique(scenarioById.get(sc.id)?.frRefs ?? [], idCompare),
+              frRefs: sortedUnique([...(scenarioById.get(sc.id)?.frRefs.toArray() ?? [])], idCompare),
               targets: [sc.id],
               witness: { verdicts },
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,

@@ -48,6 +48,7 @@ import {
 import {
   FormalModelId,
   FrReferenceIndex,
+  FrRefs,
   type IrBackgroundDecl,
   type IrObligationDecl,
   type IrScenarioDecl,
@@ -301,9 +302,9 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
 describe("FrReferenceIndex", () => {
   test("collects owners per frRef and reports the missing ones sorted", () => {
     const index = FrReferenceIndex.of([
-      { owner: "OB-2", frRefs: ["FR-1", "FR-9"] },
-      { owner: "OB-1", frRefs: ["FR-9"] },
-      { owner: "scenarios[3]", frRefs: [] },
+      { owner: "OB-2", frRefs: FrRefs.of(["FR-1", "FR-9"]) },
+      { owner: "OB-1", frRefs: FrRefs.of(["FR-9"]) },
+      { owner: "scenarios[3]", frRefs: FrRefs.of([]) },
     ]);
     expect(index.referencedIds().sort()).toEqual(["FR-1", "FR-9"]);
     expect(index.missingErrors(RequirementIds.of(["FR-1"]))).toEqual([

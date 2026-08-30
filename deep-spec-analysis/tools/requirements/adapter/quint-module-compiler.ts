@@ -139,7 +139,7 @@ function decomposeEffect(effect: Expression): Map<string, Expression> {
 
 function domainOf(attr: AttributeDeclaration): string {
   if (attr.kind === "bool") return "Set(true, false)";
-  if (attr.kind === "enum") return `Set(${(attr.values ?? []).map((v) => JSON.stringify(v)).join(", ")})`;
+  if (attr.kind === "enum") return `Set(${(attr.values?.toArray() ?? []).map((v) => JSON.stringify(v)).join(", ")})`;
   if (attr.min === undefined || attr.max === undefined) {
     throw new CompileError(`int attribute "${attr.path}" lacks min/max — bounded domains are required by the quint backend`);
   }
@@ -202,10 +202,10 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   const invariantComponents: { id: string; expr: Expression; frRefs: string[] }[] = [];
   for (const ob of model.obligations()) {
     if ((ob.nature === "invariant" || ob.nature === "numeric") && ob.assert) {
-      invariantComponents.push({ id: ob.id, expr: ob.assert, frRefs: ob.frRefs });
+      invariantComponents.push({ id: ob.id, expr: ob.assert, frRefs: [...ob.frRefs.toArray()] });
     }
     if (ob.nature === "state-temporal" && ob.temporal?.pattern === "always" && ob.temporal.assert) {
-      invariantComponents.push({ id: ob.id, expr: ob.temporal.assert, frRefs: ob.frRefs });
+      invariantComponents.push({ id: ob.id, expr: ob.temporal.assert, frRefs: [...ob.frRefs.toArray()] });
     }
   }
   const bgComponents = model.background().toArray().map((b) => ({ id: b.id, expr: b.assert, frRefs: [] as string[] }));

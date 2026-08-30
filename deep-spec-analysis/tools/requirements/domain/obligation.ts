@@ -1,11 +1,12 @@
 // 義務（EARS nature 付き）。逐語移動。
 
 import type { Expression } from "../../kernel/domain/expression.ts";
+import type { FrRefs } from "./fr-refs.ts";
 
 export interface Obligation {
   id: string;
   nature: string;
-  frRefs: string[];
+  frRefs: FrRefs;
   ears?: string;
   assert?: Expression;
   trigger?: string;
