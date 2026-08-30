@@ -6,7 +6,7 @@
 // ソートは VerificationReport.compose の不変条件）は facts 自身の振る舞い
 // （OOUI 裁定）。
 
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { SmtQueryVerdicts } from "./solver-verdict.ts";
 import type { VerificationFinding, VerificationSkipped } from "./verification-finding.ts";
@@ -118,8 +118,8 @@ export class SmtPlanFacts {
       conflictKeys.add(key);
       findings.push({
         kind: "conflict",
-        frRefs: model.frRefsOf(effective),
-        targets: effective,
+        frRefs: FrRefs.of(model.frRefsOf(effective)),
+        targets: TargetIds.of(effective),
         witness: { core: [...core].sort() },
         detail,
       });
@@ -186,8 +186,8 @@ export class SmtPlanFacts {
       if (r.status === "sat") {
         findings.push({
           kind: "completeness-gap",
-          frRefs: model.frRefsOf(eventIds),
-          targets: [...eventIds],
+          frRefs: FrRefs.of(model.frRefsOf(eventIds)),
+          targets: TargetIds.of([...eventIds]),
           witness: { model: r.decodedModel ?? {} },
           detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
         });
@@ -210,8 +210,8 @@ export class SmtPlanFacts {
         const targets = sortedUnique([sc.id, ...coreToTargets(r.core ?? [])], idCompare);
         findings.push({
           kind: "scenario-violation",
-          frRefs: model.frRefsOf(targets),
-          targets,
+          frRefs: FrRefs.of(model.frRefsOf(targets)),
+          targets: TargetIds.of(targets),
           witness: { core: [...(r.core ?? [])].sort() },
           detail: `Accept scenario ${sc.id} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
         });
@@ -219,8 +219,8 @@ export class SmtPlanFacts {
       if (sc.kind === "reject" && r.status === "sat") {
         findings.push({
           kind: "scenario-violation",
-          frRefs: model.frRefsOf([sc.id]),
-          targets: [sc.id],
+          frRefs: FrRefs.of(model.frRefsOf([sc.id])),
+          targets: TargetIds.of([sc.id]),
           witness: { model: r.decodedModel ?? {} },
           detail: `Reject scenario ${sc.id} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
         });

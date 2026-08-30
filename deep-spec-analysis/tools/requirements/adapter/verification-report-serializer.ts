@@ -5,7 +5,7 @@
 // 責務。conformToFindingsContract が「書き手は不適合ファイルを決して出さない」
 // の実装（refcheck と同じ規律・同じ凍結文言）。
 
-import { ContentHash, IrVersion, type ArtifactPath } from "../../kernel/domain/index.ts";
+import { ContentHash, FrRefs, IrVersion, TargetIds, type ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
@@ -15,8 +15,8 @@ import {
   VerificationFindings,
   VerificationSkips,
   type CrossCheckedEntry,
-  type VerificationFinding,
   type VerificationSkipped,
+  type VerificationWitness,
   VerificationReport,
   VerificationReportId,
 } from "../domain/index.ts";
@@ -31,8 +31,25 @@ function orderedDocument(report: VerificationReport): { [k: string]: Json } {
   const reason = report.unavailableReason();
   if (reason !== null) ordered.unavailable = { reason };
   // コレクションは境界（描画）で toArray() へ落とす——中身は契約2 の素の JSON 形。
-  ordered.findings = report.findings().toArray() as unknown as Json;
-  ordered.skipped = report.skipped().toArray() as unknown as Json;
+  // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
+  // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
+  // frRefs, targets, witness, detail)、skip は (target, reason, detail?)。
+  // witness ユニオンの内側は素通し値（材料）で逐語描画。
+  ordered.findings = report.findings().toArray().map((f) => {
+    const out: { [k: string]: Json } = {
+      kind: f.kind,
+      frRefs: f.frRefs.toArray() as unknown as Json,
+      targets: f.targets.toArray() as unknown as Json,
+      witness: f.witness as unknown as Json,
+      detail: f.detail,
+    };
+    return out as Json;
+  });
+  ordered.skipped = report.skipped().toArray().map((sk) => {
+    const out: { [k: string]: Json } = { target: sk.target, reason: sk.reason };
+    if (sk.detail !== undefined) out.detail = sk.detail;
+    return out as Json;
+  });
   const crossChecked = report.crossChecked();
   if (crossChecked !== null) ordered.crossChecked = crossChecked.toArray() as unknown as Json;
   return ordered;
@@ -97,8 +114,28 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
     irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
     irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
     method: typeof raw.method === "string" ? raw.method : "",
-    findings: VerificationFindings.of((Array.isArray(raw.findings) ? raw.findings : []) as unknown as VerificationFinding[]),
-    skipped: VerificationSkips.of(skipped as unknown as VerificationSkipped[]),
+    findings: VerificationFindings.of(
+      (Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []).map((e) => {
+        const entry = e as { [k: string]: Json };
+        return {
+          kind: typeof entry.kind === "string" ? entry.kind : "",
+          frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
+          targets: TargetIds.of(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
+          witness: (entry.witness ?? { core: [] }) as unknown as VerificationWitness,
+          detail: typeof entry.detail === "string" ? entry.detail : "",
+        };
+      }),
+    ),
+    skipped: VerificationSkips.of(
+      skipped.map((entry) => {
+        const sk: VerificationSkipped = {
+          target: typeof entry.target === "string" ? entry.target : "",
+          reason: typeof entry.reason === "string" ? entry.reason : "",
+        };
+        if (typeof entry.detail === "string") sk.detail = entry.detail;
+        return sk;
+      }),
+    ),
     crossChecked: Array.isArray(raw.crossChecked)
       ? CrossCheckedEntries.of(raw.crossChecked as unknown as CrossCheckedEntry[])
       : null,

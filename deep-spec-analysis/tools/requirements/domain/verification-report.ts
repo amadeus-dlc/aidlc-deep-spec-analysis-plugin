@@ -4,7 +4,7 @@
 // degraded は契約適合の降格形（findings/skipped/crossChecked を空にして
 // unavailable 理由だけ残す——旧 writeFindingsDoc の自己検証降格と同じ姿）。
 
-import { ContentHash, IrVersion, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { ContentHash, FrRefs, IrVersion, TargetIds, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import type { VerificationFinding } from "./verification-finding.ts";
@@ -332,8 +332,8 @@ export class VerificationReports {
             verdicts[b.backend] = vb ? "violated" : "clean";
             findings.push({
               kind: "cross-check-disagreement",
-              frRefs: sortedUnique([...(scenarioById.get(sc.id)?.frRefs.toArray() ?? [])], idCompare),
-              targets: [sc.id],
+              frRefs: FrRefs.of(sortedUnique([...(scenarioById.get(sc.id)?.frRefs.toArray() ?? [])], idCompare)),
+              targets: TargetIds.of([sc.id]),
               witness: { verdicts },
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
             });

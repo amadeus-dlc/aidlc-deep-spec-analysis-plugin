@@ -6,7 +6,7 @@
 // 正準ソートは VerificationReport.compose の不変条件、phase 2 の「既に skip
 // 済みの義務は走らせない」ガードも逐語）は facts 自身の振る舞い（OOUI 裁定）。
 
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/expression.ts";
 import { evaluateExpression } from "./expression-evaluation.ts";
 import type { QuintRuns } from "./quint-verdict.ts";
@@ -116,8 +116,8 @@ export class QuintMachineFacts {
       } else if (run.kind === "deadlock") {
         findings.push({
           kind: "completeness-gap",
-          frRefs: model.frRefsOf(this.#eventIds),
-          targets: this.#eventIds.length > 0 ? [...this.#eventIds].sort(idCompare) : machineTargets,
+          frRefs: FrRefs.of(model.frRefsOf(this.#eventIds)),
+          targets: TargetIds.of(this.#eventIds.length > 0 ? [...this.#eventIds].sort(idCompare) : machineTargets),
           witness: run.trace !== null ? { trace: run.trace.toArray() } : { model: {} },
           detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
         });
@@ -128,8 +128,8 @@ export class QuintMachineFacts {
           : sortedUnique([...violatedComponents.ids()], idCompare);
         findings.push({
           kind: "conflict",
-          frRefs: model.frRefsOf(sortedUnique([...targets, ...this.#eventIds], idCompare)),
-          targets,
+          frRefs: FrRefs.of(model.frRefsOf(sortedUnique([...targets, ...this.#eventIds], idCompare))),
+          targets: TargetIds.of(targets),
           witness: { trace: run.trace.toArray() },
           detail: `The event machine can reach a state that violates ${targets.join(", ")} (step trace attached): the event rules do not preserve the obligation.`,
         });
@@ -163,8 +163,8 @@ export class QuintMachineFacts {
       } else if (r.kind === "violation") {
         findings.push({
           kind: "conflict",
-          frRefs: model.frRefsOf([ob.id]),
-          targets: [ob.id],
+          frRefs: FrRefs.of(model.frRefsOf([ob.id])),
+          targets: TargetIds.of([ob.id]),
           witness: { trace: r.trace.toArray() },
           detail: `Temporal obligation ${ob.id} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`,
         });
@@ -204,8 +204,8 @@ export class QuintMachineFacts {
         const targets = sortedUnique([sc.id, ...violatedComponents.ids()], idCompare);
         findings.push({
           kind: "scenario-violation",
-          frRefs: model.frRefsOf(targets),
-          targets,
+          frRefs: FrRefs.of(model.frRefsOf(targets)),
+          targets: TargetIds.of(targets),
           witness: { model: state },
           detail: `Accept scenario ${sc.id} describes a state the obligations rule out — the requirements reject an example that should be accepted.`,
         });
@@ -213,8 +213,8 @@ export class QuintMachineFacts {
       if (sc.kind === "reject" && !r.violated) {
         findings.push({
           kind: "scenario-violation",
-          frRefs: model.frRefsOf([sc.id]),
-          targets: [sc.id],
+          frRefs: FrRefs.of(model.frRefsOf([sc.id])),
+          targets: TargetIds.of([sc.id]),
           witness: { model: state },
           detail: `Reject scenario ${sc.id} is accepted by every obligation — the requirements do not exclude an example that should be rejected.`,
         });
