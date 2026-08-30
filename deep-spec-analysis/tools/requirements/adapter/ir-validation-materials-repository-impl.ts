@@ -7,7 +7,7 @@
 // 挙動（参照解決の可否が変わる）を含め、そのまま保存する。
 
 import { existsSync, readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { basename, dirname } from "node:path";
 import {
   type Json,
   extractFences,
@@ -16,14 +16,15 @@ import {
   validateSchema,
 } from "../../kernel/adapter/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
-import type {
-  FrRefClaim,
-  IrAttributeView,
-  IrBackgroundView,
-  IrEntityView,
-  IrModelView,
-  IrObligationView,
-  IrScenarioView,
+import {
+  type FrRefClaim,
+  type IrAttributeView,
+  type IrBackgroundView,
+  type IrEntityView,
+  type IrModelView,
+  type IrObligationView,
+  type IrScenarioView,
+  RequirementsSourceId,
 } from "../domain/index.ts";
 import type { IrMaterialsAcquisition, IrValidationMaterialsRepository } from "../usecase/index.ts";
 
@@ -167,6 +168,9 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
         view: buildView(ir),
         frClaims: collectFrClaims(ir),
         declaredDigest: typeof ir.sourceDigest === "string" ? ir.sourceDigest : null,
+        // <record>/<phase>/<stage>/… → 記録ルートは 3 階層上（旧
+        // findRequirementsFile の導出の逐語——識別子の導出はパス知識）。
+        sourceId: RequirementsSourceId.of(dirname(dirname(dirname(outputPath)))),
       },
     };
   }

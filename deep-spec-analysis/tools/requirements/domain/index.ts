@@ -50,3 +50,4 @@ export {
 export { modelWellFormednessErrors } from "./model-well-formedness.ts";
 export { type FrRefClaim, FrReferenceIndex } from "./fr-reference-index.ts";
 export { SourceAnchor } from "./source-anchor.ts";
+export { RequirementsSourceId } from "./requirements-source-id.ts";

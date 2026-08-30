@@ -6,7 +6,7 @@
 // not-applicable は形式モデル以外への書き込み（センサーの pass-through）。
 // unreadable は材料が組めない失敗で、errors は verdict にそのまま載る凍結文言。
 
-import type { FrRefClaim, IrModelView } from "../domain/index.ts";
+import type { FrRefClaim, IrModelView, RequirementsSourceId } from "../domain/index.ts";
 
 export interface IrValidationMaterials {
   readonly irVersion: string;
@@ -15,6 +15,9 @@ export interface IrValidationMaterials {
   readonly frClaims: readonly FrRefClaim[];
   // IR の sourceDigest。文字列でなければ null。
   readonly declaredDigest: string | null;
+  // この成果物が属する記録の要件ソース集約の識別子（導出はアダプタの
+  // パス知識——成果物パス → 記録ルート）。
+  readonly sourceId: RequirementsSourceId;
 }
 
 export type IrMaterialsAcquisition =
@@ -33,6 +36,8 @@ export interface RequirementsSource {
   readonly digest: string;
 }
 
+// 集約 ID による解決。記録ルート配下のどのフェーズに requirements.md が
+// あるかの探索は Repository の解決詳細で、恒等には含まれない。
 export interface RequirementsSourceRepository {
-  resolve(outputPath: string): RequirementsSource | null;
+  resolve(id: RequirementsSourceId): RequirementsSource | null;
 }

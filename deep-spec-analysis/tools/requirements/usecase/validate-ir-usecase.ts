@@ -49,7 +49,7 @@ export class ValidateIrUseCase {
       errors.push(...modelWellFormednessErrors(materials.view));
 
       const index = FrReferenceIndex.of(materials.frClaims);
-      const source = this.#source.resolve(outputPath);
+      const source = this.#source.resolve(materials.sourceId);
       if (source === null) {
         errors.push("requirements.md not found under this intent record — frRefs cannot be reverse-verified");
       } else {

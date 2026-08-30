@@ -687,6 +687,15 @@ untouched.
   UTF-8 and would diverge on a file that is not valid UTF-8. The adapter
   keeps `createHash` over the Buffer, and the reason is recorded at the
   call site.
+- **Review fix (gate restoration)**: the design materials gateway
+  initially built unit views — including the per-unit `existsSync` /
+  rules.md reads — unconditionally, where the legacy main only ran
+  `semanticErrors` when the version matched and the schema was valid.
+  The gate is restored in the adapter: unit views (and their I/O) are
+  built only under the legacy errors-empty condition, so a unit name
+  that has not passed the schema's `^[a-z0-9][a-z0-9-]{0,63}$` constraint
+  is never joined into a filesystem path (the legacy I/O profile and its
+  path confinement, preserved).
 - **Proofs**: a new in-process suite drives both interactors over real
   Impls and asserts the rendered verdict line is byte-identical to the one
   the real sensor writes on stdout, across every scenario (canonical, each
@@ -696,3 +705,28 @@ untouched.
   empty over 45 files; the live sandbox upgrade transported both trees and
   reproduced the canonical pass and every planted defect with the doctor
   at 0 errors.
+
+## Repository ruling — a repository resolves its aggregate by the aggregate's own ID (2026-08-30)
+
+An owner ruling landed during PR7 review and was applied immediately:
+**a repository's lookup method takes the identity of the aggregate it
+resolves — never the identity of some other artifact from which the
+repository would derive it internally. The identity's value may well be
+a path, but it must be typed and conceptualized as the aggregate's ID.**
+
+- The flagged violation: `RequirementsSourceRepository.resolve(outputPath)`
+  received the *formal model artifact's* path and derived the requirements
+  source's identity (record root, three levels up) inside the Impl —
+  resolution by another aggregate's identity.
+- The fix: the new `RequirementsSourceId` value object (requirements/domain)
+  carries the record root — one requirements source per intent record, so
+  the record IS the identity; which phase directory physically holds
+  requirements.md stays a resolution detail of the repository. The
+  derivation from the verify artifact's path is path-layout knowledge and
+  therefore adapter work: the materials gateway stamps `sourceId` into
+  `IrValidationMaterials` during acquisition, and the use case hands that
+  ID to `resolve`.
+- Ports whose parameter is the resolved aggregate's own artifact path
+  (`findByPath` on the formal-model and design-model repositories) already
+  satisfy the value-may-be-a-path clause; typing those identities is
+  follow-up alignment, tracked for the closeout.

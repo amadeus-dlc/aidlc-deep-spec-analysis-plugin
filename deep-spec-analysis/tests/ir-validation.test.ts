@@ -26,6 +26,7 @@ import {
 import {
   FrReferenceIndex,
   type IrModelView,
+  RequirementsSourceId,
   SourceAnchor,
   modelWellFormednessErrors,
 } from "../tools/requirements/domain/index.ts";
@@ -270,6 +271,27 @@ describe("FrReferenceIndex", () => {
       'frRef "FR-9" (used by OB-1, OB-2) does not exist in requirements.md',
     ]);
     expect(index.missingErrors(new Set(["FR-1", "FR-9"]))).toEqual([]);
+  });
+});
+
+describe("RequirementsSourceId", () => {
+  test("identity is the record root, compared by value", () => {
+    const a = RequirementsSourceId.of("/records/r1");
+    const b = RequirementsSourceId.of("/records/r1");
+    const c = RequirementsSourceId.of("/records/r2");
+    expect(a.recordRoot()).toBe("/records/r1");
+    expect(a.equals(b)).toBe(true);
+    expect(a.equals(c)).toBe(false);
+  });
+
+  test("the repository resolves by the aggregate id, wherever the phase directory sits", () => {
+    const record = join(tmpdir(), `deep-spec-source-id-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(join(record, "construction", "requirements-analysis"), { recursive: true });
+    writeFileSync(join(record, "construction", "requirements-analysis", "requirements.md"), "- FR-1: x\n");
+    const source = new RequirementsSourceRepositoryImpl().resolve(RequirementsSourceId.of(record));
+    expect(source).not.toBeNull();
+    expect([...(source?.knownIds ?? [])]).toEqual(["FR-1"]);
+    expect(new RequirementsSourceRepositoryImpl().resolve(RequirementsSourceId.of(join(record, "nowhere")))).toBeNull();
   });
 });
 
