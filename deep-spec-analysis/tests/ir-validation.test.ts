@@ -15,10 +15,30 @@ import { fileURLToPath } from "node:url";
 import { ArtifactPath, RequirementIds } from "../tools/kernel/domain/index.ts";
 import { DesignIrValidationMaterialsRepositoryImpl } from "../tools/design/adapter/index.ts";
 import {
+  BindingPairs,
   BrReferenceIndex,
+  BrRefs,
+  DeclaredValues,
+  type DesignBackgroundDecl,
+  DesignAttributeDecls,
+  DesignBackgroundDecls,
+  DesignEntityDecls,
+  type DesignIgnoreDecl,
+  DesignIgnoreDecls,
+  type DesignMachineDecl,
+  DesignMachineDecls,
   DesignModelId,
+  type DesignObligationDecl,
+  DesignObligationDecls,
+  type DesignScenarioDecl,
+  DesignScenarioDecls,
+  type DesignTransitionDecl,
+  DesignTransitionDecls,
   type DesignUnitDecl,
+  DesignUnitDecls,
   designWellFormednessErrors,
+  InitialStates,
+  UnformalizedTargets,
 } from "../tools/design/domain/index.ts";
 import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "../tools/design/usecase/index.ts";
 import {
@@ -465,30 +485,72 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
 });
 
 describe("designWellFormednessErrors (contract 3 domain branches)", () => {
-  function unit(overrides: Partial<DesignUnitDecl>): DesignUnitDecl {
+  // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
+  type RawAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
+  type RawEntity = { name: string; attributes: RawAttr[] };
+  type RawObligation = Omit<DesignObligationDecl, "brRefs"> & { brRefs?: string[] };
+  type RawTransition = Omit<DesignTransitionDecl, "brRefs"> & { brRefs?: string[] };
+  type RawMachine = Omit<DesignMachineDecl, "initial" | "transitions" | "ignores"> & {
+    initial: string[];
+    transitions: RawTransition[];
+    ignores: DesignIgnoreDecl[];
+  };
+  type RawScenario = Omit<DesignScenarioDecl, "bindings" | "brRefs"> & {
+    bindings: (readonly [string, unknown])[];
+    brRefs?: string[];
+  };
+  type RawUnit = {
+    entities?: RawEntity[];
+    obligations?: RawObligation[];
+    stateMachines?: RawMachine[];
+    scenarios?: RawScenario[];
+    background?: DesignBackgroundDecl[];
+    unformalizedTargets?: string[];
+    directoryExists?: boolean;
+    rulesMarkdown?: string | null;
+  };
+  const brRefs = (refs: string[] | undefined) => (refs === undefined ? undefined : BrRefs.of(refs));
+  function unit(overrides: RawUnit): DesignUnitDecl {
     return {
       unit: "u1",
-      entities: [],
-      obligations: [],
-      stateMachines: [],
-      scenarios: [],
-      background: [],
-      unformalizedTargets: [],
-      directoryExists: true,
-      rulesMarkdown: null,
-      ...overrides,
+      entities: DesignEntityDecls.of(
+        (overrides.entities ?? []).map((e) => ({
+          name: e.name,
+          attributes: DesignAttributeDecls.of(
+            e.attributes.map((a) => ({ ...a, values: a.values === undefined ? undefined : DeclaredValues.of(a.values) })),
+          ),
+        })),
+      ),
+      obligations: DesignObligationDecls.of(
+        (overrides.obligations ?? []).map((ob) => ({ ...ob, brRefs: brRefs(ob.brRefs) })),
+      ),
+      stateMachines: DesignMachineDecls.of(
+        (overrides.stateMachines ?? []).map((sm) => ({
+          ...sm,
+          initial: InitialStates.of(sm.initial),
+          transitions: DesignTransitionDecls.of(sm.transitions.map((tr) => ({ ...tr, brRefs: brRefs(tr.brRefs) }))),
+          ignores: DesignIgnoreDecls.of(sm.ignores),
+        })),
+      ),
+      scenarios: DesignScenarioDecls.of(
+        (overrides.scenarios ?? []).map((sc) => ({ ...sc, bindings: BindingPairs.of(sc.bindings), brRefs: brRefs(sc.brRefs) })),
+      ),
+      background: DesignBackgroundDecls.of(overrides.background ?? []),
+      unformalizedTargets: UnformalizedTargets.of(overrides.unformalizedTargets ?? []),
+      directoryExists: overrides.directoryExists ?? true,
+      rulesMarkdown: overrides.rulesMarkdown ?? null,
     };
   }
 
   test("duplicate unit names are reported once per repeat", () => {
-    expect(designWellFormednessErrors([unit({}), unit({})])).toEqual(['duplicate unit "u1"']);
+    expect(designWellFormednessErrors(DesignUnitDecls.of([unit({}), unit({})]))).toEqual(['duplicate unit "u1"']);
   });
 
   test("int attributes require bounds", () => {
     expect(
-      designWellFormednessErrors([
+      designWellFormednessErrors(DesignUnitDecls.of([
         unit({ entities: [{ name: "t", attributes: [{ name: "age", kind: "int" }, { name: "age", kind: "int", min: 3, max: 1 }] }] }),
-      ]),
+      ])),
     ).toEqual([
       "unit u1: t.age: int attributes require min and max — the Quint backend needs bounded domains",
       'unit u1: duplicate attribute "t.age"',
@@ -508,7 +570,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
       },
     ];
     expect(
-      designWellFormednessErrors([
+      designWellFormednessErrors(DesignUnitDecls.of([
         unit({
           entities,
           obligations: [
@@ -523,7 +585,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
             { id: "DOB-3", assert: { op: "enum", value: "nope" } },
           ],
         }),
-      ]),
+      ])),
     ).toEqual([
       'unit u1: obligation DOB-1: enum literal "email" is not a value of "ticket.status"',
       'unit u1: obligation DOB-2: enum literal "email" is compared against non-enum attribute "ticket.age"',
@@ -533,7 +595,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
 
   test("temporal branches are walked in design obligations too", () => {
     expect(
-      designWellFormednessErrors([
+      designWellFormednessErrors(DesignUnitDecls.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "flag", kind: "bool" }] }],
           obligations: [
@@ -547,7 +609,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
             },
           ],
         }),
-      ]),
+      ])),
     ).toEqual([
       'unit u1: obligation DOB-1: unresolvable reference "t.ghost"',
       'unit u1: obligation DOB-1: unresolvable reference "t.other"',
@@ -555,27 +617,27 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   });
 
   test("origin \"rules\" requires brRefs", () => {
-    expect(designWellFormednessErrors([unit({ obligations: [{ id: "DOB-1", origin: "rules" }] })])).toEqual([
+    expect(designWellFormednessErrors(DesignUnitDecls.of([unit({ obligations: [{ id: "DOB-1", origin: "rules" }] })]))).toEqual([
       'unit u1: obligation DOB-1: origin "rules" requires brRefs',
     ]);
   });
 
   test("a machine's lifecycle attribute must be a declared enum", () => {
-    expect(designWellFormednessErrors([unit({ stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }] })])).toEqual([
+    expect(designWellFormednessErrors(DesignUnitDecls.of([unit({ stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }] })]))).toEqual([
       'unit u1: machine SM-1: lifecycle attribute "t.state" is not declared',
     ]);
     expect(
-      designWellFormednessErrors([
+      designWellFormednessErrors(DesignUnitDecls.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "state", kind: "bool" }] }],
           stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }],
         }),
-      ]),
+      ])),
     ).toEqual(['unit u1: machine SM-1: lifecycle attribute "t.state" is not an enum — its values are the state set']);
   });
 
   test("machine states, self-assignment and ignore collisions", () => {
-    const errors = designWellFormednessErrors([
+    const errors = designWellFormednessErrors(DesignUnitDecls.of([
       unit({
         entities: [{ name: "t", attributes: [{ name: "state", kind: "enum", values: ["open", "closed"] }] }],
         stateMachines: [
@@ -600,7 +662,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
           },
         ],
       }),
-    ]);
+    ]));
     expect(errors).toEqual([
       'unit u1: machine SM-1: initial state "ghost" is not a value of t.state',
       'unit u1: transition TR-1: to state "gone" is not a value of t.state',
@@ -612,7 +674,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
 
   test("scenario bindings and background assertions are checked per unit", () => {
     expect(
-      designWellFormednessErrors([
+      designWellFormednessErrors(DesignUnitDecls.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "flag", kind: "bool" }] }],
           scenarios: [
@@ -628,7 +690,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
           ],
           background: [{ id: "DBG-1", assert: { op: "ref", path: "t.ghost" } }],
         }),
-      ]),
+      ])),
     ).toEqual([
       'unit u1: scenario DSC-1: binding value 1 does not fit bool attribute "t.flag"',
       'unit u1: scenario DSC-1: binding for unknown attribute "t.ghost"',
@@ -638,26 +700,26 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   });
 
   test("a missing construction directory is an error even with zero brRefs", () => {
-    expect(designWellFormednessErrors([unit({ directoryExists: false })])).toEqual([
+    expect(designWellFormednessErrors(DesignUnitDecls.of([unit({ directoryExists: false })]))).toEqual([
       "unit u1: no construction/u1/ directory exists under this record — the unit name matches no unit-of-work, so BR coverage cannot be verified",
     ]);
   });
 
   test("brRefs without rules.md cannot be reverse-verified", () => {
-    expect(designWellFormednessErrors([unit({ obligations: [{ id: "DOB-1", brRefs: ["BR1.1"] }] })])).toEqual([
+    expect(designWellFormednessErrors(DesignUnitDecls.of([unit({ obligations: [{ id: "DOB-1", brRefs: ["BR1.1"] }] })]))).toEqual([
       "unit u1: brRefs are used but construction/u1/functional-design/rules.md was not found — they cannot be reverse-verified",
     ]);
   });
 
   test("BR coverage: unknown refs are errors and silent rules are a contract violation", () => {
     expect(
-      designWellFormednessErrors([
+      designWellFormednessErrors(DesignUnitDecls.of([
         unit({
           obligations: [{ id: "DOB-1", brRefs: ["BR9.9"] }],
           unformalizedTargets: ["BR1.2"],
           rulesMarkdown: "- BR1.1\n- BR1.2\n",
         }),
-      ]),
+      ])),
     ).toEqual([
       'unit u1: brRef "BR9.9" does not exist in rules.md',
       "unit u1: BR coverage: rule BR1.1 in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] — silence is a contract violation",
@@ -666,7 +728,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
 
   test("brRefs from transitions and scenarios count toward coverage", () => {
     expect(
-      designWellFormednessErrors([
+      designWellFormednessErrors(DesignUnitDecls.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "state", kind: "enum", values: ["open"] }] }],
           stateMachines: [
@@ -675,7 +737,93 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
           scenarios: [{ id: "DSC-1", bindings: [], hasEvent: false, brRefs: ["BR1.2"] }],
           rulesMarkdown: "- BR1.1\n- BR1.2\n",
         }),
-      ]),
+      ])),
     ).toEqual([]);
+  });
+});
+
+describe("design decl collections (first-class operations)", () => {
+  test("of/add/iterator/toArray hold insertion order across the decl bundle", () => {
+    const values = DeclaredValues.of(["a"]).add("b");
+    expect([...values]).toEqual(["a", "b"]);
+    expect(values.includes("b")).toBe(true);
+    expect(values.includes("c")).toBe(false);
+    expect(values.toArray()).toEqual(["a", "b"]);
+
+    const refs = BrRefs.of(["BR1.1"]).add("BR1.2");
+    expect([...refs]).toEqual(["BR1.1", "BR1.2"]);
+    expect(refs.toArray()).toEqual(["BR1.1", "BR1.2"]);
+
+    const initial = InitialStates.of(["open"]).add("closed");
+    expect([...initial]).toEqual(["open", "closed"]);
+    expect(initial.toArray()).toEqual(["open", "closed"]);
+
+    const unformalized = UnformalizedTargets.of(["BR2.1"]).add("BR2.2");
+    expect([...unformalized]).toEqual(["BR2.1", "BR2.2"]);
+    expect(unformalized.covers("BR2.2")).toBe(true);
+    expect(unformalized.covers("BR9.9")).toBe(false);
+    expect(unformalized.toArray()).toEqual(["BR2.1", "BR2.2"]);
+
+    const bindings = BindingPairs.of([["t.flag", true]]).add(["t.n", 1]);
+    expect([...bindings]).toEqual([
+      ["t.flag", true],
+      ["t.n", 1],
+    ]);
+    expect(bindings.toArray().length).toBe(2);
+
+    const attr = { name: "state", kind: "enum", values: DeclaredValues.of(["open"]) };
+    const attrs = DesignAttributeDecls.of([]).add(attr);
+    expect([...attrs]).toEqual([attr]);
+    expect(attrs.toArray()).toEqual([attr]);
+
+    const entity = { name: "t", attributes: attrs };
+    const entities = DesignEntityDecls.of([]).add(entity);
+    expect([...entities]).toEqual([entity]);
+    expect(entities.toArray()).toEqual([entity]);
+
+    const ob = { id: "DOB-1" };
+    const obs = DesignObligationDecls.of([]).add(ob);
+    expect([...obs]).toEqual([ob]);
+    expect(obs.toArray()).toEqual([ob]);
+
+    const tr = { id: "TR-1" };
+    const trs = DesignTransitionDecls.of([]).add(tr);
+    expect([...trs]).toEqual([tr]);
+    expect(trs.toArray()).toEqual([tr]);
+
+    const ig = { state: "open", trigger: "close" };
+    const igs = DesignIgnoreDecls.of([]).add(ig);
+    expect([...igs]).toEqual([ig]);
+    expect(igs.toArray()).toEqual([ig]);
+
+    const sm = { id: "SM-1", attrPath: "t.state", initial, transitions: trs, ignores: igs };
+    const sms = DesignMachineDecls.of([]).add(sm);
+    expect([...sms]).toEqual([sm]);
+    expect(sms.toArray()).toEqual([sm]);
+
+    const sc = { id: "DSC-1", bindings, hasEvent: false };
+    const scs = DesignScenarioDecls.of([]).add(sc);
+    expect([...scs]).toEqual([sc]);
+    expect(scs.toArray()).toEqual([sc]);
+
+    const bg = { id: "DBG-1" };
+    const bgs = DesignBackgroundDecls.of([]).add(bg);
+    expect([...bgs]).toEqual([bg]);
+    expect(bgs.toArray()).toEqual([bg]);
+
+    const ud: DesignUnitDecl = {
+      unit: "u1",
+      entities,
+      obligations: obs,
+      stateMachines: sms,
+      scenarios: scs,
+      background: bgs,
+      unformalizedTargets: unformalized,
+      directoryExists: true,
+      rulesMarkdown: null,
+    };
+    const uds = DesignUnitDecls.of([]).add(ud);
+    expect([...uds]).toEqual([ud]);
+    expect(uds.toArray()).toEqual([ud]);
   });
 });

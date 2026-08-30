@@ -5,12 +5,12 @@
 // not-applicable は機能形式モデル以外への書き込み（pass-through）。unreadable は
 // 材料が組めない失敗で、errors は verdict にそのまま載る凍結文言。
 
-import type { DesignModelId, DesignUnitDecl } from "../domain/index.ts";
+import type { DesignModelId, DesignUnitDecls } from "../domain/index.ts";
 
 export interface DesignIrValidationMaterials {
   readonly irVersion: string;
   readonly schemaErrors: readonly string[];
-  readonly units: readonly DesignUnitDecl[];
+  readonly units: DesignUnitDecls;
 }
 
 export type DesignIrMaterialsAcquisition =

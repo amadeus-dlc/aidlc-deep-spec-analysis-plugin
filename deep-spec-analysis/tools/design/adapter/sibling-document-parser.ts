@@ -5,6 +5,7 @@
 // は素通し。skipped は {target:string, reason:string} のみ。
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
+import { SiblingVerdictFindings, SiblingVerdictSkips } from "../domain/index.ts";
 import type { DesignValue, SiblingVerdictDocument, SiblingVerdictFinding, SiblingVerdictSkip } from "../domain/index.ts";
 
 const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
@@ -32,5 +33,10 @@ export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
     if (typeof s.detail === "string") out.detail = s.detail;
     skipped.push(out);
   }
-  return { kind: "readable", method: typeof raw.method === "string" ? raw.method : null, findings, skipped };
+  return {
+    kind: "readable",
+    method: typeof raw.method === "string" ? raw.method : null,
+    findings: SiblingVerdictFindings.of(findings),
+    skipped: SiblingVerdictSkips.of(skipped),
+  };
 }

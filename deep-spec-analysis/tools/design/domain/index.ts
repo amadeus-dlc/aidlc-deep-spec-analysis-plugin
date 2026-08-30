@@ -26,6 +26,10 @@ export {
   type LoweredObligation,
   type LoweredScenario,
   type LoweredUnit,
+  LoweredBackgrounds,
+  LoweredObligations,
+  LoweredScenarios,
+  LoweringIndex,
   lowerUnit,
 } from "./lower-unit.ts";
 export {
@@ -33,6 +37,8 @@ export {
   type SiblingVerdictDocument,
   type SiblingVerdictFinding,
   type SiblingVerdictSkip,
+  SiblingVerdictFindings,
+  SiblingVerdictSkips,
   remapUnitDocument,
 } from "./remap-unit-doc.ts";
 export { DesignReportId } from "./design-report-id.ts";
@@ -55,6 +61,20 @@ export {
   designVersionMismatchReport,
 } from "./design-degradation.ts";
 export {
+  BindingPairs,
+  BrRefs,
+  DeclaredValues,
+  DesignAttributeDecls,
+  DesignBackgroundDecls,
+  DesignEntityDecls,
+  DesignIgnoreDecls,
+  DesignMachineDecls,
+  DesignObligationDecls,
+  DesignScenarioDecls,
+  DesignTransitionDecls,
+  DesignUnitDecls,
+  InitialStates,
+  UnformalizedTargets,
   type DesignAttributeDecl,
   type DesignBackgroundDecl,
   type DesignEntityDecl,

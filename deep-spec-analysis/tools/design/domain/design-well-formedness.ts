@@ -7,14 +7,14 @@
 
 import { type Expression, walkExpression } from "../../kernel/domain/index.ts";
 import { BrReferenceIndex } from "./br-reference-index.ts";
-import type { DesignUnitDecl } from "./design-ir-decl.ts";
+import type { BrRefs, DeclaredValues, DesignUnitDecls } from "./design-ir-decl.ts";
 
 interface AttributeType {
   readonly kind: string;
-  readonly values?: readonly string[];
+  readonly values?: DeclaredValues;
 }
 
-export function designWellFormednessErrors(units: readonly DesignUnitDecl[]): string[] {
+export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
   const errors: string[] = [];
   const unitNames = new Set<string>();
 
@@ -70,7 +70,7 @@ export function designWellFormednessErrors(units: readonly DesignUnitDecl[]): st
           if (siblingType !== undefined) {
             if (siblingType.kind !== "enum") {
               errors.push(where(`${ctx}: enum literal "${node.value}" is compared against non-enum attribute "${sibling}"`));
-            } else if (!(siblingType.values ?? []).includes(node.value)) {
+            } else if (!(siblingType.values?.includes(node.value) ?? false)) {
               errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of "${sibling}"`));
             }
           } else if (sibling === undefined) {
@@ -88,7 +88,7 @@ export function designWellFormednessErrors(units: readonly DesignUnitDecl[]): st
       seenIds.add(id);
     };
     const brRefsUsed = new Set<string>();
-    const collectBr = (refs: readonly string[] | undefined): void => {
+    const collectBr = (refs: BrRefs | undefined): void => {
       if (refs === undefined) return;
       for (const b of refs) brRefsUsed.add(b);
     };
@@ -124,7 +124,7 @@ export function designWellFormednessErrors(units: readonly DesignUnitDecl[]): st
         errors.push(where(`${ctx}: lifecycle attribute "${attrPath}" is not an enum — its values are the state set`));
         continue;
       }
-      const states = new Set(attr.values);
+      const states = new Set(attr.values ?? []);
       for (const s of sm.initial) {
         if (!states.has(s)) {
           errors.push(where(`${ctx}: initial state "${s}" is not a value of ${attrPath}`));
@@ -178,7 +178,7 @@ export function designWellFormednessErrors(units: readonly DesignUnitDecl[]): st
         const ok =
           (t.kind === "bool" && typeof val === "boolean") ||
           (t.kind === "int" && typeof val === "number" && Number.isInteger(val)) ||
-          (t.kind === "enum" && typeof val === "string" && (t.values ?? []).includes(val));
+          (t.kind === "enum" && typeof val === "string" && (t.values?.includes(val) ?? false));
         if (!ok) errors.push(where(`${ctx}: binding value ${JSON.stringify(val)} does not fit ${t.kind} attribute "${path}"`));
       }
       if (sc.expect !== undefined) checkExpr(sc.expect, ctx, sc.hasEvent);
@@ -210,9 +210,9 @@ export function designWellFormednessErrors(units: readonly DesignUnitDecl[]): st
       for (const br of [...brRefsUsed].sort()) {
         if (!known.has(br)) errors.push(where(`brRef "${br}" does not exist in rules.md`));
       }
-      const unformalizedTargets = new Set(unitView.unformalizedTargets);
+      const unformalizedTargets = unitView.unformalizedTargets;
       for (const br of known.sortedIds()) {
-        if (!brRefsUsed.has(br) && !unformalizedTargets.has(br)) {
+        if (!brRefsUsed.has(br) && !unformalizedTargets.covers(br)) {
           errors.push(
             where(`BR coverage: rule ${br} in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] — silence is a contract violation`),
           );

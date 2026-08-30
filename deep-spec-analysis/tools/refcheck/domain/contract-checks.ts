@@ -22,30 +22,30 @@ export interface ContractCheckMaterials {
   readonly specBlocks: readonly SpecBlockAssessment[];
 }
 
-export function runContractChecks(input: ContractCheckMaterials, ledger: CheckFamilyLedger): void {
-  const { artifact, depArtifact } = input;
+export function runContractChecks(materials: ContractCheckMaterials, ledger: CheckFamilyLedger): void {
+  const { artifact, depArtifact } = materials;
   const ref = (art: string, element: string, value?: string): WitnessRef =>
     value === undefined ? { artifact: art, element } : { artifact: art, element, value };
 
   // --- declared units (unit-of-work-dependency.md edge block) --------------
   let units: UnitDecl[] | null = null;
-  if (input.declaredUnits.kind === "absent") {
+  if (materials.declaredUnits.kind === "absent") {
     ledger.skip("CD-1", "absent-input", "unit-of-work-dependency.md is not present under this intent record — declared units are unknown");
     ledger.skip("CD-3", "absent-input", "unit-of-work-dependency.md is not present under this intent record — the unit dependency DAG is unknown");
-  } else if (input.declaredUnits.kind === "unrecognized") {
-    ledger.skip("CD-1", "unrecognized-format", `unit-of-work-dependency.md carries no parseable \`units:\` edge block${input.declaredUnits.error ? ` (${input.declaredUnits.error})` : ""}`);
+  } else if (materials.declaredUnits.kind === "unrecognized") {
+    ledger.skip("CD-1", "unrecognized-format", `unit-of-work-dependency.md carries no parseable \`units:\` edge block${materials.declaredUnits.error ? ` (${materials.declaredUnits.error})` : ""}`);
     ledger.skip("CD-3", "unrecognized-format", "blocked: the units edge block is unusable");
   } else {
-    units = input.declaredUnits.units;
+    units = materials.declaredUnits.units;
   }
 
   // --- CD-1: contracts table -------------------------------------------------
   let rows: ContractRow[] = [];
-  if (input.contractsTable.kind === "absent") {
+  if (materials.contractsTable.kind === "absent") {
     if (units !== null) ledger.skip("CD-1", "unrecognized-format", "no markdown table with a Provider column found");
     ledger.skip("CD-3", "unrecognized-format", "no contracts table — DAG edge coverage cannot be checked");
   } else {
-    rows = [...input.contractsTable.rows];
+    rows = [...materials.contractsTable.rows];
     if (units !== null) {
       const declared = new Set(units.map((u) => u.name));
       for (const row of rows) {
@@ -70,7 +70,7 @@ export function runContractChecks(input: ContractCheckMaterials, ledger: CheckFa
   }
 
   // --- CD-2: spec blocks -----------------------------------------------------
-  for (const block of input.specBlocks) {
+  for (const block of materials.specBlocks) {
     if (block.issue === null) continue;
     const blockId = `contract:block-${block.index}`;
     const el = `yaml fence #${block.index} (line ${block.line})`;
@@ -86,7 +86,7 @@ export function runContractChecks(input: ContractCheckMaterials, ledger: CheckFa
   }
 
   // --- CD-3: DAG edge coverage ----------------------------------------------
-  if (units !== null && input.contractsTable.kind !== "absent") {
+  if (units !== null && materials.contractsTable.kind !== "absent") {
     const covered = new Set<string>();
     for (const row of rows) {
       covered.add(`${row.provider} ${row.consumer}`);
