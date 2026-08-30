@@ -51,8 +51,10 @@ import {
   runContractChecks,
   runFunctionalChecks,
   AttributeName,
+  AttributeNames,
   DesignRecordId,
   EntityName,
+  SiblingUnitIndex,
 } from "../tools/refcheck/domain/index.ts";
 import { InMemoryReferenceCheckReportRepository } from "./doubles/in-memory-reference-check-report-repository.ts";
 
@@ -253,7 +255,7 @@ function functionalInput(overrides: Partial<FunctionalCheckMaterials>): Function
     requirementIdsKnown: null,
     componentsArtifact: "components.md",
     domainEntities: { kind: "absent" },
-    siblingUnits: new Map(),
+    siblingUnits: SiblingUnitIndex.of(new Map()),
     ...overrides,
   };
 }
@@ -467,7 +469,7 @@ describe("functional branches the fixtures do not exercise", () => {
       entities: parseEntitiesDocument(entitiesMd),
       spec: parseFunctionalSpecDocument("# prose only, no machines\n"),
       domainEntities: parseDomainEntitiesDocument(componentsMd),
-      siblingUnits: new Map([["u1", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: [AttributeName.reconstitute("status")] }]])]]),
+      siblingUnits: SiblingUnitIndex.of(new Map([["u1", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: AttributeNames.of([AttributeName.reconstitute("status")]) }]])]])),
     });
     const skipDetails = report.skipped().map((s) => s.detail ?? "").join("\n");
     expect(skipDetails).toContain('no `### State Machine: Order` heading with a stateDiagram fence found');
@@ -480,7 +482,7 @@ describe("functional branches the fixtures do not exercise", () => {
     const report = functionalReport({
       unit: undefined,
       domainEntities: parseDomainEntitiesDocument(componentsMd),
-      siblingUnits: new Map([["u2", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: [AttributeName.reconstitute("qty")] }]])]]),
+      siblingUnits: SiblingUnitIndex.of(new Map([["u2", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: AttributeNames.of([AttributeName.reconstitute("qty")]) }]])]])),
     });
     const reasons = report.skipped().map((s) => `${s.target}:${s.reason}`);
     expect(reasons).toContain("check:XS-3:unrecognized-format");

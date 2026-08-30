@@ -37,15 +37,22 @@ export {
   type RuleDeclSeed,
   type RulesOutcome,
   type ShapeError,
-  type SiblingUnitEntities,
   type StateMachineSketchSeed,
   AttrDecl,
+  AttrDecls,
   DeclaredEntities,
   DomainEntitySketch,
+  DomainEntitySketches,
   EntityDecl,
+  EntityDecls,
   RelDecl,
+  RelDecls,
   RuleDecl,
+  RuleDecls,
+  ShapeErrors,
+  SiblingUnitIndex,
   StateMachineSketch,
+  StateMachineSketches,
 } from "./functional-design.ts";
 export { FUNCTIONAL_FAMILIES, runFunctionalChecks, type FunctionalCheckMaterials } from "./functional-checks.ts";
 export { DesignRecord, type DesignRecordSeed, type LoadedDocument } from "./design-record.ts";
@@ -70,4 +77,8 @@ export {
   SourceId,
   StateName,
   TypeName,
+  AllowedValues,
+  AttributeNames,
+  SourceIds,
+  StateNames,
 } from "./functional-design-values.ts";

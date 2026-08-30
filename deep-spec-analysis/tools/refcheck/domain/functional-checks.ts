@@ -10,9 +10,9 @@ import type {
   DeclaredEntities,
   EntitiesOutcome,
   FunctionalSpecOutcome,
-  RuleDecl,
+  RuleDecls,
   RulesOutcome,
-  SiblingUnitEntities,
+  SiblingUnitIndex,
 } from "./functional-design.ts";
 import type { WitnessRef } from "./witness-ref.ts";
 
@@ -35,7 +35,7 @@ export interface FunctionalCheckMaterials {
   readonly requirementIdsKnown: ReadonlySet<string> | null;
   readonly componentsArtifact: string;
   readonly domainEntities: DomainEntitiesOutcome;
-  readonly siblingUnits: SiblingUnitEntities;
+  readonly siblingUnits: SiblingUnitIndex;
 }
 
 function ref(artifact: string, element: string, value?: string): WitnessRef {
@@ -68,12 +68,12 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
     for (const e of entities.shapeErrors()) {
       ledger.finding("FD-E1", "structure-invalid", ["check:FD-E1"], [ref(entitiesArt, e.element.value())], e.detail);
     }
-    for (const dup of entities.duplicateEntityDecls()) {
+    for (const dup of entities.entities().duplicatesByName()) {
       ledger.finding("FD-E1", "structure-invalid", [safeTarget("entity", dup.name().value())], [ref(entitiesArt, `${dup.element().value()}.name`, dup.name().value())],
         `entity "${dup.name().value()}" is declared more than once`);
     }
     for (const e of entities.entities()) {
-      for (const dup of e.duplicateAttrDecls()) {
+      for (const dup of e.attrs().duplicatesByName()) {
         ledger.finding("FD-E1", "structure-invalid", [safeTarget("attr", `${e.name().value()}.${dup.name().value()}`)], [ref(entitiesArt, `${dup.element().value()}.name`, dup.name().value())],
           `attribute "${e.name().value()}.${dup.name().value()}" is declared more than once`);
       }
@@ -85,7 +85,7 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
       for (const a of e.attrs()) {
         const attrId = safeTarget("attr", `${e.name().value()}.${a.name().value()}`);
         const label = `${e.name().value()}.${a.name().value()}`;
-        // FD-E2: 型クラス整合は属性宣言が自分で判定する。
+        // FD-E2: 型区分整合は属性宣言が自分で判定する。
         if (a.declaresAllowedValuesOnNonEnumerableType()) {
           ledger.finding("FD-E2", "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.typeToken())],
             `"${label}" declares allowed values but its type "${a.typeText()}" is not an enumerable type`);
@@ -117,7 +117,7 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
         }
         // FD-E6: 参照の解決は宣言集合が告げる。
         const reference = a.references();
-        if (reference !== null && !entities.resolvesReference(reference)) {
+        if (reference !== null && !entities.entities().resolvesReference(reference)) {
           ledger.finding("FD-E6", "reference-broken", [attrId], [ref(entitiesArt, a.element().value(), reference.value())],
             `"${label}" references "${reference.value()}" which is not a declared entity`);
         }
@@ -126,7 +126,7 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
     // FD-E4 / FD-E5: 関係宣言が自分の整合を告げる。
     for (const r of entities.allRels()) {
       for (const endpoint of [r.from(), r.to()]) {
-        if (endpoint !== null && !entities.containsEntityNamed(endpoint.value())) {
+        if (endpoint !== null && !entities.entities().containsNamed(endpoint.value())) {
           ledger.finding("FD-E4", "reference-broken", [safeTarget("entity", endpoint.value())], [ref(entitiesArt, r.element().value(), endpoint.value())],
             `relationship endpoint "${endpoint.value()}" is not a declared entity`);
         }
@@ -144,7 +144,7 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
 
   // --- rules.md -------------------------------------------------------------
   const rulesArt = input.rulesArtifact;
-  let rules: readonly RuleDecl[] | null = null;
+  let rules: RuleDecls | null = null;
   const blockRs = (why: string): void => {
     for (const f of ["FD-R2", "FD-R3", "FD-R4", "FD-R5"]) ledger.skip(f, "unrecognized-format", why);
   };
@@ -214,7 +214,7 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
       for (const r of rules) {
         const appliesTo = r.appliesTo();
         if (appliesTo === null) continue;
-        if (!entities.resolvesAppliesTo(appliesTo)) {
+        if (!entities.entities().resolvesAppliesTo(appliesTo)) {
           ledger.finding("FD-R4", "reference-broken",
             [r.findingTarget("check:FD-R4")],
             [ref(rulesArt, r.element().value(), appliesTo.value())],
@@ -243,8 +243,8 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
     ledger.skip("FD-S2", "absent-input", "entities.md is unavailable — state machines cannot be checked against allowed values");
   } else {
     const machines = input.spec.machines;
-    if (machines.length === 0) {
-      for (const e of entities.lifecycleEntities()) {
+    if (machines.isEmpty()) {
+      for (const e of entities.entities().lifecycleOnly()) {
         ledger.skip("FD-S1", "unrecognized-format",
           `no \`### State Machine: ${e.name().value()}\` heading with a stateDiagram fence found for lifecycle entity "${e.name().value()}"`);
         ledger.skip("FD-S2", "unrecognized-format",
@@ -260,7 +260,7 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
         ledger.skip("FD-S2", "unrecognized-format", `${el}: ${m.unsupported()}`);
         continue;
       }
-      const ent = entities.entityByNormalizedName(normalizeName(entName));
+      const ent = entities.entities().byNormalizedName(normalizeName(entName));
       if (!ent) {
         ledger.finding("FD-S1", "consistency-mismatch", [safeTarget("entity", entName)], [ref(specArt, el, entName)],
           `state machine names entity "${entName}" which is not declared in entities.md`);
@@ -304,27 +304,24 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
   } else {
     const domainEntities = input.domainEntities.entities;
     const unitEntities = input.siblingUnits;
-    // Dedupe by normalized name: a doubly-declared domain entity is DD-5's
-    // finding; the XS checks look at each distinct entity once.
-    const seenDomain = new Set<string>();
-    for (const de of [...domainEntities].sort((a, b) => (a.name().value() < b.name().value() ? -1 : 1))) {
+    // 正規化名での一意化と整列はコレクションが所有する（重複宣言そのものは
+    // DD-5 の finding）。
+    for (const de of domainEntities.sortedDistinctByNormalizedName()) {
       const key = de.name().normalized();
-      if (seenDomain.has(key)) continue;
-      seenDomain.add(key);
-      const definers = [...unitEntities.entries()].filter(([, m]) => m.has(key)).map(([u]) => u);
+      const definers = unitEntities.definersOf(key);
       if (definers.length >= 2) {
         ledger.finding("XS-1", "consistency-mismatch", [safeTarget("entity", de.name().value())],
           [ref(compArt, de.catalogLabel()),
             ...definers.map((u) => ref(`construction/${u}/functional-design/entities.md`, `entity ${de.name().value()}`))],
           `domain entity "${de.name().value()}" is defined in ${definers.length} units (${definers.join(", ")}) — ownership is duplicated`);
-      } else if (definers.length === 0 && unitEntities.size > 0) {
+      } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
         ledger.finding("XS-2", "consistency-mismatch", [safeTarget("entity", de.name().value())],
           [ref(compArt, de.catalogLabel())],
           `domain entity "${de.name().value()}" is defined in no unit's entities.md — it was dropped on the way to functional design`);
       }
       // XS-3: 属性の取り落としは素描が自分で告げる（このユニットの定義に対してのみ）。
       if (input.unit !== undefined) {
-        const mine = unitEntities.get(input.unit)?.get(key);
+        const mine = unitEntities.entityDeclaredIn(input.unit, key);
         if (mine) {
           const dropped = de.attributesDroppedIn(mine.attrs);
           if (dropped.length > 0) {

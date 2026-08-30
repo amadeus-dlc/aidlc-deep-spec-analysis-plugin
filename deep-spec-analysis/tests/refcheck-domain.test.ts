@@ -150,3 +150,98 @@ describe("functional-design vocabulary domain primitives", () => {
     expect(ComponentName.reconstitute("Core").value()).toBe("Core");
   });
 });
+
+// ファーストクラスコレクション — 不変の追加・巡回・境界脱出口・集合知識の分岐網羅。
+import {
+  AllowedValues,
+  AttrDecl,
+  AttrDecls,
+  AttributeNames,
+  DomainEntitySketch,
+  DomainEntitySketches,
+  EntityDecl,
+  EntityDecls,
+  RelDecl,
+  RelDecls,
+  RuleDecl,
+  RuleDecls,
+  ShapeErrors,
+  SiblingUnitIndex,
+  SourceIds,
+  StateMachineSketch,
+  StateMachineSketches,
+  StateNames,
+} from "../tools/refcheck/domain/index.ts";
+
+describe("first-class collections", () => {
+  const attr = (name: string, allowed: string[] | null = null): AttrDecl =>
+    AttrDecl.reconstitute({
+      name: AttributeName.reconstitute(name),
+      element: ElementPath.reconstitute(`e.${name}`),
+      type: null,
+      uniqueIsTrue: false,
+      references: null,
+      allowed: allowed === null ? null : AllowedValues.of(allowed.map((v) => AllowedValue.reconstitute(v))),
+      def: null,
+      minDeclared: false,
+      maxDeclared: false,
+      min: null,
+      max: null,
+    });
+  const entity = (name: string, attrs: AttrDecl[] = []): EntityDecl =>
+    EntityDecl.reconstitute({
+      name: EntityName.reconstitute(name),
+      element: ElementPath.reconstitute(`entities.${name}`),
+      attrs: AttrDecls.of(attrs),
+      rels: RelDecls.of([]),
+    });
+
+  test("add is immutable append across every collection", () => {
+    const names = AttributeNames.of([]);
+    expect(names.count()).toBe(0);
+    expect(names.add(AttributeName.reconstitute("qty")).count()).toBe(1);
+    expect(names.count()).toBe(0);
+
+    expect([...AllowedValues.of([]).add(AllowedValue.reconstitute("open"))].length).toBe(1);
+    expect([...StateNames.of([]).add(StateName.reconstitute("open"))].length).toBe(1);
+    expect(SourceIds.of([]).add(SourceId.reconstitute("FR-1")).toArray().length).toBe(1);
+    expect(AttrDecls.of([]).add(attr("a")).toArray().length).toBe(1);
+    expect(EntityDecls.of([]).add(entity("Order")).toArray().length).toBe(1);
+    expect([...RelDecls.of([]).add(RelDecl.reconstitute({ element: ElementPath.reconstitute("r[0]"), from: null, to: null, cardinality: null, hasDirection: false }))].length).toBe(1);
+    expect(RuleDecls.of([]).add(RuleDecl.reconstitute({ id: null, element: ElementPath.reconstitute("rules[0]"), category: null, appliesTo: null, sourceIds: SourceIds.of([]), missing: [] })).toArray().length).toBe(1);
+    expect(ShapeErrors.of([]).add({ element: ElementPath.reconstitute("entities"), detail: "x" }).toArray().length).toBe(1);
+    const sketch = StateMachineSketch.reconstitute({ spec: MachineSpec.reconstitute("Order"), states: StateNames.of([]), fenceLine: 1, unsupported: null });
+    expect(StateMachineSketches.of([]).add(sketch).isEmpty()).toBe(false);
+    const de = DomainEntitySketch.reconstitute({ name: EntityName.reconstitute("Order"), component: ComponentName.reconstitute("Core"), attributes: AttributeNames.of([]) });
+    expect(DomainEntitySketches.of([]).add(de).toArray().length).toBe(1);
+  });
+
+  test("collection-owned set knowledge: names, duplicates, membership, index lookups", () => {
+    const attrs = AttrDecls.of([attr("status", ["open"]), attr("qty"), attr("status")]);
+    expect(attrs.names().map((n) => n.value())).toEqual(["status", "qty", "status"]);
+    expect(attrs.duplicatesByName().map((a) => a.name().value())).toEqual(["status"]);
+    expect(attrs.named("qty")?.name().value()).toBe("qty");
+    expect(attrs.lifecycleAttr()?.name().value()).toBe("status");
+
+    const decls = EntityDecls.of([entity("Order"), entity("Order")]);
+    expect(decls.duplicatesByName().length).toBe(1);
+    expect(decls.containsNamed("Order")).toBe(true);
+    expect(decls.containsNamed("Ghost")).toBe(false);
+
+    const rels = RelDecls.of([]).concat(RelDecls.of([RelDecl.reconstitute({ element: ElementPath.reconstitute("r[0]"), from: null, to: null, cardinality: null, hasDirection: true })]));
+    expect(rels.toArray().length).toBe(1);
+
+    const index = SiblingUnitIndex.of(new Map([["u1", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: AttributeNames.of([AttributeName.reconstitute("qty")]) }]])]]));
+    expect(index.hasAnyUnit()).toBe(true);
+    expect(index.definersOf("order")).toEqual(["u1"]);
+    expect(index.entityDeclaredIn("u1", "order")?.name.value()).toBe("Order");
+    expect(index.entityDeclaredIn("u9", "order")).toBe(undefined);
+    expect(SiblingUnitIndex.of(new Map()).hasAnyUnit()).toBe(false);
+
+    const sketches = DomainEntitySketches.of([
+      DomainEntitySketch.reconstitute({ name: EntityName.reconstitute("Order"), component: ComponentName.reconstitute("Core"), attributes: AttributeNames.of([]) }),
+      DomainEntitySketch.reconstitute({ name: EntityName.reconstitute("order"), component: ComponentName.reconstitute("Core"), attributes: AttributeNames.of([]) }),
+    ]);
+    expect(sketches.sortedDistinctByNormalizedName().length).toBe(1);
+  });
+});

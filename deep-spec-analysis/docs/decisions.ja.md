@@ -873,13 +873,13 @@ PR #40 の型付き集約 ID は解決には使われていたが、解決され
 まず指摘の震源である functional-design クラスタへ適用：プロパティ袋
 7 型は振る舞いを持つクラスになり、逃げていた述語が家に帰った——
 
-- `AttrDecl` は自分の整合を自分で判定する：FD-E2 の型クラス衝突
+- `AttrDecl` は自分の整合を自分で判定する：FD-E2 の型区分衝突
   （`declaresAllowedValuesOnNonEnumerableType`・
   `declaresBoundsOnNonNumericType`・`declaresUniqueOnCollectionType`）、
   FD-E3 の範囲・既定値整合（`boundsInverted`・`defaultBelowMin`/
   `defaultAboveMax`・`defaultOutsideAllowed`）、ライフサイクル候補性、
   FD-S の図差分（`rogueDiagramStates`・`allowedValuesAbsentFrom`）。
-  型クラス集合は `TypeName`（`classifiesNumeric`/`Date`/`Bool`/
+  型区分集合は `TypeName`（`classifiesNumeric`/`Date`/`Bool`/
   `Collection`）へ、基数の閉集合は `CardinalityNotation.isInClosedSet`
   へ、category の閉集合は `RuleCategory.isKnownCategory` へ移った。
 - `EntityDecl` は `duplicateAttrDecls`・`lifecycleAttr`（旧自由関数は
@@ -897,3 +897,26 @@ PR #40 の型付き集約 ID は解決には使われていたが、解決され
 - 族内の finding 発行順は変わった（重複が集合メソッド由来になったため）
   が、レポート集約の compose が正準ソートを所有するため観測不能——
   golden が確認している。
+
+## ファーストクラスコレクション裁定 — ドメイン層は配列を生で扱わない（2026-08-30）
+
+オーナー裁定：生の配列をドメイン層に流してはならない。コレクションは
+不変の `add`・集合の知識・境界専用の脱出口 `toArray()` を持つ
+ファーストクラスのドメインオブジェクトである。震源クラスタへ適用：
+語彙側に `AttributeNames`・`AllowedValues`・`StateNames`・`SourceIds`、
+宣言側に `AttrDecls`・`RelDecls`・`EntityDecls`・`ShapeErrors`・
+`RuleDecls`・`StateMachineSketches`・`DomainEntitySketches`・
+`SiblingUnitIndex`。集合の知識はさらに一段コレクションへ沈んだ：重複検出
+（`duplicatesByName`）、ライフサイクル選定（`AttrDecls.lifecycleAttr`）、
+FD-E6/FD-R4 の解決（`EntityDecls.resolvesReference`/`resolvesAppliesTo`）、
+FD-S の図差分（`AllowedValues.rogueAmong`/`absentFrom`）、FD-R3 の逆検証
+（`SourceIds.valuesMissingFrom`）、XS の巡回順
+（`DomainEntitySketches.sortedDistinctByNormalizedName`）、兄弟索引の
+照会（`SiblingUnitIndex.definersOf`/`entityDeclaredIn`）。ドメインに
+裸の `Map` を晒していた旧 `SiblingUnitEntities` 型別名は索引クラスの中で
+死んだ。同セッションの用語補正も記録する：コメントは「型区分」と書く
+——通常のオブジェクト指向の分類であり、関数型の型クラスの含意は意図も
+実装もしていない。
+
+証明：308 tests green。golden 無変更。パリティスナップショットの
+`diff -r` は空のまま。全コレクションは 90% 床の上。

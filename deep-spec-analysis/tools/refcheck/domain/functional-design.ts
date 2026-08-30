@@ -1,15 +1,19 @@
 // functional-design（entities.md / rules.md / functional-spec.md）と
 // 横断検査（XS）向け domain-design エンティティのドメインオブジェクト。
 // 解析（fence/YAML/mermaid/Json 歩き）はアダプタのパーサが行い、ここは
-// 宣言が自分の整合性判定（型クラス衝突・範囲逆転・参照解決・被覆差分）を
+// 宣言が自分の整合性判定（型区分の衝突・範囲逆転・参照解決・被覆差分）を
 // 所有する抽象データ型——検査ランナーは尋ねず（ask）、告げる（tell）だけ。
-// 判定の意味論と文言材料の描画形は旧 functional-checks の凍結挙動の逐語移設。
+// 配列を生で運ばない：集合の知識（重複・差分・解決・選定）はファースト
+// クラスコレクションが所有し、toArray() は境界（描画・アダプタ）専用の
+// 脱出口。判定の意味論と文言の描画形は旧 functional-checks の凍結挙動の
+// 逐語移設。
 
 import type {
-  AllowedValue,
+  AllowedValues,
   AppliesTo,
   AttributeDefault,
   AttributeName,
+  AttributeNames,
   BusinessRuleId,
   CardinalityNotation,
   ComponentName,
@@ -19,8 +23,8 @@ import type {
   NumericBound,
   ReferenceTarget,
   RuleCategory,
-  SourceId,
-  StateName,
+  SourceIds,
+  StateNames,
   TypeName,
 } from "./functional-design-values.ts";
 
@@ -32,7 +36,7 @@ export interface AttrDeclSeed {
   readonly type: TypeName | null;
   readonly uniqueIsTrue: boolean;
   readonly references: ReferenceTarget | null;
-  readonly allowed: readonly AllowedValue[] | null;
+  readonly allowed: AllowedValues | null;
   readonly def: AttributeDefault | null;
   readonly minDeclared: boolean;
   readonly maxDeclared: boolean;
@@ -40,7 +44,7 @@ export interface AttrDeclSeed {
   readonly max: NumericBound | null;
 }
 
-// 属性宣言。型クラスとの整合・範囲と既定値の整合・ライフサイクル候補性という
+// 属性宣言。型区分との整合・範囲と既定値の整合・ライフサイクル候補性という
 // ドメイン知識を自分で判定する（旧 FD-E2/E3 の条件式の移設）。
 export class AttrDecl {
   readonly #seed: AttrDeclSeed;
@@ -91,7 +95,7 @@ export class AttrDecl {
     return this.#seed.type === null ? "null" : this.#seed.type.value();
   }
 
-  // FD-E2: 列挙できない型クラス（数値・日付・真偽）に allowed_values を宣言。
+  // FD-E2: 列挙できない型区分（数値・日付・真偽）に allowed_values を宣言。
   declaresAllowedValuesOnNonEnumerableType(): boolean {
     const t = this.#seed.type;
     if (t === null || this.#seed.allowed === null) return false;
@@ -131,7 +135,7 @@ export class AttrDecl {
   defaultOutsideAllowed(): boolean {
     const d = this.#seed.def;
     if (this.#seed.allowed === null || d === null || !d.isString()) return false;
-    return !this.#seed.allowed.some((v) => v.value() === d.asString());
+    return !this.#seed.allowed.containsValue(d.asString());
   }
 
   // ライフサイクル属性の候補性（status/state の名を帯び allowed を持つ）。
@@ -139,16 +143,68 @@ export class AttrDecl {
     return this.#seed.name.value() === "status" || this.#seed.name.value() === "state";
   }
 
-  // FD-S1: 図の状態のうち allowed values に無いもの（正規化照合・値の昇順）。
-  rogueDiagramStates(states: readonly StateName[]): string[] {
-    const allowedNorm = new Set((this.#seed.allowed ?? []).map((v) => v.normalized()));
-    return states.filter((s) => !allowedNorm.has(s.normalized())).map((s) => s.value()).sort();
+  // FD-S1: 図の状態のうち allowed values に無いもの（差分はコレクションが計算）。
+  rogueDiagramStates(states: StateNames): string[] {
+    return this.#seed.allowed === null ? [] : this.#seed.allowed.rogueAmong(states);
   }
 
   // FD-S2: allowed values のうちどの図状態にも現れないもの。
-  allowedValuesAbsentFrom(states: readonly StateName[]): string[] {
-    const stateNorm = new Set(states.map((s) => s.normalized()));
-    return (this.#seed.allowed ?? []).filter((v) => !stateNorm.has(v.normalized())).map((v) => v.value()).sort();
+  allowedValuesAbsentFrom(states: StateNames): string[] {
+    return this.#seed.allowed === null ? [] : this.#seed.allowed.absentFrom(states);
+  }
+}
+
+// 属性宣言のコレクション。重複検出・ライフサイクル属性の選定・名前解決という
+// 集合の知識を所有する。
+export class AttrDecls {
+  readonly #values: readonly AttrDecl[];
+
+  private constructor(values: readonly AttrDecl[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly AttrDecl[]): AttrDecls {
+    return new AttrDecls([...values]);
+  }
+
+  add(value: AttrDecl): AttrDecls {
+    return new AttrDecls([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<AttrDecl> {
+    yield* this.#values;
+  }
+
+  // 2 回目以降に現れた属性宣言（宣言順——旧 seen-set 走査と同じ列）。
+  duplicatesByName(): AttrDecl[] {
+    const seen = new Set<string>();
+    const dups: AttrDecl[] = [];
+    for (const a of this.#values) {
+      if (seen.has(a.name().value())) dups.push(a);
+      seen.add(a.name().value());
+    }
+    return dups;
+  }
+
+  // ライフサイクル属性：status/state の名で allowed を持つもの、無ければ
+  // allowed を持つ唯一の属性、それも無ければ null（旧 lifecycleAttrOf）。
+  lifecycleAttr(): AttrDecl | null {
+    const named = this.#values.find((a) => a.bearsLifecycleName() && a.hasAllowedValues());
+    if (named) return named;
+    const withAllowed = this.#values.filter((a) => a.hasAllowedValues());
+    return withAllowed.length === 1 ? (withAllowed[0] ?? null) : null;
+  }
+
+  named(token: string): AttrDecl | null {
+    return this.#values.find((a) => a.name().value() === token) ?? null;
+  }
+
+  names(): AttributeName[] {
+    return this.#values.map((a) => a.name());
+  }
+
+  toArray(): readonly AttrDecl[] {
+    return this.#values;
   }
 }
 
@@ -197,15 +253,42 @@ export class RelDecl {
   }
 }
 
+export class RelDecls {
+  readonly #values: readonly RelDecl[];
+
+  private constructor(values: readonly RelDecl[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly RelDecl[]): RelDecls {
+    return new RelDecls([...values]);
+  }
+
+  add(value: RelDecl): RelDecls {
+    return new RelDecls([...this.#values, value]);
+  }
+
+  concat(other: RelDecls): RelDecls {
+    return new RelDecls([...this.#values, ...other.#values]);
+  }
+
+  *[Symbol.iterator](): Iterator<RelDecl> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly RelDecl[] {
+    return this.#values;
+  }
+}
+
 export interface EntityDeclSeed {
   readonly name: EntityName;
   readonly element: ElementPath;
-  readonly attrs: readonly AttrDecl[];
-  readonly rels: readonly RelDecl[];
+  readonly attrs: AttrDecls;
+  readonly rels: RelDecls;
 }
 
-// エンティティ宣言。属性の重複検出・ライフサイクル属性の選定・属性の解決を
-// 自分で行う（旧 lifecycleAttrOf 自由関数と seen-set 走査の移設）。
+// エンティティ宣言。属性の重複・選定・解決は属性コレクションに委ねる。
 export class EntityDecl {
   readonly #seed: EntityDeclSeed;
 
@@ -225,36 +308,88 @@ export class EntityDecl {
     return this.#seed.element;
   }
 
-  attrs(): readonly AttrDecl[] {
+  attrs(): AttrDecls {
     return this.#seed.attrs;
   }
 
-  rels(): readonly RelDecl[] {
+  rels(): RelDecls {
     return this.#seed.rels;
   }
 
-  // 2 回目以降に現れた属性宣言（宣言順——旧 seen-set 走査と同じ列）。
-  duplicateAttrDecls(): AttrDecl[] {
+  lifecycleAttr(): AttrDecl | null {
+    return this.#seed.attrs.lifecycleAttr();
+  }
+
+  attrNamed(token: string): AttrDecl | null {
+    return this.#seed.attrs.named(token);
+  }
+}
+
+// エンティティ宣言のコレクション。重複・所属・正規化名解決・ライフサイクル
+// 対象の選定・あいまい照合という集合の知識を所有する。
+export class EntityDecls {
+  readonly #values: readonly EntityDecl[];
+  readonly #names: Set<string>;
+
+  private constructor(values: readonly EntityDecl[]) {
+    this.#values = values;
+    this.#names = new Set(values.map((e) => e.name().value()));
+  }
+
+  static of(values: readonly EntityDecl[]): EntityDecls {
+    return new EntityDecls([...values]);
+  }
+
+  add(value: EntityDecl): EntityDecls {
+    return new EntityDecls([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<EntityDecl> {
+    yield* this.#values;
+  }
+
+  duplicatesByName(): EntityDecl[] {
     const seen = new Set<string>();
-    const dups: AttrDecl[] = [];
-    for (const a of this.#seed.attrs) {
-      if (seen.has(a.name().value())) dups.push(a);
-      seen.add(a.name().value());
+    const dups: EntityDecl[] = [];
+    for (const e of this.#values) {
+      if (seen.has(e.name().value())) dups.push(e);
+      seen.add(e.name().value());
     }
     return dups;
   }
 
-  // ライフサイクル属性：status/state の名で allowed を持つもの、無ければ
-  // allowed を持つ唯一の属性、それも無ければ null（旧 lifecycleAttrOf）。
-  lifecycleAttr(): AttrDecl | null {
-    const named = this.#seed.attrs.find((a) => a.bearsLifecycleName() && a.hasAllowedValues());
-    if (named) return named;
-    const withAllowed = this.#seed.attrs.filter((a) => a.hasAllowedValues());
-    return withAllowed.length === 1 ? (withAllowed[0] ?? null) : null;
+  containsNamed(value: string): boolean {
+    return this.#names.has(value);
   }
 
-  attrNamed(token: string): AttrDecl | null {
-    return this.#seed.attrs.find((a) => a.name().value() === token) ?? null;
+  byNormalizedName(normalized: string): EntityDecl | undefined {
+    return this.#values.find((e) => e.name().normalized() === normalized);
+  }
+
+  lifecycleOnly(): EntityDecl[] {
+    return this.#values.filter((e) => e.lifecycleAttr() !== null);
+  }
+
+  // FD-E6: Entity / Entity.attr 形はエンティティ名の厳密照合、自由文は
+  // 小文字包含の緩い照合（凍結挙動）。
+  resolvesReference(reference: ReferenceTarget): boolean {
+    const token = reference.value().match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.[A-Za-z][A-Za-z0-9_]*)?$/);
+    if (token) return this.#names.has(token[1] ?? "");
+    return this.#values.some((d) => reference.value().toLowerCase().includes(d.name().value().toLowerCase()));
+  }
+
+  // FD-R4: applies-to が Entity / Entity.attribute へ解決するか。
+  resolvesAppliesTo(target: AppliesTo): boolean {
+    const token = target.value().match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.([A-Za-z][A-Za-z0-9_]*))?$/);
+    if (token) {
+      const ent = this.#values.find((e) => e.name().value() === token[1]);
+      return ent !== undefined && (token[2] === undefined || ent.attrNamed(token[2]) !== null);
+    }
+    return this.#values.some((e) => target.value().toLowerCase().includes(e.name().value().toLowerCase()));
+  }
+
+  toArray(): readonly EntityDecl[] {
+    return this.#values;
   }
 }
 
@@ -263,80 +398,63 @@ export interface ShapeError {
   readonly detail: string;
 }
 
-export interface DeclaredEntitiesSeed {
-  readonly entities: readonly EntityDecl[];
-  readonly rels: readonly RelDecl[]; // top-level relationships
-  readonly shapeErrors: readonly ShapeError[];
+export class ShapeErrors {
+  readonly #values: readonly ShapeError[];
+
+  private constructor(values: readonly ShapeError[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly ShapeError[]): ShapeErrors {
+    return new ShapeErrors([...values]);
+  }
+
+  add(value: ShapeError): ShapeErrors {
+    return new ShapeErrors([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<ShapeError> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly ShapeError[] {
+    return this.#values;
+  }
 }
 
-// entities.md の宣言集合。エンティティの重複・参照解決（FD-E6）・applies-to
-// 解決（FD-R4）・ライフサイクル対象の選定という集合知識を所有する。
+export interface DeclaredEntitiesSeed {
+  readonly entities: EntityDecls;
+  readonly rels: RelDecls; // top-level relationships
+  readonly shapeErrors: ShapeErrors;
+}
+
+// entities.md の宣言集合。参照解決・applies-to 解決・ライフサイクル対象の
+// 選定はエンティティコレクションに委ね、最上位と各エンティティ配下の関係の
+// 合成順（凍結）を所有する。
 export class DeclaredEntities {
   readonly #seed: DeclaredEntitiesSeed;
-  readonly #names: Set<string>;
 
   private constructor(seed: DeclaredEntitiesSeed) {
     this.#seed = seed;
-    this.#names = new Set(seed.entities.map((e) => e.name().value()));
   }
 
   static reconstitute(seed: DeclaredEntitiesSeed): DeclaredEntities {
     return new DeclaredEntities(seed);
   }
 
-  entities(): readonly EntityDecl[] {
+  entities(): EntityDecls {
     return this.#seed.entities;
   }
 
-  shapeErrors(): readonly ShapeError[] {
+  shapeErrors(): ShapeErrors {
     return this.#seed.shapeErrors;
   }
 
   // 最上位＋各エンティティ配下の全関係宣言（旧 allRels の合成順）。
-  allRels(): RelDecl[] {
-    return [...this.#seed.rels, ...this.#seed.entities.flatMap((e) => [...e.rels()])];
-  }
-
-  // 2 回目以降に現れたエンティティ宣言（宣言順）。
-  duplicateEntityDecls(): EntityDecl[] {
-    const seen = new Set<string>();
-    const dups: EntityDecl[] = [];
-    for (const e of this.#seed.entities) {
-      if (seen.has(e.name().value())) dups.push(e);
-      seen.add(e.name().value());
-    }
-    return dups;
-  }
-
-  containsEntityNamed(value: string): boolean {
-    return this.#names.has(value);
-  }
-
-  // FD-E6: references が宣言済みエンティティへ解決するか。
-  // Entity / Entity.attr 形はエンティティ名の厳密照合、自由文は小文字包含の
-  // 緩い照合（凍結挙動）。
-  resolvesReference(reference: ReferenceTarget): boolean {
-    const token = reference.value().match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.[A-Za-z][A-Za-z0-9_]*)?$/);
-    if (token) return this.#names.has(token[1] ?? "");
-    return this.#seed.entities.some((d) => reference.value().toLowerCase().includes(d.name().value().toLowerCase()));
-  }
-
-  // FD-R4: applies-to が Entity / Entity.attribute へ解決するか。
-  resolvesAppliesTo(target: AppliesTo): boolean {
-    const token = target.value().match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.([A-Za-z][A-Za-z0-9_]*))?$/);
-    if (token) {
-      const ent = this.#seed.entities.find((e) => e.name().value() === token[1]);
-      return ent !== null && ent !== undefined && (token[2] === undefined || ent.attrNamed(token[2]) !== null);
-    }
-    return this.#seed.entities.some((e) => target.value().toLowerCase().includes(e.name().value().toLowerCase()));
-  }
-
-  entityByNormalizedName(normalized: string): EntityDecl | undefined {
-    return this.#seed.entities.find((e) => e.name().normalized() === normalized);
-  }
-
-  lifecycleEntities(): EntityDecl[] {
-    return this.#seed.entities.filter((e) => e.lifecycleAttr() !== null);
+  allRels(): RelDecls {
+    let all = this.#seed.rels;
+    for (const e of this.#seed.entities) all = all.concat(e.rels());
+    return all;
   }
 }
 
@@ -353,7 +471,7 @@ export interface RuleDeclSeed {
   readonly element: ElementPath;
   readonly category: RuleCategory | null;
   readonly appliesTo: AppliesTo | null;
-  readonly sourceIds: readonly SourceId[];
+  readonly sourceIds: SourceIds;
   // 欠落キー名の列（文言材料——語彙値ではない）。
   readonly missing: readonly string[];
 }
@@ -398,11 +516,35 @@ export class RuleDecl {
 
   // FD-R3: requirements.md に存在しない source id（値の昇順——凍結順）。
   sourceIdValuesMissingFrom(known: ReadonlySet<string>): string[] {
-    return this.#seed.sourceIds.map((id) => id.value()).filter((id) => !known.has(id)).sort();
+    return this.#seed.sourceIds.valuesMissingFrom(known);
   }
 
   categoryOutsideClosedSet(): boolean {
     return this.#seed.category !== null && !this.#seed.category.isKnownCategory();
+  }
+}
+
+export class RuleDecls {
+  readonly #values: readonly RuleDecl[];
+
+  private constructor(values: readonly RuleDecl[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly RuleDecl[]): RuleDecls {
+    return new RuleDecls([...values]);
+  }
+
+  add(value: RuleDecl): RuleDecls {
+    return new RuleDecls([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<RuleDecl> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly RuleDecl[] {
+    return this.#values;
   }
 }
 
@@ -411,13 +553,13 @@ export type RulesOutcome =
   | { readonly kind: "wrong-fence-count"; readonly found: number }
   | { readonly kind: "unparseable"; readonly line: number; readonly error: string }
   | { readonly kind: "no-rules-list" }
-  | { readonly kind: "extracted"; readonly rules: readonly RuleDecl[] };
+  | { readonly kind: "extracted"; readonly rules: RuleDecls };
 
 // ---- functional-spec.md -----------------------------------------------------
 
 export interface StateMachineSketchSeed {
   readonly spec: MachineSpec; // "Entity" or "Entity.attribute" from the heading
-  readonly states: readonly StateName[];
+  readonly states: StateNames;
   readonly fenceLine: number;
   readonly unsupported: string | null; // 文言材料（理由のプローズ）
 }
@@ -438,7 +580,7 @@ export class StateMachineSketch {
     return this.#seed.spec;
   }
 
-  states(): readonly StateName[] {
+  states(): StateNames {
     return this.#seed.states;
   }
 
@@ -452,16 +594,44 @@ export class StateMachineSketch {
   }
 }
 
+export class StateMachineSketches {
+  readonly #values: readonly StateMachineSketch[];
+
+  private constructor(values: readonly StateMachineSketch[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly StateMachineSketch[]): StateMachineSketches {
+    return new StateMachineSketches([...values]);
+  }
+
+  add(value: StateMachineSketch): StateMachineSketches {
+    return new StateMachineSketches([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<StateMachineSketch> {
+    yield* this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
+  }
+
+  toArray(): readonly StateMachineSketch[] {
+    return this.#values;
+  }
+}
+
 export type FunctionalSpecOutcome =
   | { readonly kind: "absent" }
-  | { readonly kind: "present"; readonly machines: readonly StateMachineSketch[] };
+  | { readonly kind: "present"; readonly machines: StateMachineSketches };
 
 // ---- components.md (XS) -----------------------------------------------------
 
 export interface DomainEntitySketchSeed {
   readonly name: EntityName;
   readonly component: ComponentName;
-  readonly attributes: readonly AttributeName[];
+  readonly attributes: AttributeNames;
 }
 
 // domain-design 側エンティティの素描。functional-design 側との被覆差分と
@@ -487,16 +657,83 @@ export class DomainEntitySketch {
   }
 
   // XS-3: このユニットの定義が落としている属性（値の昇順——凍結順）。
-  attributesDroppedIn(unitAttrs: readonly AttributeName[]): string[] {
-    const mineNorm = new Set(unitAttrs.map((a) => a.normalized()));
-    return this.#seed.attributes.filter((a) => !mineNorm.has(a.normalized())).map((a) => a.value()).sort();
+  attributesDroppedIn(unitAttrs: AttributeNames): string[] {
+    return this.#seed.attributes
+      .toArray()
+      .filter((a) => !unitAttrs.coversNormalized(a))
+      .map((a) => a.value())
+      .sort();
+  }
+}
+
+// domain-design 側素描のコレクション。名前順の整列と正規化名での一意化
+// （XS 検査の凍結挙動）を所有する。
+export class DomainEntitySketches {
+  readonly #values: readonly DomainEntitySketch[];
+
+  private constructor(values: readonly DomainEntitySketch[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly DomainEntitySketch[]): DomainEntitySketches {
+    return new DomainEntitySketches([...values]);
+  }
+
+  add(value: DomainEntitySketch): DomainEntitySketches {
+    return new DomainEntitySketches([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<DomainEntitySketch> {
+    yield* this.#values;
+  }
+
+  // 名前昇順に整列し、正規化名の初出だけを残す（XS の巡回順——凍結）。
+  sortedDistinctByNormalizedName(): DomainEntitySketch[] {
+    const sorted = [...this.#values].sort((a, b) => (a.name().value() < b.name().value() ? -1 : 1));
+    const seen = new Set<string>();
+    const out: DomainEntitySketch[] = [];
+    for (const de of sorted) {
+      const key = de.name().normalized();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(de);
+    }
+    return out;
+  }
+
+  toArray(): readonly DomainEntitySketch[] {
+    return this.#values;
   }
 }
 
 export type DomainEntitiesOutcome =
   | { readonly kind: "absent" }
   | { readonly kind: "unusable"; readonly error: string }
-  | { readonly kind: "extracted"; readonly entities: readonly DomainEntitySketch[] };
+  | { readonly kind: "extracted"; readonly entities: DomainEntitySketches };
 
-// 正規化名 → { 宣言名, 属性名列 }（XS 検査が消費するユニットごとの索引）。
-export type SiblingUnitEntities = Map<string, Map<string, { name: EntityName; attrs: readonly AttributeName[] }>>;
+// 兄弟ユニットの entities.md 索引。ユニット横断の定義元探索と、ユニット内の
+// 正規化名解決という集合の知識を所有する（XS 検査の凍結挙動）。
+export class SiblingUnitIndex {
+  readonly #units: ReadonlyMap<string, ReadonlyMap<string, { name: EntityName; attrs: AttributeNames }>>;
+
+  private constructor(units: ReadonlyMap<string, ReadonlyMap<string, { name: EntityName; attrs: AttributeNames }>>) {
+    this.#units = units;
+  }
+
+  static of(units: ReadonlyMap<string, ReadonlyMap<string, { name: EntityName; attrs: AttributeNames }>>): SiblingUnitIndex {
+    return new SiblingUnitIndex(new Map(units));
+  }
+
+  // この正規化名のエンティティを定義しているユニット（登録順——凍結順）。
+  definersOf(normalizedName: string): string[] {
+    return [...this.#units.entries()].filter(([, m]) => m.has(normalizedName)).map(([u]) => u);
+  }
+
+  entityDeclaredIn(unit: string, normalizedName: string): { name: EntityName; attrs: AttributeNames } | undefined {
+    return this.#units.get(unit)?.get(normalizedName);
+  }
+
+  hasAnyUnit(): boolean {
+    return this.#units.size > 0;
+  }
+}

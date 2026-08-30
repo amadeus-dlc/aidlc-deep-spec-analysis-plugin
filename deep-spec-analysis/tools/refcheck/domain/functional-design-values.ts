@@ -61,9 +61,9 @@ export class TypeName {
   static reconstitute(raw: string): TypeName { return new TypeName(raw); }
   equals(other: TypeName): boolean { return this.#value === other.#value; }
   value(): string { return this.#value; }
-  // 型クラス（numeric/date/bool/…）の照合は小文字正規化で行う（凍結挙動）。
+  // 型区分（numeric/date/bool/…）の照合は小文字正規化で行う（凍結挙動）。
   normalized(): string { return this.#value.toLowerCase(); }
-  // 型クラスの分類は型名語彙の知識（旧 functional-checks のローカル集合の移設）。
+  // 型区分の分類は型名語彙の知識（旧 functional-checks のローカル集合の移設）。
   classifiesNumeric(): boolean { return NUMERICISH.has(this.normalized()); }
   classifiesDate(): boolean { return DATEISH.has(this.normalized()); }
   classifiesBool(): boolean { return BOOLISH.has(this.normalized()); }
@@ -238,4 +238,135 @@ export class ReferenceTarget {
   static reconstitute(raw: string): ReferenceTarget { return new ReferenceTarget(raw); }
   equals(other: ReferenceTarget): boolean { return this.#value === other.#value; }
   value(): string { return this.#value; }
+}
+
+// ---- ファーストクラスコレクション（語彙） -----------------------------------
+// ドメイン層は配列を生で扱わない。集合の知識（正規化照合・差分・所属）は
+// コレクション自身が所有し、toArray() は境界（描画・アダプタ）専用の脱出口。
+
+export class AttributeNames {
+  readonly #values: readonly AttributeName[];
+
+  private constructor(values: readonly AttributeName[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly AttributeName[]): AttributeNames {
+    return new AttributeNames([...values]);
+  }
+
+  add(value: AttributeName): AttributeNames {
+    return new AttributeNames([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<AttributeName> {
+    yield* this.#values;
+  }
+
+  count(): number {
+    return this.#values.length;
+  }
+
+  // 正規化名での被覆判定（XS-3 の照合知識）。
+  coversNormalized(name: AttributeName): boolean {
+    return this.#values.some((v) => v.normalized() === name.normalized());
+  }
+
+  // 境界: 描画・アダプタ専用。
+  toArray(): readonly AttributeName[] {
+    return this.#values;
+  }
+}
+
+export class AllowedValues {
+  readonly #values: readonly AllowedValue[];
+
+  private constructor(values: readonly AllowedValue[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly AllowedValue[]): AllowedValues {
+    return new AllowedValues([...values]);
+  }
+
+  add(value: AllowedValue): AllowedValues {
+    return new AllowedValues([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<AllowedValue> {
+    yield* this.#values;
+  }
+
+  containsValue(raw: string): boolean {
+    return this.#values.some((v) => v.value() === raw);
+  }
+
+  // FD-S1: 図の状態のうち許容値に無いもの（正規化照合・値の昇順——凍結順）。
+  rogueAmong(states: StateNames): string[] {
+    const norm = new Set(this.#values.map((v) => v.normalized()));
+    return states.toArray().filter((s) => !norm.has(s.normalized())).map((s) => s.value()).sort();
+  }
+
+  // FD-S2: 許容値のうちどの図状態にも現れないもの。
+  absentFrom(states: StateNames): string[] {
+    const stateNorm = new Set(states.toArray().map((s) => s.normalized()));
+    return this.#values.filter((v) => !stateNorm.has(v.normalized())).map((v) => v.value()).sort();
+  }
+
+  toArray(): readonly AllowedValue[] {
+    return this.#values;
+  }
+}
+
+export class StateNames {
+  readonly #values: readonly StateName[];
+
+  private constructor(values: readonly StateName[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly StateName[]): StateNames {
+    return new StateNames([...values]);
+  }
+
+  add(value: StateName): StateNames {
+    return new StateNames([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<StateName> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly StateName[] {
+    return this.#values;
+  }
+}
+
+export class SourceIds {
+  readonly #values: readonly SourceId[];
+
+  private constructor(values: readonly SourceId[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly SourceId[]): SourceIds {
+    return new SourceIds([...values]);
+  }
+
+  add(value: SourceId): SourceIds {
+    return new SourceIds([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<SourceId> {
+    yield* this.#values;
+  }
+
+  // FD-R3: requirements.md に存在しない source id（値の昇順——凍結順）。
+  valuesMissingFrom(known: ReadonlySet<string>): string[] {
+    return this.#values.map((id) => id.value()).filter((id) => !known.has(id)).sort();
+  }
+
+  toArray(): readonly SourceId[] {
+    return this.#values;
+  }
 }

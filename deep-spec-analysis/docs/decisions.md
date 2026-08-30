@@ -903,13 +903,13 @@ Applied first at the flagged epicenter, the functional-design cluster:
 the seven property bags became behavior-bearing classes, and the escaped
 predicates moved home —
 
-- `AttrDecl` now judges its own coherence: the FD-E2 type-class
+- `AttrDecl` now judges its own coherence: the FD-E2 type-category
   conflicts (`declaresAllowedValuesOnNonEnumerableType`,
   `declaresBoundsOnNonNumericType`, `declaresUniqueOnCollectionType`),
   the FD-E3 range/default coherence (`boundsInverted`,
   `defaultBelowMin`/`defaultAboveMax`, `defaultOutsideAllowed`), the
   lifecycle candidacy, and the FD-S diagram diffs (`rogueDiagramStates`,
-  `allowedValuesAbsentFrom`). The type-class sets moved into `TypeName`
+  `allowedValuesAbsentFrom`). The type-category sets moved into `TypeName`
   (`classifiesNumeric`/`Date`/`Bool`/`Collection`), the cardinality
   closed set into `CardinalityNotation.isInClosedSet`, the category set
   into `RuleCategory.isKnownCategory`.
@@ -930,3 +930,28 @@ predicates moved home —
 - Finding-emission order changed within a family (duplicates now come
   from collection methods); this is unobservable because the report
   aggregate's compose owns canonical sorting — the goldens confirm.
+
+## First-class-collection ruling — domain layers never handle raw arrays (2026-08-30)
+
+The owner ruled that raw arrays must not flow through the domain layer:
+collections are first-class domain objects with an immutable `add`, the
+collection-owned set knowledge, and `toArray()` as the boundary-only
+escape hatch. Applied at the epicenter cluster: `AttributeNames`,
+`AllowedValues`, `StateNames`, `SourceIds` (vocabulary side) and
+`AttrDecls`, `RelDecls`, `EntityDecls`, `ShapeErrors`, `RuleDecls`,
+`StateMachineSketches`, `DomainEntitySketches`, `SiblingUnitIndex`
+(declaration side). The set knowledge sank one level further into the
+collections: duplicate detection (`duplicatesByName`), lifecycle
+selection (`AttrDecls.lifecycleAttr`), FD-E6/FD-R4 resolution
+(`EntityDecls.resolvesReference`/`resolvesAppliesTo`), the FD-S diagram
+diffs (`AllowedValues.rogueAmong`/`absentFrom`), the FD-R3 reverse
+verification (`SourceIds.valuesMissingFrom`), the XS traversal order
+(`DomainEntitySketches.sortedDistinctByNormalizedName`) and the sibling
+lookups (`SiblingUnitIndex.definersOf`/`entityDeclaredIn`). The former
+`SiblingUnitEntities` type alias — a bare `Map` in the domain — died
+into the index class. Terminology note recorded in the same session:
+comments now say 型区分 (type category) — plain OO classification, no
+functional type-class connotation intended or implemented.
+
+Proofs: 308 tests green; goldens untouched; the parity snapshot
+`diff -r` stays empty; every collection above the 90% floor.

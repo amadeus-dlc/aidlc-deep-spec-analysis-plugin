@@ -13,7 +13,7 @@ import type {
   EntitiesOutcome,
   FunctionalSpecOutcome,
   RulesOutcome,
-  SiblingUnitEntities,
+  SiblingUnitIndex,
 } from "./functional-design.ts";
 
 // 読み込まれ解析済みの 1 文書：inputs[] 記録用の (artifact, sha256) と解析結果。
@@ -45,7 +45,7 @@ export interface DesignRecordSeed {
     readonly requirements: LoadedDocument<ReadonlySet<string>> | null;
     readonly componentsArtifact: string;
     readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
-    readonly siblingUnits: SiblingUnitEntities;
+    readonly siblingUnits: SiblingUnitIndex;
     readonly siblingInputs: readonly InputAnchor[];
   } | null;
 }
