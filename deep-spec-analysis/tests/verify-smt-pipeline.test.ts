@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
-import { TargetIds, ArtifactPath, ContentHash, IrVersion, expressionUsesPrime } from "../tools/kernel/domain/index.ts";
+import { TargetIds, ArtifactPath, ContentHash, IrVersion, Expressions } from "../tools/kernel/domain/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -560,13 +560,13 @@ describe("degradation reports and ordering", () => {
     expect(back.findings().toArray()).toEqual(composed.findings().toArray());
   });
 
-  test("expressionUsesPrime finds primes only through nested references", () => {
-    expect(expressionUsesPrime({ op: "ref", path: "a", prime: true })).toBe(true);
-    expect(expressionUsesPrime({
+  test("Expressions.usesPrime finds primes only through nested references", () => {
+    expect(Expressions.usesPrime({ op: "ref", path: "a", prime: true })).toBe(true);
+    expect(Expressions.usesPrime({
       op: "and",
       args: [{ op: "bool", value: true }, { op: "not", args: [{ op: "ref", path: "a", prime: true }] }],
     })).toBe(true);
-    expect(expressionUsesPrime({ op: "eq", args: [{ op: "ref", path: "a" }, { op: "int", value: 1 }] })).toBe(false);
+    expect(Expressions.usesPrime({ op: "eq", args: [{ op: "ref", path: "a" }, { op: "int", value: 1 }] })).toBe(false);
   });
 
   test("the model resolves targets, references, and attributes as the old free functions did", () => {

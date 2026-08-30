@@ -16,11 +16,7 @@ import {
   validateSchema,
 } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok, unreachable } from "../tools/kernel/infrastructure/index.ts";
-import {
-  idCompare,
-  normalizeName,
-  TargetIds, sortedUnique,
-} from "../tools/kernel/domain/index.ts";
+import { IdOrder, Names, TargetIds } from "../tools/kernel/domain/index.ts";
 
 describe("result", () => {
   test("ok and err narrow through the ok discriminant", () => {
@@ -76,18 +72,18 @@ describe("canonical-json + content-hash", () => {
 
 describe("id-order", () => {
   test("letter skeleton orders before numeric segments", () => {
-    expect(idCompare("DD-2", "FD-1")).toBeLessThan(0);
-    expect(idCompare("OB-2", "OB-10")).toBeLessThan(0);
-    expect(idCompare("BR1.2", "BR1.10")).toBeLessThan(0);
-    expect(idCompare("OB-1", "OB-1")).toBe(0);
+    expect(IdOrder.compare("DD-2", "FD-1")).toBeLessThan(0);
+    expect(IdOrder.compare("OB-2", "OB-10")).toBeLessThan(0);
+    expect(IdOrder.compare("BR1.2", "BR1.10")).toBeLessThan(0);
+    expect(IdOrder.compare("OB-1", "OB-1")).toBe(0);
   });
 
   test("a shorter id sorts before its extension (missing segment pads with -1)", () => {
-    expect(idCompare("BR1", "BR1.1")).toBeLessThan(0);
+    expect(IdOrder.compare("BR1", "BR1.1")).toBeLessThan(0);
   });
 
   test("sortedUnique deduplicates then sorts with the given comparator", () => {
-    expect(sortedUnique(["OB-10", "OB-2", "OB-2"], idCompare)).toEqual(["OB-2", "OB-10"]);
+    expect(IdOrder.sortedUnique(["OB-10", "OB-2", "OB-2"], IdOrder.compare)).toEqual(["OB-2", "OB-10"]);
   });
 });
 
@@ -258,7 +254,8 @@ describe("target-id / requirement-ids / name-normalize", () => {
   });
 
   test("normalizeName casefolds and strips non-alphanumerics", () => {
-    expect(normalizeName("Order_Item")).toBe("orderitem");
-    expect(normalizeName("OrderItem")).toBe("orderitem");
+    expect(Names.normalize("Order_Item")).toBe("orderitem");
+    expect(Names.normalize("OrderItem")).toBe("orderitem");
   });
 });
+

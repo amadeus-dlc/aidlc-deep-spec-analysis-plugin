@@ -6,7 +6,7 @@
 // 自由関数は AlphaContext 自身の振る舞い（substitute / equalityFor）になった。
 // 索引キーは Expression（published language）の生パス——境界で string を受ける。
 
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import type { AttributeMapping } from "./refinement-map.ts";
 
@@ -89,7 +89,7 @@ export class AlphaContext {
     const mapping = this.#byReq.get(reqPath);
     if (!mapping) return null;
     if (mapping.kind === "enum-cases") {
-      const values = sortedUnique(Object.values(mapping.cases), idCompare);
+      const values = IdOrder.sortedUnique(Object.values(mapping.cases), IdOrder.compare);
       // 2 つの設計値が等しく抽象されるのは同じ要件値へ写るとき：要件値ごとに
       // 「pre がその類に居る iff post がその類に居る」。
       const classes = values.map((reqValue) => {

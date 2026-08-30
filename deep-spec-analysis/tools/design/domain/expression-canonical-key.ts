@@ -19,6 +19,15 @@ function keyOf(value: CanonicalNode): string {
   return JSON.stringify(value);
 }
 
-export function expressionCanonicalKey(e: Expression): string {
+function expressionCanonicalKeyImpl(e: Expression): string {
   return keyOf(e as unknown as CanonicalNode);
+}
+
+// 旧自由関数 expressionCanonicalKey の従属先（OOUI 裁定）。
+export class ExpressionCanonicalKey {
+  private constructor() {}
+
+  static of(e: Expression): string {
+    return expressionCanonicalKeyImpl(e);
+  }
 }

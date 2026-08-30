@@ -3,7 +3,7 @@
 // からの逐語移動（golden バイト凍結。並びはソートで正規化されるが、tie の
 // 挙動まで変えないため発行順も保存する）。
 
-import { type ArtifactPath, type RequirementIds, normalizeName, TargetIds } from "../../kernel/domain/index.ts";
+import { type ArtifactPath, type RequirementIds, TargetIds, Names } from "../../kernel/domain/index.ts";
 import { CheckFamilies, CheckFamily } from "./check-family.ts";
 import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import type { UnitName } from "./unit-name.ts";
@@ -42,7 +42,7 @@ export const FUNCTIONAL_FAMILIES = CheckFamilies.of([
   XS_1, XS_2, XS_3,
 ]);
 
-export interface FunctionalCheckMaterials {
+export interface FunctionalCheckMaterialsSeed {
   readonly unit: UnitName | undefined;
   readonly entitiesArtifact: ArtifactPath;
   readonly entities: EntitiesOutcome;
@@ -61,7 +61,7 @@ function ref(artifact: string, element: string, value?: string): WitnessRef {
   return value === undefined ? { artifact, element } : { artifact, element, value };
 }
 
-export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger: CheckFamilyLedger): void {
+function runFunctionalChecksImpl(materials: FunctionalCheckMaterialsSeed, ledger: CheckFamilyLedger): void {
   const entitiesArt = materials.entitiesArtifact.asString();
 
   // --- entities.md ----------------------------------------------------------
@@ -279,7 +279,7 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
         ledger.skip(FD_S2, "unrecognized-format", `${el}: ${m.unsupported()}`);
         continue;
       }
-      const ent = entities.entities().byNormalizedName(normalizeName(entName));
+      const ent = entities.entities().byNormalizedName(Names.normalize(entName));
       if (!ent) {
         ledger.finding(FD_S1, "consistency-mismatch", [TargetIds.safe("entity", entName)], [ref(specArt, el, entName)],
           `state machine names entity "${entName}" which is not declared in entities.md`);
@@ -354,5 +354,23 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
     if (materials.unit === undefined) {
       ledger.skip(XS_3, "unrecognized-format", "the unit for this functional-design record could not be determined from its path");
     }
+  }
+}
+
+// FD/XS 検査材料。検査の起動は材料自身の振る舞い（OOUI 裁定：旧
+// runFunctionalChecks の従属先）。
+export class FunctionalCheckMaterials {
+  readonly #seed: FunctionalCheckMaterialsSeed;
+
+  private constructor(seed: FunctionalCheckMaterialsSeed) {
+    this.#seed = seed;
+  }
+
+  static of(seed: FunctionalCheckMaterialsSeed): FunctionalCheckMaterials {
+    return new FunctionalCheckMaterials(seed);
+  }
+
+  runChecks(ledger: CheckFamilyLedger): void {
+    runFunctionalChecksImpl(this.#seed, ledger);
   }
 }

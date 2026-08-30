@@ -9,11 +9,11 @@ import {
   CheckFamilyLedger,
   InputAnchors,
   COMPONENT_FAMILIES,
+  ComponentCheckMaterials,
   ReferenceCheckReport,
   ReferenceCheckReportId,
-  runComponentChecks,
 } from "../domain/index.ts";
-import type { ArtifactPath } from "../../kernel/domain/index.ts";
+import { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./design-record-repository.ts";
 import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
@@ -40,7 +40,7 @@ export class CheckDomainComponentsUseCase {
     if (catalog === null) return { kind: "not-applicable" };
 
     const ledger = new CheckFamilyLedger(COMPONENT_FAMILIES);
-    runComponentChecks(catalog, record.value.target().artifact, ledger);
+    ComponentCheckMaterials.of({ outcome: catalog, artifact: ArtifactPath.reconstitute(record.value.target().artifact) }).runChecks(ledger);
     const report = ReferenceCheckReport.compose({
       id: ReferenceCheckReportId.of(input.reportDirectory, "components"),
       inputs: InputAnchors.of([record.value.target()]),

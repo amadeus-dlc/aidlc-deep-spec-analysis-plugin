@@ -5,7 +5,7 @@
 // 旧 aidlc-sensor-deep-spec-design-ir-valid.ts の semanticErrors からの逐語
 // 移植で、文言と発生順序はそのまま観測面に出る。
 
-import { type Expression, walkExpression } from "../../kernel/domain/index.ts";
+import { type Expression, Expressions } from "../../kernel/domain/index.ts";
 import { BrReferenceIndex } from "./br-reference-index.ts";
 import type { BrRefs, DeclaredValues, DesignUnitDecls } from "./design-ir-decl.ts";
 
@@ -49,7 +49,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
       // unit (a "closed" literal on ticket.channel must not legalize
       // "closed" against ticket.status).
       const boundEnum = new Map<Expression, string>();
-      walkExpression(e, (node) => {
+      Expressions.walk(e, (node) => {
         const args = node.args ?? [];
         if (args.length === 2) {
           const ref = args.find((a) => a.op === "ref" && typeof a.path === "string");
@@ -57,7 +57,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
           if (ref && en) boundEnum.set(en, ref.path as string);
         }
       });
-      walkExpression(e, (node) => {
+      Expressions.walk(e, (node) => {
         if (node.op === "ref" && typeof node.path === "string") {
           if (!attrTypes.has(node.path)) errors.push(where(`${ctx}: unresolvable reference "${node.path}"`));
           if (node.prime === true && !primesAllowed) {
@@ -146,7 +146,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
         if (tr.guard !== undefined) checkExpr(tr.guard, tctx, false);
         if (tr.effect !== undefined) {
           checkExpr(tr.effect, tctx, true);
-          walkExpression(tr.effect, (node) => {
+          Expressions.walk(tr.effect, (node) => {
             if (node.op === "ref" && node.prime === true && node.path === attrPath) {
               errors.push(where(`${tctx}: the effect assigns the machine's own attribute "${attrPath}" — state' = to is implicit`));
             }

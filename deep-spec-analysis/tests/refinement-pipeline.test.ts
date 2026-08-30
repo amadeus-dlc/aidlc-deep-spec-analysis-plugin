@@ -624,7 +624,7 @@ describe("refinement collections (first-class operations)", () => {
     expect(tr.isEmpty()).toBe(false);
     expect(TransitionRefs.of([]).isEmpty()).toBe(true);
     expect(tr.unknownAmong(new Set(["TR-2"]))).toEqual(["TR-10"]);
-    // unknownAmong は素の辞書順、sortedCanonically は idCompare（数値尾）。
+    // unknownAmong は素の辞書順、sortedCanonically は IdOrder.compare（数値尾）。
     expect(tr.sortedCanonically()).toEqual(["TR-2", "TR-10"]);
     expect(tr.toArray()).toEqual(["TR-2", "TR-10"]);
 

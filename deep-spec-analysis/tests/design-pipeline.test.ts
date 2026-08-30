@@ -56,7 +56,7 @@ import {
   DesignReport,
   DesignReportId,
   DesignUnit,
-  expressionCanonicalKey,
+  ExpressionCanonicalKey,
   LoweredUnit,
   DesignModelId,
 } from "../tools/design/domain/index.ts";
@@ -249,7 +249,7 @@ describe("lowering (typed compile-down)", () => {
 
   test("numbering, maps, and the implicit machine encoding are stable", () => {
     const low = LoweredUnit.of(machineUnit, { synthetics: false });
-    // 義務は idCompare 順（DOB-1 が DOB-2 の前）→ OB-1=DOB-1(event)、
+    // 義務は IdOrder.compare 順（DOB-1 が DOB-2 の前）→ OB-1=DOB-1(event)、
     // OB-2=DOB-2(invariant)、以後 TR-1/TR-2/ignore。
     expect(low.obligations().toArray().map((o) => `${o.id}:${o.nature}`)).toEqual([
       "OB-1:event",
@@ -341,7 +341,7 @@ describe("lowering (typed compile-down)", () => {
       { op: "not", args: [{ op: "ref", path: "A.b" }] },
     ];
     for (const s of samples) {
-      expect(expressionCanonicalKey(s)).toBe(canonicalStringify(s as unknown as Json));
+      expect(ExpressionCanonicalKey.of(s)).toBe(canonicalStringify(s as unknown as Json));
     }
   });
 });

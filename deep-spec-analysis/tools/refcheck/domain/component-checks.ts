@@ -3,6 +3,7 @@
 //（golden バイト凍結）。形式の解析はアダプタ側パーサの責務。
 
 import { TargetIds } from "../../kernel/domain/index.ts";
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import { CheckFamilies, CheckFamily } from "./check-family.ts";
 import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import { Components } from "./component-catalog.ts";
@@ -24,7 +25,7 @@ export const COMPONENT_FAMILIES = CheckFamilies.of([DD_0, DD_1, DD_2, DD_3, DD_4
 // DD-0 が落ちたとき blocked スキップになる後続ファミリー。
 const BLOCKED_BY_DD_0 = [DD_1, DD_2, DD_3, DD_4, DD_5, DD_6, DD_7];
 
-export function runComponentChecks(
+function runComponentChecksImpl(
   outcome: ComponentCatalogOutcome,
   artifact: string,
   ledger: CheckFamilyLedger,
@@ -167,5 +168,28 @@ export function runComponentChecks(
     ledger.finding(DD_7, "structure-invalid", cycle.map((n) => TargetIds.safe("component", n)),
       cycle.map((n, i) => ref(`${comps.byName(ComponentName.reconstitute(n))?.element.asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])),
       `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
+  }
+}
+
+// DD 検査材料——outcome と発火成果物。検査の起動は材料自身の振る舞い
+// （OOUI 裁定：旧 runComponentChecks の従属先）。
+export interface ComponentCheckMaterialsSeed {
+  readonly outcome: ComponentCatalogOutcome;
+  readonly artifact: ArtifactPath;
+}
+
+export class ComponentCheckMaterials {
+  readonly #seed: ComponentCheckMaterialsSeed;
+
+  private constructor(seed: ComponentCheckMaterialsSeed) {
+    this.#seed = seed;
+  }
+
+  static of(seed: ComponentCheckMaterialsSeed): ComponentCheckMaterials {
+    return new ComponentCheckMaterials(seed);
+  }
+
+  runChecks(ledger: CheckFamilyLedger): void {
+    runComponentChecksImpl(this.#seed.outcome, this.#seed.artifact.asString(), ledger);
   }
 }

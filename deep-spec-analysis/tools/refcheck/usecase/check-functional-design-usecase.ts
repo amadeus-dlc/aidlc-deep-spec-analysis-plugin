@@ -9,9 +9,9 @@ import {
   CheckFamilyLedger,
   InputAnchors,
   FUNCTIONAL_FAMILIES,
+  FunctionalCheckMaterials,
   ReferenceCheckReport,
   ReferenceCheckReportId,
-  runFunctionalChecks,
 } from "../domain/index.ts";
 import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
@@ -40,7 +40,7 @@ export class CheckFunctionalDesignUseCase {
     if (fd === null) return { kind: "not-applicable" };
 
     const ledger = new CheckFamilyLedger(FUNCTIONAL_FAMILIES, fd.unit);
-    runFunctionalChecks({
+    FunctionalCheckMaterials.of({
       unit: fd.unit,
       entitiesArtifact: fd.entitiesArtifact,
       entities: fd.entities === null ? { kind: "absent" } : fd.entities.outcome,
@@ -52,7 +52,7 @@ export class CheckFunctionalDesignUseCase {
       componentsArtifact: fd.componentsArtifact,
       domainEntities: fd.components === null ? { kind: "absent" } : fd.components.outcome,
       siblingUnits: fd.siblingUnits,
-    }, ledger);
+    }).runChecks(ledger);
 
     let inputs = InputAnchors.of([]);
     if (fd.entities !== null) inputs = inputs.add(fd.entities.input);

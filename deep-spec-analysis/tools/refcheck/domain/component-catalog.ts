@@ -3,7 +3,7 @@
 // フィールドはドメインプリミティブ、集まりはファーストクラスコレクションで
 // 運ぶ。DD-7 の閉路検出は依存グラフ＝Components の知識。
 
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 import type { AttributeName, ComponentName, ElementPath, EntityName } from "./functional-design-values.ts";
 
 export interface ComponentRef {
@@ -163,9 +163,9 @@ export class Components {
     for (const c of [...this.#values].sort((a, b) => (a.name.asString() < b.name.asString() ? -1 : 1))) {
       adj.set(
         c.name.asString(),
-        sortedUnique(
+        IdOrder.sortedUnique(
           c.dependsOn.toArray().map((d) => d.component.asString()).filter((n) => declared.has(n)),
-          idCompare,
+          IdOrder.compare,
         ),
       );
     }

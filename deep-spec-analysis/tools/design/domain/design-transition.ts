@@ -1,6 +1,6 @@
 // 状態機械の遷移（契約3）。逐語移動。
 
-import { idCompare } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import type { BrRefs } from "./design-ir-decl.ts";
 
@@ -39,7 +39,7 @@ export class DesignTransitions {
   }
 
   sortedCanonically(): DesignTransitions {
-    return new DesignTransitions([...this.#values].sort((a, b) => idCompare(a.id, b.id)));
+    return new DesignTransitions([...this.#values].sort((a, b) => IdOrder.compare(a.id, b.id)));
   }
 
   toArray(): readonly DesignTransition[] {

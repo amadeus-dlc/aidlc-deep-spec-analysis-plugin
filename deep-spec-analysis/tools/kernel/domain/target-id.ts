@@ -2,7 +2,7 @@
 // ペイロードが運ぶ id 列のファーストクラスコレクションを所有する。
 // 旧自由関数 safeTarget は TargetIds.safe に従属した（OOUI 裁定）。
 
-import { idCompare, sortedUnique } from "./id-order.ts";
+import { IdOrder } from "./id-order.ts";
 
 export class TargetIds {
   readonly #values: readonly string[];
@@ -44,7 +44,7 @@ export class TargetIds {
 
   // finding の targets 面の凍結正準形（一意化 + id 順）。
   sortedUniqueCanonically(): TargetIds {
-    return new TargetIds(sortedUnique([...this.#values], idCompare));
+    return new TargetIds(IdOrder.sortedUnique([...this.#values]));
   }
 
   joined(separator: string): string {

@@ -50,7 +50,7 @@ import {
   VerificationReport,
   VerificationReportId,
   VerificationSkips,
-  evaluateExpression,
+  ExpressionEvaluation,
   FormalModelId,
 } from "../tools/requirements/domain/index.ts";
 import {
@@ -362,26 +362,26 @@ describe("expression evaluation (pure attribution)", () => {
   const int = (value: number) => ({ op: "int", value });
 
   test("boolean, comparison, and arithmetic operators evaluate over the state", () => {
-    expect(evaluateExpression({ op: "and", args: [{ op: "bool", value: true }, ref("T.b")] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "or", args: [{ op: "bool", value: false }] }, state)).toBe(false);
-    expect(evaluateExpression({ op: "not", args: [ref("T.b")] }, state)).toBe(false);
-    expect(evaluateExpression({ op: "implies", args: [ref("T.b"), { op: "bool", value: false }] }, state)).toBe(false);
-    expect(evaluateExpression({ op: "iff", args: [ref("T.b"), { op: "bool", value: true }] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "eq", args: [ref("T.s"), { op: "enum", value: "on" }] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "ne", args: [ref("T.n"), int(3)] }, state)).toBe(false);
-    expect(evaluateExpression({ op: "lt", args: [ref("T.n"), int(4)] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "le", args: [ref("T.n"), int(3)] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "gt", args: [ref("T.n"), int(3)] }, state)).toBe(false);
-    expect(evaluateExpression({ op: "ge", args: [ref("T.n"), int(3)] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "add", args: [ref("T.n"), int(1)] }, state)).toBe(4);
-    expect(evaluateExpression({ op: "sub", args: [ref("T.n"), int(1)] }, state)).toBe(2);
-    expect(evaluateExpression({ op: "mul", args: [ref("T.n"), int(2)] }, state)).toBe(6);
+    expect(ExpressionEvaluation.evaluate({ op: "and", args: [{ op: "bool", value: true }, ref("T.b")] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "or", args: [{ op: "bool", value: false }] }, state)).toBe(false);
+    expect(ExpressionEvaluation.evaluate({ op: "not", args: [ref("T.b")] }, state)).toBe(false);
+    expect(ExpressionEvaluation.evaluate({ op: "implies", args: [ref("T.b"), { op: "bool", value: false }] }, state)).toBe(false);
+    expect(ExpressionEvaluation.evaluate({ op: "iff", args: [ref("T.b"), { op: "bool", value: true }] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "eq", args: [ref("T.s"), { op: "enum", value: "on" }] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "ne", args: [ref("T.n"), int(3)] }, state)).toBe(false);
+    expect(ExpressionEvaluation.evaluate({ op: "lt", args: [ref("T.n"), int(4)] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "le", args: [ref("T.n"), int(3)] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "gt", args: [ref("T.n"), int(3)] }, state)).toBe(false);
+    expect(ExpressionEvaluation.evaluate({ op: "ge", args: [ref("T.n"), int(3)] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "add", args: [ref("T.n"), int(1)] }, state)).toBe(4);
+    expect(ExpressionEvaluation.evaluate({ op: "sub", args: [ref("T.n"), int(1)] }, state)).toBe(2);
+    expect(ExpressionEvaluation.evaluate({ op: "mul", args: [ref("T.n"), int(2)] }, state)).toBe(6);
   });
 
   test("missing references and unknown operators fall to null (tolerant evaluation)", () => {
-    expect(evaluateExpression({ op: "ref", path: "T.missing" }, state)).toBe(null);
-    expect(evaluateExpression({ op: "mystery" }, state)).toBe(null);
-    expect(evaluateExpression({ op: "int", value: 7 }, state)).toBe(7);
+    expect(ExpressionEvaluation.evaluate({ op: "ref", path: "T.missing" }, state)).toBe(null);
+    expect(ExpressionEvaluation.evaluate({ op: "mystery" }, state)).toBe(null);
+    expect(ExpressionEvaluation.evaluate({ op: "int", value: 7 }, state)).toBe(7);
   });
 });
 
@@ -421,3 +421,4 @@ describe("quint facts collections (first-class operations)", () => {
     expect(facts.machineTargets()).toEqual(["OB-1", "OB-2", "OB-9"]);
   });
 });
+

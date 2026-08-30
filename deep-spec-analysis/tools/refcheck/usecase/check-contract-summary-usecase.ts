@@ -8,9 +8,9 @@ import {
   CheckFamilyLedger,
   InputAnchors,
   CONTRACT_FAMILIES,
+  ContractCheckMaterials,
   ReferenceCheckReport,
   ReferenceCheckReportId,
-  runContractChecks,
 } from "../domain/index.ts";
 import { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
@@ -41,13 +41,13 @@ export class CheckContractSummaryUseCase {
     if (contractsTable === null || specBlocks === null || declaredUnits === null) return { kind: "not-applicable" };
 
     const ledger = new CheckFamilyLedger(CONTRACT_FAMILIES);
-    runContractChecks({
+    ContractCheckMaterials.of({
       artifact: ArtifactPath.reconstitute(record.value.target().artifact),
       depArtifact: declaredUnits.artifactName,
       declaredUnits: declaredUnits.document === null ? { kind: "absent" } : declaredUnits.document.outcome,
       contractsTable,
       specBlocks,
-    }, ledger);
+    }).runChecks(ledger);
 
     let inputs = InputAnchors.of([record.value.target()]);
     if (declaredUnits.document !== null) inputs = inputs.add(declaredUnits.document.input);

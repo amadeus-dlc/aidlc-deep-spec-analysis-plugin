@@ -4,7 +4,7 @@
 // supportsMajor）は旧センサーの自由関数群を集約メソッドへ移したもの。
 // 配列を生で運ばない：部品はファーストクラスコレクションで受け取り・返す。
 
-import { type IrVersion, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { type IrVersion, IdOrder } from "../../kernel/domain/index.ts";
 import { type AttributeDeclaration, AttributeDeclarations } from "./attribute-declaration.ts";
 import type { Expression } from "../../kernel/domain/expression.ts";
 import type { FormalModelId } from "./formal-model-id.ts";
@@ -111,7 +111,7 @@ export class RequirementsModel {
 
   // 境界: 縮退文書の skip 対象列（義務 id ＋シナリオ id の昇順——凍結順）。
   allTargets(): string[] {
-    return [...this.#obligations.ids(), ...this.#scenarios.ids()].sort(idCompare);
+    return [...this.#obligations.ids(), ...this.#scenarios.ids()].sort(IdOrder.compare);
   }
 
   frRefsOf(targets: readonly string[]): string[] {
@@ -122,6 +122,6 @@ export class RequirementsModel {
       const sc = this.#scenarios.byId(t);
       if (sc) refs.push(...sc.frRefs);
     }
-    return sortedUnique(refs, idCompare);
+    return IdOrder.sortedUnique(refs, IdOrder.compare);
   }
 }

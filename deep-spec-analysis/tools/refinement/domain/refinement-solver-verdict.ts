@@ -6,7 +6,7 @@
 // detail 文言は golden 凍結）は facts 自身の振る舞い（OOUI 裁定——旧
 // interpretRefinementVerdicts の逐語移植）。
 
-import { FrRefs, TargetIds, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import { DesignFindings, DesignSkips } from "../../design/domain/index.ts";
 import type { DesignFinding, DesignSkipped, DesignValue } from "../../design/domain/index.ts";
 import type { UnitRefinementPlan } from "./refinement-plan.ts";
@@ -83,7 +83,7 @@ export class RefinementSolverFacts {
   ): InterpretedRefinementVerdicts {
     const findings: DesignFinding[] = [];
     const skipped: DesignSkipped[] = [];
-    const frOf = (reqId: string): string[] => sortedUnique(req.frRefsOf(reqId), idCompare);
+    const frOf = (reqId: string): string[] => IdOrder.sortedUnique(req.frRefsOf(reqId), IdOrder.compare);
 
     for (const [queryId, p] of this.#pending) {
       const r = results.verdictOf(queryId);
@@ -129,7 +129,7 @@ export class RefinementSolverFacts {
           findings.push({
             kind: "completeness-gap",
             frRefs: FrRefs.of(frOf(p.reqId)),
-            targets: TargetIds.of(sortedUnique([p.reqId, ...plan.mappedTransitionsOf(p.reqId)], idCompare)),
+            targets: TargetIds.of(IdOrder.sortedUnique([p.reqId, ...plan.mappedTransitionsOf(p.reqId)], IdOrder.compare)),
             witness: { model: r.decodedModel ?? {} },
             unit: unitName,
             detail: `The requirements event ${p.reqId} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
@@ -140,7 +140,7 @@ export class RefinementSolverFacts {
           findings.push({
             kind: "refinement-violation",
             frRefs: FrRefs.of(frOf(p.reqId)),
-            targets: TargetIds.of(sortedUnique([p.reqId, p.designId ?? ""], idCompare).filter((t) => t !== "")),
+            targets: TargetIds.of(IdOrder.sortedUnique([p.reqId, p.designId ?? ""], IdOrder.compare).filter((t) => t !== "")),
             witness: { trace: [r.decodedModel ?? {}, r.decodedPostModel ?? {}] },
             unit: unitName,
             detail: `Design step ${p.designId} of unit ${unitName}, taken where requirements event ${p.reqId} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,

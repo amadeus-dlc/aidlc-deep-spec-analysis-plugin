@@ -19,7 +19,7 @@ const CD_3 = CheckFamily.reconstitute("CD-3");
 
 export const CONTRACT_FAMILIES = CheckFamilies.of([CD_1, CD_2, CD_3]);
 
-export interface ContractCheckMaterials {
+export interface ContractCheckMaterialsSeed {
   readonly artifact: ArtifactPath;
   readonly depArtifact: ArtifactPath;
   readonly declaredUnits: DeclaredUnitsOutcome;
@@ -27,7 +27,7 @@ export interface ContractCheckMaterials {
   readonly specBlocks: SpecBlockAssessments;
 }
 
-export function runContractChecks(materials: ContractCheckMaterials, ledger: CheckFamilyLedger): void {
+function runContractChecksImpl(materials: ContractCheckMaterialsSeed, ledger: CheckFamilyLedger): void {
   const artifact = materials.artifact.asString();
   const depArtifact = materials.depArtifact.asString();
   const ref = (art: string, element: string, value?: string): WitnessRef =>
@@ -105,5 +105,23 @@ export function runContractChecks(materials: ContractCheckMaterials, ledger: Che
         }
       }
     }
+  }
+}
+
+// CD 検査材料。検査の起動は材料自身の振る舞い（OOUI 裁定：旧
+// runContractChecks の従属先）。
+export class ContractCheckMaterials {
+  readonly #seed: ContractCheckMaterialsSeed;
+
+  private constructor(seed: ContractCheckMaterialsSeed) {
+    this.#seed = seed;
+  }
+
+  static of(seed: ContractCheckMaterialsSeed): ContractCheckMaterials {
+    return new ContractCheckMaterials(seed);
+  }
+
+  runChecks(ledger: CheckFamilyLedger): void {
+    runContractChecksImpl(this.#seed, ledger);
   }
 }

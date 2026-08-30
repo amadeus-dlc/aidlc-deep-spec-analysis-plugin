@@ -7,7 +7,7 @@
 // 集まりはファーストクラスコレクションで運ぶ。
 
 import { DesignUnitId } from "../../design/domain/index.ts";
-import { idCompare } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 import type { RefinementMapId } from "./refinement-map-id.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
@@ -72,9 +72,9 @@ export class TransitionRefs {
     return this.#values.filter((t) => !declared.has(t)).sort();
   }
 
-  // eventTransitions 索引が持つ正準順（idCompare）。
+  // eventTransitions 索引が持つ正準順（IdOrder.compare）。
   sortedCanonically(): string[] {
-    return [...this.#values].sort(idCompare);
+    return [...this.#values].sort(IdOrder.compare);
   }
 
   toArray(): readonly string[] {

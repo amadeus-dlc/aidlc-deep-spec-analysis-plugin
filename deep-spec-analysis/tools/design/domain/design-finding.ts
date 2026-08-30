@@ -2,7 +2,7 @@
 // v1 判定から remap で受け継ぐ素通し値（core は remap 済みラベル列、trace /
 // model / verdicts はそのまま）。
 
-import { idCompare } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 import type { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import type { DesignValue } from "./design-value.ts";
 
@@ -59,7 +59,7 @@ function sortDesignFindings(findings: readonly DesignFinding[]): DesignFinding[]
 function sortDesignSkipped(skipped: readonly DesignSkipped[]): DesignSkipped[] {
   return [...skipped].sort((a, b) => {
     if (a.unit !== b.unit) return a.unit < b.unit ? -1 : 1;
-    const c = idCompare(a.target, b.target);
+    const c = IdOrder.compare(a.target, b.target);
     if (c !== 0) return c;
     return a.reason < b.reason ? -1 : a.reason > b.reason ? 1 : 0;
   });

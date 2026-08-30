@@ -10,14 +10,20 @@ export interface Expression {
   value?: boolean | number | string;
 }
 
-export function expressionUsesPrime(e: Expression): boolean {
-  if (e.op === "ref" && e.prime === true) return true;
-  return (e.args ?? []).some(expressionUsesPrime);
-}
+// Expression（interface＝Published Language）の随伴クラス。旧自由関数
+// expressionUsesPrime / walkExpression の従属先（OOUI 裁定）。
+export class Expressions {
+  private constructor() {}
 
-// 式ツリーの前順走査。両 IR バリデータがローカルに複製していた walkExpr の
-// 統合（PR7）——訪問順は「自ノード → args の宣言順」で凍結。
-export function walkExpression(e: Expression, visit: (node: Expression) => void): void {
-  visit(e);
-  for (const a of e.args ?? []) walkExpression(a, visit);
+  static usesPrime(e: Expression): boolean {
+    if (e.op === "ref" && e.prime === true) return true;
+    return (e.args ?? []).some((a) => Expressions.usesPrime(a));
+  }
+
+  // 式ツリーの前順走査。両 IR バリデータがローカルに複製していた walkExpr の
+  // 統合（PR7）——訪問順は「自ノード → args の宣言順」で凍結。
+  static walk(e: Expression, visit: (node: Expression) => void): void {
+    visit(e);
+    for (const a of e.args ?? []) Expressions.walk(a, visit);
+  }
 }

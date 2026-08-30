@@ -6,7 +6,7 @@
 
 import type { FormalModelId } from "../../requirements/domain/index.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
-import { idCompare } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 
 // enum 属性の宣言値のコレクション（宣言順を保持——decode の序数対応に効く）。
@@ -129,7 +129,7 @@ export class RefinementObligations {
   }
 
   sortedCanonically(): RefinementObligations {
-    return new RefinementObligations([...this.#values].sort((a, b) => idCompare(a.id, b.id)));
+    return new RefinementObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id, b.id)));
   }
 
   toArray(): readonly RefinementObligation[] {

@@ -5,7 +5,7 @@
 // が機械証明）。旧 catalog-order.ts の sort は Findings/Skips の集合知識へ
 // 畳んだ。
 
-import { idCompare } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 import type { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import type { WitnessRefs } from "./witness-ref.ts";
 import type { Skipped } from "./skipped.ts";
@@ -115,7 +115,7 @@ export class Skips {
   sortedCanonically(): Skips {
     return new Skips(
       [...this.#values].sort((a, b) => {
-        const c = idCompare(a.target, b.target);
+        const c = IdOrder.compare(a.target, b.target);
         if (c !== 0) return c;
         return a.reason < b.reason ? -1 : a.reason > b.reason ? 1 : 0;
       }),

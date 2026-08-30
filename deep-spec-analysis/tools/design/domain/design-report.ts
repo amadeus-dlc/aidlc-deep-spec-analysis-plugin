@@ -6,7 +6,7 @@
 // （findings/skipped/inputs/checked/crossChecked を空にして unavailable 理由
 // だけ残す——旧 writeDesignDoc の自己検証降格と同じ姿）。
 
-import { ContentHash, FrRefs, IrVersion, TargetIds, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { ContentHash, FrRefs, IrVersion, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { DesignModel } from "./design-model.ts";
 import { DesignFindings, DesignSkips } from "./design-finding.ts";
 import type { DesignFinding } from "./design-finding.ts";
@@ -75,7 +75,7 @@ export class CheckedUnits {
   }
 
   sortedUniqueCanonically(): CheckedUnits {
-    return new CheckedUnits(sortedUnique([...this.#values], idCompare));
+    return new CheckedUnits(IdOrder.sortedUnique([...this.#values], IdOrder.compare));
   }
 
   toArray(): readonly string[] {
@@ -383,7 +383,7 @@ export class DesignReports {
               verdicts[b.backend] = vb ? "violated" : "clean";
               findings.push({
                 kind: "cross-check-disagreement",
-                frRefs: FrRefs.of(sortedUnique([...sc.frRefs], idCompare)),
+                frRefs: FrRefs.of(IdOrder.sortedUnique([...sc.frRefs], IdOrder.compare)),
                 targets: TargetIds.of([sc.id]),
                 witness: { verdicts },
                 unit: u.name(),
@@ -395,7 +395,7 @@ export class DesignReports {
       }
     }
     const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => ({ backend, targets: [...targets].sort(idCompare) }))
+      .map(([backend, targets]) => ({ backend, targets: [...targets].sort(IdOrder.compare) }))
       .sort((x, y) => (x.backend < y.backend ? -1 : x.backend > y.backend ? 1 : 0));
 
     return DesignReport.compose({

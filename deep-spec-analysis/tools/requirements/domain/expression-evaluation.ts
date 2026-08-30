@@ -6,15 +6,15 @@
 import type { Expression } from "../../kernel/domain/expression.ts";
 import type { DecodedValue, TraceState } from "./trace-state.ts";
 
-export function evaluateExpression(e: Expression, state: TraceState): DecodedValue {
-  const arg = (i: number): DecodedValue => evaluateExpression((e.args ?? [])[i] as Expression, state);
+function evaluateExpressionImpl(e: Expression, state: TraceState): DecodedValue {
+  const arg = (i: number): DecodedValue => evaluateExpressionImpl((e.args ?? [])[i] as Expression, state);
   const asBool = (v: DecodedValue): boolean => v === true;
   const asNum = (v: DecodedValue): number => (typeof v === "number" ? v : Number.NaN);
   switch (e.op) {
     case "and":
-      return (e.args ?? []).every((a) => asBool(evaluateExpression(a, state)));
+      return (e.args ?? []).every((a) => asBool(evaluateExpressionImpl(a, state)));
     case "or":
-      return (e.args ?? []).some((a) => asBool(evaluateExpression(a, state)));
+      return (e.args ?? []).some((a) => asBool(evaluateExpressionImpl(a, state)));
     case "not":
       return !asBool(arg(0));
     case "implies":
@@ -47,5 +47,14 @@ export function evaluateExpression(e: Expression, state: TraceState): DecodedVal
       return e.value ?? null;
     default:
       return null;
+  }
+}
+
+// 旧自由関数 evaluateExpression の従属先（OOUI 裁定）。
+export class ExpressionEvaluation {
+  private constructor() {}
+
+  static evaluate(e: Expression, state: TraceState): DecodedValue {
+    return evaluateExpressionImpl(e, state);
   }
 }

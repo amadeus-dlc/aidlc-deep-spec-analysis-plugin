@@ -17,7 +17,7 @@ export { type DesignModelComposition, DesignModel } from "./design-model.ts";
 export {
   DesignFindings,
   DesignSkips, type DesignFinding, type DesignSkipped } from "./design-finding.ts";
-export { expressionCanonicalKey } from "./expression-canonical-key.ts";
+export { ExpressionCanonicalKey } from "./expression-canonical-key.ts";
 export {
   type LoweredOrigin,
   type LoweringKind,

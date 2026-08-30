@@ -44,12 +44,12 @@ import {
   COMPONENT_FAMILIES,
   CONTRACT_FAMILIES,
   FUNCTIONAL_FAMILIES,
-  type FunctionalCheckMaterials,
+  type FunctionalCheckMaterialsSeed,
   ReferenceCheckReport,
   ReferenceCheckReportId,
-  runComponentChecks,
-  runContractChecks,
-  runFunctionalChecks,
+  ComponentCheckMaterials,
+  ContractCheckMaterials,
+  FunctionalCheckMaterials,
   InputAnchors,
   BlockIndex,
   CheckFamilies,
@@ -199,7 +199,7 @@ function domainReport(
 describe("skip branches the fixtures do not exercise", () => {
   test("a broken components fence blocks DD-1..DD-7 with unrecognized-format skips", () => {
     const report = domainReport(COMPONENT_FAMILIES, (l) =>
-      runComponentChecks(parseComponentCatalog("no fence at all"), "components.md", l));
+      ComponentCheckMaterials.of({ outcome: parseComponentCatalog("no fence at all"), artifact: ap("components.md") }).runChecks(l));
     expect(report.findingsCount()).toBe(1);
     expect(report.skippedCount()).toBe(7);
     expect(report.skipped().toArray().every((s) => s.reason === "unrecognized-format")).toBe(true);
@@ -208,20 +208,20 @@ describe("skip branches the fixtures do not exercise", () => {
 
   test("an unparseable components yaml block is a DD-0 finding carrying the parser error", () => {
     const report = domainReport(COMPONENT_FAMILIES, (l) =>
-      runComponentChecks(parseComponentCatalog("```yaml\na: &x 1\n```\n"), "components.md", l));
+      ComponentCheckMaterials.of({ outcome: parseComponentCatalog("```yaml\na: &x 1\n```\n"), artifact: ap("components.md") }).runChecks(l));
     expect(report.findings().toArray()[0]?.detail).toContain("does not parse in the supported subset");
     expect(report.skippedCount()).toBe(7);
   });
 
   test("an absent dependency artifact skips CD-1/CD-3 as absent-input", () => {
     const report = domainReport(CONTRACT_FAMILIES, (l) =>
-      runContractChecks({
+      ContractCheckMaterials.of({
         artifact: ArtifactPath.reconstitute("contract-summary.md"),
         depArtifact: ArtifactPath.reconstitute("unit-of-work-dependency.md"),
         declaredUnits: { kind: "absent" },
         contractsTable: { kind: "absent" },
         specBlocks: SpecBlockAssessments.of([]),
-      }, l), "contract-summary");
+      }).runChecks(l), "contract-summary");
     const reasons = report.skipped().toArray().map((s) => `${s.target}:${s.reason}`);
     expect(reasons).toContain("check:CD-1:absent-input");
     expect(reasons).toContain("check:CD-3:absent-input");
@@ -230,7 +230,7 @@ describe("skip branches the fixtures do not exercise", () => {
 
   test("an unusable units edge block and every spec-block issue kind are reported", () => {
     const report = domainReport(CONTRACT_FAMILIES, (l) =>
-      runContractChecks({
+      ContractCheckMaterials.of({
         artifact: ArtifactPath.reconstitute("contract-summary.md"),
         depArtifact: ArtifactPath.reconstitute("unit-of-work-dependency.md"),
         declaredUnits: { kind: "unrecognized", error: "no yaml fence with a top-level `units:` list" },
@@ -240,7 +240,7 @@ describe("skip branches the fixtures do not exercise", () => {
           { index: BlockIndex.reconstitute(2), line: LineNumber.reconstitute(5), issue: { kind: "not-a-mapping" } },
           { index: BlockIndex.reconstitute(3), line: LineNumber.reconstitute(9), issue: { kind: "unparseable", error: "line 1: x" } },
         ]),
-      }, l), "contract-summary");
+      }).runChecks(l), "contract-summary");
     const details = report.findings().toArray().map((f) => f.detail).join("\n");
     expect(details).toContain("CD-2: OpenAPI spec block carries `openapi:` but no `paths:`");
     expect(details).toContain("CD-2: spec block is not a YAML mapping");
@@ -251,7 +251,7 @@ describe("skip branches the fixtures do not exercise", () => {
   });
 });
 
-function functionalInput(overrides: Partial<FunctionalCheckMaterials>): FunctionalCheckMaterials {
+function functionalInput(overrides: Partial<FunctionalCheckMaterialsSeed>): FunctionalCheckMaterialsSeed {
   return {
     unit: UnitName.reconstitute("u1"),
     entitiesArtifact: ArtifactPath.reconstitute("e.md"),
@@ -268,9 +268,9 @@ function functionalInput(overrides: Partial<FunctionalCheckMaterials>): Function
   };
 }
 
-function functionalReport(overrides: Partial<FunctionalCheckMaterials>): ReferenceCheckReport {
+function functionalReport(overrides: Partial<FunctionalCheckMaterialsSeed>): ReferenceCheckReport {
   const input = functionalInput(overrides);
-  return domainReport(FUNCTIONAL_FAMILIES, (l) => runFunctionalChecks(input, l), "functional-design", input.unit);
+  return domainReport(FUNCTIONAL_FAMILIES, (l) => FunctionalCheckMaterials.of(input).runChecks(l), "functional-design", input.unit);
 }
 
 describe("functional branches the fixtures do not exercise", () => {

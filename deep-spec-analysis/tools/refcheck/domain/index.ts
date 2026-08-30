@@ -24,7 +24,7 @@ export {
   ComponentShapeErrors,
   EntityReferences,
 } from "./component-catalog.ts";
-export { COMPONENT_FAMILIES, runComponentChecks } from "./component-checks.ts";
+export { COMPONENT_FAMILIES, ComponentCheckMaterials, type ComponentCheckMaterialsSeed } from "./component-checks.ts";
 export {
   type UnitDecl,
   type DeclaredUnitsOutcome,
@@ -38,7 +38,7 @@ export {
   SpecBlockAssessments,
   UnitDecls,
 } from "./contract-summary.ts";
-export { CONTRACT_FAMILIES, runContractChecks, type ContractCheckMaterials } from "./contract-checks.ts";
+export { CONTRACT_FAMILIES, ContractCheckMaterials, type ContractCheckMaterialsSeed } from "./contract-checks.ts";
 export {
   type AttrDeclSeed,
   type DeclaredEntitiesSeed,
@@ -68,7 +68,7 @@ export {
   StateMachineSketch,
   StateMachineSketches,
 } from "./functional-design.ts";
-export { FUNCTIONAL_FAMILIES, runFunctionalChecks, type FunctionalCheckMaterials } from "./functional-checks.ts";
+export { FUNCTIONAL_FAMILIES, FunctionalCheckMaterials, type FunctionalCheckMaterialsSeed } from "./functional-checks.ts";
 export { DesignRecord, type DesignRecordSeed, type LoadedDocument } from "./design-record.ts";
 export { DesignRecordId } from "./design-record-id.ts";
 export { type CheckExecutionMode } from "./check-execution-mode.ts";

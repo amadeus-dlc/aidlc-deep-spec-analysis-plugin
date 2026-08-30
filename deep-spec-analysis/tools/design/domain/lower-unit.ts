@@ -11,12 +11,12 @@
 // 旧 deep-spec-design-lib.ts の lowerUnit からの逐語移植（Json 組み立ては
 // アダプタの serializer が担い、ここは型付き lowering を返す）。
 
-import { FrRefs, TargetIds, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import type { DesignMachine } from "./design-machine.ts";
 import type { DesignObligation } from "./design-obligation.ts";
 import type { DesignUnit } from "./design-unit.ts";
-import { expressionCanonicalKey } from "./expression-canonical-key.ts";
+import { ExpressionCanonicalKey } from "./expression-canonical-key.ts";
 import { DesignFindings, DesignSkips } from "./design-finding.ts";
 import type { DesignFinding, DesignSkipped } from "./design-finding.ts";
 import type { DesignValue } from "./design-value.ts";
@@ -155,7 +155,7 @@ export class LoweredUnit {
           finding: {
             kind: "redundancy",
             frRefs: FrRefs.of(frRefs),
-            targets: TargetIds.of(sortedUnique([pair[0], pair[1]], idCompare)),
+            targets: TargetIds.of(IdOrder.sortedUnique([pair[0], pair[1]], IdOrder.compare)),
             witness,
             unit: u.name(),
             detail: `${pair[1]} is subsumed by ${pair[0]}: same trigger, a provably narrower guard, and an identical effect — it can never apply where ${pair[0]} does not.`,
@@ -167,7 +167,7 @@ export class LoweredUnit {
       }
       if (synth) continue; // 合成に触れる他の判定はノイズ
 
-      const targets = sortedUnique(mapped.map((m) => m.design), idCompare);
+      const targets = IdOrder.sortedUnique(mapped.map((m) => m.design), IdOrder.compare);
       // deterministic:false waiver：同トリガ conflict の対象がすべて、非決定を
       // 宣言した 1 機械の遷移であるとき。
       if (f.kind === "conflict" && targets.length > 0) {
@@ -462,7 +462,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
 
   // 1) 設計義務は素通し（frRefs は帰属のため保持。空の frRefs は lowered
   //    文書で適法——v1 バックエンドは frRefs を不透明な帰属文字列として扱う）。
-  for (const ob of [...u.obligations()].sort((a, b) => idCompare(a.id, b.id))) {
+  for (const ob of [...u.obligations()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
     const lowered: Omit<LoweredObligation, "id"> = {
       nature: ob.nature,
       frRefs: [...ob.frRefs],
@@ -480,7 +480,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
 
   // 2) 状態機械のコンパイルダウン：遷移 → 暗黙ガード・効果つき event 義務、
   //    ignores → 明示 no-op event。
-  for (const sm of [...u.machines()].sort((a, b) => idCompare(a.id, b.id))) {
+  for (const sm of [...u.machines()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
     const attrPath = `${sm.entity}.${sm.attribute}`;
     attrPathOfMachine.set(sm.id, attrPath);
     for (const tr of sm.transitions.sortedCanonically()) {
@@ -523,7 +523,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
       for (const a of list) {
         for (const b of list) {
           if (a === b) continue;
-          if (expressionCanonicalKey(a.effect) !== expressionCanonicalKey(b.effect)) continue;
+          if (ExpressionCanonicalKey.of(a.effect) !== ExpressionCanonicalKey.of(b.effect)) continue;
           // (guardB and not guardA) の空虚性は guardB => guardA を証明する：
           // b は a に包摂される（同トリガ・証明可能に狭いガード・同一効果）。
           push(
@@ -545,7 +545,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   // 4) シナリオと背景。
   const scenarios: LoweredScenario[] = [];
   let scN = 0;
-  for (const sc of [...u.scenarios()].sort((a, b) => idCompare(a.id, b.id))) {
+  for (const sc of [...u.scenarios()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
     scN += 1;
     const lowId = `SC-${scN}`;
     scenarioMap.set(lowId, sc.id);
@@ -561,7 +561,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   }
   const background: LoweredBackground[] = [];
   let bgN = 0;
-  for (const bg of [...u.background()].sort((a, b) => idCompare(a.id, b.id))) {
+  for (const bg of [...u.background()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
     bgN += 1;
     background.push({ id: `BG-${bgN}`, assert: bg.assert });
   }

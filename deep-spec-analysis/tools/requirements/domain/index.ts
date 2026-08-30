@@ -37,7 +37,7 @@ export {
   SmtPlanFacts,
 } from "./smt-plan-facts.ts";
 export { type DecodedValue, type TraceState, TraceStates } from "./trace-state.ts";
-export { evaluateExpression } from "./expression-evaluation.ts";
+export { ExpressionEvaluation } from "./expression-evaluation.ts";
 export {
   type InterpretedQuintVerdicts,
   type QuintMachineComponent,

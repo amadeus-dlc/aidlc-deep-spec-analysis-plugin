@@ -6,9 +6,9 @@
 // 正準ソートは VerificationReport.compose の不変条件、phase 2 の「既に skip
 // 済みの義務は走らせない」ガードも逐語）は facts 自身の振る舞い（OOUI 裁定）。
 
-import { FrRefs, TargetIds, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/expression.ts";
-import { evaluateExpression } from "./expression-evaluation.ts";
+import { ExpressionEvaluation } from "./expression-evaluation.ts";
 import type { QuintRuns } from "./quint-verdict.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { TraceState } from "./trace-state.ts";
@@ -51,7 +51,7 @@ export class QuintMachineComponents {
   }
 
   violatedBy(state: TraceState): QuintMachineComponents {
-    return new QuintMachineComponents(this.#values.filter((c) => evaluateExpression(c.expr, state) !== true));
+    return new QuintMachineComponents(this.#values.filter((c) => ExpressionEvaluation.evaluate(c.expr, state) !== true));
   }
 
   toArray(): readonly QuintMachineComponent[] {
@@ -90,7 +90,7 @@ export class QuintMachineFacts {
 
   // 機械フェーズが検査する対象の全 id（成分 + イベント義務、正準順・一意）。
   machineTargets(): string[] {
-    return sortedUnique([...this.#invariantComponents.ids(), ...this.#eventIds], idCompare);
+    return IdOrder.sortedUnique([...this.#invariantComponents.ids(), ...this.#eventIds], IdOrder.compare);
   }
 
   // 旧 interpretQuintVerdicts の逐語移植。
@@ -117,18 +117,18 @@ export class QuintMachineFacts {
         findings.push({
           kind: "completeness-gap",
           frRefs: FrRefs.of(model.frRefsOf(this.#eventIds)),
-          targets: TargetIds.of(this.#eventIds.length > 0 ? [...this.#eventIds].sort(idCompare) : machineTargets),
+          targets: TargetIds.of(this.#eventIds.length > 0 ? [...this.#eventIds].sort(IdOrder.compare) : machineTargets),
           witness: run.trace !== null ? { trace: run.trace.toArray() } : { model: {} },
           detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
         });
       } else if (run.kind === "violation") {
         const violatedComponents = this.#invariantComponents.violatedBy(run.trace.finalState());
         const targets = violatedComponents.isEmpty()
-          ? [...this.#eventIds].sort(idCompare)
-          : sortedUnique([...violatedComponents.ids()], idCompare);
+          ? [...this.#eventIds].sort(IdOrder.compare)
+          : IdOrder.sortedUnique([...violatedComponents.ids()], IdOrder.compare);
         findings.push({
           kind: "conflict",
-          frRefs: FrRefs.of(model.frRefsOf(sortedUnique([...targets, ...this.#eventIds], idCompare))),
+          frRefs: FrRefs.of(model.frRefsOf(IdOrder.sortedUnique([...targets, ...this.#eventIds], IdOrder.compare))),
           targets: TargetIds.of(targets),
           witness: { trace: run.trace.toArray() },
           detail: `The event machine can reach a state that violates ${targets.join(", ")} (step trace attached): the event rules do not preserve the obligation.`,
@@ -201,7 +201,7 @@ export class QuintMachineFacts {
       for (const [path, value] of Object.entries(sc.bindings)) state[path] = value;
       if (sc.kind === "accept" && r.violated) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
-        const targets = sortedUnique([sc.id, ...violatedComponents.ids()], idCompare);
+        const targets = IdOrder.sortedUnique([sc.id, ...violatedComponents.ids()], IdOrder.compare);
         findings.push({
           kind: "scenario-violation",
           frRefs: FrRefs.of(model.frRefsOf(targets)),
