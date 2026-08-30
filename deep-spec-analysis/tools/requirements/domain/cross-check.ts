@@ -5,6 +5,8 @@
 // 結果はセンサーの発火順に依存しない。旧 recomputeCrossCheck の計算部の
 // 逐語移植（成立文書の選別のうち、読めないファイルの黙殺は Repository 側）。
 
+import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
+import { CrossCheckedEntries, VerificationReports } from "./verification-report.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
@@ -16,23 +18,25 @@ export function crossCheckReport(
   id: VerificationReportId,
   model: RequirementsModel,
   irHash: ContentHash,
-  siblings: readonly VerificationReport[],
+  siblings: VerificationReports,
 ): VerificationReport {
   // 比較に参加するのは同一 irHash の可用文書のみ（旧実装の読込時選別と同値）。
   const docs = siblings
+    .toArray()
     .filter((s) => s.irHash().equals(irHash) && !s.isUnavailable())
     .map((s) => ({
       backend: s.id().backendName(),
-      findings: s.findings(),
+      findings: s.findings().toArray(),
       skippedTargets: new Set(
         s
           .skipped()
+          .toArray()
           .filter((e) => typeof e.target === "string")
           .map((e) => e.target),
       ),
     }));
 
-  const scenarioById = new Map(model.scenarios().map((s) => [s.id, s]));
+  const scenarioById = new Map(model.scenarios().toArray().map((s) => [s.id, s]));
   const findings: VerificationFinding[] = [];
   const comparedByBackend = new Map<string, Set<string>>();
   for (let i = 0; i < docs.length; i++) {
@@ -70,8 +74,8 @@ export function crossCheckReport(
     irVersion: model.irVersion(),
     irHash,
     method: "exhaustive",
-    findings,
-    skipped: [],
-    crossChecked,
+    findings: VerificationFindings.of(findings),
+    skipped: VerificationSkips.of([]),
+    crossChecked: CrossCheckedEntries.of(crossChecked),
   });
 }

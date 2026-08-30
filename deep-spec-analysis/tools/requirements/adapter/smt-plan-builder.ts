@@ -6,6 +6,7 @@
 
 import { type Expression, expressionUsesPrime, idCompare } from "../../kernel/domain/index.ts";
 import {
+  VerificationSkips,
   type Obligation,
   type RequirementsModel,
   type SmtPlanFacts,
@@ -238,7 +239,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     ]),
   ].join("\n");
   const baseAssumptions = [...typeBounds, ...bg, ...invariants].map((c) => c.name);
-  const modelVars = model.attributes().map((a) => ({
+  const modelVars = model.attributes().toArray().map((a) => ({
     name: smtVar(a.path, false),
     sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool",
   }));
@@ -357,5 +358,5 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     }
   }
 
-  return { queries, facts: { compiled, skipped, labelToTarget, eventPairs, gapTriggers, scenarioQueries } };
+  return { queries, facts: { compiled, skipped: VerificationSkips.of(skipped), labelToTarget, eventPairs, gapTriggers, scenarioQueries } };
 }

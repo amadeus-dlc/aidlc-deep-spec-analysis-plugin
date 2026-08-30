@@ -6,7 +6,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
-import { sha256 } from "../../kernel/domain/index.ts";
+import { ContentHash, } from "../../kernel/domain/index.ts";
 import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import { DesignModel, type DesignModelId } from "../domain/index.ts";
@@ -40,6 +40,6 @@ export class DesignModelRepositoryImpl implements DesignModelRepository {
     if (typeof composition === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: composition });
     }
-    return ok({ model: DesignModel.compose({ id, ...composition }), irHash: sha256(canonicalStringify(raw)) });
+    return ok({ model: DesignModel.compose({ id, ...composition }), irHash: ContentHash.ofText(canonicalStringify(raw)) });
   }
 }

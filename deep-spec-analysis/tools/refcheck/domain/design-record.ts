@@ -4,6 +4,7 @@
 // 各値の取得規則（requirements は rules が使えるときだけ・兄弟は catalog が
 // 解析できたときだけ等）は Impl が凍結挙動として実装する。
 
+import { type RequirementIds } from "../../kernel/domain/index.ts";
 import type { DesignRecordId } from "./design-record-id.ts";
 import type { InputAnchor } from "./input-anchor.ts";
 import type { ComponentCatalogOutcome } from "./component-catalog.ts";
@@ -42,7 +43,7 @@ export interface DesignRecordSeed {
     readonly rules: LoadedDocument<RulesOutcome> | null;
     readonly specArtifact: string;
     readonly spec: LoadedDocument<FunctionalSpecOutcome> | null;
-    readonly requirements: LoadedDocument<ReadonlySet<string>> | null;
+    readonly requirements: LoadedDocument<RequirementIds> | null;
     readonly componentsArtifact: string;
     readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
     readonly siblingUnits: SiblingUnitIndex;

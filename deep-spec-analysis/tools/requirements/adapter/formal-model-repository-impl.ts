@@ -5,7 +5,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
-import { sha256 } from "../../kernel/domain/index.ts";
+import { ContentHash, } from "../../kernel/domain/index.ts";
 import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import { type FormalModelId, RequirementsModel } from "../domain/index.ts";
@@ -43,6 +43,6 @@ export class FormalModelRepositoryImpl implements FormalModelRepository {
     if (typeof seed === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: seed });
     }
-    return ok({ model: RequirementsModel.reconstitute({ id, ...seed }), irHash: sha256(canonicalStringify(rawIr)) });
+    return ok({ model: RequirementsModel.reconstitute({ id, ...seed }), irHash: ContentHash.ofText(canonicalStringify(rawIr)) });
   }
 }

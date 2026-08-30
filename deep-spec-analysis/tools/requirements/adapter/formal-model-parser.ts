@@ -5,11 +5,15 @@
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { IrVersion, type Expression } from "../../kernel/domain/index.ts";
-import type {
-  AttributeDeclaration,
-  Obligation,
-  RequirementsModelSeed,
-  Scenario,
+import {
+  type AttributeDeclaration,
+  type Obligation,
+  type RequirementsModelSeed,
+  type Scenario,
+  AttributeDeclarations,
+  BackgroundAssumptions,
+  Obligations,
+  Scenarios,
 } from "../domain/index.ts";
 
 // 恒等（FormalModelId）は Repository が findById の引数から注入する——
@@ -75,5 +79,11 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id"> |
     if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
     background.push({ id: bg.id, assert: bg.assert as unknown as Expression });
   }
-  return { irVersion: irVersion.value, attributes, obligations, scenarios, background };
+  return {
+    irVersion: irVersion.value,
+    attributes: AttributeDeclarations.of(attributes),
+    obligations: Obligations.of(obligations),
+    scenarios: Scenarios.of(scenarios),
+    background: BackgroundAssumptions.of(background),
+  };
 }

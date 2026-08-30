@@ -4,6 +4,8 @@
 // `<section>[<i>]`）はアダプタの寛容パースの責務で、ここは索引と照合だけ。
 // 旧 ir-valid の collectFrRefs ＋ 照合ループからの逐語移植。
 
+import type { RequirementIds } from "../../kernel/domain/index.ts";
+
 export interface FrRefClaim {
   readonly owner: string;
   readonly frRefs: readonly string[];
@@ -34,7 +36,7 @@ export class FrReferenceIndex {
   }
 
   // requirements.md に存在しない frRef を、id 昇順・owner 昇順で報告する。
-  missingErrors(known: ReadonlySet<string>): string[] {
+  missingErrors(known: RequirementIds): string[] {
     const missing = [...this.#ownersByRef.keys()].filter((id) => !known.has(id)).sort();
     return missing.map((id) => {
       const owners = (this.#ownersByRef.get(id) ?? []).sort().join(", ");

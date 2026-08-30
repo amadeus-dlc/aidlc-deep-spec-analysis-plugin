@@ -3,7 +3,7 @@
 // からの逐語移動（golden バイト凍結。並びはソートで正規化されるが、tie の
 // 挙動まで変えないため発行順も保存する）。
 
-import { normalizeName, safeTarget } from "../../kernel/domain/index.ts";
+import { type RequirementIds, normalizeName, safeTarget } from "../../kernel/domain/index.ts";
 import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import type {
   DomainEntitiesOutcome,
@@ -32,7 +32,7 @@ export interface FunctionalCheckMaterials {
   readonly specArtifact: string;
   readonly spec: FunctionalSpecOutcome;
   // requirements.md が読めたときはその FR/NFR id 集合、読めなければ null。
-  readonly requirementIdsKnown: ReadonlySet<string> | null;
+  readonly requirementIdsKnown: RequirementIds | null;
   readonly componentsArtifact: string;
   readonly domainEntities: DomainEntitiesOutcome;
   readonly siblingUnits: SiblingUnitIndex;

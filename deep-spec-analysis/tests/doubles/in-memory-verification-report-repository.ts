@@ -8,7 +8,7 @@ import { type Result, err, ok } from "../../tools/kernel/infrastructure/index.ts
 import type { ArtifactPath } from "../../tools/kernel/domain/index.ts";
 import type { Schema, SchemaUnreadable } from "../../tools/kernel/adapter/index.ts";
 import { conformToFindingsContract } from "../../tools/requirements/adapter/index.ts";
-import type { VerificationReport, VerificationReportId } from "../../tools/requirements/domain/index.ts";
+import { type VerificationReport, type VerificationReportId, VerificationReports } from "../../tools/requirements/domain/index.ts";
 import type { RepositoryError } from "../../tools/kernel/usecase/index.ts";
 import type { VerificationReportRepository } from "../../tools/requirements/usecase/index.ts";
 
@@ -32,13 +32,13 @@ export class InMemoryVerificationReportRepository implements VerificationReportR
     return ok(found);
   }
 
-  findAllByDirectory(directory: ArtifactPath): Result<readonly VerificationReport[], RepositoryError> {
+  findAllByDirectory(directory: ArtifactPath): Result<VerificationReports, RepositoryError> {
     const prefix = `${directory.value()}/`;
     const hits = [...this.#store.entries()]
       .filter(([key]) => key.startsWith(prefix) && key !== `${prefix}cross-check.json`)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([, report]) => report);
-    return ok(hits);
+    return ok(VerificationReports.of(hits));
   }
 
   conformedOf(report: VerificationReport): VerificationReport {

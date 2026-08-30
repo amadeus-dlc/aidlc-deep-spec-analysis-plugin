@@ -12,7 +12,7 @@ import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { ArtifactPath, RequirementIds } from "../tools/kernel/domain/index.ts";
 import { DesignIrValidationMaterialsRepositoryImpl } from "../tools/design/adapter/index.ts";
 import {
   BrReferenceIndex,
@@ -277,10 +277,10 @@ describe("FrReferenceIndex", () => {
       { owner: "scenarios[3]", frRefs: [] },
     ]);
     expect(index.referencedIds().sort()).toEqual(["FR-1", "FR-9"]);
-    expect(index.missingErrors(new Set(["FR-1"]))).toEqual([
+    expect(index.missingErrors(RequirementIds.of(["FR-1"]))).toEqual([
       'frRef "FR-9" (used by OB-1, OB-2) does not exist in requirements.md',
     ]);
-    expect(index.missingErrors(new Set(["FR-1", "FR-9"]))).toEqual([]);
+    expect(index.missingErrors(RequirementIds.of(["FR-1", "FR-9"]))).toEqual([]);
   });
 });
 

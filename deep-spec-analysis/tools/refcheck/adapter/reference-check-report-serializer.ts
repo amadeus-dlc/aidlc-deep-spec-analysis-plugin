@@ -8,7 +8,7 @@
 // この戻り値から導出させることで、stdout とファイルの矛盾を構造的に防ぐ。
 
 import type { Result } from "../../kernel/infrastructure/index.ts";
-import { ContentHash, sha256 } from "../../kernel/domain/index.ts";
+import { ContentHash } from "../../kernel/domain/index.ts";
 import { canonicalStringify } from "../../kernel/adapter/canonical-json.ts";
 import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/schema-validator.ts";
@@ -28,7 +28,7 @@ function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
   const ordered: { [k: string]: Json } = {
     backend: report.id().backendName(),
     irVersion: CATALOG_VERSION,
-    irHash: sha256(canonicalStringify(inputs)).value(),
+    irHash: ContentHash.ofText(canonicalStringify(inputs)).value(),
     method: "static",
   };
   const reason = report.unavailableReason();

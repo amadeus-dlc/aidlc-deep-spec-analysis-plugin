@@ -2,16 +2,15 @@
 // から記録配下を探索してバイトを読み、use-case へは id 集合とダイジェスト
 // だけを渡す。
 //
-// ダイジェストは「読んだバイト列そのもの」の sha256 — kernel の sha256(text)
-// は文字列を UTF-8 で符号化し直すため、不正なバイト列を含むファイルで結果が
-// ずれる。sourceDigest は観測面（凍結文言に載る）なので Buffer のまま採る。
+// ダイジェストは「読んだバイト列そのもの」の sha256（ContentHash.ofBytes）。
+// ofText は文字列を UTF-8 で符号化し直すため、不正なバイト列を含むファイルで
+// 結果がずれる。sourceDigest は観測面（凍結文言に載る）なので Buffer で採る。
 // 旧 aidlc-sensor-deep-spec-ir-valid.ts の findRequirementsFile ＋ source
 // anchoring 節からの逐語移植（記録ルートの導出は材料ゲートウェイ側へ移動）。
 
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { requirementIds } from "../../kernel/domain/index.ts";
+import { ContentHash, RequirementIds } from "../../kernel/domain/index.ts";
 import type { RequirementsSourceId } from "../domain/index.ts";
 import type { RequirementsSource, RequirementsSourceRepository } from "../usecase/index.ts";
 
@@ -35,8 +34,8 @@ export class RequirementsSourceRepositoryImpl implements RequirementsSourceRepos
     if (path === null) return null;
     const bytes = readFileSync(path);
     return {
-      knownIds: requirementIds(bytes.toString("utf-8")),
-      digest: createHash("sha256").update(bytes).digest("hex"),
+      knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
+      digest: ContentHash.ofBytes(bytes).value(),
     };
   }
 }

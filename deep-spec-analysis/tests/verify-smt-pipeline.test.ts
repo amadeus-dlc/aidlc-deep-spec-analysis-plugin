@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
-import { ArtifactPath, ContentHash, IrVersion, expressionUsesPrime, sha256 } from "../tools/kernel/domain/index.ts";
+import { ArtifactPath, ContentHash, IrVersion, expressionUsesPrime } from "../tools/kernel/domain/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -32,8 +32,18 @@ import {
   renderVerificationReportBytes,
 } from "../tools/requirements/adapter/index.ts";
 import {
+  VerificationFindings,
+  VerificationReports,
+  VerificationSkips,
+  type BackgroundAssumption,
+  type Scenario,
+  type Obligation,
+  type AttributeDeclaration,
+  AttributeDeclarations,
+  Obligations,
+  Scenarios,
+  BackgroundAssumptions,
   RequirementsModel,
-  type RequirementsModelSeed,
   type SmtPlanFacts,
   type SmtQueryVerdict,
   VerificationReport,
@@ -63,15 +73,20 @@ const schemaPath = join(pluginRoot, "tools", "data", "deep-spec-findings-schema.
 const schema = readContractSchema(schemaPath);
 const sensorPath = join(pluginRoot, "tools", "aidlc-sensor-deep-spec-verify-smt.ts");
 
-function model(seed: Partial<RequirementsModelSeed>): RequirementsModel {
+function model(seed: {
+  irVersion?: IrVersion;
+  attributes?: AttributeDeclaration[];
+  obligations?: Obligation[];
+  scenarios?: Scenario[];
+  background?: BackgroundAssumption[];
+}): RequirementsModel {
   return RequirementsModel.reconstitute({
     id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
-    irVersion: IrVersion.reconstitute("1.0.0"),
-    attributes: [],
-    obligations: [],
-    scenarios: [],
-    background: [],
-    ...seed,
+    irVersion: seed.irVersion ?? IrVersion.reconstitute("1.0.0"),
+    attributes: AttributeDeclarations.of(seed.attributes ?? []),
+    obligations: Obligations.of(seed.obligations ?? []),
+    scenarios: Scenarios.of(seed.scenarios ?? []),
+    background: BackgroundAssumptions.of(seed.background ?? []),
   });
 }
 
@@ -121,7 +136,7 @@ function solver(check: SmtCheck): Z3SolverClient {
 
 const EMPTY_FACTS: SmtPlanFacts = {
   compiled: new Map(),
-  skipped: [],
+  skipped: VerificationSkips.of([]),
   labelToTarget: new Map(),
   eventPairs: [],
   gapTriggers: new Map(),
@@ -156,7 +171,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     expect(written.ok && written.value.unavailableReason())
       .toBe("IR unreadable: IR lacks a semver irVersion — see the deep-spec-ir-valid sensor for details");
     expect(written.ok && written.value.irVersion().value()).toBe("0.0.0");
-    expect(written.ok && written.value.irHash().equals(sha256(""))).toBe(true);
+    expect(written.ok && written.value.irHash().equals(ContentHash.ofText(""))).toBe(true);
     expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(false);
   });
 
@@ -174,9 +189,9 @@ describe("the verify-smt interactor over the InMemory double", () => {
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("version-mismatch");
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
-    expect(written.ok && written.value.skipped().map((s) => `${s.target}:${s.reason}`))
+    expect(written.ok && written.value.skipped().toArray().map((s) => `${s.target}:${s.reason}`))
       .toEqual(["OB-1:ir-version-mismatch", "SC-1:ir-version-mismatch"]);
-    expect(written.ok && written.value.skipped()[0]?.detail)
+    expect(written.ok && written.value.skipped().toArray()[0]?.detail)
       .toBe("IR major version 2 is not supported by this backend (supports 1.x.x)");
     expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(true);
   });
@@ -191,7 +206,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     });
     const facts: SmtPlanFacts = {
       ...EMPTY_FACTS,
-      skipped: [{ target: "OB-2", reason: "capability", detail: 'nature "state-temporal" is checked by a state-machine backend, not the SMT backend' }],
+      skipped: VerificationSkips.of([{ target: "OB-2", reason: "capability", detail: 'nature "state-temporal" is checked by a state-machine backend, not the SMT backend' }]),
     };
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok({ model: m, irHash: ContentHash.reconstitute("a".repeat(64)) })),
@@ -202,9 +217,9 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
     expect(written.ok && written.value.unavailableReason())
       .toBe("no runtime could execute the z3 child process (node: not on PATH)");
-    expect(written.ok && written.value.skipped().map((s) => `${s.target}:${s.reason}`))
+    expect(written.ok && written.value.skipped().toArray().map((s) => `${s.target}:${s.reason}`))
       .toEqual(["OB-1:unavailable", "OB-2:capability"]);
-    expect(written.ok && written.value.skipped()[0]?.detail).toBe("z3 could not be executed");
+    expect(written.ok && written.value.skipped().toArray()[0]?.detail).toBe("z3 could not be executed");
   });
 
   test("a solved run interprets, persists the conformed report, and converges cross-check", () => {
@@ -232,11 +247,11 @@ describe("the verify-smt interactor over the InMemory double", () => {
     expect(outcome.kind === "verified" && outcome.pass).toBe(false);
     expect(outcome.kind === "verified" && outcome.findingsCount).toBe(1);
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
-    expect(written.ok && written.value.findings()[0]?.kind).toBe("scenario-violation");
+    expect(written.ok && written.value.findings().toArray()[0]?.kind).toBe("scenario-violation");
     const bytes = written.ok ? renderVerificationReportBytes(written.value) : "";
     expect(Object.keys(JSON.parse(bytes))).toEqual(["backend", "irVersion", "irHash", "method", "findings", "skipped"]);
     const cross = reports.findById(VerificationReportId.of(ap(DIR), "cross-check"));
-    expect(cross.ok && cross.value.crossChecked()).toEqual([]);
+    expect(cross.ok && cross.value.crossChecked()?.toArray()).toEqual([]);
   });
 });
 
@@ -257,7 +272,7 @@ describe("smt verdict interpretation", () => {
   });
   const facts: SmtPlanFacts = {
     compiled: new Map([["OB-1", true], ["OB-2", true], ["OB-3", true], ["OB-4", true]]),
-    skipped: [{ target: "OB-9", reason: "capability", detail: "seed" }],
+    skipped: VerificationSkips.of([{ target: "OB-9", reason: "capability", detail: "seed" }]),
     labelToTarget: new Map([["ob_OB_1", "OB-1"], ["ob_OB_2", "OB-2"], ["ty_x", "TY-x"], ["bg_B1", "B1"]]),
     eventPairs: [{ qOverlap: "evo:OB-3:OB-4", qJoint: "evj:OB-3:OB-4", a: "OB-3", b: "OB-4", trigger: "submit" }],
     gapTriggers: new Map([["submit", ["OB-3", "OB-4"]]]),
@@ -268,14 +283,14 @@ describe("smt verdict interpretation", () => {
 
   test("global unsat becomes one conflict attributed via the OB-prefixed core labels", () => {
     const { findings, skipped } = run([["global", { status: "unsat", core: ["ty_x", "ob_OB_2", "ob_OB_1"] }]]);
-    expect(findings).toEqual([{
+    expect([...findings]).toEqual([{
       kind: "conflict",
       frRefs: ["FR-1", "FR-2"],
       targets: ["OB-1", "OB-2"],
       witness: { core: ["ob_OB_1", "ob_OB_2", "ty_x"] },
       detail: "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.",
     }]);
-    expect(skipped).toEqual([{ target: "OB-9", reason: "capability", detail: "seed" }]);
+    expect([...skipped]).toEqual([{ target: "OB-9", reason: "capability", detail: "seed" }]);
   });
 
   test("global unsat suppresses vacuity findings, and an empty core falls back to all invariants", () => {
@@ -283,8 +298,8 @@ describe("smt verdict interpretation", () => {
       ["global", { status: "unsat", core: [] }],
       ["vac:OB-1", { status: "unsat", core: ["ob_OB_2"] }],
     ]);
-    expect(findings.length).toBe(1);
-    expect(findings[0]?.targets).toEqual(["OB-1", "OB-2"]);
+    expect(findings.toArray().length).toBe(1);
+    expect(findings.toArray()[0]?.targets).toEqual(["OB-1", "OB-2"]);
   });
 
   test("a conflict with no effective targets is dropped entirely", () => {
@@ -294,12 +309,12 @@ describe("smt verdict interpretation", () => {
       { ...EMPTY_FACTS, compiled: new Map([["OB-3", true]]) },
       new Map([["global", { status: "unsat", core: [] }]]),
     );
-    expect(findings).toEqual([]);
+    expect([...findings]).toEqual([]);
   });
 
   test("global timeout skips every compiled invariant", () => {
     const { skipped } = run([["global", { status: "unknown" }]]);
-    expect(skipped.slice(1)).toEqual([
+    expect(skipped.toArray().slice(1)).toEqual([
       { target: "OB-1", reason: "timeout", detail: "global consistency check exceeded the solver budget" },
       { target: "OB-2", reason: "timeout", detail: "global consistency check exceeded the solver budget" },
     ]);
@@ -311,14 +326,14 @@ describe("smt verdict interpretation", () => {
       ["vac:OB-1", { status: "unsat", core: ["ob_OB_2"] }],
       ["vac:OB-2", { status: "unsat", core: ["ob_OB_1"] }],
     ]);
-    expect(findings.length).toBe(1);
-    expect(findings[0]?.targets).toEqual(["OB-1", "OB-2"]);
-    expect(findings[0]?.detail).toStartWith("The condition of obligation OB-1 can never hold");
+    expect(findings.toArray().length).toBe(1);
+    expect(findings.toArray()[0]?.targets).toEqual(["OB-1", "OB-2"]);
+    expect(findings.toArray()[0]?.detail).toStartWith("The condition of obligation OB-1 can never hold");
   });
 
   test("vacuity budget becomes a timeout skip for that obligation", () => {
     const { skipped } = run([["vac:OB-2", { status: "budget" }]]);
-    expect(skipped.slice(1)).toEqual([
+    expect(skipped.toArray().slice(1)).toEqual([
       { target: "OB-2", reason: "timeout", detail: "vacuity check for OB-2 exceeded the solver budget" },
     ]);
   });
@@ -328,7 +343,7 @@ describe("smt verdict interpretation", () => {
       ["evo:OB-3:OB-4", { status: "sat" }],
       ["evj:OB-3:OB-4", { status: "unsat", core: [] }],
     ]);
-    expect(findings[0]?.detail).toBe(
+    expect(findings.toArray()[0]?.detail).toBe(
       'Events OB-3 and OB-4 for trigger "submit" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.',
     );
   });
@@ -338,21 +353,21 @@ describe("smt verdict interpretation", () => {
       ["evo:OB-3:OB-4", { status: "sat" }],
       ["evj:OB-3:OB-4", { status: "unknown" }],
     ]);
-    expect(skipped.slice(1).map((s) => s.target)).toEqual(["OB-3", "OB-4"]);
-    expect(run([["evo:OB-3:OB-4", { status: "sat" }]]).skipped.length).toBe(1);
+    expect(skipped.toArray().slice(1).map((s) => s.target)).toEqual(["OB-3", "OB-4"]);
+    expect(run([["evo:OB-3:OB-4", { status: "sat" }]]).skipped.toArray().length).toBe(1);
   });
 
   test("a sat gap query becomes a completeness-gap carrying the decoded witness state", () => {
     const { findings } = run([["gap:submit", { status: "sat", decodedModel: { "Ticket.priority": 2 } }]]);
-    expect(findings).toEqual([{
+    expect([...findings]).toEqual([{
       kind: "completeness-gap",
       frRefs: ["FR-3", "FR-4"],
       targets: ["OB-3", "OB-4"],
       witness: { model: { "Ticket.priority": 2 } },
       detail: 'No rule for trigger "submit" applies to the witness state: the behavior of this input region is unspecified.',
     }]);
-    expect(run([["gap:submit", { status: "unsat" }]]).findings).toEqual([]);
-    expect(run([["gap:submit", { status: "error" }]]).skipped.slice(1).map((s) => s.target)).toEqual(["OB-3", "OB-4"]);
+    expect([...run([["gap:submit", { status: "unsat" }]]).findings]).toEqual([]);
+    expect(run([["gap:submit", { status: "error" }]]).skipped.toArray().slice(1).map((s) => s.target)).toEqual(["OB-3", "OB-4"]);
   });
 
   test("scenario verdicts: accept-unsat and reject-sat violate, undecided skips, missing is silent", () => {
@@ -360,13 +375,13 @@ describe("smt verdict interpretation", () => {
       ["sc:SC-1", { status: "unsat", core: ["ob_OB_1", "ty_x"] }],
       ["sc:SC-2", { status: "sat", decodedModel: { "Ticket.done": false } }],
     ]);
-    expect(findings.map((f) => f.targets)).toEqual([["OB-1", "SC-1"], ["SC-2"]]);
-    expect(findings[0]?.witness).toEqual({ core: ["ob_OB_1", "ty_x"] });
-    expect(findings[1]?.witness).toEqual({ model: { "Ticket.done": false } });
-    expect(findings[0]?.detail).toStartWith("Accept scenario SC-1 describes a state");
-    expect(findings[1]?.detail).toStartWith("Reject scenario SC-2 is still satisfiable");
-    expect(run([["sc:SC-1", { status: "budget" }]]).skipped.slice(1).map((s) => s.target)).toEqual(["SC-1"]);
-    expect(run([]).findings).toEqual([]);
+    expect(findings.toArray().map((f) => f.targets)).toEqual([["OB-1", "SC-1"], ["SC-2"]]);
+    expect(findings.toArray()[0]?.witness).toEqual({ core: ["ob_OB_1", "ty_x"] });
+    expect(findings.toArray()[1]?.witness).toEqual({ model: { "Ticket.done": false } });
+    expect(findings.toArray()[0]?.detail).toStartWith("Accept scenario SC-1 describes a state");
+    expect(findings.toArray()[1]?.detail).toStartWith("Reject scenario SC-2 is still satisfiable");
+    expect(run([["sc:SC-1", { status: "budget" }]]).skipped.toArray().slice(1).map((s) => s.target)).toEqual(["SC-1"]);
+    expect([...run([]).findings]).toEqual([]);
   });
 });
 
@@ -389,28 +404,28 @@ describe("cross-check computation", () => {
       irVersion: IrVersion.reconstitute("1.0.0"),
       irHash: ContentHash.reconstitute(input.irHash ?? "h1"),
       method: "exhaustive",
-      findings: (input.violated ?? []).map((t): VerificationFinding => ({
+      findings: VerificationFindings.of((input.violated ?? []).map((t): VerificationFinding => ({
         kind: "scenario-violation",
         frRefs: [],
         targets: [t],
         witness: { core: [] },
         detail: "x",
-      })),
-      skipped: (input.skippedTargets ?? []).map((t) => ({ target: t, reason: "capability" })),
+      }))),
+      skipped: VerificationSkips.of((input.skippedTargets ?? []).map((t) => ({ target: t, reason: "capability" }))),
       crossChecked: null,
       unavailableReason: input.unavailable ?? null,
     });
 
   test("a disagreement yields the frozen finding with the per-backend verdict table", () => {
-    const report = crossCheckReport(id, m, ContentHash.reconstitute("h1"), [sibling("quint", { violated: ["SC-1"] }), sibling("smt", {})]);
-    expect(report.findings()).toEqual([{
+    const report = crossCheckReport(id, m, ContentHash.reconstitute("h1"), VerificationReports.of([sibling("quint", { violated: ["SC-1"] }), sibling("smt", {})]));
+    expect(report.findings().toArray()).toEqual([{
       kind: "cross-check-disagreement",
       frRefs: ["FR-1", "FR-2"],
       targets: ["SC-1"],
       witness: { verdicts: { quint: "violated", smt: "clean" } },
       detail: 'Backends "quint" and "smt" disagree on scenario SC-1. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.',
     }]);
-    expect(report.crossChecked()).toEqual([
+    expect(report.crossChecked()?.toArray()).toEqual([
       { backend: "quint", targets: ["SC-1", "SC-2"] },
       { backend: "smt", targets: ["SC-1", "SC-2"] },
     ]);
@@ -419,23 +434,23 @@ describe("cross-check computation", () => {
   });
 
   test("skipped targets, foreign irHash, and unavailable documents never participate", () => {
-    const report = crossCheckReport(id, m, ContentHash.reconstitute("h1"), [
+    const report = crossCheckReport(id, m, ContentHash.reconstitute("h1"), VerificationReports.of([
       sibling("quint", { violated: ["SC-1"], skippedTargets: ["SC-1"] }),
       sibling("smt", {}),
       sibling("stale", { irHash: "other", violated: ["SC-2"] }),
       sibling("down", { unavailable: "boom", violated: ["SC-2"] }),
-    ]);
-    expect(report.findings()).toEqual([]);
-    expect(report.crossChecked()).toEqual([
+    ]));
+    expect(report.findings().toArray()).toEqual([]);
+    expect(report.crossChecked()?.toArray()).toEqual([
       { backend: "quint", targets: ["SC-2"] },
       { backend: "smt", targets: ["SC-2"] },
     ]);
   });
 
   test("fewer than two comparable documents produce an empty cross-check", () => {
-    const report = crossCheckReport(id, m, ContentHash.reconstitute("h1"), [sibling("smt", {})]);
-    expect(report.findings()).toEqual([]);
-    expect(report.crossChecked()).toEqual([]);
+    const report = crossCheckReport(id, m, ContentHash.reconstitute("h1"), VerificationReports.of([sibling("smt", {})]));
+    expect(report.findings().toArray()).toEqual([]);
+    expect(report.crossChecked()?.toArray()).toEqual([]);
     expect(report.passes()).toBe(true);
   });
 });
@@ -445,7 +460,7 @@ describe("degradation reports and ordering", () => {
     const r = irUnreadableReport(VerificationReportId.of(ap("/v"), "smt"), "exhaustive", "IR is not a JSON object");
     expect(r.unavailableReason()).toBe("IR unreadable: IR is not a JSON object — see the deep-spec-ir-valid sensor for details");
     expect(r.irVersion().value()).toBe("0.0.0");
-    expect(r.irHash().equals(sha256(""))).toBe(true);
+    expect(r.irHash().equals(ContentHash.ofText(""))).toBe(true);
     expect(r.isUnavailable()).toBe(true);
     expect(r.findingsCount()).toBe(0);
     expect(r.skippedCount()).toBe(0);
@@ -460,16 +475,16 @@ describe("degradation reports and ordering", () => {
     expect(m.supportsMajor(1)).toBe(false);
     expect(m.majorVersion()).toBe(3);
     const vm = versionMismatchReport(VerificationReportId.of(ap("/v"), "smt"), m, ContentHash.reconstitute("h"), "exhaustive");
-    expect(vm.skipped().map((s) => s.target)).toEqual(["OB-2", "SC-1"]);
+    expect(vm.skipped().toArray().map((s) => s.target)).toEqual(["OB-2", "SC-1"]);
     const su = solverUnavailableReport(
       VerificationReportId.of(ap("/v"), "smt"),
       m,
       ContentHash.reconstitute("h"),
-      [{ target: "OB-2", reason: "compile-error", detail: "invariant obligation lacks an assert expression" }],
+      VerificationSkips.of([{ target: "OB-2", reason: "compile-error", detail: "invariant obligation lacks an assert expression" }]),
       "z3-solver is not available in this project: nope",
     );
     expect(su.unavailableReason()).toBe("z3-solver is not available in this project: nope");
-    expect(su.skipped().map((s) => `${s.target}:${s.reason}`)).toEqual(["OB-2:compile-error", "SC-1:unavailable"]);
+    expect(su.skipped().toArray().map((s) => `${s.target}:${s.reason}`)).toEqual(["OB-2:compile-error", "SC-1:unavailable"]);
   });
 
   test("finding order: kind rank, then joined targets, then detail; unknown kinds sink to rank 9", () => {
@@ -518,18 +533,18 @@ describe("degradation reports and ordering", () => {
       irVersion: IrVersion.reconstitute("1.0.0"),
       irHash: ContentHash.reconstitute("h"),
       method: "exhaustive",
-      findings: [
+      findings: VerificationFindings.of([
         { kind: "scenario-violation", frRefs: [], targets: ["SC-1"], witness: { core: [] }, detail: "b" },
         { kind: "conflict", frRefs: [], targets: ["OB-1"], witness: { core: [] }, detail: "a" },
-      ],
-      skipped: [{ target: "OB-2", reason: "timeout" }, { target: "OB-1", reason: "capability" }],
+      ]),
+      skipped: VerificationSkips.of([{ target: "OB-2", reason: "timeout" }, { target: "OB-1", reason: "capability" }]),
     });
-    expect(composed.findings().map((x) => x.kind)).toEqual(["conflict", "scenario-violation"]);
-    expect(composed.skipped().map((x) => x.target)).toEqual(["OB-1", "OB-2"]);
+    expect(composed.findings().toArray().map((x) => x.kind)).toEqual(["conflict", "scenario-violation"]);
+    expect(composed.skipped().toArray().map((x) => x.target)).toEqual(["OB-1", "OB-2"]);
     expect(composed.passes()).toBe(false);
     const degraded = composed.degraded("why");
     expect(degraded.unavailableReason()).toBe("why");
-    expect(degraded.findings()).toEqual([]);
+    expect(degraded.findings().toArray()).toEqual([]);
     expect(degraded.crossChecked()).toBe(null);
     const back = VerificationReport.reconstitute({
       id,
@@ -541,7 +556,7 @@ describe("degradation reports and ordering", () => {
       crossChecked: null,
       unavailableReason: null,
     });
-    expect(back.findings()).toEqual(composed.findings());
+    expect(back.findings().toArray()).toEqual(composed.findings().toArray());
   });
 
   test("expressionUsesPrime finds primes only through nested references", () => {
@@ -568,10 +583,10 @@ describe("degradation reports and ordering", () => {
     expect(m.frRefsOf(["nope"])).toEqual([]);
     expect(m.attributeAt("Ticket.priority")?.max).toBe(3);
     expect(m.attributeAt("nope")).toBe(undefined);
-    expect(m.attributes().length).toBe(1);
-    expect(m.obligations().length).toBe(2);
-    expect(m.scenarios().length).toBe(1);
-    expect(m.background()[0]?.id).toBe("B1");
+    expect(m.attributes().toArray().length).toBe(1);
+    expect(m.obligations().toArray().length).toBe(2);
+    expect(m.scenarios().toArray().length).toBe(1);
+    expect(m.background().toArray()[0]?.id).toBe("B1");
     expect(m.irVersion().value()).toBe("1.0.0");
     expect(m.supportsMajor(1)).toBe(true);
   });

@@ -8,6 +8,7 @@
 // 脱出口。判定の意味論と文言の描画形は旧 functional-checks の凍結挙動の
 // 逐語移設。
 
+import { type RequirementIds } from "../../kernel/domain/index.ts";
 import type {
   AllowedValues,
   AppliesTo,
@@ -515,7 +516,7 @@ export class RuleDecl {
   }
 
   // FD-R3: requirements.md に存在しない source id（値の昇順——凍結順）。
-  sourceIdValuesMissingFrom(known: ReadonlySet<string>): string[] {
+  sourceIdValuesMissingFrom(known: RequirementIds): string[] {
     return this.#seed.sourceIds.valuesMissingFrom(known);
   }
 

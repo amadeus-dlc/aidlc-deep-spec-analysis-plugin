@@ -5,7 +5,7 @@
 // 照合・描画の解釈（正規化・整形）は語彙自身が所有し、検査は意味論だけを書く。
 
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
-import { normalizeName } from "../../kernel/domain/index.ts";
+import { type RequirementIds, normalizeName } from "../../kernel/domain/index.ts";
 
 export type TokenError = { readonly kind: "empty-token"; readonly raw: string };
 export type BoundError = { readonly kind: "not-finite"; readonly raw: number };
@@ -362,7 +362,7 @@ export class SourceIds {
   }
 
   // FD-R3: requirements.md に存在しない source id（値の昇順——凍結順）。
-  valuesMissingFrom(known: ReadonlySet<string>): string[] {
+  valuesMissingFrom(known: RequirementIds): string[] {
     return this.#values.map((id) => id.value()).filter((id) => !known.has(id)).sort();
   }
 

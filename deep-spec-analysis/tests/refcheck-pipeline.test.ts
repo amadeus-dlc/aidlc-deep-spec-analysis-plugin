@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { RequirementIds, ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -418,7 +418,7 @@ describe("functional branches the fixtures do not exercise", () => {
     const report = functionalReport({
       entities: parseEntitiesDocument(entitiesMd),
       rules: parseRulesDocument(rulesMd),
-      requirementIdsKnown: new Set(["FR-1"]),
+      requirementIdsKnown: RequirementIds.of(["FR-1"]),
     });
     const details = report.findings().map((f) => f.detail).join("\n");
     expect(details).toContain('rule id "BR1.1" is declared more than once');

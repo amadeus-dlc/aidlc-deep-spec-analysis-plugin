@@ -13,10 +13,11 @@ import type { QuintRuns } from "./quint-verdict.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { TraceState } from "./trace-state.ts";
 import type { VerificationFinding, VerificationSkipped } from "./verification-finding.ts";
+import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
 
 export interface InterpretedQuintVerdicts {
-  findings: VerificationFinding[];
-  skipped: VerificationSkipped[];
+  findings: VerificationFindings;
+  skipped: VerificationSkips;
 }
 
 export function interpretQuintVerdicts(
@@ -151,5 +152,5 @@ export function interpretQuintVerdicts(
     }
   }
 
-  return { findings, skipped };
+  return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
 }
