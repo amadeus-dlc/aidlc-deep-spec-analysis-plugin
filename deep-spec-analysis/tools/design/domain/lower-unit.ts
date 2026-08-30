@@ -52,13 +52,197 @@ export interface LoweredBackground {
 }
 
 export interface LoweredUnit {
-  obligations: LoweredObligation[];
-  scenarios: LoweredScenario[];
-  background: LoweredBackground[];
-  map: Map<string, LoweredOrigin>;
-  scenarioMap: Map<string, string>;
-  machineOfTransition: Map<string, DesignMachine>;
-  attrPathOfMachine: Map<string, string>;
+  readonly obligations: LoweredObligations;
+  readonly scenarios: LoweredScenarios;
+  readonly background: LoweredBackgrounds;
+  readonly index: LoweringIndex;
+}
+
+// lowered 義務のファーストクラスコレクション。OB-n 採番順は文書バイトに
+// 効く凍結面——順序保持で運ぶ。
+export class LoweredObligations {
+  readonly #values: readonly LoweredObligation[];
+
+  private constructor(values: readonly LoweredObligation[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly LoweredObligation[]): LoweredObligations {
+    return new LoweredObligations([...values]);
+  }
+
+  add(value: LoweredObligation): LoweredObligations {
+    return new LoweredObligations([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<LoweredObligation> {
+    yield* this.#values;
+  }
+
+  count(): number {
+    return this.#values.length;
+  }
+
+  // 境界（serializer・テスト）専用のエスケープハッチ。
+  toArray(): readonly LoweredObligation[] {
+    return this.#values;
+  }
+}
+
+// lowered シナリオのファーストクラスコレクション（SC-n 採番順を保持）。
+export class LoweredScenarios {
+  readonly #values: readonly LoweredScenario[];
+
+  private constructor(values: readonly LoweredScenario[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly LoweredScenario[]): LoweredScenarios {
+    return new LoweredScenarios([...values]);
+  }
+
+  add(value: LoweredScenario): LoweredScenarios {
+    return new LoweredScenarios([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<LoweredScenario> {
+    yield* this.#values;
+  }
+
+  count(): number {
+    return this.#values.length;
+  }
+
+  toArray(): readonly LoweredScenario[] {
+    return this.#values;
+  }
+}
+
+// lowered 背景のファーストクラスコレクション（BG-n 採番順を保持）。
+export class LoweredBackgrounds {
+  readonly #values: readonly LoweredBackground[];
+
+  private constructor(values: readonly LoweredBackground[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly LoweredBackground[]): LoweredBackgrounds {
+    return new LoweredBackgrounds([...values]);
+  }
+
+  add(value: LoweredBackground): LoweredBackgrounds {
+    return new LoweredBackgrounds([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<LoweredBackground> {
+    yield* this.#values;
+  }
+
+  count(): number {
+    return this.#values.length;
+  }
+
+  toArray(): readonly LoweredBackground[] {
+    return this.#values;
+  }
+}
+
+// SMT 変数名は設計 id の英数字化（remap の witness core 書き換えと同じ規則）。
+function designToken(id: string): string {
+  return id.replace(/[^A-Za-z0-9_]/g, "_");
+}
+
+// lowering 索引——lowered id と設計語彙（DOB/TR/SM/DSC id・機械・属性パス）の
+// 対応を閉じ込める。remap はこの索引に「訊く」のではなく「頼む」：lowered id
+// の設計帰属解決とテキスト書き換えは索引自身の振る舞い。
+export class LoweringIndex {
+  readonly #origins: ReadonlyMap<string, LoweredOrigin>;
+  readonly #scenarioDesignIds: ReadonlyMap<string, string>;
+  readonly #machinesByTransition: ReadonlyMap<string, DesignMachine>;
+  readonly #attrPathsByMachine: ReadonlyMap<string, string>;
+
+  private constructor(props: {
+    origins: ReadonlyMap<string, LoweredOrigin>;
+    scenarioDesignIds: ReadonlyMap<string, string>;
+    machinesByTransition: ReadonlyMap<string, DesignMachine>;
+    attrPathsByMachine: ReadonlyMap<string, string>;
+  }) {
+    this.#origins = props.origins;
+    this.#scenarioDesignIds = props.scenarioDesignIds;
+    this.#machinesByTransition = props.machinesByTransition;
+    this.#attrPathsByMachine = props.attrPathsByMachine;
+  }
+
+  static of(props: {
+    origins: ReadonlyMap<string, LoweredOrigin>;
+    scenarioDesignIds: ReadonlyMap<string, string>;
+    machinesByTransition: ReadonlyMap<string, DesignMachine>;
+    attrPathsByMachine: ReadonlyMap<string, string>;
+  }): LoweringIndex {
+    return new LoweringIndex({
+      origins: new Map(props.origins),
+      scenarioDesignIds: new Map(props.scenarioDesignIds),
+      machinesByTransition: new Map(props.machinesByTransition),
+      attrPathsByMachine: new Map(props.attrPathsByMachine),
+    });
+  }
+
+  originOf(loweredId: string): LoweredOrigin | null {
+    return this.#origins.get(loweredId) ?? null;
+  }
+
+  // lowered 対象 → 設計帰属。義務・合成の origin → シナリオ → 逐語、の
+  // 解決順は remap の凍結挙動。
+  resolveDesignTarget(loweredId: string): { design: string; entry: LoweredOrigin | null } {
+    const entry = this.#origins.get(loweredId) ?? null;
+    if (entry) return { design: entry.design, entry };
+    const dsc = this.#scenarioDesignIds.get(loweredId);
+    if (dsc) return { design: dsc, entry: null };
+    return { design: loweredId, entry: null };
+  }
+
+  // v1 detail 内の OB-n 参照を設計 id へ書き換える（"DOB-2" は \bOB-2\b
+  // 境界を含まないため二重書き換えは起きない）。
+  rewriteLoweredIds(text: string): string {
+    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(`OB-${num}`)?.design ?? m);
+  }
+
+  // witness core のラベル内 OB_n トークンを設計 id の英数字化へ書き換える。
+  rewriteLoweredIdTokens(label: string): string {
+    return label.replace(/OB_([0-9]+)/g, (m, num) => {
+      const entry = this.#origins.get(`OB-${num}`);
+      return entry ? designToken(entry.design) : m;
+    });
+  }
+
+  isTransition(designId: string): boolean {
+    return this.#machinesByTransition.has(designId);
+  }
+
+  machineOfTransition(designId: string): DesignMachine | null {
+    return this.#machinesByTransition.get(designId) ?? null;
+  }
+
+  attrPathOfMachine(machineId: string): string | null {
+    return this.#attrPathsByMachine.get(machineId) ?? null;
+  }
+
+  // refinement 追加パス用：lowered id を素通し帰属として索引に足した新索引。
+  withPassthrough(loweredId: string, designId: string): LoweringIndex {
+    const origins = new Map(this.#origins);
+    origins.set(loweredId, { design: designId, kind: "passthrough" });
+    return new LoweringIndex({
+      origins,
+      scenarioDesignIds: this.#scenarioDesignIds,
+      machinesByTransition: this.#machinesByTransition,
+      attrPathsByMachine: this.#attrPathsByMachine,
+    });
+  }
+
+  // 境界（テスト）専用のエスケープハッチ：帰属表の全エントリ。
+  toOriginEntries(): readonly (readonly [string, LoweredOrigin])[] {
+    return [...this.#origins.entries()];
+  }
 }
 
 const eqRef = (path: string, prime: boolean, value: string): Expression => ({
@@ -199,5 +383,15 @@ export function lowerUnit(u: DesignUnit, opts: { synthetics: boolean }): Lowered
     background.push({ id: `BG-${bgN}`, assert: bg.assert });
   }
 
-  return { obligations, scenarios, background, map, scenarioMap, machineOfTransition, attrPathOfMachine };
+  return {
+    obligations: LoweredObligations.of(obligations),
+    scenarios: LoweredScenarios.of(scenarios),
+    background: LoweredBackgrounds.of(background),
+    index: LoweringIndex.of({
+      origins: map,
+      scenarioDesignIds: scenarioMap,
+      machinesByTransition: machineOfTransition,
+      attrPathsByMachine: attrPathOfMachine,
+    }),
+  };
 }

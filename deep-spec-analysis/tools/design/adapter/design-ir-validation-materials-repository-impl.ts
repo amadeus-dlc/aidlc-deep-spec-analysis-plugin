@@ -30,6 +30,22 @@ import type {
   DesignTransitionDecl,
   DesignUnitDecl,
 } from "../domain/index.ts";
+import {
+  BindingPairs,
+  BrRefs,
+  DeclaredValues,
+  DesignAttributeDecls,
+  DesignBackgroundDecls,
+  DesignEntityDecls,
+  DesignIgnoreDecls,
+  DesignMachineDecls,
+  DesignObligationDecls,
+  DesignScenarioDecls,
+  DesignTransitionDecls,
+  DesignUnitDecls,
+  InitialStates,
+  UnformalizedTargets,
+} from "../domain/index.ts";
 import { type DesignModelId, SUPPORTED_DESIGN_IR_MAJOR } from "../domain/index.ts";
 import type {
   DesignIrMaterialsAcquisition,
@@ -51,6 +67,13 @@ function strArrayOrUndefined(v: Json): string[] | undefined {
   return Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : undefined;
 }
 
+// brRefs は「配列でなければ未宣言」——宣言の有無を undefined で保存しつつ
+// 宣言済みはコレクションで運ぶ。
+function brRefsOrUndefined(v: Json): BrRefs | undefined {
+  const arr = strArrayOrUndefined(v);
+  return arr === undefined ? undefined : BrRefs.of(arr);
+}
+
 function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordRoot: string | null): DesignUnitDecl {
   const entities: DesignEntityDecl[] = [];
   const schema = isObject(rawUnit.schema) ? rawUnit.schema : {};
@@ -63,12 +86,12 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
       attributes.push({
         name: attr.name,
         kind: typeof t.kind === "string" ? t.kind : "",
-        values: Array.isArray(t.values) ? (t.values.filter((v) => typeof v === "string") as string[]) : undefined,
+        values: Array.isArray(t.values) ? DeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
         min: typeof t.min === "number" ? t.min : undefined,
         max: typeof t.max === "number" ? t.max : undefined,
       });
     }
-    entities.push({ name: ent.name, attributes });
+    entities.push({ name: ent.name, attributes: DesignAttributeDecls.of(attributes) });
   }
 
   const obligations: DesignObligationDecl[] = [];
@@ -78,7 +101,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     obligations.push({
       id: ob.id,
       origin: typeof ob.origin === "string" ? ob.origin : undefined,
-      brRefs: strArrayOrUndefined(ob.brRefs ?? null),
+      brRefs: brRefsOrUndefined(ob.brRefs ?? null),
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
       effect: asExpression(ob.effect ?? null),
@@ -106,7 +129,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
         from: typeof tr.from === "string" ? tr.from : undefined,
         to: typeof tr.to === "string" ? tr.to : undefined,
         trigger: typeof tr.trigger === "string" ? tr.trigger : undefined,
-        brRefs: strArrayOrUndefined(tr.brRefs ?? null),
+        brRefs: brRefsOrUndefined(tr.brRefs ?? null),
         guard: asExpression(tr.guard ?? null),
         effect: asExpression(tr.effect ?? null),
       });
@@ -116,7 +139,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
       if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
       ignores.push({ state: ig.state, trigger: ig.trigger });
     }
-    stateMachines.push({ id: sm.id, attrPath, initial, transitions, ignores });
+    stateMachines.push({ id: sm.id, attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) });
   }
 
   const scenarios: DesignScenarioDecl[] = [];
@@ -125,10 +148,10 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
     scenarios.push({
       id: sc.id,
-      bindings: Object.entries(bindings),
+      bindings: BindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
-      brRefs: strArrayOrUndefined(sc.brRefs ?? null),
+      brRefs: brRefsOrUndefined(sc.brRefs ?? null),
     });
   }
 
@@ -152,12 +175,12 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
 
   return {
     unit: unitName,
-    entities,
-    obligations,
-    stateMachines,
-    scenarios,
-    background,
-    unformalizedTargets,
+    entities: DesignEntityDecls.of(entities),
+    obligations: DesignObligationDecls.of(obligations),
+    stateMachines: DesignMachineDecls.of(stateMachines),
+    scenarios: DesignScenarioDecls.of(scenarios),
+    background: DesignBackgroundDecls.of(background),
+    unformalizedTargets: UnformalizedTargets.of(unformalizedTargets),
     directoryExists,
     rulesMarkdown,
   };
@@ -234,7 +257,7 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
       materials: {
         irVersion,
         schemaErrors,
-        units,
+        units: DesignUnitDecls.of(units),
       },
     };
   }

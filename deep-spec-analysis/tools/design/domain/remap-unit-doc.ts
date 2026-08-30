@@ -9,6 +9,7 @@
 // アダプタのパーサが済ませ、ここは型付き判定を受ける）。
 
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { DesignFindings, DesignSkips } from "./design-finding.ts";
 import type { DesignFinding, DesignSkipped } from "./design-finding.ts";
 import type { DesignUnit } from "./design-unit.ts";
 import type { DesignValue } from "./design-value.ts";
@@ -29,20 +30,66 @@ export interface SiblingVerdictSkip {
   detail?: string;
 }
 
+// 兄弟バックエンド判定 finding のファーストクラスコレクション（文書順を保持）。
+export class SiblingVerdictFindings {
+  readonly #values: readonly SiblingVerdictFinding[];
+
+  private constructor(values: readonly SiblingVerdictFinding[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly SiblingVerdictFinding[]): SiblingVerdictFindings {
+    return new SiblingVerdictFindings([...values]);
+  }
+
+  add(value: SiblingVerdictFinding): SiblingVerdictFindings {
+    return new SiblingVerdictFindings([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<SiblingVerdictFinding> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly SiblingVerdictFinding[] {
+    return this.#values;
+  }
+}
+
+// 兄弟バックエンド判定 skip のファーストクラスコレクション（文書順を保持）。
+export class SiblingVerdictSkips {
+  readonly #values: readonly SiblingVerdictSkip[];
+
+  private constructor(values: readonly SiblingVerdictSkip[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly SiblingVerdictSkip[]): SiblingVerdictSkips {
+    return new SiblingVerdictSkips([...values]);
+  }
+
+  add(value: SiblingVerdictSkip): SiblingVerdictSkips {
+    return new SiblingVerdictSkips([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<SiblingVerdictSkip> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly SiblingVerdictSkip[] {
+    return this.#values;
+  }
+}
+
 export type SiblingVerdictDocument =
   | { kind: "unreadable" }
   | { kind: "unavailable"; reason: string; method: string | null }
-  | { kind: "readable"; method: string | null; findings: SiblingVerdictFinding[]; skipped: SiblingVerdictSkip[] };
+  | { kind: "readable"; method: string | null; findings: SiblingVerdictFindings; skipped: SiblingVerdictSkips };
 
 export interface RemappedUnit {
-  findings: DesignFinding[];
-  skipped: DesignSkipped[];
+  readonly findings: DesignFindings;
+  readonly skipped: DesignSkips;
   unavailable: string | null;
   method: string | null;
-}
-
-function designToken(id: string): string {
-  return id.replace(/[^A-Za-z0-9_]/g, "_");
 }
 
 function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
@@ -51,31 +98,18 @@ function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
 
 export function remapUnitDocument(u: DesignUnit, low: LoweredUnit, doc: SiblingVerdictDocument): RemappedUnit {
   if (doc.kind === "unreadable") {
-    return { findings: [], skipped: [], unavailable: "sibling backend produced no findings document", method: null };
+    return { findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: "sibling backend produced no findings document", method: null };
   }
   if (doc.kind === "unavailable") {
-    return { findings: [], skipped: [], unavailable: doc.reason, method: doc.method };
+    return { findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: doc.reason, method: doc.method };
   }
   const method = doc.method;
-  const mapTarget = (t: string): { design: string; entry: LoweredOrigin | null } => {
-    const entry = low.map.get(t) ?? null;
-    if (entry) return { design: entry.design, entry };
-    const dsc = low.scenarioMap.get(t);
-    if (dsc) return { design: dsc, entry: null };
-    return { design: t, entry: null };
-  };
+  const mapTarget = (t: string): { design: string; entry: LoweredOrigin | null } => low.index.resolveDesignTarget(t);
   const remapCore = (core: DesignValue): DesignValue => {
     if (!Array.isArray(core)) return core;
-    return core.map((label) => {
-      if (typeof label !== "string") return label;
-      return label.replace(/OB_([0-9]+)/g, (m, num) => {
-        const entry = low.map.get(`OB-${num}`);
-        return entry ? designToken(entry.design) : m;
-      });
-    });
+    return core.map((label) => (typeof label === "string" ? low.index.rewriteLoweredIdTokens(label) : label));
   };
-  const remapDetail = (detail: string): string =>
-    detail.replace(/\bOB-([0-9]+)\b/g, (m, num) => low.map.get(`OB-${num}`)?.design ?? m);
+  const remapDetail = (detail: string): string => low.index.rewriteLoweredIds(detail);
 
   const findings: DesignFinding[] = [];
   const skipped: DesignSkipped[] = [];
@@ -95,7 +129,7 @@ export function remapUnitDocument(u: DesignUnit, low: LoweredUnit, doc: SiblingV
     const synth = mapped.find((m) => m.entry?.kind === "vac-dead" || m.entry?.kind === "vac-shadow");
     if (synth?.entry?.kind === "vac-dead" && f.kind === "conflict") {
       const design = synth.entry.design;
-      const isTransition = low.machineOfTransition.has(design);
+      const isTransition = low.index.isTransition(design);
       deadDesignIds.add(design);
       findings.push({
         kind: "unreachable",
@@ -129,7 +163,7 @@ export function remapUnitDocument(u: DesignUnit, low: LoweredUnit, doc: SiblingV
     // deterministic:false waiver：同トリガ conflict の対象がすべて、非決定を
     // 宣言した 1 機械の遷移であるとき。
     if (f.kind === "conflict" && targets.length > 0) {
-      const machines = targets.map((t) => low.machineOfTransition.get(t));
+      const machines = targets.map((t) => low.index.machineOfTransition(t));
       const first = machines[0];
       if (first && machines.every((m) => m === first) && first.deterministic === false) {
         for (const t of targets) {
@@ -186,5 +220,5 @@ export function remapUnitDocument(u: DesignUnit, low: LoweredUnit, doc: SiblingV
     if (typeof s.detail === "string") out.detail = remapDetail(s.detail);
     skipped.push(out);
   }
-  return { findings, skipped, unavailable: null, method };
+  return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped), unavailable: null, method };
 }

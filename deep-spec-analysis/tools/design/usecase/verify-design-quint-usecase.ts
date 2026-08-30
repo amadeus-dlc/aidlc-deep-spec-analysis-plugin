@@ -29,6 +29,7 @@ import {
   remapUnitDocument,
   RefinementMaterialsId,
 } from "../domain/index.ts";
+import type { LoweredUnit } from "../domain/index.ts";
 import {
   planUnitRefinement,
   quintRefinementStatusSkips,
@@ -149,7 +150,7 @@ export class VerifyDesignQuintUseCase {
 
       // 到達不能状態の検出（FR8.4）：bounded モードのみ・予算キャップつき。
       for (const sm of [...u.machines()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-        const attrPath = lowered.attrPathOfMachine.get(sm.id) ?? `${sm.entity}.${sm.attribute}`;
+        const attrPath = lowered.index.attrPathOfMachine(sm.id) ?? `${sm.entity}.${sm.attribute}`;
         const candidates = u
           .enumValuesOf(attrPath)
           .filter((s) => !sm.initial.includes(s))
@@ -238,14 +239,22 @@ export class VerifyDesignQuintUseCase {
             }
             continue;
           }
-          const lowered = lowerUnit(u, { synthetics: false });
-          let n = lowered.obligations.length;
+          const base = lowerUnit(u, { synthetics: false });
+          let refinementObligations = base.obligations;
+          let refinementIndex = base.index;
+          let n = refinementObligations.count();
           for (const e of extras) {
             n += 1;
             const lowId = `OB-${n}`;
-            lowered.obligations.push({ id: lowId, nature: "invariant", frRefs: e.frRefs, assert: e.expr });
-            lowered.map.set(lowId, { design: e.reqId, kind: "passthrough" });
+            refinementObligations = refinementObligations.add({ id: lowId, nature: "invariant", frRefs: e.frRefs, assert: e.expr });
+            refinementIndex = refinementIndex.withPassthrough(lowId, e.reqId);
           }
+          const lowered: LoweredUnit = {
+            obligations: refinementObligations,
+            scenarios: base.scenarios,
+            background: base.background,
+            index: refinementIndex,
+          };
           const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
           if (run.exit !== 0 || run.doc === null) {
             for (const e of extras) {

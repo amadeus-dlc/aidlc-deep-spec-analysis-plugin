@@ -6,7 +6,7 @@ import type { Json } from "../../kernel/adapter/index.ts";
 import type { DesignUnit, LoweredUnit } from "../domain/index.ts";
 
 export function renderLoweredDocument(u: DesignUnit, low: LoweredUnit): Json {
-  const obligations: Json[] = low.obligations.map((ob) => {
+  const obligations: Json[] = low.obligations.toArray().map((ob) => {
     const out: { [k: string]: Json } = {
       id: ob.id,
       nature: ob.nature,
@@ -19,7 +19,7 @@ export function renderLoweredDocument(u: DesignUnit, low: LoweredUnit): Json {
     if (ob.temporal) out.temporal = ob.temporal as unknown as Json;
     return out;
   });
-  const scenarios: Json[] = low.scenarios.map((sc) => {
+  const scenarios: Json[] = low.scenarios.toArray().map((sc) => {
     const out: { [k: string]: Json } = {
       id: sc.id,
       kind: sc.kind,
@@ -30,7 +30,7 @@ export function renderLoweredDocument(u: DesignUnit, low: LoweredUnit): Json {
     if (sc.expect) out.expect = sc.expect as unknown as Json;
     return out;
   });
-  const background: Json[] = low.background.map((bg) => ({ id: bg.id, assert: bg.assert as unknown as Json }));
+  const background: Json[] = low.background.toArray().map((bg) => ({ id: bg.id, assert: bg.assert as unknown as Json }));
   return {
     irVersion: "1.0.0",
     schema: { entities: u.rawEntities() as unknown as Json },

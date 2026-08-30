@@ -42,29 +42,29 @@ function ref(artifact: string, element: string, value?: string): WitnessRef {
   return value === undefined ? { artifact, element } : { artifact, element, value };
 }
 
-export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: CheckFamilyLedger): void {
-  const entitiesArt = input.entitiesArtifact;
+export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger: CheckFamilyLedger): void {
+  const entitiesArt = materials.entitiesArtifact;
 
   // --- entities.md ----------------------------------------------------------
   let entities: DeclaredEntities | null = null;
-  if (input.entities.kind === "absent") {
+  if (materials.entities.kind === "absent") {
     for (const f of ["FD-E1", "FD-E2", "FD-E3", "FD-E4", "FD-E5", "FD-E6"]) {
       ledger.skip(f, "absent-input", "entities.md is not present in this unit's functional-design record");
     }
-  } else if (input.entities.kind === "wrong-fence-count") {
+  } else if (materials.entities.kind === "wrong-fence-count") {
     ledger.finding("FD-E1", "structure-invalid", ["check:FD-E1"], [ref(entitiesArt, "yaml fence")],
-      `entities.md must carry exactly one fenced yaml source-of-truth block (found ${input.entities.found})`);
+      `entities.md must carry exactly one fenced yaml source-of-truth block (found ${materials.entities.found})`);
     for (const f of ["FD-E2", "FD-E3", "FD-E4", "FD-E5", "FD-E6"]) {
       ledger.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
     }
-  } else if (input.entities.kind === "unparseable") {
-    ledger.finding("FD-E1", "structure-invalid", ["check:FD-E1"], [ref(entitiesArt, `yaml fence (line ${input.entities.line})`)],
-      `yaml block does not parse in the supported subset: ${input.entities.error}`);
+  } else if (materials.entities.kind === "unparseable") {
+    ledger.finding("FD-E1", "structure-invalid", ["check:FD-E1"], [ref(entitiesArt, `yaml fence (line ${materials.entities.line})`)],
+      `yaml block does not parse in the supported subset: ${materials.entities.error}`);
     for (const f of ["FD-E2", "FD-E3", "FD-E4", "FD-E5", "FD-E6"]) {
       ledger.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
     }
   } else {
-    entities = input.entities.model;
+    entities = materials.entities.model;
     for (const e of entities.shapeErrors()) {
       ledger.finding("FD-E1", "structure-invalid", ["check:FD-E1"], [ref(entitiesArt, e.element.value())], e.detail);
     }
@@ -143,29 +143,29 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
   }
 
   // --- rules.md -------------------------------------------------------------
-  const rulesArt = input.rulesArtifact;
+  const rulesArt = materials.rulesArtifact;
   let rules: RuleDecls | null = null;
   const blockRs = (why: string): void => {
     for (const f of ["FD-R2", "FD-R3", "FD-R4", "FD-R5"]) ledger.skip(f, "unrecognized-format", why);
   };
-  if (input.rules.kind === "absent") {
+  if (materials.rules.kind === "absent") {
     for (const f of ["FD-R1", "FD-R2", "FD-R3", "FD-R4", "FD-R5"]) {
       ledger.skip(f, "absent-input", "rules.md is not present in this unit's functional-design record");
     }
-  } else if (input.rules.kind === "wrong-fence-count") {
+  } else if (materials.rules.kind === "wrong-fence-count") {
     ledger.finding("FD-R1", "structure-invalid", ["check:FD-R1"], [ref(rulesArt, "yaml fence")],
-      `rules.md must carry exactly one fenced yaml source-of-truth block (found ${input.rules.found})`);
+      `rules.md must carry exactly one fenced yaml source-of-truth block (found ${materials.rules.found})`);
     blockRs("blocked by FD-R1: the rules yaml block is unusable");
-  } else if (input.rules.kind === "unparseable") {
-    ledger.finding("FD-R1", "structure-invalid", ["check:FD-R1"], [ref(rulesArt, `yaml fence (line ${input.rules.line})`)],
-      `yaml block does not parse in the supported subset: ${input.rules.error}`);
+  } else if (materials.rules.kind === "unparseable") {
+    ledger.finding("FD-R1", "structure-invalid", ["check:FD-R1"], [ref(rulesArt, `yaml fence (line ${materials.rules.line})`)],
+      `yaml block does not parse in the supported subset: ${materials.rules.error}`);
     blockRs("blocked by FD-R1: the rules yaml block is unusable");
-  } else if (input.rules.kind === "no-rules-list") {
+  } else if (materials.rules.kind === "no-rules-list") {
     ledger.finding("FD-R1", "structure-invalid", ["check:FD-R1"], [ref(rulesArt, "rules")],
       "top-level `rules:` list is missing");
     blockRs("blocked by FD-R1: the rules yaml block is unusable");
   } else {
-    rules = input.rules.rules;
+    rules = materials.rules.rules;
     for (const r of rules) {
       if (r.missing().length > 0) {
         ledger.finding("FD-R1", "structure-invalid", [r.findingTarget("check:FD-R1")],
@@ -193,10 +193,10 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
       seenIds.add(id.value());
     }
     // FD-R3: source FR/NFR ids exist in requirements.md
-    if (input.requirementIdsKnown === null) {
+    if (materials.requirementIdsKnown === null) {
       ledger.skip("FD-R3", "absent-input", "requirements.md not found under this intent record — source ids cannot be reverse-verified");
     } else {
-      const known = input.requirementIdsKnown;
+      const known = materials.requirementIdsKnown;
       for (const r of rules) {
         const missing = r.sourceIdValuesMissingFrom(known);
         if (missing.length > 0) {
@@ -234,15 +234,15 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
   }
 
   // --- functional-spec.md state machines ------------------------------------
-  const specArt = input.specArtifact;
-  if (input.spec.kind === "absent") {
+  const specArt = materials.specArtifact;
+  if (materials.spec.kind === "absent") {
     ledger.skip("FD-S1", "absent-input", "functional-spec.md is not present in this unit's functional-design record");
     ledger.skip("FD-S2", "absent-input", "functional-spec.md is not present in this unit's functional-design record");
   } else if (entities === null) {
     ledger.skip("FD-S1", "absent-input", "entities.md is unavailable — state machines cannot be checked against allowed values");
     ledger.skip("FD-S2", "absent-input", "entities.md is unavailable — state machines cannot be checked against allowed values");
   } else {
-    const machines = input.spec.machines;
+    const machines = materials.spec.machines;
     if (machines.isEmpty()) {
       for (const e of entities.entities().lifecycleOnly()) {
         ledger.skip("FD-S1", "unrecognized-format",
@@ -292,18 +292,18 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
   }
 
   // --- XS: domain-design vs functional-design entities ------------------------
-  const compArt = input.componentsArtifact;
-  if (input.domainEntities.kind === "absent") {
+  const compArt = materials.componentsArtifact;
+  if (materials.domainEntities.kind === "absent") {
     for (const f of ["XS-1", "XS-2", "XS-3"]) {
       ledger.skip(f, "absent-input", "domain-design components.md is not present under this intent record");
     }
-  } else if (input.domainEntities.kind === "unusable") {
+  } else if (materials.domainEntities.kind === "unusable") {
     for (const f of ["XS-1", "XS-2", "XS-3"]) {
-      ledger.skip(f, "unrecognized-format", `components.md yaml block is unusable (${input.domainEntities.error})`);
+      ledger.skip(f, "unrecognized-format", `components.md yaml block is unusable (${materials.domainEntities.error})`);
     }
   } else {
-    const domainEntities = input.domainEntities.entities;
-    const unitEntities = input.siblingUnits;
+    const domainEntities = materials.domainEntities.entities;
+    const unitEntities = materials.siblingUnits;
     // 正規化名での一意化と整列はコレクションが所有する（重複宣言そのものは
     // DD-5 の finding）。
     for (const de of domainEntities.sortedDistinctByNormalizedName()) {
@@ -320,8 +320,8 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
           `domain entity "${de.name().value()}" is defined in no unit's entities.md — it was dropped on the way to functional design`);
       }
       // XS-3: 属性の取り落としは素描が自分で告げる（このユニットの定義に対してのみ）。
-      if (input.unit !== undefined) {
-        const mine = unitEntities.entityDeclaredIn(input.unit, key);
+      if (materials.unit !== undefined) {
+        const mine = unitEntities.entityDeclaredIn(materials.unit, key);
         if (mine) {
           const dropped = de.attributesDroppedIn(mine.attrs);
           if (dropped.length > 0) {
@@ -332,7 +332,7 @@ export function runFunctionalChecks(input: FunctionalCheckMaterials, ledger: Che
         }
       }
     }
-    if (input.unit === undefined) {
+    if (materials.unit === undefined) {
       ledger.skip("XS-3", "unrecognized-format", "the unit for this functional-design record could not be determined from its path");
     }
   }

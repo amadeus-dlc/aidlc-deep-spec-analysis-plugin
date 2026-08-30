@@ -42,7 +42,10 @@ import {
   type DesignValue,
   type DesignFinding,
   type DesignModelComposition,
+  type DesignSkipped,
   type SiblingVerdictDocument,
+  SiblingVerdictFindings,
+  SiblingVerdictSkips,
   DesignModel,
   DesignReport,
   DesignReportId,
@@ -98,7 +101,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
 
       for (const backend of ["smt", "quint"] as const) {
         const findings: DesignFinding[] = [];
-        const skipped: ReturnType<typeof remapUnitDocument>["skipped"] = [];
+        const skipped: DesignSkipped[] = [];
         const checkedUnits: string[] = [];
         let method: string | null = null;
         for (const u of model.units()) {
@@ -114,7 +117,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
           if (backend === "quint") {
             // entry と同じ到達性検出フェーズ：simulation では capability skip。
             for (const sm of [...u.machines()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-              const attrPath = lowered.attrPathOfMachine.get(sm.id) ?? `${sm.entity}.${sm.attribute}`;
+              const attrPath = lowered.index.attrPathOfMachine(sm.id) ?? `${sm.entity}.${sm.attribute}`;
               const candidates = u
                 .enumValuesOf(attrPath)
                 .filter((s) => !sm.initial.includes(s))
@@ -229,32 +232,32 @@ describe("lowering (typed compile-down)", () => {
     const low = lowerUnit(machineUnit, { synthetics: false });
     // 義務は idCompare 順（DOB-1 が DOB-2 の前）→ OB-1=DOB-1(event)、
     // OB-2=DOB-2(invariant)、以後 TR-1/TR-2/ignore。
-    expect(low.obligations.map((o) => `${o.id}:${o.nature}`)).toEqual([
+    expect(low.obligations.toArray().map((o) => `${o.id}:${o.nature}`)).toEqual([
       "OB-1:event",
       "OB-2:invariant",
       "OB-3:event",
       "OB-4:event",
       "OB-5:event",
     ]);
-    expect(low.map.get("OB-3")).toEqual({ design: "TR-1", kind: "transition" });
-    expect(low.map.get("OB-5")).toEqual({ design: "SM-1", kind: "ignore" });
-    expect(low.scenarioMap.get("SC-1")).toBe("DSC-1");
-    expect(low.background[0]?.id).toBe("BG-1");
-    expect(low.attrPathOfMachine.get("SM-1")).toBe("Ticket.status");
-    expect(low.machineOfTransition.get("TR-1")?.id).toBe("SM-1");
+    expect(low.index.originOf("OB-3")).toEqual({ design: "TR-1", kind: "transition" });
+    expect(low.index.originOf("OB-5")).toEqual({ design: "SM-1", kind: "ignore" });
+    expect(low.index.resolveDesignTarget("SC-1").design).toBe("DSC-1");
+    expect(low.background.toArray()[0]?.id).toBe("BG-1");
+    expect(low.index.attrPathOfMachine("SM-1")).toBe("Ticket.status");
+    expect(low.index.machineOfTransition("TR-1")?.id).toBe("SM-1");
     // 遷移の暗黙ガード：state==from（追加ガードがあれば and 結合）。
-    expect(low.obligations[2]?.guard).toEqual({
+    expect(low.obligations.toArray()[2]?.guard).toEqual({
       op: "eq",
       args: [{ op: "ref", path: "Ticket.status" }, { op: "enum", value: "open" }],
     });
-    expect(low.obligations[3]?.guard?.op).toBe("and");
+    expect(low.obligations.toArray()[3]?.guard?.op).toBe("and");
   });
 
   test("synthetics add one vac-dead per candidate and shadow pairs for canonically equal effects", () => {
     const low = lowerUnit(machineUnit, { synthetics: true });
-    const kinds = [...low.map.values()].map((e) => e.kind);
+    const kinds = low.index.toOriginEntries().map(([, e]) => e.kind);
     expect(kinds.filter((k) => k === "vac-dead").length).toBe(3); // DOB-1, TR-1, TR-2
-    const shadows = [...low.map.values()].filter((e) => e.kind === "vac-shadow");
+    const shadows = low.index.toOriginEntries().map(([, e]) => e).filter((e) => e.kind === "vac-shadow");
     // 3 候補（DOB-1・TR-1・TR-2）はすべて同トリガ・正準同一効果
     // （eq(prime(status), "closed")）→ 全順序対 6 件。
     expect(shadows.map((s) => s.pair)).toEqual([
@@ -295,14 +298,14 @@ describe("lowering (typed compile-down)", () => {
     });
     const low = lowerUnit(multi, { synthetics: false });
     // ignores は state/trigger 文字列順（x が y の前）、機械は id 順。
-    expect([...low.attrPathOfMachine.keys()]).toEqual(["SM-1", "SM-2"]);
-    expect(low.scenarioMap.get("SC-1")).toBe("DSC-1");
-    expect(low.scenarioMap.get("SC-2")).toBe("DSC-2");
-    expect(low.background.map((b) => b.assert)).toEqual([
+    expect(["SM-1", "SM-2"].map((id) => low.index.attrPathOfMachine(id))).toEqual(["T.a", "T.b"]);
+    expect(low.index.resolveDesignTarget("SC-1").design).toBe("DSC-1");
+    expect(low.index.resolveDesignTarget("SC-2").design).toBe("DSC-2");
+    expect(low.background.toArray().map((b) => b.assert)).toEqual([
       { op: "bool", value: false },
       { op: "bool", value: true },
     ]);
-    const ignoreGuards = low.obligations.filter((o) => low.map.get(o.id)?.kind === "ignore").map((o) => o.guard);
+    const ignoreGuards = low.obligations.toArray().filter((o) => low.index.originOf(o.id)?.kind === "ignore").map((o) => o.guard);
     expect(ignoreGuards[0]).toEqual({ op: "eq", args: [{ op: "ref", path: "T.b" }, { op: "enum", value: "x" }] });
     // 2 ユニットの compose はユニット名昇順を不変条件として適用する。
     const m = model([unit({ unit: "u2" }), unit({ unit: "u1" })]);
@@ -347,60 +350,64 @@ describe("remap (design vocabulary attribution)", () => {
     findings?: { kind: string; frRefs: string[]; targets: string[]; witness: Json; detail: string }[];
     skipped?: { target: string; reason: string; detail?: string }[];
   }): SiblingVerdictDocument =>
-    ({ kind: "readable", method: "exhaustive", findings: (input.findings ?? []) as never, skipped: input.skipped ?? [] });
+    ({
+      kind: "readable",
+      method: "exhaustive",
+      findings: SiblingVerdictFindings.of((input.findings ?? []) as never),
+      skipped: SiblingVerdictSkips.of(input.skipped ?? []),
+    });
 
   test("unavailable and unreadable sibling documents pass straight through", () => {
     expect(remapUnitDocument(u, low, { kind: "unreadable" }).unavailable).toBe("sibling backend produced no findings document");
-    expect(remapUnitDocument(u, low, { kind: "unavailable", reason: "boom", method: "simulation" })).toEqual({
-      findings: [],
-      skipped: [],
-      unavailable: "boom",
-      method: "simulation",
-    });
+    const out = remapUnitDocument(u, low, { kind: "unavailable", reason: "boom", method: "simulation" });
+    expect(out.findings.toArray()).toEqual([]);
+    expect(out.skipped.toArray()).toEqual([]);
+    expect(out.unavailable).toBe("boom");
+    expect(out.method).toBe("simulation");
   });
 
   test("a vac-dead conflict becomes unreachable with the transition/rule wording", () => {
-    const deadId = [...low.map.entries()].find(([, e]) => e.kind === "vac-dead" && e.design === "TR-1")?.[0] as string;
+    const deadId = low.index.toOriginEntries().find(([, e]) => e.kind === "vac-dead" && e.design === "TR-1")?.[0] as string;
     const out = remapUnitDocument(u, low, doc({
       findings: [{ kind: "conflict", frRefs: ["FR-1"], targets: [deadId], witness: { core: [`ant_${deadId.replace("-", "_")}`] }, detail: "x" }],
     }));
-    expect(out.findings[0]?.kind).toBe("unreachable");
-    expect(out.findings[0]?.detail).toBe(
+    expect(out.findings.toArray()[0]?.kind).toBe("unreachable");
+    expect(out.findings.toArray()[0]?.detail).toBe(
       "The guard of TR-1 can never hold under the entity constraints and invariants (witness core attached): the transition is dead.",
     );
   });
 
   test("mutual shadow pairs collapse into one equivalence finding; one-way stays subsumption", () => {
-    const ids = [...low.map.entries()].filter(([, e]) => e.kind === "vac-shadow");
+    const ids = low.index.toOriginEntries().filter(([, e]) => e.kind === "vac-shadow");
     const oneWay = remapUnitDocument(u, low, doc({
       findings: [{ kind: "conflict", frRefs: [], targets: [ids[0]?.[0] as string], witness: { core: [] }, detail: "x" }],
     }));
-    expect(oneWay.findings[0]?.kind).toBe("redundancy");
-    expect(oneWay.findings[0]?.detail).toContain("is subsumed by");
+    expect(oneWay.findings.toArray()[0]?.kind).toBe("redundancy");
+    expect(oneWay.findings.toArray()[0]?.detail).toContain("is subsumed by");
     const mutual = remapUnitDocument(u, low, doc({
       findings: ids.map(([id]) => ({ kind: "conflict", frRefs: [], targets: [id], witness: { core: [] }, detail: "x" })),
     }));
-    expect(mutual.findings.length).toBe(1);
-    expect(mutual.findings[0]?.detail).toContain("are mutually redundant");
+    expect(mutual.findings.count()).toBe(1);
+    expect(mutual.findings.toArray()[0]?.detail).toContain("are mutually redundant");
   });
 
   test("a same-machine conflict under deterministic:false is waived once per target", () => {
-    const trIds = [...low.map.entries()].filter(([, e]) => e.kind === "transition").map(([id]) => id);
+    const trIds = low.index.toOriginEntries().filter(([, e]) => e.kind === "transition").map(([id]) => id);
     const out = remapUnitDocument(u, low, doc({
       findings: [
         { kind: "conflict", frRefs: [], targets: trIds, witness: { core: [] }, detail: "overlap" },
         { kind: "conflict", frRefs: [], targets: trIds, witness: { core: [] }, detail: "overlap again" },
       ],
     }));
-    expect(out.findings).toEqual([]);
-    expect(out.skipped.map((s) => `${s.target}:${s.reason}`)).toEqual(["TR-1:waived", "TR-2:waived"]);
-    expect(out.skipped[0]?.detail).toBe(
+    expect(out.findings.toArray()).toEqual([]);
+    expect(out.skipped.toArray().map((s) => `${s.target}:${s.reason}`)).toEqual(["TR-1:waived", "TR-2:waived"]);
+    expect(out.skipped.toArray()[0]?.detail).toBe(
       "machine SM-1 declares deterministic: false — the same-(state,trigger) overlap check is waived by the model",
     );
   });
 
   test("details and witness cores are rewritten into design ids, and skips are deduped per (target, reason)", () => {
-    const trLow = [...low.map.entries()].find(([, e]) => e.kind === "transition" && e.design === "TR-1")?.[0] as string;
+    const trLow = low.index.toOriginEntries().find(([, e]) => e.kind === "transition" && e.design === "TR-1")?.[0] as string;
     const out = remapUnitDocument(u, low, doc({
       findings: [{
         kind: "completeness-gap",
@@ -415,11 +422,11 @@ describe("remap (design vocabulary attribution)", () => {
         { target: "SC-1", reason: "capability" },
       ],
     }));
-    expect(out.findings[0]?.targets).toEqual(["DSC-1", "TR-1"]);
-    expect(out.findings[0]?.detail).toBe("No rule for TR-1 applies");
-    expect(out.findings[0]?.witness).toEqual({ core: ["g_TR_1", "ty_x"] });
-    expect(out.skipped.map((s) => `${s.target}:${s.reason}`)).toEqual(["TR-1:timeout", "DSC-1:capability"]);
-    expect(out.skipped[0]?.detail).toBe("check for TR-1 timed out");
+    expect(out.findings.toArray()[0]?.targets).toEqual(["DSC-1", "TR-1"]);
+    expect(out.findings.toArray()[0]?.detail).toBe("No rule for TR-1 applies");
+    expect(out.findings.toArray()[0]?.witness).toEqual({ core: ["g_TR_1", "ty_x"] });
+    expect(out.skipped.toArray().map((s) => `${s.target}:${s.reason}`)).toEqual(["TR-1:timeout", "DSC-1:capability"]);
+    expect(out.skipped.toArray()[0]?.detail).toBe("check for TR-1 timed out");
   });
 });
 
@@ -613,5 +620,52 @@ describe("report ordering, cross-check, and degradations", () => {
     const noTrace: Json = { findings: [{ kind: "conflict", witness: {} }] };
     expect(probeReached(noTrace, "T.s", "dead")).toBe(true);
     expect(probeReached({ findings: [] }, "T.s", "dead")).toBe(false);
+  });
+});
+
+describe("lowered collections and the lowering index (first-class operations)", () => {
+  const u = unit({});
+  const base = lowerUnit(u, { synthetics: false });
+
+  test("of/add/iterator/count/toArray hold OB/SC/BG numbering order", () => {
+    const obs = base.obligations.add({ id: "OB-99", nature: "invariant", frRefs: [] });
+    expect(obs.count()).toBe(base.obligations.count() + 1);
+    expect([...obs].at(-1)?.id).toBe("OB-99");
+    expect(obs.toArray().at(-1)?.nature).toBe("invariant");
+
+    const scs = base.scenarios.add({ id: "SC-99", kind: "accept", frRefs: [], bindings: {} });
+    expect(scs.count()).toBe(base.scenarios.count() + 1);
+    expect([...scs].at(-1)?.id).toBe("SC-99");
+    expect(scs.toArray().at(-1)?.kind).toBe("accept");
+
+    const bgs = base.background.add({ id: "BG-99", assert: { op: "bool", value: true } });
+    expect(bgs.count()).toBe(base.background.count() + 1);
+    expect([...bgs].at(-1)?.id).toBe("BG-99");
+    expect(bgs.toArray().at(-1)?.id).toBe("BG-99");
+  });
+
+  test("withPassthrough extends attribution immutably and rewrites fall back verbatim", () => {
+    const extended = base.index.withPassthrough("OB-99", "FR-7");
+    expect(extended.originOf("OB-99")).toEqual({ design: "FR-7", kind: "passthrough" });
+    expect(base.index.originOf("OB-99")).toBe(null);
+    expect(extended.resolveDesignTarget("OB-99").design).toBe("FR-7");
+    // 未知の lowered id は逐語で残る（detail・witness core とも）。
+    expect(base.index.rewriteLoweredIds("No rule for OB-42 applies")).toBe("No rule for OB-42 applies");
+    expect(base.index.rewriteLoweredIdTokens("g_OB_42")).toBe("g_OB_42");
+    expect(base.index.isTransition("TR-404")).toBe(false);
+    expect(base.index.machineOfTransition("TR-404")).toBe(null);
+    expect(base.index.attrPathOfMachine("SM-404")).toBe(null);
+  });
+
+  test("sibling verdict collections keep document order under add", () => {
+    const finding = { kind: "conflict", frRefs: [], targets: ["OB-1"], witness: { core: [] }, detail: "x" };
+    const findings = SiblingVerdictFindings.of([]).add(finding);
+    expect([...findings]).toEqual([finding]);
+    expect(findings.toArray()).toEqual([finding]);
+
+    const skip = { target: "OB-1", reason: "timeout" };
+    const skips = SiblingVerdictSkips.of([]).add(skip);
+    expect([...skips]).toEqual([skip]);
+    expect(skips.toArray()).toEqual([skip]);
   });
 });
