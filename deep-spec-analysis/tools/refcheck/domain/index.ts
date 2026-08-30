@@ -4,7 +4,7 @@ export { CATALOG_VERSION } from "./catalog-version.ts";
 export { type RefEntry } from "./ref-entry.ts";
 export { type Finding } from "./finding.ts";
 export { type Skipped } from "./skipped.ts";
-export { type InputEntry } from "./input-entry.ts";
+export { type InputAnchor } from "./input-anchor.ts";
 export { sortFindings, sortSkipped } from "./catalog-order.ts";
 export { ReferenceCheckReport, type ReferenceCheckReportSeed } from "./reference-check-report.ts";
 export { ReferenceCheckReportId } from "./reference-check-report-id.ts";

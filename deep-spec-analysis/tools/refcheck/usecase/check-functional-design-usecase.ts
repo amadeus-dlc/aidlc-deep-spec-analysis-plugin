@@ -8,7 +8,7 @@ import {
   type DesignRecordId,
   CheckFamilyLedger,
   FUNCTIONAL_FAMILIES,
-  type InputEntry,
+  type InputAnchor,
   ReferenceCheckReport,
   ReferenceCheckReportId,
   runFunctionalChecks,
@@ -54,7 +54,7 @@ export class CheckFunctionalDesignUseCase {
       siblingUnits: fd.siblingUnits,
     }, ledger);
 
-    const inputs: InputEntry[] = [];
+    const inputs: InputAnchor[] = [];
     if (fd.entities !== null) inputs.push(fd.entities.input);
     if (fd.rules !== null) inputs.push(fd.rules.input);
     if (fd.requirements !== null) inputs.push(fd.requirements.input);

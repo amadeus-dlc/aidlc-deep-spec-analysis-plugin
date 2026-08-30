@@ -29,7 +29,7 @@ export {
 export { DesignReportId } from "./design-report-id.ts";
 export {
   type DesignCrossCheckedEntry,
-  type DesignInputEntry,
+  type DesignInputAnchor,
   type DesignReportComposition,
   type DesignReportSeed,
   DesignReport,

@@ -12,7 +12,8 @@ import type { DesignFinding, DesignSkipped } from "./design-finding.ts";
 import { sortDesignFindings, sortDesignSkipped } from "./design-finding-order.ts";
 import type { DesignReportId } from "./design-report-id.ts";
 
-export interface DesignInputEntry {
+// 入力成果物の錨（refcheck の InputAnchor と同語彙・コンテキスト所有）。
+export interface DesignInputAnchor {
   readonly artifact: string;
   readonly sha256: ContentHash;
 }
@@ -29,7 +30,7 @@ export interface DesignReportSeed {
   readonly method: string;
   readonly findings: readonly DesignFinding[];
   readonly skipped: readonly DesignSkipped[];
-  readonly inputs: readonly DesignInputEntry[] | null;
+  readonly inputs: readonly DesignInputAnchor[] | null;
   readonly checked: readonly string[] | null;
   readonly crossChecked: readonly DesignCrossCheckedEntry[] | null;
   readonly unavailableReason: string | null;
@@ -42,7 +43,7 @@ export interface DesignReportComposition {
   readonly method: string;
   readonly findings: readonly DesignFinding[];
   readonly skipped: readonly DesignSkipped[];
-  readonly inputs?: readonly DesignInputEntry[];
+  readonly inputs?: readonly DesignInputAnchor[];
   readonly checked?: readonly string[];
   readonly crossChecked?: readonly DesignCrossCheckedEntry[];
   readonly unavailableReason?: string;
@@ -55,7 +56,7 @@ export class DesignReport {
   readonly #method: string;
   readonly #findings: readonly DesignFinding[];
   readonly #skipped: readonly DesignSkipped[];
-  readonly #inputs: readonly DesignInputEntry[] | null;
+  readonly #inputs: readonly DesignInputAnchor[] | null;
   readonly #checked: readonly string[] | null;
   readonly #crossChecked: readonly DesignCrossCheckedEntry[] | null;
   readonly #unavailableReason: string | null;
@@ -135,7 +136,7 @@ export class DesignReport {
     return this.#skipped;
   }
 
-  inputs(): readonly DesignInputEntry[] | null {
+  inputs(): readonly DesignInputAnchor[] | null {
     return this.#inputs;
   }
 

@@ -11,7 +11,7 @@ import { ok } from "../../kernel/infrastructure/index.ts";
 import type { Clock, RepositoryError } from "../../kernel/usecase/index.ts";
 import {
   type DesignFinding,
-  type DesignInputEntry,
+  type DesignInputAnchor,
   type DesignSkipped,
   DesignReport,
   DesignReportId,
@@ -197,7 +197,7 @@ export class VerifyDesignQuintUseCase {
 
     // --- Phase 3（動的）：alpha(P) が機械の不変量面に合流する -----------------
     const context = this.#refinementContexts.findById(RefinementContextId.ofModel(input.modelId));
-    let inputs: readonly DesignInputEntry[] | undefined;
+    let inputs: readonly DesignInputAnchor[] | undefined;
     if (context.kind === "active") {
       const req = context.requirements;
       const reqTargets = req.allTargetIds();

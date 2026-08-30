@@ -12,7 +12,7 @@ import { ok } from "../../kernel/infrastructure/index.ts";
 import type { Clock, RepositoryError } from "../../kernel/usecase/index.ts";
 import {
   type DesignFinding,
-  type DesignInputEntry,
+  type DesignInputAnchor,
   type DesignSkipped,
   DesignReport,
   DesignReportId,
@@ -154,7 +154,7 @@ export class VerifyDesignSmtUseCase {
     // 要件形式モデルの存在で発火。欠落・陳腐化・ユニット欠けの map は明示 skip
     // を生む——沈黙しない。
     const context = this.#refinementContexts.findById(RefinementContextId.ofModel(input.modelId));
-    let inputs: readonly DesignInputEntry[] | undefined;
+    let inputs: readonly DesignInputAnchor[] | undefined;
     if (context.kind === "active") {
       const req = context.requirements;
       const reqTargets = req.allTargetIds();

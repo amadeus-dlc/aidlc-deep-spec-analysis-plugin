@@ -786,6 +786,12 @@ brRefs は文書から到来；抽出集合は regex 保証だが照合相手は
 well-formedness が parse で拒否せず**報告**すべき対象）。PR10 の凍結
 解除時に golden 再生成とともに変換する。
 
+同じレビューで命名の裁定も入った：`InputEntry` / `DesignInputEntry` は
+ユビキタス言語ではない（「entry＝台帳行」は技術語）。概念は入力成果物の
+**内容による錨着**——`SourceAnchor` と同じ語彙——であるため、`InputAnchor`
+（refcheck）と `DesignInputAnchor`（design）へ改名した。語はコンテキスト
+ごとに所有する。
+
 証明：296+12 tests green。両 DP は行カバレッジ 100%。パリティ
 スナップショットは PR7 以前の base に対し `diff -r` 空。実 sandbox の
 z3 実行が `smt.json` を golden とバイト一致で再現。

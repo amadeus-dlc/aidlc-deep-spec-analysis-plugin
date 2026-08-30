@@ -4,7 +4,7 @@
 // 各値の取得規則（requirements は rules が使えるときだけ・兄弟は catalog が
 // 解析できたときだけ等）は Impl が凍結挙動として実装する。
 
-import type { InputEntry } from "./input-entry.ts";
+import type { InputAnchor } from "./input-anchor.ts";
 import type { ComponentCatalogOutcome } from "./component-catalog.ts";
 import type { ContractsTableOutcome, DeclaredUnitsOutcome, SpecBlockAssessment } from "./contract-summary.ts";
 import type {
@@ -17,14 +17,14 @@ import type {
 
 // 読み込まれ解析済みの 1 文書：inputs[] 記録用の (artifact, sha256) と解析結果。
 export interface LoadedDocument<Outcome> {
-  readonly input: InputEntry;
+  readonly input: InputAnchor;
   readonly outcome: Outcome;
 }
 
 export interface DesignRecordSeed {
   // 発火対象の record 相対名と (artifact, sha256)。対象が読めない場合に
   // 集約は作られない（Repository が not-found を返す）。
-  readonly target: InputEntry;
+  readonly target: InputAnchor;
   // 対象が components.md のときだけ載る視点。
   readonly componentCatalog: ComponentCatalogOutcome | null;
   // 対象が contract-summary.md のときだけ載る視点。
@@ -44,7 +44,7 @@ export interface DesignRecordSeed {
     readonly componentsArtifact: string;
     readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
     readonly siblingUnits: SiblingUnitEntities;
-    readonly siblingInputs: readonly InputEntry[];
+    readonly siblingInputs: readonly InputAnchor[];
   } | null;
 }
 
@@ -59,7 +59,7 @@ export class DesignRecord {
     return new DesignRecord(seed);
   }
 
-  target(): InputEntry {
+  target(): InputAnchor {
     return this.#seed.target;
   }
 

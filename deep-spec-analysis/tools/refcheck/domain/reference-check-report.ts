@@ -13,13 +13,13 @@
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import { sortFindings, sortSkipped } from "./catalog-order.ts";
 import type { Finding } from "./finding.ts";
-import type { InputEntry } from "./input-entry.ts";
+import type { InputAnchor } from "./input-anchor.ts";
 import { ReferenceCheckReportId } from "./reference-check-report-id.ts";
 import type { Skipped } from "./skipped.ts";
 
 export interface ReferenceCheckReportSeed {
   readonly id: ReferenceCheckReportId;
-  readonly inputs: readonly InputEntry[];
+  readonly inputs: readonly InputAnchor[];
   readonly checked: readonly string[];
   readonly findings: readonly Finding[];
   readonly skipped: readonly Skipped[];
@@ -27,7 +27,7 @@ export interface ReferenceCheckReportSeed {
 
 export class ReferenceCheckReport {
   readonly #id: ReferenceCheckReportId;
-  readonly #inputs: readonly InputEntry[];
+  readonly #inputs: readonly InputAnchor[];
   readonly #checked: readonly string[];
   readonly #findings: readonly Finding[];
   readonly #skipped: readonly Skipped[];
@@ -35,7 +35,7 @@ export class ReferenceCheckReport {
 
   private constructor(
     id: ReferenceCheckReportId,
-    inputs: readonly InputEntry[],
+    inputs: readonly InputAnchor[],
     checked: readonly string[],
     findings: readonly Finding[],
     skipped: readonly Skipped[],
@@ -86,7 +86,7 @@ export class ReferenceCheckReport {
     return this.#id;
   }
 
-  inputs(): readonly InputEntry[] {
+  inputs(): readonly InputAnchor[] {
     return this.#inputs;
   }
 

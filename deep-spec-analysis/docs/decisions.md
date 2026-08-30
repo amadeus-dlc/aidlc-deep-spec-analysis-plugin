@@ -807,6 +807,13 @@ names), `AttributePath` (expression paths are exactly what
 well-formedness must REPORT on, not reject at parse). When PR10 lifts
 the freeze, these convert with regenerated goldens.
 
+A naming correction landed in the same review: `InputEntry` /
+`DesignInputEntry` were not ubiquitous language ("entry" is a technical
+ledger-row word). The concept is content-anchoring of an input artifact
+— the same vocabulary as `SourceAnchor` — so they are now `InputAnchor`
+(refcheck) and `DesignInputAnchor` (design), each context owning its
+word.
+
 Proofs: 296+12 tests green; both DPs at 100% line coverage; the parity
 snapshot `diff -r` is empty against the pre-PR7 base; a live sandbox z3
 run reproduced `smt.json` byte-identical to the golden.
