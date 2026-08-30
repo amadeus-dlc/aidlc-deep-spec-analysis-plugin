@@ -15,6 +15,8 @@
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseFlags } from "./kernel/adapter/index.ts";
+import { ArtifactPath } from "./kernel/domain/index.ts";
+import { DesignModelId } from "./design/domain/index.ts";
 import { SystemClock } from "./kernel/adapter/index.ts";
 import { VerifyDesignSmtUseCase } from "./design/usecase/index.ts";
 import {
@@ -30,7 +32,9 @@ const DESIGN_VERIFY_DIRNAME = "deep-spec-design-verify";
 
 function main(): void {
   const flags = parseFlags(process.argv.slice(2));
-  if (!flags.outputPath) {
+  const target = ArtifactPath.parse(flags.outputPath);
+  const reportLocation = ArtifactPath.parse(join(dirname(flags.outputPath), DESIGN_VERIFY_DIRNAME));
+  if (!target.ok || !reportLocation.ok) {
     process.stderr.write("deep-spec-design-verify-smt: --output-path is required\n");
     process.exit(1);
   }
@@ -53,8 +57,8 @@ function main(): void {
     new SystemClock(),
   );
   const outcome = useCase.execute({
-    modelPath: flags.outputPath,
-    verifyDirectory: join(dirname(flags.outputPath), DESIGN_VERIFY_DIRNAME),
+    modelId: DesignModelId.of(target.value),
+    verifyDirectory: reportLocation.value,
   });
 
   switch (outcome.kind) {

@@ -25,6 +25,8 @@
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseFlags } from "./kernel/adapter/index.ts";
+import { ArtifactPath } from "./kernel/domain/index.ts";
+import { FormalModelId } from "./requirements/domain/index.ts";
 import { VerifyRequirementsQuintUseCase } from "./requirements/usecase/index.ts";
 import {
   FormalModelRepositoryImpl,
@@ -37,7 +39,9 @@ const VERIFY_DIRNAME = "deep-spec-verify";
 
 function main(): void {
   const flags = parseFlags(process.argv.slice(2));
-  if (!flags.outputPath) {
+  const target = ArtifactPath.parse(flags.outputPath);
+  const reportLocation = ArtifactPath.parse(join(dirname(flags.outputPath), VERIFY_DIRNAME));
+  if (!target.ok || !reportLocation.ok) {
     process.stderr.write("deep-spec-verify-quint: --output-path is required\n");
     process.exit(1);
   }
@@ -59,8 +63,8 @@ function main(): void {
     }),
   );
   const outcome = useCase.execute({
-    modelPath: flags.outputPath,
-    verifyDirectory: join(dirname(flags.outputPath), VERIFY_DIRNAME),
+    modelId: FormalModelId.of(target.value),
+    verifyDirectory: reportLocation.value,
   });
 
   switch (outcome.kind) {

@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Json } from "../../kernel/adapter/index.ts";
 import { readContractSchema } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
@@ -28,7 +29,7 @@ export class VerificationReportRepositoryImpl implements VerificationReportRepos
   }
 
   findById(aggregateId: VerificationReportId): Result<VerificationReport, RepositoryError> {
-    const path = join(aggregateId.directory(), aggregateId.fileName());
+    const path = join(aggregateId.directory().value(), aggregateId.fileName());
     if (!existsSync(path)) {
       return err({ kind: "not-found", path });
     }
@@ -45,19 +46,19 @@ export class VerificationReportRepositoryImpl implements VerificationReportRepos
     return report;
   }
 
-  findAllByDirectory(directory: string): Result<readonly VerificationReport[], RepositoryError> {
+  findAllByDirectory(directory: ArtifactPath): Result<readonly VerificationReport[], RepositoryError> {
     let entries: string[];
     try {
-      entries = readdirSync(directory)
+      entries = readdirSync(directory.value())
         .filter((f) => f.endsWith(".json") && f !== "cross-check.json")
         .sort();
     } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: directory, cause: e instanceof Error ? e.message : String(e) });
+      return err({ kind: "io-failed", operation: "read", path: directory.value(), cause: e instanceof Error ? e.message : String(e) });
     }
     const reports: VerificationReport[] = [];
     for (const file of entries) {
       try {
-        const raw = JSON.parse(readFileSync(join(directory, file), "utf-8")) as Json;
+        const raw = JSON.parse(readFileSync(join(directory.value(), file), "utf-8")) as Json;
         const report = parseSiblingReportDocument(directory, file, raw);
         if (report !== null) reports.push(report);
       } catch {
@@ -73,9 +74,9 @@ export class VerificationReportRepositoryImpl implements VerificationReportRepos
 
   save(report: VerificationReport): Result<void, RepositoryError> {
     const conformed = this.conformedOf(report);
-    const path = join(conformed.id().directory(), conformed.id().fileName());
+    const path = join(conformed.id().directory().value(), conformed.id().fileName());
     try {
-      mkdirSync(conformed.id().directory(), { recursive: true });
+      mkdirSync(conformed.id().directory().value(), { recursive: true });
       writeFileSync(path, renderVerificationReportBytes(conformed), "utf-8");
       return ok(undefined);
     } catch (e) {

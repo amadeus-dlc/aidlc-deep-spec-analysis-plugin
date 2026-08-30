@@ -20,7 +20,7 @@ export class InMemoryReferenceCheckReportRepository implements ReferenceCheckRep
   }
 
   #keyOf(id: ReferenceCheckReportId): string {
-    return `${id.directory()}/${id.fileName()}`;
+    return `${id.directory().value()}/${id.fileName()}`;
   }
 
   findById(aggregateId: ReferenceCheckReportId): Result<ReferenceCheckReport, RepositoryError> {

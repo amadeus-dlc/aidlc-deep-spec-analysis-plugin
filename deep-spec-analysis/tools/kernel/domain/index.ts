@@ -8,3 +8,4 @@ export { idCompare, sortedUnique } from "./id-order.ts";
 export { safeTarget } from "./target-id.ts";
 export { requirementIds } from "./requirement-ids.ts";
 export { normalizeName } from "./name-normalize.ts";
+export { type ArtifactPathError, ArtifactPath } from "./artifact-path.ts";

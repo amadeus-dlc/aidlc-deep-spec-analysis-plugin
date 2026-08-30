@@ -17,6 +17,7 @@ import {
 } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
+  type DesignRecordId,
   DesignRecord,
   type DesignRecordSeed,
   type InputEntry,
@@ -33,7 +34,8 @@ import {
 } from "./functional-design-parser.ts";
 
 export class DesignRecordRepositoryImpl implements DesignRecordRepository {
-  findByArtifact(artifactPath: string): Result<DesignRecord, RepositoryError> {
+  findById(id: DesignRecordId): Result<DesignRecord, RepositoryError> {
+    const artifactPath = id.artifactPath().value();
     const md = readIfExists(artifactPath);
     if (md === null) {
       return err({ kind: "not-found", path: artifactPath });

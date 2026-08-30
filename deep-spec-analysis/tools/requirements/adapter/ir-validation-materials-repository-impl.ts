@@ -24,6 +24,7 @@ import {
   type IrModelView,
   type IrObligationView,
   type IrScenarioView,
+  type FormalModelId,
   RequirementsSourceId,
 } from "../domain/index.ts";
 import type { IrMaterialsAcquisition, IrValidationMaterialsRepository } from "../usecase/index.ts";
@@ -122,7 +123,8 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
     this.#schemaPath = config.schemaPath;
   }
 
-  acquire(outputPath: string): IrMaterialsAcquisition {
+  acquire(id: FormalModelId): IrMaterialsAcquisition {
+    const outputPath = id.artifactPath().value();
     if (basename(outputPath) !== FORMAL_MODEL_BASENAME || !existsSync(outputPath)) {
       return { kind: "not-applicable" };
     }

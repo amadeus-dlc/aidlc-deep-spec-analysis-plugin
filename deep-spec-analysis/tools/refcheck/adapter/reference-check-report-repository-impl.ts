@@ -21,7 +21,7 @@ export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportR
   }
 
   findById(aggregateId: ReferenceCheckReportId): Result<ReferenceCheckReport, RepositoryError> {
-    const path = join(aggregateId.directory(), aggregateId.fileName());
+    const path = join(aggregateId.directory().value(), aggregateId.fileName());
     if (!existsSync(path)) {
       return err({ kind: "not-found", path });
     }
@@ -44,9 +44,9 @@ export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportR
 
   save(report: ReferenceCheckReport): Result<void, RepositoryError> {
     const conformed = this.conformedOf(report);
-    const path = join(conformed.id().directory(), conformed.id().fileName());
+    const path = join(conformed.id().directory().value(), conformed.id().fileName());
     try {
-      mkdirSync(conformed.id().directory(), { recursive: true });
+      mkdirSync(conformed.id().directory().value(), { recursive: true });
       writeFileSync(path, renderReportBytes(conformed), "utf-8");
       return ok(undefined);
     } catch (e) {

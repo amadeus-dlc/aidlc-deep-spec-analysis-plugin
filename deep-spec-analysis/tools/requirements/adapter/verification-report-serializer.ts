@@ -5,6 +5,7 @@
 // 責務。conformToFindingsContract が「書き手は不適合ファイルを決して出さない」
 // の実装（refcheck と同じ規律・同じ凍結文言）。
 
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
@@ -74,7 +75,7 @@ export function parseVerificationReportDocument(
 // ファイル名から補う（旧 recomputeCrossCheck の読込と同値）。読めない形は
 // null（呼び手が黙って除く）。
 export function parseSiblingReportDocument(
-  directory: string,
+  directory: ArtifactPath,
   fileName: string,
   raw: Json,
 ): VerificationReport | null {

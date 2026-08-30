@@ -14,8 +14,16 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
+import { ArtifactPath } from "../tools/kernel/domain/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
+
+// テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
+function ap(raw: string): ArtifactPath {
+  const parsed = ArtifactPath.parse(raw);
+  if (!parsed.ok) throw new Error(`test fixture path is empty: ${raw}`);
+  return parsed.value;
+}
 import {
   FormalModelRepositoryImpl,
   QuintClientImpl,
@@ -32,6 +40,7 @@ import {
   interpretQuintVerdicts,
   machineUncompilableReport,
   quintUnavailableReport,
+  FormalModelId,
 } from "../tools/requirements/domain/index.ts";
 import {
   type AcquiredFormalModel,
@@ -79,7 +88,7 @@ describe("in-process golden equivalence (interactor over real Impls, real quint 
           apalacheDistSet: false,
           homeDirectory: "",
         }),
-      ).execute({ modelPath, verifyDirectory: verifyDir });
+      ).execute({ modelId: FormalModelId.of(ap(modelPath)), verifyDirectory: ap(verifyDir) });
 
       expect(outcome.kind).toBe("verified");
       expect(outcome.kind === "verified" && outcome.method).toBe("simulation");
@@ -96,7 +105,7 @@ describe("in-process golden equivalence (interactor over real Impls, real quint 
 // --- interactor の全経路（InMemory ダブル＋素の値のみ） ----------------------
 
 function formalModels(result: Result<AcquiredFormalModel, RepositoryError>): FormalModelRepository {
-  return { findByPath: () => result };
+  return { findById: () => result };
 }
 
 function quint(result: QuintCheckResult): QuintClient {
@@ -116,13 +125,13 @@ describe("the verify-quint interactor over the InMemory double", () => {
       formalModels(err({ kind: "corrupt", path: "/x", cause: "IR is not a JSON object" })),
       reports,
       quint({ kind: "cli-unavailable" }),
-    ).execute({ modelPath: "/x", verifyDirectory: DIR });
+    ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("model-unreadable");
-    const written = reports.findById(VerificationReportId.of(DIR, "quint"));
+    const written = reports.findById(VerificationReportId.of(ap(DIR), "quint"));
     expect(written.ok && written.value.method()).toBe("simulation");
     expect(written.ok && written.value.unavailableReason())
       .toBe("IR unreadable: IR is not a JSON object — see the deep-spec-ir-valid sensor for details");
-    expect(reports.findById(VerificationReportId.of(DIR, "cross-check")).ok).toBe(false);
+    expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(false);
   });
 
   test("a missing quint CLI writes the frozen unavailable document and the caller exits 127", () => {
@@ -135,15 +144,15 @@ describe("the verify-quint interactor over the InMemory double", () => {
       formalModels(ok({ model: m, irHash: HASH })),
       reports,
       quint({ kind: "cli-unavailable" }),
-    ).execute({ modelPath: "/x", verifyDirectory: DIR });
+    ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("backend-unavailable");
-    const written = reports.findById(VerificationReportId.of(DIR, "quint"));
+    const written = reports.findById(VerificationReportId.of(ap(DIR), "quint"));
     expect(written.ok && written.value.unavailableReason())
       .toBe("quint CLI is not available (install: npm i -g @informalsystems/quint)");
     expect(written.ok && written.value.method()).toBe("simulation");
     expect(written.ok && written.value.skipped().map((s) => `${s.target}:${s.reason}:${s.detail}`))
       .toEqual(["OB-1:unavailable:quint CLI missing", "SC-1:unavailable:quint CLI missing"]);
-    expect(reports.findById(VerificationReportId.of(DIR, "cross-check")).ok).toBe(true);
+    expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(true);
   });
 
   test("an uncompilable machine records every target as compile-error under the detected method", () => {
@@ -156,9 +165,9 @@ describe("the verify-quint interactor over the InMemory double", () => {
       formalModels(ok({ model: m, irHash: HASH })),
       reports,
       quint({ kind: "machine-uncompilable", method: "bounded", error: 'state variable name collision: "a_b"' }),
-    ).execute({ modelPath: "/x", verifyDirectory: DIR });
+    ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("machine-uncompilable");
-    const written = reports.findById(VerificationReportId.of(DIR, "quint"));
+    const written = reports.findById(VerificationReportId.of(ap(DIR), "quint"));
     expect(written.ok && written.value.method()).toBe("bounded");
     expect(written.ok && written.value.isUnavailable()).toBe(false);
     expect(written.ok && written.value.skipped().map((s) => `${s.target}:${s.reason}`))
@@ -186,11 +195,11 @@ describe("the verify-quint interactor over the InMemory double", () => {
       formalModels(ok({ model: m, irHash: HASH })),
       reports,
       quint({ kind: "checked", method: "bounded", facts, compileSkips: [], runs }),
-    ).execute({ modelPath: "/x", verifyDirectory: DIR });
+    ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("verified");
     expect(outcome.kind === "verified" && outcome.pass).toBe(false);
     expect(outcome.kind === "verified" && outcome.method).toBe("bounded");
-    const written = reports.findById(VerificationReportId.of(DIR, "quint"));
+    const written = reports.findById(VerificationReportId.of(ap(DIR), "quint"));
     expect(written.ok && written.value.findings()[0]?.kind).toBe("scenario-violation");
     const bytes = written.ok ? renderVerificationReportBytes(written.value) : "";
     expect(JSON.parse(bytes).method).toBe("bounded");
@@ -354,11 +363,11 @@ describe("quint degradation reports", () => {
       obligations: [{ id: "OB-2", nature: "event", frRefs: [] }],
       scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
     });
-    const r = machineUncompilableReport(VerificationReportId.of("/v", "quint"), m, "h", "simulation", "boom");
+    const r = machineUncompilableReport(VerificationReportId.of(ap("/v"), "quint"), m, "h", "simulation", "boom");
     expect(r.method()).toBe("simulation");
     expect(r.skipped().map((s) => `${s.target}:${s.reason}:${s.detail}`))
       .toEqual(["OB-2:compile-error:boom", "SC-1:compile-error:boom"]);
-    const u = quintUnavailableReport(VerificationReportId.of("/v", "quint"), m, "h");
+    const u = quintUnavailableReport(VerificationReportId.of(ap("/v"), "quint"), m, "h");
     expect(u.unavailableReason()).toBe("quint CLI is not available (install: npm i -g @informalsystems/quint)");
   });
 });

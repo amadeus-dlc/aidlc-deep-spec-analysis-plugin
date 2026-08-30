@@ -21,12 +21,16 @@
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseFlags, renderVerdictLine } from "./kernel/adapter/index.ts";
+import { ArtifactPath } from "./kernel/domain/index.ts";
+import { DesignRecordId } from "./refcheck/domain/index.ts";
 import { CheckDomainComponentsUseCase } from "./refcheck/usecase/index.ts";
 import { DesignRecordRepositoryImpl, ReferenceCheckReportRepositoryImpl } from "./refcheck/adapter/index.ts";
 
 function main(): void {
   const flags = parseFlags(process.argv.slice(2));
-  if (!flags.outputPath) {
+  const target = ArtifactPath.parse(flags.outputPath);
+  const reportLocation = ArtifactPath.parse(join(dirname(flags.outputPath), "deep-spec-refcheck"));
+  if (!target.ok || !reportLocation.ok) {
     process.stderr.write("deep-spec-refcheck-domain: --output-path is required\n");
     process.exit(1);
   }
@@ -42,9 +46,9 @@ function main(): void {
     ),
   );
   const outcome = useCase.execute({
-    artifactPath: flags.outputPath,
-    reportDirectory: join(dirname(flags.outputPath), "deep-spec-refcheck"),
-    reportOnly: flags.reportOnly,
+    recordId: DesignRecordId.of(target.value),
+    reportDirectory: reportLocation.value,
+    mode: flags.reportOnly ? "report-only" : "persist",
   });
 
   if (outcome.kind === "not-applicable") {

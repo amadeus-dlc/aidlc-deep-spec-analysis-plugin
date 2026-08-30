@@ -6,7 +6,7 @@
 // irVersion チェックより前に verdict へ落ちる。意味検査はスキーマ検証まで
 // 無傷の IR にのみ走る。
 
-import { SUPPORTED_DESIGN_IR_MAJOR, designWellFormednessErrors } from "../domain/index.ts";
+import { type DesignModelId, SUPPORTED_DESIGN_IR_MAJOR, designWellFormednessErrors } from "../domain/index.ts";
 import type { DesignIrValidationMaterialsRepository } from "./design-ir-validation-materials-repository.ts";
 import type { ValidateDesignIrOutcome } from "./validate-design-ir-outcome.ts";
 
@@ -17,8 +17,8 @@ export class ValidateDesignIrUseCase {
     this.#materials = materials;
   }
 
-  execute(outputPath: string): ValidateDesignIrOutcome {
-    const acquired = this.#materials.acquire(outputPath);
+  execute(modelId: DesignModelId): ValidateDesignIrOutcome {
+    const acquired = this.#materials.acquire(modelId);
     if (acquired.kind === "not-applicable") return { kind: "not-applicable" };
     if (acquired.kind === "unreadable") {
       return { kind: "verdict", pass: false, errors: acquired.errors };

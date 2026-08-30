@@ -15,7 +15,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
 import type { Json } from "../tools/kernel/adapter/index.ts";
-import { sha256 } from "../tools/kernel/domain/index.ts";
+import { ArtifactPath, sha256 } from "../tools/kernel/domain/index.ts";
+// テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
+function ap(raw: string): ArtifactPath {
+  const parsed = ArtifactPath.parse(raw);
+  if (!parsed.ok) throw new Error(`test fixture path is empty: ${raw}`);
+  return parsed.value;
+}
+
 import {
   type DesignFinding,
   type DesignModelComposition,
@@ -33,6 +40,7 @@ import {
   remapUnitDoc,
   sortDesignFindings,
   sortDesignSkipped,
+  DesignModelId,
 } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
@@ -59,7 +67,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
       cpSync(join(fixtures, "record"), record, { recursive: true });
       const modelPath = join(record, "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md");
       const verifyDir = join(dirname(modelPath), "deep-spec-design-verify");
-      const acquired = new DesignModelRepositoryImpl().findByPath(modelPath);
+      const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(modelPath)));
       expect(acquired.ok).toBe(true);
       if (!acquired.ok) return;
       const { model, irHash } = acquired.value;
@@ -108,7 +116,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
         }
         const conformed = reports.conformedOf(
           DesignReport.compose({
-            id: DesignReportId.of(verifyDir, backend),
+            id: DesignReportId.of(ap(verifyDir), backend),
             irVersion: model.irVersion(),
             irHash,
             method: backend === "smt" ? "exhaustive" : (method ?? "simulation"),
@@ -118,11 +126,11 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
           }),
         );
         expect(reports.save(conformed).ok).toBe(true);
-        const siblings = reports.findAllByDirectory(verifyDir);
+        const siblings = reports.findAllByDirectory(ap(verifyDir));
         expect(siblings.ok).toBe(true);
         if (siblings.ok) {
           expect(
-            reports.save(designCrossCheckReport(DesignReportId.of(verifyDir, "cross-check"), model, irHash, siblings.value)).ok,
+            reports.save(designCrossCheckReport(DesignReportId.of(ap(verifyDir), "cross-check"), model, irHash, siblings.value)).ok,
           ).toBe(true);
         }
         expect(readFileSync(join(verifyDir, `${backend}.json`), "utf-8")).toBe(golden(`${backend}.json`));
@@ -437,7 +445,7 @@ describe("report ordering, cross-check, and degradations", () => {
 
   test("compose sorts inputs by artifact and dedupes checked; degraded strips everything", () => {
     const report = DesignReport.compose({
-      id: DesignReportId.of("/v", "smt"),
+      id: DesignReportId.of(ap("/v"), "smt"),
       irVersion: "1.0.0",
       irHash: "a".repeat(64),
       method: "exhaustive",
@@ -477,8 +485,8 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(degraded.checked()).toBe(null);
     expect(degraded.passes()).toBe(false);
     expect(degraded.isUnavailable()).toBe(true);
-    expect(DesignReportId.of("/v", "smt").equals(DesignReportId.of("/v", "smt"))).toBe(true);
-    expect(DesignReportId.of("/v", "smt").fileName()).toBe("smt.json");
+    expect(DesignReportId.of(ap("/v"), "smt").equals(DesignReportId.of(ap("/v"), "smt"))).toBe(true);
+    expect(DesignReportId.of(ap("/v"), "smt").fileName()).toBe("smt.json");
   });
 
   test("cross-check compares per (unit, scenario), honors skips, and freezes the design wording", () => {
@@ -487,7 +495,7 @@ describe("report ordering, cross-check, and degradations", () => {
     const HASH = "a".repeat(64);
     const sibling = (backend: string, violated: boolean, skipKey?: string): DesignReport =>
       DesignReport.reconstitute({
-        id: DesignReportId.of("/v", backend),
+        id: DesignReportId.of(ap("/v"), backend),
         irVersion: "1.0.0",
         irHash: HASH,
         method: "exhaustive",
@@ -498,7 +506,7 @@ describe("report ordering, cross-check, and degradations", () => {
         crossChecked: null,
         unavailableReason: null,
       });
-    const report = designCrossCheckReport(DesignReportId.of("/v", "cross-check"), m, HASH, [
+    const report = designCrossCheckReport(DesignReportId.of(ap("/v"), "cross-check"), m, HASH, [
       sibling("quint", true),
       sibling("smt", false),
     ]);
@@ -514,7 +522,7 @@ describe("report ordering, cross-check, and degradations", () => {
       { backend: "quint", targets: ["DSC-1"] },
       { backend: "smt", targets: ["DSC-1"] },
     ]);
-    const skippedOut = designCrossCheckReport(DesignReportId.of("/v", "cross-check"), m, HASH, [
+    const skippedOut = designCrossCheckReport(DesignReportId.of(ap("/v"), "cross-check"), m, HASH, [
       sibling("quint", true, "skip"),
       sibling("smt", false),
     ]);
@@ -533,12 +541,12 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(u1.allTargets()).toEqual(["DOB-1", "DSC-1", "TR-1"]);
     expect(u1.enumValuesOf("T.s")).toEqual([]);
 
-    const unread = designIrUnreadableReport(DesignReportId.of("/v", "smt"), "exhaustive", "design IR carries no units[]");
+    const unread = designIrUnreadableReport(DesignReportId.of(ap("/v"), "smt"), "exhaustive", "design IR carries no units[]");
     expect(unread.unavailableReason()).toBe("design IR unreadable: design IR carries no units[] — see the deep-spec-design-ir-valid sensor for details");
     expect(unread.irVersion()).toBe("0.0.0");
     expect(unread.irHash()).toBe(sha256(""));
 
-    const mismatch = designVersionMismatchReport(DesignReportId.of("/v", "quint"), m, "a".repeat(64), "simulation");
+    const mismatch = designVersionMismatchReport(DesignReportId.of(ap("/v"), "quint"), m, "a".repeat(64), "simulation");
     expect(mismatch.skipped().map((s) => `${s.unit}:${s.target}:${s.reason}`)).toEqual([
       "u1:DOB-1:ir-version-mismatch",
       "u1:DSC-1:ir-version-mismatch",
@@ -546,7 +554,7 @@ describe("report ordering, cross-check, and degradations", () => {
     ]);
     expect(mismatch.skipped()[0]?.detail).toBe("design IR major version 2 is not supported by this backend (supports 1.x.x)");
 
-    const down = designBackendUnavailableReport(DesignReportId.of("/v", "quint"), m, "a".repeat(64), "simulation", "quint CLI is not available", "quint CLI missing");
+    const down = designBackendUnavailableReport(DesignReportId.of(ap("/v"), "quint"), m, "a".repeat(64), "simulation", "quint CLI is not available", "quint CLI missing");
     expect(down.unavailableReason()).toBe("quint CLI is not available");
     expect(down.skipped().every((s) => s.reason === "unavailable" && s.detail === "quint CLI missing")).toBe(true);
   });

@@ -12,9 +12,11 @@ import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ArtifactPath } from "../tools/kernel/domain/index.ts";
 import { DesignIrValidationMaterialsRepositoryImpl } from "../tools/design/adapter/index.ts";
 import {
   BrReferenceIndex,
+  DesignModelId,
   type DesignUnitView,
   designWellFormednessErrors,
 } from "../tools/design/domain/index.ts";
@@ -24,6 +26,7 @@ import {
   RequirementsSourceRepositoryImpl,
 } from "../tools/requirements/adapter/index.ts";
 import {
+  FormalModelId,
   FrReferenceIndex,
   type IrModelView,
   RequirementsSourceId,
@@ -39,6 +42,13 @@ const irSchemaPath = join(toolsDir, "data", "deep-spec-ir-schema.json");
 const designSchemaPath = join(toolsDir, "data", "deep-spec-design-ir-schema.json");
 
 const MAX_REPORTED_ERRORS = 25;
+
+// テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
+function ap(raw: string): ArtifactPath {
+  const parsed = ArtifactPath.parse(raw);
+  if (!parsed.ok) throw new Error(`test fixture path is empty: ${raw}`);
+  return parsed.value;
+}
 
 // entry の描画と同一の行を組む（比較対象は子プロセスの stdout そのもの）。
 function renderVerdict(outcome: ValidateIrOutcome | ValidateDesignIrOutcome): string {
@@ -105,14 +115,14 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
   test("canonical fixture", () => {
     const { modelPath } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(modelPath))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor)).toMatchObject({ pass: true, findings_count: 0 });
   });
 
   test("broken fixture — semantic defects and frRef traceability", () => {
     const { modelPath } = makeIrRecord(join(fixtures, "invalid", "deep-spec-analysis-formal-model.md"));
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(modelPath))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).pass).toBe(false);
   });
 
@@ -121,7 +131,7 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
     const req = join(record, "inception", "requirements-analysis", "requirements.md");
     writeFileSync(req, `${readFileSync(req, "utf-8")}\n- FR-9: 監査ログを5年間保持しなければならない。\n`);
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(modelPath))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).errors.join("\n")).toContain("does not match requirements.md");
   });
 
@@ -129,7 +139,7 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
     const { modelPath } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     writeFileSync(modelPath, readFileSync(modelPath, "utf-8").replace(/^\s*"sourceDigest": "[0-9a-f]{64}",\n/m, ""));
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(modelPath))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).errors.join("\n")).toContain('add "sourceDigest"');
   });
 
@@ -139,7 +149,7 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
     const modelPath = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
     cpSync(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"), modelPath);
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(modelPath))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).errors).toContain(
       "requirements.md not found under this intent record — frRefs cannot be reverse-verified",
     );
@@ -148,13 +158,13 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
   test("fence and JSON failures short-circuit before the version check", () => {
     const { modelPath } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     writeFileSync(modelPath, "# no fence here\n");
-    expect(renderVerdict(irUseCase().execute(modelPath))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
+    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
 
     writeFileSync(modelPath, "```json\n{ not json\n```\n");
-    expect(renderVerdict(irUseCase().execute(modelPath))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
+    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
 
     writeFileSync(modelPath, "```json\n[]\n```\n");
-    expect(renderVerdict(irUseCase().execute(modelPath))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
+    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
   });
 
   test("schema absent — the acquisition fails before anything else", () => {
@@ -163,7 +173,7 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
       new IrValidationMaterialsRepositoryImpl({ schemaPath: join(tmpdir(), "no-such-ir-schema.json") }),
       new RequirementsSourceRepositoryImpl(),
     );
-    const outcome = useCase.execute(modelPath);
+    const outcome = useCase.execute(FormalModelId.of(ap(modelPath)));
     expect(outcome.kind).toBe("verdict");
     if (outcome.kind !== "verdict") return;
     expect(outcome.pass).toBe(false);
@@ -174,7 +184,7 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
     const { modelPath } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     writeFileSync(modelPath, readFileSync(modelPath, "utf-8").replace(/"irVersion": "1\.[0-9]+\.[0-9]+"/, '"irVersion": "2.0.0"'));
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(modelPath))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).errors[0]).toContain("unsupported major version");
   });
 
@@ -182,8 +192,8 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
     const { record } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     const other = join(record, "inception", "deep-spec-analysis-verify", "notes.md");
     writeFileSync(other, "# notes\n");
-    expect(irUseCase().execute(other).kind).toBe("not-applicable");
-    expect(renderVerdict(irUseCase().execute(other))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, other));
+    expect(irUseCase().execute(FormalModelId.of(ap(other))).kind).toBe("not-applicable");
+    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(other))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, other));
   });
 });
 
@@ -193,7 +203,7 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
   test("canonical fixture", () => {
     const { modelPath } = makeDesignRecord();
     const viaSensor = fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(designUseCase().execute(modelPath))).toBe(viaSensor);
+    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor)).toMatchObject({ pass: true, findings_count: 0 });
   });
 
@@ -201,7 +211,7 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
     const { modelPath } = makeDesignRecord();
     cpSync(join(fixtures, "design", "invalid-formal-model.md"), modelPath);
     const viaSensor = fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(designUseCase().execute(modelPath))).toBe(viaSensor);
+    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(viaSensor);
     const verdict = JSON.parse(viaSensor);
     expect(verdict.pass).toBe(false);
     const all = verdict.errors.join("\n");
@@ -214,17 +224,17 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
   test("fence and JSON failures short-circuit", () => {
     const { modelPath } = makeDesignRecord();
     writeFileSync(modelPath, "# no fence\n");
-    expect(renderVerdict(designUseCase().execute(modelPath))).toBe(
+    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(
       fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath),
     );
 
     writeFileSync(modelPath, "```json\n{ not json\n```\n");
-    expect(renderVerdict(designUseCase().execute(modelPath))).toBe(
+    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(
       fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath),
     );
 
     writeFileSync(modelPath, "```json\n[]\n```\n");
-    expect(renderVerdict(designUseCase().execute(modelPath))).toBe(
+    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(
       fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath),
     );
   });
@@ -234,7 +244,7 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
     const useCase = new ValidateDesignIrUseCase(
       new DesignIrValidationMaterialsRepositoryImpl({ schemaPath: join(tmpdir(), "no-such-design-schema.json") }),
     );
-    const outcome = useCase.execute(modelPath);
+    const outcome = useCase.execute(DesignModelId.of(ap(modelPath)));
     expect(outcome.kind).toBe("verdict");
     if (outcome.kind !== "verdict") return;
     expect(outcome.errors[0]).toContain("design IR schema not installed at");
@@ -247,7 +257,7 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
       readFileSync(modelPath, "utf-8").replace(/"irVersion": "1\.[0-9]+\.[0-9]+"/, '"irVersion": "3.0.0"'),
     );
     const viaSensor = fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(designUseCase().execute(modelPath))).toBe(viaSensor);
+    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).errors[0]).toContain("unsupported major version");
   });
 
@@ -255,7 +265,7 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
     const { record } = makeDesignRecord();
     const other = join(record, "construction", "deep-spec-analysis-functional-verify", "notes.md");
     writeFileSync(other, "# notes\n");
-    expect(designUseCase().execute(other).kind).toBe("not-applicable");
+    expect(designUseCase().execute(DesignModelId.of(ap(other))).kind).toBe("not-applicable");
   });
 });
 
@@ -288,10 +298,10 @@ describe("RequirementsSourceId", () => {
     const record = join(tmpdir(), `deep-spec-source-id-${Math.random().toString(36).slice(2)}`);
     mkdirSync(join(record, "construction", "requirements-analysis"), { recursive: true });
     writeFileSync(join(record, "construction", "requirements-analysis", "requirements.md"), "- FR-1: x\n");
-    const source = new RequirementsSourceRepositoryImpl().resolve(RequirementsSourceId.of(record));
+    const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(record));
     expect(source).not.toBeNull();
     expect([...(source?.knownIds ?? [])]).toEqual(["FR-1"]);
-    expect(new RequirementsSourceRepositoryImpl().resolve(RequirementsSourceId.of(join(record, "nowhere")))).toBeNull();
+    expect(new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(join(record, "nowhere")))).toBeNull();
   });
 });
 

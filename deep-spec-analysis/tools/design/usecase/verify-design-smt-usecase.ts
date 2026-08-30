@@ -6,6 +6,7 @@
 // 予算・skip の凍結文言はフロー制御の一部としてここが逐語所有する
 // （文書系の detail はドメインのファクトリ／解釈が所有——分担は PR5 と同じ）。
 
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { ok } from "../../kernel/infrastructure/index.ts";
 import type { Clock, RepositoryError } from "../../kernel/usecase/index.ts";
@@ -23,6 +24,8 @@ import {
   designVersionMismatchReport,
   lowerUnit,
   remapUnitDoc,
+  type DesignModelId,
+  RefinementContextId,
 } from "../domain/index.ts";
 import {
   interpretRefinementVerdicts,
@@ -45,8 +48,8 @@ const RUN_BUDGET_MS = 60_000;
 const REFINEMENT_DEADLINE_MS = 65_000;
 
 export interface VerifyDesignInput {
-  readonly modelPath: string;
-  readonly verifyDirectory: string;
+  readonly modelId: DesignModelId;
+  readonly verifyDirectory: ArtifactPath;
 }
 
 export class VerifyDesignSmtUseCase {
@@ -75,7 +78,7 @@ export class VerifyDesignSmtUseCase {
 
   execute(input: VerifyDesignInput): VerifyDesignOutcome {
     const id = DesignReportId.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#designModels.findByPath(input.modelPath);
+    const acquired = this.#designModels.findById(input.modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
@@ -150,7 +153,7 @@ export class VerifyDesignSmtUseCase {
     // --- Phase 3: 検証済み要件 IR に対する refinement ------------------------
     // 要件形式モデルの存在で発火。欠落・陳腐化・ユニット欠けの map は明示 skip
     // を生む——沈黙しない。
-    const context = this.#refinementContexts.findByModelPath(input.modelPath);
+    const context = this.#refinementContexts.findById(RefinementContextId.ofModel(input.modelId));
     let inputs: readonly DesignInputEntry[] | undefined;
     if (context.kind === "active") {
       const req = context.requirements;
@@ -236,7 +239,7 @@ export class VerifyDesignSmtUseCase {
 
   // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
   // チェックを再計算する（最後の書き手が勝ち、全書き手が同一バイトへ収束）。
-  #recomputeCrossCheck(model: DesignModel, irHash: string, directory: string): Result<void, RepositoryError> {
+  #recomputeCrossCheck(model: DesignModel, irHash: string, directory: ArtifactPath): Result<void, RepositoryError> {
     const siblings = this.#reports.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);

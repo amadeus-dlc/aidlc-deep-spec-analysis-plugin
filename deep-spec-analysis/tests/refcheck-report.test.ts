@@ -11,6 +11,14 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
+import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+// テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
+function ap(raw: string): ArtifactPath {
+  const parsed = ArtifactPath.parse(raw);
+  if (!parsed.ok) throw new Error(`test fixture path is empty: ${raw}`);
+  return parsed.value;
+}
+
 import { err } from "../tools/kernel/infrastructure/index.ts";
 import {
   ReferenceCheckReportRepositoryImpl,
@@ -26,7 +34,7 @@ const schema = readContractSchema(schemaPath);
 
 function seed(directory: string, overrides: Partial<Parameters<typeof ReferenceCheckReport.compose>[0]> = {}) {
   return ReferenceCheckReport.compose({
-    id: ReferenceCheckReportId.of(directory, "components"),
+    id: ReferenceCheckReportId.of(ap(directory), "components"),
     inputs: [{ artifact: "inception/domain-design/components.md", sha256: "a".repeat(64) }],
     checked: ["check:DD-0"],
     findings: [],
@@ -37,10 +45,10 @@ function seed(directory: string, overrides: Partial<Parameters<typeof ReferenceC
 
 describe("ReferenceCheckReportId", () => {
   test("equality is by directory and backend; boundaries derive the file identity", () => {
-    const a = ReferenceCheckReportId.of("/tmp/x", "components");
-    expect(a.equals(ReferenceCheckReportId.of("/tmp/x", "components"))).toBe(true);
-    expect(a.equals(ReferenceCheckReportId.of("/tmp/y", "components"))).toBe(false);
-    expect(a.equals(ReferenceCheckReportId.of("/tmp/x", "functional-design"))).toBe(false);
+    const a = ReferenceCheckReportId.of(ap("/tmp/x"), "components");
+    expect(a.equals(ReferenceCheckReportId.of(ap("/tmp/x"), "components"))).toBe(true);
+    expect(a.equals(ReferenceCheckReportId.of(ap("/tmp/y"), "components"))).toBe(false);
+    expect(a.equals(ReferenceCheckReportId.of(ap("/tmp/x"), "functional-design"))).toBe(false);
     expect(a.fileName()).toBe("components.json");
     expect(a.backendName()).toBe("components");
   });
@@ -120,13 +128,13 @@ describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", ()
     const dir = mkdtempSync(join(tmpdir(), "refcheck-repo-"));
     try {
       const repository = new ReferenceCheckReportRepositoryImpl(schemaPath);
-      const absent = repository.findById(ReferenceCheckReportId.of(dir, "components"));
+      const absent = repository.findById(ReferenceCheckReportId.of(ap(dir), "components"));
       expect(!absent.ok && absent.error.kind).toBe("not-found");
       writeFileSync(join(dir, "components.json"), "not json at all");
-      const corrupt = repository.findById(ReferenceCheckReportId.of(dir, "components"));
+      const corrupt = repository.findById(ReferenceCheckReportId.of(ap(dir), "components"));
       expect(!corrupt.ok && corrupt.error.kind).toBe("corrupt");
       writeFileSync(join(dir, "components.json"), JSON.stringify({ backend: "other", inputs: [], checked: [], findings: [], skipped: [] }));
-      const mismatched = repository.findById(ReferenceCheckReportId.of(dir, "components"));
+      const mismatched = repository.findById(ReferenceCheckReportId.of(ap(dir), "components"));
       expect(!mismatched.ok && mismatched.error.kind).toBe("corrupt");
     } finally {
       rmSync(dir, { recursive: true, force: true });
