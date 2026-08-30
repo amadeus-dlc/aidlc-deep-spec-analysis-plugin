@@ -30,7 +30,7 @@ export class VerificationReportRepositoryImpl implements VerificationReportRepos
   }
 
   findById(aggregateId: VerificationReportId): Result<VerificationReport, RepositoryError> {
-    const path = join(aggregateId.directory().value(), aggregateId.fileName());
+    const path = join(aggregateId.directory().asString(), aggregateId.fileName());
     if (!existsSync(path)) {
       return err({ kind: "not-found", path });
     }
@@ -50,16 +50,16 @@ export class VerificationReportRepositoryImpl implements VerificationReportRepos
   findAllByDirectory(directory: ArtifactPath): Result<VerificationReports, RepositoryError> {
     let entries: string[];
     try {
-      entries = readdirSync(directory.value())
+      entries = readdirSync(directory.asString())
         .filter((f) => f.endsWith(".json") && f !== "cross-check.json")
         .sort();
     } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: directory.value(), cause: e instanceof Error ? e.message : String(e) });
+      return err({ kind: "io-failed", operation: "read", path: directory.asString(), cause: e instanceof Error ? e.message : String(e) });
     }
     const reports: VerificationReport[] = [];
     for (const file of entries) {
       try {
-        const raw = JSON.parse(readFileSync(join(directory.value(), file), "utf-8")) as Json;
+        const raw = JSON.parse(readFileSync(join(directory.asString(), file), "utf-8")) as Json;
         const report = parseSiblingReportDocument(directory, file, raw);
         if (report !== null) reports.push(report);
       } catch {
@@ -75,9 +75,9 @@ export class VerificationReportRepositoryImpl implements VerificationReportRepos
 
   save(report: VerificationReport): Result<void, RepositoryError> {
     const conformed = this.conformedOf(report);
-    const path = join(conformed.id().directory().value(), conformed.id().fileName());
+    const path = join(conformed.id().directory().asString(), conformed.id().fileName());
     try {
-      mkdirSync(conformed.id().directory().value(), { recursive: true });
+      mkdirSync(conformed.id().directory().asString(), { recursive: true });
       writeFileSync(path, renderVerificationReportBytes(conformed), "utf-8");
       return ok(undefined);
     } catch (e) {

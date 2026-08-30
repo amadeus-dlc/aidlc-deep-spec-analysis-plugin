@@ -36,7 +36,7 @@ import {
 
 export class DesignRecordRepositoryImpl implements DesignRecordRepository {
   findById(id: DesignRecordId): Result<DesignRecord, RepositoryError> {
-    const artifactPath = id.artifactPath().value();
+    const artifactPath = id.artifactPath().asString();
     const md = readIfExists(artifactPath);
     if (md === null) {
       return err({ kind: "not-found", path: artifactPath });

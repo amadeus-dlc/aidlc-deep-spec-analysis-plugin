@@ -26,7 +26,7 @@ export class LineNumber {
     return this.#value === other.#value;
   }
 
-  value(): number {
+  asNumber(): number {
     return this.#value;
   }
 }
@@ -51,7 +51,7 @@ export class BlockIndex {
     return this.#value === other.#value;
   }
 
-  value(): number {
+  asNumber(): number {
     return this.#value;
   }
 }

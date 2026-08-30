@@ -14,7 +14,7 @@ import { parseFormalModel } from "./formal-model-parser.ts";
 
 export class FormalModelRepositoryImpl implements FormalModelRepository {
   findById(id: FormalModelId): Result<AcquiredFormalModel, RepositoryError> {
-    const modelPath = id.artifactPath().value();
+    const modelPath = id.artifactPath().asString();
     let md: string;
     try {
       md = readFileSync(modelPath, "utf-8");

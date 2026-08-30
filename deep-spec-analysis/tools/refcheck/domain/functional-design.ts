@@ -94,7 +94,7 @@ export class AttrDecl {
 
   // 境界: 文言に載る型の描画形（未宣言は旧 `${null}` の "null"——凍結形）。
   typeText(): string {
-    return this.#seed.type === null ? "null" : this.#seed.type.value();
+    return this.#seed.type === null ? "null" : this.#seed.type.asString();
   }
 
   // FD-E2: 列挙できない型区分（数値・日付・真偽）に allowed_values を宣言。
@@ -119,18 +119,18 @@ export class AttrDecl {
 
   // FD-E3: min > max の範囲逆転。
   boundsInverted(): boolean {
-    return this.#seed.min !== null && this.#seed.max !== null && this.#seed.min.value() > this.#seed.max.value();
+    return this.#seed.min !== null && this.#seed.max !== null && this.#seed.min.asNumber() > this.#seed.max.asNumber();
   }
 
   // FD-E3: 数値既定値が範囲の外。
   defaultBelowMin(): boolean {
     const d = this.#seed.def;
-    return d !== null && d.isNumber() && this.#seed.min !== null && d.asNumber() < this.#seed.min.value();
+    return d !== null && d.isNumber() && this.#seed.min !== null && d.asNumber() < this.#seed.min.asNumber();
   }
 
   defaultAboveMax(): boolean {
     const d = this.#seed.def;
-    return d !== null && d.isNumber() && this.#seed.max !== null && d.asNumber() > this.#seed.max.value();
+    return d !== null && d.isNumber() && this.#seed.max !== null && d.asNumber() > this.#seed.max.asNumber();
   }
 
   // FD-E3: 文字列既定値が allowed_values の外。
@@ -142,7 +142,7 @@ export class AttrDecl {
 
   // ライフサイクル属性の候補性（status/state の名を帯び allowed を持つ）。
   bearsLifecycleName(): boolean {
-    return this.#seed.name.value() === "status" || this.#seed.name.value() === "state";
+    return this.#seed.name.asString() === "status" || this.#seed.name.asString() === "state";
   }
 
   // FD-S1: 図の状態のうち allowed values に無いもの（差分はコレクションが計算）。
@@ -182,8 +182,8 @@ export class AttrDecls {
     const seen = new Set<string>();
     const dups: AttrDecl[] = [];
     for (const a of this.#values) {
-      if (seen.has(a.name().value())) dups.push(a);
-      seen.add(a.name().value());
+      if (seen.has(a.name().asString())) dups.push(a);
+      seen.add(a.name().asString());
     }
     return dups;
   }
@@ -198,7 +198,7 @@ export class AttrDecls {
   }
 
   named(token: string): AttrDecl | null {
-    return this.#values.find((a) => a.name().value() === token) ?? null;
+    return this.#values.find((a) => a.name().asString() === token) ?? null;
   }
 
   names(): AttributeName[] {
@@ -335,7 +335,7 @@ export class EntityDecls {
 
   private constructor(values: readonly EntityDecl[]) {
     this.#values = values;
-    this.#names = new Set(values.map((e) => e.name().value()));
+    this.#names = new Set(values.map((e) => e.name().asString()));
   }
 
   static of(values: readonly EntityDecl[]): EntityDecls {
@@ -354,8 +354,8 @@ export class EntityDecls {
     const seen = new Set<string>();
     const dups: EntityDecl[] = [];
     for (const e of this.#values) {
-      if (seen.has(e.name().value())) dups.push(e);
-      seen.add(e.name().value());
+      if (seen.has(e.name().asString())) dups.push(e);
+      seen.add(e.name().asString());
     }
     return dups;
   }
@@ -375,19 +375,19 @@ export class EntityDecls {
   // FD-E6: Entity / Entity.attr 形はエンティティ名の厳密照合、自由文は
   // 小文字包含の緩い照合（凍結挙動）。
   resolvesReference(reference: ReferenceTarget): boolean {
-    const token = reference.value().match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.[A-Za-z][A-Za-z0-9_]*)?$/);
+    const token = reference.asString().match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.[A-Za-z][A-Za-z0-9_]*)?$/);
     if (token) return this.#names.has(token[1] ?? "");
-    return this.#values.some((d) => reference.value().toLowerCase().includes(d.name().value().toLowerCase()));
+    return this.#values.some((d) => reference.asString().toLowerCase().includes(d.name().asString().toLowerCase()));
   }
 
   // FD-R4: applies-to が Entity / Entity.attribute へ解決するか。
   resolvesAppliesTo(target: AppliesTo): boolean {
-    const token = target.value().match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.([A-Za-z][A-Za-z0-9_]*))?$/);
+    const token = target.asString().match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.([A-Za-z][A-Za-z0-9_]*))?$/);
     if (token) {
-      const ent = this.#values.find((e) => e.name().value() === token[1]);
+      const ent = this.#values.find((e) => e.name().asString() === token[1]);
       return ent !== undefined && (token[2] === undefined || ent.attrNamed(token[2]) !== null);
     }
-    return this.#values.some((e) => target.value().toLowerCase().includes(e.name().value().toLowerCase()));
+    return this.#values.some((e) => target.asString().toLowerCase().includes(e.name().asString().toLowerCase()));
   }
 
   toArray(): readonly EntityDecl[] {
@@ -513,7 +513,7 @@ export class RuleDecl {
 
   // 旧 `r.id !== null && /^BR…$/.test(r.id) ? r.id : fallback` の移設。
   findingTarget(fallback: string): string {
-    return this.#seed.id !== null && this.#seed.id.matchesShape() ? this.#seed.id.value() : fallback;
+    return this.#seed.id !== null && this.#seed.id.matchesShape() ? this.#seed.id.asString() : fallback;
   }
 
   // FD-R3: requirements.md に存在しない source id（値の昇順——凍結順）。
@@ -592,7 +592,7 @@ export class StateMachineSketch {
 
   // 境界: witness と skip 文言に載る位置ラベル（凍結書式）。
   locationLabel(): string {
-    return `State Machine: ${this.#seed.spec.value()} (fence line ${this.#seed.fenceLine.value()})`;
+    return `State Machine: ${this.#seed.spec.asString()} (fence line ${this.#seed.fenceLine.asNumber()})`;
   }
 }
 
@@ -655,7 +655,7 @@ export class DomainEntitySketch {
 
   // 境界: witness に載るカタログ位置ラベル（凍結書式）。
   catalogLabel(): string {
-    return `entity ${this.#seed.name.value()} (component ${this.#seed.component.value()})`;
+    return `entity ${this.#seed.name.asString()} (component ${this.#seed.component.asString()})`;
   }
 
   // XS-3: このユニットの定義が落としている属性（値の昇順——凍結順）。
@@ -663,7 +663,7 @@ export class DomainEntitySketch {
     return this.#seed.attributes
       .toArray()
       .filter((a) => !unitAttrs.coversNormalized(a))
-      .map((a) => a.value())
+      .map((a) => a.asString())
       .sort();
   }
 }
@@ -691,7 +691,7 @@ export class DomainEntitySketches {
 
   // 名前昇順に整列し、正規化名の初出だけを残す（XS の巡回順——凍結）。
   sortedDistinctByNormalizedName(): DomainEntitySketch[] {
-    const sorted = [...this.#values].sort((a, b) => (a.name().value() < b.name().value() ? -1 : 1));
+    const sorted = [...this.#values].sort((a, b) => (a.name().asString() < b.name().asString() ? -1 : 1));
     const seen = new Set<string>();
     const out: DomainEntitySketch[] = [];
     for (const de of sorted) {

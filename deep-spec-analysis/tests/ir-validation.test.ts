@@ -309,7 +309,7 @@ describe("RequirementsSourceId", () => {
     const a = RequirementsSourceId.of(ap("/records/r1"));
     const b = RequirementsSourceId.of(ap("/records/r1"));
     const c = RequirementsSourceId.of(ap("/records/r2"));
-    expect(a.recordRoot().value()).toBe("/records/r1");
+    expect(a.recordRoot().asString()).toBe("/records/r1");
     expect(a.equals(b)).toBe(true);
     expect(a.equals(c)).toBe(false);
   });

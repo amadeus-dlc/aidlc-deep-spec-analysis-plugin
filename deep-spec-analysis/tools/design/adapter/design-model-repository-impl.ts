@@ -15,7 +15,7 @@ import { parseDesignModel } from "./design-model-parser.ts";
 
 export class DesignModelRepositoryImpl implements DesignModelRepository {
   findById(id: DesignModelId): Result<AcquiredDesignModel, RepositoryError> {
-    const modelPath = id.artifactPath().value();
+    const modelPath = id.artifactPath().asString();
     let md: string;
     try {
       md = readFileSync(modelPath, "utf-8");

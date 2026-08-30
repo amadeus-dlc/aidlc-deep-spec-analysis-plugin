@@ -21,7 +21,7 @@ export class InMemoryVerificationReportRepository implements VerificationReportR
   }
 
   #keyOf(id: VerificationReportId): string {
-    return `${id.directory().value()}/${id.fileName()}`;
+    return `${id.directory().asString()}/${id.fileName()}`;
   }
 
   findById(aggregateId: VerificationReportId): Result<VerificationReport, RepositoryError> {
@@ -33,7 +33,7 @@ export class InMemoryVerificationReportRepository implements VerificationReportR
   }
 
   findAllByDirectory(directory: ArtifactPath): Result<VerificationReports, RepositoryError> {
-    const prefix = `${directory.value()}/`;
+    const prefix = `${directory.asString()}/`;
     const hits = [...this.#store.entries()]
       .filter(([key]) => key.startsWith(prefix) && key !== `${prefix}cross-check.json`)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

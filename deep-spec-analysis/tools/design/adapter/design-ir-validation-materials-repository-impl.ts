@@ -194,7 +194,7 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
   }
 
   acquire(id: DesignModelId): DesignIrMaterialsAcquisition {
-    const outputPath = id.artifactPath().value();
+    const outputPath = id.artifactPath().asString();
     if (basename(outputPath) !== DESIGN_MODEL_BASENAME || !existsSync(outputPath)) {
       return { kind: "not-applicable" };
     }

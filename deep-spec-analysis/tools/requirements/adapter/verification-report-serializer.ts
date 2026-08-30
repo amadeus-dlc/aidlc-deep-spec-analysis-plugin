@@ -24,8 +24,8 @@ import {
 function orderedDocument(report: VerificationReport): { [k: string]: Json } {
   const ordered: { [k: string]: Json } = {
     backend: report.id().backendName(),
-    irVersion: report.irVersion().value(),
-    irHash: report.irHash().value(),
+    irVersion: report.irVersion().asString(),
+    irHash: report.irHash().asString(),
     method: report.method(),
   };
   const reason = report.unavailableReason();

@@ -19,7 +19,7 @@ export class DesignUnitId {
   }
 
   // 境界: 文書・文言・写像キーに逐語で載るユニット名。
-  value(): string {
+  asString(): string {
     return this.#value;
   }
 }

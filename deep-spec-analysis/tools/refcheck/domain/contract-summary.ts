@@ -33,7 +33,7 @@ export class UnitDecls {
   }
 
   declares(value: string): boolean {
-    return this.#values.some((u) => u.name.value() === value);
+    return this.#values.some((u) => u.name.asString() === value);
   }
 
   names(): UnitNames {
@@ -42,7 +42,7 @@ export class UnitDecls {
 
   // CD-3 の走査順（unit 名の辞書順）はコレクション知識。
   sortedByName(): UnitDecls {
-    return new UnitDecls([...this.#values].sort((a, b) => (a.name.value() < b.name.value() ? -1 : 1)));
+    return new UnitDecls([...this.#values].sort((a, b) => (a.name.asString() < b.name.asString() ? -1 : 1)));
   }
 
   toArray(): readonly UnitDecl[] {
@@ -79,7 +79,7 @@ export class ContractId {
     return this.#value === other.#value;
   }
 
-  value(): string {
+  asString(): string {
     return this.#value;
   }
 }
@@ -101,7 +101,7 @@ export class ContractParty {
     return this.#value === other.#value;
   }
 
-  value(): string {
+  asString(): string {
     return this.#value;
   }
 
@@ -145,8 +145,8 @@ export class ContractRows {
   coversEdge(from: string, to: string): boolean {
     return this.#values.some(
       (r) =>
-        (r.provider.value() === from && r.consumer.value() === to) ||
-        (r.consumer.value() === from && r.provider.value() === to),
+        (r.provider.asString() === from && r.consumer.asString() === to) ||
+        (r.consumer.asString() === from && r.provider.asString() === to),
     );
   }
 
