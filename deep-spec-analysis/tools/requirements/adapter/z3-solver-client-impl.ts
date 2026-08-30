@@ -7,6 +7,7 @@
 // 旧 runChild からの逐語移植。
 
 import { spawnSync } from "node:child_process";
+import { SmtQueryVerdicts } from "../domain/index.ts";
 import type { RequirementsModel, SmtQueryVerdict } from "../domain/index.ts";
 import type { SmtCheck, Z3SolverClient } from "../usecase/index.ts";
 import { type SmtChildQuery, buildSmtPlan, decodeSolverModel } from "./smt-plan-builder.ts";
@@ -46,7 +47,7 @@ export class Z3SolverClientImpl implements Z3SolverClient {
         core: r.core,
       });
     }
-    return { facts: plan.facts, result: { kind: "solved", verdicts } };
+    return { facts: plan.facts, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(verdicts) } };
   }
 
   #runChild(queries: SmtChildQuery[]): { results?: Map<string, SmtChildResult>; unavailable?: string } {

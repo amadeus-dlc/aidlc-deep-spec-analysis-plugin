@@ -139,6 +139,8 @@ describe("IrVersion", () => {
 // requirements 側ファーストクラスコレクション — 不変 add・境界脱出口・集合知識。
 import {
   AttributeDeclarations,
+  AttributeValues,
+  FrRefs,
   BackgroundAssumptions,
   CrossCheckedEntries,
   Obligations,
@@ -159,12 +161,12 @@ describe("requirements first-class collections", () => {
     expect(attrs.byPath("o.qty")?.kind).toBe("int");
     expect(attrs.toArray().length).toBe(1);
 
-    const obs = Obligations.of([]).add({ id: "OB-1", nature: "invariant", frRefs: ["FR-1"] });
+    const obs = Obligations.of([]).add({ id: "OB-1", nature: "invariant", frRefs: FrRefs.of(["FR-1"]) });
     expect(obs.byId("OB-1")?.nature).toBe("invariant");
     expect(obs.ids()).toEqual(["OB-1"]);
     expect([...obs].length).toBe(1);
 
-    const scs = Scenarios.of([]).add({ id: "SC-1", kind: "accept", frRefs: [], bindings: {} });
+    const scs = Scenarios.of([]).add({ id: "SC-1", kind: "accept", frRefs: FrRefs.of([]), bindings: {} });
     expect(scs.byId("SC-1")?.kind).toBe("accept");
     expect(scs.ids()).toEqual(["SC-1"]);
 
@@ -270,5 +272,22 @@ describe("design first-class collections", () => {
     expect([...cc].length).toBe(1);
     expect([...DesignReports.of([])].length).toBe(0);
     expect(DesignReports.of([]).toArray().length).toBe(0);
+  });
+});
+
+describe("requirements value collections (first-class operations)", () => {
+  test("FrRefs and AttributeValues hold declaration order and ordinal knowledge", () => {
+    const refs = FrRefs.of(["FR-2"]).add("FR-1");
+    expect([...refs]).toEqual(["FR-2", "FR-1"]);
+    expect(refs.toArray()).toEqual(["FR-2", "FR-1"]);
+
+    const values = AttributeValues.of(["open"]).add("closed");
+    expect([...values]).toEqual(["open", "closed"]);
+    expect(values.indexOf("closed")).toBe(1);
+    expect(values.indexOf("ghost")).toBe(-1);
+    expect(values.valueAt(0)).toBe("open");
+    expect(values.valueAt(9)).toBe(undefined);
+    expect(values.count()).toBe(2);
+    expect(values.toArray()).toEqual(["open", "closed"]);
   });
 });

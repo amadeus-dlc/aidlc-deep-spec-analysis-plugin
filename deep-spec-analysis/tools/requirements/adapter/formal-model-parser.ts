@@ -6,6 +6,8 @@
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { IrVersion, type Expression } from "../../kernel/domain/index.ts";
 import {
+  AttributeValues,
+  FrRefs,
   type AttributeDeclaration,
   type Obligation,
   type RequirementsModelSeed,
@@ -36,7 +38,7 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id"> |
         kind,
         min: typeof t.min === "number" ? t.min : undefined,
         max: typeof t.max === "number" ? t.max : undefined,
-        values: Array.isArray(t.values) ? (t.values.filter((v) => typeof v === "string") as string[]) : undefined,
+        values: Array.isArray(t.values) ? AttributeValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
       });
     }
   }
@@ -47,7 +49,7 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id"> |
     obligations.push({
       id: ob.id,
       nature: ob.nature,
-      frRefs: strArr(ob.frRefs),
+      frRefs: FrRefs.of(strArr(ob.frRefs)),
       ears: typeof ob.ears === "string" ? ob.ears : undefined,
       assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
       trigger: typeof ob.trigger === "string" ? ob.trigger : undefined,
@@ -68,7 +70,7 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id"> |
     scenarios.push({
       id: sc.id,
       kind,
-      frRefs: strArr(sc.frRefs),
+      frRefs: FrRefs.of(strArr(sc.frRefs)),
       bindings,
       event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: sc.event.trigger } : undefined,
       expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,

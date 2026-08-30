@@ -21,7 +21,15 @@ import {
   type IrAttributeDecl,
   type IrBackgroundDecl,
   type IrEntityDecl,
-  type IrModelDecl,
+  FrRefs,
+  IrAttributeDecls,
+  IrBackgroundDecls,
+  IrBindingPairs,
+  IrDeclaredValues,
+  IrEntityDecls,
+  IrModelDecl,
+  IrObligationDecls,
+  IrScenarioDecls,
   type IrObligationDecl,
   type IrScenarioDecl,
   type FormalModelId,
@@ -51,12 +59,12 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
       attributes.push({
         name: attr.name,
         kind: typeof t.kind === "string" ? t.kind : "",
-        values: Array.isArray(t.values) ? (t.values.filter((v) => typeof v === "string") as string[]) : undefined,
+        values: Array.isArray(t.values) ? IrDeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
         min: typeof t.min === "number" ? t.min : undefined,
         max: typeof t.max === "number" ? t.max : undefined,
       });
     }
-    entities.push({ name: ent.name, attributes });
+    entities.push({ name: ent.name, attributes: IrAttributeDecls.of(attributes) });
   }
 
   const obligations: IrObligationDecl[] = [];
@@ -85,7 +93,7 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
     scenarios.push({
       id: sc.id,
-      bindings: Object.entries(bindings),
+      bindings: IrBindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
     });
@@ -97,7 +105,12 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
     background.push({ id: bg.id, assert: asExpression(bg.assert ?? null) });
   }
 
-  return { entities, obligations, scenarios, background };
+  return IrModelDecl.reconstitute({
+    entities: IrEntityDecls.of(entities),
+    obligations: IrObligationDecls.of(obligations),
+    scenarios: IrScenarioDecls.of(scenarios),
+    background: IrBackgroundDecls.of(background),
+  });
 }
 
 // owner は id、無ければ `<section>[<index>]`（旧 collectFrRefs の逐語）。
@@ -110,7 +123,7 @@ function collectFrClaims(ir: { [k: string]: Json }): FrRefClaim[] {
       const owner = typeof entry.id === "string" ? entry.id : `${section}[${i}]`;
       const refs = entry.frRefs ?? null;
       if (!Array.isArray(refs)) return;
-      claims.push({ owner, frRefs: refs.filter((r) => typeof r === "string") as string[] });
+      claims.push({ owner, frRefs: FrRefs.of(refs.filter((r) => typeof r === "string") as string[]) });
     });
   }
   return claims;

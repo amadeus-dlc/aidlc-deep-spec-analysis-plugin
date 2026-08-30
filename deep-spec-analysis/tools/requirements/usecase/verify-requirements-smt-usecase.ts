@@ -20,11 +20,6 @@ import {
   VerificationReport,
   VerificationReportId,
   type RequirementsModel,
-  crossCheckReport,
-  interpretSmtVerdicts,
-  irUnreadableReport,
-  solverUnavailableReport,
-  versionMismatchReport,
 } from "../domain/index.ts";
 import type { FormalModelRepository } from "./formal-model-repository.ts";
 import type { VerificationReportRepository } from "./verification-report-repository.ts";
@@ -56,14 +51,14 @@ export class VerifyRequirementsSmtUseCase {
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#persist(irUnreadableReport(id, "exhaustive", acquired.error.cause));
+      const saved = this.#persist(VerificationReport.irUnreadable(id, "exhaustive", acquired.error.cause));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
     }
     const { model, irHash } = acquired.value;
 
     if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
-      const saved = this.#persist(versionMismatchReport(id, model, irHash, "exhaustive"));
+      const saved = this.#persist(VerificationReport.versionMismatch(id, model, irHash, "exhaustive"));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
       if (!cross.ok) return { kind: "save-failed", error: cross.error };
@@ -72,14 +67,14 @@ export class VerifyRequirementsSmtUseCase {
 
     const run = this.#z3SolverClient.check(model);
     if (run.result.kind === "unavailable") {
-      const saved = this.#persist(solverUnavailableReport(id, model, irHash, run.facts.skipped, run.result.reason));
+      const saved = this.#persist(VerificationReport.solverUnavailable(id, model, irHash, run.facts.planSkipped(), run.result.reason));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
       if (!cross.ok) return { kind: "save-failed", error: cross.error };
       return { kind: "solver-unavailable" };
     }
 
-    const interpreted = interpretSmtVerdicts(model, run.facts, run.result.verdicts);
+    const interpreted = run.facts.interpret(model, run.result.verdicts);
     const conformed = this.#verificationReportRepository.conformedOf(
       VerificationReport.compose({
         id,
@@ -112,6 +107,6 @@ export class VerifyRequirementsSmtUseCase {
     const siblings = this.#verificationReportRepository.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);
-    return this.#persist(crossCheckReport(VerificationReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash, siblings.value));
+    return this.#persist(siblings.value.crossChecked(VerificationReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
   }
 }

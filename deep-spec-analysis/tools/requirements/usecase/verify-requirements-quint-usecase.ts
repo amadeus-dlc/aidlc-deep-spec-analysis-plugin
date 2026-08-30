@@ -23,12 +23,6 @@ import {
   VerificationReport,
   VerificationReportId,
   type RequirementsModel,
-  crossCheckReport,
-  interpretQuintVerdicts,
-  irUnreadableReport,
-  machineUncompilableReport,
-  quintUnavailableReport,
-  versionMismatchReport,
 } from "../domain/index.ts";
 import type { FormalModelRepository } from "./formal-model-repository.ts";
 import type { QuintClient } from "./quint-client.ts";
@@ -60,14 +54,14 @@ export class VerifyRequirementsQuintUseCase {
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#persist(irUnreadableReport(id, "simulation", acquired.error.cause));
+      const saved = this.#persist(VerificationReport.irUnreadable(id, "simulation", acquired.error.cause));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
     }
     const { model, irHash } = acquired.value;
 
     if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
-      const saved = this.#persist(versionMismatchReport(id, model, irHash, "simulation"));
+      const saved = this.#persist(VerificationReport.versionMismatch(id, model, irHash, "simulation"));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
       if (!cross.ok) return { kind: "save-failed", error: cross.error };
@@ -76,21 +70,21 @@ export class VerifyRequirementsQuintUseCase {
 
     const checked = this.#quintClient.check(model);
     if (checked.kind === "cli-unavailable") {
-      const saved = this.#persist(quintUnavailableReport(id, model, irHash));
+      const saved = this.#persist(VerificationReport.quintUnavailable(id, model, irHash));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
       if (!cross.ok) return { kind: "save-failed", error: cross.error };
       return { kind: "backend-unavailable" };
     }
     if (checked.kind === "machine-uncompilable") {
-      const saved = this.#persist(machineUncompilableReport(id, model, irHash, checked.method, checked.error));
+      const saved = this.#persist(VerificationReport.machineUncompilable(id, model, irHash, checked.method, checked.error));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
       if (!cross.ok) return { kind: "save-failed", error: cross.error };
       return { kind: "machine-uncompilable" };
     }
 
-    const interpreted = interpretQuintVerdicts(model, checked.facts, checked.compileSkips, checked.method, checked.runs);
+    const interpreted = checked.facts.interpret(model, checked.compileSkips, checked.method, checked.runs);
     const conformed = this.#verificationReportRepository.conformedOf(
       VerificationReport.compose({
         id,
@@ -124,6 +118,6 @@ export class VerifyRequirementsQuintUseCase {
     const siblings = this.#verificationReportRepository.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);
-    return this.#persist(crossCheckReport(VerificationReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash, siblings.value));
+    return this.#persist(siblings.value.crossChecked(VerificationReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
   }
 }

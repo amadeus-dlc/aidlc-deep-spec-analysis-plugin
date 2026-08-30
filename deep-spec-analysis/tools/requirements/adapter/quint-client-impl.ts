@@ -9,10 +9,9 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { QuintRuns, TraceStates, VerificationSkips } from "../domain/index.ts";
 import type {
   QuintMachineRunVerdict,
-  QuintRuns,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
   RequirementsModel,
@@ -71,17 +70,14 @@ export class QuintClientImpl implements QuintClient {
       // skip と、機械フェーズの timeout / run-failed による対象一括 skip。
       const skipTargets = new Set(machine.compileSkips.map((s) => s.target));
       if (machineRun !== null && (machineRun.kind === "timeout" || machineRun.kind === "run-failed")) {
-        for (const t of sortedUnique(
-          [...machine.facts.invariantComponents.map((c) => c.id), ...machine.facts.eventIds],
-          idCompare,
-        )) {
+        for (const t of machine.facts.machineTargets()) {
           skipTargets.add(t);
         }
       }
       const temporals = bounded ? this.#runTemporalPhase(machine, modulePath, skipTargets, work) : new Map<string, QuintTemporalVerdict>();
       const scenarios = this.#runScenarioPhase(machine, modulePath, work);
-      const runs: QuintRuns = { machine: machineRun, temporals, scenarios };
-      return { kind: "checked", method, facts: machine.facts, compileSkips: machine.compileSkips, runs };
+      const runs = QuintRuns.of({ machine: machineRun, temporals, scenarios });
+      return { kind: "checked", method, facts: machine.facts, compileSkips: VerificationSkips.of(machine.compileSkips), runs };
     } finally {
       rmSync(work, { recursive: true, force: true });
     }
@@ -126,7 +122,7 @@ export class QuintClientImpl implements QuintClient {
     bounded: boolean,
     work: string,
   ): QuintMachineRunVerdict | null {
-    if (machine.facts.invariantComponents.length === 0) return null;
+    if (!machine.facts.hasInvariantComponents()) return null;
     const itfPath = join(work, "machine.itf.json");
     const run = bounded
       ? this.#runQuint(
@@ -152,11 +148,11 @@ export class QuintClientImpl implements QuintClient {
         );
     if (run.timedOut) return { kind: "timeout" };
     if (`${run.stdout}\n${run.stderr}`.toLowerCase().includes("deadlock")) {
-      return { kind: "deadlock", trace: run.itf ? decodeItfTrace(run.itf, machine.varToPath) : null };
+      return { kind: "deadlock", trace: run.itf ? TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)) : null };
     }
     const violated = run.itf !== null && (itfStatus(run.itf) === "violation" || (bounded && !!run.itf));
     if (violated && run.itf) {
-      return { kind: "violation", trace: decodeItfTrace(run.itf, machine.varToPath) };
+      return { kind: "violation", trace: TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)) };
     }
     if (!violated && run.itf === null && `${run.stdout}${run.stderr}`.includes("error")) {
       return { kind: "run-failed", outputTail: this.#outputTail(run) };
@@ -185,7 +181,7 @@ export class QuintClientImpl implements QuintClient {
       if (run.timedOut) {
         out.set(obId, { kind: "timeout" });
       } else if (run.itf) {
-        out.set(obId, { kind: "violation", trace: decodeItfTrace(run.itf, machine.varToPath) });
+        out.set(obId, { kind: "violation", trace: TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)) });
       } else {
         out.set(obId, { kind: "clean" });
       }

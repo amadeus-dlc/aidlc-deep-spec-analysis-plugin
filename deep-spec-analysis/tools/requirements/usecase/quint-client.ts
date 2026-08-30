@@ -8,7 +8,7 @@ import type {
   QuintMachineFacts,
   QuintRuns,
   RequirementsModel,
-  VerificationSkipped,
+  VerificationSkips,
 } from "../domain/index.ts";
 
 export type QuintCheckResult =
@@ -18,7 +18,7 @@ export type QuintCheckResult =
       readonly kind: "checked";
       readonly method: string;
       readonly facts: QuintMachineFacts;
-      readonly compileSkips: readonly VerificationSkipped[];
+      readonly compileSkips: VerificationSkips;
       readonly runs: QuintRuns;
     };
 

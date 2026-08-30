@@ -1,9 +1,16 @@
 // SMT 検証計画の「事実」——判定解釈に必要な、形式（SMT-LIB）を含まない面。
 // クエリ id（"global" / "vac:OB-x" / "evo:a:b" / "evj:a:b" / "gap:trigger" /
 // "sc:SC-x"）とラベル→対象の対応、コンパイル時 skip がここに載る。
-// スクリプト本体はアダプタの計画ビルダが所有する。
+// スクリプト本体はアダプタの計画ビルダが所有する。判定の解釈（旧
+// interpretSmtVerdicts——detail 文言は golden 凍結・返り値は未ソートで正準
+// ソートは VerificationReport.compose の不変条件）は facts 自身の振る舞い
+// （OOUI 裁定）。
 
-import type { VerificationSkips } from "./verification-finding.ts";
+import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import type { RequirementsModel } from "./requirements-model.ts";
+import type { SmtQueryVerdicts } from "./solver-verdict.ts";
+import type { VerificationFinding, VerificationSkipped } from "./verification-finding.ts";
+import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
 
 export interface SmtEventPairProbe {
   readonly qOverlap: string;
@@ -13,11 +20,213 @@ export interface SmtEventPairProbe {
   readonly trigger: string;
 }
 
-export interface SmtPlanFacts {
+// 同トリガ event 対プローブのファーストクラスコレクション（発行順を保持）。
+export class SmtEventPairProbes {
+  readonly #values: readonly SmtEventPairProbe[];
+
+  private constructor(values: readonly SmtEventPairProbe[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly SmtEventPairProbe[]): SmtEventPairProbes {
+    return new SmtEventPairProbes([...values]);
+  }
+
+  add(value: SmtEventPairProbe): SmtEventPairProbes {
+    return new SmtEventPairProbes([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<SmtEventPairProbe> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly SmtEventPairProbe[] {
+    return this.#values;
+  }
+}
+
+export interface InterpretedVerdicts {
+  findings: VerificationFindings;
+  skipped: VerificationSkips;
+}
+
+export interface SmtPlanFactsSeed {
   readonly compiled: ReadonlyMap<string, boolean>;
   readonly skipped: VerificationSkips;
   readonly labelToTarget: ReadonlyMap<string, string>;
-  readonly eventPairs: readonly SmtEventPairProbe[];
+  readonly eventPairs: SmtEventPairProbes;
   readonly gapTriggers: ReadonlyMap<string, readonly string[]>;
   readonly scenarioQueries: ReadonlyMap<string, string>;
+}
+
+export class SmtPlanFacts {
+  readonly #compiled: ReadonlyMap<string, boolean>;
+  readonly #skipped: VerificationSkips;
+  readonly #labelToTarget: ReadonlyMap<string, string>;
+  readonly #eventPairs: SmtEventPairProbes;
+  readonly #gapTriggers: ReadonlyMap<string, readonly string[]>;
+  readonly #scenarioQueries: ReadonlyMap<string, string>;
+
+  private constructor(seed: SmtPlanFactsSeed) {
+    this.#compiled = seed.compiled;
+    this.#skipped = seed.skipped;
+    this.#labelToTarget = seed.labelToTarget;
+    this.#eventPairs = seed.eventPairs;
+    this.#gapTriggers = seed.gapTriggers;
+    this.#scenarioQueries = seed.scenarioQueries;
+  }
+
+  static of(seed: SmtPlanFactsSeed): SmtPlanFacts {
+    return new SmtPlanFacts({
+      compiled: new Map(seed.compiled),
+      skipped: seed.skipped,
+      labelToTarget: new Map(seed.labelToTarget),
+      eventPairs: seed.eventPairs,
+      gapTriggers: new Map(seed.gapTriggers),
+      scenarioQueries: new Map(seed.scenarioQueries),
+    });
+  }
+
+  // ソルバ実行不能でも文書に載るコンパイル時 skip（unavailable 文書用）。
+  planSkipped(): VerificationSkips {
+    return this.#skipped;
+  }
+
+  // 旧 interpretSmtVerdicts の逐語移植。
+  interpret(model: RequirementsModel, results: SmtQueryVerdicts): InterpretedVerdicts {
+    const findings: VerificationFinding[] = [];
+    const skipped: VerificationSkipped[] = [...this.#skipped.toArray()];
+    const conflictKeys = new Set<string>();
+    const invariantIds = model
+      .obligations()
+      .toArray()
+      .filter((o) => (o.nature === "invariant" || o.nature === "numeric") && this.#compiled.get(o.id))
+      .map((o) => o.id);
+
+    const coreToTargets = (core: string[]): string[] => {
+      const targets = core
+        .map((label) => this.#labelToTarget.get(label))
+        .filter((t): t is string => typeof t === "string" && t.startsWith("OB-"));
+      return sortedUnique(targets, idCompare);
+    };
+
+    const addConflict = (targets: string[], core: string[], detail: string): void => {
+      const effective = targets.length > 0 ? targets : invariantIds;
+      if (effective.length === 0) return;
+      const key = effective.join(",");
+      if (conflictKeys.has(key)) return;
+      conflictKeys.add(key);
+      findings.push({
+        kind: "conflict",
+        frRefs: model.frRefsOf(effective),
+        targets: effective,
+        witness: { core: [...core].sort() },
+        detail,
+      });
+    };
+
+    const timeoutSkip = (targets: string[], what: string): void => {
+      for (const t of targets) {
+        skipped.push({ target: t, reason: "timeout", detail: `${what} exceeded the solver budget` });
+      }
+    };
+
+    // (a) 大域一貫性。
+    const global = results.verdictOf("global");
+    let globallyUnsat = false;
+    if (global?.status === "unsat") {
+      globallyUnsat = true;
+      addConflict(
+        coreToTargets(global.core ?? []),
+        global.core ?? [],
+        "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.",
+      );
+    } else if (global && global.status !== "sat") {
+      timeoutSkip(invariantIds, "global consistency check");
+    }
+
+    // (a) 前件空虚（大域 unsat のときは冗長な派生なので黙る）。
+    if (!globallyUnsat) {
+      for (const ob of model.obligations()) {
+        const r = results.verdictOf(`vac:${ob.id}`);
+        if (!r) continue;
+        if (r.status === "unsat") {
+          const targets = sortedUnique([...coreToTargets(r.core ?? []), ob.id], idCompare);
+          addConflict(
+            targets,
+            r.core ?? [],
+            `The condition of obligation ${ob.id} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
+          );
+        } else if (r.status !== "sat") {
+          timeoutSkip([ob.id], `vacuity check for ${ob.id}`);
+        }
+      }
+    }
+
+    // (a) 同トリガの矛盾効果。
+    for (const pair of this.#eventPairs) {
+      const overlap = results.verdictOf(pair.qOverlap);
+      const joint = results.verdictOf(pair.qJoint);
+      if (!overlap || !joint) continue;
+      if (overlap.status === "sat" && joint.status === "unsat") {
+        addConflict(
+          sortedUnique([pair.a, pair.b], idCompare),
+          joint.core ?? [],
+          `Events ${pair.a} and ${pair.b} for trigger "${pair.trigger}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`,
+        );
+      } else if (overlap.status === "unknown" || overlap.status === "budget" || joint.status === "unknown" || joint.status === "budget") {
+        timeoutSkip([pair.a, pair.b], `event-pair check for trigger "${pair.trigger}"`);
+      }
+    }
+
+    // (b) 完全性ギャップ。
+    for (const [trigger, eventIds] of [...this.#gapTriggers.entries()].sort()) {
+      const r = results.verdictOf(`gap:${trigger}`);
+      if (!r) continue;
+      if (r.status === "sat") {
+        findings.push({
+          kind: "completeness-gap",
+          frRefs: model.frRefsOf(eventIds),
+          targets: [...eventIds],
+          witness: { model: r.decodedModel ?? {} },
+          detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
+        });
+      } else if (r.status !== "unsat") {
+        timeoutSkip([...eventIds], `completeness check for trigger "${trigger}"`);
+      }
+    }
+
+    // (c) シナリオ。
+    for (const sc of model.scenarios()) {
+      const qid = this.#scenarioQueries.get(sc.id);
+      if (!qid) continue;
+      const r = results.verdictOf(qid);
+      if (!r) continue;
+      if (r.status === "unknown" || r.status === "budget" || r.status === "error") {
+        timeoutSkip([sc.id], `scenario check for ${sc.id}`);
+        continue;
+      }
+      if (sc.kind === "accept" && r.status === "unsat") {
+        const targets = sortedUnique([sc.id, ...coreToTargets(r.core ?? [])], idCompare);
+        findings.push({
+          kind: "scenario-violation",
+          frRefs: model.frRefsOf(targets),
+          targets,
+          witness: { core: [...(r.core ?? [])].sort() },
+          detail: `Accept scenario ${sc.id} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
+        });
+      }
+      if (sc.kind === "reject" && r.status === "sat") {
+        findings.push({
+          kind: "scenario-violation",
+          frRefs: model.frRefsOf([sc.id]),
+          targets: [sc.id],
+          witness: { model: r.decodedModel ?? {} },
+          detail: `Reject scenario ${sc.id} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
+        });
+      }
+    }
+
+    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
+  }
 }

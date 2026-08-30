@@ -11,7 +11,6 @@ import {
   FrReferenceIndex,
   SUPPORTED_IR_MAJOR,
   SourceAnchor,
-  modelWellFormednessErrors,
 } from "../domain/index.ts";
 import type {
   IrValidationMaterialsRepository,
@@ -47,7 +46,7 @@ export class ValidateIrUseCase {
 
     // 意味検査とトレーサビリティはスキーマ妥当な IR にのみ意味がある。
     if (errors.length === 0) {
-      errors.push(...modelWellFormednessErrors(materials.view));
+      errors.push(...materials.view.wellFormednessErrors());
 
       const index = FrReferenceIndex.of(materials.frClaims);
       const source = this.#requirementsSourceRepository.findById(materials.sourceId);

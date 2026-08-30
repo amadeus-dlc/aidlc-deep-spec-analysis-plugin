@@ -1,11 +1,12 @@
 // 受け入れ／拒否シナリオ。逐語移動。
 
 import type { Expression } from "../../kernel/domain/expression.ts";
+import type { FrRefs } from "./fr-refs.ts";
 
 export interface Scenario {
   id: string;
   kind: "accept" | "reject";
-  frRefs: string[];
+  frRefs: FrRefs;
   bindings: { [path: string]: boolean | number | string };
   event?: { trigger: string };
   expect?: Expression;
