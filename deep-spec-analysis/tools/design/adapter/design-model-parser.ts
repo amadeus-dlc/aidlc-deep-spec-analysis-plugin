@@ -7,6 +7,12 @@
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { IrVersion, type  Expression } from "../../kernel/domain/index.ts";
 import {
+  DesignUnits,
+  AttrPaths,
+  DesignBackgroundAssumptions,
+  DesignMachines,
+  DesignObligations,
+  DesignScenarios,
   type DesignMachine,
   type DesignModelComposition,
   type DesignObligation,
@@ -112,14 +118,14 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> 
       DesignUnit.reconstitute({
         unit: rawUnit.unit,
         rawEntities: rawEntities as unknown as DesignValue,
-        attrPaths,
-        obligations,
-        machines,
-        scenarios,
-        background,
+        attrPaths: AttrPaths.of([...attrPaths]),
+        obligations: DesignObligations.of(obligations),
+        machines: DesignMachines.of(machines),
+        scenarios: DesignScenarios.of(scenarios),
+        background: DesignBackgroundAssumptions.of(background),
       }),
     );
   }
   if (units.length === 0) return "design IR carries no parseable units";
-  return { irVersion: irVersion.value, units };
+  return { irVersion: irVersion.value, units: DesignUnits.of(units) };
 }

@@ -6,7 +6,7 @@
 
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
-import type { DesignFinding, DesignMachine, DesignUnit, DesignValue } from "../../design/domain/index.ts";
+import type { DesignFinding, DesignUnit, DesignValue } from "../../design/domain/index.ts";
 import type { AlphaContext } from "./alpha-substitution.ts";
 import type { AttributeMapping, RefinementUnitMap } from "./refinement-map.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
@@ -126,10 +126,7 @@ export function planUnitRefinement(
 
   const ctx: AlphaContext = { byReq, reqAttrByPath };
   const eventByTrigger = new Map(unitMap.eventMap.map((e) => [e.reqTrigger, e] as const));
-  const designIds = new Set<string>([
-    ...u.obligations().map((o) => o.id),
-    ...u.machines().flatMap((m: DesignMachine) => m.transitions.map((t) => t.id)),
-  ]);
+  const designIds = new Set<string>([...u.obligations().ids(), ...u.machines().transitionIds()]);
 
   const attrsCovered = (e: Expression | undefined): { ok: boolean; missing: string[] } => {
     if (!e) return { ok: true, missing: [] };

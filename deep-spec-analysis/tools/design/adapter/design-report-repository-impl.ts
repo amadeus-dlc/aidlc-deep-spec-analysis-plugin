@@ -12,6 +12,7 @@ import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import { readContractSchema } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { DesignReport, DesignReportId } from "../domain/index.ts";
+import { DesignReports } from "../domain/index.ts";
 import type { DesignReportRepository } from "../usecase/index.ts";
 import {
   conformDesignReport,
@@ -44,7 +45,7 @@ export class DesignReportRepositoryImpl implements DesignReportRepository {
     return ok(report);
   }
 
-  findAllByDirectory(directory: ArtifactPath): Result<readonly DesignReport[], RepositoryError> {
+  findAllByDirectory(directory: ArtifactPath): Result<DesignReports, RepositoryError> {
     let entries: string[];
     try {
       entries = readdirSync(directory.value())
@@ -63,7 +64,7 @@ export class DesignReportRepositoryImpl implements DesignReportRepository {
         // 読めない兄弟文書は黙って除く——その状態は自分の書き手が報告する。
       }
     }
-    return ok(reports);
+    return ok(DesignReports.of(reports));
   }
 
   conformedOf(report: DesignReport): DesignReport {

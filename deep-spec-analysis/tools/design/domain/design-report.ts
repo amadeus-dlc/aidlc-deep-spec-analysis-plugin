@@ -8,8 +8,7 @@
 
 import type { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
-import type { DesignFinding, DesignSkipped } from "./design-finding.ts";
-import { sortDesignFindings, sortDesignSkipped } from "./design-finding-order.ts";
+import { DesignFindings, DesignSkips } from "./design-finding.ts";
 import type { DesignReportId } from "./design-report-id.ts";
 
 // 入力成果物の錨（refcheck の InputAnchor と同語彙・コンテキスト所有）。
@@ -23,16 +22,101 @@ export interface DesignCrossCheckedEntry {
   readonly targets: string[];
 }
 
+// 入力成果物の錨のファーストクラスコレクション。artifact 名昇順の整列
+// （compose の不変条件）を所有する。
+export class DesignInputAnchors {
+  readonly #values: readonly DesignInputAnchor[];
+
+  private constructor(values: readonly DesignInputAnchor[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly DesignInputAnchor[]): DesignInputAnchors {
+    return new DesignInputAnchors([...values]);
+  }
+
+  add(value: DesignInputAnchor): DesignInputAnchors {
+    return new DesignInputAnchors([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<DesignInputAnchor> {
+    yield* this.#values;
+  }
+
+  sortedByArtifact(): DesignInputAnchors {
+    return new DesignInputAnchors([...this.#values].sort((a, b) => (a.artifact < b.artifact ? -1 : a.artifact > b.artifact ? 1 : 0)));
+  }
+
+  toArray(): readonly DesignInputAnchor[] {
+    return this.#values;
+  }
+}
+
+// 検査済みユニット面のファーストクラスコレクション。id 順の一意整列
+// （compose の不変条件）を所有する。
+export class CheckedUnits {
+  readonly #values: readonly string[];
+
+  private constructor(values: readonly string[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly string[]): CheckedUnits {
+    return new CheckedUnits([...values]);
+  }
+
+  add(value: string): CheckedUnits {
+    return new CheckedUnits([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<string> {
+    yield* this.#values;
+  }
+
+  sortedUniqueCanonically(): CheckedUnits {
+    return new CheckedUnits(sortedUnique([...this.#values], idCompare));
+  }
+
+  toArray(): readonly string[] {
+    return this.#values;
+  }
+}
+
+// クロスチェック判定表のファーストクラスコレクション。
+export class DesignCrossCheckedEntries {
+  readonly #values: readonly DesignCrossCheckedEntry[];
+
+  private constructor(values: readonly DesignCrossCheckedEntry[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly DesignCrossCheckedEntry[]): DesignCrossCheckedEntries {
+    return new DesignCrossCheckedEntries([...values]);
+  }
+
+  add(value: DesignCrossCheckedEntry): DesignCrossCheckedEntries {
+    return new DesignCrossCheckedEntries([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<DesignCrossCheckedEntry> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly DesignCrossCheckedEntry[] {
+    return this.#values;
+  }
+}
+
 export interface DesignReportSeed {
   readonly id: DesignReportId;
   readonly irVersion: IrVersion;
   readonly irHash: ContentHash;
   readonly method: string;
-  readonly findings: readonly DesignFinding[];
-  readonly skipped: readonly DesignSkipped[];
-  readonly inputs: readonly DesignInputAnchor[] | null;
-  readonly checked: readonly string[] | null;
-  readonly crossChecked: readonly DesignCrossCheckedEntry[] | null;
+  readonly findings: DesignFindings;
+  readonly skipped: DesignSkips;
+  readonly inputs: DesignInputAnchors | null;
+  readonly checked: CheckedUnits | null;
+  readonly crossChecked: DesignCrossCheckedEntries | null;
   readonly unavailableReason: string | null;
 }
 
@@ -41,11 +125,11 @@ export interface DesignReportComposition {
   readonly irVersion: IrVersion;
   readonly irHash: ContentHash;
   readonly method: string;
-  readonly findings: readonly DesignFinding[];
-  readonly skipped: readonly DesignSkipped[];
-  readonly inputs?: readonly DesignInputAnchor[];
-  readonly checked?: readonly string[];
-  readonly crossChecked?: readonly DesignCrossCheckedEntry[];
+  readonly findings: DesignFindings;
+  readonly skipped: DesignSkips;
+  readonly inputs?: DesignInputAnchors;
+  readonly checked?: CheckedUnits;
+  readonly crossChecked?: DesignCrossCheckedEntries;
   readonly unavailableReason?: string;
 }
 
@@ -54,11 +138,11 @@ export class DesignReport {
   readonly #irVersion: IrVersion;
   readonly #irHash: ContentHash;
   readonly #method: string;
-  readonly #findings: readonly DesignFinding[];
-  readonly #skipped: readonly DesignSkipped[];
-  readonly #inputs: readonly DesignInputAnchor[] | null;
-  readonly #checked: readonly string[] | null;
-  readonly #crossChecked: readonly DesignCrossCheckedEntry[] | null;
+  readonly #findings: DesignFindings;
+  readonly #skipped: DesignSkips;
+  readonly #inputs: DesignInputAnchors | null;
+  readonly #checked: CheckedUnits | null;
+  readonly #crossChecked: DesignCrossCheckedEntries | null;
   readonly #unavailableReason: string | null;
 
   private constructor(seed: DesignReportSeed) {
@@ -81,10 +165,10 @@ export class DesignReport {
       irVersion: input.irVersion,
       irHash: input.irHash,
       method: input.method,
-      findings: sortDesignFindings(input.findings),
-      skipped: sortDesignSkipped(input.skipped),
-      inputs: input.inputs === undefined ? null : [...input.inputs].sort((a, b) => (a.artifact < b.artifact ? -1 : a.artifact > b.artifact ? 1 : 0)),
-      checked: input.checked === undefined ? null : sortedUnique([...input.checked], idCompare),
+      findings: input.findings.sortedCanonically(),
+      skipped: input.skipped.sortedCanonically(),
+      inputs: input.inputs === undefined ? null : input.inputs.sortedByArtifact(),
+      checked: input.checked === undefined ? null : input.checked.sortedUniqueCanonically(),
       crossChecked: input.crossChecked ?? null,
       unavailableReason: input.unavailableReason ?? null,
     });
@@ -103,8 +187,8 @@ export class DesignReport {
       irVersion: this.#irVersion,
       irHash: this.#irHash,
       method: this.#method,
-      findings: [],
-      skipped: [],
+      findings: DesignFindings.of([]),
+      skipped: DesignSkips.of([]),
       inputs: null,
       checked: null,
       crossChecked: null,
@@ -128,23 +212,23 @@ export class DesignReport {
     return this.#method;
   }
 
-  findings(): readonly DesignFinding[] {
+  findings(): DesignFindings {
     return this.#findings;
   }
 
-  skipped(): readonly DesignSkipped[] {
+  skipped(): DesignSkips {
     return this.#skipped;
   }
 
-  inputs(): readonly DesignInputAnchor[] | null {
+  inputs(): DesignInputAnchors | null {
     return this.#inputs;
   }
 
-  checked(): readonly string[] | null {
+  checked(): CheckedUnits | null {
     return this.#checked;
   }
 
-  crossChecked(): readonly DesignCrossCheckedEntry[] | null {
+  crossChecked(): DesignCrossCheckedEntries | null {
     return this.#crossChecked;
   }
 
@@ -158,14 +242,39 @@ export class DesignReport {
 
   // verdict 行の pass はこの述語から導く（unavailable でなく findings ゼロ）。
   passes(): boolean {
-    return this.#unavailableReason === null && this.#findings.length === 0;
+    return this.#unavailableReason === null && this.#findings.isEmpty();
   }
 
   findingsCount(): number {
-    return this.#findings.length;
+    return this.#findings.count();
   }
 
   skippedCount(): number {
-    return this.#skipped.length;
+    return this.#skipped.count();
+  }
+}
+
+// 兄弟文書のファーストクラスコレクション（設計クロスチェックの入力）。
+export class DesignReports {
+  readonly #values: readonly DesignReport[];
+
+  private constructor(values: readonly DesignReport[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly DesignReport[]): DesignReports {
+    return new DesignReports([...values]);
+  }
+
+  add(value: DesignReport): DesignReports {
+    return new DesignReports([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<DesignReport> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly DesignReport[] {
+    return this.#values;
   }
 }

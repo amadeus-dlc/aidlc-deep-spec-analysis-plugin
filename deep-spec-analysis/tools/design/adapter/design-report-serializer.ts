@@ -10,6 +10,11 @@ import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
 import type { SchemaUnreadable } from "../../kernel/adapter/index.ts";
 import {
+  CheckedUnits,
+  DesignCrossCheckedEntries,
+  DesignFindings,
+  DesignInputAnchors,
+  DesignSkips,
   type DesignCrossCheckedEntry,
   type DesignFinding,
   type DesignSkipped,
@@ -28,13 +33,13 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
   if (reason !== null) ordered.unavailable = { reason };
   const inputs = report.inputs();
   // ContentHash は境界（描画）で value() へ落とす（キー順は旧挿入順）。
-  if (inputs !== null) ordered.inputs = inputs.map((i) => ({ artifact: i.artifact, sha256: i.sha256.value() })) as unknown as Json;
+  if (inputs !== null) ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact, sha256: i.sha256.value() })) as unknown as Json;
   const checked = report.checked();
-  if (checked !== null) ordered.checked = checked as unknown as Json;
-  ordered.findings = report.findings() as unknown as Json;
-  ordered.skipped = report.skipped() as unknown as Json;
+  if (checked !== null) ordered.checked = checked.toArray() as unknown as Json;
+  ordered.findings = report.findings().toArray() as unknown as Json;
+  ordered.skipped = report.skipped().toArray() as unknown as Json;
   const crossChecked = report.crossChecked();
-  if (crossChecked !== null) ordered.crossChecked = crossChecked as unknown as Json;
+  if (crossChecked !== null) ordered.crossChecked = crossChecked.toArray() as unknown as Json;
   return ordered;
 }
 
@@ -78,19 +83,19 @@ export function parseSiblingDesignReportDocument(
     irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
     irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
     method: typeof raw.method === "string" ? raw.method : "",
-    findings: (Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []) as unknown as DesignFinding[],
-    skipped: skipped as unknown as DesignSkipped[],
+    findings: DesignFindings.of((Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []) as unknown as DesignFinding[]),
+    skipped: DesignSkips.of(skipped as unknown as DesignSkipped[]),
     inputs: Array.isArray(raw.inputs)
-      ? (raw.inputs as Json[]).map((e) => {
+      ? DesignInputAnchors.of((raw.inputs as Json[]).map((e) => {
           const entry = isObject(e) ? e : {};
           return {
             artifact: typeof entry.artifact === "string" ? entry.artifact : "",
             sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : ""),
           };
-        })
+        }))
       : null,
-    checked: Array.isArray(raw.checked) ? (raw.checked as Json[]).filter((c): c is string => typeof c === "string") : null,
-    crossChecked: Array.isArray(raw.crossChecked) ? (raw.crossChecked as unknown as DesignCrossCheckedEntry[]) : null,
+    checked: Array.isArray(raw.checked) ? CheckedUnits.of((raw.checked as Json[]).filter((c): c is string => typeof c === "string")) : null,
+    crossChecked: Array.isArray(raw.crossChecked) ? DesignCrossCheckedEntries.of(raw.crossChecked as unknown as DesignCrossCheckedEntry[]) : null,
     unavailableReason: isObject(raw.unavailable)
       ? typeof raw.unavailable.reason === "string"
         ? raw.unavailable.reason

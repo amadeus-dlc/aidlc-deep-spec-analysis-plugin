@@ -3,6 +3,7 @@
 // 呼び手（entry）が凍結値を渡す（smt: "exhaustive" / quint: ir 系 2 経路は
 // "simulation"、127 経路は検出済み method ?? "simulation"）。
 
+import { DesignFindings, DesignSkips } from "./design-finding.ts";
 import { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import { } from "../../kernel/domain/index.ts";
 import type { DesignModel } from "./design-model.ts";
@@ -18,8 +19,8 @@ export function designIrUnreadableReport(id: DesignReportId, method: string, cau
     irVersion: IrVersion.reconstitute("0.0.0"),
     irHash: ContentHash.ofText(""),
     method,
-    findings: [],
-    skipped: [],
+    findings: DesignFindings.of([]),
+    skipped: DesignSkips.of([]),
     unavailableReason: `design IR unreadable: ${cause} — see the deep-spec-design-ir-valid sensor for details`,
   });
 }
@@ -36,15 +37,15 @@ export function designVersionMismatchReport(
     irVersion: model.irVersion(),
     irHash,
     method,
-    findings: [],
-    skipped: model.units().flatMap((u) =>
+    findings: DesignFindings.of([]),
+    skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
       u.allTargets().map((t) => ({
         target: t,
         reason: "ir-version-mismatch",
         unit: u.name(),
         detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
       })),
-    ),
+    )),
   });
 }
 
@@ -64,10 +65,10 @@ export function designBackendUnavailableReport(
     irVersion: model.irVersion(),
     irHash,
     method,
-    findings: [],
-    skipped: model.units().flatMap((u) =>
+    findings: DesignFindings.of([]),
+    skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
       u.allTargets().map((t) => ({ target: t, reason: "unavailable", unit: u.name(), detail: skipDetail })),
-    ),
+    )),
     unavailableReason: reason,
   });
 }

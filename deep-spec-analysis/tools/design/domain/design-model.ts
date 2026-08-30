@@ -4,20 +4,20 @@
 
 import type { DesignModelId } from "./design-model-id.ts";
 import type { IrVersion } from "../../kernel/domain/index.ts";
-import type { DesignUnit } from "./design-unit.ts";
+import { DesignUnits } from "./design-unit.ts";
 
 export interface DesignModelComposition {
   readonly id: DesignModelId;
   readonly irVersion: IrVersion;
-  readonly units: readonly DesignUnit[];
+  readonly units: DesignUnits;
 }
 
 export class DesignModel {
   readonly #id: DesignModelId;
   readonly #irVersion: IrVersion;
-  readonly #units: readonly DesignUnit[];
+  readonly #units: DesignUnits;
 
-  private constructor(id: DesignModelId, irVersion: IrVersion, units: readonly DesignUnit[]) {
+  private constructor(id: DesignModelId, irVersion: IrVersion, units: DesignUnits) {
     this.#id = id;
     this.#irVersion = irVersion;
     this.#units = units;
@@ -25,11 +25,7 @@ export class DesignModel {
 
   // ユニット名昇順を不変条件としてここで一度だけ適用する。
   static compose(input: DesignModelComposition): DesignModel {
-    return new DesignModel(
-      input.id,
-      input.irVersion,
-      [...input.units].sort((a, b) => (a.name() < b.name() ? -1 : a.name() > b.name() ? 1 : 0)),
-    );
+    return new DesignModel(input.id, input.irVersion, input.units.sortedByName());
   }
 
   id(): DesignModelId {
@@ -49,7 +45,7 @@ export class DesignModel {
     return this.#irVersion.supportsMajor(major);
   }
 
-  units(): readonly DesignUnit[] {
+  units(): DesignUnits {
     return this.#units;
   }
 }

@@ -26,7 +26,17 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { type DesignUnit as DesignUnitType, DesignModelId, DesignUnit, DesignUnitId, RefinementMaterialsId } from "../tools/design/domain/index.ts";
+import {
+  AttrPaths,
+  DesignBackgroundAssumptions,
+  DesignMachines,
+  DesignObligations,
+  DesignScenarios,
+  type DesignBackgroundAssumption,
+  type DesignMachine,
+  type DesignObligation,
+  type DesignScenario,
+  type DesignValue, type DesignUnit as DesignUnitType, DesignModelId, DesignUnit, DesignUnitId, RefinementMaterialsId } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -160,16 +170,23 @@ describe("SMT script characterization (the PR8 safety net)", () => {
 
 // --- ドメイン検査の分岐固定（純関数の直接駆動） ------------------------------
 
-function unit(seed: Partial<Parameters<typeof DesignUnit.reconstitute>[0]>): DesignUnitType {
+function unit(seed: {
+  unit?: string;
+  rawEntities?: DesignValue;
+  attrPaths?: Set<string>;
+  obligations?: DesignObligation[];
+  machines?: DesignMachine[];
+  scenarios?: DesignScenario[];
+  background?: DesignBackgroundAssumption[];
+}): DesignUnitType {
   return DesignUnit.reconstitute({
-    unit: "u1",
-    rawEntities: [],
-    attrPaths: new Set(),
-    obligations: [],
-    machines: [],
-    scenarios: [],
-    background: [],
-    ...seed,
+    unit: seed.unit ?? "u1",
+    rawEntities: seed.rawEntities ?? [],
+    attrPaths: AttrPaths.of([...(seed.attrPaths ?? new Set<string>())]),
+    obligations: DesignObligations.of(seed.obligations ?? []),
+    machines: DesignMachines.of(seed.machines ?? []),
+    scenarios: DesignScenarios.of(seed.scenarios ?? []),
+    background: DesignBackgroundAssumptions.of(seed.background ?? []),
   });
 }
 

@@ -24,6 +24,22 @@ function ap(raw: string): ArtifactPath {
 }
 
 import {
+  CheckedUnits,
+  DesignFindings,
+  DesignInputAnchors,
+  DesignReports,
+  DesignSkips,
+  DesignUnits,
+  AttrPaths,
+  DesignBackgroundAssumptions,
+  DesignMachines,
+  DesignObligations,
+  DesignScenarios,
+  type DesignBackgroundAssumption,
+  type DesignMachine,
+  type DesignObligation,
+  type DesignScenario,
+  type DesignValue,
   type DesignFinding,
   type DesignModelComposition,
   type SiblingVerdictDocument,
@@ -120,9 +136,9 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
             irVersion: model.irVersion(),
             irHash,
             method: backend === "smt" ? "exhaustive" : (method ?? "simulation"),
-            findings,
-            skipped,
-            checked: checkedUnits,
+            findings: DesignFindings.of(findings),
+            skipped: DesignSkips.of(skipped),
+            checked: CheckedUnits.of(checkedUnits),
           }),
         );
         expect(reports.save(conformed).ok).toBe(true);
@@ -144,16 +160,23 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
 
 // --- ドメイン検査の分岐固定（純関数の直接駆動） ------------------------------
 
-function unit(seed: Partial<Parameters<typeof DesignUnit.reconstitute>[0]>): DesignUnit {
+function unit(seed: {
+  unit?: string;
+  rawEntities?: DesignValue;
+  attrPaths?: Set<string>;
+  obligations?: DesignObligation[];
+  machines?: DesignMachine[];
+  scenarios?: DesignScenario[];
+  background?: DesignBackgroundAssumption[];
+}): DesignUnit {
   return DesignUnit.reconstitute({
-    unit: "u1",
-    rawEntities: [],
-    attrPaths: new Set(),
-    obligations: [],
-    machines: [],
-    scenarios: [],
-    background: [],
-    ...seed,
+    unit: seed.unit ?? "u1",
+    rawEntities: seed.rawEntities ?? [],
+    attrPaths: AttrPaths.of([...(seed.attrPaths ?? new Set<string>())]),
+    obligations: DesignObligations.of(seed.obligations ?? []),
+    machines: DesignMachines.of(seed.machines ?? []),
+    scenarios: DesignScenarios.of(seed.scenarios ?? []),
+    background: DesignBackgroundAssumptions.of(seed.background ?? []),
   });
 }
 
@@ -161,7 +184,7 @@ function model(units: DesignUnit[], irVersion = "1.0.0"): DesignModel {
   return DesignModel.compose({
     id: DesignModelId.of(ap("/test/deep-spec-analysis-functional-formal-model.md")),
     irVersion: IrVersion.reconstitute(irVersion),
-    units,
+    units: DesignUnits.of(units),
   } satisfies DesignModelComposition);
 }
 
@@ -283,10 +306,10 @@ describe("lowering (typed compile-down)", () => {
     expect(ignoreGuards[0]).toEqual({ op: "eq", args: [{ op: "ref", path: "T.b" }, { op: "enum", value: "x" }] });
     // 2 ユニットの compose はユニット名昇順を不変条件として適用する。
     const m = model([unit({ unit: "u2" }), unit({ unit: "u1" })]);
-    expect(m.units().map((x) => x.name())).toEqual(["u1", "u2"]);
+    expect(m.units().toArray().map((x) => x.name())).toEqual(["u1", "u2"]);
     expect(m.irVersion().value()).toBe("1.0.0");
     expect(m.id().equals(DesignModelId.of(ap("/test/deep-spec-analysis-functional-formal-model.md")))).toBe(true);
-    expect(m.units()[0]?.id().value()).toBe(m.units()[0]?.name() ?? "");
+    expect(m.units().toArray()[0]?.id().value()).toBe(m.units().toArray()[0]?.name() ?? "");
   });
 
   test("the canonical expression key matches the kernel canonical JSON byte for byte", () => {
@@ -455,16 +478,16 @@ describe("report ordering, cross-check, and degradations", () => {
       irVersion: IrVersion.reconstitute("1.0.0"),
       irHash: ContentHash.reconstitute("a".repeat(64)),
       method: "exhaustive",
-      findings: [f("conflict", "u1", ["DOB-1"], "c")],
-      skipped: [],
-      inputs: [
+      findings: DesignFindings.of([f("conflict", "u1", ["DOB-1"], "c")]),
+      skipped: DesignSkips.of([]),
+      inputs: DesignInputAnchors.of([
         { artifact: "b.md", sha256: ContentHash.reconstitute("2".repeat(64)) },
         { artifact: "a.md", sha256: ContentHash.reconstitute("1".repeat(64)) },
-      ],
-      checked: ["unit:u2", "unit:u1", "unit:u1"],
+      ]),
+      checked: CheckedUnits.of(["unit:u2", "unit:u1", "unit:u1"]),
     });
-    expect(report.inputs()?.map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
-    expect(report.checked()).toEqual(["unit:u1", "unit:u2"]);
+    expect(report.inputs()?.toArray().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
+    expect(report.checked()?.toArray()).toEqual(["unit:u1", "unit:u2"]);
     expect(report.passes()).toBe(false);
     expect(report.findingsCount()).toBe(1);
     expect(report.skippedCount()).toBe(0);
@@ -485,7 +508,7 @@ describe("report ordering, cross-check, and degradations", () => {
       crossChecked: null,
       unavailableReason: null,
     });
-    expect(back.findings()).toEqual(report.findings());
+    expect(back.findings().toArray()).toEqual(report.findings().toArray());
     const degraded = report.degraded("why");
     expect(degraded.inputs()).toBe(null);
     expect(degraded.checked()).toBe(null);
@@ -505,18 +528,18 @@ describe("report ordering, cross-check, and degradations", () => {
         irVersion: IrVersion.reconstitute("1.0.0"),
         irHash: HASH,
         method: "exhaustive",
-        findings: violated ? [f("scenario-violation", "u1", ["DSC-1"], "x")] : [],
-        skipped: skipKey ? [{ target: "DSC-1", reason: "capability", unit: "u1" }] : [],
+        findings: DesignFindings.of(violated ? [f("scenario-violation", "u1", ["DSC-1"], "x")] : []),
+        skipped: DesignSkips.of(skipKey ? [{ target: "DSC-1", reason: "capability", unit: "u1" }] : []),
         inputs: null,
         checked: null,
         crossChecked: null,
         unavailableReason: null,
       });
-    const report = designCrossCheckReport(DesignReportId.of(ap("/v"), "cross-check"), m, HASH, [
+    const report = designCrossCheckReport(DesignReportId.of(ap("/v"), "cross-check"), m, HASH, DesignReports.of([
       sibling("quint", true),
       sibling("smt", false),
-    ]);
-    expect(report.findings()[0]).toEqual({
+    ]));
+    expect(report.findings().toArray()[0]).toEqual({
       kind: "cross-check-disagreement",
       frRefs: ["FR-1", "FR-2"],
       targets: ["DSC-1"],
@@ -524,16 +547,16 @@ describe("report ordering, cross-check, and degradations", () => {
       unit: "u1",
       detail: 'Backends "quint" and "smt" disagree on scenario DSC-1 of unit u1. This signals a defect in the formalization or in a backend compiler, not in the design itself.',
     });
-    expect(report.crossChecked()).toEqual([
+    expect(report.crossChecked()?.toArray()).toEqual([
       { backend: "quint", targets: ["DSC-1"] },
       { backend: "smt", targets: ["DSC-1"] },
     ]);
-    const skippedOut = designCrossCheckReport(DesignReportId.of(ap("/v"), "cross-check"), m, HASH, [
+    const skippedOut = designCrossCheckReport(DesignReportId.of(ap("/v"), "cross-check"), m, HASH, DesignReports.of([
       sibling("quint", true, "skip"),
       sibling("smt", false),
-    ]);
-    expect(skippedOut.findings()).toEqual([]);
-    expect(skippedOut.crossChecked()).toEqual([]);
+    ]));
+    expect(skippedOut.findings().toArray()).toEqual([]);
+    expect(skippedOut.crossChecked()?.toArray()).toEqual([]);
   });
 
   test("degradation factories freeze the design wording and span every unit target", () => {
@@ -553,16 +576,16 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(unread.irHash().equals(ContentHash.ofText(""))).toBe(true);
 
     const mismatch = designVersionMismatchReport(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation");
-    expect(mismatch.skipped().map((s) => `${s.unit}:${s.target}:${s.reason}`)).toEqual([
+    expect(mismatch.skipped().toArray().map((s) => `${s.unit}:${s.target}:${s.reason}`)).toEqual([
       "u1:DOB-1:ir-version-mismatch",
       "u1:DSC-1:ir-version-mismatch",
       "u1:TR-1:ir-version-mismatch",
     ]);
-    expect(mismatch.skipped()[0]?.detail).toBe("design IR major version 2 is not supported by this backend (supports 1.x.x)");
+    expect(mismatch.skipped().toArray()[0]?.detail).toBe("design IR major version 2 is not supported by this backend (supports 1.x.x)");
 
     const down = designBackendUnavailableReport(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation", "quint CLI is not available", "quint CLI missing");
     expect(down.unavailableReason()).toBe("quint CLI is not available");
-    expect(down.skipped().every((s) => s.reason === "unavailable" && s.detail === "quint CLI missing")).toBe(true);
+    expect(down.skipped().toArray().every((s) => s.reason === "unavailable" && s.detail === "quint CLI missing")).toBe(true);
   });
 
   test("the reachability variant keeps only events plus the single probe, and probeReached demands the final state", () => {

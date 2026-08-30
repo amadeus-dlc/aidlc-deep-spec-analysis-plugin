@@ -14,3 +14,32 @@ export interface DesignObligation {
   effect?: Expression;
   temporal?: { pattern: string; assert?: Expression; from?: Expression; to?: Expression };
 }
+
+// 設計義務のファーストクラスコレクション。id 列の導出を所有する。
+export class DesignObligations {
+  readonly #values: readonly DesignObligation[];
+
+  private constructor(values: readonly DesignObligation[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly DesignObligation[]): DesignObligations {
+    return new DesignObligations([...values]);
+  }
+
+  add(value: DesignObligation): DesignObligations {
+    return new DesignObligations([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<DesignObligation> {
+    yield* this.#values;
+  }
+
+  ids(): readonly string[] {
+    return this.#values.map((o) => o.id);
+  }
+
+  toArray(): readonly DesignObligation[] {
+    return this.#values;
+  }
+}
