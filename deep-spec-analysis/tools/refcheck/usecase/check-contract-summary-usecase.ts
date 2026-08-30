@@ -12,7 +12,7 @@ import {
   ReferenceCheckReportId,
   runContractChecks,
 } from "../domain/index.ts";
-import type { ArtifactPath } from "../../kernel/domain/index.ts";
+import { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./design-record-repository.ts";
 import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
@@ -42,7 +42,7 @@ export class CheckContractSummaryUseCase {
 
     const ledger = new CheckFamilyLedger(CONTRACT_FAMILIES);
     runContractChecks({
-      artifact: record.value.target().artifact,
+      artifact: ArtifactPath.reconstitute(record.value.target().artifact),
       depArtifact: declaredUnits.artifactName,
       declaredUnits: declaredUnits.document === null ? { kind: "absent" } : declaredUnits.document.outcome,
       contractsTable,

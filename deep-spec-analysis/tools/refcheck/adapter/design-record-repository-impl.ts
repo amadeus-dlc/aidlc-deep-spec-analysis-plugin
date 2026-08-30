@@ -8,7 +8,7 @@
 
 import { basename, dirname, join } from "node:path";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
-import { ContentHash, RequirementIds, } from "../../kernel/domain/index.ts";
+import { ArtifactPath, ContentHash, RequirementIds } from "../../kernel/domain/index.ts";
 import {
   findRecordRoot,
   listSubdirectories,
@@ -21,6 +21,7 @@ import {
   DesignRecord,
   type DesignRecordSeed,
   type InputAnchor,
+  UnitName,
 } from "../domain/index.ts";
 import type { DesignRecordRepository } from "../usecase/index.ts";
 import { parseComponentCatalog } from "./component-catalog-parser.ts";
@@ -63,10 +64,13 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const depPath = recordRoot === null ? null : join(recordRoot, "inception", "units-generation", "unit-of-work-dependency.md");
     const depMd = depPath === null ? null : readIfExists(depPath);
     if (depPath === null || depMd === null) {
-      return { artifactName: depPath === null ? "unit-of-work-dependency.md" : relArtifact(recordRoot, depPath), document: null };
+      return {
+        artifactName: ArtifactPath.reconstitute(depPath === null ? "unit-of-work-dependency.md" : relArtifact(recordRoot, depPath)),
+        document: null,
+      };
     }
     return {
-      artifactName: relArtifact(recordRoot, depPath),
+      artifactName: ArtifactPath.reconstitute(relArtifact(recordRoot, depPath)),
       document: {
         input: { artifact: relArtifact(recordRoot, depPath), sha256: ContentHash.ofText(depMd) },
         outcome: parseDeclaredUnits(depMd),
@@ -113,15 +117,15 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     }
 
     return {
-      unit,
-      entitiesArtifact: rel(entitiesPath),
+      unit: unit === undefined ? undefined : UnitName.reconstitute(unit),
+      entitiesArtifact: ArtifactPath.reconstitute(rel(entitiesPath)),
       entities,
-      rulesArtifact: rel(rulesPath),
+      rulesArtifact: ArtifactPath.reconstitute(rel(rulesPath)),
       rules,
-      specArtifact: rel(specPath),
+      specArtifact: ArtifactPath.reconstitute(rel(specPath)),
       spec,
       requirements,
-      componentsArtifact: componentsPath === null ? "components.md" : rel(componentsPath),
+      componentsArtifact: ArtifactPath.reconstitute(componentsPath === null ? "components.md" : rel(componentsPath)),
       components,
       siblingUnits: buildSiblingUnitEntities(siblingTexts),
       siblingInputs: siblingTexts
