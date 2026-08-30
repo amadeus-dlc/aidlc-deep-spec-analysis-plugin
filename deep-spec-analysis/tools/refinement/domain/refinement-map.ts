@@ -5,6 +5,8 @@
 // enumMap も無い entry を byReq へ登録だけしていた——挙動保存のため表現を残す。
 // alpha 到達時は AlphaError）。
 
+import type { DesignUnitId } from "../../design/domain/index.ts";
+import type { RefinementMapId } from "./refinement-map-id.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 
@@ -32,17 +34,20 @@ export interface RefinementUnitMap {
 }
 
 export interface RefinementMapSeed {
+  readonly id: RefinementMapId;
   readonly requirementsIrHash: ContentHash;
   readonly designIrHash: ContentHash;
   readonly units: readonly RefinementUnitMap[];
 }
 
 export class RefinementMap {
+  readonly #id: RefinementMapId;
   readonly #requirementsIrHash: ContentHash;
   readonly #designIrHash: ContentHash;
   readonly #units: readonly RefinementUnitMap[];
 
   private constructor(seed: RefinementMapSeed) {
+    this.#id = seed.id;
     this.#requirementsIrHash = seed.requirementsIrHash;
     this.#designIrHash = seed.designIrHash;
     this.#units = seed.units;
@@ -54,6 +59,10 @@ export class RefinementMap {
   }
 
   // 境界: 要件形式モデルの hash と照合される宣言値（陳腐化検出）。
+  id(): RefinementMapId {
+    return this.#id;
+  }
+
   requirementsIrHash(): ContentHash {
     return this.#requirementsIrHash;
   }
@@ -67,7 +76,7 @@ export class RefinementMap {
     return this.#units;
   }
 
-  unitMapOf(unitName: string): RefinementUnitMap | undefined {
-    return this.#units.find((m) => m.unit === unitName);
+  unitMapOf(unit: DesignUnitId): RefinementUnitMap | undefined {
+    return this.#units.find((m) => m.unit === unit.value());
   }
 }

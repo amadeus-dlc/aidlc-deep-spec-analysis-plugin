@@ -65,6 +65,7 @@ const sensorPath = join(pluginRoot, "tools", "aidlc-sensor-deep-spec-verify-smt.
 
 function model(seed: Partial<RequirementsModelSeed>): RequirementsModel {
   return RequirementsModel.reconstitute({
+    id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
     irVersion: IrVersion.reconstitute("1.0.0"),
     attributes: [],
     obligations: [],

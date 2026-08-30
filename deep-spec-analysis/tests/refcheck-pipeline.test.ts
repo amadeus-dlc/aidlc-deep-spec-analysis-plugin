@@ -85,6 +85,8 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
           mode: "persist",
         });
         expect(domainOutcome.kind).toBe("verified");
+        const rec = new DesignRecordRepositoryImpl().findById(DesignRecordId.of(ap(componentsPath)));
+        expect(rec.ok && rec.value.id().equals(DesignRecordId.of(ap(componentsPath)))).toBe(true);
         expect(readFileSync(join(dirname(componentsPath), "deep-spec-refcheck", "components.json"), "utf-8"))
           .toBe(golden(variant, "components.json"));
 

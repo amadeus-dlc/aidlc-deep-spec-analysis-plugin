@@ -215,7 +215,7 @@ export class VerifyDesignQuintUseCase {
       } else {
         inputs = context.map.inputs;
         for (const u of model.units()) {
-          const unitMap = context.map.map.unitMapOf(u.name());
+          const unitMap = context.map.map.unitMapOf(u.id());
           if (!unitMap) {
             for (const t of reqTargets) {
               skipped.push({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` });

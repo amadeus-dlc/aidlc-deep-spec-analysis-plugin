@@ -817,3 +817,40 @@ word.
 Proofs: 296+12 tests green; both DPs at 100% line coverage; the parity
 snapshot `diff -r` is empty against the pre-PR7 base; a live sandbox z3
 run reproduced `smt.json` byte-identical to the golden.
+
+## Aggregate-identity ruling — every entity and aggregate carries its ID (2026-08-30)
+
+The owner ruled that ID-less entities and aggregates are unacceptable. The
+audit found that PR #40's typed aggregate IDs were used to *resolve*
+aggregates but the resolved aggregates did not *carry* them — a repository
+answered `findById(id)` with an object that did not know its own identity.
+
+- `RequirementsModel` now carries `FormalModelId`, `DesignModel` carries
+  `DesignModelId`, `DesignRecord` carries `DesignRecordId` — injected by
+  the repository from the `findById` argument (the parser knows only the
+  document's content, never its identity).
+- `RefinementMap` gains the new `RefinementMapId` (the contract-4 map
+  artifact — one per record), and `RefinementRequirements` carries
+  `FormalModelId`: a profile does not change identity, so the contract-1
+  aggregate's ID is re-exported through the refinement facade (layer
+  discipline: design/adapter→requirements/domain is a forbidden edge,
+  design/adapter→refinement/domain is allowed).
+- `DesignUnit` — the entity inside `DesignModel` — gains `id():
+  DesignUnitId` (identity = the unit name; validation of the name is the
+  freeze-blocked `UnitName` DP's job, not the ID's), and
+  `RefinementMap.unitMapOf` now takes the typed id instead of a raw
+  string.
+- Interface entities (`Obligation`, `Scenario`, machines, transitions)
+  already carry their `id` fields; typing those stable IDs is the
+  freeze-blocked `RequirementId`/`BusinessRuleId` story.
+
+Review round on the same PR: the stale `InputEntry` names in this
+catalog's typed-through list were corrected (CodeRabbit), and
+`IrVersion.parse`'s acceptance of leading zeros was confirmed as the
+frozen legacy pattern `/^\d+\.\d+\.\d+$/` — tightening to strict SemVer
+would reject IRs the legacy parsers accepted, so it is pinned by test and
+deferred to the PR10 lift.
+
+Proofs: 304 tests green; parity snapshot `diff -r` empty against the
+pre-PR7 base; goldens untouched; all new id accessors covered above the
+90% floor.

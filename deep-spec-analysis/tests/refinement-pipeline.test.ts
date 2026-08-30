@@ -26,7 +26,7 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { type DesignUnit as DesignUnitType, DesignModelId, DesignUnit, RefinementContextId } from "../tools/design/domain/index.ts";
+import { type DesignUnit as DesignUnitType, DesignModelId, DesignUnit, DesignUnitId, RefinementContextId } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -144,10 +144,12 @@ describe("SMT script characterization (the PR8 safety net)", () => {
     expect(acquired.ok && context.kind === "active" && context.map.kind === "loaded").toBe(true);
     if (!acquired.ok || context.kind !== "active" || context.map.kind !== "loaded") return;
     expect(context.map.map.units().length).toBeGreaterThan(0);
-    expect(context.map.map.unitMapOf("no-such-unit")).toBe(undefined);
+    expect(context.map.map.unitMapOf(DesignUnitId.of("no-such-unit"))).toBe(undefined);
+    expect(context.map.map.id().artifactPath().value().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
+    expect(context.requirements.id().artifactPath().value().endsWith("deep-spec-analysis-formal-model.md")).toBe(true);
     const queries: Json[] = [];
     for (const u of acquired.value.model.units()) {
-      const unitMap = context.map.map.unitMapOf(u.name());
+      const unitMap = context.map.map.unitMapOf(u.id());
       if (!unitMap) continue;
       const plan = planUnitRefinement(u, unitMap, context.requirements, context.map.mapArtifact);
       queries.push(...(buildRefinementQueries(u, context.requirements, plan).queries as unknown as Json[]));
@@ -173,6 +175,7 @@ function unit(seed: Partial<Parameters<typeof DesignUnit.reconstitute>[0]>): Des
 
 function requirements(seed: Partial<RefinementRequirementsSeed>): RefinementRequirements {
   return RefinementRequirements.reconstitute({
+    id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
     hash: ContentHash.reconstitute("a".repeat(64)),
     attributes: [],
     obligations: [],

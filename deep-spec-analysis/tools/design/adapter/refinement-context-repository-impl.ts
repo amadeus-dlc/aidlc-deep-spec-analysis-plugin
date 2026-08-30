@@ -8,7 +8,7 @@
 import type { RefinementContextId } from "../domain/index.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { ContentHash, sha256 } from "../../kernel/domain/index.ts";
+import { ArtifactPath, ContentHash, sha256 } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import {
   type Json,
@@ -20,6 +20,8 @@ import {
   validateSchema,
 } from "../../kernel/adapter/index.ts";
 import {
+  FormalModelId,
+  RefinementMapId,
   type AttributeMapping,
   type EventMapping,
   type RefinementAttribute,
@@ -65,6 +67,10 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
 
   #loadRequirements(recordRoot: string): RefinementRequirements | null {
     const path = join(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
+    // join は空文字列を返さないため parse は失敗し得ない（型の網羅のみ——
+    // 到達すれば inactive 側へ落ちるが、それは defect であって仕様ではない）。
+    const idPath = ArtifactPath.parse(path);
+    if (!idPath.ok) return null;
     if (!existsSync(path)) return null;
     const fence = extractSingleJsonFence(readFileSync(path, "utf-8"));
     if (fence === null) return null;
@@ -122,6 +128,7 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
       });
     }
     return RefinementRequirements.reconstitute({
+      id: FormalModelId.of(idPath.value),
       hash: sha256(canonicalStringify(raw)),
       attributes,
       obligations,
@@ -132,6 +139,9 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
   #loadMap(recordRoot: string, stageDir: string, modelPath: string): RefinementMapAcquisition {
     const path = join(stageDir, REFINEMENT_MAP_BASENAME);
     if (!existsSync(path)) return { kind: "absent", error: null };
+    // join は空文字列を返さないため parse は失敗し得ない（型の網羅のみ）。
+    const mapPath = ArtifactPath.parse(path);
+    if (!mapPath.ok) return { kind: "absent", error: "defect: refinement map path derivation produced an empty path" };
     const fence = extractSingleJsonFence(readFileSync(path, "utf-8"));
     if (fence === null) return { kind: "absent", error: "refinement map does not contain exactly one ```json fence" };
     let raw: Json;
@@ -186,6 +196,7 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
       units.push({ unit: u.unit, attrMap, eventMap, unmapped });
     }
     const map = RefinementMap.reconstitute({
+      id: RefinementMapId.of(mapPath.value),
       requirementsIrHash: ContentHash.reconstitute(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
       designIrHash: ContentHash.reconstitute(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
       units,

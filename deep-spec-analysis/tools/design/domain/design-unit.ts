@@ -2,6 +2,7 @@
 // 素通し（lowering が契約1 文書へそのまま埋め込む）で、enum 値の照会だけを
 // ドメインが行う。allUnitTargets / enumValuesOf は旧自由関数のメソッド化。
 
+import { DesignUnitId } from "./design-unit-id.ts";
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import type { DesignMachine } from "./design-machine.ts";
@@ -52,6 +53,11 @@ export class DesignUnit {
     return new DesignUnit(seed);
   }
 
+  id(): DesignUnitId {
+    return DesignUnitId.of(this.#unit);
+  }
+
+  // 境界: 文書・文言に逐語で載るユニット名（恒等の値）。
   name(): string {
     return this.#unit;
   }

@@ -56,4 +56,5 @@ export {
 export { BrReferenceIndex } from "./br-reference-index.ts";
 export { designWellFormednessErrors } from "./design-well-formedness.ts";
 export { DesignModelId } from "./design-model-id.ts";
+export { DesignUnitId } from "./design-unit-id.ts";
 export { RefinementContextId } from "./refinement-context-id.ts";

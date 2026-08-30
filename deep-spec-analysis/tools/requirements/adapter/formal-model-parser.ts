@@ -12,7 +12,9 @@ import type {
   Scenario,
 } from "../domain/index.ts";
 
-export function parseFormalModel(raw: Json): RequirementsModelSeed | string {
+// 恒等（FormalModelId）は Repository が findById の引数から注入する——
+// パーサは文書の中身しか知らない。
+export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id"> | string {
   if (!isObject(raw)) return "IR is not a JSON object";
   const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
   if (!irVersion.ok) return "IR lacks a semver irVersion";

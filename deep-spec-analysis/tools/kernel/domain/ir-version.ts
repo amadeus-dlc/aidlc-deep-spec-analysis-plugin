@@ -1,7 +1,10 @@
 // IrVersion — 契約 IR の semver（major.minor.patch）。parse が strict な
-// 構築口（parseFormalModel が既に課していた /^\d+\.\d+\.\d+$/ と同じ
-// invariant）、reconstitute は凍結文書からの逐語再水和専用。major 抽出と
-// サポート判定はバージョン語彙そのものなので DP が持つ。
+// 構築口で、invariant は両モデルパーサが課してきた凍結パターン
+// /^\d+\.\d+\.\d+$/ の逐語——先行ゼロ（01.2.3）を許すのは厳密 SemVer との
+// 意図的な差で、これを締めると旧実装が受理した IR を corrupt に落とす
+// 観測面の変更になる（厳密化は PR10 の凍結解除と同時）。reconstitute は
+// 凍結文書からの逐語再水和専用。major 抽出とサポート判定はバージョン語彙
+// そのものなので DP が持つ。
 
 import { type Result, err, ok } from "../infrastructure/index.ts";
 

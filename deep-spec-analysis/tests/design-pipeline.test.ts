@@ -158,7 +158,11 @@ function unit(seed: Partial<Parameters<typeof DesignUnit.reconstitute>[0]>): Des
 }
 
 function model(units: DesignUnit[], irVersion = "1.0.0"): DesignModel {
-  return DesignModel.compose({ irVersion: IrVersion.reconstitute(irVersion), units } satisfies DesignModelComposition);
+  return DesignModel.compose({
+    id: DesignModelId.of(ap("/test/deep-spec-analysis-functional-formal-model.md")),
+    irVersion: IrVersion.reconstitute(irVersion),
+    units,
+  } satisfies DesignModelComposition);
 }
 
 describe("lowering (typed compile-down)", () => {
@@ -281,6 +285,8 @@ describe("lowering (typed compile-down)", () => {
     const m = model([unit({ unit: "u2" }), unit({ unit: "u1" })]);
     expect(m.units().map((x) => x.name())).toEqual(["u1", "u2"]);
     expect(m.irVersion().value()).toBe("1.0.0");
+    expect(m.id().equals(DesignModelId.of(ap("/test/deep-spec-analysis-functional-formal-model.md")))).toBe(true);
+    expect(m.units()[0]?.id().value()).toBe(m.units()[0]?.name() ?? "");
   });
 
   test("the canonical expression key matches the kernel canonical JSON byte for byte", () => {

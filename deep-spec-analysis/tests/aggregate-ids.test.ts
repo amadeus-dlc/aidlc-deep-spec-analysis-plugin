@@ -4,7 +4,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { ArtifactPath, ContentHash, IrVersion, sha256 } from "../tools/kernel/domain/index.ts";
-import { DesignModelId, RefinementContextId } from "../tools/design/domain/index.ts";
+import { DesignModelId, DesignUnitId, RefinementContextId } from "../tools/design/domain/index.ts";
+import { RefinementMapId } from "../tools/refinement/domain/index.ts";
 import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
 import { FormalModelId } from "../tools/requirements/domain/index.ts";
 
@@ -64,6 +65,22 @@ describe("aggregate ids resolve forward, by their own identity", () => {
   });
 });
 
+describe("DesignUnitId and RefinementMapId", () => {
+  test("DesignUnitId is the unit entity's identity, compared by value", () => {
+    const id = DesignUnitId.of("u1-orders");
+    expect(id.value()).toBe("u1-orders");
+    expect(id.equals(DesignUnitId.of("u1-orders"))).toBe(true);
+    expect(id.equals(DesignUnitId.of("u2-billing"))).toBe(false);
+  });
+
+  test("RefinementMapId is the contract-4 map aggregate's identity", () => {
+    const id = RefinementMapId.of(ap("/r/deep-spec-analysis-refinement-map.md"));
+    expect(id.artifactPath().value()).toBe("/r/deep-spec-analysis-refinement-map.md");
+    expect(id.equals(RefinementMapId.of(ap("/r/deep-spec-analysis-refinement-map.md")))).toBe(true);
+    expect(id.equals(RefinementMapId.of(ap("/other/deep-spec-analysis-refinement-map.md")))).toBe(false);
+  });
+});
+
 describe("ContentHash", () => {
   test("parse accepts exactly 64 lowercase hex chars", () => {
     const ok = ContentHash.parse("a".repeat(64));
@@ -102,6 +119,12 @@ describe("IrVersion", () => {
       expect(parsed.ok).toBe(false);
       if (!parsed.ok) expect(parsed.error).toEqual({ kind: "not-a-semver", raw: bad });
     }
+  });
+
+  test("parse keeps the frozen legacy pattern: leading zeros are accepted (strict SemVer is the PR10 lift)", () => {
+    const parsed = IrVersion.parse("01.2.3");
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.value.majorVersion()).toBe(1);
   });
 
   test("reconstitute preserves the legacy tolerant major extraction (NaN on empty)", () => {

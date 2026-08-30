@@ -40,6 +40,6 @@ export class DesignModelRepositoryImpl implements DesignModelRepository {
     if (typeof composition === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: composition });
     }
-    return ok({ model: DesignModel.compose(composition), irHash: sha256(canonicalStringify(raw)) });
+    return ok({ model: DesignModel.compose({ id, ...composition }), irHash: sha256(canonicalStringify(raw)) });
   }
 }

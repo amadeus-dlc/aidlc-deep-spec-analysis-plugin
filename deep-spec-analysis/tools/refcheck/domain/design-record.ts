@@ -4,6 +4,7 @@
 // 各値の取得規則（requirements は rules が使えるときだけ・兄弟は catalog が
 // 解析できたときだけ等）は Impl が凍結挙動として実装する。
 
+import type { DesignRecordId } from "./design-record-id.ts";
 import type { InputAnchor } from "./input-anchor.ts";
 import type { ComponentCatalogOutcome } from "./component-catalog.ts";
 import type { ContractsTableOutcome, DeclaredUnitsOutcome, SpecBlockAssessment } from "./contract-summary.ts";
@@ -22,6 +23,7 @@ export interface LoadedDocument<Outcome> {
 }
 
 export interface DesignRecordSeed {
+  readonly id: DesignRecordId;
   // 発火対象の record 相対名と (artifact, sha256)。対象が読めない場合に
   // 集約は作られない（Repository が not-found を返す）。
   readonly target: InputAnchor;
@@ -57,6 +59,10 @@ export class DesignRecord {
 
   static reconstitute(seed: DesignRecordSeed): DesignRecord {
     return new DesignRecord(seed);
+  }
+
+  id(): DesignRecordId {
+    return this.#seed.id;
   }
 
   target(): InputAnchor {

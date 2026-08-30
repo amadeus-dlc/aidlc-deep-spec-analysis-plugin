@@ -48,6 +48,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const input = (p: string, text: string): InputAnchor => ({ artifact: rel(p), sha256: sha256(text) });
 
     const seed: DesignRecordSeed = {
+      id,
       target: input(artifactPath, md),
       componentCatalog: targetBase === "components.md" ? parseComponentCatalog(md) : null,
       contractsTable: targetBase === "contract-summary.md" ? parseContractsTable(md) : null,

@@ -762,8 +762,8 @@ base に対して空（45 ファイル）。296 tests green。新 VO は全て�
 
 - **`ContentHash`**（kernel）——`^[0-9a-f]{64}$`。`sha256()` がこれを
   返し、`ofText`/`ofBytes` が計算側の生成口。`AcquiredFormalModel` /
-  `AcquiredDesignModel` の irHash、両レポート集約、`InputEntry` /
-  `DesignInputEntry` の sha256、`SourceAnchor` の実測辺、
+  `AcquiredDesignModel` の irHash、両レポート集約、`InputAnchor` /
+  `DesignInputAnchor` の sha256、`SourceAnchor` の実測辺、
   `RefinementMap` の 二重アンカーと陳腐化比較（string の `!==` を
   `equals` へ）まで縦貫。serializer は描画バイトで `value()` へ落とし、
   再構成は逐語の口を使う。
@@ -795,3 +795,36 @@ well-formedness が parse で拒否せず**報告**すべき対象）。PR10 の
 証明：296+12 tests green。両 DP は行カバレッジ 100%。パリティ
 スナップショットは PR7 以前の base に対し `diff -r` 空。実 sandbox の
 z3 実行が `smt.json` を golden とバイト一致で再現。
+
+## 集約恒等の裁定 — エンティティと集約は必ず自分の ID を運ぶ（2026-08-30）
+
+オーナー裁定：ID を持たないエンティティ・集約は許容できない。監査の結果、
+PR #40 の型付き集約 ID は解決には使われていたが、解決された集約自身が
+それを**運んでいなかった**——Repository が `findById(id)` に答えるのに、
+返る集約は自分の恒等を知らない片手落ちだった。
+
+- `RequirementsModel` は `FormalModelId` を、`DesignModel` は
+  `DesignModelId` を、`DesignRecord` は `DesignRecordId` を保持する。
+  注入は Repository が `findById` の引数から行う（パーサは文書の中身しか
+  知らず、恒等を知らない）。
+- `RefinementMap` は新設の `RefinementMapId`（契約4 map 成果物——1 記録に
+  1 つ）を、`RefinementRequirements` は `FormalModelId` を保持する。
+  プロファイルは恒等を変えないため、契約1 集約の ID を refinement の
+  facade から再輸出した（層規律：design/adapter→requirements/domain は
+  禁止辺、design/adapter→refinement/domain は許可辺）。
+- `DesignModel` 内のエンティティ `DesignUnit` は `id(): DesignUnitId` を
+  得た（恒等はユニット名。名前の正当性検証は凍結封鎖中の `UnitName` DP の
+  責務で、ID の責務ではない）。`RefinementMap.unitMapOf` は生文字列でなく
+  型付き ID を受ける。
+- インターフェイスのエンティティ（`Obligation`・`Scenario`・機械・遷移）は
+  `id` フィールドを既に持つ。それら安定 ID の型付けは凍結封鎖中の
+  `RequirementId` / `BusinessRuleId` の話である。
+
+同 PR のレビューラウンド：本カタログの型付け一覧に残っていた旧名
+`InputEntry` を修正（CodeRabbit）。`IrVersion.parse` が先行ゼロを受理する
+のはレガシーパーサの凍結パターン `/^\d+\.\d+\.\d+$/` の逐語であることを
+確認——厳密 SemVer 化は旧実装が受理した IR を拒否する観測面の変更になる
+ため、テストで固定し PR10 の解除へ送った。
+
+証明：304 tests green。パリティスナップショットは PR7 以前の base に対し
+`diff -r` 空。golden 無変更。新設の id アクセサは全て 90% 床の上で被覆。

@@ -2,19 +2,23 @@
 // ユニットのユニット名昇順は集約の不変条件として compose が一度だけ適用する
 // （旧 parseDesignIr 末尾のソートの移設）。
 
+import type { DesignModelId } from "./design-model-id.ts";
 import type { IrVersion } from "../../kernel/domain/index.ts";
 import type { DesignUnit } from "./design-unit.ts";
 
 export interface DesignModelComposition {
+  readonly id: DesignModelId;
   readonly irVersion: IrVersion;
   readonly units: readonly DesignUnit[];
 }
 
 export class DesignModel {
+  readonly #id: DesignModelId;
   readonly #irVersion: IrVersion;
   readonly #units: readonly DesignUnit[];
 
-  private constructor(irVersion: IrVersion, units: readonly DesignUnit[]) {
+  private constructor(id: DesignModelId, irVersion: IrVersion, units: readonly DesignUnit[]) {
+    this.#id = id;
     this.#irVersion = irVersion;
     this.#units = units;
   }
@@ -22,9 +26,14 @@ export class DesignModel {
   // ユニット名昇順を不変条件としてここで一度だけ適用する。
   static compose(input: DesignModelComposition): DesignModel {
     return new DesignModel(
+      input.id,
       input.irVersion,
       [...input.units].sort((a, b) => (a.name() < b.name() ? -1 : a.name() > b.name() ? 1 : 0)),
     );
+  }
+
+  id(): DesignModelId {
+    return this.#id;
   }
 
   irVersion(): IrVersion {

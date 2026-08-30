@@ -3,6 +3,7 @@
 // ここは型付き部品を組む。クエリ（allTargets / frRefsOf / attrByPath /
 // supportsMajor）は旧センサーの自由関数群を集約メソッドへ移したもの。
 
+import type { FormalModelId } from "./formal-model-id.ts";
 import type { IrVersion } from "../../kernel/domain/index.ts";
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { AttributeDeclaration } from "./attribute-declaration.ts";
@@ -16,6 +17,7 @@ export interface BackgroundAssumption {
 }
 
 export interface RequirementsModelSeed {
+  readonly id: FormalModelId;
   readonly irVersion: IrVersion;
   readonly attributes: readonly AttributeDeclaration[];
   readonly obligations: readonly Obligation[];
@@ -24,6 +26,7 @@ export interface RequirementsModelSeed {
 }
 
 export class RequirementsModel {
+  readonly #id: FormalModelId;
   readonly #irVersion: IrVersion;
   readonly #attributes: readonly AttributeDeclaration[];
   readonly #obligations: readonly Obligation[];
@@ -32,6 +35,7 @@ export class RequirementsModel {
   readonly #attrByPath: Map<string, AttributeDeclaration>;
 
   private constructor(seed: RequirementsModelSeed) {
+    this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#attributes = seed.attributes;
     this.#obligations = seed.obligations;
@@ -43,6 +47,10 @@ export class RequirementsModel {
   // アダプタのパーサが解いた型付き部品からの唯一の構築口。
   static reconstitute(seed: RequirementsModelSeed): RequirementsModel {
     return new RequirementsModel(seed);
+  }
+
+  id(): FormalModelId {
+    return this.#id;
   }
 
   irVersion(): IrVersion {
