@@ -10,6 +10,10 @@ import type { Result } from "../../kernel/infrastructure/index.ts";
 import { ok } from "../../kernel/infrastructure/index.ts";
 import type { Clock, RepositoryError } from "../../kernel/usecase/index.ts";
 import {
+  DesignFindings,
+  DesignSkips,
+  DesignInputAnchors,
+  CheckedUnits,
   type DesignFinding,
   type DesignInputAnchor,
   type DesignSkipped,
@@ -297,10 +301,10 @@ export class VerifyDesignQuintUseCase {
         irVersion: model.irVersion(),
         irHash,
         method: finalMethod,
-        findings,
-        skipped,
-        ...(inputs !== undefined ? { inputs } : {}),
-        checked: checkedUnits,
+        findings: DesignFindings.of(findings),
+        skipped: DesignSkips.of(skipped),
+        ...(inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {}),
+        checked: CheckedUnits.of(checkedUnits),
       }),
     );
     const saved = this.#designReportRepository.save(conformed);

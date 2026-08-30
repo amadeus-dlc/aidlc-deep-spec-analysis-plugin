@@ -5,6 +5,8 @@
 // 旧 recomputeDesignCrossCheck の計算部の逐語移植（読めないファイルの黙殺は
 // Repository 側）。
 
+import { DesignFindings, DesignSkips } from "./design-finding.ts";
+import { DesignCrossCheckedEntries, DesignReports } from "./design-report.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { DesignFinding } from "./design-finding.ts";
@@ -16,17 +18,19 @@ export function designCrossCheckReport(
   id: DesignReportId,
   model: DesignModel,
   irHash: ContentHash,
-  siblings: readonly DesignReport[],
+  siblings: DesignReports,
 ): DesignReport {
   // 比較に参加するのは同一 irHash の可用文書のみ（旧実装の読込時選別と同値）。
   const docs = siblings
+    .toArray()
     .filter((s) => s.irHash().equals(irHash) && !s.isUnavailable())
     .map((s) => ({
       backend: s.id().backendName(),
-      findings: s.findings(),
+      findings: s.findings().toArray(),
       skipped: new Set(
         s
           .skipped()
+          .toArray()
           .filter((e) => typeof e.target === "string")
           .map((e) => `${typeof e.unit === "string" ? e.unit : ""}|${e.target}`),
       ),
@@ -75,8 +79,8 @@ export function designCrossCheckReport(
     irVersion: model.irVersion(),
     irHash,
     method: "exhaustive",
-    findings,
-    skipped: [],
-    crossChecked,
+    findings: DesignFindings.of(findings),
+    skipped: DesignSkips.of([]),
+    crossChecked: DesignCrossCheckedEntries.of(crossChecked),
   });
 }

@@ -2,12 +2,21 @@
 
 export { type DesignValue } from "./design-value.ts";
 export { type DesignTransition } from "./design-transition.ts";
-export { type DesignMachine } from "./design-machine.ts";
-export { type DesignObligation } from "./design-obligation.ts";
-export { type DesignScenario } from "./design-scenario.ts";
-export { type DesignBackgroundAssumption, type DesignUnitSeed, DesignUnit } from "./design-unit.ts";
+export { type DesignMachine, DesignMachines } from "./design-machine.ts";
+export { type DesignObligation, DesignObligations } from "./design-obligation.ts";
+export { type DesignScenario, DesignScenarios } from "./design-scenario.ts";
+export {
+  type DesignBackgroundAssumption,
+  type DesignUnitSeed,
+  AttrPaths,
+  DesignBackgroundAssumptions,
+  DesignUnit,
+  DesignUnits,
+} from "./design-unit.ts";
 export { type DesignModelComposition, DesignModel } from "./design-model.ts";
-export { type DesignFinding, type DesignSkipped } from "./design-finding.ts";
+export {
+  DesignFindings,
+  DesignSkips, type DesignFinding, type DesignSkipped } from "./design-finding.ts";
 export { sortDesignFindings, sortDesignSkipped } from "./design-finding-order.ts";
 export { expressionCanonicalKey } from "./expression-canonical-key.ts";
 export {
@@ -28,6 +37,10 @@ export {
 } from "./remap-unit-doc.ts";
 export { DesignReportId } from "./design-report-id.ts";
 export {
+  CheckedUnits,
+  DesignCrossCheckedEntries,
+  DesignInputAnchors,
+  DesignReports,
   type DesignCrossCheckedEntry,
   type DesignInputAnchor,
   type DesignReportComposition,

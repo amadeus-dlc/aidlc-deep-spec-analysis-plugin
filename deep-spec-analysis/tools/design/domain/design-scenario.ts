@@ -11,3 +11,32 @@ export interface DesignScenario {
   event?: { trigger: string };
   expect?: Expression;
 }
+
+// 設計シナリオのファーストクラスコレクション。
+export class DesignScenarios {
+  readonly #values: readonly DesignScenario[];
+
+  private constructor(values: readonly DesignScenario[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly DesignScenario[]): DesignScenarios {
+    return new DesignScenarios([...values]);
+  }
+
+  add(value: DesignScenario): DesignScenarios {
+    return new DesignScenarios([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<DesignScenario> {
+    yield* this.#values;
+  }
+
+  ids(): readonly string[] {
+    return this.#values.map((s) => s.id);
+  }
+
+  toArray(): readonly DesignScenario[] {
+    return this.#values;
+  }
+}

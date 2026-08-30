@@ -190,3 +190,85 @@ describe("requirements first-class collections", () => {
     expect([...VerificationReports.of([])].length).toBe(0);
   });
 });
+
+// design 側ファーストクラスコレクション — 不変 add・境界脱出口・集合知識。
+import {
+  AttrPaths,
+  CheckedUnits,
+  DesignBackgroundAssumptions,
+  DesignCrossCheckedEntries,
+  DesignFindings,
+  DesignInputAnchors,
+  DesignMachines,
+  DesignObligations,
+  DesignReports,
+  DesignScenarios,
+  DesignSkips,
+  DesignUnit,
+  DesignUnits,
+} from "../tools/design/domain/index.ts";
+
+describe("design first-class collections", () => {
+  const ob = { id: "DOB-1", nature: "invariant", origin: "", brRefs: [], frRefs: [], assert: { op: "bool", value: true } };
+  const machine = {
+    id: "SM-1", entity: "T", attribute: "s", initial: ["a"], deterministic: true,
+    transitions: [{ id: "TR-1", from: "a", to: "b", trigger: "t", brRefs: [] }], ignores: [],
+  };
+
+  test("immutable add, iteration, and set knowledge", () => {
+    expect(DesignObligations.of([]).add(ob).ids()).toEqual(["DOB-1"]);
+    expect([...DesignObligations.of([ob])].length).toBe(1);
+    expect(DesignMachines.of([]).add(machine).transitionIds()).toEqual(["TR-1"]);
+    expect([...DesignMachines.of([machine])].length).toBe(1);
+    expect(DesignMachines.of([machine]).toArray().length).toBe(1);
+    expect(DesignObligations.of([ob]).toArray().length).toBe(1);
+    expect(DesignScenarios.of([{ id: "DSC-9", kind: "reject", brRefs: [], frRefs: [], bindings: {} }]).toArray().length).toBe(1);
+    expect(DesignScenarios.of([]).add({ id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} }).ids()).toEqual(["DSC-1"]);
+    expect([...DesignScenarios.of([])].length).toBe(0);
+    expect(DesignBackgroundAssumptions.of([]).add({ id: "DBG-1", assert: { op: "bool", value: true } }).toArray().length).toBe(1);
+    expect([...DesignBackgroundAssumptions.of([])].length).toBe(0);
+    const paths = AttrPaths.of(["T.s"]).add("T.x");
+    expect(paths.has("T.x")).toBe(true);
+    expect([...paths].sort()).toEqual(["T.s", "T.x"]);
+    expect([...AttrPaths.of([]).toArray()]).toEqual([]);
+
+    const u = DesignUnit.reconstitute({
+      unit: "u2", rawEntities: [],
+      attrPaths: AttrPaths.of([]),
+      obligations: DesignObligations.of([ob]),
+      machines: DesignMachines.of([machine]),
+      scenarios: DesignScenarios.of([]),
+      background: DesignBackgroundAssumptions.of([]),
+    });
+    const units = DesignUnits.of([]).add(u);
+    expect(units.isEmpty()).toBe(false);
+    expect(units.sortedByName().toArray()[0]?.name()).toBe("u2");
+    expect([...units].length).toBe(1);
+
+    const finding = { kind: "conflict", frRefs: [], targets: ["DOB-1"], witness: { refs: [] }, unit: "u2", detail: "d" };
+    const fs = DesignFindings.of([]).add(finding);
+    expect(fs.isEmpty()).toBe(false);
+    expect(fs.count()).toBe(1);
+    expect([...fs.sortedCanonically()].length).toBe(1);
+    const sk = DesignSkips.of([]).add({ target: "DOB-1", reason: "timeout", unit: "u2" })
+      .concat(DesignSkips.of([{ target: "DOB-0", reason: "capability", unit: "u2" }]));
+    expect(sk.count()).toBe(2);
+    expect(sk.sortedCanonically().toArray()[0]?.target).toBe("DOB-0");
+    expect([...sk].length).toBe(2);
+
+    const anchors = DesignInputAnchors.of([]).add({ artifact: "b.md", sha256: ContentHash.reconstitute("2".repeat(64)) })
+      .add({ artifact: "a.md", sha256: ContentHash.reconstitute("1".repeat(64)) });
+    expect(anchors.sortedByArtifact().toArray().map((a) => a.artifact)).toEqual(["a.md", "b.md"]);
+    expect([...anchors].length).toBe(2);
+
+    const checked = CheckedUnits.of(["unit:u2", "unit:u1", "unit:u1"]).add("unit:u3");
+    expect(checked.sortedUniqueCanonically().toArray()).toEqual(["unit:u1", "unit:u2", "unit:u3"]);
+    expect([...checked].length).toBe(4);
+
+    const cc = DesignCrossCheckedEntries.of([]).add({ backend: "smt", targets: ["DSC-1"] });
+    expect(cc.toArray()[0]?.backend).toBe("smt");
+    expect([...cc].length).toBe(1);
+    expect([...DesignReports.of([])].length).toBe(0);
+    expect(DesignReports.of([]).toArray().length).toBe(0);
+  });
+});

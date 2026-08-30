@@ -9,11 +9,11 @@
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { ArtifactPath } from "../../kernel/domain/index.ts";
-import type { DesignReport, DesignReportId } from "../domain/index.ts";
+import type { DesignReport, DesignReportId, DesignReports } from "../domain/index.ts";
 
 export interface DesignReportRepository {
   findById(aggregateId: DesignReportId): Result<DesignReport, RepositoryError>;
-  findAllByDirectory(directory: ArtifactPath): Result<readonly DesignReport[], RepositoryError>;
+  findAllByDirectory(directory: ArtifactPath): Result<DesignReports, RepositoryError>;
   conformedOf(report: DesignReport): DesignReport;
   save(report: DesignReport): Result<void, RepositoryError>;
 }

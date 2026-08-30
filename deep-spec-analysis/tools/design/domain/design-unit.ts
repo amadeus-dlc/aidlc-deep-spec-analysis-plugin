@@ -5,9 +5,9 @@
 import { DesignUnitId } from "./design-unit-id.ts";
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
-import type { DesignMachine } from "./design-machine.ts";
-import type { DesignObligation } from "./design-obligation.ts";
-import type { DesignScenario } from "./design-scenario.ts";
+import { DesignMachines } from "./design-machine.ts";
+import { DesignObligations } from "./design-obligation.ts";
+import { DesignScenarios } from "./design-scenario.ts";
 import type { DesignValue } from "./design-value.ts";
 
 export interface DesignBackgroundAssumption {
@@ -15,14 +15,68 @@ export interface DesignBackgroundAssumption {
   assert: Expression;
 }
 
+// 設計背景仮定のファーストクラスコレクション。
+export class DesignBackgroundAssumptions {
+  readonly #values: readonly DesignBackgroundAssumption[];
+
+  private constructor(values: readonly DesignBackgroundAssumption[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly DesignBackgroundAssumption[]): DesignBackgroundAssumptions {
+    return new DesignBackgroundAssumptions([...values]);
+  }
+
+  add(value: DesignBackgroundAssumption): DesignBackgroundAssumptions {
+    return new DesignBackgroundAssumptions([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<DesignBackgroundAssumption> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly DesignBackgroundAssumption[] {
+    return this.#values;
+  }
+}
+
+// 設計属性パス集合のファーストクラスコレクション（lowering・alpha 置換の照会面）。
+export class AttrPaths {
+  readonly #values: ReadonlySet<string>;
+
+  private constructor(values: ReadonlySet<string>) {
+    this.#values = values;
+  }
+
+  static of(values: readonly string[]): AttrPaths {
+    return new AttrPaths(new Set(values));
+  }
+
+  add(value: string): AttrPaths {
+    return new AttrPaths(new Set([...this.#values, value]));
+  }
+
+  *[Symbol.iterator](): Iterator<string> {
+    yield* this.#values;
+  }
+
+  has(value: string): boolean {
+    return this.#values.has(value);
+  }
+
+  toArray(): readonly string[] {
+    return [...this.#values];
+  }
+}
+
 export interface DesignUnitSeed {
   readonly unit: string;
   readonly rawEntities: DesignValue;
-  readonly attrPaths: ReadonlySet<string>;
-  readonly obligations: readonly DesignObligation[];
-  readonly machines: readonly DesignMachine[];
-  readonly scenarios: readonly DesignScenario[];
-  readonly background: readonly DesignBackgroundAssumption[];
+  readonly attrPaths: AttrPaths;
+  readonly obligations: DesignObligations;
+  readonly machines: DesignMachines;
+  readonly scenarios: DesignScenarios;
+  readonly background: DesignBackgroundAssumptions;
 }
 
 function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
@@ -32,11 +86,11 @@ function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
 export class DesignUnit {
   readonly #unit: string;
   readonly #rawEntities: DesignValue;
-  readonly #attrPaths: ReadonlySet<string>;
-  readonly #obligations: readonly DesignObligation[];
-  readonly #machines: readonly DesignMachine[];
-  readonly #scenarios: readonly DesignScenario[];
-  readonly #background: readonly DesignBackgroundAssumption[];
+  readonly #attrPaths: AttrPaths;
+  readonly #obligations: DesignObligations;
+  readonly #machines: DesignMachines;
+  readonly #scenarios: DesignScenarios;
+  readonly #background: DesignBackgroundAssumptions;
 
   private constructor(seed: DesignUnitSeed) {
     this.#unit = seed.unit;
@@ -67,34 +121,30 @@ export class DesignUnit {
     return this.#rawEntities;
   }
 
-  attrPaths(): ReadonlySet<string> {
+  attrPaths(): AttrPaths {
     return this.#attrPaths;
   }
 
-  obligations(): readonly DesignObligation[] {
+  obligations(): DesignObligations {
     return this.#obligations;
   }
 
-  machines(): readonly DesignMachine[] {
+  machines(): DesignMachines {
     return this.#machines;
   }
 
-  scenarios(): readonly DesignScenario[] {
+  scenarios(): DesignScenarios {
     return this.#scenarios;
   }
 
-  background(): readonly DesignBackgroundAssumption[] {
+  background(): DesignBackgroundAssumptions {
     return this.#background;
   }
 
   // このユニットでバックエンドが検査し得る全対象（義務・遷移・シナリオ）。
   allTargets(): string[] {
     return sortedUnique(
-      [
-        ...this.#obligations.map((o) => o.id),
-        ...this.#machines.flatMap((m) => m.transitions.map((t) => t.id)),
-        ...this.#scenarios.map((s) => s.id),
-      ],
+      [...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()],
       idCompare,
     );
   }
@@ -112,5 +162,39 @@ export class DesignUnit {
       }
     }
     return [];
+  }
+}
+
+// 設計ユニットのファーストクラスコレクション。ユニット名昇順の整列
+// （DesignModel の組成不変条件）という集合の知識を所有する。
+export class DesignUnits {
+  readonly #values: readonly DesignUnit[];
+
+  private constructor(values: readonly DesignUnit[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly DesignUnit[]): DesignUnits {
+    return new DesignUnits([...values]);
+  }
+
+  add(value: DesignUnit): DesignUnits {
+    return new DesignUnits([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<DesignUnit> {
+    yield* this.#values;
+  }
+
+  sortedByName(): DesignUnits {
+    return new DesignUnits([...this.#values].sort((a, b) => (a.name() < b.name() ? -1 : a.name() > b.name() ? 1 : 0)));
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
+  }
+
+  toArray(): readonly DesignUnit[] {
+    return this.#values;
   }
 }
