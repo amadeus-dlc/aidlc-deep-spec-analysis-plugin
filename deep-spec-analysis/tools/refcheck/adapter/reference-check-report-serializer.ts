@@ -13,18 +13,28 @@ import { canonicalStringify } from "../../kernel/adapter/canonical-json.ts";
 import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/schema-validator.ts";
 import type { SchemaUnreadable } from "../../kernel/adapter/contract-schema.ts";
+import { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import {
   CATALOG_VERSION,
   type Finding,
+  type Skipped,
+  type WitnessRef,
+  Findings,
+  InputAnchors,
   ReferenceCheckReport,
   type ReferenceCheckReportId,
-  type Skipped,
+  Skips,
+  WitnessRefs,
 } from "../domain/index.ts";
 
 function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
   // ContentHash は境界（描画）で asString() へ落とす——DP のままでは正準 JSON に
-  // 乗らない。キー順（artifact, sha256）は旧リテラルの挿入順そのもの。
-  const inputs = report.inputs().map((i) => ({ artifact: i.artifact, sha256: i.sha256.asString() })) as unknown as Json;
+  // 乗らない。各キー順は旧構築サイトの挿入順そのもの（golden バイト凍結）：
+  // inputs は (artifact, sha256)、finding は (kind, frRefs, targets, witness,
+  // detail, unit?)、witness ref は (artifact, element, value?)、skip は
+  // (target, reason, detail?, unit?)。ペイロードのコレクションはこの描画点で
+  // だけ toArray() に降りる。
+  const inputs = report.inputs().toArray().map((i) => ({ artifact: i.artifact, sha256: i.sha256.asString() })) as unknown as Json;
   const ordered: { [k: string]: Json } = {
     backend: report.id().backendName(),
     irVersion: CATALOG_VERSION,
@@ -34,9 +44,29 @@ function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
   const reason = report.unavailableReason();
   if (reason !== null) ordered.unavailable = { reason };
   ordered.inputs = inputs;
-  ordered.checked = report.checked() as unknown as Json;
-  ordered.findings = report.findings() as unknown as Json;
-  ordered.skipped = report.skipped() as unknown as Json;
+  ordered.checked = report.checked().toArray() as unknown as Json;
+  ordered.findings = report.findings().toArray().map((f) => {
+    const refs = f.witness.refs.toArray().map((r) => {
+      const out: { [k: string]: Json } = { artifact: r.artifact, element: r.element };
+      if (r.value !== undefined) out.value = r.value;
+      return out as Json;
+    });
+    const out: { [k: string]: Json } = {
+      kind: f.kind,
+      frRefs: f.frRefs.toArray() as unknown as Json,
+      targets: f.targets.toArray() as unknown as Json,
+      witness: { refs },
+      detail: f.detail,
+    };
+    if (f.unit !== undefined) out.unit = f.unit;
+    return out as Json;
+  });
+  ordered.skipped = report.skipped().toArray().map((sk) => {
+    const out: { [k: string]: Json } = { target: sk.target, reason: sk.reason };
+    if (sk.detail !== undefined) out.detail = sk.detail;
+    if (sk.unit !== undefined) out.unit = sk.unit;
+    return out as Json;
+  });
   return ordered;
 }
 
@@ -80,16 +110,54 @@ export function parseReportDocument(
     ok: true,
     value: ReferenceCheckReport.reconstitute({
       id,
-      inputs: (raw.inputs as Json[]).map((e) => {
-        const entry = isObject(e) ? e : {};
-        return {
-          artifact: typeof entry.artifact === "string" ? entry.artifact : "",
-          sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : ""),
-        };
-      }),
-      checked: (raw.checked as Json[]).filter((c): c is string => typeof c === "string"),
-      findings: raw.findings as unknown as Finding[],
-      skipped: raw.skipped as unknown as Skipped[],
+      inputs: InputAnchors.of(
+        (raw.inputs as Json[]).map((e) => {
+          const entry = isObject(e) ? e : {};
+          return {
+            artifact: typeof entry.artifact === "string" ? entry.artifact : "",
+            sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : ""),
+          };
+        }),
+      ),
+      checked: TargetIds.of((raw.checked as Json[]).filter((c): c is string => typeof c === "string")),
+      findings: Findings.of(
+        (raw.findings as Json[]).map((e) => {
+          const entry = isObject(e) ? e : {};
+          const witness = isObject(entry.witness) ? entry.witness : {};
+          const refs = Array.isArray(witness.refs)
+            ? witness.refs.map((r) => {
+                const rr = isObject(r) ? r : {};
+                const out: WitnessRef = {
+                  artifact: typeof rr.artifact === "string" ? rr.artifact : "",
+                  element: typeof rr.element === "string" ? rr.element : "",
+                };
+                if (typeof rr.value === "string") out.value = rr.value;
+                return out;
+              })
+            : [];
+          const f: Finding = {
+            kind: typeof entry.kind === "string" ? entry.kind : "",
+            frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
+            targets: TargetIds.of(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
+            witness: { refs: WitnessRefs.of(refs) },
+            detail: typeof entry.detail === "string" ? entry.detail : "",
+          };
+          if (typeof entry.unit === "string") f.unit = entry.unit;
+          return f;
+        }),
+      ),
+      skipped: Skips.of(
+        (raw.skipped as Json[]).map((e) => {
+          const entry = isObject(e) ? e : {};
+          const sk: Skipped = {
+            target: typeof entry.target === "string" ? entry.target : "",
+            reason: typeof entry.reason === "string" ? entry.reason : "",
+          };
+          if (typeof entry.detail === "string") sk.detail = entry.detail;
+          if (typeof entry.unit === "string") sk.unit = entry.unit;
+          return sk;
+        }),
+      ),
       unavailableReason: unavailable,
     }),
   };

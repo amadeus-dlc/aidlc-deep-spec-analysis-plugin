@@ -6,7 +6,8 @@ export { type Expression, expressionUsesPrime, walkExpression } from "./expressi
 export { type ContentHashError, ContentHash } from "./content-hash.ts";
 export { type IrVersionError, IrVersion } from "./ir-version.ts";
 export { idCompare, sortedUnique } from "./id-order.ts";
-export { safeTarget } from "./target-id.ts";
+export { TargetIds } from "./target-id.ts";
+export { FrRefs } from "./fr-refs.ts";
 export { RequirementIds } from "./requirement-ids.ts";
 export { normalizeName } from "./name-normalize.ts";
 export { type ArtifactPathError, ArtifactPath } from "./artifact-path.ts";

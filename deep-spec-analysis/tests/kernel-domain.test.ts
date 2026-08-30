@@ -19,8 +19,7 @@ import { type Result, err, ok, unreachable } from "../tools/kernel/infrastructur
 import {
   idCompare,
   normalizeName,
-  safeTarget,
-  sortedUnique,
+  TargetIds, sortedUnique,
 } from "../tools/kernel/domain/index.ts";
 
 describe("result", () => {
@@ -247,11 +246,11 @@ describe("schema-validator — per-keyword exact messages", () => {
 
 describe("target-id / requirement-ids / name-normalize", () => {
   test("safeTarget sanitizes out-of-alphabet characters and empty tokens", () => {
-    expect(safeTarget("unit", "u1-orders")).toBe("unit:u1-orders");
-    expect(safeTarget("entity", "Order Item")).toBe("entity:Order-Item");
-    expect(safeTarget("component", "")).toBe("component:unknown");
+    expect(TargetIds.safe("unit", "u1-orders")).toBe("unit:u1-orders");
+    expect(TargetIds.safe("entity", "Order Item")).toBe("entity:Order-Item");
+    expect(TargetIds.safe("component", "")).toBe("component:unknown");
     // 置換であって削除ではない: 各文字が "-" になる（凍結挙動の記録）。
-    expect(safeTarget("attr", "注文")).toBe("attr:--");
+    expect(TargetIds.safe("attr", "注文")).toBe("attr:--");
   });
 
   test("requirementIds finds FR/NFR ids with optional dash and dotted segments", () => {

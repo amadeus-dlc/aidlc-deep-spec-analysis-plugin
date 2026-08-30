@@ -9,10 +9,12 @@
 // CQS: finding / skip は void のコマンド、findings / skipped / checkedTargets
 // はクエリ。unit は functional センサーのみが持つ（キー順の末尾、凍結）。
 
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { CheckFamilies, CheckFamily } from "./check-family.ts";
+import { Findings, Skips } from "./finding.ts";
 import type { Finding } from "./finding.ts";
 import type { UnitName } from "./unit-name.ts";
+import { WitnessRefs } from "./witness-ref.ts";
 import type { WitnessRef } from "./witness-ref.ts";
 import type { Skipped } from "./skipped.ts";
 
@@ -32,9 +34,9 @@ export class CheckFamilyLedger {
   finding(family: CheckFamily, kind: string, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
     const f: Finding = {
       kind,
-      frRefs: sortedUnique(frRefs, idCompare),
-      targets: sortedUnique(targets, idCompare),
-      witness: { refs },
+      frRefs: FrRefs.of(sortedUnique(frRefs, idCompare)),
+      targets: TargetIds.of(sortedUnique(targets, idCompare)),
+      witness: { refs: WitnessRefs.of(refs) },
       detail: family.prefixedDetail(detail),
     };
     if (this.#unit !== undefined) f.unit = this.#unit.asString();
@@ -49,15 +51,15 @@ export class CheckFamilyLedger {
     this.#skippedFamilies.add(family.asString());
   }
 
-  findings(): readonly Finding[] {
-    return this.#findings;
+  findings(): Findings {
+    return Findings.of(this.#findings);
   }
 
-  skipped(): readonly Skipped[] {
-    return this.#skipped;
+  skipped(): Skips {
+    return Skips.of(this.#skipped);
   }
 
-  checkedTargets(): string[] {
-    return this.#families.checkedTargetsExcluding(this.#failed, this.#skippedFamilies);
+  checkedTargets(): TargetIds {
+    return TargetIds.of(this.#families.checkedTargetsExcluding(this.#failed, this.#skippedFamilies));
   }
 }

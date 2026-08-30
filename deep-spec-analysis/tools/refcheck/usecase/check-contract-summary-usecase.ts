@@ -6,8 +6,8 @@ import {
   type CheckExecutionMode,
   type DesignRecordId,
   CheckFamilyLedger,
+  InputAnchors,
   CONTRACT_FAMILIES,
-  type InputAnchor,
   ReferenceCheckReport,
   ReferenceCheckReportId,
   runContractChecks,
@@ -49,8 +49,8 @@ export class CheckContractSummaryUseCase {
       specBlocks,
     }, ledger);
 
-    const inputs: InputAnchor[] = [record.value.target()];
-    if (declaredUnits.document !== null) inputs.push(declaredUnits.document.input);
+    let inputs = InputAnchors.of([record.value.target()]);
+    if (declaredUnits.document !== null) inputs = inputs.add(declaredUnits.document.input);
     const report = ReferenceCheckReport.compose({
       id: ReferenceCheckReportId.of(input.reportDirectory, "contract-summary"),
       inputs,

@@ -7,8 +7,8 @@ import {
   type CheckExecutionMode,
   type DesignRecordId,
   CheckFamilyLedger,
+  InputAnchors,
   FUNCTIONAL_FAMILIES,
-  type InputAnchor,
   ReferenceCheckReport,
   ReferenceCheckReportId,
   runFunctionalChecks,
@@ -54,13 +54,13 @@ export class CheckFunctionalDesignUseCase {
       siblingUnits: fd.siblingUnits,
     }, ledger);
 
-    const inputs: InputAnchor[] = [];
-    if (fd.entities !== null) inputs.push(fd.entities.input);
-    if (fd.rules !== null) inputs.push(fd.rules.input);
-    if (fd.requirements !== null) inputs.push(fd.requirements.input);
-    if (fd.spec !== null) inputs.push(fd.spec.input);
-    if (fd.components !== null) inputs.push(fd.components.input);
-    inputs.push(...fd.siblingInputs);
+    let inputs = InputAnchors.of([]);
+    if (fd.entities !== null) inputs = inputs.add(fd.entities.input);
+    if (fd.rules !== null) inputs = inputs.add(fd.rules.input);
+    if (fd.requirements !== null) inputs = inputs.add(fd.requirements.input);
+    if (fd.spec !== null) inputs = inputs.add(fd.spec.input);
+    if (fd.components !== null) inputs = inputs.add(fd.components.input);
+    inputs = inputs.addAll(fd.siblingInputs);
 
     const report = ReferenceCheckReport.compose({
       id: ReferenceCheckReportId.of(input.reportDirectory, "functional-design"),

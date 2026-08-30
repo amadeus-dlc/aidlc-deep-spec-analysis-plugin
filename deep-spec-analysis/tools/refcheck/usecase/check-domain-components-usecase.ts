@@ -7,6 +7,7 @@ import {
   type CheckExecutionMode,
   type DesignRecordId,
   CheckFamilyLedger,
+  InputAnchors,
   COMPONENT_FAMILIES,
   ReferenceCheckReport,
   ReferenceCheckReportId,
@@ -42,7 +43,7 @@ export class CheckDomainComponentsUseCase {
     runComponentChecks(catalog, record.value.target().artifact, ledger);
     const report = ReferenceCheckReport.compose({
       id: ReferenceCheckReportId.of(input.reportDirectory, "components"),
-      inputs: [record.value.target()],
+      inputs: InputAnchors.of([record.value.target()]),
       checked: ledger.checkedTargets(),
       findings: ledger.findings(),
       skipped: ledger.skipped(),

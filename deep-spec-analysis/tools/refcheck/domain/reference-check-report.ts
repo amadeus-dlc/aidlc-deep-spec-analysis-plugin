@@ -10,35 +10,33 @@
 //                    アダプタが組んで渡す。inputs は保持、内容は空になる——凍結挙動）
 //   - reconstitute … 書かれた真実（アダプタが型付きに解いた状態）からの再構成
 
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
-import { sortFindings, sortSkipped } from "./catalog-order.ts";
-import type { Finding } from "./finding.ts";
-import type { InputAnchor } from "./input-anchor.ts";
+import { TargetIds } from "../../kernel/domain/index.ts";
+import { Findings, Skips } from "./finding.ts";
+import { InputAnchors } from "./input-anchor.ts";
 import { ReferenceCheckReportId } from "./reference-check-report-id.ts";
-import type { Skipped } from "./skipped.ts";
 
 export interface ReferenceCheckReportSeed {
   readonly id: ReferenceCheckReportId;
-  readonly inputs: readonly InputAnchor[];
-  readonly checked: readonly string[];
-  readonly findings: readonly Finding[];
-  readonly skipped: readonly Skipped[];
+  readonly inputs: InputAnchors;
+  readonly checked: TargetIds;
+  readonly findings: Findings;
+  readonly skipped: Skips;
 }
 
 export class ReferenceCheckReport {
   readonly #id: ReferenceCheckReportId;
-  readonly #inputs: readonly InputAnchor[];
-  readonly #checked: readonly string[];
-  readonly #findings: readonly Finding[];
-  readonly #skipped: readonly Skipped[];
+  readonly #inputs: InputAnchors;
+  readonly #checked: TargetIds;
+  readonly #findings: Findings;
+  readonly #skipped: Skips;
   readonly #unavailableReason: string | null;
 
   private constructor(
     id: ReferenceCheckReportId,
-    inputs: readonly InputAnchor[],
-    checked: readonly string[],
-    findings: readonly Finding[],
-    skipped: readonly Skipped[],
+    inputs: InputAnchors,
+    checked: TargetIds,
+    findings: Findings,
+    skipped: Skips,
     unavailableReason: string | null,
   ) {
     this.#id = id;
@@ -55,10 +53,10 @@ export class ReferenceCheckReport {
   static compose(seed: ReferenceCheckReportSeed): ReferenceCheckReport {
     return new ReferenceCheckReport(
       seed.id,
-      [...seed.inputs].sort((a, b) => (a.artifact < b.artifact ? -1 : a.artifact > b.artifact ? 1 : 0)),
-      sortedUnique([...seed.checked], idCompare),
-      sortFindings([...seed.findings]),
-      sortSkipped([...seed.skipped]),
+      seed.inputs.sortedByArtifact(),
+      seed.checked.sortedUniqueCanonically(),
+      seed.findings.sortedCanonically(),
+      seed.skipped.sortedCanonically(),
       null,
     );
   }
@@ -66,7 +64,7 @@ export class ReferenceCheckReport {
   // 契約不適合時の降格形。inputs は保持し内容を空にする（凍結挙動）。
   // 理由文言は emitter（アダプタ）が組んで渡す——ドメインは値として保持する。
   degraded(reason: string): ReferenceCheckReport {
-    return new ReferenceCheckReport(this.#id, this.#inputs, [], [], [], reason);
+    return new ReferenceCheckReport(this.#id, this.#inputs, TargetIds.of([]), Findings.of([]), Skips.of([]), reason);
   }
 
   // 書かれた真実からの再構成（Repository の読出側だけが使う）。書込時に
@@ -74,10 +72,10 @@ export class ReferenceCheckReport {
   static reconstitute(seed: ReferenceCheckReportSeed & { readonly unavailableReason: string | null }): ReferenceCheckReport {
     return new ReferenceCheckReport(
       seed.id,
-      [...seed.inputs],
-      [...seed.checked],
-      [...seed.findings],
-      [...seed.skipped],
+      seed.inputs,
+      seed.checked,
+      seed.findings,
+      seed.skipped,
       seed.unavailableReason,
     );
   }
@@ -86,19 +84,19 @@ export class ReferenceCheckReport {
     return this.#id;
   }
 
-  inputs(): readonly InputAnchor[] {
+  inputs(): InputAnchors {
     return this.#inputs;
   }
 
-  checked(): readonly string[] {
+  checked(): TargetIds {
     return this.#checked;
   }
 
-  findings(): readonly Finding[] {
+  findings(): Findings {
     return this.#findings;
   }
 
-  skipped(): readonly Skipped[] {
+  skipped(): Skips {
     return this.#skipped;
   }
 
@@ -111,15 +109,15 @@ export class ReferenceCheckReport {
   }
 
   findingsCount(): number {
-    return this.#findings.length;
+    return this.#findings.count();
   }
 
   skippedCount(): number {
-    return this.#skipped.length;
+    return this.#skipped.count();
   }
 
   // センサー verdict の述語：降格しておらず finding が 0 なら pass。
   passes(): boolean {
-    return this.#unavailableReason === null && this.#findings.length === 0;
+    return this.#unavailableReason === null && this.#findings.isEmpty();
   }
 }

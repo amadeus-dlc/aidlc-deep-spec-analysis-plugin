@@ -3,7 +3,7 @@
 // からの逐語移動（golden バイト凍結。並びはソートで正規化されるが、tie の
 // 挙動まで変えないため発行順も保存する）。
 
-import { type ArtifactPath, type RequirementIds, normalizeName, safeTarget } from "../../kernel/domain/index.ts";
+import { type ArtifactPath, type RequirementIds, normalizeName, TargetIds } from "../../kernel/domain/index.ts";
 import { CheckFamilies, CheckFamily } from "./check-family.ts";
 import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import type { UnitName } from "./unit-name.ts";
@@ -88,12 +88,12 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
       ledger.finding(FD_E1, "structure-invalid", [FD_E1.asCheckTarget()], [ref(entitiesArt, e.element.asString())], e.detail);
     }
     for (const dup of entities.entities().duplicatesByName()) {
-      ledger.finding(FD_E1, "structure-invalid", [safeTarget("entity", dup.name().asString())], [ref(entitiesArt, `${dup.element().asString()}.name`, dup.name().asString())],
+      ledger.finding(FD_E1, "structure-invalid", [TargetIds.safe("entity", dup.name().asString())], [ref(entitiesArt, `${dup.element().asString()}.name`, dup.name().asString())],
         `entity "${dup.name().asString()}" is declared more than once`);
     }
     for (const e of entities.entities()) {
       for (const dup of e.attrs().duplicatesByName()) {
-        ledger.finding(FD_E1, "structure-invalid", [safeTarget("attr", `${e.name().asString()}.${dup.name().asString()}`)], [ref(entitiesArt, `${dup.element().asString()}.name`, dup.name().asString())],
+        ledger.finding(FD_E1, "structure-invalid", [TargetIds.safe("attr", `${e.name().asString()}.${dup.name().asString()}`)], [ref(entitiesArt, `${dup.element().asString()}.name`, dup.name().asString())],
           `attribute "${e.name().asString()}.${dup.name().asString()}" is declared more than once`);
       }
     }
@@ -102,7 +102,7 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
   if (entities !== null) {
     for (const e of entities.entities()) {
       for (const a of e.attrs()) {
-        const attrId = safeTarget("attr", `${e.name().asString()}.${a.name().asString()}`);
+        const attrId = TargetIds.safe("attr", `${e.name().asString()}.${a.name().asString()}`);
         const label = `${e.name().asString()}.${a.name().asString()}`;
         // FD-E2: 型区分整合は属性宣言が自分で判定する。
         if (a.declaresAllowedValuesOnNonEnumerableType()) {
@@ -146,7 +146,7 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
     for (const r of entities.allRels()) {
       for (const endpoint of [r.from(), r.to()]) {
         if (endpoint !== null && !entities.entities().containsNamed(endpoint.asString())) {
-          ledger.finding(FD_E4, "reference-broken", [safeTarget("entity", endpoint.asString())], [ref(entitiesArt, r.element().asString(), endpoint.asString())],
+          ledger.finding(FD_E4, "reference-broken", [TargetIds.safe("entity", endpoint.asString())], [ref(entitiesArt, r.element().asString(), endpoint.asString())],
             `relationship endpoint "${endpoint.asString()}" is not a declared entity`);
         }
       }
@@ -281,7 +281,7 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
       }
       const ent = entities.entities().byNormalizedName(normalizeName(entName));
       if (!ent) {
-        ledger.finding(FD_S1, "consistency-mismatch", [safeTarget("entity", entName)], [ref(specArt, el, entName)],
+        ledger.finding(FD_S1, "consistency-mismatch", [TargetIds.safe("entity", entName)], [ref(specArt, el, entName)],
           `state machine names entity "${entName}" which is not declared in entities.md`);
         continue;
       }
@@ -294,7 +294,7 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
         continue;
       }
       // FD-S1/S2: 図と allowed の差分は属性宣言が自分で告げる。
-      const attrId = safeTarget("attr", `${ent.name().asString()}.${attr.name().asString()}`);
+      const attrId = TargetIds.safe("attr", `${ent.name().asString()}.${attr.name().asString()}`);
       const rogue = attr.rogueDiagramStates(m.states());
       if (rogue.length > 0) {
         ledger.finding(FD_S1, "consistency-mismatch", [attrId],
@@ -329,12 +329,12 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
       const key = de.name().normalized();
       const definers = unitEntities.definersOf(key);
       if (definers.length >= 2) {
-        ledger.finding(XS_1, "consistency-mismatch", [safeTarget("entity", de.name().asString())],
+        ledger.finding(XS_1, "consistency-mismatch", [TargetIds.safe("entity", de.name().asString())],
           [ref(compArt, de.catalogLabel()),
             ...definers.map((u) => ref(`construction/${u}/functional-design/entities.md`, `entity ${de.name().asString()}`))],
           `domain entity "${de.name().asString()}" is defined in ${definers.length} units (${definers.join(", ")}) — ownership is duplicated`);
       } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
-        ledger.finding(XS_2, "consistency-mismatch", [safeTarget("entity", de.name().asString())],
+        ledger.finding(XS_2, "consistency-mismatch", [TargetIds.safe("entity", de.name().asString())],
           [ref(compArt, de.catalogLabel())],
           `domain entity "${de.name().asString()}" is defined in no unit's entities.md — it was dropped on the way to functional design`);
       }
@@ -344,7 +344,7 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
         if (mine) {
           const dropped = de.attributesDroppedIn(mine.attrs);
           if (dropped.length > 0) {
-            ledger.finding(XS_3, "consistency-mismatch", [safeTarget("entity", de.name().asString())],
+            ledger.finding(XS_3, "consistency-mismatch", [TargetIds.safe("entity", de.name().asString())],
               dropped.map((a) => ref(compArt, `entity ${de.name().asString()}.attributes`, a)),
               `domain-design declares attribute(s) ${dropped.join(", ")} on "${de.name().asString()}" that this unit's entities.md does not carry`);
           }

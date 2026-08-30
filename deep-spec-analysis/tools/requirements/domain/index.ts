@@ -1,7 +1,8 @@
 // requirements/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
 export { type AttributeDeclaration, AttributeDeclarations, AttributeValues } from "./attribute-declaration.ts";
-export { FrRefs } from "./fr-refs.ts";
+// FrRefs は kernel 所有の共有語彙（requirements の facade からも見える）。
+export { FrRefs } from "../../kernel/domain/index.ts";
 export { type Obligation, Obligations } from "./obligation.ts";
 export { type Scenario, Scenarios } from "./scenario.ts";
 export {

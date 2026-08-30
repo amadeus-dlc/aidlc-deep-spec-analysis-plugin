@@ -25,21 +25,36 @@ import {
   conformToContract,
   renderReportBytes,
 } from "../tools/refcheck/adapter/index.ts";
-import { type Finding, ReferenceCheckReport, ReferenceCheckReportId } from "../tools/refcheck/domain/index.ts";
+import { FrRefs, TargetIds } from "../tools/kernel/domain/index.ts";
+import {
+  type Finding,
+  type InputAnchor,
+  type Skipped,
+  Findings,
+  InputAnchors,
+  ReferenceCheckReport,
+  ReferenceCheckReportId,
+  Skips,
+  WitnessRefs,
+} from "../tools/refcheck/domain/index.ts";
 
 const schemaPath = join(
   dirname(fileURLToPath(import.meta.url)), "..", "tools", "data", "deep-spec-findings-schema.json",
 );
 const schema = readContractSchema(schemaPath);
 
-function seed(directory: string, overrides: Partial<Parameters<typeof ReferenceCheckReport.compose>[0]> = {}) {
+function seed(
+  directory: string,
+  overrides: { inputs?: InputAnchor[]; checked?: string[]; findings?: Finding[]; skipped?: Skipped[] } = {},
+) {
   return ReferenceCheckReport.compose({
     id: ReferenceCheckReportId.of(ap(directory), "components"),
-    inputs: [{ artifact: "inception/domain-design/components.md", sha256: ContentHash.reconstitute("a".repeat(64)) }],
-    checked: ["check:DD-0"],
-    findings: [],
-    skipped: [],
-    ...overrides,
+    inputs: InputAnchors.of(
+      overrides.inputs ?? [{ artifact: "inception/domain-design/components.md", sha256: ContentHash.reconstitute("a".repeat(64)) }],
+    ),
+    checked: TargetIds.of(overrides.checked ?? ["check:DD-0"]),
+    findings: Findings.of(overrides.findings ?? []),
+    skipped: Skips.of(overrides.skipped ?? []),
   });
 }
 
@@ -67,8 +82,8 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     expect(report.isUnavailable()).toBe(false);
     expect(report.findingsCount()).toBe(0);
     expect(report.skippedCount()).toBe(0);
-    expect(report.checked()).toEqual(["check:DD-0", "check:DD-1"]);
-    expect(report.inputs().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
+    expect(report.checked().toArray()).toEqual(["check:DD-0", "check:DD-1"]);
+    expect(report.inputs().toArray().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
     expect(report.unavailableReason()).toBe(null);
     expect(report.id().backendName()).toBe("components");
   });
@@ -78,9 +93,9 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     expect(degraded.isUnavailable()).toBe(true);
     expect(degraded.passes()).toBe(false);
     expect(degraded.unavailableReason()).toBe("why");
-    expect(degraded.checked()).toEqual([]);
+    expect(degraded.checked().toArray()).toEqual([]);
     expect(degraded.findingsCount()).toBe(0);
-    expect(degraded.inputs()).toHaveLength(1);
+    expect(degraded.inputs().toArray()).toHaveLength(1);
   });
 });
 
@@ -95,7 +110,7 @@ describe("serializer (adapter owns the format knowledge)", () => {
   });
 
   test("a non-conforming document degrades with the frozen wording", () => {
-    const badFinding = { kind: "no-such-kind", frRefs: [], targets: ["check:DD-0"], witness: { refs: [] }, detail: "DD-0: x" } as Finding;
+    const badFinding: Finding = { kind: "no-such-kind", frRefs: FrRefs.of([]), targets: TargetIds.of(["check:DD-0"]), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" };
     const conformed = conformToContract(seed("/tmp/r", { findings: [badFinding] }), schema);
     expect(conformed.isUnavailable()).toBe(true);
     expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
