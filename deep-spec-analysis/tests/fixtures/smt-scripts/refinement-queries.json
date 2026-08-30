@@ -1,0 +1,115 @@
+[
+  {
+    "id": "rv:OB-1",
+    "script": "(declare-const v_ticket_phase Int)\n(declare-const v_ticket_value Int)\n(declare-const ty_ticket_phase Bool)\n(assert (=> ty_ticket_phase (and (>= v_ticket_phase 0) (<= v_ticket_phase 2))))\n(declare-const ty_ticket_value Bool)\n(assert (=> ty_ticket_value (and (>= v_ticket_value 0) (<= v_ticket_value 3))))\n(declare-const inv_DOB_1 Bool)\n(assert (=> inv_DOB_1 (=> (= v_ticket_phase 2) (>= v_ticket_value 0))))\n(declare-const neg_OB_1 Bool)\n(assert (=> neg_OB_1 (not (=> (= v_ticket_phase 2) (>= v_ticket_value 1)))))",
+    "assumptions": [
+      "ty_ticket_phase",
+      "ty_ticket_value",
+      "inv_DOB_1",
+      "neg_OB_1"
+    ],
+    "model": [
+      {
+        "name": "v_ticket_phase",
+        "sort": "Int"
+      },
+      {
+        "name": "v_ticket_value",
+        "sort": "Int"
+      }
+    ]
+  },
+  {
+    "id": "re:OB-2",
+    "script": "(declare-const v_ticket_phase Int)\n(declare-const v_ticket_value Int)\n(declare-const ty_ticket_phase Bool)\n(assert (=> ty_ticket_phase (and (>= v_ticket_phase 0) (<= v_ticket_phase 2))))\n(declare-const ty_ticket_value Bool)\n(assert (=> ty_ticket_value (and (>= v_ticket_value 0) (<= v_ticket_value 3))))\n(declare-const inv_DOB_1 Bool)\n(assert (=> inv_DOB_1 (=> (= v_ticket_phase 2) (>= v_ticket_value 0))))\n(declare-const ag_OB_2 Bool)\n(assert (=> ag_OB_2 (or (= v_ticket_phase 1) (= v_ticket_phase 0))))\n(declare-const ne_OB_2 Bool)\n(assert (=> ne_OB_2 (not (or (= v_ticket_phase 1)))))",
+    "assumptions": [
+      "ty_ticket_phase",
+      "ty_ticket_value",
+      "inv_DOB_1",
+      "ag_OB_2",
+      "ne_OB_2"
+    ],
+    "model": [
+      {
+        "name": "v_ticket_phase",
+        "sort": "Int"
+      },
+      {
+        "name": "v_ticket_value",
+        "sort": "Int"
+      }
+    ]
+  },
+  {
+    "id": "rs2:OB-2:TR-2",
+    "script": "(declare-const v_ticket_phase Int)\n(declare-const v_ticket_value Int)\n(declare-const p_ticket_phase Int)\n(declare-const p_ticket_value Int)\n(declare-const ty_ticket_phase Bool)\n(assert (=> ty_ticket_phase (and (>= v_ticket_phase 0) (<= v_ticket_phase 2))))\n(declare-const ty_ticket_value Bool)\n(assert (=> ty_ticket_value (and (>= v_ticket_value 0) (<= v_ticket_value 3))))\n(declare-const inv_DOB_1 Bool)\n(assert (=> inv_DOB_1 (=> (= v_ticket_phase 2) (>= v_ticket_value 0))))\n(declare-const typ_ticket_phase Bool)\n(assert (=> typ_ticket_phase (and (>= p_ticket_phase 0) (<= p_ticket_phase 2))))\n(declare-const typ_ticket_value Bool)\n(assert (=> typ_ticket_value (and (>= p_ticket_value 0) (<= p_ticket_value 3))))\n(declare-const step_TR_2 Bool)\n(assert (=> step_TR_2 (and (= v_ticket_phase 1) (= p_ticket_phase 2) (= p_ticket_value v_ticket_value))))\n(declare-const ag2_OB_2 Bool)\n(assert (=> ag2_OB_2 (or (= v_ticket_phase 1) (= v_ticket_phase 0))))\n(declare-const viol_OB_2 Bool)\n(assert (=> viol_OB_2 (not (and (= p_ticket_phase 2) (= v_ticket_value p_ticket_value)))))",
+    "assumptions": [
+      "ty_ticket_phase",
+      "ty_ticket_value",
+      "inv_DOB_1",
+      "typ_ticket_phase",
+      "typ_ticket_value",
+      "step_TR_2",
+      "ag2_OB_2",
+      "viol_OB_2"
+    ],
+    "model": [
+      {
+        "name": "v_ticket_phase",
+        "sort": "Int"
+      },
+      {
+        "name": "v_ticket_value",
+        "sort": "Int"
+      },
+      {
+        "name": "p_ticket_phase",
+        "sort": "Int"
+      },
+      {
+        "name": "p_ticket_value",
+        "sort": "Int"
+      }
+    ]
+  },
+  {
+    "id": "rs:SC-1",
+    "script": "(declare-const v_ticket_phase Int)\n(declare-const v_ticket_value Int)\n(declare-const ty_ticket_phase Bool)\n(assert (=> ty_ticket_phase (and (>= v_ticket_phase 0) (<= v_ticket_phase 2))))\n(declare-const ty_ticket_value Bool)\n(assert (=> ty_ticket_value (and (>= v_ticket_value 0) (<= v_ticket_value 3))))\n(declare-const inv_DOB_1 Bool)\n(assert (=> inv_DOB_1 (=> (= v_ticket_phase 2) (>= v_ticket_value 0))))\n(declare-const sc_SC_1 Bool)\n(assert (=> sc_SC_1 (and (= v_ticket_value 1) (or (= v_ticket_phase 1) (= v_ticket_phase 0)))))",
+    "assumptions": [
+      "ty_ticket_phase",
+      "ty_ticket_value",
+      "inv_DOB_1",
+      "sc_SC_1"
+    ],
+    "model": [
+      {
+        "name": "v_ticket_phase",
+        "sort": "Int"
+      },
+      {
+        "name": "v_ticket_value",
+        "sort": "Int"
+      }
+    ]
+  },
+  {
+    "id": "rs:SC-2",
+    "script": "(declare-const v_ticket_phase Int)\n(declare-const v_ticket_value Int)\n(declare-const ty_ticket_phase Bool)\n(assert (=> ty_ticket_phase (and (>= v_ticket_phase 0) (<= v_ticket_phase 2))))\n(declare-const ty_ticket_value Bool)\n(assert (=> ty_ticket_value (and (>= v_ticket_value 0) (<= v_ticket_value 3))))\n(declare-const inv_DOB_1 Bool)\n(assert (=> inv_DOB_1 (=> (= v_ticket_phase 2) (>= v_ticket_value 0))))\n(declare-const sc_SC_2 Bool)\n(assert (=> sc_SC_2 (and (= v_ticket_value 0) (= v_ticket_phase 2))))",
+    "assumptions": [
+      "ty_ticket_phase",
+      "ty_ticket_value",
+      "inv_DOB_1",
+      "sc_SC_2"
+    ],
+    "model": [
+      {
+        "name": "v_ticket_phase",
+        "sort": "Int"
+      },
+      {
+        "name": "v_ticket_value",
+        "sort": "Int"
+      }
+    ]
+  }
+]

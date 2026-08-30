@@ -4,3 +4,4 @@
 // アウトプットポートの一部としてここで定義する（オーナー裁定 2026-08-30）。
 
 export { type RepositoryError } from "./repository-error.ts";
+export { type Clock } from "./clock.ts";

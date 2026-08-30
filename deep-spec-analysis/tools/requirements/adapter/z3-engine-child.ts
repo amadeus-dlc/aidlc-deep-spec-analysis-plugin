@@ -1,6 +1,6 @@
 // z3 実行の子プロセス本体。stdin の {queries, timeoutMs, budgetMs} を解いて
 // z3-solver（WASM）でクエリを流し、{results} または {unavailable} の JSON
-// 1 行を返す。プロトコルは凍結——refinement-lib も同じ子（エントリの
+// 1 行を返す。プロトコルは凍結——design の refinement ソルバも同じ子（エントリの
 // --smt-child）へ独自ペイロードを spawn する。stdout への書出と exit は
 // entry の責務（本モジュールは行を返すだけ）。
 // 旧 childMain からの逐語移植。

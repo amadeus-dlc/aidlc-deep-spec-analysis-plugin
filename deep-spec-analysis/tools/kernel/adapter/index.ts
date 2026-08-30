@@ -12,3 +12,4 @@ export { type Yaml, parseYamlSubset } from "./yaml-subset.ts";
 export { type Fence, extractFences } from "./markdown-fences.ts";
 export { type MdTable, parseMarkdownTables } from "./markdown-tables.ts";
 export { listSubdirectories } from "./list-subdirectories.ts";
+export { SystemClock } from "./system-clock.ts";

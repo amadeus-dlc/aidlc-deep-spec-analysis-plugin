@@ -144,7 +144,7 @@ describe("rule red/green examples (detection power proof)", () => {
 
   test("locationOf classifies entries, legacy files, data, and layered paths", () => {
     expect(locationOf("aidlc-sensor-deep-spec-ir-valid.ts")).toBe("entry");
-    expect(locationOf("deep-spec-refinement-lib.ts")).toBe("legacy");
+    expect(locationOf("deep-spec-analysis-doctor.ts")).toBe("entry");
     expect(locationOf("data/deep-spec-ir-schema.json")).toBe("data");
     expect(locationOf("kernel/domain/digest.ts")).toEqual({ context: "kernel", layer: "domain" });
   });
@@ -187,7 +187,6 @@ describe("the real tools/ tree", () => {
       "aidlc-sensor-deep-spec-design-verify-quint.ts",
       "deep-spec-analysis-doctor.ts",
       "deep-spec-lib.ts",
-      "deep-spec-refinement-lib.ts",
     ]);
     for (const rel of LEGACY_FILES) expect(original.has(rel)).toBe(true);
   });

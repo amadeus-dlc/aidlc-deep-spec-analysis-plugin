@@ -490,6 +490,7 @@ describe("phase-1 refcheck sensors compose into the sandbox", () => {
       "design/domain/index.ts",
       "design/usecase/index.ts",
       "design/adapter/index.ts",
+      "refinement/domain/index.ts",
     ]) {
       expect(existsSync(join(sandbox, ".claude", "tools", tool))).toBe(true);
     }

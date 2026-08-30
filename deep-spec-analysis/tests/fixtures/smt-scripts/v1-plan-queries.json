@@ -1,0 +1,250 @@
+[
+  {
+    "id": "global",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7"
+    ],
+    "model": [
+      {
+        "name": "v_order_status",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_amount",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_expedited",
+        "sort": "Bool"
+      }
+    ]
+  },
+  {
+    "id": "vac:OB-1",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))\n(declare-const ant_OB_1 Bool)\n(assert (=> ant_OB_1 v_order_expedited))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7",
+      "ant_OB_1"
+    ],
+    "model": []
+  },
+  {
+    "id": "vac:OB-2",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))\n(declare-const ant_OB_2 Bool)\n(assert (=> ant_OB_2 v_order_expedited))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7",
+      "ant_OB_2"
+    ],
+    "model": []
+  },
+  {
+    "id": "vac:OB-7",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))\n(declare-const ant_OB_7 Bool)\n(assert (=> ant_OB_7 (= v_order_status 4)))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7",
+      "ant_OB_7"
+    ],
+    "model": []
+  },
+  {
+    "id": "evo:OB-4:OB-5",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))\n(declare-const g_OB_4 Bool)\n(assert (=> g_OB_4 (and (= v_order_status 0) (>= v_order_amount 1))))\n(declare-const g_OB_5 Bool)\n(assert (=> g_OB_5 (>= v_order_amount 0)))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7",
+      "g_OB_4",
+      "g_OB_5"
+    ],
+    "model": []
+  },
+  {
+    "id": "evj:OB-4:OB-5",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))\n(declare-const p_order_status Int)\n(declare-const p_order_amount Int)\n(declare-const p_order_expedited Bool)\n(declare-const typ_order_status Bool)\n(assert (=> typ_order_status (and (>= p_order_status 0) (<= p_order_status 4))))\n(declare-const typ_order_amount Bool)\n(assert (=> typ_order_amount (and (>= p_order_amount 0) (<= p_order_amount 3))))\n(declare-const g_OB_4 Bool)\n(assert (=> g_OB_4 (and (= v_order_status 0) (>= v_order_amount 1))))\n(declare-const g_OB_5 Bool)\n(assert (=> g_OB_5 (>= v_order_amount 0)))\n(declare-const e_OB_4 Bool)\n(assert (=> e_OB_4 (= p_order_status 1)))\n(declare-const e_OB_5 Bool)\n(assert (=> e_OB_5 (= p_order_status 3)))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7",
+      "typ_order_status",
+      "typ_order_amount",
+      "g_OB_4",
+      "g_OB_5",
+      "e_OB_4",
+      "e_OB_5"
+    ],
+    "model": []
+  },
+  {
+    "id": "gap:ship",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))\n(declare-const ng_ship Bool)\n(assert (=> ng_ship (not (= v_order_status 1))))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7",
+      "ng_ship"
+    ],
+    "model": [
+      {
+        "name": "v_order_status",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_amount",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_expedited",
+        "sort": "Bool"
+      }
+    ]
+  },
+  {
+    "id": "gap:submit",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))\n(declare-const ng_submit Bool)\n(assert (=> ng_submit (not (or (and (= v_order_status 0) (>= v_order_amount 1)) (>= v_order_amount 0)))))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7",
+      "ng_submit"
+    ],
+    "model": [
+      {
+        "name": "v_order_status",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_amount",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_expedited",
+        "sort": "Bool"
+      }
+    ]
+  },
+  {
+    "id": "sc:SC-1",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))\n(declare-const sc_SC_1 Bool)\n(assert (=> sc_SC_1 (and (= v_order_amount 1) (= v_order_expedited false) (= v_order_status 0))))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7",
+      "sc_SC_1"
+    ],
+    "model": [
+      {
+        "name": "v_order_status",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_amount",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_expedited",
+        "sort": "Bool"
+      }
+    ]
+  },
+  {
+    "id": "sc:SC-2",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))\n(declare-const sc_SC_2 Bool)\n(assert (=> sc_SC_2 (and (= v_order_amount 2) (= v_order_expedited true) (= v_order_status 2))))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7",
+      "sc_SC_2"
+    ],
+    "model": [
+      {
+        "name": "v_order_status",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_amount",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_expedited",
+        "sort": "Bool"
+      }
+    ]
+  },
+  {
+    "id": "sc:SC-3",
+    "script": "(declare-const v_order_status Int)\n(declare-const v_order_amount Int)\n(declare-const v_order_expedited Bool)\n(declare-const ty_order_status Bool)\n(assert (=> ty_order_status (and (>= v_order_status 0) (<= v_order_status 4))))\n(declare-const ty_order_amount Bool)\n(assert (=> ty_order_amount (and (>= v_order_amount 0) (<= v_order_amount 3))))\n(declare-const bg_BG_1 Bool)\n(assert (=> bg_BG_1 (>= v_order_amount 0)))\n(declare-const ob_OB_1 Bool)\n(assert (=> ob_OB_1 (=> v_order_expedited (>= v_order_amount 3))))\n(declare-const ob_OB_2 Bool)\n(assert (=> ob_OB_2 (=> v_order_expedited (<= v_order_amount 1))))\n(declare-const ob_OB_3 Bool)\n(assert (=> ob_OB_3 (<= v_order_amount 3)))\n(declare-const ob_OB_7 Bool)\n(assert (=> ob_OB_7 (=> (= v_order_status 4) (>= v_order_amount 1))))\n(declare-const sc_SC_3 Bool)\n(assert (=> sc_SC_3 (and (= v_order_amount 2) (= v_order_expedited true))))",
+    "assumptions": [
+      "ty_order_status",
+      "ty_order_amount",
+      "bg_BG_1",
+      "ob_OB_1",
+      "ob_OB_2",
+      "ob_OB_3",
+      "ob_OB_7",
+      "sc_SC_3"
+    ],
+    "model": [
+      {
+        "name": "v_order_status",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_amount",
+        "sort": "Int"
+      },
+      {
+        "name": "v_order_expedited",
+        "sort": "Bool"
+      }
+    ]
+  }
+]

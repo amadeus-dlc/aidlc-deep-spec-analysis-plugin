@@ -62,6 +62,7 @@ installed("tools/requirements/adapter/index.ts", "error");
 installed("tools/design/domain/index.ts", "error");
 installed("tools/design/usecase/index.ts", "error");
 installed("tools/design/adapter/index.ts", "error");
+installed("tools/refinement/domain/index.ts", "error");
 installed("sensors/aidlc-deep-spec-design-ir-valid.md", "error");
 installed("sensors/aidlc-deep-spec-design-verify-smt.md", "error");
 installed("sensors/aidlc-deep-spec-design-verify-quint.md", "error");
@@ -70,7 +71,6 @@ installed("tools/aidlc-sensor-deep-spec-design-verify-smt.ts", "error");
 installed("tools/aidlc-sensor-deep-spec-design-verify-quint.ts", "error");
 installed("tools/data/deep-spec-design-ir-schema.json", "error");
 installed("knowledge/aidlc-architect-agent/deep-spec-design-ir-authoring.md", "error");
-installed("tools/deep-spec-refinement-lib.ts", "error");
 installed("tools/data/deep-spec-refinement-map-schema.json", "error");
 installed("knowledge/aidlc-architect-agent/deep-spec-refinement-map-authoring.md", "error");
 

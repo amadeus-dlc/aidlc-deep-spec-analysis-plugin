@@ -7,3 +7,16 @@ export {
   type SiblingBackendClient,
   type SiblingLoweredRun,
 } from "./sibling-backend-client.ts";
+export {
+  type RefinementMapAcquisition,
+  type RefinementContextRepository,
+  type RefinementPhaseContext,
+} from "./refinement-context-repository.ts";
+export {
+  type RefinementCheck,
+  type RefinementSolverClient,
+  type RefinementSolverResult,
+} from "./refinement-solver-client.ts";
+export { type VerifyDesignOutcome } from "./verify-design-outcome.ts";
+export { type VerifyDesignInput, VerifyDesignSmtUseCase } from "./verify-design-smt-usecase.ts";
+export { VerifyDesignQuintUseCase } from "./verify-design-quint-usecase.ts";
