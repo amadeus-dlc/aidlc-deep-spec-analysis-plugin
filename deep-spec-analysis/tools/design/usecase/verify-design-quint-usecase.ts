@@ -1,3 +1,4 @@
+import { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 // deep-spec-design-verify-quint の interactor。Phase 1-2（lowering → v1 quint
 // 兄弟 → remap）＋到達性プローブ（bounded のみ・RUN ごとの上限つき）＋
 // Phase 3（refinement の動的パス：alpha(P) が機械の不変量面に合流し、違反
@@ -21,15 +22,10 @@ import {
   DesignReportId,
   type DesignModel,
   SUPPORTED_DESIGN_IR_MAJOR,
-  designBackendUnavailableReport,
-  designCrossCheckReport,
-  designIrUnreadableReport,
-  designVersionMismatchReport,
-  lowerUnit,
-  remapUnitDocument,
+  LoweredUnit,
   RefinementMaterialsId,
 } from "../domain/index.ts";
-import type { LoweredUnit } from "../domain/index.ts";
+
 import {
   UnitRefinementPlan,
 } from "../../refinement/domain/index.ts";
@@ -77,7 +73,7 @@ export class VerifyDesignQuintUseCase {
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#persist(designIrUnreadableReport(id, "simulation", acquired.error.cause));
+      const saved = this.#persist(DesignReport.irUnreadable(id, "simulation", acquired.error.cause));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
     }
@@ -85,7 +81,7 @@ export class VerifyDesignQuintUseCase {
 
     if (!model.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR)) {
       // 旧実装は conform 前の skip 数を verdict 行に載せていた——凍結挙動。
-      const mismatch = designVersionMismatchReport(id, model, irHash, "simulation");
+      const mismatch = DesignReport.versionMismatch(id, model, irHash, "simulation");
       const saved = this.#persist(mismatch);
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
@@ -109,7 +105,7 @@ export class VerifyDesignQuintUseCase {
         }
         continue;
       }
-      const lowered = lowerUnit(u, { synthetics: false });
+      const lowered = LoweredUnit.of(u, { synthetics: false });
       // 子に run budget を超えて生き延びさせない。
       const mainRemaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
       if (mainRemaining < 3_000) {
@@ -122,7 +118,7 @@ export class VerifyDesignQuintUseCase {
       if (run.exit === 127) {
         const reason =
           (run.doc?.kind === "unavailable" ? run.doc.reason : null) ?? "quint CLI could not be executed by the lowered v1 backend";
-        const saved = this.#persist(designBackendUnavailableReport(id, model, irHash, method ?? "simulation", reason, "quint CLI missing"));
+        const saved = this.#persist(DesignReport.backendUnavailable(id, model, irHash, method ?? "simulation", reason, "quint CLI missing"));
         if (!saved.ok) return { kind: "save-failed", error: saved.error };
         const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
         if (!cross.ok) return { kind: "save-failed", error: cross.error };
@@ -134,7 +130,7 @@ export class VerifyDesignQuintUseCase {
         }
         continue;
       }
-      const remapped = remapUnitDocument(u, lowered, run.doc);
+      const remapped = lowered.remapVerdicts(u, run.doc);
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
           skipped.push({ target: t, reason: "unavailable", unit: u.name(), detail: remapped.unavailable });
@@ -148,7 +144,7 @@ export class VerifyDesignQuintUseCase {
 
       // 到達不能状態の検出（FR8.4）：bounded モードのみ・予算キャップつき。
       for (const sm of [...u.machines()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-        const attrPath = lowered.index.attrPathOfMachine(sm.id) ?? `${sm.entity}.${sm.attribute}`;
+        const attrPath = lowered.index().attrPathOfMachine(sm.id) ?? `${sm.entity}.${sm.attribute}`;
         const candidates = u
           .enumValuesOf(attrPath)
           .filter((s) => !sm.initial.includes(s))
@@ -179,8 +175,8 @@ export class VerifyDesignQuintUseCase {
           if (!probe.reached) {
             findings.push({
               kind: "unreachable",
-              frRefs: [],
-              targets: [sm.id],
+              frRefs: FrRefs.of([]),
+              targets: TargetIds.of([sm.id]),
               witness: { model: { [attrPath]: state } },
               unit: u.name(),
               detail: `State "${state}" of ${sm.id} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state — it may be dead.`,
@@ -237,9 +233,9 @@ export class VerifyDesignQuintUseCase {
             }
             continue;
           }
-          const base = lowerUnit(u, { synthetics: false });
-          let refinementObligations = base.obligations;
-          let refinementIndex = base.index;
+          const base = LoweredUnit.of(u, { synthetics: false });
+          let refinementObligations = base.obligations();
+          let refinementIndex = base.index();
           let n = refinementObligations.count();
           for (const e of extras) {
             n += 1;
@@ -247,12 +243,7 @@ export class VerifyDesignQuintUseCase {
             refinementObligations = refinementObligations.add({ id: lowId, nature: "invariant", frRefs: e.frRefs, assert: e.expr });
             refinementIndex = refinementIndex.withPassthrough(lowId, e.reqId);
           }
-          const lowered: LoweredUnit = {
-            obligations: refinementObligations,
-            scenarios: base.scenarios,
-            background: base.background,
-            index: refinementIndex,
-          };
+          const lowered = base.extendedWith(refinementObligations, refinementIndex);
           const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
           if (run.exit !== 0 || run.doc === null) {
             for (const e of extras) {
@@ -260,7 +251,7 @@ export class VerifyDesignQuintUseCase {
             }
             continue;
           }
-          const remapped = remapUnitDocument(u, lowered, run.doc);
+          const remapped = lowered.remapVerdicts(u, run.doc);
           if (remapped.unavailable !== null) {
             for (const e of extras) {
               skipped.push({ target: e.reqId, reason: "unavailable", unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` });
@@ -272,13 +263,13 @@ export class VerifyDesignQuintUseCase {
           let designConflict = false;
           for (const f of remapped.findings) {
             if (f.kind !== "conflict") continue;
-            const reqHits = f.targets.filter((t) => reqIdSet.has(t));
+            const reqHits = f.targets.toArray().filter((t: string) => reqIdSet.has(t));
             if (reqHits.length > 0) {
               hitExtra = true;
               findings.push({
                 kind: "refinement-violation",
                 frRefs: f.frRefs,
-                targets: reqHits,
+                targets: TargetIds.of(reqHits),
                 witness: f.witness,
                 unit: u.name(),
                 detail: `The design machine of unit ${u.name()} reaches a state that violates requirements obligation ${reqHits.join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,
@@ -337,6 +328,6 @@ export class VerifyDesignQuintUseCase {
     const siblings = this.#designReportRepository.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);
-    return this.#persist(designCrossCheckReport(DesignReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash, siblings.value));
+    return this.#persist(siblings.value.crossChecked(DesignReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
   }
 }

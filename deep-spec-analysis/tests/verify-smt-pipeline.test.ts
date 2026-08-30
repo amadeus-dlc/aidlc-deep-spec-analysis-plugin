@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
-import { ArtifactPath, ContentHash, IrVersion, expressionUsesPrime } from "../tools/kernel/domain/index.ts";
+import { TargetIds, ArtifactPath, ContentHash, IrVersion, Expressions } from "../tools/kernel/domain/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -289,8 +289,8 @@ describe("smt verdict interpretation", () => {
     const { findings, skipped } = run([["global", { status: "unsat", core: ["ty_x", "ob_OB_2", "ob_OB_1"] }]]);
     expect([...findings]).toEqual([{
       kind: "conflict",
-      frRefs: ["FR-1", "FR-2"],
-      targets: ["OB-1", "OB-2"],
+      frRefs: FrRefs.of(["FR-1", "FR-2"]),
+      targets: TargetIds.of(["OB-1", "OB-2"]),
       witness: { core: ["ob_OB_1", "ob_OB_2", "ty_x"] },
       detail: "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.",
     }]);
@@ -303,7 +303,7 @@ describe("smt verdict interpretation", () => {
       ["vac:OB-1", { status: "unsat", core: ["ob_OB_2"] }],
     ]);
     expect(findings.toArray().length).toBe(1);
-    expect(findings.toArray()[0]?.targets).toEqual(["OB-1", "OB-2"]);
+    expect(findings.toArray()[0]?.targets.toArray()).toEqual(["OB-1", "OB-2"]);
   });
 
   test("a conflict with no effective targets is dropped entirely", () => {
@@ -328,7 +328,7 @@ describe("smt verdict interpretation", () => {
       ["vac:OB-2", { status: "unsat", core: ["ob_OB_1"] }],
     ]);
     expect(findings.toArray().length).toBe(1);
-    expect(findings.toArray()[0]?.targets).toEqual(["OB-1", "OB-2"]);
+    expect(findings.toArray()[0]?.targets.toArray()).toEqual(["OB-1", "OB-2"]);
     expect(findings.toArray()[0]?.detail).toStartWith("The condition of obligation OB-1 can never hold");
   });
 
@@ -362,8 +362,8 @@ describe("smt verdict interpretation", () => {
     const { findings } = run([["gap:submit", { status: "sat", decodedModel: { "Ticket.priority": 2 } }]]);
     expect([...findings]).toEqual([{
       kind: "completeness-gap",
-      frRefs: ["FR-3", "FR-4"],
-      targets: ["OB-3", "OB-4"],
+      frRefs: FrRefs.of(["FR-3", "FR-4"]),
+      targets: TargetIds.of(["OB-3", "OB-4"]),
       witness: { model: { "Ticket.priority": 2 } },
       detail: 'No rule for trigger "submit" applies to the witness state: the behavior of this input region is unspecified.',
     }]);
@@ -376,7 +376,7 @@ describe("smt verdict interpretation", () => {
       ["sc:SC-1", { status: "unsat", core: ["ob_OB_1", "ty_x"] }],
       ["sc:SC-2", { status: "sat", decodedModel: { "Ticket.done": false } }],
     ]);
-    expect(findings.toArray().map((f) => f.targets)).toEqual([["OB-1", "SC-1"], ["SC-2"]]);
+    expect(findings.toArray().map((f) => f.targets.toArray())).toEqual([["OB-1", "SC-1"], ["SC-2"]]);
     expect(findings.toArray()[0]?.witness).toEqual({ core: ["ob_OB_1", "ty_x"] });
     expect(findings.toArray()[1]?.witness).toEqual({ model: { "Ticket.done": false } });
     expect(findings.toArray()[0]?.detail).toStartWith("Accept scenario SC-1 describes a state");
@@ -407,8 +407,8 @@ describe("cross-check computation", () => {
       method: "exhaustive",
       findings: VerificationFindings.of((input.violated ?? []).map((t): VerificationFinding => ({
         kind: "scenario-violation",
-        frRefs: [],
-        targets: [t],
+        frRefs: FrRefs.of([]),
+        targets: TargetIds.of([t]),
         witness: { core: [] },
         detail: "x",
       }))),
@@ -421,8 +421,8 @@ describe("cross-check computation", () => {
     const report = VerificationReports.of([sibling("quint", { violated: ["SC-1"] }), sibling("smt", {})]).crossChecked(id, m, ContentHash.reconstitute("h1"));
     expect(report.findings().toArray()).toEqual([{
       kind: "cross-check-disagreement",
-      frRefs: ["FR-1", "FR-2"],
-      targets: ["SC-1"],
+      frRefs: FrRefs.of(["FR-1", "FR-2"]),
+      targets: TargetIds.of(["SC-1"]),
       witness: { verdicts: { quint: "violated", smt: "clean" } },
       detail: 'Backends "quint" and "smt" disagree on scenario SC-1. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.',
     }]);
@@ -491,8 +491,8 @@ describe("degradation reports and ordering", () => {
   test("finding order: kind rank, then joined targets, then detail; unknown kinds sink to rank 9", () => {
     const f = (kind: string, targets: string[], detail: string): VerificationFinding => ({
       kind,
-      frRefs: [],
-      targets,
+      frRefs: FrRefs.of([]),
+      targets: TargetIds.of(targets),
       witness: { core: [] },
       detail,
     });
@@ -504,7 +504,7 @@ describe("degradation reports and ordering", () => {
       f("completeness-gap", ["OB-1"], "c"),
       f("conflict", ["OB-1", "OB-2"], "a"),
     ]).sortedCanonically();
-    expect(sorted.toArray().map((x) => `${x.kind}:${x.targets.join(",")}:${x.detail}`)).toEqual([
+    expect(sorted.toArray().map((x) => `${x.kind}:${x.targets.joined(",")}:${x.detail}`)).toEqual([
       "conflict:OB-1,OB-2:a",
       "completeness-gap:OB-1:c",
       "scenario-violation:SC-2:a",
@@ -535,8 +535,8 @@ describe("degradation reports and ordering", () => {
       irHash: ContentHash.reconstitute("h"),
       method: "exhaustive",
       findings: VerificationFindings.of([
-        { kind: "scenario-violation", frRefs: [], targets: ["SC-1"], witness: { core: [] }, detail: "b" },
-        { kind: "conflict", frRefs: [], targets: ["OB-1"], witness: { core: [] }, detail: "a" },
+        { kind: "scenario-violation", frRefs: FrRefs.of([]), targets: TargetIds.of(["SC-1"]), witness: { core: [] }, detail: "b" },
+        { kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.of(["OB-1"]), witness: { core: [] }, detail: "a" },
       ]),
       skipped: VerificationSkips.of([{ target: "OB-2", reason: "timeout" }, { target: "OB-1", reason: "capability" }]),
     });
@@ -560,13 +560,13 @@ describe("degradation reports and ordering", () => {
     expect(back.findings().toArray()).toEqual(composed.findings().toArray());
   });
 
-  test("expressionUsesPrime finds primes only through nested references", () => {
-    expect(expressionUsesPrime({ op: "ref", path: "a", prime: true })).toBe(true);
-    expect(expressionUsesPrime({
+  test("Expressions.usesPrime finds primes only through nested references", () => {
+    expect(Expressions.usesPrime({ op: "ref", path: "a", prime: true })).toBe(true);
+    expect(Expressions.usesPrime({
       op: "and",
       args: [{ op: "bool", value: true }, { op: "not", args: [{ op: "ref", path: "a", prime: true }] }],
     })).toBe(true);
-    expect(expressionUsesPrime({ op: "eq", args: [{ op: "ref", path: "a" }, { op: "int", value: 1 }] })).toBe(false);
+    expect(Expressions.usesPrime({ op: "eq", args: [{ op: "ref", path: "a" }, { op: "int", value: 1 }] })).toBe(false);
   });
 
   test("the model resolves targets, references, and attributes as the old free functions did", () => {

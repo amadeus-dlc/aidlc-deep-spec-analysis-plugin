@@ -34,7 +34,7 @@ function extractKindRank(file: string): { table: Map<string, number>; fallback: 
 
 // PR4 で verify-quint の重複表が消え、v1 表の定義は 1 箇所に収束した。
 const V1_FILES = ["requirements/domain/verification-finding.ts"];
-const EXTENDED_FILES = ["refcheck/domain/catalog-order.ts", "design/domain/design-finding-order.ts"];
+const EXTENDED_FILES = ["refcheck/domain/finding.ts", "design/domain/design-finding.ts"];
 
 describe("kind-rank order preservation", () => {
   test("the v1 backend table is the single shared domain VO", () => {

@@ -4,7 +4,7 @@
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の smtVar / smtName / enumCode /
 // smtOf / buildPlan からの逐語移植（IrDoc → RequirementsModel の読み替えのみ）。
 
-import { type Expression, expressionUsesPrime, idCompare } from "../../kernel/domain/index.ts";
+import { type Expression, Expressions, IdOrder } from "../../kernel/domain/index.ts";
 import {
   SmtEventPairProbes,
   SmtPlanFacts,
@@ -216,7 +216,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         continue;
       }
       try {
-        if (expressionUsesPrime(ob.guard)) throw new CompileError("guard must not use primed references");
+        if (Expressions.usesPrime(ob.guard)) throw new CompileError("guard must not use primed references");
         smtOf(model, ob.guard);
         smtOf(model, ob.effect);
         events.push(ob);
@@ -324,7 +324,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     queries.push({ id: `gap:${trigger}`, script, assumptions: [...baseAssumptions, name], model: modelVars });
     gapTriggers.set(
       trigger,
-      list.map((ev) => ev.id).sort(idCompare),
+      list.map((ev) => ev.id).sort(IdOrder.compare),
     );
   }
 

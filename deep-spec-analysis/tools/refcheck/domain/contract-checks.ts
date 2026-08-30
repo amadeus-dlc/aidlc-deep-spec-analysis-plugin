@@ -1,7 +1,7 @@
 // CD 検査ファミリー（CD-1..CD-3）— 型付き入力上の純検査。
 // finding/skip の文言・targets・witness refs は旧センサー本体からの逐語移動。
 
-import { type ArtifactPath, safeTarget } from "../../kernel/domain/index.ts";
+import { type ArtifactPath, TargetIds } from "../../kernel/domain/index.ts";
 import { CheckFamilies, CheckFamily } from "./check-family.ts";
 import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import { ContractRows } from "./contract-summary.ts";
@@ -19,7 +19,7 @@ const CD_3 = CheckFamily.reconstitute("CD-3");
 
 export const CONTRACT_FAMILIES = CheckFamilies.of([CD_1, CD_2, CD_3]);
 
-export interface ContractCheckMaterials {
+export interface ContractCheckMaterialsSeed {
   readonly artifact: ArtifactPath;
   readonly depArtifact: ArtifactPath;
   readonly declaredUnits: DeclaredUnitsOutcome;
@@ -27,7 +27,7 @@ export interface ContractCheckMaterials {
   readonly specBlocks: SpecBlockAssessments;
 }
 
-export function runContractChecks(materials: ContractCheckMaterials, ledger: CheckFamilyLedger): void {
+function runContractChecksImpl(materials: ContractCheckMaterialsSeed, ledger: CheckFamilyLedger): void {
   const artifact = materials.artifact.asString();
   const depArtifact = materials.depArtifact.asString();
   const ref = (art: string, element: string, value?: string): WitnessRef =>
@@ -57,17 +57,17 @@ export function runContractChecks(materials: ContractCheckMaterials, ledger: Che
       for (const row of rows) {
         const el = `contracts table row ${row.id.asString()} (line ${row.line.asNumber()})`;
         if (!row.provider.isBlank() && !declared.declares(row.provider.asString())) {
-          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, safeTarget("unit", row.provider.asString())],
+          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, TargetIds.safe("unit", row.provider.asString())],
             [ref(artifact, el, row.provider.asString()), ref(depArtifact, "units")],
             `Provider Unit "${row.provider.asString()}" is not a declared unit`);
         }
         if (!row.consumer.isBlank() && !declared.declares(row.consumer.asString()) && !row.consumer.declaresExternal()) {
-          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, safeTarget("unit", row.consumer.asString())],
+          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, TargetIds.safe("unit", row.consumer.asString())],
             [ref(artifact, el, row.consumer.asString()), ref(depArtifact, "units")],
             `Consumer "${row.consumer.asString()}" is neither a declared unit nor \`External: …\``);
         }
         if (!row.owner.isBlank() && !declared.declares(row.owner.asString())) {
-          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, safeTarget("unit", row.owner.asString())],
+          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, TargetIds.safe("unit", row.owner.asString())],
             [ref(artifact, el, row.owner.asString()), ref(depArtifact, "units")],
             `Owner "${row.owner.asString()}" is not a declared unit`);
         }
@@ -99,11 +99,29 @@ export function runContractChecks(materials: ContractCheckMaterials, ledger: Che
         const depName = dep.asString();
         if (!units.declares(depName)) continue; // dangling edge is units-generation's problem
         if (!rows.coversEdge(depName, uName)) {
-          ledger.finding(CD_3, "consistency-mismatch", [safeTarget("unit", depName), safeTarget("unit", uName)],
+          ledger.finding(CD_3, "consistency-mismatch", [TargetIds.safe("unit", depName), TargetIds.safe("unit", uName)],
             [ref(depArtifact, `units (${uName} depends_on ${depName})`), ref(artifact, "contracts table")],
             `unit dependency edge "${uName}" -> "${depName}" has no contracts-table row in either orientation`);
         }
       }
     }
+  }
+}
+
+// CD 検査材料。検査の起動は材料自身の振る舞い（OOUI 裁定：旧
+// runContractChecks の従属先）。
+export class ContractCheckMaterials {
+  readonly #seed: ContractCheckMaterialsSeed;
+
+  private constructor(seed: ContractCheckMaterialsSeed) {
+    this.#seed = seed;
+  }
+
+  static of(seed: ContractCheckMaterialsSeed): ContractCheckMaterials {
+    return new ContractCheckMaterials(seed);
+  }
+
+  runChecks(ledger: CheckFamilyLedger): void {
+    runContractChecksImpl(this.#seed, ledger);
   }
 }

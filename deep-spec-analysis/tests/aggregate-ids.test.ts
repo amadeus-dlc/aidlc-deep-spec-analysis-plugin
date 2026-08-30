@@ -3,8 +3,16 @@
 // equals は値による恒等比較。domain 90% 床のための分岐網羅。
 
 import { describe, expect, test } from "bun:test";
-import { ArtifactPath, ContentHash, IrVersion } from "../tools/kernel/domain/index.ts";
-import { DesignModelId, DesignUnitId, RefinementMaterialsId } from "../tools/design/domain/index.ts";
+import { ArtifactPath, ContentHash, IrVersion, TargetIds } from "../tools/kernel/domain/index.ts";
+import {
+  BrRefs,
+  DesignIgnores,
+  DesignModelId,
+  DesignTransitions,
+  DesignUnitId,
+  InitialStates,
+  RefinementMaterialsId,
+} from "../tools/design/domain/index.ts";
 import { RefinementMapId } from "../tools/refinement/domain/index.ts";
 import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
 import { FormalModelId } from "../tools/requirements/domain/index.ts";
@@ -174,7 +182,7 @@ describe("requirements first-class collections", () => {
     expect([...bgs].length).toBe(1);
     expect(bgs.toArray()[0]?.id).toBe("B1");
 
-    const finding = { kind: "conflict", frRefs: [], targets: ["OB-1"], witness: { core: [] }, detail: "d" };
+    const finding = { kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.of(["OB-1"]), witness: { core: [] }, detail: "d" };
     const fs = VerificationFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
@@ -211,10 +219,11 @@ import {
 } from "../tools/design/domain/index.ts";
 
 describe("design first-class collections", () => {
-  const ob = { id: "DOB-1", nature: "invariant", origin: "", brRefs: [], frRefs: [], assert: { op: "bool", value: true } };
+  const ob = { id: "DOB-1", nature: "invariant", origin: "", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), assert: { op: "bool", value: true } };
   const machine = {
-    id: "SM-1", entity: "T", attribute: "s", initial: ["a"], deterministic: true,
-    transitions: [{ id: "TR-1", from: "a", to: "b", trigger: "t", brRefs: [] }], ignores: [],
+    id: "SM-1", entity: "T", attribute: "s", initial: InitialStates.of(["a"]), deterministic: true,
+    transitions: DesignTransitions.of([{ id: "TR-1", from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) }]),
+    ignores: DesignIgnores.of([]),
   };
 
   test("immutable add, iteration, and set knowledge", () => {
@@ -224,8 +233,8 @@ describe("design first-class collections", () => {
     expect([...DesignMachines.of([machine])].length).toBe(1);
     expect(DesignMachines.of([machine]).toArray().length).toBe(1);
     expect(DesignObligations.of([ob]).toArray().length).toBe(1);
-    expect(DesignScenarios.of([{ id: "DSC-9", kind: "reject", brRefs: [], frRefs: [], bindings: {} }]).toArray().length).toBe(1);
-    expect(DesignScenarios.of([]).add({ id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} }).ids()).toEqual(["DSC-1"]);
+    expect(DesignScenarios.of([{ id: "DSC-9", kind: "reject", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} }]).toArray().length).toBe(1);
+    expect(DesignScenarios.of([]).add({ id: "DSC-1", kind: "accept", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} }).ids()).toEqual(["DSC-1"]);
     expect([...DesignScenarios.of([])].length).toBe(0);
     expect(DesignBackgroundAssumptions.of([]).add({ id: "DBG-1", assert: { op: "bool", value: true } }).toArray().length).toBe(1);
     expect([...DesignBackgroundAssumptions.of([])].length).toBe(0);
@@ -247,7 +256,7 @@ describe("design first-class collections", () => {
     expect(units.sortedByName().toArray()[0]?.name()).toBe("u2");
     expect([...units].length).toBe(1);
 
-    const finding = { kind: "conflict", frRefs: [], targets: ["DOB-1"], witness: { refs: [] }, unit: "u2", detail: "d" };
+    const finding = { kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.of(["DOB-1"]), witness: { refs: [] }, unit: "u2", detail: "d" };
     const fs = DesignFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
@@ -289,5 +298,21 @@ describe("requirements value collections (first-class operations)", () => {
     expect(values.valueAt(9)).toBe(undefined);
     expect(values.count()).toBe(2);
     expect(values.toArray()).toEqual(["open", "closed"]);
+  });
+});
+
+describe("design part collections (first-class operations)", () => {
+  test("DesignTransitions and DesignIgnores own their frozen orders under add", () => {
+    const t1 = { id: "TR-2", from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) };
+    const t2 = { id: "TR-10", from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) };
+    const trs = DesignTransitions.of([t2]).add(t1);
+    expect([...trs].length).toBe(2);
+    expect(trs.ids()).toEqual(["TR-10", "TR-2"]);
+    expect(trs.sortedCanonically().toArray().map((t) => t.id)).toEqual(["TR-2", "TR-10"]);
+
+    const igs = DesignIgnores.of([{ state: "y", trigger: "go", reason: "" }]).add({ state: "x", trigger: "go", reason: "" });
+    expect([...igs].length).toBe(2);
+    expect(igs.sortedByStateTrigger().toArray().map((i) => i.state)).toEqual(["x", "y"]);
+    expect(igs.toArray().length).toBe(2);
   });
 });

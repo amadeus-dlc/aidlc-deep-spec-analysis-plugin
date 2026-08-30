@@ -1,8 +1,8 @@
 // design/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
 export { type DesignValue } from "./design-value.ts";
-export { type DesignTransition } from "./design-transition.ts";
-export { type DesignMachine, DesignMachines } from "./design-machine.ts";
+export { type DesignTransition, DesignTransitions } from "./design-transition.ts";
+export { type DesignIgnore, type DesignMachine, DesignIgnores, DesignMachines } from "./design-machine.ts";
 export { type DesignObligation, DesignObligations } from "./design-obligation.ts";
 export { type DesignScenario, DesignScenarios } from "./design-scenario.ts";
 export {
@@ -17,20 +17,18 @@ export { type DesignModelComposition, DesignModel } from "./design-model.ts";
 export {
   DesignFindings,
   DesignSkips, type DesignFinding, type DesignSkipped } from "./design-finding.ts";
-export { sortDesignFindings, sortDesignSkipped } from "./design-finding-order.ts";
-export { expressionCanonicalKey } from "./expression-canonical-key.ts";
+export { ExpressionCanonicalKey } from "./expression-canonical-key.ts";
 export {
   type LoweredOrigin,
   type LoweringKind,
   type LoweredBackground,
   type LoweredObligation,
   type LoweredScenario,
-  type LoweredUnit,
   LoweredBackgrounds,
   LoweredObligations,
   LoweredScenarios,
+  LoweredUnit,
   LoweringIndex,
-  lowerUnit,
 } from "./lower-unit.ts";
 export {
   type RemappedUnit,
@@ -39,10 +37,10 @@ export {
   type SiblingVerdictSkip,
   SiblingVerdictFindings,
   SiblingVerdictSkips,
-  remapUnitDocument,
 } from "./remap-unit-doc.ts";
 export { DesignReportId } from "./design-report-id.ts";
 export {
+  SUPPORTED_DESIGN_IR_MAJOR,
   CheckedUnits,
   DesignCrossCheckedEntries,
   DesignInputAnchors,
@@ -53,13 +51,6 @@ export {
   type DesignReportSeed,
   DesignReport,
 } from "./design-report.ts";
-export { designCrossCheckReport } from "./design-cross-check.ts";
-export {
-  SUPPORTED_DESIGN_IR_MAJOR,
-  designBackendUnavailableReport,
-  designIrUnreadableReport,
-  designVersionMismatchReport,
-} from "./design-degradation.ts";
 export {
   BindingPairs,
   BrRefs,

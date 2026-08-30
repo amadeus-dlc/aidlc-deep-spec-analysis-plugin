@@ -16,12 +16,7 @@ import {
   validateSchema,
 } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok, unreachable } from "../tools/kernel/infrastructure/index.ts";
-import {
-  idCompare,
-  normalizeName,
-  safeTarget,
-  sortedUnique,
-} from "../tools/kernel/domain/index.ts";
+import { Expressions, IdOrder, Names, TargetIds } from "../tools/kernel/domain/index.ts";
 
 describe("result", () => {
   test("ok and err narrow through the ok discriminant", () => {
@@ -77,18 +72,18 @@ describe("canonical-json + content-hash", () => {
 
 describe("id-order", () => {
   test("letter skeleton orders before numeric segments", () => {
-    expect(idCompare("DD-2", "FD-1")).toBeLessThan(0);
-    expect(idCompare("OB-2", "OB-10")).toBeLessThan(0);
-    expect(idCompare("BR1.2", "BR1.10")).toBeLessThan(0);
-    expect(idCompare("OB-1", "OB-1")).toBe(0);
+    expect(IdOrder.compare("DD-2", "FD-1")).toBeLessThan(0);
+    expect(IdOrder.compare("OB-2", "OB-10")).toBeLessThan(0);
+    expect(IdOrder.compare("BR1.2", "BR1.10")).toBeLessThan(0);
+    expect(IdOrder.compare("OB-1", "OB-1")).toBe(0);
   });
 
   test("a shorter id sorts before its extension (missing segment pads with -1)", () => {
-    expect(idCompare("BR1", "BR1.1")).toBeLessThan(0);
+    expect(IdOrder.compare("BR1", "BR1.1")).toBeLessThan(0);
   });
 
   test("sortedUnique deduplicates then sorts with the given comparator", () => {
-    expect(sortedUnique(["OB-10", "OB-2", "OB-2"], idCompare)).toEqual(["OB-2", "OB-10"]);
+    expect(IdOrder.sortedUnique(["OB-10", "OB-2", "OB-2"], IdOrder.compare)).toEqual(["OB-2", "OB-10"]);
   });
 });
 
@@ -247,11 +242,11 @@ describe("schema-validator — per-keyword exact messages", () => {
 
 describe("target-id / requirement-ids / name-normalize", () => {
   test("safeTarget sanitizes out-of-alphabet characters and empty tokens", () => {
-    expect(safeTarget("unit", "u1-orders")).toBe("unit:u1-orders");
-    expect(safeTarget("entity", "Order Item")).toBe("entity:Order-Item");
-    expect(safeTarget("component", "")).toBe("component:unknown");
+    expect(TargetIds.safe("unit", "u1-orders")).toBe("unit:u1-orders");
+    expect(TargetIds.safe("entity", "Order Item")).toBe("entity:Order-Item");
+    expect(TargetIds.safe("component", "")).toBe("component:unknown");
     // 置換であって削除ではない: 各文字が "-" になる（凍結挙動の記録）。
-    expect(safeTarget("attr", "注文")).toBe("attr:--");
+    expect(TargetIds.safe("attr", "注文")).toBe("attr:--");
   });
 
   test("requirementIds finds FR/NFR ids with optional dash and dotted segments", () => {
@@ -259,7 +254,15 @@ describe("target-id / requirement-ids / name-normalize", () => {
   });
 
   test("normalizeName casefolds and strips non-alphanumerics", () => {
-    expect(normalizeName("Order_Item")).toBe("orderitem");
-    expect(normalizeName("OrderItem")).toBe("orderitem");
+    expect(Names.normalize("Order_Item")).toBe("orderitem");
+    expect(Names.normalize("OrderItem")).toBe("orderitem");
+  });
+});
+
+describe("companion seals", () => {
+  test("static companions are sealed (ctor spent at class initialization)", () => {
+    expect(IdOrder.isSealed()).toBe(true);
+    expect(Names.isSealed()).toBe(true);
+    expect(Expressions.isSealed()).toBe(true);
   });
 });

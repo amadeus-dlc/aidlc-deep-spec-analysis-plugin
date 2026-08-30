@@ -2,7 +2,8 @@
 // unsat core のラベル列・decode 済み状態モデル・クロスチェック判定表・
 // 状態機械のステップトレース。
 
-import { idCompare } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
+import type { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import type { TraceState } from "./trace-state.ts";
 
 export type VerificationWitness =
@@ -13,8 +14,8 @@ export type VerificationWitness =
 
 export interface VerificationFinding {
   kind: string;
-  frRefs: string[];
-  targets: string[];
+  frRefs: FrRefs;
+  targets: TargetIds;
   witness: VerificationWitness;
   detail: string;
 }
@@ -45,8 +46,8 @@ function sortVerificationFindings(findings: readonly VerificationFinding[]): Ver
   return [...findings].sort((a, b) => {
     const kr = rankOf(a.kind) - rankOf(b.kind);
     if (kr !== 0) return kr;
-    const ta = a.targets.join(",");
-    const tb = b.targets.join(",");
+    const ta = a.targets.joined(",");
+    const tb = b.targets.joined(",");
     if (ta !== tb) return ta < tb ? -1 : 1;
     return a.detail < b.detail ? -1 : a.detail > b.detail ? 1 : 0;
   });
@@ -54,7 +55,7 @@ function sortVerificationFindings(findings: readonly VerificationFinding[]): Ver
 
 function sortVerificationSkipped(skipped: readonly VerificationSkipped[]): VerificationSkipped[] {
   return [...skipped].sort((a, b) => {
-    const c = idCompare(a.target, b.target);
+    const c = IdOrder.compare(a.target, b.target);
     if (c !== 0) return c;
     return a.reason < b.reason ? -1 : a.reason > b.reason ? 1 : 0;
   });

@@ -21,6 +21,7 @@ import {
   DesignRecord,
   type DesignRecordSeed,
   type InputAnchor,
+  InputAnchors,
   UnitName,
 } from "../domain/index.ts";
 import type { DesignRecordRepository } from "../usecase/index.ts";
@@ -128,9 +129,11 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
       componentsArtifact: ArtifactPath.reconstitute(componentsPath === null ? "components.md" : rel(componentsPath)),
       components,
       siblingUnits: buildSiblingUnitEntities(siblingTexts),
-      siblingInputs: siblingTexts
-        .filter((s) => s.path !== entitiesPath)
-        .map((s) => ({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) })),
+      siblingInputs: InputAnchors.of(
+        siblingTexts
+          .filter((s) => s.path !== entitiesPath)
+          .map((s) => ({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) })),
+      ),
     };
   }
 }

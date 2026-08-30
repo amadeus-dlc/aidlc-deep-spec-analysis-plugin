@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
@@ -50,7 +50,7 @@ import {
   VerificationReport,
   VerificationReportId,
   VerificationSkips,
-  evaluateExpression,
+  ExpressionEvaluation,
   FormalModelId,
 } from "../tools/requirements/domain/index.ts";
 import {
@@ -265,8 +265,8 @@ describe("quint verdict interpretation", () => {
     const withTrace = run({ machine: { kind: "deadlock", trace: TraceStates.of([{ "T.ok": true }]) } });
     expect([...withTrace.findings]).toEqual([{
       kind: "completeness-gap",
-      frRefs: ["FR-2"],
-      targets: ["OB-2"],
+      frRefs: FrRefs.of(["FR-2"]),
+      targets: TargetIds.of(["OB-2"]),
       witness: { trace: [{ "T.ok": true }] },
       detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
     }]);
@@ -278,13 +278,13 @@ describe("quint verdict interpretation", () => {
     const attributed = run({ machine: { kind: "violation", trace: TraceStates.of([{ "T.ok": true }, { "T.ok": false }]) } });
     expect([...attributed.findings]).toEqual([{
       kind: "conflict",
-      frRefs: ["FR-1", "FR-2"],
-      targets: ["OB-1"],
+      frRefs: FrRefs.of(["FR-1", "FR-2"]),
+      targets: TargetIds.of(["OB-1"]),
       witness: { trace: [{ "T.ok": true }, { "T.ok": false }] },
       detail: "The event machine can reach a state that violates OB-1 (step trace attached): the event rules do not preserve the obligation.",
     }]);
     const unattributed = run({ machine: { kind: "violation", trace: TraceStates.of([{ "T.ok": true }]) } });
-    expect(unattributed.findings.toArray()[0]?.targets).toEqual(["OB-2"]);
+    expect(unattributed.findings.toArray()[0]?.targets.toArray()).toEqual(["OB-2"]);
   });
 
   test("a failed machine run skips its targets with the verify/run wording per method", () => {
@@ -307,8 +307,8 @@ describe("quint verdict interpretation", () => {
     const violated = run({ temporals: new Map([["OB-3", { kind: "violation", trace: TraceStates.of([{ "T.ok": false }]) }]]) }, "bounded");
     expect(violated.findings.toArray()[0]).toEqual({
       kind: "conflict",
-      frRefs: ["FR-3"],
-      targets: ["OB-3"],
+      frRefs: FrRefs.of(["FR-3"]),
+      targets: TargetIds.of(["OB-3"]),
       witness: { trace: [{ "T.ok": false }] },
       detail: 'Temporal obligation OB-3 (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.',
     });
@@ -337,16 +337,16 @@ describe("quint verdict interpretation", () => {
     const acceptViolated = run({ scenarios: new Map([["SC-1", { kind: "evaluated", violated: true }]]) });
     expect([...acceptViolated.findings]).toEqual([{
       kind: "scenario-violation",
-      frRefs: ["FR-1"],
-      targets: ["OB-1", "SC-1"],
+      frRefs: FrRefs.of(["FR-1"]),
+      targets: TargetIds.of(["OB-1", "SC-1"]),
       witness: { model: { "T.ok": false } },
       detail: "Accept scenario SC-1 describes a state the obligations rule out — the requirements reject an example that should be accepted.",
     }]);
     const rejectAccepted = run({ scenarios: new Map([["SC-2", { kind: "evaluated", violated: false }]]) });
     expect([...rejectAccepted.findings]).toEqual([{
       kind: "scenario-violation",
-      frRefs: ["FR-2"],
-      targets: ["SC-2"],
+      frRefs: FrRefs.of(["FR-2"]),
+      targets: TargetIds.of(["SC-2"]),
       witness: { model: { "T.ok": true } },
       detail: "Reject scenario SC-2 is accepted by every obligation — the requirements do not exclude an example that should be rejected.",
     }]);
@@ -362,26 +362,26 @@ describe("expression evaluation (pure attribution)", () => {
   const int = (value: number) => ({ op: "int", value });
 
   test("boolean, comparison, and arithmetic operators evaluate over the state", () => {
-    expect(evaluateExpression({ op: "and", args: [{ op: "bool", value: true }, ref("T.b")] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "or", args: [{ op: "bool", value: false }] }, state)).toBe(false);
-    expect(evaluateExpression({ op: "not", args: [ref("T.b")] }, state)).toBe(false);
-    expect(evaluateExpression({ op: "implies", args: [ref("T.b"), { op: "bool", value: false }] }, state)).toBe(false);
-    expect(evaluateExpression({ op: "iff", args: [ref("T.b"), { op: "bool", value: true }] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "eq", args: [ref("T.s"), { op: "enum", value: "on" }] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "ne", args: [ref("T.n"), int(3)] }, state)).toBe(false);
-    expect(evaluateExpression({ op: "lt", args: [ref("T.n"), int(4)] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "le", args: [ref("T.n"), int(3)] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "gt", args: [ref("T.n"), int(3)] }, state)).toBe(false);
-    expect(evaluateExpression({ op: "ge", args: [ref("T.n"), int(3)] }, state)).toBe(true);
-    expect(evaluateExpression({ op: "add", args: [ref("T.n"), int(1)] }, state)).toBe(4);
-    expect(evaluateExpression({ op: "sub", args: [ref("T.n"), int(1)] }, state)).toBe(2);
-    expect(evaluateExpression({ op: "mul", args: [ref("T.n"), int(2)] }, state)).toBe(6);
+    expect(ExpressionEvaluation.evaluate({ op: "and", args: [{ op: "bool", value: true }, ref("T.b")] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "or", args: [{ op: "bool", value: false }] }, state)).toBe(false);
+    expect(ExpressionEvaluation.evaluate({ op: "not", args: [ref("T.b")] }, state)).toBe(false);
+    expect(ExpressionEvaluation.evaluate({ op: "implies", args: [ref("T.b"), { op: "bool", value: false }] }, state)).toBe(false);
+    expect(ExpressionEvaluation.evaluate({ op: "iff", args: [ref("T.b"), { op: "bool", value: true }] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "eq", args: [ref("T.s"), { op: "enum", value: "on" }] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "ne", args: [ref("T.n"), int(3)] }, state)).toBe(false);
+    expect(ExpressionEvaluation.evaluate({ op: "lt", args: [ref("T.n"), int(4)] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "le", args: [ref("T.n"), int(3)] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "gt", args: [ref("T.n"), int(3)] }, state)).toBe(false);
+    expect(ExpressionEvaluation.evaluate({ op: "ge", args: [ref("T.n"), int(3)] }, state)).toBe(true);
+    expect(ExpressionEvaluation.evaluate({ op: "add", args: [ref("T.n"), int(1)] }, state)).toBe(4);
+    expect(ExpressionEvaluation.evaluate({ op: "sub", args: [ref("T.n"), int(1)] }, state)).toBe(2);
+    expect(ExpressionEvaluation.evaluate({ op: "mul", args: [ref("T.n"), int(2)] }, state)).toBe(6);
   });
 
   test("missing references and unknown operators fall to null (tolerant evaluation)", () => {
-    expect(evaluateExpression({ op: "ref", path: "T.missing" }, state)).toBe(null);
-    expect(evaluateExpression({ op: "mystery" }, state)).toBe(null);
-    expect(evaluateExpression({ op: "int", value: 7 }, state)).toBe(7);
+    expect(ExpressionEvaluation.evaluate({ op: "ref", path: "T.missing" }, state)).toBe(null);
+    expect(ExpressionEvaluation.evaluate({ op: "mystery" }, state)).toBe(null);
+    expect(ExpressionEvaluation.evaluate({ op: "int", value: 7 }, state)).toBe(7);
   });
 });
 
@@ -419,5 +419,11 @@ describe("quint facts collections (first-class operations)", () => {
     const facts = QuintMachineFacts.of({ invariantComponents: comps, eventIds: ["OB-9", "OB-2"], scenariosWithInit: new Set() });
     expect(facts.hasInvariantComponents()).toBe(true);
     expect(facts.machineTargets()).toEqual(["OB-1", "OB-2", "OB-9"]);
+  });
+});
+
+describe("companion seals", () => {
+  test("ExpressionEvaluation is sealed", () => {
+    expect(ExpressionEvaluation.isSealed()).toBe(true);
   });
 });

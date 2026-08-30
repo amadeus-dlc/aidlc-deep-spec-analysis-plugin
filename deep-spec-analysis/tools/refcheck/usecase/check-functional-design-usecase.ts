@@ -7,11 +7,11 @@ import {
   type CheckExecutionMode,
   type DesignRecordId,
   CheckFamilyLedger,
+  InputAnchors,
   FUNCTIONAL_FAMILIES,
-  type InputAnchor,
+  FunctionalCheckMaterials,
   ReferenceCheckReport,
   ReferenceCheckReportId,
-  runFunctionalChecks,
 } from "../domain/index.ts";
 import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
@@ -40,7 +40,7 @@ export class CheckFunctionalDesignUseCase {
     if (fd === null) return { kind: "not-applicable" };
 
     const ledger = new CheckFamilyLedger(FUNCTIONAL_FAMILIES, fd.unit);
-    runFunctionalChecks({
+    FunctionalCheckMaterials.of({
       unit: fd.unit,
       entitiesArtifact: fd.entitiesArtifact,
       entities: fd.entities === null ? { kind: "absent" } : fd.entities.outcome,
@@ -52,15 +52,15 @@ export class CheckFunctionalDesignUseCase {
       componentsArtifact: fd.componentsArtifact,
       domainEntities: fd.components === null ? { kind: "absent" } : fd.components.outcome,
       siblingUnits: fd.siblingUnits,
-    }, ledger);
+    }).runChecks(ledger);
 
-    const inputs: InputAnchor[] = [];
-    if (fd.entities !== null) inputs.push(fd.entities.input);
-    if (fd.rules !== null) inputs.push(fd.rules.input);
-    if (fd.requirements !== null) inputs.push(fd.requirements.input);
-    if (fd.spec !== null) inputs.push(fd.spec.input);
-    if (fd.components !== null) inputs.push(fd.components.input);
-    inputs.push(...fd.siblingInputs);
+    let inputs = InputAnchors.of([]);
+    if (fd.entities !== null) inputs = inputs.add(fd.entities.input);
+    if (fd.rules !== null) inputs = inputs.add(fd.rules.input);
+    if (fd.requirements !== null) inputs = inputs.add(fd.requirements.input);
+    if (fd.spec !== null) inputs = inputs.add(fd.spec.input);
+    if (fd.components !== null) inputs = inputs.add(fd.components.input);
+    inputs = inputs.addAll(fd.siblingInputs);
 
     const report = ReferenceCheckReport.compose({
       id: ReferenceCheckReportId.of(input.reportDirectory, "functional-design"),

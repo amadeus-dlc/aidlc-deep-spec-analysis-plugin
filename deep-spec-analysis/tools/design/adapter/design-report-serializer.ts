@@ -4,7 +4,7 @@
 // `JSON.stringify(・, null, 2) + "\n"` の描画・findings スキーマ自己検証・
 // 降格文言（golden 凍結）は本モジュールの責務。
 
-import { ContentHash, IrVersion, type ArtifactPath } from "../../kernel/domain/index.ts";
+import { ContentHash, FrRefs, IrVersion, TargetIds, type ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
@@ -16,8 +16,8 @@ import {
   DesignInputAnchors,
   DesignSkips,
   type DesignCrossCheckedEntry,
-  type DesignFinding,
   type DesignSkipped,
+  type DesignValue,
   DesignReport,
   DesignReportId,
 } from "../domain/index.ts";
@@ -36,8 +36,26 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
   if (inputs !== null) ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact, sha256: i.sha256.asString() })) as unknown as Json;
   const checked = report.checked();
   if (checked !== null) ordered.checked = checked.toArray() as unknown as Json;
-  ordered.findings = report.findings().toArray() as unknown as Json;
-  ordered.skipped = report.skipped().toArray() as unknown as Json;
+  // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
+  // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
+  // frRefs, targets, witness, unit, detail)、skip は (target, reason, unit,
+  // detail?)。witness は remap 素通し値（DesignValue）で逐語描画。
+  ordered.findings = report.findings().toArray().map((f) => {
+    const out: { [k: string]: Json } = {
+      kind: f.kind,
+      frRefs: f.frRefs.toArray() as unknown as Json,
+      targets: f.targets.toArray() as unknown as Json,
+      witness: f.witness as unknown as Json,
+      unit: f.unit,
+      detail: f.detail,
+    };
+    return out as Json;
+  });
+  ordered.skipped = report.skipped().toArray().map((sk) => {
+    const out: { [k: string]: Json } = { target: sk.target, reason: sk.reason, unit: sk.unit };
+    if (sk.detail !== undefined) out.detail = sk.detail;
+    return out as Json;
+  });
   const crossChecked = report.crossChecked();
   if (crossChecked !== null) ordered.crossChecked = crossChecked.toArray() as unknown as Json;
   return ordered;
@@ -83,8 +101,30 @@ export function parseSiblingDesignReportDocument(
     irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
     irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
     method: typeof raw.method === "string" ? raw.method : "",
-    findings: DesignFindings.of((Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []) as unknown as DesignFinding[]),
-    skipped: DesignSkips.of(skipped as unknown as DesignSkipped[]),
+    findings: DesignFindings.of(
+      (Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []).map((e) => {
+        const entry = e as { [k: string]: Json };
+        return {
+          kind: typeof entry.kind === "string" ? entry.kind : "",
+          frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
+          targets: TargetIds.of(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
+          witness: (entry.witness ?? null) as unknown as DesignValue,
+          unit: typeof entry.unit === "string" ? entry.unit : "",
+          detail: typeof entry.detail === "string" ? entry.detail : "",
+        };
+      }),
+    ),
+    skipped: DesignSkips.of(
+      skipped.map((entry) => {
+        const sk: DesignSkipped = {
+          target: typeof entry.target === "string" ? entry.target : "",
+          reason: typeof entry.reason === "string" ? entry.reason : "",
+          unit: typeof entry.unit === "string" ? entry.unit : "",
+        };
+        if (typeof entry.detail === "string") sk.detail = entry.detail;
+        return sk;
+      }),
+    ),
     inputs: Array.isArray(raw.inputs)
       ? DesignInputAnchors.of((raw.inputs as Json[]).map((e) => {
           const entry = isObject(e) ? e : {};

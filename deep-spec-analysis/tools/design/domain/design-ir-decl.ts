@@ -166,6 +166,10 @@ export class InitialStates {
     yield* this.#values;
   }
 
+  includes(value: string): boolean {
+    return this.#values.includes(value);
+  }
+
   toArray(): readonly string[] {
     return this.#values;
   }

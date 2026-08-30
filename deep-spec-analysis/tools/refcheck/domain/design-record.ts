@@ -7,6 +7,7 @@
 import { type ArtifactPath, type RequirementIds } from "../../kernel/domain/index.ts";
 import type { DesignRecordId } from "./design-record-id.ts";
 import type { InputAnchor } from "./input-anchor.ts";
+import type { InputAnchors } from "./input-anchor.ts";
 import type { ComponentCatalogOutcome } from "./component-catalog.ts";
 import type { ContractsTableOutcome, DeclaredUnitsOutcome, SpecBlockAssessments } from "./contract-summary.ts";
 import type { UnitName } from "./unit-name.ts";
@@ -48,7 +49,7 @@ export interface DesignRecordSeed {
     readonly componentsArtifact: ArtifactPath;
     readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
     readonly siblingUnits: SiblingUnitIndex;
-    readonly siblingInputs: readonly InputAnchor[];
+    readonly siblingInputs: InputAnchors;
   } | null;
 }
 

@@ -3,7 +3,7 @@
 // ドメインが行う。allUnitTargets / enumValuesOf は旧自由関数のメソッド化。
 
 import { DesignUnitId } from "./design-unit-id.ts";
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "./design-machine.ts";
 import { DesignObligations } from "./design-obligation.ts";
@@ -143,9 +143,9 @@ export class DesignUnit {
 
   // このユニットでバックエンドが検査し得る全対象（義務・遷移・シナリオ）。
   allTargets(): string[] {
-    return sortedUnique(
+    return IdOrder.sortedUnique(
       [...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()],
-      idCompare,
+      IdOrder.compare,
     );
   }
 

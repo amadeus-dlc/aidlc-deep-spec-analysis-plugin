@@ -10,7 +10,7 @@
 // ときの黙殺条件（isObject / typeof チェック）はパーサ側へ移り、ここに来る
 // 時点で型は確定している。
 
-import { type Expression, walkExpression } from "../../kernel/domain/index.ts";
+import { type Expression, Expressions } from "../../kernel/domain/index.ts";
 
 // enum 属性の宣言値のコレクション（宣言順を保持——序数対応・文言順に効く）。
 export class IrDeclaredValues {
@@ -283,7 +283,7 @@ export class IrModelDecl {
     }
 
     const checkExpr = (e: Expression, where: string, primesAllowed: boolean): void => {
-      walkExpression(e, (node) => {
+      Expressions.walk(e, (node) => {
         if (node.op === "ref" && typeof node.path === "string") {
           if (!attrTypes.has(node.path)) {
             errors.push(`${where}: unresolvable reference "${node.path}"`);

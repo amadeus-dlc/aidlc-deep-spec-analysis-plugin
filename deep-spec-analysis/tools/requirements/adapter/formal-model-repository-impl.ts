@@ -5,7 +5,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
-import { ContentHash, } from "../../kernel/domain/index.ts";
+import { ContentHash } from "../../kernel/domain/index.ts";
 import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import { type FormalModelId, RequirementsModel } from "../domain/index.ts";

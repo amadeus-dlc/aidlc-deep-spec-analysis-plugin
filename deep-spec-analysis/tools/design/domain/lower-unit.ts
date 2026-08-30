@@ -11,12 +11,17 @@
 // 旧 deep-spec-design-lib.ts の lowerUnit からの逐語移植（Json 組み立ては
 // アダプタの serializer が担い、ここは型付き lowering を返す）。
 
-import { idCompare } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import type { DesignMachine } from "./design-machine.ts";
 import type { DesignObligation } from "./design-obligation.ts";
 import type { DesignUnit } from "./design-unit.ts";
-import { expressionCanonicalKey } from "./expression-canonical-key.ts";
+import { ExpressionCanonicalKey } from "./expression-canonical-key.ts";
+import { DesignFindings, DesignSkips } from "./design-finding.ts";
+import type { DesignFinding, DesignSkipped } from "./design-finding.ts";
+import type { DesignValue } from "./design-value.ts";
+import type { RemappedUnit, SiblingVerdictDocument } from "./remap-unit-doc.ts";
+
 
 export type LoweringKind = "passthrough" | "transition" | "ignore" | "vac-dead" | "vac-shadow";
 
@@ -51,11 +56,180 @@ export interface LoweredBackground {
   assert: Expression;
 }
 
-export interface LoweredUnit {
-  readonly obligations: LoweredObligations;
-  readonly scenarios: LoweredScenarios;
-  readonly background: LoweredBackgrounds;
-  readonly index: LoweringIndex;
+// lowering の結果（3 コレクション + 帰属索引）。構築（旧 lowerUnit）・
+// refinement 追加パスによる不変拡張・v1 判定の設計語彙への remap（旧
+// remapUnitDocument）を自身の振る舞いとして持つ（OOUI 裁定）。
+export class LoweredUnit {
+  readonly #obligations: LoweredObligations;
+  readonly #scenarios: LoweredScenarios;
+  readonly #background: LoweredBackgrounds;
+  readonly #index: LoweringIndex;
+
+  private constructor(props: {
+    obligations: LoweredObligations;
+    scenarios: LoweredScenarios;
+    background: LoweredBackgrounds;
+    index: LoweringIndex;
+  }) {
+    this.#obligations = props.obligations;
+    this.#scenarios = props.scenarios;
+    this.#background = props.background;
+    this.#index = props.index;
+  }
+
+  obligations(): LoweredObligations {
+    return this.#obligations;
+  }
+
+  scenarios(): LoweredScenarios {
+    return this.#scenarios;
+  }
+
+  background(): LoweredBackgrounds {
+    return this.#background;
+  }
+
+  index(): LoweringIndex {
+    return this.#index;
+  }
+
+  // refinement 追加パス：追加不変量つき義務列と拡張済み索引での組み直し。
+  extendedWith(obligations: LoweredObligations, index: LoweringIndex): LoweredUnit {
+    return new LoweredUnit({ obligations, scenarios: this.#scenarios, background: this.#background, index });
+  }
+
+  static of(u: DesignUnit, opts: { synthetics: boolean }): LoweredUnit {
+    return new LoweredUnit(buildLowering(u, opts));
+  }
+
+  // remap — lowered v1 判定を設計語彙（DOB/TR/SM/DSC id・unit 帰属）へ写す。
+  // 旧 remapUnitDocument の逐語移植。
+  remapVerdicts(u: DesignUnit, doc: SiblingVerdictDocument): RemappedUnit {
+    if (doc.kind === "unreadable") {
+      return { findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: "sibling backend produced no findings document", method: null };
+    }
+    if (doc.kind === "unavailable") {
+      return { findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: doc.reason, method: doc.method };
+    }
+    const method = doc.method;
+    const mapTarget = (t: string): { design: string; entry: LoweredOrigin | null } => this.#index.resolveDesignTarget(t);
+    const remapCore = (core: DesignValue): DesignValue => {
+      if (!Array.isArray(core)) return core;
+      return core.map((label) => (typeof label === "string" ? this.#index.rewriteLoweredIdTokens(label) : label));
+    };
+    const remapDetail = (detail: string): string => this.#index.rewriteLoweredIds(detail);
+
+    const findings: DesignFinding[] = [];
+    const skipped: DesignSkipped[] = [];
+    const waived = new Set<string>();
+    const deadDesignIds = new Set<string>();
+    const shadowFindings: { finding: DesignFinding; subsumer: string; subsumed: string }[] = [];
+
+    for (const f of doc.findings) {
+      const mapped = f.targets.map(mapTarget);
+      const frRefs = f.frRefs;
+      const detail = remapDetail(f.detail);
+      let witness = f.witness;
+      if (isRecord(witness) && "core" in witness) {
+        witness = { core: remapCore(witness.core ?? null) };
+      }
+
+      const synth = mapped.find((m) => m.entry?.kind === "vac-dead" || m.entry?.kind === "vac-shadow");
+      if (synth?.entry?.kind === "vac-dead" && f.kind === "conflict") {
+        const design = synth.entry.design;
+        const isTransition = this.#index.isTransition(design);
+        deadDesignIds.add(design);
+        findings.push({
+          kind: "unreachable",
+          frRefs: FrRefs.of(frRefs),
+          targets: TargetIds.of([design]),
+          witness,
+          unit: u.name(),
+          detail: `The guard of ${design} can never hold under the entity constraints and invariants (witness core attached): the ${isTransition ? "transition" : "rule"} is dead.`,
+        });
+        continue;
+      }
+      if (synth?.entry?.kind === "vac-shadow" && f.kind === "conflict") {
+        const pair = synth.entry.pair ?? [synth.entry.design, synth.entry.design];
+        shadowFindings.push({
+          finding: {
+            kind: "redundancy",
+            frRefs: FrRefs.of(frRefs),
+            targets: TargetIds.of(IdOrder.sortedUnique([pair[0], pair[1]], IdOrder.compare)),
+            witness,
+            unit: u.name(),
+            detail: `${pair[1]} is subsumed by ${pair[0]}: same trigger, a provably narrower guard, and an identical effect — it can never apply where ${pair[0]} does not.`,
+          },
+          subsumer: pair[0],
+          subsumed: pair[1],
+        });
+        continue;
+      }
+      if (synth) continue; // 合成に触れる他の判定はノイズ
+
+      const targets = IdOrder.sortedUnique(mapped.map((m) => m.design), IdOrder.compare);
+      // deterministic:false waiver：同トリガ conflict の対象がすべて、非決定を
+      // 宣言した 1 機械の遷移であるとき。
+      if (f.kind === "conflict" && targets.length > 0) {
+        const machines = targets.map((t) => this.#index.machineOfTransition(t));
+        const first = machines[0];
+        if (first && machines.every((m) => m === first) && first.deterministic === false) {
+          for (const t of targets) {
+            if (!waived.has(t)) {
+              waived.add(t);
+              skipped.push({
+                target: t,
+                reason: "waived",
+                unit: u.name(),
+                detail: `machine ${first.id} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
+              });
+            }
+          }
+          continue;
+        }
+      }
+      findings.push({ kind: f.kind, frRefs: FrRefs.of(frRefs), targets: TargetIds.of(targets), witness, unit: u.name(), detail });
+    }
+
+    // shadow の後段：死んだルール/遷移は既に unreachable——その空虚な包摂は何も
+    // 加えない。相互包摂（両方向証明）は 1 件の「等価」finding へ畳む。
+    const liveShadows = shadowFindings.filter((s) => !deadDesignIds.has(s.subsumed) && !deadDesignIds.has(s.subsumer));
+    const byPair = new Map<string, typeof liveShadows>();
+    for (const s of liveShadows) {
+      const key = s.finding.targets.joined(",");
+      const list = byPair.get(key) ?? [];
+      list.push(s);
+      byPair.set(key, list);
+    }
+    for (const key of [...byPair.keys()].sort()) {
+      const list = byPair.get(key) ?? [];
+      const directions = new Set(list.map((s) => `${s.subsumer}>${s.subsumed}`));
+      const first = list[0];
+      if (!first) continue;
+      if (list.length >= 2 && directions.size >= 2) {
+        const [a, b] = first.finding.targets.toArray();
+        findings.push({
+          ...first.finding,
+          detail: `${a} and ${b} are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect — one of them can be removed.`,
+        });
+      } else {
+        findings.push(first.finding);
+      }
+    }
+
+    const seenSkip = new Set<string>();
+    for (const s of doc.skipped) {
+      const { design, entry } = mapTarget(s.target);
+      if (entry?.kind === "vac-dead" || entry?.kind === "vac-shadow") continue; // 合成の予算ノイズ
+      const key = `${design}|${s.reason}`;
+      if (seenSkip.has(key)) continue;
+      seenSkip.add(key);
+      const out: DesignSkipped = { target: design, reason: s.reason, unit: u.name() };
+      if (typeof s.detail === "string") out.detail = remapDetail(s.detail);
+      skipped.push(out);
+    }
+    return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped), unavailable: null, method };
+  }
 }
 
 // lowered 義務のファーストクラスコレクション。OB-n 採番順は文書バイトに
@@ -148,6 +322,10 @@ export class LoweredBackgrounds {
 }
 
 // SMT 変数名は設計 id の英数字化（remap の witness core 書き換えと同じ規則）。
+function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 function designToken(id: string): string {
   return id.replace(/[^A-Za-z0-9_]/g, "_");
 }
@@ -250,7 +428,12 @@ const eqRef = (path: string, prime: boolean, value: string): Expression => ({
   args: [{ op: "ref", path, ...(prime ? { prime: true } : {}) }, { op: "enum", value }],
 });
 
-export function lowerUnit(u: DesignUnit, opts: { synthetics: boolean }): LoweredUnit {
+function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
+  obligations: LoweredObligations;
+  scenarios: LoweredScenarios;
+  background: LoweredBackgrounds;
+  index: LoweringIndex;
+} {
   const map = new Map<string, LoweredOrigin>();
   const scenarioMap = new Map<string, string>();
   const machineOfTransition = new Map<string, DesignMachine>();
@@ -279,10 +462,10 @@ export function lowerUnit(u: DesignUnit, opts: { synthetics: boolean }): Lowered
 
   // 1) 設計義務は素通し（frRefs は帰属のため保持。空の frRefs は lowered
   //    文書で適法——v1 バックエンドは frRefs を不透明な帰属文字列として扱う）。
-  for (const ob of [...u.obligations()].sort((a, b) => idCompare(a.id, b.id))) {
+  for (const ob of [...u.obligations()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
     const lowered: Omit<LoweredObligation, "id"> = {
       nature: ob.nature,
-      frRefs: ob.frRefs,
+      frRefs: [...ob.frRefs],
     };
     if (ob.assert) lowered.assert = ob.assert;
     if (ob.trigger !== undefined) lowered.trigger = ob.trigger;
@@ -297,10 +480,10 @@ export function lowerUnit(u: DesignUnit, opts: { synthetics: boolean }): Lowered
 
   // 2) 状態機械のコンパイルダウン：遷移 → 暗黙ガード・効果つき event 義務、
   //    ignores → 明示 no-op event。
-  for (const sm of [...u.machines()].sort((a, b) => idCompare(a.id, b.id))) {
+  for (const sm of [...u.machines()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
     const attrPath = `${sm.entity}.${sm.attribute}`;
     attrPathOfMachine.set(sm.id, attrPath);
-    for (const tr of [...sm.transitions].sort((a, b) => idCompare(a.id, b.id))) {
+    for (const tr of sm.transitions.sortedCanonically()) {
       const guard: Expression = tr.guard ? { op: "and", args: [eqRef(attrPath, false, tr.from), tr.guard] } : eqRef(attrPath, false, tr.from);
       const effect: Expression = tr.effect ? { op: "and", args: [eqRef(attrPath, true, tr.to), tr.effect] } : eqRef(attrPath, true, tr.to);
       const lowId = push(
@@ -310,7 +493,7 @@ export function lowerUnit(u: DesignUnit, opts: { synthetics: boolean }): Lowered
       machineOfTransition.set(tr.id, sm);
       candidates.push({ lowId, design: tr.id, trigger: tr.trigger, guard, effect });
     }
-    const sortedIgnores = [...sm.ignores].sort((a, b) => (`${a.state}/${a.trigger}` < `${b.state}/${b.trigger}` ? -1 : 1));
+    const sortedIgnores = sm.ignores.sortedByStateTrigger();
     for (const ig of sortedIgnores) {
       const effect: Expression = { op: "eq", args: [{ op: "ref", path: attrPath, prime: true }, { op: "ref", path: attrPath }] };
       push(
@@ -340,7 +523,7 @@ export function lowerUnit(u: DesignUnit, opts: { synthetics: boolean }): Lowered
       for (const a of list) {
         for (const b of list) {
           if (a === b) continue;
-          if (expressionCanonicalKey(a.effect) !== expressionCanonicalKey(b.effect)) continue;
+          if (ExpressionCanonicalKey.of(a.effect) !== ExpressionCanonicalKey.of(b.effect)) continue;
           // (guardB and not guardA) の空虚性は guardB => guardA を証明する：
           // b は a に包摂される（同トリガ・証明可能に狭いガード・同一効果）。
           push(
@@ -362,14 +545,14 @@ export function lowerUnit(u: DesignUnit, opts: { synthetics: boolean }): Lowered
   // 4) シナリオと背景。
   const scenarios: LoweredScenario[] = [];
   let scN = 0;
-  for (const sc of [...u.scenarios()].sort((a, b) => idCompare(a.id, b.id))) {
+  for (const sc of [...u.scenarios()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
     scN += 1;
     const lowId = `SC-${scN}`;
     scenarioMap.set(lowId, sc.id);
     const lowered: LoweredScenario = {
       id: lowId,
       kind: sc.kind,
-      frRefs: sc.frRefs,
+      frRefs: [...sc.frRefs],
       bindings: sc.bindings,
     };
     if (sc.event) lowered.event = sc.event;
@@ -378,7 +561,7 @@ export function lowerUnit(u: DesignUnit, opts: { synthetics: boolean }): Lowered
   }
   const background: LoweredBackground[] = [];
   let bgN = 0;
-  for (const bg of [...u.background()].sort((a, b) => idCompare(a.id, b.id))) {
+  for (const bg of [...u.background()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
     bgN += 1;
     background.push({ id: `BG-${bgN}`, assert: bg.assert });
   }

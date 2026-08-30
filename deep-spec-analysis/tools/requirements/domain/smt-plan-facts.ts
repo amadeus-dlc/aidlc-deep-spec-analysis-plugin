@@ -6,7 +6,7 @@
 // ソートは VerificationReport.compose の不変条件）は facts 自身の振る舞い
 // （OOUI 裁定）。
 
-import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { SmtQueryVerdicts } from "./solver-verdict.ts";
 import type { VerificationFinding, VerificationSkipped } from "./verification-finding.ts";
@@ -107,7 +107,7 @@ export class SmtPlanFacts {
       const targets = core
         .map((label) => this.#labelToTarget.get(label))
         .filter((t): t is string => typeof t === "string" && t.startsWith("OB-"));
-      return sortedUnique(targets, idCompare);
+      return IdOrder.sortedUnique(targets, IdOrder.compare);
     };
 
     const addConflict = (targets: string[], core: string[], detail: string): void => {
@@ -118,8 +118,8 @@ export class SmtPlanFacts {
       conflictKeys.add(key);
       findings.push({
         kind: "conflict",
-        frRefs: model.frRefsOf(effective),
-        targets: effective,
+        frRefs: FrRefs.of(model.frRefsOf(effective)),
+        targets: TargetIds.of(effective),
         witness: { core: [...core].sort() },
         detail,
       });
@@ -151,7 +151,7 @@ export class SmtPlanFacts {
         const r = results.verdictOf(`vac:${ob.id}`);
         if (!r) continue;
         if (r.status === "unsat") {
-          const targets = sortedUnique([...coreToTargets(r.core ?? []), ob.id], idCompare);
+          const targets = IdOrder.sortedUnique([...coreToTargets(r.core ?? []), ob.id], IdOrder.compare);
           addConflict(
             targets,
             r.core ?? [],
@@ -170,7 +170,7 @@ export class SmtPlanFacts {
       if (!overlap || !joint) continue;
       if (overlap.status === "sat" && joint.status === "unsat") {
         addConflict(
-          sortedUnique([pair.a, pair.b], idCompare),
+          IdOrder.sortedUnique([pair.a, pair.b], IdOrder.compare),
           joint.core ?? [],
           `Events ${pair.a} and ${pair.b} for trigger "${pair.trigger}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`,
         );
@@ -186,8 +186,8 @@ export class SmtPlanFacts {
       if (r.status === "sat") {
         findings.push({
           kind: "completeness-gap",
-          frRefs: model.frRefsOf(eventIds),
-          targets: [...eventIds],
+          frRefs: FrRefs.of(model.frRefsOf(eventIds)),
+          targets: TargetIds.of([...eventIds]),
           witness: { model: r.decodedModel ?? {} },
           detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
         });
@@ -207,11 +207,11 @@ export class SmtPlanFacts {
         continue;
       }
       if (sc.kind === "accept" && r.status === "unsat") {
-        const targets = sortedUnique([sc.id, ...coreToTargets(r.core ?? [])], idCompare);
+        const targets = IdOrder.sortedUnique([sc.id, ...coreToTargets(r.core ?? [])], IdOrder.compare);
         findings.push({
           kind: "scenario-violation",
-          frRefs: model.frRefsOf(targets),
-          targets,
+          frRefs: FrRefs.of(model.frRefsOf(targets)),
+          targets: TargetIds.of(targets),
           witness: { core: [...(r.core ?? [])].sort() },
           detail: `Accept scenario ${sc.id} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
         });
@@ -219,8 +219,8 @@ export class SmtPlanFacts {
       if (sc.kind === "reject" && r.status === "sat") {
         findings.push({
           kind: "scenario-violation",
-          frRefs: model.frRefsOf([sc.id]),
-          targets: [sc.id],
+          frRefs: FrRefs.of(model.frRefsOf([sc.id])),
+          targets: TargetIds.of([sc.id]),
           witness: { model: r.decodedModel ?? {} },
           detail: `Reject scenario ${sc.id} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
         });

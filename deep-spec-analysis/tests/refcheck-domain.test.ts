@@ -2,21 +2,22 @@
 // カタログ順序は golden バイトを決める凍結挙動——順位・タイブレークを固定する。
 
 import { describe, expect, test } from "bun:test";
-import { CATALOG_VERSION, type Finding, type Skipped, sortFindings, sortSkipped } from "../tools/refcheck/domain/index.ts";
+import { ContentHash, FrRefs, TargetIds } from "../tools/kernel/domain/index.ts";
+import { CATALOG_VERSION, type Finding, type Skipped, Findings, InputAnchors, Skips, WitnessRefs } from "../tools/refcheck/domain/index.ts";
 
 function finding(kind: string, targets: string[], detail: string): Finding {
-  return { kind, frRefs: [], targets, witness: { refs: [] }, detail };
+  return { kind, frRefs: FrRefs.of([]), targets: TargetIds.of(targets), witness: { refs: WitnessRefs.of([]) }, detail };
 }
 
 describe("catalog-order", () => {
   test("findings sort by the extended kind rank, then joined targets, then detail", () => {
-    const sorted = sortFindings([
+    const sorted = Findings.of([
       finding("cross-check-disagreement", ["SC-1"], "z"),
       finding("structure-invalid", ["check:DD-0"], "b"),
       finding("structure-invalid", ["check:DD-0"], "a"),
       finding("reference-broken", ["component:A"], "x"),
       finding("conflict", ["OB-9"], "y"),
-    ]);
+    ]).sortedCanonically().toArray();
     expect(sorted.map((f) => `${f.kind}/${f.detail}`)).toEqual([
       "conflict/y",
       "structure-invalid/a",
@@ -27,16 +28,16 @@ describe("catalog-order", () => {
   });
 
   test("an unknown kind ranks after every catalogued kind (fallback 99)", () => {
-    const sorted = sortFindings([finding("mystery-kind", ["X-1"], "m"), finding("cross-check-disagreement", ["SC-1"], "c")]);
+    const sorted = Findings.of([finding("mystery-kind", ["X-1"], "m"), finding("cross-check-disagreement", ["SC-1"], "c")]).sortedCanonically().toArray();
     expect(sorted[0]?.kind).toBe("cross-check-disagreement");
   });
 
   test("a prototype-inherited name as kind falls back like any unknown kind (no NaN ranks)", () => {
-    const sorted = sortFindings([
+    const sorted = Findings.of([
       finding("toString", ["X-1"], "t"),
       finding("constructor", ["X-2"], "c"),
       finding("conflict", ["OB-1"], "k"),
-    ]);
+    ]).sortedCanonically().toArray();
     expect(sorted[0]?.kind).toBe("conflict");
     // 両者とも fallback 99 で同順位 → targets 文字列比較で "X-1" が先。
     expect(sorted.slice(1).map((f) => f.kind)).toEqual(["toString", "constructor"]);
@@ -48,7 +49,7 @@ describe("catalog-order", () => {
       { target: "check:FD-E2", reason: "a" },
       { target: "check:FD-E2", reason: "A" },
     ];
-    expect(sortSkipped(skips).map((s) => `${s.target}/${s.reason}`)).toEqual([
+    expect(Skips.of(skips).sortedCanonically().toArray().map((s) => `${s.target}/${s.reason}`)).toEqual([
       "check:FD-E2/A",
       "check:FD-E2/a",
       "check:FD-E10/b",
@@ -383,5 +384,40 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(errs.count()).toBe(1);
     expect([...errs].length).toBe(1);
     expect(errs.toArray()[0]?.detail).toBe("x");
+  });
+});
+
+describe("refcheck payload collections (first-class operations)", () => {
+  test("TargetIds, FrRefs, WitnessRefs, Findings, Skips, InputAnchors under add", () => {
+    const ids = TargetIds.of(["check:DD-1"]).add("check:DD-0").add("check:DD-1");
+    expect([...ids]).toEqual(["check:DD-1", "check:DD-0", "check:DD-1"]);
+    expect(ids.count()).toBe(3);
+    expect(ids.joined(",")).toBe("check:DD-1,check:DD-0,check:DD-1");
+    expect(ids.sortedUniqueCanonically().toArray()).toEqual(["check:DD-0", "check:DD-1"]);
+
+    const refs = FrRefs.of([]).add("FR-1");
+    expect([...refs]).toEqual(["FR-1"]);
+
+    const wr = { artifact: "a.md", element: "e" };
+    const wrs = WitnessRefs.of([]).add(wr);
+    expect([...wrs]).toEqual([wr]);
+    expect(wrs.toArray()).toEqual([wr]);
+
+    const f = finding("conflict", ["OB-1"], "x");
+    const fs = Findings.of([]).add(f);
+    expect([...fs]).toEqual([f]);
+    expect(fs.count()).toBe(1);
+    expect(fs.isEmpty()).toBe(false);
+    expect(Findings.of([]).isEmpty()).toBe(true);
+
+    const sk = { target: "check:DD-1", reason: "waived" };
+    const sks = Skips.of([]).add(sk);
+    expect([...sks]).toEqual([sk]);
+    expect(sks.count()).toBe(1);
+
+    const ia = { artifact: "b.md", sha256: ContentHash.reconstitute("a".repeat(64)) };
+    const ias = InputAnchors.of([]).add(ia).addAll([{ artifact: "a.md", sha256: ContentHash.reconstitute("b".repeat(64)) }]);
+    expect([...ias].length).toBe(2);
+    expect(ias.sortedByArtifact().toArray().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
   });
 });

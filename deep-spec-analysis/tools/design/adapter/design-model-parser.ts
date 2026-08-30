@@ -5,9 +5,14 @@
 // 旧 deep-spec-design-lib.ts の parseDesignIr からの逐語移植。
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
-import { IrVersion, type  Expression } from "../../kernel/domain/index.ts";
+import { FrRefs, IrVersion, type Expression } from "../../kernel/domain/index.ts";
 import {
+  BrRefs,
+  DesignIgnores,
+  DesignTransitions,
   DesignUnits,
+  InitialStates,
+  type DesignIgnore,
   AttrPaths,
   DesignBackgroundAssumptions,
   DesignMachines,
@@ -49,8 +54,8 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> 
         id: ob.id,
         nature: ob.nature,
         origin: typeof ob.origin === "string" ? ob.origin : "",
-        brRefs: strArr(ob.brRefs),
-        frRefs: strArr(ob.frRefs),
+        brRefs: BrRefs.of(strArr(ob.brRefs)),
+        frRefs: FrRefs.of(strArr(ob.frRefs)),
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
         trigger: typeof ob.trigger === "string" ? ob.trigger : undefined,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
@@ -72,10 +77,10 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> 
           trigger: tr.trigger,
           guard: isObject(tr.guard) ? (tr.guard as unknown as Expression) : undefined,
           effect: isObject(tr.effect) ? (tr.effect as unknown as Expression) : undefined,
-          brRefs: strArr(tr.brRefs),
+          brRefs: BrRefs.of(strArr(tr.brRefs)),
         });
       }
-      const ignores: DesignMachine["ignores"] = [];
+      const ignores: DesignIgnore[] = [];
       for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
         if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
         ignores.push({ state: ig.state, trigger: ig.trigger, reason: typeof ig.reason === "string" ? ig.reason : "" });
@@ -84,9 +89,9 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> 
         id: sm.id,
         entity: sm.entity,
         attribute: sm.attribute,
-        initial: strArr(sm.initial),
-        transitions,
-        ignores,
+        initial: InitialStates.of(strArr(sm.initial)),
+        transitions: DesignTransitions.of(transitions),
+        ignores: DesignIgnores.of(ignores),
         deterministic: sm.deterministic !== false,
       });
     }
@@ -102,8 +107,8 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> 
       scenarios.push({
         id: sc.id,
         kind,
-        brRefs: strArr(sc.brRefs),
-        frRefs: strArr(sc.frRefs),
+        brRefs: BrRefs.of(strArr(sc.brRefs)),
+        frRefs: FrRefs.of(strArr(sc.frRefs)),
         bindings,
         event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: sc.event.trigger } : undefined,
         expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,

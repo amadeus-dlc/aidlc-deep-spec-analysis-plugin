@@ -5,7 +5,7 @@
 // 照合・描画の解釈（正規化・整形）は語彙自身が所有し、検査は意味論だけを書く。
 
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
-import { type RequirementIds, normalizeName } from "../../kernel/domain/index.ts";
+import { type RequirementIds, Names } from "../../kernel/domain/index.ts";
 
 export type TokenError = { readonly kind: "empty-token"; readonly raw: string };
 export type BoundError = { readonly kind: "not-finite"; readonly raw: number };
@@ -22,7 +22,7 @@ export class EntityName {
   // 境界: 文言・witness 位置に逐語で載る宣言名。
   asString(): string { return this.#value; }
   // 照合はケース・区切りを畳んだ正規化名で行う（XS/FD-S の凍結挙動）。
-  normalized(): string { return normalizeName(this.#value); }
+  normalized(): string { return Names.normalize(this.#value); }
 }
 
 export class AttributeName {
@@ -35,7 +35,7 @@ export class AttributeName {
   static reconstitute(raw: string): AttributeName { return new AttributeName(raw); }
   equals(other: AttributeName): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
-  normalized(): string { return normalizeName(this.#value); }
+  normalized(): string { return Names.normalize(this.#value); }
 }
 
 // YAML/見出し内の位置指定子（witness の location に載る）。
@@ -85,7 +85,7 @@ export class AllowedValue {
   static reconstitute(raw: string): AllowedValue { return new AllowedValue(raw); }
   equals(other: AllowedValue): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
-  normalized(): string { return normalizeName(this.#value); }
+  normalized(): string { return Names.normalize(this.#value); }
 }
 
 // default 宣言 — 文書上は文字列または数値（それ以外は宣言なし扱い＝凍結挙動）。
@@ -212,7 +212,7 @@ export class StateName {
   static reconstitute(raw: string): StateName { return new StateName(raw); }
   equals(other: StateName): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
-  normalized(): string { return normalizeName(this.#value); }
+  normalized(): string { return Names.normalize(this.#value); }
 }
 
 export class ComponentName {

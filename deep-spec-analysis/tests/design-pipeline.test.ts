@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
 import type { Json } from "../tools/kernel/adapter/index.ts";
-import { ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { FrRefs, TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -36,10 +36,16 @@ import {
   DesignObligations,
   DesignScenarios,
   type DesignBackgroundAssumption,
+  type DesignIgnore,
   type DesignMachine,
   type DesignObligation,
   type DesignScenario,
+  type DesignTransition,
   type DesignValue,
+  BrRefs,
+  DesignIgnores,
+  DesignTransitions,
+  InitialStates,
   type DesignFinding,
   type DesignModelComposition,
   type DesignSkipped,
@@ -50,15 +56,8 @@ import {
   DesignReport,
   DesignReportId,
   DesignUnit,
-  designBackendUnavailableReport,
-  designCrossCheckReport,
-  designIrUnreadableReport,
-  designVersionMismatchReport,
-  expressionCanonicalKey,
-  lowerUnit,
-  remapUnitDocument,
-  sortDesignFindings,
-  sortDesignSkipped,
+  ExpressionCanonicalKey,
+  LoweredUnit,
   DesignModelId,
 } from "../tools/design/domain/index.ts";
 import {
@@ -105,10 +104,10 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
         const checkedUnits: string[] = [];
         let method: string | null = null;
         for (const u of model.units()) {
-          const lowered = lowerUnit(u, { synthetics: backend === "smt" });
+          const lowered = LoweredUnit.of(u, { synthetics: backend === "smt" });
           const run = sibling.runLowered(backend, u, lowered, 55_000);
           expect(run.exit).toBe(0);
-          const remapped = remapUnitDocument(u, lowered, run.doc ?? { kind: "unreadable" });
+          const remapped = lowered.remapVerdicts(u, run.doc ?? { kind: "unreadable" });
           expect(remapped.unavailable).toBe(null);
           method = method ?? remapped.method;
           findings.push(...remapped.findings);
@@ -117,7 +116,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
           if (backend === "quint") {
             // entry と同じ到達性検出フェーズ：simulation では capability skip。
             for (const sm of [...u.machines()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-              const attrPath = lowered.index.attrPathOfMachine(sm.id) ?? `${sm.entity}.${sm.attribute}`;
+              const attrPath = lowered.index().attrPathOfMachine(sm.id) ?? `${sm.entity}.${sm.attribute}`;
               const candidates = u
                 .enumValuesOf(attrPath)
                 .filter((s) => !sm.initial.includes(s))
@@ -149,7 +148,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
         expect(siblings.ok).toBe(true);
         if (siblings.ok) {
           expect(
-            reports.save(designCrossCheckReport(DesignReportId.of(ap(verifyDir), "cross-check"), model, irHash, siblings.value)).ok,
+            reports.save(siblings.value.crossChecked(DesignReportId.of(ap(verifyDir), "cross-check"), model, irHash)).ok,
           ).toBe(true);
         }
         expect(readFileSync(join(verifyDir, `${backend}.json`), "utf-8")).toBe(golden(`${backend}.json`));
@@ -163,22 +162,42 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
 
 // --- ドメイン検査の分岐固定（純関数の直接駆動） ------------------------------
 
+// テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
+type RawDesignObligation = Omit<DesignObligation, "brRefs" | "frRefs"> & { brRefs: string[]; frRefs: string[] };
+type RawDesignTransition = Omit<DesignTransition, "brRefs"> & { brRefs: string[] };
+type RawDesignMachine = Omit<DesignMachine, "initial" | "transitions" | "ignores"> & {
+  initial: string[];
+  transitions: RawDesignTransition[];
+  ignores: DesignIgnore[];
+};
+type RawDesignScenario = Omit<DesignScenario, "brRefs" | "frRefs"> & { brRefs: string[]; frRefs: string[] };
 function unit(seed: {
   unit?: string;
   rawEntities?: DesignValue;
   attrPaths?: Set<string>;
-  obligations?: DesignObligation[];
-  machines?: DesignMachine[];
-  scenarios?: DesignScenario[];
+  obligations?: RawDesignObligation[];
+  machines?: RawDesignMachine[];
+  scenarios?: RawDesignScenario[];
   background?: DesignBackgroundAssumption[];
 }): DesignUnit {
   return DesignUnit.reconstitute({
     unit: seed.unit ?? "u1",
     rawEntities: seed.rawEntities ?? [],
     attrPaths: AttrPaths.of([...(seed.attrPaths ?? new Set<string>())]),
-    obligations: DesignObligations.of(seed.obligations ?? []),
-    machines: DesignMachines.of(seed.machines ?? []),
-    scenarios: DesignScenarios.of(seed.scenarios ?? []),
+    obligations: DesignObligations.of(
+      (seed.obligations ?? []).map((o) => ({ ...o, brRefs: BrRefs.of(o.brRefs), frRefs: FrRefs.of(o.frRefs) })),
+    ),
+    machines: DesignMachines.of(
+      (seed.machines ?? []).map((m) => ({
+        ...m,
+        initial: InitialStates.of(m.initial),
+        transitions: DesignTransitions.of(m.transitions.map((t) => ({ ...t, brRefs: BrRefs.of(t.brRefs) }))),
+        ignores: DesignIgnores.of(m.ignores),
+      })),
+    ),
+    scenarios: DesignScenarios.of(
+      (seed.scenarios ?? []).map((s) => ({ ...s, brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
+    ),
     background: DesignBackgroundAssumptions.of(seed.background ?? []),
   });
 }
@@ -229,35 +248,35 @@ describe("lowering (typed compile-down)", () => {
   });
 
   test("numbering, maps, and the implicit machine encoding are stable", () => {
-    const low = lowerUnit(machineUnit, { synthetics: false });
-    // 義務は idCompare 順（DOB-1 が DOB-2 の前）→ OB-1=DOB-1(event)、
+    const low = LoweredUnit.of(machineUnit, { synthetics: false });
+    // 義務は IdOrder.compare 順（DOB-1 が DOB-2 の前）→ OB-1=DOB-1(event)、
     // OB-2=DOB-2(invariant)、以後 TR-1/TR-2/ignore。
-    expect(low.obligations.toArray().map((o) => `${o.id}:${o.nature}`)).toEqual([
+    expect(low.obligations().toArray().map((o) => `${o.id}:${o.nature}`)).toEqual([
       "OB-1:event",
       "OB-2:invariant",
       "OB-3:event",
       "OB-4:event",
       "OB-5:event",
     ]);
-    expect(low.index.originOf("OB-3")).toEqual({ design: "TR-1", kind: "transition" });
-    expect(low.index.originOf("OB-5")).toEqual({ design: "SM-1", kind: "ignore" });
-    expect(low.index.resolveDesignTarget("SC-1").design).toBe("DSC-1");
-    expect(low.background.toArray()[0]?.id).toBe("BG-1");
-    expect(low.index.attrPathOfMachine("SM-1")).toBe("Ticket.status");
-    expect(low.index.machineOfTransition("TR-1")?.id).toBe("SM-1");
+    expect(low.index().originOf("OB-3")).toEqual({ design: "TR-1", kind: "transition" });
+    expect(low.index().originOf("OB-5")).toEqual({ design: "SM-1", kind: "ignore" });
+    expect(low.index().resolveDesignTarget("SC-1").design).toBe("DSC-1");
+    expect(low.background().toArray()[0]?.id).toBe("BG-1");
+    expect(low.index().attrPathOfMachine("SM-1")).toBe("Ticket.status");
+    expect(low.index().machineOfTransition("TR-1")?.id).toBe("SM-1");
     // 遷移の暗黙ガード：state==from（追加ガードがあれば and 結合）。
-    expect(low.obligations.toArray()[2]?.guard).toEqual({
+    expect(low.obligations().toArray()[2]?.guard).toEqual({
       op: "eq",
       args: [{ op: "ref", path: "Ticket.status" }, { op: "enum", value: "open" }],
     });
-    expect(low.obligations.toArray()[3]?.guard?.op).toBe("and");
+    expect(low.obligations().toArray()[3]?.guard?.op).toBe("and");
   });
 
   test("synthetics add one vac-dead per candidate and shadow pairs for canonically equal effects", () => {
-    const low = lowerUnit(machineUnit, { synthetics: true });
-    const kinds = low.index.toOriginEntries().map(([, e]) => e.kind);
+    const low = LoweredUnit.of(machineUnit, { synthetics: true });
+    const kinds = low.index().toOriginEntries().map(([, e]) => e.kind);
     expect(kinds.filter((k) => k === "vac-dead").length).toBe(3); // DOB-1, TR-1, TR-2
-    const shadows = low.index.toOriginEntries().map(([, e]) => e).filter((e) => e.kind === "vac-shadow");
+    const shadows = low.index().toOriginEntries().map(([, e]) => e).filter((e) => e.kind === "vac-shadow");
     // 3 候補（DOB-1・TR-1・TR-2）はすべて同トリガ・正準同一効果
     // （eq(prime(status), "closed")）→ 全順序対 6 件。
     expect(shadows.map((s) => s.pair)).toEqual([
@@ -296,16 +315,16 @@ describe("lowering (typed compile-down)", () => {
         { id: "BG-A", assert: { op: "bool", value: false } },
       ],
     });
-    const low = lowerUnit(multi, { synthetics: false });
+    const low = LoweredUnit.of(multi, { synthetics: false });
     // ignores は state/trigger 文字列順（x が y の前）、機械は id 順。
-    expect(["SM-1", "SM-2"].map((id) => low.index.attrPathOfMachine(id))).toEqual(["T.a", "T.b"]);
-    expect(low.index.resolveDesignTarget("SC-1").design).toBe("DSC-1");
-    expect(low.index.resolveDesignTarget("SC-2").design).toBe("DSC-2");
-    expect(low.background.toArray().map((b) => b.assert)).toEqual([
+    expect(["SM-1", "SM-2"].map((id) => low.index().attrPathOfMachine(id))).toEqual(["T.a", "T.b"]);
+    expect(low.index().resolveDesignTarget("SC-1").design).toBe("DSC-1");
+    expect(low.index().resolveDesignTarget("SC-2").design).toBe("DSC-2");
+    expect(low.background().toArray().map((b) => b.assert)).toEqual([
       { op: "bool", value: false },
       { op: "bool", value: true },
     ]);
-    const ignoreGuards = low.obligations.toArray().filter((o) => low.index.originOf(o.id)?.kind === "ignore").map((o) => o.guard);
+    const ignoreGuards = low.obligations().toArray().filter((o) => low.index().originOf(o.id)?.kind === "ignore").map((o) => o.guard);
     expect(ignoreGuards[0]).toEqual({ op: "eq", args: [{ op: "ref", path: "T.b" }, { op: "enum", value: "x" }] });
     // 2 ユニットの compose はユニット名昇順を不変条件として適用する。
     const m = model([unit({ unit: "u2" }), unit({ unit: "u1" })]);
@@ -322,7 +341,7 @@ describe("lowering (typed compile-down)", () => {
       { op: "not", args: [{ op: "ref", path: "A.b" }] },
     ];
     for (const s of samples) {
-      expect(expressionCanonicalKey(s)).toBe(canonicalStringify(s as unknown as Json));
+      expect(ExpressionCanonicalKey.of(s)).toBe(canonicalStringify(s as unknown as Json));
     }
   });
 });
@@ -345,7 +364,7 @@ describe("remap (design vocabulary attribution)", () => {
     ],
     scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} }],
   });
-  const low = lowerUnit(u, { synthetics: true });
+  const low = LoweredUnit.of(u, { synthetics: true });
   const doc = (input: {
     findings?: { kind: string; frRefs: string[]; targets: string[]; witness: Json; detail: string }[];
     skipped?: { target: string; reason: string; detail?: string }[];
@@ -358,8 +377,8 @@ describe("remap (design vocabulary attribution)", () => {
     });
 
   test("unavailable and unreadable sibling documents pass straight through", () => {
-    expect(remapUnitDocument(u, low, { kind: "unreadable" }).unavailable).toBe("sibling backend produced no findings document");
-    const out = remapUnitDocument(u, low, { kind: "unavailable", reason: "boom", method: "simulation" });
+    expect(low.remapVerdicts(u, { kind: "unreadable" }).unavailable).toBe("sibling backend produced no findings document");
+    const out = low.remapVerdicts(u, { kind: "unavailable", reason: "boom", method: "simulation" });
     expect(out.findings.toArray()).toEqual([]);
     expect(out.skipped.toArray()).toEqual([]);
     expect(out.unavailable).toBe("boom");
@@ -367,8 +386,8 @@ describe("remap (design vocabulary attribution)", () => {
   });
 
   test("a vac-dead conflict becomes unreachable with the transition/rule wording", () => {
-    const deadId = low.index.toOriginEntries().find(([, e]) => e.kind === "vac-dead" && e.design === "TR-1")?.[0] as string;
-    const out = remapUnitDocument(u, low, doc({
+    const deadId = low.index().toOriginEntries().find(([, e]) => e.kind === "vac-dead" && e.design === "TR-1")?.[0] as string;
+    const out = low.remapVerdicts(u, doc({
       findings: [{ kind: "conflict", frRefs: ["FR-1"], targets: [deadId], witness: { core: [`ant_${deadId.replace("-", "_")}`] }, detail: "x" }],
     }));
     expect(out.findings.toArray()[0]?.kind).toBe("unreachable");
@@ -378,13 +397,13 @@ describe("remap (design vocabulary attribution)", () => {
   });
 
   test("mutual shadow pairs collapse into one equivalence finding; one-way stays subsumption", () => {
-    const ids = low.index.toOriginEntries().filter(([, e]) => e.kind === "vac-shadow");
-    const oneWay = remapUnitDocument(u, low, doc({
+    const ids = low.index().toOriginEntries().filter(([, e]) => e.kind === "vac-shadow");
+    const oneWay = low.remapVerdicts(u, doc({
       findings: [{ kind: "conflict", frRefs: [], targets: [ids[0]?.[0] as string], witness: { core: [] }, detail: "x" }],
     }));
     expect(oneWay.findings.toArray()[0]?.kind).toBe("redundancy");
     expect(oneWay.findings.toArray()[0]?.detail).toContain("is subsumed by");
-    const mutual = remapUnitDocument(u, low, doc({
+    const mutual = low.remapVerdicts(u, doc({
       findings: ids.map(([id]) => ({ kind: "conflict", frRefs: [], targets: [id], witness: { core: [] }, detail: "x" })),
     }));
     expect(mutual.findings.count()).toBe(1);
@@ -392,8 +411,8 @@ describe("remap (design vocabulary attribution)", () => {
   });
 
   test("a same-machine conflict under deterministic:false is waived once per target", () => {
-    const trIds = low.index.toOriginEntries().filter(([, e]) => e.kind === "transition").map(([id]) => id);
-    const out = remapUnitDocument(u, low, doc({
+    const trIds = low.index().toOriginEntries().filter(([, e]) => e.kind === "transition").map(([id]) => id);
+    const out = low.remapVerdicts(u, doc({
       findings: [
         { kind: "conflict", frRefs: [], targets: trIds, witness: { core: [] }, detail: "overlap" },
         { kind: "conflict", frRefs: [], targets: trIds, witness: { core: [] }, detail: "overlap again" },
@@ -407,8 +426,8 @@ describe("remap (design vocabulary attribution)", () => {
   });
 
   test("details and witness cores are rewritten into design ids, and skips are deduped per (target, reason)", () => {
-    const trLow = low.index.toOriginEntries().find(([, e]) => e.kind === "transition" && e.design === "TR-1")?.[0] as string;
-    const out = remapUnitDocument(u, low, doc({
+    const trLow = low.index().toOriginEntries().find(([, e]) => e.kind === "transition" && e.design === "TR-1")?.[0] as string;
+    const out = low.remapVerdicts(u, doc({
       findings: [{
         kind: "completeness-gap",
         frRefs: ["FR-9"],
@@ -422,7 +441,7 @@ describe("remap (design vocabulary attribution)", () => {
         { target: "SC-1", reason: "capability" },
       ],
     }));
-    expect(out.findings.toArray()[0]?.targets).toEqual(["DSC-1", "TR-1"]);
+    expect(out.findings.toArray()[0]?.targets.toArray()).toEqual(["DSC-1", "TR-1"]);
     expect(out.findings.toArray()[0]?.detail).toBe("No rule for TR-1 applies");
     expect(out.findings.toArray()[0]?.witness).toEqual({ core: ["g_TR_1", "ty_x"] });
     expect(out.skipped.toArray().map((s) => `${s.target}:${s.reason}`)).toEqual(["TR-1:timeout", "DSC-1:capability"]);
@@ -433,15 +452,15 @@ describe("remap (design vocabulary attribution)", () => {
 describe("report ordering, cross-check, and degradations", () => {
   const f = (kind: string, unitName: string, targets: string[], detail: string): DesignFinding => ({
     kind,
-    frRefs: [],
-    targets,
+    frRefs: FrRefs.of([]),
+    targets: TargetIds.of(targets),
     witness: { core: [] },
     unit: unitName,
     detail,
   });
 
   test("the 11-kind order sorts kind, then unit, then targets, then detail; unknown sinks to 99", () => {
-    const sorted = sortDesignFindings([
+    const sorted = DesignFindings.of([
       f("mystery", "u1", ["X"], "z"),
       f("cross-check-disagreement", "u1", ["DSC-1"], "d"),
       f("redundancy", "u2", ["TR-1"], "r"),
@@ -451,7 +470,7 @@ describe("report ordering, cross-check, and degradations", () => {
       f("refinement-violation", "u1", ["FR-1"], "rv"),
       f("mapping-gap", "u1", ["FR-1"], "mg"),
       f("conflict", "u1", ["DOB-1"], "a"),
-    ]);
+    ]).sortedCanonically().toArray();
     expect(sorted.map((x) => x.kind)).toEqual([
       "conflict",
       "conflict",
@@ -467,11 +486,11 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(sorted[0]?.detail).toBe("a");
     expect(sorted[1]?.detail).toBe("c");
     expect(sorted[3]?.unit).toBe("u1");
-    const skips = sortDesignSkipped([
+    const skips = DesignSkips.of([
       { target: "TR-2", reason: "timeout", unit: "u2" },
       { target: "TR-10", reason: "waived", unit: "u1" },
       { target: "TR-2", reason: "capability", unit: "u1" },
-    ]);
+    ]).sortedCanonically().toArray();
     expect(skips.map((s) => `${s.unit}:${s.target}:${s.reason}`)).toEqual([
       "u1:TR-2:capability",
       "u1:TR-10:waived",
@@ -542,26 +561,27 @@ describe("report ordering, cross-check, and degradations", () => {
         crossChecked: null,
         unavailableReason: null,
       });
-    const report = designCrossCheckReport(DesignReportId.of(ap("/v"), "cross-check"), m, HASH, DesignReports.of([
+    const report = DesignReports.of([
       sibling("quint", true),
       sibling("smt", false),
-    ]));
-    expect(report.findings().toArray()[0]).toEqual({
-      kind: "cross-check-disagreement",
-      frRefs: ["FR-1", "FR-2"],
-      targets: ["DSC-1"],
-      witness: { verdicts: { quint: "violated", smt: "clean" } },
-      unit: "u1",
-      detail: 'Backends "quint" and "smt" disagree on scenario DSC-1 of unit u1. This signals a defect in the formalization or in a backend compiler, not in the design itself.',
-    });
+    ]).crossChecked(DesignReportId.of(ap("/v"), "cross-check"), m, HASH);
+    const disagreement = report.findings().toArray()[0];
+    expect(disagreement?.kind).toBe("cross-check-disagreement");
+    expect(disagreement?.frRefs.toArray()).toEqual(["FR-1", "FR-2"]);
+    expect(disagreement?.targets.toArray()).toEqual(["DSC-1"]);
+    expect(disagreement?.witness).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
+    expect(disagreement?.unit).toBe("u1");
+    expect(disagreement?.detail).toBe(
+      'Backends "quint" and "smt" disagree on scenario DSC-1 of unit u1. This signals a defect in the formalization or in a backend compiler, not in the design itself.',
+    );
     expect(report.crossChecked()?.toArray()).toEqual([
       { backend: "quint", targets: ["DSC-1"] },
       { backend: "smt", targets: ["DSC-1"] },
     ]);
-    const skippedOut = designCrossCheckReport(DesignReportId.of(ap("/v"), "cross-check"), m, HASH, DesignReports.of([
+    const skippedOut = DesignReports.of([
       sibling("quint", true, "skip"),
       sibling("smt", false),
-    ]));
+    ]).crossChecked(DesignReportId.of(ap("/v"), "cross-check"), m, HASH);
     expect(skippedOut.findings().toArray()).toEqual([]);
     expect(skippedOut.crossChecked()?.toArray()).toEqual([]);
   });
@@ -577,12 +597,12 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(u1.allTargets()).toEqual(["DOB-1", "DSC-1", "TR-1"]);
     expect(u1.enumValuesOf("T.s")).toEqual([]);
 
-    const unread = designIrUnreadableReport(DesignReportId.of(ap("/v"), "smt"), "exhaustive", "design IR carries no units[]");
+    const unread = DesignReport.irUnreadable(DesignReportId.of(ap("/v"), "smt"), "exhaustive", "design IR carries no units[]");
     expect(unread.unavailableReason()).toBe("design IR unreadable: design IR carries no units[] — see the deep-spec-design-ir-valid sensor for details");
     expect(unread.irVersion().asString()).toBe("0.0.0");
     expect(unread.irHash().equals(ContentHash.ofText(""))).toBe(true);
 
-    const mismatch = designVersionMismatchReport(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation");
+    const mismatch = DesignReport.versionMismatch(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation");
     expect(mismatch.skipped().toArray().map((s) => `${s.unit}:${s.target}:${s.reason}`)).toEqual([
       "u1:DOB-1:ir-version-mismatch",
       "u1:DSC-1:ir-version-mismatch",
@@ -590,7 +610,7 @@ describe("report ordering, cross-check, and degradations", () => {
     ]);
     expect(mismatch.skipped().toArray()[0]?.detail).toBe("design IR major version 2 is not supported by this backend (supports 1.x.x)");
 
-    const down = designBackendUnavailableReport(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation", "quint CLI is not available", "quint CLI missing");
+    const down = DesignReport.backendUnavailable(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation", "quint CLI is not available", "quint CLI missing");
     expect(down.unavailableReason()).toBe("quint CLI is not available");
     expect(down.skipped().toArray().every((s) => s.reason === "unavailable" && s.detail === "quint CLI missing")).toBe(true);
   });
@@ -625,36 +645,36 @@ describe("report ordering, cross-check, and degradations", () => {
 
 describe("lowered collections and the lowering index (first-class operations)", () => {
   const u = unit({});
-  const base = lowerUnit(u, { synthetics: false });
+  const base = LoweredUnit.of(u, { synthetics: false });
 
   test("of/add/iterator/count/toArray hold OB/SC/BG numbering order", () => {
-    const obs = base.obligations.add({ id: "OB-99", nature: "invariant", frRefs: [] });
-    expect(obs.count()).toBe(base.obligations.count() + 1);
+    const obs = base.obligations().add({ id: "OB-99", nature: "invariant", frRefs: [] });
+    expect(obs.count()).toBe(base.obligations().count() + 1);
     expect([...obs].at(-1)?.id).toBe("OB-99");
     expect(obs.toArray().at(-1)?.nature).toBe("invariant");
 
-    const scs = base.scenarios.add({ id: "SC-99", kind: "accept", frRefs: [], bindings: {} });
-    expect(scs.count()).toBe(base.scenarios.count() + 1);
+    const scs = base.scenarios().add({ id: "SC-99", kind: "accept", frRefs: [], bindings: {} });
+    expect(scs.count()).toBe(base.scenarios().count() + 1);
     expect([...scs].at(-1)?.id).toBe("SC-99");
     expect(scs.toArray().at(-1)?.kind).toBe("accept");
 
-    const bgs = base.background.add({ id: "BG-99", assert: { op: "bool", value: true } });
-    expect(bgs.count()).toBe(base.background.count() + 1);
+    const bgs = base.background().add({ id: "BG-99", assert: { op: "bool", value: true } });
+    expect(bgs.count()).toBe(base.background().count() + 1);
     expect([...bgs].at(-1)?.id).toBe("BG-99");
     expect(bgs.toArray().at(-1)?.id).toBe("BG-99");
   });
 
   test("withPassthrough extends attribution immutably and rewrites fall back verbatim", () => {
-    const extended = base.index.withPassthrough("OB-99", "FR-7");
+    const extended = base.index().withPassthrough("OB-99", "FR-7");
     expect(extended.originOf("OB-99")).toEqual({ design: "FR-7", kind: "passthrough" });
-    expect(base.index.originOf("OB-99")).toBe(null);
+    expect(base.index().originOf("OB-99")).toBe(null);
     expect(extended.resolveDesignTarget("OB-99").design).toBe("FR-7");
     // 未知の lowered id は逐語で残る（detail・witness core とも）。
-    expect(base.index.rewriteLoweredIds("No rule for OB-42 applies")).toBe("No rule for OB-42 applies");
-    expect(base.index.rewriteLoweredIdTokens("g_OB_42")).toBe("g_OB_42");
-    expect(base.index.isTransition("TR-404")).toBe(false);
-    expect(base.index.machineOfTransition("TR-404")).toBe(null);
-    expect(base.index.attrPathOfMachine("SM-404")).toBe(null);
+    expect(base.index().rewriteLoweredIds("No rule for OB-42 applies")).toBe("No rule for OB-42 applies");
+    expect(base.index().rewriteLoweredIdTokens("g_OB_42")).toBe("g_OB_42");
+    expect(base.index().isTransition("TR-404")).toBe(false);
+    expect(base.index().machineOfTransition("TR-404")).toBe(null);
+    expect(base.index().attrPathOfMachine("SM-404")).toBe(null);
   });
 
   test("sibling verdict collections keep document order under add", () => {
@@ -667,5 +687,11 @@ describe("lowered collections and the lowering index (first-class operations)", 
     const skips = SiblingVerdictSkips.of([]).add(skip);
     expect([...skips]).toEqual([skip]);
     expect(skips.toArray()).toEqual([skip]);
+  });
+});
+
+describe("companion seals", () => {
+  test("ExpressionCanonicalKey is sealed", () => {
+    expect(ExpressionCanonicalKey.isSealed()).toBe(true);
   });
 });
