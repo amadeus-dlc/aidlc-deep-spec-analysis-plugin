@@ -20,8 +20,17 @@ import {
   validateSchema,
 } from "../../kernel/adapter/index.ts";
 import {
+  AttributeMappings,
+  EventMappings,
   FormalModelId,
+  RefinementAttributes,
   RefinementMapId,
+  RefinementObligations,
+  RefinementScenarios,
+  RefinementUnitMaps,
+  ReqAttributeValues,
+  TransitionRefs,
+  UnmappedDeclarations,
   type AttributeMapping,
   type EventMapping,
   type RefinementAttribute,
@@ -32,6 +41,7 @@ import {
   RefinementMap,
   RefinementRequirements,
 } from "../../refinement/domain/index.ts";
+import { DesignUnitId } from "../domain/index.ts";
 import type {
   RefinementMaterialsRepository,
   RefinementMapAcquisition,
@@ -94,7 +104,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
           kind: t.kind,
           min: typeof t.min === "number" ? t.min : undefined,
           max: typeof t.max === "number" ? t.max : undefined,
-          values: Array.isArray(t.values) ? (t.values.filter((v) => typeof v === "string") as string[]) : undefined,
+          values: Array.isArray(t.values) ? ReqAttributeValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
         });
       }
     }
@@ -130,9 +140,9 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
     return RefinementRequirements.reconstitute({
       id: FormalModelId.of(idPath.value),
       hash: ContentHash.ofText(canonicalStringify(raw)),
-      attributes,
-      obligations,
-      scenarios,
+      attributes: RefinementAttributes.of(attributes),
+      obligations: RefinementObligations.of(obligations),
+      scenarios: RefinementScenarios.of(scenarios),
     });
   }
 
@@ -183,7 +193,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
         if (!isObject(e) || typeof e.reqTrigger !== "string") continue;
         eventMap.push({
           reqTrigger: e.reqTrigger,
-          transitions: strArr(e.transitions),
+          transitions: TransitionRefs.of(strArr(e.transitions)),
           waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
         });
       }
@@ -193,13 +203,18 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
           unmapped.push({ target: un.target, reason: typeof un.reason === "string" ? un.reason : "" });
         }
       }
-      units.push({ unit: u.unit, attrMap, eventMap, unmapped });
+      units.push({
+        unit: DesignUnitId.of(u.unit),
+        attrMap: AttributeMappings.of(attrMap),
+        eventMap: EventMappings.of(eventMap),
+        unmapped: UnmappedDeclarations.of(unmapped),
+      });
     }
     const map = RefinementMap.reconstitute({
       id: RefinementMapId.of(mapPath.value),
       requirementsIrHash: ContentHash.reconstitute(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
       designIrHash: ContentHash.reconstitute(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
-      units,
+      units: RefinementUnitMaps.of(units),
     });
     const reqModelPath = join(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
     const mapArtifact = relArtifact(recordRoot, path);

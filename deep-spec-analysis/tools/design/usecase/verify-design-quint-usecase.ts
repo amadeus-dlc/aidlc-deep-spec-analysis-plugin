@@ -31,9 +31,7 @@ import {
 } from "../domain/index.ts";
 import type { LoweredUnit } from "../domain/index.ts";
 import {
-  planUnitRefinement,
-  quintRefinementStatusSkips,
-  refinementQuintInvariants,
+  UnitRefinementPlan,
 } from "../../refinement/domain/index.ts";
 import type { DesignModelRepository } from "./design-model-repository.ts";
 import type { DesignReportRepository } from "./design-report-repository.ts";
@@ -227,11 +225,11 @@ export class VerifyDesignQuintUseCase {
             }
             continue;
           }
-          const plan = planUnitRefinement(u, unitMap, req, context.map.mapArtifact);
-          findings.push(...plan.gaps);
-          skipped.push(...quintRefinementStatusSkips(plan, req, u.name()));
-          const extras = refinementQuintInvariants(plan, req);
-          if (extras.length === 0) continue;
+          const plan = UnitRefinementPlan.of(u, unitMap, req, context.map.mapArtifact);
+          findings.push(...plan.gaps());
+          skipped.push(...plan.quintStatusSkips(req, u.name()));
+          const extras = plan.quintInvariants(req);
+          if (extras.isEmpty()) continue;
           const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (this.#clock.now() - started));
           if (remaining < 3_000) {
             for (const e of extras) {
@@ -269,7 +267,7 @@ export class VerifyDesignQuintUseCase {
             }
             continue;
           }
-          const reqIdSet = new Set(extras.map((e) => e.reqId));
+          const reqIdSet = extras.reqIds();
           let hitExtra = false;
           let designConflict = false;
           for (const f of remapped.findings) {

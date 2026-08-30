@@ -4,7 +4,7 @@
 // 起動しない（旧挙動の凍結——no-queries）。
 
 import type {
-  RefinementQueryVerdict,
+  RefinementQueryVerdicts,
   RefinementRequirements,
   RefinementSolverFacts,
   UnitRefinementPlan,
@@ -14,7 +14,7 @@ import type { DesignUnit } from "../domain/index.ts";
 export type RefinementSolverResult =
   | { readonly kind: "no-queries" }
   | { readonly kind: "unavailable"; readonly reason: string }
-  | { readonly kind: "solved"; readonly verdicts: ReadonlyMap<string, RefinementQueryVerdict> };
+  | { readonly kind: "solved"; readonly verdicts: RefinementQueryVerdicts };
 
 export interface RefinementCheck {
   readonly facts: RefinementSolverFacts;
