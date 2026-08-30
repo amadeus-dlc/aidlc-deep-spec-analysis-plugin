@@ -855,3 +855,45 @@ describe("design decl collections (first-class operations)", () => {
     expect(uds.toArray()).toEqual([ud]);
   });
 });
+
+describe("contract-1 decl collections (first-class operations)", () => {
+  test("of/add/iterator/toArray hold declaration order across the Ir bundle", () => {
+    const values = IrDeclaredValues.of(["a"]).add("b");
+    expect([...values]).toEqual(["a", "b"]);
+    expect(values.includes("b")).toBe(true);
+    expect(values.includes("z")).toBe(false);
+    expect(values.toArray()).toEqual(["a", "b"]);
+
+    const attr = { name: "x", kind: "bool" };
+    const attrs = IrAttributeDecls.of([]).add(attr);
+    expect([...attrs]).toEqual([attr]);
+    expect(attrs.toArray()).toEqual([attr]);
+
+    const ent = { name: "t", attributes: attrs };
+    const ents = IrEntityDecls.of([]).add(ent);
+    expect([...ents]).toEqual([ent]);
+    expect(ents.toArray()).toEqual([ent]);
+
+    const ob = { id: "OB-1" };
+    const obs = IrObligationDecls.of([]).add(ob);
+    expect([...obs]).toEqual([ob]);
+    expect(obs.toArray()).toEqual([ob]);
+
+    const pairs = IrBindingPairs.of([["t.x", true]]).add(["t.y", 1]);
+    expect([...pairs]).toEqual([
+      ["t.x", true],
+      ["t.y", 1],
+    ]);
+    expect(pairs.toArray().length).toBe(2);
+
+    const sc = { id: "SC-1", bindings: pairs, hasEvent: false };
+    const scs = IrScenarioDecls.of([]).add(sc);
+    expect([...scs]).toEqual([sc]);
+    expect(scs.toArray()).toEqual([sc]);
+
+    const bg = { id: "BG-1" };
+    const bgs = IrBackgroundDecls.of([]).add(bg);
+    expect([...bgs]).toEqual([bg]);
+    expect(bgs.toArray()).toEqual([bg]);
+  });
+});

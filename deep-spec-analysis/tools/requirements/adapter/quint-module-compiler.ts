@@ -10,9 +10,10 @@
 import { type Expression, expressionUsesPrime } from "../../kernel/domain/index.ts";
 import {
   type AttributeDeclaration,
-  type QuintMachineFacts,
   type RequirementsModel,
   type VerificationSkipped,
+  QuintMachineComponents,
+  QuintMachineFacts,
 } from "../domain/index.ts";
 
 class CompileError extends Error {
@@ -318,11 +319,11 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   lines.push("}");
   return {
     moduleText: `${lines.join("\n")}\n`,
-    facts: {
-      invariantComponents,
+    facts: QuintMachineFacts.of({
+      invariantComponents: QuintMachineComponents.of(invariantComponents),
       eventIds,
       scenariosWithInit: new Set(scenarioInitActions.keys()),
-    },
+    }),
     compileSkips,
     varToPath,
     scenarioInitActions,

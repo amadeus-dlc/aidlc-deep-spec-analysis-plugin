@@ -40,13 +40,15 @@ import {
   Scenarios,
   BackgroundAssumptions,
   RequirementsModel,
-  type QuintMachineFacts,
-  type QuintRuns,
+  type QuintRunsSeed,
+  QuintMachineComponents,
+  QuintMachineFacts,
+  QuintRuns,
+  TraceStates,
+  VerificationReport,
   VerificationReportId,
+  VerificationSkips,
   evaluateExpression,
-  interpretQuintVerdicts,
-  machineUncompilableReport,
-  quintUnavailableReport,
   FormalModelId,
 } from "../tools/requirements/domain/index.ts";
 import {
@@ -125,7 +127,7 @@ function quint(result: QuintCheckResult): QuintClient {
   return { check: () => result };
 }
 
-const EMPTY_RUNS: QuintRuns = { machine: null, temporals: new Map(), scenarios: new Map() };
+const EMPTY_RUNS: QuintRunsSeed = { machine: null, temporals: new Map(), scenarios: new Map() };
 
 const HASH = "a".repeat(64);
 
@@ -194,20 +196,20 @@ describe("the verify-quint interactor over the InMemory double", () => {
       obligations: [{ id: "OB-1", nature: "invariant", frRefs: ["FR-1"], assert: { op: "bool", value: true } }],
       scenarios: [{ id: "SC-1", kind: "reject", frRefs: ["FR-2"], bindings: { "T.x": 1 } }],
     });
-    const facts: QuintMachineFacts = {
-      invariantComponents: [{ id: "OB-1", expr: { op: "bool", value: true }, frRefs: ["FR-1"] }],
+    const facts = QuintMachineFacts.of({
+      invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "bool", value: true }, frRefs: ["FR-1"] }]),
       eventIds: [],
       scenariosWithInit: new Set(["SC-1"]),
-    };
-    const runs: QuintRuns = {
+    });
+    const runs = QuintRuns.of({
       machine: { kind: "clean" },
       temporals: new Map(),
       scenarios: new Map([["SC-1", { kind: "evaluated", violated: false }]]),
-    };
+    });
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok({ model: m, irHash: ContentHash.reconstitute(HASH) })),
       reports,
-      quint({ kind: "checked", method: "bounded", facts, compileSkips: [], runs }),
+      quint({ kind: "checked", method: "bounded", facts, compileSkips: VerificationSkips.of([]), runs }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("verified");
     expect(outcome.kind === "verified" && outcome.pass).toBe(false);
@@ -235,13 +237,13 @@ describe("quint verdict interpretation", () => {
       { id: "SC-3", kind: "accept", frRefs: [], bindings: {}, event: { trigger: "go" } },
     ],
   });
-  const facts: QuintMachineFacts = {
-    invariantComponents: [{ id: "OB-1", expr: { op: "ref", path: "T.ok" }, frRefs: ["FR-1"] }],
+  const facts = QuintMachineFacts.of({
+    invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "ref", path: "T.ok" }, frRefs: ["FR-1"] }]),
     eventIds: ["OB-2"],
     scenariosWithInit: new Set(["SC-1", "SC-2"]),
-  };
-  const run = (runs: Partial<QuintRuns>, method = "simulation", compileSkips: { target: string; reason: string }[] = []) =>
-    interpretQuintVerdicts(machineModel, facts, compileSkips, method, { ...EMPTY_RUNS, ...runs });
+  });
+  const run = (runs: Partial<QuintRunsSeed>, method = "simulation", compileSkips: { target: string; reason: string }[] = []) =>
+    facts.interpret(machineModel, VerificationSkips.of(compileSkips), method, QuintRuns.of({ ...EMPTY_RUNS, ...runs }));
 
   test("a machine timeout skips every machine target with the frozen budget wording", () => {
     const { skipped } = run({ machine: { kind: "timeout" } });
@@ -252,7 +254,7 @@ describe("quint verdict interpretation", () => {
   });
 
   test("a deadlock is a completeness-gap over the event ids, with a model fallback witness", () => {
-    const withTrace = run({ machine: { kind: "deadlock", trace: [{ "T.ok": true }] } });
+    const withTrace = run({ machine: { kind: "deadlock", trace: TraceStates.of([{ "T.ok": true }]) } });
     expect([...withTrace.findings]).toEqual([{
       kind: "completeness-gap",
       frRefs: ["FR-2"],
@@ -265,7 +267,7 @@ describe("quint verdict interpretation", () => {
   });
 
   test("a violation trace is attributed to the failing components via pure evaluation", () => {
-    const attributed = run({ machine: { kind: "violation", trace: [{ "T.ok": true }, { "T.ok": false }] } });
+    const attributed = run({ machine: { kind: "violation", trace: TraceStates.of([{ "T.ok": true }, { "T.ok": false }]) } });
     expect([...attributed.findings]).toEqual([{
       kind: "conflict",
       frRefs: ["FR-1", "FR-2"],
@@ -273,7 +275,7 @@ describe("quint verdict interpretation", () => {
       witness: { trace: [{ "T.ok": true }, { "T.ok": false }] },
       detail: "The event machine can reach a state that violates OB-1 (step trace attached): the event rules do not preserve the obligation.",
     }]);
-    const unattributed = run({ machine: { kind: "violation", trace: [{ "T.ok": true }] } });
+    const unattributed = run({ machine: { kind: "violation", trace: TraceStates.of([{ "T.ok": true }]) } });
     expect(unattributed.findings.toArray()[0]?.targets).toEqual(["OB-2"]);
   });
 
@@ -294,7 +296,7 @@ describe("quint verdict interpretation", () => {
     expect(guarded.skipped.toArray().filter((s) => s.target === "OB-3").length).toBe(1);
     const timeout = run({ temporals: new Map([["OB-3", { kind: "timeout" }]]) }, "bounded");
     expect(timeout.skipped.toArray().find((s) => s.target === "OB-3")?.detail).toBe("temporal check exceeded its budget");
-    const violated = run({ temporals: new Map([["OB-3", { kind: "violation", trace: [{ "T.ok": false }] }]]) }, "bounded");
+    const violated = run({ temporals: new Map([["OB-3", { kind: "violation", trace: TraceStates.of([{ "T.ok": false }]) }]]) }, "bounded");
     expect(violated.findings.toArray()[0]).toEqual({
       kind: "conflict",
       frRefs: ["FR-3"],
@@ -311,7 +313,12 @@ describe("quint verdict interpretation", () => {
     const base = run({});
     expect(base.skipped.toArray().find((s) => s.target === "SC-3")?.detail)
       .toBe("scenarios with a When-event are not checked by the quint backend in v1");
-    const unbound = interpretQuintVerdicts(machineModel, { ...facts, scenariosWithInit: new Set() }, [], "simulation", EMPTY_RUNS);
+    const unboundFacts = QuintMachineFacts.of({
+      invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "ref", path: "T.ok" }, frRefs: ["FR-1"] }]),
+      eventIds: ["OB-2"],
+      scenariosWithInit: new Set(),
+    });
+    const unbound = unboundFacts.interpret(machineModel, VerificationSkips.of([]), "simulation", QuintRuns.of(EMPTY_RUNS));
     expect(unbound.skipped.toArray().find((s) => s.target === "SC-1")?.detail)
       .toBe("quint scenario evaluation requires bindings for every declared attribute");
     const timeout = run({ scenarios: new Map([["SC-1", { kind: "timeout" }]]) });
@@ -376,11 +383,33 @@ describe("quint degradation reports", () => {
       obligations: [{ id: "OB-2", nature: "event", frRefs: [] }],
       scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
     });
-    const r = machineUncompilableReport(VerificationReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("h"), "simulation", "boom");
+    const r = VerificationReport.machineUncompilable(VerificationReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("h"), "simulation", "boom");
     expect(r.method()).toBe("simulation");
     expect(r.skipped().toArray().map((s) => `${s.target}:${s.reason}:${s.detail}`))
       .toEqual(["OB-2:compile-error:boom", "SC-1:compile-error:boom"]);
-    const u = quintUnavailableReport(VerificationReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("h"));
+    const u = VerificationReport.quintUnavailable(VerificationReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("h"));
     expect(u.unavailableReason()).toBe("quint CLI is not available (install: npm i -g @informalsystems/quint)");
+  });
+});
+
+describe("quint facts collections (first-class operations)", () => {
+  test("TraceStates and QuintMachineComponents own their step/attribution knowledge", () => {
+    const traces = TraceStates.of([{ "T.ok": true }]).add({ "T.ok": false });
+    expect([...traces].length).toBe(2);
+    expect(traces.finalState()).toEqual({ "T.ok": false });
+    expect(TraceStates.of([]).finalState()).toEqual({});
+    expect(traces.toArray()).toEqual([{ "T.ok": true }, { "T.ok": false }]);
+
+    const comps = QuintMachineComponents.of([]).add({ id: "OB-1", expr: { op: "ref", path: "T.ok" }, frRefs: [] });
+    expect(comps.isEmpty()).toBe(false);
+    expect([...comps].length).toBe(1);
+    expect(comps.ids()).toEqual(["OB-1"]);
+    expect(comps.violatedBy({ "T.ok": false }).ids()).toEqual(["OB-1"]);
+    expect(comps.violatedBy({ "T.ok": true }).isEmpty()).toBe(true);
+    expect(comps.toArray().length).toBe(1);
+
+    const facts = QuintMachineFacts.of({ invariantComponents: comps, eventIds: ["OB-9", "OB-2"], scenariosWithInit: new Set() });
+    expect(facts.hasInvariantComponents()).toBe(true);
+    expect(facts.machineTargets()).toEqual(["OB-1", "OB-2", "OB-9"]);
   });
 });

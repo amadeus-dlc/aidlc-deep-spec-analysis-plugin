@@ -6,10 +6,11 @@
 
 import { type Expression, expressionUsesPrime, idCompare } from "../../kernel/domain/index.ts";
 import {
+  SmtEventPairProbes,
+  SmtPlanFacts,
   VerificationSkips,
   type Obligation,
   type RequirementsModel,
-  type SmtPlanFacts,
   type VerificationSkipped,
 } from "../domain/index.ts";
 
@@ -358,5 +359,15 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     }
   }
 
-  return { queries, facts: { compiled, skipped: VerificationSkips.of(skipped), labelToTarget, eventPairs, gapTriggers, scenarioQueries } };
+  return {
+    queries,
+    facts: SmtPlanFacts.of({
+      compiled,
+      skipped: VerificationSkips.of(skipped),
+      labelToTarget,
+      eventPairs: SmtEventPairProbes.of(eventPairs),
+      gapTriggers,
+      scenarioQueries,
+    }),
+  };
 }
