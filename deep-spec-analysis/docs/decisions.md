@@ -646,3 +646,87 @@ first run of the layered pipeline.
   the doctor at 0 errors. With this PR the LEGACY set of the
   architecture rules contains only entries — **no legacy library
   remains**.
+
+## DDD migration PR7 — both IR validators become interactors; the duplicated kernel helpers collapse (2026-08-30, #20)
+
+The two contract validators (ir-valid 460 lines, design-ir-valid 348) are
+now composition roots over layered use cases, and the last local copies of
+the kernel helpers are gone. Base-vs-head parity diff is empty; goldens
+untouched.
+
+- **The keep-both fallback was not needed.** issue #20 mandated a first
+  step: diff ir-valid's local `validateSchema` against the kernel one,
+  because its error strings are an observed surface (the ir-valid
+  `errors[]` that intent-e2e asserts). The two are byte-identical apart
+  from the `export` keyword and all 12 error templates match, so the local
+  copy was deleted rather than kept. `requirementIds` is likewise
+  byte-identical; `extractJsonFences` is `extractFences(md, "json")`
+  mapped to bodies; the local `parseFlags` is the kernel one minus the
+  unread `--report-only`.
+- **`walkExpression` joins kernel/domain.** Both validators carried the
+  same pre-order walk over the shared `Expression` vocabulary.
+- **requirements/domain**: `modelWellFormednessErrors` (unique ids,
+  resolvable references, enum membership, prime legality — every wording
+  and the emission order verbatim), `FrReferenceIndex` (the frRef reverse
+  index and its sorted missing-reference report), and `SourceAnchor`
+  (declared vs actual digest, both frozen messages).
+- **design/domain**: `designWellFormednessErrors` (per-unit id namespaces,
+  the sibling-bound enum rule, machine well-formedness, BR coverage) and
+  `BrReferenceIndex`.
+- **The domain cannot see `Json`.** Layer direction forbids domain →
+  kernel/adapter, and the ruling that serialization formats are adapter
+  knowledge stands. So the tolerant walk over raw Json — every `isObject`
+  / `typeof` guard deciding whether an entry is silently skipped — moved
+  into the adapters, which hand the domain a typed view (`IrModelView` /
+  `DesignUnitView`). The existing contract-1 parser could NOT be reused:
+  it drops attributes whose `type` is malformed, while ir-valid registers
+  them with `kind: ""` — a difference that changes which references
+  resolve.
+- **The digest stays a byte digest.** `sourceDigest` hashes the
+  requirements.md *bytes*; kernel's `sha256(text)` re-encodes a string as
+  UTF-8 and would diverge on a file that is not valid UTF-8. The adapter
+  keeps `createHash` over the Buffer, and the reason is recorded at the
+  call site.
+- **Review fix (gate restoration)**: the design materials gateway
+  initially built unit views — including the per-unit `existsSync` /
+  rules.md reads — unconditionally, where the legacy main only ran
+  `semanticErrors` when the version matched and the schema was valid.
+  The gate is restored in the adapter: unit views (and their I/O) are
+  built only under the legacy errors-empty condition, so a unit name
+  that has not passed the schema's `^[a-z0-9][a-z0-9-]{0,63}$` constraint
+  is never joined into a filesystem path (the legacy I/O profile and its
+  path confinement, preserved).
+- **Proofs**: a new in-process suite drives both interactors over real
+  Impls and asserts the rendered verdict line is byte-identical to the one
+  the real sensor writes on stdout, across every scenario (canonical, each
+  planted defect, digest drift, absent requirements, fence/JSON/schema
+  failures, version mismatch, pass-through); both well-formedness modules
+  hold 100% line coverage; the base↔head parity snapshot `diff -r` is
+  empty over 45 files; the live sandbox upgrade transported both trees and
+  reproduced the canonical pass and every planted defect with the doctor
+  at 0 errors.
+
+## Repository ruling — a repository resolves its aggregate by the aggregate's own ID (2026-08-30)
+
+An owner ruling landed during PR7 review and was applied immediately:
+**a repository's lookup method takes the identity of the aggregate it
+resolves — never the identity of some other artifact from which the
+repository would derive it internally. The identity's value may well be
+a path, but it must be typed and conceptualized as the aggregate's ID.**
+
+- The flagged violation: `RequirementsSourceRepository.resolve(outputPath)`
+  received the *formal model artifact's* path and derived the requirements
+  source's identity (record root, three levels up) inside the Impl —
+  resolution by another aggregate's identity.
+- The fix: the new `RequirementsSourceId` value object (requirements/domain)
+  carries the record root — one requirements source per intent record, so
+  the record IS the identity; which phase directory physically holds
+  requirements.md stays a resolution detail of the repository. The
+  derivation from the verify artifact's path is path-layout knowledge and
+  therefore adapter work: the materials gateway stamps `sourceId` into
+  `IrValidationMaterials` during acquisition, and the use case hands that
+  ID to `resolve`.
+- Ports whose parameter is the resolved aggregate's own artifact path
+  (`findByPath` on the formal-model and design-model repositories) already
+  satisfy the value-may-be-a-path clause; typing those identities is
+  follow-up alignment, tracked for the closeout.

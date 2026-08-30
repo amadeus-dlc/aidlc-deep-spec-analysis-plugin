@@ -29,3 +29,7 @@ export {
   RefinementContextRepositoryImpl,
 } from "./refinement-context-repository-impl.ts";
 export { type RefinementSolverClientConfig, RefinementSolverClientImpl } from "./refinement-solver-client-impl.ts";
+export {
+  type DesignIrValidationMaterialsConfig,
+  DesignIrValidationMaterialsRepositoryImpl,
+} from "./design-ir-validation-materials-repository-impl.ts";

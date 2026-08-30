@@ -14,3 +14,10 @@ export function expressionUsesPrime(e: Expression): boolean {
   if (e.op === "ref" && e.prime === true) return true;
   return (e.args ?? []).some(expressionUsesPrime);
 }
+
+// 式ツリーの前順走査。両 IR バリデータがローカルに複製していた walkExpr の
+// 統合（PR7）——訪問順は「自ノード → args の宣言順」で凍結。
+export function walkExpression(e: Expression, visit: (node: Expression) => void): void {
+  visit(e);
+  for (const a of e.args ?? []) walkExpression(a, visit);
+}

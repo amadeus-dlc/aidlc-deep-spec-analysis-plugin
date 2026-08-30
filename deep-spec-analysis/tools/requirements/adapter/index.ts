@@ -20,3 +20,8 @@ export {
 } from "./quint-module-compiler.ts";
 export { decodeItfTrace, itfStatus } from "./itf-decoder.ts";
 export { type QuintClientConfig, QuintClientImpl } from "./quint-client-impl.ts";
+export {
+  type IrValidationMaterialsConfig,
+  IrValidationMaterialsRepositoryImpl,
+} from "./ir-validation-materials-repository-impl.ts";
+export { RequirementsSourceRepositoryImpl } from "./requirements-source-repository-impl.ts";

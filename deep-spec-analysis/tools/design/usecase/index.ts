@@ -20,3 +20,10 @@ export {
 export { type VerifyDesignOutcome } from "./verify-design-outcome.ts";
 export { type VerifyDesignInput, VerifyDesignSmtUseCase } from "./verify-design-smt-usecase.ts";
 export { VerifyDesignQuintUseCase } from "./verify-design-quint-usecase.ts";
+export {
+  type DesignIrMaterialsAcquisition,
+  type DesignIrValidationMaterials,
+  type DesignIrValidationMaterialsRepository,
+} from "./design-ir-validation-materials-repository.ts";
+export { type ValidateDesignIrOutcome } from "./validate-design-ir-outcome.ts";
+export { ValidateDesignIrUseCase } from "./validate-design-ir-usecase.ts";

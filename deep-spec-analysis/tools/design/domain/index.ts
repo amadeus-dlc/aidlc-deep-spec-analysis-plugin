@@ -41,3 +41,17 @@ export {
   designIrUnreadableReport,
   designVersionMismatchReport,
 } from "./design-degradation.ts";
+export {
+  type DesignAttributeView,
+  type DesignBackgroundView,
+  type DesignEntityView,
+  type DesignIgnoreView,
+  type DesignMachineView,
+  type DesignObligationView,
+  type DesignScenarioView,
+  type DesignTemporalView,
+  type DesignTransitionView,
+  type DesignUnitView,
+} from "./design-ir-view.ts";
+export { BrReferenceIndex } from "./br-reference-index.ts";
+export { designWellFormednessErrors } from "./design-well-formedness.ts";
