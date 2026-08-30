@@ -30,6 +30,7 @@ import type {
   DesignTransitionView,
   DesignUnitView,
 } from "../domain/index.ts";
+import { SUPPORTED_DESIGN_IR_MAJOR } from "../domain/index.ts";
 import type {
   DesignIrMaterialsAcquisition,
   DesignIrValidationMaterialsRepository,
@@ -207,17 +208,30 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
     const schemaErrors: string[] = [];
     validateSchema(schema.value, schema.value, ir, "", schemaErrors);
 
-    const recordRoot = findRecordRoot(dirname(outputPath));
+    const irVersion = typeof ir.irVersion === "string" ? ir.irVersion : "";
+
+    // 旧 main は「バージョン一致かつスキーマ妥当」のときだけ semanticErrors を
+    // 呼んだ——unit view の構築（construction/<unit>/ の existsSync と rules.md
+    // 読み）はその内側の I/O なので、同じゲートで組む。ゲートが閉じている間は
+    // ユニット名がスキーマの ^[a-z0-9][a-z0-9-]{0,63}$ 制約を通過していない
+    // 可能性があり、生の名前を join へ渡さない（レガシーの I/O プロファイルと
+    // 経路制限の保存）。use case 側も errors 非空なら units を読まない。
+    const major = Number.parseInt(irVersion.split(".")[0] ?? "", 10);
+    const semanticGateOpen = schemaErrors.length === 0 && !(Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR);
+
     const units: DesignUnitView[] = [];
-    for (const rawUnit of Array.isArray(ir.units) ? ir.units : []) {
-      if (!isObject(rawUnit) || typeof rawUnit.unit !== "string") continue;
-      units.push(buildUnitView(rawUnit, rawUnit.unit, recordRoot));
+    if (semanticGateOpen) {
+      const recordRoot = findRecordRoot(dirname(outputPath));
+      for (const rawUnit of Array.isArray(ir.units) ? ir.units : []) {
+        if (!isObject(rawUnit) || typeof rawUnit.unit !== "string") continue;
+        units.push(buildUnitView(rawUnit, rawUnit.unit, recordRoot));
+      }
     }
 
     return {
       kind: "acquired",
       materials: {
-        irVersion: typeof ir.irVersion === "string" ? ir.irVersion : "",
+        irVersion,
         schemaErrors,
         units,
       },
