@@ -5,6 +5,9 @@
 // enumMap も無い entry を byReq へ登録だけしていた——挙動保存のため表現を残す。
 // alpha 到達時は AlphaError）。
 
+import type { DesignUnitId } from "../../design/domain/index.ts";
+import type { RefinementMapId } from "./refinement-map-id.ts";
+import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 
 export type AttributeMapping =
@@ -18,7 +21,7 @@ export interface EventMapping {
   readonly waived?: { readonly reason: string };
 }
 
-export interface UnmappedEntry {
+export interface UnmappedTarget {
   readonly target: string;
   readonly reason: string;
 }
@@ -27,21 +30,24 @@ export interface RefinementUnitMap {
   readonly unit: string;
   readonly attrMap: readonly AttributeMapping[];
   readonly eventMap: readonly EventMapping[];
-  readonly unmapped: readonly UnmappedEntry[];
+  readonly unmapped: readonly UnmappedTarget[];
 }
 
 export interface RefinementMapSeed {
-  readonly requirementsIrHash: string;
-  readonly designIrHash: string;
+  readonly id: RefinementMapId;
+  readonly requirementsIrHash: ContentHash;
+  readonly designIrHash: ContentHash;
   readonly units: readonly RefinementUnitMap[];
 }
 
 export class RefinementMap {
-  readonly #requirementsIrHash: string;
-  readonly #designIrHash: string;
+  readonly #id: RefinementMapId;
+  readonly #requirementsIrHash: ContentHash;
+  readonly #designIrHash: ContentHash;
   readonly #units: readonly RefinementUnitMap[];
 
   private constructor(seed: RefinementMapSeed) {
+    this.#id = seed.id;
     this.#requirementsIrHash = seed.requirementsIrHash;
     this.#designIrHash = seed.designIrHash;
     this.#units = seed.units;
@@ -53,12 +59,16 @@ export class RefinementMap {
   }
 
   // 境界: 要件形式モデルの hash と照合される宣言値（陳腐化検出）。
-  requirementsIrHash(): string {
+  id(): RefinementMapId {
+    return this.#id;
+  }
+
+  requirementsIrHash(): ContentHash {
     return this.#requirementsIrHash;
   }
 
   // 境界: 設計 IR の irHash と照合される宣言値（陳腐化検出）。
-  designIrHash(): string {
+  designIrHash(): ContentHash {
     return this.#designIrHash;
   }
 
@@ -66,7 +76,7 @@ export class RefinementMap {
     return this.#units;
   }
 
-  unitMapOf(unitName: string): RefinementUnitMap | undefined {
-    return this.#units.find((m) => m.unit === unitName);
+  unitMapOf(unit: DesignUnitId): RefinementUnitMap | undefined {
+    return this.#units.find((m) => m.unit === unit.value());
   }
 }

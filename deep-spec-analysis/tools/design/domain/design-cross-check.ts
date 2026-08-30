@@ -5,6 +5,7 @@
 // 旧 recomputeDesignCrossCheck の計算部の逐語移植（読めないファイルの黙殺は
 // Repository 側）。
 
+import type { ContentHash } from "../../kernel/domain/index.ts";
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { DesignFinding } from "./design-finding.ts";
 import type { DesignModel } from "./design-model.ts";
@@ -14,12 +15,12 @@ import type { DesignReportId } from "./design-report-id.ts";
 export function designCrossCheckReport(
   id: DesignReportId,
   model: DesignModel,
-  irHash: string,
+  irHash: ContentHash,
   siblings: readonly DesignReport[],
 ): DesignReport {
   // 比較に参加するのは同一 irHash の可用文書のみ（旧実装の読込時選別と同値）。
   const docs = siblings
-    .filter((s) => s.irHash() === irHash && !s.isUnavailable())
+    .filter((s) => s.irHash().equals(irHash) && !s.isUnavailable())
     .map((s) => ({
       backend: s.id().backendName(),
       findings: s.findings(),

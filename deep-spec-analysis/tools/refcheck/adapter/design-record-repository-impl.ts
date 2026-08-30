@@ -20,7 +20,7 @@ import {
   type DesignRecordId,
   DesignRecord,
   type DesignRecordSeed,
-  type InputEntry,
+  type InputAnchor,
 } from "../domain/index.ts";
 import type { DesignRecordRepository } from "../usecase/index.ts";
 import { parseComponentCatalog } from "./component-catalog-parser.ts";
@@ -45,9 +45,10 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const isFunctional = basename(fdDir) === "functional-design";
     const recordRoot = findRecordRoot(isFunctional ? fdDir : dirname(artifactPath));
     const rel = (p: string): string => relArtifact(recordRoot, p);
-    const input = (p: string, text: string): InputEntry => ({ artifact: rel(p), sha256: sha256(text) });
+    const input = (p: string, text: string): InputAnchor => ({ artifact: rel(p), sha256: sha256(text) });
 
     const seed: DesignRecordSeed = {
+      id,
       target: input(artifactPath, md),
       componentCatalog: targetBase === "components.md" ? parseComponentCatalog(md) : null,
       contractsTable: targetBase === "contract-summary.md" ? parseContractsTable(md) : null,
@@ -75,7 +76,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
 
   #functional(recordRoot: string | null, fdDir: string): NonNullable<DesignRecordSeed["functional"]> {
     const rel = (p: string): string => relArtifact(recordRoot, p);
-    const load = <T>(path: string, parse: (text: string) => T): { input: InputEntry; outcome: T } | null => {
+    const load = <T>(path: string, parse: (text: string) => T): { input: InputAnchor; outcome: T } | null => {
       const text = readIfExists(path);
       if (text === null) return null;
       return { input: { artifact: rel(path), sha256: sha256(text) }, outcome: parse(text) };

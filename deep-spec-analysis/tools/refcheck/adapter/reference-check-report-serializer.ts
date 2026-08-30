@@ -8,7 +8,7 @@
 // この戻り値から導出させることで、stdout とファイルの矛盾を構造的に防ぐ。
 
 import type { Result } from "../../kernel/infrastructure/index.ts";
-import { sha256 } from "../../kernel/domain/index.ts";
+import { ContentHash, sha256 } from "../../kernel/domain/index.ts";
 import { canonicalStringify } from "../../kernel/adapter/canonical-json.ts";
 import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/schema-validator.ts";
@@ -16,18 +16,19 @@ import type { SchemaUnreadable } from "../../kernel/adapter/contract-schema.ts";
 import {
   CATALOG_VERSION,
   type Finding,
-  type InputEntry,
   ReferenceCheckReport,
   type ReferenceCheckReportId,
   type Skipped,
 } from "../domain/index.ts";
 
 function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
-  const inputs = report.inputs() as unknown as Json;
+  // ContentHash は境界（描画）で value() へ落とす——DP のままでは正準 JSON に
+  // 乗らない。キー順（artifact, sha256）は旧リテラルの挿入順そのもの。
+  const inputs = report.inputs().map((i) => ({ artifact: i.artifact, sha256: i.sha256.value() })) as unknown as Json;
   const ordered: { [k: string]: Json } = {
     backend: report.id().backendName(),
     irVersion: CATALOG_VERSION,
-    irHash: sha256(canonicalStringify(inputs)),
+    irHash: sha256(canonicalStringify(inputs)).value(),
     method: "static",
   };
   const reason = report.unavailableReason();
@@ -79,7 +80,13 @@ export function parseReportDocument(
     ok: true,
     value: ReferenceCheckReport.reconstitute({
       id,
-      inputs: raw.inputs as unknown as InputEntry[],
+      inputs: (raw.inputs as Json[]).map((e) => {
+        const entry = isObject(e) ? e : {};
+        return {
+          artifact: typeof entry.artifact === "string" ? entry.artifact : "",
+          sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : ""),
+        };
+      }),
       checked: (raw.checked as Json[]).filter((c): c is string => typeof c === "string"),
       findings: raw.findings as unknown as Finding[],
       skipped: raw.skipped as unknown as Skipped[],

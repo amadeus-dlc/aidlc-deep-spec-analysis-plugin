@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -44,13 +44,17 @@ import {
   COMPONENT_FAMILIES,
   CONTRACT_FAMILIES,
   FUNCTIONAL_FAMILIES,
-  type FunctionalChecksInput,
+  type FunctionalCheckMaterials,
   ReferenceCheckReport,
   ReferenceCheckReportId,
   runComponentChecks,
   runContractChecks,
   runFunctionalChecks,
+  AttributeName,
+  AttributeNames,
   DesignRecordId,
+  EntityName,
+  SiblingUnitIndex,
 } from "../tools/refcheck/domain/index.ts";
 import { InMemoryReferenceCheckReportRepository } from "./doubles/in-memory-reference-check-report-repository.ts";
 
@@ -85,6 +89,8 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
           mode: "persist",
         });
         expect(domainOutcome.kind).toBe("verified");
+        const rec = new DesignRecordRepositoryImpl().findById(DesignRecordId.of(ap(componentsPath)));
+        expect(rec.ok && rec.value.id().equals(DesignRecordId.of(ap(componentsPath)))).toBe(true);
         expect(readFileSync(join(dirname(componentsPath), "deep-spec-refcheck", "components.json"), "utf-8"))
           .toBe(golden(variant, "components.json"));
 
@@ -175,7 +181,7 @@ function domainReport(
   run(ledger);
   return ReferenceCheckReport.compose({
     id: ReferenceCheckReportId.of(ap("/tmp/r"), backend),
-    inputs: [{ artifact: "x.md", sha256: "a".repeat(64) }],
+    inputs: [{ artifact: "x.md", sha256: ContentHash.reconstitute("a".repeat(64)) }],
     checked: ledger.checkedTargets(),
     findings: ledger.findings(),
     skipped: ledger.skipped(),
@@ -237,7 +243,7 @@ describe("skip branches the fixtures do not exercise", () => {
   });
 });
 
-function functionalInput(overrides: Partial<FunctionalChecksInput>): FunctionalChecksInput {
+function functionalInput(overrides: Partial<FunctionalCheckMaterials>): FunctionalCheckMaterials {
   return {
     unit: "u1",
     entitiesArtifact: "e.md",
@@ -249,12 +255,12 @@ function functionalInput(overrides: Partial<FunctionalChecksInput>): FunctionalC
     requirementIdsKnown: null,
     componentsArtifact: "components.md",
     domainEntities: { kind: "absent" },
-    siblingUnits: new Map(),
+    siblingUnits: SiblingUnitIndex.of(new Map()),
     ...overrides,
   };
 }
 
-function functionalReport(overrides: Partial<FunctionalChecksInput>): ReferenceCheckReport {
+function functionalReport(overrides: Partial<FunctionalCheckMaterials>): ReferenceCheckReport {
   const input = functionalInput(overrides);
   return domainReport(FUNCTIONAL_FAMILIES, (l) => runFunctionalChecks(input, l), "functional-design", input.unit);
 }
@@ -463,7 +469,7 @@ describe("functional branches the fixtures do not exercise", () => {
       entities: parseEntitiesDocument(entitiesMd),
       spec: parseFunctionalSpecDocument("# prose only, no machines\n"),
       domainEntities: parseDomainEntitiesDocument(componentsMd),
-      siblingUnits: new Map([["u1", new Map([["order", { name: "Order", attrs: ["status"] }]])]]),
+      siblingUnits: SiblingUnitIndex.of(new Map([["u1", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: AttributeNames.of([AttributeName.reconstitute("status")]) }]])]])),
     });
     const skipDetails = report.skipped().map((s) => s.detail ?? "").join("\n");
     expect(skipDetails).toContain('no `### State Machine: Order` heading with a stateDiagram fence found');
@@ -476,7 +482,7 @@ describe("functional branches the fixtures do not exercise", () => {
     const report = functionalReport({
       unit: undefined,
       domainEntities: parseDomainEntitiesDocument(componentsMd),
-      siblingUnits: new Map([["u2", new Map([["order", { name: "Order", attrs: ["qty"] }]])]]),
+      siblingUnits: SiblingUnitIndex.of(new Map([["u2", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: AttributeNames.of([AttributeName.reconstitute("qty")]) }]])]])),
     });
     const reasons = report.skipped().map((s) => `${s.target}:${s.reason}`);
     expect(reasons).toContain("check:XS-3:unrecognized-format");

@@ -4,7 +4,7 @@
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
-import type { Expression } from "../../kernel/domain/index.ts";
+import { IrVersion, type Expression } from "../../kernel/domain/index.ts";
 import type {
   AttributeDeclaration,
   Obligation,
@@ -12,10 +12,12 @@ import type {
   Scenario,
 } from "../domain/index.ts";
 
-export function parseFormalModel(raw: Json): RequirementsModelSeed | string {
+// 恒等（FormalModelId）は Repository が findById の引数から注入する——
+// パーサは文書の中身しか知らない。
+export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id"> | string {
   if (!isObject(raw)) return "IR is not a JSON object";
-  const irVersion = typeof raw.irVersion === "string" ? raw.irVersion : "";
-  if (!/^\d+\.\d+\.\d+$/.test(irVersion)) return "IR lacks a semver irVersion";
+  const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
+  if (!irVersion.ok) return "IR lacks a semver irVersion";
   const attributes: AttributeDeclaration[] = [];
   const schema = isObject(raw.schema) ? raw.schema : {};
   for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
@@ -73,5 +75,5 @@ export function parseFormalModel(raw: Json): RequirementsModelSeed | string {
     if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
     background.push({ id: bg.id, assert: bg.assert as unknown as Expression });
   }
-  return { irVersion, attributes, obligations, scenarios, background };
+  return { irVersion: irVersion.value, attributes, obligations, scenarios, background };
 }

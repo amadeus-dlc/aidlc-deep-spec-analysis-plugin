@@ -765,3 +765,193 @@ repo-wide in one sweep:
 Proofs: the base↔head parity snapshot `diff -r` is empty against the
 pre-PR7 base (45 files); 296 tests green; every new VO holds 100% line
 coverage; goldens untouched.
+
+## Domain-primitive catalog — parse/reconstitute duality; two land now, six are freeze-blocked (2026-08-30)
+
+The owner ruled that domain primitives were not thorough: the ubiquitous
+language's constrained values still flowed through aggregates as raw
+strings. The catalog was audited value by value, and the aggregate idiom
+was extended to DPs: **`parse` is the strict boundary constructor
+(Result, materials-only error) and `reconstitute` is the verbatim
+rehydration door for frozen documents** — exactly the compose /
+reconstitute duality the aggregates already had, so byte-frozen tolerant
+reading stays in the adapters while every parse-path is Always-Valid.
+
+Landed now (both with real production/interpretation semantics today):
+
+- **`ContentHash`** (kernel) — `^[0-9a-f]{64}$`; `sha256()` now returns
+  it, `ofText`/`ofBytes` are the computed producers. Typed end-to-end:
+  `AcquiredFormalModel`/`AcquiredDesignModel.irHash`, both report
+  aggregates, `InputEntry`/`DesignInputEntry.sha256`, `SourceAnchor`'s
+  actual side, `RefinementMap`'s dual anchors and the staleness
+  comparisons (`equals`, no more `!==` on strings). Serializers map to
+  `value()` at the rendered byte and reconstitute via the verbatim door.
+- **`IrVersion`** (kernel) — semver; the strict invariant already
+  existed in both model parsers (`IR lacks a semver irVersion`), so
+  `RequirementsModel`/`DesignModel` hold it Always-Valid, and
+  `majorVersion`/`supportsMajor` moved onto the DP where they belong.
+  Report reconstitution keeps the frozen "" tolerance via `reconstitute`
+  (NaN major, same as legacy).
+
+Freeze-blocked (recorded here so PR10 lifts them deliberately): the
+remaining six candidates have NO strict production path today — every
+value enters through byte-frozen tolerant ingestion, so their `parse`
+would be dead code and the DP pure ceremony. `UnitName` (schema pattern
+`^[a-z0-9][a-z0-9-]{0,63}$` exists, but units only ever arrive via the
+tolerant model parser), `RequirementId`/`BusinessRuleId` (frRefs/brRefs
+arrive from documents; the extraction sets are regex-guaranteed but
+compare against raw document claims), `VerificationMethod` (internally
+closed to bounded/simulation but report reconstitution admits any
+string), `BackendName` (sibling reconstitution derives it from file
+names), `AttributePath` (expression paths are exactly what
+well-formedness must REPORT on, not reject at parse). When PR10 lifts
+the freeze, these convert with regenerated goldens.
+
+A naming correction landed in the same review: `InputEntry` /
+`DesignInputEntry` were not ubiquitous language ("entry" is a technical
+ledger-row word). The concept is content-anchoring of an input artifact
+— the same vocabulary as `SourceAnchor` — so they are now `InputAnchor`
+(refcheck) and `DesignInputAnchor` (design), each context owning its
+word.
+
+Proofs: 296+12 tests green; both DPs at 100% line coverage; the parity
+snapshot `diff -r` is empty against the pre-PR7 base; a live sandbox z3
+run reproduced `smt.json` byte-identical to the golden.
+
+## Aggregate-identity ruling — every entity and aggregate carries its ID (2026-08-30)
+
+The owner ruled that ID-less entities and aggregates are unacceptable. The
+audit found that PR #40's typed aggregate IDs were used to *resolve*
+aggregates but the resolved aggregates did not *carry* them — a repository
+answered `findById(id)` with an object that did not know its own identity.
+
+- `RequirementsModel` now carries `FormalModelId`, `DesignModel` carries
+  `DesignModelId`, `DesignRecord` carries `DesignRecordId` — injected by
+  the repository from the `findById` argument (the parser knows only the
+  document's content, never its identity).
+- `RefinementMap` gains the new `RefinementMapId` (the contract-4 map
+  artifact — one per record), and `RefinementRequirements` carries
+  `FormalModelId`: a profile does not change identity, so the contract-1
+  aggregate's ID is re-exported through the refinement facade (layer
+  discipline: design/adapter→requirements/domain is a forbidden edge,
+  design/adapter→refinement/domain is allowed).
+- `DesignUnit` — the entity inside `DesignModel` — gains `id():
+  DesignUnitId` (identity = the unit name; validation of the name is the
+  freeze-blocked `UnitName` DP's job, not the ID's), and
+  `RefinementMap.unitMapOf` now takes the typed id instead of a raw
+  string.
+- Interface entities (`Obligation`, `Scenario`, machines, transitions)
+  already carry their `id` fields; typing those stable IDs is the
+  freeze-blocked `RequirementId`/`BusinessRuleId` story.
+
+Review round on the same PR: the stale `InputEntry` names in this
+catalog's typed-through list were corrected (CodeRabbit), and
+`IrVersion.parse`'s acceptance of leading zeros was confirmed as the
+frozen legacy pattern `/^\d+\.\d+\.\d+$/` — tightening to strict SemVer
+would reject IRs the legacy parsers accepted, so it is pinned by test and
+deferred to the PR10 lift.
+
+Proofs: 304 tests green; parity snapshot `diff -r` empty against the
+pre-PR7 base; goldens untouched; all new id accessors covered above the
+90% floor.
+
+## Vocabulary-primitive ruling — non-boolean values in domain interfaces become DPs (2026-08-30)
+
+Two more rulings landed in the same review session and were applied:
+
+1. **Port-holding fields are named for their role.** `#designRecords` /
+   `#reports` hid what they hold; every use-case field and constructor
+   parameter holding a port now bears the port's name
+   (`#designRecordRepository`, `#referenceCheckReportRepository`,
+   `#formalModelRepository`, `#verificationReportRepository`,
+   `#z3SolverClient`, `#quintClient`, `#designModelRepository`,
+   `#designReportRepository`, `#siblingBackendClient`,
+   `#refinementContextRepository`, `#refinementSolverClient`,
+   `#irValidationMaterialsRepository`, `#requirementsSourceRepository`,
+   `#designIrValidationMaterialsRepository`).
+2. **Non-boolean fields of domain interfaces are domain primitives** —
+   the freeze-blocked stance was overruled: the `reconstitute` door makes
+   DP-ification freeze-compatible even where the strict `parse` path has
+   no producer yet. Applied first to the quoted instance and its whole
+   cluster: the functional-design vocabulary (`AttrDecl`, `RelDecl`,
+   `EntityDecl`, `RuleDecl`, `StateMachineSketch`, `DomainEntitySketch`,
+   the sibling index) now speaks `EntityName`, `AttributeName`,
+   `ElementPath`, `TypeName`, `AllowedValue`, `AttributeDefault`,
+   `NumericBound`, `CardinalityNotation`, `BusinessRuleId`,
+   `RuleCategory`, `AppliesTo`, `SourceId`, `MachineSpec`, `StateName`,
+   `ComponentName`, `ReferenceTarget` — each owning its interpretation
+   vocabulary (case/underscore normalization, the BR shape, cardinality
+   token folding, spec decomposition, default rendering) so the checks
+   read as semantics while every frozen message stays byte-identical.
+   Booleans (declaration flags) and prose (details, unsupported reasons,
+   missing-key lists) stay primitive by the ruling's own carve-out;
+   line/count metadata stays numeric pending an explicit ruling.
+
+Proofs: 305+ tests green; the vocabulary file holds 100% line coverage;
+goldens untouched; the parity snapshot `diff -r` stays empty against the
+pre-PR7 base (the refcheck scenarios exercise these messages heavily).
+
+## Tell-Don't-Ask ruling — domain objects are abstract data types, not data structures (2026-08-30)
+
+The owner ruled that an anemic domain model is unacceptable: a domain
+interface carrying only properties means its behavior has escaped
+outside, and every caller is *asking* (pulling data out and deciding
+elsewhere) instead of *telling*. Domain objects must enclose their
+complex domain knowledge behind a narrow surface.
+
+Applied first at the flagged epicenter, the functional-design cluster:
+the seven property bags became behavior-bearing classes, and the escaped
+predicates moved home —
+
+- `AttrDecl` now judges its own coherence: the FD-E2 type-category
+  conflicts (`declaresAllowedValuesOnNonEnumerableType`,
+  `declaresBoundsOnNonNumericType`, `declaresUniqueOnCollectionType`),
+  the FD-E3 range/default coherence (`boundsInverted`,
+  `defaultBelowMin`/`defaultAboveMax`, `defaultOutsideAllowed`), the
+  lifecycle candidacy, and the FD-S diagram diffs (`rogueDiagramStates`,
+  `allowedValuesAbsentFrom`). The type-category sets moved into `TypeName`
+  (`classifiesNumeric`/`Date`/`Bool`/`Collection`), the cardinality
+  closed set into `CardinalityNotation.isInClosedSet`, the category set
+  into `RuleCategory.isKnownCategory`.
+- `EntityDecl` owns `duplicateAttrDecls`, `lifecycleAttr` (the former
+  free function died into it), `attrNamed`. `DeclaredEntities` owns
+  `duplicateEntityDecls`, `allRels`, `containsEntityNamed`, the FD-E6
+  `resolvesReference`, the FD-R4 `resolvesAppliesTo`,
+  `entityByNormalizedName`, `lifecycleEntities`. `RuleDecl` owns
+  `findingTarget` (the five-fold BR-shape ternary died into it),
+  `sourceIdValuesMissingFrom`, `categoryOutsideClosedSet`.
+  `StateMachineSketch` owns its frozen `locationLabel`;
+  `DomainEntitySketch` owns `catalogLabel` and `attributesDroppedIn`.
+- The check runners are now pure coordinators: they iterate, tell the
+  declarations to yield their violations, and render the frozen
+  messages. Formatting stays on 境界 accessors so every message is
+  byte-identical (proven by the untouched goldens and the still-empty
+  parity snapshot).
+- Finding-emission order changed within a family (duplicates now come
+  from collection methods); this is unobservable because the report
+  aggregate's compose owns canonical sorting — the goldens confirm.
+
+## First-class-collection ruling — domain layers never handle raw arrays (2026-08-30)
+
+The owner ruled that raw arrays must not flow through the domain layer:
+collections are first-class domain objects with an immutable `add`, the
+collection-owned set knowledge, and `toArray()` as the boundary-only
+escape hatch. Applied at the epicenter cluster: `AttributeNames`,
+`AllowedValues`, `StateNames`, `SourceIds` (vocabulary side) and
+`AttrDecls`, `RelDecls`, `EntityDecls`, `ShapeErrors`, `RuleDecls`,
+`StateMachineSketches`, `DomainEntitySketches`, `SiblingUnitIndex`
+(declaration side). The set knowledge sank one level further into the
+collections: duplicate detection (`duplicatesByName`), lifecycle
+selection (`AttrDecls.lifecycleAttr`), FD-E6/FD-R4 resolution
+(`EntityDecls.resolvesReference`/`resolvesAppliesTo`), the FD-S diagram
+diffs (`AllowedValues.rogueAmong`/`absentFrom`), the FD-R3 reverse
+verification (`SourceIds.valuesMissingFrom`), the XS traversal order
+(`DomainEntitySketches.sortedDistinctByNormalizedName`) and the sibling
+lookups (`SiblingUnitIndex.definersOf`/`entityDeclaredIn`). The former
+`SiblingUnitEntities` type alias — a bare `Map` in the domain — died
+into the index class. Terminology note recorded in the same session:
+comments now say 型区分 (type category) — plain OO classification, no
+functional type-class connotation intended or implemented.
+
+Proofs: 308 tests green; goldens untouched; the parity snapshot
+`diff -r` stays empty; every collection above the 90% floor.

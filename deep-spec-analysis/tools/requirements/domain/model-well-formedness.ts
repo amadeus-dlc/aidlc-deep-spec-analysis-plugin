@@ -4,14 +4,14 @@
 // 文言と発生順序は ir-valid の errors[] としてそのまま観測面に出る。
 
 import { type Expression, walkExpression } from "../../kernel/domain/index.ts";
-import type { IrModelView } from "./ir-model-view.ts";
+import type { IrModelDecl } from "./ir-model-decl.ts";
 
 interface AttributeType {
   readonly kind: string;
   readonly values?: readonly string[];
 }
 
-export function modelWellFormednessErrors(view: IrModelView): string[] {
+export function modelWellFormednessErrors(view: IrModelDecl): string[] {
   const errors: string[] = [];
   const attrTypes = new Map<string, AttributeType>();
 

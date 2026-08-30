@@ -747,3 +747,176 @@ PR7 マージ直後にオーナー裁定がさらに 2 つ下り、一括でリ�
 証明：base↔head パリティスナップショットの `diff -r` は PR7 以前の
 base に対して空（45 ファイル）。296 tests green。新 VO は全て行カバレッジ
 100%。golden 無変更。
+
+## ドメインプリミティブ・カタログ — parse/reconstitute の二面性、2 種を即時・6 種を凍結封鎖（2026-08-30）
+
+オーナーから「ドメインプリミティブも徹底していない」の裁定：ユビキタス
+言語の制約付き値が生 string のまま集約を流れていた。値ごとに監査し、
+集約のイディオムを DP へ拡張した——**`parse` が境界の strict な構築口
+（Result・材料のみエラー）、`reconstitute` が凍結文書の逐語再水和専用の
+口**。集約が既に持っていた compose / reconstitute の二面性そのもので、
+バイト凍結された寛容読みはアダプタに残り、parse 経路は Always-Valid に
+なる。
+
+即時適用（今日すでに実の生成・解釈セマンティクスを持つ 2 種）：
+
+- **`ContentHash`**（kernel）——`^[0-9a-f]{64}$`。`sha256()` がこれを
+  返し、`ofText`/`ofBytes` が計算側の生成口。`AcquiredFormalModel` /
+  `AcquiredDesignModel` の irHash、両レポート集約、`InputAnchor` /
+  `DesignInputAnchor` の sha256、`SourceAnchor` の実測辺、
+  `RefinementMap` の 二重アンカーと陳腐化比較（string の `!==` を
+  `equals` へ）まで縦貫。serializer は描画バイトで `value()` へ落とし、
+  再構成は逐語の口を使う。
+- **`IrVersion`**（kernel）——semver。strict な invariant は両モデル
+  パーサに既に存在した（`IR lacks a semver irVersion`）ため、
+  `RequirementsModel` / `DesignModel` は Always-Valid にこれを保持し、
+  `majorVersion` / `supportsMajor` は本来の居場所である DP へ移った。
+  レポート再構成は凍結された "" 許容を `reconstitute` で保存（major は
+  legacy と同じ NaN）。
+
+凍結封鎖（PR10 が意図的に解除するための台帳）：残る 6 候補には今日
+strict な生成経路が存在しない——全値がバイト凍結された寛容取り込みから
+入るため、`parse` は死にコードになり DP は純粋な儀式になる。
+`UnitName`（スキーマパターンは存在するがユニットは寛容モデルパーサ
+経由でしか到来しない）、`RequirementId` / `BusinessRuleId`（frRefs /
+brRefs は文書から到来；抽出集合は regex 保証だが照合相手は生の文書側
+主張）、`VerificationMethod`（内部は bounded/simulation に閉じるが
+レポート再構成が任意文字列を許す）、`BackendName`（兄弟再構成が
+ファイル名から導出する）、`AttributePath`（式のパスはまさに
+well-formedness が parse で拒否せず**報告**すべき対象）。PR10 の凍結
+解除時に golden 再生成とともに変換する。
+
+同じレビューで命名の裁定も入った：`InputEntry` / `DesignInputEntry` は
+ユビキタス言語ではない（「entry＝台帳行」は技術語）。概念は入力成果物の
+**内容による錨着**——`SourceAnchor` と同じ語彙——であるため、`InputAnchor`
+（refcheck）と `DesignInputAnchor`（design）へ改名した。語はコンテキスト
+ごとに所有する。
+
+証明：296+12 tests green。両 DP は行カバレッジ 100%。パリティ
+スナップショットは PR7 以前の base に対し `diff -r` 空。実 sandbox の
+z3 実行が `smt.json` を golden とバイト一致で再現。
+
+## 集約恒等の裁定 — エンティティと集約は必ず自分の ID を運ぶ（2026-08-30）
+
+オーナー裁定：ID を持たないエンティティ・集約は許容できない。監査の結果、
+PR #40 の型付き集約 ID は解決には使われていたが、解決された集約自身が
+それを**運んでいなかった**——Repository が `findById(id)` に答えるのに、
+返る集約は自分の恒等を知らない片手落ちだった。
+
+- `RequirementsModel` は `FormalModelId` を、`DesignModel` は
+  `DesignModelId` を、`DesignRecord` は `DesignRecordId` を保持する。
+  注入は Repository が `findById` の引数から行う（パーサは文書の中身しか
+  知らず、恒等を知らない）。
+- `RefinementMap` は新設の `RefinementMapId`（契約4 map 成果物——1 記録に
+  1 つ）を、`RefinementRequirements` は `FormalModelId` を保持する。
+  プロファイルは恒等を変えないため、契約1 集約の ID を refinement の
+  facade から再輸出した（層規律：design/adapter→requirements/domain は
+  禁止辺、design/adapter→refinement/domain は許可辺）。
+- `DesignModel` 内のエンティティ `DesignUnit` は `id(): DesignUnitId` を
+  得た（恒等はユニット名。名前の正当性検証は凍結封鎖中の `UnitName` DP の
+  責務で、ID の責務ではない）。`RefinementMap.unitMapOf` は生文字列でなく
+  型付き ID を受ける。
+- インターフェイスのエンティティ（`Obligation`・`Scenario`・機械・遷移）は
+  `id` フィールドを既に持つ。それら安定 ID の型付けは凍結封鎖中の
+  `RequirementId` / `BusinessRuleId` の話である。
+
+同 PR のレビューラウンド：本カタログの型付け一覧に残っていた旧名
+`InputEntry` を修正（CodeRabbit）。`IrVersion.parse` が先行ゼロを受理する
+のはレガシーパーサの凍結パターン `/^\d+\.\d+\.\d+$/` の逐語であることを
+確認——厳密 SemVer 化は旧実装が受理した IR を拒否する観測面の変更になる
+ため、テストで固定し PR10 の解除へ送った。
+
+証明：304 tests green。パリティスナップショットは PR7 以前の base に対し
+`diff -r` 空。golden 無変更。新設の id アクセサは全て 90% 床の上で被覆。
+
+## 語彙プリミティブの裁定 — ドメインインターフェイスの非 bool 値は DP にする（2026-08-30）
+
+同じレビューセッションでさらに 2 つの裁定が下り、適用した：
+
+1. **ポートを保持するフィールドは役割の名で呼ぶ。** `#designRecords` /
+   `#reports` は保持物を隠していた。ポートを保持する全ユースケースの
+   フィールドとコンストラクタ引数はポート名を冠する
+   （`#designRecordRepository`・`#referenceCheckReportRepository`・
+   `#formalModelRepository`・`#verificationReportRepository`・
+   `#z3SolverClient`・`#quintClient`・`#designModelRepository`・
+   `#designReportRepository`・`#siblingBackendClient`・
+   `#refinementContextRepository`・`#refinementSolverClient`・
+   `#irValidationMaterialsRepository`・`#requirementsSourceRepository`・
+   `#designIrValidationMaterialsRepository`）。
+2. **ドメインインターフェイスの非 bool フィールドはドメインプリミティブ**
+   ——凍結封鎖の判断は棄却された：`reconstitute` の口があるため、strict な
+   `parse` 経路に生成者がまだ無くても DP 化は凍結と両立する。まず引用された
+   実例とそのクラスタ全体へ適用：functional-design 語彙（`AttrDecl`・
+   `RelDecl`・`EntityDecl`・`RuleDecl`・`StateMachineSketch`・
+   `DomainEntitySketch`・兄弟索引）は `EntityName`・`AttributeName`・
+   `ElementPath`・`TypeName`・`AllowedValue`・`AttributeDefault`・
+   `NumericBound`・`CardinalityNotation`・`BusinessRuleId`・
+   `RuleCategory`・`AppliesTo`・`SourceId`・`MachineSpec`・`StateName`・
+   `ComponentName`・`ReferenceTarget` を話す。各 DP は照合・描画の解釈語彙
+   （ケース／アンダースコア正規化・BR 形・基数トークン畳み込み・spec 分解・
+   既定値描画）を所有し、検査は意味論として読める一方、凍結文言は全て
+   バイト同一に保たれる。bool（宣言フラグ）と文言材料（detail・unsupported
+   理由・欠落キー名列）は裁定自身の除外により素のまま。行番号・件数の
+   メタデータは明示裁定があるまで number のまま。
+
+証明：305+ tests green。語彙ファイルは行カバレッジ 100%。golden 無変更。
+パリティスナップショットは PR7 以前の base に対し `diff -r` 空のまま
+（refcheck シナリオがこれらの文言を濃密に通す）。
+
+## Tell-Don't-Ask 裁定 — ドメインオブジェクトは抽象データ型であり、データ構造ではない（2026-08-30）
+
+オーナー裁定：貧血ドメインモデルは許容できない。プロパティしか持たない
+ドメイン interface は振る舞いが外へ逃げた証拠であり、呼び手は皆
+**尋ねて**（データを取り出し外で判断して）いる。ドメインオブジェクトは
+複雑なドメイン知識を狭い面の内側に閉じ込めるべし。
+
+まず指摘の震源である functional-design クラスタへ適用：プロパティ袋
+7 型は振る舞いを持つクラスになり、逃げていた述語が家に帰った——
+
+- `AttrDecl` は自分の整合を自分で判定する：FD-E2 の型区分衝突
+  （`declaresAllowedValuesOnNonEnumerableType`・
+  `declaresBoundsOnNonNumericType`・`declaresUniqueOnCollectionType`）、
+  FD-E3 の範囲・既定値整合（`boundsInverted`・`defaultBelowMin`/
+  `defaultAboveMax`・`defaultOutsideAllowed`）、ライフサイクル候補性、
+  FD-S の図差分（`rogueDiagramStates`・`allowedValuesAbsentFrom`）。
+  型区分集合は `TypeName`（`classifiesNumeric`/`Date`/`Bool`/
+  `Collection`）へ、基数の閉集合は `CardinalityNotation.isInClosedSet`
+  へ、category の閉集合は `RuleCategory.isKnownCategory` へ移った。
+- `EntityDecl` は `duplicateAttrDecls`・`lifecycleAttr`（旧自由関数は
+  この中で死んだ）・`attrNamed` を所有。`DeclaredEntities` は
+  `duplicateEntityDecls`・`allRels`・`containsEntityNamed`・FD-E6 の
+  `resolvesReference`・FD-R4 の `resolvesAppliesTo`・
+  `entityByNormalizedName`・`lifecycleEntities` を所有。`RuleDecl` は
+  `findingTarget`（5 連の BR 形三項演算子はこの中で死んだ）・
+  `sourceIdValuesMissingFrom`・`categoryOutsideClosedSet` を所有。
+  `StateMachineSketch` は凍結書式の `locationLabel` を、
+  `DomainEntitySketch` は `catalogLabel` と `attributesDroppedIn` を所有。
+- 検査ランナーは純粋なコーディネータになった：巡回し、宣言に違反を
+  **告げさせ**、凍結文言を描画するだけ。書式は境界アクセサに残るため
+  全文言はバイト同一（golden 無変更とパリティ空 diff で実証）。
+- 族内の finding 発行順は変わった（重複が集合メソッド由来になったため）
+  が、レポート集約の compose が正準ソートを所有するため観測不能——
+  golden が確認している。
+
+## ファーストクラスコレクション裁定 — ドメイン層は配列を生で扱わない（2026-08-30）
+
+オーナー裁定：生の配列をドメイン層に流してはならない。コレクションは
+不変の `add`・集合の知識・境界専用の脱出口 `toArray()` を持つ
+ファーストクラスのドメインオブジェクトである。震源クラスタへ適用：
+語彙側に `AttributeNames`・`AllowedValues`・`StateNames`・`SourceIds`、
+宣言側に `AttrDecls`・`RelDecls`・`EntityDecls`・`ShapeErrors`・
+`RuleDecls`・`StateMachineSketches`・`DomainEntitySketches`・
+`SiblingUnitIndex`。集合の知識はさらに一段コレクションへ沈んだ：重複検出
+（`duplicatesByName`）、ライフサイクル選定（`AttrDecls.lifecycleAttr`）、
+FD-E6/FD-R4 の解決（`EntityDecls.resolvesReference`/`resolvesAppliesTo`）、
+FD-S の図差分（`AllowedValues.rogueAmong`/`absentFrom`）、FD-R3 の逆検証
+（`SourceIds.valuesMissingFrom`）、XS の巡回順
+（`DomainEntitySketches.sortedDistinctByNormalizedName`）、兄弟索引の
+照会（`SiblingUnitIndex.definersOf`/`entityDeclaredIn`）。ドメインに
+裸の `Map` を晒していた旧 `SiblingUnitEntities` 型別名は索引クラスの中で
+死んだ。同セッションの用語補正も記録する：コメントは「型区分」と書く
+——通常のオブジェクト指向の分類であり、関数型の型クラスの含意は意図も
+実装もしていない。
+
+証明：308 tests green。golden 無変更。パリティスナップショットの
+`diff -r` は空のまま。全コレクションは 90% 床の上。

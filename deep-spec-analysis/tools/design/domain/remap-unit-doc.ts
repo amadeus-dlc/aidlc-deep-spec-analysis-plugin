@@ -5,14 +5,14 @@
 // 相互包摂（両方向証明）は 1 件の「等価」finding へ畳む。deterministic: false
 // を宣言した機械の同 (state,trigger) 重複 conflict は waived skip へ（人間承認
 // 済みのモデル waiver——沈黙ではない）。文言はすべて golden 凍結。
-// 旧 deep-spec-design-lib.ts の remapUnitDoc からの逐語移植（Json の選別は
+// 旧 deep-spec-design-lib.ts の remapUnitDocument からの逐語移植（Json の選別は
 // アダプタのパーサが済ませ、ここは型付き判定を受ける）。
 
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { DesignFinding, DesignSkipped } from "./design-finding.ts";
 import type { DesignUnit } from "./design-unit.ts";
 import type { DesignValue } from "./design-value.ts";
-import type { LowEntry, LoweredUnit } from "./lower-unit.ts";
+import type { LoweredOrigin, LoweredUnit } from "./lower-unit.ts";
 
 // アダプタのパーサが素の v1 文書から選別した型付き判定面。
 export interface SiblingVerdictFinding {
@@ -29,7 +29,7 @@ export interface SiblingVerdictSkip {
   detail?: string;
 }
 
-export type SiblingVerdictDoc =
+export type SiblingVerdictDocument =
   | { kind: "unreadable" }
   | { kind: "unavailable"; reason: string; method: string | null }
   | { kind: "readable"; method: string | null; findings: SiblingVerdictFinding[]; skipped: SiblingVerdictSkip[] };
@@ -49,7 +49,7 @@ function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-export function remapUnitDoc(u: DesignUnit, low: LoweredUnit, doc: SiblingVerdictDoc): RemappedUnit {
+export function remapUnitDocument(u: DesignUnit, low: LoweredUnit, doc: SiblingVerdictDocument): RemappedUnit {
   if (doc.kind === "unreadable") {
     return { findings: [], skipped: [], unavailable: "sibling backend produced no findings document", method: null };
   }
@@ -57,7 +57,7 @@ export function remapUnitDoc(u: DesignUnit, low: LoweredUnit, doc: SiblingVerdic
     return { findings: [], skipped: [], unavailable: doc.reason, method: doc.method };
   }
   const method = doc.method;
-  const mapTarget = (t: string): { design: string; entry: LowEntry | null } => {
+  const mapTarget = (t: string): { design: string; entry: LoweredOrigin | null } => {
     const entry = low.map.get(t) ?? null;
     if (entry) return { design: entry.design, entry };
     const dsc = low.scenarioMap.get(t);

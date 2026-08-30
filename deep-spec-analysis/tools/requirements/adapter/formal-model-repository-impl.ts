@@ -43,6 +43,6 @@ export class FormalModelRepositoryImpl implements FormalModelRepository {
     if (typeof seed === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: seed });
     }
-    return ok({ model: RequirementsModel.reconstitute(seed), irHash: sha256(canonicalStringify(rawIr)) });
+    return ok({ model: RequirementsModel.reconstitute({ id, ...seed }), irHash: sha256(canonicalStringify(rawIr)) });
   }
 }

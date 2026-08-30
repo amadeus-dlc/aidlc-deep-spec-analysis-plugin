@@ -1,14 +1,14 @@
-// RefinementContextRepository の実 Gateway 実装。レコードルート歩行・要件形式
+// RefinementMaterialsRepository の実 Gateway 実装。レコードルート歩行・要件形式
 // モデルの寛容読取（不読は null → inactive）・refinement map の fence/JSON/
 // 契約4 スキーマ検証（凍結エラーメッセージ 4 種）・inputs 台帳（3 成果物の
 // 相対パス＋sha256）をここで解決する。契約4 スキーマのパスは entry が注入する。
 // 旧 refinement-lib の loadRequirementsIr / loadRefinementMap と旧 entry の
 // inputs 組成からの逐語移植。
 
-import type { RefinementContextId } from "../domain/index.ts";
+import type { RefinementMaterialsId } from "../domain/index.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { sha256 } from "../../kernel/domain/index.ts";
+import { ArtifactPath, ContentHash, sha256 } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import {
   type Json,
@@ -20,20 +20,22 @@ import {
   validateSchema,
 } from "../../kernel/adapter/index.ts";
 import {
+  FormalModelId,
+  RefinementMapId,
   type AttributeMapping,
   type EventMapping,
   type RefinementAttribute,
   type RefinementObligation,
   type RefinementScenario,
   type RefinementUnitMap,
-  type UnmappedEntry,
+  type UnmappedTarget,
   RefinementMap,
   RefinementRequirements,
 } from "../../refinement/domain/index.ts";
 import type {
-  RefinementContextRepository,
+  RefinementMaterialsRepository,
   RefinementMapAcquisition,
-  RefinementPhaseContext,
+  RefinementMaterials,
 } from "../usecase/index.ts";
 
 export const REFINEMENT_MAP_BASENAME = "deep-spec-analysis-refinement-map.md";
@@ -47,14 +49,14 @@ function extractSingleJsonFence(md: string): string | null {
   return fences.length === 1 ? (fences[0]?.body ?? null) : null;
 }
 
-export class RefinementContextRepositoryImpl implements RefinementContextRepository {
+export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRepository {
   readonly #mapSchemaPath: string;
 
   constructor(mapSchemaPath: string) {
     this.#mapSchemaPath = mapSchemaPath;
   }
 
-  findById(id: RefinementContextId): RefinementPhaseContext {
+  findById(id: RefinementMaterialsId): RefinementMaterials {
     const modelPath = id.modelArtifactPath().value();
     const recordRoot = findRecordRoot(dirname(modelPath));
     const requirements = recordRoot === null ? null : this.#loadRequirements(recordRoot);
@@ -65,6 +67,10 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
 
   #loadRequirements(recordRoot: string): RefinementRequirements | null {
     const path = join(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
+    // join は空文字列を返さないため parse は失敗し得ない（型の網羅のみ——
+    // 到達すれば inactive 側へ落ちるが、それは defect であって仕様ではない）。
+    const idPath = ArtifactPath.parse(path);
+    if (!idPath.ok) return null;
     if (!existsSync(path)) return null;
     const fence = extractSingleJsonFence(readFileSync(path, "utf-8"));
     if (fence === null) return null;
@@ -122,6 +128,7 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
       });
     }
     return RefinementRequirements.reconstitute({
+      id: FormalModelId.of(idPath.value),
       hash: sha256(canonicalStringify(raw)),
       attributes,
       obligations,
@@ -132,6 +139,9 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
   #loadMap(recordRoot: string, stageDir: string, modelPath: string): RefinementMapAcquisition {
     const path = join(stageDir, REFINEMENT_MAP_BASENAME);
     if (!existsSync(path)) return { kind: "absent", error: null };
+    // join は空文字列を返さないため parse は失敗し得ない（型の網羅のみ）。
+    const mapPath = ArtifactPath.parse(path);
+    if (!mapPath.ok) return { kind: "absent", error: "defect: refinement map path derivation produced an empty path" };
     const fence = extractSingleJsonFence(readFileSync(path, "utf-8"));
     if (fence === null) return { kind: "absent", error: "refinement map does not contain exactly one ```json fence" };
     let raw: Json;
@@ -177,7 +187,7 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
           waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
         });
       }
-      const unmapped: UnmappedEntry[] = [];
+      const unmapped: UnmappedTarget[] = [];
       for (const un of Array.isArray(u.unmapped) ? u.unmapped : []) {
         if (isObject(un) && typeof un.target === "string") {
           unmapped.push({ target: un.target, reason: typeof un.reason === "string" ? un.reason : "" });
@@ -186,8 +196,9 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
       units.push({ unit: u.unit, attrMap, eventMap, unmapped });
     }
     const map = RefinementMap.reconstitute({
-      requirementsIrHash: typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : "",
-      designIrHash: typeof doc.designIrHash === "string" ? doc.designIrHash : "",
+      id: RefinementMapId.of(mapPath.value),
+      requirementsIrHash: ContentHash.reconstitute(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
+      designIrHash: ContentHash.reconstitute(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
       units,
     });
     const reqModelPath = join(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);

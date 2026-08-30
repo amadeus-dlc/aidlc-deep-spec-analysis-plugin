@@ -17,7 +17,7 @@ import { DesignIrValidationMaterialsRepositoryImpl } from "../tools/design/adapt
 import {
   BrReferenceIndex,
   DesignModelId,
-  type DesignUnitView,
+  type DesignUnitDecl,
   designWellFormednessErrors,
 } from "../tools/design/domain/index.ts";
 import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "../tools/design/usecase/index.ts";
@@ -28,7 +28,7 @@ import {
 import {
   FormalModelId,
   FrReferenceIndex,
-  type IrModelView,
+  type IrModelDecl,
   RequirementsSourceId,
   SourceAnchor,
   modelWellFormednessErrors,
@@ -333,7 +333,7 @@ describe("BrReferenceIndex", () => {
 });
 
 describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
-  const emptyView: IrModelView = { entities: [], obligations: [], scenarios: [], background: [] };
+  const emptyView: IrModelDecl = { entities: [], obligations: [], scenarios: [], background: [] };
 
   test("a well-formed model is silent", () => {
     expect(
@@ -465,7 +465,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
 });
 
 describe("designWellFormednessErrors (contract 3 domain branches)", () => {
-  function unit(overrides: Partial<DesignUnitView>): DesignUnitView {
+  function unit(overrides: Partial<DesignUnitDecl>): DesignUnitDecl {
     return {
       unit: "u1",
       entities: [],

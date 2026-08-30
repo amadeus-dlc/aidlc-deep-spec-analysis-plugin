@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Json } from "../tools/kernel/adapter/index.ts";
 import { SystemClock } from "../tools/kernel/adapter/index.ts";
-import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
 import { FormalModelId } from "../tools/requirements/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
@@ -26,11 +26,11 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { type DesignUnit as DesignUnitType, DesignModelId, DesignUnit, RefinementContextId } from "../tools/design/domain/index.ts";
+import { type DesignUnit as DesignUnitType, DesignModelId, DesignUnit, DesignUnitId, RefinementMaterialsId } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
-  RefinementContextRepositoryImpl,
+  RefinementMaterialsRepositoryImpl,
   RefinementSolverClientImpl,
   SiblingBackendClientImpl,
   buildRefinementQueries,
@@ -50,7 +50,7 @@ import {
   interpretRefinementVerdicts,
   planUnitRefinement,
   quintRefinementStatusSkips,
-  refinementQuintExtras,
+  refinementQuintInvariants,
   reqEffectAssignments,
   smtRefinementStatusSkips,
 } from "../tools/refinement/domain/index.ts";
@@ -77,7 +77,7 @@ function wiring(record: string) {
     workingDirectory: pluginRoot,
     spawnEnvironment: { ...process.env, AIDLC_DEEP_SPEC_QUINT_METHOD: "simulation", AIDLC_DEEP_SPEC_QUINT_BIN: quintBin },
   });
-  const contexts = new RefinementContextRepositoryImpl(mapSchemaPath);
+  const contexts = new RefinementMaterialsRepositoryImpl(mapSchemaPath);
   const solver = new RefinementSolverClientImpl({
     childHostPath: join(toolsDir, "aidlc-sensor-deep-spec-verify-smt.ts"),
     perQueryTimeoutMs: 2000,
@@ -140,14 +140,16 @@ describe("SMT script characterization (the PR8 safety net)", () => {
   test("the second (refinement) compiler emits byte-identical scripts for the refinement fixture", () => {
     const modelPath = join(fixtures, "record", ...MODEL_RELPATH);
     const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(modelPath)));
-    const context = new RefinementContextRepositoryImpl(mapSchemaPath).findById(RefinementContextId.ofModel(DesignModelId.of(ap(modelPath))));
+    const context = new RefinementMaterialsRepositoryImpl(mapSchemaPath).findById(RefinementMaterialsId.ofModel(DesignModelId.of(ap(modelPath))));
     expect(acquired.ok && context.kind === "active" && context.map.kind === "loaded").toBe(true);
     if (!acquired.ok || context.kind !== "active" || context.map.kind !== "loaded") return;
     expect(context.map.map.units().length).toBeGreaterThan(0);
-    expect(context.map.map.unitMapOf("no-such-unit")).toBe(undefined);
+    expect(context.map.map.unitMapOf(DesignUnitId.of("no-such-unit"))).toBe(undefined);
+    expect(context.map.map.id().artifactPath().value().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
+    expect(context.requirements.id().artifactPath().value().endsWith("deep-spec-analysis-formal-model.md")).toBe(true);
     const queries: Json[] = [];
     for (const u of acquired.value.model.units()) {
-      const unitMap = context.map.map.unitMapOf(u.name());
+      const unitMap = context.map.map.unitMapOf(u.id());
       if (!unitMap) continue;
       const plan = planUnitRefinement(u, unitMap, context.requirements, context.map.mapArtifact);
       queries.push(...(buildRefinementQueries(u, context.requirements, plan).queries as unknown as Json[]));
@@ -173,7 +175,8 @@ function unit(seed: Partial<Parameters<typeof DesignUnit.reconstitute>[0]>): Des
 
 function requirements(seed: Partial<RefinementRequirementsSeed>): RefinementRequirements {
   return RefinementRequirements.reconstitute({
-    hash: "a".repeat(64),
+    id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
+    hash: ContentHash.reconstitute("a".repeat(64)),
     attributes: [],
     obligations: [],
     scenarios: [],
@@ -380,7 +383,7 @@ describe("plan classification and gap findings", () => {
 
   test("quint extras carry alpha(P) for checkable invariants only", () => {
     const plan = planUnitRefinement(designUnit, unitMap, req, "m.md");
-    const extras = refinementQuintExtras(plan, req);
+    const extras = refinementQuintInvariants(plan, req);
     expect(extras.map((e) => e.reqId)).toEqual(["OB-1"]);
     expect(extras[0]?.expr).toEqual({ op: "ref", path: "D.flag" });
   });

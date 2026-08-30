@@ -3,6 +3,7 @@
 // 呼び手（entry）が凍結値を渡す（smt: "exhaustive" / quint: ir 系 2 経路は
 // "simulation"、127 経路は検出済み method ?? "simulation"）。
 
+import { type ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import { sha256 } from "../../kernel/domain/index.ts";
 import type { DesignModel } from "./design-model.ts";
 import type { DesignReportId } from "./design-report-id.ts";
@@ -14,7 +15,7 @@ export const SUPPORTED_DESIGN_IR_MAJOR = 1;
 export function designIrUnreadableReport(id: DesignReportId, method: string, cause: string): DesignReport {
   return DesignReport.compose({
     id,
-    irVersion: "0.0.0",
+    irVersion: IrVersion.reconstitute("0.0.0"),
     irHash: sha256(""),
     method,
     findings: [],
@@ -27,7 +28,7 @@ export function designIrUnreadableReport(id: DesignReportId, method: string, cau
 export function designVersionMismatchReport(
   id: DesignReportId,
   model: DesignModel,
-  irHash: string,
+  irHash: ContentHash,
   method: string,
 ): DesignReport {
   return DesignReport.compose({
@@ -53,7 +54,7 @@ export function designVersionMismatchReport(
 export function designBackendUnavailableReport(
   id: DesignReportId,
   model: DesignModel,
-  irHash: string,
+  irHash: ContentHash,
   method: string,
   reason: string,
   skipDetail: string,

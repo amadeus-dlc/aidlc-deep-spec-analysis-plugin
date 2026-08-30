@@ -3,6 +3,8 @@
 // ここは型付き部品を組む。クエリ（allTargets / frRefsOf / attrByPath /
 // supportsMajor）は旧センサーの自由関数群を集約メソッドへ移したもの。
 
+import type { FormalModelId } from "./formal-model-id.ts";
+import type { IrVersion } from "../../kernel/domain/index.ts";
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { AttributeDeclaration } from "./attribute-declaration.ts";
 import type { Expression } from "../../kernel/domain/expression.ts";
@@ -15,7 +17,8 @@ export interface BackgroundAssumption {
 }
 
 export interface RequirementsModelSeed {
-  readonly irVersion: string;
+  readonly id: FormalModelId;
+  readonly irVersion: IrVersion;
   readonly attributes: readonly AttributeDeclaration[];
   readonly obligations: readonly Obligation[];
   readonly scenarios: readonly Scenario[];
@@ -23,7 +26,8 @@ export interface RequirementsModelSeed {
 }
 
 export class RequirementsModel {
-  readonly #irVersion: string;
+  readonly #id: FormalModelId;
+  readonly #irVersion: IrVersion;
   readonly #attributes: readonly AttributeDeclaration[];
   readonly #obligations: readonly Obligation[];
   readonly #scenarios: readonly Scenario[];
@@ -31,6 +35,7 @@ export class RequirementsModel {
   readonly #attrByPath: Map<string, AttributeDeclaration>;
 
   private constructor(seed: RequirementsModelSeed) {
+    this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#attributes = seed.attributes;
     this.#obligations = seed.obligations;
@@ -44,17 +49,21 @@ export class RequirementsModel {
     return new RequirementsModel(seed);
   }
 
-  irVersion(): string {
+  id(): FormalModelId {
+    return this.#id;
+  }
+
+  irVersion(): IrVersion {
     return this.#irVersion;
   }
 
   supportsMajor(major: number): boolean {
-    return Number.parseInt(this.#irVersion.split(".")[0] ?? "", 10) === major;
+    return this.#irVersion.supportsMajor(major);
   }
 
   // 境界: 旧実装の major 抽出と同じ計算（verdict 文言に載る）。
   majorVersion(): number {
-    return Number.parseInt(this.#irVersion.split(".")[0] ?? "", 10);
+    return this.#irVersion.majorVersion();
   }
 
   attributes(): readonly AttributeDeclaration[] {

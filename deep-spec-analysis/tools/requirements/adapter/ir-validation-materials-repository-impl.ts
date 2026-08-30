@@ -18,12 +18,12 @@ import {
 import { ArtifactPath, type Expression } from "../../kernel/domain/index.ts";
 import {
   type FrRefClaim,
-  type IrAttributeView,
-  type IrBackgroundView,
-  type IrEntityView,
-  type IrModelView,
-  type IrObligationView,
-  type IrScenarioView,
+  type IrAttributeDecl,
+  type IrBackgroundDecl,
+  type IrEntityDecl,
+  type IrModelDecl,
+  type IrObligationDecl,
+  type IrScenarioDecl,
   type FormalModelId,
   RequirementsSourceId,
 } from "../domain/index.ts";
@@ -39,12 +39,12 @@ function asExpression(v: Json): Expression | undefined {
   return isObject(v) ? (v as unknown as Expression) : undefined;
 }
 
-function buildView(ir: { [k: string]: Json }): IrModelView {
-  const entities: IrEntityView[] = [];
+function buildView(ir: { [k: string]: Json }): IrModelDecl {
+  const entities: IrEntityDecl[] = [];
   const schema = isObject(ir.schema) ? ir.schema : {};
   for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
     if (!isObject(ent) || typeof ent.name !== "string") continue;
-    const attributes: IrAttributeView[] = [];
+    const attributes: IrAttributeDecl[] = [];
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string") continue;
       const t = isObject(attr.type) ? attr.type : {};
@@ -59,7 +59,7 @@ function buildView(ir: { [k: string]: Json }): IrModelView {
     entities.push({ name: ent.name, attributes });
   }
 
-  const obligations: IrObligationView[] = [];
+  const obligations: IrObligationDecl[] = [];
   for (const ob of Array.isArray(ir.obligations) ? ir.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string") continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
@@ -79,7 +79,7 @@ function buildView(ir: { [k: string]: Json }): IrModelView {
     });
   }
 
-  const scenarios: IrScenarioView[] = [];
+  const scenarios: IrScenarioDecl[] = [];
   for (const sc of Array.isArray(ir.scenarios) ? ir.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
@@ -91,7 +91,7 @@ function buildView(ir: { [k: string]: Json }): IrModelView {
     });
   }
 
-  const background: IrBackgroundView[] = [];
+  const background: IrBackgroundDecl[] = [];
   for (const bg of Array.isArray(ir.background) ? ir.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string") continue;
     background.push({ id: bg.id, assert: asExpression(bg.assert ?? null) });

@@ -6,14 +6,16 @@
 // （findings/skipped/inputs/checked/crossChecked を空にして unavailable 理由
 // だけ残す——旧 writeDesignDoc の自己検証降格と同じ姿）。
 
+import type { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
 import type { DesignFinding, DesignSkipped } from "./design-finding.ts";
 import { sortDesignFindings, sortDesignSkipped } from "./design-finding-order.ts";
 import type { DesignReportId } from "./design-report-id.ts";
 
-export interface DesignInputEntry {
+// 入力成果物の錨（refcheck の InputAnchor と同語彙・コンテキスト所有）。
+export interface DesignInputAnchor {
   readonly artifact: string;
-  readonly sha256: string;
+  readonly sha256: ContentHash;
 }
 
 export interface DesignCrossCheckedEntry {
@@ -23,12 +25,12 @@ export interface DesignCrossCheckedEntry {
 
 export interface DesignReportSeed {
   readonly id: DesignReportId;
-  readonly irVersion: string;
-  readonly irHash: string;
+  readonly irVersion: IrVersion;
+  readonly irHash: ContentHash;
   readonly method: string;
   readonly findings: readonly DesignFinding[];
   readonly skipped: readonly DesignSkipped[];
-  readonly inputs: readonly DesignInputEntry[] | null;
+  readonly inputs: readonly DesignInputAnchor[] | null;
   readonly checked: readonly string[] | null;
   readonly crossChecked: readonly DesignCrossCheckedEntry[] | null;
   readonly unavailableReason: string | null;
@@ -36,12 +38,12 @@ export interface DesignReportSeed {
 
 export interface DesignReportComposition {
   readonly id: DesignReportId;
-  readonly irVersion: string;
-  readonly irHash: string;
+  readonly irVersion: IrVersion;
+  readonly irHash: ContentHash;
   readonly method: string;
   readonly findings: readonly DesignFinding[];
   readonly skipped: readonly DesignSkipped[];
-  readonly inputs?: readonly DesignInputEntry[];
+  readonly inputs?: readonly DesignInputAnchor[];
   readonly checked?: readonly string[];
   readonly crossChecked?: readonly DesignCrossCheckedEntry[];
   readonly unavailableReason?: string;
@@ -49,12 +51,12 @@ export interface DesignReportComposition {
 
 export class DesignReport {
   readonly #id: DesignReportId;
-  readonly #irVersion: string;
-  readonly #irHash: string;
+  readonly #irVersion: IrVersion;
+  readonly #irHash: ContentHash;
   readonly #method: string;
   readonly #findings: readonly DesignFinding[];
   readonly #skipped: readonly DesignSkipped[];
-  readonly #inputs: readonly DesignInputEntry[] | null;
+  readonly #inputs: readonly DesignInputAnchor[] | null;
   readonly #checked: readonly string[] | null;
   readonly #crossChecked: readonly DesignCrossCheckedEntry[] | null;
   readonly #unavailableReason: string | null;
@@ -114,11 +116,11 @@ export class DesignReport {
     return this.#id;
   }
 
-  irVersion(): string {
+  irVersion(): IrVersion {
     return this.#irVersion;
   }
 
-  irHash(): string {
+  irHash(): ContentHash {
     return this.#irHash;
   }
 
@@ -134,7 +136,7 @@ export class DesignReport {
     return this.#skipped;
   }
 
-  inputs(): readonly DesignInputEntry[] | null {
+  inputs(): readonly DesignInputAnchor[] | null {
     return this.#inputs;
   }
 

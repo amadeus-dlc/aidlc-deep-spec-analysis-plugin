@@ -9,7 +9,7 @@
 import type { Expression } from "../../kernel/domain/index.ts";
 
 // 型宣言が欠けた属性は kind: "" で届く（旧実装はカタログへ登録した）。
-export interface DesignAttributeView {
+export interface DesignAttributeDecl {
   readonly name: string;
   readonly kind: string;
   readonly values?: readonly string[];
@@ -17,18 +17,18 @@ export interface DesignAttributeView {
   readonly max?: number;
 }
 
-export interface DesignEntityView {
+export interface DesignEntityDecl {
   readonly name: string;
-  readonly attributes: readonly DesignAttributeView[];
+  readonly attributes: readonly DesignAttributeDecl[];
 }
 
-export interface DesignTemporalView {
+export interface DesignTemporalDecl {
   readonly assert?: Expression;
   readonly from?: Expression;
   readonly to?: Expression;
 }
 
-export interface DesignObligationView {
+export interface DesignObligationDecl {
   readonly id: string;
   readonly origin?: string;
   // brRefs が配列でなければ undefined（origin:"rules" の必須チェックに使う）。
@@ -36,10 +36,10 @@ export interface DesignObligationView {
   readonly assert?: Expression;
   readonly guard?: Expression;
   readonly effect?: Expression;
-  readonly temporal?: DesignTemporalView;
+  readonly temporal?: DesignTemporalDecl;
 }
 
-export interface DesignTransitionView {
+export interface DesignTransitionDecl {
   readonly id: string;
   readonly from?: string;
   readonly to?: string;
@@ -49,21 +49,21 @@ export interface DesignTransitionView {
   readonly effect?: Expression;
 }
 
-export interface DesignIgnoreView {
+export interface DesignIgnoreDecl {
   readonly state: string;
   readonly trigger: string;
 }
 
-export interface DesignMachineView {
+export interface DesignMachineDecl {
   readonly id: string;
   // `<entity>.<attribute>`。どちらかが文字列でなければ "?" が入る（凍結）。
   readonly attrPath: string;
   readonly initial: readonly string[];
-  readonly transitions: readonly DesignTransitionView[];
-  readonly ignores: readonly DesignIgnoreView[];
+  readonly transitions: readonly DesignTransitionDecl[];
+  readonly ignores: readonly DesignIgnoreDecl[];
 }
 
-export interface DesignScenarioView {
+export interface DesignScenarioDecl {
   readonly id: string;
   readonly bindings: readonly (readonly [string, unknown])[];
   readonly hasEvent: boolean;
@@ -71,18 +71,18 @@ export interface DesignScenarioView {
   readonly brRefs?: readonly string[];
 }
 
-export interface DesignBackgroundView {
+export interface DesignBackgroundDecl {
   readonly id: string;
   readonly assert?: Expression;
 }
 
-export interface DesignUnitView {
+export interface DesignUnitDecl {
   readonly unit: string;
-  readonly entities: readonly DesignEntityView[];
-  readonly obligations: readonly DesignObligationView[];
-  readonly stateMachines: readonly DesignMachineView[];
-  readonly scenarios: readonly DesignScenarioView[];
-  readonly background: readonly DesignBackgroundView[];
+  readonly entities: readonly DesignEntityDecl[];
+  readonly obligations: readonly DesignObligationDecl[];
+  readonly stateMachines: readonly DesignMachineDecl[];
+  readonly scenarios: readonly DesignScenarioDecl[];
+  readonly background: readonly DesignBackgroundDecl[];
   readonly unformalizedTargets: readonly string[];
   // construction/<unit>/ が記録配下に存在するか（記録ルート未解決なら true 扱い
   // ——旧実装は recordRoot === null のときこの検査を出さない）。

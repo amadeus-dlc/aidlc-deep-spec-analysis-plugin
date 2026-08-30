@@ -9,8 +9,8 @@ export {
 } from "./sibling-backend-client.ts";
 export {
   type RefinementMapAcquisition,
-  type RefinementContextRepository,
-  type RefinementPhaseContext,
+  type RefinementMaterialsRepository,
+  type RefinementMaterials,
 } from "./refinement-context-repository.ts";
 export {
   type RefinementCheck,

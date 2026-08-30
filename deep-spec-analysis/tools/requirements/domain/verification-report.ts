@@ -4,6 +4,7 @@
 // degraded は契約適合の降格形（findings/skipped/crossChecked を空にして
 // unavailable 理由だけ残す——旧 writeFindingsDoc の自己検証降格と同じ姿）。
 
+import type { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import type { VerificationFinding, VerificationSkipped } from "./verification-finding.ts";
 import { sortVerificationFindings, sortVerificationSkipped } from "./verification-finding-order.ts";
@@ -15,8 +16,8 @@ export interface CrossCheckedEntry {
 
 export interface VerificationReportSeed {
   readonly id: VerificationReportId;
-  readonly irVersion: string;
-  readonly irHash: string;
+  readonly irVersion: IrVersion;
+  readonly irHash: ContentHash;
   readonly method: string;
   readonly findings: readonly VerificationFinding[];
   readonly skipped: readonly VerificationSkipped[];
@@ -26,8 +27,8 @@ export interface VerificationReportSeed {
 
 export interface VerificationReportComposition {
   readonly id: VerificationReportId;
-  readonly irVersion: string;
-  readonly irHash: string;
+  readonly irVersion: IrVersion;
+  readonly irHash: ContentHash;
   readonly method: string;
   readonly findings: readonly VerificationFinding[];
   readonly skipped: readonly VerificationSkipped[];
@@ -37,8 +38,8 @@ export interface VerificationReportComposition {
 
 export class VerificationReport {
   readonly #id: VerificationReportId;
-  readonly #irVersion: string;
-  readonly #irHash: string;
+  readonly #irVersion: IrVersion;
+  readonly #irHash: ContentHash;
   readonly #method: string;
   readonly #findings: readonly VerificationFinding[];
   readonly #skipped: readonly VerificationSkipped[];
@@ -95,11 +96,11 @@ export class VerificationReport {
     return this.#id;
   }
 
-  irVersion(): string {
+  irVersion(): IrVersion {
     return this.#irVersion;
   }
 
-  irHash(): string {
+  irHash(): ContentHash {
     return this.#irHash;
   }
 

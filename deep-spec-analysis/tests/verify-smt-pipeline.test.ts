@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
-import { ArtifactPath, expressionUsesPrime, sha256 } from "../tools/kernel/domain/index.ts";
+import { ArtifactPath, ContentHash, IrVersion, expressionUsesPrime, sha256 } from "../tools/kernel/domain/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -65,7 +65,8 @@ const sensorPath = join(pluginRoot, "tools", "aidlc-sensor-deep-spec-verify-smt.
 
 function model(seed: Partial<RequirementsModelSeed>): RequirementsModel {
   return RequirementsModel.reconstitute({
-    irVersion: "1.0.0",
+    id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
+    irVersion: IrVersion.reconstitute("1.0.0"),
     attributes: [],
     obligations: [],
     scenarios: [],
@@ -154,20 +155,20 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
     expect(written.ok && written.value.unavailableReason())
       .toBe("IR unreadable: IR lacks a semver irVersion — see the deep-spec-ir-valid sensor for details");
-    expect(written.ok && written.value.irVersion()).toBe("0.0.0");
-    expect(written.ok && written.value.irHash()).toBe(sha256(""));
+    expect(written.ok && written.value.irVersion().value()).toBe("0.0.0");
+    expect(written.ok && written.value.irHash().equals(sha256(""))).toBe(true);
     expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(false);
   });
 
   test("an unsupported IR major writes all-targets skips and recomputes cross-check", () => {
     const reports = new InMemoryVerificationReportRepository(schema);
     const m = model({
-      irVersion: "2.0.0",
+      irVersion: IrVersion.reconstitute("2.0.0"),
       obligations: [{ id: "OB-1", nature: "invariant", frRefs: ["FR-1"] }],
       scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
     });
     const outcome = new VerifyRequirementsSmtUseCase(
-      formalModels(ok({ model: m, irHash: "a".repeat(64) })),
+      formalModels(ok({ model: m, irHash: ContentHash.reconstitute("a".repeat(64)) })),
       reports,
       solver({ facts: EMPTY_FACTS, result: { kind: "solved", verdicts: new Map() } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
@@ -193,7 +194,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
       skipped: [{ target: "OB-2", reason: "capability", detail: 'nature "state-temporal" is checked by a state-machine backend, not the SMT backend' }],
     };
     const outcome = new VerifyRequirementsSmtUseCase(
-      formalModels(ok({ model: m, irHash: "a".repeat(64) })),
+      formalModels(ok({ model: m, irHash: ContentHash.reconstitute("a".repeat(64)) })),
       reports,
       solver({ facts, result: { kind: "unavailable", reason: "no runtime could execute the z3 child process (node: not on PATH)" } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
@@ -223,7 +224,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
       ["sc:SC-1", { status: "sat", decodedModel: { "Ticket.priority": 1 } }],
     ]);
     const outcome = new VerifyRequirementsSmtUseCase(
-      formalModels(ok({ model: m, irHash: "a".repeat(64) })),
+      formalModels(ok({ model: m, irHash: ContentHash.reconstitute("a".repeat(64)) })),
       reports,
       solver({ facts, result: { kind: "solved", verdicts } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
@@ -385,8 +386,8 @@ describe("cross-check computation", () => {
   }): VerificationReport =>
     VerificationReport.reconstitute({
       id: VerificationReportId.of(ap("/tmp/verify"), backend),
-      irVersion: "1.0.0",
-      irHash: input.irHash ?? "h1",
+      irVersion: IrVersion.reconstitute("1.0.0"),
+      irHash: ContentHash.reconstitute(input.irHash ?? "h1"),
       method: "exhaustive",
       findings: (input.violated ?? []).map((t): VerificationFinding => ({
         kind: "scenario-violation",
@@ -401,7 +402,7 @@ describe("cross-check computation", () => {
     });
 
   test("a disagreement yields the frozen finding with the per-backend verdict table", () => {
-    const report = crossCheckReport(id, m, "h1", [sibling("quint", { violated: ["SC-1"] }), sibling("smt", {})]);
+    const report = crossCheckReport(id, m, ContentHash.reconstitute("h1"), [sibling("quint", { violated: ["SC-1"] }), sibling("smt", {})]);
     expect(report.findings()).toEqual([{
       kind: "cross-check-disagreement",
       frRefs: ["FR-1", "FR-2"],
@@ -413,12 +414,12 @@ describe("cross-check computation", () => {
       { backend: "quint", targets: ["SC-1", "SC-2"] },
       { backend: "smt", targets: ["SC-1", "SC-2"] },
     ]);
-    expect(report.irVersion()).toBe("1.0.0");
+    expect(report.irVersion().value()).toBe("1.0.0");
     expect(report.method()).toBe("exhaustive");
   });
 
   test("skipped targets, foreign irHash, and unavailable documents never participate", () => {
-    const report = crossCheckReport(id, m, "h1", [
+    const report = crossCheckReport(id, m, ContentHash.reconstitute("h1"), [
       sibling("quint", { violated: ["SC-1"], skippedTargets: ["SC-1"] }),
       sibling("smt", {}),
       sibling("stale", { irHash: "other", violated: ["SC-2"] }),
@@ -432,7 +433,7 @@ describe("cross-check computation", () => {
   });
 
   test("fewer than two comparable documents produce an empty cross-check", () => {
-    const report = crossCheckReport(id, m, "h1", [sibling("smt", {})]);
+    const report = crossCheckReport(id, m, ContentHash.reconstitute("h1"), [sibling("smt", {})]);
     expect(report.findings()).toEqual([]);
     expect(report.crossChecked()).toEqual([]);
     expect(report.passes()).toBe(true);
@@ -443,8 +444,8 @@ describe("degradation reports and ordering", () => {
   test("irUnreadableReport freezes the reason, the 0.0.0 version, and the empty-input hash", () => {
     const r = irUnreadableReport(VerificationReportId.of(ap("/v"), "smt"), "exhaustive", "IR is not a JSON object");
     expect(r.unavailableReason()).toBe("IR unreadable: IR is not a JSON object — see the deep-spec-ir-valid sensor for details");
-    expect(r.irVersion()).toBe("0.0.0");
-    expect(r.irHash()).toBe(sha256(""));
+    expect(r.irVersion().value()).toBe("0.0.0");
+    expect(r.irHash().equals(sha256(""))).toBe(true);
     expect(r.isUnavailable()).toBe(true);
     expect(r.findingsCount()).toBe(0);
     expect(r.skippedCount()).toBe(0);
@@ -452,18 +453,18 @@ describe("degradation reports and ordering", () => {
 
   test("versionMismatchReport and solverUnavailableReport carry the frozen skip vocabularies", () => {
     const m = model({
-      irVersion: "3.1.4",
+      irVersion: IrVersion.reconstitute("3.1.4"),
       obligations: [{ id: "OB-2", nature: "invariant", frRefs: [] }],
       scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
     });
     expect(m.supportsMajor(1)).toBe(false);
     expect(m.majorVersion()).toBe(3);
-    const vm = versionMismatchReport(VerificationReportId.of(ap("/v"), "smt"), m, "h", "exhaustive");
+    const vm = versionMismatchReport(VerificationReportId.of(ap("/v"), "smt"), m, ContentHash.reconstitute("h"), "exhaustive");
     expect(vm.skipped().map((s) => s.target)).toEqual(["OB-2", "SC-1"]);
     const su = solverUnavailableReport(
       VerificationReportId.of(ap("/v"), "smt"),
       m,
-      "h",
+      ContentHash.reconstitute("h"),
       [{ target: "OB-2", reason: "compile-error", detail: "invariant obligation lacks an assert expression" }],
       "z3-solver is not available in this project: nope",
     );
@@ -514,8 +515,8 @@ describe("degradation reports and ordering", () => {
     expect(id.fileName()).toBe("smt.json");
     const composed = VerificationReport.compose({
       id,
-      irVersion: "1.0.0",
-      irHash: "h",
+      irVersion: IrVersion.reconstitute("1.0.0"),
+      irHash: ContentHash.reconstitute("h"),
       method: "exhaustive",
       findings: [
         { kind: "scenario-violation", frRefs: [], targets: ["SC-1"], witness: { core: [] }, detail: "b" },
@@ -571,7 +572,7 @@ describe("degradation reports and ordering", () => {
     expect(m.obligations().length).toBe(2);
     expect(m.scenarios().length).toBe(1);
     expect(m.background()[0]?.id).toBe("B1");
-    expect(m.irVersion()).toBe("1.0.0");
+    expect(m.irVersion().value()).toBe("1.0.0");
     expect(m.supportsMajor(1)).toBe(true);
   });
 });
