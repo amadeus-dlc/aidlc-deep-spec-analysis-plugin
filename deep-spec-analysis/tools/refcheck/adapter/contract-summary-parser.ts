@@ -5,6 +5,17 @@ import { extractFences } from "../../kernel/adapter/markdown-fences.ts";
 import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
 import { parseMarkdownTables } from "../../kernel/adapter/markdown-tables.ts";
 import { parseYamlSubset } from "../../kernel/adapter/yaml-subset.ts";
+import {
+  BlockIndex,
+  ContractId,
+  ContractParty,
+  ContractRows,
+  LineNumber,
+  SpecBlockAssessments,
+  UnitDecls,
+  UnitName,
+  UnitNames,
+} from "../domain/index.ts";
 import type {
   ContractsTableOutcome,
   DeclaredUnitsOutcome,
@@ -26,10 +37,10 @@ export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
       const dependsOn = Array.isArray(raw.depends_on)
         ? (raw.depends_on as Json[]).filter((d): d is string => typeof d === "string")
         : [];
-      units.push({ name: raw.name, dependsOn });
+      units.push({ name: UnitName.reconstitute(raw.name), dependsOn: UnitNames.reconstitute(dependsOn) });
     }
     if (units.length === 0) return { kind: "unrecognized" };
-    return { kind: "declared", units };
+    return { kind: "declared", units: UnitDecls.of(units) };
   }
   return { kind: "unrecognized", error: "no yaml fence with a top-level `units:` list" };
 }
@@ -48,22 +59,24 @@ export function parseContractsTable(md: string): ContractsTableOutcome {
   const oCol = col(/owner/i);
   return {
     kind: "rows",
-    rows: contractsTable.rows.map((r, i) => {
-      const first = cleanCell(r.cells[0] ?? "");
-      return {
-        id: /^[0-9]+$/.test(first) ? first : String(i + 1),
-        provider: cleanCell(r.cells[pCol] ?? ""),
-        consumer: cCol >= 0 ? cleanCell(r.cells[cCol] ?? "") : "",
-        owner: oCol >= 0 ? cleanCell(r.cells[oCol] ?? "") : "",
-        line: r.line,
-      };
-    }),
+    rows: ContractRows.of(
+      contractsTable.rows.map((r, i) => {
+        const first = cleanCell(r.cells[0] ?? "");
+        return {
+          id: ContractId.reconstitute(/^[0-9]+$/.test(first) ? first : String(i + 1)),
+          provider: ContractParty.reconstitute(cleanCell(r.cells[pCol] ?? "")),
+          consumer: ContractParty.reconstitute(cCol >= 0 ? cleanCell(r.cells[cCol] ?? "") : ""),
+          owner: ContractParty.reconstitute(oCol >= 0 ? cleanCell(r.cells[oCol] ?? "") : ""),
+          line: LineNumber.reconstitute(r.line),
+        };
+      }),
+    ),
   };
 }
 
-export function assessSpecBlocks(md: string): SpecBlockAssessment[] {
-  return extractFences(md, "yaml").map((fence, i) => {
-    const base = { index: i + 1, line: fence.line };
+export function assessSpecBlocks(md: string): SpecBlockAssessments {
+  const blocks: SpecBlockAssessment[] = extractFences(md, "yaml").map((fence, i) => {
+    const base = { index: BlockIndex.reconstitute(i + 1), line: LineNumber.reconstitute(fence.line) };
     const parsed = parseYamlSubset(fence.body);
     if (parsed.error !== undefined) {
       return { ...base, issue: { kind: "unparseable" as const, error: parsed.error } };
@@ -78,4 +91,5 @@ export function assessSpecBlocks(md: string): SpecBlockAssessment[] {
     // asyncapi and shared-schema blocks: parseability is the check.
     return { ...base, issue: null };
   });
+  return SpecBlockAssessments.of(blocks);
 }

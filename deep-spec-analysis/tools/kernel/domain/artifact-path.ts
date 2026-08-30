@@ -20,6 +20,11 @@ export class ArtifactPath {
     return ok(new ArtifactPath(raw));
   }
 
+  // 凍結文書・集約内部からの逐語再水和（compose/reconstitute 双対の DP 側）。
+  static reconstitute(raw: string): ArtifactPath {
+    return new ArtifactPath(raw);
+  }
+
   equals(other: ArtifactPath): boolean {
     return this.#value === other.#value;
   }

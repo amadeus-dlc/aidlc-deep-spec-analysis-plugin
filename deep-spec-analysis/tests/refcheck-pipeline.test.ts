@@ -50,6 +50,13 @@ import {
   runComponentChecks,
   runContractChecks,
   runFunctionalChecks,
+  BlockIndex,
+  CheckFamilies,
+  CheckFamily,
+  ContractRows,
+  LineNumber,
+  SpecBlockAssessments,
+  UnitName,
   AttributeName,
   AttributeNames,
   DesignRecordId,
@@ -172,10 +179,10 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 // --- 以下はドメイン検査の分岐固定（use case を介さない直接駆動） -------------
 
 function domainReport(
-  families: readonly string[],
+  families: CheckFamilies,
   run: (ledger: CheckFamilyLedger) => void,
   backend = "components",
-  unit?: string,
+  unit?: UnitName,
 ): ReferenceCheckReport {
   const ledger = new CheckFamilyLedger(families, unit);
   run(ledger);
@@ -208,11 +215,11 @@ describe("skip branches the fixtures do not exercise", () => {
   test("an absent dependency artifact skips CD-1/CD-3 as absent-input", () => {
     const report = domainReport(CONTRACT_FAMILIES, (l) =>
       runContractChecks({
-        artifact: "contract-summary.md",
-        depArtifact: "unit-of-work-dependency.md",
+        artifact: ArtifactPath.reconstitute("contract-summary.md"),
+        depArtifact: ArtifactPath.reconstitute("unit-of-work-dependency.md"),
         declaredUnits: { kind: "absent" },
         contractsTable: { kind: "absent" },
-        specBlocks: [],
+        specBlocks: SpecBlockAssessments.of([]),
       }, l), "contract-summary");
     const reasons = report.skipped().map((s) => `${s.target}:${s.reason}`);
     expect(reasons).toContain("check:CD-1:absent-input");
@@ -223,15 +230,15 @@ describe("skip branches the fixtures do not exercise", () => {
   test("an unusable units edge block and every spec-block issue kind are reported", () => {
     const report = domainReport(CONTRACT_FAMILIES, (l) =>
       runContractChecks({
-        artifact: "contract-summary.md",
-        depArtifact: "unit-of-work-dependency.md",
+        artifact: ArtifactPath.reconstitute("contract-summary.md"),
+        depArtifact: ArtifactPath.reconstitute("unit-of-work-dependency.md"),
         declaredUnits: { kind: "unrecognized", error: "no yaml fence with a top-level `units:` list" },
-        contractsTable: { kind: "rows", rows: [] },
-        specBlocks: [
-          { index: 1, line: 1, issue: { kind: "openapi-without-paths" } },
-          { index: 2, line: 5, issue: { kind: "not-a-mapping" } },
-          { index: 3, line: 9, issue: { kind: "unparseable", error: "line 1: x" } },
-        ],
+        contractsTable: { kind: "rows", rows: ContractRows.of([]) },
+        specBlocks: SpecBlockAssessments.of([
+          { index: BlockIndex.reconstitute(1), line: LineNumber.reconstitute(1), issue: { kind: "openapi-without-paths" } },
+          { index: BlockIndex.reconstitute(2), line: LineNumber.reconstitute(5), issue: { kind: "not-a-mapping" } },
+          { index: BlockIndex.reconstitute(3), line: LineNumber.reconstitute(9), issue: { kind: "unparseable", error: "line 1: x" } },
+        ]),
       }, l), "contract-summary");
     const details = report.findings().map((f) => f.detail).join("\n");
     expect(details).toContain("CD-2: OpenAPI spec block carries `openapi:` but no `paths:`");
@@ -245,15 +252,15 @@ describe("skip branches the fixtures do not exercise", () => {
 
 function functionalInput(overrides: Partial<FunctionalCheckMaterials>): FunctionalCheckMaterials {
   return {
-    unit: "u1",
-    entitiesArtifact: "e.md",
+    unit: UnitName.reconstitute("u1"),
+    entitiesArtifact: ArtifactPath.reconstitute("e.md"),
     entities: { kind: "absent" },
-    rulesArtifact: "r.md",
+    rulesArtifact: ArtifactPath.reconstitute("r.md"),
     rules: { kind: "absent" },
-    specArtifact: "s.md",
+    specArtifact: ArtifactPath.reconstitute("s.md"),
     spec: { kind: "absent" },
     requirementIdsKnown: null,
-    componentsArtifact: "components.md",
+    componentsArtifact: ArtifactPath.reconstitute("components.md"),
     domainEntities: { kind: "absent" },
     siblingUnits: SiblingUnitIndex.of(new Map()),
     ...overrides,
@@ -489,9 +496,9 @@ describe("functional branches the fixtures do not exercise", () => {
   });
 
   test("the ledger records findings and skips against their families and derives checked", () => {
-    const ledger = new CheckFamilyLedger(["A-1", "A-2", "A-3"], "u9");
-    ledger.finding("A-1", "structure-invalid", ["check:A-1"], [], "boom");
-    ledger.skip("A-2", "absent-input", "gone");
+    const ledger = new CheckFamilyLedger(CheckFamilies.reconstitute(["A-1", "A-2", "A-3"]), UnitName.reconstitute("u9"));
+    ledger.finding(CheckFamily.reconstitute("A-1"), "structure-invalid", ["check:A-1"], [], "boom");
+    ledger.skip(CheckFamily.reconstitute("A-2"), "absent-input", "gone");
     expect(ledger.findings()[0]?.detail).toBe("A-1: boom");
     expect(ledger.findings()[0]?.unit).toBe("u9");
     expect(ledger.skipped()[0]?.target).toBe("check:A-2");
@@ -501,7 +508,7 @@ describe("functional branches the fixtures do not exercise", () => {
 
   test("a degraded conformance still renders a schema-valid unavailable document", () => {
     const bad = domainReport(COMPONENT_FAMILIES, (l) =>
-      l.finding("DD-0", "no-such-kind", ["check:DD-0"], [], "x"));
+      l.finding(CheckFamily.reconstitute("DD-0"), "no-such-kind", ["check:DD-0"], [], "x"));
     const conformed = conformToContract(bad, schema);
     expect(conformed.isUnavailable()).toBe(true);
     expect(JSON.parse(renderReportBytes(conformed)).unavailable.reason)

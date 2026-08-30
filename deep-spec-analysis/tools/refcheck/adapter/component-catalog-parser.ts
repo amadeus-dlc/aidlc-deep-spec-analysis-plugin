@@ -5,44 +5,57 @@
 import { extractFences } from "../../kernel/adapter/markdown-fences.ts";
 import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
 import { parseYamlSubset } from "../../kernel/adapter/yaml-subset.ts";
+import {
+  AttributeName,
+  ComponentEntities,
+  ComponentName,
+  ComponentRefs,
+  Components,
+  ComponentShapeErrors,
+  ElementPath,
+  EntityName,
+  EntityReferences,
+} from "../domain/index.ts";
 import type {
   Component,
   ComponentCatalogOutcome,
   ComponentEntity,
+  ComponentRef,
   ComponentShapeError,
+  EntityReference,
 } from "../domain/index.ts";
 
 function str(v: Json): string | null {
   return typeof v === "string" ? v : null;
 }
 
-function extractComponents(value: Json): { comps: Component[]; shapeErrors: ComponentShapeError[] } {
+function extractComponents(value: Json): { comps: Components; shapeErrors: ComponentShapeErrors } {
   const shapeErrors: ComponentShapeError[] = [];
   const comps: Component[] = [];
   if (!isObject(value) || !Array.isArray(value.components)) {
-    shapeErrors.push({ element: "components", detail: "top-level `components:` list is missing" });
-    return { comps, shapeErrors };
+    shapeErrors.push({ element: ElementPath.reconstitute("components"), detail: "top-level `components:` list is missing" });
+    return { comps: Components.of(comps), shapeErrors: ComponentShapeErrors.of(shapeErrors) };
   }
   value.components.forEach((raw, i) => {
     const element = `components[${i}]`;
     if (!isObject(raw)) {
-      shapeErrors.push({ element, detail: "component entry is not a mapping" });
+      shapeErrors.push({ element: ElementPath.reconstitute(element), detail: "component entry is not a mapping" });
       return;
     }
     const name = str(raw.name);
     if (name === null) {
-      shapeErrors.push({ element: `${element}.name`, detail: "component has no string `name`" });
+      shapeErrors.push({ element: ElementPath.reconstitute(`${element}.name`), detail: "component has no string `name`" });
       return;
     }
-    const refs = (key: "depends_on" | "dependents"): Component["dependsOn"] => {
-      const out: Component["dependsOn"] = [];
-      if (!Array.isArray(raw[key])) return out;
+    const refs = (key: "depends_on" | "dependents"): ComponentRefs => {
+      const out: ComponentRef[] = [];
+      if (!Array.isArray(raw[key])) return ComponentRefs.of(out);
       (raw[key] as Json[]).forEach((entry, j) => {
         const el = `${element}.${key}[${j}].component`;
         const comp = isObject(entry) ? str(entry.component) : str(entry);
-        if (comp !== null) out.push({ component: comp, element: el });
+        if (comp !== null) out.push({ component: ComponentName.reconstitute(comp), element: ElementPath.reconstitute(el) });
       });
-      return out;
+      return ComponentRefs.of(out);
     };
     const entities: ComponentEntity[] = [];
     if (Array.isArray(raw.entities)) {
@@ -50,28 +63,39 @@ function extractComponents(value: Json): { comps: Component[]; shapeErrors: Comp
         if (!isObject(entry)) return;
         const ename = str(entry.name);
         if (ename === null) return;
-        const references: ComponentEntity["references"] = [];
+        const references: EntityReference[] = [];
         if (Array.isArray(entry.references)) {
           (entry.references as Json[]).forEach((ref, k) => {
             if (!isObject(ref)) return;
             const target = str(ref.entity);
             const ownedBy = str(ref.owned_by);
             if (target !== null && ownedBy !== null) {
-              references.push({ entity: target, ownedBy, element: `${element}.entities[${j}].references[${k}]` });
+              references.push({
+                entity: EntityName.reconstitute(target),
+                ownedBy: ComponentName.reconstitute(ownedBy),
+                element: ElementPath.reconstitute(`${element}.entities[${j}].references[${k}]`),
+              });
             }
           });
         }
+        const identifier = str(entry.identifier);
         entities.push({
-          name: ename,
-          element: `${element}.entities[${j}]`,
-          identifier: str(entry.identifier),
-          references,
+          name: EntityName.reconstitute(ename),
+          element: ElementPath.reconstitute(`${element}.entities[${j}]`),
+          identifier: identifier === null ? null : AttributeName.reconstitute(identifier),
+          references: EntityReferences.of(references),
         });
       });
     }
-    comps.push({ name, element, dependsOn: refs("depends_on"), dependents: refs("dependents"), entities });
+    comps.push({
+      name: ComponentName.reconstitute(name),
+      element: ElementPath.reconstitute(element),
+      dependsOn: refs("depends_on"),
+      dependents: refs("dependents"),
+      entities: ComponentEntities.of(entities),
+    });
   });
-  return { comps, shapeErrors };
+  return { comps: Components.of(comps), shapeErrors: ComponentShapeErrors.of(shapeErrors) };
 }
 
 export function parseComponentCatalog(md: string): ComponentCatalogOutcome {

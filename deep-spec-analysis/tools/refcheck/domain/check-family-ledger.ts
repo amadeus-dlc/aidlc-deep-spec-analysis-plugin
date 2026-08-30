@@ -10,41 +10,43 @@
 // はクエリ。unit は functional センサーのみが持つ（キー順の末尾、凍結）。
 
 import { idCompare, sortedUnique } from "../../kernel/domain/index.ts";
+import type { CheckFamilies, CheckFamily } from "./check-family.ts";
 import type { Finding } from "./finding.ts";
+import type { UnitName } from "./unit-name.ts";
 import type { WitnessRef } from "./witness-ref.ts";
 import type { Skipped } from "./skipped.ts";
 
 export class CheckFamilyLedger {
-  readonly #families: readonly string[];
-  readonly #unit: string | undefined;
+  readonly #families: CheckFamilies;
+  readonly #unit: UnitName | undefined;
   readonly #findings: Finding[] = [];
   readonly #skipped: Skipped[] = [];
   readonly #failed = new Set<string>();
   readonly #skippedFamilies = new Set<string>();
 
-  constructor(families: readonly string[], unit?: string) {
+  constructor(families: CheckFamilies, unit?: UnitName) {
     this.#families = families;
     this.#unit = unit;
   }
 
-  finding(family: string, kind: string, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
+  finding(family: CheckFamily, kind: string, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
     const f: Finding = {
       kind,
       frRefs: sortedUnique(frRefs, idCompare),
       targets: sortedUnique(targets, idCompare),
       witness: { refs },
-      detail: `${family}: ${detail}`,
+      detail: family.prefixedDetail(detail),
     };
-    if (this.#unit !== undefined) f.unit = this.#unit;
+    if (this.#unit !== undefined) f.unit = this.#unit.value();
     this.#findings.push(f);
-    this.#failed.add(family);
+    this.#failed.add(family.value());
   }
 
-  skip(family: string, reason: string, detail: string): void {
-    const s: Skipped = { target: `check:${family}`, reason, detail };
-    if (this.#unit !== undefined) s.unit = this.#unit;
+  skip(family: CheckFamily, reason: string, detail: string): void {
+    const s: Skipped = { target: family.asCheckTarget(), reason, detail };
+    if (this.#unit !== undefined) s.unit = this.#unit.value();
     this.#skipped.push(s);
-    this.#skippedFamilies.add(family);
+    this.#skippedFamilies.add(family.value());
   }
 
   findings(): readonly Finding[] {
@@ -56,6 +58,6 @@ export class CheckFamilyLedger {
   }
 
   checkedTargets(): string[] {
-    return this.#families.filter((f) => !this.#failed.has(f) && !this.#skippedFamilies.has(f)).map((f) => `check:${f}`);
+    return this.#families.checkedTargetsExcluding(this.#failed, this.#skippedFamilies);
   }
 }
