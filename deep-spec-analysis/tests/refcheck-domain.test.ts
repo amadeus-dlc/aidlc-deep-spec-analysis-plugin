@@ -375,6 +375,10 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(entity.references.toArray().length).toBe(1);
     // A -> B -> A の閉路は正準化されて 1 件。
     expect(comps.dependencyCycles()).toEqual([["A", "B"]]);
+    // 重複名の byName は最後の宣言が勝つ（旧 name→Component Map の凍結挙動）。
+    const aDup = { ...a, element: ElementPath.reconstitute("components[9]") };
+    const withDup = comps.add(aDup);
+    expect(withDup.byName(aName)?.element.value()).toBe("components[9]");
     const errs = ComponentShapeErrors.of([]).add({ element: el, detail: "x" });
     expect(errs.count()).toBe(1);
     expect([...errs].length).toBe(1);

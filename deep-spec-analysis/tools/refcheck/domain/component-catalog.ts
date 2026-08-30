@@ -143,8 +143,15 @@ export class Components {
     return this.#values.some((c) => c.name.equals(name));
   }
 
+  // 重複名は最後の宣言が勝つ——旧実装の name→Component Map（Map.set の
+  // 上書き）の凍結挙動。重複自体は DD-1 の finding だが、後続検査
+  // （DD-4/DD-6/DD-7 の witness）は最後の宣言へ束縛される。
   byName(name: ComponentName): Component | null {
-    return this.#values.find((c) => c.name.equals(name)) ?? null;
+    let found: Component | null = null;
+    for (const c of this.#values) {
+      if (c.name.equals(name)) found = c;
+    }
+    return found;
   }
 
   // Deterministic cycle detection over the depends_on graph. Returns each
