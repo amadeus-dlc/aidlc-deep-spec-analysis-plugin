@@ -4,11 +4,12 @@
 // 各値の取得規則（requirements は rules が使えるときだけ・兄弟は catalog が
 // 解析できたときだけ等）は Impl が凍結挙動として実装する。
 
-import { type RequirementIds } from "../../kernel/domain/index.ts";
+import { type ArtifactPath, type RequirementIds } from "../../kernel/domain/index.ts";
 import type { DesignRecordId } from "./design-record-id.ts";
 import type { InputAnchor } from "./input-anchor.ts";
 import type { ComponentCatalogOutcome } from "./component-catalog.ts";
-import type { ContractsTableOutcome, DeclaredUnitsOutcome, SpecBlockAssessment } from "./contract-summary.ts";
+import type { ContractsTableOutcome, DeclaredUnitsOutcome, SpecBlockAssessments } from "./contract-summary.ts";
+import type { UnitName } from "./unit-name.ts";
 import type {
   DomainEntitiesOutcome,
   EntitiesOutcome,
@@ -32,19 +33,19 @@ export interface DesignRecordSeed {
   readonly componentCatalog: ComponentCatalogOutcome | null;
   // 対象が contract-summary.md のときだけ載る視点。
   readonly contractsTable: ContractsTableOutcome | null;
-  readonly specBlocks: readonly SpecBlockAssessment[] | null;
-  readonly declaredUnits: { readonly artifactName: string; readonly document: LoadedDocument<DeclaredUnitsOutcome> | null } | null;
+  readonly specBlocks: SpecBlockAssessments | null;
+  readonly declaredUnits: { readonly artifactName: ArtifactPath; readonly document: LoadedDocument<DeclaredUnitsOutcome> | null } | null;
   // 対象が functional-design 配下のときだけ載る視点。
   readonly functional: {
-    readonly unit: string | undefined;
-    readonly entitiesArtifact: string;
+    readonly unit: UnitName | undefined;
+    readonly entitiesArtifact: ArtifactPath;
     readonly entities: LoadedDocument<EntitiesOutcome> | null;
-    readonly rulesArtifact: string;
+    readonly rulesArtifact: ArtifactPath;
     readonly rules: LoadedDocument<RulesOutcome> | null;
-    readonly specArtifact: string;
+    readonly specArtifact: ArtifactPath;
     readonly spec: LoadedDocument<FunctionalSpecOutcome> | null;
     readonly requirements: LoadedDocument<RequirementIds> | null;
-    readonly componentsArtifact: string;
+    readonly componentsArtifact: ArtifactPath;
     readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
     readonly siblingUnits: SiblingUnitIndex;
     readonly siblingInputs: readonly InputAnchor[];
@@ -78,7 +79,7 @@ export class DesignRecord {
     return this.#seed.contractsTable;
   }
 
-  specBlocks(): readonly SpecBlockAssessment[] | null {
+  specBlocks(): SpecBlockAssessments | null {
     return this.#seed.specBlocks;
   }
 

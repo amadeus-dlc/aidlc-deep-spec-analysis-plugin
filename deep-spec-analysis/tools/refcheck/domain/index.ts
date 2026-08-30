@@ -9,12 +9,21 @@ export { sortFindings, sortSkipped } from "./catalog-order.ts";
 export { ReferenceCheckReport, type ReferenceCheckReportSeed } from "./reference-check-report.ts";
 export { ReferenceCheckReportId } from "./reference-check-report-id.ts";
 export { CheckFamilyLedger } from "./check-family-ledger.ts";
+export { type CheckFamilyError, CheckFamilies, CheckFamily } from "./check-family.ts";
+export { type UnitNameError, UnitName, UnitNames } from "./unit-name.ts";
+export { type LocationError, BlockIndex, LineNumber } from "./location-values.ts";
 export {
   type Component,
   type ComponentRef,
   type ComponentEntity,
   type ComponentShapeError,
   type ComponentCatalogOutcome,
+  type EntityReference,
+  ComponentEntities,
+  ComponentRefs,
+  Components,
+  ComponentShapeErrors,
+  EntityReferences,
 } from "./component-catalog.ts";
 export { COMPONENT_FAMILIES, runComponentChecks } from "./component-checks.ts";
 export {
@@ -23,6 +32,12 @@ export {
   type ContractRow,
   type ContractsTableOutcome,
   type SpecBlockAssessment,
+  type ContractCellError,
+  ContractId,
+  ContractParty,
+  ContractRows,
+  SpecBlockAssessments,
+  UnitDecls,
 } from "./contract-summary.ts";
 export { CONTRACT_FAMILIES, runContractChecks, type ContractCheckMaterials } from "./contract-checks.ts";
 export {

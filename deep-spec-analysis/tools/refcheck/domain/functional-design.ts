@@ -9,6 +9,7 @@
 // 逐語移設。
 
 import { type RequirementIds } from "../../kernel/domain/index.ts";
+import type { LineNumber } from "./location-values.ts";
 import type {
   AllowedValues,
   AppliesTo,
@@ -561,7 +562,7 @@ export type RulesOutcome =
 export interface StateMachineSketchSeed {
   readonly spec: MachineSpec; // "Entity" or "Entity.attribute" from the heading
   readonly states: StateNames;
-  readonly fenceLine: number;
+  readonly fenceLine: LineNumber;
   readonly unsupported: string | null; // 文言材料（理由のプローズ）
 }
 
@@ -591,7 +592,7 @@ export class StateMachineSketch {
 
   // 境界: witness と skip 文言に載る位置ラベル（凍結書式）。
   locationLabel(): string {
-    return `State Machine: ${this.#seed.spec.value()} (fence line ${this.#seed.fenceLine})`;
+    return `State Machine: ${this.#seed.spec.value()} (fence line ${this.#seed.fenceLine.value()})`;
   }
 }
 

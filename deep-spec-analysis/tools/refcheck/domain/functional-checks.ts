@@ -3,8 +3,10 @@
 // からの逐語移動（golden バイト凍結。並びはソートで正規化されるが、tie の
 // 挙動まで変えないため発行順も保存する）。
 
-import { type RequirementIds, normalizeName, safeTarget } from "../../kernel/domain/index.ts";
+import { type ArtifactPath, type RequirementIds, normalizeName, safeTarget } from "../../kernel/domain/index.ts";
+import { CheckFamilies, CheckFamily } from "./check-family.ts";
 import type { CheckFamilyLedger } from "./check-family-ledger.ts";
+import type { UnitName } from "./unit-name.ts";
 import type {
   DomainEntitiesOutcome,
   DeclaredEntities,
@@ -16,24 +18,41 @@ import type {
 } from "./functional-design.ts";
 import type { WitnessRef } from "./witness-ref.ts";
 
-export const FUNCTIONAL_FAMILIES = [
-  "FD-E1", "FD-E2", "FD-E3", "FD-E4", "FD-E5", "FD-E6",
-  "FD-R1", "FD-R2", "FD-R3", "FD-R4", "FD-R5",
-  "FD-S1", "FD-S2",
-  "XS-1", "XS-2", "XS-3",
-];
+const FD_E1 = CheckFamily.reconstitute("FD-E1");
+const FD_E2 = CheckFamily.reconstitute("FD-E2");
+const FD_E3 = CheckFamily.reconstitute("FD-E3");
+const FD_E4 = CheckFamily.reconstitute("FD-E4");
+const FD_E5 = CheckFamily.reconstitute("FD-E5");
+const FD_E6 = CheckFamily.reconstitute("FD-E6");
+const FD_R1 = CheckFamily.reconstitute("FD-R1");
+const FD_R2 = CheckFamily.reconstitute("FD-R2");
+const FD_R3 = CheckFamily.reconstitute("FD-R3");
+const FD_R4 = CheckFamily.reconstitute("FD-R4");
+const FD_R5 = CheckFamily.reconstitute("FD-R5");
+const FD_S1 = CheckFamily.reconstitute("FD-S1");
+const FD_S2 = CheckFamily.reconstitute("FD-S2");
+const XS_1 = CheckFamily.reconstitute("XS-1");
+const XS_2 = CheckFamily.reconstitute("XS-2");
+const XS_3 = CheckFamily.reconstitute("XS-3");
+
+export const FUNCTIONAL_FAMILIES = CheckFamilies.of([
+  FD_E1, FD_E2, FD_E3, FD_E4, FD_E5, FD_E6,
+  FD_R1, FD_R2, FD_R3, FD_R4, FD_R5,
+  FD_S1, FD_S2,
+  XS_1, XS_2, XS_3,
+]);
 
 export interface FunctionalCheckMaterials {
-  readonly unit: string | undefined;
-  readonly entitiesArtifact: string;
+  readonly unit: UnitName | undefined;
+  readonly entitiesArtifact: ArtifactPath;
   readonly entities: EntitiesOutcome;
-  readonly rulesArtifact: string;
+  readonly rulesArtifact: ArtifactPath;
   readonly rules: RulesOutcome;
-  readonly specArtifact: string;
+  readonly specArtifact: ArtifactPath;
   readonly spec: FunctionalSpecOutcome;
   // requirements.md が読めたときはその FR/NFR id 集合、読めなければ null。
   readonly requirementIdsKnown: RequirementIds | null;
-  readonly componentsArtifact: string;
+  readonly componentsArtifact: ArtifactPath;
   readonly domainEntities: DomainEntitiesOutcome;
   readonly siblingUnits: SiblingUnitIndex;
 }
@@ -43,38 +62,38 @@ function ref(artifact: string, element: string, value?: string): WitnessRef {
 }
 
 export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger: CheckFamilyLedger): void {
-  const entitiesArt = materials.entitiesArtifact;
+  const entitiesArt = materials.entitiesArtifact.value();
 
   // --- entities.md ----------------------------------------------------------
   let entities: DeclaredEntities | null = null;
   if (materials.entities.kind === "absent") {
-    for (const f of ["FD-E1", "FD-E2", "FD-E3", "FD-E4", "FD-E5", "FD-E6"]) {
+    for (const f of [FD_E1, FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
       ledger.skip(f, "absent-input", "entities.md is not present in this unit's functional-design record");
     }
   } else if (materials.entities.kind === "wrong-fence-count") {
-    ledger.finding("FD-E1", "structure-invalid", ["check:FD-E1"], [ref(entitiesArt, "yaml fence")],
+    ledger.finding(FD_E1, "structure-invalid", [FD_E1.asCheckTarget()], [ref(entitiesArt, "yaml fence")],
       `entities.md must carry exactly one fenced yaml source-of-truth block (found ${materials.entities.found})`);
-    for (const f of ["FD-E2", "FD-E3", "FD-E4", "FD-E5", "FD-E6"]) {
+    for (const f of [FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
       ledger.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
     }
   } else if (materials.entities.kind === "unparseable") {
-    ledger.finding("FD-E1", "structure-invalid", ["check:FD-E1"], [ref(entitiesArt, `yaml fence (line ${materials.entities.line})`)],
+    ledger.finding(FD_E1, "structure-invalid", [FD_E1.asCheckTarget()], [ref(entitiesArt, `yaml fence (line ${materials.entities.line})`)],
       `yaml block does not parse in the supported subset: ${materials.entities.error}`);
-    for (const f of ["FD-E2", "FD-E3", "FD-E4", "FD-E5", "FD-E6"]) {
+    for (const f of [FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
       ledger.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
     }
   } else {
     entities = materials.entities.model;
     for (const e of entities.shapeErrors()) {
-      ledger.finding("FD-E1", "structure-invalid", ["check:FD-E1"], [ref(entitiesArt, e.element.value())], e.detail);
+      ledger.finding(FD_E1, "structure-invalid", [FD_E1.asCheckTarget()], [ref(entitiesArt, e.element.value())], e.detail);
     }
     for (const dup of entities.entities().duplicatesByName()) {
-      ledger.finding("FD-E1", "structure-invalid", [safeTarget("entity", dup.name().value())], [ref(entitiesArt, `${dup.element().value()}.name`, dup.name().value())],
+      ledger.finding(FD_E1, "structure-invalid", [safeTarget("entity", dup.name().value())], [ref(entitiesArt, `${dup.element().value()}.name`, dup.name().value())],
         `entity "${dup.name().value()}" is declared more than once`);
     }
     for (const e of entities.entities()) {
       for (const dup of e.attrs().duplicatesByName()) {
-        ledger.finding("FD-E1", "structure-invalid", [safeTarget("attr", `${e.name().value()}.${dup.name().value()}`)], [ref(entitiesArt, `${dup.element().value()}.name`, dup.name().value())],
+        ledger.finding(FD_E1, "structure-invalid", [safeTarget("attr", `${e.name().value()}.${dup.name().value()}`)], [ref(entitiesArt, `${dup.element().value()}.name`, dup.name().value())],
           `attribute "${e.name().value()}.${dup.name().value()}" is declared more than once`);
       }
     }
@@ -87,38 +106,38 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
         const label = `${e.name().value()}.${a.name().value()}`;
         // FD-E2: 型区分整合は属性宣言が自分で判定する。
         if (a.declaresAllowedValuesOnNonEnumerableType()) {
-          ledger.finding("FD-E2", "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.typeToken())],
+          ledger.finding(FD_E2, "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.typeToken())],
             `"${label}" declares allowed values but its type "${a.typeText()}" is not an enumerable type`);
         }
         if (a.declaresBoundsOnNonNumericType()) {
-          ledger.finding("FD-E2", "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.typeToken())],
+          ledger.finding(FD_E2, "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.typeToken())],
             `"${label}" declares min/max but its type "${a.typeText()}" is not numeric or date-like`);
         }
         if (a.declaresUniqueOnCollectionType()) {
-          ledger.finding("FD-E2", "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.typeToken())],
+          ledger.finding(FD_E2, "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.typeToken())],
             `"${label}" declares unique but its type "${a.typeText()}" is not scalar`);
         }
         // FD-E3: 範囲・既定値の整合も属性宣言が告げる。
         if (a.boundsInverted()) {
-          ledger.finding("FD-E3", "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), `min ${a.min()?.value()} > max ${a.max()?.value()}`)],
+          ledger.finding(FD_E3, "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), `min ${a.min()?.value()} > max ${a.max()?.value()}`)],
             `"${label}": min ${a.min()?.value()} exceeds max ${a.max()?.value()}`);
         }
         if (a.defaultBelowMin()) {
-          ledger.finding("FD-E3", "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.def()?.render() ?? "")],
+          ledger.finding(FD_E3, "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.def()?.render() ?? "")],
             `"${label}": default ${a.def()?.render()} is below min ${a.min()?.value()}`);
         }
         if (a.defaultAboveMax()) {
-          ledger.finding("FD-E3", "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.def()?.render() ?? "")],
+          ledger.finding(FD_E3, "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.def()?.render() ?? "")],
             `"${label}": default ${a.def()?.render()} is above max ${a.max()?.value()}`);
         }
         if (a.defaultOutsideAllowed()) {
-          ledger.finding("FD-E3", "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.def()?.render() ?? "")],
+          ledger.finding(FD_E3, "structure-invalid", [attrId], [ref(entitiesArt, a.element().value(), a.def()?.render() ?? "")],
             `"${label}": default "${a.def()?.render()}" is not one of the allowed values`);
         }
         // FD-E6: 参照の解決は宣言集合が告げる。
         const reference = a.references();
         if (reference !== null && !entities.entities().resolvesReference(reference)) {
-          ledger.finding("FD-E6", "reference-broken", [attrId], [ref(entitiesArt, a.element().value(), reference.value())],
+          ledger.finding(FD_E6, "reference-broken", [attrId], [ref(entitiesArt, a.element().value(), reference.value())],
             `"${label}" references "${reference.value()}" which is not a declared entity`);
         }
       }
@@ -127,48 +146,48 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
     for (const r of entities.allRels()) {
       for (const endpoint of [r.from(), r.to()]) {
         if (endpoint !== null && !entities.entities().containsNamed(endpoint.value())) {
-          ledger.finding("FD-E4", "reference-broken", [safeTarget("entity", endpoint.value())], [ref(entitiesArt, r.element().value(), endpoint.value())],
+          ledger.finding(FD_E4, "reference-broken", [safeTarget("entity", endpoint.value())], [ref(entitiesArt, r.element().value(), endpoint.value())],
             `relationship endpoint "${endpoint.value()}" is not a declared entity`);
         }
       }
       if (r.cardinalityOutsideClosedSet()) {
-        ledger.finding("FD-E5", "structure-invalid", ["check:FD-E5"], [ref(entitiesArt, r.element().value(), r.cardinality()?.value() ?? "")],
+        ledger.finding(FD_E5, "structure-invalid", [FD_E5.asCheckTarget()], [ref(entitiesArt, r.element().value(), r.cardinality()?.value() ?? "")],
           `cardinality "${r.cardinality()?.value()}" is not in the closed set 1:1 | 1:N | N:1 | N:M`);
       }
       if (r.cardinalityWithoutDirection()) {
-        ledger.finding("FD-E5", "structure-invalid", ["check:FD-E5"], [ref(entitiesArt, r.element().value())],
+        ledger.finding(FD_E5, "structure-invalid", [FD_E5.asCheckTarget()], [ref(entitiesArt, r.element().value())],
           "relationship declares a cardinality but no direction (from/to or direction key)");
       }
     }
   }
 
   // --- rules.md -------------------------------------------------------------
-  const rulesArt = materials.rulesArtifact;
+  const rulesArt = materials.rulesArtifact.value();
   let rules: RuleDecls | null = null;
   const blockRs = (why: string): void => {
-    for (const f of ["FD-R2", "FD-R3", "FD-R4", "FD-R5"]) ledger.skip(f, "unrecognized-format", why);
+    for (const f of [FD_R2, FD_R3, FD_R4, FD_R5]) ledger.skip(f, "unrecognized-format", why);
   };
   if (materials.rules.kind === "absent") {
-    for (const f of ["FD-R1", "FD-R2", "FD-R3", "FD-R4", "FD-R5"]) {
+    for (const f of [FD_R1, FD_R2, FD_R3, FD_R4, FD_R5]) {
       ledger.skip(f, "absent-input", "rules.md is not present in this unit's functional-design record");
     }
   } else if (materials.rules.kind === "wrong-fence-count") {
-    ledger.finding("FD-R1", "structure-invalid", ["check:FD-R1"], [ref(rulesArt, "yaml fence")],
+    ledger.finding(FD_R1, "structure-invalid", [FD_R1.asCheckTarget()], [ref(rulesArt, "yaml fence")],
       `rules.md must carry exactly one fenced yaml source-of-truth block (found ${materials.rules.found})`);
     blockRs("blocked by FD-R1: the rules yaml block is unusable");
   } else if (materials.rules.kind === "unparseable") {
-    ledger.finding("FD-R1", "structure-invalid", ["check:FD-R1"], [ref(rulesArt, `yaml fence (line ${materials.rules.line})`)],
+    ledger.finding(FD_R1, "structure-invalid", [FD_R1.asCheckTarget()], [ref(rulesArt, `yaml fence (line ${materials.rules.line})`)],
       `yaml block does not parse in the supported subset: ${materials.rules.error}`);
     blockRs("blocked by FD-R1: the rules yaml block is unusable");
   } else if (materials.rules.kind === "no-rules-list") {
-    ledger.finding("FD-R1", "structure-invalid", ["check:FD-R1"], [ref(rulesArt, "rules")],
+    ledger.finding(FD_R1, "structure-invalid", [FD_R1.asCheckTarget()], [ref(rulesArt, "rules")],
       "top-level `rules:` list is missing");
     blockRs("blocked by FD-R1: the rules yaml block is unusable");
   } else {
     rules = materials.rules.rules;
     for (const r of rules) {
       if (r.missing().length > 0) {
-        ledger.finding("FD-R1", "structure-invalid", [r.findingTarget("check:FD-R1")],
+        ledger.finding(FD_R1, "structure-invalid", [r.findingTarget("check:FD-R1")],
           [ref(rulesArt, r.element().value())],
           `rule is missing required key(s): ${r.missing().join(", ")}`);
       }
@@ -182,25 +201,25 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
       const id = r.id();
       if (id === null) continue;
       if (!id.matchesShape()) {
-        ledger.finding("FD-R2", "structure-invalid", ["check:FD-R2"], [ref(rulesArt, `${r.element().value()}.id`, id.value())],
+        ledger.finding(FD_R2, "structure-invalid", [FD_R2.asCheckTarget()], [ref(rulesArt, `${r.element().value()}.id`, id.value())],
           `rule id "${id.value()}" does not match BR{group}.{seq}`);
         continue;
       }
       if (seenIds.has(id.value())) {
-        ledger.finding("FD-R2", "structure-invalid", [id.value()], [ref(rulesArt, `${r.element().value()}.id`, id.value())],
+        ledger.finding(FD_R2, "structure-invalid", [id.value()], [ref(rulesArt, `${r.element().value()}.id`, id.value())],
           `rule id "${id.value()}" is declared more than once`);
       }
       seenIds.add(id.value());
     }
     // FD-R3: source FR/NFR ids exist in requirements.md
     if (materials.requirementIdsKnown === null) {
-      ledger.skip("FD-R3", "absent-input", "requirements.md not found under this intent record — source ids cannot be reverse-verified");
+      ledger.skip(FD_R3, "absent-input", "requirements.md not found under this intent record — source ids cannot be reverse-verified");
     } else {
       const known = materials.requirementIdsKnown;
       for (const r of rules) {
         const missing = r.sourceIdValuesMissingFrom(known);
         if (missing.length > 0) {
-          ledger.finding("FD-R3", "reference-broken",
+          ledger.finding(FD_R3, "reference-broken",
             [r.findingTarget("check:FD-R3")],
             missing.map((id) => ref(rulesArt, `${r.element().value()}.source`, id)),
             `source id(s) ${missing.join(", ")} do not exist in requirements.md`, missing);
@@ -209,13 +228,13 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
     }
     // FD-R4: applies-to resolves against entities.md
     if (entities === null) {
-      ledger.skip("FD-R4", "absent-input", "entities.md is unavailable — applies-to cannot be resolved");
+      ledger.skip(FD_R4, "absent-input", "entities.md is unavailable — applies-to cannot be resolved");
     } else {
       for (const r of rules) {
         const appliesTo = r.appliesTo();
         if (appliesTo === null) continue;
         if (!entities.entities().resolvesAppliesTo(appliesTo)) {
-          ledger.finding("FD-R4", "reference-broken",
+          ledger.finding(FD_R4, "reference-broken",
             [r.findingTarget("check:FD-R4")],
             [ref(rulesArt, r.element().value(), appliesTo.value())],
             `applies-to "${appliesTo.value()}" does not resolve to a declared entity or entity.attribute`);
@@ -225,7 +244,7 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
     // FD-R5: category closed set
     for (const r of rules) {
       if (r.categoryOutsideClosedSet()) {
-        ledger.finding("FD-R5", "structure-invalid",
+        ledger.finding(FD_R5, "structure-invalid",
           [r.findingTarget("check:FD-R5")],
           [ref(rulesArt, `${r.element().value()}.category`, r.category()?.value() ?? "")],
           `category "${r.category()?.value()}" is not one of validation | authorization | constraint | calculation | policy`);
@@ -234,20 +253,20 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
   }
 
   // --- functional-spec.md state machines ------------------------------------
-  const specArt = materials.specArtifact;
+  const specArt = materials.specArtifact.value();
   if (materials.spec.kind === "absent") {
-    ledger.skip("FD-S1", "absent-input", "functional-spec.md is not present in this unit's functional-design record");
-    ledger.skip("FD-S2", "absent-input", "functional-spec.md is not present in this unit's functional-design record");
+    ledger.skip(FD_S1, "absent-input", "functional-spec.md is not present in this unit's functional-design record");
+    ledger.skip(FD_S2, "absent-input", "functional-spec.md is not present in this unit's functional-design record");
   } else if (entities === null) {
-    ledger.skip("FD-S1", "absent-input", "entities.md is unavailable — state machines cannot be checked against allowed values");
-    ledger.skip("FD-S2", "absent-input", "entities.md is unavailable — state machines cannot be checked against allowed values");
+    ledger.skip(FD_S1, "absent-input", "entities.md is unavailable — state machines cannot be checked against allowed values");
+    ledger.skip(FD_S2, "absent-input", "entities.md is unavailable — state machines cannot be checked against allowed values");
   } else {
     const machines = materials.spec.machines;
     if (machines.isEmpty()) {
       for (const e of entities.entities().lifecycleOnly()) {
-        ledger.skip("FD-S1", "unrecognized-format",
+        ledger.skip(FD_S1, "unrecognized-format",
           `no \`### State Machine: ${e.name().value()}\` heading with a stateDiagram fence found for lifecycle entity "${e.name().value()}"`);
-        ledger.skip("FD-S2", "unrecognized-format",
+        ledger.skip(FD_S2, "unrecognized-format",
           `no \`### State Machine: ${e.name().value()}\` heading with a stateDiagram fence found for lifecycle entity "${e.name().value()}"`);
       }
     }
@@ -256,21 +275,21 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
       const attrName = m.spec().attributeToken();
       const el = m.locationLabel();
       if (m.unsupported() !== null) {
-        ledger.skip("FD-S1", "unrecognized-format", `${el}: ${m.unsupported()}`);
-        ledger.skip("FD-S2", "unrecognized-format", `${el}: ${m.unsupported()}`);
+        ledger.skip(FD_S1, "unrecognized-format", `${el}: ${m.unsupported()}`);
+        ledger.skip(FD_S2, "unrecognized-format", `${el}: ${m.unsupported()}`);
         continue;
       }
       const ent = entities.entities().byNormalizedName(normalizeName(entName));
       if (!ent) {
-        ledger.finding("FD-S1", "consistency-mismatch", [safeTarget("entity", entName)], [ref(specArt, el, entName)],
+        ledger.finding(FD_S1, "consistency-mismatch", [safeTarget("entity", entName)], [ref(specArt, el, entName)],
           `state machine names entity "${entName}" which is not declared in entities.md`);
         continue;
       }
       const attr = attrName !== undefined ? ent.attrNamed(attrName) : ent.lifecycleAttr();
       if (!attr || !attr.hasAllowedValues()) {
-        ledger.skip("FD-S1", "unrecognized-format",
+        ledger.skip(FD_S1, "unrecognized-format",
           `${el}: no lifecycle attribute with allowed values could be determined for entity "${ent.name().value()}"`);
-        ledger.skip("FD-S2", "unrecognized-format",
+        ledger.skip(FD_S2, "unrecognized-format",
           `${el}: no lifecycle attribute with allowed values could be determined for entity "${ent.name().value()}"`);
         continue;
       }
@@ -278,13 +297,13 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
       const attrId = safeTarget("attr", `${ent.name().value()}.${attr.name().value()}`);
       const rogue = attr.rogueDiagramStates(m.states());
       if (rogue.length > 0) {
-        ledger.finding("FD-S1", "consistency-mismatch", [attrId],
+        ledger.finding(FD_S1, "consistency-mismatch", [attrId],
           rogue.map((v) => ref(specArt, el, v)),
           `diagram state(s) ${rogue.join(", ")} are not allowed values of ${ent.name().value()}.${attr.name().value()} in entities.md`);
       }
       const dangling = attr.allowedValuesAbsentFrom(m.states());
       if (dangling.length > 0) {
-        ledger.finding("FD-S2", "consistency-mismatch", [attrId],
+        ledger.finding(FD_S2, "consistency-mismatch", [attrId],
           dangling.map((v) => ref(entitiesArt, attr.element().value(), v)),
           `allowed value(s) ${dangling.join(", ")} of ${ent.name().value()}.${attr.name().value()} appear in no diagram state`);
       }
@@ -292,13 +311,13 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
   }
 
   // --- XS: domain-design vs functional-design entities ------------------------
-  const compArt = materials.componentsArtifact;
+  const compArt = materials.componentsArtifact.value();
   if (materials.domainEntities.kind === "absent") {
-    for (const f of ["XS-1", "XS-2", "XS-3"]) {
+    for (const f of [XS_1, XS_2, XS_3]) {
       ledger.skip(f, "absent-input", "domain-design components.md is not present under this intent record");
     }
   } else if (materials.domainEntities.kind === "unusable") {
-    for (const f of ["XS-1", "XS-2", "XS-3"]) {
+    for (const f of [XS_1, XS_2, XS_3]) {
       ledger.skip(f, "unrecognized-format", `components.md yaml block is unusable (${materials.domainEntities.error})`);
     }
   } else {
@@ -310,22 +329,22 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
       const key = de.name().normalized();
       const definers = unitEntities.definersOf(key);
       if (definers.length >= 2) {
-        ledger.finding("XS-1", "consistency-mismatch", [safeTarget("entity", de.name().value())],
+        ledger.finding(XS_1, "consistency-mismatch", [safeTarget("entity", de.name().value())],
           [ref(compArt, de.catalogLabel()),
             ...definers.map((u) => ref(`construction/${u}/functional-design/entities.md`, `entity ${de.name().value()}`))],
           `domain entity "${de.name().value()}" is defined in ${definers.length} units (${definers.join(", ")}) — ownership is duplicated`);
       } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
-        ledger.finding("XS-2", "consistency-mismatch", [safeTarget("entity", de.name().value())],
+        ledger.finding(XS_2, "consistency-mismatch", [safeTarget("entity", de.name().value())],
           [ref(compArt, de.catalogLabel())],
           `domain entity "${de.name().value()}" is defined in no unit's entities.md — it was dropped on the way to functional design`);
       }
       // XS-3: 属性の取り落としは素描が自分で告げる（このユニットの定義に対してのみ）。
       if (materials.unit !== undefined) {
-        const mine = unitEntities.entityDeclaredIn(materials.unit, key);
+        const mine = unitEntities.entityDeclaredIn(materials.unit.value(), key);
         if (mine) {
           const dropped = de.attributesDroppedIn(mine.attrs);
           if (dropped.length > 0) {
-            ledger.finding("XS-3", "consistency-mismatch", [safeTarget("entity", de.name().value())],
+            ledger.finding(XS_3, "consistency-mismatch", [safeTarget("entity", de.name().value())],
               dropped.map((a) => ref(compArt, `entity ${de.name().value()}.attributes`, a)),
               `domain-design declares attribute(s) ${dropped.join(", ")} on "${de.name().value()}" that this unit's entities.md does not carry`);
           }
@@ -333,7 +352,7 @@ export function runFunctionalChecks(materials: FunctionalCheckMaterials, ledger:
       }
     }
     if (materials.unit === undefined) {
-      ledger.skip("XS-3", "unrecognized-format", "the unit for this functional-design record could not be determined from its path");
+      ledger.skip(XS_3, "unrecognized-format", "the unit for this functional-design record could not be determined from its path");
     }
   }
 }
