@@ -646,3 +646,53 @@ first run of the layered pipeline.
   the doctor at 0 errors. With this PR the LEGACY set of the
   architecture rules contains only entries — **no legacy library
   remains**.
+
+## DDD migration PR7 — both IR validators become interactors; the duplicated kernel helpers collapse (2026-08-30, #20)
+
+The two contract validators (ir-valid 460 lines, design-ir-valid 348) are
+now composition roots over layered use cases, and the last local copies of
+the kernel helpers are gone. Base-vs-head parity diff is empty; goldens
+untouched.
+
+- **The keep-both fallback was not needed.** issue #20 mandated a first
+  step: diff ir-valid's local `validateSchema` against the kernel one,
+  because its error strings are an observed surface (the ir-valid
+  `errors[]` that intent-e2e asserts). The two are byte-identical apart
+  from the `export` keyword and all 12 error templates match, so the local
+  copy was deleted rather than kept. `requirementIds` is likewise
+  byte-identical; `extractJsonFences` is `extractFences(md, "json")`
+  mapped to bodies; the local `parseFlags` is the kernel one minus the
+  unread `--report-only`.
+- **`walkExpression` joins kernel/domain.** Both validators carried the
+  same pre-order walk over the shared `Expression` vocabulary.
+- **requirements/domain**: `modelWellFormednessErrors` (unique ids,
+  resolvable references, enum membership, prime legality — every wording
+  and the emission order verbatim), `FrReferenceIndex` (the frRef reverse
+  index and its sorted missing-reference report), and `SourceAnchor`
+  (declared vs actual digest, both frozen messages).
+- **design/domain**: `designWellFormednessErrors` (per-unit id namespaces,
+  the sibling-bound enum rule, machine well-formedness, BR coverage) and
+  `BrReferenceIndex`.
+- **The domain cannot see `Json`.** Layer direction forbids domain →
+  kernel/adapter, and the ruling that serialization formats are adapter
+  knowledge stands. So the tolerant walk over raw Json — every `isObject`
+  / `typeof` guard deciding whether an entry is silently skipped — moved
+  into the adapters, which hand the domain a typed view (`IrModelView` /
+  `DesignUnitView`). The existing contract-1 parser could NOT be reused:
+  it drops attributes whose `type` is malformed, while ir-valid registers
+  them with `kind: ""` — a difference that changes which references
+  resolve.
+- **The digest stays a byte digest.** `sourceDigest` hashes the
+  requirements.md *bytes*; kernel's `sha256(text)` re-encodes a string as
+  UTF-8 and would diverge on a file that is not valid UTF-8. The adapter
+  keeps `createHash` over the Buffer, and the reason is recorded at the
+  call site.
+- **Proofs**: a new in-process suite drives both interactors over real
+  Impls and asserts the rendered verdict line is byte-identical to the one
+  the real sensor writes on stdout, across every scenario (canonical, each
+  planted defect, digest drift, absent requirements, fence/JSON/schema
+  failures, version mismatch, pass-through); both well-formedness modules
+  hold 100% line coverage; the base↔head parity snapshot `diff -r` is
+  empty over 45 files; the live sandbox upgrade transported both trees and
+  reproduced the canonical pass and every planted defect with the doctor
+  at 0 errors.

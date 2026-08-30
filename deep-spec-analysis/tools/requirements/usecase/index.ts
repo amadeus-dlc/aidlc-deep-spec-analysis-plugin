@@ -8,3 +8,12 @@ export { type VerifyRequirementsSmtInput, VerifyRequirementsSmtUseCase } from ".
 export { type QuintCheckResult, type QuintClient } from "./quint-client.ts";
 export { type VerifyQuintOutcome } from "./verify-quint-outcome.ts";
 export { type VerifyRequirementsQuintInput, VerifyRequirementsQuintUseCase } from "./verify-requirements-quint-usecase.ts";
+export {
+  type IrMaterialsAcquisition,
+  type IrValidationMaterials,
+  type IrValidationMaterialsRepository,
+  type RequirementsSource,
+  type RequirementsSourceRepository,
+} from "./ir-validation-materials-repository.ts";
+export { type ValidateIrOutcome } from "./validate-ir-outcome.ts";
+export { ValidateIrUseCase } from "./validate-ir-usecase.ts";

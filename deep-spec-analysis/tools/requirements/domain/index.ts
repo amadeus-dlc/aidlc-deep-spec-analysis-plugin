@@ -38,3 +38,15 @@ export {
   type QuintTemporalVerdict,
 } from "./quint-verdict.ts";
 export { type InterpretedQuintVerdicts, interpretQuintVerdicts } from "./quint-verdict-interpretation.ts";
+export {
+  type IrAttributeView,
+  type IrBackgroundView,
+  type IrEntityView,
+  type IrModelView,
+  type IrObligationView,
+  type IrScenarioView,
+  type IrTemporalView,
+} from "./ir-model-view.ts";
+export { modelWellFormednessErrors } from "./model-well-formedness.ts";
+export { type FrRefClaim, FrReferenceIndex } from "./fr-reference-index.ts";
+export { SourceAnchor } from "./source-anchor.ts";

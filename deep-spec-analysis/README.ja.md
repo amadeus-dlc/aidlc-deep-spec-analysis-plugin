@@ -11,7 +11,7 @@ AI-DLC v2 のための Kiro 流 **Deep Spec Analysis**：追加合成プラグ�
 | ステージ | `stages/inception/deep-spec-analysis-verify.md` | `requirements-analysis` 直後の Inception ステージ（scopes: `enterprise`, `feature`）。`deep-spec-analysis-formal-model` + `deep-spec-analysis-report` を生成 |
 | 契約1（IR） | `tools/data/deep-spec-ir-schema.json` | バックエンド中立の形式モデル：schema / obligations（EARS nature）/ scenarios / background。`sourceDigest`（requirements.md の sha256）で正確なソーステキストにアンカーされる。SMT-LIB や Quint は一切含まない |
 | 契約2（findings） | `tools/data/deep-spec-findings-schema.json` | `<record>/inception/deep-spec-analysis-verify/deep-spec-verify/<backend>.json` の正規化された各バックエンド結果：findings、理由付き `skipped[]`（無沈黙）、`unavailable`、正準ソート |
-| IR センサー | `sensors/aidlc-deep-spec-ir-valid.md` + `tools/aidlc-sensor-deep-spec-ir-valid.ts` | スキーマ適合＋意味検査＋frRefs の requirements.md 逆引き検証＋`sourceDigest` の再計算照合（ソースドリフトを拒否。エラーが期待値を提示） |
+| IR センサー | `sensors/aidlc-deep-spec-ir-valid.md` + `tools/aidlc-sensor-deep-spec-ir-valid.ts` + `tools/requirements/{domain,usecase,adapter}/` | スキーマ適合＋意味検査＋frRefs の requirements.md 逆引き検証＋`sourceDigest` の再計算照合（ソースドリフトを拒否。エラーが期待値を提示） |
 | SMT バックエンド | `sensors/aidlc-deep-spec-verify-smt.md` + `tools/aidlc-sensor-deep-spec-verify-smt.ts` | TypeScript で IR→SMT-LIB へコンパイルし、z3（`z3-solver` WASM）を子プロセス実行。矛盾（unsat core）・完全性ギャップ（witness モデル）・シナリオ検査。`method: exhaustive` |
 | Quint バックエンド | `sensors/aidlc-deep-spec-verify-quint.md` + `tools/aidlc-sensor-deep-spec-verify-quint.ts` | TypeScript で IR→Quint へコンパイルし、`quint` CLI にシェルアウト。到達可能な不変条件違反（ステップトレース）・デッドロックギャップ・leads-to temporal（bounded）・シナリオ再検査。Apalache 検出時 `method: bounded`、それ以外はシード固定の `simulation` |
 | クロスチェック | 両バックエンドが書く | `deep-spec-verify/cross-check.json` — シナリオ判定をバックエンド間で照合。`cross-check-disagreement` は要件の欠陥ではなく形式化/コンパイラの欠陥を示す（FR8.2） |

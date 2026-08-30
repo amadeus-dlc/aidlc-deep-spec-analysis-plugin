@@ -643,3 +643,45 @@ design-verify センサーは `design/{domain,usecase,adapter}` の上で動く�
   で tombstone が refinement-lib を除去し、3 golden を再現、doctor 0 errors。
   この PR でアーキテクチャルールの LEGACY 集合は entry のみ——**legacy
   ライブラリは残っていない**。
+
+## DDD 移行 PR7 — IR バリデータ 2 本の interactor 化・kernel 重複の解消（2026-08-30、#20）
+
+契約バリデータ 2 本（ir-valid 460 行・design-ir-valid 348 行）が層化された
+ユースケース上の合成ルートになり、kernel ヘルパのローカル複製が消えた。
+base↔head パリティ diff は空、golden は無変更。
+
+- **keep-both fallback は不要だった。** issue #20 は手順の最初に「ir-valid の
+  ローカル `validateSchema` と kernel 版の文言 diff」を要求していた——error
+  文字列は観測面（intent-e2e が表明する ir-valid の `errors[]`）だからである。
+  両者は `export` キーワード以外バイト同一で、12 種のエラー文言も完全一致
+  したため、ローカル複製は保持せず削除した。`requirementIds` も同じくバイト
+  同一。`extractJsonFences` は `extractFences(md, "json")` の body 射影と等価。
+  ローカル `parseFlags` は kernel 版から未使用の `--report-only` を欠いた形。
+- **`walkExpression` を kernel/domain へ。** 両バリデータが共有 `Expression`
+  語彙に対する同一の前順走査を各自に持っていた。
+- **requirements/domain**：`modelWellFormednessErrors`（id 一意性・参照解決・
+  enum 所属・prime 合法性——文言と発生順序を逐語保存）、`FrReferenceIndex`
+  （frRef 逆索引と未存在参照の整列報告）、`SourceAnchor`（宣言値と実測値の
+  照合、凍結文言 2 種）。
+- **design/domain**：`designWellFormednessErrors`（ユニット内 id 名前空間・
+  兄弟束縛つき enum 規則・状態機械の整合・BR カバレッジ）と
+  `BrReferenceIndex`。
+- **ドメインは `Json` を見られない。** 層方向は domain → kernel/adapter を
+  禁じ、直列化形式はアダプタの知識という裁定も生きている。よって生 Json の
+  寛容な走査——「どのエントリを黙って落とすか」を決める `isObject` /
+  `typeof` ガードのすべて——はアダプタへ移し、ドメインへは型付きビュー
+  （`IrModelView` / `DesignUnitView`）を渡す形にした。既存の契約1 パーサは
+  **再利用できない**：`type` が壊れた属性を落とすが、ir-valid は `kind: ""`
+  で登録する——参照解決の可否が変わる差である。
+- **ダイジェストはバイトのダイジェストのまま。** `sourceDigest` は
+  requirements.md の**バイト列**を hash する。kernel の `sha256(text)` は
+  文字列を UTF-8 で符号化し直すため、不正な UTF-8 を含むファイルで結果が
+  ずれる。アダプタは Buffer に対する `createHash` を維持し、理由を呼び出し
+  地点に記録した。
+- **証明**：新しい in-process スイートが実 Impl で両 interactor を駆動し、
+  描画した verdict 行が実センサーの stdout とバイト一致することを全シナリオ
+  （正常・各仕込み欠陥・ダイジェストのドリフト・requirements 不在・
+  fence/JSON/スキーマの失敗・バージョン不一致・pass-through）で表明する。
+  well-formedness 2 モジュールは行カバレッジ 100%。base↔head パリティ
+  スナップショットの `diff -r` は 45 ファイルで空。実 sandbox アップグレード
+  で両ツリーが転送され、正常系の pass と全仕込み欠陥を再現、doctor 0 errors。
