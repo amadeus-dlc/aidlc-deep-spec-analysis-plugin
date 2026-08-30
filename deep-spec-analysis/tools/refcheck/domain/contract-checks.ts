@@ -28,8 +28,8 @@ export interface ContractCheckMaterials {
 }
 
 export function runContractChecks(materials: ContractCheckMaterials, ledger: CheckFamilyLedger): void {
-  const artifact = materials.artifact.value();
-  const depArtifact = materials.depArtifact.value();
+  const artifact = materials.artifact.asString();
+  const depArtifact = materials.depArtifact.asString();
   const ref = (art: string, element: string, value?: string): WitnessRef =>
     value === undefined ? { artifact: art, element } : { artifact: art, element, value };
 
@@ -55,21 +55,21 @@ export function runContractChecks(materials: ContractCheckMaterials, ledger: Che
     if (units !== null) {
       const declared = units;
       for (const row of rows) {
-        const el = `contracts table row ${row.id.value()} (line ${row.line.value()})`;
-        if (!row.provider.isBlank() && !declared.declares(row.provider.value())) {
-          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.value()}`, safeTarget("unit", row.provider.value())],
-            [ref(artifact, el, row.provider.value()), ref(depArtifact, "units")],
-            `Provider Unit "${row.provider.value()}" is not a declared unit`);
+        const el = `contracts table row ${row.id.asString()} (line ${row.line.asNumber()})`;
+        if (!row.provider.isBlank() && !declared.declares(row.provider.asString())) {
+          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, safeTarget("unit", row.provider.asString())],
+            [ref(artifact, el, row.provider.asString()), ref(depArtifact, "units")],
+            `Provider Unit "${row.provider.asString()}" is not a declared unit`);
         }
-        if (!row.consumer.isBlank() && !declared.declares(row.consumer.value()) && !row.consumer.declaresExternal()) {
-          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.value()}`, safeTarget("unit", row.consumer.value())],
-            [ref(artifact, el, row.consumer.value()), ref(depArtifact, "units")],
-            `Consumer "${row.consumer.value()}" is neither a declared unit nor \`External: …\``);
+        if (!row.consumer.isBlank() && !declared.declares(row.consumer.asString()) && !row.consumer.declaresExternal()) {
+          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, safeTarget("unit", row.consumer.asString())],
+            [ref(artifact, el, row.consumer.asString()), ref(depArtifact, "units")],
+            `Consumer "${row.consumer.asString()}" is neither a declared unit nor \`External: …\``);
         }
-        if (!row.owner.isBlank() && !declared.declares(row.owner.value())) {
-          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.value()}`, safeTarget("unit", row.owner.value())],
-            [ref(artifact, el, row.owner.value()), ref(depArtifact, "units")],
-            `Owner "${row.owner.value()}" is not a declared unit`);
+        if (!row.owner.isBlank() && !declared.declares(row.owner.asString())) {
+          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, safeTarget("unit", row.owner.asString())],
+            [ref(artifact, el, row.owner.asString()), ref(depArtifact, "units")],
+            `Owner "${row.owner.asString()}" is not a declared unit`);
         }
       }
     }
@@ -78,8 +78,8 @@ export function runContractChecks(materials: ContractCheckMaterials, ledger: Che
   // --- CD-2: spec blocks -----------------------------------------------------
   for (const block of materials.specBlocks) {
     if (block.issue === null) continue;
-    const blockId = `contract:block-${block.index.value()}`;
-    const el = `yaml fence #${block.index.value()} (line ${block.line.value()})`;
+    const blockId = `contract:block-${block.index.asNumber()}`;
+    const el = `yaml fence #${block.index.asNumber()} (line ${block.line.asNumber()})`;
     if (block.issue.kind === "unparseable") {
       ledger.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el)],
         `spec block does not parse in the supported YAML subset: ${block.issue.error}`);
@@ -94,9 +94,9 @@ export function runContractChecks(materials: ContractCheckMaterials, ledger: Che
   // --- CD-3: DAG edge coverage ----------------------------------------------
   if (units !== null && materials.contractsTable.kind !== "absent") {
     for (const u of units.sortedByName()) {
-      const uName = u.name.value();
+      const uName = u.name.asString();
       for (const dep of u.dependsOn.sortedByValue()) {
-        const depName = dep.value();
+        const depName = dep.asString();
         if (!units.declares(depName)) continue; // dangling edge is units-generation's problem
         if (!rows.coversEdge(depName, uName)) {
           ledger.finding(CD_3, "consistency-mismatch", [safeTarget("unit", depName), safeTarget("unit", uName)],

@@ -39,7 +39,7 @@ export class ContentHash {
   }
 
   // 境界: 文書へ逐語で載る値。
-  value(): string {
+  asString(): string {
     return this.#value;
   }
 }

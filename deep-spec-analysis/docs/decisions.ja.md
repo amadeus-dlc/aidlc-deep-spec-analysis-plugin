@@ -920,3 +920,18 @@ FD-S の図差分（`AllowedValues.rogueAmong`/`absentFrom`）、FD-R3 の逆検
 
 証明：308 tests green。golden 無変更。パリティスナップショットの
 `diff -r` は空のまま。全コレクションは 90% 床の上。
+
+## アクセサ命名の裁定 — DP のアクセサはフィールドでなく表現を語る（2026-08-30）
+
+オーナーは、ドメインプリミティブの `value(): string` が内部構造
+（`#value` フィールド）を公開面に暴露していると裁定した。アクセサは
+表現への変換なので、変換として命名する：文字列値の DP は
+`asString()`、数値の DP（`LineNumber`・`BlockIndex`・`NumericBound`）は
+`asNumber()`。全 5 コンテキストの全 DP に適用（宣言 25・呼び出し約
+300 箇所）。役割名のアクセサ（`backendName()`・`fileName()`・
+`majorVersion()`）は元から原則に適合しており不変。private の
+`#value` フィールドは対象外——裁定は公開語彙について。今後の DP は
+最初から `asString`/`asNumber` に従う（#46 台帳の不変条件に記載）。
+
+証拠：322 テスト green・golden 無傷・パリティスナップショット
+`diff -r` 空・カバレッジフロア充足。

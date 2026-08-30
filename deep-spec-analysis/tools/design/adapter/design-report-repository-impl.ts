@@ -28,7 +28,7 @@ export class DesignReportRepositoryImpl implements DesignReportRepository {
   }
 
   findById(aggregateId: DesignReportId): Result<DesignReport, RepositoryError> {
-    const path = join(aggregateId.directory().value(), aggregateId.fileName());
+    const path = join(aggregateId.directory().asString(), aggregateId.fileName());
     if (!existsSync(path)) {
       return err({ kind: "not-found", path });
     }
@@ -48,16 +48,16 @@ export class DesignReportRepositoryImpl implements DesignReportRepository {
   findAllByDirectory(directory: ArtifactPath): Result<DesignReports, RepositoryError> {
     let entries: string[];
     try {
-      entries = readdirSync(directory.value())
+      entries = readdirSync(directory.asString())
         .filter((f) => f.endsWith(".json") && f !== "cross-check.json")
         .sort();
     } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: directory.value(), cause: e instanceof Error ? e.message : String(e) });
+      return err({ kind: "io-failed", operation: "read", path: directory.asString(), cause: e instanceof Error ? e.message : String(e) });
     }
     const reports: DesignReport[] = [];
     for (const file of entries) {
       try {
-        const raw = JSON.parse(readFileSync(join(directory.value(), file), "utf-8")) as Json;
+        const raw = JSON.parse(readFileSync(join(directory.asString(), file), "utf-8")) as Json;
         const report = parseSiblingDesignReportDocument(directory, file, raw);
         if (report !== null) reports.push(report);
       } catch {
@@ -73,9 +73,9 @@ export class DesignReportRepositoryImpl implements DesignReportRepository {
 
   save(report: DesignReport): Result<void, RepositoryError> {
     const conformed = this.conformedOf(report);
-    const path = join(conformed.id().directory().value(), conformed.id().fileName());
+    const path = join(conformed.id().directory().asString(), conformed.id().fileName());
     try {
-      mkdirSync(conformed.id().directory().value(), { recursive: true });
+      mkdirSync(conformed.id().directory().asString(), { recursive: true });
       writeFileSync(path, renderDesignReportBytes(conformed), "utf-8");
       return ok(undefined);
     } catch (e) {

@@ -30,12 +30,12 @@ function findRequirementsFile(recordDir: string): string | null {
 
 export class RequirementsSourceRepositoryImpl implements RequirementsSourceRepository {
   findById(id: RequirementsSourceId): RequirementsSource | null {
-    const path = findRequirementsFile(id.recordRoot().value());
+    const path = findRequirementsFile(id.recordRoot().asString());
     if (path === null) return null;
     const bytes = readFileSync(path);
     return {
       knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
-      digest: ContentHash.ofBytes(bytes).value(),
+      digest: ContentHash.ofBytes(bytes).asString(),
     };
   }
 }

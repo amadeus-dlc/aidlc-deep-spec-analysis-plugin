@@ -27,7 +27,7 @@ export class CheckFamily {
     return this.#value === other.#value;
   }
 
-  value(): string {
+  asString(): string {
     return this.#value;
   }
 
@@ -69,7 +69,7 @@ export class CheckFamilies {
 
   // 「checked = 全 family − failed − skipped」の導出は台帳向けの集合知識。
   checkedTargetsExcluding(failed: ReadonlySet<string>, skipped: ReadonlySet<string>): string[] {
-    return this.#values.filter((f) => !failed.has(f.value()) && !skipped.has(f.value())).map((f) => f.asCheckTarget());
+    return this.#values.filter((f) => !failed.has(f.asString()) && !skipped.has(f.asString())).map((f) => f.asCheckTarget());
   }
 
   toArray(): readonly CheckFamily[] {

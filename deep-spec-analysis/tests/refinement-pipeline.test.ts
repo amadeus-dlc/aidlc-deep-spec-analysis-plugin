@@ -155,8 +155,8 @@ describe("SMT script characterization (the PR8 safety net)", () => {
     if (!acquired.ok || context.kind !== "active" || context.map.kind !== "loaded") return;
     expect(context.map.map.units().length).toBeGreaterThan(0);
     expect(context.map.map.unitMapOf(DesignUnitId.of("no-such-unit"))).toBe(undefined);
-    expect(context.map.map.id().artifactPath().value().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
-    expect(context.requirements.id().artifactPath().value().endsWith("deep-spec-analysis-formal-model.md")).toBe(true);
+    expect(context.map.map.id().artifactPath().asString().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
+    expect(context.requirements.id().artifactPath().asString().endsWith("deep-spec-analysis-formal-model.md")).toBe(true);
     const queries: Json[] = [];
     for (const u of acquired.value.model.units()) {
       const unitMap = context.map.map.unitMapOf(u.id());

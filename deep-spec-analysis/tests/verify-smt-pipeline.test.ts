@@ -170,7 +170,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
     expect(written.ok && written.value.unavailableReason())
       .toBe("IR unreadable: IR lacks a semver irVersion — see the deep-spec-ir-valid sensor for details");
-    expect(written.ok && written.value.irVersion().value()).toBe("0.0.0");
+    expect(written.ok && written.value.irVersion().asString()).toBe("0.0.0");
     expect(written.ok && written.value.irHash().equals(ContentHash.ofText(""))).toBe(true);
     expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(false);
   });
@@ -429,7 +429,7 @@ describe("cross-check computation", () => {
       { backend: "quint", targets: ["SC-1", "SC-2"] },
       { backend: "smt", targets: ["SC-1", "SC-2"] },
     ]);
-    expect(report.irVersion().value()).toBe("1.0.0");
+    expect(report.irVersion().asString()).toBe("1.0.0");
     expect(report.method()).toBe("exhaustive");
   });
 
@@ -459,7 +459,7 @@ describe("degradation reports and ordering", () => {
   test("irUnreadableReport freezes the reason, the 0.0.0 version, and the empty-input hash", () => {
     const r = irUnreadableReport(VerificationReportId.of(ap("/v"), "smt"), "exhaustive", "IR is not a JSON object");
     expect(r.unavailableReason()).toBe("IR unreadable: IR is not a JSON object — see the deep-spec-ir-valid sensor for details");
-    expect(r.irVersion().value()).toBe("0.0.0");
+    expect(r.irVersion().asString()).toBe("0.0.0");
     expect(r.irHash().equals(ContentHash.ofText(""))).toBe(true);
     expect(r.isUnavailable()).toBe(true);
     expect(r.findingsCount()).toBe(0);
@@ -587,7 +587,7 @@ describe("degradation reports and ordering", () => {
     expect(m.obligations().toArray().length).toBe(2);
     expect(m.scenarios().toArray().length).toBe(1);
     expect(m.background().toArray()[0]?.id).toBe("B1");
-    expect(m.irVersion().value()).toBe("1.0.0");
+    expect(m.irVersion().asString()).toBe("1.0.0");
     expect(m.supportsMajor(1)).toBe(true);
   });
 });

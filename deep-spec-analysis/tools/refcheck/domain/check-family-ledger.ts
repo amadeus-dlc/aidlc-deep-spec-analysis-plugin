@@ -37,16 +37,16 @@ export class CheckFamilyLedger {
       witness: { refs },
       detail: family.prefixedDetail(detail),
     };
-    if (this.#unit !== undefined) f.unit = this.#unit.value();
+    if (this.#unit !== undefined) f.unit = this.#unit.asString();
     this.#findings.push(f);
-    this.#failed.add(family.value());
+    this.#failed.add(family.asString());
   }
 
   skip(family: CheckFamily, reason: string, detail: string): void {
     const s: Skipped = { target: family.asCheckTarget(), reason, detail };
-    if (this.#unit !== undefined) s.unit = this.#unit.value();
+    if (this.#unit !== undefined) s.unit = this.#unit.asString();
     this.#skipped.push(s);
-    this.#skippedFamilies.add(family.value());
+    this.#skippedFamilies.add(family.asString());
   }
 
   findings(): readonly Finding[] {

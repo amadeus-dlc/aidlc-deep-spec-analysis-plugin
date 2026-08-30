@@ -77,6 +77,6 @@ export class RefinementMap {
   }
 
   unitMapOf(unit: DesignUnitId): RefinementUnitMap | undefined {
-    return this.#units.find((m) => m.unit === unit.value());
+    return this.#units.find((m) => m.unit === unit.asString());
   }
 }

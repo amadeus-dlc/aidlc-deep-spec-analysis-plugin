@@ -57,7 +57,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
   }
 
   findById(id: RefinementMaterialsId): RefinementMaterials {
-    const modelPath = id.modelArtifactPath().value();
+    const modelPath = id.modelArtifactPath().asString();
     const recordRoot = findRecordRoot(dirname(modelPath));
     const requirements = recordRoot === null ? null : this.#loadRequirements(recordRoot);
     if (recordRoot === null || requirements === null) return { kind: "inactive" };

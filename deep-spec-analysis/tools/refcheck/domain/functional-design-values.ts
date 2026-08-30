@@ -20,7 +20,7 @@ export class EntityName {
   static reconstitute(raw: string): EntityName { return new EntityName(raw); }
   equals(other: EntityName): boolean { return this.#value === other.#value; }
   // 境界: 文言・witness 位置に逐語で載る宣言名。
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
   // 照合はケース・区切りを畳んだ正規化名で行う（XS/FD-S の凍結挙動）。
   normalized(): string { return normalizeName(this.#value); }
 }
@@ -34,7 +34,7 @@ export class AttributeName {
   }
   static reconstitute(raw: string): AttributeName { return new AttributeName(raw); }
   equals(other: AttributeName): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
   normalized(): string { return normalizeName(this.#value); }
 }
 
@@ -48,7 +48,7 @@ export class ElementPath {
   }
   static reconstitute(raw: string): ElementPath { return new ElementPath(raw); }
   equals(other: ElementPath): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
 }
 
 export class TypeName {
@@ -60,7 +60,7 @@ export class TypeName {
   }
   static reconstitute(raw: string): TypeName { return new TypeName(raw); }
   equals(other: TypeName): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
   // 型区分（numeric/date/bool/…）の照合は小文字正規化で行う（凍結挙動）。
   normalized(): string { return this.#value.toLowerCase(); }
   // 型区分の分類は型名語彙の知識（旧 functional-checks のローカル集合の移設）。
@@ -84,7 +84,7 @@ export class AllowedValue {
   }
   static reconstitute(raw: string): AllowedValue { return new AllowedValue(raw); }
   equals(other: AllowedValue): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
   normalized(): string { return normalizeName(this.#value); }
 }
 
@@ -111,7 +111,7 @@ export class NumericBound {
   }
   static reconstitute(raw: number): NumericBound { return new NumericBound(raw); }
   equals(other: NumericBound): boolean { return this.#value === other.#value; }
-  value(): number { return this.#value; }
+  asNumber(): number { return this.#value; }
 }
 
 export class CardinalityNotation {
@@ -123,7 +123,7 @@ export class CardinalityNotation {
   }
   static reconstitute(raw: string): CardinalityNotation { return new CardinalityNotation(raw); }
   equals(other: CardinalityNotation): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
   // 閉集合（1:1 | 1:N | N:1 | N:M）との照合形：大文字化・空白除去（凍結挙動）。
   normalizedToken(): string { return this.#value.toUpperCase().replace(/\s/g, ""); }
   isInClosedSet(): boolean { return CARDINALITIES.has(this.normalizedToken()); }
@@ -140,7 +140,7 @@ export class BusinessRuleId {
   }
   static reconstitute(raw: string): BusinessRuleId { return new BusinessRuleId(raw); }
   equals(other: BusinessRuleId): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
   // BR{group}.{seq} 形か（FD-R2 の判定と finding target の選別に使う）。
   matchesShape(): boolean { return /^BR[0-9]+\.[0-9]+$/.test(this.#value); }
 }
@@ -154,7 +154,7 @@ export class RuleCategory {
   }
   static reconstitute(raw: string): RuleCategory { return new RuleCategory(raw); }
   equals(other: RuleCategory): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
   normalized(): string { return this.#value.toLowerCase(); }
   isKnownCategory(): boolean { return CATEGORIES.has(this.normalized()); }
 }
@@ -170,7 +170,7 @@ export class AppliesTo {
   }
   static reconstitute(raw: string): AppliesTo { return new AppliesTo(raw); }
   equals(other: AppliesTo): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
 }
 
 // rules.md の source 欄から抽出された FR/NFR 参照。
@@ -183,7 +183,7 @@ export class SourceId {
   }
   static reconstitute(raw: string): SourceId { return new SourceId(raw); }
   equals(other: SourceId): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
 }
 
 // `### State Machine: <spec>` 見出しの対象（"Entity" または "Entity.attribute"）。
@@ -196,7 +196,7 @@ export class MachineSpec {
   }
   static reconstitute(raw: string): MachineSpec { return new MachineSpec(raw); }
   equals(other: MachineSpec): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
   // "Entity.attribute" の分解は spec 語彙そのもの（旧 split(".") の凍結挙動）。
   entityToken(): string { return this.#value.split(".")[0] ?? ""; }
   attributeToken(): string | undefined { return this.#value.split(".")[1]; }
@@ -211,7 +211,7 @@ export class StateName {
   }
   static reconstitute(raw: string): StateName { return new StateName(raw); }
   equals(other: StateName): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
   normalized(): string { return normalizeName(this.#value); }
 }
 
@@ -224,7 +224,7 @@ export class ComponentName {
   }
   static reconstitute(raw: string): ComponentName { return new ComponentName(raw); }
   equals(other: ComponentName): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
 }
 
 // FD-E6 の参照先トークン（"Entity" / "Entity.attribute" / 自由文）。
@@ -237,7 +237,7 @@ export class ReferenceTarget {
   }
   static reconstitute(raw: string): ReferenceTarget { return new ReferenceTarget(raw); }
   equals(other: ReferenceTarget): boolean { return this.#value === other.#value; }
-  value(): string { return this.#value; }
+  asString(): string { return this.#value; }
 }
 
 // ---- ファーストクラスコレクション（語彙） -----------------------------------
@@ -298,19 +298,19 @@ export class AllowedValues {
   }
 
   containsValue(raw: string): boolean {
-    return this.#values.some((v) => v.value() === raw);
+    return this.#values.some((v) => v.asString() === raw);
   }
 
   // FD-S1: 図の状態のうち許容値に無いもの（正規化照合・値の昇順——凍結順）。
   rogueAmong(states: StateNames): string[] {
     const norm = new Set(this.#values.map((v) => v.normalized()));
-    return states.toArray().filter((s) => !norm.has(s.normalized())).map((s) => s.value()).sort();
+    return states.toArray().filter((s) => !norm.has(s.normalized())).map((s) => s.asString()).sort();
   }
 
   // FD-S2: 許容値のうちどの図状態にも現れないもの。
   absentFrom(states: StateNames): string[] {
     const stateNorm = new Set(states.toArray().map((s) => s.normalized()));
-    return this.#values.filter((v) => !stateNorm.has(v.normalized())).map((v) => v.value()).sort();
+    return this.#values.filter((v) => !stateNorm.has(v.normalized())).map((v) => v.asString()).sort();
   }
 
   toArray(): readonly AllowedValue[] {
@@ -363,7 +363,7 @@ export class SourceIds {
 
   // FD-R3: requirements.md に存在しない source id（値の昇順——凍結順）。
   valuesMissingFrom(known: RequirementIds): string[] {
-    return this.#values.map((id) => id.value()).filter((id) => !known.has(id)).sort();
+    return this.#values.map((id) => id.asString()).filter((id) => !known.has(id)).sort();
   }
 
   toArray(): readonly SourceId[] {
