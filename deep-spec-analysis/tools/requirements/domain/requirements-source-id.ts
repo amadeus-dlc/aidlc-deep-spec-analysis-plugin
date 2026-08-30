@@ -5,23 +5,24 @@
 // 識別子の導出（検証対象成果物のパス → 記録ルート）はパス配置の知識なので
 // アダプタが行い、ドメインは受け取った恒等だけを運ぶ。
 
-export class RequirementsSourceId {
-  readonly #recordRoot: string;
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 
-  private constructor(recordRoot: string) {
+export class RequirementsSourceId {
+  readonly #recordRoot: ArtifactPath;
+
+  private constructor(recordRoot: ArtifactPath) {
     this.#recordRoot = recordRoot;
   }
 
-  static of(recordRoot: string): RequirementsSourceId {
+  static of(recordRoot: ArtifactPath): RequirementsSourceId {
     return new RequirementsSourceId(recordRoot);
   }
 
   equals(other: RequirementsSourceId): boolean {
-    return this.#recordRoot === other.#recordRoot;
+    return this.#recordRoot.equals(other.#recordRoot);
   }
 
-  // 境界: Repository が探索起点（記録ルート）を導出するための識別子の値。
-  recordRoot(): string {
+  recordRoot(): ArtifactPath {
     return this.#recordRoot;
   }
 }

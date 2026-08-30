@@ -42,3 +42,87 @@
 **Duration ms**: 906
 
 ---
+
+## Sensor Fired
+**Timestamp**: 2026-08-29T18:45:47Z
+**Event**: SENSOR_FIRED
+**Fire id**: d3493081
+**Sensor ID**: pr-review-clean
+**Stage slug**: build-and-test
+**Output path**: ritual.pr-review.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-08-29T18:45:48Z
+**Event**: SENSOR_PASSED
+**Fire id**: d3493081
+**Sensor ID**: pr-review-clean
+**Stage slug**: build-and-test
+**Output path**: ritual.pr-review.md
+**Duration ms**: 984
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-08-29T22:16:56Z
+**Event**: SENSOR_FIRED
+**Fire id**: 2a484e20
+**Sensor ID**: pr-review-clean
+**Stage slug**: build-and-test
+**Output path**: ritual.pr-review.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-08-29T22:16:57Z
+**Event**: SENSOR_PASSED
+**Fire id**: 2a484e20
+**Sensor ID**: pr-review-clean
+**Stage slug**: build-and-test
+**Output path**: ritual.pr-review.md
+**Duration ms**: 1082
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-08-29T23:42:24Z
+**Event**: SENSOR_FIRED
+**Fire id**: 7f20a3d4
+**Sensor ID**: pr-review-clean
+**Stage slug**: build-and-test
+**Output path**: ritual.pr-review.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-08-29T23:42:25Z
+**Event**: SENSOR_PASSED
+**Fire id**: 7f20a3d4
+**Sensor ID**: pr-review-clean
+**Stage slug**: build-and-test
+**Output path**: ritual.pr-review.md
+**Duration ms**: 1051
+
+---
+
+## Sensor Fired
+**Timestamp**: 2026-08-30T02:12:56Z
+**Event**: SENSOR_FIRED
+**Fire id**: b22e79cb
+**Sensor ID**: pr-review-clean
+**Stage slug**: build-and-test
+**Output path**: ritual.pr-review.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-08-30T02:12:58Z
+**Event**: SENSOR_PASSED
+**Fire id**: b22e79cb
+**Sensor ID**: pr-review-clean
+**Stage slug**: build-and-test
+**Output path**: ritual.pr-review.md
+**Duration ms**: 1414
+
+---

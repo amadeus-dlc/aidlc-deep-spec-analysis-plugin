@@ -31,7 +31,7 @@ function findRequirementsFile(recordDir: string): string | null {
 
 export class RequirementsSourceRepositoryImpl implements RequirementsSourceRepository {
   findById(id: RequirementsSourceId): RequirementsSource | null {
-    const path = findRequirementsFile(id.recordRoot());
+    const path = findRequirementsFile(id.recordRoot().value());
     if (path === null) return null;
     const bytes = readFileSync(path);
     return {

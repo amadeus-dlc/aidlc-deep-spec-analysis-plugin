@@ -15,7 +15,7 @@ import {
   readContractSchema,
   validateSchema,
 } from "../../kernel/adapter/index.ts";
-import type { Expression } from "../../kernel/domain/index.ts";
+import { ArtifactPath, type Expression } from "../../kernel/domain/index.ts";
 import {
   type FrRefClaim,
   type IrAttributeView,
@@ -162,6 +162,15 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
     const schemaErrors: string[] = [];
     validateSchema(schema.value, schema.value, ir, "", schemaErrors);
 
+    // <record>/<phase>/<stage>/… → 記録ルートは 3 階層上（旧
+    // findRequirementsFile の導出の逐語——識別子の導出はパス知識）。dirname は
+    // 空文字列を返さないため parse は失敗し得ない；分岐は型の網羅のみで、
+    // 到達すれば defect として unreadable に落とす（黙殺しない）。
+    const recordRoot = ArtifactPath.parse(dirname(dirname(dirname(outputPath))));
+    if (!recordRoot.ok) {
+      return { kind: "unreadable", errors: ["defect: record-root derivation produced an empty path"] };
+    }
+
     return {
       kind: "acquired",
       materials: {
@@ -170,9 +179,7 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
         view: buildView(ir),
         frClaims: collectFrClaims(ir),
         declaredDigest: typeof ir.sourceDigest === "string" ? ir.sourceDigest : null,
-        // <record>/<phase>/<stage>/… → 記録ルートは 3 階層上（旧
-        // findRequirementsFile の導出の逐語——識別子の導出はパス知識）。
-        sourceId: RequirementsSourceId.of(dirname(dirname(dirname(outputPath)))),
+        sourceId: RequirementsSourceId.of(recordRoot.value),
       },
     };
   }

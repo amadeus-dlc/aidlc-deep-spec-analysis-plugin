@@ -286,10 +286,10 @@ describe("FrReferenceIndex", () => {
 
 describe("RequirementsSourceId", () => {
   test("identity is the record root, compared by value", () => {
-    const a = RequirementsSourceId.of("/records/r1");
-    const b = RequirementsSourceId.of("/records/r1");
-    const c = RequirementsSourceId.of("/records/r2");
-    expect(a.recordRoot()).toBe("/records/r1");
+    const a = RequirementsSourceId.of(ap("/records/r1"));
+    const b = RequirementsSourceId.of(ap("/records/r1"));
+    const c = RequirementsSourceId.of(ap("/records/r2"));
+    expect(a.recordRoot().value()).toBe("/records/r1");
     expect(a.equals(b)).toBe(true);
     expect(a.equals(c)).toBe(false);
   });
@@ -298,10 +298,10 @@ describe("RequirementsSourceId", () => {
     const record = join(tmpdir(), `deep-spec-source-id-${Math.random().toString(36).slice(2)}`);
     mkdirSync(join(record, "construction", "requirements-analysis"), { recursive: true });
     writeFileSync(join(record, "construction", "requirements-analysis", "requirements.md"), "- FR-1: x\n");
-    const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(record));
+    const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(record)));
     expect(source).not.toBeNull();
     expect([...(source?.knownIds ?? [])]).toEqual(["FR-1"]);
-    expect(new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(join(record, "nowhere")))).toBeNull();
+    expect(new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(join(record, "nowhere"))))).toBeNull();
   });
 });
 
