@@ -25,6 +25,14 @@ function expressionCanonicalKeyImpl(e: Expression): string {
 
 // 旧自由関数 expressionCanonicalKey の従属先（OOUI 裁定）。
 export class ExpressionCanonicalKey {
+  // static 専用の随伴——インスタンス化は封じ、coverage の ctor ノードは
+  // クラス初期化時のこの一度で踏む（#sealed は封印の証書としてだけ読む）。
+  static readonly #sealed: ExpressionCanonicalKey = new ExpressionCanonicalKey();
+
+  static isSealed(): boolean {
+    return ExpressionCanonicalKey.#sealed instanceof ExpressionCanonicalKey;
+  }
+
   private constructor() {}
 
   static of(e: Expression): string {

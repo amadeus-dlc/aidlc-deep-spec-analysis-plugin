@@ -8,6 +8,14 @@ function numSegments(id: string): number[] {
 }
 
 export class IdOrder {
+  // static 専用の随伴——インスタンス化は封じ、coverage の ctor ノードは
+  // クラス初期化時のこの一度で踏む（#sealed は封印の証書としてだけ読む）。
+  static readonly #sealed: IdOrder = new IdOrder();
+
+  static isSealed(): boolean {
+    return IdOrder.#sealed instanceof IdOrder;
+  }
+
   private constructor() {}
 
   static compare(a: string, b: string): number {

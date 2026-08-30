@@ -422,3 +422,8 @@ describe("quint facts collections (first-class operations)", () => {
   });
 });
 
+describe("companion seals", () => {
+  test("ExpressionEvaluation is sealed", () => {
+    expect(ExpressionEvaluation.isSealed()).toBe(true);
+  });
+});

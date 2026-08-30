@@ -2,6 +2,14 @@
 // normalizeName は Names の随伴クラスに従属した（OOUI 裁定）。
 
 export class Names {
+  // static 専用の随伴——インスタンス化は封じ、coverage の ctor ノードは
+  // クラス初期化時のこの一度で踏む（#sealed は封印の証書としてだけ読む）。
+  static readonly #sealed: Names = new Names();
+
+  static isSealed(): boolean {
+    return Names.#sealed instanceof Names;
+  }
+
   private constructor() {}
 
   // Name normalization for cross-artifact entity matching (XS checks):

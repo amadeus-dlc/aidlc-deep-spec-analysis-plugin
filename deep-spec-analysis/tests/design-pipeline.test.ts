@@ -689,3 +689,9 @@ describe("lowered collections and the lowering index (first-class operations)", 
     expect(skips.toArray()).toEqual([skip]);
   });
 });
+
+describe("companion seals", () => {
+  test("ExpressionCanonicalKey is sealed", () => {
+    expect(ExpressionCanonicalKey.isSealed()).toBe(true);
+  });
+});

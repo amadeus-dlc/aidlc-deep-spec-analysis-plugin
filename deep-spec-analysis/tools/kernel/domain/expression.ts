@@ -13,6 +13,14 @@ export interface Expression {
 // Expression（interface＝Published Language）の随伴クラス。旧自由関数
 // expressionUsesPrime / walkExpression の従属先（OOUI 裁定）。
 export class Expressions {
+  // static 専用の随伴——インスタンス化は封じ、coverage の ctor ノードは
+  // クラス初期化時のこの一度で踏む（#sealed は封印の証書としてだけ読む）。
+  static readonly #sealed: Expressions = new Expressions();
+
+  static isSealed(): boolean {
+    return Expressions.#sealed instanceof Expressions;
+  }
+
   private constructor() {}
 
   static usesPrime(e: Expression): boolean {

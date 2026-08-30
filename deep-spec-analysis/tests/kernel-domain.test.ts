@@ -16,7 +16,7 @@ import {
   validateSchema,
 } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok, unreachable } from "../tools/kernel/infrastructure/index.ts";
-import { IdOrder, Names, TargetIds } from "../tools/kernel/domain/index.ts";
+import { Expressions, IdOrder, Names, TargetIds } from "../tools/kernel/domain/index.ts";
 
 describe("result", () => {
   test("ok and err narrow through the ok discriminant", () => {
@@ -259,3 +259,10 @@ describe("target-id / requirement-ids / name-normalize", () => {
   });
 });
 
+describe("companion seals", () => {
+  test("static companions are sealed (ctor spent at class initialization)", () => {
+    expect(IdOrder.isSealed()).toBe(true);
+    expect(Names.isSealed()).toBe(true);
+    expect(Expressions.isSealed()).toBe(true);
+  });
+});
