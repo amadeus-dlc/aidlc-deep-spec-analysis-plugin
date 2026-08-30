@@ -608,3 +608,38 @@ design-verify センサーは `design/{domain,usecase,adapter}` の上で動く�
   per-file 90% 床を保持（ほぼ 100%）。kind-rank 証明は設計順位 VO を
   読む。実 sandbox のアップグレードで tombstone が design-lib を除去し、
   design ツリーが運搬され、quint 設計 golden を再現、doctor 0 errors。
+
+## DDD 移行 PR6 — refinement-lib 解体・design センサーの interactor 化（2026-08-30、#19）
+
+最後の共有 lib（1,109 行）を削除（tombstone 化）し、2 つの design-verify
+センサーは完全な interactor になった。base↔head パリティ diff は空・golden
+無変更・refinement E2E スイートはレイヤード化後の初回実行で green。
+
+- **refinement/domain**（意図して adapter を持たないコンテキスト——I/O は
+  design のポート群の背後に居る）：閉じた `AttributeMapping` ユニオン
+  （expression / enum-cases / スキーマ到達不能の `unspecified` 素通し形——
+  唯一の意図的逸脱：旧実装はここで TypeError 落ち、新実装は材料のみの
+  AlphaError）を持つ `RefinementMap` 集約、`RefinementRequirements`
+  （契約1 の refinement プロファイルビュー）、alpha 置換、
+  `planUnitRefinement`（閉包規則と全 mapping-gap 文言逐語）、設計イベント
+  カタログ、バックエンド別の status-skip 語彙 2 種、
+  `interpretRefinementVerdicts`（4 プローブ種の凍結文言）、Quint extras。
+- **design/usecase**：`Clock` ポート消費（予算制御はフロー——時計は kernel
+  ポート＋`SystemClock` アダプタ）、`RefinementContextRepository` ポート
+  （レコードルート歩行・契約4 map 読込の凍結エラー 4 種・3 成果物の inputs
+  台帳）、`RefinementSolverClient` ポート、そして interactor 2 本
+  `VerifyDesignSmtUseCase` / `VerifyDesignQuintUseCase`——Phase 1-3・予算・
+  プローブ・masked-capability の全ロジックが entry から出て、entry は純粋な
+  合成ルートになった。
+- **design/adapter**：**明示的な第 2 SMT コンパイラ**（v1 計画ビルダとは
+  意図して統一しない——PR8 判断点）と、refinement プロファイルの attempt
+  文言（stderr 尾なし——v1 と別の凍結プロファイル）を持つソルバクライアント。
+- **PR8 の安全網**：両コンパイラの SMT-LIB スクリプトをキャラクタライゼー
+  ションスイートが逐語固定（`tests/fixtures/smt-scripts/`）——将来の統一は
+  このバイトを保つことが条件。
+- **証明**：in-process golden スイートが実 Impl（実 v1 兄弟・実 z3 子）で
+  両 interactor を Phase 3 込みで駆動し、refinement golden 3 本をバイト一致
+  で照合。refinement/domain は 90% 床（ほぼ 100%）。実 sandbox アップグレード
+  で tombstone が refinement-lib を除去し、3 golden を再現、doctor 0 errors。
+  この PR でアーキテクチャルールの LEGACY 集合は entry のみ——**legacy
+  ライブラリは残っていない**。

@@ -603,3 +603,46 @@ diff empty; goldens untouched.
   kind-rank proof reads the design order VO; the live sandbox upgrade
   removed design-lib via the tombstone, transported the design tree, and
   reproduced the quint design golden with the doctor at 0 errors.
+
+## DDD migration PR6 — refinement-lib dissolves; the design sensors become interactors (2026-08-30, #19)
+
+The last shared lib (1,109 lines) is deleted (tombstoned) and the two
+design-verify sensors are now full interactors. Base-vs-head parity diff
+is empty; goldens untouched; the refinement E2E suite passed on the
+first run of the layered pipeline.
+
+- **refinement/domain** (a context with NO adapter — by design, its I/O
+  lives behind design's ports): the `RefinementMap` aggregate with the
+  closed `AttributeMapping` union (expression / enum-cases / the
+  schema-unreachable `unspecified` tolerance — the one deliberate
+  deviation: legacy crashed on it with a TypeError, the port now raises
+  a materials-only AlphaError), `RefinementRequirements` (the
+  refinement-profile view of contract 1), alpha substitution
+  (`alphaExpr`/`alphaEquality`), `planUnitRefinement` (closure rule and
+  every mapping-gap wording verbatim), the design event catalog, both
+  backend-flavored status-skip vocabularies, `interpretRefinementVerdicts`
+  (the four probe kinds with frozen texts), and the Quint extras.
+- **design/usecase** gains the `Clock` port consumption (budget control
+  is flow — the clock is a kernel port with a `SystemClock` adapter),
+  the `RefinementContextRepository` port (record-root walking, the
+  contract-4 map load with its four frozen error messages, and the
+  three-artifact inputs ledger), the `RefinementSolverClient` port, and
+  the two interactors `VerifyDesignSmtUseCase` /
+  `VerifyDesignQuintUseCase` — phases 1-3, budgets, probes, and the
+  masked-capability logic all moved out of the entries, which are now
+  pure composition roots.
+- **design/adapter** gains the **explicit second SMT compiler**
+  (deliberately NOT unified with the v1 plan builder — the PR8 decision
+  point) plus the refinement solver client with the refinement attempt
+  wording (no stderr tail — a frozen profile distinct from v1's).
+- **The PR8 safety net**: a characterization suite snapshots the exact
+  SMT-LIB scripts of BOTH compilers (`tests/fixtures/smt-scripts/`) —
+  any future unification must keep these bytes.
+- **Proofs**: the in-process golden suite drives both interactors over
+  real Impls (real v1 siblings, real z3 child) through phase 3 and
+  byte-matches all three refinement goldens; refinement/domain holds the
+  90% floor (mostly 100%); the live sandbox upgrade removed
+  refinement-lib via the tombstone and reproduced all three goldens with
+  the doctor at 0 errors. With this PR the LEGACY set of the
+  architecture rules contains only entries — **no legacy library
+  remains**.

@@ -15,7 +15,7 @@
 // execute が成果物パス（識別）から形式モデルを解決して検証〜永続化〜
 // クロスチェック再計算までを起動する。env（タイムアウト・ランタイム上書き）
 // と自パス・スキーマパスはここで解決して注入する。
-// --smt-child は z3 実行の子プロセス分岐（プロトコル凍結——refinement-lib も
+// --smt-child は z3 実行の子プロセス分岐（プロトコル凍結——design の refinement
 // この子を spawn する）。ソルバ欠如は unavailable 文書へ降格して exit 127。
 
 import { basename, dirname, join } from "node:path";

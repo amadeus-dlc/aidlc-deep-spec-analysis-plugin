@@ -26,7 +26,6 @@ export const LEGACY_FILES: ReadonlySet<string> = new Set([
   "aidlc-sensor-deep-spec-design-verify-smt.ts",
   "aidlc-sensor-deep-spec-design-verify-quint.ts",
   "deep-spec-analysis-doctor.ts",
-  "deep-spec-refinement-lib.ts",
 ]);
 
 // 合成ルート（フラット必須の entry）。ディスパッチャが basename 解決するため
@@ -275,6 +274,9 @@ const SANCTIONED_CROSS_CONTEXT: readonly { from: string; to: string }[] = [
   { from: "refinement/domain", to: "requirements/domain" },
   { from: "refinement/domain", to: "design/domain" },
   { from: "design/usecase", to: "refinement/domain" },
+  // design のポート Impl（第 2 SMT コンパイラ・refinement 取得系）は
+  // refinement 語彙で通信する——ユースケースが公認消費する語彙の実装面。
+  { from: "design/adapter", to: "refinement/domain" },
 ];
 
 export function layerDirection(relPath: string, source: string): Violation[] {
