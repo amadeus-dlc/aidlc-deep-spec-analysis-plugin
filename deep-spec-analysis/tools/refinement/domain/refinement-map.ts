@@ -5,6 +5,7 @@
 // enumMap も無い entry を byReq へ登録だけしていた——挙動保存のため表現を残す。
 // alpha 到達時は AlphaError）。
 
+import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 
 export type AttributeMapping =
@@ -31,14 +32,14 @@ export interface RefinementUnitMap {
 }
 
 export interface RefinementMapSeed {
-  readonly requirementsIrHash: string;
-  readonly designIrHash: string;
+  readonly requirementsIrHash: ContentHash;
+  readonly designIrHash: ContentHash;
   readonly units: readonly RefinementUnitMap[];
 }
 
 export class RefinementMap {
-  readonly #requirementsIrHash: string;
-  readonly #designIrHash: string;
+  readonly #requirementsIrHash: ContentHash;
+  readonly #designIrHash: ContentHash;
   readonly #units: readonly RefinementUnitMap[];
 
   private constructor(seed: RefinementMapSeed) {
@@ -53,12 +54,12 @@ export class RefinementMap {
   }
 
   // 境界: 要件形式モデルの hash と照合される宣言値（陳腐化検出）。
-  requirementsIrHash(): string {
+  requirementsIrHash(): ContentHash {
     return this.#requirementsIrHash;
   }
 
   // 境界: 設計 IR の irHash と照合される宣言値（陳腐化検出）。
-  designIrHash(): string {
+  designIrHash(): ContentHash {
     return this.#designIrHash;
   }
 

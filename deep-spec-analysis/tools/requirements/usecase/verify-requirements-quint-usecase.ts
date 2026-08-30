@@ -13,7 +13,7 @@
 //   - 検証成立 → findings 文書＋クロスチェック。verdict は conformed
 //     （＝書かれた姿）から導出する。
 
-import type { ArtifactPath } from "../../kernel/domain/index.ts";
+import type { ArtifactPath, ContentHash } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { ok } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
@@ -120,7 +120,7 @@ export class VerifyRequirementsQuintUseCase {
 
   // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
   // チェックを再計算する（最後の書き手が勝ち、全書き手が同一バイトへ収束）。
-  #recomputeCrossCheck(model: RequirementsModel, irHash: string, directory: ArtifactPath): Result<void, RepositoryError> {
+  #recomputeCrossCheck(model: RequirementsModel, irHash: ContentHash, directory: ArtifactPath): Result<void, RepositoryError> {
     const siblings = this.#reports.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);

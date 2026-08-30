@@ -2,18 +2,19 @@
 // ユニットのユニット名昇順は集約の不変条件として compose が一度だけ適用する
 // （旧 parseDesignIr 末尾のソートの移設）。
 
+import type { IrVersion } from "../../kernel/domain/index.ts";
 import type { DesignUnit } from "./design-unit.ts";
 
 export interface DesignModelComposition {
-  readonly irVersion: string;
+  readonly irVersion: IrVersion;
   readonly units: readonly DesignUnit[];
 }
 
 export class DesignModel {
-  readonly #irVersion: string;
+  readonly #irVersion: IrVersion;
   readonly #units: readonly DesignUnit[];
 
-  private constructor(irVersion: string, units: readonly DesignUnit[]) {
+  private constructor(irVersion: IrVersion, units: readonly DesignUnit[]) {
     this.#irVersion = irVersion;
     this.#units = units;
   }
@@ -26,17 +27,17 @@ export class DesignModel {
     );
   }
 
-  irVersion(): string {
+  irVersion(): IrVersion {
     return this.#irVersion;
   }
 
   // 境界: 旧実装の major 抽出と同じ計算（skip detail 文言に載る）。
   majorVersion(): number {
-    return Number.parseInt(this.#irVersion.split(".")[0] ?? "", 10);
+    return this.#irVersion.majorVersion();
   }
 
   supportsMajor(major: number): boolean {
-    return this.majorVersion() === major;
+    return this.#irVersion.supportsMajor(major);
   }
 
   units(): readonly DesignUnit[] {

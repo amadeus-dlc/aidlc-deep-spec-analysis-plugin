@@ -2,6 +2,7 @@
 // 保ちつつ、残る全対象を unavailable として記録する（文言は golden 凍結）。
 // 旧 parentMain の unavailable 経路の writeFindingsDoc からの逐語移植。
 
+import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import type { VerificationSkipped } from "./verification-finding.ts";
@@ -10,7 +11,7 @@ import { VerificationReport } from "./verification-report.ts";
 export function solverUnavailableReport(
   id: VerificationReportId,
   model: RequirementsModel,
-  irHash: string,
+  irHash: ContentHash,
   planSkipped: readonly VerificationSkipped[],
   reason: string,
 ): VerificationReport {

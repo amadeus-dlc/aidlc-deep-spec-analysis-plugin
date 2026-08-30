@@ -8,7 +8,7 @@
 import type { RefinementContextId } from "../domain/index.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { sha256 } from "../../kernel/domain/index.ts";
+import { ContentHash, sha256 } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import {
   type Json,
@@ -186,8 +186,8 @@ export class RefinementContextRepositoryImpl implements RefinementContextReposit
       units.push({ unit: u.unit, attrMap, eventMap, unmapped });
     }
     const map = RefinementMap.reconstitute({
-      requirementsIrHash: typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : "",
-      designIrHash: typeof doc.designIrHash === "string" ? doc.designIrHash : "",
+      requirementsIrHash: ContentHash.reconstitute(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
+      designIrHash: ContentHash.reconstitute(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
       units,
     });
     const reqModelPath = join(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);

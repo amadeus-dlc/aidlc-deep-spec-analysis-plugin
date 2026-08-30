@@ -4,6 +4,7 @@
 // 正準 JSON の sha256（アダプタが導出）——map の requirementsIrHash と照合する
 // 識別材料。
 
+import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 
 export interface RefinementAttribute {
@@ -33,14 +34,14 @@ export interface RefinementScenario {
 }
 
 export interface RefinementRequirementsSeed {
-  readonly hash: string;
+  readonly hash: ContentHash;
   readonly attributes: readonly RefinementAttribute[];
   readonly obligations: readonly RefinementObligation[];
   readonly scenarios: readonly RefinementScenario[];
 }
 
 export class RefinementRequirements {
-  readonly #hash: string;
+  readonly #hash: ContentHash;
   readonly #attributes: readonly RefinementAttribute[];
   readonly #obligations: readonly RefinementObligation[];
   readonly #scenarios: readonly RefinementScenario[];
@@ -62,7 +63,7 @@ export class RefinementRequirements {
   }
 
   // 境界: map の requirementsIrHash と照合される正準 JSON ダイジェスト。
-  hash(): string {
+  hash(): ContentHash {
     return this.#hash;
   }
 

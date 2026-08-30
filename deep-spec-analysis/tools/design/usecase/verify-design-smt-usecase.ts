@@ -6,7 +6,7 @@
 // 予算・skip の凍結文言はフロー制御の一部としてここが逐語所有する
 // （文書系の detail はドメインのファクトリ／解釈が所有——分担は PR5 と同じ）。
 
-import type { ArtifactPath } from "../../kernel/domain/index.ts";
+import type { ArtifactPath, ContentHash } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { ok } from "../../kernel/infrastructure/index.ts";
 import type { Clock, RepositoryError } from "../../kernel/usecase/index.ts";
@@ -165,9 +165,9 @@ export class VerifyDesignSmtUseCase {
       };
       if (context.map.kind === "absent") {
         skipAll("absent-input", context.map.error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
-      } else if (context.map.map.requirementsIrHash() !== req.hash()) {
+      } else if (!context.map.map.requirementsIrHash().equals(req.hash())) {
         skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
-      } else if (context.map.map.designIrHash() !== irHash) {
+      } else if (!context.map.map.designIrHash().equals(irHash)) {
         skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR — re-author the map");
       } else {
         inputs = context.map.inputs;
@@ -239,7 +239,7 @@ export class VerifyDesignSmtUseCase {
 
   // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
   // チェックを再計算する（最後の書き手が勝ち、全書き手が同一バイトへ収束）。
-  #recomputeCrossCheck(model: DesignModel, irHash: string, directory: ArtifactPath): Result<void, RepositoryError> {
+  #recomputeCrossCheck(model: DesignModel, irHash: ContentHash, directory: ArtifactPath): Result<void, RepositoryError> {
     const siblings = this.#reports.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);

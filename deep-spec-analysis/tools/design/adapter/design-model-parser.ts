@@ -5,7 +5,7 @@
 // 旧 deep-spec-design-lib.ts の parseDesignIr からの逐語移植。
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
-import type { Expression } from "../../kernel/domain/index.ts";
+import { IrVersion, type  Expression } from "../../kernel/domain/index.ts";
 import {
   type DesignMachine,
   type DesignModelComposition,
@@ -21,8 +21,8 @@ const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeo
 export function parseDesignModel(raw: Json): DesignModelComposition | string {
   if (!isObject(raw)) return "design IR is not a JSON object";
   if (raw.irKind !== "design") return 'document is not a design IR (missing `"irKind": "design"`)';
-  const irVersion = typeof raw.irVersion === "string" ? raw.irVersion : "";
-  if (!/^\d+\.\d+\.\d+$/.test(irVersion)) return "design IR lacks a semver irVersion";
+  const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
+  if (!irVersion.ok) return "design IR lacks a semver irVersion";
   if (!Array.isArray(raw.units) || raw.units.length === 0) return "design IR carries no units[]";
   const units: DesignUnit[] = [];
   for (const rawUnit of raw.units) {
@@ -121,5 +121,5 @@ export function parseDesignModel(raw: Json): DesignModelComposition | string {
     );
   }
   if (units.length === 0) return "design IR carries no parseable units";
-  return { irVersion, units };
+  return { irVersion: irVersion.value, units };
 }

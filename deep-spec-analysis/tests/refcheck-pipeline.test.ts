@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -175,7 +175,7 @@ function domainReport(
   run(ledger);
   return ReferenceCheckReport.compose({
     id: ReferenceCheckReportId.of(ap("/tmp/r"), backend),
-    inputs: [{ artifact: "x.md", sha256: "a".repeat(64) }],
+    inputs: [{ artifact: "x.md", sha256: ContentHash.reconstitute("a".repeat(64)) }],
     checked: ledger.checkedTargets(),
     findings: ledger.findings(),
     skipped: ledger.skipped(),

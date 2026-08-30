@@ -4,7 +4,7 @@
 // `JSON.stringify(・, null, 2) + "\n"` の描画・findings スキーマ自己検証・
 // 降格文言（golden 凍結）は本モジュールの責務。
 
-import type { ArtifactPath } from "../../kernel/domain/index.ts";
+import { ContentHash, IrVersion, type ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
@@ -12,7 +12,6 @@ import type { SchemaUnreadable } from "../../kernel/adapter/index.ts";
 import {
   type DesignCrossCheckedEntry,
   type DesignFinding,
-  type DesignInputEntry,
   type DesignSkipped,
   DesignReport,
   DesignReportId,
@@ -21,14 +20,15 @@ import {
 function orderedDocument(report: DesignReport): { [k: string]: Json } {
   const ordered: { [k: string]: Json } = {
     backend: report.id().backendName(),
-    irVersion: report.irVersion(),
-    irHash: report.irHash(),
+    irVersion: report.irVersion().value(),
+    irHash: report.irHash().value(),
     method: report.method(),
   };
   const reason = report.unavailableReason();
   if (reason !== null) ordered.unavailable = { reason };
   const inputs = report.inputs();
-  if (inputs !== null) ordered.inputs = inputs as unknown as Json;
+  // ContentHash は境界（描画）で value() へ落とす（キー順は旧挿入順）。
+  if (inputs !== null) ordered.inputs = inputs.map((i) => ({ artifact: i.artifact, sha256: i.sha256.value() })) as unknown as Json;
   const checked = report.checked();
   if (checked !== null) ordered.checked = checked as unknown as Json;
   ordered.findings = report.findings() as unknown as Json;
@@ -75,12 +75,20 @@ export function parseSiblingDesignReportDocument(
   );
   return DesignReport.reconstitute({
     id: DesignReportId.of(directory, backend),
-    irVersion: typeof raw.irVersion === "string" ? raw.irVersion : "",
-    irHash: typeof raw.irHash === "string" ? raw.irHash : "",
+    irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
+    irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
     method: typeof raw.method === "string" ? raw.method : "",
     findings: (Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []) as unknown as DesignFinding[],
     skipped: skipped as unknown as DesignSkipped[],
-    inputs: Array.isArray(raw.inputs) ? (raw.inputs as unknown as DesignInputEntry[]) : null,
+    inputs: Array.isArray(raw.inputs)
+      ? (raw.inputs as Json[]).map((e) => {
+          const entry = isObject(e) ? e : {};
+          return {
+            artifact: typeof entry.artifact === "string" ? entry.artifact : "",
+            sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : ""),
+          };
+        })
+      : null,
     checked: Array.isArray(raw.checked) ? (raw.checked as Json[]).filter((c): c is string => typeof c === "string") : null,
     crossChecked: Array.isArray(raw.crossChecked) ? (raw.crossChecked as unknown as DesignCrossCheckedEntry[]) : null,
     unavailableReason: isObject(raw.unavailable)

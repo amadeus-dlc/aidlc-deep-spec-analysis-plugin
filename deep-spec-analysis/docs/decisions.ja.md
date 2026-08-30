@@ -747,3 +747,45 @@ PR7 マージ直後にオーナー裁定がさらに 2 つ下り、一括でリ�
 証明：base↔head パリティスナップショットの `diff -r` は PR7 以前の
 base に対して空（45 ファイル）。296 tests green。新 VO は全て行カバレッジ
 100%。golden 無変更。
+
+## ドメインプリミティブ・カタログ — parse/reconstitute の二面性、2 種を即時・6 種を凍結封鎖（2026-08-30）
+
+オーナーから「ドメインプリミティブも徹底していない」の裁定：ユビキタス
+言語の制約付き値が生 string のまま集約を流れていた。値ごとに監査し、
+集約のイディオムを DP へ拡張した——**`parse` が境界の strict な構築口
+（Result・材料のみエラー）、`reconstitute` が凍結文書の逐語再水和専用の
+口**。集約が既に持っていた compose / reconstitute の二面性そのもので、
+バイト凍結された寛容読みはアダプタに残り、parse 経路は Always-Valid に
+なる。
+
+即時適用（今日すでに実の生成・解釈セマンティクスを持つ 2 種）：
+
+- **`ContentHash`**（kernel）——`^[0-9a-f]{64}$`。`sha256()` がこれを
+  返し、`ofText`/`ofBytes` が計算側の生成口。`AcquiredFormalModel` /
+  `AcquiredDesignModel` の irHash、両レポート集約、`InputEntry` /
+  `DesignInputEntry` の sha256、`SourceAnchor` の実測辺、
+  `RefinementMap` の 二重アンカーと陳腐化比較（string の `!==` を
+  `equals` へ）まで縦貫。serializer は描画バイトで `value()` へ落とし、
+  再構成は逐語の口を使う。
+- **`IrVersion`**（kernel）——semver。strict な invariant は両モデル
+  パーサに既に存在した（`IR lacks a semver irVersion`）ため、
+  `RequirementsModel` / `DesignModel` は Always-Valid にこれを保持し、
+  `majorVersion` / `supportsMajor` は本来の居場所である DP へ移った。
+  レポート再構成は凍結された "" 許容を `reconstitute` で保存（major は
+  legacy と同じ NaN）。
+
+凍結封鎖（PR10 が意図的に解除するための台帳）：残る 6 候補には今日
+strict な生成経路が存在しない——全値がバイト凍結された寛容取り込みから
+入るため、`parse` は死にコードになり DP は純粋な儀式になる。
+`UnitName`（スキーマパターンは存在するがユニットは寛容モデルパーサ
+経由でしか到来しない）、`RequirementId` / `BusinessRuleId`（frRefs /
+brRefs は文書から到来；抽出集合は regex 保証だが照合相手は生の文書側
+主張）、`VerificationMethod`（内部は bounded/simulation に閉じるが
+レポート再構成が任意文字列を許す）、`BackendName`（兄弟再構成が
+ファイル名から導出する）、`AttributePath`（式のパスはまさに
+well-formedness が parse で拒否せず**報告**すべき対象）。PR10 の凍結
+解除時に golden 再生成とともに変換する。
+
+証明：296+12 tests green。両 DP は行カバレッジ 100%。パリティ
+スナップショットは PR7 以前の base に対し `diff -r` 空。実 sandbox の
+z3 実行が `smt.json` を golden とバイト一致で再現。

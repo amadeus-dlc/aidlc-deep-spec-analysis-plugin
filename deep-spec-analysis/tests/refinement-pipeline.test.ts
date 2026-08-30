@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Json } from "../tools/kernel/adapter/index.ts";
 import { SystemClock } from "../tools/kernel/adapter/index.ts";
-import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
 import { FormalModelId } from "../tools/requirements/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
@@ -173,7 +173,7 @@ function unit(seed: Partial<Parameters<typeof DesignUnit.reconstitute>[0]>): Des
 
 function requirements(seed: Partial<RefinementRequirementsSeed>): RefinementRequirements {
   return RefinementRequirements.reconstitute({
-    hash: "a".repeat(64),
+    hash: ContentHash.reconstitute("a".repeat(64)),
     attributes: [],
     obligations: [],
     scenarios: [],

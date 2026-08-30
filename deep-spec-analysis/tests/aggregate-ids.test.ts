@@ -3,7 +3,7 @@
 // equals は値による恒等比較。domain 90% 床のための分岐網羅。
 
 import { describe, expect, test } from "bun:test";
-import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { ArtifactPath, ContentHash, IrVersion, sha256 } from "../tools/kernel/domain/index.ts";
 import { DesignModelId, RefinementContextId } from "../tools/design/domain/index.ts";
 import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
 import { FormalModelId } from "../tools/requirements/domain/index.ts";
@@ -61,5 +61,54 @@ describe("aggregate ids resolve forward, by their own identity", () => {
     expect(id.artifactPath().value()).toBe("/r/components.md");
     expect(id.equals(DesignRecordId.of(ap("/r/components.md")))).toBe(true);
     expect(id.equals(DesignRecordId.of(ap("/r/contract-summary.md")))).toBe(false);
+  });
+});
+
+describe("ContentHash", () => {
+  test("parse accepts exactly 64 lowercase hex chars", () => {
+    const ok = ContentHash.parse("a".repeat(64));
+    expect(ok.ok).toBe(true);
+    for (const bad of ["", "A".repeat(64), "a".repeat(63), "g".repeat(64)]) {
+      const parsed = ContentHash.parse(bad);
+      expect(parsed.ok).toBe(false);
+      if (!parsed.ok) expect(parsed.error).toEqual({ kind: "not-a-sha256-hex", raw: bad });
+    }
+  });
+
+  test("ofText matches the known digest of the empty string, and equals compares by value", () => {
+    expect(ContentHash.ofText("").value()).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    expect(sha256("").equals(ContentHash.ofText(""))).toBe(true);
+    expect(ContentHash.ofBytes(new Uint8Array([])).equals(sha256(""))).toBe(true);
+    expect(sha256("a").equals(sha256("b"))).toBe(false);
+  });
+
+  test("reconstitute is the verbatim rehydration door for frozen documents", () => {
+    expect(ContentHash.reconstitute("").value()).toBe("");
+  });
+});
+
+describe("IrVersion", () => {
+  test("parse accepts exactly major.minor.patch", () => {
+    const ok = IrVersion.parse("1.2.3");
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(ok.value.value()).toBe("1.2.3");
+      expect(ok.value.majorVersion()).toBe(1);
+      expect(ok.value.supportsMajor(1)).toBe(true);
+      expect(ok.value.supportsMajor(2)).toBe(false);
+    }
+    for (const bad of ["", "1.2", "v1.2.3", "1.2.3-rc1"]) {
+      const parsed = IrVersion.parse(bad);
+      expect(parsed.ok).toBe(false);
+      if (!parsed.ok) expect(parsed.error).toEqual({ kind: "not-a-semver", raw: bad });
+    }
+  });
+
+  test("reconstitute preserves the legacy tolerant major extraction (NaN on empty)", () => {
+    const empty = IrVersion.reconstitute("");
+    expect(Number.isNaN(empty.majorVersion())).toBe(true);
+    expect(empty.supportsMajor(1)).toBe(false);
+    expect(empty.equals(IrVersion.reconstitute(""))).toBe(true);
+    expect(empty.equals(IrVersion.reconstitute("1.0.0"))).toBe(false);
   });
 });

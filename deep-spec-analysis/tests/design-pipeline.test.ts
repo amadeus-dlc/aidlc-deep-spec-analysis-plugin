@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
 import type { Json } from "../tools/kernel/adapter/index.ts";
-import { ArtifactPath, sha256 } from "../tools/kernel/domain/index.ts";
+import { ContentHash, IrVersion, ArtifactPath, sha256 } from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -158,7 +158,7 @@ function unit(seed: Partial<Parameters<typeof DesignUnit.reconstitute>[0]>): Des
 }
 
 function model(units: DesignUnit[], irVersion = "1.0.0"): DesignModel {
-  return DesignModel.compose({ irVersion, units } satisfies DesignModelComposition);
+  return DesignModel.compose({ irVersion: IrVersion.reconstitute(irVersion), units } satisfies DesignModelComposition);
 }
 
 describe("lowering (typed compile-down)", () => {
@@ -280,7 +280,7 @@ describe("lowering (typed compile-down)", () => {
     // 2 ユニットの compose はユニット名昇順を不変条件として適用する。
     const m = model([unit({ unit: "u2" }), unit({ unit: "u1" })]);
     expect(m.units().map((x) => x.name())).toEqual(["u1", "u2"]);
-    expect(m.irVersion()).toBe("1.0.0");
+    expect(m.irVersion().value()).toBe("1.0.0");
   });
 
   test("the canonical expression key matches the kernel canonical JSON byte for byte", () => {
@@ -446,14 +446,14 @@ describe("report ordering, cross-check, and degradations", () => {
   test("compose sorts inputs by artifact and dedupes checked; degraded strips everything", () => {
     const report = DesignReport.compose({
       id: DesignReportId.of(ap("/v"), "smt"),
-      irVersion: "1.0.0",
-      irHash: "a".repeat(64),
+      irVersion: IrVersion.reconstitute("1.0.0"),
+      irHash: ContentHash.reconstitute("a".repeat(64)),
       method: "exhaustive",
       findings: [f("conflict", "u1", ["DOB-1"], "c")],
       skipped: [],
       inputs: [
-        { artifact: "b.md", sha256: "2".repeat(64) },
-        { artifact: "a.md", sha256: "1".repeat(64) },
+        { artifact: "b.md", sha256: ContentHash.reconstitute("2".repeat(64)) },
+        { artifact: "a.md", sha256: ContentHash.reconstitute("1".repeat(64)) },
       ],
       checked: ["unit:u2", "unit:u1", "unit:u1"],
     });
@@ -462,8 +462,8 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(report.passes()).toBe(false);
     expect(report.findingsCount()).toBe(1);
     expect(report.skippedCount()).toBe(0);
-    expect(report.irVersion()).toBe("1.0.0");
-    expect(report.irHash()).toBe("a".repeat(64));
+    expect(report.irVersion().value()).toBe("1.0.0");
+    expect(report.irHash().value()).toBe("a".repeat(64));
     expect(report.method()).toBe("exhaustive");
     expect(report.unavailableReason()).toBe(null);
     expect(report.crossChecked()).toBe(null);
@@ -492,11 +492,11 @@ describe("report ordering, cross-check, and degradations", () => {
   test("cross-check compares per (unit, scenario), honors skips, and freezes the design wording", () => {
     const u1 = unit({ scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: ["FR-2", "FR-1"], bindings: {} }] });
     const m = model([u1]);
-    const HASH = "a".repeat(64);
+    const HASH = ContentHash.reconstitute("a".repeat(64));
     const sibling = (backend: string, violated: boolean, skipKey?: string): DesignReport =>
       DesignReport.reconstitute({
         id: DesignReportId.of(ap("/v"), backend),
-        irVersion: "1.0.0",
+        irVersion: IrVersion.reconstitute("1.0.0"),
         irHash: HASH,
         method: "exhaustive",
         findings: violated ? [f("scenario-violation", "u1", ["DSC-1"], "x")] : [],
@@ -543,10 +543,10 @@ describe("report ordering, cross-check, and degradations", () => {
 
     const unread = designIrUnreadableReport(DesignReportId.of(ap("/v"), "smt"), "exhaustive", "design IR carries no units[]");
     expect(unread.unavailableReason()).toBe("design IR unreadable: design IR carries no units[] — see the deep-spec-design-ir-valid sensor for details");
-    expect(unread.irVersion()).toBe("0.0.0");
-    expect(unread.irHash()).toBe(sha256(""));
+    expect(unread.irVersion().value()).toBe("0.0.0");
+    expect(unread.irHash().equals(sha256(""))).toBe(true);
 
-    const mismatch = designVersionMismatchReport(DesignReportId.of(ap("/v"), "quint"), m, "a".repeat(64), "simulation");
+    const mismatch = designVersionMismatchReport(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation");
     expect(mismatch.skipped().map((s) => `${s.unit}:${s.target}:${s.reason}`)).toEqual([
       "u1:DOB-1:ir-version-mismatch",
       "u1:DSC-1:ir-version-mismatch",
@@ -554,7 +554,7 @@ describe("report ordering, cross-check, and degradations", () => {
     ]);
     expect(mismatch.skipped()[0]?.detail).toBe("design IR major version 2 is not supported by this backend (supports 1.x.x)");
 
-    const down = designBackendUnavailableReport(DesignReportId.of(ap("/v"), "quint"), m, "a".repeat(64), "simulation", "quint CLI is not available", "quint CLI missing");
+    const down = designBackendUnavailableReport(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation", "quint CLI is not available", "quint CLI missing");
     expect(down.unavailableReason()).toBe("quint CLI is not available");
     expect(down.skipped().every((s) => s.reason === "unavailable" && s.detail === "quint CLI missing")).toBe(true);
   });

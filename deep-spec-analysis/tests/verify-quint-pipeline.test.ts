@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
@@ -58,7 +58,7 @@ const schema = readContractSchema(schemaPath);
 
 function model(seed: Partial<RequirementsModelSeed>): RequirementsModel {
   return RequirementsModel.reconstitute({
-    irVersion: "1.0.0",
+    irVersion: IrVersion.reconstitute("1.0.0"),
     attributes: [],
     obligations: [],
     scenarios: [],
@@ -141,7 +141,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
       scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
     });
     const outcome = new VerifyRequirementsQuintUseCase(
-      formalModels(ok({ model: m, irHash: HASH })),
+      formalModels(ok({ model: m, irHash: ContentHash.reconstitute(HASH) })),
       reports,
       quint({ kind: "cli-unavailable" }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
@@ -162,7 +162,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
       scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
     });
     const outcome = new VerifyRequirementsQuintUseCase(
-      formalModels(ok({ model: m, irHash: HASH })),
+      formalModels(ok({ model: m, irHash: ContentHash.reconstitute(HASH) })),
       reports,
       quint({ kind: "machine-uncompilable", method: "bounded", error: 'state variable name collision: "a_b"' }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
@@ -192,7 +192,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
       scenarios: new Map([["SC-1", { kind: "evaluated", violated: false }]]),
     };
     const outcome = new VerifyRequirementsQuintUseCase(
-      formalModels(ok({ model: m, irHash: HASH })),
+      formalModels(ok({ model: m, irHash: ContentHash.reconstitute(HASH) })),
       reports,
       quint({ kind: "checked", method: "bounded", facts, compileSkips: [], runs }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
@@ -363,11 +363,11 @@ describe("quint degradation reports", () => {
       obligations: [{ id: "OB-2", nature: "event", frRefs: [] }],
       scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
     });
-    const r = machineUncompilableReport(VerificationReportId.of(ap("/v"), "quint"), m, "h", "simulation", "boom");
+    const r = machineUncompilableReport(VerificationReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("h"), "simulation", "boom");
     expect(r.method()).toBe("simulation");
     expect(r.skipped().map((s) => `${s.target}:${s.reason}:${s.detail}`))
       .toEqual(["OB-2:compile-error:boom", "SC-1:compile-error:boom"]);
-    const u = quintUnavailableReport(VerificationReportId.of(ap("/v"), "quint"), m, "h");
+    const u = quintUnavailableReport(VerificationReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("h"));
     expect(u.unavailableReason()).toBe("quint CLI is not available (install: npm i -g @informalsystems/quint)");
   });
 });

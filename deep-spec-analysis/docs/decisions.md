@@ -765,3 +765,48 @@ repo-wide in one sweep:
 Proofs: the base↔head parity snapshot `diff -r` is empty against the
 pre-PR7 base (45 files); 296 tests green; every new VO holds 100% line
 coverage; goldens untouched.
+
+## Domain-primitive catalog — parse/reconstitute duality; two land now, six are freeze-blocked (2026-08-30)
+
+The owner ruled that domain primitives were not thorough: the ubiquitous
+language's constrained values still flowed through aggregates as raw
+strings. The catalog was audited value by value, and the aggregate idiom
+was extended to DPs: **`parse` is the strict boundary constructor
+(Result, materials-only error) and `reconstitute` is the verbatim
+rehydration door for frozen documents** — exactly the compose /
+reconstitute duality the aggregates already had, so byte-frozen tolerant
+reading stays in the adapters while every parse-path is Always-Valid.
+
+Landed now (both with real production/interpretation semantics today):
+
+- **`ContentHash`** (kernel) — `^[0-9a-f]{64}$`; `sha256()` now returns
+  it, `ofText`/`ofBytes` are the computed producers. Typed end-to-end:
+  `AcquiredFormalModel`/`AcquiredDesignModel.irHash`, both report
+  aggregates, `InputEntry`/`DesignInputEntry.sha256`, `SourceAnchor`'s
+  actual side, `RefinementMap`'s dual anchors and the staleness
+  comparisons (`equals`, no more `!==` on strings). Serializers map to
+  `value()` at the rendered byte and reconstitute via the verbatim door.
+- **`IrVersion`** (kernel) — semver; the strict invariant already
+  existed in both model parsers (`IR lacks a semver irVersion`), so
+  `RequirementsModel`/`DesignModel` hold it Always-Valid, and
+  `majorVersion`/`supportsMajor` moved onto the DP where they belong.
+  Report reconstitution keeps the frozen "" tolerance via `reconstitute`
+  (NaN major, same as legacy).
+
+Freeze-blocked (recorded here so PR10 lifts them deliberately): the
+remaining six candidates have NO strict production path today — every
+value enters through byte-frozen tolerant ingestion, so their `parse`
+would be dead code and the DP pure ceremony. `UnitName` (schema pattern
+`^[a-z0-9][a-z0-9-]{0,63}$` exists, but units only ever arrive via the
+tolerant model parser), `RequirementId`/`BusinessRuleId` (frRefs/brRefs
+arrive from documents; the extraction sets are regex-guaranteed but
+compare against raw document claims), `VerificationMethod` (internally
+closed to bounded/simulation but report reconstitution admits any
+string), `BackendName` (sibling reconstitution derives it from file
+names), `AttributePath` (expression paths are exactly what
+well-formedness must REPORT on, not reject at parse). When PR10 lifts
+the freeze, these convert with regenerated goldens.
+
+Proofs: 296+12 tests green; both DPs at 100% line coverage; the parity
+snapshot `diff -r` is empty against the pre-PR7 base; a live sandbox z3
+run reproduced `smt.json` byte-identical to the golden.

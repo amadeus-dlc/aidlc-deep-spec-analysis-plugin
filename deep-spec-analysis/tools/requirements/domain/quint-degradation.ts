@@ -5,6 +5,7 @@
 //   このバックエンドが検査するはずだった全義務・全シナリオを compile-error
 //   として記録する（旧 machine === null 経路）。
 
+import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import { VerificationReport } from "./verification-report.ts";
@@ -12,7 +13,7 @@ import { VerificationReport } from "./verification-report.ts";
 export function quintUnavailableReport(
   id: VerificationReportId,
   model: RequirementsModel,
-  irHash: string,
+  irHash: ContentHash,
 ): VerificationReport {
   return VerificationReport.compose({
     id,
@@ -28,7 +29,7 @@ export function quintUnavailableReport(
 export function machineUncompilableReport(
   id: VerificationReportId,
   model: RequirementsModel,
-  irHash: string,
+  irHash: ContentHash,
   method: string,
   machineError: string,
 ): VerificationReport {

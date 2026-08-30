@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -35,7 +35,7 @@ const schema = readContractSchema(schemaPath);
 function seed(directory: string, overrides: Partial<Parameters<typeof ReferenceCheckReport.compose>[0]> = {}) {
   return ReferenceCheckReport.compose({
     id: ReferenceCheckReportId.of(ap(directory), "components"),
-    inputs: [{ artifact: "inception/domain-design/components.md", sha256: "a".repeat(64) }],
+    inputs: [{ artifact: "inception/domain-design/components.md", sha256: ContentHash.reconstitute("a".repeat(64)) }],
     checked: ["check:DD-0"],
     findings: [],
     skipped: [],
@@ -59,8 +59,8 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     const report = seed("/tmp/r", {
       checked: ["check:DD-1", "check:DD-0", "check:DD-1"],
       inputs: [
-        { artifact: "b.md", sha256: "b".repeat(64) },
-        { artifact: "a.md", sha256: "a".repeat(64) },
+        { artifact: "b.md", sha256: ContentHash.reconstitute("b".repeat(64)) },
+        { artifact: "a.md", sha256: ContentHash.reconstitute("a".repeat(64)) },
       ],
     });
     expect(report.passes()).toBe(true);

@@ -5,7 +5,7 @@
 // 責務。conformToFindingsContract が「書き手は不適合ファイルを決して出さない」
 // の実装（refcheck と同じ規律・同じ凍結文言）。
 
-import type { ArtifactPath } from "../../kernel/domain/index.ts";
+import { ContentHash, IrVersion, type ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
@@ -21,8 +21,8 @@ import {
 function orderedDocument(report: VerificationReport): { [k: string]: Json } {
   const ordered: { [k: string]: Json } = {
     backend: report.id().backendName(),
-    irVersion: report.irVersion(),
-    irHash: report.irHash(),
+    irVersion: report.irVersion().value(),
+    irHash: report.irHash().value(),
     method: report.method(),
   };
   const reason = report.unavailableReason();
@@ -90,8 +90,8 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
   );
   return VerificationReport.reconstitute({
     id,
-    irVersion: typeof raw.irVersion === "string" ? raw.irVersion : "",
-    irHash: typeof raw.irHash === "string" ? raw.irHash : "",
+    irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
+    irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
     method: typeof raw.method === "string" ? raw.method : "",
     findings: (Array.isArray(raw.findings) ? raw.findings : []) as unknown as VerificationFinding[],
     skipped: skipped as unknown as VerificationSkipped[],
