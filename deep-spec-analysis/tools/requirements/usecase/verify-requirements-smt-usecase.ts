@@ -40,19 +40,19 @@ export interface VerifyRequirementsSmtInput {
 }
 
 export class VerifyRequirementsSmtUseCase {
-  readonly #formalModels: FormalModelRepository;
-  readonly #reports: VerificationReportRepository;
-  readonly #solver: Z3SolverClient;
+  readonly #formalModelRepository: FormalModelRepository;
+  readonly #verificationReportRepository: VerificationReportRepository;
+  readonly #z3SolverClient: Z3SolverClient;
 
-  constructor(formalModels: FormalModelRepository, reports: VerificationReportRepository, solver: Z3SolverClient) {
-    this.#formalModels = formalModels;
-    this.#reports = reports;
-    this.#solver = solver;
+  constructor(formalModelRepository: FormalModelRepository, verificationReportRepository: VerificationReportRepository, z3SolverClient: Z3SolverClient) {
+    this.#formalModelRepository = formalModelRepository;
+    this.#verificationReportRepository = verificationReportRepository;
+    this.#z3SolverClient = z3SolverClient;
   }
 
   execute(input: VerifyRequirementsSmtInput): VerifySmtOutcome {
     const id = VerificationReportId.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#formalModels.findById(input.modelId);
+    const acquired = this.#formalModelRepository.findById(input.modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
@@ -70,7 +70,7 @@ export class VerifyRequirementsSmtUseCase {
       return { kind: "version-mismatch" };
     }
 
-    const run = this.#solver.check(model);
+    const run = this.#z3SolverClient.check(model);
     if (run.result.kind === "unavailable") {
       const saved = this.#persist(solverUnavailableReport(id, model, irHash, run.facts.skipped, run.result.reason));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
@@ -80,7 +80,7 @@ export class VerifyRequirementsSmtUseCase {
     }
 
     const interpreted = interpretSmtVerdicts(model, run.facts, run.result.verdicts);
-    const conformed = this.#reports.conformedOf(
+    const conformed = this.#verificationReportRepository.conformedOf(
       VerificationReport.compose({
         id,
         irVersion: model.irVersion(),
@@ -90,7 +90,7 @@ export class VerifyRequirementsSmtUseCase {
         skipped: interpreted.skipped,
       }),
     );
-    const saved = this.#reports.save(conformed);
+    const saved = this.#verificationReportRepository.save(conformed);
     if (!saved.ok) return { kind: "save-failed", error: saved.error };
     const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
     if (!cross.ok) return { kind: "save-failed", error: cross.error };
@@ -103,13 +103,13 @@ export class VerifyRequirementsSmtUseCase {
   }
 
   #persist(report: VerificationReport): Result<void, RepositoryError> {
-    return this.#reports.save(this.#reports.conformedOf(report));
+    return this.#verificationReportRepository.save(this.#verificationReportRepository.conformedOf(report));
   }
 
   // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
   // チェックを再計算する（最後の書き手が勝ち、全書き手が同一バイトへ収束）。
   #recomputeCrossCheck(model: RequirementsModel, irHash: ContentHash, directory: ArtifactPath): Result<void, RepositoryError> {
-    const siblings = this.#reports.findAllByDirectory(directory);
+    const siblings = this.#verificationReportRepository.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);
     return this.#persist(crossCheckReport(VerificationReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash, siblings.value));

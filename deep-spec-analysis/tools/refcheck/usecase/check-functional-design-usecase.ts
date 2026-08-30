@@ -25,16 +25,16 @@ export interface CheckFunctionalDesignInput {
 }
 
 export class CheckFunctionalDesignUseCase {
-  readonly #designRecords: DesignRecordRepository;
-  readonly #reports: ReferenceCheckReportRepository;
+  readonly #designRecordRepository: DesignRecordRepository;
+  readonly #referenceCheckReportRepository: ReferenceCheckReportRepository;
 
-  constructor(designRecords: DesignRecordRepository, reports: ReferenceCheckReportRepository) {
-    this.#designRecords = designRecords;
-    this.#reports = reports;
+  constructor(designRecordRepository: DesignRecordRepository, referenceCheckReportRepository: ReferenceCheckReportRepository) {
+    this.#designRecordRepository = designRecordRepository;
+    this.#referenceCheckReportRepository = referenceCheckReportRepository;
   }
 
   execute(input: CheckFunctionalDesignInput): CheckOutcome {
-    const record = this.#designRecords.findById(input.recordId);
+    const record = this.#designRecordRepository.findById(input.recordId);
     if (!record.ok) return { kind: "not-applicable" };
     const fd = record.value.functional();
     if (fd === null) return { kind: "not-applicable" };
@@ -69,9 +69,9 @@ export class CheckFunctionalDesignUseCase {
       findings: ledger.findings(),
       skipped: ledger.skipped(),
     });
-    const conformed = this.#reports.conformedOf(report);
+    const conformed = this.#referenceCheckReportRepository.conformedOf(report);
     if (input.mode === "persist") {
-      const saved = this.#reports.save(conformed);
+      const saved = this.#referenceCheckReportRepository.save(conformed);
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
     }
     return {

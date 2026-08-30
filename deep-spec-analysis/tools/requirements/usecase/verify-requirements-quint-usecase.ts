@@ -44,19 +44,19 @@ export interface VerifyRequirementsQuintInput {
 }
 
 export class VerifyRequirementsQuintUseCase {
-  readonly #formalModels: FormalModelRepository;
-  readonly #reports: VerificationReportRepository;
-  readonly #quint: QuintClient;
+  readonly #formalModelRepository: FormalModelRepository;
+  readonly #verificationReportRepository: VerificationReportRepository;
+  readonly #quintClient: QuintClient;
 
-  constructor(formalModels: FormalModelRepository, reports: VerificationReportRepository, quint: QuintClient) {
-    this.#formalModels = formalModels;
-    this.#reports = reports;
-    this.#quint = quint;
+  constructor(formalModelRepository: FormalModelRepository, verificationReportRepository: VerificationReportRepository, quintClient: QuintClient) {
+    this.#formalModelRepository = formalModelRepository;
+    this.#verificationReportRepository = verificationReportRepository;
+    this.#quintClient = quintClient;
   }
 
   execute(input: VerifyRequirementsQuintInput): VerifyQuintOutcome {
     const id = VerificationReportId.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#formalModels.findById(input.modelId);
+    const acquired = this.#formalModelRepository.findById(input.modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
@@ -74,7 +74,7 @@ export class VerifyRequirementsQuintUseCase {
       return { kind: "version-mismatch" };
     }
 
-    const checked = this.#quint.check(model);
+    const checked = this.#quintClient.check(model);
     if (checked.kind === "cli-unavailable") {
       const saved = this.#persist(quintUnavailableReport(id, model, irHash));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
@@ -91,7 +91,7 @@ export class VerifyRequirementsQuintUseCase {
     }
 
     const interpreted = interpretQuintVerdicts(model, checked.facts, checked.compileSkips, checked.method, checked.runs);
-    const conformed = this.#reports.conformedOf(
+    const conformed = this.#verificationReportRepository.conformedOf(
       VerificationReport.compose({
         id,
         irVersion: model.irVersion(),
@@ -101,7 +101,7 @@ export class VerifyRequirementsQuintUseCase {
         skipped: interpreted.skipped,
       }),
     );
-    const saved = this.#reports.save(conformed);
+    const saved = this.#verificationReportRepository.save(conformed);
     if (!saved.ok) return { kind: "save-failed", error: saved.error };
     const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
     if (!cross.ok) return { kind: "save-failed", error: cross.error };
@@ -115,13 +115,13 @@ export class VerifyRequirementsQuintUseCase {
   }
 
   #persist(report: VerificationReport): Result<void, RepositoryError> {
-    return this.#reports.save(this.#reports.conformedOf(report));
+    return this.#verificationReportRepository.save(this.#verificationReportRepository.conformedOf(report));
   }
 
   // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
   // チェックを再計算する（最後の書き手が勝ち、全書き手が同一バイトへ収束）。
   #recomputeCrossCheck(model: RequirementsModel, irHash: ContentHash, directory: ArtifactPath): Result<void, RepositoryError> {
-    const siblings = this.#reports.findAllByDirectory(directory);
+    const siblings = this.#verificationReportRepository.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);
     return this.#persist(crossCheckReport(VerificationReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash, siblings.value));

@@ -828,3 +828,37 @@ PR #40 の型付き集約 ID は解決には使われていたが、解決され
 
 証明：304 tests green。パリティスナップショットは PR7 以前の base に対し
 `diff -r` 空。golden 無変更。新設の id アクセサは全て 90% 床の上で被覆。
+
+## 語彙プリミティブの裁定 — ドメインインターフェイスの非 bool 値は DP にする（2026-08-30）
+
+同じレビューセッションでさらに 2 つの裁定が下り、適用した：
+
+1. **ポートを保持するフィールドは役割の名で呼ぶ。** `#designRecords` /
+   `#reports` は保持物を隠していた。ポートを保持する全ユースケースの
+   フィールドとコンストラクタ引数はポート名を冠する
+   （`#designRecordRepository`・`#referenceCheckReportRepository`・
+   `#formalModelRepository`・`#verificationReportRepository`・
+   `#z3SolverClient`・`#quintClient`・`#designModelRepository`・
+   `#designReportRepository`・`#siblingBackendClient`・
+   `#refinementContextRepository`・`#refinementSolverClient`・
+   `#irValidationMaterialsRepository`・`#requirementsSourceRepository`・
+   `#designIrValidationMaterialsRepository`）。
+2. **ドメインインターフェイスの非 bool フィールドはドメインプリミティブ**
+   ——凍結封鎖の判断は棄却された：`reconstitute` の口があるため、strict な
+   `parse` 経路に生成者がまだ無くても DP 化は凍結と両立する。まず引用された
+   実例とそのクラスタ全体へ適用：functional-design 語彙（`AttrDecl`・
+   `RelDecl`・`EntityDecl`・`RuleDecl`・`StateMachineSketch`・
+   `DomainEntitySketch`・兄弟索引）は `EntityName`・`AttributeName`・
+   `ElementPath`・`TypeName`・`AllowedValue`・`AttributeDefault`・
+   `NumericBound`・`CardinalityNotation`・`BusinessRuleId`・
+   `RuleCategory`・`AppliesTo`・`SourceId`・`MachineSpec`・`StateName`・
+   `ComponentName`・`ReferenceTarget` を話す。各 DP は照合・描画の解釈語彙
+   （ケース／アンダースコア正規化・BR 形・基数トークン畳み込み・spec 分解・
+   既定値描画）を所有し、検査は意味論として読める一方、凍結文言は全て
+   バイト同一に保たれる。bool（宣言フラグ）と文言材料（detail・unsupported
+   理由・欠落キー名列）は裁定自身の除外により素のまま。行番号・件数の
+   メタデータは明示裁定があるまで number のまま。
+
+証明：305+ tests green。語彙ファイルは行カバレッジ 100%。golden 無変更。
+パリティスナップショットは PR7 以前の base に対し `diff -r` 空のまま
+（refcheck シナリオがこれらの文言を濃密に通す）。

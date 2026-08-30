@@ -20,16 +20,16 @@ import type {
 import type { ValidateIrOutcome } from "./validate-ir-outcome.ts";
 
 export class ValidateIrUseCase {
-  readonly #materials: IrValidationMaterialsRepository;
-  readonly #source: RequirementsSourceRepository;
+  readonly #irValidationMaterialsRepository: IrValidationMaterialsRepository;
+  readonly #requirementsSourceRepository: RequirementsSourceRepository;
 
-  constructor(materials: IrValidationMaterialsRepository, source: RequirementsSourceRepository) {
-    this.#materials = materials;
-    this.#source = source;
+  constructor(irValidationMaterialsRepository: IrValidationMaterialsRepository, requirementsSourceRepository: RequirementsSourceRepository) {
+    this.#irValidationMaterialsRepository = irValidationMaterialsRepository;
+    this.#requirementsSourceRepository = requirementsSourceRepository;
   }
 
   execute(modelId: FormalModelId): ValidateIrOutcome {
-    const acquired = this.#materials.acquire(modelId);
+    const acquired = this.#irValidationMaterialsRepository.acquire(modelId);
     if (acquired.kind === "not-applicable") return { kind: "not-applicable" };
     if (acquired.kind === "unreadable") {
       return { kind: "verdict", pass: false, errors: acquired.errors };
@@ -50,7 +50,7 @@ export class ValidateIrUseCase {
       errors.push(...modelWellFormednessErrors(materials.view));
 
       const index = FrReferenceIndex.of(materials.frClaims);
-      const source = this.#source.findById(materials.sourceId);
+      const source = this.#requirementsSourceRepository.findById(materials.sourceId);
       if (source === null) {
         errors.push("requirements.md not found under this intent record — frRefs cannot be reverse-verified");
       } else {

@@ -45,32 +45,32 @@ const UNREACH_BUDGET_MS = 70_000;
 const BOUND_STEPS = 8; // v1 バックエンドの MAX_STEPS を写す
 
 export class VerifyDesignQuintUseCase {
-  readonly #designModels: DesignModelRepository;
-  readonly #reports: DesignReportRepository;
-  readonly #sibling: SiblingBackendClient;
-  readonly #refinementContexts: RefinementContextRepository;
+  readonly #designModelRepository: DesignModelRepository;
+  readonly #designReportRepository: DesignReportRepository;
+  readonly #siblingBackendClient: SiblingBackendClient;
+  readonly #refinementContextRepository: RefinementContextRepository;
   readonly #clock: Clock;
   readonly #unreachCap: number;
 
   constructor(
-    designModels: DesignModelRepository,
-    reports: DesignReportRepository,
-    sibling: SiblingBackendClient,
-    refinementContexts: RefinementContextRepository,
+    designModelRepository: DesignModelRepository,
+    designReportRepository: DesignReportRepository,
+    siblingBackendClient: SiblingBackendClient,
+    refinementContextRepository: RefinementContextRepository,
     clock: Clock,
     unreachCap: number,
   ) {
-    this.#designModels = designModels;
-    this.#reports = reports;
-    this.#sibling = sibling;
-    this.#refinementContexts = refinementContexts;
+    this.#designModelRepository = designModelRepository;
+    this.#designReportRepository = designReportRepository;
+    this.#siblingBackendClient = siblingBackendClient;
+    this.#refinementContextRepository = refinementContextRepository;
     this.#clock = clock;
     this.#unreachCap = unreachCap;
   }
 
   execute(input: VerifyDesignInput): VerifyDesignOutcome {
     const id = DesignReportId.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#designModels.findById(input.modelId);
+    const acquired = this.#designModelRepository.findById(input.modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
@@ -115,7 +115,7 @@ export class VerifyDesignQuintUseCase {
         }
         continue;
       }
-      const run = this.#sibling.runLowered("quint", u, lowered, mainRemaining);
+      const run = this.#siblingBackendClient.runLowered("quint", u, lowered, mainRemaining);
       if (run.exit === 127) {
         const reason =
           (run.doc?.kind === "unavailable" ? run.doc.reason : null) ?? "quint CLI could not be executed by the lowered v1 backend";
@@ -168,7 +168,7 @@ export class VerifyDesignQuintUseCase {
             continue;
           }
           probesUsed += 1;
-          const probe = this.#sibling.probeState(u, lowered, attrPath, state, probeRemaining);
+          const probe = this.#siblingBackendClient.probeState(u, lowered, attrPath, state, probeRemaining);
           if (probe.kind === "failed") {
             leftover.push(state);
             continue;
@@ -196,7 +196,7 @@ export class VerifyDesignQuintUseCase {
     }
 
     // --- Phase 3（動的）：alpha(P) が機械の不変量面に合流する -----------------
-    const context = this.#refinementContexts.findById(RefinementContextId.ofModel(input.modelId));
+    const context = this.#refinementContextRepository.findById(RefinementContextId.ofModel(input.modelId));
     let inputs: readonly DesignInputAnchor[] | undefined;
     if (context.kind === "active") {
       const req = context.requirements;
@@ -242,7 +242,7 @@ export class VerifyDesignQuintUseCase {
             lowered.obligations.push({ id: lowId, nature: "invariant", frRefs: e.frRefs, assert: e.expr });
             lowered.map.set(lowId, { design: e.reqId, kind: "passthrough" });
           }
-          const run = this.#sibling.runLowered("quint", u, lowered, remaining);
+          const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
           if (run.exit !== 0 || run.doc === null) {
             for (const e of extras) {
               skipped.push({ target: e.reqId, reason: "unavailable", unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` });
@@ -291,7 +291,7 @@ export class VerifyDesignQuintUseCase {
     }
 
     const finalMethod = method ?? "simulation";
-    const conformed = this.#reports.conformedOf(
+    const conformed = this.#designReportRepository.conformedOf(
       DesignReport.compose({
         id,
         irVersion: model.irVersion(),
@@ -303,7 +303,7 @@ export class VerifyDesignQuintUseCase {
         checked: checkedUnits,
       }),
     );
-    const saved = this.#reports.save(conformed);
+    const saved = this.#designReportRepository.save(conformed);
     if (!saved.ok) return { kind: "save-failed", error: saved.error };
     const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
     if (!cross.ok) return { kind: "save-failed", error: cross.error };
@@ -317,13 +317,13 @@ export class VerifyDesignQuintUseCase {
   }
 
   #persist(report: DesignReport): Result<void, RepositoryError> {
-    return this.#reports.save(this.#reports.conformedOf(report));
+    return this.#designReportRepository.save(this.#designReportRepository.conformedOf(report));
   }
 
   // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
   // チェックを再計算する（最後の書き手が勝ち、全書き手が同一バイトへ収束）。
   #recomputeCrossCheck(model: DesignModel, irHash: ContentHash, directory: ArtifactPath): Result<void, RepositoryError> {
-    const siblings = this.#reports.findAllByDirectory(directory);
+    const siblings = this.#designReportRepository.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);
     return this.#persist(designCrossCheckReport(DesignReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash, siblings.value));

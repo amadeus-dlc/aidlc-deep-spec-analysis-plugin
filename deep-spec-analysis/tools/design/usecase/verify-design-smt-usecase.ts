@@ -53,32 +53,32 @@ export interface VerifyDesignInput {
 }
 
 export class VerifyDesignSmtUseCase {
-  readonly #designModels: DesignModelRepository;
-  readonly #reports: DesignReportRepository;
-  readonly #sibling: SiblingBackendClient;
-  readonly #refinementContexts: RefinementContextRepository;
-  readonly #refinementSolver: RefinementSolverClient;
+  readonly #designModelRepository: DesignModelRepository;
+  readonly #designReportRepository: DesignReportRepository;
+  readonly #siblingBackendClient: SiblingBackendClient;
+  readonly #refinementContextRepository: RefinementContextRepository;
+  readonly #refinementSolverClient: RefinementSolverClient;
   readonly #clock: Clock;
 
   constructor(
-    designModels: DesignModelRepository,
-    reports: DesignReportRepository,
-    sibling: SiblingBackendClient,
-    refinementContexts: RefinementContextRepository,
-    refinementSolver: RefinementSolverClient,
+    designModelRepository: DesignModelRepository,
+    designReportRepository: DesignReportRepository,
+    siblingBackendClient: SiblingBackendClient,
+    refinementContextRepository: RefinementContextRepository,
+    refinementSolverClient: RefinementSolverClient,
     clock: Clock,
   ) {
-    this.#designModels = designModels;
-    this.#reports = reports;
-    this.#sibling = sibling;
-    this.#refinementContexts = refinementContexts;
-    this.#refinementSolver = refinementSolver;
+    this.#designModelRepository = designModelRepository;
+    this.#designReportRepository = designReportRepository;
+    this.#siblingBackendClient = siblingBackendClient;
+    this.#refinementContextRepository = refinementContextRepository;
+    this.#refinementSolverClient = refinementSolverClient;
     this.#clock = clock;
   }
 
   execute(input: VerifyDesignInput): VerifyDesignOutcome {
     const id = DesignReportId.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#designModels.findById(input.modelId);
+    const acquired = this.#designModelRepository.findById(input.modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
@@ -122,7 +122,7 @@ export class VerifyDesignSmtUseCase {
         }
         continue;
       }
-      const run = this.#sibling.runLowered("smt", u, lowered, remaining);
+      const run = this.#siblingBackendClient.runLowered("smt", u, lowered, remaining);
       if (run.exit === 127) {
         const reason =
           (run.doc?.kind === "unavailable" ? run.doc.reason : null) ?? "z3 could not be executed by the lowered v1 backend";
@@ -153,7 +153,7 @@ export class VerifyDesignSmtUseCase {
     // --- Phase 3: 検証済み要件 IR に対する refinement ------------------------
     // 要件形式モデルの存在で発火。欠落・陳腐化・ユニット欠けの map は明示 skip
     // を生む——沈黙しない。
-    const context = this.#refinementContexts.findById(RefinementContextId.ofModel(input.modelId));
+    const context = this.#refinementContextRepository.findById(RefinementContextId.ofModel(input.modelId));
     let inputs: readonly DesignInputAnchor[] | undefined;
     if (context.kind === "active") {
       const req = context.requirements;
@@ -187,7 +187,7 @@ export class VerifyDesignSmtUseCase {
             continue;
           }
           const plan = planUnitRefinement(u, unitMap, req, context.map.mapArtifact);
-          const check = this.#refinementSolver.check(u, req, plan, Math.min(30_000, refRemaining));
+          const check = this.#refinementSolverClient.check(u, req, plan, Math.min(30_000, refRemaining));
           if (check.result.kind === "unavailable") {
             // 旧挙動：unavailable のユニットは gap / status / compile skip を
             // 捨て、全要件対象を一括 unavailable として記録する。
@@ -208,7 +208,7 @@ export class VerifyDesignSmtUseCase {
       }
     }
 
-    const conformed = this.#reports.conformedOf(
+    const conformed = this.#designReportRepository.conformedOf(
       DesignReport.compose({
         id,
         irVersion: model.irVersion(),
@@ -220,7 +220,7 @@ export class VerifyDesignSmtUseCase {
         checked: checkedUnits,
       }),
     );
-    const saved = this.#reports.save(conformed);
+    const saved = this.#designReportRepository.save(conformed);
     if (!saved.ok) return { kind: "save-failed", error: saved.error };
     const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
     if (!cross.ok) return { kind: "save-failed", error: cross.error };
@@ -234,13 +234,13 @@ export class VerifyDesignSmtUseCase {
   }
 
   #persist(report: DesignReport): Result<void, RepositoryError> {
-    return this.#reports.save(this.#reports.conformedOf(report));
+    return this.#designReportRepository.save(this.#designReportRepository.conformedOf(report));
   }
 
   // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
   // チェックを再計算する（最後の書き手が勝ち、全書き手が同一バイトへ収束）。
   #recomputeCrossCheck(model: DesignModel, irHash: ContentHash, directory: ArtifactPath): Result<void, RepositoryError> {
-    const siblings = this.#reports.findAllByDirectory(directory);
+    const siblings = this.#designReportRepository.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);
     return this.#persist(designCrossCheckReport(DesignReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash, siblings.value));

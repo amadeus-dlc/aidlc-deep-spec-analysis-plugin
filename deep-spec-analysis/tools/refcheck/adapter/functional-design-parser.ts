@@ -2,10 +2,28 @@
 // ここに封じ、型付き outcome へ解く。抽出ロジックは旧センサーの逐語移動
 //（AttrDecl の生 Json フィールドのみ、検査が区別する意味論へ無損失に写像）。
 
-import { normalizeName, requirementIds } from "../../kernel/domain/index.ts";
+import { requirementIds } from "../../kernel/domain/index.ts";
 import { extractFences } from "../../kernel/adapter/markdown-fences.ts";
 import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
 import { parseYamlSubset } from "../../kernel/adapter/yaml-subset.ts";
+import {
+  AllowedValue,
+  AppliesTo,
+  AttributeDefault,
+  AttributeName,
+  BusinessRuleId,
+  CardinalityNotation,
+  ComponentName,
+  ElementPath,
+  EntityName,
+  MachineSpec,
+  NumericBound,
+  ReferenceTarget,
+  RuleCategory,
+  SourceId,
+  StateName,
+  TypeName,
+} from "../domain/index.ts";
 import type {
   AttrDecl,
   DomainEntitiesOutcome,
@@ -37,24 +55,30 @@ function extractRel(raw: Json, element: string, implicitFrom: string | null): Re
   const to = str(pick(raw, ["to", "target", "entity"]));
   const cardinality = str(pick(raw, ["cardinality"]));
   const hasDirection = (from !== null && to !== null) || str(pick(raw, ["direction"])) !== null;
-  return { element, from, to, cardinality, hasDirection };
+  return {
+    element: ElementPath.reconstitute(element),
+    from: from === null ? null : EntityName.reconstitute(from),
+    to: to === null ? null : EntityName.reconstitute(to),
+    cardinality: cardinality === null ? null : CardinalityNotation.reconstitute(cardinality),
+    hasDirection,
+  };
 }
 
 function extractEntities(value: Json): EntitiesModel {
   const model: EntitiesModel = { entities: [], rels: [], shapeErrors: [] };
   if (!isObject(value) || !Array.isArray(value.entities)) {
-    model.shapeErrors.push({ element: "entities", detail: "top-level `entities:` list is missing" });
+    model.shapeErrors.push({ element: ElementPath.reconstitute("entities"), detail: "top-level `entities:` list is missing" });
     return model;
   }
   value.entities.forEach((raw, i) => {
     const element = `entities[${i}]`;
     if (!isObject(raw)) {
-      model.shapeErrors.push({ element, detail: "entity entry is not a mapping" });
+      model.shapeErrors.push({ element: ElementPath.reconstitute(element), detail: "entity entry is not a mapping" });
       return;
     }
     const name = str(raw.name);
     if (name === null) {
-      model.shapeErrors.push({ element: `${element}.name`, detail: "entity has no string `name`" });
+      model.shapeErrors.push({ element: ElementPath.reconstitute(`${element}.name`), detail: "entity has no string `name`" });
       return;
     }
     const attrs: AttrDecl[] = [];
@@ -62,17 +86,17 @@ function extractEntities(value: Json): EntitiesModel {
       (raw.attributes as Json[]).forEach((a, j) => {
         const ael = `${element}.attributes[${j}]`;
         if (!isObject(a)) {
-          model.shapeErrors.push({ element: ael, detail: "attribute entry is not a mapping" });
+          model.shapeErrors.push({ element: ElementPath.reconstitute(ael), detail: "attribute entry is not a mapping" });
           return;
         }
         const aname = str(a.name);
         if (aname === null) {
-          model.shapeErrors.push({ element: `${ael}.name`, detail: "attribute has no string `name`" });
+          model.shapeErrors.push({ element: ElementPath.reconstitute(`${ael}.name`), detail: "attribute has no string `name`" });
           return;
         }
         const type = str(pick(a, ["type", "logical_type", "logical-type"]));
         if (type === null) {
-          model.shapeErrors.push({ element: `${ael}.type`, detail: `attribute "${name}.${aname}" has no logical type` });
+          model.shapeErrors.push({ element: ElementPath.reconstitute(`${ael}.type`), detail: `attribute "${name}.${aname}" has no logical type` });
         }
         const allowedRaw = pick(a, ["allowed_values", "allowed-values", "allowed", "values"]);
         const allowed = Array.isArray(allowedRaw)
@@ -81,18 +105,19 @@ function extractEntities(value: Json): EntitiesModel {
         const defRaw = pick(a, ["default"]);
         const minRaw = pick(a, ["min"]);
         const maxRaw = pick(a, ["max"]);
+        const references = str(pick(a, ["references", "reference", "ref"]));
         attrs.push({
-          name: aname,
-          element: ael,
-          type,
+          name: AttributeName.reconstitute(aname),
+          element: ElementPath.reconstitute(ael),
+          type: type === null ? null : TypeName.reconstitute(type),
           uniqueIsTrue: pick(a, ["unique"]) === true,
-          references: str(pick(a, ["references", "reference", "ref"])),
-          allowed,
-          def: typeof defRaw === "number" || typeof defRaw === "string" ? defRaw : null,
+          references: references === null ? null : ReferenceTarget.reconstitute(references),
+          allowed: allowed === null ? null : allowed.map((v) => AllowedValue.reconstitute(v)),
+          def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.reconstitute(defRaw) : null,
           minDeclared: minRaw !== null,
           maxDeclared: maxRaw !== null,
-          min: typeof minRaw === "number" ? minRaw : null,
-          max: typeof maxRaw === "number" ? maxRaw : null,
+          min: typeof minRaw === "number" ? NumericBound.reconstitute(minRaw) : null,
+          max: typeof maxRaw === "number" ? NumericBound.reconstitute(maxRaw) : null,
         });
       });
     }
@@ -103,7 +128,7 @@ function extractEntities(value: Json): EntitiesModel {
         if (rel) rels.push(rel);
       });
     }
-    model.entities.push({ name, element, attrs, rels });
+    model.entities.push({ name: EntityName.reconstitute(name), element: ElementPath.reconstitute(element), attrs, rels });
   });
   if (Array.isArray(value.relationships)) {
     (value.relationships as Json[]).forEach((r, j) => {
@@ -137,19 +162,24 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
   if (!isObject(v) || !Array.isArray(v.rules)) return { kind: "no-rules-list" };
   const rules: RuleDecl[] = (v.rules as Json[]).map((raw, i) => {
     const element = `rules[${i}]`;
-    if (!isObject(raw)) return { id: null, element, category: null, appliesTo: null, sourceIds: [], missing: ["<entry is not a mapping>"] };
+    if (!isObject(raw)) {
+      return { id: null, element: ElementPath.reconstitute(element), category: null, appliesTo: null, sourceIds: [], missing: ["<entry is not a mapping>"] };
+    }
     const missing = ["id", "statement", "category"].filter((k) => !(k in raw));
     if (!("source" in raw) && !("sources" in raw)) missing.push("source");
     const source = pick(raw, ["source", "sources"]);
     const sourceText = Array.isArray(source)
       ? (source as Json[]).filter((s): s is string => typeof s === "string").join(" ")
       : (str(source) ?? "");
+    const id = str(raw.id);
+    const category = str(raw.category);
+    const appliesTo = str(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
     return {
-      id: str(raw.id),
-      element,
-      category: str(raw.category),
-      appliesTo: str(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"])),
-      sourceIds: [...requirementIds(sourceText)],
+      id: id === null ? null : BusinessRuleId.reconstitute(id),
+      element: ElementPath.reconstitute(element),
+      category: category === null ? null : RuleCategory.reconstitute(category),
+      appliesTo: appliesTo === null ? null : AppliesTo.reconstitute(appliesTo),
+      sourceIds: [...requirementIds(sourceText)].map((v) => SourceId.reconstitute(v)),
       missing,
     };
   });
@@ -189,7 +219,12 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecOu
           }
         }
       }
-      machines.push({ spec: (h[1] ?? "").trim(), states: [...states].sort(), fenceLine: j + 1, unsupported });
+      machines.push({
+        spec: MachineSpec.reconstitute((h[1] ?? "").trim()),
+        states: [...states].sort().map((v) => StateName.reconstitute(v)),
+        fenceLine: j + 1,
+        unsupported,
+      });
       break;
     }
   }
@@ -212,7 +247,11 @@ export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOu
         const attributes = Array.isArray(e.attributes)
           ? (e.attributes as Json[]).filter((a): a is string => typeof a === "string")
           : [];
-        out.push({ name: e.name, component: raw.name, attributes });
+        out.push({
+          name: EntityName.reconstitute(e.name),
+          component: ComponentName.reconstitute(raw.name),
+          attributes: attributes.map((v) => AttributeName.reconstitute(v)),
+        });
       }
     }
   }
@@ -229,9 +268,9 @@ export function buildSiblingUnitEntities(texts: readonly { unit: string; text: s
     const parsed = parseYamlSubset(fence.body);
     if (parsed.error !== undefined) continue; // its own unit's run reports the parse error
     const model = extractEntities(parsed.value ?? null);
-    const map = new Map<string, { name: string; attrs: string[] }>();
+    const map = new Map<string, { name: EntityName; attrs: AttributeName[] }>();
     for (const e of model.entities) {
-      map.set(normalizeName(e.name), { name: e.name, attrs: e.attrs.map((a) => a.name) });
+      map.set(e.name.normalized(), { name: e.name, attrs: e.attrs.map((a) => a.name) });
     }
     unitEntities.set(unit, map);
   }

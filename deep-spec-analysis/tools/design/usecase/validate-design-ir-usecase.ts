@@ -11,14 +11,14 @@ import type { DesignIrValidationMaterialsRepository } from "./design-ir-validati
 import type { ValidateDesignIrOutcome } from "./validate-design-ir-outcome.ts";
 
 export class ValidateDesignIrUseCase {
-  readonly #materials: DesignIrValidationMaterialsRepository;
+  readonly #designIrValidationMaterialsRepository: DesignIrValidationMaterialsRepository;
 
-  constructor(materials: DesignIrValidationMaterialsRepository) {
-    this.#materials = materials;
+  constructor(designIrValidationMaterialsRepository: DesignIrValidationMaterialsRepository) {
+    this.#designIrValidationMaterialsRepository = designIrValidationMaterialsRepository;
   }
 
   execute(modelId: DesignModelId): ValidateDesignIrOutcome {
-    const acquired = this.#materials.acquire(modelId);
+    const acquired = this.#designIrValidationMaterialsRepository.acquire(modelId);
     if (acquired.kind === "not-applicable") return { kind: "not-applicable" };
     if (acquired.kind === "unreadable") {
       return { kind: "verdict", pass: false, errors: acquired.errors };

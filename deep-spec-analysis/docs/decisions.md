@@ -854,3 +854,39 @@ deferred to the PR10 lift.
 Proofs: 304 tests green; parity snapshot `diff -r` empty against the
 pre-PR7 base; goldens untouched; all new id accessors covered above the
 90% floor.
+
+## Vocabulary-primitive ruling — non-boolean values in domain interfaces become DPs (2026-08-30)
+
+Two more rulings landed in the same review session and were applied:
+
+1. **Port-holding fields are named for their role.** `#designRecords` /
+   `#reports` hid what they hold; every use-case field and constructor
+   parameter holding a port now bears the port's name
+   (`#designRecordRepository`, `#referenceCheckReportRepository`,
+   `#formalModelRepository`, `#verificationReportRepository`,
+   `#z3SolverClient`, `#quintClient`, `#designModelRepository`,
+   `#designReportRepository`, `#siblingBackendClient`,
+   `#refinementContextRepository`, `#refinementSolverClient`,
+   `#irValidationMaterialsRepository`, `#requirementsSourceRepository`,
+   `#designIrValidationMaterialsRepository`).
+2. **Non-boolean fields of domain interfaces are domain primitives** —
+   the freeze-blocked stance was overruled: the `reconstitute` door makes
+   DP-ification freeze-compatible even where the strict `parse` path has
+   no producer yet. Applied first to the quoted instance and its whole
+   cluster: the functional-design vocabulary (`AttrDecl`, `RelDecl`,
+   `EntityDecl`, `RuleDecl`, `StateMachineSketch`, `DomainEntitySketch`,
+   the sibling index) now speaks `EntityName`, `AttributeName`,
+   `ElementPath`, `TypeName`, `AllowedValue`, `AttributeDefault`,
+   `NumericBound`, `CardinalityNotation`, `BusinessRuleId`,
+   `RuleCategory`, `AppliesTo`, `SourceId`, `MachineSpec`, `StateName`,
+   `ComponentName`, `ReferenceTarget` — each owning its interpretation
+   vocabulary (case/underscore normalization, the BR shape, cardinality
+   token folding, spec decomposition, default rendering) so the checks
+   read as semantics while every frozen message stays byte-identical.
+   Booleans (declaration flags) and prose (details, unsupported reasons,
+   missing-key lists) stay primitive by the ruling's own carve-out;
+   line/count metadata stays numeric pending an explicit ruling.
+
+Proofs: 305+ tests green; the vocabulary file holds 100% line coverage;
+goldens untouched; the parity snapshot `diff -r` stays empty against the
+pre-PR7 base (the refcheck scenarios exercise these messages heavily).

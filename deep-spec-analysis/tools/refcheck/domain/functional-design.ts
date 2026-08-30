@@ -2,34 +2,53 @@
 // 横断検査（XS）向け domain-design エンティティの型付き入力モデル。
 // 解析（fence/YAML/mermaid/Json 歩き）はアダプタのパーサが行う。
 
+import type {
+  AllowedValue,
+  AppliesTo,
+  AttributeDefault,
+  AttributeName,
+  BusinessRuleId,
+  CardinalityNotation,
+  ComponentName,
+  ElementPath,
+  EntityName,
+  MachineSpec,
+  NumericBound,
+  ReferenceTarget,
+  RuleCategory,
+  SourceId,
+  StateName,
+  TypeName,
+} from "./functional-design-values.ts";
+
 // 旧実装は unique/min/max/default を生 Json のまま持ち typeof で分岐していた。
-// 検査が実際に区別するのは「宣言の有無」「数値として読めるか」「文字列か」
-// だけなので、その意味論を無損失に型へ写す（Json はドメインに持ち込まない）。
+// 検査が区別する意味論（宣言の有無・数値か文字列か）は語彙 DP が所有し、
+// bool（宣言フラグ）以外の値はすべてドメインプリミティブで運ぶ。
 export interface AttrDecl {
-  name: string;
-  element: string;
-  type: string | null;
+  name: AttributeName;
+  element: ElementPath;
+  type: TypeName | null;
   uniqueIsTrue: boolean;
-  references: string | null;
-  allowed: string[] | null;
-  def: string | number | null;
+  references: ReferenceTarget | null;
+  allowed: AllowedValue[] | null;
+  def: AttributeDefault | null;
   minDeclared: boolean;
   maxDeclared: boolean;
-  min: number | null;
-  max: number | null;
+  min: NumericBound | null;
+  max: NumericBound | null;
 }
 
 export interface RelDecl {
-  element: string;
-  from: string | null;
-  to: string | null;
-  cardinality: string | null;
+  element: ElementPath;
+  from: EntityName | null;
+  to: EntityName | null;
+  cardinality: CardinalityNotation | null;
   hasDirection: boolean;
 }
 
 export interface EntityDecl {
-  name: string;
-  element: string;
+  name: EntityName;
+  element: ElementPath;
   attrs: AttrDecl[];
   rels: RelDecl[];
 }
@@ -37,7 +56,7 @@ export interface EntityDecl {
 export interface EntitiesModel {
   entities: EntityDecl[];
   rels: RelDecl[]; // top-level relationships
-  shapeErrors: { element: string; detail: string }[];
+  shapeErrors: { element: ElementPath; detail: string }[];
 }
 
 export type EntitiesOutcome =
@@ -47,11 +66,12 @@ export type EntitiesOutcome =
   | { readonly kind: "extracted"; readonly model: EntitiesModel };
 
 export interface RuleDecl {
-  id: string | null;
-  element: string;
-  category: string | null;
-  appliesTo: string | null;
-  sourceIds: string[];
+  id: BusinessRuleId | null;
+  element: ElementPath;
+  category: RuleCategory | null;
+  appliesTo: AppliesTo | null;
+  sourceIds: SourceId[];
+  // 欠落キー名の列（文言材料——語彙値ではない）。
   missing: string[];
 }
 
@@ -63,10 +83,10 @@ export type RulesOutcome =
   | { readonly kind: "extracted"; readonly rules: RuleDecl[] };
 
 export interface StateMachineSketch {
-  spec: string; // "Entity" or "Entity.attribute" from the heading
-  states: string[];
+  spec: MachineSpec; // "Entity" or "Entity.attribute" from the heading
+  states: StateName[];
   fenceLine: number;
-  unsupported: string | null;
+  unsupported: string | null; // 文言材料（理由のプローズ）
 }
 
 export type FunctionalSpecOutcome =
@@ -74,9 +94,9 @@ export type FunctionalSpecOutcome =
   | { readonly kind: "present"; readonly machines: StateMachineSketch[] };
 
 export interface DomainEntitySketch {
-  name: string;
-  component: string;
-  attributes: string[];
+  name: EntityName;
+  component: ComponentName;
+  attributes: AttributeName[];
 }
 
 export type DomainEntitiesOutcome =
@@ -85,4 +105,4 @@ export type DomainEntitiesOutcome =
   | { readonly kind: "extracted"; readonly entities: DomainEntitySketch[] };
 
 // 正規化名 → { 宣言名, 属性名列 }（XS 検査が消費するユニットごとの索引）。
-export type SiblingUnitEntities = Map<string, Map<string, { name: string; attrs: string[] }>>;
+export type SiblingUnitEntities = Map<string, Map<string, { name: EntityName; attrs: AttributeName[] }>>;
