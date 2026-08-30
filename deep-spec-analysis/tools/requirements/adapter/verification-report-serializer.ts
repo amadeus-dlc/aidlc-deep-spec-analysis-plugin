@@ -11,6 +11,9 @@ import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
 import type { SchemaUnreadable } from "../../kernel/adapter/index.ts";
 import {
+  CrossCheckedEntries,
+  VerificationFindings,
+  VerificationSkips,
   type CrossCheckedEntry,
   type VerificationFinding,
   type VerificationSkipped,
@@ -27,10 +30,11 @@ function orderedDocument(report: VerificationReport): { [k: string]: Json } {
   };
   const reason = report.unavailableReason();
   if (reason !== null) ordered.unavailable = { reason };
-  ordered.findings = report.findings() as unknown as Json;
-  ordered.skipped = report.skipped() as unknown as Json;
+  // コレクションは境界（描画）で toArray() へ落とす——中身は契約2 の素の JSON 形。
+  ordered.findings = report.findings().toArray() as unknown as Json;
+  ordered.skipped = report.skipped().toArray() as unknown as Json;
   const crossChecked = report.crossChecked();
-  if (crossChecked !== null) ordered.crossChecked = crossChecked as unknown as Json;
+  if (crossChecked !== null) ordered.crossChecked = crossChecked.toArray() as unknown as Json;
   return ordered;
 }
 
@@ -93,9 +97,11 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
     irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
     irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
     method: typeof raw.method === "string" ? raw.method : "",
-    findings: (Array.isArray(raw.findings) ? raw.findings : []) as unknown as VerificationFinding[],
-    skipped: skipped as unknown as VerificationSkipped[],
-    crossChecked: Array.isArray(raw.crossChecked) ? (raw.crossChecked as unknown as CrossCheckedEntry[]) : null,
+    findings: VerificationFindings.of((Array.isArray(raw.findings) ? raw.findings : []) as unknown as VerificationFinding[]),
+    skipped: VerificationSkips.of(skipped as unknown as VerificationSkipped[]),
+    crossChecked: Array.isArray(raw.crossChecked)
+      ? CrossCheckedEntries.of(raw.crossChecked as unknown as CrossCheckedEntry[])
+      : null,
     unavailableReason: isObject(raw.unavailable)
       ? typeof raw.unavailable.reason === "string"
         ? raw.unavailable.reason

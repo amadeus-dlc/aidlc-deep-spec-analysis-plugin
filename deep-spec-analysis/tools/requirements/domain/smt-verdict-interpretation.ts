@@ -9,10 +9,11 @@ import type { RequirementsModel } from "./requirements-model.ts";
 import type { SmtPlanFacts } from "./smt-plan-facts.ts";
 import type { SmtQueryVerdict } from "./solver-verdict.ts";
 import type { VerificationFinding, VerificationSkipped } from "./verification-finding.ts";
+import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
 
 export interface InterpretedVerdicts {
-  findings: VerificationFinding[];
-  skipped: VerificationSkipped[];
+  findings: VerificationFindings;
+  skipped: VerificationSkips;
 }
 
 export function interpretSmtVerdicts(
@@ -25,6 +26,7 @@ export function interpretSmtVerdicts(
   const conflictKeys = new Set<string>();
   const invariantIds = model
     .obligations()
+    .toArray()
     .filter((o) => (o.nature === "invariant" || o.nature === "numeric") && facts.compiled.get(o.id))
     .map((o) => o.id);
 
@@ -152,5 +154,5 @@ export function interpretSmtVerdicts(
     }
   }
 
-  return { findings, skipped };
+  return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
 }

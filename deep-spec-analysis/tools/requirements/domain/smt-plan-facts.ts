@@ -3,7 +3,7 @@
 // "sc:SC-x"）とラベル→対象の対応、コンパイル時 skip がここに載る。
 // スクリプト本体はアダプタの計画ビルダが所有する。
 
-import type { VerificationSkipped } from "./verification-finding.ts";
+import type { VerificationSkips } from "./verification-finding.ts";
 
 export interface SmtEventPairProbe {
   readonly qOverlap: string;
@@ -15,7 +15,7 @@ export interface SmtEventPairProbe {
 
 export interface SmtPlanFacts {
   readonly compiled: ReadonlyMap<string, boolean>;
-  readonly skipped: readonly VerificationSkipped[];
+  readonly skipped: VerificationSkips;
   readonly labelToTarget: ReadonlyMap<string, string>;
   readonly eventPairs: readonly SmtEventPairProbe[];
   readonly gapTriggers: ReadonlyMap<string, readonly string[]>;

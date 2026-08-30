@@ -135,3 +135,58 @@ describe("IrVersion", () => {
     expect(empty.equals(IrVersion.reconstitute("1.0.0"))).toBe(false);
   });
 });
+
+// requirements 側ファーストクラスコレクション — 不変 add・境界脱出口・集合知識。
+import {
+  AttributeDeclarations,
+  BackgroundAssumptions,
+  CrossCheckedEntries,
+  Obligations,
+  Scenarios,
+  VerificationFindings,
+  VerificationReports,
+  VerificationSkips,
+} from "../tools/requirements/domain/index.ts";
+import { RequirementIds } from "../tools/kernel/domain/index.ts";
+
+describe("requirements first-class collections", () => {
+  test("immutable add and boundary escape across the cluster", () => {
+    expect(RequirementIds.of([]).add("FR-1").has("FR-1")).toBe(true);
+    expect([...RequirementIds.of(["FR-1"])]).toEqual(["FR-1"]);
+    expect([...RequirementIds.extractFrom("- FR-1 と NFR-2.1").toArray()].sort()).toEqual(["FR-1", "NFR-2.1"]);
+
+    const attrs = AttributeDeclarations.of([]).add({ path: "o.qty", kind: "int", min: 0, max: 5 });
+    expect(attrs.byPath("o.qty")?.kind).toBe("int");
+    expect(attrs.toArray().length).toBe(1);
+
+    const obs = Obligations.of([]).add({ id: "OB-1", nature: "invariant", frRefs: ["FR-1"] });
+    expect(obs.byId("OB-1")?.nature).toBe("invariant");
+    expect(obs.ids()).toEqual(["OB-1"]);
+    expect([...obs].length).toBe(1);
+
+    const scs = Scenarios.of([]).add({ id: "SC-1", kind: "accept", frRefs: [], bindings: {} });
+    expect(scs.byId("SC-1")?.kind).toBe("accept");
+    expect(scs.ids()).toEqual(["SC-1"]);
+
+    const bgs = BackgroundAssumptions.of([]).add({ id: "B1", assert: { op: "bool", value: true } });
+    expect([...bgs].length).toBe(1);
+    expect(bgs.toArray()[0]?.id).toBe("B1");
+
+    const finding = { kind: "conflict", frRefs: [], targets: ["OB-1"], witness: { core: [] }, detail: "d" };
+    const fs = VerificationFindings.of([]).add(finding);
+    expect(fs.isEmpty()).toBe(false);
+    expect(fs.count()).toBe(1);
+    expect([...fs.sortedCanonically()]).toEqual([finding]);
+
+    const sk = VerificationSkips.of([]).add({ target: "OB-2", reason: "timeout" })
+      .concat(VerificationSkips.of([{ target: "OB-1", reason: "capability" }]));
+    expect(sk.count()).toBe(2);
+    expect(sk.sortedCanonically().toArray().map((s) => s.target)).toEqual(["OB-1", "OB-2"]);
+
+    const cc = CrossCheckedEntries.of([]).add({ backend: "smt", targets: ["SC-1"] });
+    expect([...cc].length).toBe(1);
+    expect(cc.toArray()[0]?.backend).toBe("smt");
+
+    expect([...VerificationReports.of([])].length).toBe(0);
+  });
+});

@@ -95,7 +95,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     // requirements.md は rules が使えるときだけ読む（凍結された取得条件）。
     const reqPath = recordRoot === null ? null : join(recordRoot, "inception", "requirements-analysis", "requirements.md");
     const requirements = rules !== null && rules.outcome.kind === "extracted" && reqPath !== null
-      ? load(reqPath, (t) => requirementIds(t) as ReadonlySet<string>)
+      ? load(reqPath, (t) => requirementIds(t))
       : null;
 
     const componentsPath = recordRoot === null ? null : join(recordRoot, "inception", "domain-design", "components.md");

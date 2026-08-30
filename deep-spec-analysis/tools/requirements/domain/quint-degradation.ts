@@ -9,6 +9,7 @@ import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import { VerificationReport } from "./verification-report.ts";
+import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
 
 export function quintUnavailableReport(
   id: VerificationReportId,
@@ -20,8 +21,8 @@ export function quintUnavailableReport(
     irVersion: model.irVersion(),
     irHash,
     method: "simulation",
-    findings: [],
-    skipped: model.allTargets().map((t) => ({ target: t, reason: "unavailable", detail: "quint CLI missing" })),
+    findings: VerificationFindings.of([]),
+    skipped: VerificationSkips.of(model.allTargets().map((t) => ({ target: t, reason: "unavailable", detail: "quint CLI missing" }))),
     unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)",
   });
 }
@@ -38,10 +39,10 @@ export function machineUncompilableReport(
     irVersion: model.irVersion(),
     irHash,
     method,
-    findings: [],
-    skipped: [
-      ...model.obligations().map((ob) => ({ target: ob.id, reason: "compile-error", detail: machineError })),
-      ...model.scenarios().map((sc) => ({ target: sc.id, reason: "compile-error", detail: machineError })),
-    ],
+    findings: VerificationFindings.of([]),
+    skipped: VerificationSkips.of([
+      ...model.obligations().toArray().map((ob) => ({ target: ob.id, reason: "compile-error", detail: machineError })),
+      ...model.scenarios().toArray().map((sc) => ({ target: sc.id, reason: "compile-error", detail: machineError })),
+    ]),
   });
 }

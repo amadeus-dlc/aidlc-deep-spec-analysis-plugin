@@ -5,14 +5,14 @@
 import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
-import type { VerificationSkipped } from "./verification-finding.ts";
 import { VerificationReport } from "./verification-report.ts";
+import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
 
 export function solverUnavailableReport(
   id: VerificationReportId,
   model: RequirementsModel,
   irHash: ContentHash,
-  planSkipped: readonly VerificationSkipped[],
+  planSkipped: VerificationSkips,
   reason: string,
 ): VerificationReport {
   return VerificationReport.compose({
@@ -20,14 +20,14 @@ export function solverUnavailableReport(
     irVersion: model.irVersion(),
     irHash,
     method: "exhaustive",
-    findings: [],
-    skipped: [
-      ...planSkipped,
+    findings: VerificationFindings.of([]),
+    skipped: VerificationSkips.of([
+      ...planSkipped.toArray(),
       ...model
         .allTargets()
-        .filter((t) => !planSkipped.some((s) => s.target === t))
+        .filter((t) => !planSkipped.toArray().some((s) => s.target === t))
         .map((t) => ({ target: t, reason: "unavailable", detail: "z3 could not be executed" })),
-    ],
+    ]),
     unavailableReason: reason,
   });
 }

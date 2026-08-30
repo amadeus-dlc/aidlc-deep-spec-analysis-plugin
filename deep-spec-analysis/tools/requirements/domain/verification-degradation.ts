@@ -8,6 +8,7 @@ import { sha256 } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import { VerificationReport } from "./verification-report.ts";
+import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
 
 export const SUPPORTED_IR_MAJOR = 1;
 
@@ -19,8 +20,8 @@ export function irUnreadableReport(id: VerificationReportId, method: string, cau
     irVersion: IrVersion.reconstitute("0.0.0"),
     irHash: sha256(""),
     method,
-    findings: [],
-    skipped: [],
+    findings: VerificationFindings.of([]),
+    skipped: VerificationSkips.of([]),
     unavailableReason: `IR unreadable: ${cause} — see the deep-spec-ir-valid sensor for details`,
   });
 }
@@ -37,11 +38,11 @@ export function versionMismatchReport(
     irVersion: model.irVersion(),
     irHash,
     method,
-    findings: [],
-    skipped: model.allTargets().map((t) => ({
+    findings: VerificationFindings.of([]),
+    skipped: VerificationSkips.of(model.allTargets().map((t) => ({
       target: t,
       reason: "ir-version-mismatch",
       detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`,
-    })),
+    }))),
   });
 }

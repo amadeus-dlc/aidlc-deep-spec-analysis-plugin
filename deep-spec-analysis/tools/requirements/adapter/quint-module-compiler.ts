@@ -176,7 +176,7 @@ export function compileQuintMachine(model: RequirementsModel): QuintCompilation 
 
 function compile(model: RequirementsModel): CompiledQuintMachine {
   const compileSkips: VerificationSkipped[] = [];
-  const attrs = model.attributes();
+  const attrs = model.attributes().toArray();
   const varToPath = new Map<string, string>();
   for (const attr of attrs) {
     const v = qVar(attr.path);
@@ -207,7 +207,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       invariantComponents.push({ id: ob.id, expr: ob.temporal.assert, frRefs: ob.frRefs });
     }
   }
-  const bgComponents = model.background().map((b) => ({ id: b.id, expr: b.assert, frRefs: [] as string[] }));
+  const bgComponents = model.background().toArray().map((b) => ({ id: b.id, expr: b.assert, frRefs: [] as string[] }));
 
   const invExprs: string[] = [];
   for (const c of [...invariantComponents, ...bgComponents]) {

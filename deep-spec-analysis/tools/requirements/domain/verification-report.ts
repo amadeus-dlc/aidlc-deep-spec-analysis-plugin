@@ -6,12 +6,36 @@
 
 import type { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
-import type { VerificationFinding, VerificationSkipped } from "./verification-finding.ts";
-import { sortVerificationFindings, sortVerificationSkipped } from "./verification-finding-order.ts";
+import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
 
 export interface CrossCheckedEntry {
   readonly backend: string;
   readonly targets: string[];
+}
+
+// クロスチェック判定表のファーストクラスコレクション。
+export class CrossCheckedEntries {
+  readonly #values: readonly CrossCheckedEntry[];
+
+  private constructor(values: readonly CrossCheckedEntry[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly CrossCheckedEntry[]): CrossCheckedEntries {
+    return new CrossCheckedEntries([...values]);
+  }
+
+  add(value: CrossCheckedEntry): CrossCheckedEntries {
+    return new CrossCheckedEntries([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<CrossCheckedEntry> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly CrossCheckedEntry[] {
+    return this.#values;
+  }
 }
 
 export interface VerificationReportSeed {
@@ -19,9 +43,9 @@ export interface VerificationReportSeed {
   readonly irVersion: IrVersion;
   readonly irHash: ContentHash;
   readonly method: string;
-  readonly findings: readonly VerificationFinding[];
-  readonly skipped: readonly VerificationSkipped[];
-  readonly crossChecked: readonly CrossCheckedEntry[] | null;
+  readonly findings: VerificationFindings;
+  readonly skipped: VerificationSkips;
+  readonly crossChecked: CrossCheckedEntries | null;
   readonly unavailableReason: string | null;
 }
 
@@ -30,9 +54,9 @@ export interface VerificationReportComposition {
   readonly irVersion: IrVersion;
   readonly irHash: ContentHash;
   readonly method: string;
-  readonly findings: readonly VerificationFinding[];
-  readonly skipped: readonly VerificationSkipped[];
-  readonly crossChecked?: readonly CrossCheckedEntry[];
+  readonly findings: VerificationFindings;
+  readonly skipped: VerificationSkips;
+  readonly crossChecked?: CrossCheckedEntries;
   readonly unavailableReason?: string;
 }
 
@@ -41,9 +65,9 @@ export class VerificationReport {
   readonly #irVersion: IrVersion;
   readonly #irHash: ContentHash;
   readonly #method: string;
-  readonly #findings: readonly VerificationFinding[];
-  readonly #skipped: readonly VerificationSkipped[];
-  readonly #crossChecked: readonly CrossCheckedEntry[] | null;
+  readonly #findings: VerificationFindings;
+  readonly #skipped: VerificationSkips;
+  readonly #crossChecked: CrossCheckedEntries | null;
   readonly #unavailableReason: string | null;
 
   private constructor(seed: VerificationReportSeed) {
@@ -65,8 +89,8 @@ export class VerificationReport {
       irVersion: input.irVersion,
       irHash: input.irHash,
       method: input.method,
-      findings: sortVerificationFindings(input.findings),
-      skipped: sortVerificationSkipped(input.skipped),
+      findings: input.findings.sortedCanonically(),
+      skipped: input.skipped.sortedCanonically(),
       crossChecked: input.crossChecked ?? null,
       unavailableReason: input.unavailableReason ?? null,
     });
@@ -85,8 +109,8 @@ export class VerificationReport {
       irVersion: this.#irVersion,
       irHash: this.#irHash,
       method: this.#method,
-      findings: [],
-      skipped: [],
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([]),
       crossChecked: null,
       unavailableReason: reason,
     });
@@ -108,15 +132,15 @@ export class VerificationReport {
     return this.#method;
   }
 
-  findings(): readonly VerificationFinding[] {
+  findings(): VerificationFindings {
     return this.#findings;
   }
 
-  skipped(): readonly VerificationSkipped[] {
+  skipped(): VerificationSkips {
     return this.#skipped;
   }
 
-  crossChecked(): readonly CrossCheckedEntry[] | null {
+  crossChecked(): CrossCheckedEntries | null {
     return this.#crossChecked;
   }
 
@@ -130,14 +154,39 @@ export class VerificationReport {
 
   // verdict 行の pass はこの述語から導く（findings ゼロ＝pass）。
   passes(): boolean {
-    return this.#findings.length === 0;
+    return this.#findings.isEmpty();
   }
 
   findingsCount(): number {
-    return this.#findings.length;
+    return this.#findings.count();
   }
 
   skippedCount(): number {
-    return this.#skipped.length;
+    return this.#skipped.count();
+  }
+}
+
+// 兄弟文書のファーストクラスコレクション（クロスチェックの入力）。
+export class VerificationReports {
+  readonly #values: readonly VerificationReport[];
+
+  private constructor(values: readonly VerificationReport[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly VerificationReport[]): VerificationReports {
+    return new VerificationReports([...values]);
+  }
+
+  add(value: VerificationReport): VerificationReports {
+    return new VerificationReports([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<VerificationReport> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly VerificationReport[] {
+    return this.#values;
   }
 }

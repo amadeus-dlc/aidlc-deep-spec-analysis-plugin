@@ -7,6 +7,6 @@ export { type ContentHashError, ContentHash, sha256 } from "./content-hash.ts";
 export { type IrVersionError, IrVersion } from "./ir-version.ts";
 export { idCompare, sortedUnique } from "./id-order.ts";
 export { safeTarget } from "./target-id.ts";
-export { requirementIds } from "./requirement-ids.ts";
+export { RequirementIds, requirementIds } from "./requirement-ids.ts";
 export { normalizeName } from "./name-normalize.ts";
 export { type ArtifactPathError, ArtifactPath } from "./artifact-path.ts";

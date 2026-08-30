@@ -13,6 +13,7 @@ import type { Json } from "../../kernel/adapter/index.ts";
 import { readContractSchema } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { VerificationReport, VerificationReportId } from "../domain/index.ts";
+import { VerificationReports } from "../domain/index.ts";
 import type { VerificationReportRepository } from "../usecase/index.ts";
 import {
   conformToFindingsContract,
@@ -46,7 +47,7 @@ export class VerificationReportRepositoryImpl implements VerificationReportRepos
     return report;
   }
 
-  findAllByDirectory(directory: ArtifactPath): Result<readonly VerificationReport[], RepositoryError> {
+  findAllByDirectory(directory: ArtifactPath): Result<VerificationReports, RepositoryError> {
     let entries: string[];
     try {
       entries = readdirSync(directory.value())
@@ -65,7 +66,7 @@ export class VerificationReportRepositoryImpl implements VerificationReportRepos
         // 読めない兄弟文書は黙って除く——その状態は自分の書き手が報告する。
       }
     }
-    return ok(reports);
+    return ok(VerificationReports.of(reports));
   }
 
   conformedOf(report: VerificationReport): VerificationReport {

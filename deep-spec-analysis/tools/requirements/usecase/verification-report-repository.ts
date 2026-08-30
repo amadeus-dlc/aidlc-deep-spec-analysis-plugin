@@ -9,11 +9,11 @@
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { ArtifactPath } from "../../kernel/domain/index.ts";
-import type { VerificationReport, VerificationReportId } from "../domain/index.ts";
+import type { VerificationReport, VerificationReportId, VerificationReports } from "../domain/index.ts";
 
 export interface VerificationReportRepository {
   findById(aggregateId: VerificationReportId): Result<VerificationReport, RepositoryError>;
-  findAllByDirectory(directory: ArtifactPath): Result<readonly VerificationReport[], RepositoryError>;
+  findAllByDirectory(directory: ArtifactPath): Result<VerificationReports, RepositoryError>;
   conformedOf(report: VerificationReport): VerificationReport;
   save(report: VerificationReport): Result<void, RepositoryError>;
 }

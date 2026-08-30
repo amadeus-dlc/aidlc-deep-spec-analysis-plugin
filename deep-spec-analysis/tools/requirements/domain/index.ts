@@ -1,25 +1,30 @@
 // requirements/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
-export { type AttributeDeclaration } from "./attribute-declaration.ts";
-export { type Obligation } from "./obligation.ts";
-export { type Scenario } from "./scenario.ts";
+export { type AttributeDeclaration, AttributeDeclarations } from "./attribute-declaration.ts";
+export { type Obligation, Obligations } from "./obligation.ts";
+export { type Scenario, Scenarios } from "./scenario.ts";
 export {
   type BackgroundAssumption,
   type RequirementsModelSeed,
+  BackgroundAssumptions,
   RequirementsModel,
 } from "./requirements-model.ts";
 export {
   type VerificationFinding,
   type VerificationSkipped,
   type VerificationWitness,
+  VerificationFindings,
+  VerificationSkips,
 } from "./verification-finding.ts";
 export { sortVerificationFindings, sortVerificationSkipped } from "./verification-finding-order.ts";
 export { VerificationReportId } from "./verification-report-id.ts";
 export {
   type CrossCheckedEntry,
+  CrossCheckedEntries,
   type VerificationReportComposition,
   type VerificationReportSeed,
   VerificationReport,
+  VerificationReports,
 } from "./verification-report.ts";
 export { type SmtQueryStatus, type SmtQueryVerdict } from "./solver-verdict.ts";
 export { type SmtEventPairProbe, type SmtPlanFacts } from "./smt-plan-facts.ts";
