@@ -27,6 +27,15 @@ function ap(raw: string): ArtifactPath {
 }
 
 import {
+  DesignBackgroundId,
+  DesignAttributeName,
+  DesignEntityName,
+  DesignMachineId,
+  DesignObligationId,
+  DesignObligationNature,
+  DesignObligationOrigin,
+  DesignScenarioId,
+  DesignTransitionId,
   AttrPaths,
   DesignBackgroundAssumptions,
   DesignMachines,
@@ -193,15 +202,25 @@ describe("SMT script characterization (the PR8 safety net)", () => {
 
 // --- ドメイン検査の分岐固定（純関数の直接駆動） ------------------------------
 
-// テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
-type RawDesignObligation = Omit<DesignObligation, "brRefs" | "frRefs"> & { brRefs: string[]; frRefs: string[] };
-type RawDesignTransition = Omit<DesignTransition, "brRefs"> & { brRefs: string[] };
-type RawDesignMachine = Omit<DesignMachine, "initial" | "transitions" | "ignores"> & {
+// テストの読みやすさのため素の配列・素の文字列で書き、ここで一括して DP と
+// コレクションに包む。
+type RawDesignObligation = Omit<DesignObligation, "id" | "nature" | "origin" | "brRefs" | "frRefs"> & {
+  id: string;
+  nature: string;
+  origin: string;
+  brRefs: string[];
+  frRefs: string[];
+};
+type RawDesignTransition = Omit<DesignTransition, "id" | "brRefs"> & { id: string; brRefs: string[] };
+type RawDesignMachine = Omit<DesignMachine, "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
+  id: string;
+  entity: string;
+  attribute: string;
   initial: string[];
   transitions: RawDesignTransition[];
   ignores: DesignIgnore[];
 };
-type RawDesignScenario = Omit<DesignScenario, "brRefs" | "frRefs"> & { brRefs: string[]; frRefs: string[] };
+type RawDesignScenario = Omit<DesignScenario, "id" | "brRefs" | "frRefs"> & { id: string; brRefs: string[]; frRefs: string[] };
 function unit(seed: {
   unit?: string;
   rawEntities?: DesignValue;
@@ -209,27 +228,41 @@ function unit(seed: {
   obligations?: RawDesignObligation[];
   machines?: RawDesignMachine[];
   scenarios?: RawDesignScenario[];
-  background?: DesignBackgroundAssumption[];
+  background?: (Omit<DesignBackgroundAssumption, "id"> & { id: string })[];
 }): DesignUnitType {
   return DesignUnit.reconstitute({
     unit: seed.unit ?? "u1",
     rawEntities: seed.rawEntities ?? [],
     attrPaths: AttrPaths.of([...(seed.attrPaths ?? new Set<string>())]),
     obligations: DesignObligations.of(
-      (seed.obligations ?? []).map((o) => ({ ...o, brRefs: BrRefs.of(o.brRefs), frRefs: FrRefs.of(o.frRefs) })),
+      (seed.obligations ?? []).map((o) => ({
+        ...o,
+        id: DesignObligationId.reconstitute(o.id),
+        nature: DesignObligationNature.reconstitute(o.nature),
+        origin: DesignObligationOrigin.reconstitute(o.origin),
+        brRefs: BrRefs.of(o.brRefs),
+        frRefs: FrRefs.of(o.frRefs),
+      })),
     ),
     machines: DesignMachines.of(
       (seed.machines ?? []).map((m) => ({
         ...m,
+        id: DesignMachineId.reconstitute(m.id),
+        entity: DesignEntityName.reconstitute(m.entity),
+        attribute: DesignAttributeName.reconstitute(m.attribute),
         initial: InitialStates.of(m.initial),
-        transitions: DesignTransitions.of(m.transitions.map((t) => ({ ...t, brRefs: BrRefs.of(t.brRefs) }))),
+        transitions: DesignTransitions.of(
+          m.transitions.map((t) => ({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs) })),
+        ),
         ignores: DesignIgnores.of(m.ignores),
       })),
     ),
     scenarios: DesignScenarios.of(
-      (seed.scenarios ?? []).map((s) => ({ ...s, brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
+      (seed.scenarios ?? []).map((s) => ({ ...s, id: DesignScenarioId.reconstitute(s.id), brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
     ),
-    background: DesignBackgroundAssumptions.of(seed.background ?? []),
+    background: DesignBackgroundAssumptions.of(
+      (seed.background ?? []).map((b) => ({ ...b, id: DesignBackgroundId.reconstitute(b.id) })),
+    ),
   });
 }
 

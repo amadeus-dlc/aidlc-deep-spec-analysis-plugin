@@ -46,7 +46,7 @@ export class DesignEventCatalog {
     const out = new Map<string, DesignEvent>();
     const eqRef = (path: string, value: string): Expression => ({ op: "eq", args: [{ op: "ref", path }, { op: "enum", value }] });
     for (const sm of u.machines()) {
-      const attrPath = `${sm.entity}.${sm.attribute}`;
+      const attrPath = `${sm.entity.asString()}.${sm.attribute.asString()}`;
       for (const tr of sm.transitions) {
         const guard: Expression = tr.guard ? { op: "and", args: [eqRef(attrPath, tr.from), tr.guard] } : eqRef(attrPath, tr.from);
         const effectAssign = new Map<string, Expression>();
@@ -63,11 +63,11 @@ export class DesignEventCatalog {
             // シミュレーションは下流の SMT コンパイルで fail closed になる。
           }
         }
-        out.set(tr.id, { guard, effectAssign: DesignAssignments.of(effectAssign) });
+        out.set(tr.id.asString(), { guard, effectAssign: DesignAssignments.of(effectAssign) });
       }
     }
     for (const ob of u.obligations()) {
-      if (ob.nature !== "event" || !ob.guard || !ob.effect) continue;
+      if (ob.nature.asString() !== "event" || !ob.guard || !ob.effect) continue;
       const effectAssign = new Map<string, Expression>();
       try {
         for (const [path, term] of EffectAssignments.ofEffect(ob.effect)) {
@@ -78,7 +78,7 @@ export class DesignEventCatalog {
       } catch {
         continue;
       }
-      out.set(ob.id, { guard: ob.guard, effectAssign: DesignAssignments.of(effectAssign) });
+      out.set(ob.id.asString(), { guard: ob.guard, effectAssign: DesignAssignments.of(effectAssign) });
     }
     return new DesignEventCatalog(out);
   }

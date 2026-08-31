@@ -181,7 +181,7 @@ export class LoweredUnit {
                 target: t,
                 reason: "waived",
                 unit: u.name(),
-                detail: `machine ${first.id} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
+                detail: `machine ${first.id.asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
               });
             }
           }
@@ -462,9 +462,9 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
 
   // 1) 設計義務は素通し（frRefs は帰属のため保持。空の frRefs は lowered
   //    文書で適法——v1 バックエンドは frRefs を不透明な帰属文字列として扱う）。
-  for (const ob of [...u.obligations()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
+  for (const ob of [...u.obligations()].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString()))) {
     const lowered: Omit<LoweredObligation, "id"> = {
-      nature: ob.nature,
+      nature: ob.nature.asString(),
       frRefs: [...ob.frRefs],
     };
     if (ob.assert) lowered.assert = ob.assert;
@@ -472,33 +472,33 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     if (ob.guard) lowered.guard = ob.guard;
     if (ob.effect) lowered.effect = ob.effect;
     if (ob.temporal) lowered.temporal = ob.temporal;
-    const lowId = push(lowered, { design: ob.id, kind: "passthrough" });
-    if (ob.nature === "event" && ob.guard && ob.effect && ob.trigger) {
-      candidates.push({ lowId, design: ob.id, trigger: ob.trigger, guard: ob.guard, effect: ob.effect });
+    const lowId = push(lowered, { design: ob.id.asString(), kind: "passthrough" });
+    if (ob.nature.asString() === "event" && ob.guard && ob.effect && ob.trigger) {
+      candidates.push({ lowId, design: ob.id.asString(), trigger: ob.trigger, guard: ob.guard, effect: ob.effect });
     }
   }
 
   // 2) 状態機械のコンパイルダウン：遷移 → 暗黙ガード・効果つき event 義務、
   //    ignores → 明示 no-op event。
-  for (const sm of [...u.machines()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
-    const attrPath = `${sm.entity}.${sm.attribute}`;
-    attrPathOfMachine.set(sm.id, attrPath);
+  for (const sm of [...u.machines()].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString()))) {
+    const attrPath = `${sm.entity.asString()}.${sm.attribute.asString()}`;
+    attrPathOfMachine.set(sm.id.asString(), attrPath);
     for (const tr of sm.transitions.sortedCanonically()) {
       const guard: Expression = tr.guard ? { op: "and", args: [eqRef(attrPath, false, tr.from), tr.guard] } : eqRef(attrPath, false, tr.from);
       const effect: Expression = tr.effect ? { op: "and", args: [eqRef(attrPath, true, tr.to), tr.effect] } : eqRef(attrPath, true, tr.to);
       const lowId = push(
         { nature: "event", frRefs: [], trigger: tr.trigger, guard, effect },
-        { design: tr.id, kind: "transition" },
+        { design: tr.id.asString(), kind: "transition" },
       );
-      machineOfTransition.set(tr.id, sm);
-      candidates.push({ lowId, design: tr.id, trigger: tr.trigger, guard, effect });
+      machineOfTransition.set(tr.id.asString(), sm);
+      candidates.push({ lowId, design: tr.id.asString(), trigger: tr.trigger, guard, effect });
     }
     const sortedIgnores = sm.ignores.sortedByStateTrigger();
     for (const ig of sortedIgnores) {
       const effect: Expression = { op: "eq", args: [{ op: "ref", path: attrPath, prime: true }, { op: "ref", path: attrPath }] };
       push(
         { nature: "event", frRefs: [], trigger: ig.trigger, guard: eqRef(attrPath, false, ig.state), effect },
-        { design: sm.id, kind: "ignore" },
+        { design: sm.id.asString(), kind: "ignore" },
       );
     }
   }
@@ -545,10 +545,10 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   // 4) シナリオと背景。
   const scenarios: LoweredScenario[] = [];
   let scN = 0;
-  for (const sc of [...u.scenarios()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
+  for (const sc of [...u.scenarios()].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString()))) {
     scN += 1;
     const lowId = `SC-${scN}`;
-    scenarioMap.set(lowId, sc.id);
+    scenarioMap.set(lowId, sc.id.asString());
     const lowered: LoweredScenario = {
       id: lowId,
       kind: sc.kind,
@@ -561,7 +561,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   }
   const background: LoweredBackground[] = [];
   let bgN = 0;
-  for (const bg of [...u.background()].sort((a, b) => IdOrder.compare(a.id, b.id))) {
+  for (const bg of [...u.background()].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString()))) {
     bgN += 1;
     background.push({ id: `BG-${bgN}`, assert: bg.assert });
   }
