@@ -128,6 +128,9 @@ export function decodeSolverModel(
   values: { [name: string]: string },
 ): { [path: string]: boolean | number | string } {
   const out: { [path: string]: boolean | number | string } = {};
+  // 旧センサー逐語の比較器（byte-frozen）。重複 path は ir-valid の
+  // duplicate-attribute 検査が表面化し、等値時に 1 を返す挙動も凍結面
+  // （return 0 への正規化は重複時の安定順を変え得るため PR10 の凍結台帳で扱う）。
   for (const attr of [...model.attributes()].sort((a, b) => (a.path.asString() < b.path.asString() ? -1 : 1))) {
     const raw = values[smtVar(attr.path.asString(), false)];
     if (raw === undefined) continue;
