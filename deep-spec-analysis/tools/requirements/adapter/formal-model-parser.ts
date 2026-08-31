@@ -4,7 +4,7 @@
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
-import { IrVersion, type Expression } from "../../kernel/domain/index.ts";
+import { IrVersion, type Expression, TriggerName } from "../../kernel/domain/index.ts";
 import {
   AttributeBound,
   AttributePath,
@@ -59,7 +59,7 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id" | 
       frRefs: FrRefs.of(strArr(ob.frRefs)),
       ears: typeof ob.ears === "string" ? ob.ears : undefined,
       assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
-      trigger: typeof ob.trigger === "string" ? ob.trigger : undefined,
+      trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
       guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
       effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
       temporal: isObject(ob.temporal) ? (ob.temporal as unknown as Obligation["temporal"]) : undefined,
@@ -79,7 +79,7 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id" | 
       kind,
       frRefs: FrRefs.of(strArr(sc.frRefs)),
       bindings,
-      event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: sc.event.trigger } : undefined,
+      event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
       expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
     });
   }

@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
 import type { Json } from "../tools/kernel/adapter/index.ts";
-import { FrRefs, TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { TriggerName, FrRefs, TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -174,23 +174,30 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
 
 // テストの読みやすさのため素の配列・素の文字列で書き、ここで一括して DP と
 // コレクションに包む。
-type RawDesignObligation = Omit<DesignObligation, "id" | "nature" | "origin" | "brRefs" | "frRefs"> & {
+type RawDesignObligation = Omit<DesignObligation, "id" | "nature" | "origin" | "brRefs" | "frRefs" | "trigger"> & {
   id: string;
   nature: string;
   origin: string;
   brRefs: string[];
   frRefs: string[];
+  trigger?: string;
 };
-type RawDesignTransition = Omit<DesignTransition, "id" | "brRefs"> & { id: string; brRefs: string[] };
+type RawDesignTransition = Omit<DesignTransition, "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
+type RawDesignIgnore = Omit<DesignIgnore, "trigger"> & { trigger: string };
 type RawDesignMachine = Omit<DesignMachine, "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
   id: string;
   entity: string;
   attribute: string;
   initial: string[];
   transitions: RawDesignTransition[];
-  ignores: DesignIgnore[];
+  ignores: RawDesignIgnore[];
 };
-type RawDesignScenario = Omit<DesignScenario, "id" | "brRefs" | "frRefs"> & { id: string; brRefs: string[]; frRefs: string[] };
+type RawDesignScenario = Omit<DesignScenario, "id" | "brRefs" | "frRefs" | "event"> & {
+  id: string;
+  brRefs: string[];
+  frRefs: string[];
+  event?: { trigger: string };
+};
 function unit(seed: {
   unit?: string;
   rawEntities?: DesignValue;
@@ -212,6 +219,7 @@ function unit(seed: {
         origin: DesignObligationOrigin.reconstitute(o.origin),
         brRefs: BrRefs.of(o.brRefs),
         frRefs: FrRefs.of(o.frRefs),
+        trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger),
       })),
     ),
     machines: DesignMachines.of(
@@ -222,13 +230,19 @@ function unit(seed: {
         attribute: DesignAttributeName.reconstitute(m.attribute),
         initial: InitialStates.of(m.initial),
         transitions: DesignTransitions.of(
-          m.transitions.map((t) => ({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs) })),
+          m.transitions.map((t) => ({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
         ),
-        ignores: DesignIgnores.of(m.ignores),
+        ignores: DesignIgnores.of(m.ignores.map((g) => ({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
       })),
     ),
     scenarios: DesignScenarios.of(
-      (seed.scenarios ?? []).map((s) => ({ ...s, id: DesignScenarioId.reconstitute(s.id), brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
+      (seed.scenarios ?? []).map((s) => ({
+        ...s,
+        id: DesignScenarioId.reconstitute(s.id),
+        brRefs: BrRefs.of(s.brRefs),
+        frRefs: FrRefs.of(s.frRefs),
+        event: s.event === undefined ? undefined : { trigger: TriggerName.reconstitute(s.event.trigger) },
+      })),
     ),
     background: DesignBackgroundAssumptions.of(
       (seed.background ?? []).map((b) => ({ ...b, id: DesignBackgroundId.reconstitute(b.id) })),

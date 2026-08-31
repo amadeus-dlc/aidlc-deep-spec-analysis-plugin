@@ -19,7 +19,7 @@ import {
   readIfExists,
   validateSchema,
 } from "../../kernel/adapter/index.ts";
-import { AttributeBound, ErrorMessages, IrVersion } from "../../kernel/domain/index.ts";
+import { AttributeBound, ErrorMessages, IrVersion, TriggerName } from "../../kernel/domain/index.ts";
 import { type Result, err as repoErr, ok } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
@@ -138,7 +138,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
         id: DesignTransitionId.reconstitute(tr.id),
         from: typeof tr.from === "string" ? tr.from : undefined,
         to: typeof tr.to === "string" ? tr.to : undefined,
-        trigger: typeof tr.trigger === "string" ? tr.trigger : undefined,
+        trigger: typeof tr.trigger === "string" ? TriggerName.reconstitute(tr.trigger) : undefined,
         brRefs: brRefsOrUndefined(tr.brRefs ?? null),
         guard: asExpression(tr.guard ?? null),
         effect: asExpression(tr.effect ?? null),
@@ -147,7 +147,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     const ignores: DesignIgnoreDecl[] = [];
     for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
       if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
-      ignores.push({ state: ig.state, trigger: ig.trigger });
+      ignores.push({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger) });
     }
     stateMachines.push({ id: DesignMachineId.reconstitute(sm.id), attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) });
   }

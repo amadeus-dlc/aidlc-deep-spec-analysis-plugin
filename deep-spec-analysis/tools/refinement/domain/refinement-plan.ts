@@ -156,12 +156,12 @@ export class UnitRefinementPlan {
         const covE = attrsCovered(ob.effect);
         const missing = IdOrder.sortedUnique([...covG.missing, ...covE.missing], IdOrder.compare);
         if (!entry || entry.transitions.isEmpty()) {
-          obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `requirements event trigger "${ob.trigger ?? "?"}" has no eventMap entry (map it to design transitions or waive it)` });
+          obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `requirements event trigger "${ob.trigger === undefined ? "?" : ob.trigger.asString()}" has no eventMap entry (map it to design transitions or waive it)` });
           continue;
         }
         const badIds = entry.transitions.unknownAmong(designIds);
         if (badIds.length > 0) {
-          obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `eventMap for "${ob.trigger}" names unknown design id(s) ${badIds.join(", ")}` });
+          obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `eventMap for "${ob.trigger?.asString()}" names unknown design id(s) ${badIds.join(", ")}` });
           continue;
         }
         if (missing.length > 0) {

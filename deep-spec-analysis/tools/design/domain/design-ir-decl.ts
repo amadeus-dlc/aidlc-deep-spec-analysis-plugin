@@ -6,7 +6,7 @@
 // 旧 design-ir-valid センサーの semanticErrors が生 Json を走査していた
 // ときの黙殺条件（isObject / typeof チェック）はパーサ側へ移った。
 
-import type { AttributeBound, Expression } from "../../kernel/domain/index.ts";
+import type { AttributeBound, Expression, TriggerName } from "../../kernel/domain/index.ts";
 import type { DesignUnitId } from "./design-unit-id.ts";
 import type { DesignObligationId, DesignObligationOrigin } from "./design-obligation.ts";
 import type { DesignTransitionId } from "./design-transition.ts";
@@ -49,7 +49,7 @@ export interface DesignTransitionDecl {
   readonly id: DesignTransitionId;
   readonly from?: string;
   readonly to?: string;
-  readonly trigger?: string;
+  readonly trigger?: TriggerName;
   readonly brRefs?: BrRefs;
   readonly guard?: Expression;
   readonly effect?: Expression;
@@ -57,7 +57,7 @@ export interface DesignTransitionDecl {
 
 export interface DesignIgnoreDecl {
   readonly state: string;
-  readonly trigger: string;
+  readonly trigger: TriggerName;
 }
 
 export interface DesignMachineDecl {

@@ -3,7 +3,7 @@
 // equals は値による恒等比較。domain 90% 床のための分岐網羅。
 
 import { describe, expect, test } from "bun:test";
-import { ArtifactPath, BackendName, ContentHash, IrVersion, TargetIds } from "../tools/kernel/domain/index.ts";
+import { TriggerName, ArtifactPath, BackendName, ContentHash, IrVersion, TargetIds } from "../tools/kernel/domain/index.ts";
 import {
   DesignAttributeName,
   DesignBackgroundId,
@@ -241,7 +241,7 @@ describe("design first-class collections", () => {
     attribute: DesignAttributeName.reconstitute("s"),
     initial: InitialStates.of(["a"]),
     deterministic: true,
-    transitions: DesignTransitions.of([{ id: DesignTransitionId.reconstitute("TR-1"), from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) }]),
+    transitions: DesignTransitions.of([{ id: DesignTransitionId.reconstitute("TR-1"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) }]),
     ignores: DesignIgnores.of([]),
   };
 
@@ -322,14 +322,14 @@ describe("requirements value collections (first-class operations)", () => {
 
 describe("design part collections (first-class operations)", () => {
   test("DesignTransitions and DesignIgnores own their frozen orders under add", () => {
-    const t1 = { id: DesignTransitionId.reconstitute("TR-2"), from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) };
-    const t2 = { id: DesignTransitionId.reconstitute("TR-10"), from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) };
+    const t1 = { id: DesignTransitionId.reconstitute("TR-2"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) };
+    const t2 = { id: DesignTransitionId.reconstitute("TR-10"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) };
     const trs = DesignTransitions.of([t2]).add(t1);
     expect([...trs].length).toBe(2);
     expect(trs.ids()).toEqual(["TR-10", "TR-2"]);
     expect(trs.sortedCanonically().toArray().map((t) => t.id.asString())).toEqual(["TR-2", "TR-10"]);
 
-    const igs = DesignIgnores.of([{ state: "y", trigger: "go", reason: "" }]).add({ state: "x", trigger: "go", reason: "" });
+    const igs = DesignIgnores.of([{ state: "y", trigger: TriggerName.reconstitute("go"), reason: "" }]).add({ state: "x", trigger: TriggerName.reconstitute("go"), reason: "" });
     expect([...igs].length).toBe(2);
     expect(igs.sortedByStateTrigger().toArray().map((i) => i.state)).toEqual(["x", "y"]);
     expect(igs.toArray().length).toBe(2);
@@ -473,5 +473,17 @@ describe("DesignObligationNature closed set (tell-don't-ask consolidation)", () 
     expect(DesignObligationNature.reconstitute("state-temporal").isStateTemporal()).toBe(true);
     const mystery = DesignObligationNature.reconstitute("mystery");
     expect(mystery.isNumeric() || mystery.isStateTemporal()).toBe(false);
+  });
+});
+
+describe("TriggerName (issue #46 wave 5c-3)", () => {
+  test("parse rejects the empty token; reconstitute passes it through and isEmpty owns the old falsy check", () => {
+    expect(TriggerName.parse("").ok).toBe(false);
+    const t = TriggerName.parse("close");
+    if (!t.ok) throw new Error("unreachable");
+    expect(t.value.equals(TriggerName.reconstitute("close"))).toBe(true);
+    expect(t.value.asString()).toBe("close");
+    expect(t.value.isEmpty()).toBe(false);
+    expect(TriggerName.reconstitute("").isEmpty()).toBe(true);
   });
 });

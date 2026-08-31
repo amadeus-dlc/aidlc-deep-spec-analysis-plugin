@@ -30,14 +30,14 @@ export class DesignTransitionId {
 }
 
 import { IdOrder } from "../../kernel/domain/index.ts";
-import type { Expression } from "../../kernel/domain/index.ts";
+import type { Expression, TriggerName } from "../../kernel/domain/index.ts";
 import type { BrRefs } from "./design-ir-decl.ts";
 
 export interface DesignTransition {
   id: DesignTransitionId;
   from: string;
   to: string;
-  trigger: string;
+  trigger: TriggerName;
   guard?: Expression;
   effect?: Expression;
   brRefs: BrRefs;

@@ -8,7 +8,7 @@
 import type { RefinementMaterialsId } from "../domain/index.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { ArtifactPath, ContentHash, FrRefs } from "../../kernel/domain/index.ts";
+import { ArtifactPath, ContentHash, FrRefs, TriggerName } from "../../kernel/domain/index.ts";
 import { AttributeBound, AttributePath, ObligationId, ObligationNature, ScenarioId } from "../../refinement/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import {
@@ -119,7 +119,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
         nature: ObligationNature.reconstitute(ob.nature),
         frRefs: FrRefs.of(strArr(ob.frRefs)),
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
-        trigger: typeof ob.trigger === "string" ? ob.trigger : undefined,
+        trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
         effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
       });
@@ -137,7 +137,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
         kind: sc.kind,
         frRefs: FrRefs.of(strArr(sc.frRefs)),
         bindings,
-        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: sc.event.trigger } : undefined,
+        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
       });
     }
     return RefinementRequirements.reconstitute({
@@ -217,7 +217,7 @@ export function parseRefinementMapDocument(bytes: Uint8Array, id: RefinementMapI
     for (const e of Array.isArray(u.eventMap) ? u.eventMap : []) {
       if (!isObject(e) || typeof e.reqTrigger !== "string") continue;
       eventMap.push({
-        reqTrigger: e.reqTrigger,
+        reqTrigger: TriggerName.reconstitute(e.reqTrigger),
         transitions: TransitionRefs.of(strArr(e.transitions).map((t) => TransitionRef.reconstitute(t))),
         waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
       });

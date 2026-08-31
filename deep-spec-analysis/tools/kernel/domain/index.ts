@@ -14,3 +14,4 @@ export { Names } from "./name-normalize.ts";
 export { type ArtifactPathError, ArtifactPath } from "./artifact-path.ts";
 export { type AttributeBoundError, AttributeBound } from "./attribute-bound.ts";
 export { ErrorMessages } from "./error-messages.ts";
+export { type TriggerNameError, TriggerName } from "./trigger-name.ts";

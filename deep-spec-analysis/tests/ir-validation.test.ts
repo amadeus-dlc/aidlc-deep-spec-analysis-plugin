@@ -12,7 +12,7 @@ import { cpSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ArtifactPath, AttributeBound, ErrorMessages, RequirementIds } from "../tools/kernel/domain/index.ts";
+import { TriggerName, ArtifactPath, AttributeBound, ErrorMessages, RequirementIds } from "../tools/kernel/domain/index.ts";
 import { DesignIrValidationMaterialsRepositoryImpl, DesignModelRepositoryImpl } from "../tools/design/adapter/index.ts";
 import {
   BindingPairs,
@@ -549,12 +549,13 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   type RawAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawEntity = { name: string; attributes: RawAttr[] };
   type RawObligation = Omit<DesignObligationDecl, "id" | "origin" | "brRefs"> & { id: string; origin?: string; brRefs?: string[] };
-  type RawTransition = Omit<DesignTransitionDecl, "id" | "brRefs"> & { id: string; brRefs?: string[] };
+  type RawTransition = Omit<DesignTransitionDecl, "id" | "brRefs" | "trigger"> & { id: string; brRefs?: string[]; trigger?: string };
+  type RawIgnore = Omit<DesignIgnoreDecl, "trigger"> & { trigger: string };
   type RawMachine = Omit<DesignMachineDecl, "id" | "initial" | "transitions" | "ignores"> & {
     id: string;
     initial: string[];
     transitions: RawTransition[];
-    ignores: DesignIgnoreDecl[];
+    ignores: RawIgnore[];
   };
   type RawScenario = Omit<DesignScenarioDecl, "id" | "bindings" | "brRefs"> & {
     id: string;
@@ -604,9 +605,14 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
           id: DesignMachineId.reconstitute(sm.id),
           initial: InitialStates.of(sm.initial),
           transitions: DesignTransitionDecls.of(
-            sm.transitions.map((tr) => ({ ...tr, id: DesignTransitionId.reconstitute(tr.id), brRefs: brRefs(tr.brRefs) })),
+            sm.transitions.map((tr) => ({
+              ...tr,
+              id: DesignTransitionId.reconstitute(tr.id),
+              brRefs: brRefs(tr.brRefs),
+              trigger: tr.trigger === undefined ? undefined : TriggerName.reconstitute(tr.trigger),
+            })),
           ),
-          ignores: DesignIgnoreDecls.of(sm.ignores),
+          ignores: DesignIgnoreDecls.of(sm.ignores.map((g) => ({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
         })),
       ),
       scenarios: DesignScenarioDecls.of(
@@ -870,7 +876,7 @@ describe("design decl collections (first-class operations)", () => {
     expect([...trs]).toEqual([tr]);
     expect(trs.toArray()).toEqual([tr]);
 
-    const ig = { state: "open", trigger: "close" };
+    const ig = { state: "open", trigger: TriggerName.reconstitute("close") };
     const igs = DesignIgnoreDecls.of([]).add(ig);
     expect([...igs]).toEqual([ig]);
     expect(igs.toArray()).toEqual([ig]);

@@ -68,7 +68,7 @@ export class ObligationNature {
 }
 
 import type { Expression } from "../../kernel/domain/expression.ts";
-import type { FrRefs } from "../../kernel/domain/index.ts";
+import type { FrRefs, TriggerName } from "../../kernel/domain/index.ts";
 
 export interface Obligation {
   id: ObligationId;
@@ -76,7 +76,7 @@ export interface Obligation {
   frRefs: FrRefs;
   ears?: string;
   assert?: Expression;
-  trigger?: string;
+  trigger?: TriggerName;
   guard?: Expression;
   effect?: Expression;
   temporal?: { pattern: string; assert?: Expression; from?: Expression; to?: Expression };

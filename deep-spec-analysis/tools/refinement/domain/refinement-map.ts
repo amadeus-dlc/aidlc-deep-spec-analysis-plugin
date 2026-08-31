@@ -10,6 +10,7 @@ import { DesignUnitId } from "../../design/domain/index.ts";
 import type { AttributePath } from "../../requirements/domain/index.ts";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { IdOrder } from "../../kernel/domain/index.ts";
+import type { TriggerName } from "../../kernel/domain/index.ts";
 import type { RefinementMapId } from "./refinement-map-id.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
@@ -148,7 +149,7 @@ export class TransitionRefs {
 }
 
 export interface EventMapping {
-  readonly reqTrigger: string;
+  readonly reqTrigger: TriggerName;
   readonly transitions: TransitionRefs;
   readonly waived?: { readonly reason: string };
 }
@@ -174,10 +175,10 @@ export class EventMappings {
     yield* this.#values;
   }
 
-  ofTrigger(reqTrigger: string): EventMapping | undefined {
+  ofTrigger(reqTrigger: TriggerName): EventMapping | undefined {
     let found: EventMapping | undefined;
     for (const e of this.#values) {
-      if (e.reqTrigger === reqTrigger) found = e;
+      if (e.reqTrigger.equals(reqTrigger)) found = e;
     }
     return found;
   }
