@@ -38,6 +38,9 @@ import {
   AttributeDeclarations,
   AttributeValues,
   FrRefs,
+  ObligationId,
+  ObligationNature,
+  ScenarioId,
   Obligations,
   Scenarios,
   BackgroundAssumptions,
@@ -160,8 +163,8 @@ describe("the verify-quint interactor over the InMemory double", () => {
   test("a missing quint CLI writes the frozen unavailable document and the caller exits 127", () => {
     const reports = new InMemoryVerificationReportRepository(schema);
     const m = model({
-      obligations: [{ id: "OB-1", nature: "invariant", frRefs: [] }],
-      scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
+      obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: [] }],
+      scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
     });
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok({ model: m, irHash: ContentHash.reconstitute(HASH) })),
@@ -181,8 +184,8 @@ describe("the verify-quint interactor over the InMemory double", () => {
   test("an uncompilable machine records every target as compile-error under the detected method", () => {
     const reports = new InMemoryVerificationReportRepository(schema);
     const m = model({
-      obligations: [{ id: "OB-1", nature: "invariant", frRefs: [] }],
-      scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
+      obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: [] }],
+      scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
     });
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok({ model: m, irHash: ContentHash.reconstitute(HASH) })),
@@ -201,8 +204,8 @@ describe("the verify-quint interactor over the InMemory double", () => {
   test("a checked run interprets, persists the conformed report, and reports the detected method", () => {
     const reports = new InMemoryVerificationReportRepository(schema);
     const m = model({
-      obligations: [{ id: "OB-1", nature: "invariant", frRefs: ["FR-1"], assert: { op: "bool", value: true } }],
-      scenarios: [{ id: "SC-1", kind: "reject", frRefs: ["FR-2"], bindings: { "T.x": 1 } }],
+      obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-1"], assert: { op: "bool", value: true } }],
+      scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: { "T.x": 1 } }],
     });
     const facts = QuintMachineFacts.of({
       invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "bool", value: true }, frRefs: ["FR-1"] }]),
@@ -235,14 +238,14 @@ describe("the verify-quint interactor over the InMemory double", () => {
 describe("quint verdict interpretation", () => {
   const machineModel = model({
     obligations: [
-      { id: "OB-1", nature: "invariant", frRefs: ["FR-1"], assert: { op: "ref", path: "T.ok" } },
-      { id: "OB-2", nature: "event", frRefs: ["FR-2"] },
-      { id: "OB-3", nature: "state-temporal", frRefs: ["FR-3"], temporal: { pattern: "leads-to" } },
+      { id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-1"], assert: { op: "ref", path: "T.ok" } },
+      { id: ObligationId.reconstitute("OB-2"), nature: ObligationNature.reconstitute("event"), frRefs: ["FR-2"] },
+      { id: ObligationId.reconstitute("OB-3"), nature: ObligationNature.reconstitute("state-temporal"), frRefs: ["FR-3"], temporal: { pattern: "leads-to" } },
     ],
     scenarios: [
-      { id: "SC-1", kind: "accept", frRefs: ["FR-1"], bindings: { "T.ok": false } },
-      { id: "SC-2", kind: "reject", frRefs: ["FR-2"], bindings: { "T.ok": true } },
-      { id: "SC-3", kind: "accept", frRefs: [], bindings: {}, event: { trigger: "go" } },
+      { id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: ["FR-1"], bindings: { "T.ok": false } },
+      { id: ScenarioId.reconstitute("SC-2"), kind: "reject", frRefs: ["FR-2"], bindings: { "T.ok": true } },
+      { id: ScenarioId.reconstitute("SC-3"), kind: "accept", frRefs: [], bindings: {}, event: { trigger: "go" } },
     ],
   });
   const facts = QuintMachineFacts.of({
@@ -388,8 +391,8 @@ describe("expression evaluation (pure attribution)", () => {
 describe("quint degradation reports", () => {
   test("machineUncompilableReport spans obligations and scenarios under the detected method", () => {
     const m = model({
-      obligations: [{ id: "OB-2", nature: "event", frRefs: [] }],
-      scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
+      obligations: [{ id: ObligationId.reconstitute("OB-2"), nature: ObligationNature.reconstitute("event"), frRefs: [] }],
+      scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
     });
     const r = VerificationReport.machineUncompilable(VerificationReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("h"), "simulation", "boom");
     expect(r.method()).toBe("simulation");

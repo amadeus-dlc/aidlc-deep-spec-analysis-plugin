@@ -574,7 +574,7 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(disagreement?.detail).toBe(
       'Backends "quint" and "smt" disagree on scenario DSC-1 of unit u1. This signals a defect in the formalization or in a backend compiler, not in the design itself.',
     );
-    expect(report.crossChecked()?.toArray()).toEqual([
+    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toArray() }))).toEqual([
       { backend: "quint", targets: ["DSC-1"] },
       { backend: "smt", targets: ["DSC-1"] },
     ]);

@@ -3,7 +3,7 @@
 // equals は値による恒等比較。domain 90% 床のための分岐網羅。
 
 import { describe, expect, test } from "bun:test";
-import { ArtifactPath, ContentHash, IrVersion, TargetIds } from "../tools/kernel/domain/index.ts";
+import { ArtifactPath, BackendName, ContentHash, IrVersion, TargetIds } from "../tools/kernel/domain/index.ts";
 import {
   BrRefs,
   DesignIgnores,
@@ -146,9 +146,15 @@ describe("IrVersion", () => {
 
 // requirements 側ファーストクラスコレクション — 不変 add・境界脱出口・集合知識。
 import {
+  AttributeBound,
   AttributeDeclarations,
+  AttributePath,
   AttributeValues,
+  BackgroundAssumptionId,
   FrRefs,
+  ObligationId,
+  ObligationNature,
+  ScenarioId,
   BackgroundAssumptions,
   CrossCheckedEntries,
   Obligations,
@@ -165,22 +171,22 @@ describe("requirements first-class collections", () => {
     expect([...RequirementIds.of(["FR-1"])]).toEqual(["FR-1"]);
     expect([...RequirementIds.extractFrom("- FR-1 と NFR-2.1").toArray()].sort()).toEqual(["FR-1", "NFR-2.1"]);
 
-    const attrs = AttributeDeclarations.of([]).add({ path: "o.qty", kind: "int", min: 0, max: 5 });
+    const attrs = AttributeDeclarations.of([]).add({ path: AttributePath.reconstitute("o.qty"), kind: "int", min: AttributeBound.reconstitute(0), max: AttributeBound.reconstitute(5) });
     expect(attrs.byPath("o.qty")?.kind).toBe("int");
     expect(attrs.toArray().length).toBe(1);
 
-    const obs = Obligations.of([]).add({ id: "OB-1", nature: "invariant", frRefs: FrRefs.of(["FR-1"]) });
-    expect(obs.byId("OB-1")?.nature).toBe("invariant");
+    const obs = Obligations.of([]).add({ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: FrRefs.of(["FR-1"]) });
+    expect(obs.byId("OB-1")?.nature.asString()).toBe("invariant");
     expect(obs.ids()).toEqual(["OB-1"]);
     expect([...obs].length).toBe(1);
 
-    const scs = Scenarios.of([]).add({ id: "SC-1", kind: "accept", frRefs: FrRefs.of([]), bindings: {} });
+    const scs = Scenarios.of([]).add({ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: FrRefs.of([]), bindings: {} });
     expect(scs.byId("SC-1")?.kind).toBe("accept");
     expect(scs.ids()).toEqual(["SC-1"]);
 
-    const bgs = BackgroundAssumptions.of([]).add({ id: "B1", assert: { op: "bool", value: true } });
+    const bgs = BackgroundAssumptions.of([]).add({ id: BackgroundAssumptionId.reconstitute("B1"), assert: { op: "bool", value: true } });
     expect([...bgs].length).toBe(1);
-    expect(bgs.toArray()[0]?.id).toBe("B1");
+    expect(bgs.toArray()[0]?.id.asString()).toBe("B1");
 
     const finding = { kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.of(["OB-1"]), witness: { core: [] }, detail: "d" };
     const fs = VerificationFindings.of([]).add(finding);
@@ -193,9 +199,9 @@ describe("requirements first-class collections", () => {
     expect(sk.count()).toBe(2);
     expect(sk.sortedCanonically().toArray().map((s) => s.target)).toEqual(["OB-1", "OB-2"]);
 
-    const cc = CrossCheckedEntries.of([]).add({ backend: "smt", targets: ["SC-1"] });
+    const cc = CrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.of(["SC-1"]) });
     expect([...cc].length).toBe(1);
-    expect(cc.toArray()[0]?.backend).toBe("smt");
+    expect(cc.toArray()[0]?.backend.asString()).toBe("smt");
 
     expect([...VerificationReports.of([])].length).toBe(0);
   });
@@ -276,8 +282,8 @@ describe("design first-class collections", () => {
     expect(checked.sortedUniqueCanonically().toArray()).toEqual(["unit:u1", "unit:u2", "unit:u3"]);
     expect([...checked].length).toBe(4);
 
-    const cc = DesignCrossCheckedEntries.of([]).add({ backend: "smt", targets: ["DSC-1"] });
-    expect(cc.toArray()[0]?.backend).toBe("smt");
+    const cc = DesignCrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.of(["DSC-1"]) });
+    expect(cc.toArray()[0]?.backend.asString()).toBe("smt");
     expect([...cc].length).toBe(1);
     expect([...DesignReports.of([])].length).toBe(0);
     expect(DesignReports.of([]).toArray().length).toBe(0);
@@ -314,5 +320,57 @@ describe("design part collections (first-class operations)", () => {
     expect([...igs].length).toBe(2);
     expect(igs.sortedByStateTrigger().toArray().map((i) => i.state)).toEqual(["x", "y"]);
     expect(igs.toArray().length).toBe(2);
+  });
+});
+
+describe("requirements identity primitives (issue #46 wave 5a)", () => {
+  test("parse rejects the empty token, reconstitute is verbatim, equals is by value", () => {
+    expect(ObligationId.parse("").ok).toBe(false);
+    const ob = ObligationId.parse("OB-1");
+    if (!ob.ok) throw new Error("unreachable");
+    expect(ob.value.equals(ObligationId.reconstitute("OB-1"))).toBe(true);
+    expect(ob.value.asString()).toBe("OB-1");
+
+    expect(ScenarioId.parse("").ok).toBe(false);
+    const sc = ScenarioId.parse("SC-1");
+    if (!sc.ok) throw new Error("unreachable");
+    expect(sc.value.equals(ScenarioId.reconstitute("SC-1"))).toBe(true);
+
+    expect(BackgroundAssumptionId.parse("").ok).toBe(false);
+    const bg = BackgroundAssumptionId.parse("B1");
+    if (!bg.ok) throw new Error("unreachable");
+    expect(bg.value.equals(BackgroundAssumptionId.reconstitute("B1"))).toBe(true);
+    expect(bg.value.asString()).toBe("B1");
+
+    expect(AttributePath.parse("").ok).toBe(false);
+    const ap2 = AttributePath.parse("T.x");
+    if (!ap2.ok) throw new Error("unreachable");
+    expect(ap2.value.equals(AttributePath.reconstitute("T.x"))).toBe(true);
+    expect(ap2.value.asString()).toBe("T.x");
+
+    expect(AttributeBound.parse(1.5).ok).toBe(false);
+    const b = AttributeBound.parse(-3);
+    if (!b.ok) throw new Error("unreachable");
+    expect(b.value.equals(AttributeBound.reconstitute(-3))).toBe(true);
+    expect(b.value.asNumber()).toBe(-3);
+  });
+
+  test("ObligationNature owns the known-nature predicates; unknown natures pass through", () => {
+    expect(ObligationNature.reconstitute("invariant").isInvariant()).toBe(true);
+    expect(ObligationNature.reconstitute("numeric").isNumeric()).toBe(true);
+    expect(ObligationNature.reconstitute("event").isEvent()).toBe(true);
+    expect(ObligationNature.reconstitute("state-temporal").isStateTemporal()).toBe(true);
+    const mystery = ObligationNature.reconstitute("mystery");
+    expect(mystery.isInvariant() || mystery.isNumeric() || mystery.isEvent() || mystery.isStateTemporal()).toBe(false);
+    expect(mystery.asString()).toBe("mystery");
+    expect(mystery.equals(ObligationNature.reconstitute("mystery"))).toBe(true);
+  });
+
+  test("BackendName parses strictly and rehydrates verbatim", () => {
+    expect(BackendName.parse("").ok).toBe(false);
+    const b = BackendName.parse("smt");
+    if (!b.ok) throw new Error("unreachable");
+    expect(b.value.equals(BackendName.reconstitute("smt"))).toBe(true);
+    expect(b.value.asString()).toBe("smt");
   });
 });

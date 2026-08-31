@@ -4,7 +4,7 @@
 // `JSON.stringify(・, null, 2) + "\n"` の描画・findings スキーマ自己検証・
 // 降格文言（golden 凍結）は本モジュールの責務。
 
-import { ContentHash, FrRefs, IrVersion, TargetIds, type ArtifactPath } from "../../kernel/domain/index.ts";
+import { BackendName, ContentHash, FrRefs, IrVersion, TargetIds, type ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
@@ -15,7 +15,6 @@ import {
   DesignFindings,
   DesignInputAnchors,
   DesignSkips,
-  type DesignCrossCheckedEntry,
   type DesignSkipped,
   type DesignValue,
   DesignReport,
@@ -57,7 +56,10 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
     return out as Json;
   });
   const crossChecked = report.crossChecked();
-  if (crossChecked !== null) ordered.crossChecked = crossChecked.toArray() as unknown as Json;
+  // crossChecked エントリの凍結キー順は (backend, targets)。
+  if (crossChecked !== null) {
+    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend.asString(), targets: [...e.targets.toArray()] }) as unknown as Json);
+  }
   return ordered;
 }
 
@@ -135,7 +137,12 @@ export function parseSiblingDesignReportDocument(
         }))
       : null,
     checked: Array.isArray(raw.checked) ? CheckedUnits.of((raw.checked as Json[]).filter((c): c is string => typeof c === "string")) : null,
-    crossChecked: Array.isArray(raw.crossChecked) ? DesignCrossCheckedEntries.of(raw.crossChecked as unknown as DesignCrossCheckedEntry[]) : null,
+    crossChecked: Array.isArray(raw.crossChecked) ? DesignCrossCheckedEntries.of(
+          (raw.crossChecked as Json[]).filter(isObject).map((e) => ({
+            backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
+            targets: TargetIds.of(Array.isArray(e.targets) ? (e.targets.filter((t) => typeof t === "string") as string[]) : []),
+          })),
+        ) : null,
     unavailableReason: isObject(raw.unavailable)
       ? typeof raw.unavailable.reason === "string"
         ? raw.unavailable.reason

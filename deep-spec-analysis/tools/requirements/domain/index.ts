@@ -1,13 +1,23 @@
 // requirements/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
-export { type AttributeDeclaration, AttributeDeclarations, AttributeValues } from "./attribute-declaration.ts";
+export {
+  type AttributeBoundError,
+  type AttributeDeclaration,
+  type AttributePathError,
+  AttributeBound,
+  AttributeDeclarations,
+  AttributePath,
+  AttributeValues,
+} from "./attribute-declaration.ts";
 // FrRefs は kernel 所有の共有語彙（requirements の facade からも見える）。
 export { FrRefs } from "../../kernel/domain/index.ts";
-export { type Obligation, Obligations } from "./obligation.ts";
-export { type Scenario, Scenarios } from "./scenario.ts";
+export { type Obligation, type ObligationIdError, ObligationId, ObligationNature, Obligations } from "./obligation.ts";
+export { type Scenario, type ScenarioIdError, ScenarioId, Scenarios } from "./scenario.ts";
 export {
   type BackgroundAssumption,
+  type BackgroundAssumptionIdError,
   type RequirementsModelSeed,
+  BackgroundAssumptionId,
   BackgroundAssumptions,
   RequirementsModel,
 } from "./requirements-model.ts";

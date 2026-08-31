@@ -100,8 +100,8 @@ export class SmtPlanFacts {
     const invariantIds = model
       .obligations()
       .toArray()
-      .filter((o) => (o.nature === "invariant" || o.nature === "numeric") && this.#compiled.get(o.id))
-      .map((o) => o.id);
+      .filter((o) => (o.nature.asString() === "invariant" || o.nature.asString() === "numeric") && this.#compiled.get(o.id.asString()))
+      .map((o) => o.id.asString());
 
     const coreToTargets = (core: string[]): string[] => {
       const targets = core
@@ -148,17 +148,17 @@ export class SmtPlanFacts {
     // (a) 前件空虚（大域 unsat のときは冗長な派生なので黙る）。
     if (!globallyUnsat) {
       for (const ob of model.obligations()) {
-        const r = results.verdictOf(`vac:${ob.id}`);
+        const r = results.verdictOf(`vac:${ob.id.asString()}`);
         if (!r) continue;
         if (r.status === "unsat") {
-          const targets = IdOrder.sortedUnique([...coreToTargets(r.core ?? []), ob.id], IdOrder.compare);
+          const targets = IdOrder.sortedUnique([...coreToTargets(r.core ?? []), ob.id.asString()], IdOrder.compare);
           addConflict(
             targets,
             r.core ?? [],
-            `The condition of obligation ${ob.id} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
+            `The condition of obligation ${ob.id.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
           );
         } else if (r.status !== "sat") {
-          timeoutSkip([ob.id], `vacuity check for ${ob.id}`);
+          timeoutSkip([ob.id.asString()], `vacuity check for ${ob.id.asString()}`);
         }
       }
     }
@@ -198,31 +198,31 @@ export class SmtPlanFacts {
 
     // (c) シナリオ。
     for (const sc of model.scenarios()) {
-      const qid = this.#scenarioQueries.get(sc.id);
+      const qid = this.#scenarioQueries.get(sc.id.asString());
       if (!qid) continue;
       const r = results.verdictOf(qid);
       if (!r) continue;
       if (r.status === "unknown" || r.status === "budget" || r.status === "error") {
-        timeoutSkip([sc.id], `scenario check for ${sc.id}`);
+        timeoutSkip([sc.id.asString()], `scenario check for ${sc.id.asString()}`);
         continue;
       }
       if (sc.kind === "accept" && r.status === "unsat") {
-        const targets = IdOrder.sortedUnique([sc.id, ...coreToTargets(r.core ?? [])], IdOrder.compare);
+        const targets = IdOrder.sortedUnique([sc.id.asString(), ...coreToTargets(r.core ?? [])], IdOrder.compare);
         findings.push({
           kind: "scenario-violation",
           frRefs: FrRefs.of(model.frRefsOf(targets)),
           targets: TargetIds.of(targets),
           witness: { core: [...(r.core ?? [])].sort() },
-          detail: `Accept scenario ${sc.id} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
+          detail: `Accept scenario ${sc.id.asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
         });
       }
       if (sc.kind === "reject" && r.status === "sat") {
         findings.push({
           kind: "scenario-violation",
-          frRefs: FrRefs.of(model.frRefsOf([sc.id])),
-          targets: TargetIds.of([sc.id]),
+          frRefs: FrRefs.of(model.frRefsOf([sc.id.asString()])),
+          targets: TargetIds.of([sc.id.asString()]),
           witness: { model: r.decodedModel ?? {} },
-          detail: `Reject scenario ${sc.id} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
+          detail: `Reject scenario ${sc.id.asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
         });
       }
     }

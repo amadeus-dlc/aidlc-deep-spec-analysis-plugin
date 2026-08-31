@@ -6,7 +6,7 @@
 // （findings/skipped/inputs/checked/crossChecked を空にして unavailable 理由
 // だけ残す——旧 writeDesignDoc の自己検証降格と同じ姿）。
 
-import { ContentHash, FrRefs, IrVersion, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
+import { BackendName, ContentHash, FrRefs, IrVersion, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { DesignModel } from "./design-model.ts";
 import { DesignFindings, DesignSkips } from "./design-finding.ts";
 import type { DesignFinding } from "./design-finding.ts";
@@ -19,8 +19,8 @@ export interface DesignInputAnchor {
 }
 
 export interface DesignCrossCheckedEntry {
-  readonly backend: string;
-  readonly targets: string[];
+  readonly backend: BackendName;
+  readonly targets: TargetIds;
 }
 
 // 入力成果物の錨のファーストクラスコレクション。artifact 名昇順の整列
@@ -395,8 +395,8 @@ export class DesignReports {
       }
     }
     const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => ({ backend, targets: [...targets].sort(IdOrder.compare) }))
-      .sort((x, y) => (x.backend < y.backend ? -1 : x.backend > y.backend ? 1 : 0));
+      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.of([...targets].sort(IdOrder.compare)) }))
+      .sort((x, y) => (x.backend.asString() < y.backend.asString() ? -1 : x.backend.asString() > y.backend.asString() ? 1 : 0));
 
     return DesignReport.compose({
       id,

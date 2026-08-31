@@ -5,7 +5,7 @@
 // 責務。conformToFindingsContract が「書き手は不適合ファイルを決して出さない」
 // の実装（refcheck と同じ規律・同じ凍結文言）。
 
-import { ContentHash, FrRefs, IrVersion, TargetIds, type ArtifactPath } from "../../kernel/domain/index.ts";
+import { BackendName, ContentHash, FrRefs, IrVersion, TargetIds, type ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
@@ -14,7 +14,6 @@ import {
   CrossCheckedEntries,
   VerificationFindings,
   VerificationSkips,
-  type CrossCheckedEntry,
   type VerificationSkipped,
   type VerificationWitness,
   VerificationReport,
@@ -51,7 +50,10 @@ function orderedDocument(report: VerificationReport): { [k: string]: Json } {
     return out as Json;
   });
   const crossChecked = report.crossChecked();
-  if (crossChecked !== null) ordered.crossChecked = crossChecked.toArray() as unknown as Json;
+  // crossChecked エントリの凍結キー順は (backend, targets)。
+  if (crossChecked !== null) {
+    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend.asString(), targets: [...e.targets.toArray()] }) as unknown as Json);
+  }
   return ordered;
 }
 
@@ -137,7 +139,12 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
       }),
     ),
     crossChecked: Array.isArray(raw.crossChecked)
-      ? CrossCheckedEntries.of(raw.crossChecked as unknown as CrossCheckedEntry[])
+      ? CrossCheckedEntries.of(
+          (raw.crossChecked as Json[]).filter(isObject).map((e) => ({
+            backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
+            targets: TargetIds.of(Array.isArray(e.targets) ? (e.targets.filter((t) => typeof t === "string") as string[]) : []),
+          })),
+        )
       : null,
     unavailableReason: isObject(raw.unavailable)
       ? typeof raw.unavailable.reason === "string"

@@ -42,6 +42,12 @@ import {
   AttributeDeclarations,
   AttributeValues,
   FrRefs,
+  AttributeBound,
+  AttributePath,
+  BackgroundAssumptionId,
+  ObligationId,
+  ObligationNature,
+  ScenarioId,
   Obligations,
   Scenarios,
   BackgroundAssumptions,
@@ -183,8 +189,8 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const reports = new InMemoryVerificationReportRepository(schema);
     const m = model({
       irVersion: IrVersion.reconstitute("2.0.0"),
-      obligations: [{ id: "OB-1", nature: "invariant", frRefs: ["FR-1"] }],
-      scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
+      obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-1"] }],
+      scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
     });
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok({ model: m, irHash: ContentHash.reconstitute("a".repeat(64)) })),
@@ -204,8 +210,8 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const reports = new InMemoryVerificationReportRepository(schema);
     const m = model({
       obligations: [
-        { id: "OB-1", nature: "invariant", frRefs: [] },
-        { id: "OB-2", nature: "state-temporal", frRefs: [] },
+        { id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: [] },
+        { id: ObligationId.reconstitute("OB-2"), nature: ObligationNature.reconstitute("state-temporal"), frRefs: [] },
       ],
     });
     const facts = SmtPlanFacts.of({
@@ -229,8 +235,8 @@ describe("the verify-smt interactor over the InMemory double", () => {
   test("a solved run interprets, persists the conformed report, and converges cross-check", () => {
     const reports = new InMemoryVerificationReportRepository(schema);
     const m = model({
-      obligations: [{ id: "OB-1", nature: "invariant", frRefs: ["FR-1"] }],
-      scenarios: [{ id: "SC-1", kind: "reject", frRefs: ["FR-2"], bindings: {} }],
+      obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-1"] }],
+      scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: {} }],
     });
     const facts = SmtPlanFacts.of({
       ...EMPTY_FACTS,
@@ -264,14 +270,14 @@ describe("the verify-smt interactor over the InMemory double", () => {
 describe("smt verdict interpretation", () => {
   const twoInvariants = model({
     obligations: [
-      { id: "OB-1", nature: "invariant", frRefs: ["FR-1"] },
-      { id: "OB-2", nature: "numeric", frRefs: ["FR-2", "FR-1"] },
-      { id: "OB-3", nature: "event", frRefs: ["FR-3"] },
-      { id: "OB-4", nature: "event", frRefs: ["FR-4"] },
+      { id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-1"] },
+      { id: ObligationId.reconstitute("OB-2"), nature: ObligationNature.reconstitute("numeric"), frRefs: ["FR-2", "FR-1"] },
+      { id: ObligationId.reconstitute("OB-3"), nature: ObligationNature.reconstitute("event"), frRefs: ["FR-3"] },
+      { id: ObligationId.reconstitute("OB-4"), nature: ObligationNature.reconstitute("event"), frRefs: ["FR-4"] },
     ],
     scenarios: [
-      { id: "SC-1", kind: "accept", frRefs: ["FR-1"], bindings: {} },
-      { id: "SC-2", kind: "reject", frRefs: ["FR-2"], bindings: {} },
+      { id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: ["FR-1"], bindings: {} },
+      { id: ScenarioId.reconstitute("SC-2"), kind: "reject", frRefs: ["FR-2"], bindings: {} },
     ],
   });
   const facts = SmtPlanFacts.of({
@@ -307,7 +313,7 @@ describe("smt verdict interpretation", () => {
   });
 
   test("a conflict with no effective targets is dropped entirely", () => {
-    const bare = model({ obligations: [{ id: "OB-3", nature: "event", frRefs: [] }] });
+    const bare = model({ obligations: [{ id: ObligationId.reconstitute("OB-3"), nature: ObligationNature.reconstitute("event"), frRefs: [] }] });
     const { findings } = SmtPlanFacts.of({ ...EMPTY_FACTS, compiled: new Map([["OB-3", true]]) })
       .interpret(bare, SmtQueryVerdicts.of(new Map([["global", { status: "unsat", core: [] }]])));
     expect([...findings]).toEqual([]);
@@ -389,8 +395,8 @@ describe("smt verdict interpretation", () => {
 describe("cross-check computation", () => {
   const m = model({
     scenarios: [
-      { id: "SC-1", kind: "accept", frRefs: ["FR-2", "FR-1"], bindings: {} },
-      { id: "SC-2", kind: "reject", frRefs: [], bindings: {} },
+      { id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: ["FR-2", "FR-1"], bindings: {} },
+      { id: ScenarioId.reconstitute("SC-2"), kind: "reject", frRefs: [], bindings: {} },
     ],
   });
   const id = VerificationReportId.of(ap("/tmp/verify"), "cross-check");
@@ -426,7 +432,7 @@ describe("cross-check computation", () => {
       witness: { verdicts: { quint: "violated", smt: "clean" } },
       detail: 'Backends "quint" and "smt" disagree on scenario SC-1. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.',
     }]);
-    expect(report.crossChecked()?.toArray()).toEqual([
+    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toArray() }))).toEqual([
       { backend: "quint", targets: ["SC-1", "SC-2"] },
       { backend: "smt", targets: ["SC-1", "SC-2"] },
     ]);
@@ -442,7 +448,7 @@ describe("cross-check computation", () => {
       sibling("down", { unavailable: "boom", violated: ["SC-2"] }),
     ]).crossChecked(id, m, ContentHash.reconstitute("h1"));
     expect(report.findings().toArray()).toEqual([]);
-    expect(report.crossChecked()?.toArray()).toEqual([
+    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toArray() }))).toEqual([
       { backend: "quint", targets: ["SC-2"] },
       { backend: "smt", targets: ["SC-2"] },
     ]);
@@ -470,8 +476,8 @@ describe("degradation reports and ordering", () => {
   test("versionMismatchReport and solverUnavailableReport carry the frozen skip vocabularies", () => {
     const m = model({
       irVersion: IrVersion.reconstitute("3.1.4"),
-      obligations: [{ id: "OB-2", nature: "invariant", frRefs: [] }],
-      scenarios: [{ id: "SC-1", kind: "accept", frRefs: [], bindings: {} }],
+      obligations: [{ id: ObligationId.reconstitute("OB-2"), nature: ObligationNature.reconstitute("invariant"), frRefs: [] }],
+      scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
     });
     expect(m.supportsMajor(1)).toBe(false);
     expect(m.majorVersion()).toBe(3);
@@ -571,23 +577,23 @@ describe("degradation reports and ordering", () => {
 
   test("the model resolves targets, references, and attributes as the old free functions did", () => {
     const m = model({
-      attributes: [{ path: "Ticket.priority", kind: "int", min: 0, max: 3 }],
+      attributes: [{ path: AttributePath.reconstitute("Ticket.priority"), kind: "int", min: AttributeBound.reconstitute(0), max: AttributeBound.reconstitute(3) }],
       obligations: [
-        { id: "OB-2", nature: "invariant", frRefs: ["FR-2"] },
-        { id: "OB-1", nature: "event", frRefs: ["FR-1", "FR-2"] },
+        { id: ObligationId.reconstitute("OB-2"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-2"] },
+        { id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("event"), frRefs: ["FR-1", "FR-2"] },
       ],
-      scenarios: [{ id: "SC-1", kind: "accept", frRefs: ["FR-2"], bindings: {} }],
-      background: [{ id: "B1", assert: { op: "bool", value: true } }],
+      scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: ["FR-2"], bindings: {} }],
+      background: [{ id: BackgroundAssumptionId.reconstitute("B1"), assert: { op: "bool", value: true } }],
     });
     expect(m.allTargets()).toEqual(["OB-1", "OB-2", "SC-1"]);
     expect(m.frRefsOf(["OB-1", "SC-1"])).toEqual(["FR-1", "FR-2"]);
     expect(m.frRefsOf(["nope"])).toEqual([]);
-    expect(m.attributeAt("Ticket.priority")?.max).toBe(3);
+    expect(m.attributeAt("Ticket.priority")?.max?.asNumber()).toBe(3);
     expect(m.attributeAt("nope")).toBe(undefined);
     expect(m.attributes().toArray().length).toBe(1);
     expect(m.obligations().toArray().length).toBe(2);
     expect(m.scenarios().toArray().length).toBe(1);
-    expect(m.background().toArray()[0]?.id).toBe("B1");
+    expect(m.background().toArray()[0]?.id.asString()).toBe("B1");
     expect(m.irVersion().asString()).toBe("1.0.0");
     expect(m.supportsMajor(1)).toBe(true);
   });
