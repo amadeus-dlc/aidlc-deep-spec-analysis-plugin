@@ -5,8 +5,8 @@
 //      適用する前にインラインの fixture ソースで証明する（カスタム検査の DoD:
 //      検出力の証明なきルールはそれ自体がレビュー指摘）。
 //   2. 実ツリー走査 — tools/ 配下の全 .ts を走査し違反ゼロを表明する。
-//      現行フラット 13 ファイルは rules.ts の LEGACY_FILES として層規律を
-//      免除されており、移行 PR が進むたびに縮む。
+//      旧 LEGACY_FILES 免除は PR10 で空化済み——フラットに残るのは合成ルート
+//      (entry)の 10 ファイルだけで、それ以外の未分類ファイルは違反になる。
 
 import { describe, expect, test } from "bun:test";
 import { lstatSync, readFileSync, readdirSync } from "node:fs";
@@ -14,14 +14,17 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ENTRY_FILES,
-  LEGACY_FILES,
   layerDirection,
   locationOf,
   noEntryImports,
+  noEnums,
   noExportStar,
+  noGetAccessors,
   noIoInPureLayers,
+  noNonNullAssertions,
   noTestPayloads,
   onlySanctionedImports,
+  privateConstructorInDomain,
   processOnlyInEntries,
   violationsOf,
 } from "./architecture/rules.ts";
@@ -117,6 +120,35 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(onlySanctionedImports("kernel/domain/x.ts", '// import { z } from "zod"; と書いてはならない\nconst v = 1;')).toHaveLength(0);
   });
 
+  test("private-constructor-in-domain flags a public-ctor domain class, passes factories and Error types", () => {
+    expect(privateConstructorInDomain("kernel/domain/x.ts", "export class Token {\n  constructor(v: string) {}\n}")).not.toHaveLength(0);
+    expect(privateConstructorInDomain("kernel/domain/x.ts", "export class Token {\n  private constructor(v: string) {}\n  static of(v: string): Token { return new Token(v); }\n}")).toHaveLength(0);
+    expect(privateConstructorInDomain("kernel/domain/x.ts", "export class Boom extends Error {\n  constructor(m: string) { super(m); }\n}")).toHaveLength(0);
+    // adapter のクラスは対象外(Impl は合成ルートが new で配線する)。
+    expect(privateConstructorInDomain("kernel/adapter/x.ts", "export class Impl {\n  constructor() {}\n}")).toHaveLength(0);
+  });
+
+  test("no-get-accessors flags a getter, passes a method and a string mentioning get", () => {
+    expect(noGetAccessors("kernel/domain/x.ts", "export class A {\n  get value(): string { return this.#v; }\n}")).not.toHaveLength(0);
+    expect(noGetAccessors("kernel/domain/x.ts", "export class A {\n  value(): string { return this.#v; }\n}")).toHaveLength(0);
+    expect(noGetAccessors("kernel/domain/x.ts", 'const s = "  get thing (";\nconst v = 1;')).toHaveLength(0);
+  });
+
+  test("no-enums flags enum declarations, passes literal unions and the word in prose", () => {
+    expect(noEnums("kernel/domain/x.ts", "export enum Kind { A, B }")).not.toHaveLength(0);
+    expect(noEnums("kernel/domain/x.ts", "const enum Kind { A }")).not.toHaveLength(0);
+    expect(noEnums("kernel/domain/x.ts", 'type Kind = "a" | "b";')).toHaveLength(0);
+    expect(noEnums("kernel/domain/x.ts", '// enum は禁止\nconst v = "enum Kind {";')).toHaveLength(0);
+  });
+
+  test("no-non-null-assertions flags x! forms, passes negation and inequality", () => {
+    expect(noNonNullAssertions("kernel/domain/x.ts", "const v = xs[0]!.name;")).not.toHaveLength(0);
+    expect(noNonNullAssertions("kernel/domain/x.ts", "const v = find()!;")).not.toHaveLength(0);
+    expect(noNonNullAssertions("kernel/domain/x.ts", "const v = m!.group;")).not.toHaveLength(0);
+    expect(noNonNullAssertions("kernel/domain/x.ts", "if (a !== b && !flag && a != c) { run(); }")).toHaveLength(0);
+    expect(noNonNullAssertions("kernel/domain/x.ts", 'const s = "bang! inside string";')).toHaveLength(0);
+  });
+
   test("no-export-star flags a wildcard re-export, passes an explicit facade", () => {
     expect(noExportStar("kernel/domain/index.ts", 'export * from "./digest.ts";')).not.toHaveLength(0);
     expect(noExportStar("kernel/domain/index.ts", 'export { Digest } from "./digest.ts";')).toHaveLength(0);
@@ -167,27 +199,11 @@ describe("the real tools/ tree", () => {
     expect(unclassified).toEqual([]);
   });
 
-  test("the legacy allowlist only shrinks — no unlisted flat file appears", () => {
+  test("the legacy allowlist is empty — every flat file is a sanctioned entry (PR10 closeout)", () => {
     const flat = files.filter((rel) => !rel.includes("/"));
-    for (const rel of flat) expect(LEGACY_FILES.has(rel)).toBe(true);
-  });
-
-  test("the legacy allowlist never grows beyond the original 13 files (removals only)", () => {
-    // 移行開始時点（2026-08-29、ロードマップ #12）の固定集合。ここへの追加は
-    // 移行の逆行なので、allowlist へ新ファイルを足す変更はこのテストで落ちる。
-    const original = new Set([
-      "aidlc-sensor-deep-spec-ir-valid.ts",
-      "aidlc-sensor-deep-spec-verify-smt.ts",
-      "aidlc-sensor-deep-spec-verify-quint.ts",
-      "aidlc-sensor-deep-spec-refcheck-domain.ts",
-      "aidlc-sensor-deep-spec-refcheck-contract.ts",
-      "aidlc-sensor-deep-spec-refcheck-functional.ts",
-      "aidlc-sensor-deep-spec-design-ir-valid.ts",
-      "aidlc-sensor-deep-spec-design-verify-smt.ts",
-      "aidlc-sensor-deep-spec-design-verify-quint.ts",
-      "deep-spec-analysis-doctor.ts",
-      "deep-spec-lib.ts",
-    ]);
-    for (const rel of LEGACY_FILES) expect(original.has(rel)).toBe(true);
+    for (const rel of flat) expect(ENTRY_FILES.has(rel)).toBe(true);
+    // entry は層規律の免除ではなく配線役割: 9 センサー + doctor の固定集合から
+    // 増えない(新規フラットファイルはこのテストで落ちる)。
+    expect(ENTRY_FILES.size).toBe(10);
   });
 });

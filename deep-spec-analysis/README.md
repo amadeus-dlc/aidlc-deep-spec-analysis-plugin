@@ -87,6 +87,8 @@ bun test
 byte-for-byte, twice; it also exercises degradation (missing solver,
 IR-version mismatch) and a forged cross-check disagreement.
 
+`tools/` is layered into five bounded contexts (kernel / requirements / design / refinement / refcheck) × four layers (infrastructure / domain / usecase / adapter); the only flat files are the composition roots (nine sensors + the doctor, the *entry* role). The layer DAG and style discipline (private constructors in domain, no get accessors / TS enums / non-null assertions, …) are enforced by `tests/architecture.test.ts` with red examples, and byte parity against the migration base is pinned by `tests/parity/` (see `tests/README.md` and `docs/decisions.md`).
+
 ## Future split (NFR4)
 
 The internal structure keeps a strict backend = 1 sensor + 1 tool mapping so

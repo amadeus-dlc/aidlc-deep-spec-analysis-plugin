@@ -46,7 +46,7 @@ export class CheckFunctionalDesignUseCase {
     const fd = record.value.functional();
     if (fd === null) return { kind: "not-applicable" };
 
-    const ledger = new CheckFamilyLedger(FUNCTIONAL_FAMILIES, fd.unit);
+    const ledger = CheckFamilyLedger.of(FUNCTIONAL_FAMILIES, fd.unit);
     FunctionalCheckMaterials.of({
       unit: fd.unit,
       entitiesArtifact: fd.entitiesArtifact,

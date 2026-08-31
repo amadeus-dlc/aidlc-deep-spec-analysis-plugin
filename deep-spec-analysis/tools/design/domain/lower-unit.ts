@@ -12,6 +12,7 @@
 // アダプタの serializer が担い、ここは型付き lowering を返す）。
 
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
+import { Expressions } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { DesignMachines } from "./design-machine.ts";
@@ -480,10 +481,6 @@ export class LoweringIndex {
   }
 }
 
-const eqRef = (path: string, prime: boolean, value: string): Expression => ({
-  op: "eq",
-  args: [{ op: "ref", path, ...(prime ? { prime: true } : {}) }, { op: "enum", value }],
-});
 
 function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   obligations: LoweredObligations;
@@ -542,8 +539,8 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     const attrPath = DesignMachines.attrPathOf(sm);
     attrPathOfMachine.set(sm.id.asString(), attrPath);
     for (const tr of sm.transitions.sortedCanonically()) {
-      const guard: Expression = tr.guard ? { op: "and", args: [eqRef(attrPath, false, tr.from), tr.guard] } : eqRef(attrPath, false, tr.from);
-      const effect: Expression = tr.effect ? { op: "and", args: [eqRef(attrPath, true, tr.to), tr.effect] } : eqRef(attrPath, true, tr.to);
+      const guard: Expression = tr.guard ? { op: "and", args: [Expressions.eqRef(attrPath, false, tr.from), tr.guard] } : Expressions.eqRef(attrPath, false, tr.from);
+      const effect: Expression = tr.effect ? { op: "and", args: [Expressions.eqRef(attrPath, true, tr.to), tr.effect] } : Expressions.eqRef(attrPath, true, tr.to);
       const lowId = push(
         { nature: "event", frRefs: [], trigger: tr.trigger.asString(), guard, effect },
         { design: LoweredOriginRef.reconstitute(tr.id.asString()), kind: "transition" },
@@ -555,7 +552,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     for (const ig of sortedIgnores) {
       const effect: Expression = { op: "eq", args: [{ op: "ref", path: attrPath, prime: true }, { op: "ref", path: attrPath }] };
       push(
-        { nature: "event", frRefs: [], trigger: ig.trigger.asString(), guard: eqRef(attrPath, false, ig.state), effect },
+        { nature: "event", frRefs: [], trigger: ig.trigger.asString(), guard: Expressions.eqRef(attrPath, false, ig.state), effect },
         { design: LoweredOriginRef.reconstitute(sm.id.asString()), kind: "ignore" },
       );
     }

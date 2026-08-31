@@ -185,7 +185,7 @@ function domainReport(
   backend = "components",
   unit?: UnitName,
 ): ReferenceCheckReport {
-  const ledger = new CheckFamilyLedger(families, unit);
+  const ledger = CheckFamilyLedger.of(families, unit);
   run(ledger);
   return ReferenceCheckReport.compose({
     id: ReferenceCheckReportId.of(ap("/tmp/r"), backend),
@@ -497,7 +497,7 @@ describe("functional branches the fixtures do not exercise", () => {
   });
 
   test("the ledger records findings and skips against their families and derives checked", () => {
-    const ledger = new CheckFamilyLedger(CheckFamilies.reconstitute(["A-1", "A-2", "A-3"]), UnitName.reconstitute("u9"));
+    const ledger = CheckFamilyLedger.of(CheckFamilies.reconstitute(["A-1", "A-2", "A-3"]), UnitName.reconstitute("u9"));
     ledger.finding(CheckFamily.reconstitute("A-1"), "structure-invalid", ["check:A-1"], [], "boom");
     ledger.skip(CheckFamily.reconstitute("A-2"), "absent-input", "gone");
     expect(ledger.findings().toArray()[0]?.detail).toBe("A-1: boom");

@@ -49,3 +49,23 @@
 
 fixture はここに置く（決して `tools/` 配下に置かない——compose は出荷ツリー内の
 テストペイロードを拒否する）。
+
+## 移行後の内部スイート（DDD/Clean Architecture）
+
+- `architecture.test.ts` + `architecture/rules.ts` — 層 DAG（infrastructure→
+  domain→usecase→adapter、公認横断 4 エッジのみ）・entry 限定の
+  process.*/import.meta・facade の export * 禁止・domain の private
+  constructor 規律・get アクセサ/TS enum/非 null 表明の禁止。各ルールは
+  実樹適用の前にインライン fixture で検出力を証明する（red example 必須）。
+  旧 LEGACY_FILES 免除は PR10 で空化——フラットは entry（合成ルート）10
+  ファイルのみ。
+- `parity/` — 移行の基底（pre-PR7）に対する全パイプライン出力のバイト
+  パリティスナップショット（`diff -r` が空でなければ落ちる）。
+- `kernel-domain.test.ts`・`aggregate-ids.test.ts`・`ir-validation.test.ts`・
+  `kind-rank.test.ts` — kernel/各コンテキストのドメインプリミティブと
+  ファーストクラスコレクション、Decl 束、finding kind の凍結順の単体固定。
+- `verify-smt-pipeline.test.ts`・`verify-quint-pipeline.test.ts`・
+  `design-pipeline.test.ts`・`refinement-pipeline.test.ts`・
+  `refcheck-{domain,pipeline,report}.test.ts` — 層化後の各縦串
+  （domain/usecase/adapter チェーン）を InMemory ダブルと実 Impl の両方で
+  駆動する結合スイート。golden 等価（実ソルバー込み）を含む。

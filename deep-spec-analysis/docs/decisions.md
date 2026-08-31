@@ -971,3 +971,62 @@ the ruling is about the public vocabulary. Future DPs follow `asString`/
 
 Proofs: 322 tests green; goldens untouched; parity snapshot `diff -r`
 stays empty; coverage floor holds.
+
+## Domain-vocabulary completion and full layer enforcement — rulings A–D and PR10 (2026-08-31 – 09-01)
+
+The four #46 rulings were applied across the tree and the ledger closed (PRs #54–#60).
+
+- **Ruling A (domain primitives everywhere)**: no primitive-typed fields on
+  domain objects except bool. requirements (5a) → design (5b) →
+  refinement/decl bundles (5c-1/5c-2) → the trigger face (5c-3, kernel
+  `TriggerName`) → the lowered payload faces (5d: `LoweredId`,
+  `LoweredOriginRef`, `ObligationIds`, `BackendName` on the report
+  identities). Shared vocabulary is promoted to the kernel following the
+  FrRefs precedent (`AttributeBound`, `TriggerName`, `ErrorMessages`).
+- **Ruling C (tell-don't-ask)**: wrapping a value means nothing while its
+  knowledge (closed-set predicates, frozen orderings, coordinate
+  derivations, bound comparisons, matching syntax) lives at call sites —
+  the primitive or its collection owns it (#56, applied from day one to
+  every new primitive since).
+- **Ruling D (repository contract)**: repository methods speak persistence
+  vocabulary only (findById/store); findById returns an aggregate that
+  carries its id, and every writable document gets store — single-document
+  aggregates retain their raw source bytes and findById∘store is
+  byte-identity (atomic writes, defensive copies). Write-adjacent queries
+  such as contract conformance move to separate service ports.
+- **Permanent declared exclusions**: the `Expression` published language
+  (closing the `op` set is rejected — lenient unknown-value passthrough is
+  the contract), state tokens (references to enum declared values, whose
+  vocabulary is itself material), the design `attrPath` (a joined form
+  derived from the entity/attribute primitives), serializer-direct payload
+  strings, and `FrRefClaim.owner` (a mixed obligation/scenario reference
+  token).
+- **The frozen equal→1 comparators**: normalizing to `return 0` could
+  change the stable order of duplicate declarations and is rejected for
+  good; duplicates are surfaced by well-formedness.
+
+PR10 turned layer enforcement fully on:
+
+- The LEGACY_FILES exemption is emptied. The ten flat files (nine sensors
+  plus the doctor) are the **entry** role, not an exemption — the only
+  place allowed to touch process.*/import.meta, carrying wiring only.
+- New style rules (each with a red example): private-constructor
+  discipline for domain classes (new only inside the class, Error
+  subclasses exempt), no get accessors, no TS enums, no non-null
+  assertions. The real tree had two violations (a public ctor on
+  `CheckFamilyLedger` → `of()` factory; one `!` in the doctor), both fixed.
+- Duplicate audit: beyond the already-kernel-shared helpers
+  (findRecordRoot, relArtifact, validateSchema, readIfExists, isObject,
+  canonicalStringify, extractFences), `strArr` (five adapters) and `eqRef`
+  (the implicit-guard encoding shared by lowering and the event catalog —
+  now one definition, structurally lockstep) moved to the kernel. Two
+  honest exceptions remain: ① the sanitize regexes differ per meaning
+  (SMT symbols `[^A-Za-z0-9_]` vs finding targets `[^A-Za-z0-9_./-]`),
+  ② the SMT rendering vocabulary (`smtName`/`smtVar`) is duplicated
+  between requirements and design by the PR8 outcome — an adapter may not
+  import a foreign context's adapter, and the second compiler mirrors the
+  v1 rendering vocabulary verbatim by contract.
+
+Evidence: 367 tests green, goldens untouched, parity snapshot `diff -r`
+empty against the pre-PR7 base, coverage floors held, 7 harness builds,
+CLI z3/quint spot check BYTE-IDENTICAL.

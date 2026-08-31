@@ -47,7 +47,7 @@ export class CheckContractSummaryUseCase {
     const declaredUnits = record.value.declaredUnits();
     if (contractsTable === null || specBlocks === null || declaredUnits === null) return { kind: "not-applicable" };
 
-    const ledger = new CheckFamilyLedger(CONTRACT_FAMILIES);
+    const ledger = CheckFamilyLedger.of(CONTRACT_FAMILIES);
     ContractCheckMaterials.of({
       artifact: ArtifactPath.reconstitute(record.value.target().artifact),
       depArtifact: declaredUnits.artifactName,

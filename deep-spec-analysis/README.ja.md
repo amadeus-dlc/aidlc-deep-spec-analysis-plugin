@@ -64,6 +64,8 @@ bun test
 
 `tests/conformance.test.ts` は正典 fixture（`tests/fixtures/conformance/`）で両バックエンドを駆動し、期待 findings とバイト単位で 2 回照合する。劣化（ソルバー欠如・IR バージョン不一致）と偽造クロスチェック不一致も検査する。
 
+`tools/` は 5 つの境界づけられたコンテキスト（kernel / requirements / design / refinement / refcheck）×4 層（infrastructure / domain / usecase / adapter）に層化されており、フラットに残るのは合成ルート（9 センサー + doctor の entry）だけである。層 DAG・スタイル規律（domain の private constructor・get/enum/非 null 表明の禁止など）は `tests/architecture.test.ts` が red example つきで強制し、移行基底とのバイトパリティは `tests/parity/` が固定する（詳細は `tests/README.ja.md` と `docs/decisions.ja.md`）。
+
 ## 将来の分割（NFR4）
 
 内部構造は「バックエンド 1 = センサー 1 + ツール 1」の厳密な対応を保っているため、後日の 3 分割（`deep-spec-analysis` core / `-smt` / `-quint`）は機械的作業で済む：各バックエンドのマニフェスト＋ツールのペアを独自のプラグインルートへ移し、`plugin.json` を追加し、ステージの `sensors:` リスト（バックエンドごとに 1 行）を付け替えるだけ。結合は契約1 と契約2 のみ：バックエンド同士は決して import し合わず、クロスチェックは sibling ファイルを汎用的に読む。

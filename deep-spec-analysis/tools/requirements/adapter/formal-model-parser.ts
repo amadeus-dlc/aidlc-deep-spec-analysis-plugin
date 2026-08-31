@@ -3,7 +3,7 @@
 // 厳密検査を担う）。集約として成立しない形は凍結文言の文字列で返す。
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
 
-import { type Json, isObject } from "../../kernel/adapter/index.ts";
+import { type Json, isObject, strArr } from "../../kernel/adapter/index.ts";
 import { IrVersion, type Expression, TriggerName } from "../../kernel/domain/index.ts";
 import {
   AttributeBound,
@@ -49,7 +49,6 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id" | 
       });
     }
   }
-  const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
   const obligations: Obligation[] = [];
   for (const ob of Array.isArray(raw.obligations) ? raw.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;

@@ -53,3 +53,25 @@ skip the SMT assertions with a warning if absent).
 
 Fixtures live here (never under `tools/` — compose refuses test payloads in
 the shipped tree).
+
+## Post-migration internal suites (DDD / Clean Architecture)
+
+- `architecture.test.ts` + `architecture/rules.ts` — the layer DAG
+  (infrastructure→domain→usecase→adapter, four sanctioned cross-context
+  edges only), entry-only process.*/import.meta, no `export *` facades,
+  private-constructor discipline in domain, and bans on get accessors,
+  TS enums, and non-null assertions. Every rule proves its detection power
+  on inline fixtures (red examples) before scanning the real tree. The
+  old LEGACY_FILES exemption was emptied in PR10 — the only flat files
+  are the ten entry composition roots.
+- `parity/` — byte-parity snapshots of every pipeline output against the
+  pre-migration (pre-PR7) base; fails unless `diff -r` is empty.
+- `kernel-domain.test.ts`, `aggregate-ids.test.ts`, `ir-validation.test.ts`,
+  `kind-rank.test.ts` — unit pins for the kernel/context domain primitives,
+  first-class collections, decl bundles, and the frozen finding-kind order.
+- `verify-smt-pipeline.test.ts`, `verify-quint-pipeline.test.ts`,
+  `design-pipeline.test.ts`, `refinement-pipeline.test.ts`,
+  `refcheck-{domain,pipeline,report}.test.ts` — integration suites driving
+  each layered vertical (domain/usecase/adapter chains) through both
+  in-memory doubles and the real Impls, including golden equivalence with
+  the real solvers.

@@ -4,6 +4,7 @@
 // 逐語移植——自由関数は DesignEventCatalog.of（構築）と自身の照会になった
 // （OOUI 裁定）。
 
+import { Expressions } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "../../design/domain/index.ts";
 import type { DesignUnit } from "../../design/domain/index.ts";
@@ -45,11 +46,10 @@ export class DesignEventCatalog {
   // 旧 designEventCatalog 本体の逐語移植。
   static of(u: DesignUnit): DesignEventCatalog {
     const out = new Map<string, DesignEvent>();
-    const eqRef = (path: string, value: string): Expression => ({ op: "eq", args: [{ op: "ref", path }, { op: "enum", value }] });
     for (const sm of u.machines()) {
       const attrPath = DesignMachines.attrPathOf(sm);
       for (const tr of sm.transitions) {
-        const guard: Expression = tr.guard ? { op: "and", args: [eqRef(attrPath, tr.from), tr.guard] } : eqRef(attrPath, tr.from);
+        const guard: Expression = tr.guard ? { op: "and", args: [Expressions.eqRef(attrPath, false, tr.from), tr.guard] } : Expressions.eqRef(attrPath, false, tr.from);
         const effectAssign = new Map<string, Expression>();
         effectAssign.set(attrPath, { op: "enum", value: tr.to });
         if (tr.effect) {

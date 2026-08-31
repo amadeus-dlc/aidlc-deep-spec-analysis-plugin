@@ -4,11 +4,10 @@
 // のエントリのみ、frRefs は文字列選別、detail は文字列でなければ ""、witness
 // は素通し。skipped は {target:string, reason:string} のみ。
 
-import { type Json, isObject } from "../../kernel/adapter/index.ts";
+import { type Json, isObject, strArr } from "../../kernel/adapter/index.ts";
 import { LoweredId, SiblingVerdictFindings, SiblingVerdictSkips } from "../domain/index.ts";
 import type { DesignValue, SiblingVerdictDocument, SiblingVerdictFinding, SiblingVerdictSkip } from "../domain/index.ts";
 
-const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
 
 export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
   if (!isObject(raw)) return { kind: "unreadable" };
