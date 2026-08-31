@@ -22,7 +22,7 @@ import {
 
 function orderedDocument(report: VerificationReport): { [k: string]: Json } {
   const ordered: { [k: string]: Json } = {
-    backend: report.id().backendName(),
+    backend: report.id().backendName().asString(),
     irVersion: report.irVersion().asString(),
     irHash: report.irHash().asString(),
     method: report.method(),
@@ -85,8 +85,8 @@ export function parseVerificationReportDocument(
   raw: Json,
 ): Result<VerificationReport, { cause: string }> {
   if (!isObject(raw)) return { ok: false, error: { cause: "document is not a JSON object" } };
-  if (raw.backend !== id.backendName()) {
-    return { ok: false, error: { cause: `document backend "${String(raw.backend)}" does not match the id backend "${id.backendName()}"` } };
+  if (raw.backend !== id.backendName().asString()) {
+    return { ok: false, error: { cause: `document backend "${String(raw.backend)}" does not match the id backend "${id.backendName().asString()}"` } };
   }
   if (!Array.isArray(raw.findings) || !Array.isArray(raw.skipped)) {
     return { ok: false, error: { cause: "document lacks findings/skipped arrays" } };

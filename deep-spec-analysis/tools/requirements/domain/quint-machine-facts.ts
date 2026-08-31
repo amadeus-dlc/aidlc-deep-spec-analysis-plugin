@@ -10,6 +10,7 @@ import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/expression.ts";
 import { ExpressionEvaluation } from "./expression-evaluation.ts";
 import type { QuintRuns } from "./quint-verdict.ts";
+import type { ObligationIds } from "./obligation.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { TraceState } from "./trace-state.ts";
 import type { VerificationFinding, VerificationSkipped } from "./verification-finding.ts";
@@ -61,13 +62,13 @@ export class QuintMachineComponents {
 
 export interface QuintMachineFactsSeed {
   readonly invariantComponents: QuintMachineComponents;
-  readonly eventIds: readonly string[];
+  readonly eventIds: ObligationIds;
   readonly scenariosWithInit: ReadonlySet<string>;
 }
 
 export class QuintMachineFacts {
   readonly #invariantComponents: QuintMachineComponents;
-  readonly #eventIds: readonly string[];
+  readonly #eventIds: ObligationIds;
   readonly #scenariosWithInit: ReadonlySet<string>;
 
   private constructor(seed: QuintMachineFactsSeed) {
@@ -79,7 +80,7 @@ export class QuintMachineFacts {
   static of(seed: QuintMachineFactsSeed): QuintMachineFacts {
     return new QuintMachineFacts({
       invariantComponents: seed.invariantComponents,
-      eventIds: [...seed.eventIds],
+      eventIds: seed.eventIds,
       scenariosWithInit: new Set(seed.scenariosWithInit),
     });
   }
@@ -90,7 +91,7 @@ export class QuintMachineFacts {
 
   // 機械フェーズが検査する対象の全 id（成分 + イベント義務、正準順・一意）。
   machineTargets(): string[] {
-    return IdOrder.sortedUnique([...this.#invariantComponents.ids(), ...this.#eventIds], IdOrder.compare);
+    return IdOrder.sortedUnique([...this.#invariantComponents.ids(), ...this.#eventIds.toStrings()], IdOrder.compare);
   }
 
   // 旧 interpretQuintVerdicts の逐語移植。
@@ -116,19 +117,19 @@ export class QuintMachineFacts {
       } else if (run.kind === "deadlock") {
         findings.push({
           kind: "completeness-gap",
-          frRefs: FrRefs.of(model.frRefsOf(this.#eventIds)),
-          targets: TargetIds.of(this.#eventIds.length > 0 ? [...this.#eventIds].sort(IdOrder.compare) : machineTargets),
+          frRefs: FrRefs.of(model.frRefsOf(this.#eventIds.toStrings())),
+          targets: TargetIds.of(this.#eventIds.isEmpty() ? machineTargets : this.#eventIds.toStrings().sort(IdOrder.compare)),
           witness: run.trace !== null ? { trace: run.trace.toArray() } : { model: {} },
           detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
         });
       } else if (run.kind === "violation") {
         const violatedComponents = this.#invariantComponents.violatedBy(run.trace.finalState());
         const targets = violatedComponents.isEmpty()
-          ? [...this.#eventIds].sort(IdOrder.compare)
+          ? this.#eventIds.toStrings().sort(IdOrder.compare)
           : IdOrder.sortedUnique([...violatedComponents.ids()], IdOrder.compare);
         findings.push({
           kind: "conflict",
-          frRefs: FrRefs.of(model.frRefsOf(IdOrder.sortedUnique([...targets, ...this.#eventIds], IdOrder.compare))),
+          frRefs: FrRefs.of(model.frRefsOf(IdOrder.sortedUnique([...targets, ...this.#eventIds.toStrings()], IdOrder.compare))),
           targets: TargetIds.of(targets),
           witness: { trace: run.trace.toArray() },
           detail: `The event machine can reach a state that violates ${targets.join(", ")} (step trace attached): the event rules do not preserve the obligation.`,

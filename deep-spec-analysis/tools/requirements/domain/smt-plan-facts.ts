@@ -6,6 +6,8 @@
 // ソートは VerificationReport.compose の不変条件）は facts 自身の振る舞い
 // （OOUI 裁定）。
 
+import type { TriggerName } from "../../kernel/domain/index.ts";
+import type { ObligationId } from "./obligation.ts";
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { SmtQueryVerdicts } from "./solver-verdict.ts";
@@ -15,9 +17,9 @@ import { VerificationFindings, VerificationSkips } from "./verification-finding.
 export interface SmtEventPairProbe {
   readonly qOverlap: string;
   readonly qJoint: string;
-  readonly a: string;
-  readonly b: string;
-  readonly trigger: string;
+  readonly a: ObligationId;
+  readonly b: ObligationId;
+  readonly trigger: TriggerName;
 }
 
 // 同トリガ event 対プローブのファーストクラスコレクション（発行順を保持）。
@@ -170,12 +172,12 @@ export class SmtPlanFacts {
       if (!overlap || !joint) continue;
       if (overlap.status === "sat" && joint.status === "unsat") {
         addConflict(
-          IdOrder.sortedUnique([pair.a, pair.b], IdOrder.compare),
+          IdOrder.sortedUnique([pair.a.asString(), pair.b.asString()], IdOrder.compare),
           joint.core ?? [],
-          `Events ${pair.a} and ${pair.b} for trigger "${pair.trigger}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`,
+          `Events ${pair.a.asString()} and ${pair.b.asString()} for trigger "${pair.trigger.asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`,
         );
       } else if (overlap.status === "unknown" || overlap.status === "budget" || joint.status === "unknown" || joint.status === "budget") {
-        timeoutSkip([pair.a, pair.b], `event-pair check for trigger "${pair.trigger}"`);
+        timeoutSkip([pair.a.asString(), pair.b.asString()], `event-pair check for trigger "${pair.trigger.asString()}"`);
       }
     }
 

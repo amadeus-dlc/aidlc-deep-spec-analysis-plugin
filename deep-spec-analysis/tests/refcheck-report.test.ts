@@ -65,7 +65,7 @@ describe("ReferenceCheckReportId", () => {
     expect(a.equals(ReferenceCheckReportId.of(ap("/tmp/y"), "components"))).toBe(false);
     expect(a.equals(ReferenceCheckReportId.of(ap("/tmp/x"), "functional-design"))).toBe(false);
     expect(a.fileName()).toBe("components.json");
-    expect(a.backendName()).toBe("components");
+    expect(a.backendName().asString()).toBe("components");
   });
 });
 
@@ -85,7 +85,7 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     expect(report.checked().toArray()).toEqual(["check:DD-0", "check:DD-1"]);
     expect(report.inputs().toArray().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
     expect(report.unavailableReason()).toBe(null);
-    expect(report.id().backendName()).toBe("components");
+    expect(report.id().backendName().asString()).toBe("components");
   });
 
   test("degraded keeps the inputs, empties the content, and fails the verdict", () => {

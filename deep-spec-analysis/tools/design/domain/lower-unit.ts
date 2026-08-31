@@ -13,6 +13,7 @@
 
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { DesignMachines } from "./design-machine.ts";
 import type { DesignMachine } from "./design-machine.ts";
 import type { DesignObligation } from "./design-obligation.ts";
@@ -26,14 +27,68 @@ import type { RemappedUnit, SiblingVerdictDocument } from "./remap-unit-doc.ts";
 
 export type LoweringKind = "passthrough" | "transition" | "ignore" | "vac-dead" | "vac-shadow";
 
+// lowered 採番 id(OB-n / SC-n / BG-n)——v1 子文書のバイト面に載る識別。
+export class LoweredId {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<LoweredId, LoweredTokenError> {
+    if (raw === "") return err({ kind: "empty-lowered-token", raw });
+    return ok(new LoweredId(raw));
+  }
+
+  static reconstitute(raw: string): LoweredId {
+    return new LoweredId(raw);
+  }
+
+  equals(other: LoweredId): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
+
+// lowered 帰属の設計側参照(DOB/TR/DSC/DBG id——remap の書き戻し語彙)。
+export class LoweredOriginRef {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<LoweredOriginRef, LoweredTokenError> {
+    if (raw === "") return err({ kind: "empty-lowered-token", raw });
+    return ok(new LoweredOriginRef(raw));
+  }
+
+  static reconstitute(raw: string): LoweredOriginRef {
+    return new LoweredOriginRef(raw);
+  }
+
+  equals(other: LoweredOriginRef): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
+
+export type LoweredTokenError = { readonly kind: "empty-lowered-token"; readonly raw: string };
+
 export interface LoweredOrigin {
-  design: string;
+  design: LoweredOriginRef;
   kind: LoweringKind;
-  pair?: [string, string];
+  pair?: [LoweredOriginRef, LoweredOriginRef];
 }
 
 export interface LoweredObligation {
-  id: string;
+  id: LoweredId;
   nature: string;
   frRefs: string[];
   assert?: Expression;
@@ -44,7 +99,7 @@ export interface LoweredObligation {
 }
 
 export interface LoweredScenario {
-  id: string;
+  id: LoweredId;
   kind: "accept" | "reject";
   frRefs: string[];
   bindings: { [path: string]: boolean | number | string };
@@ -53,7 +108,7 @@ export interface LoweredScenario {
 }
 
 export interface LoweredBackground {
-  id: string;
+  id: LoweredId;
   assert: Expression;
 }
 
@@ -137,7 +192,7 @@ export class LoweredUnit {
 
       const synth = mapped.find((m) => m.entry?.kind === "vac-dead" || m.entry?.kind === "vac-shadow");
       if (synth?.entry?.kind === "vac-dead" && f.kind === "conflict") {
-        const design = synth.entry.design;
+        const design = synth.entry.design.asString();
         const isTransition = this.#index.isTransition(design);
         deadDesignIds.add(design);
         findings.push({
@@ -151,7 +206,8 @@ export class LoweredUnit {
         continue;
       }
       if (synth?.entry?.kind === "vac-shadow" && f.kind === "conflict") {
-        const pair = synth.entry.pair ?? [synth.entry.design, synth.entry.design];
+        const pairRefs = synth.entry.pair ?? [synth.entry.design, synth.entry.design];
+        const pair = [pairRefs[0].asString(), pairRefs[1].asString()] as const;
         shadowFindings.push({
           finding: {
             kind: "redundancy",
@@ -220,7 +276,7 @@ export class LoweredUnit {
 
     const seenSkip = new Set<string>();
     for (const s of doc.skipped) {
-      const { design, entry } = mapTarget(s.target);
+      const { design, entry } = mapTarget(s.target.asString());
       if (entry?.kind === "vac-dead" || entry?.kind === "vac-shadow") continue; // 合成の予算ノイズ
       const key = `${design}|${s.reason}`;
       if (seenSkip.has(key)) continue;
@@ -374,7 +430,7 @@ export class LoweringIndex {
   // 解決順は remap の凍結挙動。
   resolveDesignTarget(loweredId: string): { design: string; entry: LoweredOrigin | null } {
     const entry = this.#origins.get(loweredId) ?? null;
-    if (entry) return { design: entry.design, entry };
+    if (entry) return { design: entry.design.asString(), entry };
     const dsc = this.#scenarioDesignIds.get(loweredId);
     if (dsc) return { design: dsc, entry: null };
     return { design: loweredId, entry: null };
@@ -383,14 +439,14 @@ export class LoweringIndex {
   // v1 detail 内の OB-n 参照を設計 id へ書き換える（"DOB-2" は \bOB-2\b
   // 境界を含まないため二重書き換えは起きない）。
   rewriteLoweredIds(text: string): string {
-    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(`OB-${num}`)?.design ?? m);
+    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(`OB-${num}`)?.design.asString() ?? m);
   }
 
   // witness core のラベル内 OB_n トークンを設計 id の英数字化へ書き換える。
   rewriteLoweredIdTokens(label: string): string {
     return label.replace(/OB_([0-9]+)/g, (m, num) => {
       const entry = this.#origins.get(`OB-${num}`);
-      return entry ? designToken(entry.design) : m;
+      return entry ? designToken(entry.design.asString()) : m;
     });
   }
 
@@ -409,7 +465,7 @@ export class LoweringIndex {
   // refinement 追加パス用：lowered id を素通し帰属として索引に足した新索引。
   withPassthrough(loweredId: string, designId: string): LoweringIndex {
     const origins = new Map(this.#origins);
-    origins.set(loweredId, { design: designId, kind: "passthrough" });
+    origins.set(loweredId, { design: LoweredOriginRef.reconstitute(designId), kind: "passthrough" });
     return new LoweringIndex({
       origins,
       scenarioDesignIds: this.#scenarioDesignIds,
@@ -441,19 +497,19 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   const attrPathOfMachine = new Map<string, string>();
   const obligations: LoweredObligation[] = [];
   let n = 0;
-  const nextId = (): string => {
+  const nextId = (): LoweredId => {
     n += 1;
-    return `OB-${n}`;
+    return LoweredId.reconstitute(`OB-${n}`);
   };
-  const push = (ob: Omit<LoweredObligation, "id">, entry: LoweredOrigin): string => {
+  const push = (ob: Omit<LoweredObligation, "id">, entry: LoweredOrigin): LoweredId => {
     const id = nextId();
     obligations.push({ id, ...ob });
-    map.set(id, entry);
+    map.set(id.asString(), entry);
     return id;
   };
 
   interface EventCandidate {
-    lowId: string;
+    lowId: LoweredId;
     design: string;
     trigger: string;
     guard: Expression;
@@ -473,7 +529,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     if (ob.guard) lowered.guard = ob.guard;
     if (ob.effect) lowered.effect = ob.effect;
     if (ob.temporal) lowered.temporal = ob.temporal;
-    const lowId = push(lowered, { design: ob.id.asString(), kind: "passthrough" });
+    const lowId = push(lowered, { design: LoweredOriginRef.reconstitute(ob.id.asString()), kind: "passthrough" });
     // 旧 `ob.trigger` 真偽値は「未宣言または空文字」を捕えていた(凍結挙動)。
     if (ob.nature.isEvent() && ob.guard && ob.effect && ob.trigger !== undefined && !ob.trigger.isEmpty()) {
       candidates.push({ lowId, design: ob.id.asString(), trigger: ob.trigger.asString(), guard: ob.guard, effect: ob.effect });
@@ -490,7 +546,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
       const effect: Expression = tr.effect ? { op: "and", args: [eqRef(attrPath, true, tr.to), tr.effect] } : eqRef(attrPath, true, tr.to);
       const lowId = push(
         { nature: "event", frRefs: [], trigger: tr.trigger.asString(), guard, effect },
-        { design: tr.id.asString(), kind: "transition" },
+        { design: LoweredOriginRef.reconstitute(tr.id.asString()), kind: "transition" },
       );
       machineOfTransition.set(tr.id.asString(), sm);
       candidates.push({ lowId, design: tr.id.asString(), trigger: tr.trigger.asString(), guard, effect });
@@ -500,7 +556,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
       const effect: Expression = { op: "eq", args: [{ op: "ref", path: attrPath, prime: true }, { op: "ref", path: attrPath }] };
       push(
         { nature: "event", frRefs: [], trigger: ig.trigger.asString(), guard: eqRef(attrPath, false, ig.state), effect },
-        { design: sm.id.asString(), kind: "ignore" },
+        { design: LoweredOriginRef.reconstitute(sm.id.asString()), kind: "ignore" },
       );
     }
   }
@@ -511,7 +567,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     for (const c of candidates) {
       push(
         { nature: "invariant", frRefs: [], assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } },
-        { design: c.design, kind: "vac-dead" },
+        { design: LoweredOriginRef.reconstitute(c.design), kind: "vac-dead" },
       );
     }
     const byTrigger = new Map<string, EventCandidate[]>();
@@ -537,7 +593,11 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
                 args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }],
               },
             },
-            { design: `${a.design}|${b.design}`, kind: "vac-shadow", pair: [a.design, b.design] },
+            {
+              design: LoweredOriginRef.reconstitute(`${a.design}|${b.design}`),
+              kind: "vac-shadow",
+              pair: [LoweredOriginRef.reconstitute(a.design), LoweredOriginRef.reconstitute(b.design)],
+            },
           );
         }
       }
@@ -552,7 +612,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     const lowId = `SC-${scN}`;
     scenarioMap.set(lowId, sc.id.asString());
     const lowered: LoweredScenario = {
-      id: lowId,
+      id: LoweredId.reconstitute(lowId),
       kind: sc.kind,
       frRefs: [...sc.frRefs],
       bindings: sc.bindings,
@@ -565,7 +625,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   let bgN = 0;
   for (const bg of u.background().sortedCanonically()) {
     bgN += 1;
-    background.push({ id: `BG-${bgN}`, assert: bg.assert });
+    background.push({ id: LoweredId.reconstitute(`BG-${bgN}`), assert: bg.assert });
   }
 
   return {

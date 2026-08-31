@@ -55,6 +55,7 @@ import {
   VerificationSkips,
   ExpressionEvaluation,
   FormalModelId,
+  ObligationIds,
 } from "../tools/requirements/domain/index.ts";
 import {
   type FormalModelRepository,
@@ -210,7 +211,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     });
     const facts = QuintMachineFacts.of({
       invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "bool", value: true }, frRefs: ["FR-1"] }]),
-      eventIds: [],
+      eventIds: ObligationIds.of([]),
       scenariosWithInit: new Set(["SC-1"]),
     });
     const runs = QuintRuns.of({
@@ -251,7 +252,7 @@ describe("quint verdict interpretation", () => {
   });
   const facts = QuintMachineFacts.of({
     invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "ref", path: "T.ok" }, frRefs: ["FR-1"] }]),
-    eventIds: ["OB-2"],
+    eventIds: ObligationIds.of([ObligationId.reconstitute("OB-2")]),
     scenariosWithInit: new Set(["SC-1", "SC-2"]),
   });
   const run = (runs: Partial<QuintRunsSeed>, method = "simulation", compileSkips: { target: string; reason: string }[] = []) =>
@@ -327,7 +328,7 @@ describe("quint verdict interpretation", () => {
       .toBe("scenarios with a When-event are not checked by the quint backend in v1");
     const unboundFacts = QuintMachineFacts.of({
       invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "ref", path: "T.ok" }, frRefs: ["FR-1"] }]),
-      eventIds: ["OB-2"],
+      eventIds: ObligationIds.of([ObligationId.reconstitute("OB-2")]),
       scenariosWithInit: new Set(),
     });
     const unbound = unboundFacts.interpret(machineModel, VerificationSkips.of([]), "simulation", QuintRuns.of(EMPTY_RUNS));
@@ -420,7 +421,7 @@ describe("quint facts collections (first-class operations)", () => {
     expect(comps.violatedBy({ "T.ok": true }).isEmpty()).toBe(true);
     expect(comps.toArray().length).toBe(1);
 
-    const facts = QuintMachineFacts.of({ invariantComponents: comps, eventIds: ["OB-9", "OB-2"], scenariosWithInit: new Set() });
+    const facts = QuintMachineFacts.of({ invariantComponents: comps, eventIds: ObligationIds.of([ObligationId.reconstitute("OB-9"), ObligationId.reconstitute("OB-2")]), scenariosWithInit: new Set() });
     expect(facts.hasInvariantComponents()).toBe(true);
     expect(facts.machineTargets()).toEqual(["OB-1", "OB-2", "OB-9"]);
   });

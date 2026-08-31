@@ -36,7 +36,7 @@ function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
   // だけ toArray() に降りる。
   const inputs = report.inputs().toArray().map((i) => ({ artifact: i.artifact, sha256: i.sha256.asString() })) as unknown as Json;
   const ordered: { [k: string]: Json } = {
-    backend: report.id().backendName(),
+    backend: report.id().backendName().asString(),
     irVersion: CATALOG_VERSION,
     irHash: ContentHash.ofText(canonicalStringify(inputs)).asString(),
     method: "static",
@@ -99,8 +99,8 @@ export function parseReportDocument(
   raw: Json,
 ): Result<ReferenceCheckReport, { cause: string }> {
   if (!isObject(raw)) return { ok: false, error: { cause: "document is not a JSON object" } };
-  if (raw.backend !== id.backendName()) {
-    return { ok: false, error: { cause: `document backend "${String(raw.backend)}" does not match the id backend "${id.backendName()}"` } };
+  if (raw.backend !== id.backendName().asString()) {
+    return { ok: false, error: { cause: `document backend "${String(raw.backend)}" does not match the id backend "${id.backendName().asString()}"` } };
   }
   if (!Array.isArray(raw.findings) || !Array.isArray(raw.skipped) || !Array.isArray(raw.inputs) || !Array.isArray(raw.checked)) {
     return { ok: false, error: { cause: "document lacks inputs/checked/findings/skipped arrays" } };

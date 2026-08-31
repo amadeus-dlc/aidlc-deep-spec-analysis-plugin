@@ -45,7 +45,6 @@ import {
   AttributeBound,
   AttributePath,
   BackgroundAssumptionId,
-  ObligationId,
   ObligationNature,
   ScenarioId,
   Obligations,
@@ -61,6 +60,7 @@ import {
   VerificationReportId,
   type VerificationFinding,
   FormalModelId,
+  ObligationId,
 } from "../tools/requirements/domain/index.ts";
 import {
   type FormalModelRepository,
@@ -285,7 +285,7 @@ describe("smt verdict interpretation", () => {
     compiled: new Map([["OB-1", true], ["OB-2", true], ["OB-3", true], ["OB-4", true]]),
     skipped: VerificationSkips.of([{ target: "OB-9", reason: "capability", detail: "seed" }]),
     labelToTarget: new Map([["ob_OB_1", "OB-1"], ["ob_OB_2", "OB-2"], ["ty_x", "TY-x"], ["bg_B1", "B1"]]),
-    eventPairs: SmtEventPairProbes.of([{ qOverlap: "evo:OB-3:OB-4", qJoint: "evj:OB-3:OB-4", a: "OB-3", b: "OB-4", trigger: "submit" }]),
+    eventPairs: SmtEventPairProbes.of([{ qOverlap: "evo:OB-3:OB-4", qJoint: "evj:OB-3:OB-4", a: ObligationId.reconstitute("OB-3"), b: ObligationId.reconstitute("OB-4"), trigger: TriggerName.reconstitute("submit") }]),
     gapTriggers: new Map([["submit", ["OB-3", "OB-4"]]]),
     scenarioQueries: new Map([["SC-1", "sc:SC-1"], ["SC-2", "sc:SC-2"]]),
   });
@@ -602,7 +602,7 @@ describe("degradation reports and ordering", () => {
 
 describe("smt facts collections (first-class operations)", () => {
   test("SmtEventPairProbes holds issuance order under add", () => {
-    const probe = { qOverlap: "evo:a:b", qJoint: "evj:a:b", a: "OB-1", b: "OB-2", trigger: "go" };
+    const probe = { qOverlap: "evo:a:b", qJoint: "evj:a:b", a: ObligationId.reconstitute("OB-1"), b: ObligationId.reconstitute("OB-2"), trigger: TriggerName.reconstitute("go") };
     const probes = SmtEventPairProbes.of([]).add(probe);
     expect([...probes]).toEqual([probe]);
     expect(probes.toArray()).toEqual([probe]);

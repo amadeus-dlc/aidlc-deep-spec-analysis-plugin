@@ -23,7 +23,7 @@ import {
 
 function orderedDocument(report: DesignReport): { [k: string]: Json } {
   const ordered: { [k: string]: Json } = {
-    backend: report.id().backendName(),
+    backend: report.id().backendName().asString(),
     irVersion: report.irVersion().asString(),
     irHash: report.irHash().asString(),
     method: report.method(),

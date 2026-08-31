@@ -11,7 +11,9 @@ export {
 } from "./attribute-declaration.ts";
 // FrRefs は kernel 所有の共有語彙（requirements の facade からも見える）。
 export { FrRefs } from "../../kernel/domain/index.ts";
-export { type Obligation, type ObligationIdError, ObligationId, ObligationNature, Obligations } from "./obligation.ts";
+export { type Obligation, type ObligationIdError, ObligationId, ObligationNature, Obligations,
+  ObligationIds,
+} from "./obligation.ts";
 export { type Scenario, type ScenarioIdError, ScenarioId, Scenarios } from "./scenario.ts";
 export {
   type BackgroundAssumption,

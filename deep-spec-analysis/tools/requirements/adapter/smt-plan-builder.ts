@@ -4,7 +4,7 @@
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の smtVar / smtName / enumCode /
 // smtOf / buildPlan からの逐語移植（IrDoc → RequirementsModel の読み替えのみ）。
 
-import { type Expression, Expressions, IdOrder } from "../../kernel/domain/index.ts";
+import { type Expression, Expressions, IdOrder, TriggerName } from "../../kernel/domain/index.ts";
 import {
   SmtEventPairProbes,
   SmtPlanFacts,
@@ -13,6 +13,7 @@ import {
   type RequirementsModel,
   type VerificationSkipped,
   type AttributeBound,
+  type SmtEventPairProbe,
 } from "../domain/index.ts";
 
 // 子プロセスへ渡す 1 クエリ分の台本。プロトコル（JSON 形）は design の refinement ソルバも
@@ -273,7 +274,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   }
 
   // (a) 同トリガでガードが重なり効果が矛盾するイベント対。
-  const eventPairs: { qOverlap: string; qJoint: string; a: string; b: string; trigger: string }[] = [];
+  const eventPairs: SmtEventPairProbe[] = [];
   const byTrigger = new Map<string, Obligation[]>();
   for (const ev of events) {
     const key = ev.trigger === undefined ? "" : ev.trigger.asString();
@@ -317,7 +318,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
           assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
           model: [],
         });
-        eventPairs.push({ qOverlap, qJoint, a: a.id.asString(), b: b.id.asString(), trigger });
+        eventPairs.push({ qOverlap, qJoint, a: a.id, b: b.id, trigger: TriggerName.reconstitute(trigger) });
       }
     }
   }

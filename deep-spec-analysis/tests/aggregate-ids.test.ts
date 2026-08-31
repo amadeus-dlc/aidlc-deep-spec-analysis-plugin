@@ -21,7 +21,10 @@ import {
   DesignUnitId,
   InitialStates,
   RefinementMaterialsId,
+  LoweredOriginRef,
+  LoweredId,
 } from "../tools/design/domain/index.ts";
+import { ObligationIds } from "../tools/requirements/domain/index.ts";
 import { RefinementMapId } from "../tools/refinement/domain/index.ts";
 import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
 import { FormalModelId } from "../tools/requirements/domain/index.ts";
@@ -485,5 +488,29 @@ describe("TriggerName (issue #46 wave 5c-3)", () => {
     expect(t.value.asString()).toBe("close");
     expect(t.value.isEmpty()).toBe(false);
     expect(TriggerName.reconstitute("").isEmpty()).toBe(true);
+  });
+});
+
+describe("lowered identity primitives and ObligationIds (issue #46 wave 5d)", () => {
+  test("LoweredId / LoweredOriginRef parse-reject the empty token and rehydrate verbatim", () => {
+    expect(LoweredId.parse("").ok).toBe(false);
+    const lid = LoweredId.parse("OB-1");
+    if (!lid.ok) throw new Error("unreachable");
+    expect(lid.value.equals(LoweredId.reconstitute("OB-1"))).toBe(true);
+    expect(lid.value.asString()).toBe("OB-1");
+
+    expect(LoweredOriginRef.parse("").ok).toBe(false);
+    const ref = LoweredOriginRef.parse("TR-1");
+    if (!ref.ok) throw new Error("unreachable");
+    expect(ref.value.equals(LoweredOriginRef.reconstitute("TR-1"))).toBe(true);
+    expect(ref.value.asString()).toBe("TR-1");
+  });
+
+  test("ObligationIds keeps declaration order and escapes only at the boundary", () => {
+    const ids = ObligationIds.of([ObligationId.reconstitute("OB-2")]).add(ObligationId.reconstitute("OB-1"));
+    expect([...ids].map((i) => i.asString())).toEqual(["OB-2", "OB-1"]);
+    expect(ids.isEmpty()).toBe(false);
+    expect(ObligationIds.of([]).isEmpty()).toBe(true);
+    expect(ids.toStrings()).toEqual(["OB-2", "OB-1"]);
   });
 });

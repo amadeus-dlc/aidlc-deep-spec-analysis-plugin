@@ -5,7 +5,7 @@
 // は素通し。skipped は {target:string, reason:string} のみ。
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
-import { SiblingVerdictFindings, SiblingVerdictSkips } from "../domain/index.ts";
+import { LoweredId, SiblingVerdictFindings, SiblingVerdictSkips } from "../domain/index.ts";
 import type { DesignValue, SiblingVerdictDocument, SiblingVerdictFinding, SiblingVerdictSkip } from "../domain/index.ts";
 
 const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
@@ -29,7 +29,7 @@ export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
   const skipped: SiblingVerdictSkip[] = [];
   for (const s of Array.isArray(raw.skipped) ? raw.skipped : []) {
     if (!isObject(s) || typeof s.target !== "string" || typeof s.reason !== "string") continue;
-    const out: SiblingVerdictSkip = { target: s.target, reason: s.reason };
+    const out: SiblingVerdictSkip = { target: LoweredId.reconstitute(s.target), reason: s.reason };
     if (typeof s.detail === "string") out.detail = s.detail;
     skipped.push(out);
   }
