@@ -92,7 +92,7 @@ export class DesignObligationOrigin {
   }
 }
 
-import type { Expression, FrRefs } from "../../kernel/domain/index.ts";
+import type { Expression, FrRefs, TriggerName } from "../../kernel/domain/index.ts";
 import { IdOrder } from "../../kernel/domain/index.ts";
 import type { BrRefs } from "./design-ir-decl.ts";
 
@@ -103,7 +103,7 @@ export interface DesignObligation {
   brRefs: BrRefs;
   frRefs: FrRefs;
   assert?: Expression;
-  trigger?: string;
+  trigger?: TriggerName;
   guard?: Expression;
   effect?: Expression;
   temporal?: { pattern: string; assert?: Expression; from?: Expression; to?: Expression };

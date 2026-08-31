@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { TriggerName, TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
@@ -71,7 +71,7 @@ const schema = readContractSchema(schemaPath);
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
 type RawAttributeDeclaration = Omit<AttributeDeclaration, "values"> & { values?: string[] };
-type RawObligation = Omit<Obligation, "frRefs"> & { frRefs: string[] };
+type RawObligation = Omit<Obligation, "frRefs" | "trigger"> & { frRefs: string[]; trigger?: string };
 type RawScenario = Omit<Scenario, "frRefs"> & { frRefs: string[] };
 function model(seed: {
   irVersion?: IrVersion;
@@ -88,7 +88,7 @@ function model(seed: {
     attributes: AttributeDeclarations.of(
       (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
     ),
-    obligations: Obligations.of((seed.obligations ?? []).map((o) => ({ ...o, frRefs: FrRefs.of(o.frRefs) }))),
+    obligations: Obligations.of((seed.obligations ?? []).map((o) => ({ ...o, frRefs: FrRefs.of(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
     scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => ({ ...s, frRefs: FrRefs.of(s.frRefs) }))),
     background: BackgroundAssumptions.of(seed.background ?? []),
   });
@@ -246,7 +246,7 @@ describe("quint verdict interpretation", () => {
     scenarios: [
       { id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: ["FR-1"], bindings: { "T.ok": false } },
       { id: ScenarioId.reconstitute("SC-2"), kind: "reject", frRefs: ["FR-2"], bindings: { "T.ok": true } },
-      { id: ScenarioId.reconstitute("SC-3"), kind: "accept", frRefs: [], bindings: {}, event: { trigger: "go" } },
+      { id: ScenarioId.reconstitute("SC-3"), kind: "accept", frRefs: [], bindings: {}, event: { trigger: TriggerName.reconstitute("go") } },
     ],
   });
   const facts = QuintMachineFacts.of({

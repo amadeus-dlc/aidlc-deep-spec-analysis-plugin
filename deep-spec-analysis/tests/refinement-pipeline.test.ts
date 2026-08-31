@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Json } from "../tools/kernel/adapter/index.ts";
 import { SystemClock } from "../tools/kernel/adapter/index.ts";
-import { FrRefs, ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { TriggerName, FrRefs, ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
 import type { Expression } from "../tools/kernel/domain/index.ts";
 import { AttributeBound, AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "../tools/requirements/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -220,7 +220,7 @@ type RawDesignObligation = Omit<DesignObligation, "id" | "nature" | "origin" | "
   brRefs: string[];
   frRefs: string[];
 };
-type RawDesignTransition = Omit<DesignTransition, "id" | "brRefs"> & { id: string; brRefs: string[] };
+type RawDesignTransition = Omit<DesignTransition, "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
 type RawDesignMachine = Omit<DesignMachine, "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
   id: string;
   entity: string;
@@ -261,7 +261,7 @@ function unit(seed: {
         attribute: DesignAttributeName.reconstitute(m.attribute),
         initial: InitialStates.of(m.initial),
         transitions: DesignTransitions.of(
-          m.transitions.map((t) => ({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs) })),
+          m.transitions.map((t) => ({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
         ),
         ignores: DesignIgnores.of(m.ignores),
       })),
@@ -278,8 +278,8 @@ function unit(seed: {
 // テストの読みやすさのため素の配列・素の id で書き、ここで一括して DP と
 // コレクションに包む（アダプタの門と同型）。
 type RawReqAttribute = Omit<RefinementAttribute, "path" | "min" | "max" | "values"> & { path: string; min?: number; max?: number; values?: string[] };
-type RawReqObligation = Omit<RefinementObligation, "id" | "nature" | "frRefs"> & { id: string; nature: string; frRefs: string[] };
-type RawReqScenario = Omit<RefinementScenario, "id" | "frRefs"> & { id: string; frRefs: string[] };
+type RawReqObligation = Omit<RefinementObligation, "id" | "nature" | "frRefs" | "trigger"> & { id: string; nature: string; frRefs: string[]; trigger?: string };
+type RawReqScenario = Omit<RefinementScenario, "id" | "frRefs" | "event"> & { id: string; frRefs: string[]; event?: { trigger: string } };
 function requirements(seed: {
   attributes?: RawReqAttribute[];
   obligations?: RawReqObligation[];
@@ -298,10 +298,21 @@ function requirements(seed: {
       })),
     ),
     obligations: RefinementObligations.of(
-      (seed.obligations ?? []).map((o) => ({ ...o, id: ObligationId.reconstitute(o.id), nature: ObligationNature.reconstitute(o.nature), frRefs: FrRefs.of(o.frRefs) })),
+      (seed.obligations ?? []).map((o) => ({
+        ...o,
+        id: ObligationId.reconstitute(o.id),
+        nature: ObligationNature.reconstitute(o.nature),
+        frRefs: FrRefs.of(o.frRefs),
+        trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger),
+      })),
     ),
     scenarios: RefinementScenarios.of(
-      (seed.scenarios ?? []).map((s) => ({ ...s, id: ScenarioId.reconstitute(s.id), frRefs: FrRefs.of(s.frRefs) })),
+      (seed.scenarios ?? []).map((s) => ({
+        ...s,
+        id: ScenarioId.reconstitute(s.id),
+        frRefs: FrRefs.of(s.frRefs),
+        event: s.event === undefined ? undefined : { trigger: TriggerName.reconstitute(s.event.trigger) },
+      })),
     ),
   });
 }
@@ -310,7 +321,7 @@ type RawAttributeMapping =
   | { kind: "expression"; req: string; expr: Expression }
   | { kind: "enum-cases"; req: string; from: string; cases: { [designValue: string]: string } }
   | { kind: "unspecified"; req: string };
-type RawEventMapping = Omit<EventMapping, "transitions"> & { transitions: string[] };
+type RawEventMapping = Omit<EventMapping, "reqTrigger" | "transitions"> & { reqTrigger: string; transitions: string[] };
 type RawUnmappedTarget = { target: string; reason: string };
 function wrapMapping(m: RawAttributeMapping): AttributeMapping {
   return { ...m, req: AttributePath.reconstitute(m.req) } as AttributeMapping;
@@ -325,7 +336,7 @@ function refUnitMap(seed: {
     unit: DesignUnitId.of(seed.unit ?? "u1"),
     attrMap: AttributeMappings.of((seed.attrMap ?? []).map(wrapMapping)),
     eventMap: EventMappings.of(
-      (seed.eventMap ?? []).map((e) => ({ ...e, transitions: TransitionRefs.of(e.transitions.map((t) => TransitionRef.reconstitute(t))) })),
+      (seed.eventMap ?? []).map((e) => ({ ...e, reqTrigger: TriggerName.reconstitute(e.reqTrigger), transitions: TransitionRefs.of(e.transitions.map((t) => TransitionRef.reconstitute(t))) })),
     ),
     unmapped: UnmappedDeclarations.of(
       (seed.unmapped ?? []).map((un) => ({ ...un, target: UnmappedTargetRef.reconstitute(un.target) })),
@@ -698,12 +709,13 @@ describe("refinement collections (first-class operations)", () => {
     expect(tref("TR-1").equals(tref("TR-1"))).toBe(true);
     expect(TransitionRef.parse("").ok).toBe(false);
 
-    const em = EventMappings.of([]).add({ reqTrigger: "go", transitions: TransitionRefs.of([tref("TR-1")]) })
-      .add({ reqTrigger: "go", transitions: TransitionRefs.of([tref("TR-9")]) });
+    const trig = (raw: string): TriggerName => TriggerName.reconstitute(raw);
+    const em = EventMappings.of([]).add({ reqTrigger: trig("go"), transitions: TransitionRefs.of([tref("TR-1")]) })
+      .add({ reqTrigger: trig("go"), transitions: TransitionRefs.of([tref("TR-9")]) });
     expect([...em].length).toBe(2);
     // 重複トリガは最後の宣言が勝つ（旧 new Map の凍結挙動）。
-    expect([...(em.ofTrigger("go")?.transitions ?? TransitionRefs.of([]))].map((t) => t.asString())).toEqual(["TR-9"]);
-    expect(em.ofTrigger("ghost")).toBe(undefined);
+    expect([...(em.ofTrigger(trig("go"))?.transitions ?? TransitionRefs.of([]))].map((t) => t.asString())).toEqual(["TR-9"]);
+    expect(em.ofTrigger(trig("ghost"))).toBe(undefined);
     expect(em.toArray().length).toBe(2);
 
     const uref = (raw: string): UnmappedTargetRef => UnmappedTargetRef.reconstitute(raw);

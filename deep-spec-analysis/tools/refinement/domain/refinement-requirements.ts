@@ -5,7 +5,7 @@
 // 識別材料。集まりはファーストクラスコレクションで運ぶ。
 
 import type { AttributeBound, AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "../../requirements/domain/index.ts";
-import type { ContentHash, FrRefs } from "../../kernel/domain/index.ts";
+import type { ContentHash, FrRefs, TriggerName } from "../../kernel/domain/index.ts";
 import { IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 
@@ -98,7 +98,7 @@ export interface RefinementObligation {
   nature: ObligationNature;
   frRefs: FrRefs;
   assert?: Expression;
-  trigger?: string;
+  trigger?: TriggerName;
   guard?: Expression;
   effect?: Expression;
 }
@@ -146,7 +146,7 @@ export interface RefinementScenario {
   kind: "accept" | "reject";
   frRefs: FrRefs;
   bindings: { [path: string]: boolean | number | string };
-  event?: { trigger: string };
+  event?: { trigger: TriggerName };
 }
 
 // 要件シナリオのファーストクラスコレクション。id 索引は最後の宣言が勝つ。

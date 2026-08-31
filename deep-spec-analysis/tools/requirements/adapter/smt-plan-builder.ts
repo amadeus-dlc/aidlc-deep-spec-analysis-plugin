@@ -217,7 +217,8 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         compiled.set(ob.id.asString(), false);
       }
     } else if (ob.nature.isEvent()) {
-      if (!ob.guard || !ob.effect || !ob.trigger) {
+      // 旧 `!ob.trigger` は「未宣言または空文字」を一括で捕えていた(凍結挙動)。
+      if (!ob.guard || !ob.effect || ob.trigger === undefined || ob.trigger.isEmpty()) {
         skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
         compiled.set(ob.id.asString(), false);
         continue;
@@ -275,9 +276,10 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const eventPairs: { qOverlap: string; qJoint: string; a: string; b: string; trigger: string }[] = [];
   const byTrigger = new Map<string, Obligation[]>();
   for (const ev of events) {
-    const list = byTrigger.get(ev.trigger ?? "") ?? [];
+    const key = ev.trigger === undefined ? "" : ev.trigger.asString();
+    const list = byTrigger.get(key) ?? [];
     list.push(ev);
-    byTrigger.set(ev.trigger ?? "", list);
+    byTrigger.set(key, list);
   }
   for (const trigger of [...byTrigger.keys()].sort()) {
     const list = byTrigger.get(trigger) ?? [];

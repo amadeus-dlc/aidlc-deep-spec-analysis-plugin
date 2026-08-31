@@ -469,13 +469,14 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
       frRefs: [...ob.frRefs],
     };
     if (ob.assert) lowered.assert = ob.assert;
-    if (ob.trigger !== undefined) lowered.trigger = ob.trigger;
+    if (ob.trigger !== undefined) lowered.trigger = ob.trigger.asString();
     if (ob.guard) lowered.guard = ob.guard;
     if (ob.effect) lowered.effect = ob.effect;
     if (ob.temporal) lowered.temporal = ob.temporal;
     const lowId = push(lowered, { design: ob.id.asString(), kind: "passthrough" });
-    if (ob.nature.isEvent() && ob.guard && ob.effect && ob.trigger) {
-      candidates.push({ lowId, design: ob.id.asString(), trigger: ob.trigger, guard: ob.guard, effect: ob.effect });
+    // 旧 `ob.trigger` 真偽値は「未宣言または空文字」を捕えていた(凍結挙動)。
+    if (ob.nature.isEvent() && ob.guard && ob.effect && ob.trigger !== undefined && !ob.trigger.isEmpty()) {
+      candidates.push({ lowId, design: ob.id.asString(), trigger: ob.trigger.asString(), guard: ob.guard, effect: ob.effect });
     }
   }
 
@@ -488,17 +489,17 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
       const guard: Expression = tr.guard ? { op: "and", args: [eqRef(attrPath, false, tr.from), tr.guard] } : eqRef(attrPath, false, tr.from);
       const effect: Expression = tr.effect ? { op: "and", args: [eqRef(attrPath, true, tr.to), tr.effect] } : eqRef(attrPath, true, tr.to);
       const lowId = push(
-        { nature: "event", frRefs: [], trigger: tr.trigger, guard, effect },
+        { nature: "event", frRefs: [], trigger: tr.trigger.asString(), guard, effect },
         { design: tr.id.asString(), kind: "transition" },
       );
       machineOfTransition.set(tr.id.asString(), sm);
-      candidates.push({ lowId, design: tr.id.asString(), trigger: tr.trigger, guard, effect });
+      candidates.push({ lowId, design: tr.id.asString(), trigger: tr.trigger.asString(), guard, effect });
     }
     const sortedIgnores = sm.ignores.sortedByStateTrigger();
     for (const ig of sortedIgnores) {
       const effect: Expression = { op: "eq", args: [{ op: "ref", path: attrPath, prime: true }, { op: "ref", path: attrPath }] };
       push(
-        { nature: "event", frRefs: [], trigger: ig.trigger, guard: eqRef(attrPath, false, ig.state), effect },
+        { nature: "event", frRefs: [], trigger: ig.trigger.asString(), guard: eqRef(attrPath, false, ig.state), effect },
         { design: sm.id.asString(), kind: "ignore" },
       );
     }
@@ -556,7 +557,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
       frRefs: [...sc.frRefs],
       bindings: sc.bindings,
     };
-    if (sc.event) lowered.event = sc.event;
+    if (sc.event) lowered.event = { trigger: sc.event.trigger.asString() };
     if (sc.expect) lowered.expect = sc.expect;
     scenarios.push(lowered);
   }

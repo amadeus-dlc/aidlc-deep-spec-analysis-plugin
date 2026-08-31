@@ -30,7 +30,7 @@ export class DesignScenarioId {
   }
 }
 
-import type { Expression, FrRefs } from "../../kernel/domain/index.ts";
+import type { Expression, FrRefs, TriggerName } from "../../kernel/domain/index.ts";
 import { IdOrder } from "../../kernel/domain/index.ts";
 import type { BrRefs } from "./design-ir-decl.ts";
 
@@ -40,7 +40,7 @@ export interface DesignScenario {
   brRefs: BrRefs;
   frRefs: FrRefs;
   bindings: { [path: string]: boolean | number | string };
-  event?: { trigger: string };
+  event?: { trigger: TriggerName };
   expect?: Expression;
 }
 

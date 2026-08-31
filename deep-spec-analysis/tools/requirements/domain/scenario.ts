@@ -30,14 +30,14 @@ export class ScenarioId {
 }
 
 import type { Expression } from "../../kernel/domain/expression.ts";
-import type { FrRefs } from "../../kernel/domain/index.ts";
+import type { FrRefs, TriggerName } from "../../kernel/domain/index.ts";
 
 export interface Scenario {
   id: ScenarioId;
   kind: "accept" | "reject";
   frRefs: FrRefs;
   bindings: { [path: string]: boolean | number | string };
-  event?: { trigger: string };
+  event?: { trigger: TriggerName };
   expect?: Expression;
 }
 

@@ -252,7 +252,8 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   const actionNames: string[] = [];
   for (const ob of model.obligations()) {
     if (!ob.nature.isEvent()) continue;
-    if (!ob.guard || !ob.effect || !ob.trigger) {
+    // 旧 `!ob.trigger` は「未宣言または空文字」を一括で捕えていた(凍結挙動)。
+    if (!ob.guard || !ob.effect || ob.trigger === undefined || ob.trigger.isEmpty()) {
       compileSkips.push({ target: ob.id.asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
       continue;
     }

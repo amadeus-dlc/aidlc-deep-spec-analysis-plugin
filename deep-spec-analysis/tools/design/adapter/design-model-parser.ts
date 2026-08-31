@@ -5,7 +5,7 @@
 // 旧 deep-spec-design-lib.ts の parseDesignIr からの逐語移植。
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
-import { FrRefs, IrVersion, type Expression } from "../../kernel/domain/index.ts";
+import { FrRefs, IrVersion, type Expression, TriggerName } from "../../kernel/domain/index.ts";
 import {
   BrRefs,
   DesignBackgroundId,
@@ -67,7 +67,7 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
         brRefs: BrRefs.of(strArr(ob.brRefs)),
         frRefs: FrRefs.of(strArr(ob.frRefs)),
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
-        trigger: typeof ob.trigger === "string" ? ob.trigger : undefined,
+        trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
         effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
         temporal: isObject(ob.temporal) ? (ob.temporal as unknown as DesignObligation["temporal"]) : undefined,
@@ -84,7 +84,7 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
           id: DesignTransitionId.reconstitute(tr.id),
           from: tr.from,
           to: tr.to,
-          trigger: tr.trigger,
+          trigger: TriggerName.reconstitute(tr.trigger),
           guard: isObject(tr.guard) ? (tr.guard as unknown as Expression) : undefined,
           effect: isObject(tr.effect) ? (tr.effect as unknown as Expression) : undefined,
           brRefs: BrRefs.of(strArr(tr.brRefs)),
@@ -93,7 +93,7 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
       const ignores: DesignIgnore[] = [];
       for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
         if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
-        ignores.push({ state: ig.state, trigger: ig.trigger, reason: typeof ig.reason === "string" ? ig.reason : "" });
+        ignores.push({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger), reason: typeof ig.reason === "string" ? ig.reason : "" });
       }
       machines.push({
         id: DesignMachineId.reconstitute(sm.id),
@@ -120,7 +120,7 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
         brRefs: BrRefs.of(strArr(sc.brRefs)),
         frRefs: FrRefs.of(strArr(sc.frRefs)),
         bindings,
-        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: sc.event.trigger } : undefined,
+        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
         expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
       });
     }

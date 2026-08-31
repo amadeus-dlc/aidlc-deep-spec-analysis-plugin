@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
-import { TargetIds, ArtifactPath, ContentHash, IrVersion, Expressions } from "../tools/kernel/domain/index.ts";
+import { TriggerName, TargetIds, ArtifactPath, ContentHash, IrVersion, Expressions } from "../tools/kernel/domain/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -78,7 +78,7 @@ const sensorPath = join(pluginRoot, "tools", "aidlc-sensor-deep-spec-verify-smt.
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
 type RawAttributeDeclaration = Omit<AttributeDeclaration, "values"> & { values?: string[] };
-type RawObligation = Omit<Obligation, "frRefs"> & { frRefs: string[] };
+type RawObligation = Omit<Obligation, "frRefs" | "trigger"> & { frRefs: string[]; trigger?: string };
 type RawScenario = Omit<Scenario, "frRefs"> & { frRefs: string[] };
 function model(seed: {
   irVersion?: IrVersion;
@@ -95,7 +95,7 @@ function model(seed: {
     attributes: AttributeDeclarations.of(
       (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
     ),
-    obligations: Obligations.of((seed.obligations ?? []).map((o) => ({ ...o, frRefs: FrRefs.of(o.frRefs) }))),
+    obligations: Obligations.of((seed.obligations ?? []).map((o) => ({ ...o, frRefs: FrRefs.of(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
     scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => ({ ...s, frRefs: FrRefs.of(s.frRefs) }))),
     background: BackgroundAssumptions.of(seed.background ?? []),
   });

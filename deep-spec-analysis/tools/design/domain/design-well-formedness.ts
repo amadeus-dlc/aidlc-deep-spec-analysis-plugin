@@ -142,7 +142,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
           }
         }
         if (tr.from !== undefined && tr.trigger !== undefined) {
-          transitionCells.add(`${tr.from}|${tr.trigger}`);
+          transitionCells.add(`${tr.from}|${tr.trigger.asString()}`);
         }
         if (tr.guard !== undefined) checkExpr(tr.guard, tctx, false);
         if (tr.effect !== undefined) {
@@ -158,9 +158,9 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
         if (!states.has(ig.state)) {
           errors.push(where(`${ctx}: ignores state "${ig.state}" is not a value of ${attrPath}`));
         }
-        if (transitionCells.has(`${ig.state}|${ig.trigger}`)) {
+        if (transitionCells.has(`${ig.state}|${ig.trigger.asString()}`)) {
           errors.push(
-            where(`${ctx}: ignores (${ig.state}, ${ig.trigger}) collides with a declared transition for the same (state, trigger)`),
+            where(`${ctx}: ignores (${ig.state}, ${ig.trigger.asString()}) collides with a declared transition for the same (state, trigger)`),
           );
         }
       }
