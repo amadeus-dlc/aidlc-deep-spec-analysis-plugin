@@ -7,15 +7,80 @@
 // 集まりはファーストクラスコレクションで運ぶ。
 
 import { DesignUnitId } from "../../design/domain/index.ts";
+import type { AttributePath } from "../../requirements/domain/index.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { IdOrder } from "../../kernel/domain/index.ts";
 import type { RefinementMapId } from "./refinement-map-id.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 
 export type AttributeMapping =
-  | { readonly kind: "expression"; readonly req: string; readonly expr: Expression }
-  | { readonly kind: "enum-cases"; readonly req: string; readonly from: string; readonly cases: { readonly [designValue: string]: string } }
-  | { readonly kind: "unspecified"; readonly req: string };
+  | { readonly kind: "expression"; readonly req: AttributePath; readonly expr: Expression }
+  | { readonly kind: "enum-cases"; readonly req: AttributePath; readonly from: string; readonly cases: { readonly [designValue: string]: string } }
+  | { readonly kind: "unspecified"; readonly req: AttributePath };
+
+export type RefinementMapTokenError = { readonly kind: "empty-refinement-map-token"; readonly raw: string };
+
+// eventMap.transitions の要素——写像先の設計 遷移/義務 id への宣言参照。
+export class TransitionRef {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<TransitionRef, RefinementMapTokenError> {
+    if (raw === "") return err({ kind: "empty-refinement-map-token", raw });
+    return ok(new TransitionRef(raw));
+  }
+
+  static reconstitute(raw: string): TransitionRef {
+    return new TransitionRef(raw);
+  }
+
+  equals(other: TransitionRef): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
+
+// unmapped[].target の宣言トークン——要件属性パス・義務 id・シナリオ id の
+// どれをも指しうる契約4 の waiver 語彙。
+export class UnmappedTargetRef {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<UnmappedTargetRef, RefinementMapTokenError> {
+    if (raw === "") return err({ kind: "empty-refinement-map-token", raw });
+    return ok(new UnmappedTargetRef(raw));
+  }
+
+  static reconstitute(raw: string): UnmappedTargetRef {
+    return new UnmappedTargetRef(raw);
+  }
+
+  equals(other: UnmappedTargetRef): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
+
+// 照合トークンの運び手——DP はそのまま渡し、生パス（Expression 由来）は
+// string のまま渡す。照合はコレクション自身の知識（Tell-Don't-Ask 裁定）。
+export type RefTokenCarrier = string | { asString(): string };
+
+function tokenOf(carrier: RefTokenCarrier): string {
+  return typeof carrier === "string" ? carrier : carrier.asString();
+}
 
 // attrMap 宣言のファーストクラスコレクション（宣言順を保持——重複検出の
 // gap 発火順は plan が宣言順に歩くことで凍結される）。
@@ -45,21 +110,21 @@ export class AttributeMappings {
 
 // eventMap の transitions（写像先の設計 遷移/義務 id）のコレクション。
 export class TransitionRefs {
-  readonly #values: readonly string[];
+  readonly #values: readonly TransitionRef[];
 
-  private constructor(values: readonly string[]) {
+  private constructor(values: readonly TransitionRef[]) {
     this.#values = values;
   }
 
-  static of(values: readonly string[]): TransitionRefs {
+  static of(values: readonly TransitionRef[]): TransitionRefs {
     return new TransitionRefs([...values]);
   }
 
-  add(value: string): TransitionRefs {
+  add(value: TransitionRef): TransitionRefs {
     return new TransitionRefs([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<string> {
+  *[Symbol.iterator](): Iterator<TransitionRef> {
     yield* this.#values;
   }
 
@@ -69,15 +134,15 @@ export class TransitionRefs {
 
   // 宣言に無い設計 id（gap 文言用の辞書順——旧 .sort() の凍結挙動）。
   unknownAmong(declared: ReadonlySet<string>): string[] {
-    return this.#values.filter((t) => !declared.has(t)).sort();
+    return this.#values.map((t) => t.asString()).filter((t) => !declared.has(t)).sort();
   }
 
   // eventTransitions 索引が持つ正準順（IdOrder.compare）。
-  sortedCanonically(): string[] {
-    return [...this.#values].sort(IdOrder.compare);
+  sortedCanonically(): readonly TransitionRef[] {
+    return [...this.#values].sort((a, b) => IdOrder.compare(a.asString(), b.asString()));
   }
 
-  toArray(): readonly string[] {
+  toArray(): readonly TransitionRef[] {
     return this.#values;
   }
 }
@@ -123,7 +188,7 @@ export class EventMappings {
 }
 
 export interface UnmappedTarget {
-  readonly target: string;
+  readonly target: UnmappedTargetRef;
   readonly reason: string;
 }
 
@@ -148,18 +213,20 @@ export class UnmappedDeclarations {
     yield* this.#values;
   }
 
-  covers(target: string): boolean {
-    return this.#values.some((x) => x.target === target);
+  covers(target: RefTokenCarrier): boolean {
+    const t = tokenOf(target);
+    return this.#values.some((x) => x.target.asString() === t);
   }
 
-  coversAll(targets: readonly string[]): boolean {
+  coversAll(targets: readonly RefTokenCarrier[]): boolean {
     return targets.every((t) => this.covers(t));
   }
 
-  reasonOf(target: string): string | undefined {
+  reasonOf(target: RefTokenCarrier): string | undefined {
+    const t = tokenOf(target);
     let found: string | undefined;
     for (const x of this.#values) {
-      if (x.target === target) found = x.reason;
+      if (x.target.asString() === t) found = x.reason;
     }
     return found;
   }

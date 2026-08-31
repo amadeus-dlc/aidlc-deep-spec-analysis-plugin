@@ -4,11 +4,12 @@
 // UnitRefinementPlan#quintInvariants の振る舞い（OOUI 裁定）で、ここは型と
 // ファーストクラスコレクションだけを持つ。
 
-import type { Expression } from "../../kernel/domain/index.ts";
+import type { Expression, FrRefs } from "../../kernel/domain/index.ts";
+import type { ObligationId } from "../../requirements/domain/index.ts";
 
 export interface RefinementQuintInvariant {
-  reqId: string;
-  frRefs: string[];
+  reqId: ObligationId;
+  frRefs: FrRefs;
   expr: Expression;
 }
 
@@ -37,7 +38,7 @@ export class RefinementQuintInvariants {
   }
 
   reqIds(): ReadonlySet<string> {
-    return new Set(this.#values.map((e) => e.reqId));
+    return new Set(this.#values.map((e) => e.reqId.asString()));
   }
 
   toArray(): readonly RefinementQuintInvariant[] {

@@ -18,7 +18,8 @@ import { fileURLToPath } from "node:url";
 import type { Json } from "../tools/kernel/adapter/index.ts";
 import { SystemClock } from "../tools/kernel/adapter/index.ts";
 import { FrRefs, ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
-import { FormalModelId } from "../tools/requirements/domain/index.ts";
+import type { Expression } from "../tools/kernel/domain/index.ts";
+import { AttributeBound, AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "../tools/requirements/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -83,9 +84,11 @@ import {
   RefinementScenarios,
   RefinementSolverFacts,
   ReqAttributeValues,
+  TransitionRef,
   TransitionRefs,
   UnitRefinementPlan,
   UnmappedDeclarations,
+  UnmappedTargetRef,
   type AttributeMapping,
   type EventMapping,
   type RefinementAttribute,
@@ -94,7 +97,6 @@ import {
   type RefinementQueryVerdict,
   type RefinementScenario,
   type RefinementUnitMap,
-  type UnmappedTarget,
 } from "../tools/refinement/domain/index.ts";
 import { FormalModelRepositoryImpl, buildSmtPlan } from "../tools/requirements/adapter/index.ts";
 
@@ -266,36 +268,61 @@ function unit(seed: {
   });
 }
 
-// テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
-type RawReqAttribute = Omit<RefinementAttribute, "values"> & { values?: string[] };
+// テストの読みやすさのため素の配列・素の id で書き、ここで一括して DP と
+// コレクションに包む（アダプタの門と同型）。
+type RawReqAttribute = Omit<RefinementAttribute, "path" | "min" | "max" | "values"> & { path: string; min?: number; max?: number; values?: string[] };
+type RawReqObligation = Omit<RefinementObligation, "id" | "nature" | "frRefs"> & { id: string; nature: string; frRefs: string[] };
+type RawReqScenario = Omit<RefinementScenario, "id" | "frRefs"> & { id: string; frRefs: string[] };
 function requirements(seed: {
   attributes?: RawReqAttribute[];
-  obligations?: RefinementObligation[];
-  scenarios?: RefinementScenario[];
+  obligations?: RawReqObligation[];
+  scenarios?: RawReqScenario[];
 }): RefinementRequirements {
   return RefinementRequirements.reconstitute({
     id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
     hash: ContentHash.reconstitute("a".repeat(64)),
     attributes: RefinementAttributes.of(
-      (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : ReqAttributeValues.of(a.values) })),
+      (seed.attributes ?? []).map((a) => ({
+        ...a,
+        path: AttributePath.reconstitute(a.path),
+        min: a.min === undefined ? undefined : AttributeBound.reconstitute(a.min),
+        max: a.max === undefined ? undefined : AttributeBound.reconstitute(a.max),
+        values: a.values === undefined ? undefined : ReqAttributeValues.of(a.values),
+      })),
     ),
-    obligations: RefinementObligations.of(seed.obligations ?? []),
-    scenarios: RefinementScenarios.of(seed.scenarios ?? []),
+    obligations: RefinementObligations.of(
+      (seed.obligations ?? []).map((o) => ({ ...o, id: ObligationId.reconstitute(o.id), nature: ObligationNature.reconstitute(o.nature), frRefs: FrRefs.of(o.frRefs) })),
+    ),
+    scenarios: RefinementScenarios.of(
+      (seed.scenarios ?? []).map((s) => ({ ...s, id: ScenarioId.reconstitute(s.id), frRefs: FrRefs.of(s.frRefs) })),
+    ),
   });
 }
 
+type RawAttributeMapping =
+  | { kind: "expression"; req: string; expr: Expression }
+  | { kind: "enum-cases"; req: string; from: string; cases: { [designValue: string]: string } }
+  | { kind: "unspecified"; req: string };
 type RawEventMapping = Omit<EventMapping, "transitions"> & { transitions: string[] };
+type RawUnmappedTarget = { target: string; reason: string };
+function wrapMapping(m: RawAttributeMapping): AttributeMapping {
+  return { ...m, req: AttributePath.reconstitute(m.req) } as AttributeMapping;
+}
 function refUnitMap(seed: {
   unit?: string;
-  attrMap?: AttributeMapping[];
+  attrMap?: RawAttributeMapping[];
   eventMap?: RawEventMapping[];
-  unmapped?: UnmappedTarget[];
+  unmapped?: RawUnmappedTarget[];
 }): RefinementUnitMap {
   return {
     unit: DesignUnitId.of(seed.unit ?? "u1"),
-    attrMap: AttributeMappings.of(seed.attrMap ?? []),
-    eventMap: EventMappings.of((seed.eventMap ?? []).map((e) => ({ ...e, transitions: TransitionRefs.of(e.transitions) }))),
-    unmapped: UnmappedDeclarations.of(seed.unmapped ?? []),
+    attrMap: AttributeMappings.of((seed.attrMap ?? []).map(wrapMapping)),
+    eventMap: EventMappings.of(
+      (seed.eventMap ?? []).map((e) => ({ ...e, transitions: TransitionRefs.of(e.transitions.map((t) => TransitionRef.reconstitute(t))) })),
+    ),
+    unmapped: UnmappedDeclarations.of(
+      (seed.unmapped ?? []).map((un) => ({ ...un, target: UnmappedTargetRef.reconstitute(un.target) })),
+    ),
   };
 }
 
@@ -307,9 +334,9 @@ const enumMapping = (req: string, from: string, cases: { [d: string]: string }) 
 describe("alpha substitution", () => {
   const ctx = AlphaContext.of(
     new Map<string, AttributeMapping>([
-      ["R.flag", exprMapping("R.flag", "D.flag")],
-      ["R.state", enumMapping("R.state", "D.phase", { draft: "open", review: "open", done: "closed" })],
-      ["R.none", { kind: "unspecified", req: "R.none" }],
+      ["R.flag", wrapMapping(exprMapping("R.flag", "D.flag"))],
+      ["R.state", wrapMapping(enumMapping("R.state", "D.phase", { draft: "open", review: "open", done: "closed" }))],
+      ["R.none", wrapMapping({ kind: "unspecified", req: "R.none" })],
     ]),
   );
 
@@ -416,7 +443,7 @@ describe("plan classification and gap findings", () => {
     const plan = UnitRefinementPlan.of(designUnit, unitMap, req, "construction/x/map.md");
     expect(plan.statusOfObligation("OB-1")).toEqual({ kind: "checkable" });
     expect(plan.statusOfObligation("OB-2")).toEqual({ kind: "checkable" });
-    expect(plan.mappedTransitionsOf("OB-2")).toEqual(["TR-1"]);
+    expect(plan.mappedTransitionsOf("OB-2").map((t) => t.asString())).toEqual(["TR-1"]);
     expect(plan.statusOfObligation("OB-3")).toEqual({ kind: "capability", detail: "temporal refinement is outside v1 scope" });
     expect(plan.statusOfObligation("OB-4")).toEqual({ kind: "waived", reason: "depends on unmapped attribute(s) R.orphan" });
     expect(plan.statusOfObligation("OB-5")?.kind).toBe("gap");
@@ -496,7 +523,7 @@ describe("plan classification and gap findings", () => {
   test("quint extras carry alpha(P) for checkable invariants only", () => {
     const plan = UnitRefinementPlan.of(designUnit, unitMap, req, "m.md");
     const extras = plan.quintInvariants(req);
-    expect(extras.toArray().map((e) => e.reqId)).toEqual(["OB-1"]);
+    expect(extras.toArray().map((e) => e.reqId.asString())).toEqual(["OB-1"]);
     expect(extras.toArray()[0]?.expr).toEqual({ op: "ref", path: "D.flag" });
   });
 });
@@ -594,11 +621,11 @@ describe("refinement verdict interpretation", () => {
   test("each probe kind emits its frozen finding on the deciding verdict", () => {
     const out = run(
       facts([
-        ["rv:OB-1", { kind: "invariant", reqId: "OB-1" }],
-        ["rs:SC-1", { kind: "scenario", reqId: "SC-1" }],
-        ["rs:SC-2", { kind: "scenario", reqId: "SC-2" }],
-        ["re:OB-2", { kind: "enabledness", reqId: "OB-2" }],
-        ["rs2:OB-2:TR-1", { kind: "simulation", reqId: "OB-2", designId: "TR-1" }],
+        ["rv:OB-1", { kind: "invariant", reqId: ObligationId.reconstitute("OB-1") }],
+        ["rs:SC-1", { kind: "scenario", reqId: ScenarioId.reconstitute("SC-1") }],
+        ["rs:SC-2", { kind: "scenario", reqId: ScenarioId.reconstitute("SC-2") }],
+        ["re:OB-2", { kind: "enabledness", reqId: ObligationId.reconstitute("OB-2") }],
+        ["rs2:OB-2:TR-1", { kind: "simulation", reqId: ObligationId.reconstitute("OB-2"), designId: TransitionRef.reconstitute("TR-1") }],
       ]),
       [
         ["rv:OB-1", { status: "sat", decodedModel: { "D.flag": true } }],
@@ -625,12 +652,12 @@ describe("refinement verdict interpretation", () => {
   test("quiet verdicts emit nothing; undecided and missing become the frozen timeout skip", () => {
     const out = run(
       facts([
-        ["rv:OB-1", { kind: "invariant", reqId: "OB-1" }],
-        ["rs:SC-1", { kind: "scenario", reqId: "SC-1" }],
-        ["rs:SC-2", { kind: "scenario", reqId: "SC-2" }],
-        ["re:OB-2", { kind: "enabledness", reqId: "OB-2" }],
-        ["rs2:OB-2:TR-1", { kind: "simulation", reqId: "OB-2", designId: "TR-1" }],
-        ["rv:OB-9", { kind: "invariant", reqId: "OB-9" }],
+        ["rv:OB-1", { kind: "invariant", reqId: ObligationId.reconstitute("OB-1") }],
+        ["rs:SC-1", { kind: "scenario", reqId: ScenarioId.reconstitute("SC-1") }],
+        ["rs:SC-2", { kind: "scenario", reqId: ScenarioId.reconstitute("SC-2") }],
+        ["re:OB-2", { kind: "enabledness", reqId: ObligationId.reconstitute("OB-2") }],
+        ["rs2:OB-2:TR-1", { kind: "simulation", reqId: ObligationId.reconstitute("OB-2"), designId: TransitionRef.reconstitute("TR-1") }],
+        ["rv:OB-9", { kind: "invariant", reqId: ObligationId.reconstitute("OB-9") }],
       ]),
       [
         ["rv:OB-1", { status: "unsat" }],
@@ -648,28 +675,32 @@ describe("refinement verdict interpretation", () => {
 
 describe("refinement collections (first-class operations)", () => {
   test("of/add/iterator/toArray and the map-side set knowledge", () => {
-    const am = AttributeMappings.of([]).add(exprMapping("R.a", "D.a"));
+    const am = AttributeMappings.of([]).add(wrapMapping(exprMapping("R.a", "D.a")));
     expect([...am].length).toBe(1);
-    expect(am.toArray()[0]?.req).toBe("R.a");
+    expect(am.toArray()[0]?.req.asString()).toBe("R.a");
 
-    const tr = TransitionRefs.of(["TR-2"]).add("TR-10");
-    expect([...tr]).toEqual(["TR-2", "TR-10"]);
+    const tref = (raw: string): TransitionRef => TransitionRef.reconstitute(raw);
+    const tr = TransitionRefs.of([tref("TR-2")]).add(tref("TR-10"));
+    expect([...tr].map((t) => t.asString())).toEqual(["TR-2", "TR-10"]);
     expect(tr.isEmpty()).toBe(false);
     expect(TransitionRefs.of([]).isEmpty()).toBe(true);
     expect(tr.unknownAmong(new Set(["TR-2"]))).toEqual(["TR-10"]);
     // unknownAmong は素の辞書順、sortedCanonically は IdOrder.compare（数値尾）。
-    expect(tr.sortedCanonically()).toEqual(["TR-2", "TR-10"]);
-    expect(tr.toArray()).toEqual(["TR-2", "TR-10"]);
+    expect(tr.sortedCanonically().map((t) => t.asString())).toEqual(["TR-2", "TR-10"]);
+    expect(tr.toArray().map((t) => t.asString())).toEqual(["TR-2", "TR-10"]);
+    expect(tref("TR-1").equals(tref("TR-1"))).toBe(true);
+    expect(TransitionRef.parse("").ok).toBe(false);
 
-    const em = EventMappings.of([]).add({ reqTrigger: "go", transitions: TransitionRefs.of(["TR-1"]) })
-      .add({ reqTrigger: "go", transitions: TransitionRefs.of(["TR-9"]) });
+    const em = EventMappings.of([]).add({ reqTrigger: "go", transitions: TransitionRefs.of([tref("TR-1")]) })
+      .add({ reqTrigger: "go", transitions: TransitionRefs.of([tref("TR-9")]) });
     expect([...em].length).toBe(2);
     // 重複トリガは最後の宣言が勝つ（旧 new Map の凍結挙動）。
-    expect([...(em.ofTrigger("go")?.transitions ?? TransitionRefs.of([]))]).toEqual(["TR-9"]);
+    expect([...(em.ofTrigger("go")?.transitions ?? TransitionRefs.of([]))].map((t) => t.asString())).toEqual(["TR-9"]);
     expect(em.ofTrigger("ghost")).toBe(undefined);
     expect(em.toArray().length).toBe(2);
 
-    const un = UnmappedDeclarations.of([{ target: "R.x", reason: "first" }]).add({ target: "R.x", reason: "last" });
+    const uref = (raw: string): UnmappedTargetRef => UnmappedTargetRef.reconstitute(raw);
+    const un = UnmappedDeclarations.of([{ target: uref("R.x"), reason: "first" }]).add({ target: uref("R.x"), reason: "last" });
     expect([...un].length).toBe(2);
     expect(un.covers("R.x")).toBe(true);
     expect(un.covers("R.y")).toBe(false);
@@ -696,28 +727,31 @@ describe("refinement collections (first-class operations)", () => {
     expect(vals.includes("ghost")).toBe(false);
     expect(vals.toArray()).toEqual(["open", "closed"]);
 
-    const attrs = RefinementAttributes.of([{ path: "R.b", kind: "bool" }])
-      .add({ path: "R.a", kind: "int" })
-      .add({ path: "R.a", kind: "bool" });
+    const apath = (raw: string): AttributePath => AttributePath.reconstitute(raw);
+    const attrs = RefinementAttributes.of([{ path: apath("R.b"), kind: "bool" }])
+      .add({ path: apath("R.a"), kind: "int" })
+      .add({ path: apath("R.a"), kind: "bool" });
     expect([...attrs].length).toBe(3);
     expect(attrs.covers("R.a")).toBe(true);
     expect(attrs.covers("R.z")).toBe(false);
     // path 索引は最後の宣言が勝つ。
     expect(attrs.byPath("R.a")?.kind).toBe("bool");
     expect(attrs.byPath("R.z")).toBe(undefined);
-    expect(attrs.sortedByPath().toArray().map((a) => a.path)).toEqual(["R.a", "R.a", "R.b"]);
+    expect(attrs.sortedByPath().toArray().map((a) => a.path.asString())).toEqual(["R.a", "R.a", "R.b"]);
 
-    const obs = RefinementObligations.of([{ id: "OB-2", nature: "invariant", frRefs: [] }])
-      .add({ id: "OB-1", nature: "event", frRefs: [] })
-      .add({ id: "OB-1", nature: "numeric", frRefs: [] });
+    const rob = (id: string, nature: string) => ({ id: ObligationId.reconstitute(id), nature: ObligationNature.reconstitute(nature), frRefs: FrRefs.of([]) });
+    const obs = RefinementObligations.of([rob("OB-2", "invariant")])
+      .add(rob("OB-1", "event"))
+      .add(rob("OB-1", "numeric"));
     expect([...obs].length).toBe(3);
-    expect(obs.byId("OB-1")?.nature).toBe("numeric");
+    expect(obs.byId("OB-1")?.nature.asString()).toBe("numeric");
     expect(obs.byId("OB-9")).toBe(undefined);
-    expect(obs.sortedCanonically().toArray().map((o) => o.id)).toEqual(["OB-1", "OB-1", "OB-2"]);
+    expect(obs.sortedCanonically().toArray().map((o) => o.id.asString())).toEqual(["OB-1", "OB-1", "OB-2"]);
 
-    const scs = RefinementScenarios.of([{ id: "SC-2", kind: "accept", frRefs: [], bindings: {} }])
-      .add({ id: "SC-1", kind: "reject", frRefs: [], bindings: {} })
-      .add({ id: "SC-1", kind: "accept", frRefs: [], bindings: {} });
+    const rsc = (id: string, kind: "accept" | "reject") => ({ id: ScenarioId.reconstitute(id), kind, frRefs: FrRefs.of([]), bindings: {} });
+    const scs = RefinementScenarios.of([rsc("SC-2", "accept")])
+      .add(rsc("SC-1", "reject"))
+      .add(rsc("SC-1", "accept"));
     expect([...scs].length).toBe(3);
     expect(scs.byId("SC-1")?.kind).toBe("accept");
     expect(scs.byId("SC-9")).toBe(undefined);
@@ -725,11 +759,11 @@ describe("refinement collections (first-class operations)", () => {
   });
 
   test("quint invariant collection knows its req ids", () => {
-    const inv = RefinementQuintInvariants.of([]).add({ reqId: "OB-1", frRefs: [], expr: { op: "bool", value: true } });
+    const inv = RefinementQuintInvariants.of([]).add({ reqId: ObligationId.reconstitute("OB-1"), frRefs: FrRefs.of([]), expr: { op: "bool", value: true } });
     expect(inv.isEmpty()).toBe(false);
     expect([...inv].length).toBe(1);
     expect([...inv.reqIds()]).toEqual(["OB-1"]);
-    expect(inv.toArray()[0]?.reqId).toBe("OB-1");
+    expect(inv.toArray()[0]?.reqId.asString()).toBe("OB-1");
   });
 });
 

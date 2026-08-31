@@ -9,6 +9,7 @@
 // 旧 refinement-lib の designSmtCtx / smtOfExpr / designBase / assembleQuery /
 // decodeDesignModel とクエリ構築部からの逐語移植。
 
+import { ObligationId, ScenarioId } from "../../refinement/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignSkips } from "../domain/index.ts";
 import type { DesignSkipped, DesignUnit, DesignValue } from "../domain/index.ts";
@@ -264,25 +265,25 @@ export function buildRefinementQueries(
     if (st.kind !== "checkable") continue;
     const ob = req.obligationById(obId);
     if (!ob) continue;
-    if ((ob.nature === "invariant" || ob.nature === "numeric") && ob.assert) {
+    if ((ob.nature.isInvariant() || ob.nature.isNumeric()) && ob.assert) {
       try {
         const alphaP = alphaCtx.substitute(ob.assert, false);
-        const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: `neg_${obId.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: `(not ${smtOfExpr(ctx, alphaP)})` }], modelVars);
+        const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP)})` }], modelVars);
         queries.push(q);
-        pending.set(q.id, { kind: "invariant", reqId: obId });
+        pending.set(q.id, { kind: "invariant", reqId: ObligationId.reconstitute(obId) });
       } catch (err) {
         alphaFail(obId, err);
       }
       continue;
     }
-    if (ob.nature === "event" && ob.guard && ob.effect) {
+    if (ob.nature.isEvent() && ob.guard && ob.effect) {
       const mapped = plan.mappedTransitionsOf(obId);
       try {
         const alphaG = alphaCtx.substitute(ob.guard, false);
         // enabledness：alpha(guard) は成り立つが、写像済み設計イベントが
         // ひとつも発火可能でない。
         const designGuards = mapped
-          .map((id) => catalog.eventOf(id))
+          .map((id) => catalog.eventOf(id.asString()))
           .filter((d): d is DesignEvent => d !== null)
           .map((d) => smtOfExpr(ctx, d.guard));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
@@ -291,13 +292,13 @@ export function buildRefinementQueries(
           pre.decls,
           [
             ...pre.constraints,
-            { name: `ag_${obId.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: smtOfExpr(ctx, alphaG) },
-            { name: `ne_${obId.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: notEnabled },
+            { name: smtName("ag", obId), smt: smtOfExpr(ctx, alphaG) },
+            { name: smtName("ne", obId), smt: notEnabled },
           ],
           modelVars,
         );
         queries.push(qe);
-        pending.set(qe.id, { kind: "enabledness", reqId: obId });
+        pending.set(qe.id, { kind: "enabledness", reqId: ObligationId.reconstitute(obId) });
 
         // 写像済み設計イベントごとのワンステップシミュレーション：alpha(guard)
         // が成り立つところで踏んだ 1 歩の抽象 post が、要件効果か抽象フレーム
@@ -306,14 +307,14 @@ export function buildRefinementQueries(
         const assigned = EffectAssignments.ofEffect(ob.effect);
         const frameParts: string[] = [];
         for (const a of req.attributes().sortedByPath()) {
-          if (assigned.covers(a.path)) continue;
-          const eq = alphaCtx.equalityFor(a.path);
+          if (assigned.covers(a.path.asString())) continue;
+          const eq = alphaCtx.equalityFor(a.path.asString());
           if (eq !== null) frameParts.push(smtOfExpr(ctx, eq));
         }
         const fBar = smtOfExpr(ctx, alphaCtx.substitute(ob.effect, false));
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
-          const ev = catalog.eventOf(designId);
+          const ev = catalog.eventOf(designId.asString());
           if (!ev) continue;
           const stepParts: string[] = [smtOfExpr(ctx, ev.guard)];
           for (const attr of ctx.attrs) {
@@ -329,19 +330,19 @@ export function buildRefinementQueries(
             }
           }
           const qs = assembleQuery(
-            `rs2:${obId}:${designId}`,
+            `rs2:${obId}:${designId.asString()}`,
             [...pre.decls, ...post.decls],
             [
               ...pre.constraints,
               ...post.constraints,
-              { name: `step_${designId.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: `(and ${stepParts.join(" ")})` },
-              { name: `ag2_${obId.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: smtOfExpr(ctx, alphaG) },
-              { name: `viol_${obId.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: `(not ${postCond})` },
+              { name: smtName("step", designId.asString()), smt: `(and ${stepParts.join(" ")})` },
+              { name: smtName("ag2", obId), smt: smtOfExpr(ctx, alphaG) },
+              { name: smtName("viol", obId), smt: `(not ${postCond})` },
             ],
             modelVarsBoth,
           );
           queries.push(qs);
-          pending.set(qs.id, { kind: "simulation", reqId: obId, designId });
+          pending.set(qs.id, { kind: "simulation", reqId: ObligationId.reconstitute(obId), designId });
         }
       } catch (err) {
         alphaFail(obId, err);
@@ -363,11 +364,11 @@ export function buildRefinementQueries(
       const q = assembleQuery(
         `rs:${scId}`,
         pre.decls,
-        [...pre.constraints, { name: `sc_${scId.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: parts.length === 1 ? (parts[0] as string) : `(and ${parts.join(" ")})` }],
+        [...pre.constraints, { name: smtName("sc", scId), smt: parts.length === 1 ? (parts[0] as string) : `(and ${parts.join(" ")})` }],
         modelVars,
       );
       queries.push(q);
-      pending.set(q.id, { kind: "scenario", reqId: scId });
+      pending.set(q.id, { kind: "scenario", reqId: ScenarioId.reconstitute(scId) });
     } catch (err) {
       alphaFail(scId, err);
     }
