@@ -33,3 +33,4 @@ export {
   type DesignIrValidationMaterialsConfig,
   DesignIrValidationMaterialsRepositoryImpl,
 } from "./design-ir-validation-materials-repository-impl.ts";
+export { RefinementMapRepositoryImpl } from "./refinement-map-repository-impl.ts";

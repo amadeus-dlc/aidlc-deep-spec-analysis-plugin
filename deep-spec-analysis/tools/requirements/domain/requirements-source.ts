@@ -1,13 +1,15 @@
 // RequirementsSource 集約 — 形式化の根拠となった requirements.md。id 集合と
-// バイト列のダイジェストだけを運ぶ（探索とバイト読みはアダプタ）。恒等は
-// 記録の要件ソース集約の識別子。人間著作物のため書き込み面は持たない
-// （オーナー裁定待ちの台帳行として #46 に記録）。
+// バイト列のダイジェスト、そして原文バイト列（原文材料——store の往復則
+// findById∘store がバイト恒等）を運ぶ。探索は Repository の解決詳細だが、
+// 解決された所在（sourcePath）は store の書き先として集約が保持する。
 
-import type { RequirementIds } from "../../kernel/domain/index.ts";
+import type { ArtifactPath, RequirementIds } from "../../kernel/domain/index.ts";
 import type { RequirementsSourceId } from "./requirements-source-id.ts";
 
 export interface RequirementsSource {
   readonly id: RequirementsSourceId;
+  readonly sourcePath: ArtifactPath;
   readonly knownIds: RequirementIds;
   readonly digest: string;
+  readonly sourceDocument: Uint8Array;
 }

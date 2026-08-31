@@ -240,6 +240,7 @@ function model(units: DesignUnit[], irVersion = "1.0.0"): DesignModel {
   return DesignModel.compose({
     id: DesignModelId.of(ap("/test/deep-spec-analysis-functional-formal-model.md")),
     irHash: ContentHash.reconstitute("c".repeat(64)),
+    sourceDocument: "",
     irVersion: IrVersion.reconstitute(irVersion),
     units: DesignUnits.of(units),
   } satisfies DesignModelComposition);

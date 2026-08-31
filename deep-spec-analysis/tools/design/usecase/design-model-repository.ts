@@ -3,8 +3,8 @@
 // （成果物パスが恒等）から DesignModel を解決する。irHash（生 IR の正準
 // JSON の sha256——アダプタが導出）は集約自身が運ぶ。不在は not-found、
 // fence/JSON/構造の不成立は corrupt で返し、corrupt.cause には降格文書に
-// 逐語で載る凍結文言が材料として入る。形式モデルは人間・上流工程の著作物の
-// ため書き込み面は持たない（#46 台帳の裁定待ち行）。
+// 逐語で載る凍結文言が材料として入る。store は集約の原文（sourceDocument）を
+// バイト逐語で書く——findById∘store はバイト恒等（往復則）。
 
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
@@ -12,4 +12,5 @@ import type { DesignModel, DesignModelId } from "../domain/index.ts";
 
 export interface DesignModelRepository {
   findById(id: DesignModelId): Result<DesignModel, RepositoryError>;
+  store(model: DesignModel): Result<DesignModel, RepositoryError>;
 }

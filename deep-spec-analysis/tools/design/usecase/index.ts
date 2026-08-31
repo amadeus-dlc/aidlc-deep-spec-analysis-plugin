@@ -19,3 +19,4 @@ export { VerifyDesignQuintUseCase } from "./verify-design-quint-usecase.ts";
 export { type DesignIrValidationMaterialsRepository } from "./design-ir-validation-materials-repository.ts";
 export { type ValidateDesignIrOutcome } from "./validate-design-ir-outcome.ts";
 export { ValidateDesignIrUseCase } from "./validate-design-ir-usecase.ts";
+export { type RefinementMapRepository } from "./refinement-map-repository.ts";

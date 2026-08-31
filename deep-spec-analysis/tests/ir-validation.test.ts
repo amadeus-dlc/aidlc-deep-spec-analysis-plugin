@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ArtifactPath, AttributeBound, ErrorMessages, RequirementIds } from "../tools/kernel/domain/index.ts";
-import { DesignIrValidationMaterialsRepositoryImpl } from "../tools/design/adapter/index.ts";
+import { DesignIrValidationMaterialsRepositoryImpl, DesignModelRepositoryImpl } from "../tools/design/adapter/index.ts";
 import {
   BindingPairs,
   BrReferenceIndex,
@@ -52,6 +52,7 @@ import {
 } from "../tools/design/domain/index.ts";
 import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "../tools/design/usecase/index.ts";
 import {
+  FormalModelRepositoryImpl,
   IrValidationMaterialsRepositoryImpl,
   RequirementsSourceRepositoryImpl,
 } from "../tools/requirements/adapter/index.ts";
@@ -1055,6 +1056,56 @@ describe("repository read failures keep the Result contract (PR#58 review)", () 
     mkdirSync(join(record, "inception", "requirements-analysis", "requirements.md"), { recursive: true });
     const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(record)));
     expect(!source.ok && source.error.kind).toBe("io-failed");
+    rmSync(record, { recursive: true, force: true });
+  });
+});
+
+describe("store faces on the workflow-authored aggregates (owner ruling: writable where writing is definable)", () => {
+  test("formal/design model repositories round-trip the source document", () => {
+    const record = join(tmpdir(), `deep-spec-model-store-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(record, { recursive: true });
+    const doc = '# m\n\n```json\n{"irVersion":"1.0.0","schema":{"entities":[]},"obligations":[],"scenarios":[]}\n```\n';
+    const mPath = join(record, "deep-spec-analysis-formal-model.md");
+    writeFileSync(mPath, doc);
+    const repo = new FormalModelRepositoryImpl();
+    const found = repo.findById(FormalModelId.of(ap(mPath)));
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.value.sourceDocument()).toBe(doc);
+    rmSync(mPath);
+    expect(repo.store(found.value).ok).toBe(true);
+    expect(readFileSync(mPath, "utf-8")).toBe(doc);
+
+    // 実 fixture の設計 IR を往復させる（合成文書はパーサの構造要件に届かない）。
+    const dDoc = readFileSync(
+      join(pluginRoot, "tests", "fixtures", "design", "record", "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"),
+      "utf-8",
+    );
+    const dPath = join(record, "deep-spec-analysis-functional-formal-model.md");
+    writeFileSync(dPath, dDoc);
+    const dRepo = new DesignModelRepositoryImpl();
+    const dFound = dRepo.findById(DesignModelId.of(ap(dPath)));
+    expect(dFound.ok).toBe(true);
+    if (!dFound.ok) return;
+    rmSync(dPath);
+    expect(dRepo.store(dFound.value).ok).toBe(true);
+    expect(readFileSync(dPath, "utf-8")).toBe(dDoc);
+    rmSync(record, { recursive: true, force: true });
+  });
+
+  test("requirements source repository round-trips the source bytes at the resolved location", () => {
+    const record = join(tmpdir(), `deep-spec-src-store-${Math.random().toString(36).slice(2)}`);
+    const srcPath = join(record, "inception", "requirements-analysis", "requirements.md");
+    mkdirSync(dirname(srcPath), { recursive: true });
+    writeFileSync(srcPath, "- FR-1: x\n");
+    const repo = new RequirementsSourceRepositoryImpl();
+    const found = repo.findById(RequirementsSourceId.of(ap(record)));
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.value.sourcePath.asString()).toBe(srcPath);
+    rmSync(srcPath);
+    expect(repo.store(found.value).ok).toBe(true);
+    expect(readFileSync(srcPath, "utf-8")).toBe("- FR-1: x\n");
     rmSync(record, { recursive: true, force: true });
   });
 });

@@ -4,7 +4,8 @@
 // 降格文書（golden 凍結）に逐語で載る。旧 existsSync ゲートの「stat 失敗は
 // 理由を問わず不在」も忠実に再現する（PR4 レビューの教訓）。
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { ContentHash } from "../../kernel/domain/index.ts";
 import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
@@ -40,6 +41,18 @@ export class DesignModelRepositoryImpl implements DesignModelRepository {
     if (typeof composition === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: composition });
     }
-    return ok(DesignModel.compose({ id, irHash: ContentHash.ofText(canonicalStringify(raw)), ...composition }));
+    return ok(DesignModel.compose({ id, irHash: ContentHash.ofText(canonicalStringify(raw)), sourceDocument: md, ...composition }));
+  }
+
+  // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
+  store(model: DesignModel): Result<DesignModel, RepositoryError> {
+    const modelPath = model.id().artifactPath().asString();
+    try {
+      mkdirSync(dirname(modelPath), { recursive: true });
+      writeFileSync(modelPath, model.sourceDocument(), "utf-8");
+      return ok(model);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
+    }
   }
 }

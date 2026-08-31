@@ -3,7 +3,8 @@
 // irHash（生 IR の正準 JSON の sha256）はここで導出——正準化は形式知識。
 // corrupt.cause の文言は降格文書（golden 凍結）に逐語で載る。
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { ContentHash } from "../../kernel/domain/index.ts";
 import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
@@ -43,6 +44,18 @@ export class FormalModelRepositoryImpl implements FormalModelRepository {
     if (typeof seed === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: seed });
     }
-    return ok(RequirementsModel.reconstitute({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), ...seed }));
+    return ok(RequirementsModel.reconstitute({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), sourceDocument: md, ...seed }));
+  }
+
+  // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
+  store(model: RequirementsModel): Result<RequirementsModel, RepositoryError> {
+    const modelPath = model.id().artifactPath().asString();
+    try {
+      mkdirSync(dirname(modelPath), { recursive: true });
+      writeFileSync(modelPath, model.sourceDocument(), "utf-8");
+      return ok(model);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
+    }
   }
 }

@@ -25,4 +25,5 @@ export interface IrValidationMaterialsRepository {
 // あるかの探索は Repository の解決詳細で、恒等には含まれない。
 export interface RequirementsSourceRepository {
   findById(id: RequirementsSourceId): Result<RequirementsSource, RepositoryError>;
+  store(source: RequirementsSource): Result<RequirementsSource, RepositoryError>;
 }

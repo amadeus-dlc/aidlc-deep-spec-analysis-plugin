@@ -155,70 +155,9 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
     // join は空文字列を返さないため parse は失敗し得ない（型の網羅のみ）。
     const mapPath = ArtifactPath.parse(path);
     if (!mapPath.ok) return { kind: "absent", error: "defect: refinement map path derivation produced an empty path" };
-    const fence = extractSingleJsonFence(readFileSync(path, "utf-8"));
-    if (fence === null) return { kind: "absent", error: "refinement map does not contain exactly one ```json fence" };
-    let raw: Json;
-    try {
-      raw = JSON.parse(fence) as Json;
-    } catch (err) {
-      return { kind: "absent", error: `refinement map fence is not valid JSON: ${err instanceof Error ? err.message : String(err)}` };
-    }
-    try {
-      const schemaDoc = JSON.parse(readFileSync(this.#mapSchemaPath, "utf-8"));
-      const errors: string[] = [];
-      validateSchema(schemaDoc as never, schemaDoc as never, raw as never, "", errors);
-      if (errors.length > 0) return { kind: "absent", error: `refinement map does not conform to contract 4: ${errors[0]}` };
-    } catch (err) {
-      return { kind: "absent", error: `refinement map schema unreadable: ${err instanceof Error ? err.message : String(err)}` };
-    }
-    const doc = raw as { [k: string]: Json };
-    const units: RefinementUnitMap[] = [];
-    for (const u of Array.isArray(doc.units) ? doc.units : []) {
-      if (!isObject(u) || typeof u.unit !== "string") continue;
-      const attrMap: AttributeMapping[] = [];
-      for (const m of Array.isArray(u.attrMap) ? u.attrMap : []) {
-        if (!isObject(m) || typeof m.req !== "string") continue;
-        // enumMap が成立するときは enumMap が勝つ（旧実装の分岐順の保存）。
-        if (isObject(m.enumMap) && typeof m.enumMap.from === "string" && isObject(m.enumMap.cases)) {
-          const cases: { [k: string]: string } = {};
-          for (const [k, v] of Object.entries(m.enumMap.cases)) {
-            if (typeof v === "string") cases[k] = v;
-          }
-          attrMap.push({ kind: "enum-cases", req: AttributePath.reconstitute(m.req), from: m.enumMap.from, cases });
-        } else if (isObject(m.expr)) {
-          attrMap.push({ kind: "expression", req: AttributePath.reconstitute(m.req), expr: m.expr as unknown as Expression });
-        } else {
-          attrMap.push({ kind: "unspecified", req: AttributePath.reconstitute(m.req) });
-        }
-      }
-      const eventMap: EventMapping[] = [];
-      for (const e of Array.isArray(u.eventMap) ? u.eventMap : []) {
-        if (!isObject(e) || typeof e.reqTrigger !== "string") continue;
-        eventMap.push({
-          reqTrigger: e.reqTrigger,
-          transitions: TransitionRefs.of(strArr(e.transitions).map((t) => TransitionRef.reconstitute(t))),
-          waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
-        });
-      }
-      const unmapped: UnmappedTarget[] = [];
-      for (const un of Array.isArray(u.unmapped) ? u.unmapped : []) {
-        if (isObject(un) && typeof un.target === "string") {
-          unmapped.push({ target: UnmappedTargetRef.reconstitute(un.target), reason: typeof un.reason === "string" ? un.reason : "" });
-        }
-      }
-      units.push({
-        unit: DesignUnitId.of(u.unit),
-        attrMap: AttributeMappings.of(attrMap),
-        eventMap: EventMappings.of(eventMap),
-        unmapped: UnmappedDeclarations.of(unmapped),
-      });
-    }
-    const map = RefinementMap.reconstitute({
-      id: RefinementMapId.of(mapPath.value),
-      requirementsIrHash: ContentHash.reconstitute(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
-      designIrHash: ContentHash.reconstitute(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
-      units: RefinementUnitMaps.of(units),
-    });
+    const parsed = parseRefinementMapDocument(readFileSync(path, "utf-8"), RefinementMapId.of(mapPath.value), this.#mapSchemaPath);
+    if (parsed.kind === "malformed") return { kind: "absent", error: parsed.error };
+    const map = parsed.map;
     const reqModelPath = join(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
     const mapArtifact = relArtifact(recordRoot, path);
     const inputs = [
@@ -228,4 +167,81 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
     ];
     return { kind: "loaded", map, mapArtifact, inputs };
   }
+}
+
+// 契約4 文書の共有パーサ——凍結エラー文言はここが唯一の発生点で、composite の
+// absent(error) と RefinementMapRepository の corrupt.cause が常に一致する。
+export type RefinementMapParse =
+  | { readonly kind: "parsed"; readonly map: RefinementMap }
+  | { readonly kind: "malformed"; readonly error: string };
+
+export function parseRefinementMapDocument(md: string, id: RefinementMapId, mapSchemaPath: string): RefinementMapParse {
+  const fence = extractSingleJsonFence(md);
+  if (fence === null) return { kind: "malformed", error: "refinement map does not contain exactly one ```json fence" };
+  let raw: Json;
+  try {
+    raw = JSON.parse(fence) as Json;
+  } catch (err) {
+    return { kind: "malformed", error: `refinement map fence is not valid JSON: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  try {
+    const schemaDoc = JSON.parse(readFileSync(mapSchemaPath, "utf-8"));
+    const errors: string[] = [];
+    validateSchema(schemaDoc as never, schemaDoc as never, raw as never, "", errors);
+    if (errors.length > 0) return { kind: "malformed", error: `refinement map does not conform to contract 4: ${errors[0]}` };
+  } catch (err) {
+    return { kind: "malformed", error: `refinement map schema unreadable: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  const doc = raw as { [k: string]: Json };
+  const units: RefinementUnitMap[] = [];
+  for (const u of Array.isArray(doc.units) ? doc.units : []) {
+    if (!isObject(u) || typeof u.unit !== "string") continue;
+    const attrMap: AttributeMapping[] = [];
+    for (const m of Array.isArray(u.attrMap) ? u.attrMap : []) {
+      if (!isObject(m) || typeof m.req !== "string") continue;
+      // enumMap が成立するときは enumMap が勝つ（旧実装の分岐順の保存）。
+      if (isObject(m.enumMap) && typeof m.enumMap.from === "string" && isObject(m.enumMap.cases)) {
+        const cases: { [k: string]: string } = {};
+        for (const [k, v] of Object.entries(m.enumMap.cases)) {
+          if (typeof v === "string") cases[k] = v;
+        }
+        attrMap.push({ kind: "enum-cases", req: AttributePath.reconstitute(m.req), from: m.enumMap.from, cases });
+      } else if (isObject(m.expr)) {
+        attrMap.push({ kind: "expression", req: AttributePath.reconstitute(m.req), expr: m.expr as unknown as Expression });
+      } else {
+        attrMap.push({ kind: "unspecified", req: AttributePath.reconstitute(m.req) });
+      }
+    }
+    const eventMap: EventMapping[] = [];
+    for (const e of Array.isArray(u.eventMap) ? u.eventMap : []) {
+      if (!isObject(e) || typeof e.reqTrigger !== "string") continue;
+      eventMap.push({
+        reqTrigger: e.reqTrigger,
+        transitions: TransitionRefs.of(strArr(e.transitions).map((t) => TransitionRef.reconstitute(t))),
+        waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
+      });
+    }
+    const unmapped: UnmappedTarget[] = [];
+    for (const un of Array.isArray(u.unmapped) ? u.unmapped : []) {
+      if (isObject(un) && typeof un.target === "string") {
+        unmapped.push({ target: UnmappedTargetRef.reconstitute(un.target), reason: typeof un.reason === "string" ? un.reason : "" });
+      }
+    }
+    units.push({
+      unit: DesignUnitId.of(u.unit),
+      attrMap: AttributeMappings.of(attrMap),
+      eventMap: EventMappings.of(eventMap),
+      unmapped: UnmappedDeclarations.of(unmapped),
+    });
+  }
+  return {
+    kind: "parsed",
+    map: RefinementMap.reconstitute({
+      id,
+      requirementsIrHash: ContentHash.reconstitute(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
+      designIrHash: ContentHash.reconstitute(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
+      units: RefinementUnitMaps.of(units),
+      sourceDocument: md,
+    }),
+  };
 }

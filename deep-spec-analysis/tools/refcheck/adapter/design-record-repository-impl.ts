@@ -6,6 +6,7 @@
 //   - 自ユニットの entities.md は兄弟 inputs に重複記録しない
 // 対象が読めないときは not-found（呼び手が not-applicable を選ぶ）。
 
+import { mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { ArtifactPath, ContentHash, RequirementIds } from "../../kernel/domain/index.ts";
@@ -52,6 +53,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const seed: DesignRecordSeed = {
       id,
       target: input(artifactPath, md),
+      sourceDocument: md,
       componentCatalog: targetBase === "components.md" ? parseComponentCatalog(md) : null,
       contractsTable: targetBase === "contract-summary.md" ? parseContractsTable(md) : null,
       specBlocks: targetBase === "contract-summary.md" ? assessSpecBlocks(md) : null,
@@ -59,6 +61,18 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
       functional: isFunctional ? this.#functional(recordRoot, fdDir) : null,
     };
     return ok(DesignRecord.reconstitute(seed));
+  }
+
+  // 往復則: findById が読んだ錨成果物の原文をバイト逐語で書き戻す。
+  store(record: DesignRecord): Result<DesignRecord, RepositoryError> {
+    const path = record.id().artifactPath().asString();
+    try {
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, record.sourceDocument(), "utf-8");
+      return ok(record);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   #declaredUnits(recordRoot: string | null): NonNullable<DesignRecordSeed["declaredUnits"]> {

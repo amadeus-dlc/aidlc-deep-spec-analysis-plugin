@@ -278,6 +278,8 @@ export interface RefinementMapSeed {
   readonly requirementsIrHash: ContentHash;
   readonly designIrHash: ContentHash;
   readonly units: RefinementUnitMaps;
+  // 成果物の原文（原文材料——store の往復則 findById∘store がバイト恒等）。
+  readonly sourceDocument: string;
 }
 
 export class RefinementMap {
@@ -285,12 +287,14 @@ export class RefinementMap {
   readonly #requirementsIrHash: ContentHash;
   readonly #designIrHash: ContentHash;
   readonly #units: RefinementUnitMaps;
+  readonly #sourceDocument: string;
 
   private constructor(seed: RefinementMapSeed) {
     this.#id = seed.id;
     this.#requirementsIrHash = seed.requirementsIrHash;
     this.#designIrHash = seed.designIrHash;
     this.#units = seed.units;
+    this.#sourceDocument = seed.sourceDocument;
   }
 
   // アダプタのパーサ（契約4 スキーマ検証済み）からの唯一の構築口。
@@ -318,5 +322,10 @@ export class RefinementMap {
 
   unitMapOf(unit: DesignUnitId): RefinementUnitMap | undefined {
     return this.#units.mapOf(unit);
+  }
+
+  // 境界: store が書く原文（バイト逐語）。
+  sourceDocument(): string {
+    return this.#sourceDocument;
   }
 }

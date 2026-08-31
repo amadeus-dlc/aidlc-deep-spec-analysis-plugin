@@ -11,7 +11,7 @@
 //    各純関数を直接駆動する（refinement/domain の 90% 床）。
 
 import { describe, expect, test } from "bun:test";
-import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,6 +66,7 @@ import {
   RefinementSolverClientImpl,
   SiblingBackendClientImpl,
   buildRefinementQueries,
+  RefinementMapRepositoryImpl,
 } from "../tools/design/adapter/index.ts";
 import { VerifyDesignQuintUseCase, VerifyDesignSmtUseCase } from "../tools/design/usecase/index.ts";
 import {
@@ -98,6 +99,7 @@ import {
   type RefinementScenario,
   type RefinementUnitMap,
   RefinementMaterials,
+  RefinementMapId,
 } from "../tools/refinement/domain/index.ts";
 import { FormalModelRepositoryImpl, buildSmtPlan } from "../tools/requirements/adapter/index.ts";
 
@@ -816,5 +818,33 @@ describe("RefinementMaterials aggregate (repository ruling)", () => {
     expect(active.isActive()).toBe(true);
     expect(active.mapAcquisition().kind).toBe("absent");
     expect(active.requirements()).toBeDefined();
+  });
+});
+
+describe("RefinementMapRepository (owner ruling: writable where writing is definable)", () => {
+  test("findById parses via the shared contract-4 parser and store round-trips the document", () => {
+    const mapDoc = readFileSync(join(fixtures, "record", "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-refinement-map.md"), "utf-8");
+    const dir = mkdtempSync(join(tmpdir(), "refmap-repo-"));
+    try {
+      const path = join(dir, "deep-spec-analysis-refinement-map.md");
+      writeFileSync(path, mapDoc);
+      const repo = new RefinementMapRepositoryImpl(mapSchemaPath);
+      const found = repo.findById(RefinementMapId.of(ap(path)));
+      expect(found.ok).toBe(true);
+      if (!found.ok) return;
+      expect(found.value.sourceDocument()).toBe(mapDoc);
+      expect(found.value.units().toArray().length).toBeGreaterThan(0);
+      rmSync(path);
+      expect(repo.store(found.value).ok).toBe(true);
+      expect(readFileSync(path, "utf-8")).toBe(mapDoc);
+      // 不在は not-found、壊れた文書は composite と同一の凍結文言で corrupt。
+      const missing = repo.findById(RefinementMapId.of(ap(join(dir, "nowhere.md"))));
+      expect(!missing.ok && missing.error.kind).toBe("not-found");
+      writeFileSync(path, "no fence here\n");
+      const corrupt = repo.findById(RefinementMapId.of(ap(path)));
+      expect(!corrupt.ok && corrupt.error.kind === "corrupt" && corrupt.error.cause).toBe("refinement map does not contain exactly one ```json fence");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
