@@ -8,7 +8,7 @@
 
 import {
   type FormalModelId,
-  FrReferenceIndex,
+  IrValidationMaterialsId,
   SUPPORTED_IR_MAJOR,
   SourceAnchor,
 } from "../domain/index.ts";
@@ -28,33 +28,35 @@ export class ValidateIrUseCase {
   }
 
   execute(modelId: FormalModelId): ValidateIrOutcome {
-    const acquired = this.#irValidationMaterialsRepository.acquire(modelId);
-    if (acquired.kind === "not-applicable") return { kind: "not-applicable" };
-    if (acquired.kind === "unreadable") {
-      return { kind: "verdict", pass: false, errors: acquired.errors };
+    const found = this.#irValidationMaterialsRepository.findById(IrValidationMaterialsId.ofModel(modelId));
+    if (!found.ok) {
+      // not-found = 機能形式モデル以外・不在（旧 not-applicable の pass-through）。
+      if (found.error.kind === "not-found") return { kind: "not-applicable" };
+      // corrupt.cause は verdict にそのまま載る凍結文言（旧 unreadable）。
+      return { kind: "verdict", pass: false, errors: [found.error.cause] };
     }
-    const materials = acquired.materials;
+    const materials = found.value;
 
     const errors: string[] = [];
-    const major = Number.parseInt(materials.irVersion.split(".")[0] ?? "", 10);
+    const major = materials.irVersion().majorVersion();
     if (Number.isInteger(major) && major !== SUPPORTED_IR_MAJOR) {
       errors.push(
-        `irVersion ${materials.irVersion}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`,
+        `irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`,
       );
     }
-    errors.push(...materials.schemaErrors);
+    errors.push(...materials.schemaErrors());
 
     // 意味検査とトレーサビリティはスキーマ妥当な IR にのみ意味がある。
     if (errors.length === 0) {
-      errors.push(...materials.view.wellFormednessErrors());
+      errors.push(...materials.view().wellFormednessErrors());
 
-      const index = FrReferenceIndex.of(materials.frClaims);
-      const source = this.#requirementsSourceRepository.findById(materials.sourceId);
-      if (source === null) {
+      const index = materials.frReferenceIndex();
+      const source = this.#requirementsSourceRepository.findById(materials.sourceId());
+      if (!source.ok) {
         errors.push("requirements.md not found under this intent record — frRefs cannot be reverse-verified");
       } else {
-        errors.push(...index.missingErrors(source.knownIds));
-        errors.push(...SourceAnchor.of(materials.declaredDigest, source.digest).errors());
+        errors.push(...index.missingErrors(source.value.knownIds()));
+        errors.push(...SourceAnchor.of(materials.declaredDigest(), source.value.digest()).errors());
       }
     }
 

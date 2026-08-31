@@ -39,7 +39,7 @@ import {
 
 const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
 
-export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> | string {
+export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" | "irHash" | "sourceDocument"> | string {
   if (!isObject(raw)) return "design IR is not a JSON object";
   if (raw.irKind !== "design") return 'document is not a design IR (missing `"irKind": "design"`)';
   const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");

@@ -6,7 +6,7 @@
 // irVersion チェックより前に verdict へ落ちる。意味検査はスキーマ検証まで
 // 無傷の IR にのみ走る。
 
-import { type DesignModelId, SUPPORTED_DESIGN_IR_MAJOR, designWellFormednessErrors } from "../domain/index.ts";
+import { type DesignModelId, DesignIrValidationMaterialsId, SUPPORTED_DESIGN_IR_MAJOR, designWellFormednessErrors } from "../domain/index.ts";
 import type { DesignIrValidationMaterialsRepository } from "./design-ir-validation-materials-repository.ts";
 import type { ValidateDesignIrOutcome } from "./validate-design-ir-outcome.ts";
 
@@ -18,24 +18,26 @@ export class ValidateDesignIrUseCase {
   }
 
   execute(modelId: DesignModelId): ValidateDesignIrOutcome {
-    const acquired = this.#designIrValidationMaterialsRepository.acquire(modelId);
-    if (acquired.kind === "not-applicable") return { kind: "not-applicable" };
-    if (acquired.kind === "unreadable") {
-      return { kind: "verdict", pass: false, errors: acquired.errors };
+    const found = this.#designIrValidationMaterialsRepository.findById(DesignIrValidationMaterialsId.ofModel(modelId));
+    if (!found.ok) {
+      // not-found = 機能形式モデル以外・不在（旧 not-applicable の pass-through）。
+      if (found.error.kind === "not-found") return { kind: "not-applicable" };
+      // corrupt.cause は verdict にそのまま載る凍結文言（旧 unreadable）。
+      return { kind: "verdict", pass: false, errors: [found.error.cause] };
     }
-    const materials = acquired.materials;
+    const materials = found.value;
 
     const errors: string[] = [];
-    const major = Number.parseInt(materials.irVersion.split(".")[0] ?? "", 10);
+    const major = materials.irVersion().majorVersion();
     if (Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR) {
       errors.push(
-        `irVersion ${materials.irVersion}: unsupported major version (this validator supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
+        `irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
       );
     }
-    errors.push(...materials.schemaErrors);
+    errors.push(...materials.schemaErrors());
 
     if (errors.length === 0) {
-      errors.push(...designWellFormednessErrors(materials.units));
+      errors.push(...designWellFormednessErrors(materials.units()));
     }
 
     return { kind: "verdict", pass: errors.length === 0, errors };

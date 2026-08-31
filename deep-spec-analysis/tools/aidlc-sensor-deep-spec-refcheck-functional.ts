@@ -39,12 +39,12 @@ function main(): void {
     process.exit(0);
   }
 
-  const useCase = new CheckFunctionalDesignUseCase(
-    new DesignRecordRepositoryImpl(),
-    new ReferenceCheckReportRepositoryImpl(
-      join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"),
-    ),
+  // Repository と Conformance は同一アダプタ（store が書く姿と conformedOf が
+  // 常に一致する）。
+  const reportRepository = new ReferenceCheckReportRepositoryImpl(
+    join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"),
   );
+  const useCase = new CheckFunctionalDesignUseCase(new DesignRecordRepositoryImpl(), reportRepository, reportRepository);
   const outcome = useCase.execute({
     recordId: DesignRecordId.of(target.value),
     reportDirectory: reportLocation.value,

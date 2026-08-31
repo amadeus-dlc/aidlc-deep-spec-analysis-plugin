@@ -8,12 +8,12 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ArtifactPath, RequirementIds } from "../tools/kernel/domain/index.ts";
-import { DesignIrValidationMaterialsRepositoryImpl } from "../tools/design/adapter/index.ts";
+import { ArtifactPath, AttributeBound, ErrorMessages, RequirementIds } from "../tools/kernel/domain/index.ts";
+import { DesignIrValidationMaterialsRepositoryImpl, DesignModelRepositoryImpl } from "../tools/design/adapter/index.ts";
 import {
   BindingPairs,
   BrReferenceIndex,
@@ -39,9 +39,20 @@ import {
   designWellFormednessErrors,
   InitialStates,
   UnformalizedTargets,
+  DesignUnitId,
+  DesignTransitionId,
+  DesignScenarioId,
+  DesignObligationOrigin,
+  DesignObligationId,
+  DesignMachineId,
+  DesignEntityName,
+  DesignBackgroundId,
+  DesignAttributeName,
+  DesignIrValidationMaterialsId,
 } from "../tools/design/domain/index.ts";
 import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "../tools/design/usecase/index.ts";
 import {
+  FormalModelRepositoryImpl,
   IrValidationMaterialsRepositoryImpl,
   RequirementsSourceRepositoryImpl,
 } from "../tools/requirements/adapter/index.ts";
@@ -62,6 +73,13 @@ import {
   IrScenarioDecls,
   RequirementsSourceId,
   SourceAnchor,
+  ScenarioId,
+  ObligationId,
+  IrEntityName,
+  IrAttributeName,
+  BackgroundAssumptionId,
+  IrValidationMaterialsId,
+  FrRefClaims,
 } from "../tools/requirements/domain/index.ts";
 import { ValidateIrUseCase, type ValidateIrOutcome } from "../tools/requirements/usecase/index.ts";
 
@@ -329,9 +347,10 @@ describe("RequirementsSourceId", () => {
     mkdirSync(join(record, "construction", "requirements-analysis"), { recursive: true });
     writeFileSync(join(record, "construction", "requirements-analysis", "requirements.md"), "- FR-1: x\n");
     const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(record)));
-    expect(source).not.toBeNull();
-    expect([...(source?.knownIds ?? [])]).toEqual(["FR-1"]);
-    expect(new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(join(record, "nowhere"))))).toBeNull();
+    expect(source.ok).toBe(true);
+    expect([...(source.ok ? source.value.knownIds() : [])]).toEqual(["FR-1"]);
+    const missing = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(join(record, "nowhere"))));
+    expect(!missing.ok && missing.error.kind).toBe("not-found");
   });
 });
 
@@ -366,27 +385,39 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
   type RawIrAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawIrEntity = { name: string; attributes: RawIrAttr[] };
-  type RawIrScenario = Omit<IrScenarioDecl, "bindings"> & { bindings: (readonly [string, unknown])[] };
+  type RawIrObligation = Omit<IrObligationDecl, "id"> & { id: string };
+  type RawIrScenario = Omit<IrScenarioDecl, "id" | "bindings"> & { id: string; bindings: (readonly [string, unknown])[] };
+  type RawIrBackground = Omit<IrBackgroundDecl, "id"> & { id: string };
   function irView(overrides: {
     entities?: RawIrEntity[];
-    obligations?: IrObligationDecl[];
+    obligations?: RawIrObligation[];
     scenarios?: RawIrScenario[];
-    background?: IrBackgroundDecl[];
+    background?: RawIrBackground[];
   }): IrModelDecl {
     return IrModelDecl.reconstitute({
       entities: IrEntityDecls.of(
         (overrides.entities ?? []).map((e) => ({
-          name: e.name,
+          name: IrEntityName.reconstitute(e.name),
           attributes: IrAttributeDecls.of(
-            e.attributes.map((a) => ({ ...a, values: a.values === undefined ? undefined : IrDeclaredValues.of(a.values) })),
+            e.attributes.map((a) => ({
+              ...a,
+              name: IrAttributeName.reconstitute(a.name),
+              min: a.min === undefined ? undefined : AttributeBound.reconstitute(a.min),
+              max: a.max === undefined ? undefined : AttributeBound.reconstitute(a.max),
+              values: a.values === undefined ? undefined : IrDeclaredValues.of(a.values),
+            })),
           ),
         })),
       ),
-      obligations: IrObligationDecls.of(overrides.obligations ?? []),
-      scenarios: IrScenarioDecls.of(
-        (overrides.scenarios ?? []).map((sc) => ({ ...sc, bindings: IrBindingPairs.of(sc.bindings) })),
+      obligations: IrObligationDecls.of(
+        (overrides.obligations ?? []).map((ob) => ({ ...ob, id: ObligationId.reconstitute(ob.id) })),
       ),
-      background: IrBackgroundDecls.of(overrides.background ?? []),
+      scenarios: IrScenarioDecls.of(
+        (overrides.scenarios ?? []).map((sc) => ({ ...sc, id: ScenarioId.reconstitute(sc.id), bindings: IrBindingPairs.of(sc.bindings) })),
+      ),
+      background: IrBackgroundDecls.of(
+        (overrides.background ?? []).map((bg) => ({ ...bg, id: BackgroundAssumptionId.reconstitute(bg.id) })),
+      ),
     });
   }
 
@@ -517,23 +548,26 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
   type RawAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawEntity = { name: string; attributes: RawAttr[] };
-  type RawObligation = Omit<DesignObligationDecl, "brRefs"> & { brRefs?: string[] };
-  type RawTransition = Omit<DesignTransitionDecl, "brRefs"> & { brRefs?: string[] };
-  type RawMachine = Omit<DesignMachineDecl, "initial" | "transitions" | "ignores"> & {
+  type RawObligation = Omit<DesignObligationDecl, "id" | "origin" | "brRefs"> & { id: string; origin?: string; brRefs?: string[] };
+  type RawTransition = Omit<DesignTransitionDecl, "id" | "brRefs"> & { id: string; brRefs?: string[] };
+  type RawMachine = Omit<DesignMachineDecl, "id" | "initial" | "transitions" | "ignores"> & {
+    id: string;
     initial: string[];
     transitions: RawTransition[];
     ignores: DesignIgnoreDecl[];
   };
-  type RawScenario = Omit<DesignScenarioDecl, "bindings" | "brRefs"> & {
+  type RawScenario = Omit<DesignScenarioDecl, "id" | "bindings" | "brRefs"> & {
+    id: string;
     bindings: (readonly [string, unknown])[];
     brRefs?: string[];
   };
+  type RawBackground = Omit<DesignBackgroundDecl, "id"> & { id: string };
   type RawUnit = {
     entities?: RawEntity[];
     obligations?: RawObligation[];
     stateMachines?: RawMachine[];
     scenarios?: RawScenario[];
-    background?: DesignBackgroundDecl[];
+    background?: RawBackground[];
     unformalizedTargets?: string[];
     directoryExists?: boolean;
     rulesMarkdown?: string | null;
@@ -541,30 +575,46 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   const brRefs = (refs: string[] | undefined) => (refs === undefined ? undefined : BrRefs.of(refs));
   function unit(overrides: RawUnit): DesignUnitDecl {
     return {
-      unit: "u1",
+      unit: DesignUnitId.of("u1"),
       entities: DesignEntityDecls.of(
         (overrides.entities ?? []).map((e) => ({
-          name: e.name,
+          name: DesignEntityName.reconstitute(e.name),
           attributes: DesignAttributeDecls.of(
-            e.attributes.map((a) => ({ ...a, values: a.values === undefined ? undefined : DeclaredValues.of(a.values) })),
+            e.attributes.map((a) => ({
+              ...a,
+              name: DesignAttributeName.reconstitute(a.name),
+              min: a.min === undefined ? undefined : AttributeBound.reconstitute(a.min),
+              max: a.max === undefined ? undefined : AttributeBound.reconstitute(a.max),
+              values: a.values === undefined ? undefined : DeclaredValues.of(a.values),
+            })),
           ),
         })),
       ),
       obligations: DesignObligationDecls.of(
-        (overrides.obligations ?? []).map((ob) => ({ ...ob, brRefs: brRefs(ob.brRefs) })),
+        (overrides.obligations ?? []).map((ob) => ({
+          ...ob,
+          id: DesignObligationId.reconstitute(ob.id),
+          origin: ob.origin === undefined ? undefined : DesignObligationOrigin.reconstitute(ob.origin),
+          brRefs: brRefs(ob.brRefs),
+        })),
       ),
       stateMachines: DesignMachineDecls.of(
         (overrides.stateMachines ?? []).map((sm) => ({
           ...sm,
+          id: DesignMachineId.reconstitute(sm.id),
           initial: InitialStates.of(sm.initial),
-          transitions: DesignTransitionDecls.of(sm.transitions.map((tr) => ({ ...tr, brRefs: brRefs(tr.brRefs) }))),
+          transitions: DesignTransitionDecls.of(
+            sm.transitions.map((tr) => ({ ...tr, id: DesignTransitionId.reconstitute(tr.id), brRefs: brRefs(tr.brRefs) })),
+          ),
           ignores: DesignIgnoreDecls.of(sm.ignores),
         })),
       ),
       scenarios: DesignScenarioDecls.of(
-        (overrides.scenarios ?? []).map((sc) => ({ ...sc, bindings: BindingPairs.of(sc.bindings), brRefs: brRefs(sc.brRefs) })),
+        (overrides.scenarios ?? []).map((sc) => ({ ...sc, id: DesignScenarioId.reconstitute(sc.id), bindings: BindingPairs.of(sc.bindings), brRefs: brRefs(sc.brRefs) })),
       ),
-      background: DesignBackgroundDecls.of(overrides.background ?? []),
+      background: DesignBackgroundDecls.of(
+        (overrides.background ?? []).map((bg) => ({ ...bg, id: DesignBackgroundId.reconstitute(bg.id) })),
+      ),
       unformalizedTargets: UnformalizedTargets.of(overrides.unformalizedTargets ?? []),
       directoryExists: overrides.directoryExists ?? true,
       rulesMarkdown: overrides.rulesMarkdown ?? null,
@@ -800,22 +850,22 @@ describe("design decl collections (first-class operations)", () => {
     ]);
     expect(bindings.toArray().length).toBe(2);
 
-    const attr = { name: "state", kind: "enum", values: DeclaredValues.of(["open"]) };
+    const attr = { name: DesignAttributeName.reconstitute("state"), kind: "enum", values: DeclaredValues.of(["open"]) };
     const attrs = DesignAttributeDecls.of([]).add(attr);
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
 
-    const entity = { name: "t", attributes: attrs };
+    const entity = { name: DesignEntityName.reconstitute("t"), attributes: attrs };
     const entities = DesignEntityDecls.of([]).add(entity);
     expect([...entities]).toEqual([entity]);
     expect(entities.toArray()).toEqual([entity]);
 
-    const ob = { id: "DOB-1" };
+    const ob = { id: DesignObligationId.reconstitute("DOB-1") };
     const obs = DesignObligationDecls.of([]).add(ob);
     expect([...obs]).toEqual([ob]);
     expect(obs.toArray()).toEqual([ob]);
 
-    const tr = { id: "TR-1" };
+    const tr = { id: DesignTransitionId.reconstitute("TR-1") };
     const trs = DesignTransitionDecls.of([]).add(tr);
     expect([...trs]).toEqual([tr]);
     expect(trs.toArray()).toEqual([tr]);
@@ -825,23 +875,23 @@ describe("design decl collections (first-class operations)", () => {
     expect([...igs]).toEqual([ig]);
     expect(igs.toArray()).toEqual([ig]);
 
-    const sm = { id: "SM-1", attrPath: "t.state", initial, transitions: trs, ignores: igs };
+    const sm = { id: DesignMachineId.reconstitute("SM-1"), attrPath: "t.state", initial, transitions: trs, ignores: igs };
     const sms = DesignMachineDecls.of([]).add(sm);
     expect([...sms]).toEqual([sm]);
     expect(sms.toArray()).toEqual([sm]);
 
-    const sc = { id: "DSC-1", bindings, hasEvent: false };
+    const sc = { id: DesignScenarioId.reconstitute("DSC-1"), bindings, hasEvent: false };
     const scs = DesignScenarioDecls.of([]).add(sc);
     expect([...scs]).toEqual([sc]);
     expect(scs.toArray()).toEqual([sc]);
 
-    const bg = { id: "DBG-1" };
+    const bg = { id: DesignBackgroundId.reconstitute("DBG-1") };
     const bgs = DesignBackgroundDecls.of([]).add(bg);
     expect([...bgs]).toEqual([bg]);
     expect(bgs.toArray()).toEqual([bg]);
 
     const ud: DesignUnitDecl = {
-      unit: "u1",
+      unit: DesignUnitId.of("u1"),
       entities,
       obligations: obs,
       stateMachines: sms,
@@ -865,17 +915,17 @@ describe("contract-1 decl collections (first-class operations)", () => {
     expect(values.includes("z")).toBe(false);
     expect(values.toArray()).toEqual(["a", "b"]);
 
-    const attr = { name: "x", kind: "bool" };
+    const attr = { name: IrAttributeName.reconstitute("x"), kind: "bool" };
     const attrs = IrAttributeDecls.of([]).add(attr);
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
 
-    const ent = { name: "t", attributes: attrs };
+    const ent = { name: IrEntityName.reconstitute("t"), attributes: attrs };
     const ents = IrEntityDecls.of([]).add(ent);
     expect([...ents]).toEqual([ent]);
     expect(ents.toArray()).toEqual([ent]);
 
-    const ob = { id: "OB-1" };
+    const ob = { id: ObligationId.reconstitute("OB-1") };
     const obs = IrObligationDecls.of([]).add(ob);
     expect([...obs]).toEqual([ob]);
     expect(obs.toArray()).toEqual([ob]);
@@ -887,14 +937,214 @@ describe("contract-1 decl collections (first-class operations)", () => {
     ]);
     expect(pairs.toArray().length).toBe(2);
 
-    const sc = { id: "SC-1", bindings: pairs, hasEvent: false };
+    const sc = { id: ScenarioId.reconstitute("SC-1"), bindings: pairs, hasEvent: false };
     const scs = IrScenarioDecls.of([]).add(sc);
     expect([...scs]).toEqual([sc]);
     expect(scs.toArray()).toEqual([sc]);
 
-    const bg = { id: "BG-1" };
+    const bg = { id: BackgroundAssumptionId.reconstitute("BG-1") };
     const bgs = IrBackgroundDecls.of([]).add(bg);
     expect([...bgs]).toEqual([bg]);
     expect(bgs.toArray()).toEqual([bg]);
+  });
+});
+
+describe("decl name primitives and the shared bound (issue #46 wave 5c-2)", () => {
+  test("IrEntityName / IrAttributeName parse-reject the empty token and rehydrate verbatim", () => {
+    expect(IrEntityName.parse("").ok).toBe(false);
+    const en = IrEntityName.parse("order");
+    if (!en.ok) throw new Error("unreachable");
+    expect(en.value.equals(IrEntityName.reconstitute("order"))).toBe(true);
+    expect(en.value.asString()).toBe("order");
+
+    expect(IrAttributeName.parse("").ok).toBe(false);
+    const an = IrAttributeName.parse("qty");
+    if (!an.ok) throw new Error("unreachable");
+    expect(an.value.equals(IrAttributeName.reconstitute("qty"))).toBe(true);
+    expect(an.value.asString()).toBe("qty");
+  });
+
+  test("AttributeBound owns the range-inversion comparison", () => {
+    expect(AttributeBound.reconstitute(9).exceeds(AttributeBound.reconstitute(1))).toBe(true);
+    expect(AttributeBound.reconstitute(1).exceeds(AttributeBound.reconstitute(1))).toBe(false);
+  });
+});
+
+describe("materials aggregates and the persistence round-trip (repository ruling)", () => {
+  test("ErrorMessages first-class collection", () => {
+    const msgs = ErrorMessages.of(["a"]).add("b");
+    expect([...msgs]).toEqual(["a", "b"]);
+    expect(msgs.isEmpty()).toBe(false);
+    expect(ErrorMessages.of([]).isEmpty()).toBe(true);
+    expect(msgs.toArray()).toEqual(["a", "b"]);
+  });
+
+  test("IrValidationMaterialsId / DesignIrValidationMaterialsId anchor 1:1 to the model id", () => {
+    const rid = IrValidationMaterialsId.ofModel(FormalModelId.of(ap("/r/x.md")));
+    expect(rid.equals(IrValidationMaterialsId.ofModel(FormalModelId.of(ap("/r/x.md"))))).toBe(true);
+    expect(rid.modelId().artifactPath().asString()).toBe("/r/x.md");
+    const did = DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap("/r/y.md")));
+    expect(did.equals(DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap("/r/y.md"))))).toBe(true);
+    expect(did.modelId().artifactPath().asString()).toBe("/r/y.md");
+  });
+
+  test("findById∘store round-trips the source document byte-for-byte (both contracts)", () => {
+    const record = join(tmpdir(), `deep-spec-store-${Math.random().toString(36).slice(2)}`);
+    const stage = join(record, "construction", "deep-spec-analysis-verify");
+    mkdirSync(stage, { recursive: true });
+    const irDoc = '# model\n\n```json\n{"irVersion":"1.0.0","entities":[],"obligations":[],"scenarios":[]}\n```\n';
+    const modelPath = join(stage, "deep-spec-analysis-formal-model.md");
+    writeFileSync(modelPath, irDoc);
+    const repo = new IrValidationMaterialsRepositoryImpl({ schemaPath: irSchemaPath });
+    const found = repo.findById(IrValidationMaterialsId.ofModel(FormalModelId.of(ap(modelPath))));
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(Buffer.from(found.value.sourceDocument()).toString("utf-8")).toBe(irDoc);
+    rmSync(modelPath);
+    const stored = repo.store(found.value);
+    expect(stored.ok).toBe(true);
+    expect(readFileSync(modelPath, "utf-8")).toBe(irDoc);
+    expect(found.value.irVersion().asString()).toBe("1.0.0");
+    expect(Array.isArray(found.value.schemaErrors().toArray())).toBe(true);
+    expect(found.value.frReferenceIndex()).toBeDefined();
+
+    // design 側も同じ往復則。
+    const dDoc = '# design\n\n```json\n{"irVersion":"1.0.0","units":[]}\n```\n';
+    const dPath = join(stage, "deep-spec-analysis-functional-formal-model.md");
+    writeFileSync(dPath, dDoc);
+    const dRepo = new DesignIrValidationMaterialsRepositoryImpl({ schemaPath: designSchemaPath });
+    const dId = DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap(dPath)));
+    const dFound = dRepo.findById(dId);
+    expect(dFound.ok).toBe(true);
+    if (!dFound.ok) return;
+    expect(dFound.value.id().equals(dId)).toBe(true);
+    expect(Buffer.from(dFound.value.sourceDocument()).toString("utf-8")).toBe(dDoc);
+    rmSync(dPath);
+    expect(dRepo.store(dFound.value).ok).toBe(true);
+    expect(readFileSync(dPath, "utf-8")).toBe(dDoc);
+    rmSync(record, { recursive: true, force: true });
+  });
+
+  test("FrRefClaims first-class collection feeds the reverse index", () => {
+    const claims = FrRefClaims.of([]).add({ owner: "OB-1", frRefs: FrRefs.of(["FR-1"]) });
+    expect([...claims].length).toBe(1);
+    expect(claims.toArray()[0]?.owner).toBe("OB-1");
+  });
+});
+
+describe("repository read failures keep the Result contract (PR#58 review)", () => {
+  test("a directory squatting on the artifact path classifies as io-failed, not a crash", () => {
+    const record = join(tmpdir(), `deep-spec-iofail-${Math.random().toString(36).slice(2)}`);
+    const stage = join(record, "construction", "deep-spec-analysis-verify");
+    // 成果物名のディレクトリ: existsSync は真だが readFileSync は EISDIR。
+    mkdirSync(join(stage, "deep-spec-analysis-formal-model.md"), { recursive: true });
+    const found = new IrValidationMaterialsRepositoryImpl({ schemaPath: irSchemaPath }).findById(
+      IrValidationMaterialsId.ofModel(FormalModelId.of(ap(join(stage, "deep-spec-analysis-formal-model.md")))),
+    );
+    expect(!found.ok && found.error.kind).toBe("io-failed");
+
+    mkdirSync(join(stage, "deep-spec-analysis-functional-formal-model.md"), { recursive: true });
+    const dFound = new DesignIrValidationMaterialsRepositoryImpl({ schemaPath: designSchemaPath }).findById(
+      DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap(join(stage, "deep-spec-analysis-functional-formal-model.md")))),
+    );
+    expect(!dFound.ok && dFound.error.kind).toBe("io-failed");
+    rmSync(record, { recursive: true, force: true });
+  });
+
+  test("a directory squatting on requirements.md classifies as io-failed", () => {
+    const record = join(tmpdir(), `deep-spec-src-iofail-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(join(record, "inception", "requirements-analysis", "requirements.md"), { recursive: true });
+    const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(record)));
+    expect(!source.ok && source.error.kind).toBe("io-failed");
+    rmSync(record, { recursive: true, force: true });
+  });
+});
+
+describe("store faces on the workflow-authored aggregates (owner ruling: writable where writing is definable)", () => {
+  test("formal/design model repositories round-trip the source document", () => {
+    const record = join(tmpdir(), `deep-spec-model-store-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(record, { recursive: true });
+    const doc = '# m\n\n```json\n{"irVersion":"1.0.0","schema":{"entities":[]},"obligations":[],"scenarios":[]}\n```\n';
+    const mPath = join(record, "deep-spec-analysis-formal-model.md");
+    writeFileSync(mPath, doc);
+    const repo = new FormalModelRepositoryImpl();
+    const found = repo.findById(FormalModelId.of(ap(mPath)));
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(Buffer.from(found.value.sourceDocument()).toString("utf-8")).toBe(doc);
+    rmSync(mPath);
+    expect(repo.store(found.value).ok).toBe(true);
+    expect(readFileSync(mPath, "utf-8")).toBe(doc);
+
+    // 実 fixture の設計 IR を往復させる（合成文書はパーサの構造要件に届かない）。
+    const dDoc = readFileSync(
+      join(pluginRoot, "tests", "fixtures", "design", "record", "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"),
+      "utf-8",
+    );
+    const dPath = join(record, "deep-spec-analysis-functional-formal-model.md");
+    writeFileSync(dPath, dDoc);
+    const dRepo = new DesignModelRepositoryImpl();
+    const dFound = dRepo.findById(DesignModelId.of(ap(dPath)));
+    expect(dFound.ok).toBe(true);
+    if (!dFound.ok) return;
+    rmSync(dPath);
+    expect(dRepo.store(dFound.value).ok).toBe(true);
+    expect(readFileSync(dPath, "utf-8")).toBe(dDoc);
+    rmSync(record, { recursive: true, force: true });
+  });
+
+  test("requirements source repository round-trips the source bytes at the resolved location", () => {
+    const record = join(tmpdir(), `deep-spec-src-store-${Math.random().toString(36).slice(2)}`);
+    const srcPath = join(record, "inception", "requirements-analysis", "requirements.md");
+    mkdirSync(dirname(srcPath), { recursive: true });
+    writeFileSync(srcPath, "- FR-1: x\n");
+    const repo = new RequirementsSourceRepositoryImpl();
+    const found = repo.findById(RequirementsSourceId.of(ap(record)));
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.value.sourcePath().asString()).toBe(srcPath);
+    rmSync(srcPath);
+    expect(repo.store(found.value).ok).toBe(true);
+    expect(readFileSync(srcPath, "utf-8")).toBe("- FR-1: x\n");
+    rmSync(record, { recursive: true, force: true });
+  });
+});
+
+describe("byte-fidelity and mutation safety of the store faces (PR#58 review)", () => {
+  test("non-UTF-8 bytes outside the fence survive the round-trip byte-for-byte", () => {
+    const record = join(tmpdir(), `deep-spec-rawbytes-${Math.random().toString(36).slice(2)}`);
+    const stage = join(record, "construction", "deep-spec-analysis-verify");
+    mkdirSync(stage, { recursive: true });
+    const head = Buffer.from("# m \xff\xfe raw\n\n```json\n", "latin1");
+    const fence = Buffer.from('{"irVersion":"1.0.0","entities":[],"obligations":[],"scenarios":[]}\n```\n', "utf-8");
+    const raw = Buffer.concat([head, fence]);
+    const modelPath = join(stage, "deep-spec-analysis-formal-model.md");
+    writeFileSync(modelPath, raw);
+    const repo = new IrValidationMaterialsRepositoryImpl({ schemaPath: irSchemaPath });
+    const found = repo.findById(IrValidationMaterialsId.ofModel(FormalModelId.of(ap(modelPath))));
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    rmSync(modelPath);
+    expect(repo.store(found.value).ok).toBe(true);
+    expect(Buffer.from(readFileSync(modelPath)).equals(raw)).toBe(true);
+    rmSync(record, { recursive: true, force: true });
+  });
+
+  test("mutating the returned byte view cannot corrupt what store writes", () => {
+    const record = join(tmpdir(), `deep-spec-mut-${Math.random().toString(36).slice(2)}`);
+    const srcPath = join(record, "inception", "requirements-analysis", "requirements.md");
+    mkdirSync(dirname(srcPath), { recursive: true });
+    writeFileSync(srcPath, "- FR-1: x\n");
+    const repo = new RequirementsSourceRepositoryImpl();
+    const found = repo.findById(RequirementsSourceId.of(ap(record)));
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.value.id().equals(RequirementsSourceId.of(ap(record)))).toBe(true);
+    expect(found.value.digest().length).toBe(64);
+    const view = found.value.sourceDocument();
+    view.fill(0);
+    expect(repo.store(found.value).ok).toBe(true);
+    expect(readFileSync(srcPath, "utf-8")).toBe("- FR-1: x\n");
+    rmSync(record, { recursive: true, force: true });
   });
 });

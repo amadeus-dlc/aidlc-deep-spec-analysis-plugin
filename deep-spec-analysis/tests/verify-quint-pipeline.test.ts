@@ -57,7 +57,6 @@ import {
   FormalModelId,
 } from "../tools/requirements/domain/index.ts";
 import {
-  type AcquiredFormalModel,
   type FormalModelRepository,
   type QuintCheckResult,
   type QuintClient,
@@ -83,6 +82,8 @@ function model(seed: {
 }): RequirementsModel {
   return RequirementsModel.reconstitute({
     id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
+    irHash: ContentHash.reconstitute(HASH),
+    sourceDocument: new Uint8Array(),
     irVersion: seed.irVersion ?? IrVersion.reconstitute("1.0.0"),
     attributes: AttributeDeclarations.of(
       (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
@@ -130,8 +131,8 @@ describe("in-process golden equivalence (interactor over real Impls, real quint 
 
 // --- interactor の全経路（InMemory ダブル＋素の値のみ） ----------------------
 
-function formalModels(result: Result<AcquiredFormalModel, RepositoryError>): FormalModelRepository {
-  return { findById: () => result };
+function formalModels(result: Result<RequirementsModel, RepositoryError>): FormalModelRepository {
+  return { findById: () => result, store: (m) => ok(m) };
 }
 
 function quint(result: QuintCheckResult): QuintClient {
@@ -167,7 +168,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
     });
     const outcome = new VerifyRequirementsQuintUseCase(
-      formalModels(ok({ model: m, irHash: ContentHash.reconstitute(HASH) })),
+      formalModels(ok(m)),
       reports,
       quint({ kind: "cli-unavailable" }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
@@ -188,7 +189,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
     });
     const outcome = new VerifyRequirementsQuintUseCase(
-      formalModels(ok({ model: m, irHash: ContentHash.reconstitute(HASH) })),
+      formalModels(ok(m)),
       reports,
       quint({ kind: "machine-uncompilable", method: "bounded", error: 'state variable name collision: "a_b"' }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
@@ -218,7 +219,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
       scenarios: new Map([["SC-1", { kind: "evaluated", violated: false }]]),
     });
     const outcome = new VerifyRequirementsQuintUseCase(
-      formalModels(ok({ model: m, irHash: ContentHash.reconstitute(HASH) })),
+      formalModels(ok(m)),
       reports,
       quint({ kind: "checked", method: "bounded", facts, compileSkips: VerificationSkips.of([]), runs }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });

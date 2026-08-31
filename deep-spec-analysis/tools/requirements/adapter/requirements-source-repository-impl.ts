@@ -10,32 +10,67 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { ContentHash, RequirementIds } from "../../kernel/domain/index.ts";
-import type { RequirementsSourceId } from "../domain/index.ts";
-import type { RequirementsSource, RequirementsSourceRepository } from "../usecase/index.ts";
+import { writeFileAtomically } from "../../kernel/adapter/index.ts";
+import { ArtifactPath, ContentHash, RequirementIds } from "../../kernel/domain/index.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../kernel/usecase/index.ts";
+import { RequirementsSource, type RequirementsSourceId } from "../domain/index.ts";
+import type { RequirementsSourceRepository } from "../usecase/index.ts";
 
-function findRequirementsFile(recordDir: string): string | null {
+type RequirementsFileSearch =
+  | { readonly kind: "found"; readonly path: string }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable"; readonly cause: string };
+
+function findRequirementsFile(recordDir: string): RequirementsFileSearch {
   const direct = join(recordDir, "inception", "requirements-analysis", "requirements.md");
-  if (existsSync(direct)) return direct;
+  if (existsSync(direct)) return { kind: "found", path: direct };
+  // 記録ルート自体の不在は「読取障害」ではなく不在（not-found の凍結分類）。
+  if (!existsSync(recordDir)) return { kind: "absent" };
   try {
     for (const phase of readdirSync(recordDir).sort()) {
       const candidate = join(recordDir, phase, "requirements-analysis", "requirements.md");
-      if (existsSync(candidate)) return candidate;
+      if (existsSync(candidate)) return { kind: "found", path: candidate };
     }
-  } catch {
-    // recordDir が読めない — null へ落とす。
+  } catch (e) {
+    // recordDir が読めない——不在ではなく読取障害として区別する（use case の
+    // verdict 写像は同一だが、Result 契約の分類を正しく保つ）。
+    return { kind: "unreadable", cause: e instanceof Error ? e.message : String(e) };
   }
-  return null;
+  return { kind: "absent" };
 }
 
 export class RequirementsSourceRepositoryImpl implements RequirementsSourceRepository {
-  findById(id: RequirementsSourceId): RequirementsSource | null {
-    const path = findRequirementsFile(id.recordRoot().asString());
-    if (path === null) return null;
-    const bytes = readFileSync(path);
-    return {
-      knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
-      digest: ContentHash.ofBytes(bytes).asString(),
-    };
+  findById(id: RequirementsSourceId): Result<RequirementsSource, RepositoryError> {
+    const search = findRequirementsFile(id.recordRoot().asString());
+    if (search.kind === "unreadable") {
+      return err({ kind: "io-failed", operation: "read", path: id.recordRoot().asString(), cause: search.cause });
+    }
+    if (search.kind === "absent") return err({ kind: "not-found", path: id.recordRoot().asString() });
+    try {
+      const bytes = readFileSync(search.path);
+      return ok(
+        RequirementsSource.reconstitute({
+          id,
+          sourcePath: ArtifactPath.reconstitute(search.path),
+          knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
+          digest: ContentHash.ofBytes(bytes).asString(),
+          sourceDocument: new Uint8Array(bytes),
+        }),
+      );
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "read", path: search.path, cause: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  // 往復則: findById が読んだ原文バイト列を解決済みの所在へ逐語で書き戻す。
+  store(source: RequirementsSource): Result<RequirementsSource, RepositoryError> {
+    const path = source.sourcePath().asString();
+    try {
+      writeFileAtomically(path, source.sourceDocument());
+      return ok(source);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
+    }
   }
 }

@@ -30,6 +30,9 @@ export interface DesignRecordSeed {
   // 発火対象の record 相対名と (artifact, sha256)。対象が読めない場合に
   // 集約は作られない（Repository が not-found を返す）。
   readonly target: InputAnchor;
+  // 錨成果物の原文の生バイト列（原文材料——store の往復則 findById∘store が
+  // バイト恒等。兄弟成果物は読み取り視点であり store の対象外）。
+  readonly sourceDocument: Uint8Array;
   // 対象が components.md のときだけ載る視点。
   readonly componentCatalog: ComponentCatalogOutcome | null;
   // 対象が contract-summary.md のときだけ載る視点。
@@ -70,6 +73,11 @@ export class DesignRecord {
 
   target(): InputAnchor {
     return this.#seed.target;
+  }
+
+  // 境界: store が書く錨成果物の原文（バイト逐語——外部変更を防ぐ防御コピー）。
+  sourceDocument(): Uint8Array {
+    return new Uint8Array(this.#seed.sourceDocument);
   }
 
   componentCatalog(): ComponentCatalogOutcome | null {

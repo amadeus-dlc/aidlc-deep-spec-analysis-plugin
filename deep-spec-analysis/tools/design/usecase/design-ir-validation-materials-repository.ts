@@ -1,23 +1,17 @@
-// 契約3 設計 IR の検査材料の取得ポート。フェンス抽出・JSON 解釈・スキーマ検証、
-// そしてユニットごとの BR 材料（construction ディレクトリの有無と rules.md）の
-// 解決までをアダプタに委ね、use-case へは検査語彙だけを渡す。
-//
-// not-applicable は機能形式モデル以外への書き込み（pass-through）。unreadable は
-// 材料が組めない失敗で、errors は verdict にそのまま載る凍結文言。
+// DesignIrValidationMaterials 集約の永続化・再構成ポート（Repository は集約の
+// I/O 責務。メソッドは永続化語彙のみ——オーナー裁定: find_by_id / store 系）。
+// findById はフェンス抽出・JSON 解釈・スキーマ検証・ユニットごとの BR 材料の
+// 解決をアダプタに委ねて集約を返す。読めたが材料が組めない失敗は corrupt で
+// 返し、corrupt.cause には verdict にそのまま載る凍結文言が材料として入る。
+// 機能形式モデル以外・不在は not-found（use case が pass-through へ写像）。
+// store は集約の原文（sourceDocument）をバイト逐語で書く——findById∘store は
+// バイト恒等（往復則）。
 
-import type { DesignModelId, DesignUnitDecls } from "../domain/index.ts";
-
-export interface DesignIrValidationMaterials {
-  readonly irVersion: string;
-  readonly schemaErrors: readonly string[];
-  readonly units: DesignUnitDecls;
-}
-
-export type DesignIrMaterialsAcquisition =
-  | { readonly kind: "not-applicable" }
-  | { readonly kind: "unreadable"; readonly errors: readonly string[] }
-  | { readonly kind: "acquired"; readonly materials: DesignIrValidationMaterials };
+import type { Result } from "../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../kernel/usecase/index.ts";
+import type { DesignIrValidationMaterials, DesignIrValidationMaterialsId } from "../domain/index.ts";
 
 export interface DesignIrValidationMaterialsRepository {
-  acquire(id: DesignModelId): DesignIrMaterialsAcquisition;
+  findById(id: DesignIrValidationMaterialsId): Result<DesignIrValidationMaterials, RepositoryError>;
+  store(materials: DesignIrValidationMaterials): Result<DesignIrValidationMaterials, RepositoryError>;
 }

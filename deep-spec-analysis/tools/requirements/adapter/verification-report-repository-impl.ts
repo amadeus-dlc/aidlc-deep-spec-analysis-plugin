@@ -1,6 +1,6 @@
 // VerificationReportRepository の実 Gateway 実装。
 // 保存先／読出元は集約識別子（directory + backend）から導出する。
-// 契約適合（conformedOf）は serializer の知識で実装し、save は常に conformed
+// 契約適合は serializer の知識で実装し、store は常に conformed
 // な姿を書く。findAllByDirectory は凍結取得規則そのもの：cross-check.json を
 // 除く *.json をファイル名順で読み、読めないファイルは黙って除く（その状態は
 // 各書き手が自分の文書で報告する——旧 recomputeCrossCheck の読込と同値）。
@@ -69,17 +69,13 @@ export class VerificationReportRepositoryImpl implements VerificationReportRepos
     return ok(VerificationReports.of(reports));
   }
 
-  conformedOf(report: VerificationReport): VerificationReport {
-    return conformToFindingsContract(report, readContractSchema(this.#findingsSchemaPath));
-  }
-
-  save(report: VerificationReport): Result<void, RepositoryError> {
-    const conformed = this.conformedOf(report);
+  store(report: VerificationReport): Result<VerificationReport, RepositoryError> {
+    const conformed = conformToFindingsContract(report, readContractSchema(this.#findingsSchemaPath));
     const path = join(conformed.id().directory().asString(), conformed.id().fileName());
     try {
       mkdirSync(conformed.id().directory().asString(), { recursive: true });
       writeFileSync(path, renderVerificationReportBytes(conformed), "utf-8");
-      return ok(undefined);
+      return ok(conformed);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
     }

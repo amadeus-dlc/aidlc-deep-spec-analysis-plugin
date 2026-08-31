@@ -1,6 +1,6 @@
 // DesignReport の実 Gateway 実装。保存先／読出元は集約識別子（directory +
-// backend）から導出する。契約適合（conformedOf）は serializer の知識で実装し、
-// save は常に conformed な姿を書く。findAllByDirectory はクロスチェックの
+// backend）から導出する。契約適合は serializer の知識で実装し、store は
+// 常に conformed な姿を書いて適合済み集約を返す。findAllByDirectory はクロスチェックの
 // 凍結取得規則：cross-check.json を除く *.json をファイル名順で読み、読めない
 // ファイルは黙って除く。
 
@@ -67,17 +67,13 @@ export class DesignReportRepositoryImpl implements DesignReportRepository {
     return ok(DesignReports.of(reports));
   }
 
-  conformedOf(report: DesignReport): DesignReport {
-    return conformDesignReport(report, readContractSchema(this.#findingsSchemaPath));
-  }
-
-  save(report: DesignReport): Result<void, RepositoryError> {
-    const conformed = this.conformedOf(report);
+  store(report: DesignReport): Result<DesignReport, RepositoryError> {
+    const conformed = conformDesignReport(report, readContractSchema(this.#findingsSchemaPath));
     const path = join(conformed.id().directory().asString(), conformed.id().fileName());
     try {
       mkdirSync(conformed.id().directory().asString(), { recursive: true });
       writeFileSync(path, renderDesignReportBytes(conformed), "utf-8");
-      return ok(undefined);
+      return ok(conformed);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
     }

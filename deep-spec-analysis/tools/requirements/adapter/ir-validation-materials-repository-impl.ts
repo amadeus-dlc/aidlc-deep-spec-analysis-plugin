@@ -14,8 +14,11 @@ import {
   isObject,
   readContractSchema,
   validateSchema,
+  writeFileAtomically,
 } from "../../kernel/adapter/index.ts";
-import { ArtifactPath, type Expression } from "../../kernel/domain/index.ts";
+import { ArtifactPath, AttributeBound, ErrorMessages, IrVersion, type Expression } from "../../kernel/domain/index.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
   type FrRefClaim,
   type IrAttributeDecl,
@@ -32,10 +35,17 @@ import {
   IrScenarioDecls,
   type IrObligationDecl,
   type IrScenarioDecl,
-  type FormalModelId,
+  FrRefClaims,
+  IrValidationMaterials,
+  IrValidationMaterialsId,
   RequirementsSourceId,
+  ScenarioId,
+  ObligationId,
+  IrEntityName,
+  IrAttributeName,
+  BackgroundAssumptionId,
 } from "../domain/index.ts";
-import type { IrMaterialsAcquisition, IrValidationMaterialsRepository } from "../usecase/index.ts";
+import type { IrValidationMaterialsRepository } from "../usecase/index.ts";
 
 const FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";
 
@@ -57,14 +67,14 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
       if (!isObject(attr) || typeof attr.name !== "string") continue;
       const t = isObject(attr.type) ? attr.type : {};
       attributes.push({
-        name: attr.name,
+        name: IrAttributeName.reconstitute(attr.name),
         kind: typeof t.kind === "string" ? t.kind : "",
         values: Array.isArray(t.values) ? IrDeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
-        min: typeof t.min === "number" ? t.min : undefined,
-        max: typeof t.max === "number" ? t.max : undefined,
+        min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
+        max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
       });
     }
-    entities.push({ name: ent.name, attributes: IrAttributeDecls.of(attributes) });
+    entities.push({ name: IrEntityName.reconstitute(ent.name), attributes: IrAttributeDecls.of(attributes) });
   }
 
   const obligations: IrObligationDecl[] = [];
@@ -72,7 +82,7 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
     if (!isObject(ob) || typeof ob.id !== "string") continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
     obligations.push({
-      id: ob.id,
+      id: ObligationId.reconstitute(ob.id),
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
       effect: asExpression(ob.effect ?? null),
@@ -92,7 +102,7 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
     scenarios.push({
-      id: sc.id,
+      id: ScenarioId.reconstitute(sc.id),
       bindings: IrBindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
@@ -102,7 +112,7 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
   const background: IrBackgroundDecl[] = [];
   for (const bg of Array.isArray(ir.background) ? ir.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string") continue;
-    background.push({ id: bg.id, assert: asExpression(bg.assert ?? null) });
+    background.push({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: asExpression(bg.assert ?? null) });
   }
 
   return IrModelDecl.reconstitute({
@@ -136,40 +146,47 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
     this.#schemaPath = config.schemaPath;
   }
 
-  acquire(id: FormalModelId): IrMaterialsAcquisition {
-    const outputPath = id.artifactPath().asString();
+  findById(id: IrValidationMaterialsId): Result<IrValidationMaterials, RepositoryError> {
+    const outputPath = id.modelId().artifactPath().asString();
+    // 機能形式モデル以外・不在はこの Repository の収蔵外（not-found——use case
+    // が pass-through へ写像する旧 not-applicable の凍結挙動）。
     if (basename(outputPath) !== FORMAL_MODEL_BASENAME || !existsSync(outputPath)) {
-      return { kind: "not-applicable" };
+      return err({ kind: "not-found", path: outputPath });
     }
 
-    const md = readFileSync(outputPath, "utf-8");
+    const corrupt = (cause: string): Result<IrValidationMaterials, RepositoryError> =>
+      err({ kind: "corrupt", path: outputPath, cause });
+
+    // existsSync 後の競合（削除・権限変更・ディレクトリ）でも Result 契約を
+    // 守る——読取失敗は io-failed（use case は corrupt と同じ verdict 写像）。
+    let bytes: Buffer;
+    try {
+      bytes = readFileSync(outputPath);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "read", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
+    }
+    const md = bytes.toString("utf-8");
     const fences = extractFences(md, "json").map((f) => f.body);
     if (fences.length !== 1) {
-      return {
-        kind: "unreadable",
-        errors: [`formal model must contain exactly one \`\`\`json fence (found ${fences.length})`],
-      };
+      return corrupt(`formal model must contain exactly one \`\`\`json fence (found ${fences.length})`);
     }
 
     let ir: Json;
     try {
       ir = JSON.parse(fences[0] ?? "");
-    } catch (err) {
-      return {
-        kind: "unreadable",
-        errors: [`IR fence is not valid JSON: ${err instanceof Error ? err.message : String(err)}`],
-      };
+    } catch (e) {
+      return corrupt(`IR fence is not valid JSON: ${e instanceof Error ? e.message : String(e)}`);
     }
     if (!isObject(ir)) {
-      return { kind: "unreadable", errors: ["IR fence must contain a JSON object"] };
+      return corrupt("IR fence must contain a JSON object");
     }
 
     if (!existsSync(this.#schemaPath)) {
-      return { kind: "unreadable", errors: [`IR schema not installed at ${this.#schemaPath} — run plugin sync`] };
+      return corrupt(`IR schema not installed at ${this.#schemaPath} — run plugin sync`);
     }
     const schema = readContractSchema(this.#schemaPath);
     if (!schema.ok) {
-      return { kind: "unreadable", errors: [`IR schema unreadable: ${schema.error.cause}`] };
+      return corrupt(`IR schema unreadable: ${schema.error.cause}`);
     }
 
     const schemaErrors: string[] = [];
@@ -178,22 +195,34 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
     // <record>/<phase>/<stage>/… → 記録ルートは 3 階層上（旧
     // findRequirementsFile の導出の逐語——識別子の導出はパス知識）。dirname は
     // 空文字列を返さないため parse は失敗し得ない；分岐は型の網羅のみで、
-    // 到達すれば defect として unreadable に落とす（黙殺しない）。
+    // 到達すれば defect として corrupt に落とす（黙殺しない）。
     const recordRoot = ArtifactPath.parse(dirname(dirname(dirname(outputPath))));
     if (!recordRoot.ok) {
-      return { kind: "unreadable", errors: ["defect: record-root derivation produced an empty path"] };
+      return corrupt("defect: record-root derivation produced an empty path");
     }
 
-    return {
-      kind: "acquired",
-      materials: {
-        irVersion: typeof ir.irVersion === "string" ? ir.irVersion : "",
-        schemaErrors,
+    return ok(
+      IrValidationMaterials.reconstitute({
+        id,
+        irVersion: IrVersion.reconstitute(typeof ir.irVersion === "string" ? ir.irVersion : ""),
+        schemaErrors: ErrorMessages.of(schemaErrors),
         view: buildView(ir),
-        frClaims: collectFrClaims(ir),
+        frClaims: FrRefClaims.of(collectFrClaims(ir)),
         declaredDigest: typeof ir.sourceDigest === "string" ? ir.sourceDigest : null,
         sourceId: RequirementsSourceId.of(recordRoot.value),
-      },
-    };
+        sourceDocument: new Uint8Array(bytes),
+      }),
+    );
+  }
+
+  // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
+  store(materials: IrValidationMaterials): Result<IrValidationMaterials, RepositoryError> {
+    const outputPath = materials.id().modelId().artifactPath().asString();
+    try {
+      writeFileAtomically(outputPath, materials.sourceDocument());
+      return ok(materials);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
+    }
   }
 }

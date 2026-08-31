@@ -7,24 +7,26 @@
 import { existsSync, readFileSync } from "node:fs";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { ContentHash } from "../../kernel/domain/index.ts";
-import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
+import { type Json, canonicalStringify, extractFences, writeFileAtomically } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import { DesignModel, type DesignModelId } from "../domain/index.ts";
-import type { AcquiredDesignModel, DesignModelRepository } from "../usecase/index.ts";
+import type { DesignModelRepository } from "../usecase/index.ts";
 import { parseDesignModel } from "./design-model-parser.ts";
 
 export class DesignModelRepositoryImpl implements DesignModelRepository {
-  findById(id: DesignModelId): Result<AcquiredDesignModel, RepositoryError> {
+  findById(id: DesignModelId): Result<DesignModel, RepositoryError> {
     const modelPath = id.artifactPath().asString();
-    let md: string;
+    // 原文は生バイト列で一度だけ読む（UTF-8 復号は解析専用）。
+    let bytes: Buffer;
     try {
-      md = readFileSync(modelPath, "utf-8");
+      bytes = readFileSync(modelPath);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === "ENOENT" || !existsSync(modelPath)) {
         return err({ kind: "not-found", path: modelPath });
       }
       return err({ kind: "io-failed", operation: "read", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
     }
+    const md = bytes.toString("utf-8");
     const fences = extractFences(md, "json");
     const body = fences.length === 1 ? (fences[0]?.body ?? null) : null;
     let raw: Json = null;
@@ -40,6 +42,17 @@ export class DesignModelRepositoryImpl implements DesignModelRepository {
     if (typeof composition === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: composition });
     }
-    return ok({ model: DesignModel.compose({ id, ...composition }), irHash: ContentHash.ofText(canonicalStringify(raw)) });
+    return ok(DesignModel.compose({ id, irHash: ContentHash.ofText(canonicalStringify(raw)), sourceDocument: new Uint8Array(bytes), ...composition }));
+  }
+
+  // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
+  store(model: DesignModel): Result<DesignModel, RepositoryError> {
+    const modelPath = model.id().artifactPath().asString();
+    try {
+      writeFileAtomically(modelPath, model.sourceDocument());
+      return ok(model);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
+    }
   }
 }

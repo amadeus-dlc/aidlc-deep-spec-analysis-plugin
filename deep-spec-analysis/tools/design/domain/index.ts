@@ -100,3 +100,8 @@ export { designWellFormednessErrors } from "./design-well-formedness.ts";
 export { DesignModelId } from "./design-model-id.ts";
 export { DesignUnitId } from "./design-unit-id.ts";
 export { RefinementMaterialsId } from "./refinement-materials-id.ts";
+export {
+  type DesignIrValidationMaterialsSeed,
+  DesignIrValidationMaterials,
+  DesignIrValidationMaterialsId,
+} from "./design-ir-validation-materials.ts";

@@ -63,7 +63,6 @@ import {
   FormalModelId,
 } from "../tools/requirements/domain/index.ts";
 import {
-  type AcquiredFormalModel,
   type FormalModelRepository,
   type SmtCheck,
   VerifyRequirementsSmtUseCase,
@@ -90,6 +89,8 @@ function model(seed: {
 }): RequirementsModel {
   return RequirementsModel.reconstitute({
     id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
+    irHash: ContentHash.reconstitute("a".repeat(64)),
+    sourceDocument: new Uint8Array(),
     irVersion: seed.irVersion ?? IrVersion.reconstitute("1.0.0"),
     attributes: AttributeDeclarations.of(
       (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
@@ -136,8 +137,8 @@ describe("in-process golden equivalence (interactor over real Impls, real z3 chi
 
 // --- interactor の全経路（InMemory ダブル＋素の値のみ） ----------------------
 
-function formalModels(result: Result<AcquiredFormalModel, RepositoryError>): FormalModelRepository {
-  return { findById: () => result };
+function formalModels(result: Result<RequirementsModel, RepositoryError>): FormalModelRepository {
+  return { findById: () => result, store: (m) => ok(m) };
 }
 
 function solver(check: SmtCheck): Z3SolverClient {
@@ -193,7 +194,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
     });
     const outcome = new VerifyRequirementsSmtUseCase(
-      formalModels(ok({ model: m, irHash: ContentHash.reconstitute("a".repeat(64)) })),
+      formalModels(ok(m)),
       reports,
       solver({ facts: SmtPlanFacts.of(EMPTY_FACTS), result: { kind: "solved", verdicts: SmtQueryVerdicts.of(new Map()) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
@@ -219,7 +220,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
       skipped: VerificationSkips.of([{ target: "OB-2", reason: "capability", detail: 'nature "state-temporal" is checked by a state-machine backend, not the SMT backend' }]),
     });
     const outcome = new VerifyRequirementsSmtUseCase(
-      formalModels(ok({ model: m, irHash: ContentHash.reconstitute("a".repeat(64)) })),
+      formalModels(ok(m)),
       reports,
       solver({ facts, result: { kind: "unavailable", reason: "no runtime could execute the z3 child process (node: not on PATH)" } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
@@ -249,7 +250,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
       ["sc:SC-1", { status: "sat", decodedModel: { "Ticket.priority": 1 } }],
     ]);
     const outcome = new VerifyRequirementsSmtUseCase(
-      formalModels(ok({ model: m, irHash: ContentHash.reconstitute("a".repeat(64)) })),
+      formalModels(ok(m)),
       reports,
       solver({ facts, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(verdicts) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });

@@ -31,33 +31,9 @@ export class AttributePath {
   }
 }
 
-export type AttributeBoundError = { readonly kind: "non-integer-bound"; readonly raw: number };
-
-// int 属性の有界境界（Quint バックエンドの有限領域要件）。
-export class AttributeBound {
-  readonly #value: number;
-
-  private constructor(value: number) {
-    this.#value = value;
-  }
-
-  static parse(raw: number): Result<AttributeBound, AttributeBoundError> {
-    if (!Number.isInteger(raw)) return err({ kind: "non-integer-bound", raw });
-    return ok(new AttributeBound(raw));
-  }
-
-  static reconstitute(raw: number): AttributeBound {
-    return new AttributeBound(raw);
-  }
-
-  equals(other: AttributeBound): boolean {
-    return this.#value === other.#value;
-  }
-
-  asNumber(): number {
-    return this.#value;
-  }
-}
+// AttributeBound は設計 decl 束と共有するため kernel へ移設（再輸出で面を保存）。
+export { type AttributeBoundError, AttributeBound } from "../../kernel/domain/attribute-bound.ts";
+import { AttributeBound } from "../../kernel/domain/attribute-bound.ts";
 
 // enum 宣言値のファーストクラスコレクション。宣言順＝SMT の序数符号化・
 // Quint の集合リテラル順という凍結面なので順序を所有する。
