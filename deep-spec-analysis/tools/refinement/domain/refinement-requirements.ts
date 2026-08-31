@@ -4,8 +4,8 @@
 // 正準 JSON の sha256（アダプタが導出）——map の requirementsIrHash と照合する
 // 識別材料。集まりはファーストクラスコレクションで運ぶ。
 
-import type { FormalModelId } from "../../requirements/domain/index.ts";
-import type { ContentHash } from "../../kernel/domain/index.ts";
+import type { AttributeBound, AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "../../requirements/domain/index.ts";
+import type { ContentHash, FrRefs } from "../../kernel/domain/index.ts";
 import { IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 
@@ -39,10 +39,10 @@ export class ReqAttributeValues {
 }
 
 export interface RefinementAttribute {
-  path: string;
+  path: AttributePath;
   kind: "bool" | "int" | "enum";
-  min?: number;
-  max?: number;
+  min?: AttributeBound;
+  max?: AttributeBound;
   values?: ReqAttributeValues;
 }
 
@@ -67,21 +67,25 @@ export class RefinementAttributes {
     yield* this.#values;
   }
 
-  byPath(path: string): RefinementAttribute | undefined {
+  // 索引は Expression（published language）の生パスも DP も受ける——照合は
+  // コレクション自身の知識（Tell-Don't-Ask 裁定）。
+  byPath(path: AttributePath | string): RefinementAttribute | undefined {
+    const key = typeof path === "string" ? path : path.asString();
     let found: RefinementAttribute | undefined;
     for (const a of this.#values) {
-      if (a.path === path) found = a;
+      if (a.path.asString() === key) found = a;
     }
     return found;
   }
 
-  covers(path: string): boolean {
-    return this.#values.some((a) => a.path === path);
+  covers(path: AttributePath | string): boolean {
+    const key = typeof path === "string" ? path : path.asString();
+    return this.#values.some((a) => a.path.asString() === key);
   }
 
   // 閉包検査・フレーム構築の走査順（path の辞書順）はコレクション知識。
   sortedByPath(): RefinementAttributes {
-    return new RefinementAttributes([...this.#values].sort((x, y) => (x.path < y.path ? -1 : 1)));
+    return new RefinementAttributes([...this.#values].sort((x, y) => (x.path.asString() < y.path.asString() ? -1 : 1)));
   }
 
   toArray(): readonly RefinementAttribute[] {
@@ -90,9 +94,9 @@ export class RefinementAttributes {
 }
 
 export interface RefinementObligation {
-  id: string;
-  nature: string;
-  frRefs: string[];
+  id: ObligationId;
+  nature: ObligationNature;
+  frRefs: FrRefs;
   assert?: Expression;
   trigger?: string;
   guard?: Expression;
@@ -123,13 +127,13 @@ export class RefinementObligations {
   byId(id: string): RefinementObligation | undefined {
     let found: RefinementObligation | undefined;
     for (const o of this.#values) {
-      if (o.id === id) found = o;
+      if (o.id.asString() === id) found = o;
     }
     return found;
   }
 
   sortedCanonically(): RefinementObligations {
-    return new RefinementObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id, b.id)));
+    return new RefinementObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
   }
 
   toArray(): readonly RefinementObligation[] {
@@ -138,9 +142,9 @@ export class RefinementObligations {
 }
 
 export interface RefinementScenario {
-  id: string;
+  id: ScenarioId;
   kind: "accept" | "reject";
-  frRefs: string[];
+  frRefs: FrRefs;
   bindings: { [path: string]: boolean | number | string };
   event?: { trigger: string };
 }
@@ -168,7 +172,7 @@ export class RefinementScenarios {
   byId(id: string): RefinementScenario | undefined {
     let found: RefinementScenario | undefined;
     for (const s of this.#values) {
-      if (s.id === id) found = s;
+      if (s.id.asString() === id) found = s;
     }
     return found;
   }
@@ -238,10 +242,10 @@ export class RefinementRequirements {
   // 旧 entry の reqTargets（義務 → シナリオの宣言順・未ソート——最終文書は
   // compose が正準ソートする）。
   allTargetIds(): string[] {
-    return [...this.#obligations.toArray().map((o) => o.id), ...this.#scenarios.toArray().map((s) => s.id)];
+    return [...this.#obligations.toArray().map((o) => o.id.asString()), ...this.#scenarios.toArray().map((s) => s.id.asString())];
   }
 
-  frRefsOf(id: string): string[] {
-    return this.#obligations.byId(id)?.frRefs ?? this.#scenarios.byId(id)?.frRefs ?? [];
+  frRefsOf(id: string): readonly string[] {
+    return this.#obligations.byId(id)?.frRefs.toArray() ?? this.#scenarios.byId(id)?.frRefs.toArray() ?? [];
   }
 }

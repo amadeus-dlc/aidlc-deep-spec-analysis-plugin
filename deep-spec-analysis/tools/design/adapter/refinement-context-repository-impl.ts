@@ -8,7 +8,8 @@
 import type { RefinementMaterialsId } from "../domain/index.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { ArtifactPath, ContentHash } from "../../kernel/domain/index.ts";
+import { ArtifactPath, ContentHash, FrRefs } from "../../kernel/domain/index.ts";
+import { AttributeBound, AttributePath, ObligationId, ObligationNature, ScenarioId } from "../../refinement/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import {
   type Json,
@@ -40,6 +41,8 @@ import {
   type UnmappedTarget,
   RefinementMap,
   RefinementRequirements,
+  UnmappedTargetRef,
+  TransitionRef,
 } from "../../refinement/domain/index.ts";
 import { DesignUnitId } from "../domain/index.ts";
 import type {
@@ -100,10 +103,10 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
         const t = attr.type;
         if (t.kind !== "bool" && t.kind !== "int" && t.kind !== "enum") continue;
         attributes.push({
-          path: `${ent.name}.${attr.name}`,
+          path: AttributePath.reconstitute(`${ent.name}.${attr.name}`),
           kind: t.kind,
-          min: typeof t.min === "number" ? t.min : undefined,
-          max: typeof t.max === "number" ? t.max : undefined,
+          min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
+          max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
           values: Array.isArray(t.values) ? ReqAttributeValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
         });
       }
@@ -112,9 +115,9 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
     for (const ob of Array.isArray(raw.obligations) ? raw.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
       obligations.push({
-        id: ob.id,
-        nature: ob.nature,
-        frRefs: strArr(ob.frRefs),
+        id: ObligationId.reconstitute(ob.id),
+        nature: ObligationNature.reconstitute(ob.nature),
+        frRefs: FrRefs.of(strArr(ob.frRefs)),
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
         trigger: typeof ob.trigger === "string" ? ob.trigger : undefined,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
@@ -130,9 +133,9 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
         if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
       }
       scenarios.push({
-        id: sc.id,
+        id: ScenarioId.reconstitute(sc.id),
         kind: sc.kind,
-        frRefs: strArr(sc.frRefs),
+        frRefs: FrRefs.of(strArr(sc.frRefs)),
         bindings,
         event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: sc.event.trigger } : undefined,
       });
@@ -181,11 +184,11 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
           for (const [k, v] of Object.entries(m.enumMap.cases)) {
             if (typeof v === "string") cases[k] = v;
           }
-          attrMap.push({ kind: "enum-cases", req: m.req, from: m.enumMap.from, cases });
+          attrMap.push({ kind: "enum-cases", req: AttributePath.reconstitute(m.req), from: m.enumMap.from, cases });
         } else if (isObject(m.expr)) {
-          attrMap.push({ kind: "expression", req: m.req, expr: m.expr as unknown as Expression });
+          attrMap.push({ kind: "expression", req: AttributePath.reconstitute(m.req), expr: m.expr as unknown as Expression });
         } else {
-          attrMap.push({ kind: "unspecified", req: m.req });
+          attrMap.push({ kind: "unspecified", req: AttributePath.reconstitute(m.req) });
         }
       }
       const eventMap: EventMapping[] = [];
@@ -193,14 +196,14 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
         if (!isObject(e) || typeof e.reqTrigger !== "string") continue;
         eventMap.push({
           reqTrigger: e.reqTrigger,
-          transitions: TransitionRefs.of(strArr(e.transitions)),
+          transitions: TransitionRefs.of(strArr(e.transitions).map((t) => TransitionRef.reconstitute(t))),
           waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
         });
       }
       const unmapped: UnmappedTarget[] = [];
       for (const un of Array.isArray(u.unmapped) ? u.unmapped : []) {
         if (isObject(un) && typeof un.target === "string") {
-          unmapped.push({ target: un.target, reason: typeof un.reason === "string" ? un.reason : "" });
+          unmapped.push({ target: UnmappedTargetRef.reconstitute(un.target), reason: typeof un.reason === "string" ? un.reason : "" });
         }
       }
       units.push({

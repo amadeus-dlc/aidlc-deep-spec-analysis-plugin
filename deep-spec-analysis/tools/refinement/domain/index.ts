@@ -25,8 +25,11 @@ export {
   EventMappings,
   RefinementMap,
   RefinementUnitMaps,
+  TransitionRef,
   TransitionRefs,
   UnmappedDeclarations,
+  UnmappedTargetRef,
+  type RefinementMapTokenError,
 } from "./refinement-map.ts";
 export { AlphaContext, AlphaError } from "./alpha-substitution.ts";
 export { type RefinementStatus, UnitRefinementPlan } from "./refinement-plan.ts";
@@ -47,3 +50,7 @@ export { RefinementMapId } from "./refinement-map-id.ts";
 // の面からこれを構築する（層規律：design/adapter→requirements/domain は禁止辺、
 // design/adapter→refinement/domain は許可辺）。
 export { FormalModelId } from "../../requirements/domain/index.ts";
+
+// refinement の要件語彙は requirements の DP を再利用する——設計側アダプタは
+// 裁可済みエッジ(design→refinement/domain)からこの facade 経由で受け取る。
+export { AttributeBound, AttributePath, ObligationId, ObligationNature, ScenarioId } from "../../requirements/domain/index.ts";

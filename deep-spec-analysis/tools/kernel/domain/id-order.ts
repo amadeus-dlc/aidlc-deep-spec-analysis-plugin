@@ -32,7 +32,7 @@ export class IdOrder {
     return 0;
   }
 
-  static sortedUnique(values: string[], cmp: (a: string, b: string) => number = IdOrder.compare): string[] {
+  static sortedUnique(values: readonly string[], cmp: (a: string, b: string) => number = IdOrder.compare): string[] {
     return [...new Set(values)].sort(cmp);
   }
 }

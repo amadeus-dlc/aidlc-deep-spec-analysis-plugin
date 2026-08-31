@@ -12,7 +12,7 @@ import type { DesignFinding, DesignSkipped, DesignUnit } from "../../design/doma
 import { AlphaContext } from "./alpha-substitution.ts";
 import { RefinementQuintInvariants } from "./quint-invariants.ts";
 import type { RefinementQuintInvariant } from "./quint-invariants.ts";
-import type { AttributeMapping, RefinementUnitMap } from "./refinement-map.ts";
+import type { AttributeMapping, RefinementUnitMap, TransitionRef } from "./refinement-map.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
 
 export type RefinementStatus =
@@ -32,14 +32,14 @@ export class UnitRefinementPlan {
   readonly #ctx: AlphaContext;
   readonly #obligationStatus: ReadonlyMap<string, RefinementStatus>;
   readonly #scenarioStatus: ReadonlyMap<string, RefinementStatus>;
-  readonly #eventTransitions: ReadonlyMap<string, readonly string[]>;
+  readonly #eventTransitions: ReadonlyMap<string, readonly TransitionRef[]>;
   readonly #gaps: DesignFindings;
 
   private constructor(props: {
     ctx: AlphaContext;
     obligationStatus: ReadonlyMap<string, RefinementStatus>;
     scenarioStatus: ReadonlyMap<string, RefinementStatus>;
-    eventTransitions: ReadonlyMap<string, readonly string[]>;
+    eventTransitions: ReadonlyMap<string, readonly TransitionRef[]>;
     gaps: DesignFindings;
   }) {
     this.#ctx = props.ctx;
@@ -52,7 +52,7 @@ export class UnitRefinementPlan {
   // 旧 planUnitRefinement の逐語移植（構築ファクトリ）。
   static of(u: DesignUnit, unitMap: RefinementUnitMap, req: RefinementRequirements, mapArtifact: string): UnitRefinementPlan {
     const gaps: DesignFinding[] = [];
-    const gap = (targets: string[], detail: string, frRefs: string[] = []): void => {
+    const gap = (targets: string[], detail: string, frRefs: readonly string[] = []): void => {
       gaps.push({
         kind: "mapping-gap",
         frRefs: FrRefs.of(IdOrder.sortedUnique(frRefs, IdOrder.compare)),
@@ -66,40 +66,40 @@ export class UnitRefinementPlan {
     const unmapped = unitMap.unmapped;
 
     for (const m of unitMap.attrMap) {
-      if (byReq.has(m.req)) gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap maps "${m.req}" more than once`);
-      byReq.set(m.req, m);
+      if (byReq.has(m.req.asString())) gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap maps "${m.req.asString()}" more than once`);
+      byReq.set(m.req.asString(), m);
       const reqAttr = req.attributes().byPath(m.req);
       if (!reqAttr) {
-        gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap entry "${m.req}" names no attribute of the requirements IR`);
+        gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap entry "${m.req.asString()}" names no attribute of the requirements IR`);
         continue;
       }
       if (m.kind === "enum-cases") {
         if (reqAttr.kind !== "enum") {
-          gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap entry "${m.req}" uses enumMap but the requirements attribute is ${reqAttr.kind}`);
+          gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap entry "${m.req.asString()}" uses enumMap but the requirements attribute is ${reqAttr.kind}`);
         }
         if (!u.attrPaths().has(m.from)) {
-          gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap.from "${m.from}" is not a design attribute of unit ${u.name()}`);
+          gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap.from "${m.from}" is not a design attribute of unit ${u.name()}`);
           continue;
         }
         const fromValues = u.declaredEnumValuesOf(m.from);
         if (fromValues === null) {
-          gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap.from "${m.from}" is not an enum design attribute`);
+          gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap.from "${m.from}" is not an enum design attribute`);
           continue;
         }
         const missing = fromValues.filter((v) => !(v in m.cases)).sort();
         if (missing.length > 0) {
-          gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap for "${m.req}" is not total over "${m.from}": missing case(s) ${missing.join(", ")}`);
+          gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap for "${m.req.asString()}" is not total over "${m.from}": missing case(s) ${missing.join(", ")}`);
         }
         const badResults = IdOrder.sortedUnique(Object.values(m.cases).filter((rv) => !(reqAttr.values?.includes(rv) ?? false)), IdOrder.compare);
         if (badResults.length > 0) {
-          gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap for "${m.req}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`);
+          gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap for "${m.req.asString()}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`);
         }
       } else if (m.kind === "expression") {
         const refs = new Set<string>();
         exprRefs(m.expr, refs);
         for (const r of [...refs].sort()) {
           if (!u.attrPaths().has(r)) {
-            gap([`attr:${m.req.replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap expression for "${m.req}" references "${r}", which is not a design attribute of unit ${u.name()}`);
+            gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap expression for "${m.req.asString()}" references "${r}", which is not a design attribute of unit ${u.name()}`);
           }
         }
       }
@@ -107,10 +107,10 @@ export class UnitRefinementPlan {
 
     // 属性の閉包：要件の全属性は写像されるか unmapped[] に居る。
     for (const a of req.attributes().sortedByPath()) {
-      if (!byReq.has(a.path) && !unmapped.covers(a.path)) {
+      if (!byReq.has(a.path.asString()) && !unmapped.covers(a.path)) {
         gap(
-          [`attr:${a.path.replace(/[^A-Za-z0-9_./-]/g, "-")}`],
-          `requirements attribute "${a.path}" is neither mapped by attrMap nor listed in unmapped[] — silence is a contract violation`,
+          [`attr:${a.path.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`],
+          `requirements attribute "${a.path.asString()}" is neither mapped by attrMap nor listed in unmapped[] — silence is a contract violation`,
         );
       }
     }
@@ -126,89 +126,89 @@ export class UnitRefinementPlan {
     };
 
     const obligationStatus = new Map<string, RefinementStatus>();
-    const eventTransitions = new Map<string, readonly string[]>();
+    const eventTransitions = new Map<string, readonly TransitionRef[]>();
     for (const ob of req.obligations()) {
       if (unmapped.covers(ob.id)) {
-        obligationStatus.set(ob.id, { kind: "waived", reason: unmapped.reasonOf(ob.id) ?? "listed in unmapped[]" });
+        obligationStatus.set(ob.id.asString(), { kind: "waived", reason: unmapped.reasonOf(ob.id) ?? "listed in unmapped[]" });
         continue;
       }
-      if (ob.nature === "state-temporal") {
-        obligationStatus.set(ob.id, { kind: "capability", detail: "temporal refinement is outside v1 scope" });
+      if (ob.nature.isStateTemporal()) {
+        obligationStatus.set(ob.id.asString(), { kind: "capability", detail: "temporal refinement is outside v1 scope" });
         continue;
       }
-      if (ob.nature === "invariant" || ob.nature === "numeric") {
+      if (ob.nature.isInvariant() || ob.nature.isNumeric()) {
         const cov = attrsCovered(ob.assert);
-        if (cov.ok) obligationStatus.set(ob.id, { kind: "checkable" });
+        if (cov.ok) obligationStatus.set(ob.id.asString(), { kind: "checkable" });
         else if (unmapped.coversAll(cov.missing)) {
-          obligationStatus.set(ob.id, { kind: "waived", reason: `depends on unmapped attribute(s) ${cov.missing.join(", ")}` });
+          obligationStatus.set(ob.id.asString(), { kind: "waived", reason: `depends on unmapped attribute(s) ${cov.missing.join(", ")}` });
         } else {
-          obligationStatus.set(ob.id, { kind: "gap", detail: `depends on attribute(s) ${cov.missing.join(", ")} that are neither mapped nor in unmapped[]` });
+          obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `depends on attribute(s) ${cov.missing.join(", ")} that are neither mapped nor in unmapped[]` });
         }
         continue;
       }
-      if (ob.nature === "event") {
+      if (ob.nature.isEvent()) {
         const entry = ob.trigger === undefined ? undefined : unitMap.eventMap.ofTrigger(ob.trigger);
         if (entry?.waived) {
-          obligationStatus.set(ob.id, { kind: "waived", reason: entry.waived.reason });
+          obligationStatus.set(ob.id.asString(), { kind: "waived", reason: entry.waived.reason });
           continue;
         }
         const covG = attrsCovered(ob.guard);
         const covE = attrsCovered(ob.effect);
         const missing = IdOrder.sortedUnique([...covG.missing, ...covE.missing], IdOrder.compare);
         if (!entry || entry.transitions.isEmpty()) {
-          obligationStatus.set(ob.id, { kind: "gap", detail: `requirements event trigger "${ob.trigger ?? "?"}" has no eventMap entry (map it to design transitions or waive it)` });
+          obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `requirements event trigger "${ob.trigger ?? "?"}" has no eventMap entry (map it to design transitions or waive it)` });
           continue;
         }
         const badIds = entry.transitions.unknownAmong(designIds);
         if (badIds.length > 0) {
-          obligationStatus.set(ob.id, { kind: "gap", detail: `eventMap for "${ob.trigger}" names unknown design id(s) ${badIds.join(", ")}` });
+          obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `eventMap for "${ob.trigger}" names unknown design id(s) ${badIds.join(", ")}` });
           continue;
         }
         if (missing.length > 0) {
           if (unmapped.coversAll(missing)) {
-            obligationStatus.set(ob.id, { kind: "waived", reason: `depends on unmapped attribute(s) ${missing.join(", ")}` });
+            obligationStatus.set(ob.id.asString(), { kind: "waived", reason: `depends on unmapped attribute(s) ${missing.join(", ")}` });
           } else {
-            obligationStatus.set(ob.id, { kind: "gap", detail: `depends on attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]` });
+            obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `depends on attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]` });
           }
           continue;
         }
-        obligationStatus.set(ob.id, { kind: "checkable" });
-        eventTransitions.set(ob.id, entry.transitions.sortedCanonically());
+        obligationStatus.set(ob.id.asString(), { kind: "checkable" });
+        eventTransitions.set(ob.id.asString(), entry.transitions.sortedCanonically());
         continue;
       }
-      obligationStatus.set(ob.id, { kind: "capability", detail: `nature "${ob.nature}" has no refinement check` });
+      obligationStatus.set(ob.id.asString(), { kind: "capability", detail: `nature "${ob.nature.asString()}" has no refinement check` });
     }
 
     const scenarioStatus = new Map<string, RefinementStatus>();
     for (const sc of req.scenarios()) {
       if (unmapped.covers(sc.id)) {
-        scenarioStatus.set(sc.id, { kind: "waived", reason: unmapped.reasonOf(sc.id) ?? "listed in unmapped[]" });
+        scenarioStatus.set(sc.id.asString(), { kind: "waived", reason: unmapped.reasonOf(sc.id) ?? "listed in unmapped[]" });
         continue;
       }
       if (sc.event) {
-        scenarioStatus.set(sc.id, { kind: "capability", detail: "event scenarios are not replayed in v1" });
+        scenarioStatus.set(sc.id.asString(), { kind: "capability", detail: "event scenarios are not replayed in v1" });
         continue;
       }
       const missing = Object.keys(sc.bindings)
         .filter((p) => !byReq.has(p))
         .sort();
-      if (missing.length === 0) scenarioStatus.set(sc.id, { kind: "checkable" });
+      if (missing.length === 0) scenarioStatus.set(sc.id.asString(), { kind: "checkable" });
       else if (unmapped.coversAll(missing)) {
-        scenarioStatus.set(sc.id, { kind: "waived", reason: `binds unmapped attribute(s) ${missing.join(", ")}` });
+        scenarioStatus.set(sc.id.asString(), { kind: "waived", reason: `binds unmapped attribute(s) ${missing.join(", ")}` });
       } else {
-        scenarioStatus.set(sc.id, { kind: "gap", detail: `binds attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]` });
+        scenarioStatus.set(sc.id.asString(), { kind: "gap", detail: `binds attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]` });
       }
     }
 
     // 義務/シナリオの gap 分類は mapping-gap finding へ昇格する。
     for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => IdOrder.compare(a[0], b[0]))) {
       if (st.kind === "gap") {
-        gap([id], `${id}: ${st.detail}`, req.obligationById(id)?.frRefs ?? []);
+        gap([id], `${id}: ${st.detail}`, req.obligationById(id)?.frRefs.toArray() ?? []);
       }
     }
     for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => IdOrder.compare(a[0], b[0]))) {
       if (st.kind === "gap") {
-        gap([id], `${id}: ${st.detail}`, req.scenarioById(id)?.frRefs ?? []);
+        gap([id], `${id}: ${st.detail}`, req.scenarioById(id)?.frRefs.toArray() ?? []);
       }
     }
 
@@ -246,7 +246,7 @@ export class UnitRefinementPlan {
     return this.#scenarioStatus.get(id);
   }
 
-  mappedTransitionsOf(reqId: string): readonly string[] {
+  mappedTransitionsOf(reqId: string): readonly TransitionRef[] {
     return this.#eventTransitions.get(reqId) ?? [];
   }
 
@@ -277,7 +277,7 @@ export class UnitRefinementPlan {
       else if (st.kind === "capability") skipped.push({ target: rid, reason: "capability", unit: unitName, detail: st.detail });
       else if (st.kind === "checkable") {
         const ob = req.obligationById(rid);
-        if (ob?.nature === "event") {
+        if (ob !== undefined && ob.nature.isEvent()) {
           skipped.push({ target: rid, reason: "capability", unit: unitName, detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" });
         }
       }
@@ -297,8 +297,8 @@ export class UnitRefinementPlan {
   quintInvariants(req: RefinementRequirements): RefinementQuintInvariants {
     const out: RefinementQuintInvariant[] = [];
     for (const ob of req.obligations().sortedCanonically()) {
-      if (this.#obligationStatus.get(ob.id)?.kind !== "checkable") continue;
-      if ((ob.nature !== "invariant" && ob.nature !== "numeric") || !ob.assert) continue;
+      if (this.#obligationStatus.get(ob.id.asString())?.kind !== "checkable") continue;
+      if ((!ob.nature.isInvariant() && !ob.nature.isNumeric()) || !ob.assert) continue;
       try {
         out.push({ reqId: ob.id, frRefs: ob.frRefs, expr: this.#ctx.substitute(ob.assert, false) });
       } catch {
