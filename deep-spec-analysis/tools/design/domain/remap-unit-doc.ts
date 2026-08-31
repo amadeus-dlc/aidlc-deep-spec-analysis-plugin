@@ -9,6 +9,7 @@
 // になった（OOUI 裁定）——ここは判定面の型とコレクションだけを持つ。
 
 import type { DesignFindings, DesignSkips } from "./design-finding.ts";
+import type { LoweredId } from "./lower-unit.ts";
 import type { DesignValue } from "./design-value.ts";
 
 // アダプタのパーサが素の v1 文書から選別した型付き判定面。
@@ -21,7 +22,7 @@ export interface SiblingVerdictFinding {
 }
 
 export interface SiblingVerdictSkip {
-  target: string;
+  target: LoweredId;
   reason: string;
   detail?: string;
 }

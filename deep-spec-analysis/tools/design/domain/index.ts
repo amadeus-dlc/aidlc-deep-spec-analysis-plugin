@@ -47,6 +47,9 @@ export {
   LoweredScenarios,
   LoweredUnit,
   LoweringIndex,
+  LoweredId,
+  LoweredOriginRef,
+  type LoweredTokenError,
 } from "./lower-unit.ts";
 export {
   type RemappedUnit,

@@ -25,6 +25,7 @@ import {
   SUPPORTED_DESIGN_IR_MAJOR,
   LoweredUnit,
   RefinementMaterialsId,
+  LoweredId,
 } from "../domain/index.ts";
 
 import {
@@ -242,9 +243,9 @@ export class VerifyDesignQuintUseCase {
           let n = refinementObligations.count();
           for (const e of extras) {
             n += 1;
-            const lowId = `OB-${n}`;
+            const lowId = LoweredId.reconstitute(`OB-${n}`);
             refinementObligations = refinementObligations.add({ id: lowId, nature: "invariant", frRefs: [...e.frRefs], assert: e.expr });
-            refinementIndex = refinementIndex.withPassthrough(lowId, e.reqId.asString());
+            refinementIndex = refinementIndex.withPassthrough(lowId.asString(), e.reqId.asString());
           }
           const lowered = base.extendedWith(refinementObligations, refinementIndex);
           const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);

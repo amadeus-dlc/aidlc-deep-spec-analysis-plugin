@@ -349,7 +349,7 @@ export class DesignReports {
     const docs = this.toArray()
       .filter((s) => s.irHash().equals(irHash) && !s.isUnavailable())
       .map((s) => ({
-        backend: s.id().backendName(),
+        backend: s.id().backendName().asString(),
         findings: s.findings().toArray(),
         skipped: new Set(
           s

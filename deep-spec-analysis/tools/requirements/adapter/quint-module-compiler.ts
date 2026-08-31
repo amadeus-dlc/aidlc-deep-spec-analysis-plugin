@@ -14,6 +14,8 @@ import {
   type VerificationSkipped,
   QuintMachineComponents,
   QuintMachineFacts,
+  ObligationIds,
+  type ObligationId,
 } from "../domain/index.ts";
 
 class CompileError extends Error {
@@ -248,7 +250,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   lines.push("");
 
   // イベント → 明示フレームつき action（言及されない変数は不変）。
-  const eventIds: string[] = [];
+  const eventIds: ObligationId[] = [];
   const actionNames: string[] = [];
   for (const ob of model.obligations()) {
     if (!ob.nature.isEvent()) continue;
@@ -269,7 +271,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       }
       lines.push(`  action ${action} = all { ${parts.join(", ")} }`);
       actionNames.push(action);
-      eventIds.push(ob.id.asString());
+      eventIds.push(ob.id);
     } catch (err) {
       compileSkips.push({ target: ob.id.asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
     }
@@ -322,7 +324,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
     moduleText: `${lines.join("\n")}\n`,
     facts: QuintMachineFacts.of({
       invariantComponents: QuintMachineComponents.of(invariantComponents),
-      eventIds,
+      eventIds: ObligationIds.of(eventIds),
       scenariosWithInit: new Set(scenarioInitActions.keys()),
     }),
     compileSkips,
