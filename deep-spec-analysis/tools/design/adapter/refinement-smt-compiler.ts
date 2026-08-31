@@ -45,6 +45,11 @@ function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+// v1 smt-plan-builder と同じ SMT シンボル正規化（境界描画・逐語）。
+function smtName(prefix: string, id: string): string {
+  return `${prefix}_${id.replace(/[^A-Za-z0-9_]/g, "_")}`;
+}
+
 export function refinementSmtContext(u: DesignUnit): RefinementSmtContext {
   const attrs: RefinementAttr[] = [];
   const rawEntities = u.rawEntities();
@@ -177,15 +182,15 @@ export function designBase(
   if (!primed) {
     for (const bg of u.background()) {
       try {
-        constraints.push({ name: `bg_${bg.id.asString().replace(/[^A-Za-z0-9_]/g, "_")}`, smt: smtOfExpr(ctx, bg.assert) });
+        constraints.push({ name: smtName("bg", bg.id.asString()), smt: smtOfExpr(ctx, bg.assert) });
       } catch {
         // コンパイルできない背景は落とす——設計パスが報告する。
       }
     }
     for (const ob of u.obligations()) {
-      if ((ob.nature.asString() === "invariant" || ob.nature.asString() === "numeric") && ob.assert) {
+      if ((ob.nature.isInvariant() || ob.nature.isNumeric()) && ob.assert) {
         try {
-          constraints.push({ name: `inv_${ob.id.asString().replace(/[^A-Za-z0-9_]/g, "_")}`, smt: smtOfExpr(ctx, ob.assert) });
+          constraints.push({ name: smtName("inv", ob.id.asString()), smt: smtOfExpr(ctx, ob.assert) });
         } catch {
           // 同上。
         }

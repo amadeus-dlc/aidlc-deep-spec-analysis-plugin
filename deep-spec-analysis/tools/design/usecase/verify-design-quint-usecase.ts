@@ -11,6 +11,7 @@ import type { Result } from "../../kernel/infrastructure/index.ts";
 import { ok } from "../../kernel/infrastructure/index.ts";
 import type { Clock, RepositoryError } from "../../kernel/usecase/index.ts";
 import {
+  DesignMachines,
   DesignFindings,
   DesignSkips,
   DesignInputAnchors,
@@ -144,7 +145,7 @@ export class VerifyDesignQuintUseCase {
 
       // 到達不能状態の検出（FR8.4）：bounded モードのみ・予算キャップつき。
       for (const sm of u.machines().sortedById()) {
-        const attrPath = lowered.index().attrPathOfMachine(sm.id.asString()) ?? `${sm.entity.asString()}.${sm.attribute.asString()}`;
+        const attrPath = lowered.index().attrPathOfMachine(sm.id.asString()) ?? DesignMachines.attrPathOf(sm);
         const candidates = u
           .enumValuesOf(attrPath)
           .filter((s) => !sm.initial.includes(s))

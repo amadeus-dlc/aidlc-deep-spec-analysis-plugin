@@ -146,7 +146,7 @@ export class QuintMachineFacts {
 
     // 2) leads-to 時相義務（bounded のみ。既に skip 済みの義務は対象外）。
     for (const ob of model.obligations()) {
-      if (ob.nature.asString() !== "state-temporal" || ob.temporal?.pattern !== "leads-to") continue;
+      if (!ob.nature.isStateTemporal() || ob.temporal?.pattern !== "leads-to") continue;
       if (skipped.some((s) => s.target === ob.id.asString())) continue;
       if (!bounded) {
         skipped.push({

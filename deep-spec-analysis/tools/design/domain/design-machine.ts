@@ -3,6 +3,7 @@
 // 生涯属性の座標（entity / attribute）はドメインプリミティブで運ぶ。
 
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 
 export type DesignMachineTokenError = { readonly kind: "empty-machine-token"; readonly raw: string };
 
@@ -163,6 +164,16 @@ export class DesignMachines {
   // 重複 id は well-formedness が surface する）。
   sortedById(): DesignMachines {
     return new DesignMachines([...this.#values].sort((a, b) => (a.id.asString() < b.id.asString() ? -1 : 1)));
+  }
+
+  // lowering の凍結順：IdOrder 正準順（sortedById＝probe 凍結順とは別面）。
+  sortedCanonically(): DesignMachines {
+    return new DesignMachines([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
+  }
+
+  // 機械の生涯属性の座標（entity.attribute——lowering・触媒・文言の共有導出）。
+  static attrPathOf(sm: DesignMachine): string {
+    return `${sm.entity.asString()}.${sm.attribute.asString()}`;
   }
 
   toArray(): readonly DesignMachine[] {

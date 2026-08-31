@@ -31,6 +31,7 @@ export class DesignScenarioId {
 }
 
 import type { Expression, FrRefs } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 import type { BrRefs } from "./design-ir-decl.ts";
 
 export interface DesignScenario {
@@ -57,6 +58,11 @@ export class DesignScenarios {
 
   add(value: DesignScenario): DesignScenarios {
     return new DesignScenarios([...this.#values, value]);
+  }
+
+  // lowering の凍結順：IdOrder 正準順（DesignTransitions.sortedCanonically と同じ面）。
+  sortedCanonically(): DesignScenarios {
+    return new DesignScenarios([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
   }
 
   *[Symbol.iterator](): Iterator<DesignScenario> {

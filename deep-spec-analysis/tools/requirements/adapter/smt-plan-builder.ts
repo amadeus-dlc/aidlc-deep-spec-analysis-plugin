@@ -12,6 +12,7 @@ import {
   type Obligation,
   type RequirementsModel,
   type VerificationSkipped,
+  type AttributeBound,
 } from "../domain/index.ts";
 
 // 子プロセスへ渡す 1 クエリ分の台本。プロトコル（JSON 形）は design の refinement ソルバも
@@ -45,6 +46,12 @@ export function smtVar(path: string, primed: boolean): string {
 
 function smtName(prefix: string, id: string): string {
   return `${prefix}_${id.replace(/[^A-Za-z0-9_]/g, "_")}`;
+}
+
+// SMT-LIB の整数リテラル描画（負数は (- n) 形——境界描画・逐語）。
+function smtNumeral(bound: AttributeBound): string {
+  const n = bound.asNumber();
+  return n < 0 ? `(- ${-n})` : String(n);
 }
 
 function enumCode(model: RequirementsModel, attrPath: string, value: string): number {
@@ -128,10 +135,7 @@ export function decodeSolverModel(
   values: { [name: string]: string },
 ): { [path: string]: boolean | number | string } {
   const out: { [path: string]: boolean | number | string } = {};
-  // 旧センサー逐語の比較器（byte-frozen）。重複 path は ir-valid の
-  // duplicate-attribute 検査が表面化し、等値時に 1 を返す挙動も凍結面
-  // （return 0 への正規化は重複時の安定順を変え得るため PR10 の凍結台帳で扱う）。
-  for (const attr of [...model.attributes()].sort((a, b) => (a.path.asString() < b.path.asString() ? -1 : 1))) {
+  for (const attr of model.attributes().sortedByPath()) {
     const raw = values[smtVar(attr.path.asString(), false)];
     if (raw === undefined) continue;
     if (attr.kind === "bool") {
@@ -169,8 +173,8 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       }
       if (attr.kind === "int" && (attr.min !== undefined || attr.max !== undefined)) {
         const parts: string[] = [];
-        if (attr.min !== undefined) parts.push(`(>= ${v} ${attr.min.asNumber() < 0 ? `(- ${-attr.min.asNumber()})` : attr.min.asNumber()})`);
-        if (attr.max !== undefined) parts.push(`(<= ${v} ${attr.max.asNumber() < 0 ? `(- ${-attr.max.asNumber()})` : attr.max.asNumber()})`);
+        if (attr.min !== undefined) parts.push(`(>= ${v} ${smtNumeral(attr.min)})`);
+        if (attr.max !== undefined) parts.push(`(<= ${v} ${smtNumeral(attr.max)})`);
         return parts.length === 1 ? (parts[0] ?? null) : `(and ${parts.join(" ")})`;
       }
       return null;
@@ -197,7 +201,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const invariantObs: Obligation[] = [];
   const events: Obligation[] = [];
   for (const ob of model.obligations()) {
-    if (ob.nature.asString() === "invariant" || ob.nature.asString() === "numeric") {
+    if (ob.nature.isInvariant() || ob.nature.isNumeric()) {
       if (!ob.assert) {
         skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: "invariant obligation lacks an assert expression" });
         compiled.set(ob.id.asString(), false);
@@ -212,7 +216,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
         compiled.set(ob.id.asString(), false);
       }
-    } else if (ob.nature.asString() === "event") {
+    } else if (ob.nature.isEvent()) {
       if (!ob.guard || !ob.effect || !ob.trigger) {
         skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
         compiled.set(ob.id.asString(), false);

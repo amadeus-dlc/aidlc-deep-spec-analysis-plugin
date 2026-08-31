@@ -100,7 +100,7 @@ export class SmtPlanFacts {
     const invariantIds = model
       .obligations()
       .toArray()
-      .filter((o) => (o.nature.asString() === "invariant" || o.nature.asString() === "numeric") && this.#compiled.get(o.id.asString()))
+      .filter((o) => (o.nature.isInvariant() || o.nature.isNumeric()) && this.#compiled.get(o.id.asString()))
       .map((o) => o.id.asString());
 
     const coreToTargets = (core: string[]): string[] => {

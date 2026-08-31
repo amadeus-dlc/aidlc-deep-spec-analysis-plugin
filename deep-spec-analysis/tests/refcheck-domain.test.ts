@@ -421,3 +421,41 @@ describe("refcheck payload collections (first-class operations)", () => {
     expect(ias.sortedByArtifact().toArray().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
   });
 });
+
+describe("value primitives own their matching logic (tell-don't-ask consolidation)", () => {
+  test("ReferenceTarget owns the Entity(.attr) token shape and the loose lowercase mention", () => {
+    expect(ReferenceTarget.reconstitute("Ticket").entityToken()).toBe("Ticket");
+    expect(ReferenceTarget.reconstitute("Ticket.status").entityToken()).toBe("Ticket");
+    expect(ReferenceTarget.reconstitute("the Ticket entity").entityToken()).toBe(null);
+    expect(ReferenceTarget.reconstitute("see the TICKET flow").looselyMentions(EntityName.reconstitute("Ticket"))).toBe(true);
+    expect(ReferenceTarget.reconstitute("unrelated prose").looselyMentions(EntityName.reconstitute("Ticket"))).toBe(false);
+  });
+
+  test("AppliesTo owns entity/attribute tokens; the attribute token is null without the dotted form", () => {
+    expect(AppliesTo.reconstitute("Ticket.status").entityToken()).toBe("Ticket");
+    expect(AppliesTo.reconstitute("Ticket.status").attributeToken()).toBe("status");
+    expect(AppliesTo.reconstitute("Ticket").attributeToken()).toBe(null);
+    expect(AppliesTo.reconstitute("free text target").entityToken()).toBe(null);
+    expect(AppliesTo.reconstitute("about the ticket").looselyMentions(EntityName.reconstitute("Ticket"))).toBe(true);
+  });
+
+  test("NumericBound owns the range-inversion comparison", () => {
+    expect(NumericBound.reconstitute(5).exceeds(NumericBound.reconstitute(3))).toBe(true);
+    expect(NumericBound.reconstitute(3).exceeds(NumericBound.reconstitute(3))).toBe(false);
+  });
+
+  test("AttributeDefault folds the numeric guard into the bound checks (non-numbers are in range)", () => {
+    expect(AttributeDefault.reconstitute(1).belowBound(NumericBound.reconstitute(2))).toBe(true);
+    expect(AttributeDefault.reconstitute(3).aboveBound(NumericBound.reconstitute(2))).toBe(true);
+    expect(AttributeDefault.reconstitute("open").belowBound(NumericBound.reconstitute(2))).toBe(false);
+    expect(AttributeDefault.reconstitute("open").aboveBound(NumericBound.reconstitute(2))).toBe(false);
+  });
+
+  test("AttributeName owns the lifecycle-name vocabulary and the empty-identifier check", () => {
+    expect(AttributeName.reconstitute("status").isLifecycleName()).toBe(true);
+    expect(AttributeName.reconstitute("state").isLifecycleName()).toBe(true);
+    expect(AttributeName.reconstitute("priority").isLifecycleName()).toBe(false);
+    expect(AttributeName.reconstitute("").isEmpty()).toBe(true);
+    expect(AttributeName.reconstitute("id").isEmpty()).toBe(false);
+  });
+});

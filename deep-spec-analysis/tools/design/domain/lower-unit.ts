@@ -13,6 +13,7 @@
 
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
+import { DesignMachines } from "./design-machine.ts";
 import type { DesignMachine } from "./design-machine.ts";
 import type { DesignObligation } from "./design-obligation.ts";
 import type { DesignUnit } from "./design-unit.ts";
@@ -462,7 +463,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
 
   // 1) 設計義務は素通し（frRefs は帰属のため保持。空の frRefs は lowered
   //    文書で適法——v1 バックエンドは frRefs を不透明な帰属文字列として扱う）。
-  for (const ob of [...u.obligations()].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString()))) {
+  for (const ob of u.obligations().sortedCanonically()) {
     const lowered: Omit<LoweredObligation, "id"> = {
       nature: ob.nature.asString(),
       frRefs: [...ob.frRefs],
@@ -473,15 +474,15 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     if (ob.effect) lowered.effect = ob.effect;
     if (ob.temporal) lowered.temporal = ob.temporal;
     const lowId = push(lowered, { design: ob.id.asString(), kind: "passthrough" });
-    if (ob.nature.asString() === "event" && ob.guard && ob.effect && ob.trigger) {
+    if (ob.nature.isEvent() && ob.guard && ob.effect && ob.trigger) {
       candidates.push({ lowId, design: ob.id.asString(), trigger: ob.trigger, guard: ob.guard, effect: ob.effect });
     }
   }
 
   // 2) 状態機械のコンパイルダウン：遷移 → 暗黙ガード・効果つき event 義務、
   //    ignores → 明示 no-op event。
-  for (const sm of [...u.machines()].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString()))) {
-    const attrPath = `${sm.entity.asString()}.${sm.attribute.asString()}`;
+  for (const sm of u.machines().sortedCanonically()) {
+    const attrPath = DesignMachines.attrPathOf(sm);
     attrPathOfMachine.set(sm.id.asString(), attrPath);
     for (const tr of sm.transitions.sortedCanonically()) {
       const guard: Expression = tr.guard ? { op: "and", args: [eqRef(attrPath, false, tr.from), tr.guard] } : eqRef(attrPath, false, tr.from);
@@ -545,7 +546,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   // 4) シナリオと背景。
   const scenarios: LoweredScenario[] = [];
   let scN = 0;
-  for (const sc of [...u.scenarios()].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString()))) {
+  for (const sc of u.scenarios().sortedCanonically()) {
     scN += 1;
     const lowId = `SC-${scN}`;
     scenarioMap.set(lowId, sc.id.asString());
@@ -561,7 +562,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   }
   const background: LoweredBackground[] = [];
   let bgN = 0;
-  for (const bg of [...u.background()].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString()))) {
+  for (const bg of u.background().sortedCanonically()) {
     bgN += 1;
     background.push({ id: `BG-${bgN}`, assert: bg.assert });
   }

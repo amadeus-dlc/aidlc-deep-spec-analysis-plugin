@@ -56,6 +56,14 @@ export class DesignObligationNature {
   isInvariant(): boolean {
     return this.#value === "invariant";
   }
+
+  isNumeric(): boolean {
+    return this.#value === "numeric";
+  }
+
+  isStateTemporal(): boolean {
+    return this.#value === "state-temporal";
+  }
 }
 
 // 義務の起源（"" は未宣言・"rules" は BR 由来——decl 側の要求検査が使う語彙と
@@ -85,6 +93,7 @@ export class DesignObligationOrigin {
 }
 
 import type { Expression, FrRefs } from "../../kernel/domain/index.ts";
+import { IdOrder } from "../../kernel/domain/index.ts";
 import type { BrRefs } from "./design-ir-decl.ts";
 
 export interface DesignObligation {
@@ -114,6 +123,11 @@ export class DesignObligations {
 
   add(value: DesignObligation): DesignObligations {
     return new DesignObligations([...this.#values, value]);
+  }
+
+  // lowering の凍結順：IdOrder 正準順（DesignTransitions.sortedCanonically と同じ面）。
+  sortedCanonically(): DesignObligations {
+    return new DesignObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
   }
 
   *[Symbol.iterator](): Iterator<DesignObligation> {
