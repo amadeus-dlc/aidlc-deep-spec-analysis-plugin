@@ -1030,3 +1030,31 @@ describe("materials aggregates and the persistence round-trip (repository ruling
     expect(claims.toArray()[0]?.owner).toBe("OB-1");
   });
 });
+
+describe("repository read failures keep the Result contract (PR#58 review)", () => {
+  test("a directory squatting on the artifact path classifies as io-failed, not a crash", () => {
+    const record = join(tmpdir(), `deep-spec-iofail-${Math.random().toString(36).slice(2)}`);
+    const stage = join(record, "construction", "deep-spec-analysis-verify");
+    // 成果物名のディレクトリ: existsSync は真だが readFileSync は EISDIR。
+    mkdirSync(join(stage, "deep-spec-analysis-formal-model.md"), { recursive: true });
+    const found = new IrValidationMaterialsRepositoryImpl({ schemaPath: irSchemaPath }).findById(
+      IrValidationMaterialsId.ofModel(FormalModelId.of(ap(join(stage, "deep-spec-analysis-formal-model.md")))),
+    );
+    expect(!found.ok && found.error.kind).toBe("io-failed");
+
+    mkdirSync(join(stage, "deep-spec-analysis-functional-formal-model.md"), { recursive: true });
+    const dFound = new DesignIrValidationMaterialsRepositoryImpl({ schemaPath: designSchemaPath }).findById(
+      DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap(join(stage, "deep-spec-analysis-functional-formal-model.md")))),
+    );
+    expect(!dFound.ok && dFound.error.kind).toBe("io-failed");
+    rmSync(record, { recursive: true, force: true });
+  });
+
+  test("a directory squatting on requirements.md classifies as io-failed", () => {
+    const record = join(tmpdir(), `deep-spec-src-iofail-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(join(record, "inception", "requirements-analysis", "requirements.md"), { recursive: true });
+    const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(record)));
+    expect(!source.ok && source.error.kind).toBe("io-failed");
+    rmSync(record, { recursive: true, force: true });
+  });
+});

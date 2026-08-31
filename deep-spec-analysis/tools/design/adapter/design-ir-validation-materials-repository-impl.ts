@@ -213,7 +213,14 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
     const corrupt = (cause: string): Result<DesignIrValidationMaterials, RepositoryError> =>
       repoErr({ kind: "corrupt", path: outputPath, cause });
 
-    const md = readFileSync(outputPath, "utf-8");
+    // existsSync 後の競合（削除・権限変更・ディレクトリ）でも Result 契約を
+    // 守る——読取失敗は io-failed（use case は corrupt と同じ verdict 写像）。
+    let md: string;
+    try {
+      md = readFileSync(outputPath, "utf-8");
+    } catch (e) {
+      return repoErr({ kind: "io-failed", operation: "read", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
+    }
     const fences = extractFences(md, "json");
     if (fences.length !== 1) {
       return corrupt("formal model must contain exactly one ```json fence");
