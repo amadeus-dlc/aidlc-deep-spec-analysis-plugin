@@ -348,7 +348,7 @@ describe("RequirementsSourceId", () => {
     writeFileSync(join(record, "construction", "requirements-analysis", "requirements.md"), "- FR-1: x\n");
     const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(record)));
     expect(source.ok).toBe(true);
-    expect([...(source.ok ? source.value.knownIds : [])]).toEqual(["FR-1"]);
+    expect([...(source.ok ? source.value.knownIds() : [])]).toEqual(["FR-1"]);
     const missing = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(join(record, "nowhere"))));
     expect(!missing.ok && missing.error.kind).toBe("not-found");
   });
@@ -999,7 +999,7 @@ describe("materials aggregates and the persistence round-trip (repository ruling
     const found = repo.findById(IrValidationMaterialsId.ofModel(FormalModelId.of(ap(modelPath))));
     expect(found.ok).toBe(true);
     if (!found.ok) return;
-    expect(found.value.sourceDocument()).toBe(irDoc);
+    expect(Buffer.from(found.value.sourceDocument()).toString("utf-8")).toBe(irDoc);
     rmSync(modelPath);
     const stored = repo.store(found.value);
     expect(stored.ok).toBe(true);
@@ -1018,7 +1018,7 @@ describe("materials aggregates and the persistence round-trip (repository ruling
     expect(dFound.ok).toBe(true);
     if (!dFound.ok) return;
     expect(dFound.value.id().equals(dId)).toBe(true);
-    expect(dFound.value.sourceDocument()).toBe(dDoc);
+    expect(Buffer.from(dFound.value.sourceDocument()).toString("utf-8")).toBe(dDoc);
     rmSync(dPath);
     expect(dRepo.store(dFound.value).ok).toBe(true);
     expect(readFileSync(dPath, "utf-8")).toBe(dDoc);
@@ -1071,7 +1071,7 @@ describe("store faces on the workflow-authored aggregates (owner ruling: writabl
     const found = repo.findById(FormalModelId.of(ap(mPath)));
     expect(found.ok).toBe(true);
     if (!found.ok) return;
-    expect(found.value.sourceDocument()).toBe(doc);
+    expect(Buffer.from(found.value.sourceDocument()).toString("utf-8")).toBe(doc);
     rmSync(mPath);
     expect(repo.store(found.value).ok).toBe(true);
     expect(readFileSync(mPath, "utf-8")).toBe(doc);
@@ -1102,8 +1102,47 @@ describe("store faces on the workflow-authored aggregates (owner ruling: writabl
     const found = repo.findById(RequirementsSourceId.of(ap(record)));
     expect(found.ok).toBe(true);
     if (!found.ok) return;
-    expect(found.value.sourcePath.asString()).toBe(srcPath);
+    expect(found.value.sourcePath().asString()).toBe(srcPath);
     rmSync(srcPath);
+    expect(repo.store(found.value).ok).toBe(true);
+    expect(readFileSync(srcPath, "utf-8")).toBe("- FR-1: x\n");
+    rmSync(record, { recursive: true, force: true });
+  });
+});
+
+describe("byte-fidelity and mutation safety of the store faces (PR#58 review)", () => {
+  test("non-UTF-8 bytes outside the fence survive the round-trip byte-for-byte", () => {
+    const record = join(tmpdir(), `deep-spec-rawbytes-${Math.random().toString(36).slice(2)}`);
+    const stage = join(record, "construction", "deep-spec-analysis-verify");
+    mkdirSync(stage, { recursive: true });
+    const head = Buffer.from("# m \xff\xfe raw\n\n```json\n", "latin1");
+    const fence = Buffer.from('{"irVersion":"1.0.0","entities":[],"obligations":[],"scenarios":[]}\n```\n', "utf-8");
+    const raw = Buffer.concat([head, fence]);
+    const modelPath = join(stage, "deep-spec-analysis-formal-model.md");
+    writeFileSync(modelPath, raw);
+    const repo = new IrValidationMaterialsRepositoryImpl({ schemaPath: irSchemaPath });
+    const found = repo.findById(IrValidationMaterialsId.ofModel(FormalModelId.of(ap(modelPath))));
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    rmSync(modelPath);
+    expect(repo.store(found.value).ok).toBe(true);
+    expect(Buffer.from(readFileSync(modelPath)).equals(raw)).toBe(true);
+    rmSync(record, { recursive: true, force: true });
+  });
+
+  test("mutating the returned byte view cannot corrupt what store writes", () => {
+    const record = join(tmpdir(), `deep-spec-mut-${Math.random().toString(36).slice(2)}`);
+    const srcPath = join(record, "inception", "requirements-analysis", "requirements.md");
+    mkdirSync(dirname(srcPath), { recursive: true });
+    writeFileSync(srcPath, "- FR-1: x\n");
+    const repo = new RequirementsSourceRepositoryImpl();
+    const found = repo.findById(RequirementsSourceId.of(ap(record)));
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.value.id().equals(RequirementsSourceId.of(ap(record)))).toBe(true);
+    expect(found.value.digest().length).toBe(64);
+    const view = found.value.sourceDocument();
+    view.fill(0);
     expect(repo.store(found.value).ok).toBe(true);
     expect(readFileSync(srcPath, "utf-8")).toBe("- FR-1: x\n");
     rmSync(record, { recursive: true, force: true });

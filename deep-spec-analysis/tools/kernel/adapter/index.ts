@@ -13,3 +13,4 @@ export { type Fence, extractFences } from "./markdown-fences.ts";
 export { type MdTable, parseMarkdownTables } from "./markdown-tables.ts";
 export { listSubdirectories } from "./list-subdirectories.ts";
 export { SystemClock } from "./system-clock.ts";
+export { writeFileAtomically } from "./atomic-write.ts";

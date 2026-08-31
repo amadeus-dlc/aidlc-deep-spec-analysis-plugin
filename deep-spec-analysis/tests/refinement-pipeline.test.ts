@@ -832,7 +832,7 @@ describe("RefinementMapRepository (owner ruling: writable where writing is defin
       const found = repo.findById(RefinementMapId.of(ap(path)));
       expect(found.ok).toBe(true);
       if (!found.ok) return;
-      expect(found.value.sourceDocument()).toBe(mapDoc);
+      expect(Buffer.from(found.value.sourceDocument()).toString("utf-8")).toBe(mapDoc);
       expect(found.value.units().toArray().length).toBeGreaterThan(0);
       rmSync(path);
       expect(repo.store(found.value).ok).toBe(true);

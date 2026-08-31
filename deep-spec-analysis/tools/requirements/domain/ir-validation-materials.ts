@@ -40,7 +40,7 @@ export interface IrValidationMaterialsSeed {
   // IR の sourceDigest。文字列でなければ null（宣言なし）。
   readonly declaredDigest: string | null;
   readonly sourceId: RequirementsSourceId;
-  readonly sourceDocument: string;
+  readonly sourceDocument: Uint8Array;
 }
 
 export class IrValidationMaterials {
@@ -51,7 +51,7 @@ export class IrValidationMaterials {
   readonly #frClaims: FrRefClaims;
   readonly #declaredDigest: string | null;
   readonly #sourceId: RequirementsSourceId;
-  readonly #sourceDocument: string;
+  readonly #sourceDocument: Uint8Array;
 
   private constructor(seed: IrValidationMaterialsSeed) {
     this.#id = seed.id;
@@ -61,7 +61,7 @@ export class IrValidationMaterials {
     this.#frClaims = seed.frClaims;
     this.#declaredDigest = seed.declaredDigest;
     this.#sourceId = seed.sourceId;
-    this.#sourceDocument = seed.sourceDocument;
+    this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
 
   // アダプタの寛容パースからの唯一の構築口。
@@ -98,8 +98,9 @@ export class IrValidationMaterials {
     return this.#sourceId;
   }
 
-  // 境界: store が書く原文（バイト逐語）。
-  sourceDocument(): string {
-    return this.#sourceDocument;
+  // 境界: store が書く原文（バイト逐語——UTF-8 復号で非可逆にならないよう生
+  // バイト列で保持し、外部からの変更を防ぐため構築・照会の両方で防御コピー）。
+  sourceDocument(): Uint8Array {
+    return new Uint8Array(this.#sourceDocument);
   }
 }

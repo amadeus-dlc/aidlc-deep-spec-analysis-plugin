@@ -7,7 +7,7 @@
 // ディレクトリ検査を出さない（directoryExists: true）——旧実装の
 // `recordRoot !== null &&` ガードの保存。
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import {
   type Json,
@@ -15,6 +15,7 @@ import {
   findRecordRoot,
   isObject,
   readContractSchema,
+  writeFileAtomically,
   readIfExists,
   validateSchema,
 } from "../../kernel/adapter/index.ts";
@@ -215,12 +216,13 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
 
     // existsSync 後の競合（削除・権限変更・ディレクトリ）でも Result 契約を
     // 守る——読取失敗は io-failed（use case は corrupt と同じ verdict 写像）。
-    let md: string;
+    let bytes: Buffer;
     try {
-      md = readFileSync(outputPath, "utf-8");
+      bytes = readFileSync(outputPath);
     } catch (e) {
       return repoErr({ kind: "io-failed", operation: "read", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
     }
+    const md = bytes.toString("utf-8");
     const fences = extractFences(md, "json");
     if (fences.length !== 1) {
       return corrupt("formal model must contain exactly one ```json fence");
@@ -273,7 +275,7 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
         irVersion: IrVersion.reconstitute(irVersion),
         schemaErrors: ErrorMessages.of(schemaErrors),
         units: DesignUnitDecls.of(units),
-        sourceDocument: md,
+        sourceDocument: new Uint8Array(bytes),
       }),
     );
   }
@@ -282,8 +284,7 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
   store(materials: DesignIrValidationMaterials): Result<DesignIrValidationMaterials, RepositoryError> {
     const outputPath = materials.id().modelId().artifactPath().asString();
     try {
-      mkdirSync(dirname(outputPath), { recursive: true });
-      writeFileSync(outputPath, materials.sourceDocument(), "utf-8");
+      writeFileAtomically(outputPath, materials.sourceDocument());
       return ok(materials);
     } catch (e) {
       return repoErr({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });

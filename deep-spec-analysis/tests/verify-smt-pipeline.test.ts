@@ -90,7 +90,7 @@ function model(seed: {
   return RequirementsModel.reconstitute({
     id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
     irHash: ContentHash.reconstitute("a".repeat(64)),
-    sourceDocument: "",
+    sourceDocument: new Uint8Array(),
     irVersion: seed.irVersion ?? IrVersion.reconstitute("1.0.0"),
     attributes: AttributeDeclarations.of(
       (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),

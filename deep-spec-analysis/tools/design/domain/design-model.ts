@@ -10,8 +10,8 @@ export interface DesignModelComposition {
   readonly id: DesignModelId;
   // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
   readonly irHash: ContentHash;
-  // 成果物の原文（原文材料——store の往復則 findById∘store がバイト恒等）。
-  readonly sourceDocument: string;
+  // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。
+  readonly sourceDocument: Uint8Array;
   readonly irVersion: IrVersion;
   readonly units: DesignUnits;
 }
@@ -19,14 +19,14 @@ export interface DesignModelComposition {
 export class DesignModel {
   readonly #id: DesignModelId;
   readonly #irHash: ContentHash;
-  readonly #sourceDocument: string;
+  readonly #sourceDocument: Uint8Array;
   readonly #irVersion: IrVersion;
   readonly #units: DesignUnits;
 
   private constructor(input: DesignModelComposition, units: DesignUnits) {
     this.#id = input.id;
     this.#irHash = input.irHash;
-    this.#sourceDocument = input.sourceDocument;
+    this.#sourceDocument = new Uint8Array(input.sourceDocument);
     this.#irVersion = input.irVersion;
     this.#units = units;
   }
@@ -45,9 +45,10 @@ export class DesignModel {
     return this.#irHash;
   }
 
-  // 境界: store が書く原文（バイト逐語）。
-  sourceDocument(): string {
-    return this.#sourceDocument;
+  // 境界: store が書く原文（バイト逐語——UTF-8 復号で非可逆にならないよう生
+  // バイト列で保持し、外部からの変更を防ぐため構築・照会の両方で防御コピー）。
+  sourceDocument(): Uint8Array {
+    return new Uint8Array(this.#sourceDocument);
   }
 
   irVersion(): IrVersion {

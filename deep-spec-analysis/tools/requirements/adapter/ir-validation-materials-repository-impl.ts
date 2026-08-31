@@ -6,7 +6,7 @@
 // 黙殺条件からの逐語移植。型宣言を欠く属性を kind: "" でカタログに載せる
 // 挙動（参照解決の可否が変わる）を含め、そのまま保存する。
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import {
   type Json,
@@ -14,6 +14,7 @@ import {
   isObject,
   readContractSchema,
   validateSchema,
+  writeFileAtomically,
 } from "../../kernel/adapter/index.ts";
 import { ArtifactPath, AttributeBound, ErrorMessages, IrVersion, type Expression } from "../../kernel/domain/index.ts";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
@@ -158,12 +159,13 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
 
     // existsSync 後の競合（削除・権限変更・ディレクトリ）でも Result 契約を
     // 守る——読取失敗は io-failed（use case は corrupt と同じ verdict 写像）。
-    let md: string;
+    let bytes: Buffer;
     try {
-      md = readFileSync(outputPath, "utf-8");
+      bytes = readFileSync(outputPath);
     } catch (e) {
       return err({ kind: "io-failed", operation: "read", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
     }
+    const md = bytes.toString("utf-8");
     const fences = extractFences(md, "json").map((f) => f.body);
     if (fences.length !== 1) {
       return corrupt(`formal model must contain exactly one \`\`\`json fence (found ${fences.length})`);
@@ -208,7 +210,7 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
         frClaims: FrRefClaims.of(collectFrClaims(ir)),
         declaredDigest: typeof ir.sourceDigest === "string" ? ir.sourceDigest : null,
         sourceId: RequirementsSourceId.of(recordRoot.value),
-        sourceDocument: md,
+        sourceDocument: new Uint8Array(bytes),
       }),
     );
   }
@@ -217,8 +219,7 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
   store(materials: IrValidationMaterials): Result<IrValidationMaterials, RepositoryError> {
     const outputPath = materials.id().modelId().artifactPath().asString();
     try {
-      mkdirSync(dirname(outputPath), { recursive: true });
-      writeFileSync(outputPath, materials.sourceDocument(), "utf-8");
+      writeFileAtomically(outputPath, materials.sourceDocument());
       return ok(materials);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });

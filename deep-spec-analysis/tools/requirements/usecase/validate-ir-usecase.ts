@@ -55,8 +55,8 @@ export class ValidateIrUseCase {
       if (!source.ok) {
         errors.push("requirements.md not found under this intent record — frRefs cannot be reverse-verified");
       } else {
-        errors.push(...index.missingErrors(source.value.knownIds));
-        errors.push(...SourceAnchor.of(materials.declaredDigest(), source.value.digest).errors());
+        errors.push(...index.missingErrors(source.value.knownIds()));
+        errors.push(...SourceAnchor.of(materials.declaredDigest(), source.value.digest()).errors());
       }
     }
 

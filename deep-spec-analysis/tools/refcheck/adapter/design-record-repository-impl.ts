@@ -6,7 +6,7 @@
 //   - 自ユニットの entities.md は兄弟 inputs に重複記録しない
 // 対象が読めないときは not-found（呼び手が not-applicable を選ぶ）。
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { ArtifactPath, ContentHash, RequirementIds } from "../../kernel/domain/index.ts";
@@ -15,6 +15,7 @@ import {
   listSubdirectories,
   readIfExists,
   relArtifact,
+  writeFileAtomically,
 } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
@@ -39,10 +40,15 @@ import {
 export class DesignRecordRepositoryImpl implements DesignRecordRepository {
   findById(id: DesignRecordId): Result<DesignRecord, RepositoryError> {
     const artifactPath = id.artifactPath().asString();
-    const md = readIfExists(artifactPath);
-    if (md === null) {
+    // 錨成果物は生バイト列で一度だけ読む（UTF-8 復号は解析・ダイジェスト専用。
+    // 旧 readIfExists と同じく読めない対象は理由を問わず not-found）。
+    let sourceBytes: Uint8Array;
+    try {
+      sourceBytes = new Uint8Array(readFileSync(artifactPath));
+    } catch {
       return err({ kind: "not-found", path: artifactPath });
     }
+    const md = Buffer.from(sourceBytes).toString("utf-8");
     const targetBase = basename(artifactPath);
     const fdDir = dirname(artifactPath);
     const isFunctional = basename(fdDir) === "functional-design";
@@ -53,7 +59,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const seed: DesignRecordSeed = {
       id,
       target: input(artifactPath, md),
-      sourceDocument: md,
+      sourceDocument: sourceBytes,
       componentCatalog: targetBase === "components.md" ? parseComponentCatalog(md) : null,
       contractsTable: targetBase === "contract-summary.md" ? parseContractsTable(md) : null,
       specBlocks: targetBase === "contract-summary.md" ? assessSpecBlocks(md) : null,
@@ -67,8 +73,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
   store(record: DesignRecord): Result<DesignRecord, RepositoryError> {
     const path = record.id().artifactPath().asString();
     try {
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, record.sourceDocument(), "utf-8");
+      writeFileAtomically(path, record.sourceDocument());
       return ok(record);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });

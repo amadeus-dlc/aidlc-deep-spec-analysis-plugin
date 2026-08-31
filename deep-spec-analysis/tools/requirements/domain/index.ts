@@ -93,4 +93,4 @@ export {
   IrValidationMaterials,
   IrValidationMaterialsId,
 } from "./ir-validation-materials.ts";
-export { type RequirementsSource } from "./requirements-source.ts";
+export { type RequirementsSourceSeed, RequirementsSource } from "./requirements-source.ts";

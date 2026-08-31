@@ -8,13 +8,13 @@
 // 旧 aidlc-sensor-deep-spec-ir-valid.ts の findRequirementsFile ＋ source
 // anchoring 節からの逐語移植（記録ルートの導出は材料ゲートウェイ側へ移動）。
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { writeFileAtomically } from "../../kernel/adapter/index.ts";
 import { ArtifactPath, ContentHash, RequirementIds } from "../../kernel/domain/index.ts";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
-import type { RequirementsSource, RequirementsSourceId } from "../domain/index.ts";
+import { RequirementsSource, type RequirementsSourceId } from "../domain/index.ts";
 import type { RequirementsSourceRepository } from "../usecase/index.ts";
 
 type RequirementsFileSearch =
@@ -49,13 +49,15 @@ export class RequirementsSourceRepositoryImpl implements RequirementsSourceRepos
     if (search.kind === "absent") return err({ kind: "not-found", path: id.recordRoot().asString() });
     try {
       const bytes = readFileSync(search.path);
-      return ok({
-        id,
-        sourcePath: ArtifactPath.reconstitute(search.path),
-        knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
-        digest: ContentHash.ofBytes(bytes).asString(),
-        sourceDocument: new Uint8Array(bytes),
-      });
+      return ok(
+        RequirementsSource.reconstitute({
+          id,
+          sourcePath: ArtifactPath.reconstitute(search.path),
+          knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
+          digest: ContentHash.ofBytes(bytes).asString(),
+          sourceDocument: new Uint8Array(bytes),
+        }),
+      );
     } catch (e) {
       return err({ kind: "io-failed", operation: "read", path: search.path, cause: e instanceof Error ? e.message : String(e) });
     }
@@ -63,10 +65,9 @@ export class RequirementsSourceRepositoryImpl implements RequirementsSourceRepos
 
   // 往復則: findById が読んだ原文バイト列を解決済みの所在へ逐語で書き戻す。
   store(source: RequirementsSource): Result<RequirementsSource, RepositoryError> {
-    const path = source.sourcePath.asString();
+    const path = source.sourcePath().asString();
     try {
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, source.sourceDocument);
+      writeFileAtomically(path, source.sourceDocument());
       return ok(source);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });

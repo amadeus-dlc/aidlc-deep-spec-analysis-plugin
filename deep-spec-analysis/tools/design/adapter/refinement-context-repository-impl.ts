@@ -155,7 +155,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
     // join は空文字列を返さないため parse は失敗し得ない（型の網羅のみ）。
     const mapPath = ArtifactPath.parse(path);
     if (!mapPath.ok) return { kind: "absent", error: "defect: refinement map path derivation produced an empty path" };
-    const parsed = parseRefinementMapDocument(readFileSync(path, "utf-8"), RefinementMapId.of(mapPath.value), this.#mapSchemaPath);
+    const parsed = parseRefinementMapDocument(new Uint8Array(readFileSync(path)), RefinementMapId.of(mapPath.value), this.#mapSchemaPath);
     if (parsed.kind === "malformed") return { kind: "absent", error: parsed.error };
     const map = parsed.map;
     const reqModelPath = join(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
@@ -175,7 +175,8 @@ export type RefinementMapParse =
   | { readonly kind: "parsed"; readonly map: RefinementMap }
   | { readonly kind: "malformed"; readonly error: string };
 
-export function parseRefinementMapDocument(md: string, id: RefinementMapId, mapSchemaPath: string): RefinementMapParse {
+export function parseRefinementMapDocument(bytes: Uint8Array, id: RefinementMapId, mapSchemaPath: string): RefinementMapParse {
+  const md = Buffer.from(bytes).toString("utf-8");
   const fence = extractSingleJsonFence(md);
   if (fence === null) return { kind: "malformed", error: "refinement map does not contain exactly one ```json fence" };
   let raw: Json;
@@ -241,7 +242,7 @@ export function parseRefinementMapDocument(md: string, id: RefinementMapId, mapS
       requirementsIrHash: ContentHash.reconstitute(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
       designIrHash: ContentHash.reconstitute(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
       units: RefinementUnitMaps.of(units),
-      sourceDocument: md,
+      sourceDocument: bytes,
     }),
   };
 }

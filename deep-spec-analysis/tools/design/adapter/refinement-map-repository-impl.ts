@@ -2,8 +2,8 @@
 // 取得面（refinement-context-repository-impl）と共有パーサに一本化されており、
 // corrupt.cause と absent(error) の凍結文言は常に一致する。
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { writeFileAtomically } from "../../kernel/adapter/index.ts";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { RefinementMap, RefinementMapId } from "../../refinement/domain/index.ts";
@@ -20,13 +20,13 @@ export class RefinementMapRepositoryImpl implements RefinementMapRepository {
   findById(id: RefinementMapId): Result<RefinementMap, RepositoryError> {
     const path = id.artifactPath().asString();
     if (!existsSync(path)) return err({ kind: "not-found", path });
-    let md: string;
+    let bytes: Buffer;
     try {
-      md = readFileSync(path, "utf-8");
+      bytes = readFileSync(path);
     } catch (e) {
       return err({ kind: "io-failed", operation: "read", path, cause: e instanceof Error ? e.message : String(e) });
     }
-    const parsed = parseRefinementMapDocument(md, id, this.#mapSchemaPath);
+    const parsed = parseRefinementMapDocument(new Uint8Array(bytes), id, this.#mapSchemaPath);
     if (parsed.kind === "malformed") return err({ kind: "corrupt", path, cause: parsed.error });
     return ok(parsed.map);
   }
@@ -35,8 +35,7 @@ export class RefinementMapRepositoryImpl implements RefinementMapRepository {
   store(map: RefinementMap): Result<RefinementMap, RepositoryError> {
     const path = map.id().artifactPath().asString();
     try {
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, map.sourceDocument(), "utf-8");
+      writeFileAtomically(path, map.sourceDocument());
       return ok(map);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });

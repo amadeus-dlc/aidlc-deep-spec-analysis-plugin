@@ -3,11 +3,10 @@
 // irHash（生 IR の正準 JSON の sha256）はここで導出——正準化は形式知識。
 // corrupt.cause の文言は降格文書（golden 凍結）に逐語で載る。
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { ContentHash } from "../../kernel/domain/index.ts";
-import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
+import { type Json, canonicalStringify, extractFences, writeFileAtomically } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import { type FormalModelId, RequirementsModel } from "../domain/index.ts";
 import type { FormalModelRepository } from "../usecase/index.ts";
@@ -16,9 +15,11 @@ import { parseFormalModel } from "./formal-model-parser.ts";
 export class FormalModelRepositoryImpl implements FormalModelRepository {
   findById(id: FormalModelId): Result<RequirementsModel, RepositoryError> {
     const modelPath = id.artifactPath().asString();
-    let md: string;
+    // 原文は生バイト列で一度だけ読む（UTF-8 復号は解析専用——store の往復則は
+    // バイト列で守る）。
+    let bytes: Buffer;
     try {
-      md = readFileSync(modelPath, "utf-8");
+      bytes = readFileSync(modelPath);
     } catch (e) {
       // 旧 entry ゲートの existsSync は stat 失敗を理由を問わず「不在」に
       // 潰していた（親ディレクトリの権限拒否も NA）。忠実に再現する：
@@ -29,6 +30,7 @@ export class FormalModelRepositoryImpl implements FormalModelRepository {
       }
       return err({ kind: "io-failed", operation: "read", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
     }
+    const md = bytes.toString("utf-8");
     const fences = extractFences(md, "json");
     const body = fences.length === 1 ? (fences[0]?.body ?? null) : null;
     let rawIr: Json = null;
@@ -44,15 +46,14 @@ export class FormalModelRepositoryImpl implements FormalModelRepository {
     if (typeof seed === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: seed });
     }
-    return ok(RequirementsModel.reconstitute({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), sourceDocument: md, ...seed }));
+    return ok(RequirementsModel.reconstitute({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), sourceDocument: new Uint8Array(bytes), ...seed }));
   }
 
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
   store(model: RequirementsModel): Result<RequirementsModel, RepositoryError> {
     const modelPath = model.id().artifactPath().asString();
     try {
-      mkdirSync(dirname(modelPath), { recursive: true });
-      writeFileSync(modelPath, model.sourceDocument(), "utf-8");
+      writeFileAtomically(modelPath, model.sourceDocument());
       return ok(model);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
