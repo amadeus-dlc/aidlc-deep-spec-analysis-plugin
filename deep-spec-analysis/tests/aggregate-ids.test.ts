@@ -199,9 +199,9 @@ describe("requirements first-class collections", () => {
     expect(sk.count()).toBe(2);
     expect(sk.sortedCanonically().toArray().map((s) => s.target)).toEqual(["OB-1", "OB-2"]);
 
-    const cc = CrossCheckedEntries.of([]).add({ backend: "smt", targets: ["SC-1"] });
+    const cc = CrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.of(["SC-1"]) });
     expect([...cc].length).toBe(1);
-    expect(cc.toArray()[0]?.backend).toBe("smt");
+    expect(cc.toArray()[0]?.backend.asString()).toBe("smt");
 
     expect([...VerificationReports.of([])].length).toBe(0);
   });
@@ -282,8 +282,8 @@ describe("design first-class collections", () => {
     expect(checked.sortedUniqueCanonically().toArray()).toEqual(["unit:u1", "unit:u2", "unit:u3"]);
     expect([...checked].length).toBe(4);
 
-    const cc = DesignCrossCheckedEntries.of([]).add({ backend: "smt", targets: ["DSC-1"] });
-    expect(cc.toArray()[0]?.backend).toBe("smt");
+    const cc = DesignCrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.of(["DSC-1"]) });
+    expect(cc.toArray()[0]?.backend.asString()).toBe("smt");
     expect([...cc].length).toBe(1);
     expect([...DesignReports.of([])].length).toBe(0);
     expect(DesignReports.of([]).toArray().length).toBe(0);

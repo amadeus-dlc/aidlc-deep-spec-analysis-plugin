@@ -4,7 +4,7 @@
 // degraded は契約適合の降格形（findings/skipped/crossChecked を空にして
 // unavailable 理由だけ残す——旧 writeFindingsDoc の自己検証降格と同じ姿）。
 
-import { ContentHash, FrRefs, IrVersion, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
+import { BackendName, ContentHash, FrRefs, IrVersion, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import type { VerificationFinding } from "./verification-finding.ts";
@@ -13,8 +13,8 @@ import { VerificationFindings, VerificationSkips } from "./verification-finding.
 export const SUPPORTED_IR_MAJOR = 1;
 
 export interface CrossCheckedEntry {
-  readonly backend: string;
-  readonly targets: string[];
+  readonly backend: BackendName;
+  readonly targets: TargetIds;
 }
 
 // クロスチェック判定表のファーストクラスコレクション。
@@ -342,8 +342,8 @@ export class VerificationReports {
       }
     }
     const crossChecked: CrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => ({ backend, targets: [...targets].sort(IdOrder.compare) }))
-      .sort((x, y) => (x.backend < y.backend ? -1 : x.backend > y.backend ? 1 : 0));
+      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.of([...targets].sort(IdOrder.compare)) }))
+      .sort((x, y) => (x.backend.asString() < y.backend.asString() ? -1 : x.backend.asString() > y.backend.asString() ? 1 : 0));
 
     return VerificationReport.compose({
       id,
