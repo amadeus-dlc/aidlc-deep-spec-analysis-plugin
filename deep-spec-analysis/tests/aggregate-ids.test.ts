@@ -450,3 +450,19 @@ describe("design identity primitives (issue #46 wave 5b)", () => {
     expect(undeclared.equals(DesignObligationOrigin.reconstitute(""))).toBe(true);
   });
 });
+
+describe("DesignMachines frozen probe order (PR#55 review)", () => {
+  test("sortedById restores id order regardless of input order (legacy verbatim comparator)", () => {
+    const mk = (id: string) => ({
+      id: DesignMachineId.reconstitute(id),
+      entity: DesignEntityName.reconstitute("Ticket"),
+      attribute: DesignAttributeName.reconstitute("status"),
+      initial: InitialStates.of(["open"]),
+      deterministic: true,
+      transitions: DesignTransitions.of([]),
+      ignores: DesignIgnores.of([]),
+    });
+    const sorted = DesignMachines.of([mk("SM-2"), mk("SM-1")]).sortedById();
+    expect(sorted.toArray().map((m) => m.id.asString())).toEqual(["SM-1", "SM-2"]);
+  });
+});

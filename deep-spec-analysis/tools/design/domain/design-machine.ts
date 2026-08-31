@@ -159,6 +159,12 @@ export class DesignMachines {
     return this.#values.flatMap((m) => [...m.transitions.ids()]);
   }
 
+  // 到達不能状態プローブの凍結順：id 辞書順（レガシー逐語の equal→1 比較。
+  // 重複 id は well-formedness が surface する）。
+  sortedById(): DesignMachines {
+    return new DesignMachines([...this.#values].sort((a, b) => (a.id.asString() < b.id.asString() ? -1 : 1)));
+  }
+
   toArray(): readonly DesignMachine[] {
     return this.#values;
   }

@@ -124,7 +124,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
           checkedUnits.push(`unit:${u.name()}`);
           if (backend === "quint") {
             // entry と同じ到達性検出フェーズ：simulation では capability skip。
-            for (const sm of [...u.machines()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
+            for (const sm of u.machines().sortedById()) {
               const attrPath = lowered.index().attrPathOfMachine(sm.id.asString()) ?? `${sm.entity.asString()}.${sm.attribute.asString()}`;
               const candidates = u
                 .enumValuesOf(attrPath)
