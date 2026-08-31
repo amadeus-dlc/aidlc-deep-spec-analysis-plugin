@@ -1,5 +1,85 @@
 // エンティティ属性ひとつを生涯とする状態機械（契約3）。deterministic: false は
-// 同一 (state, trigger) 重複の人間承認済み waiver 宣言。逐語移動。
+// 同一 (state, trigger) 重複の人間承認済み waiver 宣言。逐語移動。id と
+// 生涯属性の座標（entity / attribute）はドメインプリミティブで運ぶ。
+
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+
+export type DesignMachineTokenError = { readonly kind: "empty-machine-token"; readonly raw: string };
+
+export class DesignMachineId {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<DesignMachineId, DesignMachineTokenError> {
+    if (raw === "") return err({ kind: "empty-machine-token", raw });
+    return ok(new DesignMachineId(raw));
+  }
+
+  static reconstitute(raw: string): DesignMachineId {
+    return new DesignMachineId(raw);
+  }
+
+  equals(other: DesignMachineId): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
+
+export class DesignEntityName {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<DesignEntityName, DesignMachineTokenError> {
+    if (raw === "") return err({ kind: "empty-machine-token", raw });
+    return ok(new DesignEntityName(raw));
+  }
+
+  static reconstitute(raw: string): DesignEntityName {
+    return new DesignEntityName(raw);
+  }
+
+  equals(other: DesignEntityName): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
+
+export class DesignAttributeName {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<DesignAttributeName, DesignMachineTokenError> {
+    if (raw === "") return err({ kind: "empty-machine-token", raw });
+    return ok(new DesignAttributeName(raw));
+  }
+
+  static reconstitute(raw: string): DesignAttributeName {
+    return new DesignAttributeName(raw);
+  }
+
+  equals(other: DesignAttributeName): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
 
 import type { DesignTransitions } from "./design-transition.ts";
 import type { InitialStates } from "./design-ir-decl.ts";
@@ -46,9 +126,9 @@ export class DesignIgnores {
 }
 
 export interface DesignMachine {
-  id: string;
-  entity: string;
-  attribute: string;
+  id: DesignMachineId;
+  entity: DesignEntityName;
+  attribute: DesignAttributeName;
   initial: InitialStates;
   transitions: DesignTransitions;
   ignores: DesignIgnores;

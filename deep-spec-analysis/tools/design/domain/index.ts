@@ -1,11 +1,29 @@
 // design/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
 export { type DesignValue } from "./design-value.ts";
-export { type DesignTransition, DesignTransitions } from "./design-transition.ts";
-export { type DesignIgnore, type DesignMachine, DesignIgnores, DesignMachines } from "./design-machine.ts";
-export { type DesignObligation, DesignObligations } from "./design-obligation.ts";
-export { type DesignScenario, DesignScenarios } from "./design-scenario.ts";
+export { type DesignTransition, type DesignTransitionIdError, DesignTransitionId, DesignTransitions } from "./design-transition.ts";
 export {
+  type DesignIgnore,
+  type DesignMachine,
+  type DesignMachineTokenError,
+  DesignAttributeName,
+  DesignEntityName,
+  DesignIgnores,
+  DesignMachineId,
+  DesignMachines,
+} from "./design-machine.ts";
+export {
+  type DesignObligation,
+  type DesignObligationIdError,
+  DesignObligationId,
+  DesignObligationNature,
+  DesignObligationOrigin,
+  DesignObligations,
+} from "./design-obligation.ts";
+export { type DesignScenario, type DesignScenarioIdError, DesignScenarioId, DesignScenarios } from "./design-scenario.ts";
+export {
+  type DesignBackgroundIdError,
+  DesignBackgroundId,
   type DesignBackgroundAssumption,
   type DesignUnitSeed,
   AttrPaths,

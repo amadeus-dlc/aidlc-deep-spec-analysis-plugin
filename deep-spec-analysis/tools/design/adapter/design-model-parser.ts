@@ -8,6 +8,16 @@ import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { FrRefs, IrVersion, type Expression } from "../../kernel/domain/index.ts";
 import {
   BrRefs,
+  DesignBackgroundId,
+  type DesignBackgroundAssumption,
+  DesignAttributeName,
+  DesignEntityName,
+  DesignMachineId,
+  DesignObligationId,
+  DesignObligationNature,
+  DesignObligationOrigin,
+  DesignScenarioId,
+  DesignTransitionId,
   DesignIgnores,
   DesignTransitions,
   DesignUnits,
@@ -51,9 +61,9 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> 
     for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
       obligations.push({
-        id: ob.id,
-        nature: ob.nature,
-        origin: typeof ob.origin === "string" ? ob.origin : "",
+        id: DesignObligationId.reconstitute(ob.id),
+        nature: DesignObligationNature.reconstitute(ob.nature),
+        origin: DesignObligationOrigin.reconstitute(typeof ob.origin === "string" ? ob.origin : ""),
         brRefs: BrRefs.of(strArr(ob.brRefs)),
         frRefs: FrRefs.of(strArr(ob.frRefs)),
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
@@ -71,7 +81,7 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> 
         if (!isObject(tr) || typeof tr.id !== "string") continue;
         if (typeof tr.from !== "string" || typeof tr.to !== "string" || typeof tr.trigger !== "string") continue;
         transitions.push({
-          id: tr.id,
+          id: DesignTransitionId.reconstitute(tr.id),
           from: tr.from,
           to: tr.to,
           trigger: tr.trigger,
@@ -86,9 +96,9 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> 
         ignores.push({ state: ig.state, trigger: ig.trigger, reason: typeof ig.reason === "string" ? ig.reason : "" });
       }
       machines.push({
-        id: sm.id,
-        entity: sm.entity,
-        attribute: sm.attribute,
+        id: DesignMachineId.reconstitute(sm.id),
+        entity: DesignEntityName.reconstitute(sm.entity),
+        attribute: DesignAttributeName.reconstitute(sm.attribute),
         initial: InitialStates.of(strArr(sm.initial)),
         transitions: DesignTransitions.of(transitions),
         ignores: DesignIgnores.of(ignores),
@@ -105,7 +115,7 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> 
         if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
       }
       scenarios.push({
-        id: sc.id,
+        id: DesignScenarioId.reconstitute(sc.id),
         kind,
         brRefs: BrRefs.of(strArr(sc.brRefs)),
         frRefs: FrRefs.of(strArr(sc.frRefs)),
@@ -114,10 +124,10 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id"> 
         expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
       });
     }
-    const background: { id: string; assert: Expression }[] = [];
+    const background: DesignBackgroundAssumption[] = [];
     for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
       if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
-      background.push({ id: bg.id, assert: bg.assert as unknown as Expression });
+      background.push({ id: DesignBackgroundId.reconstitute(bg.id), assert: bg.assert as unknown as Expression });
     }
     units.push(
       DesignUnit.reconstitute({

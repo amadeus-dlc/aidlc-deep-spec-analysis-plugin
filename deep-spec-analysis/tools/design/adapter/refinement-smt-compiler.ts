@@ -177,15 +177,15 @@ export function designBase(
   if (!primed) {
     for (const bg of u.background()) {
       try {
-        constraints.push({ name: `bg_${bg.id.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: smtOfExpr(ctx, bg.assert) });
+        constraints.push({ name: `bg_${bg.id.asString().replace(/[^A-Za-z0-9_]/g, "_")}`, smt: smtOfExpr(ctx, bg.assert) });
       } catch {
         // コンパイルできない背景は落とす——設計パスが報告する。
       }
     }
     for (const ob of u.obligations()) {
-      if ((ob.nature === "invariant" || ob.nature === "numeric") && ob.assert) {
+      if ((ob.nature.asString() === "invariant" || ob.nature.asString() === "numeric") && ob.assert) {
         try {
-          constraints.push({ name: `inv_${ob.id.replace(/[^A-Za-z0-9_]/g, "_")}`, smt: smtOfExpr(ctx, ob.assert) });
+          constraints.push({ name: `inv_${ob.id.asString().replace(/[^A-Za-z0-9_]/g, "_")}`, smt: smtOfExpr(ctx, ob.assert) });
         } catch {
           // 同上。
         }

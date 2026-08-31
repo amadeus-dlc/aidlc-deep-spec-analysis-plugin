@@ -24,6 +24,15 @@ function ap(raw: string): ArtifactPath {
 }
 
 import {
+  DesignBackgroundId,
+  DesignAttributeName,
+  DesignEntityName,
+  DesignMachineId,
+  DesignObligationId,
+  DesignObligationNature,
+  DesignObligationOrigin,
+  DesignScenarioId,
+  DesignTransitionId,
   CheckedUnits,
   DesignFindings,
   DesignInputAnchors,
@@ -116,7 +125,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
           if (backend === "quint") {
             // entry と同じ到達性検出フェーズ：simulation では capability skip。
             for (const sm of [...u.machines()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-              const attrPath = lowered.index().attrPathOfMachine(sm.id) ?? `${sm.entity}.${sm.attribute}`;
+              const attrPath = lowered.index().attrPathOfMachine(sm.id.asString()) ?? `${sm.entity.asString()}.${sm.attribute.asString()}`;
               const candidates = u
                 .enumValuesOf(attrPath)
                 .filter((s) => !sm.initial.includes(s))
@@ -124,10 +133,10 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
               if (candidates.length === 0) continue;
               expect(method).not.toBe("bounded");
               skipped.push({
-                target: sm.id,
+                target: sm.id.asString(),
                 reason: "capability",
                 unit: u.name(),
-                detail: `unreachable-state detection for ${sm.id} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
+                detail: `unreachable-state detection for ${sm.id.asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
               });
             }
           }
@@ -162,15 +171,25 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
 
 // --- ドメイン検査の分岐固定（純関数の直接駆動） ------------------------------
 
-// テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
-type RawDesignObligation = Omit<DesignObligation, "brRefs" | "frRefs"> & { brRefs: string[]; frRefs: string[] };
-type RawDesignTransition = Omit<DesignTransition, "brRefs"> & { brRefs: string[] };
-type RawDesignMachine = Omit<DesignMachine, "initial" | "transitions" | "ignores"> & {
+// テストの読みやすさのため素の配列・素の文字列で書き、ここで一括して DP と
+// コレクションに包む。
+type RawDesignObligation = Omit<DesignObligation, "id" | "nature" | "origin" | "brRefs" | "frRefs"> & {
+  id: string;
+  nature: string;
+  origin: string;
+  brRefs: string[];
+  frRefs: string[];
+};
+type RawDesignTransition = Omit<DesignTransition, "id" | "brRefs"> & { id: string; brRefs: string[] };
+type RawDesignMachine = Omit<DesignMachine, "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
+  id: string;
+  entity: string;
+  attribute: string;
   initial: string[];
   transitions: RawDesignTransition[];
   ignores: DesignIgnore[];
 };
-type RawDesignScenario = Omit<DesignScenario, "brRefs" | "frRefs"> & { brRefs: string[]; frRefs: string[] };
+type RawDesignScenario = Omit<DesignScenario, "id" | "brRefs" | "frRefs"> & { id: string; brRefs: string[]; frRefs: string[] };
 function unit(seed: {
   unit?: string;
   rawEntities?: DesignValue;
@@ -178,27 +197,41 @@ function unit(seed: {
   obligations?: RawDesignObligation[];
   machines?: RawDesignMachine[];
   scenarios?: RawDesignScenario[];
-  background?: DesignBackgroundAssumption[];
+  background?: (Omit<DesignBackgroundAssumption, "id"> & { id: string })[];
 }): DesignUnit {
   return DesignUnit.reconstitute({
     unit: seed.unit ?? "u1",
     rawEntities: seed.rawEntities ?? [],
     attrPaths: AttrPaths.of([...(seed.attrPaths ?? new Set<string>())]),
     obligations: DesignObligations.of(
-      (seed.obligations ?? []).map((o) => ({ ...o, brRefs: BrRefs.of(o.brRefs), frRefs: FrRefs.of(o.frRefs) })),
+      (seed.obligations ?? []).map((o) => ({
+        ...o,
+        id: DesignObligationId.reconstitute(o.id),
+        nature: DesignObligationNature.reconstitute(o.nature),
+        origin: DesignObligationOrigin.reconstitute(o.origin),
+        brRefs: BrRefs.of(o.brRefs),
+        frRefs: FrRefs.of(o.frRefs),
+      })),
     ),
     machines: DesignMachines.of(
       (seed.machines ?? []).map((m) => ({
         ...m,
+        id: DesignMachineId.reconstitute(m.id),
+        entity: DesignEntityName.reconstitute(m.entity),
+        attribute: DesignAttributeName.reconstitute(m.attribute),
         initial: InitialStates.of(m.initial),
-        transitions: DesignTransitions.of(m.transitions.map((t) => ({ ...t, brRefs: BrRefs.of(t.brRefs) }))),
+        transitions: DesignTransitions.of(
+          m.transitions.map((t) => ({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs) })),
+        ),
         ignores: DesignIgnores.of(m.ignores),
       })),
     ),
     scenarios: DesignScenarios.of(
-      (seed.scenarios ?? []).map((s) => ({ ...s, brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
+      (seed.scenarios ?? []).map((s) => ({ ...s, id: DesignScenarioId.reconstitute(s.id), brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
     ),
-    background: DesignBackgroundAssumptions.of(seed.background ?? []),
+    background: DesignBackgroundAssumptions.of(
+      (seed.background ?? []).map((b) => ({ ...b, id: DesignBackgroundId.reconstitute(b.id) })),
+    ),
   });
 }
 
@@ -263,7 +296,7 @@ describe("lowering (typed compile-down)", () => {
     expect(low.index().resolveDesignTarget("SC-1").design).toBe("DSC-1");
     expect(low.background().toArray()[0]?.id).toBe("BG-1");
     expect(low.index().attrPathOfMachine("SM-1")).toBe("Ticket.status");
-    expect(low.index().machineOfTransition("TR-1")?.id).toBe("SM-1");
+    expect(low.index().machineOfTransition("TR-1")?.id.asString()).toBe("SM-1");
     // 遷移の暗黙ガード：state==from（追加ガードがあれば and 結合）。
     expect(low.obligations().toArray()[2]?.guard).toEqual({
       op: "eq",

@@ -144,7 +144,7 @@ export class VerifyDesignQuintUseCase {
 
       // 到達不能状態の検出（FR8.4）：bounded モードのみ・予算キャップつき。
       for (const sm of [...u.machines()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-        const attrPath = lowered.index().attrPathOfMachine(sm.id) ?? `${sm.entity}.${sm.attribute}`;
+        const attrPath = lowered.index().attrPathOfMachine(sm.id.asString()) ?? `${sm.entity.asString()}.${sm.attribute.asString()}`;
         const candidates = u
           .enumValuesOf(attrPath)
           .filter((s) => !sm.initial.includes(s))
@@ -152,10 +152,10 @@ export class VerifyDesignQuintUseCase {
         if (candidates.length === 0) continue;
         if (method !== "bounded") {
           skipped.push({
-            target: sm.id,
+            target: sm.id.asString(),
             reason: "capability",
             unit: u.name(),
-            detail: `unreachable-state detection for ${sm.id} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
+            detail: `unreachable-state detection for ${sm.id.asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
           });
           continue;
         }
@@ -176,19 +176,19 @@ export class VerifyDesignQuintUseCase {
             findings.push({
               kind: "unreachable",
               frRefs: FrRefs.of([]),
-              targets: TargetIds.of([sm.id]),
+              targets: TargetIds.of([sm.id.asString()]),
               witness: { model: { [attrPath]: state } },
               unit: u.name(),
-              detail: `State "${state}" of ${sm.id} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state — it may be dead.`,
+              detail: `State "${state}" of ${sm.id.asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state — it may be dead.`,
             });
           }
         }
         if (leftover.length > 0) {
           skipped.push({
-            target: sm.id,
+            target: sm.id.asString(),
             reason: probesUsed >= this.#unreachCap ? "timeout" : "unavailable",
             unit: u.name(),
-            detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id} (per-run cap ${this.#unreachCap} / budget reached, or the probe run failed)`,
+            detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id.asString()} (per-run cap ${this.#unreachCap} / budget reached, or the probe run failed)`,
           });
         }
       }

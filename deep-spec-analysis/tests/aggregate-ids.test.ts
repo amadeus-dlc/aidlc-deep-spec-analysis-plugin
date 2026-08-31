@@ -5,6 +5,15 @@
 import { describe, expect, test } from "bun:test";
 import { ArtifactPath, BackendName, ContentHash, IrVersion, TargetIds } from "../tools/kernel/domain/index.ts";
 import {
+  DesignAttributeName,
+  DesignBackgroundId,
+  DesignEntityName,
+  DesignMachineId,
+  DesignObligationId,
+  DesignObligationNature,
+  DesignObligationOrigin,
+  DesignScenarioId,
+  DesignTransitionId,
   BrRefs,
   DesignIgnores,
   DesignModelId,
@@ -225,10 +234,14 @@ import {
 } from "../tools/design/domain/index.ts";
 
 describe("design first-class collections", () => {
-  const ob = { id: "DOB-1", nature: "invariant", origin: "", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), assert: { op: "bool", value: true } };
+  const ob = { id: DesignObligationId.reconstitute("DOB-1"), nature: DesignObligationNature.reconstitute("invariant"), origin: DesignObligationOrigin.reconstitute(""), brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), assert: { op: "bool", value: true } };
   const machine = {
-    id: "SM-1", entity: "T", attribute: "s", initial: InitialStates.of(["a"]), deterministic: true,
-    transitions: DesignTransitions.of([{ id: "TR-1", from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) }]),
+    id: DesignMachineId.reconstitute("SM-1"),
+    entity: DesignEntityName.reconstitute("T"),
+    attribute: DesignAttributeName.reconstitute("s"),
+    initial: InitialStates.of(["a"]),
+    deterministic: true,
+    transitions: DesignTransitions.of([{ id: DesignTransitionId.reconstitute("TR-1"), from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) }]),
     ignores: DesignIgnores.of([]),
   };
 
@@ -239,10 +252,10 @@ describe("design first-class collections", () => {
     expect([...DesignMachines.of([machine])].length).toBe(1);
     expect(DesignMachines.of([machine]).toArray().length).toBe(1);
     expect(DesignObligations.of([ob]).toArray().length).toBe(1);
-    expect(DesignScenarios.of([{ id: "DSC-9", kind: "reject", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} }]).toArray().length).toBe(1);
-    expect(DesignScenarios.of([]).add({ id: "DSC-1", kind: "accept", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} }).ids()).toEqual(["DSC-1"]);
+    expect(DesignScenarios.of([{ id: DesignScenarioId.reconstitute("DSC-9"), kind: "reject", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} }]).toArray().length).toBe(1);
+    expect(DesignScenarios.of([]).add({ id: DesignScenarioId.reconstitute("DSC-1"), kind: "accept", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} }).ids()).toEqual(["DSC-1"]);
     expect([...DesignScenarios.of([])].length).toBe(0);
-    expect(DesignBackgroundAssumptions.of([]).add({ id: "DBG-1", assert: { op: "bool", value: true } }).toArray().length).toBe(1);
+    expect(DesignBackgroundAssumptions.of([]).add({ id: DesignBackgroundId.reconstitute("DBG-1"), assert: { op: "bool", value: true } }).toArray().length).toBe(1);
     expect([...DesignBackgroundAssumptions.of([])].length).toBe(0);
     const paths = AttrPaths.of(["T.s"]).add("T.x");
     expect(paths.has("T.x")).toBe(true);
@@ -309,12 +322,12 @@ describe("requirements value collections (first-class operations)", () => {
 
 describe("design part collections (first-class operations)", () => {
   test("DesignTransitions and DesignIgnores own their frozen orders under add", () => {
-    const t1 = { id: "TR-2", from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) };
-    const t2 = { id: "TR-10", from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) };
+    const t1 = { id: DesignTransitionId.reconstitute("TR-2"), from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) };
+    const t2 = { id: DesignTransitionId.reconstitute("TR-10"), from: "a", to: "b", trigger: "t", brRefs: BrRefs.of([]) };
     const trs = DesignTransitions.of([t2]).add(t1);
     expect([...trs].length).toBe(2);
     expect(trs.ids()).toEqual(["TR-10", "TR-2"]);
-    expect(trs.sortedCanonically().toArray().map((t) => t.id)).toEqual(["TR-2", "TR-10"]);
+    expect(trs.sortedCanonically().toArray().map((t) => t.id.asString())).toEqual(["TR-2", "TR-10"]);
 
     const igs = DesignIgnores.of([{ state: "y", trigger: "go", reason: "" }]).add({ state: "x", trigger: "go", reason: "" });
     expect([...igs].length).toBe(2);
@@ -372,5 +385,68 @@ describe("requirements identity primitives (issue #46 wave 5a)", () => {
     if (!b.ok) throw new Error("unreachable");
     expect(b.value.equals(BackendName.reconstitute("smt"))).toBe(true);
     expect(b.value.asString()).toBe("smt");
+  });
+});
+
+describe("design identity primitives (issue #46 wave 5b)", () => {
+  test("parse rejects the empty token, reconstitute is verbatim, equals is by value", () => {
+    expect(DesignObligationId.parse("").ok).toBe(false);
+    const ob = DesignObligationId.parse("DOB-1");
+    if (!ob.ok) throw new Error("unreachable");
+    expect(ob.value.equals(DesignObligationId.reconstitute("DOB-1"))).toBe(true);
+    expect(ob.value.asString()).toBe("DOB-1");
+
+    expect(DesignScenarioId.parse("").ok).toBe(false);
+    const sc = DesignScenarioId.parse("DSC-1");
+    if (!sc.ok) throw new Error("unreachable");
+    expect(sc.value.equals(DesignScenarioId.reconstitute("DSC-1"))).toBe(true);
+    expect(sc.value.asString()).toBe("DSC-1");
+
+    expect(DesignTransitionId.parse("").ok).toBe(false);
+    const tr = DesignTransitionId.parse("TR-1");
+    if (!tr.ok) throw new Error("unreachable");
+    expect(tr.value.equals(DesignTransitionId.reconstitute("TR-1"))).toBe(true);
+    expect(tr.value.asString()).toBe("TR-1");
+
+    expect(DesignBackgroundId.parse("").ok).toBe(false);
+    const bg = DesignBackgroundId.parse("BG-1");
+    if (!bg.ok) throw new Error("unreachable");
+    expect(bg.value.equals(DesignBackgroundId.reconstitute("BG-1"))).toBe(true);
+    expect(bg.value.asString()).toBe("BG-1");
+
+    expect(DesignMachineId.parse("").ok).toBe(false);
+    const sm = DesignMachineId.parse("SM-1");
+    if (!sm.ok) throw new Error("unreachable");
+    expect(sm.value.equals(DesignMachineId.reconstitute("SM-1"))).toBe(true);
+    expect(sm.value.asString()).toBe("SM-1");
+
+    expect(DesignEntityName.parse("").ok).toBe(false);
+    const en = DesignEntityName.parse("Ticket");
+    if (!en.ok) throw new Error("unreachable");
+    expect(en.value.equals(DesignEntityName.reconstitute("Ticket"))).toBe(true);
+    expect(en.value.asString()).toBe("Ticket");
+
+    expect(DesignAttributeName.parse("").ok).toBe(false);
+    const an = DesignAttributeName.parse("status");
+    if (!an.ok) throw new Error("unreachable");
+    expect(an.value.equals(DesignAttributeName.reconstitute("status"))).toBe(true);
+    expect(an.value.asString()).toBe("status");
+  });
+
+  test("DesignObligationNature owns event/invariant predicates; unknown natures pass through", () => {
+    expect(DesignObligationNature.reconstitute("event").isEvent()).toBe(true);
+    expect(DesignObligationNature.reconstitute("invariant").isInvariant()).toBe(true);
+    const mystery = DesignObligationNature.reconstitute("mystery");
+    expect(mystery.isEvent() || mystery.isInvariant()).toBe(false);
+    expect(mystery.asString()).toBe("mystery");
+    expect(mystery.equals(DesignObligationNature.reconstitute("mystery"))).toBe(true);
+  });
+
+  test("DesignObligationOrigin owns the rules predicate; the empty origin passes through", () => {
+    expect(DesignObligationOrigin.reconstitute("rules").isRules()).toBe(true);
+    const undeclared = DesignObligationOrigin.reconstitute("");
+    expect(undeclared.isRules()).toBe(false);
+    expect(undeclared.asString()).toBe("");
+    expect(undeclared.equals(DesignObligationOrigin.reconstitute(""))).toBe(true);
   });
 });
