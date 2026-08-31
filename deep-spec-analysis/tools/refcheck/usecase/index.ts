@@ -6,3 +6,4 @@ export { type CheckOutcome } from "./check-outcome.ts";
 export { CheckDomainComponentsUseCase, type CheckDomainComponentsInput } from "./check-domain-components-usecase.ts";
 export { CheckContractSummaryUseCase, type CheckContractSummaryInput } from "./check-contract-summary-usecase.ts";
 export { CheckFunctionalDesignUseCase, type CheckFunctionalDesignInput } from "./check-functional-design-usecase.ts";
+export { type ReferenceCheckReportConformance } from "./reference-check-report-conformance.ts";

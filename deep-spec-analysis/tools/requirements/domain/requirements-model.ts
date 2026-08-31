@@ -8,6 +8,7 @@ import { type IrVersion, IdOrder } from "../../kernel/domain/index.ts";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { type AttributeDeclaration, AttributeDeclarations } from "./attribute-declaration.ts";
 import type { Expression } from "../../kernel/domain/expression.ts";
+import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { FormalModelId } from "./formal-model-id.ts";
 import { Obligations } from "./obligation.ts";
 import { Scenarios } from "./scenario.ts";
@@ -71,6 +72,8 @@ export class BackgroundAssumptions {
 
 export interface RequirementsModelSeed {
   readonly id: FormalModelId;
+  // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
+  readonly irHash: ContentHash;
   readonly irVersion: IrVersion;
   readonly attributes: AttributeDeclarations;
   readonly obligations: Obligations;
@@ -80,6 +83,7 @@ export interface RequirementsModelSeed {
 
 export class RequirementsModel {
   readonly #id: FormalModelId;
+  readonly #irHash: ContentHash;
   readonly #irVersion: IrVersion;
   readonly #attributes: AttributeDeclarations;
   readonly #obligations: Obligations;
@@ -88,6 +92,7 @@ export class RequirementsModel {
 
   private constructor(seed: RequirementsModelSeed) {
     this.#id = seed.id;
+    this.#irHash = seed.irHash;
     this.#irVersion = seed.irVersion;
     this.#attributes = seed.attributes;
     this.#obligations = seed.obligations;
@@ -102,6 +107,11 @@ export class RequirementsModel {
 
   id(): FormalModelId {
     return this.#id;
+  }
+
+  // 境界: 兄弟文書・map の hash と照合される同一性材料。
+  irHash(): ContentHash {
+    return this.#irHash;
   }
 
   irVersion(): IrVersion {

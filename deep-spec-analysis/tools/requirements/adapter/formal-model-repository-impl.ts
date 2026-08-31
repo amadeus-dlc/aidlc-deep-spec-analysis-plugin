@@ -9,11 +9,11 @@ import { ContentHash } from "../../kernel/domain/index.ts";
 import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import { type FormalModelId, RequirementsModel } from "../domain/index.ts";
-import type { AcquiredFormalModel, FormalModelRepository } from "../usecase/index.ts";
+import type { FormalModelRepository } from "../usecase/index.ts";
 import { parseFormalModel } from "./formal-model-parser.ts";
 
 export class FormalModelRepositoryImpl implements FormalModelRepository {
-  findById(id: FormalModelId): Result<AcquiredFormalModel, RepositoryError> {
+  findById(id: FormalModelId): Result<RequirementsModel, RepositoryError> {
     const modelPath = id.artifactPath().asString();
     let md: string;
     try {
@@ -43,6 +43,6 @@ export class FormalModelRepositoryImpl implements FormalModelRepository {
     if (typeof seed === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: seed });
     }
-    return ok({ model: RequirementsModel.reconstitute({ id, ...seed }), irHash: ContentHash.ofText(canonicalStringify(rawIr)) });
+    return ok(RequirementsModel.reconstitute({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), ...seed }));
   }
 }

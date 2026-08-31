@@ -16,6 +16,7 @@ import {
 import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./design-record-repository.ts";
+import type { ReferenceCheckReportConformance } from "./reference-check-report-conformance.ts";
 import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
 
 export interface CheckFunctionalDesignInput {
@@ -27,10 +28,16 @@ export interface CheckFunctionalDesignInput {
 export class CheckFunctionalDesignUseCase {
   readonly #designRecordRepository: DesignRecordRepository;
   readonly #referenceCheckReportRepository: ReferenceCheckReportRepository;
+  readonly #referenceCheckReportConformance: ReferenceCheckReportConformance;
 
-  constructor(designRecordRepository: DesignRecordRepository, referenceCheckReportRepository: ReferenceCheckReportRepository) {
+  constructor(
+    designRecordRepository: DesignRecordRepository,
+    referenceCheckReportRepository: ReferenceCheckReportRepository,
+    referenceCheckReportConformance: ReferenceCheckReportConformance,
+  ) {
     this.#designRecordRepository = designRecordRepository;
     this.#referenceCheckReportRepository = referenceCheckReportRepository;
+    this.#referenceCheckReportConformance = referenceCheckReportConformance;
   }
 
   execute(input: CheckFunctionalDesignInput): CheckOutcome {
@@ -69,10 +76,15 @@ export class CheckFunctionalDesignUseCase {
       findings: ledger.findings(),
       skipped: ledger.skipped(),
     });
-    const conformed = this.#referenceCheckReportRepository.conformedOf(report);
+    // persist は store（適合を内包し書かれた姿を返す）、report-only は適合だけを
+    // 問う——どちらの verdict も「書かれる(はずの)姿」から導く（凍結挙動）。
+    let conformed: ReferenceCheckReport;
     if (input.mode === "persist") {
-      const saved = this.#referenceCheckReportRepository.save(conformed);
-      if (!saved.ok) return { kind: "save-failed", error: saved.error };
+      const stored = this.#referenceCheckReportRepository.store(report);
+      if (!stored.ok) return { kind: "save-failed", error: stored.error };
+      conformed = stored.value;
+    } else {
+      conformed = this.#referenceCheckReportConformance.conformedOf(report);
     }
     return {
       kind: "verified",

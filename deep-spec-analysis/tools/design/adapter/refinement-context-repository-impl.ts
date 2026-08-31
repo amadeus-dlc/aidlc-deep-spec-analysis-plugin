@@ -40,15 +40,15 @@ import {
   type RefinementUnitMap,
   type UnmappedTarget,
   RefinementMap,
+  RefinementMaterials,
   RefinementRequirements,
   UnmappedTargetRef,
   TransitionRef,
+  type RefinementMapAcquisition,
 } from "../../refinement/domain/index.ts";
 import { DesignUnitId } from "../domain/index.ts";
 import type {
   RefinementMaterialsRepository,
-  RefinementMapAcquisition,
-  RefinementMaterials,
 } from "../usecase/index.ts";
 
 export const REFINEMENT_MAP_BASENAME = "deep-spec-analysis-refinement-map.md";
@@ -73,9 +73,9 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
     const modelPath = id.modelArtifactPath().asString();
     const recordRoot = findRecordRoot(dirname(modelPath));
     const requirements = recordRoot === null ? null : this.#loadRequirements(recordRoot);
-    if (recordRoot === null || requirements === null) return { kind: "inactive" };
+    if (recordRoot === null || requirements === null) return RefinementMaterials.inactive(id);
     const stageDir = dirname(modelPath);
-    return { kind: "active", requirements, map: this.#loadMap(recordRoot, stageDir, modelPath) };
+    return RefinementMaterials.active(id, requirements, this.#loadMap(recordRoot, stageDir, modelPath));
   }
 
   #loadRequirements(recordRoot: string): RefinementRequirements | null {

@@ -82,7 +82,15 @@ export {
   IrAttributeName,
   IrEntityName,
 } from "./ir-model-decl.ts";
-export { type FrRefClaim, FrReferenceIndex } from "./fr-reference-index.ts";
+export { type FrRefClaim, FrReferenceIndex,
+  FrRefClaims,
+} from "./fr-reference-index.ts";
 export { SourceAnchor } from "./source-anchor.ts";
 export { RequirementsSourceId } from "./requirements-source-id.ts";
 export { FormalModelId } from "./formal-model-id.ts";
+export {
+  type IrValidationMaterialsSeed,
+  IrValidationMaterials,
+  IrValidationMaterialsId,
+} from "./ir-validation-materials.ts";
+export { type RequirementsSource } from "./requirements-source.ts";

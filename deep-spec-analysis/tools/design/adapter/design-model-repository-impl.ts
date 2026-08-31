@@ -10,11 +10,11 @@ import { ContentHash } from "../../kernel/domain/index.ts";
 import { type Json, canonicalStringify, extractFences } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import { DesignModel, type DesignModelId } from "../domain/index.ts";
-import type { AcquiredDesignModel, DesignModelRepository } from "../usecase/index.ts";
+import type { DesignModelRepository } from "../usecase/index.ts";
 import { parseDesignModel } from "./design-model-parser.ts";
 
 export class DesignModelRepositoryImpl implements DesignModelRepository {
-  findById(id: DesignModelId): Result<AcquiredDesignModel, RepositoryError> {
+  findById(id: DesignModelId): Result<DesignModel, RepositoryError> {
     const modelPath = id.artifactPath().asString();
     let md: string;
     try {
@@ -40,6 +40,6 @@ export class DesignModelRepositoryImpl implements DesignModelRepository {
     if (typeof composition === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: composition });
     }
-    return ok({ model: DesignModel.compose({ id, ...composition }), irHash: ContentHash.ofText(canonicalStringify(raw)) });
+    return ok(DesignModel.compose({ id, irHash: ContentHash.ofText(canonicalStringify(raw)), ...composition }));
   }
 }

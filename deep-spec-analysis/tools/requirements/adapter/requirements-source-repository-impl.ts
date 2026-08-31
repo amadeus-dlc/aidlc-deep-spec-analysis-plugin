@@ -11,8 +11,10 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ContentHash, RequirementIds } from "../../kernel/domain/index.ts";
-import type { RequirementsSourceId } from "../domain/index.ts";
-import type { RequirementsSource, RequirementsSourceRepository } from "../usecase/index.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../kernel/usecase/index.ts";
+import type { RequirementsSource, RequirementsSourceId } from "../domain/index.ts";
+import type { RequirementsSourceRepository } from "../usecase/index.ts";
 
 function findRequirementsFile(recordDir: string): string | null {
   const direct = join(recordDir, "inception", "requirements-analysis", "requirements.md");
@@ -29,13 +31,14 @@ function findRequirementsFile(recordDir: string): string | null {
 }
 
 export class RequirementsSourceRepositoryImpl implements RequirementsSourceRepository {
-  findById(id: RequirementsSourceId): RequirementsSource | null {
+  findById(id: RequirementsSourceId): Result<RequirementsSource, RepositoryError> {
     const path = findRequirementsFile(id.recordRoot().asString());
-    if (path === null) return null;
+    if (path === null) return err({ kind: "not-found", path: id.recordRoot().asString() });
     const bytes = readFileSync(path);
-    return {
+    return ok({
+      id,
       knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
       digest: ContentHash.ofBytes(bytes).asString(),
-    };
+    });
   }
 }

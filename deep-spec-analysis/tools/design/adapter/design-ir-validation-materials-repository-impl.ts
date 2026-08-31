@@ -7,7 +7,7 @@
 // ディレクトリ検査を出さない（directoryExists: true）——旧実装の
 // `recordRoot !== null &&` ガードの保存。
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import {
   type Json,
@@ -18,7 +18,9 @@ import {
   readIfExists,
   validateSchema,
 } from "../../kernel/adapter/index.ts";
-import { AttributeBound } from "../../kernel/domain/index.ts";
+import { AttributeBound, ErrorMessages, IrVersion } from "../../kernel/domain/index.ts";
+import { type Result, err as repoErr, ok } from "../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import type {
   DesignAttributeDecl,
@@ -56,11 +58,8 @@ import {
   InitialStates,
   UnformalizedTargets,
 } from "../domain/index.ts";
-import { type DesignModelId, SUPPORTED_DESIGN_IR_MAJOR } from "../domain/index.ts";
-import type {
-  DesignIrMaterialsAcquisition,
-  DesignIrValidationMaterialsRepository,
-} from "../usecase/index.ts";
+import { DesignIrValidationMaterials, DesignIrValidationMaterialsId, SUPPORTED_DESIGN_IR_MAJOR } from "../domain/index.ts";
+import type { DesignIrValidationMaterialsRepository } from "../usecase/index.ts";
 
 const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 
@@ -203,40 +202,39 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
     this.#schemaPath = config.schemaPath;
   }
 
-  acquire(id: DesignModelId): DesignIrMaterialsAcquisition {
-    const outputPath = id.artifactPath().asString();
+  findById(id: DesignIrValidationMaterialsId): Result<DesignIrValidationMaterials, RepositoryError> {
+    const outputPath = id.modelId().artifactPath().asString();
+    // 機能形式モデル以外・不在はこの Repository の収蔵外（not-found——use case
+    // が pass-through へ写像する旧 not-applicable の凍結挙動）。
     if (basename(outputPath) !== DESIGN_MODEL_BASENAME || !existsSync(outputPath)) {
-      return { kind: "not-applicable" };
+      return repoErr({ kind: "not-found", path: outputPath });
     }
+
+    const corrupt = (cause: string): Result<DesignIrValidationMaterials, RepositoryError> =>
+      repoErr({ kind: "corrupt", path: outputPath, cause });
 
     const md = readFileSync(outputPath, "utf-8");
     const fences = extractFences(md, "json");
     if (fences.length !== 1) {
-      return { kind: "unreadable", errors: ["formal model must contain exactly one ```json fence"] };
+      return corrupt("formal model must contain exactly one ```json fence");
     }
 
     let ir: Json;
     try {
       ir = JSON.parse(fences[0]?.body ?? "") as Json;
     } catch (err) {
-      return {
-        kind: "unreadable",
-        errors: [`design IR fence is not valid JSON: ${err instanceof Error ? err.message : String(err)}`],
-      };
+      return corrupt(`design IR fence is not valid JSON: ${err instanceof Error ? err.message : String(err)}`);
     }
     if (!isObject(ir)) {
-      return { kind: "unreadable", errors: ["design IR fence must contain a JSON object"] };
+      return corrupt("design IR fence must contain a JSON object");
     }
 
     if (!existsSync(this.#schemaPath)) {
-      return {
-        kind: "unreadable",
-        errors: [`design IR schema not installed at ${this.#schemaPath} — run plugin sync`],
-      };
+      return corrupt(`design IR schema not installed at ${this.#schemaPath} — run plugin sync`);
     }
     const schema = readContractSchema(this.#schemaPath);
     if (!schema.ok) {
-      return { kind: "unreadable", errors: [`design IR schema unreadable: ${schema.error.cause}`] };
+      return corrupt(`design IR schema unreadable: ${schema.error.cause}`);
     }
 
     const schemaErrors: string[] = [];
@@ -262,13 +260,26 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
       }
     }
 
-    return {
-      kind: "acquired",
-      materials: {
-        irVersion,
-        schemaErrors,
+    return ok(
+      DesignIrValidationMaterials.reconstitute({
+        id,
+        irVersion: IrVersion.reconstitute(irVersion),
+        schemaErrors: ErrorMessages.of(schemaErrors),
         units: DesignUnitDecls.of(units),
-      },
-    };
+        sourceDocument: md,
+      }),
+    );
+  }
+
+  // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
+  store(materials: DesignIrValidationMaterials): Result<DesignIrValidationMaterials, RepositoryError> {
+    const outputPath = materials.id().modelId().artifactPath().asString();
+    try {
+      mkdirSync(dirname(outputPath), { recursive: true });
+      writeFileSync(outputPath, materials.sourceDocument(), "utf-8");
+      return ok(materials);
+    } catch (e) {
+      return repoErr({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
+    }
   }
 }

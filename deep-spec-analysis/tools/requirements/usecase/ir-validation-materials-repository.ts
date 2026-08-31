@@ -1,44 +1,28 @@
-// 契約1 IR の検査材料の取得ポート。成果物パス（識別）から、フェンス抽出・
-// JSON 解釈・スキーマ検証までを済ませた材料を解決する。「Json をどう読むか」
-// と「スキーマをどう当てるか」はアダプタの知識なので、ポートは検査語彙だけを
-// 話す——view は well-formedness の材料、schemaErrors は凍結文言の列。
-//
-// not-applicable は形式モデル以外への書き込み（センサーの pass-through）。
-// unreadable は材料が組めない失敗で、errors は verdict にそのまま載る凍結文言。
+// IrValidationMaterials 集約の永続化・再構成ポート（Repository は集約の I/O
+// 責務。メソッドは永続化語彙のみ——オーナー裁定: find_by_id / store 系）。
+// findById はフェンス抽出・JSON 解釈・スキーマ検証・逆トレーサビリティ材料の
+// 抽出をアダプタに委ねて集約を返す。読めたが材料が組めない失敗は corrupt で
+// 返し、corrupt.cause には verdict にそのまま載る凍結文言が材料として入る。
+// 機能形式モデル以外・不在は not-found（use case が pass-through へ写像）。
+// store は集約の原文（sourceDocument）をバイト逐語で書く——findById∘store は
+// バイト恒等（往復則）。
 
-import { type RequirementIds } from "../../kernel/domain/index.ts";
-import type { FormalModelId, FrRefClaim, IrModelDecl, RequirementsSourceId } from "../domain/index.ts";
-
-export interface IrValidationMaterials {
-  readonly irVersion: string;
-  readonly schemaErrors: readonly string[];
-  readonly view: IrModelDecl;
-  readonly frClaims: readonly FrRefClaim[];
-  // IR の sourceDigest。文字列でなければ null。
-  readonly declaredDigest: string | null;
-  // この成果物が属する記録の要件ソース集約の識別子（導出はアダプタの
-  // パス知識——成果物パス → 記録ルート）。
-  readonly sourceId: RequirementsSourceId;
-}
-
-export type IrMaterialsAcquisition =
-  | { readonly kind: "not-applicable" }
-  | { readonly kind: "unreadable"; readonly errors: readonly string[] }
-  | { readonly kind: "acquired"; readonly materials: IrValidationMaterials };
+import type { Result } from "../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../kernel/usecase/index.ts";
+import type {
+  IrValidationMaterials,
+  IrValidationMaterialsId,
+  RequirementsSource,
+  RequirementsSourceId,
+} from "../domain/index.ts";
 
 export interface IrValidationMaterialsRepository {
-  acquire(id: FormalModelId): IrMaterialsAcquisition;
-}
-
-// 形式化の根拠となった requirements.md。id 集合とバイト列のダイジェストだけを
-// 運ぶ（探索とバイト読みはアダプタ）。
-export interface RequirementsSource {
-  readonly knownIds: RequirementIds;
-  readonly digest: string;
+  findById(id: IrValidationMaterialsId): Result<IrValidationMaterials, RepositoryError>;
+  store(materials: IrValidationMaterials): Result<IrValidationMaterials, RepositoryError>;
 }
 
 // 集約 ID による解決。記録ルート配下のどのフェーズに requirements.md が
 // あるかの探索は Repository の解決詳細で、恒等には含まれない。
 export interface RequirementsSourceRepository {
-  findById(id: RequirementsSourceId): RequirementsSource | null;
+  findById(id: RequirementsSourceId): Result<RequirementsSource, RepositoryError>;
 }

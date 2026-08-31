@@ -97,6 +97,7 @@ import {
   type RefinementQueryVerdict,
   type RefinementScenario,
   type RefinementUnitMap,
+  RefinementMaterials,
 } from "../tools/refinement/domain/index.ts";
 import { FormalModelRepositoryImpl, buildSmtPlan } from "../tools/requirements/adapter/index.ts";
 
@@ -177,7 +178,7 @@ describe("SMT script characterization (the PR8 safety net)", () => {
     );
     expect(acquired.ok).toBe(true);
     if (!acquired.ok) return;
-    const plan = buildSmtPlan(acquired.value.model);
+    const plan = buildSmtPlan(acquired.value);
     snapshot("v1-plan-queries.json", plan.queries as unknown as Json);
   });
 
@@ -185,18 +186,22 @@ describe("SMT script characterization (the PR8 safety net)", () => {
     const modelPath = join(fixtures, "record", ...MODEL_RELPATH);
     const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(modelPath)));
     const context = new RefinementMaterialsRepositoryImpl(mapSchemaPath).findById(RefinementMaterialsId.ofModel(DesignModelId.of(ap(modelPath))));
-    expect(acquired.ok && context.kind === "active" && context.map.kind === "loaded").toBe(true);
-    if (!acquired.ok || context.kind !== "active" || context.map.kind !== "loaded") return;
-    expect(context.map.map.units().toArray().length).toBeGreaterThan(0);
-    expect(context.map.map.unitMapOf(DesignUnitId.of("no-such-unit"))).toBe(undefined);
-    expect(context.map.map.id().artifactPath().asString().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
-    expect(context.requirements.id().artifactPath().asString().endsWith("deep-spec-analysis-formal-model.md")).toBe(true);
+    expect(acquired.ok && context.isActive()).toBe(true);
+    if (!acquired.ok || !context.isActive()) return;
+    const acq = context.mapAcquisition();
+    expect(acq.kind === "loaded").toBe(true);
+    if (acq.kind !== "loaded") return;
+    const req = context.requirements();
+    expect(acq.map.units().toArray().length).toBeGreaterThan(0);
+    expect(acq.map.unitMapOf(DesignUnitId.of("no-such-unit"))).toBe(undefined);
+    expect(acq.map.id().artifactPath().asString().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
+    expect(req.id().artifactPath().asString().endsWith("deep-spec-analysis-formal-model.md")).toBe(true);
     const queries: Json[] = [];
-    for (const u of acquired.value.model.units()) {
-      const unitMap = context.map.map.unitMapOf(u.id());
+    for (const u of acquired.value.units()) {
+      const unitMap = acq.map.unitMapOf(u.id());
       if (!unitMap) continue;
-      const plan = UnitRefinementPlan.of(u, unitMap, context.requirements, context.map.mapArtifact);
-      queries.push(...(buildRefinementQueries(u, context.requirements, plan).queries as unknown as Json[]));
+      const plan = UnitRefinementPlan.of(u, unitMap, req, acq.mapArtifact);
+      queries.push(...(buildRefinementQueries(u, req, plan).queries as unknown as Json[]));
     }
     snapshot("refinement-queries.json", queries as unknown as Json);
   });
@@ -796,5 +801,20 @@ describe("catalog misses in the enabledness path (frozen null-drop)", () => {
     // 発火可能な設計ガードなし → notEnabled は "true"（黙った除外の凍結面）。
     expect(enabledness?.script).toContain("(assert (=> ne_OB_2 true))");
     expect(built.facts.compileSkips().toArray()).toEqual([]);
+  });
+});
+
+describe("RefinementMaterials aggregate (repository ruling)", () => {
+  test("carries its id, and the state predicates guard the active accessors", () => {
+    const id = RefinementMaterialsId.ofModel(DesignModelId.of(ap("/r/m.md")));
+    const inactive = RefinementMaterials.inactive(id);
+    expect(inactive.id().equals(id)).toBe(true);
+    expect(inactive.isActive()).toBe(false);
+    expect(() => inactive.requirements()).toThrow("defect");
+    expect(() => inactive.mapAcquisition()).toThrow("defect");
+    const active = RefinementMaterials.active(id, requirements({}), { kind: "absent", error: null });
+    expect(active.isActive()).toBe(true);
+    expect(active.mapAcquisition().kind).toBe("absent");
+    expect(active.requirements()).toBeDefined();
   });
 });

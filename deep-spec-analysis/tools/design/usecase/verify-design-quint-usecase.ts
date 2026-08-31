@@ -78,7 +78,8 @@ export class VerifyDesignQuintUseCase {
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
     }
-    const { model, irHash } = acquired.value;
+    const model = acquired.value;
+    const irHash = model.irHash();
 
     if (!model.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR)) {
       // 旧実装は conform 前の skip 数を verdict 行に載せていた——凍結挙動。
@@ -198,31 +199,32 @@ export class VerifyDesignQuintUseCase {
     // --- Phase 3（動的）：alpha(P) が機械の不変量面に合流する -----------------
     const context = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
     let inputs: readonly DesignInputAnchor[] | undefined;
-    if (context.kind === "active") {
-      const req = context.requirements;
+    if (context.isActive()) {
+      const req = context.requirements();
+      const acq = context.mapAcquisition();
       const reqTargets = req.allTargetIds();
       const skipAll = (reason: string, detail: string): void => {
         for (const u of model.units()) {
           for (const t of reqTargets) skipped.push({ target: t, reason, unit: u.name(), detail });
         }
       };
-      if (context.map.kind === "absent") {
-        skipAll("absent-input", context.map.error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
-      } else if (!context.map.map.requirementsIrHash().equals(req.hash())) {
+      if (acq.kind === "absent") {
+        skipAll("absent-input", acq.error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
+      } else if (!acq.map.requirementsIrHash().equals(req.hash())) {
         skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
-      } else if (!context.map.map.designIrHash().equals(irHash)) {
+      } else if (!acq.map.designIrHash().equals(irHash)) {
         skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR — re-author the map");
       } else {
-        inputs = context.map.inputs;
+        inputs = acq.inputs;
         for (const u of model.units()) {
-          const unitMap = context.map.map.unitMapOf(u.id());
+          const unitMap = acq.map.unitMapOf(u.id());
           if (!unitMap) {
             for (const t of reqTargets) {
               skipped.push({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` });
             }
             continue;
           }
-          const plan = UnitRefinementPlan.of(u, unitMap, req, context.map.mapArtifact);
+          const plan = UnitRefinementPlan.of(u, unitMap, req, acq.mapArtifact);
           findings.push(...plan.gaps());
           skipped.push(...plan.quintStatusSkips(req, u.name()));
           const extras = plan.quintInvariants(req);
@@ -294,7 +296,7 @@ export class VerifyDesignQuintUseCase {
     }
 
     const finalMethod = method ?? "simulation";
-    const conformed = this.#designReportRepository.conformedOf(
+    const stored = this.#designReportRepository.store(
       DesignReport.compose({
         id,
         irVersion: model.irVersion(),
@@ -306,8 +308,8 @@ export class VerifyDesignQuintUseCase {
         checked: CheckedUnits.of(checkedUnits),
       }),
     );
-    const saved = this.#designReportRepository.save(conformed);
-    if (!saved.ok) return { kind: "save-failed", error: saved.error };
+    if (!stored.ok) return { kind: "save-failed", error: stored.error };
+    const conformed = stored.value;
     const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
     if (!cross.ok) return { kind: "save-failed", error: cross.error };
     return {
@@ -319,8 +321,8 @@ export class VerifyDesignQuintUseCase {
     };
   }
 
-  #persist(report: DesignReport): Result<void, RepositoryError> {
-    return this.#designReportRepository.save(this.#designReportRepository.conformedOf(report));
+  #persist(report: DesignReport): Result<DesignReport, RepositoryError> {
+    return this.#designReportRepository.store(report);
   }
 
   // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
@@ -329,6 +331,8 @@ export class VerifyDesignQuintUseCase {
     const siblings = this.#designReportRepository.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);
-    return this.#persist(siblings.value.crossChecked(DesignReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
+    const stored = this.#persist(siblings.value.crossChecked(DesignReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
+    return stored.ok ? ok(undefined) : stored;
+
   }
 }

@@ -124,12 +124,12 @@ describe("serializer (adapter owns the format knowledge)", () => {
 });
 
 describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", () => {
-  test("save then findById reconstitutes the written truth byte-for-byte", () => {
+  test("store then findById reconstitutes the written truth byte-for-byte", () => {
     const dir = mkdtempSync(join(tmpdir(), "refcheck-repo-"));
     try {
       const repository = new ReferenceCheckReportRepositoryImpl(schemaPath);
       const report = seed(dir);
-      expect(repository.save(report).ok).toBe(true);
+      expect(repository.store(report).ok).toBe(true);
       const found = repository.findById(report.id());
       expect(found.ok && renderReportBytes(found.value)).toBe(renderReportBytes(report));
       expect(found.ok && found.value.id().equals(report.id())).toBe(true);

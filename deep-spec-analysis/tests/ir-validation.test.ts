@@ -8,11 +8,11 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ArtifactPath, AttributeBound, RequirementIds } from "../tools/kernel/domain/index.ts";
+import { ArtifactPath, AttributeBound, ErrorMessages, RequirementIds } from "../tools/kernel/domain/index.ts";
 import { DesignIrValidationMaterialsRepositoryImpl } from "../tools/design/adapter/index.ts";
 import {
   BindingPairs,
@@ -48,6 +48,7 @@ import {
   DesignEntityName,
   DesignBackgroundId,
   DesignAttributeName,
+  DesignIrValidationMaterialsId,
 } from "../tools/design/domain/index.ts";
 import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "../tools/design/usecase/index.ts";
 import {
@@ -76,6 +77,8 @@ import {
   IrEntityName,
   IrAttributeName,
   BackgroundAssumptionId,
+  IrValidationMaterialsId,
+  FrRefClaims,
 } from "../tools/requirements/domain/index.ts";
 import { ValidateIrUseCase, type ValidateIrOutcome } from "../tools/requirements/usecase/index.ts";
 
@@ -343,9 +346,10 @@ describe("RequirementsSourceId", () => {
     mkdirSync(join(record, "construction", "requirements-analysis"), { recursive: true });
     writeFileSync(join(record, "construction", "requirements-analysis", "requirements.md"), "- FR-1: x\n");
     const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(record)));
-    expect(source).not.toBeNull();
-    expect([...(source?.knownIds ?? [])]).toEqual(["FR-1"]);
-    expect(new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(join(record, "nowhere"))))).toBeNull();
+    expect(source.ok).toBe(true);
+    expect([...(source.ok ? source.value.knownIds : [])]).toEqual(["FR-1"]);
+    const missing = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(join(record, "nowhere"))));
+    expect(!missing.ok && missing.error.kind).toBe("not-found");
   });
 });
 
@@ -962,5 +966,67 @@ describe("decl name primitives and the shared bound (issue #46 wave 5c-2)", () =
   test("AttributeBound owns the range-inversion comparison", () => {
     expect(AttributeBound.reconstitute(9).exceeds(AttributeBound.reconstitute(1))).toBe(true);
     expect(AttributeBound.reconstitute(1).exceeds(AttributeBound.reconstitute(1))).toBe(false);
+  });
+});
+
+describe("materials aggregates and the persistence round-trip (repository ruling)", () => {
+  test("ErrorMessages first-class collection", () => {
+    const msgs = ErrorMessages.of(["a"]).add("b");
+    expect([...msgs]).toEqual(["a", "b"]);
+    expect(msgs.isEmpty()).toBe(false);
+    expect(ErrorMessages.of([]).isEmpty()).toBe(true);
+    expect(msgs.toArray()).toEqual(["a", "b"]);
+  });
+
+  test("IrValidationMaterialsId / DesignIrValidationMaterialsId anchor 1:1 to the model id", () => {
+    const rid = IrValidationMaterialsId.ofModel(FormalModelId.of(ap("/r/x.md")));
+    expect(rid.equals(IrValidationMaterialsId.ofModel(FormalModelId.of(ap("/r/x.md"))))).toBe(true);
+    expect(rid.modelId().artifactPath().asString()).toBe("/r/x.md");
+    const did = DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap("/r/y.md")));
+    expect(did.equals(DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap("/r/y.md"))))).toBe(true);
+    expect(did.modelId().artifactPath().asString()).toBe("/r/y.md");
+  });
+
+  test("findById∘store round-trips the source document byte-for-byte (both contracts)", () => {
+    const record = join(tmpdir(), `deep-spec-store-${Math.random().toString(36).slice(2)}`);
+    const stage = join(record, "construction", "deep-spec-analysis-verify");
+    mkdirSync(stage, { recursive: true });
+    const irDoc = '# model\n\n```json\n{"irVersion":"1.0.0","entities":[],"obligations":[],"scenarios":[]}\n```\n';
+    const modelPath = join(stage, "deep-spec-analysis-formal-model.md");
+    writeFileSync(modelPath, irDoc);
+    const repo = new IrValidationMaterialsRepositoryImpl({ schemaPath: irSchemaPath });
+    const found = repo.findById(IrValidationMaterialsId.ofModel(FormalModelId.of(ap(modelPath))));
+    expect(found.ok).toBe(true);
+    if (!found.ok) return;
+    expect(found.value.sourceDocument()).toBe(irDoc);
+    rmSync(modelPath);
+    const stored = repo.store(found.value);
+    expect(stored.ok).toBe(true);
+    expect(readFileSync(modelPath, "utf-8")).toBe(irDoc);
+    expect(found.value.irVersion().asString()).toBe("1.0.0");
+    expect(Array.isArray(found.value.schemaErrors().toArray())).toBe(true);
+    expect(found.value.frReferenceIndex()).toBeDefined();
+
+    // design 側も同じ往復則。
+    const dDoc = '# design\n\n```json\n{"irVersion":"1.0.0","units":[]}\n```\n';
+    const dPath = join(stage, "deep-spec-analysis-functional-formal-model.md");
+    writeFileSync(dPath, dDoc);
+    const dRepo = new DesignIrValidationMaterialsRepositoryImpl({ schemaPath: designSchemaPath });
+    const dId = DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap(dPath)));
+    const dFound = dRepo.findById(dId);
+    expect(dFound.ok).toBe(true);
+    if (!dFound.ok) return;
+    expect(dFound.value.id().equals(dId)).toBe(true);
+    expect(dFound.value.sourceDocument()).toBe(dDoc);
+    rmSync(dPath);
+    expect(dRepo.store(dFound.value).ok).toBe(true);
+    expect(readFileSync(dPath, "utf-8")).toBe(dDoc);
+    rmSync(record, { recursive: true, force: true });
+  });
+
+  test("FrRefClaims first-class collection feeds the reverse index", () => {
+    const claims = FrRefClaims.of([]).add({ owner: "OB-1", frRefs: FrRefs.of(["FR-1"]) });
+    expect([...claims].length).toBe(1);
+    expect(claims.toArray()[0]?.owner).toBe("OB-1");
   });
 });

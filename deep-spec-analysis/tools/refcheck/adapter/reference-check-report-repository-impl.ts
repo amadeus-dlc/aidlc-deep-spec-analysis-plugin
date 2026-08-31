@@ -1,7 +1,7 @@
 // ReferenceCheckReportRepository の実 Gateway 実装。
 // 保存先／読出元は集約識別子（directory + fileName）から導出する。
-// 契約適合（conformedOf）は serializer の知識で実装し、save は常に
-// conformed な姿を書く——「不適合ファイルを決して出さない」の実装点。
+// 契約適合は serializer の知識で実装し、store は常に conformed な姿を書いて
+// 適合済み集約を返す——「不適合ファイルを決して出さない」の実装点。
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,10 +10,10 @@ import type { Json } from "../../kernel/adapter/json-value.ts";
 import { readContractSchema } from "../../kernel/adapter/contract-schema.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { ReferenceCheckReport, ReferenceCheckReportId } from "../domain/index.ts";
-import type { ReferenceCheckReportRepository } from "../usecase/index.ts";
+import type { ReferenceCheckReportConformance, ReferenceCheckReportRepository } from "../usecase/index.ts";
 import { conformToContract, parseReportDocument, renderReportBytes } from "./reference-check-report-serializer.ts";
 
-export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportRepository {
+export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportRepository, ReferenceCheckReportConformance {
   readonly #findingsSchemaPath: string;
 
   constructor(findingsSchemaPath: string) {
@@ -42,13 +42,13 @@ export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportR
     return conformToContract(report, readContractSchema(this.#findingsSchemaPath));
   }
 
-  save(report: ReferenceCheckReport): Result<void, RepositoryError> {
+  store(report: ReferenceCheckReport): Result<ReferenceCheckReport, RepositoryError> {
     const conformed = this.conformedOf(report);
     const path = join(conformed.id().directory().asString(), conformed.id().fileName());
     try {
       mkdirSync(conformed.id().directory().asString(), { recursive: true });
       writeFileSync(path, renderReportBytes(conformed), "utf-8");
-      return ok(undefined);
+      return ok(conformed);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
     }

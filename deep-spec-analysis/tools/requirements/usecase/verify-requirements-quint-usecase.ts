@@ -58,7 +58,8 @@ export class VerifyRequirementsQuintUseCase {
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
     }
-    const { model, irHash } = acquired.value;
+    const model = acquired.value;
+    const irHash = model.irHash();
 
     if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
       const saved = this.#persist(VerificationReport.versionMismatch(id, model, irHash, "simulation"));
@@ -85,7 +86,7 @@ export class VerifyRequirementsQuintUseCase {
     }
 
     const interpreted = checked.facts.interpret(model, checked.compileSkips, checked.method, checked.runs);
-    const conformed = this.#verificationReportRepository.conformedOf(
+    const stored = this.#verificationReportRepository.store(
       VerificationReport.compose({
         id,
         irVersion: model.irVersion(),
@@ -95,8 +96,8 @@ export class VerifyRequirementsQuintUseCase {
         skipped: interpreted.skipped,
       }),
     );
-    const saved = this.#verificationReportRepository.save(conformed);
-    if (!saved.ok) return { kind: "save-failed", error: saved.error };
+    if (!stored.ok) return { kind: "save-failed", error: stored.error };
+    const conformed = stored.value;
     const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
     if (!cross.ok) return { kind: "save-failed", error: cross.error };
     return {
@@ -108,8 +109,8 @@ export class VerifyRequirementsQuintUseCase {
     };
   }
 
-  #persist(report: VerificationReport): Result<void, RepositoryError> {
-    return this.#verificationReportRepository.save(this.#verificationReportRepository.conformedOf(report));
+  #persist(report: VerificationReport): Result<VerificationReport, RepositoryError> {
+    return this.#verificationReportRepository.store(report);
   }
 
   // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
@@ -118,6 +119,8 @@ export class VerifyRequirementsQuintUseCase {
     const siblings = this.#verificationReportRepository.findAllByDirectory(directory);
     // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
     if (!siblings.ok) return ok(undefined);
-    return this.#persist(siblings.value.crossChecked(VerificationReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
+    const stored = this.#persist(siblings.value.crossChecked(VerificationReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
+    return stored.ok ? ok(undefined) : stored;
+
   }
 }

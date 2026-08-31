@@ -9,9 +9,9 @@ import type { SchemaUnreadable } from "../../tools/kernel/adapter/index.ts";
 import type { RepositoryError } from "../../tools/kernel/usecase/index.ts";
 import { conformToContract } from "../../tools/refcheck/adapter/index.ts";
 import type { ReferenceCheckReport, ReferenceCheckReportId } from "../../tools/refcheck/domain/index.ts";
-import type { ReferenceCheckReportRepository } from "../../tools/refcheck/usecase/index.ts";
+import type { ReferenceCheckReportConformance, ReferenceCheckReportRepository } from "../../tools/refcheck/usecase/index.ts";
 
-export class InMemoryReferenceCheckReportRepository implements ReferenceCheckReportRepository {
+export class InMemoryReferenceCheckReportRepository implements ReferenceCheckReportRepository, ReferenceCheckReportConformance {
   readonly #findingsSchema: Result<Schema, SchemaUnreadable>;
   readonly #store = new Map<string, ReferenceCheckReport>();
 
@@ -35,8 +35,9 @@ export class InMemoryReferenceCheckReportRepository implements ReferenceCheckRep
     return conformToContract(report, this.#findingsSchema);
   }
 
-  save(report: ReferenceCheckReport): Result<void, RepositoryError> {
-    this.#store.set(this.#keyOf(report.id()), this.conformedOf(report));
-    return ok(undefined);
+  store(report: ReferenceCheckReport): Result<ReferenceCheckReport, RepositoryError> {
+    const conformed = this.conformedOf(report);
+    this.#store.set(this.#keyOf(report.id()), conformed);
+    return ok(conformed);
   }
 }

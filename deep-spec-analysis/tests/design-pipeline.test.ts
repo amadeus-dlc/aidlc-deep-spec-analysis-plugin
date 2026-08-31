@@ -97,7 +97,8 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
       const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(modelPath)));
       expect(acquired.ok).toBe(true);
       if (!acquired.ok) return;
-      const { model, irHash } = acquired.value;
+      const model = acquired.value;
+      const irHash = model.irHash();
       const reports = new DesignReportRepositoryImpl(schemaPath);
       // 兄弟 v1 spawn の決定論条件（E2E スイートと同じ seeded simulation）を
       // 明示注入する（bun の spawnSync は実行時の process.env 変異を継がない）。
@@ -141,7 +142,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
             }
           }
         }
-        const conformed = reports.conformedOf(
+        const stored = reports.store(
           DesignReport.compose({
             id: DesignReportId.of(ap(verifyDir), backend),
             irVersion: model.irVersion(),
@@ -152,12 +153,12 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
             checked: CheckedUnits.of(checkedUnits),
           }),
         );
-        expect(reports.save(conformed).ok).toBe(true);
+        expect(stored.ok).toBe(true);
         const siblings = reports.findAllByDirectory(ap(verifyDir));
         expect(siblings.ok).toBe(true);
         if (siblings.ok) {
           expect(
-            reports.save(siblings.value.crossChecked(DesignReportId.of(ap(verifyDir), "cross-check"), model, irHash)).ok,
+            reports.store(siblings.value.crossChecked(DesignReportId.of(ap(verifyDir), "cross-check"), model, irHash)).ok,
           ).toBe(true);
         }
         expect(readFileSync(join(verifyDir, `${backend}.json`), "utf-8")).toBe(golden(`${backend}.json`));
@@ -238,6 +239,7 @@ function unit(seed: {
 function model(units: DesignUnit[], irVersion = "1.0.0"): DesignModel {
   return DesignModel.compose({
     id: DesignModelId.of(ap("/test/deep-spec-analysis-functional-formal-model.md")),
+    irHash: ContentHash.reconstitute("c".repeat(64)),
     irVersion: IrVersion.reconstitute(irVersion),
     units: DesignUnits.of(units),
   } satisfies DesignModelComposition);
