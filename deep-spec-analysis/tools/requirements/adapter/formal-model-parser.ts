@@ -6,9 +6,16 @@
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { IrVersion, type Expression } from "../../kernel/domain/index.ts";
 import {
+  AttributeBound,
+  AttributePath,
   AttributeValues,
+  BackgroundAssumptionId,
   FrRefs,
+  ObligationId,
+  ObligationNature,
+  ScenarioId,
   type AttributeDeclaration,
+  type BackgroundAssumption,
   type Obligation,
   type RequirementsModelSeed,
   type Scenario,
@@ -34,10 +41,10 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id"> |
       const kind = t.kind;
       if (kind !== "bool" && kind !== "int" && kind !== "enum") continue;
       attributes.push({
-        path: `${ent.name}.${attr.name}`,
+        path: AttributePath.reconstitute(`${ent.name}.${attr.name}`),
         kind,
-        min: typeof t.min === "number" ? t.min : undefined,
-        max: typeof t.max === "number" ? t.max : undefined,
+        min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
+        max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
         values: Array.isArray(t.values) ? AttributeValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
       });
     }
@@ -47,8 +54,8 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id"> |
   for (const ob of Array.isArray(raw.obligations) ? raw.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
     obligations.push({
-      id: ob.id,
-      nature: ob.nature,
+      id: ObligationId.reconstitute(ob.id),
+      nature: ObligationNature.reconstitute(ob.nature),
       frRefs: FrRefs.of(strArr(ob.frRefs)),
       ears: typeof ob.ears === "string" ? ob.ears : undefined,
       assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
@@ -68,7 +75,7 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id"> |
       if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
     }
     scenarios.push({
-      id: sc.id,
+      id: ScenarioId.reconstitute(sc.id),
       kind,
       frRefs: FrRefs.of(strArr(sc.frRefs)),
       bindings,
@@ -76,10 +83,10 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id"> |
       expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
     });
   }
-  const background: { id: string; assert: Expression }[] = [];
+  const background: BackgroundAssumption[] = [];
   for (const bg of Array.isArray(raw.background) ? raw.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
-    background.push({ id: bg.id, assert: bg.assert as unknown as Expression });
+    background.push({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: bg.assert as unknown as Expression });
   }
   return {
     irVersion: irVersion.value,

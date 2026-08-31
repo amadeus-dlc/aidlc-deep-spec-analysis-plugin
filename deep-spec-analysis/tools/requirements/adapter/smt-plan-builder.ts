@@ -128,16 +128,16 @@ export function decodeSolverModel(
   values: { [name: string]: string },
 ): { [path: string]: boolean | number | string } {
   const out: { [path: string]: boolean | number | string } = {};
-  for (const attr of [...model.attributes()].sort((a, b) => (a.path < b.path ? -1 : 1))) {
-    const raw = values[smtVar(attr.path, false)];
+  for (const attr of [...model.attributes()].sort((a, b) => (a.path.asString() < b.path.asString() ? -1 : 1))) {
+    const raw = values[smtVar(attr.path.asString(), false)];
     if (raw === undefined) continue;
     if (attr.kind === "bool") {
-      out[attr.path] = raw === "true";
+      out[attr.path.asString()] = raw === "true";
     } else {
       const m = raw.match(/^\(-\s*(\d+)\)$/);
       const n = m ? -Number.parseInt(m[1] ?? "0", 10) : Number.parseInt(raw, 10);
-      if (attr.kind === "enum" && attr.values) out[attr.path] = attr.values.valueAt(n) ?? n;
-      else out[attr.path] = n;
+      if (attr.kind === "enum" && attr.values) out[attr.path.asString()] = attr.values.valueAt(n) ?? n;
+      else out[attr.path.asString()] = n;
     }
   }
   return out;
@@ -152,37 +152,37 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const primedDecls: string[] = [];
   for (const attr of model.attributes()) {
     const sort = attr.kind === "bool" ? "Bool" : "Int";
-    decls.push(`(declare-const ${smtVar(attr.path, false)} ${sort})`);
-    primedDecls.push(`(declare-const ${smtVar(attr.path, true)} ${sort})`);
+    decls.push(`(declare-const ${smtVar(attr.path.asString(), false)} ${sort})`);
+    primedDecls.push(`(declare-const ${smtVar(attr.path.asString(), true)} ${sort})`);
   }
 
   const typeBounds: NamedConstraint[] = [];
   const primedTypeBounds: NamedConstraint[] = [];
   for (const attr of model.attributes()) {
     const bounds = (primed: boolean): string | null => {
-      const v = smtVar(attr.path, primed);
+      const v = smtVar(attr.path.asString(), primed);
       if (attr.kind === "enum" && attr.values) {
         return `(and (>= ${v} 0) (<= ${v} ${attr.values.count() - 1}))`;
       }
       if (attr.kind === "int" && (attr.min !== undefined || attr.max !== undefined)) {
         const parts: string[] = [];
-        if (attr.min !== undefined) parts.push(`(>= ${v} ${attr.min < 0 ? `(- ${-attr.min})` : attr.min})`);
-        if (attr.max !== undefined) parts.push(`(<= ${v} ${attr.max < 0 ? `(- ${-attr.max})` : attr.max})`);
+        if (attr.min !== undefined) parts.push(`(>= ${v} ${attr.min.asNumber() < 0 ? `(- ${-attr.min.asNumber()})` : attr.min.asNumber()})`);
+        if (attr.max !== undefined) parts.push(`(<= ${v} ${attr.max.asNumber() < 0 ? `(- ${-attr.max.asNumber()})` : attr.max.asNumber()})`);
         return parts.length === 1 ? (parts[0] ?? null) : `(and ${parts.join(" ")})`;
       }
       return null;
     };
     const cur = bounds(false);
-    if (cur) typeBounds.push({ name: smtName("ty", attr.path), smt: cur });
+    if (cur) typeBounds.push({ name: smtName("ty", attr.path.asString()), smt: cur });
     const nxt = bounds(true);
-    if (nxt) primedTypeBounds.push({ name: smtName("typ", attr.path), smt: nxt });
+    if (nxt) primedTypeBounds.push({ name: smtName("typ", attr.path.asString()), smt: nxt });
   }
 
   const bg: NamedConstraint[] = [];
   for (const b of model.background()) {
     try {
-      bg.push({ name: smtName("bg", b.id), smt: smtOf(model, b.assert) });
-      labelToTarget.set(smtName("bg", b.id), b.id);
+      bg.push({ name: smtName("bg", b.id.asString()), smt: smtOf(model, b.assert) });
+      labelToTarget.set(smtName("bg", b.id.asString()), b.id.asString());
     } catch (err) {
       // コンパイルできない背景仮定は全クエリから落ちる。OB/SC の id を持たない
       // ため skipped[] を占められず、不変量の detail 経由でだけ観測される。
@@ -194,25 +194,25 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const invariantObs: Obligation[] = [];
   const events: Obligation[] = [];
   for (const ob of model.obligations()) {
-    if (ob.nature === "invariant" || ob.nature === "numeric") {
+    if (ob.nature.asString() === "invariant" || ob.nature.asString() === "numeric") {
       if (!ob.assert) {
-        skipped.push({ target: ob.id, reason: "compile-error", detail: "invariant obligation lacks an assert expression" });
-        compiled.set(ob.id, false);
+        skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: "invariant obligation lacks an assert expression" });
+        compiled.set(ob.id.asString(), false);
         continue;
       }
       try {
-        invariants.push({ name: smtName("ob", ob.id), smt: smtOf(model, ob.assert) });
-        labelToTarget.set(smtName("ob", ob.id), ob.id);
+        invariants.push({ name: smtName("ob", ob.id.asString()), smt: smtOf(model, ob.assert) });
+        labelToTarget.set(smtName("ob", ob.id.asString()), ob.id.asString());
         invariantObs.push(ob);
-        compiled.set(ob.id, true);
+        compiled.set(ob.id.asString(), true);
       } catch (err) {
-        skipped.push({ target: ob.id, reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
-        compiled.set(ob.id, false);
+        skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+        compiled.set(ob.id.asString(), false);
       }
-    } else if (ob.nature === "event") {
+    } else if (ob.nature.asString() === "event") {
       if (!ob.guard || !ob.effect || !ob.trigger) {
-        skipped.push({ target: ob.id, reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
-        compiled.set(ob.id, false);
+        skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
+        compiled.set(ob.id.asString(), false);
         continue;
       }
       try {
@@ -220,15 +220,15 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         smtOf(model, ob.guard);
         smtOf(model, ob.effect);
         events.push(ob);
-        compiled.set(ob.id, true);
+        compiled.set(ob.id.asString(), true);
       } catch (err) {
-        skipped.push({ target: ob.id, reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
-        compiled.set(ob.id, false);
+        skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+        compiled.set(ob.id.asString(), false);
       }
     } else {
       // state-temporal — このバックエンドの nature 範囲外（FR6.2）。
-      skipped.push({ target: ob.id, reason: "capability", detail: `nature "${ob.nature}" is checked by a state-machine backend, not the SMT backend` });
-      compiled.set(ob.id, false);
+      skipped.push({ target: ob.id.asString(), reason: "capability", detail: `nature "${ob.nature.asString()}" is checked by a state-machine backend, not the SMT backend` });
+      compiled.set(ob.id.asString(), false);
     }
   }
 
@@ -241,7 +241,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   ].join("\n");
   const baseAssumptions = [...typeBounds, ...bg, ...invariants].map((c) => c.name);
   const modelVars = model.attributes().toArray().map((a) => ({
-    name: smtVar(a.path, false),
+    name: smtVar(a.path.asString(), false),
     sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool",
   }));
 
@@ -256,9 +256,9 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     const ant = (ob.assert.args ?? [])[0];
     if (!ant) continue;
     try {
-      const name = smtName("ant", ob.id);
+      const name = smtName("ant", ob.id.asString());
       const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${smtOf(model, ant)}))`].join("\n");
-      queries.push({ id: `vac:${ob.id}`, script, assumptions: [...baseAssumptions, name], model: [] });
+      queries.push({ id: `vac:${ob.id.asString()}`, script, assumptions: [...baseAssumptions, name], model: [] });
     } catch {
       // 前件は完全形 assert のコンパイルで一度通っている——到達不能。
     }
@@ -279,14 +279,14 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         const a = list[i];
         const b = list[j];
         if (!a || !b || !a.guard || !b.guard || !a.effect || !b.effect) continue;
-        const ga = { name: smtName("g", a.id), smt: smtOf(model, a.guard) };
-        const gb = { name: smtName("g", b.id), smt: smtOf(model, b.guard) };
-        const ea = { name: smtName("e", a.id), smt: smtOf(model, a.effect) };
-        const eb = { name: smtName("e", b.id), smt: smtOf(model, b.effect) };
-        labelToTarget.set(ga.name, a.id);
-        labelToTarget.set(gb.name, b.id);
-        labelToTarget.set(ea.name, a.id);
-        labelToTarget.set(eb.name, b.id);
+        const ga = { name: smtName("g", a.id.asString()), smt: smtOf(model, a.guard) };
+        const gb = { name: smtName("g", b.id.asString()), smt: smtOf(model, b.guard) };
+        const ea = { name: smtName("e", a.id.asString()), smt: smtOf(model, a.effect) };
+        const eb = { name: smtName("e", b.id.asString()), smt: smtOf(model, b.effect) };
+        labelToTarget.set(ga.name, a.id.asString());
+        labelToTarget.set(gb.name, b.id.asString());
+        labelToTarget.set(ea.name, a.id.asString());
+        labelToTarget.set(eb.name, b.id.asString());
         const overlapScript = [
           baseScript,
           ...[ga, gb].flatMap((c) => [`(declare-const ${c.name} Bool)`, `(assert (=> ${c.name} ${c.smt}))`]),
@@ -299,8 +299,8 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
             `(assert (=> ${c.name} ${c.smt}))`,
           ]),
         ].join("\n");
-        const qOverlap = `evo:${a.id}:${b.id}`;
-        const qJoint = `evj:${a.id}:${b.id}`;
+        const qOverlap = `evo:${a.id.asString()}:${b.id.asString()}`;
+        const qJoint = `evj:${a.id.asString()}:${b.id.asString()}`;
         queries.push({ id: qOverlap, script: overlapScript, assumptions: [...baseAssumptions, ga.name, gb.name], model: [] });
         queries.push({
           id: qJoint,
@@ -308,7 +308,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
           assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
           model: [],
         });
-        eventPairs.push({ qOverlap, qJoint, a: a.id, b: b.id, trigger });
+        eventPairs.push({ qOverlap, qJoint, a: a.id.asString(), b: b.id.asString(), trigger });
       }
     }
   }
@@ -324,7 +324,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     queries.push({ id: `gap:${trigger}`, script, assumptions: [...baseAssumptions, name], model: modelVars });
     gapTriggers.set(
       trigger,
-      list.map((ev) => ev.id).sort(IdOrder.compare),
+      list.map((ev) => ev.id.asString()).sort(IdOrder.compare),
     );
   }
 
@@ -332,11 +332,11 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const scenarioQueries = new Map<string, string>();
   for (const sc of model.scenarios()) {
     if (sc.event) {
-      skipped.push({ target: sc.id, reason: "capability", detail: "scenarios with a When-event are not checked by the SMT backend in v1" });
+      skipped.push({ target: sc.id.asString(), reason: "capability", detail: "scenarios with a When-event are not checked by the SMT backend in v1" });
       continue;
     }
     try {
-      const name = smtName("sc", sc.id);
+      const name = smtName("sc", sc.id.asString());
       const parts: string[] = [];
       for (const [path, value] of Object.entries(sc.bindings).sort(([x], [y]) => (x < y ? -1 : 1))) {
         const attr = model.attributeAt(path);
@@ -351,11 +351,11 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       }
       const conj = parts.length === 1 ? (parts[0] ?? "true") : `(and ${parts.join(" ")})`;
       const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${conj}))`].join("\n");
-      const qid = `sc:${sc.id}`;
+      const qid = `sc:${sc.id.asString()}`;
       queries.push({ id: qid, script, assumptions: [...baseAssumptions, name], model: modelVars });
-      scenarioQueries.set(sc.id, qid);
+      scenarioQueries.set(sc.id.asString(), qid);
     } catch (err) {
-      skipped.push({ target: sc.id, reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+      skipped.push({ target: sc.id.asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
     }
   }
 

@@ -1,11 +1,78 @@
-// 義務（EARS nature 付き）。逐語移動。
+// 義務（EARS nature 付き）。逐語移動。id と nature はドメインプリミティブで
+// 運ぶ（nature の既知集合は述語として所有——未知 nature は素通しで capability
+// 文言に逐語で載る凍結挙動）。
+
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+
+export type ObligationIdError = { readonly kind: "empty-obligation-id"; readonly raw: string };
+
+export class ObligationId {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<ObligationId, ObligationIdError> {
+    if (raw === "") return err({ kind: "empty-obligation-id", raw });
+    return ok(new ObligationId(raw));
+  }
+
+  static reconstitute(raw: string): ObligationId {
+    return new ObligationId(raw);
+  }
+
+  equals(other: ObligationId): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
+
+export class ObligationNature {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static reconstitute(raw: string): ObligationNature {
+    return new ObligationNature(raw);
+  }
+
+  equals(other: ObligationNature): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+
+  isInvariant(): boolean {
+    return this.#value === "invariant";
+  }
+
+  isNumeric(): boolean {
+    return this.#value === "numeric";
+  }
+
+  isEvent(): boolean {
+    return this.#value === "event";
+  }
+
+  isStateTemporal(): boolean {
+    return this.#value === "state-temporal";
+  }
+}
 
 import type { Expression } from "../../kernel/domain/expression.ts";
 import type { FrRefs } from "../../kernel/domain/index.ts";
 
 export interface Obligation {
-  id: string;
-  nature: string;
+  id: ObligationId;
+  nature: ObligationNature;
   frRefs: FrRefs;
   ears?: string;
   assert?: Expression;
@@ -36,11 +103,11 @@ export class Obligations {
   }
 
   byId(id: string): Obligation | undefined {
-    return this.#values.find((o) => o.id === id);
+    return this.#values.find((o) => o.id.asString() === id);
   }
 
   ids(): readonly string[] {
-    return this.#values.map((o) => o.id);
+    return this.#values.map((o) => o.id.asString());
   }
 
   toArray(): readonly Obligation[] {

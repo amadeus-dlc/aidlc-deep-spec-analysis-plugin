@@ -1,10 +1,39 @@
-// 受け入れ／拒否シナリオ。逐語移動。
+// 受け入れ／拒否シナリオ。逐語移動。id はドメインプリミティブで運ぶ。
+
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+
+export type ScenarioIdError = { readonly kind: "empty-scenario-id"; readonly raw: string };
+
+export class ScenarioId {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<ScenarioId, ScenarioIdError> {
+    if (raw === "") return err({ kind: "empty-scenario-id", raw });
+    return ok(new ScenarioId(raw));
+  }
+
+  static reconstitute(raw: string): ScenarioId {
+    return new ScenarioId(raw);
+  }
+
+  equals(other: ScenarioId): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
 
 import type { Expression } from "../../kernel/domain/expression.ts";
 import type { FrRefs } from "../../kernel/domain/index.ts";
 
 export interface Scenario {
-  id: string;
+  id: ScenarioId;
   kind: "accept" | "reject";
   frRefs: FrRefs;
   bindings: { [path: string]: boolean | number | string };
@@ -33,11 +62,11 @@ export class Scenarios {
   }
 
   byId(id: string): Scenario | undefined {
-    return this.#values.find((s) => s.id === id);
+    return this.#values.find((s) => s.id.asString() === id);
   }
 
   ids(): readonly string[] {
-    return this.#values.map((s) => s.id);
+    return this.#values.map((s) => s.id.asString());
   }
 
   toArray(): readonly Scenario[] {

@@ -8,6 +8,7 @@ export { type IrVersionError, IrVersion } from "./ir-version.ts";
 export { IdOrder } from "./id-order.ts";
 export { TargetIds } from "./target-id.ts";
 export { FrRefs } from "./fr-refs.ts";
+export { type BackendNameError, BackendName } from "./backend-name.ts";
 export { RequirementIds } from "./requirement-ids.ts";
 export { Names } from "./name-normalize.ts";
 export { type ArtifactPathError, ArtifactPath } from "./artifact-path.ts";
