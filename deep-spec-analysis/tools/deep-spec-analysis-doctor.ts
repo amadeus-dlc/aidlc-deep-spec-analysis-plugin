@@ -132,7 +132,8 @@ function scopesOfStage(...stagePath: string[]): string[] {
   try {
     const frontmatter = readFileSync(stageFile, "utf-8").split("\n---")[0];
     const m = frontmatter.match(/^scopes:\n((?:\s+- .+\n)+)/m);
-    if (m) return m[1].match(/- (\S+)/g)!.map((s) => s.slice(2));
+    const items = m?.[1]?.match(/- (\S+)/g) ?? null;
+    if (items) return items.map((s) => s.slice(2));
   } catch {
     // fall through to the authored default
   }

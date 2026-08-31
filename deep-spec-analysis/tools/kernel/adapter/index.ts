@@ -5,7 +5,7 @@ export { renderVerdictLine } from "./verdict-line.ts";
 export { findRecordRoot, relArtifact } from "./record-root.ts";
 export { readIfExists } from "./read-if-exists.ts";
 export { type SchemaUnreadable, readContractSchema } from "./contract-schema.ts";
-export { type Json, isObject } from "./json-value.ts";
+export { type Json, isObject, strArr } from "./json-value.ts";
 export { canonicalStringify } from "./canonical-json.ts";
 export { type Schema, validateSchema } from "./schema-validator.ts";
 export { type Yaml, parseYamlSubset } from "./yaml-subset.ts";

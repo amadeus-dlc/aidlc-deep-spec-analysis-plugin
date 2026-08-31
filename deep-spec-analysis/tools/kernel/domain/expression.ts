@@ -28,6 +28,13 @@ export class Expressions {
     return (e.args ?? []).some((a) => Expressions.usesPrime(a));
   }
 
+  // ref == enum リテラルの等式ノード(状態機械の暗黙ガード/効果の符号)。
+  // lowering(design)と event catalog(refinement)が同一構造を組む——単一定義で
+  // 符号の lockstep を構造的に保証する(PR10 重複監査)。
+  static eqRef(path: string, prime: boolean, value: string): Expression {
+    return { op: "eq", args: [prime ? { op: "ref", path, prime: true } : { op: "ref", path }, { op: "enum", value }] };
+  }
+
   // 式ツリーの前順走査。両 IR バリデータがローカルに複製していた walkExpr の
   // 統合（PR7）——訪問順は「自ノード → args の宣言順」で凍結。
   static walk(e: Expression, visit: (node: Expression) => void): void {

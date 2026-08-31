@@ -19,6 +19,7 @@ import {
   isObject,
   relArtifact,
   validateSchema,
+  strArr,
 } from "../../kernel/adapter/index.ts";
 import {
   AttributeMappings,
@@ -54,7 +55,6 @@ import type {
 export const REFINEMENT_MAP_BASENAME = "deep-spec-analysis-refinement-map.md";
 export const REQUIREMENTS_MODEL_RELPATH = ["inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md"];
 
-const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
 
 // 旧 design-lib 系の extractSingleJsonFence と同値（唯一の json fence のみ採用）。
 function extractSingleJsonFence(md: string): string | null {

@@ -46,7 +46,7 @@ export class CheckDomainComponentsUseCase {
     const catalog = record.value.componentCatalog();
     if (catalog === null) return { kind: "not-applicable" };
 
-    const ledger = new CheckFamilyLedger(COMPONENT_FAMILIES);
+    const ledger = CheckFamilyLedger.of(COMPONENT_FAMILIES);
     ComponentCheckMaterials.of({ outcome: catalog, artifact: ArtifactPath.reconstitute(record.value.target().artifact) }).runChecks(ledger);
     const report = ReferenceCheckReport.compose({
       id: ReferenceCheckReportId.of(input.reportDirectory, "components"),

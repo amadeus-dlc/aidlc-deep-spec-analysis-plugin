@@ -15,7 +15,11 @@ export interface Violation {
 
 // 移行前から存在するフラット構成のファイル。層規律（process/io/方向）を免除。
 // 削除されたらこの集合からも消すこと（増やす変更は移行の逆行）。
-export const LEGACY_FILES: ReadonlySet<string> = new Set([
+// 合成ルート（フラット必須の entry）。ディスパッチャが basename 解決するため
+// tools/ 直下から動かせない。層規律の免除ではなく「配線だけを持つ役割」で、
+// process.*/import.meta を許される唯一の場所。旧 LEGACY_FILES 免除は PR10 で
+// 空化された——entry 以外のフラットファイルは未分類として違反になる。
+export const ENTRY_FILES: ReadonlySet<string> = new Set([
   "aidlc-sensor-deep-spec-ir-valid.ts",
   "aidlc-sensor-deep-spec-verify-smt.ts",
   "aidlc-sensor-deep-spec-verify-quint.ts",
@@ -27,12 +31,6 @@ export const LEGACY_FILES: ReadonlySet<string> = new Set([
   "aidlc-sensor-deep-spec-design-verify-quint.ts",
   "deep-spec-analysis-doctor.ts",
 ]);
-
-// 合成ルート（フラット必須の entry）。ディスパッチャが basename 解決するため
-// tools/ 直下から動かせない。
-export const ENTRY_FILES: ReadonlySet<string> = new Set(
-  [...LEGACY_FILES].filter((f) => f.startsWith("aidlc-sensor-") || f === "deep-spec-analysis-doctor.ts"),
-);
 
 const CONTEXTS = ["kernel", "requirements", "design", "refinement", "refcheck", "doctor"] as const;
 // infrastructure は「言語を拡張する技術基盤」専用の最内層（オーナー裁定
@@ -48,7 +46,7 @@ interface Location {
 }
 
 export function locationOf(relPath: string): Location | "entry" | "legacy" | "data" | null {
-  if (LEGACY_FILES.has(relPath)) return ENTRY_FILES.has(relPath) ? "entry" : "legacy";
+  if (ENTRY_FILES.has(relPath)) return "entry";
   const segments = relPath.split("/");
   if (segments[0] === "data") return "data";
   if (segments.length >= 3 && (CONTEXTS as readonly string[]).includes(segments[0]) && (LAYERS as readonly string[]).includes(segments[1])) {
@@ -62,6 +60,37 @@ export function locationOf(relPath: string): Location | "entry" | "legacy" | "da
 // 誤認して以降のコードを検査から落とすため、文字列・テンプレートリテラルを
 // 状態として追跡する字句走査で除去する。正規表現リテラル内の // は未対応
 //（除算と構文的に区別できず、実コードでの出現も想定されない既知の限界）。
+// 文字列リテラルの内容を空にして返す(コメントも除去)。正規表現ベースの
+// 構文検査が文字列内のトークンに誤爆しないための前処理。テンプレート
+// リテラルは補間ごと落とす(補間内の違反は検出しない——偽陰性側に倒す)。
+export function stripStrings(rawSource: string): string {
+  const source = stripComments(rawSource);
+  let out = "";
+  type State = "code" | "single" | "double" | "template";
+  let state: State = "code";
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i] ?? "";
+    if (state === "code") {
+      if (c === "'") state = "single";
+      else if (c === '"') state = "double";
+      else if (c === "`") state = "template";
+      out += c;
+    } else {
+      if (c === "\\") {
+        i++;
+        continue;
+      }
+      if ((state === "single" && c === "'") || (state === "double" && c === '"') || (state === "template" && c === "`")) {
+        state = "code";
+        out += c;
+      } else if (c === "\n") {
+        out += c;
+      }
+    }
+  }
+  return out;
+}
+
 export function stripComments(source: string): string {
   let out = "";
   type State = "code" | "single" | "double" | "template" | "line" | "block";
@@ -255,6 +284,57 @@ export function noExportStar(relPath: string, rawSource: string): Violation[] {
   return [];
 }
 
+// ルール: domain のクラスは private constructor + static ファクトリ(new は
+// 自クラス内の 1 箇所——house style)。Error 派生の例外型だけは公開 ctor を許す。
+export function privateConstructorInDomain(relPath: string, rawSource: string): Violation[] {
+  const loc = locationOf(relPath);
+  if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
+  const source = stripComments(rawSource);
+  const out: Violation[] = [];
+  const classRe = /^export (?:abstract )?class (\w+)(?:\s+extends\s+(\w+))?/gm;
+  for (let m = classRe.exec(source); m !== null; m = classRe.exec(source)) {
+    const name = m[1] ?? "";
+    if (m[2] === "Error") continue;
+    const start = m.index;
+    const next = source.indexOf("\nexport ", start + 1);
+    const body = source.slice(start, next > 0 ? next : source.length);
+    if (!body.includes("private constructor")) {
+      out.push({ path: relPath, rule: "private-constructor-in-domain", detail: `class ${name} lacks a private constructor` });
+    }
+  }
+  return out;
+}
+
+// ルール: get アクセサ禁止(house style は振る舞いメソッド——プロパティ風の
+// 露出はフィールド直触りの錯覚を生む)。
+export function noGetAccessors(relPath: string, rawSource: string): Violation[] {
+  const source = stripStrings(rawSource);
+  if (/^\s+(?:public\s+|private\s+|protected\s+|static\s+)*get\s+\w+\s*\(/m.test(source)) {
+    return [{ path: relPath, rule: "no-get-accessors", detail: "get accessor found — expose behaviour as a method" }];
+  }
+  return [];
+}
+
+// ルール: TS enum 禁止(閉集合は述語つき DP か literal union で運ぶ)。
+export function noEnums(relPath: string, rawSource: string): Violation[] {
+  const source = stripStrings(rawSource);
+  if (/^\s*(?:export\s+)?(?:const\s+)?enum\s+\w+/m.test(source)) {
+    return [{ path: relPath, rule: "no-enums", detail: "TS enum found — use a domain primitive or a literal union" }];
+  }
+  return [];
+}
+
+// ルール: 非 null 表明(x!)禁止——不在は Result / 明示分岐で運ぶ。
+// 文字列とコメントを剥いだうえで、識別子・)・] 直後の ! を検出する
+// (!= / !== は後続の = で除外)。
+export function noNonNullAssertions(relPath: string, rawSource: string): Violation[] {
+  const source = stripStrings(rawSource);
+  if (/[\w\)\]]!(?![=])/.test(source)) {
+    return [{ path: relPath, rule: "no-non-null-assertions", detail: "non-null assertion found — branch explicitly" }];
+  }
+  return [];
+}
+
 // ルール: 層とコンテキストの依存方向。
 //   infrastructure → 同層のみ（言語拡張基盤：ドメインを知らない）
 //   domain  → 同一コンテキスト domain・kernel/domain（＋infrastructure）
@@ -318,6 +398,10 @@ export const ALL_RULES = [
   processOnlyInEntries,
   noExportStar,
   layerDirection,
+  privateConstructorInDomain,
+  noGetAccessors,
+  noEnums,
+  noNonNullAssertions,
 ] as const;
 
 export function violationsOf(relPath: string, source: string): Violation[] {

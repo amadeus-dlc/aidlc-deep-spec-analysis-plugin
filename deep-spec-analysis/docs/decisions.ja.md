@@ -935,3 +935,52 @@ FD-S の図差分（`AllowedValues.rogueAmong`/`absentFrom`）、FD-R3 の逆検
 
 証拠：322 テスト green・golden 無傷・パリティスナップショット
 `diff -r` 空・カバレッジフロア充足。
+
+## ドメイン語彙の完全化と層強制のクローズアウト — 裁定 A〜D と PR10（2026-08-31〜09-01）
+
+#46 の 4 裁定を全域適用して台帳をクローズした（PR #54〜#60）。
+
+- **裁定 A（DP 徹底）**: ドメインオブジェクトのフィールドから bool 以外の
+  基本データ型を全廃。requirements（5a）→ design（5b）→ refinement/Decl 束
+  （5c-1/5c-2）→ トリガ面（5c-3、kernel `TriggerName`）→ lowered ペイロード面
+  （5d、`LoweredId`/`LoweredOriginRef`/`ObligationIds`/レポート識別子の
+  `BackendName`）。共有語彙は FrRefs の前例どおり kernel へ昇格
+  （`AttributeBound`・`TriggerName`・`ErrorMessages`）。
+- **裁定 C（Tell-Don't-Ask 徹底）**: DP 化は包むだけでは無意味——値の知識
+  （閉集合述語・凍結順・座標導出・境界比較・照合構文）は DP/コレクション
+  自身が所有する（#56 で全域是正、以後の新規 DP は最初から適用）。
+- **裁定 D（Repository 契約）**: Repository のメソッドは永続化語彙
+  （findById/store 系）のみ。findById は ID を持つ集約を返し、書ける文書には
+  store を付ける——単文書集約は原文の生バイト列を保持し、
+  findById∘store がバイト恒等（原子的書き込み・防御コピー込み）。
+  契約適合のような書き込み前提の照会は別サービスポートへ分離。
+- **宣言済み除外（恒久）**: `Expression` published language（`op` の閉集合化は
+  不採用——寛容な未知値素通しが契約）、状態トークン（enum 宣言値への参照で、
+  宣言値語彙そのものが素材）、design `attrPath`（entity/attribute DP 対からの
+  導出結合形）、serializer 直描画ペイロード文字列、`FrRefClaim.owner`
+  （義務/シナリオ混在の参照トークン）。
+- **equal→1 凍結コンパレータ群**: `return 0` への正規化は重複宣言時の安定順を
+  変え得るため不採用で確定。重複は well-formedness が表面化する。
+
+PR10 で層強制を完全有効化した：
+
+- LEGACY_FILES 免除を空化。フラットに残る 10 ファイル（9 センサー + doctor）は
+  「entry（合成ルート）」という役割であり免除ではない——process.*/import.meta を
+  許される唯一の場所で、配線だけを持つ。
+- スタイルルールを追加（各ルールに red example）: domain クラスの
+  private constructor 規律（new は自クラス内のみ、Error 派生は除外）・
+  get アクセサ禁止・TS enum 禁止・非 null 表明禁止。実樹の違反は 2 件
+  （`CheckFamilyLedger` の公開 ctor → `of()` ファクトリ、doctor の `!` 表明）で
+  修正済み。
+- 重複監査: kernel 共有済み（findRecordRoot・relArtifact・validateSchema・
+  readIfExists・isObject・canonicalStringify・extractFences）に加え、
+  `strArr`（5 アダプタ）と `eqRef`（lowering/catalog の暗黙ガード符号——単一
+  定義で lockstep を構造保証）を kernel へ一本化。正直な例外 2 件を残す:
+  ① sanitize 正規表現は意味別（SMT シンボル `[^A-Za-z0-9_]` と finding target
+  `[^A-Za-z0-9_./-]` は別語彙）、② SMT レンダリング語彙（`smtName`/`smtVar`）の
+  requirements/design 二重定義は PR8 の結末——adapter は他コンテキストの
+  adapter を import できず、第 2 コンパイラは v1 の描画語彙を逐語で写す契約。
+
+証拠：367 tests green・golden 無傷・パリティスナップショット `diff -r` 空
+（pre-PR7 基底）・カバレッジフロア充足・7 ハーネスビルド・CLI z3/quint
+スポットチェック BYTE-IDENTICAL。

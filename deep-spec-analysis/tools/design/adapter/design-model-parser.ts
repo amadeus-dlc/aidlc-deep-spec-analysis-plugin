@@ -4,7 +4,7 @@
 // 返す。ユニットのソートは DesignModel.compose の不変条件。
 // 旧 deep-spec-design-lib.ts の parseDesignIr からの逐語移植。
 
-import { type Json, isObject } from "../../kernel/adapter/index.ts";
+import { type Json, isObject, strArr } from "../../kernel/adapter/index.ts";
 import { FrRefs, IrVersion, type Expression, TriggerName } from "../../kernel/domain/index.ts";
 import {
   BrRefs,
@@ -37,7 +37,6 @@ import {
   DesignUnit,
 } from "../domain/index.ts";
 
-const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
 
 export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" | "irHash" | "sourceDocument"> | string {
   if (!isObject(raw)) return "design IR is not a JSON object";

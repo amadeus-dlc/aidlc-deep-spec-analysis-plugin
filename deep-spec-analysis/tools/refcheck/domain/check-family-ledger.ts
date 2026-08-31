@@ -26,9 +26,13 @@ export class CheckFamilyLedger {
   readonly #failed = new Set<string>();
   readonly #skippedFamilies = new Set<string>();
 
-  constructor(families: CheckFamilies, unit?: UnitName) {
+  private constructor(families: CheckFamilies, unit?: UnitName) {
     this.#families = families;
     this.#unit = unit;
+  }
+
+  static of(families: CheckFamilies, unit?: UnitName): CheckFamilyLedger {
+    return unit === undefined ? new CheckFamilyLedger(families) : new CheckFamilyLedger(families, unit);
   }
 
   finding(family: CheckFamily, kind: string, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
