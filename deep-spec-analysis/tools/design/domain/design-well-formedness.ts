@@ -19,7 +19,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
   const unitNames = new Set<string>();
 
   for (const unitView of units) {
-    const unitName = unitView.unit;
+    const unitName = unitView.unit.asString();
     const where = (s: string): string => `unit ${unitName}: ${s}`;
     if (unitNames.has(unitName)) errors.push(`duplicate unit "${unitName}"`);
     unitNames.add(unitName);
@@ -29,17 +29,18 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     for (const ent of unitView.entities) {
       const attrNames = new Set<string>();
       for (const attr of ent.attributes) {
-        if (attrNames.has(attr.name)) errors.push(where(`duplicate attribute "${ent.name}.${attr.name}"`));
-        attrNames.add(attr.name);
+        const coord = `${ent.name.asString()}.${attr.name.asString()}`;
+        if (attrNames.has(attr.name.asString())) errors.push(where(`duplicate attribute "${coord}"`));
+        attrNames.add(attr.name.asString());
         if (attr.kind === "int" && (attr.min === undefined || attr.max === undefined)) {
           errors.push(
-            where(`${ent.name}.${attr.name}: int attributes require min and max — the Quint backend needs bounded domains`),
+            where(`${coord}: int attributes require min and max — the Quint backend needs bounded domains`),
           );
         }
-        if (attr.kind === "int" && attr.min !== undefined && attr.max !== undefined && attr.min > attr.max) {
-          errors.push(where(`${ent.name}.${attr.name}: min > max`));
+        if (attr.kind === "int" && attr.min !== undefined && attr.max !== undefined && attr.min.exceeds(attr.max)) {
+          errors.push(where(`${coord}: min > max`));
         }
-        attrTypes.set(`${ent.name}.${attr.name}`, { kind: attr.kind, values: attr.values });
+        attrTypes.set(coord, { kind: attr.kind, values: attr.values });
       }
     }
 
@@ -94,10 +95,10 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     };
 
     for (const ob of unitView.obligations) {
-      const ctx = `obligation ${ob.id}`;
-      dup(ob.id, ctx);
+      const ctx = `obligation ${ob.id.asString()}`;
+      dup(ob.id.asString(), ctx);
       collectBr(ob.brRefs);
-      if (ob.origin === "rules" && ob.brRefs === undefined) {
+      if (ob.origin?.isRules() === true && ob.brRefs === undefined) {
         errors.push(where(`${ctx}: origin "rules" requires brRefs`));
       }
       if (ob.assert !== undefined) checkExpr(ob.assert, ctx, false);
@@ -112,8 +113,8 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     }
 
     for (const sm of unitView.stateMachines) {
-      const ctx = `machine ${sm.id}`;
-      dup(sm.id, ctx);
+      const ctx = `machine ${sm.id.asString()}`;
+      dup(sm.id.asString(), ctx);
       const attrPath = sm.attrPath;
       const attr = attrTypes.get(attrPath);
       if (!attr) {
@@ -132,8 +133,8 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
       }
       const transitionCells = new Set<string>();
       for (const tr of sm.transitions) {
-        const tctx = `transition ${tr.id}`;
-        dup(tr.id, tctx);
+        const tctx = `transition ${tr.id.asString()}`;
+        dup(tr.id.asString(), tctx);
         collectBr(tr.brRefs);
         for (const [k, v] of [["from", tr.from], ["to", tr.to]] as const) {
           if (v !== undefined && !states.has(v)) {
@@ -166,8 +167,8 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     }
 
     for (const sc of unitView.scenarios) {
-      const ctx = `scenario ${sc.id}`;
-      dup(sc.id, ctx);
+      const ctx = `scenario ${sc.id.asString()}`;
+      dup(sc.id.asString(), ctx);
       collectBr(sc.brRefs);
       for (const [path, val] of sc.bindings) {
         const t = attrTypes.get(path);
@@ -185,8 +186,8 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     }
 
     for (const bg of unitView.background) {
-      dup(bg.id, `background ${bg.id}`);
-      if (bg.assert !== undefined) checkExpr(bg.assert, `background ${bg.id}`, false);
+      dup(bg.id.asString(), `background ${bg.id.asString()}`);
+      if (bg.assert !== undefined) checkExpr(bg.assert, `background ${bg.id.asString()}`, false);
     }
 
     // brRefs reverse-verification + BR coverage against this unit's rules.md.

@@ -10,7 +10,64 @@
 // ときの黙殺条件（isObject / typeof チェック）はパーサ側へ移り、ここに来る
 // 時点で型は確定している。
 
-import { type Expression, Expressions } from "../../kernel/domain/index.ts";
+import { type AttributeBound, type Expression, Expressions } from "../../kernel/domain/index.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import type { ObligationId } from "./obligation.ts";
+import type { ScenarioId } from "./scenario.ts";
+import type { BackgroundAssumptionId } from "./requirements-model.ts";
+
+export type IrDeclTokenError = { readonly kind: "empty-ir-decl-token"; readonly raw: string };
+
+// decl 束のエンティティ名（well-formedness の重複・座標文言が使う）。
+export class IrEntityName {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<IrEntityName, IrDeclTokenError> {
+    if (raw === "") return err({ kind: "empty-ir-decl-token", raw });
+    return ok(new IrEntityName(raw));
+  }
+
+  static reconstitute(raw: string): IrEntityName {
+    return new IrEntityName(raw);
+  }
+
+  equals(other: IrEntityName): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
+
+export class IrAttributeName {
+  readonly #value: string;
+
+  private constructor(value: string) {
+    this.#value = value;
+  }
+
+  static parse(raw: string): Result<IrAttributeName, IrDeclTokenError> {
+    if (raw === "") return err({ kind: "empty-ir-decl-token", raw });
+    return ok(new IrAttributeName(raw));
+  }
+
+  static reconstitute(raw: string): IrAttributeName {
+    return new IrAttributeName(raw);
+  }
+
+  equals(other: IrAttributeName): boolean {
+    return this.#value === other.#value;
+  }
+
+  asString(): string {
+    return this.#value;
+  }
+}
 
 // enum 属性の宣言値のコレクション（宣言順を保持——序数対応・文言順に効く）。
 export class IrDeclaredValues {
@@ -44,11 +101,11 @@ export class IrDeclaredValues {
 // 型宣言が欠けた属性は kind: "" として届く（旧実装は type 欠落でも属性を
 // カタログへ登録した——参照解決の可否がそれで変わるため保存する）。
 export interface IrAttributeDecl {
-  readonly name: string;
+  readonly name: IrAttributeName;
   readonly kind: string;
   readonly values?: IrDeclaredValues;
-  readonly min?: number;
-  readonly max?: number;
+  readonly min?: AttributeBound;
+  readonly max?: AttributeBound;
 }
 
 export class IrAttributeDecls {
@@ -76,7 +133,7 @@ export class IrAttributeDecls {
 }
 
 export interface IrEntityDecl {
-  readonly name: string;
+  readonly name: IrEntityName;
   readonly attributes: IrAttributeDecls;
 }
 
@@ -111,7 +168,7 @@ export interface IrTemporalDecl {
 }
 
 export interface IrObligationDecl {
-  readonly id: string;
+  readonly id: ObligationId;
   readonly assert?: Expression;
   readonly guard?: Expression;
   readonly effect?: Expression;
@@ -170,7 +227,7 @@ export class IrBindingPairs {
 }
 
 export interface IrScenarioDecl {
-  readonly id: string;
+  readonly id: ScenarioId;
   readonly bindings: IrBindingPairs;
   readonly hasEvent: boolean;
   readonly expect?: Expression;
@@ -201,7 +258,7 @@ export class IrScenarioDecls {
 }
 
 export interface IrBackgroundDecl {
-  readonly id: string;
+  readonly id: BackgroundAssumptionId;
   readonly assert?: Expression;
 }
 
@@ -267,18 +324,20 @@ export class IrModelDecl {
 
     const entityNames = new Set<string>();
     for (const ent of this.#entities) {
-      if (entityNames.has(ent.name)) errors.push(`schema: duplicate entity "${ent.name}"`);
-      entityNames.add(ent.name);
+      const entName = ent.name.asString();
+      if (entityNames.has(entName)) errors.push(`schema: duplicate entity "${entName}"`);
+      entityNames.add(entName);
       const attrNames = new Set<string>();
       for (const attr of ent.attributes) {
-        if (attrNames.has(attr.name)) {
-          errors.push(`schema: duplicate attribute "${ent.name}.${attr.name}"`);
+        const attrName = attr.name.asString();
+        if (attrNames.has(attrName)) {
+          errors.push(`schema: duplicate attribute "${entName}.${attrName}"`);
         }
-        attrNames.add(attr.name);
-        if (attr.kind === "int" && attr.min !== undefined && attr.max !== undefined && attr.min > attr.max) {
-          errors.push(`schema: ${ent.name}.${attr.name}: min > max`);
+        attrNames.add(attrName);
+        if (attr.kind === "int" && attr.min !== undefined && attr.max !== undefined && attr.min.exceeds(attr.max)) {
+          errors.push(`schema: ${entName}.${attrName}: min > max`);
         }
-        attrTypes.set(`${ent.name}.${attr.name}`, { kind: attr.kind, values: attr.values });
+        attrTypes.set(`${entName}.${attrName}`, { kind: attr.kind, values: attr.values });
       }
     }
 
@@ -308,8 +367,8 @@ export class IrModelDecl {
     };
 
     for (const ob of this.#obligations) {
-      const where = `obligation ${ob.id}`;
-      dupCheck(ob.id, where);
+      const where = `obligation ${ob.id.asString()}`;
+      dupCheck(ob.id.asString(), where);
       if (ob.assert !== undefined) checkExpr(ob.assert, where, false);
       if (ob.guard !== undefined) checkExpr(ob.guard, where, false);
       if (ob.effect !== undefined) checkExpr(ob.effect, where, true);
@@ -322,8 +381,8 @@ export class IrModelDecl {
     }
 
     for (const sc of this.#scenarios) {
-      const where = `scenario ${sc.id}`;
-      dupCheck(sc.id, where);
+      const where = `scenario ${sc.id.asString()}`;
+      dupCheck(sc.id.asString(), where);
       for (const [path, val] of sc.bindings) {
         const t = attrTypes.get(path);
         if (!t) {
@@ -342,8 +401,8 @@ export class IrModelDecl {
     }
 
     for (const bg of this.#background) {
-      dupCheck(bg.id, `background ${bg.id}`);
-      if (bg.assert !== undefined) checkExpr(bg.assert, `background ${bg.id}`, false);
+      dupCheck(bg.id.asString(), `background ${bg.id.asString()}`);
+      if (bg.assert !== undefined) checkExpr(bg.assert, `background ${bg.id.asString()}`, false);
     }
 
     return errors;

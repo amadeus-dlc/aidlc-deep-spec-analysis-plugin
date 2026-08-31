@@ -12,3 +12,4 @@ export { type BackendNameError, BackendName } from "./backend-name.ts";
 export { RequirementIds } from "./requirement-ids.ts";
 export { Names } from "./name-normalize.ts";
 export { type ArtifactPathError, ArtifactPath } from "./artifact-path.ts";
+export { type AttributeBoundError, AttributeBound } from "./attribute-bound.ts";

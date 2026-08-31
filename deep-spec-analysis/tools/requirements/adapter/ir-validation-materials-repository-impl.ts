@@ -15,7 +15,7 @@ import {
   readContractSchema,
   validateSchema,
 } from "../../kernel/adapter/index.ts";
-import { ArtifactPath, type Expression } from "../../kernel/domain/index.ts";
+import { ArtifactPath, AttributeBound, type Expression } from "../../kernel/domain/index.ts";
 import {
   type FrRefClaim,
   type IrAttributeDecl,
@@ -34,6 +34,11 @@ import {
   type IrScenarioDecl,
   type FormalModelId,
   RequirementsSourceId,
+  ScenarioId,
+  ObligationId,
+  IrEntityName,
+  IrAttributeName,
+  BackgroundAssumptionId,
 } from "../domain/index.ts";
 import type { IrMaterialsAcquisition, IrValidationMaterialsRepository } from "../usecase/index.ts";
 
@@ -57,14 +62,14 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
       if (!isObject(attr) || typeof attr.name !== "string") continue;
       const t = isObject(attr.type) ? attr.type : {};
       attributes.push({
-        name: attr.name,
+        name: IrAttributeName.reconstitute(attr.name),
         kind: typeof t.kind === "string" ? t.kind : "",
         values: Array.isArray(t.values) ? IrDeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
-        min: typeof t.min === "number" ? t.min : undefined,
-        max: typeof t.max === "number" ? t.max : undefined,
+        min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
+        max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
       });
     }
-    entities.push({ name: ent.name, attributes: IrAttributeDecls.of(attributes) });
+    entities.push({ name: IrEntityName.reconstitute(ent.name), attributes: IrAttributeDecls.of(attributes) });
   }
 
   const obligations: IrObligationDecl[] = [];
@@ -72,7 +77,7 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
     if (!isObject(ob) || typeof ob.id !== "string") continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
     obligations.push({
-      id: ob.id,
+      id: ObligationId.reconstitute(ob.id),
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
       effect: asExpression(ob.effect ?? null),
@@ -92,7 +97,7 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
     scenarios.push({
-      id: sc.id,
+      id: ScenarioId.reconstitute(sc.id),
       bindings: IrBindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
@@ -102,7 +107,7 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
   const background: IrBackgroundDecl[] = [];
   for (const bg of Array.isArray(ir.background) ? ir.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string") continue;
-    background.push({ id: bg.id, assert: asExpression(bg.assert ?? null) });
+    background.push({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: asExpression(bg.assert ?? null) });
   }
 
   return IrModelDecl.reconstitute({

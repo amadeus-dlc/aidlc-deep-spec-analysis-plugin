@@ -78,6 +78,9 @@ export {
   IrModelDecl,
   IrObligationDecls,
   IrScenarioDecls,
+  type IrDeclTokenError,
+  IrAttributeName,
+  IrEntityName,
 } from "./ir-model-decl.ts";
 export { type FrRefClaim, FrReferenceIndex } from "./fr-reference-index.ts";
 export { SourceAnchor } from "./source-anchor.ts";

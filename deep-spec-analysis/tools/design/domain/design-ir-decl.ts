@@ -6,19 +6,25 @@
 // 旧 design-ir-valid センサーの semanticErrors が生 Json を走査していた
 // ときの黙殺条件（isObject / typeof チェック）はパーサ側へ移った。
 
-import type { Expression } from "../../kernel/domain/index.ts";
+import type { AttributeBound, Expression } from "../../kernel/domain/index.ts";
+import type { DesignUnitId } from "./design-unit-id.ts";
+import type { DesignObligationId, DesignObligationOrigin } from "./design-obligation.ts";
+import type { DesignTransitionId } from "./design-transition.ts";
+import type { DesignMachineId, DesignEntityName, DesignAttributeName } from "./design-machine.ts";
+import type { DesignScenarioId } from "./design-scenario.ts";
+import type { DesignBackgroundId } from "./design-unit.ts";
 
 // 型宣言が欠けた属性は kind: "" で届く（旧実装はカタログへ登録した）。
 export interface DesignAttributeDecl {
-  readonly name: string;
+  readonly name: DesignAttributeName;
   readonly kind: string;
   readonly values?: DeclaredValues;
-  readonly min?: number;
-  readonly max?: number;
+  readonly min?: AttributeBound;
+  readonly max?: AttributeBound;
 }
 
 export interface DesignEntityDecl {
-  readonly name: string;
+  readonly name: DesignEntityName;
   readonly attributes: DesignAttributeDecls;
 }
 
@@ -29,8 +35,8 @@ export interface DesignTemporalDecl {
 }
 
 export interface DesignObligationDecl {
-  readonly id: string;
-  readonly origin?: string;
+  readonly id: DesignObligationId;
+  readonly origin?: DesignObligationOrigin;
   // brRefs が配列でなければ undefined（origin:"rules" の必須チェックに使う）。
   readonly brRefs?: BrRefs;
   readonly assert?: Expression;
@@ -40,7 +46,7 @@ export interface DesignObligationDecl {
 }
 
 export interface DesignTransitionDecl {
-  readonly id: string;
+  readonly id: DesignTransitionId;
   readonly from?: string;
   readonly to?: string;
   readonly trigger?: string;
@@ -55,7 +61,7 @@ export interface DesignIgnoreDecl {
 }
 
 export interface DesignMachineDecl {
-  readonly id: string;
+  readonly id: DesignMachineId;
   // `<entity>.<attribute>`。どちらかが文字列でなければ "?" が入る（凍結）。
   readonly attrPath: string;
   readonly initial: InitialStates;
@@ -64,7 +70,7 @@ export interface DesignMachineDecl {
 }
 
 export interface DesignScenarioDecl {
-  readonly id: string;
+  readonly id: DesignScenarioId;
   readonly bindings: BindingPairs;
   readonly hasEvent: boolean;
   readonly expect?: Expression;
@@ -72,12 +78,12 @@ export interface DesignScenarioDecl {
 }
 
 export interface DesignBackgroundDecl {
-  readonly id: string;
+  readonly id: DesignBackgroundId;
   readonly assert?: Expression;
 }
 
 export interface DesignUnitDecl {
-  readonly unit: string;
+  readonly unit: DesignUnitId;
   readonly entities: DesignEntityDecls;
   readonly obligations: DesignObligationDecls;
   readonly stateMachines: DesignMachineDecls;
