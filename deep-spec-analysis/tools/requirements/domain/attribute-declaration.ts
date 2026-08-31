@@ -132,6 +132,13 @@ export class AttributeDeclarations {
     return this.#byPath.get(path);
   }
 
+  // 旧センサー逐語の path 辞書順（byte-frozen）。重複 path は ir-valid の
+  // duplicate-attribute 検査が表面化し、等値時に 1 を返す挙動も凍結面
+  // （return 0 への正規化は重複時の安定順を変え得るため PR10 の凍結台帳で扱う）。
+  sortedByPath(): AttributeDeclarations {
+    return new AttributeDeclarations([...this.#values].sort((a, b) => (a.path.asString() < b.path.asString() ? -1 : 1)));
+  }
+
   toArray(): readonly AttributeDeclaration[] {
     return this.#values;
   }

@@ -134,7 +134,7 @@ function runComponentChecksImpl(
       const list = owners.get(e.name.asString()) ?? [];
       list.push({ comp: c, entity: e });
       owners.set(e.name.asString(), list);
-      if (e.identifier === null || e.identifier.asString() === "") {
+      if (e.identifier === null || e.identifier.isEmpty()) {
         ledger.finding(DD_5, "structure-invalid", [TargetIds.safe("entity", e.name.asString())], [ref(`${e.element.asString()}.identifier`)],
           `entity "${e.name.asString()}" has no identifier`);
       }

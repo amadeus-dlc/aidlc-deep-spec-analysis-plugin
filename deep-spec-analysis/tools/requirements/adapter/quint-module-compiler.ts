@@ -201,10 +201,10 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   // 型境界。
   const invariantComponents: { id: string; expr: Expression; frRefs: string[] }[] = [];
   for (const ob of model.obligations()) {
-    if ((ob.nature.asString() === "invariant" || ob.nature.asString() === "numeric") && ob.assert) {
+    if ((ob.nature.isInvariant() || ob.nature.isNumeric()) && ob.assert) {
       invariantComponents.push({ id: ob.id.asString(), expr: ob.assert, frRefs: [...ob.frRefs.toArray()] });
     }
-    if (ob.nature.asString() === "state-temporal" && ob.temporal?.pattern === "always" && ob.temporal.assert) {
+    if (ob.nature.isStateTemporal() && ob.temporal?.pattern === "always" && ob.temporal.assert) {
       invariantComponents.push({ id: ob.id.asString(), expr: ob.temporal.assert, frRefs: [...ob.frRefs.toArray()] });
     }
   }
@@ -251,7 +251,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   const eventIds: string[] = [];
   const actionNames: string[] = [];
   for (const ob of model.obligations()) {
-    if (ob.nature.asString() !== "event") continue;
+    if (!ob.nature.isEvent()) continue;
     if (!ob.guard || !ob.effect || !ob.trigger) {
       compileSkips.push({ target: ob.id.asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
       continue;
@@ -281,7 +281,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   // 時相（leads-to）プロパティ——bounded モードのみ検査される。
   const temporalNames = new Map<string, string>();
   for (const ob of model.obligations()) {
-    if (ob.nature.asString() !== "state-temporal" || ob.temporal?.pattern !== "leads-to") continue;
+    if (!ob.nature.isStateTemporal() || ob.temporal?.pattern !== "leads-to") continue;
     if (!ob.temporal.from || !ob.temporal.to) continue;
     try {
       const from = quintOf(ob.temporal.from, stateName);

@@ -466,3 +466,12 @@ describe("DesignMachines frozen probe order (PR#55 review)", () => {
     expect(sorted.toArray().map((m) => m.id.asString())).toEqual(["SM-1", "SM-2"]);
   });
 });
+
+describe("DesignObligationNature closed set (tell-don't-ask consolidation)", () => {
+  test("owns all four nature predicates; unknown natures pass through", () => {
+    expect(DesignObligationNature.reconstitute("numeric").isNumeric()).toBe(true);
+    expect(DesignObligationNature.reconstitute("state-temporal").isStateTemporal()).toBe(true);
+    const mystery = DesignObligationNature.reconstitute("mystery");
+    expect(mystery.isNumeric() || mystery.isStateTemporal()).toBe(false);
+  });
+});

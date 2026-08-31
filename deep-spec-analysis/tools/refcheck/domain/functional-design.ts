@@ -119,18 +119,18 @@ export class AttrDecl {
 
   // FD-E3: min > max の範囲逆転。
   boundsInverted(): boolean {
-    return this.#seed.min !== null && this.#seed.max !== null && this.#seed.min.asNumber() > this.#seed.max.asNumber();
+    return this.#seed.min !== null && this.#seed.max !== null && this.#seed.min.exceeds(this.#seed.max);
   }
 
   // FD-E3: 数値既定値が範囲の外。
   defaultBelowMin(): boolean {
     const d = this.#seed.def;
-    return d !== null && d.isNumber() && this.#seed.min !== null && d.asNumber() < this.#seed.min.asNumber();
+    return d !== null && this.#seed.min !== null && d.belowBound(this.#seed.min);
   }
 
   defaultAboveMax(): boolean {
     const d = this.#seed.def;
-    return d !== null && d.isNumber() && this.#seed.max !== null && d.asNumber() > this.#seed.max.asNumber();
+    return d !== null && this.#seed.max !== null && d.aboveBound(this.#seed.max);
   }
 
   // FD-E3: 文字列既定値が allowed_values の外。
@@ -142,7 +142,7 @@ export class AttrDecl {
 
   // ライフサイクル属性の候補性（status/state の名を帯び allowed を持つ）。
   bearsLifecycleName(): boolean {
-    return this.#seed.name.asString() === "status" || this.#seed.name.asString() === "state";
+    return this.#seed.name.isLifecycleName();
   }
 
   // FD-S1: 図の状態のうち allowed values に無いもの（差分はコレクションが計算）。
@@ -375,19 +375,20 @@ export class EntityDecls {
   // FD-E6: Entity / Entity.attr 形はエンティティ名の厳密照合、自由文は
   // 小文字包含の緩い照合（凍結挙動）。
   resolvesReference(reference: ReferenceTarget): boolean {
-    const token = reference.asString().match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.[A-Za-z][A-Za-z0-9_]*)?$/);
-    if (token) return this.#names.has(token[1] ?? "");
-    return this.#values.some((d) => reference.asString().toLowerCase().includes(d.name().asString().toLowerCase()));
+    const token = reference.entityToken();
+    if (token !== null) return this.#names.has(token);
+    return this.#values.some((d) => reference.looselyMentions(d.name()));
   }
 
   // FD-R4: applies-to が Entity / Entity.attribute へ解決するか。
   resolvesAppliesTo(target: AppliesTo): boolean {
-    const token = target.asString().match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.([A-Za-z][A-Za-z0-9_]*))?$/);
-    if (token) {
-      const ent = this.#values.find((e) => e.name().asString() === token[1]);
-      return ent !== undefined && (token[2] === undefined || ent.attrNamed(token[2]) !== null);
+    const token = target.entityToken();
+    if (token !== null) {
+      const ent = this.#values.find((e) => e.name().asString() === token);
+      const attr = target.attributeToken();
+      return ent !== undefined && (attr === null || ent.attrNamed(attr) !== null);
     }
-    return this.#values.some((e) => target.asString().toLowerCase().includes(e.name().asString().toLowerCase()));
+    return this.#values.some((e) => target.looselyMentions(e.name()));
   }
 
   toArray(): readonly EntityDecl[] {

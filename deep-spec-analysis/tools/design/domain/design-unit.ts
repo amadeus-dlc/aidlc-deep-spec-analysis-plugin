@@ -59,6 +59,11 @@ export class DesignBackgroundAssumptions {
     return new DesignBackgroundAssumptions([...this.#values, value]);
   }
 
+  // lowering の凍結順：IdOrder 正準順（DesignTransitions.sortedCanonically と同じ面）。
+  sortedCanonically(): DesignBackgroundAssumptions {
+    return new DesignBackgroundAssumptions([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
+  }
+
   *[Symbol.iterator](): Iterator<DesignBackgroundAssumption> {
     yield* this.#values;
   }

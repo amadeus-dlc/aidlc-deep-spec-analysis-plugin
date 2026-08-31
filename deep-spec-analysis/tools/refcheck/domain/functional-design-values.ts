@@ -36,6 +36,10 @@ export class AttributeName {
   equals(other: AttributeName): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
   normalized(): string { return Names.normalize(this.#value); }
+  // ライフサイクル属性名の語彙（status/state——FD-S1 候補性の凍結集合）。
+  isLifecycleName(): boolean { return this.#value === "status" || this.#value === "state"; }
+  // identifier 欄の空宣言（DD-5 の structure-invalid 判定）。
+  isEmpty(): boolean { return this.#value === ""; }
 }
 
 // YAML/見出し内の位置指定子（witness の location に載る）。
@@ -100,6 +104,9 @@ export class AttributeDefault {
   asString(): string { return String(this.#value); }
   // 境界: 凍結文言への埋め込み形（旧 `${def}` / String(def) と同一）。
   render(): string { return String(this.#value); }
+  // FD-E3: 数値既定値の範囲照合（数値でない既定値は常に範囲内扱い＝凍結挙動）。
+  belowBound(bound: NumericBound): boolean { return typeof this.#value === "number" && this.#value < bound.asNumber(); }
+  aboveBound(bound: NumericBound): boolean { return typeof this.#value === "number" && this.#value > bound.asNumber(); }
 }
 
 export class NumericBound {
@@ -112,6 +119,8 @@ export class NumericBound {
   static reconstitute(raw: number): NumericBound { return new NumericBound(raw); }
   equals(other: NumericBound): boolean { return this.#value === other.#value; }
   asNumber(): number { return this.#value; }
+  // FD-E3: 範囲逆転（min > max）の判定は境界自身の知識。
+  exceeds(other: NumericBound): boolean { return this.#value > other.#value; }
 }
 
 export class CardinalityNotation {
@@ -171,6 +180,19 @@ export class AppliesTo {
   static reconstitute(raw: string): AppliesTo { return new AppliesTo(raw); }
   equals(other: AppliesTo): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
+  // FD-R4: Entity / Entity.attribute 形の構文知識は参照自身が所有（凍結正規表現）。
+  entityToken(): string | null {
+    const token = this.#value.match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.([A-Za-z][A-Za-z0-9_]*))?$/);
+    return token ? (token[1] ?? null) : null;
+  }
+  attributeToken(): string | null {
+    const token = this.#value.match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.([A-Za-z][A-Za-z0-9_]*))?$/);
+    return token?.[2] ?? null;
+  }
+  // 自由文の緩い照合（小文字包含——凍結挙動）。
+  looselyMentions(name: EntityName): boolean {
+    return this.#value.toLowerCase().includes(name.asString().toLowerCase());
+  }
 }
 
 // rules.md の source 欄から抽出された FR/NFR 参照。
@@ -238,6 +260,15 @@ export class ReferenceTarget {
   static reconstitute(raw: string): ReferenceTarget { return new ReferenceTarget(raw); }
   equals(other: ReferenceTarget): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
+  // FD-E6: Entity / Entity.attr 形の構文知識は参照自身が所有（凍結正規表現・属性部は非捕捉）。
+  entityToken(): string | null {
+    const token = this.#value.match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.[A-Za-z][A-Za-z0-9_]*)?$/);
+    return token ? (token[1] ?? null) : null;
+  }
+  // 自由文の緩い照合（小文字包含——凍結挙動）。
+  looselyMentions(name: EntityName): boolean {
+    return this.#value.toLowerCase().includes(name.asString().toLowerCase());
+  }
 }
 
 // ---- ファーストクラスコレクション（語彙） -----------------------------------

@@ -5,6 +5,7 @@
 // （OOUI 裁定）。
 
 import type { Expression } from "../../kernel/domain/index.ts";
+import { DesignMachines } from "../../design/domain/index.ts";
 import type { DesignUnit } from "../../design/domain/index.ts";
 import { EffectAssignments } from "./effect-assignments.ts";
 
@@ -46,7 +47,7 @@ export class DesignEventCatalog {
     const out = new Map<string, DesignEvent>();
     const eqRef = (path: string, value: string): Expression => ({ op: "eq", args: [{ op: "ref", path }, { op: "enum", value }] });
     for (const sm of u.machines()) {
-      const attrPath = `${sm.entity.asString()}.${sm.attribute.asString()}`;
+      const attrPath = DesignMachines.attrPathOf(sm);
       for (const tr of sm.transitions) {
         const guard: Expression = tr.guard ? { op: "and", args: [eqRef(attrPath, tr.from), tr.guard] } : eqRef(attrPath, tr.from);
         const effectAssign = new Map<string, Expression>();
@@ -67,7 +68,7 @@ export class DesignEventCatalog {
       }
     }
     for (const ob of u.obligations()) {
-      if (ob.nature.asString() !== "event" || !ob.guard || !ob.effect) continue;
+      if (!ob.nature.isEvent() || !ob.guard || !ob.effect) continue;
       const effectAssign = new Map<string, Expression>();
       try {
         for (const [path, term] of EffectAssignments.ofEffect(ob.effect)) {
