@@ -276,6 +276,15 @@ export class UnitRefinementPlan {
         const ob = req.obligationById(rid);
         if (ob !== undefined && ob.nature.isEvent()) {
           skipped.push({ target: rid, reason: "capability", unit: unitName, detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" });
+        } else if (ob !== undefined && (ob.nature.isInvariant() || ob.nature.isNumeric()) && ob.assert) {
+          // alpha 置換の失敗を Quint 文書にも記録する（凍結解除 #38 項 1——
+          // 旧挙動は義務が痕跡なく落ち、SMT 側だけが報告していた）。文言は
+          // SMT 側の compile-error skip と逐語で対。
+          try {
+            this.#ctx.substitute(ob.assert, false);
+          } catch (err) {
+            skipped.push({ target: rid, reason: "compile-error", unit: unitName, detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` });
+          }
         }
       }
     }
@@ -299,7 +308,7 @@ export class UnitRefinementPlan {
       try {
         out.push({ reqId: ob.id, frRefs: ob.frRefs, expr: this.#ctx.substitute(ob.assert, false) });
       } catch {
-        // SMT パスが compile-error skip として報告する。
+        // quintStatusSkips が compile-error skip として記録する（SMT 側と対）。
       }
     }
     return RefinementQuintInvariants.of(out);

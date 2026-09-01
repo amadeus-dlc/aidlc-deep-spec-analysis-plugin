@@ -201,7 +201,12 @@ export function decodeDesignModel(
     if (attr.kind === "bool") out[attr.path] = raw === "true";
     else {
       const n = smtIntOf(raw);
-      if (attr.kind === "enum" && attr.values) out[attr.path] = attr.values[n] ?? n;
+      if (!Number.isSafeInteger(n)) {
+        // 安全整数範囲外は number で正確に持てない——正確な十進文字列で運ぶ
+        //（凍結解除 #34 項 4。読めない生値はそのまま生値）。
+        const m = raw.match(/^\(-\s*(\d+)\)$/);
+        out[attr.path] = m ? `-${m[1]}` : raw;
+      } else if (attr.kind === "enum" && attr.values) out[attr.path] = attr.values[n] ?? n;
       else out[attr.path] = n;
     }
   }

@@ -79,7 +79,28 @@ export class IrModelDecl {
         if (attr.kind === "int" && attr.min !== undefined && attr.max !== undefined && attr.min.exceeds(attr.max)) {
           errors.push(`schema: ${entName}.${attrName}: min > max`);
         }
+        if (
+          (attr.min !== undefined && !Number.isSafeInteger(attr.min.asNumber())) ||
+          (attr.max !== undefined && !Number.isSafeInteger(attr.max.asNumber()))
+        ) {
+          errors.push(`schema: ${entName}.${attrName}: bounds must be safe integers`);
+        }
         attrTypes.set(`${entName}.${attrName}`, { kind: attr.kind, values: attr.values });
+      }
+    }
+
+    // SMT 変数符号化はドットを下線に潰すため、下線を含む識別子どうしで
+    // パスが衝突しうる（"a.b_c" と "a_b.c"）。衝突は検証器の変数を混線させる
+    // ので well-formedness で弾く（凍結解除 #34 項 1——特殊文字はスキーマの
+    // identifier パターンが既に締めており、衝突だけが生き残っていた）。
+    const encoded = new Map<string, string>();
+    for (const path of attrTypes.keys()) {
+      const key = path.replace(/\./g, "_");
+      const prior = encoded.get(key);
+      if (prior !== undefined) {
+        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
+      } else {
+        encoded.set(key, path);
       }
     }
 
@@ -133,7 +154,7 @@ export class IrModelDecl {
         }
         const ok =
           (t.kind === "bool" && typeof val === "boolean") ||
-          (t.kind === "int" && typeof val === "number" && Number.isInteger(val)) ||
+          (t.kind === "int" && typeof val === "number" && Number.isSafeInteger(val)) ||
           (t.kind === "enum" && typeof val === "string" && (t.values?.includes(val) ?? false));
         if (!ok) {
           errors.push(`${where}: binding value ${JSON.stringify(val)} does not fit ${t.kind} attribute "${path}"`);

@@ -71,6 +71,13 @@ export class RefinementSolverClientImpl implements RefinementSolverClient {
         attempts.push(`${runtime}: not on PATH`);
         continue;
       }
+      if (res.error && (res.error as NodeJS.ErrnoException).code === "ETIMEDOUT") {
+        // タイムアウトは別ランタイムで解け直す見込みがなく、次の試行が呼び手の
+        // 予算を二重に燃やす（30s 予算に対し最悪 ~90s）——ここで打ち切る
+        //（凍結解除 #38 項 2。ENOENT だけが「次を試す」に値する）。
+        attempts.push(`${runtime}: ${String(res.error)}`);
+        break;
+      }
       if (res.error || res.status !== 0) {
         attempts.push(`${runtime}: ${res.error ? String(res.error) : `exit ${res.status}`}`);
         continue;

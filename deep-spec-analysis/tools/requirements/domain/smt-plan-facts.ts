@@ -136,7 +136,12 @@ export class SmtPlanFacts {
           joint.core ?? [],
           `Events ${pair.a.asString()} and ${pair.b.asString()} for trigger "${pair.trigger.asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`,
         );
-      } else if (overlap.status === "unknown" || overlap.status === "budget" || joint.status === "unknown" || joint.status === "budget") {
+      } else if (
+        overlap.status === "unknown" || overlap.status === "budget" || overlap.status === "error" ||
+        joint.status === "unknown" || joint.status === "budget" || joint.status === "error"
+      ) {
+        // error も skip として記録する——対を findings からも skipped からも
+        // 落とす旧挙動は凍結解除 #34 項 3 で解消（gap/scenario 分岐と対称）。
         timeoutSkip([pair.a.asString(), pair.b.asString()], `event-pair check for trigger "${pair.trigger.asString()}"`);
       }
     }
