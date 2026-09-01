@@ -1045,3 +1045,39 @@ PR6 が繰り延べた判断点を実行した。完全統一は**不能**と裁
 キャラクタライゼーションスナップショット（tests/fixtures/smt-scripts/）
 無傷・golden 無傷・371 pass / 1 skip / 0 fail（カバレッジ床込み）・
 validator Errors: 0・7 ハーネスビルド。
+
+## DDD 移行 PR9 — doctor が層化ユースケースの合成ルートになる（2026-09-01、#22）
+
+フラット最後の実務ファイル（505 行）が doctor コンテキストの
+domain / usecase / adapter に層化され、entry は env 読取と配線だけを持つ
+合成ルートになった。
+
+- **doctor/domain の 6 概念**: `InstallationManifest`（43 行の台帳・凍結順）、
+  `VerificationStaleness`（sourceDigest 照合＋mtime フォールバックの純粋
+  判断——anchor がある限り内容ハッシュだけが真実で、mtime の嘘に騙されない）、
+  `CoverageAssessment`、`StructuralDebt`、`UnitCoverage`（refinement 失効を
+  別持ちし、凍結順の担い手になる）、`HealthVerdict`（checks 配列の
+  ファーストクラスコレクション、`document()` が published 形）。
+- **use case 5 本の実行順＝checks 配列順を凍結**: マニフェスト → ソルバ →
+  要件カバレッジ → 構造負債 → 設計カバレッジ。label/fix の文言は
+  `DoctorPresenter` に封じ、installer が grep する部分文字列
+  （"no deep-spec verification" ほか）と intent-e2e の表明 label を逐語凍結。
+  Check リテラルのプロパティ順（pass, label, fix, severity）は直列化バイト。
+- **RefcheckBackendClient は spawn 維持**: 故障隔離と 15s timeout 意味論の
+  保存。report-only の実行不能（ツール欠如・非 0 exit・壊れた verdict）は
+  null で不算入——0 findings と混同しない。
+- **凍結挙動の保存**: 走査順（spaces/intents は readdir 自然順・unit は
+  昇順）、refinement 失効行が unit 行より先に並ぶ割込み順、anchor がある時
+  だけ requirements をハッシュする遅延、try/catch の黙殺範囲、fence 正規表現。
+- **マニフェスト再編**: doctor entry と doctor 3 canary を台帳へ（39 → 43）、
+  intent-e2e の compose 検査リストを台帳と同期（kernel/refcheck の
+  usecase/adapter canary も e2e 側へ追補）。
+- **カバレッジ憲章の適用**: doctor/domain は 90% 床下（全ファイル 100%）、
+  doctor/{usecase,adapter} は bunfig 除外——「数値ゲートは domain 層に 90%」
+  の層別憲章どおり。
+
+バイト証明：新旧 doctor stdout を 2 環境（dev repo・design fixture）で
+比較——差分は裁定済みマニフェスト 4 行のみ、他 44 行は順序込み deep-equal・
+直列化バイト不変。証拠：383 pass / 1 skip / 0 fail・base↔head パリティ
+`diff -r` 空・AIDLC_PARITY=1 決定論 green・golden 無傷・validator Errors: 0・
+7 ハーネスビルド（dist に doctor ツリーの同梱を確認）。

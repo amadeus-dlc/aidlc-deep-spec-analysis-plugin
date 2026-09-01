@@ -1,0 +1,20 @@
+import { InstallationManifest } from "../domain/index.ts";
+import type { InstalledStatus } from "../domain/index.ts";
+import type { HarnessFileClient } from "./harness-file-client.ts";
+
+// マニフェスト全行の実在判定（checks 配列の先頭ブロック——凍結順）。
+export class CheckInstallationUseCase {
+  readonly #files: HarnessFileClient;
+
+  constructor(files: HarnessFileClient) {
+    this.#files = files;
+  }
+
+  execute(): readonly InstalledStatus[] {
+    const out: InstalledStatus[] = [];
+    for (const entry of InstallationManifest.standard()) {
+      out.push({ entry, present: this.#files.isInstalled(entry.rel) });
+    }
+    return out;
+  }
+}

@@ -1110,3 +1110,47 @@ Evidence: base↔head parity `diff -r` empty, AIDLC_PARITY=1 determinism
 green, characterization snapshots (tests/fixtures/smt-scripts/)
 untouched, goldens untouched, 371 pass / 1 skip / 0 fail with the
 coverage floor, validator Errors: 0, 7 harness builds.
+
+## DDD migration PR9 — the doctor becomes a composition root over layered use cases (2026-09-01, #22)
+
+The last working flat file (505 lines) is layered into a doctor context's
+domain / usecase / adapter, and the entry carries env reads and wiring
+only.
+
+- **The six doctor/domain concepts**: `InstallationManifest` (the 43-row
+  ledger, frozen order), `VerificationStaleness` (the pure sourceDigest
+  match + mtime fallback judgment — as long as an anchor exists, only
+  content decides and mtime lies are ignored), `CoverageAssessment`,
+  `StructuralDebt`, `UnitCoverage` (carrying refinement staleness
+  separately, which is what preserves the frozen order), and
+  `HealthVerdict` (a first-class collection of the checks array whose
+  `document()` is the published shape).
+- **Five use cases, execution order = checks order, frozen**: manifest →
+  solvers → requirements coverage → structural debt → design coverage.
+  Every label/fix wording is sealed in `DoctorPresenter`, freezing the
+  installer's grep substrings ("no deep-spec verification", …) and the
+  labels intent-e2e asserts verbatim. The Check literal's property order
+  (pass, label, fix, severity) is serialized bytes.
+- **RefcheckBackendClient stays a spawn**: fault isolation and the 15s
+  timeout semantics are preserved. A report-only run that cannot count
+  (missing tool, non-zero exit, broken verdict) returns null and is not
+  counted — never confused with 0 findings.
+- **Frozen behaviors preserved**: scan orders (readdir natural order for
+  spaces/intents, sorted units), the interleaving that puts
+  refinement-staleness rows before unit rows, hashing requirements only
+  when an anchor exists, the try/catch silencing scopes, the fence regex.
+- **The manifest reorganizes**: the doctor entry and its three canaries
+  join the ledger (39 → 43), and intent-e2e's compose assertion list is
+  synced with it (the kernel/refcheck usecase/adapter canaries join the
+  e2e side too).
+- **The coverage charter applies**: doctor/domain sits under the 90%
+  floor (every file at 100%); doctor/{usecase,adapter} join the bunfig
+  excludes — per the charter, the numeric gate is the domain layer's.
+
+Byte proof: old and new doctor stdout compared in two environments (the
+dev repo and the design fixture) — the diff is exactly the four
+sanctioned manifest rows; the other 44 rows are deep-equal in preserved
+order with unchanged serialization bytes. Evidence: 383 pass / 1 skip /
+0 fail, base↔head parity `diff -r` empty, AIDLC_PARITY=1 determinism
+green, goldens untouched, validator Errors: 0, 7 harness builds (dist
+carries the doctor tree).
