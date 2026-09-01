@@ -24,9 +24,8 @@ import { type Result, ok } from "../../kernel/infrastructure/index.ts";
 import { err as repoErr } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
-import { DesignAttributeDecl } from "../domain/index.ts";
+import { DesignAttributeDecl, DesignBackgroundDecl } from "../domain/index.ts";
 import type {
-  DesignBackgroundDecl,
   DesignEntityDecl,
   DesignIgnoreDecl,
   DesignMachineDecl,
@@ -167,7 +166,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
   const background: DesignBackgroundDecl[] = [];
   for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string") continue;
-    background.push({ id: DesignBackgroundId.reconstitute(bg.id), assert: asExpression(bg.assert ?? null) });
+    background.push(DesignBackgroundDecl.reconstitute({ id: DesignBackgroundId.reconstitute(bg.id), assert: asExpression(bg.assert ?? null) }));
   }
 
   const unformalizedTargets: string[] = [];

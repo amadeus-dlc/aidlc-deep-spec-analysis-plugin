@@ -146,8 +146,9 @@ export class IrModelDecl {
     }
 
     for (const bg of this.#background) {
-      dupCheck(bg.id.asString(), `background ${bg.id.asString()}`);
-      if (bg.assert !== undefined) checkExpr(bg.assert, `background ${bg.id.asString()}`, false);
+      const where = `background ${bg.id().asString()}`;
+      dupCheck(bg.id().asString(), where);
+      bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
     }
 
     return errors;

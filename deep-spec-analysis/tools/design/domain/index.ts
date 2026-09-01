@@ -66,7 +66,7 @@ export { BrRefs } from "./br-refs.ts";
 export { DeclaredValues } from "./declared-values.ts";
 export { DesignAttributeDecl } from "./design-attribute-decl.ts";
 export { DesignAttributeDecls } from "./design-attribute-decls.ts";
-export { type DesignBackgroundDecl } from "./design-background-decl.ts";
+export { DesignBackgroundDecl } from "./design-background-decl.ts";
 export { DesignBackgroundDecls } from "./design-background-decls.ts";
 export { type DesignEntityDecl } from "./design-entity-decl.ts";
 export { DesignEntityDecls } from "./design-entity-decls.ts";

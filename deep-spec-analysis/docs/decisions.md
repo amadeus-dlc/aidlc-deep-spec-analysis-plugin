@@ -1426,3 +1426,14 @@ classes, and `DesignTemporalDecl` dissolves into the door signature of
 `DesignObligationDecl`. 12 ledger entries are reclaimed — the
 shrink-only ledger now holds 110 of the 122-file starting inventory
 (the docs record the start; the ledger records what remains).
+
+Wave 4 (this PR): the background-decl twins (`IrBackgroundDecl` /
+`DesignBackgroundDecl`) become commandable — the caller no longer
+decides `assert !== undefined` nor hardcodes `primesAllowed = false`;
+each declaration owns its expression enumeration through
+`inspectExpressions` (background assertions never allow primes, and
+that invariant now lives in the declaration, not in the well-formedness
+loops). 2 ledger entries reclaimed — the ledger holds 108 of 122.
+`BackgroundAssumption` / `DesignBackgroundAssumption` /
+`LoweredBackground` stay on the ledger: their consumers are adapters
+projecting to external forms (sanctioned), pending a per-wave ruling.

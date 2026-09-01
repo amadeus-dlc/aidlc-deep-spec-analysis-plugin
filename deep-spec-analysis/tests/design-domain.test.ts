@@ -4,6 +4,8 @@ import { describe, expect, test } from "bun:test";
 import { FrRefs, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
 import {
   BrRefs,
+  DesignBackgroundDecl,
+  DesignBackgroundId,
   DesignObligation,
   DesignObligationId,
   DesignObligationNature,
@@ -204,5 +206,25 @@ describe("design transition decl", () => {
     expect(bare.brRefs()).toBeUndefined();
     expect(bare.guard()).toBeUndefined();
     expect(bare.effect()).toBeUndefined();
+  });
+});
+
+describe("design background decl", () => {
+  test("inspectExpressions visits the assertion with primes forbidden, and silence when absent", () => {
+    const withAssert = DesignBackgroundDecl.reconstitute({
+      id: DesignBackgroundId.reconstitute("DBG-1"),
+      assert: { op: "ref", path: "t.x" },
+    });
+    const seen: [string, boolean][] = [];
+    withAssert.inspectExpressions((expression, primesAllowed) => seen.push([expression.op, primesAllowed]));
+    expect(seen).toEqual([["ref", false]]);
+    expect(withAssert.id().asString()).toBe("DBG-1");
+    expect(withAssert.assertion()).toEqual({ op: "ref", path: "t.x" });
+
+    const bare = DesignBackgroundDecl.reconstitute({ id: DesignBackgroundId.reconstitute("DBG-2") });
+    const none: unknown[] = [];
+    bare.inspectExpressions((expression, primesAllowed) => none.push([expression.op, primesAllowed]));
+    expect(none).toEqual([]);
+    expect(bare.assertion()).toBeUndefined();
   });
 });

@@ -22,7 +22,7 @@ import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
   type FrRefClaim,
   IrAttributeDecl,
-  type IrBackgroundDecl,
+  IrBackgroundDecl,
   type IrEntityDecl,
   FrRefs,
   IrAttributeDecls,
@@ -110,7 +110,7 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
   const background: IrBackgroundDecl[] = [];
   for (const bg of Array.isArray(ir.background) ? ir.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string") continue;
-    background.push({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: asExpression(bg.assert ?? null) });
+    background.push(IrBackgroundDecl.reconstitute({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: asExpression(bg.assert ?? null) }));
   }
 
   return IrModelDecl.reconstitute({

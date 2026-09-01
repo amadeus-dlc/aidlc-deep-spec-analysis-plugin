@@ -1304,3 +1304,13 @@ getter しかない data model であり、同じ病巣として台帳に載る�
 `DesignObligationDecl` のドア署名へ解散。台帳から 12 エントリを回収し、
 縮小専用台帳は開始在庫 122 のうち 110 を保持する（記録は開始数、
 台帳は残債——差分が各波の回収分）。
+
+波 4（本 PR）: 背景仮定 decl 双子（`IrBackgroundDecl`／
+`DesignBackgroundDecl`）が命令できる class へ。呼び出し側が
+`assert !== undefined` を分岐し `primesAllowed = false` を直書きして
+いた漏洩を解消し、式の列挙は宣言自身の `inspectExpressions` が所有する
+（背景仮定の式に prime は許されない——その不変条件は well-formedness
+ループではなく宣言に宿る）。台帳から 2 エントリを回収し、残債は
+122 中 108。`BackgroundAssumption`／`DesignBackgroundAssumption`／
+`LoweredBackground` は adapter が外部形式へ射影する消費（公認）に留まる
+ため台帳に残し、波ごとの個別裁定を待つ。

@@ -412,7 +412,6 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
 // Expression は寛容 published language の既裁定で恒久除外。
 export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "design/domain/design-background-assumption.ts",
-  "design/domain/design-background-decl.ts",
   "design/domain/design-cross-checked-entry.ts",
   "design/domain/design-entity-decl.ts",
   "design/domain/design-finding.ts",
@@ -500,7 +499,6 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "requirements/domain/fr-ref-claim.ts",
   "requirements/domain/interpreted-quint-verdicts.ts",
   "requirements/domain/interpreted-verdicts.ts",
-  "requirements/domain/ir-background-decl.ts",
   "requirements/domain/ir-entity-decl.ts",
   "requirements/domain/ir-model-decl-seed.ts",
   "requirements/domain/ir-temporal-decl.ts",
