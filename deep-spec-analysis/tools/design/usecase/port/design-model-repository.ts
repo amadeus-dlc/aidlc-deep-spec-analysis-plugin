@@ -12,5 +12,5 @@ import type { DesignModel, DesignModelId } from "../../domain/index.ts";
 
 export interface DesignModelRepository {
   findById(id: DesignModelId): Result<DesignModel, RepositoryError>;
-  store(model: DesignModel): Result<DesignModel, RepositoryError>;
+  store(model: DesignModel): Result<void, RepositoryError>;
 }

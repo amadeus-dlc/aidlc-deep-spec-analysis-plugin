@@ -24,6 +24,7 @@ import {
   noNonNullAssertions,
   onePublicTypePerFile,
   portsLiveInPortDir,
+  commandsReturnVoid,
   noTestPayloads,
   onlySanctionedImports,
   privateConstructorInDomain,
@@ -170,6 +171,12 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(portsLiveInPortDir("design/usecase/port/sneaky.ts", "export class Sneaky {}")).not.toHaveLength(0);
     expect(portsLiveInPortDir("design/usecase/verify-usecase.ts", "export class VerifyUseCase {}")).toHaveLength(0);
     expect(portsLiveInPortDir("design/adapter/foo-client-config.ts", "export interface FooClientConfig { y: string }")).toHaveLength(0);
+  });
+
+  test("commands-return-void flags a store that returns the aggregate", () => {
+    expect(commandsReturnVoid("design/usecase/port/foo-repository.ts", "export interface FooRepository {\n  store(x: Foo): Result<Foo, RepositoryError>;\n}")).not.toHaveLength(0);
+    expect(commandsReturnVoid("design/usecase/port/foo-repository.ts", "export interface FooRepository {\n  store(x: Foo): Result<void, RepositoryError>;\n}")).toHaveLength(0);
+    expect(commandsReturnVoid("design/usecase/foo-usecase.ts", "store(x: Foo): Result<Foo, RepositoryError>;")).toHaveLength(0);
   });
 
   test("no-export-star flags a wildcard re-export, passes an explicit facade", () => {

@@ -280,11 +280,11 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
   }
 
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
-  store(materials: DesignIrValidationMaterials): Result<DesignIrValidationMaterials, RepositoryError> {
+  store(materials: DesignIrValidationMaterials): Result<void, RepositoryError> {
     const outputPath = materials.id().modelId().artifactPath().asString();
     try {
       writeFileAtomically(outputPath, materials.sourceDocument());
-      return ok(materials);
+      return ok(undefined);
     } catch (e) {
       return repoErr({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
     }

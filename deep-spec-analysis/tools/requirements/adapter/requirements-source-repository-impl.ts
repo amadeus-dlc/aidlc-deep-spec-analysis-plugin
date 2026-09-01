@@ -64,11 +64,11 @@ export class RequirementsSourceRepositoryImpl implements RequirementsSourceRepos
   }
 
   // 往復則: findById が読んだ原文バイト列を解決済みの所在へ逐語で書き戻す。
-  store(source: RequirementsSource): Result<RequirementsSource, RepositoryError> {
+  store(source: RequirementsSource): Result<void, RepositoryError> {
     const path = source.sourcePath().asString();
     try {
       writeFileAtomically(path, source.sourceDocument());
-      return ok(source);
+      return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
     }

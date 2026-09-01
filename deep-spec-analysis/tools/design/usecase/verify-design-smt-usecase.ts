@@ -203,20 +203,20 @@ export class VerifyDesignSmtUseCase {
       }
     }
 
-    const stored = this.#designReportRepository.store(
-      DesignReport.compose({
-        id,
-        irVersion: model.irVersion(),
-        irHash,
-        method: "exhaustive",
-        findings: DesignFindings.of(findings),
-        skipped: DesignSkips.of(skipped),
-        ...(inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {}),
-        checked: CheckedUnits.of(checkedUnits),
-      }),
-    );
+    const report = DesignReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash,
+      method: "exhaustive",
+      findings: DesignFindings.of(findings),
+      skipped: DesignSkips.of(skipped),
+      ...(inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {}),
+      checked: CheckedUnits.of(checkedUnits),
+    });
+    // CQS: verdict は conformedOf（照会）から導き、store は書くだけ（void）。
+    const conformed = this.#designReportRepository.conformedOf(report);
+    const stored = this.#designReportRepository.store(report);
     if (!stored.ok) return { kind: "save-failed", error: stored.error };
-    const conformed = stored.value;
     const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
     if (!cross.ok) return { kind: "save-failed", error: cross.error };
     return {
@@ -228,7 +228,7 @@ export class VerifyDesignSmtUseCase {
     };
   }
 
-  #persist(report: DesignReport): Result<DesignReport, RepositoryError> {
+  #persist(report: DesignReport): Result<void, RepositoryError> {
     return this.#designReportRepository.store(report);
   }
 

@@ -13,5 +13,5 @@ import type { DesignIrValidationMaterials, DesignIrValidationMaterialsId } from 
 
 export interface DesignIrValidationMaterialsRepository {
   findById(id: DesignIrValidationMaterialsId): Result<DesignIrValidationMaterials, RepositoryError>;
-  store(materials: DesignIrValidationMaterials): Result<DesignIrValidationMaterials, RepositoryError>;
+  store(materials: DesignIrValidationMaterials): Result<void, RepositoryError>;
 }

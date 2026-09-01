@@ -13,5 +13,5 @@ import type { DesignRecord, DesignRecordId } from "../../domain/index.ts";
 
 export interface DesignRecordRepository {
   findById(id: DesignRecordId): Result<DesignRecord, RepositoryError>;
-  store(record: DesignRecord): Result<DesignRecord, RepositoryError>;
+  store(record: DesignRecord): Result<void, RepositoryError>;
 }

@@ -16,6 +16,6 @@ import type {
 
 export interface IrValidationMaterialsRepository {
   findById(id: IrValidationMaterialsId): Result<IrValidationMaterials, RepositoryError>;
-  store(materials: IrValidationMaterials): Result<IrValidationMaterials, RepositoryError>;
+  store(materials: IrValidationMaterials): Result<void, RepositoryError>;
 }
 

@@ -55,15 +55,13 @@ export class CheckContractSummaryUseCase {
       findings: ledger.findings(),
       skipped: ledger.skipped(),
     });
-    // persist は store（適合を内包し書かれた姿を返す）、report-only は conformedOf
-    // で適合だけを問う——どちらの verdict も「書かれる(はずの)姿」から導く（凍結挙動）。
-    let conformed: ReferenceCheckReport;
+    // CQS: verdict はモードによらず conformedOf（照会）から導く——store は
+    // 書くだけ（void）で、内部で同じ適合を通すため stdout とファイルは
+    // 構造的に一致する（凍結挙動）。
+    const conformed = this.#referenceCheckReportRepository.conformedOf(report);
     if (input.mode === "persist") {
       const stored = this.#referenceCheckReportRepository.store(report);
       if (!stored.ok) return { kind: "save-failed", error: stored.error };
-      conformed = stored.value;
-    } else {
-      conformed = this.#referenceCheckReportRepository.conformedOf(report);
     }
     return {
       kind: "verified",

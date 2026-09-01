@@ -15,5 +15,9 @@ import type { VerificationReport, VerificationReportId, VerificationReports } fr
 export interface VerificationReportRepository {
   findById(aggregateId: VerificationReportId): Result<VerificationReport, RepositoryError>;
   findAllByDirectory(directory: ArtifactPath): Result<VerificationReports, RepositoryError>;
-  store(report: VerificationReport): Result<VerificationReport, RepositoryError>;
+  // CQS（オーナー裁定 2026-09-01）：store は書くだけ——正常時は void。
+  store(report: VerificationReport): Result<void, RepositoryError>;
+  // 「store が書くはずの姿」を書かずに問う照会——永続化契約の一部。verdict は
+  // この戻り値から導く（stdout とファイルの矛盾を構造的に防ぐ）。
+  conformedOf(report: VerificationReport): VerificationReport;
 }

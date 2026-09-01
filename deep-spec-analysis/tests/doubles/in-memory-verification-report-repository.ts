@@ -41,9 +41,12 @@ export class InMemoryVerificationReportRepository implements VerificationReportR
     return ok(VerificationReports.of(hits));
   }
 
-  store(report: VerificationReport): Result<VerificationReport, RepositoryError> {
-    const conformed = conformToFindingsContract(report, this.#findingsSchema);
-    this.#store.set(this.#keyOf(report.id()), conformed);
-    return ok(conformed);
+  conformedOf(report: VerificationReport): VerificationReport {
+    return conformToFindingsContract(report, this.#findingsSchema);
+  }
+
+  store(report: VerificationReport): Result<void, RepositoryError> {
+    this.#store.set(this.#keyOf(report.id()), this.conformedOf(report));
+    return ok(undefined);
   }
 }

@@ -133,7 +133,7 @@ describe("in-process golden equivalence (interactor over real Impls, real quint 
 // --- interactor の全経路（InMemory ダブル＋素の値のみ） ----------------------
 
 function formalModels(result: Result<RequirementsModel, RepositoryError>): FormalModelRepository {
-  return { findById: () => result, store: (m) => ok(m) };
+  return { findById: () => result, store: () => ok(undefined) };
 }
 
 function quint(result: QuintCheckResult): QuintClient {
