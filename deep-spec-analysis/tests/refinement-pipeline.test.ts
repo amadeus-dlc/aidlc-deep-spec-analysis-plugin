@@ -62,7 +62,7 @@ import {
   UnitRefinementPlan,
   UnmappedDeclarations,
   UnmappedTargetRef,
-  type AttributeMapping,
+  AttributeMapping,
   type EventMapping,
   type RefinementAttribute,
   RefinementObligation,
@@ -296,7 +296,15 @@ type RawAttributeMapping =
 type RawEventMapping = Omit<EventMapping, "reqTrigger" | "transitions"> & { reqTrigger: string; transitions: string[] };
 type RawUnmappedTarget = { target: string; reason: string };
 function wrapMapping(m: RawAttributeMapping): AttributeMapping {
-  return { ...m, req: AttributePath.reconstitute(m.req) } as AttributeMapping;
+  const req = AttributePath.reconstitute(m.req);
+  switch (m.kind) {
+    case "expression":
+      return AttributeMapping.expression(req, m.expr);
+    case "enum-cases":
+      return AttributeMapping.enumCases(req, m.from, m.cases);
+    case "unspecified":
+      return AttributeMapping.unspecified(req);
+  }
 }
 function refUnitMap(seed: {
   unit?: string;
@@ -329,6 +337,11 @@ describe("alpha substitution", () => {
       ["R.none", wrapMapping({ kind: "unspecified", req: "R.none" })],
     ]),
   );
+
+  test("covers reports membership of the approved mapping index", () => {
+    expect(ctx.covers("R.flag")).toBe(true);
+    expect(ctx.covers("R.zzz")).toBe(false);
+  });
 
   test("enum eq expands to the disjunction of design values mapping to the literal", () => {
     const out = ctx.substitute({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "open" }] }, false);
@@ -667,7 +680,7 @@ describe("refinement collections (first-class operations)", () => {
   test("of/add/iterator/toArray and the map-side set knowledge", () => {
     const am = AttributeMappings.of([]).add(wrapMapping(exprMapping("R.a", "D.a")));
     expect([...am].length).toBe(1);
-    expect(am.toArray()[0]?.req.asString()).toBe("R.a");
+    expect(am.toArray()[0]?.req().asString()).toBe("R.a");
 
     const tref = (raw: string): TransitionRef => TransitionRef.reconstitute(raw);
     const tr = TransitionRefs.of([tref("TR-2")]).add(tref("TR-10"));

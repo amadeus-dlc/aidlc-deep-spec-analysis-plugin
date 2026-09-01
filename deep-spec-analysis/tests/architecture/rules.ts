@@ -478,7 +478,6 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "refcheck/domain/state-machine-sketch-seed.ts",
   "refcheck/domain/unit-decl.ts",
   "refcheck/domain/witness-ref.ts",
-  "refinement/domain/attribute-mapping.ts",
   "refinement/domain/design-event.ts",
   "refinement/domain/event-mapping.ts",
   "refinement/domain/interpreted-refinement-verdicts.ts",
