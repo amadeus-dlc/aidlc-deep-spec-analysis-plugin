@@ -1233,8 +1233,8 @@ dev repo／design fixture の両基準でバイト同一（挙動変化は真の
 ある。裁定：**getter（プロパティ読み）はモデルを I/O する文脈
 （serializer／parser／presenter／コンパイラ＝モデル⇄バイト境界）と構築ドア
 （Seed）専用。domain／usecase 層でモデルのプロパティを読んで判断するのは
-すべて Tell-Don't-Ask 違反**。機械走査の実測 約 1,197 箇所／142 ファイルを
-#71 の台帳で波状に反転する（class 化は `#` フィールドで違反を tsc レベルで
+すべて Tell-Don't-Ask 違反**。機械走査の実測 約 1,197 箇所／142 ファイル
+を #71 の台帳で波状に反転する（class 化は `#` フィールドで違反を tsc レベルで
 物理的に不可能にする——これが執行機構）。
 
 - **波 1（原器）**: `IrAttributeDecl`・`DesignAttributeDecl` を命令できる
