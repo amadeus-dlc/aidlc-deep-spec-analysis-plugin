@@ -39,12 +39,12 @@ function main(): void {
     process.exit(0);
   }
 
-  // Repository と Conformance は同一アダプタ（store が書く姿と conformedOf が
+  // Repository の conformedOf は store が書く姿と
   // 常に一致する）。
   const reportRepository = new ReferenceCheckReportRepositoryImpl(
     join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"),
   );
-  const useCase = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImpl(), reportRepository, reportRepository);
+  const useCase = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImpl(), reportRepository);
   const outcome = useCase.execute({
     recordId: DesignRecordId.of(target.value),
     reportDirectory: reportLocation.value,

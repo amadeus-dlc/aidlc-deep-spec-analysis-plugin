@@ -12,8 +12,8 @@ import {
   SUPPORTED_IR_MAJOR,
   SourceAnchor,
 } from "../domain/index.ts";
-import type { IrValidationMaterialsRepository } from "./ir-validation-materials-repository.ts";
-import { type RequirementsSourceRepository } from "./requirements-source-repository.ts";
+import type { IrValidationMaterialsRepository } from "./port/ir-validation-materials-repository.ts";
+import { type RequirementsSourceRepository } from "./port/requirements-source-repository.ts";
 import type { ValidateIrOutcome } from "./validate-ir-outcome.ts";
 
 export class ValidateIrUseCase {

@@ -91,7 +91,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
         const { designRecords, reports } = realRepositories();
 
         const componentsPath = join(record, "inception", "domain-design", "components.md");
-        const domainOutcome = new CheckDomainComponentsUseCase(designRecords, reports, reports).execute({
+        const domainOutcome = new CheckDomainComponentsUseCase(designRecords, reports).execute({
           recordId: DesignRecordId.of(ap(componentsPath)),
           reportDirectory: ap(join(dirname(componentsPath), "deep-spec-refcheck")),
           mode: "persist",
@@ -103,7 +103,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
           .toBe(golden(variant, "components.json"));
 
         const contractPath = join(record, "inception", "contract-design", "contract-summary.md");
-        const contractOutcome = new CheckContractSummaryUseCase(designRecords, reports, reports).execute({
+        const contractOutcome = new CheckContractSummaryUseCase(designRecords, reports).execute({
           recordId: DesignRecordId.of(ap(contractPath)),
           reportDirectory: ap(join(dirname(contractPath), "deep-spec-refcheck")),
           mode: "persist",
@@ -113,7 +113,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
           .toBe(golden(variant, "contract-summary.json"));
 
         const entitiesPath = join(record, "construction", "u1-orders", "functional-design", "entities.md");
-        const functionalOutcome = new CheckFunctionalDesignUseCase(designRecords, reports, reports).execute({
+        const functionalOutcome = new CheckFunctionalDesignUseCase(designRecords, reports).execute({
           recordId: DesignRecordId.of(ap(entitiesPath)),
           reportDirectory: ap(join(dirname(entitiesPath), "deep-spec-refcheck")),
           mode: "persist",
@@ -129,7 +129,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 
   test("an unreadable target resolves to not-applicable, and report-only writes nothing", () => {
     const { designRecords, reports } = realRepositories();
-    const missing = new CheckDomainComponentsUseCase(designRecords, reports, reports).execute({
+    const missing = new CheckDomainComponentsUseCase(designRecords, reports).execute({
       recordId: DesignRecordId.of(ap("/nonexistent/components.md")),
       reportDirectory: ap("/nonexistent/deep-spec-refcheck"),
       mode: "persist",
@@ -140,7 +140,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
     try {
       cpSync(join(fixtures, "broken"), record, { recursive: true });
       const componentsPath = join(record, "inception", "domain-design", "components.md");
-      const outcome = new CheckDomainComponentsUseCase(designRecords, reports, reports).execute({
+      const outcome = new CheckDomainComponentsUseCase(designRecords, reports).execute({
         recordId: DesignRecordId.of(ap(componentsPath)),
         reportDirectory: ap(join(dirname(componentsPath), "deep-spec-refcheck")),
         mode: "report-only",
@@ -163,7 +163,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
       const reports = new InMemoryReferenceCheckReportRepository(schema);
       const componentsPath = join(record, "inception", "domain-design", "components.md");
       const reportDirectory = ap(join(dirname(componentsPath), "deep-spec-refcheck"));
-      const outcome = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImpl(), reports, reports).execute({
+      const outcome = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImpl(), reports).execute({
         recordId: DesignRecordId.of(ap(componentsPath)),
         reportDirectory,
         mode: "persist",

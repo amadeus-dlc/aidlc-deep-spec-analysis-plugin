@@ -1,4 +1,4 @@
-import type { RefinementQueryVerdicts } from "../../refinement/domain/index.ts";
+import type { RefinementQueryVerdicts } from "../../../refinement/domain/index.ts";
 
 export type RefinementSolverResult =
   | { readonly kind: "no-queries" }

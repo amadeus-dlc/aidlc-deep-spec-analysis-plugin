@@ -7,11 +7,15 @@
 // 副作用なしで返す。呼び手はこれを verdict の根拠にすることで、stdout と
 // ファイルの矛盾を構造的に防ぐ。save は常に conformed な姿を書く。
 
-import type { Result } from "../../kernel/infrastructure/index.ts";
-import type { RepositoryError } from "../../kernel/usecase/index.ts";
-import type { ReferenceCheckReport, ReferenceCheckReportId } from "../domain/index.ts";
+import type { Result } from "../../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../../kernel/usecase/index.ts";
+import type { ReferenceCheckReport, ReferenceCheckReportId } from "../../domain/index.ts";
 
 export interface ReferenceCheckReportRepository {
   findById(aggregateId: ReferenceCheckReportId): Result<ReferenceCheckReport, RepositoryError>;
   store(report: ReferenceCheckReport): Result<ReferenceCheckReport, RepositoryError>;
+  // 「store が書くはずの姿」を書かずに問う照会——永続化契約の一部（report-only
+  // の verdict はこの戻り値から導く。裁定改訂 2026-09-01：契約適合の別サービス
+  // ポートは廃止し、書き込み前提の照会は Repository が運ぶ）。
+  conformedOf(report: ReferenceCheckReport): ReferenceCheckReport;
 }

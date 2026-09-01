@@ -10,10 +10,10 @@ import { type Json } from "../../kernel/adapter/json.ts";
 import { readContractSchema } from "../../kernel/adapter/contract-schema.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { ReferenceCheckReport, ReferenceCheckReportId } from "../domain/index.ts";
-import type { ReferenceCheckReportConformance, ReferenceCheckReportRepository } from "../usecase/index.ts";
+import type { ReferenceCheckReportRepository } from "../usecase/index.ts";
 import { conformToContract, parseReportDocument, renderReportBytes } from "./reference-check-report-serializer.ts";
 
-export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportRepository, ReferenceCheckReportConformance {
+export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportRepository {
   readonly #findingsSchemaPath: string;
 
   constructor(findingsSchemaPath: string) {

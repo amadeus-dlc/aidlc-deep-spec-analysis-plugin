@@ -1,13 +1,13 @@
 // doctor/usecase の公開 facade — 明示列挙のみ（export * 禁止）。
 
-export { type HarnessFileClient } from "./harness-file-client.ts";
-export { type SolverProbeClient } from "./solver-probe-client.ts";
-export { type RefcheckBackendClient } from "./refcheck-backend-client.ts";
-export { type VerificationTarget } from "./verification-target.ts";
-export { type DesignArtifactRef } from "./design-artifact-ref.ts";
-export { type FunctionalUnitFacts } from "./functional-unit-facts.ts";
-export { type FunctionalTarget } from "./functional-target.ts";
-export { type DoctorWorkspaceClient } from "./doctor-workspace-client.ts";
+export { type HarnessFileClient } from "./port/harness-file-client.ts";
+export { type SolverProbeClient } from "./port/solver-probe-client.ts";
+export { type RefcheckBackendClient } from "./port/refcheck-backend-client.ts";
+export { type VerificationTarget } from "./port/verification-target.ts";
+export { type DesignArtifactRef } from "./port/design-artifact-ref.ts";
+export { type FunctionalUnitFacts } from "./port/functional-unit-facts.ts";
+export { type FunctionalTarget } from "./port/functional-target.ts";
+export { type DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 export { CheckInstallationUseCase } from "./check-installation-usecase.ts";
 export { CheckSolversUseCase } from "./check-solvers-usecase.ts";
 export { CheckVerificationCoverageUseCase } from "./check-verification-coverage-usecase.ts";

@@ -6,10 +6,10 @@
 // 持つ：cross-check.json を除く *.json をファイル名順で読み、読めないファイル
 // は黙って除く（その状態は各書き手が自分の文書で報告する）。
 
-import type { Result } from "../../kernel/infrastructure/index.ts";
-import type { RepositoryError } from "../../kernel/usecase/index.ts";
-import type { ArtifactPath } from "../../kernel/domain/index.ts";
-import type { DesignReport, DesignReportId, DesignReports } from "../domain/index.ts";
+import type { Result } from "../../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../../kernel/usecase/index.ts";
+import type { ArtifactPath } from "../../../kernel/domain/index.ts";
+import type { DesignReport, DesignReportId, DesignReports } from "../../domain/index.ts";
 
 export interface DesignReportRepository {
   findById(aggregateId: DesignReportId): Result<DesignReport, RepositoryError>;

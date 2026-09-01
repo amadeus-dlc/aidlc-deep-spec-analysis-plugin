@@ -1154,3 +1154,34 @@ order with unchanged serialization bytes. Evidence: 383 pass / 1 skip /
 0 fail, base↔head parity `diff -r` empty, AIDLC_PARITY=1 determinism
 green, goldens untouched, validator Errors: 0, 7 harness builds (dist
 carries the doctor tree).
+
+## Port-placement ruling — two kinds of port, gathered under usecase/port/ (2026-09-01)
+
+Ports come in **two kinds — Repositories (persistence) and
+external-system Clients (the `Z3SolverClient`/`QuintClient` shape)** —
+and the usecase layer's port contracts (the interfaces plus the payload
+types that make up their signatures) gather under `usecase/port/`.
+Interactors and their input/outcome types stay directly in usecase/.
+
+- **The contract-conformance service port is abolished**:
+  `ReferenceCheckReportConformance` is ruled a wrong abstraction as a
+  standalone port; `conformedOf` merges into
+  `ReferenceCheckReportRepository`. Asking for "the shape store would
+  write" without writing is part of the persistence contract, and
+  report-only verdicts still derive from that return value (the
+  invariant that stdout can never contradict the file stands). Ruling
+  D's clause "write-shape queries such as contract conformance split
+  into a separate service port" is revised by this ruling — the
+  Repository carries them instead. The three interactors drop to one
+  dependency and the entries lose their doubled wiring.
+- **The move**: 32 contracts across five contexts (kernel 2, refcheck 2,
+  requirements 9, design 11, doctor 8). Payload types that make up port
+  signatures (SmtCheck/RefinementCheck/the scan materials, …) travel as
+  part of the contract. Facade and interactor imports follow; the
+  public surface is unchanged except the dropped Conformance export.
+- **Enforcement**: `portsLiveInPortDir` joins ALL_RULES (red/green
+  examples) — it flags Repository/Client interfaces left directly in
+  usecase/ and classes (interactors) that stray into port/.
+
+Evidence: tsc clean, full suite green with the per-file 90% floor, zero
+architecture-suite violations, validator Errors: 0, 7 harness builds.

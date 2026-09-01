@@ -1,5 +1,5 @@
 import type { SolverAvailability } from "../domain/index.ts";
-import type { SolverProbeClient } from "./solver-probe-client.ts";
+import type { SolverProbeClient } from "./port/solver-probe-client.ts";
 
 // ソルバ可用性の打診（checks 配列の第 2 ブロック——全 advisory）。
 export class CheckSolversUseCase {

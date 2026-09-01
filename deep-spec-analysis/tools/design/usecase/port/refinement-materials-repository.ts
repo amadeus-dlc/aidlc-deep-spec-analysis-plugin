@@ -11,8 +11,8 @@
 // 陳腐化（requirementsIrHash / designIrHash の不一致）の判定はユースケースの
 // フロー制御——ポートは判定しない。
 
-import type { RefinementMaterialsId } from "../domain/index.ts";
-import type { RefinementMaterials } from "../../refinement/domain/index.ts";
+import type { RefinementMaterialsId } from "../../domain/index.ts";
+import type { RefinementMaterials } from "../../../refinement/domain/index.ts";
 
 export interface RefinementMaterialsRepository {
   findById(id: RefinementMaterialsId): RefinementMaterials;

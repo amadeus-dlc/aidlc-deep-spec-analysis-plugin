@@ -7,7 +7,7 @@
 // 無傷の IR にのみ走る。
 
 import { type DesignModelId, DesignIrValidationMaterialsId, SUPPORTED_DESIGN_IR_MAJOR, designWellFormednessErrors } from "../domain/index.ts";
-import type { DesignIrValidationMaterialsRepository } from "./design-ir-validation-materials-repository.ts";
+import type { DesignIrValidationMaterialsRepository } from "./port/design-ir-validation-materials-repository.ts";
 import type { ValidateDesignIrOutcome } from "./validate-design-ir-outcome.ts";
 
 export class ValidateDesignIrUseCase {

@@ -12,25 +12,21 @@ import {
   ReferenceCheckReportId,
 } from "../domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
-import type { DesignRecordRepository } from "./design-record-repository.ts";
-import type { ReferenceCheckReportConformance } from "./reference-check-report-conformance.ts";
-import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
+import type { DesignRecordRepository } from "./port/design-record-repository.ts";
+import type { ReferenceCheckReportRepository } from "./port/reference-check-report-repository.ts";
 import type { CheckFunctionalDesignInput } from "./check-functional-design-input.ts";
 
 
 export class CheckFunctionalDesignUseCase {
   readonly #designRecordRepository: DesignRecordRepository;
   readonly #referenceCheckReportRepository: ReferenceCheckReportRepository;
-  readonly #referenceCheckReportConformance: ReferenceCheckReportConformance;
 
   constructor(
     designRecordRepository: DesignRecordRepository,
     referenceCheckReportRepository: ReferenceCheckReportRepository,
-    referenceCheckReportConformance: ReferenceCheckReportConformance,
   ) {
     this.#designRecordRepository = designRecordRepository;
     this.#referenceCheckReportRepository = referenceCheckReportRepository;
-    this.#referenceCheckReportConformance = referenceCheckReportConformance;
   }
 
   execute(input: CheckFunctionalDesignInput): CheckOutcome {
@@ -69,15 +65,15 @@ export class CheckFunctionalDesignUseCase {
       findings: ledger.findings(),
       skipped: ledger.skipped(),
     });
-    // persist は store（適合を内包し書かれた姿を返す）、report-only は適合だけを
-    // 問う——どちらの verdict も「書かれる(はずの)姿」から導く（凍結挙動）。
+    // persist は store（適合を内包し書かれた姿を返す）、report-only は conformedOf
+    // で適合だけを問う——どちらの verdict も「書かれる(はずの)姿」から導く（凍結挙動）。
     let conformed: ReferenceCheckReport;
     if (input.mode === "persist") {
       const stored = this.#referenceCheckReportRepository.store(report);
       if (!stored.ok) return { kind: "save-failed", error: stored.error };
       conformed = stored.value;
     } else {
-      conformed = this.#referenceCheckReportConformance.conformedOf(report);
+      conformed = this.#referenceCheckReportRepository.conformedOf(report);
     }
     return {
       kind: "verified",

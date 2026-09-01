@@ -1,6 +1,6 @@
 import { CoverageAssessment, VerificationStaleness } from "../domain/index.ts";
 import type { CoverageRow } from "../domain/index.ts";
-import type { DoctorWorkspaceClient } from "./doctor-workspace-client.ts";
+import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 
 // 要件検証カバレッジの査定（checks 配列の第 3 ブロック）。適格＝スコープ
 // 一致かつ requirements.md 実在（ゲートウェイが母数を絞る）。モデルか

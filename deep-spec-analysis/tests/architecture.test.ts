@@ -23,6 +23,7 @@ import {
   noIoInPureLayers,
   noNonNullAssertions,
   onePublicTypePerFile,
+  portsLiveInPortDir,
   noTestPayloads,
   onlySanctionedImports,
   privateConstructorInDomain,
@@ -160,6 +161,15 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(onePublicTypePerFile("kernel/domain/index.ts", 'export { Token } from "./token.ts";')).toHaveLength(0);
     expect(onePublicTypePerFile("aidlc-sensor-deep-spec-ir-valid.ts", "export type Verdict = { pass: boolean };")).not.toHaveLength(0);
     expect(onePublicTypePerFile("kernel/domain/token.ts", 'const s = "export class Fake {}";\nexport class Token {}')).toHaveLength(0);
+  });
+
+  test("ports-live-in-port-dir flags a stray port contract and an interactor inside port/", () => {
+    expect(portsLiveInPortDir("design/usecase/foo-repository.ts", "export interface FooRepository { x(): void }")).not.toHaveLength(0);
+    expect(portsLiveInPortDir("design/usecase/foo-client.ts", "export interface FooClient { x(): void }")).not.toHaveLength(0);
+    expect(portsLiveInPortDir("design/usecase/port/foo-repository.ts", "export interface FooRepository { x(): void }")).toHaveLength(0);
+    expect(portsLiveInPortDir("design/usecase/port/sneaky.ts", "export class Sneaky {}")).not.toHaveLength(0);
+    expect(portsLiveInPortDir("design/usecase/verify-usecase.ts", "export class VerifyUseCase {}")).toHaveLength(0);
+    expect(portsLiveInPortDir("design/adapter/foo-client-config.ts", "export interface FooClientConfig { y: string }")).toHaveLength(0);
   });
 
   test("no-export-star flags a wildcard re-export, passes an explicit facade", () => {

@@ -23,9 +23,9 @@ import {
   VerificationReportId,
   type RequirementsModel,
 } from "../domain/index.ts";
-import type { FormalModelRepository } from "./formal-model-repository.ts";
-import type { QuintClient } from "./quint-client.ts";
-import type { VerificationReportRepository } from "./verification-report-repository.ts";
+import type { FormalModelRepository } from "./port/formal-model-repository.ts";
+import type { QuintClient } from "./port/quint-client.ts";
+import type { VerificationReportRepository } from "./port/verification-report-repository.ts";
 import type { VerifyQuintOutcome } from "./verify-quint-outcome.ts";
 import type { VerifyRequirementsQuintInput } from "./verify-requirements-quint-input.ts";
 

@@ -1,6 +1,6 @@
 import { InstallationManifest } from "../domain/index.ts";
 import type { InstalledStatus } from "../domain/index.ts";
-import type { HarnessFileClient } from "./harness-file-client.ts";
+import type { HarnessFileClient } from "./port/harness-file-client.ts";
 
 // マニフェスト全行の実在判定（checks 配列の先頭ブロック——凍結順）。
 export class CheckInstallationUseCase {

@@ -1,4 +1,4 @@
-import type { SmtQueryVerdicts } from "../domain/index.ts";
+import type { SmtQueryVerdicts } from "../../domain/index.ts";
 
 export type SmtSolverResult =
   | { readonly kind: "unavailable"; readonly reason: string }

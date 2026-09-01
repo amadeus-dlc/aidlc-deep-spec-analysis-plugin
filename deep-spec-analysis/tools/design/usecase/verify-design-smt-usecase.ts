@@ -28,11 +28,11 @@ import {
 import {
   UnitRefinementPlan,
 } from "../../refinement/domain/index.ts";
-import type { DesignModelRepository } from "./design-model-repository.ts";
-import type { DesignReportRepository } from "./design-report-repository.ts";
-import { type RefinementMaterialsRepository } from "./refinement-materials-repository.ts";
-import type { RefinementSolverClient } from "./refinement-solver-client.ts";
-import type { SiblingBackendClient } from "./sibling-backend-client.ts";
+import type { DesignModelRepository } from "./port/design-model-repository.ts";
+import type { DesignReportRepository } from "./port/design-report-repository.ts";
+import { type RefinementMaterialsRepository } from "./port/refinement-materials-repository.ts";
+import type { RefinementSolverClient } from "./port/refinement-solver-client.ts";
+import type { SiblingBackendClient } from "./port/sibling-backend-client.ts";
 import type { VerifyDesignOutcome } from "./verify-design-outcome.ts";
 import type { VerifyDesignInput } from "./verify-design-input.ts";
 

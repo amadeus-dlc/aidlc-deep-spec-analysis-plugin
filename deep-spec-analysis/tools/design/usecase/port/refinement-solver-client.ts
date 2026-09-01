@@ -3,8 +3,8 @@
 // （Pending・コンパイル時 skip）と型付き判定だけを返す。クエリゼロは子を
 // 起動しない（旧挙動の凍結——no-queries）。
 
-import type { RefinementRequirements, UnitRefinementPlan } from "../../refinement/domain/index.ts";
-import type { DesignUnit } from "../domain/index.ts";
+import type { RefinementRequirements, UnitRefinementPlan } from "../../../refinement/domain/index.ts";
+import type { DesignUnit } from "../../domain/index.ts";
 import type { RefinementCheck } from "./refinement-check.ts";
 
 export interface RefinementSolverClient {

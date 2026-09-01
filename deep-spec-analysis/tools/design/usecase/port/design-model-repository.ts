@@ -6,9 +6,9 @@
 // 逐語で載る凍結文言が材料として入る。store は集約の原文（sourceDocument）を
 // バイト逐語で書く——findById∘store はバイト恒等（往復則）。
 
-import type { Result } from "../../kernel/infrastructure/index.ts";
-import type { RepositoryError } from "../../kernel/usecase/index.ts";
-import type { DesignModel, DesignModelId } from "../domain/index.ts";
+import type { Result } from "../../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../../kernel/usecase/index.ts";
+import type { DesignModel, DesignModelId } from "../../domain/index.ts";
 
 export interface DesignModelRepository {
   findById(id: DesignModelId): Result<DesignModel, RepositoryError>;

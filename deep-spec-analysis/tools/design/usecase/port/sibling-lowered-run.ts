@@ -1,4 +1,4 @@
-import type { SiblingVerdictDocument } from "../domain/index.ts";
+import type { SiblingVerdictDocument } from "../../domain/index.ts";
 
 export interface SiblingLoweredRun {
   exit: number | null;
