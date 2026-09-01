@@ -7,8 +7,11 @@ import { type Json, isObject } from "../../kernel/adapter/json.ts";
 import { parseYamlSubset } from "../../kernel/adapter/yaml.ts";
 import {
   AttributeName,
+  Component,
   ComponentEntities,
+  ComponentEntity,
   ComponentName,
+  ComponentRef,
   ComponentRefs,
   Components,
   ComponentShapeErrors,
@@ -17,10 +20,7 @@ import {
   EntityReferences,
 } from "../domain/index.ts";
 import type {
-  Component,
   ComponentCatalogOutcome,
-  ComponentEntity,
-  ComponentRef,
   ComponentShapeError,
   EntityReference,
 } from "../domain/index.ts";
@@ -53,7 +53,7 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
       (raw[key] as Json[]).forEach((entry, j) => {
         const el = `${element}.${key}[${j}].component`;
         const comp = isObject(entry) ? str(entry.component) : str(entry);
-        if (comp !== null) out.push({ component: ComponentName.reconstitute(comp), element: ElementPath.reconstitute(el) });
+        if (comp !== null) out.push(ComponentRef.reconstitute({ component: ComponentName.reconstitute(comp), element: ElementPath.reconstitute(el) }));
       });
       return ComponentRefs.of(out);
     };
@@ -79,21 +79,21 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
           });
         }
         const identifier = str(entry.identifier);
-        entities.push({
+        entities.push(ComponentEntity.reconstitute({
           name: EntityName.reconstitute(ename),
           element: ElementPath.reconstitute(`${element}.entities[${j}]`),
           identifier: identifier === null ? null : AttributeName.reconstitute(identifier),
           references: EntityReferences.of(references),
-        });
+        }));
       });
     }
-    comps.push({
+    comps.push(Component.reconstitute({
       name: ComponentName.reconstitute(name),
       element: ElementPath.reconstitute(element),
       dependsOn: refs("depends_on"),
       dependents: refs("dependents"),
       entities: ComponentEntities.of(entities),
-    });
+    }));
   });
   return { comps: Components.of(comps), shapeErrors: ComponentShapeErrors.of(shapeErrors) };
 }

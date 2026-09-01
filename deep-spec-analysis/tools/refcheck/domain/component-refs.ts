@@ -23,7 +23,7 @@ export class ComponentRefs {
 
   // DD-4 の対称性検査：この参照面が name を挙げているか。
   listsComponent(name: ComponentName): boolean {
-    return this.#values.some((r) => r.component.equals(name));
+    return this.#values.some((r) => r.component().equals(name));
   }
 
   toArray(): readonly ComponentRef[] {

@@ -161,7 +161,10 @@ import {
   BlockIndex,
   CheckFamilies,
   CheckFamily,
+  Component,
   ComponentEntities,
+  ComponentEntity,
+  ComponentRef,
   ComponentRefs,
   Components,
   ComponentShapeErrors,
@@ -347,16 +350,16 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     const el = ElementPath.reconstitute("components[0]");
     const aName = ComponentName.reconstitute("A");
     const bName = ComponentName.reconstitute("B");
-    const refAtoB = { component: bName, element: el };
-    const refBtoA = { component: aName, element: el };
-    const entity = {
+    const refAtoB = ComponentRef.reconstitute({ component: bName, element: el });
+    const refBtoA = ComponentRef.reconstitute({ component: aName, element: el });
+    const entity = ComponentEntity.reconstitute({
       name: EntityName.reconstitute("Order"),
       element: el,
       identifier: AttributeName.reconstitute("id"),
       references: EntityReferences.of([]).add({ entity: EntityName.reconstitute("Line"), ownedBy: bName, element: el }),
-    };
-    const a = { name: aName, element: el, dependsOn: ComponentRefs.of([refAtoB]), dependents: ComponentRefs.of([refBtoA]), entities: ComponentEntities.of([entity]) };
-    const b = { name: bName, element: el, dependsOn: ComponentRefs.of([refBtoA]), dependents: ComponentRefs.of([]), entities: ComponentEntities.of([]) };
+    });
+    const a = Component.reconstitute({ name: aName, element: el, dependsOn: ComponentRefs.of([refAtoB]), dependents: ComponentRefs.of([refBtoA]), entities: ComponentEntities.of([entity]) });
+    const b = Component.reconstitute({ name: bName, element: el, dependsOn: ComponentRefs.of([refBtoA]), dependents: ComponentRefs.of([]), entities: ComponentEntities.of([]) });
     const comps = Components.of([]).add(a).add(b);
     expect(comps.count()).toBe(2);
     expect([...comps].length).toBe(2);
@@ -364,26 +367,116 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(comps.declares(ComponentName.reconstitute("Z"))).toBe(false);
     expect(comps.byName(bName)).toBe(b);
     expect(comps.byName(ComponentName.reconstitute("Z"))).toBe(null);
-    expect(a.dependsOn.listsComponent(bName)).toBe(true);
-    expect(a.dependsOn.toArray().length).toBe(1);
-    expect([...a.dependsOn].length).toBe(1);
-    expect(a.dependsOn.add(refBtoA).toArray().length).toBe(2);
-    expect(a.entities.declaresEntity(EntityName.reconstitute("Order"))).toBe(true);
-    expect(a.entities.declaresEntity(EntityName.reconstitute("Ghost"))).toBe(false);
-    expect([...a.entities].length).toBe(1);
-    expect(a.entities.add(entity).toArray().length).toBe(2);
-    expect([...entity.references].length).toBe(1);
-    expect(entity.references.toArray().length).toBe(1);
+    expect(a.name().asString()).toBe("A");
+    expect(a.element().asString()).toBe("components[0]");
+    expect(a.dependsOn().listsComponent(bName)).toBe(true);
+    expect(a.dependsOn().toArray().length).toBe(1);
+    expect([...a.dependsOn()].length).toBe(1);
+    expect(a.dependsOn().add(refBtoA).toArray().length).toBe(2);
+    expect(a.dependents().toArray().length).toBe(1);
+    expect(a.entities().declaresEntity(EntityName.reconstitute("Order"))).toBe(true);
+    expect(a.entities().declaresEntity(EntityName.reconstitute("Ghost"))).toBe(false);
+    expect([...a.entities()].length).toBe(1);
+    expect(a.entities().add(entity).toArray().length).toBe(2);
+    expect(entity.name().asString()).toBe("Order");
+    expect(entity.element().asString()).toBe("components[0]");
+    expect([...entity.references()].length).toBe(1);
+    expect(entity.references().toArray().length).toBe(1);
+    expect(refAtoB.component().asString()).toBe("B");
+    expect(refAtoB.element().asString()).toBe("components[0]");
     // A -> B -> A の閉路は正準化されて 1 件。
     expect(comps.dependencyCycles()).toEqual([["A", "B"]]);
     // 重複名の byName は最後の宣言が勝つ（旧 name→Component Map の凍結挙動）。
-    const aDup = { ...a, element: ElementPath.reconstitute("components[9]") };
+    const aDup = Component.reconstitute({ name: aName, element: ElementPath.reconstitute("components[9]"), dependsOn: ComponentRefs.of([]), dependents: ComponentRefs.of([]), entities: ComponentEntities.of([]) });
     const withDup = comps.add(aDup);
-    expect(withDup.byName(aName)?.element.asString()).toBe("components[9]");
+    expect(withDup.byName(aName)?.element().asString()).toBe("components[9]");
     const errs = ComponentShapeErrors.of([]).add({ element: el, detail: "x" });
     expect(errs.count()).toBe(1);
     expect([...errs].length).toBe(1);
     expect(errs.toArray()[0]?.detail).toBe("x");
+  });
+
+  test("components own their shape checks: PascalCase, duplicates, self-dependency, ownership (wave 6)", () => {
+    const el = ElementPath.reconstitute("components[0]");
+    const bare = (name: string, element: string): Component =>
+      Component.reconstitute({
+        name: ComponentName.reconstitute(name),
+        element: ElementPath.reconstitute(element),
+        dependsOn: ComponentRefs.of([]),
+        dependents: ComponentRefs.of([]),
+        entities: ComponentEntities.of([]),
+      });
+
+    // DD-1: PascalCase は宣言自身の判定。
+    expect(bare("Order", "components[0]").nameIsPascalCase()).toBe(true);
+    expect(bare("order", "components[0]").nameIsPascalCase()).toBe(false);
+
+    // DD-1: 重複は直前の宣言との対（宣言順——3 度目は 2 度目と対になる）。
+    const dups = Components.of([bare("A", "components[0]"), bare("B", "components[1]"), bare("A", "components[2]"), bare("A", "components[3]")]);
+    expect(dups.duplicateNamePairs().map((p) => `${p.prior.element().asString()}→${p.current.element().asString()}`)).toEqual([
+      "components[0]→components[2]",
+      "components[2]→components[3]",
+    ]);
+    expect(Components.of([bare("A", "components[0]"), bare("B", "components[1]")]).duplicateNamePairs()).toEqual([]);
+
+    // DD-3: 自己参照は depends_on → dependents の走査順で届く。
+    const selfName = ComponentName.reconstitute("Self");
+    const self = Component.reconstitute({
+      name: selfName,
+      element: el,
+      dependsOn: ComponentRefs.of([ComponentRef.reconstitute({ component: selfName, element: ElementPath.reconstitute("components[0].depends_on[0].component") })]),
+      dependents: ComponentRefs.of([
+        ComponentRef.reconstitute({ component: ComponentName.reconstitute("Other"), element: el }),
+        ComponentRef.reconstitute({ component: selfName, element: ElementPath.reconstitute("components[0].dependents[1].component") }),
+      ]),
+      entities: ComponentEntities.of([]),
+    });
+    expect(self.selfReferences().map((r) => r.element().asString())).toEqual([
+      "components[0].depends_on[0].component",
+      "components[0].dependents[1].component",
+    ]);
+    expect(bare("A", "components[0]").selfReferences()).toEqual([]);
+
+    // DD-5: 識別子の有無はエンティティ自身の判定（未宣言・空文字は所有不能）。
+    const entityOf = (identifier: string | null): ComponentEntity =>
+      ComponentEntity.reconstitute({
+        name: EntityName.reconstitute("Order"),
+        element: el,
+        identifier: identifier === null ? null : AttributeName.reconstitute(identifier),
+        references: EntityReferences.of([]),
+      });
+    expect(entityOf("id").hasIdentifier()).toBe(true);
+    expect(entityOf(null).hasIdentifier()).toBe(false);
+    expect(entityOf("").hasIdentifier()).toBe(false);
+
+    // DD-5: 所有競合はエンティティ名昇順、所有側は宣言順——単一所有は届かない。
+    const owner = (comp: string, element: string, entities: ComponentEntity[]): Component =>
+      Component.reconstitute({
+        name: ComponentName.reconstitute(comp),
+        element: ElementPath.reconstitute(element),
+        dependsOn: ComponentRefs.of([]),
+        dependents: ComponentRefs.of([]),
+        entities: ComponentEntities.of(entities),
+      });
+    const entityNamed = (name: string, element: string): ComponentEntity =>
+      ComponentEntity.reconstitute({
+        name: EntityName.reconstitute(name),
+        element: ElementPath.reconstitute(element),
+        identifier: AttributeName.reconstitute("id"),
+        references: EntityReferences.of([]),
+      });
+    const conflicts = Components.of([
+      owner("A", "components[0]", [entityNamed("Zed", "components[0].entities[0]"), entityNamed("Order", "components[0].entities[1]")]),
+      owner("B", "components[1]", [entityNamed("Order", "components[1].entities[0]"), entityNamed("Solo", "components[1].entities[1]")]),
+      owner("C", "components[2]", [entityNamed("Zed", "components[2].entities[0]")]),
+    ]).ownershipConflicts();
+    expect(conflicts.map((c) => c.name.asString())).toEqual(["Order", "Zed"]);
+    expect(conflicts[0]?.owners.map((o) => `${o.component.name().asString()}:${o.entity.element().asString()}`)).toEqual([
+      "A:components[0].entities[1]",
+      "B:components[1].entities[0]",
+    ]);
+    expect(conflicts[1]?.owners.map((o) => o.component.name().asString())).toEqual(["A", "C"]);
+    expect(Components.of([owner("A", "components[0]", [entityNamed("Solo", "components[0].entities[0]")])]).ownershipConflicts()).toEqual([]);
   });
 });
 

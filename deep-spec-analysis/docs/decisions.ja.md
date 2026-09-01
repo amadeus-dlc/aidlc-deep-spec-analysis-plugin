@@ -1324,3 +1324,12 @@ getter しかない data model であり、同じ病巣として台帳に載る�
 no-op event）を、重複していた2箇所（`buildLowering` と
 `DesignEventCatalog.of`）から型自身へ戻す。台帳から 3 エントリを
 回収し、残債は 122 中 105。
+
+波 6（同 PR）: `Component`／`ComponentEntity`／`ComponentRef` が命令
+できる class へ。コンポーネント宣言は名の形（DD-1 の PascalCase）
+と自己依存の検出（DD-3、`ComponentRef.pointsAt` を経由）を、
+エンティティは所有の要件たる識別子の有無（DD-5）を、コレクション
+は重複の対生成（DD-1）と複数所有のグルーピング（DD-5）を所有する
+——いずれも `ComponentCheckMaterials` に漏れていた seen-map 走査と
+owners-map 走査の移設。materials は凍結文言の組み立てだけを担う。
+台帳から 3 エントリを回収し、残債は 122 中 102。
