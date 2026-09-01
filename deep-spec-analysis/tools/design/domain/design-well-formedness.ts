@@ -7,7 +7,9 @@
 
 import { type Expression, Expressions } from "../../kernel/domain/index.ts";
 import { BrReferenceIndex } from "./br-reference-index.ts";
-import type { BrRefs, DeclaredValues, DesignUnitDecls } from "./design-ir-decl.ts";
+import { type BrRefs } from "./br-refs.ts";
+import { type DeclaredValues } from "./declared-values.ts";
+import { type DesignUnitDecls } from "./design-unit-decls.ts";
 
 interface AttributeType {
   readonly kind: string;

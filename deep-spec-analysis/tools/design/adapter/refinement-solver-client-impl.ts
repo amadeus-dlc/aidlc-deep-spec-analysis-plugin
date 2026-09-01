@@ -15,7 +15,9 @@ import type {
 } from "../../refinement/domain/index.ts";
 import type { DesignUnit } from "../domain/index.ts";
 import type { RefinementCheck, RefinementSolverClient } from "../usecase/index.ts";
-import { type RefinementChildQuery, buildRefinementQueries, decodeDesignModel } from "./refinement-smt-compiler.ts";
+import { type RefinementChildQuery } from "./refinement-child-query.ts";
+import { buildRefinementQueries, decodeDesignModel } from "./refinement-query-plan.ts";
+import type { RefinementSolverClientConfig } from "./refinement-solver-client-config.ts";
 
 interface RefinementChildResult {
   id: string;
@@ -25,12 +27,6 @@ interface RefinementChildResult {
   error?: string;
 }
 
-export interface RefinementSolverClientConfig {
-  readonly childHostPath: string;
-  readonly perQueryTimeoutMs: number;
-  readonly runtimeOverride: string | undefined;
-  readonly workingDirectory: string;
-}
 
 export class RefinementSolverClientImpl implements RefinementSolverClient {
   readonly #config: RefinementSolverClientConfig;

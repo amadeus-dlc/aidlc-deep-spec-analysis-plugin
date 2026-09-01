@@ -23,7 +23,6 @@ import {
   type DesignModel,
   SUPPORTED_DESIGN_IR_MAJOR,
   LoweredUnit,
-  type DesignModelId,
   RefinementMaterialsId,
 } from "../domain/index.ts";
 import {
@@ -31,10 +30,11 @@ import {
 } from "../../refinement/domain/index.ts";
 import type { DesignModelRepository } from "./design-model-repository.ts";
 import type { DesignReportRepository } from "./design-report-repository.ts";
-import type { RefinementMaterialsRepository } from "./refinement-context-repository.ts";
+import { type RefinementMaterialsRepository } from "./refinement-materials-repository.ts";
 import type { RefinementSolverClient } from "./refinement-solver-client.ts";
 import type { SiblingBackendClient } from "./sibling-backend-client.ts";
 import type { VerifyDesignOutcome } from "./verify-design-outcome.ts";
+import type { VerifyDesignInput } from "./verify-design-input.ts";
 
 const BACKEND = "smt";
 const CROSS_CHECK_BACKEND = "cross-check";
@@ -44,10 +44,6 @@ const RUN_BUDGET_MS = 60_000;
 // その内側で終われない子を決して起動しない。
 const REFINEMENT_DEADLINE_MS = 65_000;
 
-export interface VerifyDesignInput {
-  readonly modelId: DesignModelId;
-  readonly verifyDirectory: ArtifactPath;
-}
 
 export class VerifyDesignSmtUseCase {
   readonly #designModelRepository: DesignModelRepository;

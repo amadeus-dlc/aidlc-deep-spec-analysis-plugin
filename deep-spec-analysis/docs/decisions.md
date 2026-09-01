@@ -1030,3 +1030,37 @@ PR10 turned layer enforcement fully on:
 Evidence: 367 tests green, goldens untouched, parity snapshot `diff -r`
 empty against the pre-PR7 base, coverage floors held, 7 harness builds,
 CLI z3/quint spot check BYTE-IDENTICAL.
+
+## One-public-type-per-file ruling — every public type owns its own file (2026-09-01)
+
+Java-style file discipline, applied to the whole layered tree. A layered
+file (any layer of kernel/requirements/design/refinement/refcheck)
+carries at most one public type declaration (`export
+class/interface/type/enum`), and the file name equals the kebab-case of
+that type name (`UseCase` is the established single word "usecase").
+Subordinate non-exported types and private constants may live with their
+owning public type; function-only modules carry no naming constraint.
+Facades (index.ts) declare nothing and re-export explicitly; entries
+declare no public types — wiring only.
+
+- **Enforcement**: `onePublicTypePerFile` joins ALL_RULES (red/green
+  examples; stripStrings preprocessing avoids string-literal false
+  positives). It detects the three shapes: multi-type files, name
+  mismatches, and declarations in facades/entries.
+- **Shape of the migration**: 186 → 459 files. 273 extractions
+  (refcheck/domain 78, design/domain 73, requirements/domain 59,
+  refinement/domain 32, the rest across adapter/usecase/kernel),
+  28 renames following the owning type (`lower-unit` → `lowered-unit`,
+  `remap-unit-doc` → `remapped-unit`, `design-ir-decl` →
+  `design-unit-decl`, the kernel adapters `fence`/`json`/`md-table`/
+  `schema`/`yaml`/`names`/`target-ids`, …), the remainder import and
+  facade follow-ups.
+- **Shared tables follow their owning type**: KIND_RANK moved into the
+  findings collections (`verification-findings`/`findings`/
+  `design-findings`) and the kind-rank order-preservation test paths
+  follow. Coverage pins were added for the collection faces the split
+  exposed (of/add/iteration).
+
+Evidence: tsc clean, full suite 369 pass / 1 skip / 0 fail, goldens and
+parity untouched (no reference-output changes), the architecture suite
+reports zero violations with the new rule on.

@@ -12,8 +12,6 @@ import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type {
   IrValidationMaterials,
   IrValidationMaterialsId,
-  RequirementsSource,
-  RequirementsSourceId,
 } from "../domain/index.ts";
 
 export interface IrValidationMaterialsRepository {
@@ -21,9 +19,3 @@ export interface IrValidationMaterialsRepository {
   store(materials: IrValidationMaterials): Result<IrValidationMaterials, RepositoryError>;
 }
 
-// 集約 ID による解決。記録ルート配下のどのフェーズに requirements.md が
-// あるかの探索は Repository の解決詳細で、恒等には含まれない。
-export interface RequirementsSourceRepository {
-  findById(id: RequirementsSourceId): Result<RequirementsSource, RepositoryError>;
-  store(source: RequirementsSource): Result<RequirementsSource, RepositoryError>;
-}

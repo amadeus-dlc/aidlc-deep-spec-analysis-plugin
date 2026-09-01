@@ -3,9 +3,9 @@
 //（AttrDecl の生 Json フィールドのみ、検査が区別する意味論へ無損失に写像）。
 
 import { RequirementIds } from "../../kernel/domain/index.ts";
-import { extractFences } from "../../kernel/adapter/markdown-fences.ts";
-import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
-import { parseYamlSubset } from "../../kernel/adapter/yaml-subset.ts";
+import { extractFences } from "../../kernel/adapter/fence.ts";
+import { type Json, isObject } from "../../kernel/adapter/json.ts";
+import { parseYamlSubset } from "../../kernel/adapter/yaml.ts";
 import {
   AllowedValue,
   LineNumber,

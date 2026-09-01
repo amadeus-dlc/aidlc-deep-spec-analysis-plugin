@@ -1,110 +1,95 @@
 // design/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
 export { type DesignValue } from "./design-value.ts";
-export { type DesignTransition, type DesignTransitionIdError, DesignTransitionId, DesignTransitions } from "./design-transition.ts";
-export {
-  type DesignIgnore,
-  type DesignMachine,
-  type DesignMachineTokenError,
-  DesignAttributeName,
-  DesignEntityName,
-  DesignIgnores,
-  DesignMachineId,
-  DesignMachines,
-} from "./design-machine.ts";
-export {
-  type DesignObligation,
-  type DesignObligationIdError,
-  DesignObligationId,
-  DesignObligationNature,
-  DesignObligationOrigin,
-  DesignObligations,
-} from "./design-obligation.ts";
-export { type DesignScenario, type DesignScenarioIdError, DesignScenarioId, DesignScenarios } from "./design-scenario.ts";
-export {
-  type DesignBackgroundIdError,
-  DesignBackgroundId,
-  type DesignBackgroundAssumption,
-  type DesignUnitSeed,
-  AttrPaths,
-  DesignBackgroundAssumptions,
-  DesignUnit,
-  DesignUnits,
-} from "./design-unit.ts";
-export { type DesignModelComposition, DesignModel } from "./design-model.ts";
-export {
-  DesignFindings,
-  DesignSkips, type DesignFinding, type DesignSkipped } from "./design-finding.ts";
+export { type DesignTransition } from "./design-transition.ts";
+export { DesignTransitionId } from "./design-transition-id.ts";
+export { DesignTransitions } from "./design-transitions.ts";
+export { type DesignMachine } from "./design-machine.ts";
+export { DesignAttributeName } from "./design-attribute-name.ts";
+export { DesignEntityName } from "./design-entity-name.ts";
+export { type DesignIgnore } from "./design-ignore.ts";
+export { DesignIgnores } from "./design-ignores.ts";
+export { DesignMachineId } from "./design-machine-id.ts";
+export { DesignMachines } from "./design-machines.ts";
+export { type DesignObligation } from "./design-obligation.ts";
+export { DesignObligationId } from "./design-obligation-id.ts";
+export { DesignObligationNature } from "./design-obligation-nature.ts";
+export { DesignObligationOrigin } from "./design-obligation-origin.ts";
+export { DesignObligations } from "./design-obligations.ts";
+export { type DesignScenario } from "./design-scenario.ts";
+export { DesignScenarioId } from "./design-scenario-id.ts";
+export { DesignScenarios } from "./design-scenarios.ts";
+export { DesignUnit } from "./design-unit.ts";
+export { AttrPaths } from "./attr-paths.ts";
+export { type DesignBackgroundAssumption } from "./design-background-assumption.ts";
+export { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
+export { DesignBackgroundId } from "./design-background-id.ts";
+export { type DesignUnitSeed } from "./design-unit-seed.ts";
+export { DesignUnits } from "./design-units.ts";
+export { DesignModel } from "./design-model.ts";
+export { type DesignModelComposition } from "./design-model-composition.ts";
+export { type DesignFinding } from "./design-finding.ts";
+export { DesignFindings } from "./design-findings.ts";
+export { type DesignSkipped } from "./design-skipped.ts";
+export { DesignSkips } from "./design-skips.ts";
 export { ExpressionCanonicalKey } from "./expression-canonical-key.ts";
-export {
-  type LoweredOrigin,
-  type LoweringKind,
-  type LoweredBackground,
-  type LoweredObligation,
-  type LoweredScenario,
-  LoweredBackgrounds,
-  LoweredObligations,
-  LoweredScenarios,
-  LoweredUnit,
-  LoweringIndex,
-  LoweredId,
-  LoweredOriginRef,
-  type LoweredTokenError,
-} from "./lower-unit.ts";
-export {
-  type RemappedUnit,
-  type SiblingVerdictDocument,
-  type SiblingVerdictFinding,
-  type SiblingVerdictSkip,
-  SiblingVerdictFindings,
-  SiblingVerdictSkips,
-} from "./remap-unit-doc.ts";
+export { type LoweredBackground } from "./lowered-background.ts";
+export { LoweredBackgrounds } from "./lowered-backgrounds.ts";
+export { LoweredId } from "./lowered-id.ts";
+export { type LoweredObligation } from "./lowered-obligation.ts";
+export { LoweredObligations } from "./lowered-obligations.ts";
+export { LoweredOriginRef } from "./lowered-origin-ref.ts";
+export { type LoweredOrigin } from "./lowered-origin.ts";
+export { type LoweredScenario } from "./lowered-scenario.ts";
+export { LoweredScenarios } from "./lowered-scenarios.ts";
+export { LoweredUnit } from "./lowered-unit.ts";
+export { LoweringIndex } from "./lowering-index.ts";
+export { type LoweringKind } from "./lowering-kind.ts";
+export { type RemappedUnit } from "./remapped-unit.ts";
+export { type SiblingVerdictDocument } from "./sibling-verdict-document.ts";
+export { type SiblingVerdictFinding } from "./sibling-verdict-finding.ts";
+export { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";
+export { type SiblingVerdictSkip } from "./sibling-verdict-skip.ts";
+export { SiblingVerdictSkips } from "./sibling-verdict-skips.ts";
 export { DesignReportId } from "./design-report-id.ts";
-export {
-  SUPPORTED_DESIGN_IR_MAJOR,
-  CheckedUnits,
-  DesignCrossCheckedEntries,
-  DesignInputAnchors,
-  DesignReports,
-  type DesignCrossCheckedEntry,
-  type DesignInputAnchor,
-  type DesignReportComposition,
-  type DesignReportSeed,
-  DesignReport,
-} from "./design-report.ts";
-export {
-  BindingPairs,
-  BrRefs,
-  DeclaredValues,
-  DesignAttributeDecls,
-  DesignBackgroundDecls,
-  DesignEntityDecls,
-  DesignIgnoreDecls,
-  DesignMachineDecls,
-  DesignObligationDecls,
-  DesignScenarioDecls,
-  DesignTransitionDecls,
-  DesignUnitDecls,
-  InitialStates,
-  UnformalizedTargets,
-  type DesignAttributeDecl,
-  type DesignBackgroundDecl,
-  type DesignEntityDecl,
-  type DesignIgnoreDecl,
-  type DesignMachineDecl,
-  type DesignObligationDecl,
-  type DesignScenarioDecl,
-  type DesignTemporalDecl,
-  type DesignTransitionDecl,
-  type DesignUnitDecl,
-} from "./design-ir-decl.ts";
+export { SUPPORTED_DESIGN_IR_MAJOR, DesignReport } from "./design-report.ts";
+export { CheckedUnits } from "./checked-units.ts";
+export { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
+export { type DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
+export { type DesignInputAnchor } from "./design-input-anchor.ts";
+export { DesignInputAnchors } from "./design-input-anchors.ts";
+export { type DesignReportComposition } from "./design-report-composition.ts";
+export { type DesignReportSeed } from "./design-report-seed.ts";
+export { DesignReports } from "./design-reports.ts";
+export { BindingPairs } from "./binding-pairs.ts";
+export { BrRefs } from "./br-refs.ts";
+export { DeclaredValues } from "./declared-values.ts";
+export { type DesignAttributeDecl } from "./design-attribute-decl.ts";
+export { DesignAttributeDecls } from "./design-attribute-decls.ts";
+export { type DesignBackgroundDecl } from "./design-background-decl.ts";
+export { DesignBackgroundDecls } from "./design-background-decls.ts";
+export { type DesignEntityDecl } from "./design-entity-decl.ts";
+export { DesignEntityDecls } from "./design-entity-decls.ts";
+export { type DesignIgnoreDecl } from "./design-ignore-decl.ts";
+export { DesignIgnoreDecls } from "./design-ignore-decls.ts";
+export { type DesignMachineDecl } from "./design-machine-decl.ts";
+export { DesignMachineDecls } from "./design-machine-decls.ts";
+export { type DesignObligationDecl } from "./design-obligation-decl.ts";
+export { DesignObligationDecls } from "./design-obligation-decls.ts";
+export { type DesignScenarioDecl } from "./design-scenario-decl.ts";
+export { DesignScenarioDecls } from "./design-scenario-decls.ts";
+export { type DesignTemporalDecl } from "./design-temporal-decl.ts";
+export { type DesignTransitionDecl } from "./design-transition-decl.ts";
+export { DesignTransitionDecls } from "./design-transition-decls.ts";
+export { type DesignUnitDecl } from "./design-unit-decl.ts";
+export { DesignUnitDecls } from "./design-unit-decls.ts";
+export { InitialStates } from "./initial-states.ts";
+export { UnformalizedTargets } from "./unformalized-targets.ts";
 export { BrReferenceIndex } from "./br-reference-index.ts";
 export { designWellFormednessErrors } from "./design-well-formedness.ts";
 export { DesignModelId } from "./design-model-id.ts";
 export { DesignUnitId } from "./design-unit-id.ts";
 export { RefinementMaterialsId } from "./refinement-materials-id.ts";
-export {
-  type DesignIrValidationMaterialsSeed,
-  DesignIrValidationMaterials,
-  DesignIrValidationMaterialsId,
-} from "./design-ir-validation-materials.ts";
+export { DesignIrValidationMaterials } from "./design-ir-validation-materials.ts";
+export { DesignIrValidationMaterialsId } from "./design-ir-validation-materials-id.ts";
+export { type DesignIrValidationMaterialsSeed } from "./design-ir-validation-materials-seed.ts";

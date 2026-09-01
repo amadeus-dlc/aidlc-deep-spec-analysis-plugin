@@ -335,6 +335,51 @@ export function noNonNullAssertions(relPath: string, rawSource: string): Violati
   return [];
 }
 
+// ルール: 1 ファイル 1 公開型(Java 流——オーナー裁定 2026-09-01)。層化
+// ファイルは公開型宣言(export class/interface/type/enum)を高々 1 つ持ち、
+// その kebab-case はファイル名と一致する。従属する非公開型(export しない
+// class/interface/type)は所有する公開型のファイルに同居してよい。facade
+// (index.ts)は宣言を持たず再輸出のみ、entry は公開型を持たない。
+export function kebabOf(typeName: string): string {
+  // UseCase はこのリポジトリの確立済み一語("usecase")。
+  return typeName
+    .replace(/UseCase$/, "Usecase")
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase();
+}
+
+export function onePublicTypePerFile(relPath: string, rawSource: string): Violation[] {
+  const loc = locationOf(relPath);
+  if (loc === null) return [];
+  const source = stripStrings(rawSource);
+  const decls: string[] = [];
+  const re = /^export (?:abstract )?(?:class|interface|enum) (\w+)|^export type (\w+)\b/gm;
+  for (let m = re.exec(source); m !== null; m = re.exec(source)) {
+    decls.push(m[1] ?? m[2] ?? "");
+  }
+  const base = relPath.split("/").pop() ?? "";
+  if (base === "index.ts") {
+    return decls.length > 0
+      ? [{ path: relPath, rule: "one-public-type-per-file", detail: `facade declares ${decls.join(", ")} — facades re-export only` }]
+      : [];
+  }
+  const out: Violation[] = [];
+  if (decls.length > 1) {
+    out.push({ path: relPath, rule: "one-public-type-per-file", detail: `${decls.length} public types in one file: ${decls.join(", ")}` });
+  }
+  if (decls.length === 1 && typeof loc !== "string") {
+    const expected = `${kebabOf(decls[0] ?? "")}.ts`;
+    if (base !== expected) {
+      out.push({ path: relPath, rule: "one-public-type-per-file", detail: `public type ${decls[0]} belongs in ${expected}, not ${base}` });
+    }
+  }
+  if (typeof loc === "string" && decls.length > 0) {
+    out.push({ path: relPath, rule: "one-public-type-per-file", detail: `entry declares public type(s) ${decls.join(", ")} — entries carry wiring only` });
+  }
+  return out;
+}
+
 // ルール: 層とコンテキストの依存方向。
 //   infrastructure → 同層のみ（言語拡張基盤：ドメインを知らない）
 //   domain  → 同一コンテキスト domain・kernel/domain（＋infrastructure）
@@ -402,6 +447,7 @@ export const ALL_RULES = [
   noGetAccessors,
   noEnums,
   noNonNullAssertions,
+  onePublicTypePerFile,
 ] as const;
 
 export function violationsOf(relPath: string, source: string): Violation[] {

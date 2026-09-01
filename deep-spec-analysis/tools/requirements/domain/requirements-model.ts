@@ -5,83 +5,19 @@
 // 配列を生で運ばない：部品はファーストクラスコレクションで受け取り・返す。
 
 import { type IrVersion, IdOrder } from "../../kernel/domain/index.ts";
-import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
-import { type AttributeDeclaration, AttributeDeclarations } from "./attribute-declaration.ts";
-import type { Expression } from "../../kernel/domain/expression.ts";
+import { type AttributeDeclaration } from "./attribute-declaration.ts";
+import { AttributeDeclarations } from "./attribute-declarations.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
 import type { FormalModelId } from "./formal-model-id.ts";
-import { Obligations } from "./obligation.ts";
-import { Scenarios } from "./scenario.ts";
+import { Obligations } from "./obligations.ts";
+import { Scenarios } from "./scenarios.ts";
+import { BackgroundAssumptions } from "./background-assumptions.ts";
+import type { RequirementsModelSeed } from "./requirements-model-seed.ts";
 
-export type BackgroundAssumptionIdError = { readonly kind: "empty-background-id"; readonly raw: string };
 
-export class BackgroundAssumptionId {
-  readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
-  }
 
-  static parse(raw: string): Result<BackgroundAssumptionId, BackgroundAssumptionIdError> {
-    if (raw === "") return err({ kind: "empty-background-id", raw });
-    return ok(new BackgroundAssumptionId(raw));
-  }
 
-  static reconstitute(raw: string): BackgroundAssumptionId {
-    return new BackgroundAssumptionId(raw);
-  }
-
-  equals(other: BackgroundAssumptionId): boolean {
-    return this.#value === other.#value;
-  }
-
-  asString(): string {
-    return this.#value;
-  }
-}
-
-export interface BackgroundAssumption {
-  id: BackgroundAssumptionId;
-  assert: Expression;
-}
-
-// 背景仮定のファーストクラスコレクション。
-export class BackgroundAssumptions {
-  readonly #values: readonly BackgroundAssumption[];
-
-  private constructor(values: readonly BackgroundAssumption[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly BackgroundAssumption[]): BackgroundAssumptions {
-    return new BackgroundAssumptions([...values]);
-  }
-
-  add(value: BackgroundAssumption): BackgroundAssumptions {
-    return new BackgroundAssumptions([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<BackgroundAssumption> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly BackgroundAssumption[] {
-    return this.#values;
-  }
-}
-
-export interface RequirementsModelSeed {
-  readonly id: FormalModelId;
-  // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
-  readonly irHash: ContentHash;
-  // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。
-  readonly sourceDocument: Uint8Array;
-  readonly irVersion: IrVersion;
-  readonly attributes: AttributeDeclarations;
-  readonly obligations: Obligations;
-  readonly scenarios: Scenarios;
-  readonly background: BackgroundAssumptions;
-}
 
 export class RequirementsModel {
   readonly #id: FormalModelId;

@@ -33,9 +33,9 @@ import {
 } from "../../refinement/domain/index.ts";
 import type { DesignModelRepository } from "./design-model-repository.ts";
 import type { DesignReportRepository } from "./design-report-repository.ts";
-import type { RefinementMaterialsRepository } from "./refinement-context-repository.ts";
+import { type RefinementMaterialsRepository } from "./refinement-materials-repository.ts";
 import type { SiblingBackendClient } from "./sibling-backend-client.ts";
-import type { VerifyDesignInput } from "./verify-design-smt-usecase.ts";
+import { type VerifyDesignInput } from "./verify-design-input.ts";
 import type { VerifyDesignOutcome } from "./verify-design-outcome.ts";
 
 const BACKEND = "quint";

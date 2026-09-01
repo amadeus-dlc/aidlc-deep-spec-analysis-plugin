@@ -4,4 +4,6 @@
 // RPC クライアント・永続化はここに置かない——それらはインターフェイス
 // アダプタ層のゲートウェイ責務である。node への依存も持たない。
 
-export { type Result, type Ok, type Err, ok, err, unreachable } from "./result.ts";
+export { type Result, ok, err, unreachable } from "./result.ts";
+export { type Err } from "./err.ts";
+export { type Ok } from "./ok.ts";

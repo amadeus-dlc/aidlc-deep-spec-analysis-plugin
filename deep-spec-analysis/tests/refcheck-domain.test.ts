@@ -459,3 +459,12 @@ describe("value primitives own their matching logic (tell-don't-ask consolidatio
     expect(AttributeName.reconstitute("id").isEmpty()).toBe(false);
   });
 });
+
+describe("split-file coverage pins (one-public-type refactor)", () => {
+  test("small collections keep of/add/iterator faces", () => {
+    const an = AttributeNames.of([AttributeName.reconstitute("a")]).add(AttributeName.reconstitute("b"));
+    expect([...an].map((x) => x.asString())).toEqual(["a", "b"]);
+    const si = SourceIds.of([]).add(SourceId.reconstitute("FR-1"));
+    expect([...si].map((x) => x.asString())).toEqual(["FR-1"]);
+  });
+});

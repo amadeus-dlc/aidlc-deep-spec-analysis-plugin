@@ -4,8 +4,6 @@
 // 永続化までを起動する。verdict は conformed（＝書かれる姿）から導出。
 
 import {
-  type CheckExecutionMode,
-  type DesignRecordId,
   CheckFamilyLedger,
   InputAnchors,
   COMPONENT_FAMILIES,
@@ -18,12 +16,8 @@ import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./design-record-repository.ts";
 import type { ReferenceCheckReportConformance } from "./reference-check-report-conformance.ts";
 import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
+import type { CheckDomainComponentsInput } from "./check-domain-components-input.ts";
 
-export interface CheckDomainComponentsInput {
-  readonly recordId: DesignRecordId;
-  readonly reportDirectory: ArtifactPath;
-  readonly mode: CheckExecutionMode;
-}
 
 export class CheckDomainComponentsUseCase {
   readonly #designRecordRepository: DesignRecordRepository;

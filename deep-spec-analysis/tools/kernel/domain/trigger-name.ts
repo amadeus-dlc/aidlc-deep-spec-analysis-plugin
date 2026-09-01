@@ -6,7 +6,7 @@
 
 import { type Result, err, ok } from "../infrastructure/index.ts";
 
-export type TriggerNameError = { readonly kind: "empty-trigger-name"; readonly raw: string };
+type TriggerNameError = { readonly kind: "empty-trigger-name"; readonly raw: string };
 
 export class TriggerName {
   readonly #value: string;

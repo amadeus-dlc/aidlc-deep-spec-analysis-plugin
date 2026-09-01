@@ -1,3 +1,4 @@
+import type { SchemaUnreadable } from "./schema-unreadable.ts";
 // 契約スキーマ（JSON Schema ファイル）の読込。合成ルートがパスを解決して
 // 呼び、読めた Schema（または材料つきの失敗）をドメインへ注入する。
 // cause の文言は集約の降格文言（golden 凍結）に逐語で載るため、捕捉した
@@ -5,11 +6,8 @@
 
 import { readFileSync } from "node:fs";
 import { type Result, err, ok } from "../infrastructure/index.ts";
-import type { Schema } from "./schema-validator.ts";
+import { type Schema } from "./schema.ts";
 
-export interface SchemaUnreadable {
-  readonly cause: string;
-}
 
 export function readContractSchema(path: string): Result<Schema, SchemaUnreadable> {
   try {

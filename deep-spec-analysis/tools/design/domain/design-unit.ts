@@ -2,115 +2,21 @@
 // 素通し（lowering が契約1 文書へそのまま埋め込む）で、enum 値の照会だけを
 // ドメインが行う。allUnitTargets / enumValuesOf は旧自由関数のメソッド化。
 
-import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { DesignUnitId } from "./design-unit-id.ts";
 import { IdOrder } from "../../kernel/domain/index.ts";
-import type { Expression } from "../../kernel/domain/index.ts";
-import { DesignMachines } from "./design-machine.ts";
-import { DesignObligations } from "./design-obligation.ts";
-import { DesignScenarios } from "./design-scenario.ts";
+import { DesignMachines } from "./design-machines.ts";
+import { DesignObligations } from "./design-obligations.ts";
+import { DesignScenarios } from "./design-scenarios.ts";
 import type { DesignValue } from "./design-value.ts";
+import { AttrPaths } from "./attr-paths.ts";
+import { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
+import type { DesignUnitSeed } from "./design-unit-seed.ts";
 
-export type DesignBackgroundIdError = { readonly kind: "empty-design-background-id"; readonly raw: string };
 
-export class DesignBackgroundId {
-  readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
-  }
 
-  static parse(raw: string): Result<DesignBackgroundId, DesignBackgroundIdError> {
-    if (raw === "") return err({ kind: "empty-design-background-id", raw });
-    return ok(new DesignBackgroundId(raw));
-  }
 
-  static reconstitute(raw: string): DesignBackgroundId {
-    return new DesignBackgroundId(raw);
-  }
 
-  equals(other: DesignBackgroundId): boolean {
-    return this.#value === other.#value;
-  }
-
-  asString(): string {
-    return this.#value;
-  }
-}
-
-export interface DesignBackgroundAssumption {
-  id: DesignBackgroundId;
-  assert: Expression;
-}
-
-// 設計背景仮定のファーストクラスコレクション。
-export class DesignBackgroundAssumptions {
-  readonly #values: readonly DesignBackgroundAssumption[];
-
-  private constructor(values: readonly DesignBackgroundAssumption[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly DesignBackgroundAssumption[]): DesignBackgroundAssumptions {
-    return new DesignBackgroundAssumptions([...values]);
-  }
-
-  add(value: DesignBackgroundAssumption): DesignBackgroundAssumptions {
-    return new DesignBackgroundAssumptions([...this.#values, value]);
-  }
-
-  // lowering の凍結順：IdOrder 正準順（DesignTransitions.sortedCanonically と同じ面）。
-  sortedCanonically(): DesignBackgroundAssumptions {
-    return new DesignBackgroundAssumptions([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
-  }
-
-  *[Symbol.iterator](): Iterator<DesignBackgroundAssumption> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly DesignBackgroundAssumption[] {
-    return this.#values;
-  }
-}
-
-// 設計属性パス集合のファーストクラスコレクション（lowering・alpha 置換の照会面）。
-export class AttrPaths {
-  readonly #values: ReadonlySet<string>;
-
-  private constructor(values: ReadonlySet<string>) {
-    this.#values = values;
-  }
-
-  static of(values: readonly string[]): AttrPaths {
-    return new AttrPaths(new Set(values));
-  }
-
-  add(value: string): AttrPaths {
-    return new AttrPaths(new Set([...this.#values, value]));
-  }
-
-  *[Symbol.iterator](): Iterator<string> {
-    yield* this.#values;
-  }
-
-  has(value: string): boolean {
-    return this.#values.has(value);
-  }
-
-  toArray(): readonly string[] {
-    return [...this.#values];
-  }
-}
-
-export interface DesignUnitSeed {
-  readonly unit: string;
-  readonly rawEntities: DesignValue;
-  readonly attrPaths: AttrPaths;
-  readonly obligations: DesignObligations;
-  readonly machines: DesignMachines;
-  readonly scenarios: DesignScenarios;
-  readonly background: DesignBackgroundAssumptions;
-}
 
 function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -216,36 +122,3 @@ export class DesignUnit {
   }
 }
 
-// 設計ユニットのファーストクラスコレクション。ユニット名昇順の整列
-// （DesignModel の組成不変条件）という集合の知識を所有する。
-export class DesignUnits {
-  readonly #values: readonly DesignUnit[];
-
-  private constructor(values: readonly DesignUnit[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly DesignUnit[]): DesignUnits {
-    return new DesignUnits([...values]);
-  }
-
-  add(value: DesignUnit): DesignUnits {
-    return new DesignUnits([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<DesignUnit> {
-    yield* this.#values;
-  }
-
-  sortedByName(): DesignUnits {
-    return new DesignUnits([...this.#values].sort((a, b) => (a.name() < b.name() ? -1 : a.name() > b.name() ? 1 : 0)));
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
-  }
-
-  toArray(): readonly DesignUnit[] {
-    return this.#values;
-  }
-}

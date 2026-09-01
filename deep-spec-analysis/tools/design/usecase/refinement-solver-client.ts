@@ -3,23 +3,9 @@
 // （Pending・コンパイル時 skip）と型付き判定だけを返す。クエリゼロは子を
 // 起動しない（旧挙動の凍結——no-queries）。
 
-import type {
-  RefinementQueryVerdicts,
-  RefinementRequirements,
-  RefinementSolverFacts,
-  UnitRefinementPlan,
-} from "../../refinement/domain/index.ts";
+import type { RefinementRequirements, UnitRefinementPlan } from "../../refinement/domain/index.ts";
 import type { DesignUnit } from "../domain/index.ts";
-
-export type RefinementSolverResult =
-  | { readonly kind: "no-queries" }
-  | { readonly kind: "unavailable"; readonly reason: string }
-  | { readonly kind: "solved"; readonly verdicts: RefinementQueryVerdicts };
-
-export interface RefinementCheck {
-  readonly facts: RefinementSolverFacts;
-  readonly result: RefinementSolverResult;
-}
+import type { RefinementCheck } from "./refinement-check.ts";
 
 export interface RefinementSolverClient {
   check(unit: DesignUnit, requirements: RefinementRequirements, plan: UnitRefinementPlan, budgetMs: number): RefinementCheck;

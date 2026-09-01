@@ -11,17 +11,12 @@
 //   - reconstitute … 書かれた真実（アダプタが型付きに解いた状態）からの再構成
 
 import { TargetIds } from "../../kernel/domain/index.ts";
-import { Findings, Skips } from "./finding.ts";
-import { InputAnchors } from "./input-anchor.ts";
+import { Findings } from "./findings.ts";
+import { Skips } from "./skips.ts";
+import { InputAnchors } from "./input-anchors.ts";
 import { ReferenceCheckReportId } from "./reference-check-report-id.ts";
+import type { ReferenceCheckReportSeed } from "./reference-check-report-seed.ts";
 
-export interface ReferenceCheckReportSeed {
-  readonly id: ReferenceCheckReportId;
-  readonly inputs: InputAnchors;
-  readonly checked: TargetIds;
-  readonly findings: Findings;
-  readonly skipped: Skips;
-}
 
 export class ReferenceCheckReport {
   readonly #id: ReferenceCheckReportId;

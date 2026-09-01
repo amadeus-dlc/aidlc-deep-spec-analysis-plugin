@@ -2,9 +2,9 @@
 // 型付きの ComponentCatalogOutcome へ解く。抽出ロジックは旧センサーの
 // extractComponents の逐語移動。
 
-import { extractFences } from "../../kernel/adapter/markdown-fences.ts";
-import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
-import { parseYamlSubset } from "../../kernel/adapter/yaml-subset.ts";
+import { extractFences } from "../../kernel/adapter/fence.ts";
+import { type Json, isObject } from "../../kernel/adapter/json.ts";
+import { parseYamlSubset } from "../../kernel/adapter/yaml.ts";
 import {
   AttributeName,
   ComponentEntities,

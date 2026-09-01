@@ -17,14 +17,8 @@ import type { ReachabilityProbe, SiblingBackendClient, SiblingLoweredRun } from 
 import { renderLoweredDocument } from "./lowered-document-serializer.ts";
 import { parseSiblingVerdictDocument } from "./sibling-document-parser.ts";
 import { probeReached, reachabilityVariant } from "./reachability-variant.ts";
+import type { SiblingBackendClientConfig } from "./sibling-backend-client-config.ts";
 
-export interface SiblingBackendClientConfig {
-  readonly toolsDirectory: string;
-  readonly workingDirectory: string;
-  // 子プロセスへ渡す環境（省略時は親の環境を継ぐ——旧挙動）。合成ルートが
-  // 決定論条件を固定したいとき（テストハーネス等）だけ明示注入する。
-  readonly spawnEnvironment?: { readonly [k: string]: string | undefined };
-}
 
 export class SiblingBackendClientImpl implements SiblingBackendClient {
   readonly #config: SiblingBackendClientConfig;

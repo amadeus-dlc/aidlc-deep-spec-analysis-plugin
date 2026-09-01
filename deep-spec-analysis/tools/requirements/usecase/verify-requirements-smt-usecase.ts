@@ -15,7 +15,6 @@ import type { Result } from "../../kernel/infrastructure/index.ts";
 import { ok } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
-  type FormalModelId,
   SUPPORTED_IR_MAJOR,
   VerificationReport,
   VerificationReportId,
@@ -25,14 +24,11 @@ import type { FormalModelRepository } from "./formal-model-repository.ts";
 import type { VerificationReportRepository } from "./verification-report-repository.ts";
 import type { VerifySmtOutcome } from "./verify-smt-outcome.ts";
 import type { Z3SolverClient } from "./z3-solver-client.ts";
+import type { VerifyRequirementsSmtInput } from "./verify-requirements-smt-input.ts";
 
 const BACKEND = "smt";
 const CROSS_CHECK_BACKEND = "cross-check";
 
-export interface VerifyRequirementsSmtInput {
-  readonly modelId: FormalModelId;
-  readonly verifyDirectory: ArtifactPath;
-}
 
 export class VerifyRequirementsSmtUseCase {
   readonly #formalModelRepository: FormalModelRepository;

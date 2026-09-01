@@ -27,38 +27,8 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import {
-  DesignBackgroundId,
-  DesignAttributeName,
-  DesignEntityName,
-  DesignMachineId,
-  DesignObligationId,
-  DesignObligationNature,
-  DesignObligationOrigin,
-  DesignScenarioId,
-  DesignTransitionId,
-  AttrPaths,
-  DesignBackgroundAssumptions,
-  DesignMachines,
-  DesignObligations,
-  DesignScenarios,
-  type DesignBackgroundAssumption,
-  type DesignMachine,
-  type DesignObligation,
-  type DesignScenario,
-  type DesignIgnore,
-  type DesignTransition,
-  type DesignValue, type DesignUnit as DesignUnitType,
-  BrRefs,
-  DesignIgnores,
-  DesignModelId,
-  DesignSkips,
-  DesignTransitions,
-  DesignUnit,
-  DesignUnitId,
-  InitialStates,
-  RefinementMaterialsId,
-} from "../tools/design/domain/index.ts";
+import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, type DesignMachine, type DesignObligation, type DesignScenario, type DesignIgnore, type DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId } from "../tools/design/domain/index.ts";
+import { type DesignUnit as DesignUnitType } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,

@@ -4,7 +4,8 @@
 // 旧 aidlc-sensor-deep-spec-verify-quint.ts の evalExpr からの逐語移植。
 
 import type { Expression } from "../../kernel/domain/expression.ts";
-import type { DecodedValue, TraceState } from "./trace-state.ts";
+import type { TraceState } from "./trace-state.ts";
+import { type DecodedValue } from "./decoded-value.ts";
 
 function evaluateExpressionImpl(e: Expression, state: TraceState): DecodedValue {
   const arg = (i: number): DecodedValue => evaluateExpressionImpl((e.args ?? [])[i] as Expression, state);

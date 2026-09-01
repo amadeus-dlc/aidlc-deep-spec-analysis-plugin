@@ -5,36 +5,11 @@
 // 成果物の原文（原文材料——store の往復則 findById∘store がバイト恒等）。
 
 import type { ErrorMessages, IrVersion } from "../../kernel/domain/index.ts";
-import type { DesignModelId } from "./design-model-id.ts";
-import type { DesignUnitDecls } from "./design-ir-decl.ts";
+import { type DesignUnitDecls } from "./design-unit-decls.ts";
+import { DesignIrValidationMaterialsId } from "./design-ir-validation-materials-id.ts";
+import type { DesignIrValidationMaterialsSeed } from "./design-ir-validation-materials-seed.ts";
 
-export class DesignIrValidationMaterialsId {
-  readonly #model: DesignModelId;
 
-  private constructor(model: DesignModelId) {
-    this.#model = model;
-  }
-
-  static ofModel(model: DesignModelId): DesignIrValidationMaterialsId {
-    return new DesignIrValidationMaterialsId(model);
-  }
-
-  equals(other: DesignIrValidationMaterialsId): boolean {
-    return this.#model.equals(other.#model);
-  }
-
-  modelId(): DesignModelId {
-    return this.#model;
-  }
-}
-
-export interface DesignIrValidationMaterialsSeed {
-  readonly id: DesignIrValidationMaterialsId;
-  readonly irVersion: IrVersion;
-  readonly schemaErrors: ErrorMessages;
-  readonly units: DesignUnitDecls;
-  readonly sourceDocument: Uint8Array;
-}
 
 export class DesignIrValidationMaterials {
   readonly #id: DesignIrValidationMaterialsId;

@@ -984,3 +984,30 @@ PR10 で層強制を完全有効化した：
 証拠：367 tests green・golden 無傷・パリティスナップショット `diff -r` 空
 （pre-PR7 基底）・カバレッジフロア充足・7 ハーネスビルド・CLI z3/quint
 スポットチェック BYTE-IDENTICAL。
+
+## 1 ファイル 1 公開型の裁定 — 公開型はファイルを一枚ずつ所有する（2026-09-01）
+
+Java 流のファイル規律を層化ツリー全体に適用した。層化ファイル
+（kernel/requirements/design/refinement/refcheck の各層）は公開型宣言
+（`export class/interface/type/enum`）を高々 1 つ持ち、ファイル名はその
+公開型名の kebab-case と一致する（`UseCase` は確立済みの一語「usecase」）。
+従属する非公開型・私有定数は所有する公開型のファイルに同居してよく、
+関数だけのモジュールに命名制約はない。facade（index.ts）は宣言を持たず
+明示再輸出のみ、entry は公開型を持たない——配線だけを運ぶ。
+
+- **執行**: `onePublicTypePerFile` を ALL_RULES に追加（red/green example
+  つき、stripStrings 前処理で文字列内の偽陽性なし）。多型ファイル・
+  名前不一致・facade/entry での宣言の 3 態を検出する。
+- **適用の形**: 186 → 459 ファイル。抽出 273（refcheck/domain 78・
+  design/domain 73・requirements/domain 59・refinement/domain 32、残りは
+  adapter/usecase/kernel）、公開型名へ追随する改名 28（`lower-unit` →
+  `lowered-unit`、`remap-unit-doc` → `remapped-unit`、`design-ir-decl` →
+  `design-unit-decl`、kernel adapter の `fence`/`json`/`md-table`/`schema`/
+  `yaml`/`names`/`target-ids` ほか）、残余は import と facade の追随修正。
+- **共有表は所有型に従う**: KIND_RANK は各 findings コレクション
+  （`verification-findings`/`findings`/`design-findings`）のファイルへ移り、
+  kind-rank 順序保存テストのパスも追随。分割で露出したコレクション面
+  （of/add/巡回）にカバレッジピンを追加。
+
+証拠：tsc clean・全スイート 369 pass / 1 skip / 0 fail・golden／パリティ
+無傷（参照出力に変更なし）・architecture スイートは新ルール込みで違反ゼロ。

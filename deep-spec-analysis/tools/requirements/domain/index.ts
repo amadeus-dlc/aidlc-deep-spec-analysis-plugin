@@ -1,98 +1,83 @@
 // requirements/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
-export {
-  type AttributeBoundError,
-  type AttributeDeclaration,
-  type AttributePathError,
-  AttributeBound,
-  AttributeDeclarations,
-  AttributePath,
-  AttributeValues,
-} from "./attribute-declaration.ts";
+export { type AttributeDeclaration, AttributeBound } from "./attribute-declaration.ts";
+export { AttributeDeclarations } from "./attribute-declarations.ts";
+export { AttributePath } from "./attribute-path.ts";
+export { AttributeValues } from "./attribute-values.ts";
 // FrRefs は kernel 所有の共有語彙（requirements の facade からも見える）。
 export { FrRefs } from "../../kernel/domain/index.ts";
-export { type Obligation, type ObligationIdError, ObligationId, ObligationNature, Obligations,
-  ObligationIds,
-} from "./obligation.ts";
-export { type Scenario, type ScenarioIdError, ScenarioId, Scenarios } from "./scenario.ts";
-export {
-  type BackgroundAssumption,
-  type BackgroundAssumptionIdError,
-  type RequirementsModelSeed,
-  BackgroundAssumptionId,
-  BackgroundAssumptions,
-  RequirementsModel,
-} from "./requirements-model.ts";
-export {
-  type VerificationFinding,
-  type VerificationSkipped,
-  type VerificationWitness,
-  VerificationFindings,
-  VerificationSkips,
-} from "./verification-finding.ts";
+export { type Obligation } from "./obligation.ts";
+export { ObligationId } from "./obligation-id.ts";
+export { ObligationIds } from "./obligation-ids.ts";
+export { ObligationNature } from "./obligation-nature.ts";
+export { Obligations } from "./obligations.ts";
+export { type Scenario } from "./scenario.ts";
+export { ScenarioId } from "./scenario-id.ts";
+export { Scenarios } from "./scenarios.ts";
+export { RequirementsModel } from "./requirements-model.ts";
+export { BackgroundAssumptionId } from "./background-assumption-id.ts";
+export { type BackgroundAssumption } from "./background-assumption.ts";
+export { BackgroundAssumptions } from "./background-assumptions.ts";
+export { type RequirementsModelSeed } from "./requirements-model-seed.ts";
+export { type VerificationFinding } from "./verification-finding.ts";
+export { VerificationFindings } from "./verification-findings.ts";
+export { type VerificationSkipped } from "./verification-skipped.ts";
+export { VerificationSkips } from "./verification-skips.ts";
+export { type VerificationWitness } from "./verification-witness.ts";
 export { VerificationReportId } from "./verification-report-id.ts";
-export {
-  SUPPORTED_IR_MAJOR,
-  type CrossCheckedEntry,
-  CrossCheckedEntries,
-  type VerificationReportComposition,
-  type VerificationReportSeed,
-  VerificationReport,
-  VerificationReports,
-} from "./verification-report.ts";
-export { type SmtQueryStatus, type SmtQueryVerdict, SmtQueryVerdicts } from "./solver-verdict.ts";
-export {
-  type InterpretedVerdicts,
-  type SmtEventPairProbe,
-  type SmtPlanFactsSeed,
-  SmtEventPairProbes,
-  SmtPlanFacts,
-} from "./smt-plan-facts.ts";
-export { type DecodedValue, type TraceState, TraceStates } from "./trace-state.ts";
+export { SUPPORTED_IR_MAJOR, VerificationReport } from "./verification-report.ts";
+export { CrossCheckedEntries } from "./cross-checked-entries.ts";
+export { type CrossCheckedEntry } from "./cross-checked-entry.ts";
+export { type VerificationReportComposition } from "./verification-report-composition.ts";
+export { type VerificationReportSeed } from "./verification-report-seed.ts";
+export { VerificationReports } from "./verification-reports.ts";
+export { type SmtQueryStatus } from "./smt-query-status.ts";
+export { type SmtQueryVerdict } from "./smt-query-verdict.ts";
+export { SmtQueryVerdicts } from "./smt-query-verdicts.ts";
+export { SmtPlanFacts } from "./smt-plan-facts.ts";
+export { type InterpretedVerdicts } from "./interpreted-verdicts.ts";
+export { type SmtEventPairProbe } from "./smt-event-pair-probe.ts";
+export { SmtEventPairProbes } from "./smt-event-pair-probes.ts";
+export { type SmtPlanFactsSeed } from "./smt-plan-facts-seed.ts";
+export { type TraceState } from "./trace-state.ts";
+export { type DecodedValue } from "./decoded-value.ts";
+export { TraceStates } from "./trace-states.ts";
 export { ExpressionEvaluation } from "./expression-evaluation.ts";
-export {
-  type InterpretedQuintVerdicts,
-  type QuintMachineComponent,
-  type QuintMachineFactsSeed,
-  QuintMachineComponents,
-  QuintMachineFacts,
-} from "./quint-machine-facts.ts";
-export {
-  type QuintMachineRunVerdict,
-  type QuintRunsSeed,
-  type QuintScenarioVerdict,
-  type QuintTemporalVerdict,
-  QuintRuns,
-} from "./quint-verdict.ts";
-export {
-  type IrAttributeDecl,
-  type IrBackgroundDecl,
-  type IrEntityDecl,
-  type IrModelDeclSeed,
-  type IrObligationDecl,
-  type IrScenarioDecl,
-  type IrTemporalDecl,
-  IrAttributeDecls,
-  IrBackgroundDecls,
-  IrBindingPairs,
-  IrDeclaredValues,
-  IrEntityDecls,
-  IrModelDecl,
-  IrObligationDecls,
-  IrScenarioDecls,
-  type IrDeclTokenError,
-  IrAttributeName,
-  IrEntityName,
-} from "./ir-model-decl.ts";
-export { type FrRefClaim, FrReferenceIndex,
-  FrRefClaims,
-} from "./fr-reference-index.ts";
+export { QuintMachineFacts } from "./quint-machine-facts.ts";
+export { type InterpretedQuintVerdicts } from "./interpreted-quint-verdicts.ts";
+export { type QuintMachineComponent } from "./quint-machine-component.ts";
+export { QuintMachineComponents } from "./quint-machine-components.ts";
+export { type QuintMachineFactsSeed } from "./quint-machine-facts-seed.ts";
+export { type QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";
+export { type QuintRunsSeed } from "./quint-runs-seed.ts";
+export { QuintRuns } from "./quint-runs.ts";
+export { type QuintScenarioVerdict } from "./quint-scenario-verdict.ts";
+export { type QuintTemporalVerdict } from "./quint-temporal-verdict.ts";
+export { IrModelDecl } from "./ir-model-decl.ts";
+export { type IrAttributeDecl } from "./ir-attribute-decl.ts";
+export { IrAttributeDecls } from "./ir-attribute-decls.ts";
+export { IrAttributeName } from "./ir-attribute-name.ts";
+export { type IrBackgroundDecl } from "./ir-background-decl.ts";
+export { IrBackgroundDecls } from "./ir-background-decls.ts";
+export { IrBindingPairs } from "./ir-binding-pairs.ts";
+export { IrDeclaredValues } from "./ir-declared-values.ts";
+export { type IrEntityDecl } from "./ir-entity-decl.ts";
+export { IrEntityDecls } from "./ir-entity-decls.ts";
+export { IrEntityName } from "./ir-entity-name.ts";
+export { type IrModelDeclSeed } from "./ir-model-decl-seed.ts";
+export { type IrObligationDecl } from "./ir-obligation-decl.ts";
+export { IrObligationDecls } from "./ir-obligation-decls.ts";
+export { type IrScenarioDecl } from "./ir-scenario-decl.ts";
+export { IrScenarioDecls } from "./ir-scenario-decls.ts";
+export { type IrTemporalDecl } from "./ir-temporal-decl.ts";
+export { FrReferenceIndex } from "./fr-reference-index.ts";
+export { type FrRefClaim } from "./fr-ref-claim.ts";
+export { FrRefClaims } from "./fr-ref-claims.ts";
 export { SourceAnchor } from "./source-anchor.ts";
 export { RequirementsSourceId } from "./requirements-source-id.ts";
 export { FormalModelId } from "./formal-model-id.ts";
-export {
-  type IrValidationMaterialsSeed,
-  IrValidationMaterials,
-  IrValidationMaterialsId,
-} from "./ir-validation-materials.ts";
-export { type RequirementsSourceSeed, RequirementsSource } from "./requirements-source.ts";
+export { IrValidationMaterials } from "./ir-validation-materials.ts";
+export { IrValidationMaterialsId } from "./ir-validation-materials-id.ts";
+export { type IrValidationMaterialsSeed } from "./ir-validation-materials-seed.ts";
+export { RequirementsSource } from "./requirements-source.ts";
+export { type RequirementsSourceSeed } from "./requirements-source-seed.ts";

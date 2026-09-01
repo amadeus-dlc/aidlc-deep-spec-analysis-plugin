@@ -2,9 +2,12 @@
 
 export { parseFormalModel } from "./formal-model-parser.ts";
 export { FormalModelRepositoryImpl } from "./formal-model-repository-impl.ts";
-export { type SmtChildQuery, type SmtPlan, buildSmtPlan, decodeSolverModel, smtVar } from "./smt-plan-builder.ts";
-export { type SmtChildResult, solveSmtChild } from "./z3-engine-child.ts";
-export { type Z3SolverClientConfig, Z3SolverClientImpl } from "./z3-solver-client-impl.ts";
+export { type SmtChildQuery } from "./smt-child-query.ts";
+export { type SmtPlan, buildSmtPlan, decodeSolverModel, smtVar } from "./smt-plan.ts";
+export { type SmtChildResult } from "./smt-child-result.ts";
+export { solveSmtChild } from "./z3-engine-child.ts";
+export { Z3SolverClientImpl } from "./z3-solver-client-impl.ts";
+export { type Z3SolverClientConfig } from "./z3-solver-client-config.ts";
 export {
   conformToFindingsContract,
   parseSiblingReportDocument,
@@ -12,16 +15,11 @@ export {
   renderVerificationReportBytes,
 } from "./verification-report-serializer.ts";
 export { VerificationReportRepositoryImpl } from "./verification-report-repository-impl.ts";
-export {
-  type CompiledQuintMachine,
-  type QuintCompilation,
-  compileQuintMachine,
-  qVar,
-} from "./quint-module-compiler.ts";
+export { type CompiledQuintMachine } from "./compiled-quint-machine.ts";
+export { type QuintCompilation, compileQuintMachine, qVar } from "./quint-compilation.ts";
 export { decodeItfTrace, itfStatus } from "./itf-decoder.ts";
-export { type QuintClientConfig, QuintClientImpl } from "./quint-client-impl.ts";
-export {
-  type IrValidationMaterialsConfig,
-  IrValidationMaterialsRepositoryImpl,
-} from "./ir-validation-materials-repository-impl.ts";
+export { QuintClientImpl } from "./quint-client-impl.ts";
+export { type QuintClientConfig } from "./quint-client-config.ts";
+export { IrValidationMaterialsRepositoryImpl } from "./ir-validation-materials-repository-impl.ts";
+export { type IrValidationMaterialsConfig } from "./ir-validation-materials-config.ts";
 export { RequirementsSourceRepositoryImpl } from "./requirements-source-repository-impl.ts";

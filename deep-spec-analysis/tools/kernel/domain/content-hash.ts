@@ -7,7 +7,7 @@
 import { createHash } from "node:crypto";
 import { type Result, err, ok } from "../infrastructure/index.ts";
 
-export type ContentHashError = { readonly kind: "not-a-sha256-hex"; readonly raw: string };
+type ContentHashError = { readonly kind: "not-a-sha256-hex"; readonly raw: string };
 
 export class ContentHash {
   readonly #value: string;

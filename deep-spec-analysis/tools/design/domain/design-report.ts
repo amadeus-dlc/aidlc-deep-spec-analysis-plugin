@@ -6,133 +6,23 @@
 // （findings/skipped/inputs/checked/crossChecked を空にして unavailable 理由
 // だけ残す——旧 writeDesignDoc の自己検証降格と同じ姿）。
 
-import { BackendName, ContentHash, FrRefs, IrVersion, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
+import { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import type { DesignModel } from "./design-model.ts";
-import { DesignFindings, DesignSkips } from "./design-finding.ts";
-import type { DesignFinding } from "./design-finding.ts";
+import { DesignFindings } from "./design-findings.ts";
+import { DesignSkips } from "./design-skips.ts";
 import type { DesignReportId } from "./design-report-id.ts";
+import { CheckedUnits } from "./checked-units.ts";
+import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
+import { DesignInputAnchors } from "./design-input-anchors.ts";
+import type { DesignReportComposition } from "./design-report-composition.ts";
+import type { DesignReportSeed } from "./design-report-seed.ts";
 
-// 入力成果物の錨（refcheck の InputAnchor と同語彙・コンテキスト所有）。
-export interface DesignInputAnchor {
-  readonly artifact: string;
-  readonly sha256: ContentHash;
-}
 
-export interface DesignCrossCheckedEntry {
-  readonly backend: BackendName;
-  readonly targets: TargetIds;
-}
 
-// 入力成果物の錨のファーストクラスコレクション。artifact 名昇順の整列
-// （compose の不変条件）を所有する。
-export class DesignInputAnchors {
-  readonly #values: readonly DesignInputAnchor[];
 
-  private constructor(values: readonly DesignInputAnchor[]) {
-    this.#values = values;
-  }
 
-  static of(values: readonly DesignInputAnchor[]): DesignInputAnchors {
-    return new DesignInputAnchors([...values]);
-  }
 
-  add(value: DesignInputAnchor): DesignInputAnchors {
-    return new DesignInputAnchors([...this.#values, value]);
-  }
 
-  *[Symbol.iterator](): Iterator<DesignInputAnchor> {
-    yield* this.#values;
-  }
-
-  sortedByArtifact(): DesignInputAnchors {
-    return new DesignInputAnchors([...this.#values].sort((a, b) => (a.artifact < b.artifact ? -1 : a.artifact > b.artifact ? 1 : 0)));
-  }
-
-  toArray(): readonly DesignInputAnchor[] {
-    return this.#values;
-  }
-}
-
-// 検査済みユニット面のファーストクラスコレクション。id 順の一意整列
-// （compose の不変条件）を所有する。
-export class CheckedUnits {
-  readonly #values: readonly string[];
-
-  private constructor(values: readonly string[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly string[]): CheckedUnits {
-    return new CheckedUnits([...values]);
-  }
-
-  add(value: string): CheckedUnits {
-    return new CheckedUnits([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<string> {
-    yield* this.#values;
-  }
-
-  sortedUniqueCanonically(): CheckedUnits {
-    return new CheckedUnits(IdOrder.sortedUnique([...this.#values], IdOrder.compare));
-  }
-
-  toArray(): readonly string[] {
-    return this.#values;
-  }
-}
-
-// クロスチェック判定表のファーストクラスコレクション。
-export class DesignCrossCheckedEntries {
-  readonly #values: readonly DesignCrossCheckedEntry[];
-
-  private constructor(values: readonly DesignCrossCheckedEntry[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly DesignCrossCheckedEntry[]): DesignCrossCheckedEntries {
-    return new DesignCrossCheckedEntries([...values]);
-  }
-
-  add(value: DesignCrossCheckedEntry): DesignCrossCheckedEntries {
-    return new DesignCrossCheckedEntries([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<DesignCrossCheckedEntry> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly DesignCrossCheckedEntry[] {
-    return this.#values;
-  }
-}
-
-export interface DesignReportSeed {
-  readonly id: DesignReportId;
-  readonly irVersion: IrVersion;
-  readonly irHash: ContentHash;
-  readonly method: string;
-  readonly findings: DesignFindings;
-  readonly skipped: DesignSkips;
-  readonly inputs: DesignInputAnchors | null;
-  readonly checked: CheckedUnits | null;
-  readonly crossChecked: DesignCrossCheckedEntries | null;
-  readonly unavailableReason: string | null;
-}
-
-export interface DesignReportComposition {
-  readonly id: DesignReportId;
-  readonly irVersion: IrVersion;
-  readonly irHash: ContentHash;
-  readonly method: string;
-  readonly findings: DesignFindings;
-  readonly skipped: DesignSkips;
-  readonly inputs?: DesignInputAnchors;
-  readonly checked?: CheckedUnits;
-  readonly crossChecked?: DesignCrossCheckedEntries;
-  readonly unavailableReason?: string;
-}
 
 export const SUPPORTED_DESIGN_IR_MAJOR = 1;
 
@@ -316,97 +206,3 @@ export class DesignReport {
   }
 }
 
-// 兄弟文書のファーストクラスコレクション（設計クロスチェックの入力）。
-export class DesignReports {
-  readonly #values: readonly DesignReport[];
-
-  private constructor(values: readonly DesignReport[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly DesignReport[]): DesignReports {
-    return new DesignReports([...values]);
-  }
-
-  add(value: DesignReport): DesignReports {
-    return new DesignReports([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<DesignReport> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly DesignReport[] {
-    return this.#values;
-  }
-  // 設計クロスチェック — 同一 irHash の全バックエンド文書から (unit, scenario)
-  // ごとの判定合意を計算して cross-check レポートを組む（v1 と同じ収束設計：
-  // 最後の書き手が勝ち、全書き手が同一バイトへ収束。detail 文言は golden 凍結
-  // "...not in the design itself."）。旧 designCrossCheckReport の逐語移植
-  // （読めないファイルの黙殺は Repository 側）。
-  crossChecked(id: DesignReportId, model: DesignModel, irHash: ContentHash): DesignReport {
-    // 比較に参加するのは同一 irHash の可用文書のみ（旧実装の読込時選別と同値）。
-    const docs = this.toArray()
-      .filter((s) => s.irHash().equals(irHash) && !s.isUnavailable())
-      .map((s) => ({
-        backend: s.id().backendName().asString(),
-        findings: s.findings().toArray(),
-        skipped: new Set(
-          s
-            .skipped()
-            .toArray()
-            .filter((e) => typeof e.target === "string")
-            .map((e) => `${typeof e.unit === "string" ? e.unit : ""}|${e.target}`),
-        ),
-      }));
-
-    const findings: DesignFinding[] = [];
-    const comparedByBackend = new Map<string, Set<string>>();
-    for (let i = 0; i < docs.length; i++) {
-      for (let j = i + 1; j < docs.length; j++) {
-        const a = docs[i];
-        const b = docs[j];
-        if (!a || !b) continue;
-        for (const u of model.units()) {
-          for (const sc of u.scenarios()) {
-            const key = `${u.name()}|${sc.id.asString()}`;
-            if (a.skipped.has(key) || b.skipped.has(key)) continue;
-            const verdictOf = (d: (typeof docs)[number]): boolean =>
-              d.findings.some((f) => f.kind === "scenario-violation" && f.unit === u.name() && f.targets.includes(sc.id.asString()));
-            const va = verdictOf(a);
-            const vb = verdictOf(b);
-            (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id.asString());
-            (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(sc.id.asString());
-            if (va !== vb) {
-              const verdicts: { [backend: string]: "violated" | "clean" } = {};
-              verdicts[a.backend] = va ? "violated" : "clean";
-              verdicts[b.backend] = vb ? "violated" : "clean";
-              findings.push({
-                kind: "cross-check-disagreement",
-                frRefs: FrRefs.of(IdOrder.sortedUnique([...sc.frRefs], IdOrder.compare)),
-                targets: TargetIds.of([sc.id.asString()]),
-                witness: { verdicts },
-                unit: u.name(),
-                detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id.asString()} of unit ${u.name()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`,
-              });
-            }
-          }
-        }
-      }
-    }
-    const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.of([...targets].sort(IdOrder.compare)) }))
-      .sort((x, y) => (x.backend.asString() < y.backend.asString() ? -1 : x.backend.asString() > y.backend.asString() ? 1 : 0));
-
-    return DesignReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: "exhaustive",
-      findings: DesignFindings.of(findings),
-      skipped: DesignSkips.of([]),
-      crossChecked: DesignCrossCheckedEntries.of(crossChecked),
-    });
-  }
-
-}

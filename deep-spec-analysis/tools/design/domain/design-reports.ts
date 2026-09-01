@@ -1,0 +1,104 @@
+import { BackendName, ContentHash, FrRefs, IdOrder, TargetIds } from "../../kernel/domain/index.ts";
+import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
+import type { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
+import { DesignFindings } from "./design-findings.ts";
+import { DesignSkips } from "./design-skips.ts";
+import type { DesignFinding } from "./design-finding.ts";
+import type { DesignModel } from "./design-model.ts";
+import type { DesignReportId } from "./design-report-id.ts";
+import { DesignReport } from "./design-report.ts";
+
+// 兄弟文書のファーストクラスコレクション（設計クロスチェックの入力）。
+export class DesignReports {
+  readonly #values: readonly DesignReport[];
+
+  private constructor(values: readonly DesignReport[]) {
+    this.#values = values;
+  }
+
+  static of(values: readonly DesignReport[]): DesignReports {
+    return new DesignReports([...values]);
+  }
+
+  add(value: DesignReport): DesignReports {
+    return new DesignReports([...this.#values, value]);
+  }
+
+  *[Symbol.iterator](): Iterator<DesignReport> {
+    yield* this.#values;
+  }
+
+  toArray(): readonly DesignReport[] {
+    return this.#values;
+  }
+  // 設計クロスチェック — 同一 irHash の全バックエンド文書から (unit, scenario)
+  // ごとの判定合意を計算して cross-check レポートを組む（v1 と同じ収束設計：
+  // 最後の書き手が勝ち、全書き手が同一バイトへ収束。detail 文言は golden 凍結
+  // "...not in the design itself."）。旧 designCrossCheckReport の逐語移植
+  // （読めないファイルの黙殺は Repository 側）。
+  crossChecked(id: DesignReportId, model: DesignModel, irHash: ContentHash): DesignReport {
+    // 比較に参加するのは同一 irHash の可用文書のみ（旧実装の読込時選別と同値）。
+    const docs = this.toArray()
+      .filter((s) => s.irHash().equals(irHash) && !s.isUnavailable())
+      .map((s) => ({
+        backend: s.id().backendName().asString(),
+        findings: s.findings().toArray(),
+        skipped: new Set(
+          s
+            .skipped()
+            .toArray()
+            .filter((e) => typeof e.target === "string")
+            .map((e) => `${typeof e.unit === "string" ? e.unit : ""}|${e.target}`),
+        ),
+      }));
+
+    const findings: DesignFinding[] = [];
+    const comparedByBackend = new Map<string, Set<string>>();
+    for (let i = 0; i < docs.length; i++) {
+      for (let j = i + 1; j < docs.length; j++) {
+        const a = docs[i];
+        const b = docs[j];
+        if (!a || !b) continue;
+        for (const u of model.units()) {
+          for (const sc of u.scenarios()) {
+            const key = `${u.name()}|${sc.id.asString()}`;
+            if (a.skipped.has(key) || b.skipped.has(key)) continue;
+            const verdictOf = (d: (typeof docs)[number]): boolean =>
+              d.findings.some((f) => f.kind === "scenario-violation" && f.unit === u.name() && f.targets.includes(sc.id.asString()));
+            const va = verdictOf(a);
+            const vb = verdictOf(b);
+            (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id.asString());
+            (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(sc.id.asString());
+            if (va !== vb) {
+              const verdicts: { [backend: string]: "violated" | "clean" } = {};
+              verdicts[a.backend] = va ? "violated" : "clean";
+              verdicts[b.backend] = vb ? "violated" : "clean";
+              findings.push({
+                kind: "cross-check-disagreement",
+                frRefs: FrRefs.of(IdOrder.sortedUnique([...sc.frRefs], IdOrder.compare)),
+                targets: TargetIds.of([sc.id.asString()]),
+                witness: { verdicts },
+                unit: u.name(),
+                detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id.asString()} of unit ${u.name()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`,
+              });
+            }
+          }
+        }
+      }
+    }
+    const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
+      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.of([...targets].sort(IdOrder.compare)) }))
+      .sort((x, y) => (x.backend.asString() < y.backend.asString() ? -1 : x.backend.asString() > y.backend.asString() ? 1 : 0));
+
+    return DesignReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash,
+      method: "exhaustive",
+      findings: DesignFindings.of(findings),
+      skipped: DesignSkips.of([]),
+      crossChecked: DesignCrossCheckedEntries.of(crossChecked),
+    });
+  }
+
+}

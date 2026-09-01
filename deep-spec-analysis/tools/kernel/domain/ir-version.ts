@@ -8,7 +8,7 @@
 
 import { type Result, err, ok } from "../infrastructure/index.ts";
 
-export type IrVersionError = { readonly kind: "not-a-semver"; readonly raw: string };
+type IrVersionError = { readonly kind: "not-a-semver"; readonly raw: string };
 
 export class IrVersion {
   readonly #value: string;

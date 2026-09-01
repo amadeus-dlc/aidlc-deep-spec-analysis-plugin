@@ -4,7 +4,7 @@
 // なった（OOUI 裁定）。
 
 import type { Expression } from "../../kernel/domain/index.ts";
-import { AlphaError } from "./alpha-substitution.ts";
+import { AlphaError } from "./alpha-error.ts";
 
 export class EffectAssignments {
   readonly #values: ReadonlyMap<string, Expression>;

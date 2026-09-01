@@ -10,18 +10,9 @@
 // {requirements,design}/domain であり、設計側 domain からは refinement 語彙
 // （RefinementRequirements / RefinementMap）へ届かない。
 
-import type { DesignInputAnchor, RefinementMaterialsId } from "../../design/domain/index.ts";
-import type { RefinementMap } from "./refinement-map.ts";
+import type { RefinementMaterialsId } from "../../design/domain/index.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
-
-export type RefinementMapAcquisition =
-  | { readonly kind: "absent"; readonly error: string | null }
-  | {
-      readonly kind: "loaded";
-      readonly map: RefinementMap;
-      readonly mapArtifact: string;
-      readonly inputs: readonly DesignInputAnchor[];
-    };
+import type { RefinementMapAcquisition } from "./refinement-map-acquisition.ts";
 
 type RefinementMaterialsState =
   | { readonly kind: "inactive" }

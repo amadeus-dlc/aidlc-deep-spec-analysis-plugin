@@ -4,7 +4,7 @@
 
 import { type Result, err, ok } from "../infrastructure/index.ts";
 
-export type BackendNameError = { readonly kind: "empty-backend-name"; readonly raw: string };
+type BackendNameError = { readonly kind: "empty-backend-name"; readonly raw: string };
 
 export class BackendName {
   readonly #value: string;

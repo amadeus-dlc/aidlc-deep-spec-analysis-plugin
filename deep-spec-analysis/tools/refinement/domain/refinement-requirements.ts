@@ -4,191 +4,22 @@
 // 正準 JSON の sha256（アダプタが導出）——map の requirementsIrHash と照合する
 // 識別材料。集まりはファーストクラスコレクションで運ぶ。
 
-import type { AttributeBound, AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "../../requirements/domain/index.ts";
-import type { ContentHash, FrRefs, TriggerName } from "../../kernel/domain/index.ts";
-import { IdOrder } from "../../kernel/domain/index.ts";
-import type { Expression } from "../../kernel/domain/index.ts";
+import type { FormalModelId } from "../../requirements/domain/index.ts";
+import type { ContentHash } from "../../kernel/domain/index.ts";
+import { RefinementAttributes } from "./refinement-attributes.ts";
+import type { RefinementObligation } from "./refinement-obligation.ts";
+import { RefinementObligations } from "./refinement-obligations.ts";
+import type { RefinementRequirementsSeed } from "./refinement-requirements-seed.ts";
+import type { RefinementScenario } from "./refinement-scenario.ts";
+import { RefinementScenarios } from "./refinement-scenarios.ts";
 
-// enum 属性の宣言値のコレクション（宣言順を保持——decode の序数対応に効く）。
-export class ReqAttributeValues {
-  readonly #values: readonly string[];
 
-  private constructor(values: readonly string[]) {
-    this.#values = values;
-  }
 
-  static of(values: readonly string[]): ReqAttributeValues {
-    return new ReqAttributeValues([...values]);
-  }
 
-  add(value: string): ReqAttributeValues {
-    return new ReqAttributeValues([...this.#values, value]);
-  }
 
-  *[Symbol.iterator](): Iterator<string> {
-    yield* this.#values;
-  }
 
-  includes(value: string): boolean {
-    return this.#values.includes(value);
-  }
 
-  toArray(): readonly string[] {
-    return this.#values;
-  }
-}
 
-export interface RefinementAttribute {
-  path: AttributePath;
-  kind: "bool" | "int" | "enum";
-  min?: AttributeBound;
-  max?: AttributeBound;
-  values?: ReqAttributeValues;
-}
-
-// 要件属性のファーストクラスコレクション。path 索引は旧 new Map(...) の
-// 凍結挙動どおり重複 path は最後の宣言が勝つ。
-export class RefinementAttributes {
-  readonly #values: readonly RefinementAttribute[];
-
-  private constructor(values: readonly RefinementAttribute[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly RefinementAttribute[]): RefinementAttributes {
-    return new RefinementAttributes([...values]);
-  }
-
-  add(value: RefinementAttribute): RefinementAttributes {
-    return new RefinementAttributes([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<RefinementAttribute> {
-    yield* this.#values;
-  }
-
-  // 索引は Expression（published language）の生パスも DP も受ける——照合は
-  // コレクション自身の知識（Tell-Don't-Ask 裁定）。
-  byPath(path: AttributePath | string): RefinementAttribute | undefined {
-    const key = typeof path === "string" ? path : path.asString();
-    let found: RefinementAttribute | undefined;
-    for (const a of this.#values) {
-      if (a.path.asString() === key) found = a;
-    }
-    return found;
-  }
-
-  covers(path: AttributePath | string): boolean {
-    const key = typeof path === "string" ? path : path.asString();
-    return this.#values.some((a) => a.path.asString() === key);
-  }
-
-  // 閉包検査・フレーム構築の走査順（path の辞書順）はコレクション知識。
-  sortedByPath(): RefinementAttributes {
-    return new RefinementAttributes([...this.#values].sort((x, y) => (x.path.asString() < y.path.asString() ? -1 : 1)));
-  }
-
-  toArray(): readonly RefinementAttribute[] {
-    return this.#values;
-  }
-}
-
-export interface RefinementObligation {
-  id: ObligationId;
-  nature: ObligationNature;
-  frRefs: FrRefs;
-  assert?: Expression;
-  trigger?: TriggerName;
-  guard?: Expression;
-  effect?: Expression;
-}
-
-// 要件義務のファーストクラスコレクション。id 索引は最後の宣言が勝つ
-// （旧 new Map(...) の凍結挙動）。
-export class RefinementObligations {
-  readonly #values: readonly RefinementObligation[];
-
-  private constructor(values: readonly RefinementObligation[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly RefinementObligation[]): RefinementObligations {
-    return new RefinementObligations([...values]);
-  }
-
-  add(value: RefinementObligation): RefinementObligations {
-    return new RefinementObligations([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<RefinementObligation> {
-    yield* this.#values;
-  }
-
-  byId(id: string): RefinementObligation | undefined {
-    let found: RefinementObligation | undefined;
-    for (const o of this.#values) {
-      if (o.id.asString() === id) found = o;
-    }
-    return found;
-  }
-
-  sortedCanonically(): RefinementObligations {
-    return new RefinementObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
-  }
-
-  toArray(): readonly RefinementObligation[] {
-    return this.#values;
-  }
-}
-
-export interface RefinementScenario {
-  id: ScenarioId;
-  kind: "accept" | "reject";
-  frRefs: FrRefs;
-  bindings: { [path: string]: boolean | number | string };
-  event?: { trigger: TriggerName };
-}
-
-// 要件シナリオのファーストクラスコレクション。id 索引は最後の宣言が勝つ。
-export class RefinementScenarios {
-  readonly #values: readonly RefinementScenario[];
-
-  private constructor(values: readonly RefinementScenario[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly RefinementScenario[]): RefinementScenarios {
-    return new RefinementScenarios([...values]);
-  }
-
-  add(value: RefinementScenario): RefinementScenarios {
-    return new RefinementScenarios([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<RefinementScenario> {
-    yield* this.#values;
-  }
-
-  byId(id: string): RefinementScenario | undefined {
-    let found: RefinementScenario | undefined;
-    for (const s of this.#values) {
-      if (s.id.asString() === id) found = s;
-    }
-    return found;
-  }
-
-  toArray(): readonly RefinementScenario[] {
-    return this.#values;
-  }
-}
-
-export interface RefinementRequirementsSeed {
-  readonly id: FormalModelId;
-  readonly hash: ContentHash;
-  readonly attributes: RefinementAttributes;
-  readonly obligations: RefinementObligations;
-  readonly scenarios: RefinementScenarios;
-}
 
 export class RefinementRequirements {
   readonly #id: FormalModelId;

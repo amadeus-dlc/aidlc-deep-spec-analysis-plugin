@@ -1,5 +1,5 @@
 // RefinementMapRepository の実 Gateway 実装。契約4 文書の解釈は composite
-// 取得面（refinement-context-repository-impl）と共有パーサに一本化されており、
+// 取得面（refinement-materials-repository-impl）と共有パーサに一本化されており、
 // corrupt.cause と absent(error) の凍結文言は常に一致する。
 
 import { existsSync, readFileSync } from "node:fs";
@@ -8,7 +8,7 @@ import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { RefinementMap, RefinementMapId } from "../../refinement/domain/index.ts";
 import type { RefinementMapRepository } from "../usecase/index.ts";
-import { parseRefinementMapDocument } from "./refinement-context-repository-impl.ts";
+import { parseRefinementMapDocument } from "./refinement-materials-repository-impl.ts";
 
 export class RefinementMapRepositoryImpl implements RefinementMapRepository {
   readonly #mapSchemaPath: string;

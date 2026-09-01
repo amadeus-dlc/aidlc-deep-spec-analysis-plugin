@@ -4,8 +4,6 @@
 // 凍結取得規則で解決済みの文書からそのまま導かれる。
 
 import {
-  type CheckExecutionMode,
-  type DesignRecordId,
   CheckFamilyLedger,
   InputAnchors,
   FUNCTIONAL_FAMILIES,
@@ -13,17 +11,12 @@ import {
   ReferenceCheckReport,
   ReferenceCheckReportId,
 } from "../domain/index.ts";
-import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./design-record-repository.ts";
 import type { ReferenceCheckReportConformance } from "./reference-check-report-conformance.ts";
 import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
+import type { CheckFunctionalDesignInput } from "./check-functional-design-input.ts";
 
-export interface CheckFunctionalDesignInput {
-  readonly recordId: DesignRecordId;
-  readonly reportDirectory: ArtifactPath;
-  readonly mode: CheckExecutionMode;
-}
 
 export class CheckFunctionalDesignUseCase {
   readonly #designRecordRepository: DesignRecordRepository;

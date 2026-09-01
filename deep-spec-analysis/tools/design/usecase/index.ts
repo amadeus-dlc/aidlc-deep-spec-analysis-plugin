@@ -2,19 +2,16 @@
 
 export { type DesignModelRepository } from "./design-model-repository.ts";
 export { type DesignReportRepository } from "./design-report-repository.ts";
-export {
-  type ReachabilityProbe,
-  type SiblingBackendClient,
-  type SiblingLoweredRun,
-} from "./sibling-backend-client.ts";
-export { type RefinementMaterialsRepository } from "./refinement-context-repository.ts";
-export {
-  type RefinementCheck,
-  type RefinementSolverClient,
-  type RefinementSolverResult,
-} from "./refinement-solver-client.ts";
+export { type SiblingBackendClient } from "./sibling-backend-client.ts";
+export { type ReachabilityProbe } from "./reachability-probe.ts";
+export { type SiblingLoweredRun } from "./sibling-lowered-run.ts";
+export { type RefinementMaterialsRepository } from "./refinement-materials-repository.ts";
+export { type RefinementSolverClient } from "./refinement-solver-client.ts";
+export { type RefinementCheck } from "./refinement-check.ts";
+export { type RefinementSolverResult } from "./refinement-solver-result.ts";
 export { type VerifyDesignOutcome } from "./verify-design-outcome.ts";
-export { type VerifyDesignInput, VerifyDesignSmtUseCase } from "./verify-design-smt-usecase.ts";
+export { VerifyDesignSmtUseCase } from "./verify-design-smt-usecase.ts";
+export { type VerifyDesignInput } from "./verify-design-input.ts";
 export { VerifyDesignQuintUseCase } from "./verify-design-quint-usecase.ts";
 export { type DesignIrValidationMaterialsRepository } from "./design-ir-validation-materials-repository.ts";
 export { type ValidateDesignIrOutcome } from "./validate-design-ir-outcome.ts";

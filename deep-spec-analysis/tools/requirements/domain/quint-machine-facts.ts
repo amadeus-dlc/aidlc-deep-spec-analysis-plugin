@@ -7,64 +7,20 @@
 // 済みの義務は走らせない」ガードも逐語）は facts 自身の振る舞い（OOUI 裁定）。
 
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
-import type { Expression } from "../../kernel/domain/expression.ts";
-import { ExpressionEvaluation } from "./expression-evaluation.ts";
-import type { QuintRuns } from "./quint-verdict.ts";
-import type { ObligationIds } from "./obligation.ts";
+import { type QuintRuns } from "./quint-runs.ts";
+import { type ObligationIds } from "./obligation-ids.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { TraceState } from "./trace-state.ts";
-import type { VerificationFinding, VerificationSkipped } from "./verification-finding.ts";
-import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
+import type { VerificationFinding } from "./verification-finding.ts";
+import { type VerificationSkipped } from "./verification-skipped.ts";
+import { VerificationFindings } from "./verification-findings.ts";
+import { VerificationSkips } from "./verification-skips.ts";
+import type { InterpretedQuintVerdicts } from "./interpreted-quint-verdicts.ts";
+import { QuintMachineComponents } from "./quint-machine-components.ts";
+import type { QuintMachineFactsSeed } from "./quint-machine-facts-seed.ts";
 
-export interface QuintMachineComponent {
-  readonly id: string;
-  readonly expr: Expression;
-  readonly frRefs: readonly string[];
-}
 
-// 不変量成分のファーストクラスコレクション。帰属評価（どの成分が最終状態で
-// 破れているか）は成分集合自身の知識。
-export class QuintMachineComponents {
-  readonly #values: readonly QuintMachineComponent[];
 
-  private constructor(values: readonly QuintMachineComponent[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly QuintMachineComponent[]): QuintMachineComponents {
-    return new QuintMachineComponents([...values]);
-  }
-
-  add(value: QuintMachineComponent): QuintMachineComponents {
-    return new QuintMachineComponents([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<QuintMachineComponent> {
-    yield* this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
-  }
-
-  ids(): readonly string[] {
-    return this.#values.map((c) => c.id);
-  }
-
-  violatedBy(state: TraceState): QuintMachineComponents {
-    return new QuintMachineComponents(this.#values.filter((c) => ExpressionEvaluation.evaluate(c.expr, state) !== true));
-  }
-
-  toArray(): readonly QuintMachineComponent[] {
-    return this.#values;
-  }
-}
-
-export interface QuintMachineFactsSeed {
-  readonly invariantComponents: QuintMachineComponents;
-  readonly eventIds: ObligationIds;
-  readonly scenariosWithInit: ReadonlySet<string>;
-}
 
 export class QuintMachineFacts {
   readonly #invariantComponents: QuintMachineComponents;
@@ -226,7 +182,3 @@ export class QuintMachineFacts {
   }
 }
 
-export interface InterpretedQuintVerdicts {
-  findings: VerificationFindings;
-  skipped: VerificationSkips;
-}
