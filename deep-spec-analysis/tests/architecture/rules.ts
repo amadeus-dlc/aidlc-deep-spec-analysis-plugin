@@ -380,6 +380,29 @@ export function onePublicTypePerFile(relPath: string, rawSource: string): Violat
   return out;
 }
 
+// ルール: ポート契約の置き場（オーナー裁定 2026-09-01）。ポートは
+// Repository（永続化）と外部システム Client（Z3SolverClient/QuintClient 型）
+// の 2 種で、usecase 層のポートインターフェイスは usecase/port/ に集める。
+// port/ 配下は契約のみ——class（interactor）を置かない。
+export function portsLiveInPortDir(relPath: string, rawSource: string): Violation[] {
+  const loc = locationOf(relPath);
+  if (loc === null || typeof loc === "string" || loc.layer !== "usecase") return [];
+  const source = stripStrings(rawSource);
+  const out: Violation[] = [];
+  if (relPath.includes("/usecase/port/")) {
+    const re = /^export (?:abstract )?class (\w+)/gm;
+    for (let m = re.exec(source); m !== null; m = re.exec(source)) {
+      out.push({ path: relPath, rule: "ports-live-in-port-dir", detail: `usecase/port/ carries contracts only — class ${m[1]} belongs beside the interactors` });
+    }
+  } else {
+    const re = /^export interface (\w+(?:Repository|Client))\b/gm;
+    for (let m = re.exec(source); m !== null; m = re.exec(source)) {
+      out.push({ path: relPath, rule: "ports-live-in-port-dir", detail: `port contract ${m[1]} belongs under usecase/port/` });
+    }
+  }
+  return out;
+}
+
 // ルール: 層とコンテキストの依存方向。
 //   infrastructure → 同層のみ（言語拡張基盤：ドメインを知らない）
 //   domain  → 同一コンテキスト domain・kernel/domain（＋infrastructure）
@@ -448,6 +471,7 @@ export const ALL_RULES = [
   noEnums,
   noNonNullAssertions,
   onePublicTypePerFile,
+  portsLiveInPortDir,
 ] as const;
 
 export function violationsOf(relPath: string, source: string): Violation[] {

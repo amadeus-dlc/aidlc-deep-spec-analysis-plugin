@@ -7,12 +7,12 @@
 // store は集約の原文（sourceDocument）をバイト逐語で書く——findById∘store は
 // バイト恒等（往復則）。
 
-import type { Result } from "../../kernel/infrastructure/index.ts";
-import type { RepositoryError } from "../../kernel/usecase/index.ts";
+import type { Result } from "../../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../../kernel/usecase/index.ts";
 import type {
   IrValidationMaterials,
   IrValidationMaterialsId,
-} from "../domain/index.ts";
+} from "../../domain/index.ts";
 
 export interface IrValidationMaterialsRepository {
   findById(id: IrValidationMaterialsId): Result<IrValidationMaterials, RepositoryError>;

@@ -7,10 +7,10 @@
 // ディレクトリの cross-check.json 以外の *.json をファイル名順で読み、
 // 読めないファイルは黙って除く（その状態は各書き手が自分の文書で報告する）。
 
-import type { Result } from "../../kernel/infrastructure/index.ts";
-import type { RepositoryError } from "../../kernel/usecase/index.ts";
-import type { ArtifactPath } from "../../kernel/domain/index.ts";
-import type { VerificationReport, VerificationReportId, VerificationReports } from "../domain/index.ts";
+import type { Result } from "../../../kernel/infrastructure/index.ts";
+import type { RepositoryError } from "../../../kernel/usecase/index.ts";
+import type { ArtifactPath } from "../../../kernel/domain/index.ts";
+import type { VerificationReport, VerificationReportId, VerificationReports } from "../../domain/index.ts";
 
 export interface VerificationReportRepository {
   findById(aggregateId: VerificationReportId): Result<VerificationReport, RepositoryError>;

@@ -20,10 +20,10 @@ import {
   VerificationReportId,
   type RequirementsModel,
 } from "../domain/index.ts";
-import type { FormalModelRepository } from "./formal-model-repository.ts";
-import type { VerificationReportRepository } from "./verification-report-repository.ts";
+import type { FormalModelRepository } from "./port/formal-model-repository.ts";
+import type { VerificationReportRepository } from "./port/verification-report-repository.ts";
 import type { VerifySmtOutcome } from "./verify-smt-outcome.ts";
-import type { Z3SolverClient } from "./z3-solver-client.ts";
+import type { Z3SolverClient } from "./port/z3-solver-client.ts";
 import type { VerifyRequirementsSmtInput } from "./verify-requirements-smt-input.ts";
 
 const BACKEND = "smt";

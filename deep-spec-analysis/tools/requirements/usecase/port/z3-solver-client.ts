@@ -2,7 +2,7 @@
 // 実行を実装に委ね、計画事実と型付き判定だけを返す。実行不能でも facts は
 // 返る——コンパイル時 skip は unavailable 文書にも載るため。
 
-import type { RequirementsModel } from "../domain/index.ts";
+import type { RequirementsModel } from "../../domain/index.ts";
 import type { SmtCheck } from "./smt-check.ts";
 
 export interface Z3SolverClient {

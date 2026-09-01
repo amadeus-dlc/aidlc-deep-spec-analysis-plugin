@@ -1,4 +1,4 @@
-import type { QuintMachineFacts, QuintRuns, VerificationSkips } from "../domain/index.ts";
+import type { QuintMachineFacts, QuintRuns, VerificationSkips } from "../../domain/index.ts";
 
 export type QuintCheckResult =
   | { readonly kind: "cli-unavailable" }

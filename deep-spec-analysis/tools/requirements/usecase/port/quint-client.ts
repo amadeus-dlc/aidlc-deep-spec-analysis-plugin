@@ -4,7 +4,7 @@
 // 旧 main と同じく、CLI 不在時は機械をコンパイルしない（smt と違い
 // unavailable 文書にコンパイル時 skip は載らない——凍結挙動）。
 
-import type { RequirementsModel } from "../domain/index.ts";
+import type { RequirementsModel } from "../../domain/index.ts";
 import type { QuintCheckResult } from "./quint-check-result.ts";
 
 export interface QuintClient {

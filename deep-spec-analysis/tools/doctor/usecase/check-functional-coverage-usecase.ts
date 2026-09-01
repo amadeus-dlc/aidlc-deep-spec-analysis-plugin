@@ -1,6 +1,6 @@
 import { UnitCoverage } from "../domain/index.ts";
 import type { RefinementStaleRow, UnitCoverageRow } from "../domain/index.ts";
-import type { DoctorWorkspaceClient } from "./doctor-workspace-client.ts";
+import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 
 // 設計検証カバレッジの査定（checks 配列の第 5 ブロック、unit 粒度）＋
 // refinement 失効（phase 3）。unit はモデルの units[] に載り、実 backend 文書の

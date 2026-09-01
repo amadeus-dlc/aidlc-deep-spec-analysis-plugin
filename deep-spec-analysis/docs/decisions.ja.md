@@ -1081,3 +1081,29 @@ domain / usecase / adapter に層化され、entry は env 読取と配線だけ
 直列化バイト不変。証拠：383 pass / 1 skip / 0 fail・base↔head パリティ
 `diff -r` 空・AIDLC_PARITY=1 決定論 green・golden 無傷・validator Errors: 0・
 7 ハーネスビルド（dist に doctor ツリーの同梱を確認）。
+
+## ポート契約の置き場の裁定 — ポートは 2 種、usecase/port/ に集める（2026-09-01）
+
+ポートの分類は **Repository（永続化）と外部システム Client
+（`Z3SolverClient`/`QuintClient` 型）の 2 種**であり、usecase 層のポート契約
+（インターフェイスと、その署名を構成するペイロード型）は `usecase/port/` に
+集約する。interactor とその入出力・outcome 型は usecase/ 直下のまま。
+
+- **契約適合サービスポートの廃止**: `ReferenceCheckReportConformance` は
+  独立ポートとしては誤った抽象と裁定し、`conformedOf` を
+  `ReferenceCheckReportRepository` へ統合した。「store が書くはずの姿」を
+  書かずに問う照会は永続化契約の一部であり、report-only の verdict は
+  引き続きこの戻り値から導く（stdout とファイルの矛盾を構造的に防ぐ不変条件は
+  不変）。裁定 D の「契約適合のような書き込み前提の照会は別サービスポートへ
+  分離」句は本裁定で改訂——分離ではなく Repository が運ぶ。3 interactor は
+  依存 1 本に減り、entry の二重配線が消えた。
+- **移設**: 32 契約を 5 コンテキストで（kernel 2・refcheck 2・
+  requirements 9・design 11・doctor 8）。ポート署名を構成するペイロード型
+  （SmtCheck/RefinementCheck/走査材料ほか）も契約の一部として同行。facade と
+  interactor の import を追随、公開面は Conformance の輸出削除以外不変。
+- **執行**: `portsLiveInPortDir` を ALL_RULES へ（red/green example つき）
+  ——usecase 直下に置かれた Repository/Client インターフェイスと、port/
+  配下に紛れ込んだ class（interactor）を検出。
+
+証拠：tsc clean・全スイート green（per-file 90% 床込み）・architecture
+スイート違反ゼロ・validator Errors: 0・7 ハーネスビルド。
