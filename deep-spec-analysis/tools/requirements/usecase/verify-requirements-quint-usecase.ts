@@ -18,7 +18,6 @@ import type { Result } from "../../kernel/infrastructure/index.ts";
 import { ok } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
-  type FormalModelId,
   SUPPORTED_IR_MAJOR,
   VerificationReport,
   VerificationReportId,
@@ -28,14 +27,11 @@ import type { FormalModelRepository } from "./formal-model-repository.ts";
 import type { QuintClient } from "./quint-client.ts";
 import type { VerificationReportRepository } from "./verification-report-repository.ts";
 import type { VerifyQuintOutcome } from "./verify-quint-outcome.ts";
+import type { VerifyRequirementsQuintInput } from "./verify-requirements-quint-input.ts";
 
 const BACKEND = "quint";
 const CROSS_CHECK_BACKEND = "cross-check";
 
-export interface VerifyRequirementsQuintInput {
-  readonly modelId: FormalModelId;
-  readonly verifyDirectory: ArtifactPath;
-}
 
 export class VerifyRequirementsQuintUseCase {
   readonly #formalModelRepository: FormalModelRepository;

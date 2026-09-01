@@ -46,12 +46,10 @@ import {
   BackgroundAssumptionId,
 } from "../domain/index.ts";
 import type { IrValidationMaterialsRepository } from "../usecase/index.ts";
+import type { IrValidationMaterialsConfig } from "./ir-validation-materials-config.ts";
 
 const FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";
 
-export interface IrValidationMaterialsConfig {
-  readonly schemaPath: string;
-}
 
 function asExpression(v: Json): Expression | undefined {
   return isObject(v) ? (v as unknown as Expression) : undefined;

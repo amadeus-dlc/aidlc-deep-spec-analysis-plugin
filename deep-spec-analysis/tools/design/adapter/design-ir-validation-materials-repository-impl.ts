@@ -20,7 +20,8 @@ import {
   validateSchema,
 } from "../../kernel/adapter/index.ts";
 import { AttributeBound, ErrorMessages, IrVersion, TriggerName } from "../../kernel/domain/index.ts";
-import { type Result, err as repoErr, ok } from "../../kernel/infrastructure/index.ts";
+import { type Result, ok } from "../../kernel/infrastructure/index.ts";
+import { err as repoErr } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import type {
@@ -61,12 +62,10 @@ import {
 } from "../domain/index.ts";
 import { DesignIrValidationMaterials, DesignIrValidationMaterialsId, SUPPORTED_DESIGN_IR_MAJOR } from "../domain/index.ts";
 import type { DesignIrValidationMaterialsRepository } from "../usecase/index.ts";
+import type { DesignIrValidationMaterialsConfig } from "./design-ir-validation-materials-config.ts";
 
 const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 
-export interface DesignIrValidationMaterialsConfig {
-  readonly schemaPath: string;
-}
 
 function asExpression(v: Json): Expression | undefined {
   return isObject(v) ? (v as unknown as Expression) : undefined;

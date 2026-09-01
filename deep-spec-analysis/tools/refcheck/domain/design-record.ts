@@ -4,57 +4,14 @@
 // 各値の取得規則（requirements は rules が使えるときだけ・兄弟は catalog が
 // 解析できたときだけ等）は Impl が凍結挙動として実装する。
 
-import { type ArtifactPath, type RequirementIds } from "../../kernel/domain/index.ts";
 import type { DesignRecordId } from "./design-record-id.ts";
 import type { InputAnchor } from "./input-anchor.ts";
-import type { InputAnchors } from "./input-anchor.ts";
-import type { ComponentCatalogOutcome } from "./component-catalog.ts";
-import type { ContractsTableOutcome, DeclaredUnitsOutcome, SpecBlockAssessments } from "./contract-summary.ts";
-import type { UnitName } from "./unit-name.ts";
-import type {
-  DomainEntitiesOutcome,
-  EntitiesOutcome,
-  FunctionalSpecOutcome,
-  RulesOutcome,
-  SiblingUnitIndex,
-} from "./functional-design.ts";
+import { type ComponentCatalogOutcome } from "./component-catalog-outcome.ts";
+import { type ContractsTableOutcome } from "./contracts-table-outcome.ts";
+import { type SpecBlockAssessments } from "./spec-block-assessments.ts";
+import type { DesignRecordSeed } from "./design-record-seed.ts";
 
-// 読み込まれ解析済みの 1 文書：inputs[] 記録用の (artifact, sha256) と解析結果。
-export interface LoadedDocument<Outcome> {
-  readonly input: InputAnchor;
-  readonly outcome: Outcome;
-}
 
-export interface DesignRecordSeed {
-  readonly id: DesignRecordId;
-  // 発火対象の record 相対名と (artifact, sha256)。対象が読めない場合に
-  // 集約は作られない（Repository が not-found を返す）。
-  readonly target: InputAnchor;
-  // 錨成果物の原文の生バイト列（原文材料——store の往復則 findById∘store が
-  // バイト恒等。兄弟成果物は読み取り視点であり store の対象外）。
-  readonly sourceDocument: Uint8Array;
-  // 対象が components.md のときだけ載る視点。
-  readonly componentCatalog: ComponentCatalogOutcome | null;
-  // 対象が contract-summary.md のときだけ載る視点。
-  readonly contractsTable: ContractsTableOutcome | null;
-  readonly specBlocks: SpecBlockAssessments | null;
-  readonly declaredUnits: { readonly artifactName: ArtifactPath; readonly document: LoadedDocument<DeclaredUnitsOutcome> | null } | null;
-  // 対象が functional-design 配下のときだけ載る視点。
-  readonly functional: {
-    readonly unit: UnitName | undefined;
-    readonly entitiesArtifact: ArtifactPath;
-    readonly entities: LoadedDocument<EntitiesOutcome> | null;
-    readonly rulesArtifact: ArtifactPath;
-    readonly rules: LoadedDocument<RulesOutcome> | null;
-    readonly specArtifact: ArtifactPath;
-    readonly spec: LoadedDocument<FunctionalSpecOutcome> | null;
-    readonly requirements: LoadedDocument<RequirementIds> | null;
-    readonly componentsArtifact: ArtifactPath;
-    readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
-    readonly siblingUnits: SiblingUnitIndex;
-    readonly siblingInputs: InputAnchors;
-  } | null;
-}
 
 export class DesignRecord {
   readonly #seed: DesignRecordSeed;

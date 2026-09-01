@@ -10,9 +10,9 @@
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { ContentHash } from "../../kernel/domain/index.ts";
 import { canonicalStringify } from "../../kernel/adapter/canonical-json.ts";
-import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
-import { type Schema, validateSchema } from "../../kernel/adapter/schema-validator.ts";
-import type { SchemaUnreadable } from "../../kernel/adapter/contract-schema.ts";
+import { type Json, isObject } from "../../kernel/adapter/json.ts";
+import { type Schema, validateSchema } from "../../kernel/adapter/schema.ts";
+import type { SchemaUnreadable } from "../../kernel/adapter/schema-unreadable.ts";
 import { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import {
   CATALOG_VERSION,

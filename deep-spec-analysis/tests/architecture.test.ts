@@ -22,6 +22,7 @@ import {
   noGetAccessors,
   noIoInPureLayers,
   noNonNullAssertions,
+  onePublicTypePerFile,
   noTestPayloads,
   onlySanctionedImports,
   privateConstructorInDomain,
@@ -147,6 +148,18 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(noNonNullAssertions("kernel/domain/x.ts", "const v = m!.group;")).not.toHaveLength(0);
     expect(noNonNullAssertions("kernel/domain/x.ts", "if (a !== b && !flag && a != c) { run(); }")).toHaveLength(0);
     expect(noNonNullAssertions("kernel/domain/x.ts", 'const s = "bang! inside string";')).toHaveLength(0);
+  });
+
+  test("one-public-type-per-file flags multi-type files, name mismatches, facade/entry declarations", () => {
+    expect(onePublicTypePerFile("kernel/domain/token.ts", "export class Token {}\nexport class TokenError {}")).not.toHaveLength(0);
+    expect(onePublicTypePerFile("kernel/domain/token.ts", "export class Token {}\ntype TokenError = { raw: string };")).toHaveLength(0);
+    expect(onePublicTypePerFile("kernel/domain/wrong-name.ts", "export class Token {}")).not.toHaveLength(0);
+    expect(onePublicTypePerFile("kernel/domain/trigger-name.ts", "export class TriggerName {}")).toHaveLength(0);
+    expect(onePublicTypePerFile("kernel/usecase/verify-usecase.ts", "export class VerifyUseCase {}")).toHaveLength(0);
+    expect(onePublicTypePerFile("kernel/domain/index.ts", "export class Sneaky {}")).not.toHaveLength(0);
+    expect(onePublicTypePerFile("kernel/domain/index.ts", 'export { Token } from "./token.ts";')).toHaveLength(0);
+    expect(onePublicTypePerFile("aidlc-sensor-deep-spec-ir-valid.ts", "export type Verdict = { pass: boolean };")).not.toHaveLength(0);
+    expect(onePublicTypePerFile("kernel/domain/token.ts", 'const s = "export class Fake {}";\nexport class Token {}')).toHaveLength(0);
   });
 
   test("no-export-star flags a wildcard re-export, passes an explicit facade", () => {

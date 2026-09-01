@@ -10,11 +10,13 @@
 // はクエリ。unit は functional センサーのみが持つ（キー順の末尾、凍結）。
 
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
-import type { CheckFamilies, CheckFamily } from "./check-family.ts";
-import { Findings, Skips } from "./finding.ts";
+import type { CheckFamily } from "./check-family.ts";
+import { type CheckFamilies } from "./check-families.ts";
+import { Findings } from "./findings.ts";
+import { Skips } from "./skips.ts";
 import type { Finding } from "./finding.ts";
 import type { UnitName } from "./unit-name.ts";
-import { WitnessRefs } from "./witness-ref.ts";
+import { WitnessRefs } from "./witness-refs.ts";
 import type { WitnessRef } from "./witness-ref.ts";
 import type { Skipped } from "./skipped.ts";
 

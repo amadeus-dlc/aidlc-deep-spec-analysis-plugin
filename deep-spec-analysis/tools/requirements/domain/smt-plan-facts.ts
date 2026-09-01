@@ -6,60 +6,20 @@
 // ソートは VerificationReport.compose の不変条件）は facts 自身の振る舞い
 // （OOUI 裁定）。
 
-import type { TriggerName } from "../../kernel/domain/index.ts";
-import type { ObligationId } from "./obligation.ts";
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
-import type { SmtQueryVerdicts } from "./solver-verdict.ts";
-import type { VerificationFinding, VerificationSkipped } from "./verification-finding.ts";
-import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
+import { type SmtQueryVerdicts } from "./smt-query-verdicts.ts";
+import type { VerificationFinding } from "./verification-finding.ts";
+import { type VerificationSkipped } from "./verification-skipped.ts";
+import { VerificationFindings } from "./verification-findings.ts";
+import { VerificationSkips } from "./verification-skips.ts";
+import type { InterpretedVerdicts } from "./interpreted-verdicts.ts";
+import { SmtEventPairProbes } from "./smt-event-pair-probes.ts";
+import type { SmtPlanFactsSeed } from "./smt-plan-facts-seed.ts";
 
-export interface SmtEventPairProbe {
-  readonly qOverlap: string;
-  readonly qJoint: string;
-  readonly a: ObligationId;
-  readonly b: ObligationId;
-  readonly trigger: TriggerName;
-}
 
-// 同トリガ event 対プローブのファーストクラスコレクション（発行順を保持）。
-export class SmtEventPairProbes {
-  readonly #values: readonly SmtEventPairProbe[];
 
-  private constructor(values: readonly SmtEventPairProbe[]) {
-    this.#values = values;
-  }
 
-  static of(values: readonly SmtEventPairProbe[]): SmtEventPairProbes {
-    return new SmtEventPairProbes([...values]);
-  }
-
-  add(value: SmtEventPairProbe): SmtEventPairProbes {
-    return new SmtEventPairProbes([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<SmtEventPairProbe> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly SmtEventPairProbe[] {
-    return this.#values;
-  }
-}
-
-export interface InterpretedVerdicts {
-  findings: VerificationFindings;
-  skipped: VerificationSkips;
-}
-
-export interface SmtPlanFactsSeed {
-  readonly compiled: ReadonlyMap<string, boolean>;
-  readonly skipped: VerificationSkips;
-  readonly labelToTarget: ReadonlyMap<string, string>;
-  readonly eventPairs: SmtEventPairProbes;
-  readonly gapTriggers: ReadonlyMap<string, readonly string[]>;
-  readonly scenarioQueries: ReadonlyMap<string, string>;
-}
 
 export class SmtPlanFacts {
   readonly #compiled: ReadonlyMap<string, boolean>;

@@ -3,8 +3,6 @@
 // CD 検査 → 組成 → 契約適合 → 永続化を起動する。
 
 import {
-  type CheckExecutionMode,
-  type DesignRecordId,
   CheckFamilyLedger,
   InputAnchors,
   CONTRACT_FAMILIES,
@@ -17,12 +15,8 @@ import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./design-record-repository.ts";
 import type { ReferenceCheckReportConformance } from "./reference-check-report-conformance.ts";
 import type { ReferenceCheckReportRepository } from "./reference-check-report-repository.ts";
+import type { CheckContractSummaryInput } from "./check-contract-summary-input.ts";
 
-export interface CheckContractSummaryInput {
-  readonly recordId: DesignRecordId;
-  readonly reportDirectory: ArtifactPath;
-  readonly mode: CheckExecutionMode;
-}
 
 export class CheckContractSummaryUseCase {
   readonly #designRecordRepository: DesignRecordRepository;

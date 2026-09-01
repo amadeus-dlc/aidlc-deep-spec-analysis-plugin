@@ -1,10 +1,10 @@
 // contract-summary.md と units エッジブロックの解析 — 形式知識をここに封じ、
 // 型付きの outcome へ解く。抽出ロジックは旧センサーの逐語移動。
 
-import { extractFences } from "../../kernel/adapter/markdown-fences.ts";
-import { type Json, isObject } from "../../kernel/adapter/json-value.ts";
-import { parseMarkdownTables } from "../../kernel/adapter/markdown-tables.ts";
-import { parseYamlSubset } from "../../kernel/adapter/yaml-subset.ts";
+import { extractFences } from "../../kernel/adapter/fence.ts";
+import { type Json, isObject } from "../../kernel/adapter/json.ts";
+import { parseMarkdownTables } from "../../kernel/adapter/md-table.ts";
+import { parseYamlSubset } from "../../kernel/adapter/yaml.ts";
 import {
   BlockIndex,
   ContractId,

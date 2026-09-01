@@ -1,3 +1,4 @@
+import type { SmtChildResult } from "./smt-child-result.ts";
 // z3 実行の子プロセス本体。stdin の {queries, timeoutMs, budgetMs} を解いて
 // z3-solver（WASM）でクエリを流し、{results} または {unavailable} の JSON
 // 1 行を返す。プロトコルは凍結——design の refinement ソルバも同じ子（エントリの
@@ -10,15 +11,8 @@
 // （node 優先・bun フォールバック）で行われる。
 
 import { readFileSync } from "node:fs";
-import type { SmtChildQuery } from "./smt-plan-builder.ts";
+import { type SmtChildQuery } from "./smt-child-query.ts";
 
-export interface SmtChildResult {
-  id: string;
-  status: "sat" | "unsat" | "unknown" | "budget" | "error";
-  model?: { [name: string]: string };
-  core?: string[];
-  error?: string;
-}
 
 export async function solveSmtChild(): Promise<string> {
   let payload: { queries: SmtChildQuery[]; timeoutMs: number; budgetMs: number };

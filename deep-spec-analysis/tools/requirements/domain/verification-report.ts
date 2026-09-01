@@ -4,65 +4,20 @@
 // degraded は契約適合の降格形（findings/skipped/crossChecked を空にして
 // unavailable 理由だけ残す——旧 writeFindingsDoc の自己検証降格と同じ姿）。
 
-import { BackendName, ContentHash, FrRefs, IrVersion, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
+import { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
-import type { VerificationFinding } from "./verification-finding.ts";
-import { VerificationFindings, VerificationSkips } from "./verification-finding.ts";
+import { VerificationFindings } from "./verification-findings.ts";
+import { VerificationSkips } from "./verification-skips.ts";
+import { CrossCheckedEntries } from "./cross-checked-entries.ts";
+import type { VerificationReportComposition } from "./verification-report-composition.ts";
+import type { VerificationReportSeed } from "./verification-report-seed.ts";
 
 export const SUPPORTED_IR_MAJOR = 1;
 
-export interface CrossCheckedEntry {
-  readonly backend: BackendName;
-  readonly targets: TargetIds;
-}
 
-// クロスチェック判定表のファーストクラスコレクション。
-export class CrossCheckedEntries {
-  readonly #values: readonly CrossCheckedEntry[];
 
-  private constructor(values: readonly CrossCheckedEntry[]) {
-    this.#values = values;
-  }
 
-  static of(values: readonly CrossCheckedEntry[]): CrossCheckedEntries {
-    return new CrossCheckedEntries([...values]);
-  }
-
-  add(value: CrossCheckedEntry): CrossCheckedEntries {
-    return new CrossCheckedEntries([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<CrossCheckedEntry> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly CrossCheckedEntry[] {
-    return this.#values;
-  }
-}
-
-export interface VerificationReportSeed {
-  readonly id: VerificationReportId;
-  readonly irVersion: IrVersion;
-  readonly irHash: ContentHash;
-  readonly method: string;
-  readonly findings: VerificationFindings;
-  readonly skipped: VerificationSkips;
-  readonly crossChecked: CrossCheckedEntries | null;
-  readonly unavailableReason: string | null;
-}
-
-export interface VerificationReportComposition {
-  readonly id: VerificationReportId;
-  readonly irVersion: IrVersion;
-  readonly irHash: ContentHash;
-  readonly method: string;
-  readonly findings: VerificationFindings;
-  readonly skipped: VerificationSkips;
-  readonly crossChecked?: CrossCheckedEntries;
-  readonly unavailableReason?: string;
-}
 
 export class VerificationReport {
   readonly #id: VerificationReportId;
@@ -267,93 +222,3 @@ export class VerificationReport {
   }
 }
 
-// 兄弟文書のファーストクラスコレクション（クロスチェックの入力）。
-export class VerificationReports {
-  readonly #values: readonly VerificationReport[];
-
-  private constructor(values: readonly VerificationReport[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly VerificationReport[]): VerificationReports {
-    return new VerificationReports([...values]);
-  }
-
-  add(value: VerificationReport): VerificationReports {
-    return new VerificationReports([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<VerificationReport> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly VerificationReport[] {
-    return this.#values;
-  }
-  // クロスチェック — 同一 irHash の全バックエンド文書から、両者が判定した
-  // シナリオの合意/不一致を計算して cross-check レポートを組む（不一致は
-  // 「形式化かバックエンドコンパイラの欠陥」であり要件の欠陥ではない——
-  // detail 文言は golden 凍結。全書き手がこれを再計算して収束するため、結果は
-  // センサーの発火順に依存しない）。旧 crossCheckReport の逐語移植（成立文書の
-  // 選別のうち、読めないファイルの黙殺は Repository 側）。
-  crossChecked(id: VerificationReportId, model: RequirementsModel, irHash: ContentHash): VerificationReport {
-    // 比較に参加するのは同一 irHash の可用文書のみ（旧実装の読込時選別と同値）。
-    const docs = this.toArray()
-      .filter((s) => s.irHash().equals(irHash) && !s.isUnavailable())
-      .map((s) => ({
-        backend: s.id().backendName().asString(),
-        findings: s.findings().toArray(),
-        skippedTargets: new Set(
-          s
-            .skipped()
-            .toArray()
-            .filter((e) => typeof e.target === "string")
-            .map((e) => e.target),
-        ),
-      }));
-
-    const scenarioById = new Map(model.scenarios().toArray().map((s) => [s.id.asString(), s]));
-    const findings: VerificationFinding[] = [];
-    const comparedByBackend = new Map<string, Set<string>>();
-    for (let i = 0; i < docs.length; i++) {
-      for (let j = i + 1; j < docs.length; j++) {
-        const a = docs[i];
-        const b = docs[j];
-        if (!a || !b) continue;
-        for (const sc of model.scenarios()) {
-          if (a.skippedTargets.has(sc.id.asString()) || b.skippedTargets.has(sc.id.asString())) continue;
-          const va = a.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id.asString()));
-          const vb = b.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id.asString()));
-          (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id.asString());
-          (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(sc.id.asString());
-          if (va !== vb) {
-            const verdicts: { [backend: string]: "violated" | "clean" } = {};
-            verdicts[a.backend] = va ? "violated" : "clean";
-            verdicts[b.backend] = vb ? "violated" : "clean";
-            findings.push({
-              kind: "cross-check-disagreement",
-              frRefs: FrRefs.of(IdOrder.sortedUnique([...(scenarioById.get(sc.id.asString())?.frRefs.toArray() ?? [])], IdOrder.compare)),
-              targets: TargetIds.of([sc.id.asString()]),
-              witness: { verdicts },
-              detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id.asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
-            });
-          }
-        }
-      }
-    }
-    const crossChecked: CrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.of([...targets].sort(IdOrder.compare)) }))
-      .sort((x, y) => (x.backend.asString() < y.backend.asString() ? -1 : x.backend.asString() > y.backend.asString() ? 1 : 0));
-
-    return VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: "exhaustive",
-      findings: VerificationFindings.of(findings),
-      skipped: VerificationSkips.of([]),
-      crossChecked: CrossCheckedEntries.of(crossChecked),
-    });
-  }
-
-}

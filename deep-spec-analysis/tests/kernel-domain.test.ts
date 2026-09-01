@@ -42,7 +42,7 @@ describe("result", () => {
   });
 });
 
-describe("json-value", () => {
+describe("json", () => {
   test("isObject accepts plain objects and rejects null, arrays, and scalars", () => {
     expect(isObject({})).toBe(true);
     expect(isObject(null)).toBe(false);
@@ -87,7 +87,7 @@ describe("id-order", () => {
   });
 });
 
-describe("markdown-fences", () => {
+describe("fence", () => {
   test("captures body and 1-based opening line, filters by language", () => {
     const md = "intro\n```yaml\na: 1\n```\n```json\n{}\n```\n";
     const yaml = extractFences(md, "yaml");
@@ -104,7 +104,7 @@ describe("markdown-fences", () => {
   });
 });
 
-describe("yaml-subset — accepted shapes", () => {
+describe("yaml — accepted shapes", () => {
   test("block mapping with scalars, booleans, null, integers, floats", () => {
     const r = parseYamlSubset("name: Order\nactive: true\nnothing: null\ntilde: ~\ncount: 3\nratio: 1.5\nneg: -2\n");
     expect(r.value).toEqual({ name: "Order", active: true, nothing: null, tilde: null, count: 3, ratio: 1.5, neg: -2 });
@@ -142,7 +142,7 @@ describe("yaml-subset — accepted shapes", () => {
   });
 });
 
-describe("yaml-subset — rejections with exact error strings", () => {
+describe("yaml — rejections with exact error strings", () => {
   test("anchor, alias, and tag scalars", () => {
     expect(parseYamlSubset("a: &x 1\n").error).toBe('line 1: unsupported YAML feature (anchor/alias/tag): "&x 1"');
     expect(parseYamlSubset("a: *x\n").error).toBe('line 1: unsupported YAML feature (anchor/alias/tag): "*x"');
@@ -167,7 +167,7 @@ describe("yaml-subset — rejections with exact error strings", () => {
   });
 });
 
-describe("markdown-tables", () => {
+describe("md-table", () => {
   test("parses header, separator, rows with 1-based lines; ignores prose", () => {
     const md = "prose\n| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\nafter\n";
     const tables = parseMarkdownTables(md);
@@ -181,7 +181,7 @@ describe("markdown-tables", () => {
   });
 });
 
-describe("schema-validator — per-keyword exact messages", () => {
+describe("schema — per-keyword exact messages", () => {
   const check = (schema: Json, value: Json): string[] => {
     const errors: string[] = [];
     validateSchema(schema as never, schema as never, value, "", errors);
@@ -240,7 +240,7 @@ describe("schema-validator — per-keyword exact messages", () => {
   });
 });
 
-describe("target-id / requirement-ids / name-normalize", () => {
+describe("target-ids / requirement-ids / names", () => {
   test("safeTarget sanitizes out-of-alphabet characters and empty tokens", () => {
     expect(TargetIds.safe("unit", "u1-orders")).toBe("unit:u1-orders");
     expect(TargetIds.safe("entity", "Order Item")).toBe("entity:Order-Item");

@@ -3,7 +3,7 @@
 
 import { type Result, err, ok } from "../infrastructure/index.ts";
 
-export type AttributeBoundError = { readonly kind: "non-integer-bound"; readonly raw: number };
+type AttributeBoundError = { readonly kind: "non-integer-bound"; readonly raw: number };
 
 export class AttributeBound {
   readonly #value: number;

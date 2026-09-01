@@ -6,7 +6,7 @@
 
 import { type Result, err, ok } from "../infrastructure/index.ts";
 
-export type ArtifactPathError = { readonly kind: "empty-path" };
+type ArtifactPathError = { readonly kind: "empty-path" };
 
 export class ArtifactPath {
   readonly #value: string;

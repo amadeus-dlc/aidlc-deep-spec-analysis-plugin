@@ -27,38 +27,8 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import {
-  DesignBackgroundId,
-  DesignAttributeName,
-  DesignEntityName,
-  DesignMachineId,
-  DesignObligationId,
-  DesignObligationNature,
-  DesignObligationOrigin,
-  DesignScenarioId,
-  DesignTransitionId,
-  AttrPaths,
-  DesignBackgroundAssumptions,
-  DesignMachines,
-  DesignObligations,
-  DesignScenarios,
-  type DesignBackgroundAssumption,
-  type DesignMachine,
-  type DesignObligation,
-  type DesignScenario,
-  type DesignIgnore,
-  type DesignTransition,
-  type DesignValue, type DesignUnit as DesignUnitType,
-  BrRefs,
-  DesignIgnores,
-  DesignModelId,
-  DesignSkips,
-  DesignTransitions,
-  DesignUnit,
-  DesignUnitId,
-  InitialStates,
-  RefinementMaterialsId,
-} from "../tools/design/domain/index.ts";
+import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, type DesignMachine, type DesignObligation, type DesignScenario, type DesignIgnore, type DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId } from "../tools/design/domain/index.ts";
+import { type DesignUnit as DesignUnitType } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -858,5 +828,21 @@ describe("RefinementMapRepository (owner ruling: writable where writing is defin
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("split-file coverage pins (one-public-type refactor)", () => {
+  test("solver facts expose compile skips and issue-order iteration; unmapped target parses", () => {
+    const f = RefinementSolverFacts.of({
+      pending: new Map<string, RefinementProbe>([
+        ["rv:OB-9", { kind: "invariant", reqId: ObligationId.reconstitute("OB-9") }],
+      ]),
+      compileSkips: DesignSkips.of([]),
+    });
+    expect([...f].map(([id]) => id)).toEqual(["rv:OB-9"]);
+    expect(f.compileSkips().toArray()).toEqual([]);
+    const parsed = UnmappedTargetRef.parse("OB-1");
+    expect(parsed.ok && parsed.value.equals(UnmappedTargetRef.reconstitute("OB-1"))).toBe(true);
+    expect(UnmappedTargetRef.parse("").ok).toBe(false);
   });
 });

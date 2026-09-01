@@ -10,18 +10,14 @@ import { spawnSync } from "node:child_process";
 import { SmtQueryVerdicts } from "../domain/index.ts";
 import type { RequirementsModel, SmtQueryVerdict } from "../domain/index.ts";
 import type { SmtCheck, Z3SolverClient } from "../usecase/index.ts";
-import { type SmtChildQuery, buildSmtPlan, decodeSolverModel } from "./smt-plan-builder.ts";
-import type { SmtChildResult } from "./z3-engine-child.ts";
+import { type SmtChildQuery } from "./smt-child-query.ts";
+import { buildSmtPlan, decodeSolverModel } from "./smt-plan.ts";
+import type { SmtChildResult } from "./smt-child-result.ts";
+import type { Z3SolverClientConfig } from "./z3-solver-client-config.ts";
 
 const CHILD_BUDGET_MS = 45_000;
 const CHILD_WALL_TIMEOUT_MS = 55_000;
 
-export interface Z3SolverClientConfig {
-  readonly selfPath: string;
-  readonly perQueryTimeoutMs: number;
-  readonly runtimeOverride: string | undefined;
-  readonly workingDirectory: string;
-}
 
 export class Z3SolverClientImpl implements Z3SolverClient {
   readonly #config: Z3SolverClientConfig;

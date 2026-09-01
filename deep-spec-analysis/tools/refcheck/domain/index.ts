@@ -1,98 +1,100 @@
 // refcheck/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
 export { CATALOG_VERSION } from "./catalog-version.ts";
-export { type WitnessRef, WitnessRefs } from "./witness-ref.ts";
-export { type Finding, Findings, Skips } from "./finding.ts";
+export { type WitnessRef } from "./witness-ref.ts";
+export { WitnessRefs } from "./witness-refs.ts";
+export { type Finding } from "./finding.ts";
+export { Findings } from "./findings.ts";
+export { Skips } from "./skips.ts";
 export { type Skipped } from "./skipped.ts";
-export { type InputAnchor, InputAnchors } from "./input-anchor.ts";
-export { ReferenceCheckReport, type ReferenceCheckReportSeed } from "./reference-check-report.ts";
+export { type InputAnchor } from "./input-anchor.ts";
+export { InputAnchors } from "./input-anchors.ts";
+export { ReferenceCheckReport } from "./reference-check-report.ts";
+export { type ReferenceCheckReportSeed } from "./reference-check-report-seed.ts";
 export { ReferenceCheckReportId } from "./reference-check-report-id.ts";
 export { CheckFamilyLedger } from "./check-family-ledger.ts";
-export { type CheckFamilyError, CheckFamilies, CheckFamily } from "./check-family.ts";
-export { type UnitNameError, UnitName, UnitNames } from "./unit-name.ts";
-export { type LocationError, BlockIndex, LineNumber } from "./location-values.ts";
-export {
-  type Component,
-  type ComponentRef,
-  type ComponentEntity,
-  type ComponentShapeError,
-  type ComponentCatalogOutcome,
-  type EntityReference,
-  ComponentEntities,
-  ComponentRefs,
-  Components,
-  ComponentShapeErrors,
-  EntityReferences,
-} from "./component-catalog.ts";
-export { COMPONENT_FAMILIES, ComponentCheckMaterials, type ComponentCheckMaterialsSeed } from "./component-checks.ts";
-export {
-  type UnitDecl,
-  type DeclaredUnitsOutcome,
-  type ContractRow,
-  type ContractsTableOutcome,
-  type SpecBlockAssessment,
-  type ContractCellError,
-  ContractId,
-  ContractParty,
-  ContractRows,
-  SpecBlockAssessments,
-  UnitDecls,
-} from "./contract-summary.ts";
-export { CONTRACT_FAMILIES, ContractCheckMaterials, type ContractCheckMaterialsSeed } from "./contract-checks.ts";
-export {
-  type AttrDeclSeed,
-  type DeclaredEntitiesSeed,
-  type DomainEntitiesOutcome,
-  type DomainEntitySketchSeed,
-  type EntitiesOutcome,
-  type EntityDeclSeed,
-  type FunctionalSpecOutcome,
-  type RelDeclSeed,
-  type RuleDeclSeed,
-  type RulesOutcome,
-  type ShapeError,
-  type StateMachineSketchSeed,
-  AttrDecl,
-  AttrDecls,
-  DeclaredEntities,
-  DomainEntitySketch,
-  DomainEntitySketches,
-  EntityDecl,
-  EntityDecls,
-  RelDecl,
-  RelDecls,
-  RuleDecl,
-  RuleDecls,
-  ShapeErrors,
-  SiblingUnitIndex,
-  StateMachineSketch,
-  StateMachineSketches,
-} from "./functional-design.ts";
-export { FUNCTIONAL_FAMILIES, FunctionalCheckMaterials, type FunctionalCheckMaterialsSeed } from "./functional-checks.ts";
-export { DesignRecord, type DesignRecordSeed, type LoadedDocument } from "./design-record.ts";
+export { CheckFamily } from "./check-family.ts";
+export { CheckFamilies } from "./check-families.ts";
+export { UnitName } from "./unit-name.ts";
+export { UnitNames } from "./unit-names.ts";
+export { BlockIndex } from "./block-index.ts";
+export { LineNumber } from "./line-number.ts";
+export { Components } from "./components.ts";
+export { type ComponentCatalogOutcome } from "./component-catalog-outcome.ts";
+export { ComponentEntities } from "./component-entities.ts";
+export { type ComponentEntity } from "./component-entity.ts";
+export { type ComponentRef } from "./component-ref.ts";
+export { ComponentRefs } from "./component-refs.ts";
+export { type ComponentShapeError } from "./component-shape-error.ts";
+export { ComponentShapeErrors } from "./component-shape-errors.ts";
+export { type Component } from "./component.ts";
+export { type EntityReference } from "./entity-reference.ts";
+export { EntityReferences } from "./entity-references.ts";
+export { COMPONENT_FAMILIES, ComponentCheckMaterials } from "./component-check-materials.ts";
+export { type ComponentCheckMaterialsSeed } from "./component-check-materials-seed.ts";
+export { ContractRows } from "./contract-rows.ts";
+export { ContractId } from "./contract-id.ts";
+export { ContractParty } from "./contract-party.ts";
+export { type ContractRow } from "./contract-row.ts";
+export { type ContractsTableOutcome } from "./contracts-table-outcome.ts";
+export { type DeclaredUnitsOutcome } from "./declared-units-outcome.ts";
+export { type SpecBlockAssessment } from "./spec-block-assessment.ts";
+export { SpecBlockAssessments } from "./spec-block-assessments.ts";
+export { type UnitDecl } from "./unit-decl.ts";
+export { UnitDecls } from "./unit-decls.ts";
+export { CONTRACT_FAMILIES, ContractCheckMaterials } from "./contract-check-materials.ts";
+export { type ContractCheckMaterialsSeed } from "./contract-check-materials-seed.ts";
+export { type AttrDeclSeed } from "./attr-decl-seed.ts";
+export { AttrDecl } from "./attr-decl.ts";
+export { AttrDecls } from "./attr-decls.ts";
+export { type DeclaredEntitiesSeed } from "./declared-entities-seed.ts";
+export { DeclaredEntities } from "./declared-entities.ts";
+export { type DomainEntitiesOutcome } from "./domain-entities-outcome.ts";
+export { type DomainEntitySketchSeed } from "./domain-entity-sketch-seed.ts";
+export { DomainEntitySketch } from "./domain-entity-sketch.ts";
+export { DomainEntitySketches } from "./domain-entity-sketches.ts";
+export { type EntitiesOutcome } from "./entities-outcome.ts";
+export { type EntityDeclSeed } from "./entity-decl-seed.ts";
+export { EntityDecl } from "./entity-decl.ts";
+export { EntityDecls } from "./entity-decls.ts";
+export { type FunctionalSpecOutcome } from "./functional-spec-outcome.ts";
+export { type RelDeclSeed } from "./rel-decl-seed.ts";
+export { RelDecl } from "./rel-decl.ts";
+export { RelDecls } from "./rel-decls.ts";
+export { type RuleDeclSeed } from "./rule-decl-seed.ts";
+export { RuleDecl } from "./rule-decl.ts";
+export { RuleDecls } from "./rule-decls.ts";
+export { type RulesOutcome } from "./rules-outcome.ts";
+export { type ShapeError } from "./shape-error.ts";
+export { ShapeErrors } from "./shape-errors.ts";
+export { SiblingUnitIndex } from "./sibling-unit-index.ts";
+export { type StateMachineSketchSeed } from "./state-machine-sketch-seed.ts";
+export { StateMachineSketch } from "./state-machine-sketch.ts";
+export { StateMachineSketches } from "./state-machine-sketches.ts";
+export { FUNCTIONAL_FAMILIES, FunctionalCheckMaterials } from "./functional-check-materials.ts";
+export { type FunctionalCheckMaterialsSeed } from "./functional-check-materials-seed.ts";
+export { DesignRecord } from "./design-record.ts";
+export { type DesignRecordSeed } from "./design-record-seed.ts";
+export { type LoadedDocument } from "./loaded-document.ts";
 export { DesignRecordId } from "./design-record-id.ts";
 export { type CheckExecutionMode } from "./check-execution-mode.ts";
-export {
-  type BoundError,
-  type TokenError,
-  AllowedValue,
-  AppliesTo,
-  AttributeDefault,
-  AttributeName,
-  BusinessRuleId,
-  CardinalityNotation,
-  ComponentName,
-  ElementPath,
-  EntityName,
-  MachineSpec,
-  NumericBound,
-  ReferenceTarget,
-  RuleCategory,
-  SourceId,
-  StateName,
-  TypeName,
-  AllowedValues,
-  AttributeNames,
-  SourceIds,
-  StateNames,
-} from "./functional-design-values.ts";
+export { AllowedValue } from "./allowed-value.ts";
+export { AllowedValues } from "./allowed-values.ts";
+export { AppliesTo } from "./applies-to.ts";
+export { AttributeDefault } from "./attribute-default.ts";
+export { AttributeName } from "./attribute-name.ts";
+export { AttributeNames } from "./attribute-names.ts";
+export { BusinessRuleId } from "./business-rule-id.ts";
+export { CardinalityNotation } from "./cardinality-notation.ts";
+export { ComponentName } from "./component-name.ts";
+export { ElementPath } from "./element-path.ts";
+export { EntityName } from "./entity-name.ts";
+export { MachineSpec } from "./machine-spec.ts";
+export { NumericBound } from "./numeric-bound.ts";
+export { ReferenceTarget } from "./reference-target.ts";
+export { RuleCategory } from "./rule-category.ts";
+export { SourceId } from "./source-id.ts";
+export { SourceIds } from "./source-ids.ts";
+export { StateName } from "./state-name.ts";
+export { StateNames } from "./state-names.ts";
+export { TypeName } from "./type-name.ts";

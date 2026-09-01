@@ -6,42 +6,14 @@
 // （原文材料——store の往復則 findById∘store がバイト恒等になる永続化面）。
 
 import type { ErrorMessages, IrVersion } from "../../kernel/domain/index.ts";
-import type { FormalModelId } from "./formal-model-id.ts";
-import { FrRefClaims, FrReferenceIndex } from "./fr-reference-index.ts";
+import { FrReferenceIndex } from "./fr-reference-index.ts";
+import { FrRefClaims } from "./fr-ref-claims.ts";
 import type { IrModelDecl } from "./ir-model-decl.ts";
 import type { RequirementsSourceId } from "./requirements-source-id.ts";
+import { IrValidationMaterialsId } from "./ir-validation-materials-id.ts";
+import type { IrValidationMaterialsSeed } from "./ir-validation-materials-seed.ts";
 
-export class IrValidationMaterialsId {
-  readonly #model: FormalModelId;
 
-  private constructor(model: FormalModelId) {
-    this.#model = model;
-  }
-
-  static ofModel(model: FormalModelId): IrValidationMaterialsId {
-    return new IrValidationMaterialsId(model);
-  }
-
-  equals(other: IrValidationMaterialsId): boolean {
-    return this.#model.equals(other.#model);
-  }
-
-  modelId(): FormalModelId {
-    return this.#model;
-  }
-}
-
-export interface IrValidationMaterialsSeed {
-  readonly id: IrValidationMaterialsId;
-  readonly irVersion: IrVersion;
-  readonly schemaErrors: ErrorMessages;
-  readonly view: IrModelDecl;
-  readonly frClaims: FrRefClaims;
-  // IR の sourceDigest。文字列でなければ null（宣言なし）。
-  readonly declaredDigest: string | null;
-  readonly sourceId: RequirementsSourceId;
-  readonly sourceDocument: Uint8Array;
-}
 
 export class IrValidationMaterials {
   readonly #id: IrValidationMaterialsId;

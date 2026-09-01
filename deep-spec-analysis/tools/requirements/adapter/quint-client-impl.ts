@@ -18,7 +18,9 @@ import type {
 } from "../domain/index.ts";
 import type { QuintCheckResult, QuintClient } from "../usecase/index.ts";
 import { decodeItfTrace, itfStatus } from "./itf-decoder.ts";
-import { type CompiledQuintMachine, compileQuintMachine } from "./quint-module-compiler.ts";
+import { type CompiledQuintMachine } from "./compiled-quint-machine.ts";
+import { compileQuintMachine } from "./quint-compilation.ts";
+import type { QuintClientConfig } from "./quint-client-config.ts";
 
 const SEED = "0x2a";
 const MAX_STEPS = 8;
@@ -27,12 +29,6 @@ const RUN_TIMEOUT_MS = 30_000;
 const VERIFY_TIMEOUT_MS = 45_000;
 const SCENARIO_TIMEOUT_MS = 15_000;
 
-export interface QuintClientConfig {
-  readonly quintBin: string;
-  readonly methodOverride: string | undefined;
-  readonly apalacheDistSet: boolean;
-  readonly homeDirectory: string;
-}
 
 interface QuintRun {
   timedOut: boolean;

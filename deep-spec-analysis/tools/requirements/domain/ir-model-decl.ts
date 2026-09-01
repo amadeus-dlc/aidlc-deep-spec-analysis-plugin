@@ -10,288 +10,30 @@
 // ときの黙殺条件（isObject / typeof チェック）はパーサ側へ移り、ここに来る
 // 時点で型は確定している。
 
-import { type AttributeBound, type Expression, Expressions } from "../../kernel/domain/index.ts";
-import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
-import type { ObligationId } from "./obligation.ts";
-import type { ScenarioId } from "./scenario.ts";
-import type { BackgroundAssumptionId } from "./requirements-model.ts";
+import { type Expression, Expressions } from "../../kernel/domain/index.ts";
+import { IrBackgroundDecls } from "./ir-background-decls.ts";
+import { IrDeclaredValues } from "./ir-declared-values.ts";
+import { IrEntityDecls } from "./ir-entity-decls.ts";
+import type { IrModelDeclSeed } from "./ir-model-decl-seed.ts";
+import { IrObligationDecls } from "./ir-obligation-decls.ts";
+import { IrScenarioDecls } from "./ir-scenario-decls.ts";
 
-export type IrDeclTokenError = { readonly kind: "empty-ir-decl-token"; readonly raw: string };
 
-// decl 束のエンティティ名（well-formedness の重複・座標文言が使う）。
-export class IrEntityName {
-  readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
-  }
 
-  static parse(raw: string): Result<IrEntityName, IrDeclTokenError> {
-    if (raw === "") return err({ kind: "empty-ir-decl-token", raw });
-    return ok(new IrEntityName(raw));
-  }
 
-  static reconstitute(raw: string): IrEntityName {
-    return new IrEntityName(raw);
-  }
 
-  equals(other: IrEntityName): boolean {
-    return this.#value === other.#value;
-  }
 
-  asString(): string {
-    return this.#value;
-  }
-}
 
-export class IrAttributeName {
-  readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
-  }
 
-  static parse(raw: string): Result<IrAttributeName, IrDeclTokenError> {
-    if (raw === "") return err({ kind: "empty-ir-decl-token", raw });
-    return ok(new IrAttributeName(raw));
-  }
 
-  static reconstitute(raw: string): IrAttributeName {
-    return new IrAttributeName(raw);
-  }
 
-  equals(other: IrAttributeName): boolean {
-    return this.#value === other.#value;
-  }
 
-  asString(): string {
-    return this.#value;
-  }
-}
 
-// enum 属性の宣言値のコレクション（宣言順を保持——序数対応・文言順に効く）。
-export class IrDeclaredValues {
-  readonly #values: readonly string[];
 
-  private constructor(values: readonly string[]) {
-    this.#values = values;
-  }
 
-  static of(values: readonly string[]): IrDeclaredValues {
-    return new IrDeclaredValues([...values]);
-  }
 
-  add(value: string): IrDeclaredValues {
-    return new IrDeclaredValues([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<string> {
-    yield* this.#values;
-  }
-
-  includes(value: string): boolean {
-    return this.#values.includes(value);
-  }
-
-  toArray(): readonly string[] {
-    return this.#values;
-  }
-}
-
-// 型宣言が欠けた属性は kind: "" として届く（旧実装は type 欠落でも属性を
-// カタログへ登録した——参照解決の可否がそれで変わるため保存する）。
-export interface IrAttributeDecl {
-  readonly name: IrAttributeName;
-  readonly kind: string;
-  readonly values?: IrDeclaredValues;
-  readonly min?: AttributeBound;
-  readonly max?: AttributeBound;
-}
-
-export class IrAttributeDecls {
-  readonly #values: readonly IrAttributeDecl[];
-
-  private constructor(values: readonly IrAttributeDecl[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly IrAttributeDecl[]): IrAttributeDecls {
-    return new IrAttributeDecls([...values]);
-  }
-
-  add(value: IrAttributeDecl): IrAttributeDecls {
-    return new IrAttributeDecls([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<IrAttributeDecl> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly IrAttributeDecl[] {
-    return this.#values;
-  }
-}
-
-export interface IrEntityDecl {
-  readonly name: IrEntityName;
-  readonly attributes: IrAttributeDecls;
-}
-
-export class IrEntityDecls {
-  readonly #values: readonly IrEntityDecl[];
-
-  private constructor(values: readonly IrEntityDecl[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly IrEntityDecl[]): IrEntityDecls {
-    return new IrEntityDecls([...values]);
-  }
-
-  add(value: IrEntityDecl): IrEntityDecls {
-    return new IrEntityDecls([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<IrEntityDecl> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly IrEntityDecl[] {
-    return this.#values;
-  }
-}
-
-export interface IrTemporalDecl {
-  readonly assert?: Expression;
-  readonly from?: Expression;
-  readonly to?: Expression;
-}
-
-export interface IrObligationDecl {
-  readonly id: ObligationId;
-  readonly assert?: Expression;
-  readonly guard?: Expression;
-  readonly effect?: Expression;
-  readonly temporal?: IrTemporalDecl;
-}
-
-export class IrObligationDecls {
-  readonly #values: readonly IrObligationDecl[];
-
-  private constructor(values: readonly IrObligationDecl[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly IrObligationDecl[]): IrObligationDecls {
-    return new IrObligationDecls([...values]);
-  }
-
-  add(value: IrObligationDecl): IrObligationDecls {
-    return new IrObligationDecls([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<IrObligationDecl> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly IrObligationDecl[] {
-    return this.#values;
-  }
-}
-
-// bindings は宣言順を保つ組の列（Object.entries の順序がエラー順序に出る）。
-// 値は契約1 が許す JSON 値そのもので、型不一致の報告に JSON.stringify で
-// 現れるため素の値のまま運ぶ。
-export class IrBindingPairs {
-  readonly #values: readonly (readonly [string, unknown])[];
-
-  private constructor(values: readonly (readonly [string, unknown])[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly (readonly [string, unknown])[]): IrBindingPairs {
-    return new IrBindingPairs([...values]);
-  }
-
-  add(value: readonly [string, unknown]): IrBindingPairs {
-    return new IrBindingPairs([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<readonly [string, unknown]> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly (readonly [string, unknown])[] {
-    return this.#values;
-  }
-}
-
-export interface IrScenarioDecl {
-  readonly id: ScenarioId;
-  readonly bindings: IrBindingPairs;
-  readonly hasEvent: boolean;
-  readonly expect?: Expression;
-}
-
-export class IrScenarioDecls {
-  readonly #values: readonly IrScenarioDecl[];
-
-  private constructor(values: readonly IrScenarioDecl[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly IrScenarioDecl[]): IrScenarioDecls {
-    return new IrScenarioDecls([...values]);
-  }
-
-  add(value: IrScenarioDecl): IrScenarioDecls {
-    return new IrScenarioDecls([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<IrScenarioDecl> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly IrScenarioDecl[] {
-    return this.#values;
-  }
-}
-
-export interface IrBackgroundDecl {
-  readonly id: BackgroundAssumptionId;
-  readonly assert?: Expression;
-}
-
-export class IrBackgroundDecls {
-  readonly #values: readonly IrBackgroundDecl[];
-
-  private constructor(values: readonly IrBackgroundDecl[]) {
-    this.#values = values;
-  }
-
-  static of(values: readonly IrBackgroundDecl[]): IrBackgroundDecls {
-    return new IrBackgroundDecls([...values]);
-  }
-
-  add(value: IrBackgroundDecl): IrBackgroundDecls {
-    return new IrBackgroundDecls([...this.#values, value]);
-  }
-
-  *[Symbol.iterator](): Iterator<IrBackgroundDecl> {
-    yield* this.#values;
-  }
-
-  toArray(): readonly IrBackgroundDecl[] {
-    return this.#values;
-  }
-}
-
-export interface IrModelDeclSeed {
-  readonly entities: IrEntityDecls;
-  readonly obligations: IrObligationDecls;
-  readonly scenarios: IrScenarioDecls;
-  readonly background: IrBackgroundDecls;
-}
 
 interface AttributeType {
   readonly kind: string;
