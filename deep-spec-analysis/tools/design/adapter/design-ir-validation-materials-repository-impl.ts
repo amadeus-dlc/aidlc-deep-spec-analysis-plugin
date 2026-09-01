@@ -24,8 +24,8 @@ import { type Result, ok } from "../../kernel/infrastructure/index.ts";
 import { err as repoErr } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
+import { DesignAttributeDecl } from "../domain/index.ts";
 import type {
-  DesignAttributeDecl,
   DesignBackgroundDecl,
   DesignEntityDecl,
   DesignIgnoreDecl,
@@ -92,13 +92,13 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string") continue;
       const t = isObject(attr.type) ? attr.type : {};
-      attributes.push({
+      attributes.push(DesignAttributeDecl.reconstitute({
         name: DesignAttributeName.reconstitute(attr.name),
         kind: typeof t.kind === "string" ? t.kind : "",
         values: Array.isArray(t.values) ? DeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
         min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
         max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
-      });
+      }));
     }
     entities.push({ name: DesignEntityName.reconstitute(ent.name), attributes: DesignAttributeDecls.of(attributes) });
   }

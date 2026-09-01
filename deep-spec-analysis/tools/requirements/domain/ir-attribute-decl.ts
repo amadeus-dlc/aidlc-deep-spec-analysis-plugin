@@ -1,13 +1,62 @@
 import type { AttributeBound } from "../../kernel/domain/index.ts";
-import { IrAttributeName } from "./ir-attribute-name.ts";
-import { IrDeclaredValues } from "./ir-declared-values.ts";
+import { type IrAttributeName } from "./ir-attribute-name.ts";
+import type { IrDeclaredValues } from "./ir-declared-values.ts";
+import type { IrAttributeDeclSeed } from "./ir-attribute-decl-seed.ts";
 
-// 型宣言が欠けた属性は kind: "" として届く（旧実装は type 欠落でも属性を
-// カタログへ登録した——参照解決の可否がそれで変わるため保存する）。
-export interface IrAttributeDecl {
-  readonly name: IrAttributeName;
-  readonly kind: string;
-  readonly values?: IrDeclaredValues;
-  readonly min?: AttributeBound;
-  readonly max?: AttributeBound;
+// 属性宣言。型宣言が欠けた属性は kind: "" として届く（旧実装は type 欠落でも
+// 属性をカタログへ登録した——参照解決の可否がそれで変わるため保存する）。
+// 主従の裁定（2026-09-01、#71 波1）: 宣言は命令できる抽象データ型——
+// well-formedness の判事が吸い出していた判断を宣言自身が所有する。
+export class IrAttributeDecl {
+  readonly #name: IrAttributeName;
+  readonly #kind: string;
+  readonly #values: IrDeclaredValues | undefined;
+  readonly #min: AttributeBound | undefined;
+  readonly #max: AttributeBound | undefined;
+
+  private constructor(seed: IrAttributeDeclSeed) {
+    this.#name = seed.name;
+    this.#kind = seed.kind;
+    this.#values = seed.values;
+    this.#min = seed.min;
+    this.#max = seed.max;
+  }
+
+  static reconstitute(seed: IrAttributeDeclSeed): IrAttributeDecl {
+    return new IrAttributeDecl(seed);
+  }
+
+  // 同定面（座標組み立て・重複検査の材料）。
+  name(): IrAttributeName {
+    return this.#name;
+  }
+
+  boundsInverted(): boolean {
+    return this.#kind === "int" && this.#min !== undefined && this.#max !== undefined && this.#min.exceeds(this.#max);
+  }
+
+  boundsOutsideSafeRange(): boolean {
+    return (
+      (this.#min !== undefined && !Number.isSafeInteger(this.#min.asNumber())) ||
+      (this.#max !== undefined && !Number.isSafeInteger(this.#max.asNumber()))
+    );
+  }
+
+  admitsEnumLiteral(value: string): boolean {
+    return this.#kind === "enum" && (this.#values?.includes(value) ?? false);
+  }
+
+  // scenario binding の適合（bool / 安全整数 int / 宣言済み enum 値）。
+  fitsBinding(value: unknown): boolean {
+    return (
+      (this.#kind === "bool" && typeof value === "boolean") ||
+      (this.#kind === "int" && typeof value === "number" && Number.isSafeInteger(value)) ||
+      (this.#kind === "enum" && typeof value === "string" && (this.#values?.includes(value) ?? false))
+    );
+  }
+
+  // 文言材料（binding 不適合文言の "${kind} attribute" 描画点）。
+  kindLabel(): string {
+    return this.#kind;
+  }
 }
