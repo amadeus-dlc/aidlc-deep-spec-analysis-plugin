@@ -5,6 +5,6 @@ export { type SolverProbeClientConfig } from "./solver-probe-client-config.ts";
 export { SolverProbeClientImpl } from "./solver-probe-client-impl.ts";
 export { type RefcheckBackendClientConfig } from "./refcheck-backend-client-config.ts";
 export { RefcheckBackendClientImpl } from "./refcheck-backend-client-impl.ts";
-export { type DoctorWorkspaceRepositoryConfig } from "./doctor-workspace-repository-config.ts";
-export { DoctorWorkspaceRepositoryImpl } from "./doctor-workspace-repository-impl.ts";
+export { type DoctorWorkspaceClientConfig } from "./doctor-workspace-client-config.ts";
+export { DoctorWorkspaceClientImpl } from "./doctor-workspace-client-impl.ts";
 export { DoctorPresenter } from "./doctor-presenter.ts";

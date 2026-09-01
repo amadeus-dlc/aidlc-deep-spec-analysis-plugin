@@ -7,7 +7,7 @@ export { type VerificationTarget } from "./verification-target.ts";
 export { type DesignArtifactRef } from "./design-artifact-ref.ts";
 export { type FunctionalUnitFacts } from "./functional-unit-facts.ts";
 export { type FunctionalTarget } from "./functional-target.ts";
-export { type DoctorWorkspaceRepository } from "./doctor-workspace-repository.ts";
+export { type DoctorWorkspaceClient } from "./doctor-workspace-client.ts";
 export { CheckInstallationUseCase } from "./check-installation-usecase.ts";
 export { CheckSolversUseCase } from "./check-solvers-usecase.ts";
 export { CheckVerificationCoverageUseCase } from "./check-verification-coverage-usecase.ts";

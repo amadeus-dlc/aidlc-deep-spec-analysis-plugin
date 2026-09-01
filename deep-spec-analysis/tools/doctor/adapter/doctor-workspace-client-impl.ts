@@ -3,23 +3,23 @@ import { join } from "node:path";
 import { ContentHash } from "../../kernel/domain/index.ts";
 import type {
   DesignArtifactRef,
-  DoctorWorkspaceRepository,
+  DoctorWorkspaceClient,
   FunctionalTarget,
   FunctionalUnitFacts,
   VerificationTarget,
 } from "../usecase/index.ts";
-import type { DoctorWorkspaceRepositoryConfig } from "./doctor-workspace-repository-config.ts";
+import type { DoctorWorkspaceClientConfig } from "./doctor-workspace-client-config.ts";
 
 // aidlc ワークスペース走査の実 Gateway。旧 doctor の scopesOfStage /
 // scanVerificationCoverage / scanDesignDebt / scanFunctionalCoverage の
 // 読取部からの逐語移植——走査順（spaces/intents は readdir の自然順、unit は
 // 昇順）、try/catch の黙殺範囲、anchor がある時だけ requirements をハッシュ
 // する遅延、fence 抽出の正規表現はすべて凍結挙動。
-export class DoctorWorkspaceRepositoryImpl implements DoctorWorkspaceRepository {
+export class DoctorWorkspaceClientImpl implements DoctorWorkspaceClient {
   readonly #projectDir: string;
   readonly #root: string;
 
-  constructor(config: DoctorWorkspaceRepositoryConfig) {
+  constructor(config: DoctorWorkspaceClientConfig) {
     this.#projectDir = config.projectDir;
     this.#root = config.root;
   }
@@ -36,7 +36,7 @@ export class DoctorWorkspaceRepositoryImpl implements DoctorWorkspaceRepository 
     } catch {
       // fall through to the authored default
     }
-    return DoctorWorkspaceRepositoryImpl.#FALLBACK_STAGE_SCOPES;
+    return DoctorWorkspaceClientImpl.#FALLBACK_STAGE_SCOPES;
   }
 
   verificationScopes(): readonly string[] {

@@ -1,16 +1,16 @@
 import { StructuralDebt } from "../domain/index.ts";
 import type { DebtRow } from "../domain/index.ts";
-import type { DoctorWorkspaceRepository } from "./doctor-workspace-repository.ts";
+import type { DoctorWorkspaceClient } from "./doctor-workspace-client.ts";
 import type { RefcheckBackendClient } from "./refcheck-backend-client.ts";
 
 // 構造負債の走査（checks 配列の第 4 ブロック、report-only）。実在する設計
 // 成果物ごとに refcheck バックエンドを打診し、数えられたものだけを走査済み
 // 母数に数える（null は不算入——実行不能を 0 findings と混同しない）。
 export class CheckStructuralDebtUseCase {
-  readonly #workspace: DoctorWorkspaceRepository;
+  readonly #workspace: DoctorWorkspaceClient;
   readonly #backend: RefcheckBackendClient;
 
-  constructor(workspace: DoctorWorkspaceRepository, backend: RefcheckBackendClient) {
+  constructor(workspace: DoctorWorkspaceClient, backend: RefcheckBackendClient) {
     this.#workspace = workspace;
     this.#backend = backend;
   }

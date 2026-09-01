@@ -21,7 +21,7 @@ import {
 } from "./doctor/usecase/index.ts";
 import {
   DoctorPresenter,
-  DoctorWorkspaceRepositoryImpl,
+  DoctorWorkspaceClientImpl,
   HarnessFileClientImpl,
   RefcheckBackendClientImpl,
   SolverProbeClientImpl,
@@ -33,7 +33,7 @@ function main(): void {
   const root = join(projectDir, harnessDir);
 
   const presenter = new DoctorPresenter({ harnessDir });
-  const workspace = new DoctorWorkspaceRepositoryImpl({ projectDir, root });
+  const workspace = new DoctorWorkspaceClientImpl({ projectDir, root });
   const verdict = HealthVerdict.of([
     ...presenter.installation(new CheckInstallationUseCase(new HarnessFileClientImpl({ root })).execute()),
     ...presenter.solvers(

@@ -1,6 +1,6 @@
 import { UnitCoverage } from "../domain/index.ts";
 import type { RefinementStaleRow, UnitCoverageRow } from "../domain/index.ts";
-import type { DoctorWorkspaceRepository } from "./doctor-workspace-repository.ts";
+import type { DoctorWorkspaceClient } from "./doctor-workspace-client.ts";
 
 // 設計検証カバレッジの査定（checks 配列の第 5 ブロック、unit 粒度）＋
 // refinement 失効（phase 3）。unit はモデルの units[] に載り、実 backend 文書の
@@ -8,9 +8,9 @@ import type { DoctorWorkspaceRepository } from "./doctor-workspace-repository.ts
 // かった unit」は別物（PR #7 レビュー追補）。refinement 失効は要件モデルが
 // 設計検証より新しい intent（走査順——unit 行より先に並ぶ凍結順）。
 export class CheckFunctionalCoverageUseCase {
-  readonly #workspace: DoctorWorkspaceRepository;
+  readonly #workspace: DoctorWorkspaceClient;
 
-  constructor(workspace: DoctorWorkspaceRepository) {
+  constructor(workspace: DoctorWorkspaceClient) {
     this.#workspace = workspace;
   }
 

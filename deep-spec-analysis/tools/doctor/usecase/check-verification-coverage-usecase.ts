@@ -1,14 +1,14 @@
 import { CoverageAssessment, VerificationStaleness } from "../domain/index.ts";
 import type { CoverageRow } from "../domain/index.ts";
-import type { DoctorWorkspaceRepository } from "./doctor-workspace-repository.ts";
+import type { DoctorWorkspaceClient } from "./doctor-workspace-client.ts";
 
 // 要件検証カバレッジの査定（checks 配列の第 3 ブロック）。適格＝スコープ
 // 一致かつ requirements.md 実在（ゲートウェイが母数を絞る）。モデルか
 // findings が無ければ unverified、あれば鮮度判断（domain）で stale。
 export class CheckVerificationCoverageUseCase {
-  readonly #workspace: DoctorWorkspaceRepository;
+  readonly #workspace: DoctorWorkspaceClient;
 
-  constructor(workspace: DoctorWorkspaceRepository) {
+  constructor(workspace: DoctorWorkspaceClient) {
     this.#workspace = workspace;
   }
 

@@ -14,7 +14,7 @@ import {
 } from "../tools/doctor/domain/index.ts";
 import type { Check, ManifestEntry } from "../tools/doctor/domain/index.ts";
 import { CheckFunctionalCoverageUseCase } from "../tools/doctor/usecase/index.ts";
-import type { DoctorWorkspaceRepository } from "../tools/doctor/usecase/index.ts";
+import type { DoctorWorkspaceClient } from "../tools/doctor/usecase/index.ts";
 import { DoctorPresenter } from "../tools/doctor/adapter/index.ts";
 
 const h = (text: string): ContentHash => ContentHash.ofText(text);
@@ -181,7 +181,7 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
 
 describe("functional-coverage interactor — 判定と凍結順（stub repository 直駆動）", () => {
   test("units verify only through the model ledger AND backend checked[]; staleness by newest artifact mtime", () => {
-    const repo: DoctorWorkspaceRepository = {
+    const repo: DoctorWorkspaceClient = {
       verificationScopes: () => [],
       functionalScopes: () => ["feature"],
       verificationTargets: () => [],
