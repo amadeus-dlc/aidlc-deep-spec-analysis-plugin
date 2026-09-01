@@ -8,13 +8,8 @@
 import { type Expression, Expressions } from "../../kernel/domain/index.ts";
 import { BrReferenceIndex } from "./br-reference-index.ts";
 import { type BrRefs } from "./br-refs.ts";
-import { type DeclaredValues } from "./declared-values.ts";
+import { type DesignAttributeDecl } from "./design-attribute-decl.ts";
 import { type DesignUnitDecls } from "./design-unit-decls.ts";
-
-interface AttributeType {
-  readonly kind: string;
-  readonly values?: DeclaredValues;
-}
 
 export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
   const errors: string[] = [];
@@ -27,28 +22,27 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     unitNames.add(unitName);
 
     // Attribute catalogue for reference/enum checks.
-    const attrTypes = new Map<string, AttributeType>();
+    // 主従の裁定（#71 波1）: カタログは宣言そのものを保持し、判断は宣言へ
+    // 命じる——判事は文言（凍結面）だけを所有する。
+    const attrTypes = new Map<string, DesignAttributeDecl>();
     for (const ent of unitView.entities) {
       const attrNames = new Set<string>();
       for (const attr of ent.attributes) {
-        const coord = `${ent.name.asString()}.${attr.name.asString()}`;
-        if (attrNames.has(attr.name.asString())) errors.push(where(`duplicate attribute "${coord}"`));
-        attrNames.add(attr.name.asString());
-        if (attr.kind === "int" && (attr.min === undefined || attr.max === undefined)) {
+        const coord = `${ent.name.asString()}.${attr.name().asString()}`;
+        if (attrNames.has(attr.name().asString())) errors.push(where(`duplicate attribute "${coord}"`));
+        attrNames.add(attr.name().asString());
+        if (attr.lacksIntBounds()) {
           errors.push(
             where(`${coord}: int attributes require min and max — the Quint backend needs bounded domains`),
           );
         }
-        if (attr.kind === "int" && attr.min !== undefined && attr.max !== undefined && attr.min.exceeds(attr.max)) {
+        if (attr.boundsInverted()) {
           errors.push(where(`${coord}: min > max`));
         }
-        if (
-          (attr.min !== undefined && !Number.isSafeInteger(attr.min.asNumber())) ||
-          (attr.max !== undefined && !Number.isSafeInteger(attr.max.asNumber()))
-        ) {
+        if (attr.boundsOutsideSafeRange()) {
           errors.push(where(`${coord}: bounds must be safe integers`));
         }
-        attrTypes.set(coord, { kind: attr.kind, values: attr.values });
+        attrTypes.set(coord, attr);
       }
     }
 
@@ -90,13 +84,13 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
           const sibling = boundEnum.get(node);
           const siblingType = sibling === undefined ? undefined : attrTypes.get(sibling);
           if (siblingType !== undefined) {
-            if (siblingType.kind !== "enum") {
+            if (!siblingType.isEnum()) {
               errors.push(where(`${ctx}: enum literal "${node.value}" is compared against non-enum attribute "${sibling}"`));
-            } else if (!(siblingType.values?.includes(node.value) ?? false)) {
+            } else if (!siblingType.admitsEnumLiteral(node.value)) {
               errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of "${sibling}"`));
             }
           } else if (sibling === undefined) {
-            const known = [...attrTypes.values()].some((t) => t.kind === "enum" && t.values?.includes(node.value as string));
+            const known = [...attrTypes.values()].some((t) => t.admitsEnumLiteral(node.value as string));
             if (!known) errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of any declared enum attribute`));
           }
           // An unresolvable sibling ref is already reported by the ref check.
@@ -142,13 +136,13 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
         errors.push(where(`${ctx}: lifecycle attribute "${attrPath}" is not declared`));
         continue;
       }
-      if (attr.kind !== "enum" || !attr.values) {
+      const states = attr.enumStates();
+      if (states === null) {
         errors.push(where(`${ctx}: lifecycle attribute "${attrPath}" is not an enum — its values are the state set`));
         continue;
       }
-      const states = new Set(attr.values ?? []);
       for (const s of sm.initial) {
-        if (!states.has(s)) {
+        if (!states.includes(s)) {
           errors.push(where(`${ctx}: initial state "${s}" is not a value of ${attrPath}`));
         }
       }
@@ -158,7 +152,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
         dup(tr.id.asString(), tctx);
         collectBr(tr.brRefs);
         for (const [k, v] of [["from", tr.from], ["to", tr.to]] as const) {
-          if (v !== undefined && !states.has(v)) {
+          if (v !== undefined && !states.includes(v)) {
             errors.push(where(`${tctx}: ${k} state "${v}" is not a value of ${attrPath}`));
           }
         }
@@ -176,7 +170,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
         }
       }
       for (const ig of sm.ignores) {
-        if (!states.has(ig.state)) {
+        if (!states.includes(ig.state)) {
           errors.push(where(`${ctx}: ignores state "${ig.state}" is not a value of ${attrPath}`));
         }
         if (transitionCells.has(`${ig.state}|${ig.trigger.asString()}`)) {
@@ -197,11 +191,8 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
           errors.push(where(`${ctx}: binding for unknown attribute "${path}"`));
           continue;
         }
-        const ok =
-          (t.kind === "bool" && typeof val === "boolean") ||
-          (t.kind === "int" && typeof val === "number" && Number.isSafeInteger(val)) ||
-          (t.kind === "enum" && typeof val === "string" && (t.values?.includes(val) ?? false));
-        if (!ok) errors.push(where(`${ctx}: binding value ${JSON.stringify(val)} does not fit ${t.kind} attribute "${path}"`));
+        const ok = t.fitsBinding(val);
+        if (!ok) errors.push(where(`${ctx}: binding value ${JSON.stringify(val)} does not fit ${t.kindLabel()} attribute "${path}"`));
       }
       if (sc.expect !== undefined) checkExpr(sc.expect, ctx, sc.hasEvent);
     }

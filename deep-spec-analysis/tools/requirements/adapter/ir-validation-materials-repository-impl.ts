@@ -21,7 +21,7 @@ import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
   type FrRefClaim,
-  type IrAttributeDecl,
+  IrAttributeDecl,
   type IrBackgroundDecl,
   type IrEntityDecl,
   FrRefs,
@@ -64,13 +64,13 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string") continue;
       const t = isObject(attr.type) ? attr.type : {};
-      attributes.push({
+      attributes.push(IrAttributeDecl.reconstitute({
         name: IrAttributeName.reconstitute(attr.name),
         kind: typeof t.kind === "string" ? t.kind : "",
         values: Array.isArray(t.values) ? IrDeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
         min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
         max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
-      });
+      }));
     }
     entities.push({ name: IrEntityName.reconstitute(ent.name), attributes: IrAttributeDecls.of(attributes) });
   }

@@ -20,6 +20,7 @@ import {
   BrRefs,
   DeclaredValues,
   type DesignBackgroundDecl,
+  DesignAttributeDecl,
   DesignAttributeDecls,
   DesignBackgroundDecls,
   DesignEntityDecls,
@@ -63,6 +64,7 @@ import {
   type IrBackgroundDecl,
   type IrObligationDecl,
   type IrScenarioDecl,
+  IrAttributeDecl,
   IrAttributeDecls,
   IrBackgroundDecls,
   IrBindingPairs,
@@ -399,7 +401,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
         (overrides.entities ?? []).map((e) => ({
           name: IrEntityName.reconstitute(e.name),
           attributes: IrAttributeDecls.of(
-            e.attributes.map((a) => ({
+            e.attributes.map((a) => IrAttributeDecl.reconstitute({
               ...a,
               name: IrAttributeName.reconstitute(a.name),
               min: a.min === undefined ? undefined : AttributeBound.reconstitute(a.min),
@@ -603,7 +605,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
         (overrides.entities ?? []).map((e) => ({
           name: DesignEntityName.reconstitute(e.name),
           attributes: DesignAttributeDecls.of(
-            e.attributes.map((a) => ({
+            e.attributes.map((a) => DesignAttributeDecl.reconstitute({
               ...a,
               name: DesignAttributeName.reconstitute(a.name),
               min: a.min === undefined ? undefined : AttributeBound.reconstitute(a.min),
@@ -896,7 +898,7 @@ describe("design decl collections (first-class operations)", () => {
     ]);
     expect(bindings.toArray().length).toBe(2);
 
-    const attr = { name: DesignAttributeName.reconstitute("state"), kind: "enum", values: DeclaredValues.of(["open"]) };
+    const attr = DesignAttributeDecl.reconstitute({ name: DesignAttributeName.reconstitute("state"), kind: "enum", values: DeclaredValues.of(["open"]) });
     const attrs = DesignAttributeDecls.of([]).add(attr);
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
@@ -961,7 +963,7 @@ describe("contract-1 decl collections (first-class operations)", () => {
     expect(values.includes("z")).toBe(false);
     expect(values.toArray()).toEqual(["a", "b"]);
 
-    const attr = { name: IrAttributeName.reconstitute("x"), kind: "bool" };
+    const attr = IrAttributeDecl.reconstitute({ name: IrAttributeName.reconstitute("x"), kind: "bool" });
     const attrs = IrAttributeDecls.of([]).add(attr);
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);

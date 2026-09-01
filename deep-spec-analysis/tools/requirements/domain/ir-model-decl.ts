@@ -11,8 +11,8 @@
 // 時点で型は確定している。
 
 import { type Expression, Expressions } from "../../kernel/domain/index.ts";
+import { type IrAttributeDecl } from "./ir-attribute-decl.ts";
 import { IrBackgroundDecls } from "./ir-background-decls.ts";
-import { IrDeclaredValues } from "./ir-declared-values.ts";
 import { IrEntityDecls } from "./ir-entity-decls.ts";
 import type { IrModelDeclSeed } from "./ir-model-decl-seed.ts";
 import { IrObligationDecls } from "./ir-obligation-decls.ts";
@@ -34,11 +34,6 @@ import { IrScenarioDecls } from "./ir-scenario-decls.ts";
 
 
 
-
-interface AttributeType {
-  readonly kind: string;
-  readonly values?: IrDeclaredValues;
-}
 
 export class IrModelDecl {
   readonly #entities: IrEntityDecls;
@@ -62,7 +57,9 @@ export class IrModelDecl {
   // modelWellFormednessErrors の逐語移植）。
   wellFormednessErrors(): string[] {
     const errors: string[] = [];
-    const attrTypes = new Map<string, AttributeType>();
+    // 主従の裁定（#71 波1）: カタログは宣言そのものを保持し、判断は宣言へ
+    // 命じる——判事は文言（凍結面）だけを所有する。
+    const attrTypes = new Map<string, IrAttributeDecl>();
 
     const entityNames = new Set<string>();
     for (const ent of this.#entities) {
@@ -71,21 +68,18 @@ export class IrModelDecl {
       entityNames.add(entName);
       const attrNames = new Set<string>();
       for (const attr of ent.attributes) {
-        const attrName = attr.name.asString();
+        const attrName = attr.name().asString();
         if (attrNames.has(attrName)) {
           errors.push(`schema: duplicate attribute "${entName}.${attrName}"`);
         }
         attrNames.add(attrName);
-        if (attr.kind === "int" && attr.min !== undefined && attr.max !== undefined && attr.min.exceeds(attr.max)) {
+        if (attr.boundsInverted()) {
           errors.push(`schema: ${entName}.${attrName}: min > max`);
         }
-        if (
-          (attr.min !== undefined && !Number.isSafeInteger(attr.min.asNumber())) ||
-          (attr.max !== undefined && !Number.isSafeInteger(attr.max.asNumber()))
-        ) {
+        if (attr.boundsOutsideSafeRange()) {
           errors.push(`schema: ${entName}.${attrName}: bounds must be safe integers`);
         }
-        attrTypes.set(`${entName}.${attrName}`, { kind: attr.kind, values: attr.values });
+        attrTypes.set(`${entName}.${attrName}`, attr);
       }
     }
 
@@ -115,7 +109,7 @@ export class IrModelDecl {
           }
         }
         if (node.op === "enum" && typeof node.value === "string") {
-          const known = [...attrTypes.values()].some((t) => t.kind === "enum" && (t.values?.includes(node.value as string) ?? false));
+          const known = [...attrTypes.values()].some((t) => t.admitsEnumLiteral(node.value as string));
           if (!known) {
             errors.push(`${where}: enum literal "${node.value}" is not a value of any declared enum attribute`);
           }
@@ -152,12 +146,8 @@ export class IrModelDecl {
           errors.push(`${where}: binding for unknown attribute "${path}"`);
           continue;
         }
-        const ok =
-          (t.kind === "bool" && typeof val === "boolean") ||
-          (t.kind === "int" && typeof val === "number" && Number.isSafeInteger(val)) ||
-          (t.kind === "enum" && typeof val === "string" && (t.values?.includes(val) ?? false));
-        if (!ok) {
-          errors.push(`${where}: binding value ${JSON.stringify(val)} does not fit ${t.kind} attribute "${path}"`);
+        if (!t.fitsBinding(val)) {
+          errors.push(`${where}: binding value ${JSON.stringify(val)} does not fit ${t.kindLabel()} attribute "${path}"`);
         }
       }
       if (sc.expect !== undefined) checkExpr(sc.expect, where, sc.hasEvent);

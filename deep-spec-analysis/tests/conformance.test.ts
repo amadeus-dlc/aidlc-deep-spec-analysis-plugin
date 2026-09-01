@@ -141,7 +141,9 @@ describe("backend conformance (expected findings, byte-for-byte)", () => {
     expect(run.status).toBe(0);
     expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, findings_count: 2, method: "simulation" });
     expect(readFileSync(join(verifyDir, "quint.json"), "utf-8")).toBe(readFileSync(join(expected, "quint.json"), "utf-8"));
-  });
+    // 遅い CI ランナーで quint シミュレーションが 5s を超えることがある——
+    // 設計側の双子（design-verify）と同じ余裕を持つ（bun 既定 5s はフレーク源）。
+  }, 240_000);
 
   test("cross-check converges with the expected comparison surface and no disagreement", () => {
     if (!nodeAvailable) {

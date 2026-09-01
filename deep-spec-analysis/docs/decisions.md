@@ -1328,3 +1328,33 @@ Evidence: full suite green with the coverage floor, goldens untouched,
 doctor stdout byte-identical on both baselines (dev repo and the design
 fixture — the behavior change is confined to genuinely old artifacts),
 validator Errors: 0, 7 harness builds.
+
+## The master-servant ruling — getters are for I/O contexts; the model must be commandable (2026-09-01, #71)
+
+A property-only interface cannot be commanded, so callers pump the data
+out and judge it themselves — the master-servant inversion of the
+domain-model pattern (an anemic domain model). The ruling: **getters
+(property reads) belong only to contexts that do I/O with the model
+(serializers / parsers / presenters / compilers — the model⇄bytes
+boundary) and to construction doors (Seeds). Reading model properties
+to make decisions in the domain or usecase layer is a Tell-Don't-Ask
+violation.** The measured inventory — ~1,197 sites across 142 files —
+is inverted in waves under the #71 ledger (class-ification with `#`
+fields makes violations physically impossible at the tsc level: that is
+the enforcement mechanism).
+
+- **Wave 1 (the archetype)**: `IrAttributeDecl` and
+  `DesignAttributeDecl` become commandable classes. The judgments the
+  well-formedness twins used to pump out — the three bound states
+  (missing / inverted / outside the safe range), binding fit, enum
+  literal membership, the machine state face — are owned by the
+  declaration itself; the judges own only the wordings (the frozen
+  surface) and their order. The catalogues drop the interim
+  `AttributeType` struct and hold the declarations; the `new
+  Set(values)` film folds into `enumStates()`/`includes`.
+- Wordings and emission order are verbatim — proven by untouched
+  goldens and an empty base↔head parity `diff -r`. Both classes sit at
+  100% under the 90% floor.
+
+Evidence: 398 tests / 0 fail, goldens untouched, parity empty,
+validator Errors: 0, 7 harness builds.

@@ -1225,3 +1225,27 @@ tombstones（後方互換の残骸を**消す**反・互換機構——ファイ
 証拠：全スイート green（カバレッジ床込み）・golden 無傷・doctor stdout は
 dev repo／design fixture の両基準でバイト同一（挙動変化は真の旧成果物のみ
 に限定）・validator Errors: 0・7 ハーネスビルド。
+
+## 主従の裁定 — getter は I/O 文脈専用、モデルは命令できる型にする（2026-09-01、#71）
+
+プロパティだけの interface は命令できない。だから呼び手がデータを吸い出して
+自前で判断する——ドメインモデルパターンの主従逆転（anemic domain model）で
+ある。裁定：**getter（プロパティ読み）はモデルを I/O する文脈
+（serializer／parser／presenter／コンパイラ＝モデル⇄バイト境界）と構築ドア
+（Seed）専用。domain／usecase 層でモデルのプロパティを読んで判断するのは
+すべて Tell-Don't-Ask 違反**。機械走査の実測 約 1,197 箇所／142 ファイル
+を #71 の台帳で波状に反転する（class 化は `#` フィールドで違反を tsc レベルで
+物理的に不可能にする——これが執行機構）。
+
+- **波 1（原器）**: `IrAttributeDecl`・`DesignAttributeDecl` を命令できる
+  class へ。well-formedness 双子（ir-model-decl／design-well-formedness）が
+  吸い出していた判断——bounds 三態（欠落・逆転・非安全域）・binding 適合・
+  enum リテラル所属・machine 状態面——を宣言自身が所有し、判事は文言
+  （凍結面）と発生順だけを所有する。カタログは中間構造体 `AttributeType` を
+  廃して宣言そのものを保持し、`new Set(values)` の膜も `enumStates()`／
+  `includes` へ畳んだ。
+- 文言・発生順は逐語不変——golden 無傷・base↔head パリティ `diff -r` 空で
+  証明。両 class は 90% 床下で 100%。
+
+証拠：398 tests / 0 fail・golden 無傷・パリティ空・validator Errors: 0・
+7 ハーネスビルド。
