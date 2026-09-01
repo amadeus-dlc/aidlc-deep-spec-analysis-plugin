@@ -21,7 +21,7 @@ export class CheckVerificationCoverageUseCase {
         problems.push({ space: t.space, intent: t.intent, state: "unverified" });
         continue;
       }
-      const stale = VerificationStaleness.of({ anchor: t.anchor, sourceNewerThanModel: t.sourceNewerThanModel }).isStale();
+      const stale = VerificationStaleness.of({ anchor: t.anchor }).isStale();
       if (stale) problems.push({ space: t.space, intent: t.intent, state: "stale" });
     }
     return CoverageAssessment.of({ eligible: targets.length, problems, scopes });

@@ -1203,3 +1203,25 @@ Errors: 0・7 ハーネスビルド。
 
 証拠：全スイート green・golden 無傷・base↔head パリティ `diff -r` 空・
 ストレス 48/48 バイト一致・validator Errors: 0・7 ハーネスビルド。
+
+## 後方互換コード削除の裁定 — 旧成果物を救う経路は持たない（2026-09-01）
+
+「後方互換コードは削除せよ」のオーナー裁定で全ツリーを監査した。削除対象は
+1 件：doctor の **mtime フォールバック**（sourceDigest anchor を持たない
+「anchor 導入以前のモデル」を mtime 比較で救う経路）。ir-valid の
+`SourceAnchor` は sourceDigest 必須を強制しており、anchor なしモデルは現行
+契約で invalid——この経路は旧成果物専用の互換コードだった。削除後は
+**anchor なし＝無条件 stale**（再検証が digest を刻む）。
+`VerificationStaleness` は sourceDigest 照合のみの純粋判断になり、
+`VerificationTarget` から mtime 材料が消えた。
+
+**非該当と裁定した線引き**（互換コードではない）：stage frontmatter 欠如時の
+authored default（劣化契約）・node→bun のランタイムフォールバック
+（可用性）・`findingTarget(fallback)`（不正入力の素材選択）・kind-rank の
+「順序互換」（互換性の機械証明であってコードでない）・install.ts の
+tombstones（後方互換の残骸を**消す**反・互換機構——ファイル廃止時の追記
+規律ごと維持）。
+
+証拠：全スイート green（カバレッジ床込み）・golden 無傷・doctor stdout は
+dev repo／design fixture の両基準でバイト同一（挙動変化は真の旧成果物のみ
+に限定）・validator Errors: 0・7 ハーネスビルド。
