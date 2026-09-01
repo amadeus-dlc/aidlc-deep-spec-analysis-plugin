@@ -4,7 +4,6 @@
 // 逐語移植——自由関数は DesignEventCatalog.of（構築）と自身の照会になった
 // （OOUI 裁定）。
 
-import { Expressions } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "../../design/domain/index.ts";
 import type { DesignUnit } from "../../design/domain/index.ts";
@@ -27,12 +26,13 @@ export class DesignEventCatalog {
     for (const sm of u.machines()) {
       const attrPath = DesignMachines.attrPathOf(sm);
       for (const tr of sm.transitions) {
-        const guard: Expression = tr.guard ? { op: "and", args: [Expressions.eqRef(attrPath, false, tr.from), tr.guard] } : Expressions.eqRef(attrPath, false, tr.from);
+        const guard: Expression = tr.loweredGuard(attrPath);
         const effectAssign = new Map<string, Expression>();
-        effectAssign.set(attrPath, { op: "enum", value: tr.to });
-        if (tr.effect) {
+        effectAssign.set(...tr.stateAssignment(attrPath));
+        const explicitEffect = tr.effect();
+        if (explicitEffect !== undefined) {
           try {
-            for (const [path, term] of EffectAssignments.ofEffect(tr.effect)) {
+            for (const [path, term] of EffectAssignments.ofEffect(explicitEffect)) {
               const [a, b] = term.args ?? [];
               const rhs = a?.op === "ref" && a.prime === true ? b : a;
               if (rhs) effectAssign.set(path, rhs);
@@ -42,7 +42,7 @@ export class DesignEventCatalog {
             // シミュレーションは下流の SMT コンパイルで fail closed になる。
           }
         }
-        out.set(tr.id.asString(), { guard, effectAssign: DesignAssignments.of(effectAssign) });
+        out.set(tr.id().asString(), { guard, effectAssign: DesignAssignments.of(effectAssign) });
       }
     }
     for (const ob of u.obligations()) {

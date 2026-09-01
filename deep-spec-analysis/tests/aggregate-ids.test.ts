@@ -17,6 +17,8 @@ import {
   BrRefs,
   DesignIgnores,
   DesignModelId,
+  DesignIgnore,
+  DesignTransition,
   DesignTransitions,
   DesignUnitId,
   InitialStates,
@@ -248,7 +250,7 @@ describe("design first-class collections", () => {
     attribute: DesignAttributeName.reconstitute("s"),
     initial: InitialStates.of(["a"]),
     deterministic: true,
-    transitions: DesignTransitions.of([{ id: DesignTransitionId.reconstitute("TR-1"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) }]),
+    transitions: DesignTransitions.of([DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-1"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) })]),
     ignores: DesignIgnores.of([]),
   };
 
@@ -329,16 +331,16 @@ describe("requirements value collections (first-class operations)", () => {
 
 describe("design part collections (first-class operations)", () => {
   test("DesignTransitions and DesignIgnores own their frozen orders under add", () => {
-    const t1 = { id: DesignTransitionId.reconstitute("TR-2"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) };
-    const t2 = { id: DesignTransitionId.reconstitute("TR-10"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) };
+    const t1 = DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-2"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) });
+    const t2 = DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-10"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) });
     const trs = DesignTransitions.of([t2]).add(t1);
     expect([...trs].length).toBe(2);
     expect(trs.ids()).toEqual(["TR-10", "TR-2"]);
-    expect(trs.sortedCanonically().toArray().map((t) => t.id.asString())).toEqual(["TR-2", "TR-10"]);
+    expect(trs.sortedCanonically().toArray().map((t) => t.id().asString())).toEqual(["TR-2", "TR-10"]);
 
-    const igs = DesignIgnores.of([{ state: "y", trigger: TriggerName.reconstitute("go"), reason: "" }]).add({ state: "x", trigger: TriggerName.reconstitute("go"), reason: "" });
+    const igs = DesignIgnores.of([DesignIgnore.reconstitute({ state: "y", trigger: TriggerName.reconstitute("go"), reason: "" })]).add(DesignIgnore.reconstitute({ state: "x", trigger: TriggerName.reconstitute("go"), reason: "" }));
     expect([...igs].length).toBe(2);
-    expect(igs.sortedByStateTrigger().toArray().map((i) => i.state)).toEqual(["x", "y"]);
+    expect(igs.sortedByStateTrigger().toArray().map((i) => i.state())).toEqual(["x", "y"]);
     expect(igs.toArray().length).toBe(2);
   });
 });

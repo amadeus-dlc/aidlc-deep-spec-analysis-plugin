@@ -27,7 +27,7 @@ export class DesignIgnores {
   // 正規化は重複 (state,trigger)——well-formedness が collision として報告——の
   // 安定順を変え得るため PR10 の凍結台帳で扱う）。
   sortedByStateTrigger(): DesignIgnores {
-    return new DesignIgnores([...this.#values].sort((a, b) => (`${a.state}/${a.trigger.asString()}` < `${b.state}/${b.trigger.asString()}` ? -1 : 1)));
+    return new DesignIgnores([...this.#values].sort((a, b) => (`${a.state()}/${a.trigger().asString()}` < `${b.state()}/${b.trigger().asString()}` ? -1 : 1)));
   }
 
   toArray(): readonly DesignIgnore[] {

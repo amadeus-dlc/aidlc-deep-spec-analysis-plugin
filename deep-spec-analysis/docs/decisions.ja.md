@@ -1314,3 +1314,13 @@ getter しかない data model であり、同じ病巣として台帳に載る�
 122 中 108。`BackgroundAssumption`／`DesignBackgroundAssumption`／
 `LoweredBackground` は adapter が外部形式へ射影する消費（公認）に留まる
 ため台帳に残し、波ごとの個別裁定を待つ。
+
+波 5（同 PR）: `AttributeMapping` が α置換の材料（enum 比較の展開・
+参照への代入・抽象フレーム等式）と全域性チェック（欠けケース・
+生成値の範囲外）を所有する——`AlphaContext` は索引と未カバー検出、
+`UnitRefinementPlan` は gap 文言だけを担う。さらに
+`DesignTransition`／`DesignIgnore` の compile-down 意味論
+（暗黙の `state==from` ガード ∧ `state'=to` 効果、ignore ⇒ 明示
+no-op event）を、重複していた2箇所（`buildLowering` と
+`DesignEventCatalog.of`）から型自身へ戻す。台帳から 3 エントリを
+回収し、残債は 122 中 105。

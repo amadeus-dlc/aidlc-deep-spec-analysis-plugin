@@ -1,13 +1,13 @@
 // design/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
 export { type DesignValue } from "./design-value.ts";
-export { type DesignTransition } from "./design-transition.ts";
+export { DesignTransition } from "./design-transition.ts";
 export { DesignTransitionId } from "./design-transition-id.ts";
 export { DesignTransitions } from "./design-transitions.ts";
 export { type DesignMachine } from "./design-machine.ts";
 export { DesignAttributeName } from "./design-attribute-name.ts";
 export { DesignEntityName } from "./design-entity-name.ts";
-export { type DesignIgnore } from "./design-ignore.ts";
+export { DesignIgnore } from "./design-ignore.ts";
 export { DesignIgnores } from "./design-ignores.ts";
 export { DesignMachineId } from "./design-machine-id.ts";
 export { DesignMachines } from "./design-machines.ts";

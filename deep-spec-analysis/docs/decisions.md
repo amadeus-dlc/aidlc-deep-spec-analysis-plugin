@@ -1437,3 +1437,15 @@ loops). 2 ledger entries reclaimed — the ledger holds 108 of 122.
 `BackgroundAssumption` / `DesignBackgroundAssumption` /
 `LoweredBackground` stay on the ledger: their consumers are adapters
 projecting to external forms (sanctioned), pending a per-wave ruling.
+
+Wave 5 (same PR): `AttributeMapping` owns its alpha-substitution
+material (enum-comparison expansion, reference substitution, the
+abstract-frame equality) and its totality checks (missing cases,
+produced values outside the requirements values) — `AlphaContext`
+keeps only the index and the uncovered-attribute detection, and
+`UnitRefinementPlan` keeps only the gap wordings. And the compile-down
+semantics of `DesignTransition` / `DesignIgnore` (implicit
+`state==from` guard ∧ `state'=to` effect; ignore ⇒ explicit no-op
+event) move from the two duplicated assembly sites
+(`buildLowering` and `DesignEventCatalog.of`) into the types
+themselves. 3 ledger entries reclaimed — the ledger holds 105 of 122.
