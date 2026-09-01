@@ -4,7 +4,7 @@
 // ir-valid の errors[]・契約2 の unavailable.reason として golden バイトに
 // 現れるため、文言は「含む」ではなく完全一致で固定する。
 
-import { ContentHash, RequirementIds } from "../tools/kernel/domain/index.ts";
+import { AttributeBound, ContentHash, RequirementIds } from "../tools/kernel/domain/index.ts";
 import { describe, expect, test } from "bun:test";
 import {
   canonicalStringify,
@@ -15,6 +15,7 @@ import {
   type Json,
   validateSchema,
 } from "../tools/kernel/adapter/index.ts";
+import { smtIntOf, smtLit, smtName, smtVar } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok, unreachable } from "../tools/kernel/infrastructure/index.ts";
 import { Expressions, IdOrder, Names, TargetIds } from "../tools/kernel/domain/index.ts";
 
@@ -264,5 +265,43 @@ describe("companion seals", () => {
     expect(IdOrder.isSealed()).toBe(true);
     expect(Names.isSealed()).toBe(true);
     expect(Expressions.isSealed()).toBe(true);
+  });
+});
+
+describe("smt-symbols — shared rendering vocabulary (PR8, thaw #34 item 4)", () => {
+  test("smtVar / smtName render the frozen encodings", () => {
+    expect(smtVar("order.qty", false)).toBe("v_order_qty");
+    expect(smtVar("order.qty", true)).toBe("p_order_qty");
+    expect(smtName("ob", "OB-1")).toBe("ob_OB_1");
+  });
+
+  test("smtLit stays byte-identical in the safe range and exact beyond it", () => {
+    expect(smtLit(0)).toBe("0");
+    expect(smtLit(42)).toBe("42");
+    expect(smtLit(-7)).toBe("(- 7)");
+    expect(smtLit(Number.MAX_SAFE_INTEGER)).toBe("9007199254740991");
+    expect(smtLit(-Number.MAX_SAFE_INTEGER)).toBe("(- 9007199254740991)");
+    // 範囲外の整数は String(n) だと "1e+21"（SMT-LIB 数字列でない）に落ちる
+    // ——BigInt 経由の正確な十進で描画する。
+    expect(smtLit(1e21)).toBe("1000000000000000000000");
+    expect(smtLit(-1e21)).toBe("(- 1000000000000000000000)");
+    // 非整数は呼び手のガードが弾く前提で従来描画を保存。
+    expect(smtLit(1.5)).toBe("1.5");
+  });
+
+  test("smtIntOf decodes both numeral forms", () => {
+    expect(smtIntOf("42")).toBe(42);
+    expect(smtIntOf("(- 7)")).toBe(-7);
+  });
+});
+
+describe("attribute-bound — the parse door gates integer sanity (thaw #34 item 4)", () => {
+  test("safe integers pass; non-integers and unsafe magnitudes carry their material", () => {
+    const ok = AttributeBound.parse(7);
+    expect(ok.ok && ok.value.asNumber()).toBe(7);
+    const frac = AttributeBound.parse(1.5);
+    expect(!frac.ok && frac.error).toEqual({ kind: "non-integer-bound", raw: 1.5 });
+    const huge = AttributeBound.parse(1e21);
+    expect(!huge.ok && huge.error).toEqual({ kind: "unsafe-bound", raw: 1e21 });
   });
 });

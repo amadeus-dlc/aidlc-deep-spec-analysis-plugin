@@ -15,9 +15,14 @@ export function smtName(prefix: string, id: string): string {
   return `${prefix}_${id.replace(/[^A-Za-z0-9_]/g, "_")}`;
 }
 
-// SMT-LIB の整数リテラル描画（負数は (- n) 形——境界描画・逐語）。
+// SMT-LIB の整数リテラル描画（負数は (- n) 形——境界描画・逐語）。安全整数
+// 範囲内は従来とバイト同一。範囲外の整数（1e21 等——double としては正確）は
+// String(n) が "1e+21" と指数表記に落ちて SMT-LIB 数字列でなくなるため、
+// BigInt 経由で正確な十進を描画する（凍結解除 #34 項 4）。非整数は呼び手の
+// ガードが凍結文言で弾く——ここでは従来描画を保存する。
 export function smtLit(n: number): string {
-  return n < 0 ? `(- ${-n})` : String(n);
+  if (!Number.isInteger(n)) return n < 0 ? `(- ${-n})` : String(n);
+  return n < 0 ? `(- ${BigInt(-n)})` : String(BigInt(n));
 }
 
 // smtLit の逆——z3 テキストモデルの整数値の復号（(- n) 形を含む）。

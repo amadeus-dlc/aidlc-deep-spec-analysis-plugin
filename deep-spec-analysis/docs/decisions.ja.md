@@ -1107,3 +1107,48 @@ domain / usecase / adapter に層化され、entry は env 読取と配線だけ
 
 証拠：tsc clean・全スイート green（per-file 90% 床込み）・architecture
 スイート違反ゼロ・validator Errors: 0・7 ハーネスビルド。
+
+## 凍結解除 — 移行が byte-freeze で運んだ 7 つのギャップを裁く（2026-09-01、#34・#38）
+
+移行完了（#12、PR10 #23）を受け、#34（verify-smt 4 件）と #38
+（refinement 3 件）の台帳を解凍した。結末：**golden もパリティも 1 バイトも
+動かなかった**——全ギャップが劣化経路・異常入力の面だったため、修正は新しい
+観測面（新文言・新 skip・降格）を足すだけで、健全経路のバイトは保存された。
+golden 再生成は不要のまま両台帳を閉じる。
+
+- **#34 項 1（smtVar 衝突）**: 特殊文字はスキーマの identifier パターン
+  （`^[a-z][a-zA-Z0-9_]*$`）が当時から締めており、生きていたのは下線衝突
+  （`a.b_c` と `a_b.c` → 同じ `v_a_b_c`）だけ。両 well-formedness
+  （requirements / design）に衝突検査を追加——新凍結文言
+  `attribute paths "…" and "…" collide under the solver variable encoding
+  (dots become underscores)`（req 側は `schema: ` 接頭辞つき）。
+- **#34 項 2（sibling 無検証キャスト）**: wave 4b の明示写像化で解消済みと
+  判明——現行 `parseSiblingReportDocument` は全要素を filter/typeof で選別
+  する。回帰ピンで錠止。
+- **#34 項 3（event-pair の error 判定）**: evo/evj の error を
+  unknown/budget と同じ timeout skip として記録（gap/scenario 分岐と対称）。
+  既存凍結文言を再利用、新文言なし。
+- **#34 項 4（安全整数範囲）**: `smtLit` は安全域でバイト同一のまま、域外の
+  整数（1e21 等——double としては正確）を BigInt 経由の正確な十進で描画する
+  ——台帳の「isSafeInteger で拒否」案の上書き改良で、正確に表現できる値を
+  拒否しない。model 復号は域外を正確な十進文字列で運ぶ。authoring 面は WF が
+  締める——bounds の新凍結文言 `bounds must be safe integers`（両側）・
+  binding 検査の isSafeInteger 化（既存文言を再利用）・`AttributeBound.parse`
+  に `unsafe-bound` 材料。
+- **#38 項 1（Quint 側 alpha 失敗の黙殺）**: `quintStatusSkips` が
+  substitution を試行し、失敗を `compile-error` skip として記録——detail は
+  SMT 側と逐語で対（`alpha substitution failed: …`）。lockstep はテストで
+  錠止。
+- **#38 項 2（ETIMEDOUT 後のランタイム再試行）**: タイムアウトで打ち切る
+  （ENOENT だけが次のランタイムを試すに値する）。unavailable 文言テンプレート
+  は不変で attempts が 1 件になるだけ——30s 予算に対する最悪 ~90s の二重
+  燃焼が消えた。
+- **#38 項 3（読めないモデルでの無 verdict クラッシュ）**: `a858abc`
+  （Repository 読取の Result 契約）で解消済みと判明——existsSync 後の
+  EISDIR・権限エラーは io-failed → fail verdict。両バリデータの回帰ピンで
+  錠止。
+
+証拠：397 pass / 1 skip / 0 fail（新ピン 12・per-file 90% 床込み）・golden
+無傷（`git diff --exit-code tests/fixtures` クリーン）・base↔head パリティ
+`diff -r` 空・AIDLC_PARITY=1 決定論 green・validator Errors: 0・
+7 ハーネスビルド。

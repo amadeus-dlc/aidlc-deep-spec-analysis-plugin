@@ -3,7 +3,9 @@
 
 import { type Result, err, ok } from "../infrastructure/index.ts";
 
-type AttributeBoundError = { readonly kind: "non-integer-bound"; readonly raw: number };
+type AttributeBoundError =
+  | { readonly kind: "non-integer-bound"; readonly raw: number }
+  | { readonly kind: "unsafe-bound"; readonly raw: number };
 
 export class AttributeBound {
   readonly #value: number;
@@ -14,6 +16,8 @@ export class AttributeBound {
 
   static parse(raw: number): Result<AttributeBound, AttributeBoundError> {
     if (!Number.isInteger(raw)) return err({ kind: "non-integer-bound", raw });
+    // 安全整数範囲外は number として正確でない（凍結解除 #34 項 4）。
+    if (!Number.isSafeInteger(raw)) return err({ kind: "unsafe-bound", raw });
     return ok(new AttributeBound(raw));
   }
 

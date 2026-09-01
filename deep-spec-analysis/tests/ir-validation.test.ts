@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -445,6 +445,28 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
     ]);
   });
 
+  test("colliding encodings, unsafe bounds, and an unsafe binding are rejected (thaw #34)", () => {
+    expect(
+      irView({
+        entities: [
+          { name: "a", attributes: [{ name: "b_c", kind: "bool" }] },
+          { name: "a_b", attributes: [{ name: "c", kind: "bool" }] },
+        ],
+      }).wellFormednessErrors(),
+    ).toEqual([
+      'schema: attribute paths "a.b_c" and "a_b.c" collide under the solver variable encoding (dots become underscores)',
+    ]);
+    expect(
+      irView({ entities: [{ name: "o", attributes: [{ name: "n", kind: "int", min: 0, max: 1e21 }] }] }).wellFormednessErrors(),
+    ).toEqual(["schema: o.n: bounds must be safe integers"]);
+    expect(
+      irView({
+        entities: [{ name: "o", attributes: [{ name: "n", kind: "int", min: 0, max: 9 }] }],
+        scenarios: [{ id: "SC-1", bindings: [["o.n", 1e21]], hasEvent: false }],
+      }).wellFormednessErrors(),
+    ).toEqual(['scenario SC-1: binding value 1e+21 does not fit int attribute "o.n"']);
+  });
+
   test("unresolvable references, illegal primes and unknown enum literals", () => {
     expect(
       irView({
@@ -629,6 +651,24 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
 
   test("duplicate unit names are reported once per repeat", () => {
     expect(designWellFormednessErrors(DesignUnitDecls.of([unit({}), unit({})]))).toEqual(['duplicate unit "u1"']);
+  });
+
+  test("design-side colliding encodings and unsafe bounds are rejected (thaw #34)", () => {
+    expect(
+      designWellFormednessErrors(DesignUnitDecls.of([
+        unit({
+          entities: [
+            { name: "a", attributes: [{ name: "b_c", kind: "bool" }] },
+            { name: "a_b", attributes: [{ name: "c", kind: "bool" }] },
+          ],
+        }),
+      ])),
+    ).toEqual(['unit u1: attribute paths "a.b_c" and "a_b.c" collide under the solver variable encoding (dots become underscores)']);
+    expect(
+      designWellFormednessErrors(DesignUnitDecls.of([
+        unit({ entities: [{ name: "t", attributes: [{ name: "n", kind: "int", min: 0, max: 1e21 }] }] }),
+      ])),
+    ).toEqual(["unit u1: t.n: bounds must be safe integers"]);
   });
 
   test("int attributes require bounds", () => {
@@ -1152,5 +1192,33 @@ describe("byte-fidelity and mutation safety of the store faces (PR#58 review)", 
     expect(repo.store(found.value).ok).toBe(true);
     expect(readFileSync(srcPath, "utf-8")).toBe("- FR-1: x\n");
     rmSync(record, { recursive: true, force: true });
+  });
+});
+
+describe("unreadable-artifact degradation pins (thaw #38 item 3 — resolved by a858abc)", () => {
+  test("a model path that exists but cannot be read degrades to a failed verdict, never a crash", () => {
+    // ディレクトリを model パスに与える——existsSync は通り readFileSync が
+    // EISDIR で落ちる（権限エラー・TOCTOU レースの決定論的な代役）。
+    const scratch = mkdtempSync(join(tmpdir(), "unreadable-model-"));
+    const irDir = join(scratch, "deep-spec-analysis-formal-model.md");
+    const designDir = join(scratch, "deep-spec-analysis-functional-formal-model.md");
+    mkdirSync(irDir);
+    mkdirSync(designDir);
+    try {
+      const ir = irUseCase().execute(FormalModelId.of(ap(irDir)));
+      expect(ir.kind).toBe("verdict");
+      if (ir.kind === "verdict") {
+        expect(ir.pass).toBe(false);
+        expect(ir.errors.join("\n")).toContain("EISDIR");
+      }
+      const design = designUseCase().execute(DesignModelId.of(ap(designDir)));
+      expect(design.kind).toBe("verdict");
+      if (design.kind === "verdict") {
+        expect(design.pass).toBe(false);
+        expect(design.errors.join("\n")).toContain("EISDIR");
+      }
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
   });
 });

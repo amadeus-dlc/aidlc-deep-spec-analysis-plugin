@@ -42,7 +42,26 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
         if (attr.kind === "int" && attr.min !== undefined && attr.max !== undefined && attr.min.exceeds(attr.max)) {
           errors.push(where(`${coord}: min > max`));
         }
+        if (
+          (attr.min !== undefined && !Number.isSafeInteger(attr.min.asNumber())) ||
+          (attr.max !== undefined && !Number.isSafeInteger(attr.max.asNumber()))
+        ) {
+          errors.push(where(`${coord}: bounds must be safe integers`));
+        }
         attrTypes.set(coord, { kind: attr.kind, values: attr.values });
+      }
+    }
+
+    // SMT 変数符号化はドットを下線に潰すため、下線を含む識別子どうしで
+    // パスが衝突しうる（凍結解除 #34 項 1、requirements 側と対）。
+    const encoded = new Map<string, string>();
+    for (const path of attrTypes.keys()) {
+      const key = path.replace(/\./g, "_");
+      const prior = encoded.get(key);
+      if (prior !== undefined) {
+        errors.push(where(`attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`));
+      } else {
+        encoded.set(key, path);
       }
     }
 
@@ -180,7 +199,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
         }
         const ok =
           (t.kind === "bool" && typeof val === "boolean") ||
-          (t.kind === "int" && typeof val === "number" && Number.isInteger(val)) ||
+          (t.kind === "int" && typeof val === "number" && Number.isSafeInteger(val)) ||
           (t.kind === "enum" && typeof val === "string" && (t.values?.includes(val) ?? false));
         if (!ok) errors.push(where(`${ctx}: binding value ${JSON.stringify(val)} does not fit ${t.kind} attribute "${path}"`));
       }

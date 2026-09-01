@@ -29,6 +29,7 @@ import {
   FormalModelRepositoryImpl,
   VerificationReportRepositoryImpl,
   Z3SolverClientImpl,
+  parseSiblingReportDocument,
   renderVerificationReportBytes,
 } from "../tools/requirements/adapter/index.ts";
 import {
@@ -365,6 +366,18 @@ describe("smt verdict interpretation", () => {
     expect(run([["evo:OB-3:OB-4", { status: "sat" }]]).skipped.toArray().length).toBe(1);
   });
 
+  test("an errored event-pair half is recorded as a skip, not dropped (thaw #34 item 3)", () => {
+    const { findings, skipped } = run([
+      ["evo:OB-3:OB-4", { status: "sat" }],
+      ["evj:OB-3:OB-4", { status: "error" }],
+    ]);
+    expect(findings.toArray()).toHaveLength(0);
+    expect(skipped.toArray().slice(1)).toEqual([
+      { target: "OB-3", reason: "timeout", detail: 'event-pair check for trigger "submit" exceeded the solver budget' },
+      { target: "OB-4", reason: "timeout", detail: 'event-pair check for trigger "submit" exceeded the solver budget' },
+    ]);
+  });
+
   test("a sat gap query becomes a completeness-gap carrying the decoded witness state", () => {
     const { findings } = run([["gap:submit", { status: "sat", decodedModel: { "Ticket.priority": 2 } }]]);
     expect([...findings]).toEqual([{
@@ -606,5 +619,21 @@ describe("smt facts collections (first-class operations)", () => {
     const probes = SmtEventPairProbes.of([]).add(probe);
     expect([...probes]).toEqual([probe]);
     expect(probes.toArray()).toEqual([probe]);
+  });
+});
+
+describe("sibling-document hardening pin (thaw #34 item 2 — resolved by the wave-4b explicit mappings)", () => {
+  test("a malformed sibling parses with elements filtered, never throwing", () => {
+    const report = parseSiblingReportDocument(ArtifactPath.reconstitute("/tmp/x"), "smt.json", {
+      backend: "smt",
+      findings: [42, { kind: "conflict", frRefs: "nope", targets: 7, detail: 3 }],
+      skipped: ["junk", { target: 1 }],
+      crossChecked: [null, { backend: 5, targets: "x" }],
+    });
+    expect(report).not.toBeNull();
+    expect(report?.findings().toArray()).toEqual([
+      { kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.of([]), witness: { core: [] }, detail: "" },
+    ]);
+    expect(report?.skipped().toArray()).toEqual([]);
   });
 });

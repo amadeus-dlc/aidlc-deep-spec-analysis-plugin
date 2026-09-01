@@ -36,6 +36,8 @@ import {
   RefinementSolverClientImpl,
   SiblingBackendClientImpl,
   buildRefinementQueries,
+  decodeDesignModel,
+  type RefinementSmtContext,
   RefinementMapRepositoryImpl,
 } from "../tools/design/adapter/index.ts";
 import { VerifyDesignQuintUseCase, VerifyDesignSmtUseCase } from "../tools/design/usecase/index.ts";
@@ -844,5 +846,60 @@ describe("split-file coverage pins (one-public-type refactor)", () => {
     const parsed = UnmappedTargetRef.parse("OB-1");
     expect(parsed.ok && parsed.value.equals(UnmappedTargetRef.reconstitute("OB-1"))).toBe(true);
     expect(UnmappedTargetRef.parse("").ok).toBe(false);
+  });
+});
+
+describe("thaw pins — quint alpha skips, timeout break, exact decode (#34/#38)", () => {
+  const designUnit = () =>
+    unit({ rawEntities: [{ name: "D", attributes: [{ name: "flag", type: { kind: "bool" } }] }] });
+  const reqOneInvariant = () =>
+    requirements({
+      attributes: [{ path: "R.flag", kind: "bool" }],
+      obligations: [{ id: "OB-1", nature: "invariant", frRefs: ["FR-1"], assert: { op: "ref", path: "R.flag" } }],
+    });
+
+  test("alpha failures reach the quint document as compile-error skips, wording lockstep with the SMT pass", () => {
+    const u = designUnit();
+    const req = reqOneInvariant();
+    const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [{ kind: "unspecified", req: "R.flag" }] }), req, "m.md");
+    const quint = plan.quintStatusSkips(req, "u1").toArray().filter((s) => s.reason === "compile-error");
+    expect(quint).toEqual([{
+      target: "OB-1",
+      reason: "compile-error",
+      unit: "u1",
+      detail: 'alpha substitution failed: attrMap entry for "R.flag" declares neither an expression nor enum cases',
+    }]);
+    // SMT 側の compileSkips と逐語で対（凍結解除 #38 項 1 の対称性）。
+    expect(buildRefinementQueries(u, req, plan).facts.compileSkips().toArray()).toEqual(quint);
+  });
+
+  test("a timed-out runtime is not retried on the fallback runtime (thaw #38 item 2)", () => {
+    const u = designUnit();
+    const req = reqOneInvariant();
+    const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")] }), req, "m.md");
+    const host = join(mkdtempSync(join(tmpdir(), "sleepy-child-")), "sleepy.ts");
+    writeFileSync(host, "setTimeout(() => process.exit(0), 30_000);\n");
+    const started = Date.now();
+    // budgetMs -14_800 → spawnSync timeout 200ms：眠る子は必ず ETIMEDOUT。
+    const out = new RefinementSolverClientImpl({
+      childHostPath: host,
+      perQueryTimeoutMs: 100,
+      runtimeOverride: undefined,
+      workingDirectory: process.cwd(),
+    }).check(u, req, plan, -14_800);
+    expect(out.result.kind).toBe("unavailable");
+    const reason = out.result.kind === "unavailable" ? out.result.reason : "";
+    expect(reason).toContain("node:");
+    expect(reason).toContain("ETIMEDOUT");
+    expect(reason).not.toContain("bun:");
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  test("model values beyond the safe range decode to exact decimal strings (thaw #34 item 4)", () => {
+    const attr = { path: "o.n", kind: "int" as const };
+    const ctx: RefinementSmtContext = { attrs: [attr], byPath: new Map([["o.n", attr]]) };
+    expect(decodeDesignModel(ctx, { v_o_n: "10000000000000000000021" }, false)).toEqual({ "o.n": "10000000000000000000021" });
+    expect(decodeDesignModel(ctx, { v_o_n: "(- 10000000000000000000021)" }, false)).toEqual({ "o.n": "-10000000000000000000021" });
+    expect(decodeDesignModel(ctx, { v_o_n: "7" }, false)).toEqual({ "o.n": 7 });
   });
 });

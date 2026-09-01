@@ -1185,3 +1185,58 @@ Interactors and their input/outcome types stay directly in usecase/.
 
 Evidence: tsc clean, full suite green with the per-file 90% floor, zero
 architecture-suite violations, validator Errors: 0, 7 harness builds.
+
+## The thaw — the seven gaps the migration carried byte-frozen are ruled (2026-09-01, #34 / #38)
+
+With the migration complete (#12, PR10 #23), the #34 ledger (verify-smt,
+four items) and the #38 ledger (refinement, three items) are thawed. The
+outcome: **not one golden or parity byte moved** — every gap sat on
+degraded paths and exotic inputs, so the fixes only add new observable
+surfaces (new wordings, new skips, degradations) while the healthy-path
+bytes are preserved. Both ledgers close without regenerating a single
+golden.
+
+- **#34 item 1 (smtVar collisions)**: special characters were already
+  fenced by the schema's identifier pattern (`^[a-z][a-zA-Z0-9_]*$`);
+  only the underscore collision (`a.b_c` vs `a_b.c` → the same
+  `v_a_b_c`) was live. Both well-formedness passes (requirements /
+  design) gain a collision check — new frozen wording
+  `attribute paths "…" and "…" collide under the solver variable
+  encoding (dots become underscores)` (with the `schema: ` prefix on
+  the requirements side).
+- **#34 item 2 (unvalidated sibling casts)**: found already resolved by
+  the wave-4b explicit mappings — today's `parseSiblingReportDocument`
+  filters every element. Locked with a regression pin.
+- **#34 item 3 (the `error` verdict on event pairs)**: an evo/evj error
+  now records the same timeout skip as unknown/budget (symmetric with
+  the gap/scenario branches). Existing frozen wording reused; no new
+  wording.
+- **#34 item 4 (the safe-integer range)**: `smtLit` stays byte-identical
+  in the safe range and renders out-of-range integers (1e21 and friends
+  — exact as doubles) through BigInt as exact decimals — an upgrade
+  over the ledger's reject-with-isSafeInteger sketch that refuses no
+  exactly-representable value. Model decoding carries out-of-range
+  values as exact decimal strings. The authoring surface is fenced by
+  well-formedness — the new frozen wording `bounds must be safe
+  integers` (both sides), the binding check moving to isSafeInteger
+  (existing wording reused), and an `unsafe-bound` material on
+  `AttributeBound.parse`.
+- **#38 item 1 (swallowed alpha failures on the Quint path)**:
+  `quintStatusSkips` attempts the substitution and records failures as
+  `compile-error` skips — the detail is verbatim-paired with the SMT
+  side (`alpha substitution failed: …`), and the lockstep is locked by
+  a test.
+- **#38 item 2 (runtime retry after ETIMEDOUT)**: a timeout breaks the
+  loop (only ENOENT deserves the next runtime). The unavailable wording
+  template is unchanged — the attempts list just has one entry — and
+  the worst-case ~90s double burn against a 30s budget is gone.
+- **#38 item 3 (a verdict-less crash on an unreadable model)**: found
+  already resolved by `a858abc` (repository reads honoring the Result
+  contract) — an EISDIR or permission error after the existsSync gate
+  becomes io-failed → a fail verdict. Locked with regression pins on
+  both validators.
+
+Evidence: 397 pass / 1 skip / 0 fail (12 new pins, per-file 90% floor
+held), goldens untouched (`git diff --exit-code tests/fixtures` clean),
+base↔head parity `diff -r` empty, AIDLC_PARITY=1 determinism green,
+validator Errors: 0, 7 harness builds.
