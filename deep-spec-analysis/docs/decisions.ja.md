@@ -1273,3 +1273,25 @@ dev repo／design fixture の両基準でバイト同一（挙動変化は真の
 列挙の散在は #34 項 3 の三重バグの土壌だった）と witness 材料面
 （`witnessModel`/`witnessTrace`/`coreLabels`/`sortedCore`）を判定自身が所有。
 文言・発生順は逐語不変——golden 無傷・パリティ diff 空で証明。
+
+## 主従の裁定・MECE フェンス — 病巣の完全分割と縮小専用台帳（2026-09-01、#71）
+
+「言われた箇所だけ直す」逐次対応と、`export interface` しか数えない棚卸しは
+非 MECE だった——その棄却裁定の反映。domain 層の全輸出型を完全分割し直した：
+**behavior class 211／病巣 122（getter-only interface 102・record 共用体 19・
+object 型エイリアス 1）／閉じた文字列語彙 6／published 1（Expression）**。
+record 共用体（`RefinementProbe`・`VerificationWitness`・各 `*Outcome` 等）も
+getter しかない data model であり、同じ病巣として台帳に載る。
+
+- **フェンス**: `noDataModelsInDomain` を ALL_RULES へ（red/green example
+  つき）——domain 層の getter-only interface・object エイリアス・record
+  共用体を検出。着手時全数 122 ファイルは `DATA_MODEL_DEBT`（縮小専用——
+  増やす変更は裁定違反、LEGACY_FILES と同じ規律）に列挙し、波が 1 型を
+  返すたびに消す。これで**新規流入は CI が遮断し、残債は台帳が可視化**する
+  ——逐次対応の再発を構造的に防ぐ。
+- 判別共用体の一部（`DesignValue`・`VerificationWitness` 等の値／witness
+  ペイロード語彙）は published language 除外の候補——各波で個別に裁定し、
+  除外するなら Expression と同じく恒久除外リストへ移す（台帳から黙って
+  消さない）。
+
+証拠：399 tests / 0 fail・golden 無傷。

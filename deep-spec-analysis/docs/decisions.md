@@ -1389,3 +1389,30 @@ and the witness material faces (`witnessModel`/`witnessTrace`/
 `coreLabels`/`sortedCore`) are owned by the verdict itself. Wordings
 and emission order are verbatim — proven by untouched goldens and an
 empty parity diff.
+
+## The master-servant MECE fence — a complete partition and a shrink-only ledger (2026-09-01, #71)
+
+Fixing spots as they were pointed at, and an inventory that counted only
+`export interface`, were both non-MECE — this records that rejection.
+The domain layer's exported types are re-partitioned completely:
+**211 behavior classes / 122 diseased (102 getter-only interfaces, 19
+record unions, 1 object type alias) / 6 closed string vocabularies / 1
+published (Expression)**. Record unions (`RefinementProbe`,
+`VerificationWitness`, the `*Outcome` family, …) are getter-only data
+models too and join the ledger as the same disease.
+
+- **The fence**: `noDataModelsInDomain` joins ALL_RULES (red/green
+  examples) — it detects getter-only interfaces, object aliases, and
+  record unions in the domain layer. The full starting inventory of 122
+  files is enumerated in `DATA_MODEL_DEBT` (shrink-only — growing it is
+  a ruling violation, the LEGACY_FILES discipline), and every wave that
+  reclaims a type deletes its entry. **New inflow is blocked by CI and
+  the remaining debt is visible in the ledger** — structurally
+  preventing spot-fix relapse.
+- Some discriminated unions (`DesignValue`, `VerificationWitness` — the
+  value/witness payload vocabularies) are candidates for the
+  published-language exemption; each wave rules on them individually,
+  and an exemption moves the name to the permanent list beside
+  Expression (never silently off the ledger).
+
+Evidence: 399 tests / 0 fail, goldens untouched.
