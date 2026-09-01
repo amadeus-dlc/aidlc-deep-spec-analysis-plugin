@@ -110,21 +110,13 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     };
 
     for (const ob of unitView.obligations) {
-      const ctx = `obligation ${ob.id.asString()}`;
-      dup(ob.id.asString(), ctx);
-      collectBr(ob.brRefs);
-      if (ob.origin?.isRules() === true && ob.brRefs === undefined) {
+      const ctx = `obligation ${ob.id().asString()}`;
+      dup(ob.id().asString(), ctx);
+      collectBr(ob.brRefs());
+      if (ob.missesRequiredBrRefs()) {
         errors.push(where(`${ctx}: origin "rules" requires brRefs`));
       }
-      if (ob.assert !== undefined) checkExpr(ob.assert, ctx, false);
-      if (ob.guard !== undefined) checkExpr(ob.guard, ctx, false);
-      if (ob.effect !== undefined) checkExpr(ob.effect, ctx, true);
-      if (ob.temporal !== undefined) {
-        const t = ob.temporal;
-        if (t.assert !== undefined) checkExpr(t.assert, ctx, false);
-        if (t.from !== undefined) checkExpr(t.from, ctx, false);
-        if (t.to !== undefined) checkExpr(t.to, ctx, false);
-      }
+      ob.inspectExpressions((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
     }
 
     for (const sm of unitView.stateMachines) {
@@ -148,25 +140,19 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
       }
       const transitionCells = new Set<string>();
       for (const tr of sm.transitions) {
-        const tctx = `transition ${tr.id.asString()}`;
-        dup(tr.id.asString(), tctx);
-        collectBr(tr.brRefs);
-        for (const [k, v] of [["from", tr.from], ["to", tr.to]] as const) {
+        const tctx = `transition ${tr.id().asString()}`;
+        dup(tr.id().asString(), tctx);
+        collectBr(tr.brRefs());
+        for (const [k, v] of tr.stateEntries()) {
           if (v !== undefined && !states.includes(v)) {
             errors.push(where(`${tctx}: ${k} state "${v}" is not a value of ${attrPath}`));
           }
         }
-        if (tr.from !== undefined && tr.trigger !== undefined) {
-          transitionCells.add(`${tr.from}|${tr.trigger.asString()}`);
-        }
-        if (tr.guard !== undefined) checkExpr(tr.guard, tctx, false);
-        if (tr.effect !== undefined) {
-          checkExpr(tr.effect, tctx, true);
-          Expressions.walk(tr.effect, (node) => {
-            if (node.op === "ref" && node.prime === true && node.path === attrPath) {
-              errors.push(where(`${tctx}: the effect assigns the machine's own attribute "${attrPath}" — state' = to is implicit`));
-            }
-          });
+        const cellKey = tr.cellKey();
+        if (cellKey !== null) transitionCells.add(cellKey);
+        tr.inspectExpressions((expression, primesAllowed) => checkExpr(expression, tctx, primesAllowed));
+        if (tr.assignsPrimedReferenceTo(attrPath)) {
+          errors.push(where(`${tctx}: the effect assigns the machine's own attribute "${attrPath}" — state' = to is implicit`));
         }
       }
       for (const ig of sm.ignores) {
@@ -182,10 +168,10 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     }
 
     for (const sc of unitView.scenarios) {
-      const ctx = `scenario ${sc.id.asString()}`;
-      dup(sc.id.asString(), ctx);
-      collectBr(sc.brRefs);
-      for (const [path, val] of sc.bindings) {
+      const ctx = `scenario ${sc.id().asString()}`;
+      dup(sc.id().asString(), ctx);
+      collectBr(sc.brRefs());
+      for (const [path, val] of sc.bindings()) {
         const t = attrTypes.get(path);
         if (!t) {
           errors.push(where(`${ctx}: binding for unknown attribute "${path}"`));
@@ -194,7 +180,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
         const ok = t.fitsBinding(val);
         if (!ok) errors.push(where(`${ctx}: binding value ${JSON.stringify(val)} does not fit ${t.kindLabel()} attribute "${path}"`));
       }
-      if (sc.expect !== undefined) checkExpr(sc.expect, ctx, sc.hasEvent);
+      sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
     }
 
     for (const bg of unitView.background) {

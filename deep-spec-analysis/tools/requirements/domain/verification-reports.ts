@@ -53,7 +53,7 @@ export class VerificationReports {
         ),
       }));
 
-    const scenarioById = new Map(model.scenarios().toArray().map((s) => [s.id.asString(), s]));
+    const scenarioById = new Map(model.scenarios().toArray().map((s) => [s.id().asString(), s]));
     const findings: VerificationFinding[] = [];
     const comparedByBackend = new Map<string, Set<string>>();
     for (let i = 0; i < docs.length; i++) {
@@ -62,21 +62,21 @@ export class VerificationReports {
         const b = docs[j];
         if (!a || !b) continue;
         for (const sc of model.scenarios()) {
-          if (a.skippedTargets.has(sc.id.asString()) || b.skippedTargets.has(sc.id.asString())) continue;
-          const va = a.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id.asString()));
-          const vb = b.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id.asString()));
-          (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id.asString());
-          (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(sc.id.asString());
+          if (a.skippedTargets.has(sc.id().asString()) || b.skippedTargets.has(sc.id().asString())) continue;
+          const va = a.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id().asString()));
+          const vb = b.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id().asString()));
+          (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id().asString());
+          (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(sc.id().asString());
           if (va !== vb) {
             const verdicts: { [backend: string]: "violated" | "clean" } = {};
             verdicts[a.backend] = va ? "violated" : "clean";
             verdicts[b.backend] = vb ? "violated" : "clean";
             findings.push({
               kind: "cross-check-disagreement",
-              frRefs: FrRefs.of(IdOrder.sortedUnique([...(scenarioById.get(sc.id.asString())?.frRefs.toArray() ?? [])], IdOrder.compare)),
-              targets: TargetIds.of([sc.id.asString()]),
+              frRefs: FrRefs.of(IdOrder.sortedUnique([...(scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? [])], IdOrder.compare)),
+              targets: TargetIds.of([sc.id().asString()]),
               witness: { verdicts },
-              detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id.asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
+              detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
             });
           }
         }

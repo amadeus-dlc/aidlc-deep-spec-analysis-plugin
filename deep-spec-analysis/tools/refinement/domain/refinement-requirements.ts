@@ -73,10 +73,10 @@ export class RefinementRequirements {
   // 旧 entry の reqTargets（義務 → シナリオの宣言順・未ソート——最終文書は
   // compose が正準ソートする）。
   allTargetIds(): string[] {
-    return [...this.#obligations.toArray().map((o) => o.id.asString()), ...this.#scenarios.toArray().map((s) => s.id.asString())];
+    return [...this.#obligations.toArray().map((o) => o.id().asString()), ...this.#scenarios.toArray().map((s) => s.id().asString())];
   }
 
   frRefsOf(id: string): readonly string[] {
-    return this.#obligations.byId(id)?.frRefs.toArray() ?? this.#scenarios.byId(id)?.frRefs.toArray() ?? [];
+    return this.#obligations.byId(id)?.frRefs().toArray() ?? this.#scenarios.byId(id)?.frRefs().toArray() ?? [];
   }
 }

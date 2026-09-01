@@ -102,9 +102,9 @@ export class RequirementsModel {
     const refs: string[] = [];
     for (const t of targets) {
       const ob = this.#obligations.byId(t);
-      if (ob) refs.push(...ob.frRefs);
+      if (ob) refs.push(...ob.frRefs());
       const sc = this.#scenarios.byId(t);
-      if (sc) refs.push(...sc.frRefs);
+      if (sc) refs.push(...sc.frRefs());
     }
     return IdOrder.sortedUnique(refs, IdOrder.compare);
   }

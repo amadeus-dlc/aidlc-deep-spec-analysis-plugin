@@ -164,9 +164,10 @@ export function designBase(
       }
     }
     for (const ob of u.obligations()) {
-      if ((ob.nature.isInvariant() || ob.nature.isNumeric()) && ob.assert) {
+      const assertion = ob.assertion();
+      if (ob.isInvariantLike() && assertion !== undefined) {
         try {
-          constraints.push({ name: smtName("inv", ob.id.asString()), smt: smtOfExpr(ctx, ob.assert) });
+          constraints.push({ name: smtName("inv", ob.id().asString()), smt: smtOfExpr(ctx, assertion) });
         } catch {
           // 同上。
         }
@@ -244,9 +245,10 @@ export function buildRefinementQueries(
     if (st.kind !== "checkable") continue;
     const ob = req.obligationById(obId);
     if (!ob) continue;
-    if ((ob.nature.isInvariant() || ob.nature.isNumeric()) && ob.assert) {
+    const assertion = ob.assertion();
+    if (ob.isInvariantLike() && assertion !== undefined) {
       try {
-        const alphaP = alphaCtx.substitute(ob.assert, false);
+        const alphaP = alphaCtx.substitute(assertion, false);
         const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP)})` }], modelVars);
         queries.push(q);
         pending.set(q.id, { kind: "invariant", reqId: ObligationId.reconstitute(obId) });
@@ -255,10 +257,11 @@ export function buildRefinementQueries(
       }
       continue;
     }
-    if (ob.nature.isEvent() && ob.guard && ob.effect) {
+    const event = ob.eventDefinition();
+    if (event !== null) {
       const mapped = plan.mappedTransitionsOf(obId);
       try {
-        const alphaG = alphaCtx.substitute(ob.guard, false);
+        const alphaG = alphaCtx.substitute(event.guard, false);
         // enabledness：alpha(guard) は成り立つが、写像済み設計イベントが
         // ひとつも発火可能でない。
         const designGuards = mapped
@@ -283,14 +286,14 @@ export function buildRefinementQueries(
         // が成り立つところで踏んだ 1 歩の抽象 post が、要件効果か抽象フレーム
         // （Q2：未代入の要件属性は抽象値を保つ。unmapped 属性のフレーム等式は
         // 検査不能なので省く）に反する。
-        const assigned = EffectAssignments.ofEffect(ob.effect);
+        const assigned = EffectAssignments.ofEffect(event.effect);
         const frameParts: string[] = [];
         for (const a of req.attributes().sortedByPath()) {
           if (assigned.covers(a.path.asString())) continue;
           const eq = alphaCtx.equalityFor(a.path.asString());
           if (eq !== null) frameParts.push(smtOfExpr(ctx, eq));
         }
-        const fBar = smtOfExpr(ctx, alphaCtx.substitute(ob.effect, false));
+        const fBar = smtOfExpr(ctx, alphaCtx.substitute(event.effect, false));
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
           const ev = catalog.eventOf(designId.asString());
@@ -335,7 +338,7 @@ export function buildRefinementQueries(
     if (!sc) continue;
     try {
       const parts: string[] = [];
-      for (const [path, value] of Object.entries(sc.bindings).sort(([x], [y]) => (x < y ? -1 : 1))) {
+      for (const [path, value] of sc.bindingEntriesCanonically()) {
         const lit: Expression = typeof value === "boolean" ? { op: "bool", value } : typeof value === "number" ? { op: "int", value } : { op: "enum", value };
         const constraint: Expression = { op: "eq", args: [{ op: "ref", path }, lit] };
         parts.push(smtOfExpr(ctx, alphaCtx.substitute(constraint, false)));

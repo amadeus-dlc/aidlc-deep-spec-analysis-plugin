@@ -62,8 +62,8 @@ export class SmtPlanFacts {
     const invariantIds = model
       .obligations()
       .toArray()
-      .filter((o) => (o.nature.isInvariant() || o.nature.isNumeric()) && this.#compiled.get(o.id.asString()))
-      .map((o) => o.id.asString());
+      .filter((o) => o.isInvariantLike() && this.#compiled.get(o.id().asString()))
+      .map((o) => o.id().asString());
 
     const coreToTargets = (core: string[]): string[] => {
       const targets = core
@@ -110,17 +110,17 @@ export class SmtPlanFacts {
     // (a) 前件空虚（大域 unsat のときは冗長な派生なので黙る）。
     if (!globallyUnsat) {
       for (const ob of model.obligations()) {
-        const r = results.verdictOf(`vac:${ob.id.asString()}`);
+        const r = results.verdictOf(`vac:${ob.id().asString()}`);
         if (!r) continue;
         if (r.isUnsat()) {
-          const targets = IdOrder.sortedUnique([...coreToTargets([...r.coreLabels()]), ob.id.asString()], IdOrder.compare);
+          const targets = IdOrder.sortedUnique([...coreToTargets([...r.coreLabels()]), ob.id().asString()], IdOrder.compare);
           addConflict(
             targets,
             [...r.coreLabels()],
-            `The condition of obligation ${ob.id.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
+            `The condition of obligation ${ob.id().asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
           );
         } else if (r.isUndecided()) {
-          timeoutSkip([ob.id.asString()], `vacuity check for ${ob.id.asString()}`);
+          timeoutSkip([ob.id().asString()], `vacuity check for ${ob.id().asString()}`);
         }
       }
     }
@@ -163,31 +163,31 @@ export class SmtPlanFacts {
 
     // (c) シナリオ。
     for (const sc of model.scenarios()) {
-      const qid = this.#scenarioQueries.get(sc.id.asString());
+      const qid = this.#scenarioQueries.get(sc.id().asString());
       if (!qid) continue;
       const r = results.verdictOf(qid);
       if (!r) continue;
       if (r.isUndecided()) {
-        timeoutSkip([sc.id.asString()], `scenario check for ${sc.id.asString()}`);
+        timeoutSkip([sc.id().asString()], `scenario check for ${sc.id().asString()}`);
         continue;
       }
-      if (sc.kind === "accept" && r.isUnsat()) {
-        const targets = IdOrder.sortedUnique([sc.id.asString(), ...coreToTargets([...r.coreLabels()])], IdOrder.compare);
+      if (sc.isAccept() && r.isUnsat()) {
+        const targets = IdOrder.sortedUnique([sc.id().asString(), ...coreToTargets([...r.coreLabels()])], IdOrder.compare);
         findings.push({
           kind: "scenario-violation",
           frRefs: FrRefs.of(model.frRefsOf(targets)),
           targets: TargetIds.of(targets),
           witness: { core: r.sortedCore() },
-          detail: `Accept scenario ${sc.id.asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
+          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
         });
       }
-      if (sc.kind === "reject" && r.isSat()) {
+      if (sc.isReject() && r.isSat()) {
         findings.push({
           kind: "scenario-violation",
-          frRefs: FrRefs.of(model.frRefsOf([sc.id.asString()])),
-          targets: TargetIds.of([sc.id.asString()]),
+          frRefs: FrRefs.of(model.frRefsOf([sc.id().asString()])),
+          targets: TargetIds.of([sc.id().asString()]),
           witness: { model: r.witnessModel() },
-          detail: `Reject scenario ${sc.id.asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
+          detail: `Reject scenario ${sc.id().asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
         });
       }
     }

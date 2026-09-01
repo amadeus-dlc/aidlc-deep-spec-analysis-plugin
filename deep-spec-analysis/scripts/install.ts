@@ -205,6 +205,7 @@ const REMOVED_PAYLOADS: string[][] = [
   ["tools", "deep-spec-lib.ts"], // DDD 移行 PR2a で refcheck/ と kernel/ へ解体
   ["tools", "deep-spec-design-lib.ts"], // DDD 移行 PR5 で design/ へ解体
   ["tools", "deep-spec-refinement-lib.ts"], // DDD 移行 PR6 で refinement/ と design/ へ解体
+  ["tools", "design", "domain", "design-temporal-decl.ts"], // TDA 波3 で DesignObligationDecl の構築口へ解散
 ];
 
 function removeTombstonedPayloads(): number {

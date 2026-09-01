@@ -269,18 +269,23 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   //    文書で適法——v1 バックエンドは frRefs を不透明な帰属文字列として扱う）。
   for (const ob of u.obligations().sortedCanonically()) {
     const lowered: Omit<LoweredObligation, "id"> = {
-      nature: ob.nature.asString(),
-      frRefs: [...ob.frRefs],
+      nature: ob.nature().asString(),
+      frRefs: [...ob.frRefs()],
     };
-    if (ob.assert) lowered.assert = ob.assert;
-    if (ob.trigger !== undefined) lowered.trigger = ob.trigger.asString();
-    if (ob.guard) lowered.guard = ob.guard;
-    if (ob.effect) lowered.effect = ob.effect;
-    if (ob.temporal) lowered.temporal = ob.temporal;
-    const lowId = push(lowered, { design: LoweredOriginRef.reconstitute(ob.id.asString()), kind: "passthrough" });
-    // 旧 `ob.trigger` 真偽値は「未宣言または空文字」を捕えていた(凍結挙動)。
-    if (ob.nature.isEvent() && ob.guard && ob.effect && ob.trigger !== undefined && !ob.trigger.isEmpty()) {
-      candidates.push({ lowId, design: ob.id.asString(), trigger: ob.trigger.asString(), guard: ob.guard, effect: ob.effect });
+    const assertion = ob.assertion();
+    const trigger = ob.trigger();
+    const guard = ob.guard();
+    const effect = ob.effect();
+    const temporal = ob.temporal();
+    if (assertion !== undefined) lowered.assert = assertion;
+    if (trigger !== undefined) lowered.trigger = trigger.asString();
+    if (guard !== undefined) lowered.guard = guard;
+    if (effect !== undefined) lowered.effect = effect;
+    if (temporal !== undefined) lowered.temporal = temporal;
+    const lowId = push(lowered, { design: LoweredOriginRef.reconstitute(ob.id().asString()), kind: "passthrough" });
+    const event = ob.eventDefinition();
+    if (event !== null) {
+      candidates.push({ lowId, design: ob.id().asString(), trigger: event.trigger.asString(), guard: event.guard, effect: event.effect });
     }
   }
 
@@ -358,15 +363,17 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   for (const sc of u.scenarios().sortedCanonically()) {
     scN += 1;
     const lowId = `SC-${scN}`;
-    scenarioMap.set(lowId, sc.id.asString());
+    scenarioMap.set(lowId, sc.id().asString());
     const lowered: LoweredScenario = {
       id: LoweredId.reconstitute(lowId),
-      kind: sc.kind,
-      frRefs: [...sc.frRefs],
-      bindings: sc.bindings,
+      kind: sc.kind(),
+      frRefs: [...sc.frRefs()],
+      bindings: { ...sc.bindings() },
     };
-    if (sc.event) lowered.event = { trigger: sc.event.trigger.asString() };
-    if (sc.expect) lowered.expect = sc.expect;
+    const eventTrigger = sc.eventTrigger();
+    const expectation = sc.expectation();
+    if (eventTrigger !== undefined) lowered.event = { trigger: eventTrigger.asString() };
+    if (expectation !== undefined) lowered.expect = expectation;
     scenarios.push(lowered);
   }
   const background: LoweredBackground[] = [];

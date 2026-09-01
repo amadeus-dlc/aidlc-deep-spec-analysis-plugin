@@ -170,7 +170,9 @@ import {
   BackgroundAssumptions,
   CrossCheckedEntries,
   Obligations,
+  Obligation,
   Scenarios,
+  Scenario,
   VerificationFindings,
   VerificationReports,
   VerificationSkips,
@@ -187,13 +189,13 @@ describe("requirements first-class collections", () => {
     expect(attrs.byPath("o.qty")?.kind).toBe("int");
     expect(attrs.toArray().length).toBe(1);
 
-    const obs = Obligations.of([]).add({ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: FrRefs.of(["FR-1"]) });
-    expect(obs.byId("OB-1")?.nature.asString()).toBe("invariant");
+    const obs = Obligations.of([]).add(Obligation.reconstitute({ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: FrRefs.of(["FR-1"]) }));
+    expect(obs.byId("OB-1")?.nature().asString()).toBe("invariant");
     expect(obs.ids()).toEqual(["OB-1"]);
     expect([...obs].length).toBe(1);
 
-    const scs = Scenarios.of([]).add({ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: FrRefs.of([]), bindings: {} });
-    expect(scs.byId("SC-1")?.kind).toBe("accept");
+    const scs = Scenarios.of([]).add(Scenario.reconstitute({ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: FrRefs.of([]), bindings: {} }));
+    expect(scs.byId("SC-1")?.kind()).toBe("accept");
     expect(scs.ids()).toEqual(["SC-1"]);
 
     const bgs = BackgroundAssumptions.of([]).add({ id: BackgroundAssumptionId.reconstitute("B1"), assert: { op: "bool", value: true } });
@@ -229,15 +231,17 @@ import {
   DesignInputAnchors,
   DesignMachines,
   DesignObligations,
+  DesignObligation,
   DesignReports,
   DesignScenarios,
+  DesignScenario,
   DesignSkips,
   DesignUnit,
   DesignUnits,
 } from "../tools/design/domain/index.ts";
 
 describe("design first-class collections", () => {
-  const ob = { id: DesignObligationId.reconstitute("DOB-1"), nature: DesignObligationNature.reconstitute("invariant"), origin: DesignObligationOrigin.reconstitute(""), brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), assert: { op: "bool", value: true } };
+  const ob = DesignObligation.reconstitute({ id: DesignObligationId.reconstitute("DOB-1"), nature: DesignObligationNature.reconstitute("invariant"), origin: DesignObligationOrigin.reconstitute(""), brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), assert: { op: "bool", value: true } });
   const machine = {
     id: DesignMachineId.reconstitute("SM-1"),
     entity: DesignEntityName.reconstitute("T"),
@@ -255,8 +259,8 @@ describe("design first-class collections", () => {
     expect([...DesignMachines.of([machine])].length).toBe(1);
     expect(DesignMachines.of([machine]).toArray().length).toBe(1);
     expect(DesignObligations.of([ob]).toArray().length).toBe(1);
-    expect(DesignScenarios.of([{ id: DesignScenarioId.reconstitute("DSC-9"), kind: "reject", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} }]).toArray().length).toBe(1);
-    expect(DesignScenarios.of([]).add({ id: DesignScenarioId.reconstitute("DSC-1"), kind: "accept", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} }).ids()).toEqual(["DSC-1"]);
+    expect(DesignScenarios.of([DesignScenario.reconstitute({ id: DesignScenarioId.reconstitute("DSC-9"), kind: "reject", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} })]).toArray().length).toBe(1);
+    expect(DesignScenarios.of([]).add(DesignScenario.reconstitute({ id: DesignScenarioId.reconstitute("DSC-1"), kind: "accept", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} })).ids()).toEqual(["DSC-1"]);
     expect([...DesignScenarios.of([])].length).toBe(0);
     expect(DesignBackgroundAssumptions.of([]).add({ id: DesignBackgroundId.reconstitute("DBG-1"), assert: { op: "bool", value: true } }).toArray().length).toBe(1);
     expect([...DesignBackgroundAssumptions.of([])].length).toBe(0);

@@ -27,7 +27,7 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, type DesignMachine, type DesignObligation, type DesignScenario, type DesignIgnore, type DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId } from "../tools/design/domain/index.ts";
+import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, type DesignMachine, DesignObligation, DesignScenario, type DesignIgnore, type DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId } from "../tools/design/domain/index.ts";
 import { type DesignUnit as DesignUnitType } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
@@ -65,10 +65,10 @@ import {
   type AttributeMapping,
   type EventMapping,
   type RefinementAttribute,
-  type RefinementObligation,
+  RefinementObligation,
   type RefinementProbe,
   RefinementQueryVerdict,
-  type RefinementScenario,
+  RefinementScenario,
   type RefinementUnitMap,
   RefinementMaterials,
   RefinementMapId,
@@ -185,7 +185,7 @@ describe("SMT script characterization (the PR8 safety net)", () => {
 
 // テストの読みやすさのため素の配列・素の文字列で書き、ここで一括して DP と
 // コレクションに包む。
-type RawDesignObligation = Omit<DesignObligation, "id" | "nature" | "origin" | "brRefs" | "frRefs"> & {
+type RawDesignObligation = Omit<Parameters<typeof DesignObligation.reconstitute>[0], "id" | "nature" | "origin" | "brRefs" | "frRefs"> & {
   id: string;
   nature: string;
   origin: string;
@@ -201,7 +201,7 @@ type RawDesignMachine = Omit<DesignMachine, "id" | "entity" | "attribute" | "ini
   transitions: RawDesignTransition[];
   ignores: DesignIgnore[];
 };
-type RawDesignScenario = Omit<DesignScenario, "id" | "brRefs" | "frRefs"> & { id: string; brRefs: string[]; frRefs: string[] };
+type RawDesignScenario = Omit<Parameters<typeof DesignScenario.reconstitute>[0], "id" | "brRefs" | "frRefs"> & { id: string; brRefs: string[]; frRefs: string[] };
 function unit(seed: {
   unit?: string;
   rawEntities?: DesignValue;
@@ -216,7 +216,7 @@ function unit(seed: {
     rawEntities: seed.rawEntities ?? [],
     attrPaths: AttrPaths.of([...(seed.attrPaths ?? new Set<string>())]),
     obligations: DesignObligations.of(
-      (seed.obligations ?? []).map((o) => ({
+      (seed.obligations ?? []).map((o) => DesignObligation.reconstitute({
         ...o,
         id: DesignObligationId.reconstitute(o.id),
         nature: DesignObligationNature.reconstitute(o.nature),
@@ -239,7 +239,7 @@ function unit(seed: {
       })),
     ),
     scenarios: DesignScenarios.of(
-      (seed.scenarios ?? []).map((s) => ({ ...s, id: DesignScenarioId.reconstitute(s.id), brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
+      (seed.scenarios ?? []).map((s) => DesignScenario.reconstitute({ ...s, id: DesignScenarioId.reconstitute(s.id), brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
     ),
     background: DesignBackgroundAssumptions.of(
       (seed.background ?? []).map((b) => ({ ...b, id: DesignBackgroundId.reconstitute(b.id) })),
@@ -250,8 +250,8 @@ function unit(seed: {
 // テストの読みやすさのため素の配列・素の id で書き、ここで一括して DP と
 // コレクションに包む（アダプタの門と同型）。
 type RawReqAttribute = Omit<RefinementAttribute, "path" | "min" | "max" | "values"> & { path: string; min?: number; max?: number; values?: string[] };
-type RawReqObligation = Omit<RefinementObligation, "id" | "nature" | "frRefs" | "trigger"> & { id: string; nature: string; frRefs: string[]; trigger?: string };
-type RawReqScenario = Omit<RefinementScenario, "id" | "frRefs" | "event"> & { id: string; frRefs: string[]; event?: { trigger: string } };
+type RawReqObligation = Omit<Parameters<typeof RefinementObligation.reconstitute>[0], "id" | "nature" | "frRefs" | "trigger"> & { id: string; nature: string; frRefs: string[]; trigger?: string };
+type RawReqScenario = Omit<Parameters<typeof RefinementScenario.reconstitute>[0], "id" | "frRefs" | "event"> & { id: string; frRefs: string[]; event?: { trigger: string } };
 function requirements(seed: {
   attributes?: RawReqAttribute[];
   obligations?: RawReqObligation[];
@@ -270,7 +270,7 @@ function requirements(seed: {
       })),
     ),
     obligations: RefinementObligations.of(
-      (seed.obligations ?? []).map((o) => ({
+      (seed.obligations ?? []).map((o) => RefinementObligation.reconstitute({
         ...o,
         id: ObligationId.reconstitute(o.id),
         nature: ObligationNature.reconstitute(o.nature),
@@ -279,7 +279,7 @@ function requirements(seed: {
       })),
     ),
     scenarios: RefinementScenarios.of(
-      (seed.scenarios ?? []).map((s) => ({
+      (seed.scenarios ?? []).map((s) => RefinementScenario.reconstitute({
         ...s,
         id: ScenarioId.reconstitute(s.id),
         frRefs: FrRefs.of(s.frRefs),
@@ -730,21 +730,21 @@ describe("refinement collections (first-class operations)", () => {
     expect(attrs.byPath("R.z")).toBe(undefined);
     expect(attrs.sortedByPath().toArray().map((a) => a.path.asString())).toEqual(["R.a", "R.a", "R.b"]);
 
-    const rob = (id: string, nature: string) => ({ id: ObligationId.reconstitute(id), nature: ObligationNature.reconstitute(nature), frRefs: FrRefs.of([]) });
+    const rob = (id: string, nature: string) => RefinementObligation.reconstitute({ id: ObligationId.reconstitute(id), nature: ObligationNature.reconstitute(nature), frRefs: FrRefs.of([]) });
     const obs = RefinementObligations.of([rob("OB-2", "invariant")])
       .add(rob("OB-1", "event"))
       .add(rob("OB-1", "numeric"));
     expect([...obs].length).toBe(3);
-    expect(obs.byId("OB-1")?.nature.asString()).toBe("numeric");
+    expect(obs.byId("OB-1")?.nature().asString()).toBe("numeric");
     expect(obs.byId("OB-9")).toBe(undefined);
-    expect(obs.sortedCanonically().toArray().map((o) => o.id.asString())).toEqual(["OB-1", "OB-1", "OB-2"]);
+    expect(obs.sortedCanonically().toArray().map((o) => o.id().asString())).toEqual(["OB-1", "OB-1", "OB-2"]);
 
-    const rsc = (id: string, kind: "accept" | "reject") => ({ id: ScenarioId.reconstitute(id), kind, frRefs: FrRefs.of([]), bindings: {} });
+    const rsc = (id: string, kind: "accept" | "reject") => RefinementScenario.reconstitute({ id: ScenarioId.reconstitute(id), kind, frRefs: FrRefs.of([]), bindings: {} });
     const scs = RefinementScenarios.of([rsc("SC-2", "accept")])
       .add(rsc("SC-1", "reject"))
       .add(rsc("SC-1", "accept"));
     expect([...scs].length).toBe(3);
-    expect(scs.byId("SC-1")?.kind).toBe("accept");
+    expect(scs.byId("SC-1")?.kind()).toBe("accept");
     expect(scs.byId("SC-9")).toBe(undefined);
     expect(scs.toArray().length).toBe(3);
   });

@@ -23,7 +23,7 @@ export class RefinementScenarios {
   byId(id: string): RefinementScenario | undefined {
     let found: RefinementScenario | undefined;
     for (const s of this.#values) {
-      if (s.id.asString() === id) found = s;
+      if (s.id().asString() === id) found = s;
     }
     return found;
   }

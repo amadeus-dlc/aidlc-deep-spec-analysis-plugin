@@ -30,8 +30,8 @@ import {
   DesignScenarios,
   type DesignMachine,
   type DesignModelComposition,
-  type DesignObligation,
-  type DesignScenario,
+  DesignObligation,
+  DesignScenario,
   type DesignTransition,
   type DesignValue,
   DesignUnit,
@@ -59,7 +59,7 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
     const obligations: DesignObligation[] = [];
     for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
-      obligations.push({
+      obligations.push(DesignObligation.reconstitute({
         id: DesignObligationId.reconstitute(ob.id),
         nature: DesignObligationNature.reconstitute(ob.nature),
         origin: DesignObligationOrigin.reconstitute(typeof ob.origin === "string" ? ob.origin : ""),
@@ -69,8 +69,8 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
         trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
         effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
-        temporal: isObject(ob.temporal) ? (ob.temporal as unknown as DesignObligation["temporal"]) : undefined,
-      });
+        temporal: isObject(ob.temporal) ? (ob.temporal as unknown as { pattern: string; assert?: Expression; from?: Expression; to?: Expression }) : undefined,
+      }));
     }
     const machines: DesignMachine[] = [];
     for (const sm of Array.isArray(rawUnit.stateMachines) ? rawUnit.stateMachines : []) {
@@ -109,11 +109,11 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
       if (!isObject(sc) || typeof sc.id !== "string") continue;
       const kind = sc.kind === "accept" || sc.kind === "reject" ? sc.kind : null;
       if (kind === null || !isObject(sc.bindings)) continue;
-      const bindings: DesignScenario["bindings"] = {};
+      const bindings: Record<string, boolean | number | string> = {};
       for (const [k, v] of Object.entries(sc.bindings)) {
         if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
       }
-      scenarios.push({
+      scenarios.push(DesignScenario.reconstitute({
         id: DesignScenarioId.reconstitute(sc.id),
         kind,
         brRefs: BrRefs.of(strArr(sc.brRefs)),
@@ -121,7 +121,7 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
         bindings,
         event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
         expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
-      });
+      }));
     }
     const background: DesignBackgroundAssumption[] = [];
     for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {

@@ -47,8 +47,8 @@ import {
   type DesignBackgroundAssumption,
   type DesignIgnore,
   type DesignMachine,
-  type DesignObligation,
-  type DesignScenario,
+  DesignObligation,
+  DesignScenario,
   type DesignTransition,
   type DesignValue,
   BrRefs,
@@ -176,7 +176,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
 
 // テストの読みやすさのため素の配列・素の文字列で書き、ここで一括して DP と
 // コレクションに包む。
-type RawDesignObligation = Omit<DesignObligation, "id" | "nature" | "origin" | "brRefs" | "frRefs" | "trigger"> & {
+type RawDesignObligation = Omit<Parameters<typeof DesignObligation.reconstitute>[0], "id" | "nature" | "origin" | "brRefs" | "frRefs" | "trigger"> & {
   id: string;
   nature: string;
   origin: string;
@@ -194,7 +194,7 @@ type RawDesignMachine = Omit<DesignMachine, "id" | "entity" | "attribute" | "ini
   transitions: RawDesignTransition[];
   ignores: RawDesignIgnore[];
 };
-type RawDesignScenario = Omit<DesignScenario, "id" | "brRefs" | "frRefs" | "event"> & {
+type RawDesignScenario = Omit<Parameters<typeof DesignScenario.reconstitute>[0], "id" | "brRefs" | "frRefs" | "event"> & {
   id: string;
   brRefs: string[];
   frRefs: string[];
@@ -214,7 +214,7 @@ function unit(seed: {
     rawEntities: seed.rawEntities ?? [],
     attrPaths: AttrPaths.of([...(seed.attrPaths ?? new Set<string>())]),
     obligations: DesignObligations.of(
-      (seed.obligations ?? []).map((o) => ({
+      (seed.obligations ?? []).map((o) => DesignObligation.reconstitute({
         ...o,
         id: DesignObligationId.reconstitute(o.id),
         nature: DesignObligationNature.reconstitute(o.nature),
@@ -238,7 +238,7 @@ function unit(seed: {
       })),
     ),
     scenarios: DesignScenarios.of(
-      (seed.scenarios ?? []).map((s) => ({
+      (seed.scenarios ?? []).map((s) => DesignScenario.reconstitute({
         ...s,
         id: DesignScenarioId.reconstitute(s.id),
         brRefs: BrRefs.of(s.brRefs),

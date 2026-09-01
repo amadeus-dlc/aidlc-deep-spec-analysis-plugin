@@ -2,9 +2,27 @@ import type { Expression } from "../../kernel/domain/index.ts";
 import { IrBindingPairs } from "./ir-binding-pairs.ts";
 import { type ScenarioId } from "./scenario-id.ts";
 
-export interface IrScenarioDecl {
-  readonly id: ScenarioId;
-  readonly bindings: IrBindingPairs;
-  readonly hasEvent: boolean;
-  readonly expect?: Expression;
+export class IrScenarioDecl {
+  readonly #id: ScenarioId;
+  readonly #bindings: IrBindingPairs;
+  readonly #hasEvent: boolean;
+  readonly #expect: Expression | undefined;
+
+  private constructor(props: { id: ScenarioId; bindings: IrBindingPairs; hasEvent: boolean; expect?: Expression }) {
+    this.#id = props.id;
+    this.#bindings = props.bindings;
+    this.#hasEvent = props.hasEvent;
+    this.#expect = props.expect;
+  }
+
+  static reconstitute(props: { id: ScenarioId; bindings: IrBindingPairs; hasEvent: boolean; expect?: Expression }): IrScenarioDecl {
+    return new IrScenarioDecl(props);
+  }
+
+  id(): ScenarioId { return this.#id; }
+  bindings(): IrBindingPairs { return this.#bindings; }
+
+  inspectExpectation(visitor: (expression: Expression, primesAllowed: boolean) => void): void {
+    if (this.#expect !== undefined) visitor(this.#expect, this.#hasEvent);
+  }
 }

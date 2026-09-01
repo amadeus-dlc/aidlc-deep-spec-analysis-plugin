@@ -29,11 +29,11 @@ import {
   type DesignMachineDecl,
   DesignMachineDecls,
   DesignModelId,
-  type DesignObligationDecl,
+  DesignObligationDecl,
   DesignObligationDecls,
-  type DesignScenarioDecl,
+  DesignScenarioDecl,
   DesignScenarioDecls,
-  type DesignTransitionDecl,
+  DesignTransitionDecl,
   DesignTransitionDecls,
   type DesignUnitDecl,
   DesignUnitDecls,
@@ -62,8 +62,8 @@ import {
   FrReferenceIndex,
   FrRefs,
   type IrBackgroundDecl,
-  type IrObligationDecl,
-  type IrScenarioDecl,
+  IrObligationDecl,
+  IrScenarioDecl,
   IrAttributeDecl,
   IrAttributeDecls,
   IrBackgroundDecls,
@@ -387,8 +387,8 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
   type RawIrAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawIrEntity = { name: string; attributes: RawIrAttr[] };
-  type RawIrObligation = Omit<IrObligationDecl, "id"> & { id: string };
-  type RawIrScenario = Omit<IrScenarioDecl, "id" | "bindings"> & { id: string; bindings: (readonly [string, unknown])[] };
+  type RawIrObligation = Omit<Parameters<typeof IrObligationDecl.reconstitute>[0], "id"> & { id: string };
+  type RawIrScenario = Omit<Parameters<typeof IrScenarioDecl.reconstitute>[0], "id" | "bindings"> & { id: string; bindings: (readonly [string, unknown])[] };
   type RawIrBackground = Omit<IrBackgroundDecl, "id"> & { id: string };
   function irView(overrides: {
     entities?: RawIrEntity[];
@@ -412,10 +412,10 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
         })),
       ),
       obligations: IrObligationDecls.of(
-        (overrides.obligations ?? []).map((ob) => ({ ...ob, id: ObligationId.reconstitute(ob.id) })),
+        (overrides.obligations ?? []).map((ob) => IrObligationDecl.reconstitute({ ...ob, id: ObligationId.reconstitute(ob.id) })),
       ),
       scenarios: IrScenarioDecls.of(
-        (overrides.scenarios ?? []).map((sc) => ({ ...sc, id: ScenarioId.reconstitute(sc.id), bindings: IrBindingPairs.of(sc.bindings) })),
+        (overrides.scenarios ?? []).map((sc) => IrScenarioDecl.reconstitute({ ...sc, id: ScenarioId.reconstitute(sc.id), bindings: IrBindingPairs.of(sc.bindings) })),
       ),
       background: IrBackgroundDecls.of(
         (overrides.background ?? []).map((bg) => ({ ...bg, id: BackgroundAssumptionId.reconstitute(bg.id) })),
@@ -572,8 +572,8 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
   type RawAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawEntity = { name: string; attributes: RawAttr[] };
-  type RawObligation = Omit<DesignObligationDecl, "id" | "origin" | "brRefs"> & { id: string; origin?: string; brRefs?: string[] };
-  type RawTransition = Omit<DesignTransitionDecl, "id" | "brRefs" | "trigger"> & { id: string; brRefs?: string[]; trigger?: string };
+  type RawObligation = Omit<Parameters<typeof DesignObligationDecl.reconstitute>[0], "id" | "origin" | "brRefs"> & { id: string; origin?: string; brRefs?: string[] };
+  type RawTransition = Omit<Parameters<typeof DesignTransitionDecl.reconstitute>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs?: string[]; trigger?: string };
   type RawIgnore = Omit<DesignIgnoreDecl, "trigger"> & { trigger: string };
   type RawMachine = Omit<DesignMachineDecl, "id" | "initial" | "transitions" | "ignores"> & {
     id: string;
@@ -581,7 +581,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
     transitions: RawTransition[];
     ignores: RawIgnore[];
   };
-  type RawScenario = Omit<DesignScenarioDecl, "id" | "bindings" | "brRefs"> & {
+  type RawScenario = Omit<Parameters<typeof DesignScenarioDecl.reconstitute>[0], "id" | "bindings" | "brRefs"> & {
     id: string;
     bindings: (readonly [string, unknown])[];
     brRefs?: string[];
@@ -616,7 +616,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
         })),
       ),
       obligations: DesignObligationDecls.of(
-        (overrides.obligations ?? []).map((ob) => ({
+        (overrides.obligations ?? []).map((ob) => DesignObligationDecl.reconstitute({
           ...ob,
           id: DesignObligationId.reconstitute(ob.id),
           origin: ob.origin === undefined ? undefined : DesignObligationOrigin.reconstitute(ob.origin),
@@ -629,7 +629,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
           id: DesignMachineId.reconstitute(sm.id),
           initial: InitialStates.of(sm.initial),
           transitions: DesignTransitionDecls.of(
-            sm.transitions.map((tr) => ({
+            sm.transitions.map((tr) => DesignTransitionDecl.reconstitute({
               ...tr,
               id: DesignTransitionId.reconstitute(tr.id),
               brRefs: brRefs(tr.brRefs),
@@ -640,7 +640,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
         })),
       ),
       scenarios: DesignScenarioDecls.of(
-        (overrides.scenarios ?? []).map((sc) => ({ ...sc, id: DesignScenarioId.reconstitute(sc.id), bindings: BindingPairs.of(sc.bindings), brRefs: brRefs(sc.brRefs) })),
+        (overrides.scenarios ?? []).map((sc) => DesignScenarioDecl.reconstitute({ ...sc, id: DesignScenarioId.reconstitute(sc.id), bindings: BindingPairs.of(sc.bindings), brRefs: brRefs(sc.brRefs) })),
       ),
       background: DesignBackgroundDecls.of(
         (overrides.background ?? []).map((bg) => ({ ...bg, id: DesignBackgroundId.reconstitute(bg.id) })),
@@ -908,12 +908,12 @@ describe("design decl collections (first-class operations)", () => {
     expect([...entities]).toEqual([entity]);
     expect(entities.toArray()).toEqual([entity]);
 
-    const ob = { id: DesignObligationId.reconstitute("DOB-1") };
+    const ob = DesignObligationDecl.reconstitute({ id: DesignObligationId.reconstitute("DOB-1") });
     const obs = DesignObligationDecls.of([]).add(ob);
     expect([...obs]).toEqual([ob]);
     expect(obs.toArray()).toEqual([ob]);
 
-    const tr = { id: DesignTransitionId.reconstitute("TR-1") };
+    const tr = DesignTransitionDecl.reconstitute({ id: DesignTransitionId.reconstitute("TR-1") });
     const trs = DesignTransitionDecls.of([]).add(tr);
     expect([...trs]).toEqual([tr]);
     expect(trs.toArray()).toEqual([tr]);
@@ -928,7 +928,7 @@ describe("design decl collections (first-class operations)", () => {
     expect([...sms]).toEqual([sm]);
     expect(sms.toArray()).toEqual([sm]);
 
-    const sc = { id: DesignScenarioId.reconstitute("DSC-1"), bindings, hasEvent: false };
+    const sc = DesignScenarioDecl.reconstitute({ id: DesignScenarioId.reconstitute("DSC-1"), bindings, hasEvent: false });
     const scs = DesignScenarioDecls.of([]).add(sc);
     expect([...scs]).toEqual([sc]);
     expect(scs.toArray()).toEqual([sc]);
@@ -973,7 +973,7 @@ describe("contract-1 decl collections (first-class operations)", () => {
     expect([...ents]).toEqual([ent]);
     expect(ents.toArray()).toEqual([ent]);
 
-    const ob = { id: ObligationId.reconstitute("OB-1") };
+    const ob = IrObligationDecl.reconstitute({ id: ObligationId.reconstitute("OB-1") });
     const obs = IrObligationDecls.of([]).add(ob);
     expect([...obs]).toEqual([ob]);
     expect(obs.toArray()).toEqual([ob]);
@@ -985,7 +985,7 @@ describe("contract-1 decl collections (first-class operations)", () => {
     ]);
     expect(pairs.toArray().length).toBe(2);
 
-    const sc = { id: ScenarioId.reconstitute("SC-1"), bindings: pairs, hasEvent: false };
+    const sc = IrScenarioDecl.reconstitute({ id: ScenarioId.reconstitute("SC-1"), bindings: pairs, hasEvent: false });
     const scs = IrScenarioDecls.of([]).add(sc);
     expect([...scs]).toEqual([sc]);
     expect(scs.toArray()).toEqual([sc]);

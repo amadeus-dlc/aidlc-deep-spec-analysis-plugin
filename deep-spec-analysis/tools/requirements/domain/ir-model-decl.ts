@@ -124,23 +124,15 @@ export class IrModelDecl {
     };
 
     for (const ob of this.#obligations) {
-      const where = `obligation ${ob.id.asString()}`;
-      dupCheck(ob.id.asString(), where);
-      if (ob.assert !== undefined) checkExpr(ob.assert, where, false);
-      if (ob.guard !== undefined) checkExpr(ob.guard, where, false);
-      if (ob.effect !== undefined) checkExpr(ob.effect, where, true);
-      if (ob.temporal !== undefined) {
-        const t = ob.temporal;
-        if (t.assert !== undefined) checkExpr(t.assert, where, false);
-        if (t.from !== undefined) checkExpr(t.from, where, false);
-        if (t.to !== undefined) checkExpr(t.to, where, false);
-      }
+      const where = `obligation ${ob.id().asString()}`;
+      dupCheck(ob.id().asString(), where);
+      ob.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
     }
 
     for (const sc of this.#scenarios) {
-      const where = `scenario ${sc.id.asString()}`;
-      dupCheck(sc.id.asString(), where);
-      for (const [path, val] of sc.bindings) {
+      const where = `scenario ${sc.id().asString()}`;
+      dupCheck(sc.id().asString(), where);
+      for (const [path, val] of sc.bindings()) {
         const t = attrTypes.get(path);
         if (!t) {
           errors.push(`${where}: binding for unknown attribute "${path}"`);
@@ -150,7 +142,7 @@ export class IrModelDecl {
           errors.push(`${where}: binding value ${JSON.stringify(val)} does not fit ${t.kindLabel()} attribute "${path}"`);
         }
       }
-      if (sc.expect !== undefined) checkExpr(sc.expect, where, sc.hasEvent);
+      sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
     }
 
     for (const bg of this.#background) {

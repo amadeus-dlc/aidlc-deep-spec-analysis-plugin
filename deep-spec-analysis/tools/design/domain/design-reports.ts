@@ -61,25 +61,25 @@ export class DesignReports {
         if (!a || !b) continue;
         for (const u of model.units()) {
           for (const sc of u.scenarios()) {
-            const key = `${u.name()}|${sc.id.asString()}`;
+            const key = `${u.name()}|${sc.id().asString()}`;
             if (a.skipped.has(key) || b.skipped.has(key)) continue;
             const verdictOf = (d: (typeof docs)[number]): boolean =>
-              d.findings.some((f) => f.kind === "scenario-violation" && f.unit === u.name() && f.targets.includes(sc.id.asString()));
+              d.findings.some((f) => f.kind === "scenario-violation" && f.unit === u.name() && f.targets.includes(sc.id().asString()));
             const va = verdictOf(a);
             const vb = verdictOf(b);
-            (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id.asString());
-            (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(sc.id.asString());
+            (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id().asString());
+            (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(sc.id().asString());
             if (va !== vb) {
               const verdicts: { [backend: string]: "violated" | "clean" } = {};
               verdicts[a.backend] = va ? "violated" : "clean";
               verdicts[b.backend] = vb ? "violated" : "clean";
               findings.push({
                 kind: "cross-check-disagreement",
-                frRefs: FrRefs.of(IdOrder.sortedUnique([...sc.frRefs], IdOrder.compare)),
-                targets: TargetIds.of([sc.id.asString()]),
+                frRefs: FrRefs.of(IdOrder.sortedUnique([...sc.frRefs()], IdOrder.compare)),
+                targets: TargetIds.of([sc.id().asString()]),
                 witness: { verdicts },
                 unit: u.name(),
-                detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id.asString()} of unit ${u.name()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`,
+                detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()} of unit ${u.name()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`,
               });
             }
           }

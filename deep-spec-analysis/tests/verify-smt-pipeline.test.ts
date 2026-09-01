@@ -37,8 +37,8 @@ import {
   VerificationReports,
   VerificationSkips,
   type BackgroundAssumption,
-  type Scenario,
-  type Obligation,
+  Scenario,
+  Obligation,
   type AttributeDeclaration,
   AttributeDeclarations,
   AttributeValues,
@@ -79,8 +79,8 @@ const sensorPath = join(pluginRoot, "tools", "aidlc-sensor-deep-spec-verify-smt.
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
 type RawAttributeDeclaration = Omit<AttributeDeclaration, "values"> & { values?: string[] };
-type RawObligation = Omit<Obligation, "frRefs" | "trigger"> & { frRefs: string[]; trigger?: string };
-type RawScenario = Omit<Scenario, "frRefs"> & { frRefs: string[] };
+type RawObligation = Omit<Parameters<typeof Obligation.reconstitute>[0], "frRefs" | "trigger"> & { frRefs: string[]; trigger?: string };
+type RawScenario = Omit<Parameters<typeof Scenario.reconstitute>[0], "frRefs"> & { frRefs: string[] };
 function model(seed: {
   irVersion?: IrVersion;
   attributes?: RawAttributeDeclaration[];
@@ -96,8 +96,8 @@ function model(seed: {
     attributes: AttributeDeclarations.of(
       (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
     ),
-    obligations: Obligations.of((seed.obligations ?? []).map((o) => ({ ...o, frRefs: FrRefs.of(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
-    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => ({ ...s, frRefs: FrRefs.of(s.frRefs) }))),
+    obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.reconstitute({ ...o, frRefs: FrRefs.of(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
+    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.reconstitute({ ...s, frRefs: FrRefs.of(s.frRefs) }))),
     background: BackgroundAssumptions.of(seed.background ?? []),
   });
 }

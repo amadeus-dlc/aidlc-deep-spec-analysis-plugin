@@ -103,50 +103,50 @@ export class QuintMachineFacts {
 
     // 2) leads-to 時相義務（bounded のみ。既に skip 済みの義務は対象外）。
     for (const ob of model.obligations()) {
-      if (!ob.nature.isStateTemporal() || ob.temporal?.pattern !== "leads-to") continue;
-      if (skipped.some((s) => s.target === ob.id.asString())) continue;
+      if (!ob.isStateTemporal() || ob.temporal()?.pattern !== "leads-to") continue;
+      if (skipped.some((s) => s.target === ob.id().asString())) continue;
       if (!bounded) {
         skipped.push({
-          target: ob.id.asString(),
+          target: ob.id().asString(),
           reason: "capability",
           detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them",
         });
         continue;
       }
-      const r = runs.temporalOf(ob.id.asString());
+      const r = runs.temporalOf(ob.id().asString());
       if (!r) continue;
       if (r.kind === "timeout") {
-        skipped.push({ target: ob.id.asString(), reason: "timeout", detail: "temporal check exceeded its budget" });
+        skipped.push({ target: ob.id().asString(), reason: "timeout", detail: "temporal check exceeded its budget" });
       } else if (r.kind === "violation") {
         findings.push({
           kind: "conflict",
-          frRefs: FrRefs.of(model.frRefsOf([ob.id.asString()])),
-          targets: TargetIds.of([ob.id.asString()]),
+          frRefs: FrRefs.of(model.frRefsOf([ob.id().asString()])),
+          targets: TargetIds.of([ob.id().asString()]),
           witness: { trace: r.trace.toArray() },
-          detail: `Temporal obligation ${ob.id.asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`,
+          detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`,
         });
       }
     }
 
     // 3) シナリオ検査（全属性束縛・イベントなし）：クロスチェック面。
     for (const sc of model.scenarios()) {
-      if (sc.event) {
-        skipped.push({ target: sc.id.asString(), reason: "capability", detail: "scenarios with a When-event are not checked by the quint backend in v1" });
+      if (sc.hasEvent()) {
+        skipped.push({ target: sc.id().asString(), reason: "capability", detail: "scenarios with a When-event are not checked by the quint backend in v1" });
         continue;
       }
-      if (!this.#scenariosWithInit.has(sc.id.asString())) {
+      if (!this.#scenariosWithInit.has(sc.id().asString())) {
         skipped.push({
-          target: sc.id.asString(),
+          target: sc.id().asString(),
           reason: "capability",
           detail: "quint scenario evaluation requires bindings for every declared attribute",
         });
         continue;
       }
-      const r = runs.scenarioOf(sc.id.asString());
+      const r = runs.scenarioOf(sc.id().asString());
       if (!r) continue;
       if (r.kind === "timeout" || r.kind === "run-failed") {
         skipped.push({
-          target: sc.id.asString(),
+          target: sc.id().asString(),
           reason: r.kind === "timeout" ? "timeout" : "unavailable",
           detail: r.kind === "timeout"
             ? "scenario evaluation exceeded its budget"
@@ -155,25 +155,25 @@ export class QuintMachineFacts {
         continue;
       }
       const state: TraceState & { [path: string]: boolean | number | string } = {};
-      for (const [path, value] of Object.entries(sc.bindings)) state[path] = value;
-      if (sc.kind === "accept" && r.violated) {
+      for (const [path, value] of sc.bindingEntriesCanonically()) state[path] = value;
+      if (sc.isAccept() && r.violated) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
-        const targets = IdOrder.sortedUnique([sc.id.asString(), ...violatedComponents.ids()], IdOrder.compare);
+        const targets = IdOrder.sortedUnique([sc.id().asString(), ...violatedComponents.ids()], IdOrder.compare);
         findings.push({
           kind: "scenario-violation",
           frRefs: FrRefs.of(model.frRefsOf(targets)),
           targets: TargetIds.of(targets),
           witness: { model: state },
-          detail: `Accept scenario ${sc.id.asString()} describes a state the obligations rule out — the requirements reject an example that should be accepted.`,
+          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out — the requirements reject an example that should be accepted.`,
         });
       }
-      if (sc.kind === "reject" && !r.violated) {
+      if (sc.isReject() && !r.violated) {
         findings.push({
           kind: "scenario-violation",
-          frRefs: FrRefs.of(model.frRefsOf([sc.id.asString()])),
-          targets: TargetIds.of([sc.id.asString()]),
+          frRefs: FrRefs.of(model.frRefsOf([sc.id().asString()])),
+          targets: TargetIds.of([sc.id().asString()]),
           witness: { model: state },
-          detail: `Reject scenario ${sc.id.asString()} is accepted by every obligation — the requirements do not exclude an example that should be rejected.`,
+          detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation — the requirements do not exclude an example that should be rejected.`,
         });
       }
     }
@@ -181,4 +181,3 @@ export class QuintMachineFacts {
     return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
   }
 }
-

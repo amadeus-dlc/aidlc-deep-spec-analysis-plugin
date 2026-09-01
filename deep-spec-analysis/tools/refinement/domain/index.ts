@@ -7,10 +7,10 @@
 export { RefinementRequirements } from "./refinement-requirements.ts";
 export { type RefinementAttribute } from "./refinement-attribute.ts";
 export { RefinementAttributes } from "./refinement-attributes.ts";
-export { type RefinementObligation } from "./refinement-obligation.ts";
+export { RefinementObligation } from "./refinement-obligation.ts";
 export { RefinementObligations } from "./refinement-obligations.ts";
 export { type RefinementRequirementsSeed } from "./refinement-requirements-seed.ts";
-export { type RefinementScenario } from "./refinement-scenario.ts";
+export { RefinementScenario } from "./refinement-scenario.ts";
 export { RefinementScenarios } from "./refinement-scenarios.ts";
 export { ReqAttributeValues } from "./req-attribute-values.ts";
 export { RefinementMap } from "./refinement-map.ts";

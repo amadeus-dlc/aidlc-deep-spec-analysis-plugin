@@ -70,7 +70,7 @@ export class RefinementSolverFacts {
         }
       } else if (p.kind === "scenario") {
         const sc = req.scenarioById(p.reqId.asString());
-        if (sc?.kind === "accept" && r.isUnsat()) {
+        if (sc?.isAccept() === true && r.isUnsat()) {
           findings.push({
             kind: "refinement-violation",
             frRefs: FrRefs.of(frOf(p.reqId.asString())),
@@ -80,7 +80,7 @@ export class RefinementSolverFacts {
             detail: `Accept scenario ${p.reqId.asString()} has no design-legal counterpart in unit ${unitName} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
           });
         }
-        if (sc?.kind === "reject" && r.isSat()) {
+        if (sc?.isReject() === true && r.isSat()) {
           findings.push({
             kind: "refinement-violation",
             frRefs: FrRefs.of(frOf(p.reqId.asString())),

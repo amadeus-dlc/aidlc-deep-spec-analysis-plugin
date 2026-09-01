@@ -19,7 +19,7 @@ export class DesignScenarios {
 
   // lowering の凍結順：IdOrder 正準順（DesignTransitions.sortedCanonically と同じ面）。
   sortedCanonically(): DesignScenarios {
-    return new DesignScenarios([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
+    return new DesignScenarios([...this.#values].sort((a, b) => IdOrder.compare(a.id().asString(), b.id().asString())));
   }
 
   *[Symbol.iterator](): Iterator<DesignScenario> {
@@ -27,7 +27,7 @@ export class DesignScenarios {
   }
 
   ids(): readonly string[] {
-    return this.#values.map((s) => s.id.asString());
+    return this.#values.map((s) => s.id().asString());
   }
 
   toArray(): readonly DesignScenario[] {
