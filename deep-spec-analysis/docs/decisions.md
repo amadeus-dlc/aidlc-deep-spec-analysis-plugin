@@ -1061,6 +1061,8 @@ declare no public types — wiring only.
   follow. Coverage pins were added for the collection faces the split
   exposed (of/add/iteration).
 
-Evidence: tsc clean, full suite 369 pass / 1 skip / 0 fail, goldens and
+Evidence: tsc clean, full suite 371 pass / 1 skip / 0 fail, the per-file 90% coverage
+floor held (faces the split exposed are sealed by coverage pins),
+goldens and
 parity untouched (no reference-output changes), the architecture suite
 reports zero violations with the new rule on.

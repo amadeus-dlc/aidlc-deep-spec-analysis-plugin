@@ -830,3 +830,19 @@ describe("RefinementMapRepository (owner ruling: writable where writing is defin
     }
   });
 });
+
+describe("split-file coverage pins (one-public-type refactor)", () => {
+  test("solver facts expose compile skips and issue-order iteration; unmapped target parses", () => {
+    const f = RefinementSolverFacts.of({
+      pending: new Map<string, RefinementProbe>([
+        ["rv:OB-9", { kind: "invariant", reqId: ObligationId.reconstitute("OB-9") }],
+      ]),
+      compileSkips: DesignSkips.of([]),
+    });
+    expect([...f].map(([id]) => id)).toEqual(["rv:OB-9"]);
+    expect(f.compileSkips().toArray()).toEqual([]);
+    const parsed = UnmappedTargetRef.parse("OB-1");
+    expect(parsed.ok && parsed.value.equals(UnmappedTargetRef.reconstitute("OB-1"))).toBe(true);
+    expect(UnmappedTargetRef.parse("").ok).toBe(false);
+  });
+});

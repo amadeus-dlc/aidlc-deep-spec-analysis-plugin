@@ -468,3 +468,27 @@ describe("split-file coverage pins (one-public-type refactor)", () => {
     expect([...si].map((x) => x.asString())).toEqual(["FR-1"]);
   });
 });
+
+describe("sketch collection pins (one-public-type refactor)", () => {
+  test("sketch collections keep iterator and frozen-order faces", () => {
+    const de = (name: string) =>
+      DomainEntitySketch.reconstitute({
+        name: EntityName.reconstitute(name),
+        component: ComponentName.reconstitute("Core"),
+        attributes: AttributeNames.of([]),
+      });
+    const des = DomainEntitySketches.of([de("B")]).add(de("A")).add(de("a"));
+    expect([...des].length).toBe(3);
+    // 名前昇順・正規化名の初出のみ（"a" は "A" の正規化重複で落ちる——凍結順）。
+    expect(des.sortedDistinctByNormalizedName().map((d) => d.name().asString())).toEqual(["A", "B"]);
+    const sm = StateMachineSketch.reconstitute({
+      spec: MachineSpec.reconstitute("Order"),
+      states: StateNames.of([]),
+      fenceLine: LineNumber.reconstitute(1),
+      unsupported: null,
+    });
+    const sms = StateMachineSketches.of([]).add(sm);
+    expect([...sms].length).toBe(1);
+    expect(sms.toArray().length).toBe(1);
+  });
+});

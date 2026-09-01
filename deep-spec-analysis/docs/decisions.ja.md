@@ -1009,5 +1009,5 @@ Java 流のファイル規律を層化ツリー全体に適用した。層化フ
   kind-rank 順序保存テストのパスも追随。分割で露出したコレクション面
   （of/add/巡回）にカバレッジピンを追加。
 
-証拠：tsc clean・全スイート 369 pass / 1 skip / 0 fail・golden／パリティ
+証拠：tsc clean・全スイート 371 pass / 1 skip / 0 fail・per-file 90% カバレッジ床充足（分割で露出した面はカバレッジピンで封鎖）・golden／パリティ
 無傷（参照出力に変更なし）・architecture スイートは新ルール込みで違反ゼロ。
