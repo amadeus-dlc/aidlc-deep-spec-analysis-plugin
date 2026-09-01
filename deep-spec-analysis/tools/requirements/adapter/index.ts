@@ -3,7 +3,7 @@
 export { parseFormalModel } from "./formal-model-parser.ts";
 export { FormalModelRepositoryImpl } from "./formal-model-repository-impl.ts";
 export { type SmtChildQuery } from "./smt-child-query.ts";
-export { type SmtPlan, buildSmtPlan, decodeSolverModel, smtVar } from "./smt-plan.ts";
+export { type SmtPlan, buildSmtPlan, decodeSolverModel } from "./smt-plan.ts";
 export { type SmtChildResult } from "./smt-child-result.ts";
 export { solveSmtChild } from "./z3-engine-child.ts";
 export { Z3SolverClientImpl } from "./z3-solver-client-impl.ts";

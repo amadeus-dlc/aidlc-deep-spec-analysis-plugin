@@ -1066,3 +1066,47 @@ floor held (faces the split exposed are sealed by coverage pins),
 goldens and
 parity untouched (no reference-output changes), the architecture suite
 reports zero violations with the new rule on.
+
+## DDD migration PR8 — the SMT-compiler unification decision point is ruled: shared kernel vocabulary, two named compilers (2026-09-01, #21)
+
+The decision point PR6 deferred is executed. Full unification is ruled
+**out**, and issue #21's fallback — a shared core under two named
+compilers — lands.
+
+- **How the issue's three known differences resolved**: "enum sibling
+  resolution" is the same algorithm; the difference is only the lookup
+  table. The "bare-enum-literal wording difference" is real and frozen.
+  The "smtLit negatives" turned out byte-identical on both sides —
+  which is exactly what let the literal renderer move.
+- **Three frozen divergences reject unification**:
+  ① the bare-enum wording — for a bare enum literal, v1's explicit case
+  says "enum literal without a ref sibling has no resolvable encoding"
+  while refinement has no case and falls through to
+  'unknown operator "enum"' (carried in the alpha-failure detail). Both
+  are frozen wordings reachable as compile-error skip details in
+  document bytes; one function cannot serve both without a dialect
+  switch.
+  ② the ref resolution table is per context — v1 resolves against the
+  RequirementsModel aggregate, refinement against the
+  RefinementSmtContext built from the design unit's rawEntities.
+  ③ a type-bound constraint-name sanitization difference (newly
+  ledgered by this ruling) — v1 goes through smtName and replaces every
+  non-word character, refinement replaces dots only. Identical bytes on
+  ordinary paths, divergent frozen behavior on exotic ones.
+- **The shared core**: the four byte-identical vocabulary faces move to
+  kernel/adapter `smt-symbols` — smtVar, smtName, smtLit (also
+  collapsing v1's smtNumeral and its two inline duplicates in the int
+  literal and scenario bindings), and smtIntOf (the (- n) decode both
+  decoders shared). One definition makes the lockstep structural (the
+  eqRef precedent). The expression compilers stay two named ones —
+  smtOf (requirements) and smtOfExpr (design) — with no old-name
+  aliases.
+- **The duplicate map updates**: PR10's honest exception ② — the SMT
+  rendering vocabulary duplicated between requirements and design — is
+  resolved by this ruling; the honest exceptions shrink to one, the
+  meaning-distinct sanitize regexes.
+
+Evidence: base↔head parity `diff -r` empty, AIDLC_PARITY=1 determinism
+green, characterization snapshots (tests/fixtures/smt-scripts/)
+untouched, goldens untouched, 371 pass / 1 skip / 0 fail with the
+coverage floor, validator Errors: 0, 7 harness builds.

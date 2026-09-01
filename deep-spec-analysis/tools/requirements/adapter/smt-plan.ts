@@ -3,8 +3,10 @@
 // 必要な事実（SmtPlanFacts）だけをドメイン語彙で返す。
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の smtVar / smtName / enumCode /
 // smtOf / buildPlan からの逐語移植（IrDoc → RequirementsModel の読み替えのみ）。
+// 描画語彙（smtVar/smtName/smtLit/smtIntOf）は移行 PR8 で kernel 共有へ。
 
 import { type Expression, Expressions, IdOrder, TriggerName } from "../../kernel/domain/index.ts";
+import { smtIntOf, smtLit, smtName, smtVar } from "../../kernel/adapter/index.ts";
 import type { SmtChildQuery } from "./smt-child-query.ts";
 import {
   SmtEventPairProbes,
@@ -13,7 +15,6 @@ import {
   type Obligation,
   type RequirementsModel,
   type VerificationSkipped,
-  type AttributeBound,
   type SmtEventPairProbe,
 } from "../domain/index.ts";
 
@@ -32,20 +33,6 @@ class CompileError extends Error {
 interface NamedConstraint {
   name: string;
   smt: string;
-}
-
-export function smtVar(path: string, primed: boolean): string {
-  return `${primed ? "p" : "v"}_${path.replace(/\./g, "_")}`;
-}
-
-function smtName(prefix: string, id: string): string {
-  return `${prefix}_${id.replace(/[^A-Za-z0-9_]/g, "_")}`;
-}
-
-// SMT-LIB の整数リテラル描画（負数は (- n) 形——境界描画・逐語）。
-function smtNumeral(bound: AttributeBound): string {
-  const n = bound.asNumber();
-  return n < 0 ? `(- ${-n})` : String(n);
 }
 
 function enumCode(model: RequirementsModel, attrPath: string, value: string): number {
@@ -113,7 +100,7 @@ function smtOf(model: RequirementsModel, e: Expression): string {
     case "int": {
       const n = typeof e.value === "number" ? e.value : Number.NaN;
       if (!Number.isInteger(n)) throw new CompileError("int literal is not an integer");
-      return n < 0 ? `(- ${-n})` : String(n);
+      return smtLit(n);
     }
     case "enum":
       throw new CompileError("enum literal without a ref sibling has no resolvable encoding");
@@ -135,8 +122,7 @@ export function decodeSolverModel(
     if (attr.kind === "bool") {
       out[attr.path.asString()] = raw === "true";
     } else {
-      const m = raw.match(/^\(-\s*(\d+)\)$/);
-      const n = m ? -Number.parseInt(m[1] ?? "0", 10) : Number.parseInt(raw, 10);
+      const n = smtIntOf(raw);
       if (attr.kind === "enum" && attr.values) out[attr.path.asString()] = attr.values.valueAt(n) ?? n;
       else out[attr.path.asString()] = n;
     }
@@ -167,8 +153,8 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       }
       if (attr.kind === "int" && (attr.min !== undefined || attr.max !== undefined)) {
         const parts: string[] = [];
-        if (attr.min !== undefined) parts.push(`(>= ${v} ${smtNumeral(attr.min)})`);
-        if (attr.max !== undefined) parts.push(`(<= ${v} ${smtNumeral(attr.max)})`);
+        if (attr.min !== undefined) parts.push(`(>= ${v} ${smtLit(attr.min.asNumber())})`);
+        if (attr.max !== undefined) parts.push(`(<= ${v} ${smtLit(attr.max.asNumber())})`);
         return parts.length === 1 ? (parts[0] ?? null) : `(and ${parts.join(" ")})`;
       }
       return null;
@@ -349,7 +335,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         else if (attr.kind === "int") {
           const n = typeof value === "number" ? value : Number.NaN;
           if (!Number.isInteger(n)) throw new CompileError(`binding for int attribute "${path}" is not an integer`);
-          parts.push(`(= ${v} ${n < 0 ? `(- ${-n})` : n})`);
+          parts.push(`(= ${v} ${smtLit(n)})`);
         } else parts.push(`(= ${v} ${enumCode(model, path, String(value))})`);
       }
       const conj = parts.length === 1 ? (parts[0] ?? "true") : `(and ${parts.join(" ")})`;

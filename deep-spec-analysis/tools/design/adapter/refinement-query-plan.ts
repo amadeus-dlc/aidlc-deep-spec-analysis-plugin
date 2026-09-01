@@ -1,8 +1,9 @@
 import type { RefinementAttr } from "./refinement-attr.ts";
-// refinement の SMT-LIB コンパイラ — v1（requirements/adapter/smt-plan-builder）
-// とは意図的に統一しない**明示的な第 2 コンパイラ**（移行計画のアーキテクチャ
-// 判断 Q1 / PR8 判断点——スクリプトバイトはキャラクタライゼーション
-// スナップショットが固定する）。設計ユニットの属性表・型境界・背景・不変量から
+// refinement の SMT-LIB コンパイラ — v1（requirements/adapter/smt-plan）と
+// 統一しない**明示的な第 2 コンパイラ**（移行計画のアーキテクチャ判断 Q1 /
+// 移行 PR8 で確定——描画語彙は kernel 共有、式コンパイラは ref の解決表と
+// bare-enum 文言が文脈別に凍結されるため 2 命名のまま。スクリプトバイトは
+// キャラクタライゼーションスナップショットが固定する）。設計ユニットの属性表・型境界・背景・不変量から
 // pre/post の基底を組み、alpha 置換済みの要件性質で 4 種のクエリ
 // （rv: 静的違反・re: enabledness・rs2: ワンステップシミュレーション・
 // rs: シナリオ再生）を発行する。alpha / SMT コンパイルの失敗は凍結文言の
@@ -12,6 +13,7 @@ import type { RefinementAttr } from "./refinement-attr.ts";
 
 import { ObligationId, ScenarioId } from "../../refinement/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
+import { smtIntOf, smtLit, smtName, smtVar } from "../../kernel/adapter/index.ts";
 import { DesignSkips } from "../domain/index.ts";
 import type { DesignSkipped, DesignUnit, DesignValue } from "../domain/index.ts";
 import type { RefinementChildQuery } from "./refinement-child-query.ts";
@@ -38,11 +40,6 @@ function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-// v1 smt-plan-builder と同じ SMT シンボル正規化（境界描画・逐語）。
-function smtName(prefix: string, id: string): string {
-  return `${prefix}_${id.replace(/[^A-Za-z0-9_]/g, "_")}`;
-}
-
 export function refinementSmtContext(u: DesignUnit): RefinementSmtContext {
   const attrs: RefinementAttr[] = [];
   const rawEntities = u.rawEntities();
@@ -64,14 +61,6 @@ export function refinementSmtContext(u: DesignUnit): RefinementSmtContext {
     }
   }
   return { attrs, byPath: new Map(attrs.map((a) => [a.path, a])) };
-}
-
-function smtVar(path: string, primed: boolean): string {
-  return `${primed ? "p" : "v"}_${path.replace(/\./g, "_")}`;
-}
-
-function smtLit(n: number): string {
-  return n < 0 ? `(- ${-n})` : String(n);
 }
 
 function enumCode(ctx: RefinementSmtContext, attrPath: string, value: string): number {
@@ -211,8 +200,7 @@ export function decodeDesignModel(
     if (raw === undefined) continue;
     if (attr.kind === "bool") out[attr.path] = raw === "true";
     else {
-      const m = raw.match(/^\(-\s*(\d+)\)$/);
-      const n = m ? -Number.parseInt(m[1] ?? "0", 10) : Number.parseInt(raw, 10);
+      const n = smtIntOf(raw);
       if (attr.kind === "enum" && attr.values) out[attr.path] = attr.values[n] ?? n;
       else out[attr.path] = n;
     }
