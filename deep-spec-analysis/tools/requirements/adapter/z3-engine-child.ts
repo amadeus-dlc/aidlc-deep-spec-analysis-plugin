@@ -36,6 +36,14 @@ export async function solveSmtChild(): Promise<string> {
   // biome-ignore lint/suspicious/noExplicitAny: optional runtime, no type dep
   const Z3 = api.Context("main") as any;
   const results: SmtChildResult[] = [];
+  // 決定化（#28）: z3-solver の高水準 API は JS ラッパの GC 時に
+  // FinalizationRegistry 経由で dec_ref を発行する。負荷で GC タイミングが
+  // 変わると z3 内部の解放・ID 再利用パターンが揺れ、制約上自由な変数の
+  // モデル値が稀に変わりうる。子プロセスの寿命は短いので、生成した全ラッパを
+  // 実行終了まで保持して実行中の dec_ref をゼロにする——軽負荷時（GC 無発火）の
+  // 典型アロケーションパターンを全負荷条件で再現するため、golden バイトは
+  // 構成上不変。
+  const retained: unknown[] = [];
   const started = Date.now();
   for (const q of payload.queries) {
     if (Date.now() - started > payload.budgetMs) {
@@ -44,23 +52,35 @@ export async function solveSmtChild(): Promise<string> {
     }
     try {
       const solver = new Z3.Solver();
+      retained.push(solver);
       solver.set("timeout", payload.timeoutMs);
       solver.fromString(q.script);
       const assumptions = q.assumptions.map((n: string) => Z3.Bool.const(n));
+      retained.push(assumptions);
       const status = (await solver.check(...assumptions)) as string;
       if (status === "sat") {
         const model = solver.model();
+        retained.push(model);
         const values: { [name: string]: string } = {};
         for (const m of q.model) {
           const c = m.sort === "Bool" ? Z3.Bool.const(m.name) : Z3.Int.const(m.name);
-          values[m.name] = model.eval(c, true).toString();
+          const evaluated = model.eval(c, true);
+          retained.push(c, evaluated);
+          values[m.name] = evaluated.toString();
         }
         results.push({ id: q.id, status: "sat", model: values });
       } else if (status === "unsat") {
         const coreVec = solver.unsatCore();
+        retained.push(coreVec);
         const core: string[] = [];
         const len = typeof coreVec.length === "function" ? coreVec.length() : 0;
-        for (let i = 0; i < len; i++) core.push(coreVec.get(i).toString());
+        for (let i = 0; i < len; i++) {
+          // get(i) も個別の AST ラッパを生む——保持しないと後続クエリ中に
+          // dec_ref が走りうる（レビュー指摘の取りこぼし）。
+          const item = coreVec.get(i);
+          retained.push(item);
+          core.push(item.toString());
+        }
         results.push({ id: q.id, status: "unsat", core: core.sort() });
       } else {
         results.push({ id: q.id, status: "unknown" });
@@ -70,6 +90,9 @@ export async function solveSmtChild(): Promise<string> {
     }
   }
   const out = `${JSON.stringify({ results })}\n`;
+  // 保持はここまでで足りる——結果は素の JSON になっており、以後の解放順は
+  // 観測面に影響しない。
+  retained.length = 0;
   try {
     api.em.PThread.terminateAllThreads();
   } catch {

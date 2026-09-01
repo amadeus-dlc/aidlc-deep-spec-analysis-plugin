@@ -1268,3 +1268,37 @@ pre-assigned aggregate ids (no port has a bulk write today).
 Evidence: 397 pass / 1 skip / 0 fail with the per-file 90% floor,
 goldens untouched, parity `diff -r` empty (neither written bytes nor
 verdict values moved), validator Errors: 0, 7 harness builds.
+
+## z3 witness determinization — the GC-driven release wobble is sealed structurally (2026-09-01, #28)
+
+The mechanism behind the rare, load-only wobble of constraint-free
+witness values (seen once during the PR1 ritual: the SM-1/TR-3/TR-4 gap
+`ticket.priority` came back 0 instead of the golden 1) is identified and
+sealed.
+
+- **The mechanism**: z3-solver's high-level API issues `dec_ref` through
+  a FinalizationRegistry when a JS wrapper is GC'd. Load-dependent GC
+  timing perturbs z3's internal release and id/arena reuse pattern,
+  shifting search order — and only **constraint-free** variables can
+  change value (fully-bound witnesses cannot, matching the
+  observation).
+- **The fix**: the child retains every wrapper it creates (solver,
+  assumptions, model, eval results, unsat core) for its whole run, so
+  no `dec_ref` fires mid-run. This reproduces the light-load (no-GC)
+  allocation pattern under every load, so golden bytes are unchanged by
+  construction.
+- **Reproducibility record**: stress at 24 iterations × 14 hogs
+  (normal) plus a 64MB child heap (provoked GC) was golden-identical
+  on every run both before and after the fix — the original 1-in-~15
+  event did not reproduce under these stimuli. The ruling is therefore
+  mechanism-sealing plus a standing net, not wait-for-repro.
+- **The net**: `scripts/smt-stress.ts` (opt-in; exits 1 on divergence;
+  `NODE_OPTIONS="--max-old-space-size=64"` for the provoked-GC mode)
+  is permanent, and the per-PR parity harness keeps watching every
+  observable surface. On recurrence, reopen #28 and move to witness
+  normalization (pinning free variables to minima — a requirements-
+  level decision that revises goldens).
+
+Evidence: full suite green, goldens untouched, base↔head parity
+`diff -r` empty, stress 48/48 byte-identical, validator Errors: 0,
+7 harness builds.
