@@ -101,12 +101,13 @@ export class DoctorWorkspaceClientImpl implements DoctorWorkspaceClient {
         }
         const hasModel = existsSync(model);
         if (!hasModel || !hasFindings) {
-          out.push({ space, intent, hasModel, hasFindings, anchor: null, sourceNewerThanModel: false });
+          out.push({ space, intent, hasModel, hasFindings, anchor: null });
           continue;
         }
         // Content-based staleness の材料: モデルが sourceDigest を刻んでいれば
         // その anchor と現在の requirements.md バイトの実測 sha256 の対を渡す
-        //（mtime の嘘に騙されない）。anchor 以前のモデルは mtime 比較のみ。
+        //（mtime の嘘に騙されない）。anchor を持たないモデルは対なし＝domain が
+        // 無条件 stale と判じる（後方互換の mtime 比較は裁定で削除）。
         const anchored = readFileSync(model, "utf-8")
           .match(/```json\n([\s\S]*?)```/)?.[1]
           ?.match(/"sourceDigest"\s*:\s*"([0-9a-f]{64})"/)?.[1];
@@ -118,7 +119,6 @@ export class DoctorWorkspaceClientImpl implements DoctorWorkspaceClient {
           anchor: anchored
             ? { expected: ContentHash.reconstitute(anchored), actual: ContentHash.ofBytes(readFileSync(requirements)) }
             : null,
-          sourceNewerThanModel: anchored ? false : statSync(requirements).mtimeMs > statSync(model).mtimeMs,
         });
       }
     }

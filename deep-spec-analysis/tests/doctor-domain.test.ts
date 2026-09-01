@@ -37,13 +37,12 @@ describe("installation manifest", () => {
 
 describe("verification staleness — sourceDigest 照合と mtime フォールバックの純粋判断", () => {
   test("an anchor decides by content, never by mtime", () => {
-    expect(VerificationStaleness.of({ anchor: { expected: h("a"), actual: h("b") }, sourceNewerThanModel: false }).isStale()).toBe(true);
-    expect(VerificationStaleness.of({ anchor: { expected: h("a"), actual: h("a") }, sourceNewerThanModel: true }).isStale()).toBe(false);
+    expect(VerificationStaleness.of({ anchor: { expected: h("a"), actual: h("b") } }).isStale()).toBe(true);
+    expect(VerificationStaleness.of({ anchor: { expected: h("a"), actual: h("a") } }).isStale()).toBe(false);
   });
 
-  test("without an anchor the mtime heuristic judges", () => {
-    expect(VerificationStaleness.of({ anchor: null, sourceNewerThanModel: true }).isStale()).toBe(true);
-    expect(VerificationStaleness.of({ anchor: null, sourceNewerThanModel: false }).isStale()).toBe(false);
+  test("a model without an anchor is unconditionally stale (backward-compat mtime heuristic removed)", () => {
+    expect(VerificationStaleness.of({ anchor: null }).isStale()).toBe(true);
   });
 });
 

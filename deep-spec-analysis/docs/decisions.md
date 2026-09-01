@@ -1302,3 +1302,29 @@ sealed.
 Evidence: full suite green, goldens untouched, base↔head parity
 `diff -r` empty, stress 48/48 byte-identical, validator Errors: 0,
 7 harness builds.
+
+## The no-backward-compat ruling — no path exists to rescue old artifacts (2026-09-01)
+
+Under the owner ruling "delete backward-compatibility code", the whole
+tree was audited. One deletion qualified: the doctor's **mtime
+fallback** — the path that rescued pre-anchor models (no sourceDigest)
+with an mtime comparison. ir-valid's `SourceAnchor` enforces
+sourceDigest as mandatory, so an anchor-less model is invalid under the
+current contract — that path existed solely for old artifacts. After
+the deletion, **no anchor means unconditionally stale** (the
+re-verification stamps the digest). `VerificationStaleness` becomes a
+pure sourceDigest judgment and `VerificationTarget` drops its mtime
+material.
+
+**Ruled not backward compat** (and kept): the authored default for a
+missing stage frontmatter (a degradation contract), the node→bun
+runtime fallback (availability), `findingTarget(fallback)` (material
+selection for malformed input), kind-rank's "order compatibility" (a
+machine-proved guarantee, not code), and install.ts's tombstones (the
+anti-compat machinery that *removes* legacy remnants — kept together
+with its append-on-retire discipline).
+
+Evidence: full suite green with the coverage floor, goldens untouched,
+doctor stdout byte-identical on both baselines (dev repo and the design
+fixture — the behavior change is confined to genuinely old artifacts),
+validator Errors: 0, 7 harness builds.
