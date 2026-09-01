@@ -5,7 +5,9 @@
 // 頻発させるには NODE_OPTIONS="--max-old-space-size=64" を付けて呼ぶ。
 //
 // 使い方:  bun scripts/smt-stress.ts [iterations=24] [loadWorkers=cpus-2]
-// 終了コード: 出力が 1 種なら 0、揺れを検出したら 1。
+// 終了コード: 要求した全反復が成功し、かつ出力が 1 種のときだけ 0。
+// 揺れ・失敗（spawn エラー・timeout・非 0 exit）・観測 0 件は 1
+//（silent fake-green の防止——snapshot.ts と同じ規律）。
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -25,6 +27,7 @@ const hogs = Array.from({ length: loadWorkers }, () =>
 );
 const hashes = new Map<string, number>();
 const priorities = new Map<string, number>();
+let successes = 0;
 try {
   for (let i = 0; i < iterations; i++) {
     const record = join(tmpdir(), `smt-stress-${i}-${Math.random().toString(36).slice(2)}`);
@@ -36,8 +39,8 @@ try {
         encoding: "utf-8",
         timeout: 240_000,
       });
-      if (res.status !== 0) {
-        console.log(`iter ${i}: sensor exit ${res.status}`);
+      if (res.error || res.status !== 0) {
+        console.log(`iter ${i}: sensor failed (${res.error ? String(res.error) : `exit ${res.status}`})`);
         continue;
       }
       const smt = readFileSync(join(record, "construction", "deep-spec-analysis-functional-verify", "deep-spec-design-verify", "smt.json"), "utf-8");
@@ -47,6 +50,7 @@ try {
       const gap = (doc.findings ?? []).find((f) => f.kind === "completeness-gap" && JSON.stringify(f.targets) === JSON.stringify(["SM-1", "TR-3", "TR-4"]));
       const p = gap ? String(gap.witness?.model?.["ticket.priority"]) : "(no-gap)";
       priorities.set(p, (priorities.get(p) ?? 0) + 1);
+      successes += 1;
       process.stdout.write(`iter ${i}: ${h} priority=${p}\n`);
     } finally {
       rmSync(record, { recursive: true, force: true });
@@ -57,4 +61,5 @@ try {
 }
 console.log("=== distinct smt.json hashes:", hashes.size, JSON.stringify([...hashes.entries()]));
 console.log("=== priority histogram:", JSON.stringify([...priorities.entries()]));
-process.exit(hashes.size <= 1 ? 0 : 1);
+console.log(`=== successes: ${successes}/${iterations}`);
+process.exit(successes === iterations && successes > 0 && hashes.size === 1 ? 0 : 1);

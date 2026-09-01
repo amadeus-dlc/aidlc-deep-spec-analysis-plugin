@@ -74,7 +74,13 @@ export async function solveSmtChild(): Promise<string> {
         retained.push(coreVec);
         const core: string[] = [];
         const len = typeof coreVec.length === "function" ? coreVec.length() : 0;
-        for (let i = 0; i < len; i++) core.push(coreVec.get(i).toString());
+        for (let i = 0; i < len; i++) {
+          // get(i) も個別の AST ラッパを生む——保持しないと後続クエリ中に
+          // dec_ref が走りうる（レビュー指摘の取りこぼし）。
+          const item = coreVec.get(i);
+          retained.push(item);
+          core.push(item.toString());
+        }
         results.push({ id: q.id, status: "unsat", core: core.sort() });
       } else {
         results.push({ id: q.id, status: "unknown" });
