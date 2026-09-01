@@ -27,7 +27,7 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, type DesignMachine, DesignObligation, DesignScenario, type DesignIgnore, type DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId } from "../tools/design/domain/index.ts";
+import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, type DesignMachine, DesignObligation, DesignScenario, DesignIgnore, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId } from "../tools/design/domain/index.ts";
 import { type DesignUnit as DesignUnitType } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
@@ -62,7 +62,7 @@ import {
   UnitRefinementPlan,
   UnmappedDeclarations,
   UnmappedTargetRef,
-  type AttributeMapping,
+  AttributeMapping,
   type EventMapping,
   type RefinementAttribute,
   RefinementObligation,
@@ -192,14 +192,15 @@ type RawDesignObligation = Omit<Parameters<typeof DesignObligation.reconstitute>
   brRefs: string[];
   frRefs: string[];
 };
-type RawDesignTransition = Omit<DesignTransition, "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
+type RawDesignTransition = Omit<Parameters<typeof DesignTransition.reconstitute>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
+type RawDesignIgnore = Omit<Parameters<typeof DesignIgnore.reconstitute>[0], "trigger"> & { trigger: string };
 type RawDesignMachine = Omit<DesignMachine, "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
   id: string;
   entity: string;
   attribute: string;
   initial: string[];
   transitions: RawDesignTransition[];
-  ignores: DesignIgnore[];
+  ignores: RawDesignIgnore[];
 };
 type RawDesignScenario = Omit<Parameters<typeof DesignScenario.reconstitute>[0], "id" | "brRefs" | "frRefs"> & { id: string; brRefs: string[]; frRefs: string[] };
 function unit(seed: {
@@ -233,9 +234,9 @@ function unit(seed: {
         attribute: DesignAttributeName.reconstitute(m.attribute),
         initial: InitialStates.of(m.initial),
         transitions: DesignTransitions.of(
-          m.transitions.map((t) => ({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
+          m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
         ),
-        ignores: DesignIgnores.of(m.ignores),
+        ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
       })),
     ),
     scenarios: DesignScenarios.of(
@@ -296,7 +297,15 @@ type RawAttributeMapping =
 type RawEventMapping = Omit<EventMapping, "reqTrigger" | "transitions"> & { reqTrigger: string; transitions: string[] };
 type RawUnmappedTarget = { target: string; reason: string };
 function wrapMapping(m: RawAttributeMapping): AttributeMapping {
-  return { ...m, req: AttributePath.reconstitute(m.req) } as AttributeMapping;
+  const req = AttributePath.reconstitute(m.req);
+  switch (m.kind) {
+    case "expression":
+      return AttributeMapping.expression(req, m.expr);
+    case "enum-cases":
+      return AttributeMapping.enumCases(req, m.from, m.cases);
+    case "unspecified":
+      return AttributeMapping.unspecified(req);
+  }
 }
 function refUnitMap(seed: {
   unit?: string;
@@ -321,6 +330,17 @@ const exprMapping = (req: string, path: string) =>
 const enumMapping = (req: string, from: string, cases: { [d: string]: string }) =>
   ({ kind: "enum-cases", req, from, cases }) as const;
 
+describe("attribute mapping totality", () => {
+  test("an inherited property name (e.g. \"toString\") does not count as a covered case", () => {
+    const mapping = AttributeMapping.enumCases(AttributePath.reconstitute("R.state"), "D.phase", { draft: "open" });
+    // from の宣言値に "toString" があっても、cases の own mapping が無ければ欠けとして報告する。
+    expect(mapping.missingCasesOver(["draft", "toString"])).toEqual(["toString"]);
+    expect(mapping.missingCasesOver(["draft"])).toEqual([]);
+    expect(mapping.producedValuesOutside({ includes: (v: string) => v === "open" })).toEqual([]);
+    expect(AttributeMapping.expression(AttributePath.reconstitute("R.x"), { op: "ref", path: "D.x" }).missingCasesOver(["a"])).toEqual([]);
+  });
+});
+
 describe("alpha substitution", () => {
   const ctx = AlphaContext.of(
     new Map<string, AttributeMapping>([
@@ -329,6 +349,11 @@ describe("alpha substitution", () => {
       ["R.none", wrapMapping({ kind: "unspecified", req: "R.none" })],
     ]),
   );
+
+  test("covers reports membership of the approved mapping index", () => {
+    expect(ctx.covers("R.flag")).toBe(true);
+    expect(ctx.covers("R.zzz")).toBe(false);
+  });
 
   test("enum eq expands to the disjunction of design values mapping to the literal", () => {
     const out = ctx.substitute({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "open" }] }, false);
@@ -667,7 +692,7 @@ describe("refinement collections (first-class operations)", () => {
   test("of/add/iterator/toArray and the map-side set knowledge", () => {
     const am = AttributeMappings.of([]).add(wrapMapping(exprMapping("R.a", "D.a")));
     expect([...am].length).toBe(1);
-    expect(am.toArray()[0]?.req.asString()).toBe("R.a");
+    expect(am.toArray()[0]?.req().asString()).toBe("R.a");
 
     const tref = (raw: string): TransitionRef => TransitionRef.reconstitute(raw);
     const tr = TransitionRefs.of([tref("TR-2")]).add(tref("TR-10"));

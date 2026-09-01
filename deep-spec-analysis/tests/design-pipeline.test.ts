@@ -45,11 +45,11 @@ import {
   DesignObligations,
   DesignScenarios,
   type DesignBackgroundAssumption,
-  type DesignIgnore,
+  DesignIgnore,
   type DesignMachine,
   DesignObligation,
   DesignScenario,
-  type DesignTransition,
+  DesignTransition,
   type DesignValue,
   BrRefs,
   DesignIgnores,
@@ -184,8 +184,8 @@ type RawDesignObligation = Omit<Parameters<typeof DesignObligation.reconstitute>
   frRefs: string[];
   trigger?: string;
 };
-type RawDesignTransition = Omit<DesignTransition, "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
-type RawDesignIgnore = Omit<DesignIgnore, "trigger"> & { trigger: string };
+type RawDesignTransition = Omit<Parameters<typeof DesignTransition.reconstitute>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
+type RawDesignIgnore = Omit<Parameters<typeof DesignIgnore.reconstitute>[0], "trigger"> & { trigger: string };
 type RawDesignMachine = Omit<DesignMachine, "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
   id: string;
   entity: string;
@@ -232,9 +232,9 @@ function unit(seed: {
         attribute: DesignAttributeName.reconstitute(m.attribute),
         initial: InitialStates.of(m.initial),
         transitions: DesignTransitions.of(
-          m.transitions.map((t) => ({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
+          m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
         ),
-        ignores: DesignIgnores.of(m.ignores.map((g) => ({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
+        ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
       })),
     ),
     scenarios: DesignScenarios.of(

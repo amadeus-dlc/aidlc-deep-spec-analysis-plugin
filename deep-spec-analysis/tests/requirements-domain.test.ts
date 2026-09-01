@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { FrRefs, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
-import { Obligation, ObligationId, ObligationNature, Scenario, ScenarioId } from "../tools/requirements/domain/index.ts";
+import { BackgroundAssumptionId, IrBackgroundDecl, Obligation, ObligationId, ObligationNature, Scenario, ScenarioId } from "../tools/requirements/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
 
@@ -153,5 +153,25 @@ describe("scenario", () => {
     const out = scenario("accept").bindings();
     (out as Record<string, number>).c = 3;
     expect(scenario("accept").bindings()).toEqual({ b: 2, a: 1 });
+  });
+});
+
+describe("ir background decl", () => {
+  test("inspectExpressions visits the assertion with primes forbidden, and silence when absent", () => {
+    const withAssert = IrBackgroundDecl.reconstitute({
+      id: BackgroundAssumptionId.reconstitute("BG-1"),
+      assert: { op: "ref", path: "a.b" },
+    });
+    const seen: [string, boolean][] = [];
+    withAssert.inspectExpressions((expression, primesAllowed) => seen.push([expression.op, primesAllowed]));
+    expect(seen).toEqual([["ref", false]]);
+    expect(withAssert.id().asString()).toBe("BG-1");
+    expect(withAssert.assertion()).toEqual({ op: "ref", path: "a.b" });
+
+    const bare = IrBackgroundDecl.reconstitute({ id: BackgroundAssumptionId.reconstitute("BG-2") });
+    const none: unknown[] = [];
+    bare.inspectExpressions((expression, primesAllowed) => none.push([expression.op, primesAllowed]));
+    expect(none).toEqual([]);
+    expect(bare.assertion()).toBeUndefined();
   });
 });

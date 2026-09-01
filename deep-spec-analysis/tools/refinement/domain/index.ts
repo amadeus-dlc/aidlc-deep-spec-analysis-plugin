@@ -14,7 +14,7 @@ export { RefinementScenario } from "./refinement-scenario.ts";
 export { RefinementScenarios } from "./refinement-scenarios.ts";
 export { ReqAttributeValues } from "./req-attribute-values.ts";
 export { RefinementMap } from "./refinement-map.ts";
-export { type AttributeMapping } from "./attribute-mapping.ts";
+export { AttributeMapping } from "./attribute-mapping.ts";
 export { AttributeMappings } from "./attribute-mappings.ts";
 export { type EventMapping } from "./event-mapping.ts";
 export { EventMappings } from "./event-mappings.ts";

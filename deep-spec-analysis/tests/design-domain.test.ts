@@ -4,6 +4,10 @@ import { describe, expect, test } from "bun:test";
 import { FrRefs, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
 import {
   BrRefs,
+  DesignBackgroundDecl,
+  DesignBackgroundId,
+  DesignIgnore,
+  DesignTransition,
   DesignObligation,
   DesignObligationId,
   DesignObligationNature,
@@ -204,5 +208,71 @@ describe("design transition decl", () => {
     expect(bare.brRefs()).toBeUndefined();
     expect(bare.guard()).toBeUndefined();
     expect(bare.effect()).toBeUndefined();
+  });
+});
+
+describe("design background decl", () => {
+  test("inspectExpressions visits the assertion with primes forbidden, and silence when absent", () => {
+    const withAssert = DesignBackgroundDecl.reconstitute({
+      id: DesignBackgroundId.reconstitute("DBG-1"),
+      assert: { op: "ref", path: "t.x" },
+    });
+    const seen: [string, boolean][] = [];
+    withAssert.inspectExpressions((expression, primesAllowed) => seen.push([expression.op, primesAllowed]));
+    expect(seen).toEqual([["ref", false]]);
+    expect(withAssert.id().asString()).toBe("DBG-1");
+    expect(withAssert.assertion()).toEqual({ op: "ref", path: "t.x" });
+
+    const bare = DesignBackgroundDecl.reconstitute({ id: DesignBackgroundId.reconstitute("DBG-2") });
+    const none: unknown[] = [];
+    bare.inspectExpressions((expression, primesAllowed) => none.push([expression.op, primesAllowed]));
+    expect(none).toEqual([]);
+    expect(bare.assertion()).toBeUndefined();
+  });
+});
+
+describe("design transition and ignore (compile-down owners)", () => {
+  const primed: Expression = { op: "ref", path: "T.s", prime: true };
+  const transition = (withExprs: boolean) =>
+    DesignTransition.reconstitute({
+      id: DesignTransitionId.reconstitute("TR-1"),
+      from: "open",
+      to: "closed",
+      trigger: TriggerName.reconstitute("close"),
+      guard: withExprs ? lit(true) : undefined,
+      effect: withExprs ? primed : undefined,
+      brRefs: BrRefs.of(["BR-9"]),
+    });
+
+  test("reconstitute round-trips every field through the accessors", () => {
+    const tr = transition(true);
+    expect(tr.id().asString()).toBe("TR-1");
+    expect(tr.fromState()).toBe("open");
+    expect(tr.toState()).toBe("closed");
+    expect(tr.trigger().asString()).toBe("close");
+    expect(tr.guard()).toEqual(lit(true));
+    expect(tr.effect()).toEqual(primed);
+    expect(tr.brRefs().toArray()).toEqual(["BR-9"]);
+    expect(transition(false).guard()).toBeUndefined();
+    expect(transition(false).effect()).toBeUndefined();
+  });
+
+  test("lowered guard/effect pair the implicit state frame with the explicit expressions", () => {
+    const framed = transition(true);
+    expect(framed.loweredGuard("T.s")).toEqual({ op: "and", args: [{ op: "eq", args: [{ op: "ref", path: "T.s" }, { op: "enum", value: "open" }] }, lit(true)] });
+    expect(framed.loweredEffect("T.s")).toEqual({ op: "and", args: [{ op: "eq", args: [{ op: "ref", path: "T.s", prime: true }, { op: "enum", value: "closed" }] }, primed] });
+    const bare = transition(false);
+    expect(bare.loweredGuard("T.s")).toEqual({ op: "eq", args: [{ op: "ref", path: "T.s" }, { op: "enum", value: "open" }] });
+    expect(bare.loweredEffect("T.s")).toEqual({ op: "eq", args: [{ op: "ref", path: "T.s", prime: true }, { op: "enum", value: "closed" }] });
+    expect(bare.stateAssignment("T.s")).toEqual(["T.s", { op: "enum", value: "closed" }]);
+  });
+
+  test("ignore lowers to an explicit no-op event and round-trips its fields", () => {
+    const ig = DesignIgnore.reconstitute({ state: "closed", trigger: TriggerName.reconstitute("close"), reason: "already closed" });
+    expect(ig.state()).toBe("closed");
+    expect(ig.trigger().asString()).toBe("close");
+    expect(ig.reason()).toBe("already closed");
+    expect(ig.loweredGuard("T.s")).toEqual({ op: "eq", args: [{ op: "ref", path: "T.s" }, { op: "enum", value: "closed" }] });
+    expect(ig.loweredEffect("T.s")).toEqual({ op: "eq", args: [{ op: "ref", path: "T.s", prime: true }, { op: "ref", path: "T.s" }] });
   });
 });

@@ -57,7 +57,7 @@ export { IrModelDecl } from "./ir-model-decl.ts";
 export { IrAttributeDecl } from "./ir-attribute-decl.ts";
 export { IrAttributeDecls } from "./ir-attribute-decls.ts";
 export { IrAttributeName } from "./ir-attribute-name.ts";
-export { type IrBackgroundDecl } from "./ir-background-decl.ts";
+export { IrBackgroundDecl } from "./ir-background-decl.ts";
 export { IrBackgroundDecls } from "./ir-background-decls.ts";
 export { IrBindingPairs } from "./ir-binding-pairs.ts";
 export { IrDeclaredValues } from "./ir-declared-values.ts";

@@ -22,7 +22,7 @@ import {
   DesignTransitions,
   DesignUnits,
   InitialStates,
-  type DesignIgnore,
+  DesignIgnore,
   AttrPaths,
   DesignBackgroundAssumptions,
   DesignMachines,
@@ -32,7 +32,7 @@ import {
   type DesignModelComposition,
   DesignObligation,
   DesignScenario,
-  type DesignTransition,
+  DesignTransition,
   type DesignValue,
   DesignUnit,
 } from "../domain/index.ts";
@@ -79,7 +79,7 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
       for (const tr of Array.isArray(sm.transitions) ? sm.transitions : []) {
         if (!isObject(tr) || typeof tr.id !== "string") continue;
         if (typeof tr.from !== "string" || typeof tr.to !== "string" || typeof tr.trigger !== "string") continue;
-        transitions.push({
+        transitions.push(DesignTransition.reconstitute({
           id: DesignTransitionId.reconstitute(tr.id),
           from: tr.from,
           to: tr.to,
@@ -87,12 +87,12 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
           guard: isObject(tr.guard) ? (tr.guard as unknown as Expression) : undefined,
           effect: isObject(tr.effect) ? (tr.effect as unknown as Expression) : undefined,
           brRefs: BrRefs.of(strArr(tr.brRefs)),
-        });
+        }));
       }
       const ignores: DesignIgnore[] = [];
       for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
         if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
-        ignores.push({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger), reason: typeof ig.reason === "string" ? ig.reason : "" });
+        ignores.push(DesignIgnore.reconstitute({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger), reason: typeof ig.reason === "string" ? ig.reason : "" }));
       }
       machines.push({
         id: DesignMachineId.reconstitute(sm.id),

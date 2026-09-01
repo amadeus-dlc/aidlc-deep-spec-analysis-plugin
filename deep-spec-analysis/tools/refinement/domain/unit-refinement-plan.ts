@@ -63,40 +63,42 @@ export class UnitRefinementPlan {
     const unmapped = unitMap.unmapped;
 
     for (const m of unitMap.attrMap) {
-      if (byReq.has(m.req.asString())) gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap maps "${m.req.asString()}" more than once`);
-      byReq.set(m.req.asString(), m);
-      const reqAttr = req.attributes().byPath(m.req);
+      const reqPath = m.req().asString();
+      const gapTarget = [`attr:${reqPath.replace(/[^A-Za-z0-9_./-]/g, "-")}`];
+      if (byReq.has(reqPath)) gap(gapTarget, `attrMap maps "${reqPath}" more than once`);
+      byReq.set(reqPath, m);
+      const reqAttr = req.attributes().byPath(m.req());
       if (!reqAttr) {
-        gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap entry "${m.req.asString()}" names no attribute of the requirements IR`);
+        gap(gapTarget, `attrMap entry "${reqPath}" names no attribute of the requirements IR`);
         continue;
       }
-      if (m.kind === "enum-cases") {
+      // 判断は写像へ命じる（波5）——plan は gap 文言（凍結面）だけを所有する。
+      if (m.isEnumCases()) {
+        const from = m.enumFrom() ?? "";
         if (reqAttr.kind !== "enum") {
-          gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap entry "${m.req.asString()}" uses enumMap but the requirements attribute is ${reqAttr.kind}`);
+          gap(gapTarget, `attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind}`);
         }
-        if (!u.attrPaths().has(m.from)) {
-          gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap.from "${m.from}" is not a design attribute of unit ${u.name()}`);
+        if (!u.attrPaths().has(from)) {
+          gap(gapTarget, `enumMap.from "${from}" is not a design attribute of unit ${u.name()}`);
           continue;
         }
-        const fromValues = u.declaredEnumValuesOf(m.from);
+        const fromValues = u.declaredEnumValuesOf(from);
         if (fromValues === null) {
-          gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap.from "${m.from}" is not an enum design attribute`);
+          gap(gapTarget, `enumMap.from "${from}" is not an enum design attribute`);
           continue;
         }
-        const missing = fromValues.filter((v) => !(v in m.cases)).sort();
+        const missing = m.missingCasesOver(fromValues);
         if (missing.length > 0) {
-          gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap for "${m.req.asString()}" is not total over "${m.from}": missing case(s) ${missing.join(", ")}`);
+          gap(gapTarget, `enumMap for "${reqPath}" is not total over "${from}": missing case(s) ${missing.join(", ")}`);
         }
-        const badResults = IdOrder.sortedUnique(Object.values(m.cases).filter((rv) => !(reqAttr.values?.includes(rv) ?? false)), IdOrder.compare);
+        const badResults = m.producedValuesOutside(reqAttr.values);
         if (badResults.length > 0) {
-          gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `enumMap for "${m.req.asString()}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`);
+          gap(gapTarget, `enumMap for "${reqPath}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`);
         }
-      } else if (m.kind === "expression") {
-        const refs = new Set<string>();
-        exprRefs(m.expr, refs);
-        for (const r of [...refs].sort()) {
+      } else if (m.isExpression()) {
+        for (const r of m.referencedPaths()) {
           if (!u.attrPaths().has(r)) {
-            gap([`attr:${m.req.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`], `attrMap expression for "${m.req.asString()}" references "${r}", which is not a design attribute of unit ${u.name()}`);
+            gap(gapTarget, `attrMap expression for "${reqPath}" references "${r}", which is not a design attribute of unit ${u.name()}`);
           }
         }
       }

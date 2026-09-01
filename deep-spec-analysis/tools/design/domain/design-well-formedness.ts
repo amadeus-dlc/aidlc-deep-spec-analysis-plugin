@@ -184,8 +184,9 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     }
 
     for (const bg of unitView.background) {
-      dup(bg.id.asString(), `background ${bg.id.asString()}`);
-      if (bg.assert !== undefined) checkExpr(bg.assert, `background ${bg.id.asString()}`, false);
+      const ctx = `background ${bg.id().asString()}`;
+      dup(bg.id().asString(), ctx);
+      bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
     }
 
     // brRefs reverse-verification + BR coverage against this unit's rules.md.

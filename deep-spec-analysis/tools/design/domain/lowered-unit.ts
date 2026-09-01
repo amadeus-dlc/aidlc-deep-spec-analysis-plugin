@@ -12,7 +12,6 @@
 // アダプタの serializer が担い、ここは型付き lowering を返す）。
 
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
-import { Expressions } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "./design-machines.ts";
 import type { DesignMachine } from "./design-machine.ts";
@@ -295,20 +294,20 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     const attrPath = DesignMachines.attrPathOf(sm);
     attrPathOfMachine.set(sm.id.asString(), attrPath);
     for (const tr of sm.transitions.sortedCanonically()) {
-      const guard: Expression = tr.guard ? { op: "and", args: [Expressions.eqRef(attrPath, false, tr.from), tr.guard] } : Expressions.eqRef(attrPath, false, tr.from);
-      const effect: Expression = tr.effect ? { op: "and", args: [Expressions.eqRef(attrPath, true, tr.to), tr.effect] } : Expressions.eqRef(attrPath, true, tr.to);
+      // compile-down の暗黙部は遷移／ignore 自身が所有する（波5b）。
+      const guard = tr.loweredGuard(attrPath);
+      const effect = tr.loweredEffect(attrPath);
       const lowId = push(
-        { nature: "event", frRefs: [], trigger: tr.trigger.asString(), guard, effect },
-        { design: LoweredOriginRef.reconstitute(tr.id.asString()), kind: "transition" },
+        { nature: "event", frRefs: [], trigger: tr.trigger().asString(), guard, effect },
+        { design: LoweredOriginRef.reconstitute(tr.id().asString()), kind: "transition" },
       );
-      machineOfTransition.set(tr.id.asString(), sm);
-      candidates.push({ lowId, design: tr.id.asString(), trigger: tr.trigger.asString(), guard, effect });
+      machineOfTransition.set(tr.id().asString(), sm);
+      candidates.push({ lowId, design: tr.id().asString(), trigger: tr.trigger().asString(), guard, effect });
     }
     const sortedIgnores = sm.ignores.sortedByStateTrigger();
     for (const ig of sortedIgnores) {
-      const effect: Expression = { op: "eq", args: [{ op: "ref", path: attrPath, prime: true }, { op: "ref", path: attrPath }] };
       push(
-        { nature: "event", frRefs: [], trigger: ig.trigger.asString(), guard: Expressions.eqRef(attrPath, false, ig.state), effect },
+        { nature: "event", frRefs: [], trigger: ig.trigger().asString(), guard: ig.loweredGuard(attrPath), effect: ig.loweredEffect(attrPath) },
         { design: LoweredOriginRef.reconstitute(sm.id.asString()), kind: "ignore" },
       );
     }

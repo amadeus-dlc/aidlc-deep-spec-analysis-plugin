@@ -19,7 +19,7 @@ import {
   BrReferenceIndex,
   BrRefs,
   DeclaredValues,
-  type DesignBackgroundDecl,
+  DesignBackgroundDecl,
   DesignAttributeDecl,
   DesignAttributeDecls,
   DesignBackgroundDecls,
@@ -61,7 +61,7 @@ import {
   FormalModelId,
   FrReferenceIndex,
   FrRefs,
-  type IrBackgroundDecl,
+  IrBackgroundDecl,
   IrObligationDecl,
   IrScenarioDecl,
   IrAttributeDecl,
@@ -389,7 +389,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   type RawIrEntity = { name: string; attributes: RawIrAttr[] };
   type RawIrObligation = Omit<Parameters<typeof IrObligationDecl.reconstitute>[0], "id"> & { id: string };
   type RawIrScenario = Omit<Parameters<typeof IrScenarioDecl.reconstitute>[0], "id" | "bindings"> & { id: string; bindings: (readonly [string, unknown])[] };
-  type RawIrBackground = Omit<IrBackgroundDecl, "id"> & { id: string };
+  type RawIrBackground = Omit<Parameters<typeof IrBackgroundDecl.reconstitute>[0], "id"> & { id: string };
   function irView(overrides: {
     entities?: RawIrEntity[];
     obligations?: RawIrObligation[];
@@ -418,7 +418,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
         (overrides.scenarios ?? []).map((sc) => IrScenarioDecl.reconstitute({ ...sc, id: ScenarioId.reconstitute(sc.id), bindings: IrBindingPairs.of(sc.bindings) })),
       ),
       background: IrBackgroundDecls.of(
-        (overrides.background ?? []).map((bg) => ({ ...bg, id: BackgroundAssumptionId.reconstitute(bg.id) })),
+        (overrides.background ?? []).map((bg) => IrBackgroundDecl.reconstitute({ ...bg, id: BackgroundAssumptionId.reconstitute(bg.id) })),
       ),
     });
   }
@@ -586,7 +586,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
     bindings: (readonly [string, unknown])[];
     brRefs?: string[];
   };
-  type RawBackground = Omit<DesignBackgroundDecl, "id"> & { id: string };
+  type RawBackground = Omit<Parameters<typeof DesignBackgroundDecl.reconstitute>[0], "id"> & { id: string };
   type RawUnit = {
     entities?: RawEntity[];
     obligations?: RawObligation[];
@@ -643,7 +643,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
         (overrides.scenarios ?? []).map((sc) => DesignScenarioDecl.reconstitute({ ...sc, id: DesignScenarioId.reconstitute(sc.id), bindings: BindingPairs.of(sc.bindings), brRefs: brRefs(sc.brRefs) })),
       ),
       background: DesignBackgroundDecls.of(
-        (overrides.background ?? []).map((bg) => ({ ...bg, id: DesignBackgroundId.reconstitute(bg.id) })),
+        (overrides.background ?? []).map((bg) => DesignBackgroundDecl.reconstitute({ ...bg, id: DesignBackgroundId.reconstitute(bg.id) })),
       ),
       unformalizedTargets: UnformalizedTargets.of(overrides.unformalizedTargets ?? []),
       directoryExists: overrides.directoryExists ?? true,
@@ -933,7 +933,7 @@ describe("design decl collections (first-class operations)", () => {
     expect([...scs]).toEqual([sc]);
     expect(scs.toArray()).toEqual([sc]);
 
-    const bg = { id: DesignBackgroundId.reconstitute("DBG-1") };
+    const bg = DesignBackgroundDecl.reconstitute({ id: DesignBackgroundId.reconstitute("DBG-1") });
     const bgs = DesignBackgroundDecls.of([]).add(bg);
     expect([...bgs]).toEqual([bg]);
     expect(bgs.toArray()).toEqual([bg]);
@@ -990,7 +990,7 @@ describe("contract-1 decl collections (first-class operations)", () => {
     expect([...scs]).toEqual([sc]);
     expect(scs.toArray()).toEqual([sc]);
 
-    const bg = { id: BackgroundAssumptionId.reconstitute("BG-1") };
+    const bg = IrBackgroundDecl.reconstitute({ id: BackgroundAssumptionId.reconstitute("BG-1") });
     const bgs = IrBackgroundDecls.of([]).add(bg);
     expect([...bgs]).toEqual([bg]);
     expect(bgs.toArray()).toEqual([bg]);

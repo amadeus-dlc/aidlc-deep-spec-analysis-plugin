@@ -22,11 +22,11 @@ export class DesignTransitions {
   }
 
   ids(): readonly string[] {
-    return this.#values.map((t) => t.id.asString());
+    return this.#values.map((t) => t.id().asString());
   }
 
   sortedCanonically(): DesignTransitions {
-    return new DesignTransitions([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
+    return new DesignTransitions([...this.#values].sort((a, b) => IdOrder.compare(a.id().asString(), b.id().asString())));
   }
 
   toArray(): readonly DesignTransition[] {

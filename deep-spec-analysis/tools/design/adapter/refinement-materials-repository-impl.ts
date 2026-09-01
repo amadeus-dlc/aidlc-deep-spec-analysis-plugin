@@ -33,7 +33,7 @@ import {
   ReqAttributeValues,
   TransitionRefs,
   UnmappedDeclarations,
-  type AttributeMapping,
+  AttributeMapping,
   type EventMapping,
   type RefinementAttribute,
   RefinementObligation,
@@ -200,11 +200,11 @@ export function parseRefinementMapDocument(bytes: Uint8Array, id: RefinementMapI
         for (const [k, v] of Object.entries(m.enumMap.cases)) {
           if (typeof v === "string") cases[k] = v;
         }
-        attrMap.push({ kind: "enum-cases", req: AttributePath.reconstitute(m.req), from: m.enumMap.from, cases });
+        attrMap.push(AttributeMapping.enumCases(AttributePath.reconstitute(m.req), m.enumMap.from, cases));
       } else if (isObject(m.expr)) {
-        attrMap.push({ kind: "expression", req: AttributePath.reconstitute(m.req), expr: m.expr as unknown as Expression });
+        attrMap.push(AttributeMapping.expression(AttributePath.reconstitute(m.req), m.expr as unknown as Expression));
       } else {
-        attrMap.push({ kind: "unspecified", req: AttributePath.reconstitute(m.req) });
+        attrMap.push(AttributeMapping.unspecified(AttributePath.reconstitute(m.req)));
       }
     }
     const eventMap: EventMapping[] = [];
