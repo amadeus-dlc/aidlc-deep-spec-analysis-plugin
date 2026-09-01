@@ -1416,3 +1416,13 @@ models too and join the ledger as the same disease.
   Expression (never silently off the ledger).
 
 Evidence: 399 tests / 0 fail, goldens untouched.
+
+Wave 3 (same PR): the obligation/scenario twins and their decls across
+all three stages (`Obligation`, `Scenario`, `IrObligationDecl`,
+`IrScenarioDecl`, `DesignObligation`, `DesignScenario`,
+`DesignObligationDecl`, `DesignScenarioDecl`, `DesignTransitionDecl`,
+`RefinementObligation`, `RefinementScenario`) become commandable
+classes, and `DesignTemporalDecl` dissolves into the door signature of
+`DesignObligationDecl`. 12 ledger entries are reclaimed — the
+shrink-only ledger now holds 110 of the 122-file starting inventory
+(the docs record the start; the ledger records what remains).

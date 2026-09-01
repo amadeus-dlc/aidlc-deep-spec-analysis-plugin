@@ -11,8 +11,9 @@ export class SmtQueryVerdict {
   // ドアの引数は無名のインライン署名で運ぶ（主従の裁定・補遺）。
   private constructor(props: { status: SmtQueryStatus; decodedModel?: { [path: string]: boolean | number | string }; core?: string[] }) {
     this.#status = props.status;
-    this.#decodedModel = props.decodedModel;
-    this.#core = props.core;
+    // 判定の内部状態は外部と参照を共有しない（入出力ともにコピー）。
+    this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
+    this.#core = props.core === undefined ? undefined : [...props.core];
   }
 
   static reconstitute(props: { status: SmtQueryStatus; decodedModel?: { [path: string]: boolean | number | string }; core?: string[] }): SmtQueryVerdict {
@@ -34,7 +35,7 @@ export class SmtQueryVerdict {
 
   // witness 材料面: ラベル→対象の写像に使う生順の core。
   coreLabels(): readonly string[] {
-    return this.#core ?? [];
+    return [...(this.#core ?? [])];
   }
 
   // witness 材料面: 文書に載る整列済み core。
@@ -44,6 +45,6 @@ export class SmtQueryVerdict {
 
   // witness 材料面: 復号済みモデル（欠けは空——凍結挙動）。
   witnessModel(): { [path: string]: boolean | number | string } {
-    return this.#decodedModel ?? {};
+    return { ...(this.#decodedModel ?? {}) };
   }
 }

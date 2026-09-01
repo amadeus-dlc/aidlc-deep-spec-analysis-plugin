@@ -1295,3 +1295,12 @@ getter しかない data model であり、同じ病巣として台帳に載る�
   消さない）。
 
 証拠：399 tests / 0 fail・golden 無傷。
+
+波 3（同 PR）: 3 ステージ全ての義務／シナリオ双子とその decl
+（`Obligation`・`Scenario`・`IrObligationDecl`・`IrScenarioDecl`・
+`DesignObligation`・`DesignScenario`・`DesignObligationDecl`・
+`DesignScenarioDecl`・`DesignTransitionDecl`・`RefinementObligation`・
+`RefinementScenario`）が命令できる class へ。`DesignTemporalDecl` は
+`DesignObligationDecl` のドア署名へ解散。台帳から 12 エントリを回収し、
+縮小専用台帳は開始在庫 122 のうち 110 を保持する（記録は開始数、
+台帳は残債——差分が各波の回収分）。

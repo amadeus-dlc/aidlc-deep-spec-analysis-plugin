@@ -536,7 +536,9 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
       out.push({ path: relPath, rule: "no-data-models-in-domain", detail: `getter-only interface ${name} is a data model — make it commandable or dissolve it into a door signature` });
     }
   }
-  for (const m of source.matchAll(/^export type (\w+)\s*=\s*([\s\S]*?);\n/gm)) {
+  // ジェネリック别名（export type Foo<T> = …）と末尾セミコロン省略の両方も
+  // 拾う（波3のレビュー指摘——検査回避経路を塞ぐ）。
+  for (const m of source.matchAll(/^export type (\w+)(?:<[^>]*>)?\s*=\s*([\s\S]*?);?$/gm)) {
     const rhs = m[2] ?? "";
     if (/^\s*\{/.test(rhs) || (rhs.includes("{") && rhs.includes("|"))) {
       out.push({ path: relPath, rule: "no-data-models-in-domain", detail: `record-shaped type alias ${m[1]} is a data model — make it commandable or dissolve it into a door signature` });

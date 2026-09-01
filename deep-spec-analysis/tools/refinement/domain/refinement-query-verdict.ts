@@ -13,9 +13,10 @@ export class RefinementQueryVerdict {
   // ドアの引数は無名のインライン署名で運ぶ（主従の裁定・補遺）。
   private constructor(props: { status: RefinementQueryStatus; decodedModel?: { [path: string]: DesignValue }; decodedPostModel?: { [path: string]: DesignValue }; core?: string[] }) {
     this.#status = props.status;
-    this.#decodedModel = props.decodedModel;
-    this.#decodedPostModel = props.decodedPostModel;
-    this.#core = props.core;
+    // 判定の内部状態は外部と参照を共有しない（入出力ともにコピー）。
+    this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
+    this.#decodedPostModel = props.decodedPostModel === undefined ? undefined : { ...props.decodedPostModel };
+    this.#core = props.core === undefined ? undefined : [...props.core];
   }
 
   static reconstitute(props: { status: RefinementQueryStatus; decodedModel?: { [path: string]: DesignValue }; decodedPostModel?: { [path: string]: DesignValue }; core?: string[] }): RefinementQueryVerdict {
@@ -42,11 +43,11 @@ export class RefinementQueryVerdict {
 
   // witness 材料面: 復号済みモデル（欠けは空——凍結挙動）。
   witnessModel(): { [path: string]: DesignValue } {
-    return this.#decodedModel ?? {};
+    return { ...(this.#decodedModel ?? {}) };
   }
 
   // witness 材料面: ワンステップシミュレーションの pre/post トレース。
   witnessTrace(): [{ [path: string]: DesignValue }, { [path: string]: DesignValue }] {
-    return [this.#decodedModel ?? {}, this.#decodedPostModel ?? {}];
+    return [{ ...(this.#decodedModel ?? {}) }, { ...(this.#decodedPostModel ?? {}) }];
   }
 }

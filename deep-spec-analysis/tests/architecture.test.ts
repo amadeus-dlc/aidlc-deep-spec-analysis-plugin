@@ -186,6 +186,12 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { a: string };\n')).not.toHaveLength(0);
     expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { kind: "a" } | { kind: "b" };\n')).not.toHaveLength(0);
     expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = "a" | "b";\n')).toHaveLength(0);
+    // ジェネリック别名と末尾セミコロン省略も検出する（波3レビュー指摘の回帰）。
+    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo<T> = { t: T };\n')).not.toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { a: string }\n')).not.toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { kind: "a" } | { kind: "b" }\n')).not.toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo<T> = T | T[];\n')).toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = "a" | "b"\n')).toHaveLength(0);
     expect(noDataModelsInDomain("design/domain/design-value.ts", "export interface Sneak {\n  readonly a: string;\n}")).toHaveLength(0);
     expect(noDataModelsInDomain("design/adapter/foo.ts", "export interface Foo {\n  readonly a: string;\n}")).toHaveLength(0);
   });
