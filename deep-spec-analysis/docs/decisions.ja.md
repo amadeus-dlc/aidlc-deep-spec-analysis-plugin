@@ -1175,3 +1175,31 @@ store は禁止。複数件の書き込みだけが、正常に書けた件数�
 証拠：397 pass / 1 skip / 0 fail（per-file 90% 床込み）・golden 無傷・
 パリティ `diff -r` 空（書かれるバイトも verdict 値も不変）・validator
 Errors: 0・7 ハーネスビルド。
+
+## z3 witness 決定化 — GC 由来の解放揺れを構造的に封じる（2026-09-01、#28）
+
+負荷時に限り、制約上自由な変数の witness 値が稀に揺れた事象（PR1 儀式で
+1 回だけ、SM-1/TR-3/TR-4 gap の `ticket.priority` が golden の 1 でなく 0）
+の根本機構を特定し、封じた。
+
+- **機構**: z3-solver の高水準 API は JS ラッパの GC 時に
+  FinalizationRegistry で `dec_ref` を発行する。負荷依存の GC タイミングが
+  z3 内部の解放・ID／アリーナ再利用パターンを揺らし、探索順が変わって
+  **制約上自由な変数だけ**のモデル値が変わりうる（完全束縛 witness は不変
+  ——観測事実と一致）。
+- **対処**: 子プロセス実行中は生成した全ラッパ（solver・assumptions・
+  model・eval 結果・unsat core）を保持し、実行中の `dec_ref` をゼロにする。
+  軽負荷時（GC 無発火）の典型アロケーションパターンを全負荷条件で再現する
+  ため、golden バイトは構成上不変。
+- **再現性の記録**: 24 回×14 hog（通常）＋子ヒープ 64MB（挑発 GC）の
+  ストレスで修正前後とも全回 golden 一致——元事象（十数回に 1 回）はこの
+  刺激では非再現だった。よって「再現待ち」でなく機構封殺＋監視網常設で
+  裁定する。
+- **監視網**: `scripts/smt-stress.ts`（opt-in、揺れ検出で exit 1。
+  `NODE_OPTIONS="--max-old-space-size=64"` で挑発 GC モード）を常設。毎 PR
+  儀式のパリティハーネスも引き続き全観測面 diff で捕捉する。再発時は #28 を
+  再開し、witness 正規化（自由変数の最小化固定——golden 改定を伴う要件
+  レベル判断）へ進む。
+
+証拠：全スイート green・golden 無傷・base↔head パリティ `diff -r` 空・
+ストレス 48/48 バイト一致・validator Errors: 0・7 ハーネスビルド。
