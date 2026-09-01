@@ -15,3 +15,4 @@ export { type MdTable, parseMarkdownTables } from "./md-table.ts";
 export { listSubdirectories } from "./list-subdirectories.ts";
 export { SystemClock } from "./system-clock.ts";
 export { writeFileAtomically } from "./atomic-write.ts";
+export { smtVar, smtName, smtLit, smtIntOf } from "./smt-symbols.ts";

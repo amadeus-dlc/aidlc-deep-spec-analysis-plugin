@@ -1011,3 +1011,37 @@ Java 流のファイル規律を層化ツリー全体に適用した。層化フ
 
 証拠：tsc clean・全スイート 371 pass / 1 skip / 0 fail・per-file 90% カバレッジ床充足（分割で露出した面はカバレッジピンで封鎖）・golden／パリティ
 無傷（参照出力に変更なし）・architecture スイートは新ルール込みで違反ゼロ。
+
+## DDD 移行 PR8 — SMT コンパイラ統一の判断点を裁定：語彙は kernel 共有、式コンパイラは 2 命名で確定（2026-09-01、#21）
+
+PR6 が繰り延べた判断点を実行した。完全統一は**不能**と裁定し、issue #21 の
+フォールバック——core 共有の 2 命名コンパイラ——で確定する。
+
+- **issue の 3 つの既知差の帰結**: 「enum sibling 解決」は同一アルゴリズムで、
+  差は解決表だけだった。「bare-enum-literal の文言差」は実在の凍結差。
+  「smtLit 負数」は両側バイト同一と判明——だからこそ共有できた。
+- **統一を退けた 3 つの凍結差**:
+  ① bare-enum 文言差——裸の enum リテラルに v1 は明示 case で
+  「enum literal without a ref sibling has no resolvable encoding」、
+  refinement は case を持たず default 落ちで「unknown operator "enum"」
+  （alpha 失敗の detail に載る）。どちらも compile-error skip の detail として
+  文書バイトに現れうる凍結文言で、単一関数は方言スイッチなしに両立できない。
+  ② ref の解決表が文脈別——v1 は RequirementsModel（DP 集約）、refinement は
+  設計ユニットの rawEntities から組む RefinementSmtContext。
+  ③ 型境界制約名のサニタイズ差（本裁定で新たに台帳へ）——v1 は smtName 経由で
+  `[^A-Za-z0-9_]` 全置換、refinement はドットのみ置換。通常パスでは同一バイト
+  だが、異字を含むパスで分岐する凍結挙動。
+- **共有した core**: バイト同一の描画語彙 4 面を kernel/adapter
+  `smt-symbols` へ一本化——smtVar・smtName・smtLit（v1 側は smtNumeral と
+  int リテラル・シナリオ束縛の 2 つのインライン重複も同時に収束）・
+  smtIntOf（(- n) 形復号、両 decode の共通部）。単一定義が lockstep を構造
+  保証する（eqRef 前例）。式コンパイラは smtOf（requirements）と
+  smtOfExpr（design）の 2 命名のまま、旧名 alias なし。
+- **重複マップの更新**: PR10 が正直な例外 ② として残した「SMT レンダリング
+  語彙の requirements/design 二重定義」は本裁定で解消——正直な例外は
+  sanitize 正規表現（意味別）の 1 件に減った。
+
+証拠：base↔head パリティ `diff -r` 空・AIDLC_PARITY=1 決定論 green・
+キャラクタライゼーションスナップショット（tests/fixtures/smt-scripts/）
+無傷・golden 無傷・371 pass / 1 skip / 0 fail（カバレッジ床込み）・
+validator Errors: 0・7 ハーネスビルド。
