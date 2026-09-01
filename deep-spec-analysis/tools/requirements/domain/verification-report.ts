@@ -133,8 +133,8 @@ export class VerificationReport {
       method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
-        ...model.obligations().toArray().map((ob) => ({ target: ob.id.asString(), reason: "compile-error", detail: machineError })),
-        ...model.scenarios().toArray().map((sc) => ({ target: sc.id.asString(), reason: "compile-error", detail: machineError })),
+        ...model.obligations().toArray().map((ob) => ({ target: ob.id().asString(), reason: "compile-error", detail: machineError })),
+        ...model.scenarios().toArray().map((sc) => ({ target: sc.id().asString(), reason: "compile-error", detail: machineError })),
       ]),
     });
   }
@@ -221,4 +221,3 @@ export class VerificationReport {
     return this.#skipped.count();
   }
 }
-

@@ -46,10 +46,11 @@ export class DesignEventCatalog {
       }
     }
     for (const ob of u.obligations()) {
-      if (!ob.nature.isEvent() || !ob.guard || !ob.effect) continue;
+      const event = ob.guardedEffect();
+      if (event === null) continue;
       const effectAssign = new Map<string, Expression>();
       try {
-        for (const [path, term] of EffectAssignments.ofEffect(ob.effect)) {
+        for (const [path, term] of EffectAssignments.ofEffect(event.effect)) {
           const [a, b] = term.args ?? [];
           const rhs = a?.op === "ref" && a.prime === true ? b : a;
           if (rhs) effectAssign.set(path, rhs);
@@ -57,7 +58,7 @@ export class DesignEventCatalog {
       } catch {
         continue;
       }
-      out.set(ob.id.asString(), { guard: ob.guard, effectAssign: DesignAssignments.of(effectAssign) });
+      out.set(ob.id().asString(), { guard: event.guard, effectAssign: DesignAssignments.of(effectAssign) });
     }
     return new DesignEventCatalog(out);
   }

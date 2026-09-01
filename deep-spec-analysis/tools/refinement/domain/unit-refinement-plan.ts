@@ -125,87 +125,88 @@ export class UnitRefinementPlan {
     const obligationStatus = new Map<string, RefinementStatus>();
     const eventTransitions = new Map<string, readonly TransitionRef[]>();
     for (const ob of req.obligations()) {
-      if (unmapped.covers(ob.id)) {
-        obligationStatus.set(ob.id.asString(), { kind: "waived", reason: unmapped.reasonOf(ob.id) ?? "listed in unmapped[]" });
+      if (unmapped.covers(ob.id())) {
+        obligationStatus.set(ob.id().asString(), { kind: "waived", reason: unmapped.reasonOf(ob.id()) ?? "listed in unmapped[]" });
         continue;
       }
-      if (ob.nature.isStateTemporal()) {
-        obligationStatus.set(ob.id.asString(), { kind: "capability", detail: "temporal refinement is outside v1 scope" });
+      if (ob.isStateTemporal()) {
+        obligationStatus.set(ob.id().asString(), { kind: "capability", detail: "temporal refinement is outside v1 scope" });
         continue;
       }
-      if (ob.nature.isInvariant() || ob.nature.isNumeric()) {
-        const cov = attrsCovered(ob.assert);
-        if (cov.ok) obligationStatus.set(ob.id.asString(), { kind: "checkable" });
+      if (ob.isInvariantLike()) {
+        const cov = attrsCovered(ob.assertion());
+        if (cov.ok) obligationStatus.set(ob.id().asString(), { kind: "checkable" });
         else if (unmapped.coversAll(cov.missing)) {
-          obligationStatus.set(ob.id.asString(), { kind: "waived", reason: `depends on unmapped attribute(s) ${cov.missing.join(", ")}` });
+          obligationStatus.set(ob.id().asString(), { kind: "waived", reason: `depends on unmapped attribute(s) ${cov.missing.join(", ")}` });
         } else {
-          obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `depends on attribute(s) ${cov.missing.join(", ")} that are neither mapped nor in unmapped[]` });
+          obligationStatus.set(ob.id().asString(), { kind: "gap", detail: `depends on attribute(s) ${cov.missing.join(", ")} that are neither mapped nor in unmapped[]` });
         }
         continue;
       }
-      if (ob.nature.isEvent()) {
-        const entry = ob.trigger === undefined ? undefined : unitMap.eventMap.ofTrigger(ob.trigger);
+      if (ob.isEvent()) {
+        const trigger = ob.trigger();
+        const entry = trigger === undefined ? undefined : unitMap.eventMap.ofTrigger(trigger);
         if (entry?.waived) {
-          obligationStatus.set(ob.id.asString(), { kind: "waived", reason: entry.waived.reason });
+          obligationStatus.set(ob.id().asString(), { kind: "waived", reason: entry.waived.reason });
           continue;
         }
-        const covG = attrsCovered(ob.guard);
-        const covE = attrsCovered(ob.effect);
+        const covG = attrsCovered(ob.guard());
+        const covE = attrsCovered(ob.effect());
         const missing = IdOrder.sortedUnique([...covG.missing, ...covE.missing], IdOrder.compare);
         if (!entry || entry.transitions.isEmpty()) {
-          obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `requirements event trigger "${ob.trigger === undefined ? "?" : ob.trigger.asString()}" has no eventMap entry (map it to design transitions or waive it)` });
+          obligationStatus.set(ob.id().asString(), { kind: "gap", detail: `requirements event trigger "${trigger === undefined ? "?" : trigger.asString()}" has no eventMap entry (map it to design transitions or waive it)` });
           continue;
         }
         const badIds = entry.transitions.unknownAmong(designIds);
         if (badIds.length > 0) {
-          obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `eventMap for "${ob.trigger?.asString()}" names unknown design id(s) ${badIds.join(", ")}` });
+          obligationStatus.set(ob.id().asString(), { kind: "gap", detail: `eventMap for "${trigger?.asString()}" names unknown design id(s) ${badIds.join(", ")}` });
           continue;
         }
         if (missing.length > 0) {
           if (unmapped.coversAll(missing)) {
-            obligationStatus.set(ob.id.asString(), { kind: "waived", reason: `depends on unmapped attribute(s) ${missing.join(", ")}` });
+            obligationStatus.set(ob.id().asString(), { kind: "waived", reason: `depends on unmapped attribute(s) ${missing.join(", ")}` });
           } else {
-            obligationStatus.set(ob.id.asString(), { kind: "gap", detail: `depends on attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]` });
+            obligationStatus.set(ob.id().asString(), { kind: "gap", detail: `depends on attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]` });
           }
           continue;
         }
-        obligationStatus.set(ob.id.asString(), { kind: "checkable" });
-        eventTransitions.set(ob.id.asString(), entry.transitions.sortedCanonically());
+        obligationStatus.set(ob.id().asString(), { kind: "checkable" });
+        eventTransitions.set(ob.id().asString(), entry.transitions.sortedCanonically());
         continue;
       }
-      obligationStatus.set(ob.id.asString(), { kind: "capability", detail: `nature "${ob.nature.asString()}" has no refinement check` });
+      obligationStatus.set(ob.id().asString(), { kind: "capability", detail: `nature "${ob.nature().asString()}" has no refinement check` });
     }
 
     const scenarioStatus = new Map<string, RefinementStatus>();
     for (const sc of req.scenarios()) {
-      if (unmapped.covers(sc.id)) {
-        scenarioStatus.set(sc.id.asString(), { kind: "waived", reason: unmapped.reasonOf(sc.id) ?? "listed in unmapped[]" });
+      if (unmapped.covers(sc.id())) {
+        scenarioStatus.set(sc.id().asString(), { kind: "waived", reason: unmapped.reasonOf(sc.id()) ?? "listed in unmapped[]" });
         continue;
       }
-      if (sc.event) {
-        scenarioStatus.set(sc.id.asString(), { kind: "capability", detail: "event scenarios are not replayed in v1" });
+      if (sc.hasEvent()) {
+        scenarioStatus.set(sc.id().asString(), { kind: "capability", detail: "event scenarios are not replayed in v1" });
         continue;
       }
-      const missing = Object.keys(sc.bindings)
+      const missing = Object.keys(sc.bindings())
         .filter((p) => !byReq.has(p))
         .sort();
-      if (missing.length === 0) scenarioStatus.set(sc.id.asString(), { kind: "checkable" });
+      if (missing.length === 0) scenarioStatus.set(sc.id().asString(), { kind: "checkable" });
       else if (unmapped.coversAll(missing)) {
-        scenarioStatus.set(sc.id.asString(), { kind: "waived", reason: `binds unmapped attribute(s) ${missing.join(", ")}` });
+        scenarioStatus.set(sc.id().asString(), { kind: "waived", reason: `binds unmapped attribute(s) ${missing.join(", ")}` });
       } else {
-        scenarioStatus.set(sc.id.asString(), { kind: "gap", detail: `binds attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]` });
+        scenarioStatus.set(sc.id().asString(), { kind: "gap", detail: `binds attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]` });
       }
     }
 
     // 義務/シナリオの gap 分類は mapping-gap finding へ昇格する。
     for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => IdOrder.compare(a[0], b[0]))) {
       if (st.kind === "gap") {
-        gap([id], `${id}: ${st.detail}`, req.obligationById(id)?.frRefs.toArray() ?? []);
+        gap([id], `${id}: ${st.detail}`, req.obligationById(id)?.frRefs().toArray() ?? []);
       }
     }
     for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => IdOrder.compare(a[0], b[0]))) {
       if (st.kind === "gap") {
-        gap([id], `${id}: ${st.detail}`, req.scenarioById(id)?.frRefs.toArray() ?? []);
+        gap([id], `${id}: ${st.detail}`, req.scenarioById(id)?.frRefs().toArray() ?? []);
       }
     }
 
@@ -274,14 +275,16 @@ export class UnitRefinementPlan {
       else if (st.kind === "capability") skipped.push({ target: rid, reason: "capability", unit: unitName, detail: st.detail });
       else if (st.kind === "checkable") {
         const ob = req.obligationById(rid);
-        if (ob !== undefined && ob.nature.isEvent()) {
+        if (ob !== undefined && ob.isEvent()) {
           skipped.push({ target: rid, reason: "capability", unit: unitName, detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" });
-        } else if (ob !== undefined && (ob.nature.isInvariant() || ob.nature.isNumeric()) && ob.assert) {
+        } else if (ob !== undefined && ob.isInvariantLike()) {
+          const assertion = ob.assertion();
+          if (assertion === undefined) continue;
           // alpha 置換の失敗を Quint 文書にも記録する（凍結解除 #38 項 1——
           // 旧挙動は義務が痕跡なく落ち、SMT 側だけが報告していた）。文言は
           // SMT 側の compile-error skip と逐語で対。
           try {
-            this.#ctx.substitute(ob.assert, false);
+            this.#ctx.substitute(assertion, false);
           } catch (err) {
             skipped.push({ target: rid, reason: "compile-error", unit: unitName, detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` });
           }
@@ -303,10 +306,11 @@ export class UnitRefinementPlan {
   quintInvariants(req: RefinementRequirements): RefinementQuintInvariants {
     const out: RefinementQuintInvariant[] = [];
     for (const ob of req.obligations().sortedCanonically()) {
-      if (this.#obligationStatus.get(ob.id.asString())?.kind !== "checkable") continue;
-      if ((!ob.nature.isInvariant() && !ob.nature.isNumeric()) || !ob.assert) continue;
+      if (this.#obligationStatus.get(ob.id().asString())?.kind !== "checkable") continue;
+      const assertion = ob.assertion();
+      if (!ob.isInvariantLike() || assertion === undefined) continue;
       try {
-        out.push({ reqId: ob.id, frRefs: ob.frRefs, expr: this.#ctx.substitute(ob.assert, false) });
+        out.push({ reqId: ob.id(), frRefs: ob.frRefs(), expr: this.#ctx.substitute(assertion, false) });
       } catch {
         // quintStatusSkips が compile-error skip として記録する（SMT 側と対）。
       }

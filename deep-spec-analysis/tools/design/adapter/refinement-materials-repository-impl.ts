@@ -36,8 +36,8 @@ import {
   type AttributeMapping,
   type EventMapping,
   type RefinementAttribute,
-  type RefinementObligation,
-  type RefinementScenario,
+  RefinementObligation,
+  RefinementScenario,
   type RefinementUnitMap,
   type UnmappedTarget,
   RefinementMap,
@@ -114,7 +114,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
     const obligations: RefinementObligation[] = [];
     for (const ob of Array.isArray(raw.obligations) ? raw.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
-      obligations.push({
+      obligations.push(RefinementObligation.reconstitute({
         id: ObligationId.reconstitute(ob.id),
         nature: ObligationNature.reconstitute(ob.nature),
         frRefs: FrRefs.of(strArr(ob.frRefs)),
@@ -122,23 +122,23 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
         trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
         effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
-      });
+      }));
     }
     const scenarios: RefinementScenario[] = [];
     for (const sc of Array.isArray(raw.scenarios) ? raw.scenarios : []) {
       if (!isObject(sc) || typeof sc.id !== "string" || !isObject(sc.bindings)) continue;
       if (sc.kind !== "accept" && sc.kind !== "reject") continue;
-      const bindings: RefinementScenario["bindings"] = {};
+      const bindings: Record<string, boolean | number | string> = {};
       for (const [k, v] of Object.entries(sc.bindings)) {
         if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
       }
-      scenarios.push({
+      scenarios.push(RefinementScenario.reconstitute({
         id: ScenarioId.reconstitute(sc.id),
         kind: sc.kind,
         frRefs: FrRefs.of(strArr(sc.frRefs)),
         bindings,
         event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
-      });
+      }));
     }
     return RefinementRequirements.reconstitute({
       id: FormalModelId.of(idPath.value),

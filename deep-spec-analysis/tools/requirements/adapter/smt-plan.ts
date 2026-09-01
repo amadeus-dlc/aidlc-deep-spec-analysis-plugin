@@ -186,42 +186,43 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const invariantObs: Obligation[] = [];
   const events: Obligation[] = [];
   for (const ob of model.obligations()) {
-    if (ob.nature.isInvariant() || ob.nature.isNumeric()) {
-      if (!ob.assert) {
-        skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: "invariant obligation lacks an assert expression" });
-        compiled.set(ob.id.asString(), false);
+    if (ob.isInvariantLike()) {
+      const assertion = ob.assertion();
+      if (assertion === undefined) {
+        skipped.push({ target: ob.id().asString(), reason: "compile-error", detail: "invariant obligation lacks an assert expression" });
+        compiled.set(ob.id().asString(), false);
         continue;
       }
       try {
-        invariants.push({ name: smtName("ob", ob.id.asString()), smt: smtOf(model, ob.assert) });
-        labelToTarget.set(smtName("ob", ob.id.asString()), ob.id.asString());
+        invariants.push({ name: smtName("ob", ob.id().asString()), smt: smtOf(model, assertion) });
+        labelToTarget.set(smtName("ob", ob.id().asString()), ob.id().asString());
         invariantObs.push(ob);
-        compiled.set(ob.id.asString(), true);
+        compiled.set(ob.id().asString(), true);
       } catch (err) {
-        skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
-        compiled.set(ob.id.asString(), false);
+        skipped.push({ target: ob.id().asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+        compiled.set(ob.id().asString(), false);
       }
-    } else if (ob.nature.isEvent()) {
-      // 旧 `!ob.trigger` は「未宣言または空文字」を一括で捕えていた(凍結挙動)。
-      if (!ob.guard || !ob.effect || ob.trigger === undefined || ob.trigger.isEmpty()) {
-        skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
-        compiled.set(ob.id.asString(), false);
+    } else if (ob.isEvent()) {
+      const event = ob.eventDefinition();
+      if (event === null) {
+        skipped.push({ target: ob.id().asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
+        compiled.set(ob.id().asString(), false);
         continue;
       }
       try {
-        if (Expressions.usesPrime(ob.guard)) throw new CompileError("guard must not use primed references");
-        smtOf(model, ob.guard);
-        smtOf(model, ob.effect);
+        if (Expressions.usesPrime(event.guard)) throw new CompileError("guard must not use primed references");
+        smtOf(model, event.guard);
+        smtOf(model, event.effect);
         events.push(ob);
-        compiled.set(ob.id.asString(), true);
+        compiled.set(ob.id().asString(), true);
       } catch (err) {
-        skipped.push({ target: ob.id.asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
-        compiled.set(ob.id.asString(), false);
+        skipped.push({ target: ob.id().asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+        compiled.set(ob.id().asString(), false);
       }
     } else {
       // state-temporal — このバックエンドの nature 範囲外（FR6.2）。
-      skipped.push({ target: ob.id.asString(), reason: "capability", detail: `nature "${ob.nature.asString()}" is checked by a state-machine backend, not the SMT backend` });
-      compiled.set(ob.id.asString(), false);
+      skipped.push({ target: ob.id().asString(), reason: "capability", detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend` });
+      compiled.set(ob.id().asString(), false);
     }
   }
 
@@ -245,13 +246,12 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
 
   // (a) implication 形不変量の前件空虚。
   for (const ob of invariantObs) {
-    if (ob.assert?.op !== "implies") continue;
-    const ant = (ob.assert.args ?? [])[0];
+    const ant = ob.vacuityAntecedent();
     if (!ant) continue;
     try {
-      const name = smtName("ant", ob.id.asString());
+      const name = smtName("ant", ob.id().asString());
       const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${smtOf(model, ant)}))`].join("\n");
-      queries.push({ id: `vac:${ob.id.asString()}`, script, assumptions: [...baseAssumptions, name], model: [] });
+      queries.push({ id: `vac:${ob.id().asString()}`, script, assumptions: [...baseAssumptions, name], model: [] });
     } catch {
       // 前件は完全形 assert のコンパイルで一度通っている——到達不能。
     }
@@ -261,7 +261,9 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const eventPairs: SmtEventPairProbe[] = [];
   const byTrigger = new Map<string, Obligation[]>();
   for (const ev of events) {
-    const key = ev.trigger === undefined ? "" : ev.trigger.asString();
+    const definition = ev.eventDefinition();
+    if (definition === null) continue;
+    const key = definition.trigger.asString();
     const list = byTrigger.get(key) ?? [];
     list.push(ev);
     byTrigger.set(key, list);
@@ -272,15 +274,18 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       for (let j = i + 1; j < list.length; j++) {
         const a = list[i];
         const b = list[j];
-        if (!a || !b || !a.guard || !b.guard || !a.effect || !b.effect) continue;
-        const ga = { name: smtName("g", a.id.asString()), smt: smtOf(model, a.guard) };
-        const gb = { name: smtName("g", b.id.asString()), smt: smtOf(model, b.guard) };
-        const ea = { name: smtName("e", a.id.asString()), smt: smtOf(model, a.effect) };
-        const eb = { name: smtName("e", b.id.asString()), smt: smtOf(model, b.effect) };
-        labelToTarget.set(ga.name, a.id.asString());
-        labelToTarget.set(gb.name, b.id.asString());
-        labelToTarget.set(ea.name, a.id.asString());
-        labelToTarget.set(eb.name, b.id.asString());
+        if (!a || !b) continue;
+        const eventA = a.eventDefinition();
+        const eventB = b.eventDefinition();
+        if (eventA === null || eventB === null) continue;
+        const ga = { name: smtName("g", a.id().asString()), smt: smtOf(model, eventA.guard) };
+        const gb = { name: smtName("g", b.id().asString()), smt: smtOf(model, eventB.guard) };
+        const ea = { name: smtName("e", a.id().asString()), smt: smtOf(model, eventA.effect) };
+        const eb = { name: smtName("e", b.id().asString()), smt: smtOf(model, eventB.effect) };
+        labelToTarget.set(ga.name, a.id().asString());
+        labelToTarget.set(gb.name, b.id().asString());
+        labelToTarget.set(ea.name, a.id().asString());
+        labelToTarget.set(eb.name, b.id().asString());
         const overlapScript = [
           baseScript,
           ...[ga, gb].flatMap((c) => [`(declare-const ${c.name} Bool)`, `(assert (=> ${c.name} ${c.smt}))`]),
@@ -293,8 +298,8 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
             `(assert (=> ${c.name} ${c.smt}))`,
           ]),
         ].join("\n");
-        const qOverlap = `evo:${a.id.asString()}:${b.id.asString()}`;
-        const qJoint = `evj:${a.id.asString()}:${b.id.asString()}`;
+        const qOverlap = `evo:${a.id().asString()}:${b.id().asString()}`;
+        const qJoint = `evj:${a.id().asString()}:${b.id().asString()}`;
         queries.push({ id: qOverlap, script: overlapScript, assumptions: [...baseAssumptions, ga.name, gb.name], model: [] });
         queries.push({
           id: qJoint,
@@ -302,7 +307,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
           assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
           model: [],
         });
-        eventPairs.push({ qOverlap, qJoint, a: a.id, b: b.id, trigger: TriggerName.reconstitute(trigger) });
+        eventPairs.push({ qOverlap, qJoint, a: a.id(), b: b.id(), trigger: TriggerName.reconstitute(trigger) });
       }
     }
   }
@@ -311,28 +316,31 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const gapTriggers = new Map<string, string[]>();
   for (const trigger of [...byTrigger.keys()].sort()) {
     const list = byTrigger.get(trigger) ?? [];
-    const guards = list.map((ev) => smtOf(model, ev.guard as Expression));
+    const guards = list.flatMap((ev) => {
+      const definition = ev.eventDefinition();
+      return definition === null ? [] : [smtOf(model, definition.guard)];
+    });
     const name = smtName("ng", trigger);
     const noGuard = guards.length === 1 ? `(not ${guards[0]})` : `(not (or ${guards.join(" ")}))`;
     const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${noGuard}))`].join("\n");
     queries.push({ id: `gap:${trigger}`, script, assumptions: [...baseAssumptions, name], model: modelVars });
     gapTriggers.set(
       trigger,
-      list.map((ev) => ev.id.asString()).sort(IdOrder.compare),
+      list.map((ev) => ev.id().asString()).sort(IdOrder.compare),
     );
   }
 
   // (c) シナリオ検査 — v1 はイベントなしシナリオのみ。
   const scenarioQueries = new Map<string, string>();
   for (const sc of model.scenarios()) {
-    if (sc.event) {
-      skipped.push({ target: sc.id.asString(), reason: "capability", detail: "scenarios with a When-event are not checked by the SMT backend in v1" });
+    if (sc.hasEvent()) {
+      skipped.push({ target: sc.id().asString(), reason: "capability", detail: "scenarios with a When-event are not checked by the SMT backend in v1" });
       continue;
     }
     try {
-      const name = smtName("sc", sc.id.asString());
+      const name = smtName("sc", sc.id().asString());
       const parts: string[] = [];
-      for (const [path, value] of Object.entries(sc.bindings).sort(([x], [y]) => (x < y ? -1 : 1))) {
+      for (const [path, value] of sc.bindingEntriesCanonically()) {
         const attr = model.attributeAt(path);
         if (!attr) throw new CompileError(`binding references unknown attribute "${path}"`);
         const v = smtVar(path, false);
@@ -345,11 +353,11 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       }
       const conj = parts.length === 1 ? (parts[0] ?? "true") : `(and ${parts.join(" ")})`;
       const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${conj}))`].join("\n");
-      const qid = `sc:${sc.id.asString()}`;
+      const qid = `sc:${sc.id().asString()}`;
       queries.push({ id: qid, script, assumptions: [...baseAssumptions, name], model: modelVars });
-      scenarioQueries.set(sc.id.asString(), qid);
+      scenarioQueries.set(sc.id().asString(), qid);
     } catch (err) {
-      skipped.push({ target: sc.id.asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+      skipped.push({ target: sc.id().asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
     }
   }
 

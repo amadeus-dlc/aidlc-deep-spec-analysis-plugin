@@ -21,11 +21,11 @@ export class Scenarios {
   }
 
   byId(id: string): Scenario | undefined {
-    return this.#values.find((s) => s.id.asString() === id);
+    return this.#values.find((s) => s.id().asString() === id);
   }
 
   ids(): readonly string[] {
-    return this.#values.map((s) => s.id.asString());
+    return this.#values.map((s) => s.id().asString());
   }
 
   toArray(): readonly Scenario[] {

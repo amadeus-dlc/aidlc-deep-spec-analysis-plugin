@@ -19,7 +19,7 @@ export class DesignObligations {
 
   // lowering の凍結順：IdOrder 正準順（DesignTransitions.sortedCanonically と同じ面）。
   sortedCanonically(): DesignObligations {
-    return new DesignObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
+    return new DesignObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id().asString(), b.id().asString())));
   }
 
   *[Symbol.iterator](): Iterator<DesignObligation> {
@@ -27,7 +27,7 @@ export class DesignObligations {
   }
 
   ids(): readonly string[] {
-    return this.#values.map((o) => o.id.asString());
+    return this.#values.map((o) => o.id().asString());
   }
 
   toArray(): readonly DesignObligation[] {

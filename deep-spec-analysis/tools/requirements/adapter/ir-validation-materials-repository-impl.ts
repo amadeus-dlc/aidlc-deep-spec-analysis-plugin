@@ -33,8 +33,8 @@ import {
   IrModelDecl,
   IrObligationDecls,
   IrScenarioDecls,
-  type IrObligationDecl,
-  type IrScenarioDecl,
+  IrObligationDecl,
+  IrScenarioDecl,
   FrRefClaims,
   IrValidationMaterials,
   IrValidationMaterialsId,
@@ -79,7 +79,7 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
   for (const ob of Array.isArray(ir.obligations) ? ir.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string") continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
-    obligations.push({
+    obligations.push(IrObligationDecl.reconstitute({
       id: ObligationId.reconstitute(ob.id),
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
@@ -92,19 +92,19 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
               from: asExpression(temporal.from ?? null),
               to: asExpression(temporal.to ?? null),
             },
-    });
+    }));
   }
 
   const scenarios: IrScenarioDecl[] = [];
   for (const sc of Array.isArray(ir.scenarios) ? ir.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
-    scenarios.push({
+    scenarios.push(IrScenarioDecl.reconstitute({
       id: ScenarioId.reconstitute(sc.id),
       bindings: IrBindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
-    });
+    }));
   }
 
   const background: IrBackgroundDecl[] = [];

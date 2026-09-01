@@ -1358,3 +1358,71 @@ the enforcement mechanism).
 
 Evidence: 398 tests / 0 fail, goldens untouched, parity empty,
 validator Errors: 0, 7 harness builds.
+
+## The master-servant addendum — a getter-only type is a data model, not a domain-layer citizen (2026-09-01, #71)
+
+A rejection ruling on the `*Seed` interfaces I (the implementer) minted
+in wave 1. A domain object is getters plus domain behavior; **a
+getter-only type is a data model** — and placing one in the domain
+layer violates the layer's reason to exist. Wave 1's carve-out
+("legitimate because it is the construction door's argument") is
+withdrawn.
+
+- **The correct shape**: a door's argument travels as the door
+  signature's anonymous inline parameters, not as a named type — nobody
+  calls a function's parameter list a data model, and the domain layer
+  gains no getter-only citizen. Adapters pass literals structurally; no
+  name is needed.
+- **Applied immediately**: the four Seeds minted in waves 1–2 (the
+  attribute-decl twins and the verdict twins) are dissolved into inline
+  `reconstitute` signatures.
+- **Rolled out**: dissolving every pre-existing `*Seed`/`*Composition`
+  joins the #71 ledger as wave 7 (purging getter-only types from the
+  domain layer). The only exemptions left are I/O contexts (adapters)
+  and `Expression` (the permissive published language — already ruled).
+
+Wave 2 (same PR): the verdict twins (`SmtQueryVerdict` /
+`RefinementQueryVerdict`) become commandable classes — status
+classification (`isSat`/`isUnsat`/`isUndecided` — the scattered
+three-state enumeration was the soil of #34 item 3's triplicate bug)
+and the witness material faces (`witnessModel`/`witnessTrace`/
+`coreLabels`/`sortedCore`) are owned by the verdict itself. Wordings
+and emission order are verbatim — proven by untouched goldens and an
+empty parity diff.
+
+## The master-servant MECE fence — a complete partition and a shrink-only ledger (2026-09-01, #71)
+
+Fixing spots as they were pointed at, and an inventory that counted only
+`export interface`, were both non-MECE — this records that rejection.
+The domain layer's exported types are re-partitioned completely:
+**211 behavior classes / 122 diseased (102 getter-only interfaces, 19
+record unions, 1 object type alias) / 6 closed string vocabularies / 1
+published (Expression)**. Record unions (`RefinementProbe`,
+`VerificationWitness`, the `*Outcome` family, …) are getter-only data
+models too and join the ledger as the same disease.
+
+- **The fence**: `noDataModelsInDomain` joins ALL_RULES (red/green
+  examples) — it detects getter-only interfaces, object aliases, and
+  record unions in the domain layer. The full starting inventory of 122
+  files is enumerated in `DATA_MODEL_DEBT` (shrink-only — growing it is
+  a ruling violation, the LEGACY_FILES discipline), and every wave that
+  reclaims a type deletes its entry. **New inflow is blocked by CI and
+  the remaining debt is visible in the ledger** — structurally
+  preventing spot-fix relapse.
+- Some discriminated unions (`DesignValue`, `VerificationWitness` — the
+  value/witness payload vocabularies) are candidates for the
+  published-language exemption; each wave rules on them individually,
+  and an exemption moves the name to the permanent list beside
+  Expression (never silently off the ledger).
+
+Evidence: 399 tests / 0 fail, goldens untouched.
+
+Wave 3 (same PR): the obligation/scenario twins and their decls across
+all three stages (`Obligation`, `Scenario`, `IrObligationDecl`,
+`IrScenarioDecl`, `DesignObligation`, `DesignScenario`,
+`DesignObligationDecl`, `DesignScenarioDecl`, `DesignTransitionDecl`,
+`RefinementObligation`, `RefinementScenario`) become commandable
+classes, and `DesignTemporalDecl` dissolves into the door signature of
+`DesignObligationDecl`. 12 ledger entries are reclaimed — the
+shrink-only ledger now holds 110 of the 122-file starting inventory
+(the docs record the start; the ledger records what remains).

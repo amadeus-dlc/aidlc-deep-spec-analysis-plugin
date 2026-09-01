@@ -1,7 +1,6 @@
 import type { AttributeBound } from "../../kernel/domain/index.ts";
 import { type IrAttributeName } from "./ir-attribute-name.ts";
 import type { IrDeclaredValues } from "./ir-declared-values.ts";
-import type { IrAttributeDeclSeed } from "./ir-attribute-decl-seed.ts";
 
 // 属性宣言。型宣言が欠けた属性は kind: "" として届く（旧実装は type 欠落でも
 // 属性をカタログへ登録した——参照解決の可否がそれで変わるため保存する）。
@@ -14,16 +13,18 @@ export class IrAttributeDecl {
   readonly #min: AttributeBound | undefined;
   readonly #max: AttributeBound | undefined;
 
-  private constructor(seed: IrAttributeDeclSeed) {
-    this.#name = seed.name;
-    this.#kind = seed.kind;
-    this.#values = seed.values;
-    this.#min = seed.min;
-    this.#max = seed.max;
+  // ドアの引数は無名のインライン署名で運ぶ——名前付き getter-only 型
+  //（データモデル）を domain 層に住まわせない（主従の裁定・補遺）。
+  private constructor(props: { name: IrAttributeName; kind: string; values?: IrDeclaredValues; min?: AttributeBound; max?: AttributeBound }) {
+    this.#name = props.name;
+    this.#kind = props.kind;
+    this.#values = props.values;
+    this.#min = props.min;
+    this.#max = props.max;
   }
 
-  static reconstitute(seed: IrAttributeDeclSeed): IrAttributeDecl {
-    return new IrAttributeDecl(seed);
+  static reconstitute(props: { name: IrAttributeName; kind: string; values?: IrDeclaredValues; min?: AttributeBound; max?: AttributeBound }): IrAttributeDecl {
+    return new IrAttributeDecl(props);
   }
 
   // 同定面（座標組み立て・重複検査の材料）。

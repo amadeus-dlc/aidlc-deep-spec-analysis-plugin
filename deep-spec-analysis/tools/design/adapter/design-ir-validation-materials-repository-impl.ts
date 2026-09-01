@@ -30,9 +30,6 @@ import type {
   DesignEntityDecl,
   DesignIgnoreDecl,
   DesignMachineDecl,
-  DesignObligationDecl,
-  DesignScenarioDecl,
-  DesignTransitionDecl,
   DesignUnitDecl,
 } from "../domain/index.ts";
 import {
@@ -41,9 +38,12 @@ import {
   DesignEntityName,
   DesignMachineId,
   DesignObligationId,
+  DesignObligationDecl,
   DesignObligationOrigin,
   DesignScenarioId,
+  DesignScenarioDecl,
   DesignTransitionId,
+  DesignTransitionDecl,
   DesignUnitId,
   BindingPairs,
   BrRefs,
@@ -107,7 +107,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
   for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string") continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
-    obligations.push({
+    obligations.push(DesignObligationDecl.reconstitute({
       id: DesignObligationId.reconstitute(ob.id),
       origin: typeof ob.origin === "string" ? DesignObligationOrigin.reconstitute(ob.origin) : undefined,
       brRefs: brRefsOrUndefined(ob.brRefs ?? null),
@@ -122,7 +122,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
               from: asExpression(temporal.from ?? null),
               to: asExpression(temporal.to ?? null),
             },
-    });
+    }));
   }
 
   const stateMachines: DesignMachineDecl[] = [];
@@ -133,7 +133,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     const transitions: DesignTransitionDecl[] = [];
     for (const tr of Array.isArray(sm.transitions) ? sm.transitions : []) {
       if (!isObject(tr) || typeof tr.id !== "string") continue;
-      transitions.push({
+      transitions.push(DesignTransitionDecl.reconstitute({
         id: DesignTransitionId.reconstitute(tr.id),
         from: typeof tr.from === "string" ? tr.from : undefined,
         to: typeof tr.to === "string" ? tr.to : undefined,
@@ -141,7 +141,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
         brRefs: brRefsOrUndefined(tr.brRefs ?? null),
         guard: asExpression(tr.guard ?? null),
         effect: asExpression(tr.effect ?? null),
-      });
+      }));
     }
     const ignores: DesignIgnoreDecl[] = [];
     for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
@@ -155,13 +155,13 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
   for (const sc of Array.isArray(rawUnit.scenarios) ? rawUnit.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
-    scenarios.push({
+    scenarios.push(DesignScenarioDecl.reconstitute({
       id: DesignScenarioId.reconstitute(sc.id),
       bindings: BindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
       brRefs: brRefsOrUndefined(sc.brRefs ?? null),
-    });
+    }));
   }
 
   const background: DesignBackgroundDecl[] = [];

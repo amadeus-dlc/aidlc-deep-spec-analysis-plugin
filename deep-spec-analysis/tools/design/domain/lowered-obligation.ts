@@ -1,5 +1,4 @@
 import type { Expression } from "../../kernel/domain/index.ts";
-import type { DesignObligation } from "./design-obligation.ts";
 import { LoweredId } from "./lowered-id.ts";
 
 export interface LoweredObligation {
@@ -10,5 +9,5 @@ export interface LoweredObligation {
   trigger?: string;
   guard?: Expression;
   effect?: Expression;
-  temporal?: DesignObligation["temporal"];
+  temporal?: { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression };
 }

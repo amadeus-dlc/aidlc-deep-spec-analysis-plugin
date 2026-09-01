@@ -403,6 +403,150 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
   return out;
 }
 
+// ルール: domain 層にデータモデルを置かない（主従の裁定・MECE フェンス
+// 2026-09-01、#71）。getter しかない型（property-only interface・object 型
+// エイリアス・record を含む共用体）はデータモデルであり、domain 層の住人では
+// ない——命令できる class へ反転するか、ドア署名の無名インライン引数へ解散
+// する。DATA_MODEL_DEBT は着手時の全数棚卸し（縮小専用——増やす変更は裁定
+// 違反で、波が 1 件返すたびにここから消す。LEGACY_FILES と同じ規律）。
+// Expression は寛容 published language の既裁定で恒久除外。
+export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
+  "design/domain/design-background-assumption.ts",
+  "design/domain/design-background-decl.ts",
+  "design/domain/design-cross-checked-entry.ts",
+  "design/domain/design-entity-decl.ts",
+  "design/domain/design-finding.ts",
+  "design/domain/design-ignore-decl.ts",
+  "design/domain/design-ignore.ts",
+  "design/domain/design-input-anchor.ts",
+  "design/domain/design-ir-validation-materials-seed.ts",
+  "design/domain/design-machine-decl.ts",
+  "design/domain/design-machine.ts",
+  "design/domain/design-model-composition.ts",
+  "design/domain/design-report-composition.ts",
+  "design/domain/design-report-seed.ts",
+  "design/domain/design-skipped.ts",
+  "design/domain/design-transition.ts",
+  "design/domain/design-unit-decl.ts",
+  "design/domain/design-unit-seed.ts",
+  "design/domain/design-value.ts",
+  "design/domain/lowered-background.ts",
+  "design/domain/lowered-obligation.ts",
+  "design/domain/lowered-origin.ts",
+  "design/domain/lowered-scenario.ts",
+  "design/domain/remapped-unit.ts",
+  "design/domain/sibling-verdict-document.ts",
+  "design/domain/sibling-verdict-finding.ts",
+  "design/domain/sibling-verdict-skip.ts",
+  "doctor/domain/check.ts",
+  "doctor/domain/coverage-row.ts",
+  "doctor/domain/debt-row.ts",
+  "doctor/domain/digest-anchor.ts",
+  "doctor/domain/installed-status.ts",
+  "doctor/domain/manifest-entry.ts",
+  "doctor/domain/refinement-stale-row.ts",
+  "doctor/domain/solver-availability.ts",
+  "doctor/domain/unit-coverage-row.ts",
+  "refcheck/domain/attr-decl-seed.ts",
+  "refcheck/domain/component-catalog-outcome.ts",
+  "refcheck/domain/component-check-materials-seed.ts",
+  "refcheck/domain/component-entity.ts",
+  "refcheck/domain/component-ref.ts",
+  "refcheck/domain/component-shape-error.ts",
+  "refcheck/domain/component.ts",
+  "refcheck/domain/contract-check-materials-seed.ts",
+  "refcheck/domain/contract-row.ts",
+  "refcheck/domain/contracts-table-outcome.ts",
+  "refcheck/domain/declared-entities-seed.ts",
+  "refcheck/domain/declared-units-outcome.ts",
+  "refcheck/domain/design-record-seed.ts",
+  "refcheck/domain/domain-entities-outcome.ts",
+  "refcheck/domain/domain-entity-sketch-seed.ts",
+  "refcheck/domain/entities-outcome.ts",
+  "refcheck/domain/entity-decl-seed.ts",
+  "refcheck/domain/entity-reference.ts",
+  "refcheck/domain/finding.ts",
+  "refcheck/domain/functional-check-materials-seed.ts",
+  "refcheck/domain/functional-spec-outcome.ts",
+  "refcheck/domain/input-anchor.ts",
+  "refcheck/domain/reference-check-report-seed.ts",
+  "refcheck/domain/rel-decl-seed.ts",
+  "refcheck/domain/rule-decl-seed.ts",
+  "refcheck/domain/rules-outcome.ts",
+  "refcheck/domain/shape-error.ts",
+  "refcheck/domain/skipped.ts",
+  "refcheck/domain/spec-block-assessment.ts",
+  "refcheck/domain/state-machine-sketch-seed.ts",
+  "refcheck/domain/unit-decl.ts",
+  "refcheck/domain/witness-ref.ts",
+  "refinement/domain/attribute-mapping.ts",
+  "refinement/domain/design-event.ts",
+  "refinement/domain/event-mapping.ts",
+  "refinement/domain/interpreted-refinement-verdicts.ts",
+  "refinement/domain/ref-token-carrier.ts",
+  "refinement/domain/refinement-attribute.ts",
+  "refinement/domain/refinement-map-acquisition.ts",
+  "refinement/domain/refinement-map-seed.ts",
+  "refinement/domain/refinement-probe.ts",
+  "refinement/domain/refinement-quint-invariant.ts",
+  "refinement/domain/refinement-requirements-seed.ts",
+  "refinement/domain/refinement-status.ts",
+  "refinement/domain/refinement-unit-map.ts",
+  "refinement/domain/unmapped-target.ts",
+  "requirements/domain/attribute-declaration.ts",
+  "requirements/domain/background-assumption.ts",
+  "requirements/domain/cross-checked-entry.ts",
+  "requirements/domain/decoded-value.ts",
+  "requirements/domain/fr-ref-claim.ts",
+  "requirements/domain/interpreted-quint-verdicts.ts",
+  "requirements/domain/interpreted-verdicts.ts",
+  "requirements/domain/ir-background-decl.ts",
+  "requirements/domain/ir-entity-decl.ts",
+  "requirements/domain/ir-model-decl-seed.ts",
+  "requirements/domain/ir-temporal-decl.ts",
+  "requirements/domain/ir-validation-materials-seed.ts",
+  "requirements/domain/quint-machine-component.ts",
+  "requirements/domain/quint-machine-facts-seed.ts",
+  "requirements/domain/quint-machine-run-verdict.ts",
+  "requirements/domain/quint-runs-seed.ts",
+  "requirements/domain/quint-scenario-verdict.ts",
+  "requirements/domain/quint-temporal-verdict.ts",
+  "requirements/domain/requirements-model-seed.ts",
+  "requirements/domain/requirements-source-seed.ts",
+  "requirements/domain/smt-event-pair-probe.ts",
+  "requirements/domain/smt-plan-facts-seed.ts",
+  "requirements/domain/trace-state.ts",
+  "requirements/domain/verification-finding.ts",
+  "requirements/domain/verification-report-composition.ts",
+  "requirements/domain/verification-report-seed.ts",
+  "requirements/domain/verification-skipped.ts",
+  "requirements/domain/verification-witness.ts",
+]);
+
+export function noDataModelsInDomain(relPath: string, rawSource: string): Violation[] {
+  const loc = locationOf(relPath);
+  if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
+  if (DATA_MODEL_DEBT.has(relPath)) return [];
+  const source = stripStrings(rawSource);
+  const out: Violation[] = [];
+  for (const m of source.matchAll(/^export interface (\w+)\s*(?:extends [\w<>, ]+)?\{([\s\S]*?)^\}/gm)) {
+    const name = m[1] ?? "";
+    if (name === "Expression") continue;
+    if (!/^\s+\w+\([^)]*\):/m.test(m[2] ?? "")) {
+      out.push({ path: relPath, rule: "no-data-models-in-domain", detail: `getter-only interface ${name} is a data model — make it commandable or dissolve it into a door signature` });
+    }
+  }
+  // ジェネリック别名（export type Foo<T> = …）と末尾セミコロン省略の両方も
+  // 拾う（波3のレビュー指摘——検査回避経路を塞ぐ）。
+  for (const m of source.matchAll(/^export type (\w+)(?:<[^>]*>)?\s*=\s*([\s\S]*?);?$/gm)) {
+    const rhs = m[2] ?? "";
+    if (/^\s*\{/.test(rhs) || (rhs.includes("{") && rhs.includes("|"))) {
+      out.push({ path: relPath, rule: "no-data-models-in-domain", detail: `record-shaped type alias ${m[1]} is a data model — make it commandable or dissolve it into a door signature` });
+    }
+  }
+  return out;
+}
+
 // ルール: CQS——コマンドは返さない（オーナー裁定 2026-09-01）。ポートの
 // store は書くだけ：正常時は void で、集約を読み込んで返さない。複数件の
 // 書き込みだけが正常件数か事前採番の集約 ID 集合を返してよい（現行ポートに
@@ -490,6 +634,7 @@ export const ALL_RULES = [
   onePublicTypePerFile,
   portsLiveInPortDir,
   commandsReturnVoid,
+  noDataModelsInDomain,
 ] as const;
 
 export function violationsOf(relPath: string, source: string): Violation[] {

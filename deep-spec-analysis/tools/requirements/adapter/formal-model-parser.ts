@@ -16,9 +16,9 @@ import {
   ScenarioId,
   type AttributeDeclaration,
   type BackgroundAssumption,
-  type Obligation,
+  Obligation,
   type RequirementsModelSeed,
-  type Scenario,
+  Scenario,
   AttributeDeclarations,
   BackgroundAssumptions,
   Obligations,
@@ -52,7 +52,7 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id" | 
   const obligations: Obligation[] = [];
   for (const ob of Array.isArray(raw.obligations) ? raw.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
-    obligations.push({
+    obligations.push(Obligation.reconstitute({
       id: ObligationId.reconstitute(ob.id),
       nature: ObligationNature.reconstitute(ob.nature),
       frRefs: FrRefs.of(strArr(ob.frRefs)),
@@ -61,26 +61,26 @@ export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id" | 
       trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
       guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
       effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
-      temporal: isObject(ob.temporal) ? (ob.temporal as unknown as Obligation["temporal"]) : undefined,
-    });
+      temporal: isObject(ob.temporal) ? (ob.temporal as unknown as { pattern: string; assert?: Expression; from?: Expression; to?: Expression }) : undefined,
+    }));
   }
   const scenarios: Scenario[] = [];
   for (const sc of Array.isArray(raw.scenarios) ? raw.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const kind = sc.kind === "accept" || sc.kind === "reject" ? sc.kind : null;
     if (kind === null || !isObject(sc.bindings)) continue;
-    const bindings: Scenario["bindings"] = {};
+    const bindings: Record<string, boolean | number | string> = {};
     for (const [k, v] of Object.entries(sc.bindings)) {
       if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
     }
-    scenarios.push({
+    scenarios.push(Scenario.reconstitute({
       id: ScenarioId.reconstitute(sc.id),
       kind,
       frRefs: FrRefs.of(strArr(sc.frRefs)),
       bindings,
       event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
       expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
-    });
+    }));
   }
   const background: BackgroundAssumption[] = [];
   for (const bg of Array.isArray(raw.background) ? raw.background : []) {

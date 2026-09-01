@@ -37,8 +37,8 @@ import {
   VerificationReports,
   VerificationSkips,
   type BackgroundAssumption,
-  type Scenario,
-  type Obligation,
+  Scenario,
+  Obligation,
   type AttributeDeclaration,
   AttributeDeclarations,
   AttributeValues,
@@ -53,7 +53,7 @@ import {
   BackgroundAssumptions,
   RequirementsModel,
   type SmtPlanFactsSeed,
-  type SmtQueryVerdict,
+  SmtQueryVerdict,
   SmtEventPairProbes,
   SmtPlanFacts,
   SmtQueryVerdicts,
@@ -79,8 +79,8 @@ const sensorPath = join(pluginRoot, "tools", "aidlc-sensor-deep-spec-verify-smt.
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
 type RawAttributeDeclaration = Omit<AttributeDeclaration, "values"> & { values?: string[] };
-type RawObligation = Omit<Obligation, "frRefs" | "trigger"> & { frRefs: string[]; trigger?: string };
-type RawScenario = Omit<Scenario, "frRefs"> & { frRefs: string[] };
+type RawObligation = Omit<Parameters<typeof Obligation.reconstitute>[0], "frRefs" | "trigger"> & { frRefs: string[]; trigger?: string };
+type RawScenario = Omit<Parameters<typeof Scenario.reconstitute>[0], "frRefs"> & { frRefs: string[] };
 function model(seed: {
   irVersion?: IrVersion;
   attributes?: RawAttributeDeclaration[];
@@ -96,8 +96,8 @@ function model(seed: {
     attributes: AttributeDeclarations.of(
       (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
     ),
-    obligations: Obligations.of((seed.obligations ?? []).map((o) => ({ ...o, frRefs: FrRefs.of(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
-    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => ({ ...s, frRefs: FrRefs.of(s.frRefs) }))),
+    obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.reconstitute({ ...o, frRefs: FrRefs.of(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
+    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.reconstitute({ ...s, frRefs: FrRefs.of(s.frRefs) }))),
     background: BackgroundAssumptions.of(seed.background ?? []),
   });
 }
@@ -247,8 +247,8 @@ describe("the verify-smt interactor over the InMemory double", () => {
       scenarioQueries: new Map([["SC-1", "sc:SC-1"]]),
     });
     const verdicts = new Map<string, SmtQueryVerdict>([
-      ["global", { status: "sat", decodedModel: {} }],
-      ["sc:SC-1", { status: "sat", decodedModel: { "Ticket.priority": 1 } }],
+      ["global", SmtQueryVerdict.reconstitute({ status: "sat", decodedModel: {} })],
+      ["sc:SC-1", SmtQueryVerdict.reconstitute({ status: "sat", decodedModel: { "Ticket.priority": 1 } })],
     ]);
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
@@ -290,8 +290,8 @@ describe("smt verdict interpretation", () => {
     gapTriggers: new Map([["submit", ["OB-3", "OB-4"]]]),
     scenarioQueries: new Map([["SC-1", "sc:SC-1"], ["SC-2", "sc:SC-2"]]),
   });
-  const run = (entries: [string, SmtQueryVerdict][]) =>
-    facts.interpret(twoInvariants, SmtQueryVerdicts.of(new Map(entries)));
+  const run = (entries: [string, Parameters<typeof SmtQueryVerdict.reconstitute>[0]][]) =>
+    facts.interpret(twoInvariants, SmtQueryVerdicts.of(new Map(entries.map(([id, v]) => [id, SmtQueryVerdict.reconstitute(v)]))));
 
   test("global unsat becomes one conflict attributed via the OB-prefixed core labels", () => {
     const { findings, skipped } = run([["global", { status: "unsat", core: ["ty_x", "ob_OB_2", "ob_OB_1"] }]]);
@@ -317,7 +317,7 @@ describe("smt verdict interpretation", () => {
   test("a conflict with no effective targets is dropped entirely", () => {
     const bare = model({ obligations: [{ id: ObligationId.reconstitute("OB-3"), nature: ObligationNature.reconstitute("event"), frRefs: [] }] });
     const { findings } = SmtPlanFacts.of({ ...EMPTY_FACTS, compiled: new Map([["OB-3", true]]) })
-      .interpret(bare, SmtQueryVerdicts.of(new Map([["global", { status: "unsat", core: [] }]])));
+      .interpret(bare, SmtQueryVerdicts.of(new Map([["global", SmtQueryVerdict.reconstitute({ status: "unsat", core: [] })]])));
     expect([...findings]).toEqual([]);
   });
 

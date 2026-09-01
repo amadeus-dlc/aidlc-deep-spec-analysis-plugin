@@ -62,8 +62,8 @@ export class SmtPlanFacts {
     const invariantIds = model
       .obligations()
       .toArray()
-      .filter((o) => (o.nature.isInvariant() || o.nature.isNumeric()) && this.#compiled.get(o.id.asString()))
-      .map((o) => o.id.asString());
+      .filter((o) => o.isInvariantLike() && this.#compiled.get(o.id().asString()))
+      .map((o) => o.id().asString());
 
     const coreToTargets = (core: string[]): string[] => {
       const targets = core
@@ -96,31 +96,31 @@ export class SmtPlanFacts {
     // (a) 大域一貫性。
     const global = results.verdictOf("global");
     let globallyUnsat = false;
-    if (global?.status === "unsat") {
+    if (global?.isUnsat()) {
       globallyUnsat = true;
       addConflict(
-        coreToTargets(global.core ?? []),
-        global.core ?? [],
+        coreToTargets([...global.coreLabels()]),
+        [...global.coreLabels()],
         "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.",
       );
-    } else if (global && global.status !== "sat") {
+    } else if (global?.isUndecided()) {
       timeoutSkip(invariantIds, "global consistency check");
     }
 
     // (a) 前件空虚（大域 unsat のときは冗長な派生なので黙る）。
     if (!globallyUnsat) {
       for (const ob of model.obligations()) {
-        const r = results.verdictOf(`vac:${ob.id.asString()}`);
+        const r = results.verdictOf(`vac:${ob.id().asString()}`);
         if (!r) continue;
-        if (r.status === "unsat") {
-          const targets = IdOrder.sortedUnique([...coreToTargets(r.core ?? []), ob.id.asString()], IdOrder.compare);
+        if (r.isUnsat()) {
+          const targets = IdOrder.sortedUnique([...coreToTargets([...r.coreLabels()]), ob.id().asString()], IdOrder.compare);
           addConflict(
             targets,
-            r.core ?? [],
-            `The condition of obligation ${ob.id.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
+            [...r.coreLabels()],
+            `The condition of obligation ${ob.id().asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
           );
-        } else if (r.status !== "sat") {
-          timeoutSkip([ob.id.asString()], `vacuity check for ${ob.id.asString()}`);
+        } else if (r.isUndecided()) {
+          timeoutSkip([ob.id().asString()], `vacuity check for ${ob.id().asString()}`);
         }
       }
     }
@@ -130,18 +130,16 @@ export class SmtPlanFacts {
       const overlap = results.verdictOf(pair.qOverlap);
       const joint = results.verdictOf(pair.qJoint);
       if (!overlap || !joint) continue;
-      if (overlap.status === "sat" && joint.status === "unsat") {
+      if (overlap.isSat() && joint.isUnsat()) {
         addConflict(
           IdOrder.sortedUnique([pair.a.asString(), pair.b.asString()], IdOrder.compare),
-          joint.core ?? [],
+          [...joint.coreLabels()],
           `Events ${pair.a.asString()} and ${pair.b.asString()} for trigger "${pair.trigger.asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`,
         );
-      } else if (
-        overlap.status === "unknown" || overlap.status === "budget" || overlap.status === "error" ||
-        joint.status === "unknown" || joint.status === "budget" || joint.status === "error"
-      ) {
-        // error も skip として記録する——対を findings からも skipped からも
-        // 落とす旧挙動は凍結解除 #34 項 3 で解消（gap/scenario 分岐と対称）。
+      } else if (overlap.isUndecided() || joint.isUndecided()) {
+        // 未決（unknown/budget/error）は skip——3 状態の列挙が interpret ごとに
+        // 散在していたのが #34 項 3 の土壌で、判定面 isUndecided() に収束した
+        //（主従の裁定 #71 波2）。
         timeoutSkip([pair.a.asString(), pair.b.asString()], `event-pair check for trigger "${pair.trigger.asString()}"`);
       }
     }
@@ -150,46 +148,46 @@ export class SmtPlanFacts {
     for (const [trigger, eventIds] of [...this.#gapTriggers.entries()].sort()) {
       const r = results.verdictOf(`gap:${trigger}`);
       if (!r) continue;
-      if (r.status === "sat") {
+      if (r.isSat()) {
         findings.push({
           kind: "completeness-gap",
           frRefs: FrRefs.of(model.frRefsOf(eventIds)),
           targets: TargetIds.of([...eventIds]),
-          witness: { model: r.decodedModel ?? {} },
+          witness: { model: r.witnessModel() },
           detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
         });
-      } else if (r.status !== "unsat") {
+      } else if (r.isUndecided()) {
         timeoutSkip([...eventIds], `completeness check for trigger "${trigger}"`);
       }
     }
 
     // (c) シナリオ。
     for (const sc of model.scenarios()) {
-      const qid = this.#scenarioQueries.get(sc.id.asString());
+      const qid = this.#scenarioQueries.get(sc.id().asString());
       if (!qid) continue;
       const r = results.verdictOf(qid);
       if (!r) continue;
-      if (r.status === "unknown" || r.status === "budget" || r.status === "error") {
-        timeoutSkip([sc.id.asString()], `scenario check for ${sc.id.asString()}`);
+      if (r.isUndecided()) {
+        timeoutSkip([sc.id().asString()], `scenario check for ${sc.id().asString()}`);
         continue;
       }
-      if (sc.kind === "accept" && r.status === "unsat") {
-        const targets = IdOrder.sortedUnique([sc.id.asString(), ...coreToTargets(r.core ?? [])], IdOrder.compare);
+      if (sc.isAccept() && r.isUnsat()) {
+        const targets = IdOrder.sortedUnique([sc.id().asString(), ...coreToTargets([...r.coreLabels()])], IdOrder.compare);
         findings.push({
           kind: "scenario-violation",
           frRefs: FrRefs.of(model.frRefsOf(targets)),
           targets: TargetIds.of(targets),
-          witness: { core: [...(r.core ?? [])].sort() },
-          detail: `Accept scenario ${sc.id.asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
+          witness: { core: r.sortedCore() },
+          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
         });
       }
-      if (sc.kind === "reject" && r.status === "sat") {
+      if (sc.isReject() && r.isSat()) {
         findings.push({
           kind: "scenario-violation",
-          frRefs: FrRefs.of(model.frRefsOf([sc.id.asString()])),
-          targets: TargetIds.of([sc.id.asString()]),
-          witness: { model: r.decodedModel ?? {} },
-          detail: `Reject scenario ${sc.id.asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
+          frRefs: FrRefs.of(model.frRefsOf([sc.id().asString()])),
+          targets: TargetIds.of([sc.id().asString()]),
+          witness: { model: r.witnessModel() },
+          detail: `Reject scenario ${sc.id().asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
         });
       }
     }

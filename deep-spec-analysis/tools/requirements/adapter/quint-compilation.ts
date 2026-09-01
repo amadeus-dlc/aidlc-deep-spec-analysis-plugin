@@ -193,11 +193,13 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   // 型境界。
   const invariantComponents: { id: string; expr: Expression; frRefs: string[] }[] = [];
   for (const ob of model.obligations()) {
-    if ((ob.nature.isInvariant() || ob.nature.isNumeric()) && ob.assert) {
-      invariantComponents.push({ id: ob.id.asString(), expr: ob.assert, frRefs: [...ob.frRefs.toArray()] });
+    const assertion = ob.assertion();
+    if (ob.isInvariantLike() && assertion !== undefined) {
+      invariantComponents.push({ id: ob.id().asString(), expr: assertion, frRefs: [...ob.frRefs().toArray()] });
     }
-    if (ob.nature.isStateTemporal() && ob.temporal?.pattern === "always" && ob.temporal.assert) {
-      invariantComponents.push({ id: ob.id.asString(), expr: ob.temporal.assert, frRefs: [...ob.frRefs.toArray()] });
+    const temporal = ob.temporal();
+    if (ob.isStateTemporal() && temporal?.pattern === "always" && temporal.assert !== undefined) {
+      invariantComponents.push({ id: ob.id().asString(), expr: temporal.assert, frRefs: [...ob.frRefs().toArray()] });
     }
   }
   const bgComponents = model.background().toArray().map((b) => ({ id: b.id, expr: b.assert, frRefs: [] as string[] }));
@@ -243,17 +245,17 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   const eventIds: ObligationId[] = [];
   const actionNames: string[] = [];
   for (const ob of model.obligations()) {
-    if (!ob.nature.isEvent()) continue;
-    // 旧 `!ob.trigger` は「未宣言または空文字」を一括で捕えていた(凍結挙動)。
-    if (!ob.guard || !ob.effect || ob.trigger === undefined || ob.trigger.isEmpty()) {
-      compileSkips.push({ target: ob.id.asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
+    if (!ob.isEvent()) continue;
+    const event = ob.eventDefinition();
+    if (event === null) {
+      compileSkips.push({ target: ob.id().asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
       continue;
     }
     try {
-      if (Expressions.usesPrime(ob.guard)) throw new CompileError("guard must not use primed references");
-      const guard = quintOf(ob.guard, stateName);
-      const assignments = decomposeEffect(ob.effect);
-      const action = qId("ev", ob.id.asString());
+      if (Expressions.usesPrime(event.guard)) throw new CompileError("guard must not use primed references");
+      const guard = quintOf(event.guard, stateName);
+      const assignments = decomposeEffect(event.effect);
+      const action = qId("ev", ob.id().asString());
       const parts: string[] = [guard];
       for (const attr of attrs) {
         const rhs = assignments.get(attr.path.asString());
@@ -261,9 +263,9 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       }
       lines.push(`  action ${action} = all { ${parts.join(", ")} }`);
       actionNames.push(action);
-      eventIds.push(ob.id);
+      eventIds.push(ob.id());
     } catch (err) {
-      compileSkips.push({ target: ob.id.asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+      compileSkips.push({ target: ob.id().asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
     }
   }
   const idleParts = attrs.map((a) => `${qVar(a.path.asString())}' = ${qVar(a.path.asString())}`);
@@ -274,15 +276,16 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   // 時相（leads-to）プロパティ——bounded モードのみ検査される。
   const temporalNames = new Map<string, string>();
   for (const ob of model.obligations()) {
-    if (!ob.nature.isStateTemporal() || ob.temporal?.pattern !== "leads-to") continue;
-    if (!ob.temporal.from || !ob.temporal.to) continue;
+    const temporal = ob.temporal();
+    if (!ob.isStateTemporal() || temporal?.pattern !== "leads-to") continue;
+    if (temporal.from === undefined || temporal.to === undefined) continue;
     try {
-      const from = quintOf(ob.temporal.from, stateName);
-      const to = quintOf(ob.temporal.to, stateName);
-      lines.push(`  temporal ${qId("temp", ob.id.asString())} = always(${from} implies eventually(${to}))`);
-      temporalNames.set(ob.id.asString(), qId("temp", ob.id.asString()));
+      const from = quintOf(temporal.from, stateName);
+      const to = quintOf(temporal.to, stateName);
+      lines.push(`  temporal ${qId("temp", ob.id().asString())} = always(${from} implies eventually(${to}))`);
+      temporalNames.set(ob.id().asString(), qId("temp", ob.id().asString()));
     } catch (err) {
-      compileSkips.push({ target: ob.id.asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+      compileSkips.push({ target: ob.id().asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
     }
   }
   lines.push("");
@@ -290,13 +293,14 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   // シナリオ init：全属性束縛・イベントなしのシナリオのみ。
   const scenarioInitActions = new Map<string, string>();
   for (const sc of model.scenarios()) {
-    if (sc.event) continue;
-    const boundPaths = new Set(Object.keys(sc.bindings));
+    if (sc.hasEvent()) continue;
+    const bindings = sc.bindings();
+    const boundPaths = new Set(Object.keys(bindings));
     if (attrs.some((a) => !boundPaths.has(a.path.asString()))) continue;
     const parts: string[] = [];
     let okAll = true;
     for (const attr of attrs) {
-      const value = sc.bindings[attr.path.asString()];
+      const value = bindings[attr.path.asString()];
       if (value === undefined) {
         okAll = false;
         break;
@@ -304,9 +308,9 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       parts.push(`${qVar(attr.path.asString())}' = ${qLit(value)}`);
     }
     if (!okAll) continue;
-    const initAction = qId("scInit", sc.id.asString());
+    const initAction = qId("scInit", sc.id().asString());
     lines.push(`  action ${initAction} = all { ${parts.join(", ")} }`);
-    scenarioInitActions.set(sc.id.asString(), initAction);
+    scenarioInitActions.set(sc.id().asString(), initAction);
   }
 
   lines.push("}");

@@ -25,13 +25,13 @@ export class RefinementObligations {
   byId(id: string): RefinementObligation | undefined {
     let found: RefinementObligation | undefined;
     for (const o of this.#values) {
-      if (o.id.asString() === id) found = o;
+      if (o.id().asString() === id) found = o;
     }
     return found;
   }
 
   sortedCanonically(): RefinementObligations {
-    return new RefinementObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
+    return new RefinementObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id().asString(), b.id().asString())));
   }
 
   toArray(): readonly RefinementObligation[] {
