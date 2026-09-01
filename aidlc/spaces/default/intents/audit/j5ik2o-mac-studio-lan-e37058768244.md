@@ -421,3 +421,24 @@
 **Duration ms**: 1586
 
 ---
+
+## Sensor Fired
+**Timestamp**: 2026-09-01T11:21:16Z
+**Event**: SENSOR_FIRED
+**Fire id**: 4e313c4a
+**Sensor ID**: pr-review-clean
+**Stage slug**: build-and-test
+**Output path**: ritual.pr-review.md
+
+---
+
+## Sensor Passed
+**Timestamp**: 2026-09-01T11:21:17Z
+**Event**: SENSOR_PASSED
+**Fire id**: 4e313c4a
+**Sensor ID**: pr-review-clean
+**Stage slug**: build-and-test
+**Output path**: ritual.pr-review.md
+**Duration ms**: 1697
+
+---
