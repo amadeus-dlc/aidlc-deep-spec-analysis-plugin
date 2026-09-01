@@ -1152,3 +1152,26 @@ golden 再生成は不要のまま両台帳を閉じる。
 無傷（`git diff --exit-code tests/fixtures` クリーン）・base↔head パリティ
 `diff -r` 空・AIDLC_PARITY=1 決定論 green・validator Errors: 0・
 7 ハーネスビルド。
+
+## CQS 裁定 — コマンドは返さない：store は void（2026-09-01）
+
+Repository の store が書いた集約を返していたのは CQS 違反と裁定し、全 10
+ポートを `Result<void, RepositoryError>` に改めた。集約を読み込んで返す
+store は禁止。複数件の書き込みだけが、正常に書けた件数か事前採番の集約 ID
+集合を返してよい（現行ポートに複数件書きは無い）。
+
+- **裁定 D の改訂（write 面）**: 「store は永続化される姿を返す」設計
+  （7f40ed0）を廃し、「書かれる(はずの)姿」は conformedOf（照会）の責務に
+  ——report 系 3 Repository（refcheck／verification／design）が持つ。
+  verdict はモードによらず conformedOf から導き、store は内部で同じ適合を
+  通すため、stdout とファイルの矛盾は引き続き構造的に起きない。
+  findById∘store のバイト恒等・「不適合を書かない」不変条件は不変。
+- **呼び手の追随**: verify 4 本・refcheck 3 本を「照会 → void store」へ、
+  #persist 系も Result<void>。InMemory ダブル 2 本もポート契約に追随
+  （conformedOf 込み）。
+- **執行**: `commandsReturnVoid` を ALL_RULES へ（red/green example つき）
+  ——usecase/port の store が Result<void> 以外を返せば違反。
+
+証拠：397 pass / 1 skip / 0 fail（per-file 90% 床込み）・golden 無傷・
+パリティ `diff -r` 空（書かれるバイトも verdict 値も不変）・validator
+Errors: 0・7 ハーネスビルド。

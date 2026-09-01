@@ -1240,3 +1240,31 @@ Evidence: 397 pass / 1 skip / 0 fail (12 new pins, per-file 90% floor
 held), goldens untouched (`git diff --exit-code tests/fixtures` clean),
 base↔head parity `diff -r` empty, AIDLC_PARITY=1 determinism green,
 validator Errors: 0, 7 harness builds.
+
+## The CQS ruling — commands return nothing: store is void (2026-09-01)
+
+Repositories returning the written aggregate from store is ruled a CQS
+violation; all ten ports change to `Result<void, RepositoryError>`. A
+store that reads back and returns the aggregate is forbidden. Only bulk
+writes may return the count of successful writes or the set of
+pre-assigned aggregate ids (no port has a bulk write today).
+
+- **Ruling D revised (the write face)**: the "store returns the
+  persisted shape" design (7f40ed0) is retired; "the shape as it would
+  be written" is conformedOf's responsibility — carried by the three
+  report repositories (refcheck / verification / design). Verdicts
+  derive from conformedOf in every mode, and store runs the same
+  conformance internally, so stdout can still never contradict the
+  file. The findById∘store byte identity and the never-write-
+  nonconforming invariant stand.
+- **Callers follow**: the four verify and three refcheck use cases move
+  to "query, then void store"; the #persist helpers return
+  Result<void>. Both InMemory doubles follow the port contract
+  (conformedOf included).
+- **Enforcement**: `commandsReturnVoid` joins ALL_RULES (red/green
+  examples) — a store under usecase/port/ returning anything but
+  Result<void> flags.
+
+Evidence: 397 pass / 1 skip / 0 fail with the per-file 90% floor,
+goldens untouched, parity `diff -r` empty (neither written bytes nor
+verdict values moved), validator Errors: 0, 7 harness builds.

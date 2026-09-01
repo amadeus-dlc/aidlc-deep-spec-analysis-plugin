@@ -46,11 +46,11 @@ export class DesignModelRepositoryImpl implements DesignModelRepository {
   }
 
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
-  store(model: DesignModel): Result<DesignModel, RepositoryError> {
+  store(model: DesignModel): Result<void, RepositoryError> {
     const modelPath = model.id().artifactPath().asString();
     try {
       writeFileAtomically(modelPath, model.sourceDocument());
-      return ok(model);
+      return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
     }

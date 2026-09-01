@@ -12,5 +12,5 @@ import type { FormalModelId, RequirementsModel } from "../../domain/index.ts";
 
 export interface FormalModelRepository {
   findById(id: FormalModelId): Result<RequirementsModel, RepositoryError>;
-  store(model: RequirementsModel): Result<RequirementsModel, RepositoryError>;
+  store(model: RequirementsModel): Result<void, RepositoryError>;
 }

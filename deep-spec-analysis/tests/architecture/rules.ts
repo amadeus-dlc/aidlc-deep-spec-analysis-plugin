@@ -403,6 +403,23 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
   return out;
 }
 
+// ルール: CQS——コマンドは返さない（オーナー裁定 2026-09-01）。ポートの
+// store は書くだけ：正常時は void で、集約を読み込んで返さない。複数件の
+// 書き込みだけが正常件数か事前採番の集約 ID 集合を返してよい（現行ポートに
+// 複数件書きは無いので、機械検査は単文書 store の void を締める）。
+export function commandsReturnVoid(relPath: string, rawSource: string): Violation[] {
+  if (!relPath.includes("/usecase/port/")) return [];
+  const source = stripStrings(rawSource);
+  const out: Violation[] = [];
+  const re = /^\s*store\([^)]*\):\s*Result<(\w+)/gm;
+  for (let m = re.exec(source); m !== null; m = re.exec(source)) {
+    if (m[1] !== "void") {
+      out.push({ path: relPath, rule: "commands-return-void", detail: `store returns Result<${m[1]}, …> — commands return void (CQS)` });
+    }
+  }
+  return out;
+}
+
 // ルール: 層とコンテキストの依存方向。
 //   infrastructure → 同層のみ（言語拡張基盤：ドメインを知らない）
 //   domain  → 同一コンテキスト domain・kernel/domain（＋infrastructure）
@@ -472,6 +489,7 @@ export const ALL_RULES = [
   noNonNullAssertions,
   onePublicTypePerFile,
   portsLiveInPortDir,
+  commandsReturnVoid,
 ] as const;
 
 export function violationsOf(relPath: string, source: string): Violation[] {

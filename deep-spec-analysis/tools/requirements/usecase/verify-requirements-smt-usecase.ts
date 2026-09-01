@@ -72,18 +72,18 @@ export class VerifyRequirementsSmtUseCase {
     }
 
     const interpreted = run.facts.interpret(model, run.result.verdicts);
-    const stored = this.#verificationReportRepository.store(
-      VerificationReport.compose({
-        id,
-        irVersion: model.irVersion(),
-        irHash,
-        method: "exhaustive",
-        findings: interpreted.findings,
-        skipped: interpreted.skipped,
-      }),
-    );
+    const report = VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash,
+      method: "exhaustive",
+      findings: interpreted.findings,
+      skipped: interpreted.skipped,
+    });
+    // CQS: verdict は conformedOf（照会）から導き、store は書くだけ（void）。
+    const conformed = this.#verificationReportRepository.conformedOf(report);
+    const stored = this.#verificationReportRepository.store(report);
     if (!stored.ok) return { kind: "save-failed", error: stored.error };
-    const conformed = stored.value;
     const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
     if (!cross.ok) return { kind: "save-failed", error: cross.error };
     return {
@@ -94,7 +94,7 @@ export class VerifyRequirementsSmtUseCase {
     };
   }
 
-  #persist(report: VerificationReport): Result<VerificationReport, RepositoryError> {
+  #persist(report: VerificationReport): Result<void, RepositoryError> {
     return this.#verificationReportRepository.store(report);
   }
 

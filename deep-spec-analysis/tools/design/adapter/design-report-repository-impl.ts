@@ -67,13 +67,17 @@ export class DesignReportRepositoryImpl implements DesignReportRepository {
     return ok(DesignReports.of(reports));
   }
 
-  store(report: DesignReport): Result<DesignReport, RepositoryError> {
-    const conformed = conformDesignReport(report, readContractSchema(this.#findingsSchemaPath));
+  conformedOf(report: DesignReport): DesignReport {
+    return conformDesignReport(report, readContractSchema(this.#findingsSchemaPath));
+  }
+
+  store(report: DesignReport): Result<void, RepositoryError> {
+    const conformed = this.conformedOf(report);
     const path = join(conformed.id().directory().asString(), conformed.id().fileName());
     try {
       mkdirSync(conformed.id().directory().asString(), { recursive: true });
       writeFileSync(path, renderDesignReportBytes(conformed), "utf-8");
-      return ok(conformed);
+      return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
     }

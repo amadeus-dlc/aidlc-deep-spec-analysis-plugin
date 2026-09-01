@@ -69,13 +69,17 @@ export class VerificationReportRepositoryImpl implements VerificationReportRepos
     return ok(VerificationReports.of(reports));
   }
 
-  store(report: VerificationReport): Result<VerificationReport, RepositoryError> {
-    const conformed = conformToFindingsContract(report, readContractSchema(this.#findingsSchemaPath));
+  conformedOf(report: VerificationReport): VerificationReport {
+    return conformToFindingsContract(report, readContractSchema(this.#findingsSchemaPath));
+  }
+
+  store(report: VerificationReport): Result<void, RepositoryError> {
+    const conformed = this.conformedOf(report);
     const path = join(conformed.id().directory().asString(), conformed.id().fileName());
     try {
       mkdirSync(conformed.id().directory().asString(), { recursive: true });
       writeFileSync(path, renderVerificationReportBytes(conformed), "utf-8");
-      return ok(conformed);
+      return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
     }

@@ -35,9 +35,8 @@ export class InMemoryReferenceCheckReportRepository implements ReferenceCheckRep
     return conformToContract(report, this.#findingsSchema);
   }
 
-  store(report: ReferenceCheckReport): Result<ReferenceCheckReport, RepositoryError> {
-    const conformed = this.conformedOf(report);
-    this.#store.set(this.#keyOf(report.id()), conformed);
-    return ok(conformed);
+  store(report: ReferenceCheckReport): Result<void, RepositoryError> {
+    this.#store.set(this.#keyOf(report.id()), this.conformedOf(report));
+    return ok(undefined);
   }
 }

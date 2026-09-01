@@ -70,11 +70,11 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
   }
 
   // 往復則: findById が読んだ錨成果物の原文をバイト逐語で書き戻す。
-  store(record: DesignRecord): Result<DesignRecord, RepositoryError> {
+  store(record: DesignRecord): Result<void, RepositoryError> {
     const path = record.id().artifactPath().asString();
     try {
       writeFileAtomically(path, record.sourceDocument());
-      return ok(record);
+      return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
     }

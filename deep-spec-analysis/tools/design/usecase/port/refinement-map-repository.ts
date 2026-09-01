@@ -15,5 +15,5 @@ import type { RefinementMap, RefinementMapId } from "../../../refinement/domain/
 
 export interface RefinementMapRepository {
   findById(id: RefinementMapId): Result<RefinementMap, RepositoryError>;
-  store(map: RefinementMap): Result<RefinementMap, RepositoryError>;
+  store(map: RefinementMap): Result<void, RepositoryError>;
 }

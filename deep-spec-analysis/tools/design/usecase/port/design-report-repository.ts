@@ -14,5 +14,9 @@ import type { DesignReport, DesignReportId, DesignReports } from "../../domain/i
 export interface DesignReportRepository {
   findById(aggregateId: DesignReportId): Result<DesignReport, RepositoryError>;
   findAllByDirectory(directory: ArtifactPath): Result<DesignReports, RepositoryError>;
-  store(report: DesignReport): Result<DesignReport, RepositoryError>;
+  // CQS（オーナー裁定 2026-09-01）：store は書くだけ——正常時は void。
+  store(report: DesignReport): Result<void, RepositoryError>;
+  // 「store が書くはずの姿」を書かずに問う照会——永続化契約の一部。verdict は
+  // この戻り値から導く（stdout とファイルの矛盾を構造的に防ぐ）。
+  conformedOf(report: DesignReport): DesignReport;
 }
