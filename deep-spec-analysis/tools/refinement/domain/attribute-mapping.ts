@@ -122,7 +122,8 @@ export class AttributeMapping {
   missingCasesOver(fromValues: readonly string[]): readonly string[] {
     const variant = this.#variant;
     if (variant.kind !== "enum-cases") return [];
-    return fromValues.filter((v) => !(v in variant.cases)).sort();
+    // `in` は継承プロパティ（"toString" 等）も命中させるため、own 判定に限る。
+    return fromValues.filter((v) => !Object.hasOwn(variant.cases, v)).sort();
   }
 
   // 生成値の範囲（enum-cases 専門）: cases の生成値のうち要件属性の値でない

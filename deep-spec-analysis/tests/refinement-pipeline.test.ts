@@ -330,6 +330,17 @@ const exprMapping = (req: string, path: string) =>
 const enumMapping = (req: string, from: string, cases: { [d: string]: string }) =>
   ({ kind: "enum-cases", req, from, cases }) as const;
 
+describe("attribute mapping totality", () => {
+  test("an inherited property name (e.g. \"toString\") does not count as a covered case", () => {
+    const mapping = AttributeMapping.enumCases(AttributePath.reconstitute("R.state"), "D.phase", { draft: "open" });
+    // from の宣言値に "toString" があっても、cases の own mapping が無ければ欠けとして報告する。
+    expect(mapping.missingCasesOver(["draft", "toString"])).toEqual(["toString"]);
+    expect(mapping.missingCasesOver(["draft"])).toEqual([]);
+    expect(mapping.producedValuesOutside({ includes: (v: string) => v === "open" })).toEqual([]);
+    expect(AttributeMapping.expression(AttributePath.reconstitute("R.x"), { op: "ref", path: "D.x" }).missingCasesOver(["a"])).toEqual([]);
+  });
+});
+
 describe("alpha substitution", () => {
   const ctx = AlphaContext.of(
     new Map<string, AttributeMapping>([
