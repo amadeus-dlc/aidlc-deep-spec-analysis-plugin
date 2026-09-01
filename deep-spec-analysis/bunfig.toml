@@ -26,4 +26,6 @@ coveragePathIgnorePatterns = [
   "tools/requirements/usecase/**",
   "tools/design/adapter/**",
   "tools/design/usecase/**",
+  "tools/doctor/adapter/**",
+  "tools/doctor/usecase/**",
 ]
