@@ -1358,3 +1358,34 @@ the enforcement mechanism).
 
 Evidence: 398 tests / 0 fail, goldens untouched, parity empty,
 validator Errors: 0, 7 harness builds.
+
+## The master-servant addendum — a getter-only type is a data model, not a domain-layer citizen (2026-09-01, #71)
+
+A rejection ruling on the `*Seed` interfaces I (the implementer) minted
+in wave 1. A domain object is getters plus domain behavior; **a
+getter-only type is a data model** — and placing one in the domain
+layer violates the layer's reason to exist. Wave 1's carve-out
+("legitimate because it is the construction door's argument") is
+withdrawn.
+
+- **The correct shape**: a door's argument travels as the door
+  signature's anonymous inline parameters, not as a named type — nobody
+  calls a function's parameter list a data model, and the domain layer
+  gains no getter-only citizen. Adapters pass literals structurally; no
+  name is needed.
+- **Applied immediately**: the four Seeds minted in waves 1–2 (the
+  attribute-decl twins and the verdict twins) are dissolved into inline
+  `reconstitute` signatures.
+- **Rolled out**: dissolving every pre-existing `*Seed`/`*Composition`
+  joins the #71 ledger as wave 7 (purging getter-only types from the
+  domain layer). The only exemptions left are I/O contexts (adapters)
+  and `Expression` (the permissive published language — already ruled).
+
+Wave 2 (same PR): the verdict twins (`SmtQueryVerdict` /
+`RefinementQueryVerdict`) become commandable classes — status
+classification (`isSat`/`isUnsat`/`isUndecided` — the scattered
+three-state enumeration was the soil of #34 item 3's triplicate bug)
+and the witness material faces (`witnessModel`/`witnessTrace`/
+`coreLabels`/`sortedCore`) are owned by the verdict itself. Wordings
+and emission order are verbatim — proven by untouched goldens and an
+empty parity diff.

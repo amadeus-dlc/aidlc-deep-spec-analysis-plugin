@@ -7,9 +7,8 @@
 // 旧 runRefinementChild からの逐語移植。
 
 import { spawnSync } from "node:child_process";
-import { RefinementQueryVerdicts } from "../../refinement/domain/index.ts";
+import { RefinementQueryVerdict, RefinementQueryVerdicts } from "../../refinement/domain/index.ts";
 import type {
-  RefinementQueryVerdict,
   RefinementRequirements,
   UnitRefinementPlan,
 } from "../../refinement/domain/index.ts";
@@ -46,12 +45,12 @@ export class RefinementSolverClientImpl implements RefinementSolverClient {
     }
     const verdicts = new Map<string, RefinementQueryVerdict>();
     for (const [queryId, r] of child.results) {
-      verdicts.set(queryId, {
+      verdicts.set(queryId, RefinementQueryVerdict.reconstitute({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
         decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
         core: r.core,
-      });
+      }));
     }
     return { facts: built.facts, result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(verdicts) } };
   }

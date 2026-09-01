@@ -8,7 +8,8 @@
 
 import { spawnSync } from "node:child_process";
 import { SmtQueryVerdicts } from "../domain/index.ts";
-import type { RequirementsModel, SmtQueryVerdict } from "../domain/index.ts";
+import { SmtQueryVerdict } from "../domain/index.ts";
+import type { RequirementsModel } from "../domain/index.ts";
 import type { SmtCheck, Z3SolverClient } from "../usecase/index.ts";
 import { type SmtChildQuery } from "./smt-child-query.ts";
 import { buildSmtPlan, decodeSolverModel } from "./smt-plan.ts";
@@ -37,11 +38,11 @@ export class Z3SolverClientImpl implements Z3SolverClient {
     }
     const verdicts = new Map<string, SmtQueryVerdict>();
     for (const [id, r] of outcome.results) {
-      verdicts.set(id, {
+      verdicts.set(id, SmtQueryVerdict.reconstitute({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
         core: r.core,
-      });
+      }));
     }
     return { facts: plan.facts, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(verdicts) } };
   }

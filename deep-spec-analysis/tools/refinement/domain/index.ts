@@ -38,7 +38,7 @@ export { RefinementSolverFacts } from "./refinement-solver-facts.ts";
 export { type InterpretedRefinementVerdicts } from "./interpreted-refinement-verdicts.ts";
 export { type RefinementProbe } from "./refinement-probe.ts";
 export { type RefinementQueryStatus } from "./refinement-query-status.ts";
-export { type RefinementQueryVerdict } from "./refinement-query-verdict.ts";
+export { RefinementQueryVerdict } from "./refinement-query-verdict.ts";
 export { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
 export { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
 export { type RefinementQuintInvariant } from "./refinement-quint-invariant.ts";

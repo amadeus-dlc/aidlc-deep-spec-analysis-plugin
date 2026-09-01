@@ -1249,3 +1249,27 @@ dev repo／design fixture の両基準でバイト同一（挙動変化は真の
 
 証拠：398 tests / 0 fail・golden 無傷・パリティ空・validator Errors: 0・
 7 ハーネスビルド。
+
+## 主従の裁定・補遺 — getter しかない型はデータモデルであり、domain 層の住人ではない（2026-09-01、#71）
+
+波 1 で私（実装側）が新造した `*Seed` interface への棄却裁定。getter 群＋
+ドメインの振る舞いを持つものがドメインオブジェクトであり、**getter しか
+ない型はデータモデル**——それを domain 層に置くのは、層の存在理由への
+違反である。「構築ドアの引数だから正当」という波 1 の除外判定は撤回する。
+
+- **正しい形**: ドアの引数は**名前付き型ではなく、ドア署名の無名インライン
+  引数**で運ぶ。関数の引数リストを誰もデータモデルと呼ばないのと同じで、
+  domain 層に getter-only の市民を作らない。adapter は構造的型付けで
+  リテラルを渡すだけ——名前は要らない。
+- **即時適用**: 波 1・2 で新造した 4 Seed（attribute-decl 双子・verdict
+  双子）を解散し、`reconstitute` のインライン署名へ畳んだ。
+- **横展開**: 既存の `*Seed`／`*Composition` 群の全解散を #71 の波 7 として
+  台帳化（domain 層から getter-only 型を全廃する波）。除外に残るのは
+  I/O 文脈（adapter）と `Expression`（寛容 published language——既裁定）
+  のみ。
+
+波 2（同 PR）: verdict 双子（`SmtQueryVerdict`／`RefinementQueryVerdict`）を
+命令できる class へ——status 分類（`isSat`/`isUnsat`/`isUndecided`——3 状態
+列挙の散在は #34 項 3 の三重バグの土壌だった）と witness 材料面
+（`witnessModel`/`witnessTrace`/`coreLabels`/`sortedCore`）を判定自身が所有。
+文言・発生順は逐語不変——golden 無傷・パリティ diff 空で証明。

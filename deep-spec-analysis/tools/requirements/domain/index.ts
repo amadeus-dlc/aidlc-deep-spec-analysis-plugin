@@ -32,7 +32,7 @@ export { type VerificationReportComposition } from "./verification-report-compos
 export { type VerificationReportSeed } from "./verification-report-seed.ts";
 export { VerificationReports } from "./verification-reports.ts";
 export { type SmtQueryStatus } from "./smt-query-status.ts";
-export { type SmtQueryVerdict } from "./smt-query-verdict.ts";
+export { SmtQueryVerdict } from "./smt-query-verdict.ts";
 export { SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 export { SmtPlanFacts } from "./smt-plan-facts.ts";
 export { type InterpretedVerdicts } from "./interpreted-verdicts.ts";
@@ -55,7 +55,6 @@ export { type QuintScenarioVerdict } from "./quint-scenario-verdict.ts";
 export { type QuintTemporalVerdict } from "./quint-temporal-verdict.ts";
 export { IrModelDecl } from "./ir-model-decl.ts";
 export { IrAttributeDecl } from "./ir-attribute-decl.ts";
-export { type IrAttributeDeclSeed } from "./ir-attribute-decl-seed.ts";
 export { IrAttributeDecls } from "./ir-attribute-decls.ts";
 export { IrAttributeName } from "./ir-attribute-name.ts";
 export { type IrBackgroundDecl } from "./ir-background-decl.ts";

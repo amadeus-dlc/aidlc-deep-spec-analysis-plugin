@@ -1,7 +1,6 @@
 import type { AttributeBound } from "../../kernel/domain/index.ts";
 import type { DeclaredValues } from "./declared-values.ts";
 import { type DesignAttributeName } from "./design-attribute-name.ts";
-import type { DesignAttributeDeclSeed } from "./design-attribute-decl-seed.ts";
 
 // 属性宣言（bool / 有界 int / enum）。型宣言が欠けた属性は kind: "" で届く
 //（旧実装はカタログへ登録した——参照解決の可否が変わるため保存）。
@@ -16,16 +15,18 @@ export class DesignAttributeDecl {
   readonly #min: AttributeBound | undefined;
   readonly #max: AttributeBound | undefined;
 
-  private constructor(seed: DesignAttributeDeclSeed) {
-    this.#name = seed.name;
-    this.#kind = seed.kind;
-    this.#values = seed.values;
-    this.#min = seed.min;
-    this.#max = seed.max;
+  // ドアの引数は無名のインライン署名で運ぶ——名前付き getter-only 型
+  //（データモデル）を domain 層に住まわせない（主従の裁定・補遺）。
+  private constructor(props: { name: DesignAttributeName; kind: string; values?: DeclaredValues; min?: AttributeBound; max?: AttributeBound }) {
+    this.#name = props.name;
+    this.#kind = props.kind;
+    this.#values = props.values;
+    this.#min = props.min;
+    this.#max = props.max;
   }
 
-  static reconstitute(seed: DesignAttributeDeclSeed): DesignAttributeDecl {
-    return new DesignAttributeDecl(seed);
+  static reconstitute(props: { name: DesignAttributeName; kind: string; values?: DeclaredValues; min?: AttributeBound; max?: AttributeBound }): DesignAttributeDecl {
+    return new DesignAttributeDecl(props);
   }
 
   // 同定面（座標組み立て・重複検査の材料）。

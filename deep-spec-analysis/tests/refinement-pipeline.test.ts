@@ -67,7 +67,7 @@ import {
   type RefinementAttribute,
   type RefinementObligation,
   type RefinementProbe,
-  type RefinementQueryVerdict,
+  RefinementQueryVerdict,
   type RefinementScenario,
   type RefinementUnitMap,
   RefinementMaterials,
@@ -605,8 +605,8 @@ describe("refinement verdict interpretation", () => {
   );
   const facts = (entries: [string, RefinementProbe][]): RefinementSolverFacts =>
     RefinementSolverFacts.of({ pending: new Map(entries), compileSkips: DesignSkips.of([]) });
-  const run = (f: RefinementSolverFacts, results: [string, RefinementQueryVerdict][]) =>
-    f.interpret(RefinementQueryVerdicts.of(new Map(results)), req, plan, "u1");
+  const run = (f: RefinementSolverFacts, results: [string, Parameters<typeof RefinementQueryVerdict.reconstitute>[0]][]) =>
+    f.interpret(RefinementQueryVerdicts.of(new Map(results.map(([id, v]) => [id, RefinementQueryVerdict.reconstitute(v)]))), req, plan, "u1");
 
   test("each probe kind emits its frozen finding on the deciding verdict", () => {
     const out = run(
