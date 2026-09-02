@@ -23,7 +23,9 @@ import { DesignFinding } from "./design-finding.ts";
 import { DesignSkipped } from "./design-skipped.ts";
 import type { DesignValue } from "./design-value.ts";
 
-import { type SiblingVerdictDocument } from "./sibling-verdict-document.ts";
+import type { SiblingVerdictDocument } from "./sibling-verdict-document.ts";
+import type { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";
+import type { SiblingVerdictSkips } from "./sibling-verdict-skips.ts";
 import { LoweredBackground } from "./lowered-background.ts";
 import { LoweredBackgrounds } from "./lowered-backgrounds.ts";
 import { LoweredId } from "./lowered-id.ts";
@@ -89,13 +91,15 @@ export class LoweredUnit {
     unavailable: string | null;
     method: string | null;
   } {
-    if (doc.kind === "unreadable") {
-      return { findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: "sibling backend produced no findings document", method: null };
-    }
-    if (doc.kind === "unavailable") {
-      return { findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: doc.reason, method: doc.method };
-    }
-    const method = doc.method;
+    return doc.match<ReturnType<LoweredUnit["remapVerdicts"]>>({
+      unreadable: () => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: "sibling backend produced no findings document", method: null }),
+      unavailable: (reason, method) => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: reason, method }),
+      readable: (method, findings, skipped) => this.#remapReadable(u, method, findings, skipped),
+    });
+  }
+
+  // 読めた文書の再割り当て本体（旧 remapVerdicts の readable 分岐、逐語）。
+  #remapReadable(u: DesignUnit, method: string | null, docFindings: SiblingVerdictFindings, docSkipped: SiblingVerdictSkips): ReturnType<LoweredUnit["remapVerdicts"]> {
     const mapTarget = (t: string): { design: string; entry: LoweredOrigin | null } => this.#index.resolveDesignTarget(t);
     const remapCore = (core: DesignValue): DesignValue => {
       if (!Array.isArray(core)) return core;
@@ -109,17 +113,14 @@ export class LoweredUnit {
     const deadDesignIds = new Set<string>();
     const shadowFindings: { finding: DesignFinding; subsumer: string; subsumed: string }[] = [];
 
-    for (const f of doc.findings) {
-      const mapped = f.targets.map((t) => mapTarget(t.asString()));
-      const frRefs = f.frRefs;
-      const detail = remapDetail(f.detail);
-      let witness = f.witness;
-      if (isRecord(witness) && "core" in witness) {
-        witness = { core: remapCore(witness.core ?? null) };
-      }
+    for (const f of docFindings) {
+      const mapped = f.targets().map((t) => mapTarget(t.asString()));
+      const frRefs = f.frRefs();
+      const detail = remapDetail(f.detail());
+      const witness = f.witnessWithCoreRemapped(remapCore);
 
       const synth = mapped.find((m) => m.entry?.isSyntheticProbe());
-      if (synth?.entry?.isKind("vac-dead") && f.kind === "conflict") {
+      if (synth?.entry?.isKind("vac-dead") && f.isKind("conflict")) {
         const design = synth.entry.design().asString();
         const isTransition = this.#index.isTransition(design);
         deadDesignIds.add(design);
@@ -135,7 +136,7 @@ export class LoweredUnit {
         );
         continue;
       }
-      if (synth?.entry?.isKind("vac-shadow") && f.kind === "conflict") {
+      if (synth?.entry?.isKind("vac-shadow") && f.isKind("conflict")) {
         const pairRefs = synth.entry.pairRefs();
         const pair = [pairRefs[0].asString(), pairRefs[1].asString()] as const;
         shadowFindings.push({
@@ -157,7 +158,7 @@ export class LoweredUnit {
       const targets = IdOrder.sortedUnique(mapped.map((m) => m.design), IdOrder.compare);
       // deterministic:false waiver：同トリガ conflict の対象がすべて、非決定を
       // 宣言した 1 機械の遷移であるとき（判定は機械自身へ命じる——波7）。
-      if (f.kind === "conflict" && targets.length > 0) {
+      if (f.isKind("conflict") && targets.length > 0) {
         const machines = targets.map((t) => this.#index.machineOfTransition(t));
         const first = machines[0];
         if (first !== null && first !== undefined && first.waivesOverlapOf(machines)) {
@@ -175,7 +176,7 @@ export class LoweredUnit {
           continue;
         }
       }
-      findings.push(DesignFinding.reconstitute({ kind: f.kind, frRefs, targets: TargetIds.reconstitute(targets), witness, unit: u.name(), detail }));
+      findings.push(DesignFinding.reconstitute({ kind: f.kind(), frRefs, targets: TargetIds.reconstitute(targets), witness, unit: u.name(), detail }));
     }
 
     // shadow の後段：死んだルール/遷移は既に unreachable——その空虚な包摂は何も
@@ -204,7 +205,7 @@ export class LoweredUnit {
     }
 
     const seenSkip = new Set<string>();
-    for (const s of doc.skipped) {
+    for (const s of docSkipped) {
       const { design, entry } = mapTarget(s.target().asString());
       if (entry?.isSyntheticProbe()) continue; // 合成の予算ノイズ
       const detail = s.detail();
@@ -220,11 +221,6 @@ export class LoweredUnit {
     }
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped), unavailable: null, method };
   }
-}
-
-// SMT 変数名は設計 id の英数字化（remap の witness core 書き換えと同じ規則）。
-function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {

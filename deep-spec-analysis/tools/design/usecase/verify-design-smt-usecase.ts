@@ -119,7 +119,7 @@ export class VerifyDesignSmtUseCase {
       const run = this.#siblingBackendClient.runLowered("smt", u, lowered, remaining);
       if (run.exit === 127) {
         const reason =
-          (run.doc?.kind === "unavailable" ? run.doc.reason : null) ?? "z3 could not be executed by the lowered v1 backend";
+          run.doc?.unavailableReason() ?? "z3 could not be executed by the lowered v1 backend";
         const saved = this.#persist(DesignReport.backendUnavailable(id, model, irHash, "exhaustive", reason, "z3 could not be executed"));
         if (!saved.ok) return { kind: "save-failed", error: saved.error };
         const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
@@ -158,49 +158,56 @@ export class VerifyDesignSmtUseCase {
           for (const t of reqTargets) skipped.push(DesignSkipped.reconstitute({ target: t, reason, unit: u.name(), detail }));
         }
       };
-      if (acq.kind === "absent") {
-        skipAll("absent-input", acq.error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
-      } else if (!acq.map.requirementsIrHash().equals(req.hash())) {
-        skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
-      } else if (!acq.map.designIrHash().equals(irHash)) {
-        skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR — re-author the map");
-      } else {
-        inputs = acq.inputs;
-        for (const u of model.units()) {
-          const unitMap = acq.map.unitMapOf(u.id());
-          if (!unitMap) {
-            for (const t of reqTargets) {
-              skipped.push(DesignSkipped.reconstitute({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
+      acq.match({
+        absent: (error) => {
+          skipAll("absent-input", error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
+        },
+        loaded: (map, mapArtifact, mapInputs) => {
+          if (!map.requirementsIrHash().equals(req.hash())) {
+            skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
+            return;
+          }
+          if (!map.designIrHash().equals(irHash)) {
+            skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR — re-author the map");
+            return;
+          }
+          inputs = mapInputs;
+          for (const u of model.units()) {
+            const unitMap = map.unitMapOf(u.id());
+            if (!unitMap) {
+              for (const t of reqTargets) {
+                skipped.push(DesignSkipped.reconstitute({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
+              }
+              continue;
             }
-            continue;
-          }
-          const refRemaining = REFINEMENT_DEADLINE_MS - (this.#clock.now() - started);
-          if (refRemaining < 5_000) {
-            for (const t of reqTargets) {
-              skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before the refinement pass" }));
+            const refRemaining = REFINEMENT_DEADLINE_MS - (this.#clock.now() - started);
+            if (refRemaining < 5_000) {
+              for (const t of reqTargets) {
+                skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before the refinement pass" }));
+              }
+              continue;
             }
-            continue;
-          }
-          const plan = UnitRefinementPlan.of(u, unitMap, req, acq.mapArtifact);
-          const check = this.#refinementSolverClient.check(u, req, plan, Math.min(30_000, refRemaining));
-          if (check.result.kind === "unavailable") {
-            // 旧挙動：unavailable のユニットは gap / status / compile skip を
-            // 捨て、全要件対象を一括 unavailable として記録する。
-            for (const t of reqTargets) {
-              skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: check.result.reason }));
+            const plan = UnitRefinementPlan.of(u, unitMap, req, mapArtifact);
+            const check = this.#refinementSolverClient.check(u, req, plan, Math.min(30_000, refRemaining));
+            if (check.result.kind === "unavailable") {
+              // 旧挙動：unavailable のユニットは gap / status / compile skip を
+              // 捨て、全要件対象を一括 unavailable として記録する。
+              for (const t of reqTargets) {
+                skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: check.result.reason }));
+              }
+              continue;
             }
-            continue;
+            findings.push(...plan.gaps());
+            skipped.push(...plan.smtStatusSkips(u.name()));
+            skipped.push(...check.facts.compileSkips());
+            if (check.result.kind === "solved") {
+              const interpreted = check.facts.interpret(check.result.verdicts, req, plan, u.name());
+              findings.push(...interpreted.findings);
+              skipped.push(...interpreted.skipped);
+            }
           }
-          findings.push(...plan.gaps());
-          skipped.push(...plan.smtStatusSkips(u.name()));
-          skipped.push(...check.facts.compileSkips());
-          if (check.result.kind === "solved") {
-            const interpreted = check.facts.interpret(check.result.verdicts, req, plan, u.name());
-            findings.push(...interpreted.findings);
-            skipped.push(...interpreted.skipped);
-          }
-        }
-      }
+        },
+      });
     }
 
     const report = DesignReport.compose({

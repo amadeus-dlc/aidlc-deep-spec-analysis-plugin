@@ -50,4 +50,4 @@ export { FormalModelId } from "../../requirements/domain/index.ts";
 // 裁可済みエッジ(design→refinement/domain)からこの facade 経由で受け取る。
 export { AttributeBound, AttributePath, ObligationId, ObligationNature, ScenarioId } from "../../requirements/domain/index.ts";
 export { RefinementMaterials } from "./refinement-materials.ts";
-export { type RefinementMapAcquisition } from "./refinement-map-acquisition.ts";
+export { RefinementMapAcquisition } from "./refinement-map-acquisition.ts";

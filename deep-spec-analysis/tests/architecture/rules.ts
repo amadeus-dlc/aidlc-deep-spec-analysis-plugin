@@ -413,8 +413,6 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
 export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "design/domain/design-background-assumption.ts",
   "design/domain/design-value.ts",
-  "design/domain/sibling-verdict-document.ts",
-  "design/domain/sibling-verdict-finding.ts",
   "doctor/domain/check.ts",
   "doctor/domain/coverage-row.ts",
   "doctor/domain/debt-row.ts",
@@ -440,7 +438,6 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "refinement/domain/event-mapping.ts",
   "refinement/domain/ref-token-carrier.ts",
   "refinement/domain/refinement-attribute.ts",
-  "refinement/domain/refinement-map-acquisition.ts",
   "refinement/domain/refinement-quint-invariant.ts",
   "refinement/domain/refinement-unit-map.ts",
   "refinement/domain/unmapped-target.ts",
@@ -593,7 +590,7 @@ export function primitiveFieldsOf(rawSource: string): string[] {
 
 // 台帳の記述子総数の上限。台帳が縮んだら下げる——上げる変更は裁定違反で、
 // 新しい負債を記述子ごと台帳へ足す抜け道を diff 上で可視化する（レビュー指摘）。
-export const PRIMITIVE_FIELD_DEBT_CEILING = 88;
+export const PRIMITIVE_FIELD_DEBT_CEILING = 87;
 
 export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([
   ["design/domain/br-reference-index.ts", new Set(["#ids: Set<string>"])],
@@ -608,8 +605,8 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["design/domain/lowered-obligation.ts", new Set(["#nature: string", "#frRefs: readonly string[]", "#trigger: string | undefined"])],
   ["design/domain/lowered-scenario.ts", new Set(["#frRefs: readonly string[]"])],
   ["design/domain/lowering-index.ts", new Set(["#origins: ReadonlyMap<string, LoweredOrigin>", "#scenarioDesignIds: ReadonlyMap<string, string>", "#machinesByTransition: ReadonlyMap<string, DesignMachine>", "#attrPathsByMachine: ReadonlyMap<string, string>"])],
-  ["design/domain/sibling-verdict-document.ts", new Set(["SiblingVerdictDocument.method: string | null"])],
-  ["design/domain/sibling-verdict-finding.ts", new Set(["SiblingVerdictFinding.kind: string"])],
+  ["design/domain/sibling-verdict-document.ts", new Set(["#method: string | null"])],
+  ["design/domain/sibling-verdict-finding.ts", new Set(["#kind: string"])],
   ["design/domain/unformalized-targets.ts", new Set(["#values: ReadonlySet<string>"])],
   ["doctor/domain/coverage-assessment.ts", new Set(["#eligible: number", "#scopes: readonly string[]"])],
   ["doctor/domain/coverage-row.ts", new Set(["CoverageRow.space: string", "CoverageRow.intent: string"])],
@@ -633,7 +630,6 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["refinement/domain/design-assignments.ts", new Set(["#values: ReadonlyMap<string, Expression>"])],
   ["refinement/domain/design-event-catalog.ts", new Set(["#events: ReadonlyMap<string, DesignEvent>"])],
   ["refinement/domain/effect-assignments.ts", new Set(["#values: ReadonlyMap<string, Expression>"])],
-  ["refinement/domain/refinement-map-acquisition.ts", new Set(["RefinementMapAcquisition.mapArtifact: string"])],
   ["refinement/domain/refinement-query-verdict.ts", new Set(["#core: string[] | undefined"])],
   ["refinement/domain/refinement-query-verdicts.ts", new Set(["#values: ReadonlyMap<string, RefinementQueryVerdict>"])],
   ["refinement/domain/refinement-solver-facts.ts", new Set(["#pending: ReadonlyMap<string, RefinementProbe>"])],

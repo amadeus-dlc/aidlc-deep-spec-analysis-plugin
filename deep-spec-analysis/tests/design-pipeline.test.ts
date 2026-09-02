@@ -57,7 +57,8 @@ import {
   InitialStates,
   DesignFinding,
   DesignSkipped,
-  type SiblingVerdictDocument,
+  SiblingVerdictDocument,
+  SiblingVerdictFinding,
   SiblingVerdictFindings,
   SiblingVerdictSkips,
   DesignModel,
@@ -122,7 +123,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
           const lowered = LoweredUnit.of(u, { synthetics: backend === "smt" });
           const run = sibling.runLowered(backend, u, lowered, 55_000);
           expect(run.exit).toBe(0);
-          const remapped = lowered.remapVerdicts(u, run.doc ?? { kind: "unreadable" });
+          const remapped = lowered.remapVerdicts(u, run.doc ?? SiblingVerdictDocument.unreadable());
           expect(remapped.unavailable).toBe(null);
           method = method ?? remapped.method;
           findings.push(...remapped.findings);
@@ -424,18 +425,17 @@ describe("remap (design vocabulary attribution)", () => {
     findings?: { kind: string; frRefs: string[]; targets: string[]; witness: Json; detail: string }[];
     skipped?: { target: string; reason: string; detail?: string }[];
   }): SiblingVerdictDocument =>
-    ({
-      kind: "readable",
-      method: "exhaustive",
-      findings: SiblingVerdictFindings.of(
-        (input.findings ?? []).map((f) => ({ ...f, frRefs: FrRefs.of(f.frRefs), targets: f.targets.map((t) => LoweredId.reconstitute(t)) })) as never,
+    SiblingVerdictDocument.readable(
+      "exhaustive",
+      SiblingVerdictFindings.of(
+        (input.findings ?? []).map((f) => SiblingVerdictFinding.reconstitute({ ...f, frRefs: FrRefs.of(f.frRefs), targets: f.targets.map((t) => LoweredId.reconstitute(t)) })),
       ),
-      skipped: SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.reconstitute({ ...k, target: LoweredId.reconstitute(k.target) }))),
-    });
+      SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.reconstitute({ ...k, target: LoweredId.reconstitute(k.target) }))),
+    );
 
   test("unavailable and unreadable sibling documents pass straight through", () => {
-    expect(low.remapVerdicts(u, { kind: "unreadable" }).unavailable).toBe("sibling backend produced no findings document");
-    const out = low.remapVerdicts(u, { kind: "unavailable", reason: "boom", method: "simulation" });
+    expect(low.remapVerdicts(u, SiblingVerdictDocument.unreadable()).unavailable).toBe("sibling backend produced no findings document");
+    const out = low.remapVerdicts(u, SiblingVerdictDocument.unavailable("boom", "simulation"));
     expect(out.findings.toArray()).toEqual([]);
     expect(out.skipped.toArray()).toEqual([]);
     expect(out.unavailable).toBe("boom");
@@ -736,7 +736,7 @@ describe("lowered collections and the lowering index (first-class operations)", 
   });
 
   test("sibling verdict collections keep document order under add", () => {
-    const finding = { kind: "conflict", frRefs: FrRefs.of([]), targets: [LoweredId.reconstitute("OB-1")], witness: { core: [] }, detail: "x" };
+    const finding = SiblingVerdictFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: [LoweredId.reconstitute("OB-1")], witness: { core: [] }, detail: "x" });
     const findings = SiblingVerdictFindings.of([]).add(finding);
     expect([...findings]).toEqual([finding]);
     expect(findings.toArray()).toEqual([finding]);

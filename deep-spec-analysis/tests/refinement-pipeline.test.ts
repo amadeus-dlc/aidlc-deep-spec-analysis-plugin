@@ -74,6 +74,7 @@ import {
   RefinementMaterials,
   RefinementMapId,
   RefinementStatus,
+  RefinementMapAcquisition,
 } from "../tools/refinement/domain/index.ts";
 import { FormalModelRepositoryImpl, buildSmtPlan } from "../tools/requirements/adapter/index.ts";
 
@@ -176,20 +177,26 @@ describe("SMT script characterization (the PR8 safety net)", () => {
     expect(acquired.ok && context.isActive()).toBe(true);
     if (!acquired.ok || !context.isActive()) return;
     const acq = context.mapAcquisition();
-    expect(acq.kind === "loaded").toBe(true);
-    if (acq.kind !== "loaded") return;
     const req = context.requirements();
-    expect(acq.map.units().toArray().length).toBeGreaterThan(0);
-    expect(acq.map.unitMapOf(DesignUnitId.of("no-such-unit"))).toBe(undefined);
-    expect(acq.map.id().artifactPath().asString().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
     expect(req.id().artifactPath().asString().endsWith("deep-spec-analysis-formal-model.md")).toBe(true);
     const queries: Json[] = [];
-    for (const u of acquired.value.units()) {
-      const unitMap = acq.map.unitMapOf(u.id());
-      if (!unitMap) continue;
-      const plan = UnitRefinementPlan.of(u, unitMap, req, acq.mapArtifact);
-      queries.push(...(buildRefinementQueries(u, req, plan).queries as unknown as Json[]));
-    }
+    acq.match({
+      absent: (error) => {
+        throw new Error(`expected a loaded refinement map: ${error}`);
+      },
+      loaded: (map, mapArtifact) => {
+        expect(map.units().toArray().length).toBeGreaterThan(0);
+        expect(map.unitMapOf(DesignUnitId.of("no-such-unit"))).toBe(undefined);
+        expect(map.id().artifactPath().asString().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
+        expect(mapArtifact.asString().endsWith("deep-spec-analysis-refinement-map.md")).toBe(true);
+        for (const u of acquired.value.units()) {
+          const unitMap = map.unitMapOf(u.id());
+          if (!unitMap) continue;
+          const plan = UnitRefinementPlan.of(u, unitMap, req, mapArtifact);
+          queries.push(...(buildRefinementQueries(u, req, plan).queries as unknown as Json[]));
+        }
+      },
+    });
     snapshot("refinement-queries.json", queries as unknown as Json);
   });
 });
@@ -471,7 +478,7 @@ describe("plan classification and gap findings", () => {
   });
 
   test("statuses classify checkable / waived / capability / gap, and gaps become findings", () => {
-    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, "construction/x/map.md");
+    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.reconstitute("construction/x/map.md"));
     expect(plainStatus(plan.statusOfObligation("OB-1"))).toEqual({ kind: "checkable" });
     expect(plainStatus(plan.statusOfObligation("OB-2"))).toEqual({ kind: "checkable" });
     expect(plan.mappedTransitionsOf("OB-2").map((t) => t.asString())).toEqual(["TR-1"]);
@@ -518,7 +525,7 @@ describe("plan classification and gap findings", () => {
         { id: "OB-2", nature: "event", frRefs: [], trigger: "finish", guard: { op: "ref", path: "R.flag" }, effect: { op: "eq", args: [{ op: "ref", path: "R.flag", prime: true }, { op: "bool", value: true }] } },
       ],
     });
-    const plan = UnitRefinementPlan.of(designUnit, badMap, reqLocal, "m.md");
+    const plan = UnitRefinementPlan.of(designUnit, badMap, reqLocal, ArtifactPath.reconstitute("m.md"));
     const details = plan.gaps().toArray().map((g) => g.detail()).join("\n");
     expect(details).toContain('attrMap maps "R.flag" more than once');
     expect(details).toContain('attrMap entry "R.ghost" names no attribute of the requirements IR');
@@ -539,7 +546,7 @@ describe("plan classification and gap findings", () => {
   });
 
   test("status skips differ by backend flavor (frozen wordings)", () => {
-    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, "m.md");
+    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.reconstitute("m.md"));
     const smtSkips = plan.smtStatusSkips("u1").toArray().map((s) => `${s.target().asString()}:${s.reason()}`);
     expect(smtSkips).toContain("OB-3:capability");
     expect(smtSkips).toContain("OB-4:waived");
@@ -552,7 +559,7 @@ describe("plan classification and gap findings", () => {
   });
 
   test("quint extras carry alpha(P) for checkable invariants only", () => {
-    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, "m.md");
+    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.reconstitute("m.md"));
     const extras = plan.quintInvariants(req);
     expect(extras.toArray().map((e) => e.reqId.asString())).toEqual(["OB-1"]);
     expect(extras.toArray()[0]?.expr).toEqual({ op: "ref", path: "D.flag" });
@@ -642,7 +649,7 @@ describe("refinement verdict interpretation", () => {
     planUnit,
     refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")], eventMap: [{ reqTrigger: "go", transitions: ["TR-1", "TR-2"] }] }),
     req,
-    "m.md",
+    ArtifactPath.reconstitute("m.md"),
   );
   const facts = (entries: [string, RefinementProbe][]): RefinementSolverFacts =>
     RefinementSolverFacts.of({ pending: new Map(entries), compileSkips: DesignSkips.of([]) });
@@ -819,7 +826,7 @@ describe("catalog misses in the enabledness path (frozen null-drop)", () => {
       u,
       refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")], eventMap: [{ reqTrigger: "go", transitions: ["DOB-9"] }] }),
       req,
-      "m.md",
+      ArtifactPath.reconstitute("m.md"),
     );
     expect(plainStatus(plan.statusOfObligation("OB-2"))).toEqual({ kind: "checkable" });
     const built = buildRefinementQueries(u, req, plan);
@@ -839,9 +846,9 @@ describe("RefinementMaterials aggregate (repository ruling)", () => {
     expect(inactive.isActive()).toBe(false);
     expect(() => inactive.requirements()).toThrow("defect");
     expect(() => inactive.mapAcquisition()).toThrow("defect");
-    const active = RefinementMaterials.active(id, requirements({}), { kind: "absent", error: null });
+    const active = RefinementMaterials.active(id, requirements({}), RefinementMapAcquisition.absent(null));
     expect(active.isActive()).toBe(true);
-    expect(active.mapAcquisition().kind).toBe("absent");
+    expect(active.mapAcquisition().match({ absent: (error) => `absent:${error}`, loaded: () => "loaded" })).toBe("absent:null");
     expect(active.requirements()).toBeDefined();
   });
 });
@@ -902,7 +909,7 @@ describe("thaw pins — quint alpha skips, timeout break, exact decode (#34/#38)
   test("alpha failures reach the quint document as compile-error skips, wording lockstep with the SMT pass", () => {
     const u = designUnit();
     const req = reqOneInvariant();
-    const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [{ kind: "unspecified", req: "R.flag" }] }), req, "m.md");
+    const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [{ kind: "unspecified", req: "R.flag" }] }), req, ArtifactPath.reconstitute("m.md"));
     const quint = plan.quintStatusSkips(req, "u1").toArray().filter((s) => s.reason() === "compile-error");
     expect(quint.map((s) => ({ target: s.target().asString(), reason: s.reason(), unit: s.unit(), detail: s.detail() }))).toEqual([{
       target: "OB-1",
@@ -917,7 +924,7 @@ describe("thaw pins — quint alpha skips, timeout break, exact decode (#34/#38)
   test("a timed-out runtime is not retried on the fallback runtime (thaw #38 item 2)", () => {
     const u = designUnit();
     const req = reqOneInvariant();
-    const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")] }), req, "m.md");
+    const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")] }), req, ArtifactPath.reconstitute("m.md"));
     const host = join(mkdtempSync(join(tmpdir(), "sleepy-child-")), "sleepy.ts");
     writeFileSync(host, "setTimeout(() => process.exit(0), 30_000);\n");
     const started = Date.now();

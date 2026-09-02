@@ -1542,3 +1542,15 @@ capability）が状態 union を置き換え、計画は `isCheckable` で問い
 simulation の handler にだけ渡る——旧 union が optional にしていた対を型が
 運ぶ。`SiblingVerdictSkip` は class になり、判定の再割り当ては target・
 reason・detail を問う。台帳から 3 エントリを回収し、残債は 122 中 40。
+
+波 23（同 PR）: 兄弟バックエンドの答えと refinement map の取得結果が自分の
+解釈を所有する。`SiblingVerdictDocument`（unreadable／unavailable／
+readable）が文書 union を置き換え、判定の再割り当ては `match` で解釈し、
+2 つの検証ユースケースは `kind` と `reason` を読む代わりに
+`unavailableReason` を問う。`SiblingVerdictFinding` は class になり、
+`isKind` に答え、自分の unsat-core witness を書き換える
+（`witnessWithCoreRemapped`）——再割り当てはもう witness の形を覗かない。
+`RefinementMapAcquisition`（absent／loaded）が取得 union を置き換え、両ユース
+ケースは `match` で解釈し、読めた map の成果物パスは文字列ではなく
+`ArtifactPath` で運ぶ——プリミティブ台帳からフィールドが 1 つ消える。台帳から
+3 エントリを回収し、残債は 122 中 37。プリミティブ台帳の上限は 87 へ下がる。
