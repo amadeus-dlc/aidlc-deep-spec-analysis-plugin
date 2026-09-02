@@ -431,7 +431,9 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
   if (DATA_MODEL_DEBT.has(relPath) || PUBLISHED_VALUE_SHAPES.has(relPath)) return [];
   const source = stripStrings(rawSource);
   const out: Violation[] = [];
-  for (const m of source.matchAll(/^export interface (\w+)\s*(?:extends [\w<>, ]+)?\{([\s\S]*?)^\}/gm)) {
+  // 型引数付き（export interface X<T> {）も拾う——LoadedDocument<Outcome> が
+  // 抜けていた穴（種別規律の裁定 16、#71 波39）。
+  for (const m of source.matchAll(/^export interface (\w+)(?:<[^>]*>)?\s*(?:extends [\w<>, ]+)?\{([\s\S]*?)^\}/gm)) {
     const name = m[1] ?? "";
     if (name === "Expression") continue;
     if (!/^\s+\w+\([^)]*\):/m.test(m[2] ?? "")) {

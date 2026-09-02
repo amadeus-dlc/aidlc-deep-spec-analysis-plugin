@@ -62,7 +62,6 @@ export { StateMachineSketch } from "./state-machine-sketch.ts";
 export { StateMachineSketches } from "./state-machine-sketches.ts";
 export { FUNCTIONAL_FAMILIES, FunctionalCheckMaterials } from "./functional-check-materials.ts";
 export { DesignRecord } from "./design-record.ts";
-export { type LoadedDocument } from "./loaded-document.ts";
 export { DesignRecordId } from "./design-record-id.ts";
 export { AllowedValue } from "./allowed-value.ts";
 export { AllowedValues } from "./allowed-values.ts";

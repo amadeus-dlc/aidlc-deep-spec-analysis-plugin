@@ -3,116 +3,88 @@
 // 読み＋解析（形式知識）を所有し、ここには解析済みの型付き視点だけが載る。
 // 各値の取得規則（requirements は rules が使えるときだけ・兄弟は catalog が
 // 解析できたときだけ等）は Impl が凍結挙動として実装する。
+//
+// 検査は集約自身の門（種別規律の裁定 16、2026-09-02）: `checkComponents`／
+// `checkContracts`／`checkFunctionalDesign` が対象の視点で ReferenceCheckReport
+// を開き（検査ファミリーと unit は集約の知識）、検査を走らせ、読んだ文書の
+// アンカーを inputs[] に記録して、開いたレポートを返す。対象がその検査の
+// 文書でなければ not-applicable（sensor が選ぶ期待分岐）。読み込まれた文書は
+// アンカー＋解析結果の対として集約の内側にだけある（旧 LoadedDocument<Outcome>
+// は解散）。視点の getter は無い——集約の外に読ませる面は id と原文だけ。
 
+import { ArtifactPath, type RequirementIds } from "../../kernel/domain/index.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import { COMPONENT_FAMILIES, ComponentCheckMaterials } from "./component-check-materials.ts";
+import { CONTRACT_FAMILIES, ContractCheckMaterials } from "./contract-check-materials.ts";
+import { FUNCTIONAL_FAMILIES, FunctionalCheckMaterials } from "./functional-check-materials.ts";
+import { DeclaredUnitsOutcome } from "./declared-units-outcome.ts";
+import { DomainEntitiesOutcome } from "./domain-entities-outcome.ts";
+import { EntitiesOutcome } from "./entities-outcome.ts";
+import { FunctionalSpecOutcome } from "./functional-spec-outcome.ts";
+import { RulesOutcome } from "./rules-outcome.ts";
+import { ReferenceCheckReport } from "./reference-check-report.ts";
+import { ReferenceCheckReportId } from "./reference-check-report-id.ts";
+import type { ComponentCatalogOutcome } from "./component-catalog-outcome.ts";
+import type { ContractsTableOutcome } from "./contracts-table-outcome.ts";
 import type { DesignRecordId } from "./design-record-id.ts";
 import type { InputAnchor } from "./input-anchor.ts";
-import { type ComponentCatalogOutcome } from "./component-catalog-outcome.ts";
-import { type ContractsTableOutcome } from "./contracts-table-outcome.ts";
-import { type SpecBlockAssessments } from "./spec-block-assessments.ts";
-import type { ArtifactPath, RequirementIds } from "../../kernel/domain/index.ts";
-import type { DeclaredUnitsOutcome } from "./declared-units-outcome.ts";
-import type { DomainEntitiesOutcome } from "./domain-entities-outcome.ts";
-import type { EntitiesOutcome } from "./entities-outcome.ts";
-import type { FunctionalSpecOutcome } from "./functional-spec-outcome.ts";
-import type { RulesOutcome } from "./rules-outcome.ts";
-import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
 import type { InputAnchors } from "./input-anchors.ts";
-import type { LoadedDocument } from "./loaded-document.ts";
+import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
+import type { SpecBlockAssessments } from "./spec-block-assessments.ts";
 import type { UnitName } from "./unit-name.ts";
 
-
+// 検査の門が開かない理由：対象成果物がその検査の文書ではない。
+type CheckNotApplicable = { readonly kind: "not-applicable" };
 
 export class DesignRecord {
-  readonly #seed: {
-    readonly id: DesignRecordId;
-    // 発火対象の record 相対名と (artifact, sha256)。対象が読めない場合に
-    // 集約は作られない（Repository が not-found を返す）。
-    readonly target: InputAnchor;
-    // 錨成果物の原文の生バイト列（原文材料——store の往復則 findById∘store が
-    // バイト恒等。兄弟成果物は読み取り視点であり store の対象外）。
-    readonly sourceDocument: Uint8Array;
-    // 対象が components.md のときだけ載る視点。
-    readonly componentCatalog: ComponentCatalogOutcome | null;
-    // 対象が contract-summary.md のときだけ載る視点。
-    readonly contractsTable: ContractsTableOutcome | null;
-    readonly specBlocks: SpecBlockAssessments | null;
-    readonly declaredUnits: { readonly artifactName: ArtifactPath; readonly document: LoadedDocument<DeclaredUnitsOutcome> | null } | null;
-    // 対象が functional-design 配下のときだけ載る視点。
-    readonly functional: {
-      readonly unit: UnitName | undefined;
-      readonly entitiesArtifact: ArtifactPath;
-      readonly entities: LoadedDocument<EntitiesOutcome> | null;
-      readonly rulesArtifact: ArtifactPath;
-      readonly rules: LoadedDocument<RulesOutcome> | null;
-      readonly specArtifact: ArtifactPath;
-      readonly spec: LoadedDocument<FunctionalSpecOutcome> | null;
-      readonly requirements: LoadedDocument<RequirementIds> | null;
-      readonly componentsArtifact: ArtifactPath;
-      readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
-      readonly siblingUnits: SiblingUnitIndex;
-      readonly siblingInputs: InputAnchors;
-    } | null;
-  };
+  readonly #id: DesignRecordId;
+  // 発火対象の record 相対名と (artifact, sha256)。対象が読めない場合に
+  // 集約は作られない（Repository が not-found を返す）。
+  readonly #target: InputAnchor;
+  // 錨成果物の原文の生バイト列（原文材料——store の往復則 findById∘store が
+  // バイト恒等。兄弟成果物は読み取り視点であり store の対象外）。
+  readonly #sourceDocument: Uint8Array;
+  // 対象が components.md のときだけ載る視点。
+  readonly #componentCatalog: ComponentCatalogOutcome | null;
+  // 対象が contract-summary.md のときだけ載る視点。
+  readonly #contractSummary: Parameters<typeof DesignRecord.reconstitute>[0]["contractSummary"];
+  // 対象が functional-design 配下のときだけ載る視点。
+  readonly #functional: Parameters<typeof DesignRecord.reconstitute>[0]["functional"];
 
-  private constructor(seed: {
-    readonly id: DesignRecordId;
-    // 発火対象の record 相対名と (artifact, sha256)。対象が読めない場合に
-    // 集約は作られない（Repository が not-found を返す）。
-    readonly target: InputAnchor;
-    // 錨成果物の原文の生バイト列（原文材料——store の往復則 findById∘store が
-    // バイト恒等。兄弟成果物は読み取り視点であり store の対象外）。
-    readonly sourceDocument: Uint8Array;
-    // 対象が components.md のときだけ載る視点。
-    readonly componentCatalog: ComponentCatalogOutcome | null;
-    // 対象が contract-summary.md のときだけ載る視点。
-    readonly contractsTable: ContractsTableOutcome | null;
-    readonly specBlocks: SpecBlockAssessments | null;
-    readonly declaredUnits: { readonly artifactName: ArtifactPath; readonly document: LoadedDocument<DeclaredUnitsOutcome> | null } | null;
-    // 対象が functional-design 配下のときだけ載る視点。
-    readonly functional: {
-      readonly unit: UnitName | undefined;
-      readonly entitiesArtifact: ArtifactPath;
-      readonly entities: LoadedDocument<EntitiesOutcome> | null;
-      readonly rulesArtifact: ArtifactPath;
-      readonly rules: LoadedDocument<RulesOutcome> | null;
-      readonly specArtifact: ArtifactPath;
-      readonly spec: LoadedDocument<FunctionalSpecOutcome> | null;
-      readonly requirements: LoadedDocument<RequirementIds> | null;
-      readonly componentsArtifact: ArtifactPath;
-      readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
-      readonly siblingUnits: SiblingUnitIndex;
-      readonly siblingInputs: InputAnchors;
-    } | null;
-  }) {
-    this.#seed = seed;
+  private constructor(seed: Parameters<typeof DesignRecord.reconstitute>[0]) {
+    this.#id = seed.id;
+    this.#target = seed.target;
+    this.#sourceDocument = seed.sourceDocument;
+    this.#componentCatalog = seed.componentCatalog;
+    this.#contractSummary = seed.contractSummary;
+    this.#functional = seed.functional;
   }
 
+  // Repository の読出側だけが使う門。読み込まれた文書は (input, outcome) の対。
   static reconstitute(seed: {
     readonly id: DesignRecordId;
-    // 発火対象の record 相対名と (artifact, sha256)。対象が読めない場合に
-    // 集約は作られない（Repository が not-found を返す）。
     readonly target: InputAnchor;
-    // 錨成果物の原文の生バイト列（原文材料——store の往復則 findById∘store が
-    // バイト恒等。兄弟成果物は読み取り視点であり store の対象外）。
     readonly sourceDocument: Uint8Array;
-    // 対象が components.md のときだけ載る視点。
     readonly componentCatalog: ComponentCatalogOutcome | null;
-    // 対象が contract-summary.md のときだけ載る視点。
-    readonly contractsTable: ContractsTableOutcome | null;
-    readonly specBlocks: SpecBlockAssessments | null;
-    readonly declaredUnits: { readonly artifactName: ArtifactPath; readonly document: LoadedDocument<DeclaredUnitsOutcome> | null } | null;
-    // 対象が functional-design 配下のときだけ載る視点。
+    readonly contractSummary: {
+      readonly contractsTable: ContractsTableOutcome;
+      readonly specBlocks: SpecBlockAssessments;
+      readonly declaredUnits: {
+        readonly artifactName: ArtifactPath;
+        readonly document: { readonly input: InputAnchor; readonly outcome: DeclaredUnitsOutcome } | null;
+      };
+    } | null;
     readonly functional: {
       readonly unit: UnitName | undefined;
       readonly entitiesArtifact: ArtifactPath;
-      readonly entities: LoadedDocument<EntitiesOutcome> | null;
+      readonly entities: { readonly input: InputAnchor; readonly outcome: EntitiesOutcome } | null;
       readonly rulesArtifact: ArtifactPath;
-      readonly rules: LoadedDocument<RulesOutcome> | null;
+      readonly rules: { readonly input: InputAnchor; readonly outcome: RulesOutcome } | null;
       readonly specArtifact: ArtifactPath;
-      readonly spec: LoadedDocument<FunctionalSpecOutcome> | null;
-      readonly requirements: LoadedDocument<RequirementIds> | null;
+      readonly spec: { readonly input: InputAnchor; readonly outcome: FunctionalSpecOutcome } | null;
+      readonly requirements: { readonly input: InputAnchor; readonly outcome: RequirementIds } | null;
       readonly componentsArtifact: ArtifactPath;
-      readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
+      readonly components: { readonly input: InputAnchor; readonly outcome: DomainEntitiesOutcome } | null;
       readonly siblingUnits: SiblingUnitIndex;
       readonly siblingInputs: InputAnchors;
     } | null;
@@ -121,93 +93,67 @@ export class DesignRecord {
   }
 
   id(): DesignRecordId {
-    return this.#seed.id;
-  }
-
-  target(): InputAnchor {
-    return this.#seed.target;
+    return this.#id;
   }
 
   // 境界: store が書く錨成果物の原文（バイト逐語——外部変更を防ぐ防御コピー）。
   sourceDocument(): Uint8Array {
-    return new Uint8Array(this.#seed.sourceDocument);
+    return new Uint8Array(this.#sourceDocument);
   }
 
-  componentCatalog(): ComponentCatalogOutcome | null {
-    return this.#seed.componentCatalog;
+  // components.md の門: DD 検査を走らせ、対象を inputs に記録する。
+  checkComponents(reportDirectory: ArtifactPath): Result<ReferenceCheckReport, CheckNotApplicable> {
+    const catalog = this.#componentCatalog;
+    if (catalog === null) return err({ kind: "not-applicable" });
+    const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(reportDirectory, "components"), COMPONENT_FAMILIES);
+    ComponentCheckMaterials.of({ outcome: catalog, artifact: ArtifactPath.reconstitute(this.#target.artifact()) }).runChecks(report);
+    report.input(this.#target);
+    return ok(report);
   }
 
-  contractsTable(): ContractsTableOutcome | null {
-    return this.#seed.contractsTable;
+  // contract-summary.md の門: CD 検査を走らせ、対象と（読めたときは）units
+  // エッジ文書を inputs に記録する。
+  checkContracts(reportDirectory: ArtifactPath): Result<ReferenceCheckReport, CheckNotApplicable> {
+    const summary = this.#contractSummary;
+    if (summary === null) return err({ kind: "not-applicable" });
+    const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(reportDirectory, "contract-summary"), CONTRACT_FAMILIES);
+    ContractCheckMaterials.of({
+      artifact: ArtifactPath.reconstitute(this.#target.artifact()),
+      depArtifact: summary.declaredUnits.artifactName,
+      declaredUnits: summary.declaredUnits.document === null ? DeclaredUnitsOutcome.absent() : summary.declaredUnits.document.outcome,
+      contractsTable: summary.contractsTable,
+      specBlocks: summary.specBlocks,
+    }).runChecks(report);
+    report.input(this.#target);
+    if (summary.declaredUnits.document !== null) report.input(summary.declaredUnits.document.input);
+    return ok(report);
   }
 
-  specBlocks(): SpecBlockAssessments | null {
-    return this.#seed.specBlocks;
-  }
-
-  declaredUnits(): {
-  readonly id: DesignRecordId;
-  // 発火対象の record 相対名と (artifact, sha256)。対象が読めない場合に
-  // 集約は作られない（Repository が not-found を返す）。
-  readonly target: InputAnchor;
-  // 錨成果物の原文の生バイト列（原文材料——store の往復則 findById∘store が
-  // バイト恒等。兄弟成果物は読み取り視点であり store の対象外）。
-  readonly sourceDocument: Uint8Array;
-  // 対象が components.md のときだけ載る視点。
-  readonly componentCatalog: ComponentCatalogOutcome | null;
-  // 対象が contract-summary.md のときだけ載る視点。
-  readonly contractsTable: ContractsTableOutcome | null;
-  readonly specBlocks: SpecBlockAssessments | null;
-  readonly declaredUnits: { readonly artifactName: ArtifactPath; readonly document: LoadedDocument<DeclaredUnitsOutcome> | null } | null;
-  // 対象が functional-design 配下のときだけ載る視点。
-  readonly functional: {
-    readonly unit: UnitName | undefined;
-    readonly entitiesArtifact: ArtifactPath;
-    readonly entities: LoadedDocument<EntitiesOutcome> | null;
-    readonly rulesArtifact: ArtifactPath;
-    readonly rules: LoadedDocument<RulesOutcome> | null;
-    readonly specArtifact: ArtifactPath;
-    readonly spec: LoadedDocument<FunctionalSpecOutcome> | null;
-    readonly requirements: LoadedDocument<RequirementIds> | null;
-    readonly componentsArtifact: ArtifactPath;
-    readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
-    readonly siblingUnits: SiblingUnitIndex;
-    readonly siblingInputs: InputAnchors;
-  } | null;
-  }["declaredUnits"] {
-    return this.#seed.declaredUnits;
-  }
-
-  functional(): {
-  readonly id: DesignRecordId;
-  // 発火対象の record 相対名と (artifact, sha256)。対象が読めない場合に
-  // 集約は作られない（Repository が not-found を返す）。
-  readonly target: InputAnchor;
-  // 錨成果物の原文の生バイト列（原文材料——store の往復則 findById∘store が
-  // バイト恒等。兄弟成果物は読み取り視点であり store の対象外）。
-  readonly sourceDocument: Uint8Array;
-  // 対象が components.md のときだけ載る視点。
-  readonly componentCatalog: ComponentCatalogOutcome | null;
-  // 対象が contract-summary.md のときだけ載る視点。
-  readonly contractsTable: ContractsTableOutcome | null;
-  readonly specBlocks: SpecBlockAssessments | null;
-  readonly declaredUnits: { readonly artifactName: ArtifactPath; readonly document: LoadedDocument<DeclaredUnitsOutcome> | null } | null;
-  // 対象が functional-design 配下のときだけ載る視点。
-  readonly functional: {
-    readonly unit: UnitName | undefined;
-    readonly entitiesArtifact: ArtifactPath;
-    readonly entities: LoadedDocument<EntitiesOutcome> | null;
-    readonly rulesArtifact: ArtifactPath;
-    readonly rules: LoadedDocument<RulesOutcome> | null;
-    readonly specArtifact: ArtifactPath;
-    readonly spec: LoadedDocument<FunctionalSpecOutcome> | null;
-    readonly requirements: LoadedDocument<RequirementIds> | null;
-    readonly componentsArtifact: ArtifactPath;
-    readonly components: LoadedDocument<DomainEntitiesOutcome> | null;
-    readonly siblingUnits: SiblingUnitIndex;
-    readonly siblingInputs: InputAnchors;
-  } | null;
-  }["functional"] {
-    return this.#seed.functional;
+  // functional-design の門: FD/XS 検査を unit 付きで走らせ、読めた文書と
+  // 兄弟ユニットの entities を inputs に記録する（凍結取得規則は Impl 側）。
+  checkFunctionalDesign(reportDirectory: ArtifactPath): Result<ReferenceCheckReport, CheckNotApplicable> {
+    const fd = this.#functional;
+    if (fd === null) return err({ kind: "not-applicable" });
+    const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(reportDirectory, "functional-design"), FUNCTIONAL_FAMILIES, fd.unit);
+    FunctionalCheckMaterials.of({
+      unit: fd.unit,
+      entitiesArtifact: fd.entitiesArtifact,
+      entities: fd.entities === null ? EntitiesOutcome.absent() : fd.entities.outcome,
+      rulesArtifact: fd.rulesArtifact,
+      rules: fd.rules === null ? RulesOutcome.absent() : fd.rules.outcome,
+      specArtifact: fd.specArtifact,
+      spec: fd.spec === null ? FunctionalSpecOutcome.absent() : fd.spec.outcome,
+      requirementIdsKnown: fd.requirements === null ? null : fd.requirements.outcome,
+      componentsArtifact: fd.componentsArtifact,
+      domainEntities: fd.components === null ? DomainEntitiesOutcome.absent() : fd.components.outcome,
+      siblingUnits: fd.siblingUnits,
+    }).runChecks(report);
+    if (fd.entities !== null) report.input(fd.entities.input);
+    if (fd.rules !== null) report.input(fd.rules.input);
+    if (fd.requirements !== null) report.input(fd.requirements.input);
+    if (fd.spec !== null) report.input(fd.spec.input);
+    if (fd.components !== null) report.input(fd.components.input);
+    for (const anchor of fd.siblingInputs) report.input(anchor);
+    return ok(report);
   }
 }

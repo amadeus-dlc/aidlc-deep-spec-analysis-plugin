@@ -1834,3 +1834,18 @@ unit)` が全 family を checked にした空の文書を開き、`finding`・`s
 inputs を記録する。`CheckFamilies.checkTargets` が台帳の集合演算に代わり、
 kernel は `TargetIds.excluding` を出す。golden はバイト同一、プリミティブ台帳は
 変わらない（上限 66）。
+
+波 39（同 PR）: 裁定 16 が着地——設計 record が自分の文書と検査を持つ。
+data-model ルールをすり抜けていた generic record `LoadedDocument<Outcome>` は
+解散し、読み込まれた文書は（アンカー, 解析結果）の対として `DesignRecord` の
+内側にだけある。ルールは型引数付き interface も拾うようになった。record の
+視点 getter（`componentCatalog`・`contractsTable`・`specBlocks`・
+`declaredUnits`・`functional`）は消え、外から読めるのは id と `store` のための
+原文バイトだけ。代わりに集約は 3 つの門——`checkComponents`・
+`checkContracts`・`checkFunctionalDesign`——を持ち、レポートの置き場所を受けて
+自分で `ReferenceCheckReport` を開き（検査ファミリーと unit は record の知識
+なので、レポートは渡されるのではなくここで開く）、検査を走らせ、読んだ文書を
+すべて inputs に記録して、開いたレポートを返す。record の文書に合わない門は
+`Result` で `not-applicable` を返し、sensor はそれを自分の `not-applicable` に
+写す（期待分岐）。usecase は「record を解決し、門を開き、適合させ、書く」だけ
+になった。golden はバイト同一、プリミティブ台帳は変わらない（上限 66）。
