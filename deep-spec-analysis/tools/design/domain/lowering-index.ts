@@ -1,6 +1,6 @@
 import type { DesignMachine } from "./design-machine.ts";
 import { LoweredOriginRef } from "./lowered-origin-ref.ts";
-import type { LoweredOrigin } from "./lowered-origin.ts";
+import { LoweredOrigin } from "./lowered-origin.ts";
 
 function designToken(id: string): string {
   return id.replace(/[^A-Za-z0-9_]/g, "_");
@@ -49,7 +49,7 @@ export class LoweringIndex {
   // 解決順は remap の凍結挙動。
   resolveDesignTarget(loweredId: string): { design: string; entry: LoweredOrigin | null } {
     const entry = this.#origins.get(loweredId) ?? null;
-    if (entry) return { design: entry.design.asString(), entry };
+    if (entry) return { design: entry.design().asString(), entry };
     const dsc = this.#scenarioDesignIds.get(loweredId);
     if (dsc) return { design: dsc, entry: null };
     return { design: loweredId, entry: null };
@@ -58,14 +58,14 @@ export class LoweringIndex {
   // v1 detail 内の OB-n 参照を設計 id へ書き換える（"DOB-2" は \bOB-2\b
   // 境界を含まないため二重書き換えは起きない）。
   rewriteLoweredIds(text: string): string {
-    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(`OB-${num}`)?.design.asString() ?? m);
+    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(`OB-${num}`)?.design().asString() ?? m);
   }
 
   // witness core のラベル内 OB_n トークンを設計 id の英数字化へ書き換える。
   rewriteLoweredIdTokens(label: string): string {
     return label.replace(/OB_([0-9]+)/g, (m, num) => {
       const entry = this.#origins.get(`OB-${num}`);
-      return entry ? designToken(entry.design.asString()) : m;
+      return entry ? designToken(entry.design().asString()) : m;
     });
   }
 
@@ -84,7 +84,7 @@ export class LoweringIndex {
   // refinement 追加パス用：lowered id を素通し帰属として索引に足した新索引。
   withPassthrough(loweredId: string, designId: string): LoweringIndex {
     const origins = new Map(this.#origins);
-    origins.set(loweredId, { design: LoweredOriginRef.reconstitute(designId), kind: "passthrough" });
+    origins.set(loweredId, LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(designId), kind: "passthrough" }));
     return new LoweringIndex({
       origins,
       scenarioDesignIds: this.#scenarioDesignIds,

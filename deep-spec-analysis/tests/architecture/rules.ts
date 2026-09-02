@@ -413,10 +413,6 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
 export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "design/domain/design-background-assumption.ts",
   "design/domain/design-value.ts",
-  "design/domain/lowered-background.ts",
-  "design/domain/lowered-obligation.ts",
-  "design/domain/lowered-origin.ts",
-  "design/domain/lowered-scenario.ts",
   "design/domain/sibling-verdict-document.ts",
   "design/domain/sibling-verdict-finding.ts",
   "design/domain/sibling-verdict-skip.ts",
@@ -602,7 +598,7 @@ export function primitiveFieldsOf(rawSource: string): string[] {
 
 // 台帳の記述子総数の上限。台帳が縮んだら下げる——上げる変更は裁定違反で、
 // 新しい負債を記述子ごと台帳へ足す抜け道を diff 上で可視化する（レビュー指摘）。
-export const PRIMITIVE_FIELD_DEBT_CEILING = 90;
+export const PRIMITIVE_FIELD_DEBT_CEILING = 88;
 
 export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([
   ["design/domain/br-reference-index.ts", new Set(["#ids: Set<string>"])],
@@ -614,8 +610,8 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["design/domain/design-report.ts", new Set(["#method: string"])],
   ["design/domain/design-skipped.ts", new Set(["#unit: string"])],
   ["design/domain/design-unit.ts", new Set(["#unit: string"])],
-  ["design/domain/lowered-obligation.ts", new Set(["LoweredObligation.pattern: string", "LoweredObligation.nature: string", "LoweredObligation.frRefs: string[]", "LoweredObligation.trigger: string"])],
-  ["design/domain/lowered-scenario.ts", new Set(["LoweredScenario.trigger: string", "LoweredScenario.frRefs: string[]"])],
+  ["design/domain/lowered-obligation.ts", new Set(["#nature: string", "#frRefs: readonly string[]", "#trigger: string | undefined"])],
+  ["design/domain/lowered-scenario.ts", new Set(["#frRefs: readonly string[]"])],
   ["design/domain/lowering-index.ts", new Set(["#origins: ReadonlyMap<string, LoweredOrigin>", "#scenarioDesignIds: ReadonlyMap<string, string>", "#machinesByTransition: ReadonlyMap<string, DesignMachine>", "#attrPathsByMachine: ReadonlyMap<string, string>"])],
   ["design/domain/sibling-verdict-document.ts", new Set(["SiblingVerdictDocument.method: string | null"])],
   ["design/domain/sibling-verdict-finding.ts", new Set(["SiblingVerdictFinding.kind: string"])],

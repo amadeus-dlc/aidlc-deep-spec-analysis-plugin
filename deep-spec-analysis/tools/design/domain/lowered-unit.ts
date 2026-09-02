@@ -24,14 +24,14 @@ import { DesignSkipped } from "./design-skipped.ts";
 import type { DesignValue } from "./design-value.ts";
 
 import { type SiblingVerdictDocument } from "./sibling-verdict-document.ts";
-import type { LoweredBackground } from "./lowered-background.ts";
+import { LoweredBackground } from "./lowered-background.ts";
 import { LoweredBackgrounds } from "./lowered-backgrounds.ts";
 import { LoweredId } from "./lowered-id.ts";
-import type { LoweredObligation } from "./lowered-obligation.ts";
+import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredObligations } from "./lowered-obligations.ts";
-import type { LoweredOrigin } from "./lowered-origin.ts";
+import { LoweredOrigin } from "./lowered-origin.ts";
 import { LoweredOriginRef } from "./lowered-origin-ref.ts";
-import type { LoweredScenario } from "./lowered-scenario.ts";
+import { LoweredScenario } from "./lowered-scenario.ts";
 import { LoweredScenarios } from "./lowered-scenarios.ts";
 import { LoweringIndex } from "./lowering-index.ts";
 
@@ -118,9 +118,9 @@ export class LoweredUnit {
         witness = { core: remapCore(witness.core ?? null) };
       }
 
-      const synth = mapped.find((m) => m.entry?.kind === "vac-dead" || m.entry?.kind === "vac-shadow");
-      if (synth?.entry?.kind === "vac-dead" && f.kind === "conflict") {
-        const design = synth.entry.design.asString();
+      const synth = mapped.find((m) => m.entry?.isSyntheticProbe());
+      if (synth?.entry?.isKind("vac-dead") && f.kind === "conflict") {
+        const design = synth.entry.design().asString();
         const isTransition = this.#index.isTransition(design);
         deadDesignIds.add(design);
         findings.push(
@@ -135,8 +135,8 @@ export class LoweredUnit {
         );
         continue;
       }
-      if (synth?.entry?.kind === "vac-shadow" && f.kind === "conflict") {
-        const pairRefs = synth.entry.pair ?? [synth.entry.design, synth.entry.design];
+      if (synth?.entry?.isKind("vac-shadow") && f.kind === "conflict") {
+        const pairRefs = synth.entry.pairRefs();
         const pair = [pairRefs[0].asString(), pairRefs[1].asString()] as const;
         shadowFindings.push({
           finding: DesignFinding.reconstitute({
@@ -206,7 +206,7 @@ export class LoweredUnit {
     const seenSkip = new Set<string>();
     for (const s of doc.skipped) {
       const { design, entry } = mapTarget(s.target.asString());
-      if (entry?.kind === "vac-dead" || entry?.kind === "vac-shadow") continue; // 合成の予算ノイズ
+      if (entry?.isSyntheticProbe()) continue; // 合成の予算ノイズ
       const key = `${design}|${s.reason}`;
       if (seenSkip.has(key)) continue;
       seenSkip.add(key);
@@ -242,9 +242,9 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     n += 1;
     return LoweredId.reconstitute(`OB-${n}`);
   };
-  const push = (ob: Omit<LoweredObligation, "id">, entry: LoweredOrigin): LoweredId => {
+  const push = (ob: Omit<Parameters<typeof LoweredObligation.reconstitute>[0], "id">, entry: LoweredOrigin): LoweredId => {
     const id = nextId();
-    obligations.push({ id, ...ob });
+    obligations.push(LoweredObligation.reconstitute({ id, ...ob }));
     map.set(id.asString(), entry);
     return id;
   };
@@ -261,7 +261,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   // 1) 設計義務は素通し（frRefs は帰属のため保持。空の frRefs は lowered
   //    文書で適法——v1 バックエンドは frRefs を不透明な帰属文字列として扱う）。
   for (const ob of u.obligations().sortedCanonically()) {
-    const lowered: Omit<LoweredObligation, "id"> = {
+    const lowered: Omit<Parameters<typeof LoweredObligation.reconstitute>[0], "id"> = {
       nature: ob.nature().asString(),
       frRefs: [...ob.frRefs()],
     };
@@ -275,7 +275,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     if (guard !== undefined) lowered.guard = guard;
     if (effect !== undefined) lowered.effect = effect;
     if (temporal !== undefined) lowered.temporal = temporal;
-    const lowId = push(lowered, { design: LoweredOriginRef.reconstitute(ob.id().asString()), kind: "passthrough" });
+    const lowId = push(lowered, LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(ob.id().asString()), kind: "passthrough" }));
     const event = ob.eventDefinition();
     if (event !== null) {
       candidates.push({ lowId, design: ob.id().asString(), trigger: event.trigger.asString(), guard: event.guard, effect: event.effect });
@@ -293,7 +293,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
       const effect = tr.loweredEffect(attrPath);
       const lowId = push(
         { nature: "event", frRefs: [], trigger: tr.trigger().asString(), guard, effect },
-        { design: LoweredOriginRef.reconstitute(tr.id().asString()), kind: "transition" },
+        LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(tr.id().asString()), kind: "transition" }),
       );
       machineOfTransition.set(tr.id().asString(), sm);
       candidates.push({ lowId, design: tr.id().asString(), trigger: tr.trigger().asString(), guard, effect });
@@ -302,7 +302,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     for (const ig of sortedIgnores) {
       push(
         { nature: "event", frRefs: [], trigger: ig.trigger().asString(), guard: ig.loweredGuard(attrPath), effect: ig.loweredEffect(attrPath) },
-        { design: LoweredOriginRef.reconstitute(sm.id().asString()), kind: "ignore" },
+        LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(sm.id().asString()), kind: "ignore" }),
       );
     }
   }
@@ -313,7 +313,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     for (const c of candidates) {
       push(
         { nature: "invariant", frRefs: [], assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } },
-        { design: LoweredOriginRef.reconstitute(c.design), kind: "vac-dead" },
+        LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(c.design), kind: "vac-dead" }),
       );
     }
     const byTrigger = new Map<string, EventCandidate[]>();
@@ -339,11 +339,11 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
                 args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }],
               },
             },
-            {
+            LoweredOrigin.reconstitute({
               design: LoweredOriginRef.reconstitute(`${a.design}|${b.design}`),
               kind: "vac-shadow",
               pair: [LoweredOriginRef.reconstitute(a.design), LoweredOriginRef.reconstitute(b.design)],
-            },
+            }),
           );
         }
       }
@@ -357,23 +357,22 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     scN += 1;
     const lowId = `SC-${scN}`;
     scenarioMap.set(lowId, sc.id().asString());
-    const lowered: LoweredScenario = {
+    const eventTrigger = sc.eventTrigger();
+    const expectation = sc.expectation();
+    scenarios.push(LoweredScenario.reconstitute({
       id: LoweredId.reconstitute(lowId),
       kind: sc.kind(),
       frRefs: [...sc.frRefs()],
       bindings: { ...sc.bindings() },
-    };
-    const eventTrigger = sc.eventTrigger();
-    const expectation = sc.expectation();
-    if (eventTrigger !== undefined) lowered.event = { trigger: eventTrigger.asString() };
-    if (expectation !== undefined) lowered.expect = expectation;
-    scenarios.push(lowered);
+      ...(eventTrigger !== undefined ? { event: { trigger: eventTrigger.asString() } } : {}),
+      ...(expectation !== undefined ? { expect: expectation } : {}),
+    }));
   }
   const background: LoweredBackground[] = [];
   let bgN = 0;
   for (const bg of u.background().sortedCanonically()) {
     bgN += 1;
-    background.push({ id: LoweredId.reconstitute(`BG-${bgN}`), assert: bg.assert });
+    background.push(LoweredBackground.reconstitute({ id: LoweredId.reconstitute(`BG-${bgN}`), assert: bg.assert }));
   }
 
   return {

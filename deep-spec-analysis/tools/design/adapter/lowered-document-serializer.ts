@@ -9,29 +9,36 @@ import type { DesignUnit } from "../domain/index.ts";
 export function renderLoweredDocument(u: DesignUnit, low: LoweredUnit): Json {
   const obligations: Json[] = low.obligations().toArray().map((ob) => {
     const out: { [k: string]: Json } = {
-      id: ob.id.asString(),
-      nature: ob.nature,
-      frRefs: ob.frRefs as unknown as Json,
+      id: ob.id().asString(),
+      nature: ob.nature(),
+      frRefs: ob.frRefs() as unknown as Json,
     };
-    if (ob.assert) out.assert = ob.assert as unknown as Json;
-    if (ob.trigger !== undefined) out.trigger = ob.trigger;
-    if (ob.guard) out.guard = ob.guard as unknown as Json;
-    if (ob.effect) out.effect = ob.effect as unknown as Json;
-    if (ob.temporal) out.temporal = ob.temporal as unknown as Json;
+    const assertion = ob.assertion();
+    if (assertion) out.assert = assertion as unknown as Json;
+    const trigger = ob.trigger();
+    if (trigger !== undefined) out.trigger = trigger;
+    const guard = ob.guard();
+    if (guard) out.guard = guard as unknown as Json;
+    const effect = ob.effect();
+    if (effect) out.effect = effect as unknown as Json;
+    const temporal = ob.temporal();
+    if (temporal) out.temporal = temporal as unknown as Json;
     return out;
   });
   const scenarios: Json[] = low.scenarios().toArray().map((sc) => {
     const out: { [k: string]: Json } = {
-      id: sc.id.asString(),
-      kind: sc.kind,
-      frRefs: sc.frRefs as unknown as Json,
-      bindings: sc.bindings as unknown as Json,
+      id: sc.id().asString(),
+      kind: sc.kind(),
+      frRefs: sc.frRefs() as unknown as Json,
+      bindings: sc.bindings() as unknown as Json,
     };
-    if (sc.event) out.event = sc.event as unknown as Json;
-    if (sc.expect) out.expect = sc.expect as unknown as Json;
+    const event = sc.event();
+    if (event) out.event = event as unknown as Json;
+    const expectation = sc.expectation();
+    if (expectation) out.expect = expectation as unknown as Json;
     return out;
   });
-  const background: Json[] = low.background().toArray().map((bg) => ({ id: bg.id.asString(), assert: bg.assert as unknown as Json }));
+  const background: Json[] = low.background().toArray().map((bg) => ({ id: bg.id().asString(), assert: bg.assertion() as unknown as Json }));
   return {
     irVersion: "1.0.0",
     schema: { entities: u.rawEntities() as unknown as Json },

@@ -26,6 +26,7 @@ import {
   LoweredUnit,
   RefinementMaterialsId,
   LoweredId,
+  LoweredObligation,
 } from "../domain/index.ts";
 
 import {
@@ -244,7 +245,7 @@ export class VerifyDesignQuintUseCase {
           for (const e of extras) {
             n += 1;
             const lowId = LoweredId.reconstitute(`OB-${n}`);
-            refinementObligations = refinementObligations.add({ id: lowId, nature: "invariant", frRefs: [...e.frRefs], assert: e.expr });
+            refinementObligations = refinementObligations.add(LoweredObligation.reconstitute({ id: lowId, nature: "invariant", frRefs: [...e.frRefs], assert: e.expr }));
             refinementIndex = refinementIndex.withPassthrough(lowId.asString(), e.reqId.asString());
           }
           const lowered = base.extendedWith(refinementObligations, refinementIndex);
