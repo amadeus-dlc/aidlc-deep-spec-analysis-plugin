@@ -38,7 +38,6 @@ import {
   DesignTransitionDecls,
   DesignUnitDecl,
   DesignUnitDecls,
-  designWellFormednessErrors,
   InitialStates,
   UnformalizedTargets,
   DesignUnitId,
@@ -572,7 +571,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   });
 });
 
-describe("designWellFormednessErrors (contract 3 domain branches)", () => {
+describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", () => {
   // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
   type RawAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawEntity = { name: string; attributes: RawAttr[] };
@@ -656,32 +655,32 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   }
 
   test("duplicate unit names are reported once per repeat", () => {
-    expect(designWellFormednessErrors(DesignUnitDecls.of([unit({}), unit({})]))).toEqual(['duplicate unit "u1"']);
+    expect(DesignUnitDecls.of([unit({}), unit({})]).wellFormednessErrors()).toEqual(['duplicate unit "u1"']);
   });
 
   test("design-side colliding encodings and unsafe bounds are rejected (thaw #34)", () => {
     expect(
-      designWellFormednessErrors(DesignUnitDecls.of([
+      DesignUnitDecls.of([
         unit({
           entities: [
             { name: "a", attributes: [{ name: "b_c", kind: "bool" }] },
             { name: "a_b", attributes: [{ name: "c", kind: "bool" }] },
           ],
         }),
-      ])),
+      ]).wellFormednessErrors(),
     ).toEqual(['unit u1: attribute paths "a.b_c" and "a_b.c" collide under the solver variable encoding (dots become underscores)']);
     expect(
-      designWellFormednessErrors(DesignUnitDecls.of([
+      DesignUnitDecls.of([
         unit({ entities: [{ name: "t", attributes: [{ name: "n", kind: "int", min: 0, max: 1e21 }] }] }),
-      ])),
+      ]).wellFormednessErrors(),
     ).toEqual(["unit u1: t.n: bounds must be safe integers"]);
   });
 
   test("int attributes require bounds", () => {
     expect(
-      designWellFormednessErrors(DesignUnitDecls.of([
+      DesignUnitDecls.of([
         unit({ entities: [{ name: "t", attributes: [{ name: "age", kind: "int" }, { name: "age", kind: "int", min: 3, max: 1 }] }] }),
-      ])),
+      ]).wellFormednessErrors(),
     ).toEqual([
       "unit u1: t.age: int attributes require min and max — the Quint backend needs bounded domains",
       'unit u1: duplicate attribute "t.age"',
@@ -701,7 +700,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
       },
     ];
     expect(
-      designWellFormednessErrors(DesignUnitDecls.of([
+      DesignUnitDecls.of([
         unit({
           entities,
           obligations: [
@@ -716,7 +715,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
             { id: "DOB-3", assert: { op: "enum", value: "nope" } },
           ],
         }),
-      ])),
+      ]).wellFormednessErrors(),
     ).toEqual([
       'unit u1: obligation DOB-1: enum literal "email" is not a value of "ticket.status"',
       'unit u1: obligation DOB-2: enum literal "email" is compared against non-enum attribute "ticket.age"',
@@ -726,7 +725,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
 
   test("temporal branches are walked in design obligations too", () => {
     expect(
-      designWellFormednessErrors(DesignUnitDecls.of([
+      DesignUnitDecls.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "flag", kind: "bool" }] }],
           obligations: [
@@ -740,7 +739,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
             },
           ],
         }),
-      ])),
+      ]).wellFormednessErrors(),
     ).toEqual([
       'unit u1: obligation DOB-1: unresolvable reference "t.ghost"',
       'unit u1: obligation DOB-1: unresolvable reference "t.other"',
@@ -748,27 +747,27 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   });
 
   test("origin \"rules\" requires brRefs", () => {
-    expect(designWellFormednessErrors(DesignUnitDecls.of([unit({ obligations: [{ id: "DOB-1", origin: "rules" }] })]))).toEqual([
+    expect(DesignUnitDecls.of([unit({ obligations: [{ id: "DOB-1", origin: "rules" }] })]).wellFormednessErrors()).toEqual([
       'unit u1: obligation DOB-1: origin "rules" requires brRefs',
     ]);
   });
 
   test("a machine's lifecycle attribute must be a declared enum", () => {
-    expect(designWellFormednessErrors(DesignUnitDecls.of([unit({ stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }] })]))).toEqual([
+    expect(DesignUnitDecls.of([unit({ stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }] })]).wellFormednessErrors()).toEqual([
       'unit u1: machine SM-1: lifecycle attribute "t.state" is not declared',
     ]);
     expect(
-      designWellFormednessErrors(DesignUnitDecls.of([
+      DesignUnitDecls.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "state", kind: "bool" }] }],
           stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }],
         }),
-      ])),
+      ]).wellFormednessErrors(),
     ).toEqual(['unit u1: machine SM-1: lifecycle attribute "t.state" is not an enum — its values are the state set']);
   });
 
   test("machine states, self-assignment and ignore collisions", () => {
-    const errors = designWellFormednessErrors(DesignUnitDecls.of([
+    const errors = DesignUnitDecls.of([
       unit({
         entities: [{ name: "t", attributes: [{ name: "state", kind: "enum", values: ["open", "closed"] }] }],
         stateMachines: [
@@ -793,7 +792,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
           },
         ],
       }),
-    ]));
+    ]).wellFormednessErrors();
     expect(errors).toEqual([
       'unit u1: machine SM-1: initial state "ghost" is not a value of t.state',
       'unit u1: transition TR-1: to state "gone" is not a value of t.state',
@@ -805,7 +804,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
 
   test("scenario bindings and background assertions are checked per unit", () => {
     expect(
-      designWellFormednessErrors(DesignUnitDecls.of([
+      DesignUnitDecls.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "flag", kind: "bool" }] }],
           scenarios: [
@@ -821,7 +820,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
           ],
           background: [{ id: "DBG-1", assert: { op: "ref", path: "t.ghost" } }],
         }),
-      ])),
+      ]).wellFormednessErrors(),
     ).toEqual([
       'unit u1: scenario DSC-1: binding value 1 does not fit bool attribute "t.flag"',
       'unit u1: scenario DSC-1: binding for unknown attribute "t.ghost"',
@@ -831,26 +830,26 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   });
 
   test("a missing construction directory is an error even with zero brRefs", () => {
-    expect(designWellFormednessErrors(DesignUnitDecls.of([unit({ directoryExists: false })]))).toEqual([
+    expect(DesignUnitDecls.of([unit({ directoryExists: false })]).wellFormednessErrors()).toEqual([
       "unit u1: no construction/u1/ directory exists under this record — the unit name matches no unit-of-work, so BR coverage cannot be verified",
     ]);
   });
 
   test("brRefs without rules.md cannot be reverse-verified", () => {
-    expect(designWellFormednessErrors(DesignUnitDecls.of([unit({ obligations: [{ id: "DOB-1", brRefs: ["BR1.1"] }] })]))).toEqual([
+    expect(DesignUnitDecls.of([unit({ obligations: [{ id: "DOB-1", brRefs: ["BR1.1"] }] })]).wellFormednessErrors()).toEqual([
       "unit u1: brRefs are used but construction/u1/functional-design/rules.md was not found — they cannot be reverse-verified",
     ]);
   });
 
   test("BR coverage: unknown refs are errors and silent rules are a contract violation", () => {
     expect(
-      designWellFormednessErrors(DesignUnitDecls.of([
+      DesignUnitDecls.of([
         unit({
           obligations: [{ id: "DOB-1", brRefs: ["BR9.9"] }],
           unformalizedTargets: ["BR1.2"],
           rulesMarkdown: "- BR1.1\n- BR1.2\n",
         }),
-      ])),
+      ]).wellFormednessErrors(),
     ).toEqual([
       'unit u1: brRef "BR9.9" does not exist in rules.md',
       "unit u1: BR coverage: rule BR1.1 in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] — silence is a contract violation",
@@ -859,7 +858,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
 
   test("brRefs from transitions and scenarios count toward coverage", () => {
     expect(
-      designWellFormednessErrors(DesignUnitDecls.of([
+      DesignUnitDecls.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "state", kind: "enum", values: ["open"] }] }],
           stateMachines: [
@@ -868,7 +867,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
           scenarios: [{ id: "DSC-1", bindings: [], hasEvent: false, brRefs: ["BR1.2"] }],
           rulesMarkdown: "- BR1.1\n- BR1.2\n",
         }),
-      ])),
+      ]).wellFormednessErrors(),
     ).toEqual([]);
   });
 });

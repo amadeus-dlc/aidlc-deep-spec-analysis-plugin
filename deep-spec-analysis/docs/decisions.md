@@ -1988,3 +1988,14 @@ the four refcheck name primitives return it from `normalized()`,
 comparisons ask `equals`, indexes key on `asString`, and
 `MachineSpec.entityToken` returns an `EntityName` so the functional
 check no longer normalizes a raw string. Goldens stay byte-identical.
+
+Wave 32 (same PR): ruling 6 lands — the design IR's semantic
+well-formedness is an invariant of the declarations. The free function
+`designWellFormednessErrors` is gone: `DesignUnitDecl.wellFormednessErrors`
+judges one unit (its attribute catalogue, references, enum literals,
+prime legality, id uniqueness across kinds, machine coherence, brRefs
+reverse verification and BR coverage, each part already answering for
+itself), and `DesignUnitDecls.wellFormednessErrors` gathers the units in
+declaration order behind the cross-unit invariant (no duplicate unit
+name). The validate use case asks the declarations. Wording and order
+stay frozen; goldens stay byte-identical.
