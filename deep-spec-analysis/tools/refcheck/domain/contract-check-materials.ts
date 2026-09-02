@@ -33,65 +33,77 @@ function runContractChecksImpl(materials: {
     WitnessRef.reconstitute(value === undefined ? { artifact: art, element } : { artifact: art, element, value });
 
   // --- declared units (unit-of-work-dependency.md edge block) --------------
-  let units: UnitDecls | null = null;
-  if (materials.declaredUnits.kind === "absent") {
-    ledger.skip(CD_1, "absent-input", "unit-of-work-dependency.md is not present under this intent record — declared units are unknown");
-    ledger.skip(CD_3, "absent-input", "unit-of-work-dependency.md is not present under this intent record — the unit dependency DAG is unknown");
-  } else if (materials.declaredUnits.kind === "unrecognized") {
-    ledger.skip(CD_1, "unrecognized-format", `unit-of-work-dependency.md carries no parseable \`units:\` edge block${materials.declaredUnits.error ? ` (${materials.declaredUnits.error})` : ""}`);
-    ledger.skip(CD_3, "unrecognized-format", "blocked: the units edge block is unusable");
-  } else {
-    units = materials.declaredUnits.units;
-  }
+  const units: UnitDecls | null = materials.declaredUnits.match({
+    absent: () => {
+      ledger.skip(CD_1, "absent-input", "unit-of-work-dependency.md is not present under this intent record — declared units are unknown");
+      ledger.skip(CD_3, "absent-input", "unit-of-work-dependency.md is not present under this intent record — the unit dependency DAG is unknown");
+      return null;
+    },
+    unrecognized: (error) => {
+      ledger.skip(CD_1, "unrecognized-format", `unit-of-work-dependency.md carries no parseable \`units:\` edge block${error ? ` (${error})` : ""}`);
+      ledger.skip(CD_3, "unrecognized-format", "blocked: the units edge block is unusable");
+      return null;
+    },
+    declared: (declaredUnits) => {
+      return declaredUnits;
+    },
+  });
 
   // --- CD-1: contracts table -------------------------------------------------
-  let rows = ContractRows.of([]);
-  if (materials.contractsTable.kind === "absent") {
-    if (units !== null) ledger.skip(CD_1, "unrecognized-format", "no markdown table with a Provider column found");
-    ledger.skip(CD_3, "unrecognized-format", "no contracts table — DAG edge coverage cannot be checked");
-  } else {
-    rows = materials.contractsTable.rows;
-    if (units !== null) {
-      const declared = units;
-      for (const row of rows) {
-        const el = `contracts table row ${row.id.asString()} (line ${row.line.asNumber()})`;
-        if (!row.provider.isBlank() && !declared.declares(row.provider.asString())) {
-          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, TargetIds.safe("unit", row.provider.asString())],
-            [ref(artifact, el, row.provider.asString()), ref(depArtifact, "units")],
-            `Provider Unit "${row.provider.asString()}" is not a declared unit`);
-        }
-        if (!row.consumer.isBlank() && !declared.declares(row.consumer.asString()) && !row.consumer.declaresExternal()) {
-          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, TargetIds.safe("unit", row.consumer.asString())],
-            [ref(artifact, el, row.consumer.asString()), ref(depArtifact, "units")],
-            `Consumer "${row.consumer.asString()}" is neither a declared unit nor \`External: …\``);
-        }
-        if (!row.owner.isBlank() && !declared.declares(row.owner.asString())) {
-          ledger.finding(CD_1, "reference-broken", [`contract:${row.id.asString()}`, TargetIds.safe("unit", row.owner.asString())],
-            [ref(artifact, el, row.owner.asString()), ref(depArtifact, "units")],
-            `Owner "${row.owner.asString()}" is not a declared unit`);
+  const rows: ContractRows | null = materials.contractsTable.match({
+    absent: () => {
+      if (units !== null) ledger.skip(CD_1, "unrecognized-format", "no markdown table with a Provider column found");
+      ledger.skip(CD_3, "unrecognized-format", "no contracts table — DAG edge coverage cannot be checked");
+      return null;
+    },
+    rows: (tableRows) => {
+      if (units !== null) {
+        const declared = units;
+        for (const row of tableRows) {
+          const el = row.locationLabel();
+          if (!row.provider().isBlank() && !declared.declares(row.provider().asString())) {
+            ledger.finding(CD_1, "reference-broken", [`contract:${row.id().asString()}`, TargetIds.safe("unit", row.provider().asString())],
+              [ref(artifact, el, row.provider().asString()), ref(depArtifact, "units")],
+              `Provider Unit "${row.provider().asString()}" is not a declared unit`);
+          }
+          if (!row.consumer().isBlank() && !declared.declares(row.consumer().asString()) && !row.consumer().declaresExternal()) {
+            ledger.finding(CD_1, "reference-broken", [`contract:${row.id().asString()}`, TargetIds.safe("unit", row.consumer().asString())],
+              [ref(artifact, el, row.consumer().asString()), ref(depArtifact, "units")],
+              `Consumer "${row.consumer().asString()}" is neither a declared unit nor \`External: …\``);
+          }
+          if (!row.owner().isBlank() && !declared.declares(row.owner().asString())) {
+            ledger.finding(CD_1, "reference-broken", [`contract:${row.id().asString()}`, TargetIds.safe("unit", row.owner().asString())],
+              [ref(artifact, el, row.owner().asString()), ref(depArtifact, "units")],
+              `Owner "${row.owner().asString()}" is not a declared unit`);
+          }
         }
       }
-    }
-  }
+      return tableRows;
+    },
+  });
 
   // --- CD-2: spec blocks -----------------------------------------------------
   for (const block of materials.specBlocks) {
-    if (block.issue === null) continue;
-    const blockId = `contract:block-${block.index.asNumber()}`;
-    const el = `yaml fence #${block.index.asNumber()} (line ${block.line.asNumber()})`;
-    if (block.issue.kind === "unparseable") {
-      ledger.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el)],
-        `spec block does not parse in the supported YAML subset: ${block.issue.error}`);
-    } else if (block.issue.kind === "not-a-mapping") {
-      ledger.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el)], "spec block is not a YAML mapping");
-    } else {
-      ledger.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el, "openapi")],
-        "OpenAPI spec block carries `openapi:` but no `paths:`");
-    }
+    const blockId = block.blockId();
+    const el = block.locationLabel();
+    block.matchIssue({
+      sound: () => {},
+      unparseable: (error) => {
+        ledger.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el)],
+          `spec block does not parse in the supported YAML subset: ${error}`);
+      },
+      notAMapping: () => {
+        ledger.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el)], "spec block is not a YAML mapping");
+      },
+      openapiWithoutPaths: () => {
+        ledger.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el, "openapi")],
+          "OpenAPI spec block carries `openapi:` but no `paths:`");
+      },
+    });
   }
 
   // --- CD-3: DAG edge coverage ----------------------------------------------
-  if (units !== null && materials.contractsTable.kind !== "absent") {
+  if (units !== null && rows !== null) {
     for (const u of units.sortedByName()) {
       const uName = u.name().asString();
       // 宙に浮いた辺（未宣言の依存先）は宣言が落とす——units-generation の問題。

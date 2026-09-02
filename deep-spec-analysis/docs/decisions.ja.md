@@ -1577,3 +1577,17 @@ enum の宣言値——を `match` で渡す。コンパイラが `kind` で分�
 （`claimInto`）——索引はもう owner と refs を読まない。`SmtEventPairProbe` は
 判定結果から自分の overlap／joint 判定を引き、2 つの対象を名乗る——計画事実は
 もうクエリ id を読まない。台帳から 5 エントリを回収し、残債は 122 中 25。
+
+波 26（同 PR）: refcheck の解析結果と行が自分の解釈を所有する。7 つの解析
+結果（`ComponentCatalogOutcome`・`ContractsTableOutcome`・
+`DeclaredUnitsOutcome`・`DomainEntitiesOutcome`・`EntitiesOutcome`・
+`FunctionalSpecOutcome`・`RulesOutcome`）が名前つきファクトリを持つ命令できる
+class になり、検査材料は `match` で解釈する——absent／wrong-fence-count／
+unparseable／extracted の各枝は凍結の skip・finding 文言を保ち、抽出物は
+`kind` を調べてフィールドを読む代わりに handler の引数で届く。解析行は
+`LineNumber` で運び、プリミティブ台帳からフィールドが 3 つ消える。
+`SpecBlockAssessment` は自分のブロック id と所在ラベルを名乗り、問題は
+`matchIssue` で解釈する。`ContractRow` は DAG 辺検査に `connects` で答え、所在
+ラベルを自分で作る。`ShapeError`・`ComponentShapeError`・`EntityReference` は
+検査が問う class になる。台帳から 12 エントリを回収し、残債は 122 中 13。
+プリミティブ台帳の上限は 84 へ下がる。

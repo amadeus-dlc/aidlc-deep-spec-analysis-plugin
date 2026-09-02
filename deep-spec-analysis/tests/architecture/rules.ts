@@ -421,18 +421,6 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "doctor/domain/refinement-stale-row.ts",
   "doctor/domain/solver-availability.ts",
   "doctor/domain/unit-coverage-row.ts",
-  "refcheck/domain/component-catalog-outcome.ts",
-  "refcheck/domain/component-shape-error.ts",
-  "refcheck/domain/contract-row.ts",
-  "refcheck/domain/contracts-table-outcome.ts",
-  "refcheck/domain/declared-units-outcome.ts",
-  "refcheck/domain/domain-entities-outcome.ts",
-  "refcheck/domain/entities-outcome.ts",
-  "refcheck/domain/entity-reference.ts",
-  "refcheck/domain/functional-spec-outcome.ts",
-  "refcheck/domain/rules-outcome.ts",
-  "refcheck/domain/shape-error.ts",
-  "refcheck/domain/spec-block-assessment.ts",
   "requirements/domain/decoded-value.ts",
   "requirements/domain/trace-state.ts",
   "requirements/domain/verification-witness.ts",
@@ -578,7 +566,7 @@ export function primitiveFieldsOf(rawSource: string): string[] {
 
 // 台帳の記述子総数の上限。台帳が縮んだら下げる——上げる変更は裁定違反で、
 // 新しい負債を記述子ごと台帳へ足す抜け道を diff 上で可視化する（レビュー指摘）。
-export const PRIMITIVE_FIELD_DEBT_CEILING = 87;
+export const PRIMITIVE_FIELD_DEBT_CEILING = 84;
 
 export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([
   ["design/domain/br-reference-index.ts", new Set(["#ids: Set<string>"])],
@@ -606,12 +594,12 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["doctor/domain/unit-coverage.ts", new Set(["#eligible: number", "#scopes: readonly string[]"])],
   ["kernel/domain/fr-refs.ts", new Set(["#values: readonly string[]"])],
   ["kernel/domain/requirement-ids.ts", new Set(["#values: ReadonlySet<string>"])],
-  ["refcheck/domain/component-catalog-outcome.ts", new Set(["ComponentCatalogOutcome.found: number", "ComponentCatalogOutcome.line: number"])],
-  ["refcheck/domain/entities-outcome.ts", new Set(["EntitiesOutcome.found: number", "EntitiesOutcome.line: number"])],
+  ["refcheck/domain/component-catalog-outcome.ts", new Set(["#found: number"])],
+  ["refcheck/domain/entities-outcome.ts", new Set(["#found: number"])],
   ["refcheck/domain/entity-decls.ts", new Set(["#names: Set<string>"])],
   ["refcheck/domain/finding.ts", new Set(["#kind: string", "#unit: string | undefined"])],
   ["refcheck/domain/input-anchor.ts", new Set(["#artifact: string"])],
-  ["refcheck/domain/rules-outcome.ts", new Set(["RulesOutcome.found: number", "RulesOutcome.line: number"])],
+  ["refcheck/domain/rules-outcome.ts", new Set(["#found: number"])],
   ["refcheck/domain/skipped.ts", new Set(["#target: string", "#unit: string | undefined"])],
   ["refcheck/domain/witness-ref.ts", new Set(["#artifact: string", "#element: string", "#value: string | undefined"])],
   ["refinement/domain/alpha-context.ts", new Set(["#byReq: ReadonlyMap<string, AttributeMapping>"])],

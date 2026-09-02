@@ -35,23 +35,26 @@ function runComponentChecksImpl(
     WitnessRef.reconstitute(value === undefined ? { artifact, element } : { artifact, element, value });
 
   // --- DD-0: fence shape --------------------------------------------------
-  let comps = Components.of([]);
-  let dd0Failed = false;
-  if (outcome.kind === "wrong-fence-count") {
-    ledger.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [ref("yaml fence")],
-      `components.md must carry exactly one fenced yaml source-of-truth block (found ${outcome.found})`);
-    dd0Failed = true;
-  } else if (outcome.kind === "unparseable") {
-    ledger.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [ref(`yaml fence (line ${outcome.line})`)],
-      `yaml block does not parse in the supported subset: ${outcome.error}`);
-    dd0Failed = true;
-  } else {
-    comps = outcome.components;
-    for (const e of outcome.shapeErrors) {
-      ledger.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [ref(e.element.asString())], e.detail);
-    }
-    if (outcome.shapeErrors.count() > 0 && comps.count() === 0) dd0Failed = true;
-  }
+  const dd0 = outcome.match<{ comps: Components; failed: boolean }>({
+    wrongFenceCount: (found) => {
+      ledger.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [ref("yaml fence")],
+        `components.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
+      return { comps: Components.of([]), failed: true };
+    },
+    unparseable: (line, error) => {
+      ledger.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [ref(`yaml fence (line ${line.asNumber()})`)],
+        `yaml block does not parse in the supported subset: ${error}`);
+      return { comps: Components.of([]), failed: true };
+    },
+    extracted: (components, shapeErrors) => {
+      for (const e of shapeErrors) {
+        ledger.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [ref(e.element().asString())], e.detail());
+      }
+      return { comps: components, failed: shapeErrors.count() > 0 && components.count() === 0 };
+    },
+  });
+  const comps = dd0.comps;
+  const dd0Failed = dd0.failed;
 
   if (dd0Failed) {
     for (const family of BLOCKED_BY_DD_0) {
@@ -86,9 +89,9 @@ function runComponentChecksImpl(
     }
     for (const e of c.entities()) {
       for (const r of e.references()) {
-        if (!comps.declares(r.ownedBy)) {
-          ledger.finding(DD_2, "reference-broken", [TargetIds.safe("component", r.ownedBy.asString())], [ref(`${r.element.asString()}.owned_by`, r.ownedBy.asString())],
-            `entity "${e.name().asString()}" references owner component "${r.ownedBy.asString()}" which is not declared`);
+        if (!comps.declares(r.ownedBy())) {
+          ledger.finding(DD_2, "reference-broken", [TargetIds.safe("component", r.ownedBy().asString())], [ref(`${r.element().asString()}.owned_by`, r.ownedBy().asString())],
+            `entity "${e.name().asString()}" references owner component "${r.ownedBy().asString()}" which is not declared`);
         }
       }
     }
@@ -144,11 +147,11 @@ function runComponentChecksImpl(
   for (const c of comps) {
     for (const e of c.entities()) {
       for (const r of e.references()) {
-        const owner = comps.byName(r.ownedBy);
+        const owner = comps.byName(r.ownedBy());
         if (!owner) continue; // DD-2 already reported the undeclared owner
-        if (!owner.entities().declaresEntity(r.entity)) {
-          ledger.finding(DD_6, "reference-broken", [TargetIds.safe("entity", r.entity.asString())], [ref(`${r.element.asString()}.entity`, r.entity.asString())],
-            `entity "${e.name().asString()}" references "${r.entity.asString()}" as owned by "${r.ownedBy.asString()}", but "${r.ownedBy.asString()}" declares no such entity`);
+        if (!owner.entities().declaresEntity(r.entity())) {
+          ledger.finding(DD_6, "reference-broken", [TargetIds.safe("entity", r.entity().asString())], [ref(`${r.element().asString()}.entity`, r.entity().asString())],
+            `entity "${e.name().asString()}" references "${r.entity().asString()}" as owned by "${r.ownedBy().asString()}", but "${r.ownedBy().asString()}" declares no such entity`);
         }
       }
     }

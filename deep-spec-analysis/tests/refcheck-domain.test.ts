@@ -172,6 +172,11 @@ import {
   ComponentRefs,
   Components,
   ComponentShapeErrors,
+  ComponentShapeError,
+  ContractRow,
+  EntityReference,
+  SpecBlockAssessment,
+  ShapeError,
   ContractId,
   ContractParty,
   ContractRows,
@@ -233,7 +238,7 @@ describe("first-class collections", () => {
     expect(EntityDecls.of([]).add(entity("Order")).toArray().length).toBe(1);
     expect([...RelDecls.of([]).add(RelDecl.reconstitute({ element: ElementPath.reconstitute("r[0]"), from: null, to: null, cardinality: null, hasDirection: false }))].length).toBe(1);
     expect(RuleDecls.of([]).add(RuleDecl.reconstitute({ id: null, element: ElementPath.reconstitute("rules[0]"), category: null, appliesTo: null, sourceIds: SourceIds.of([]), missing: [] })).toArray().length).toBe(1);
-    expect(ShapeErrors.of([]).add({ element: ElementPath.reconstitute("entities"), detail: "x" }).toArray().length).toBe(1);
+    expect(ShapeErrors.of([]).add(ShapeError.reconstitute({ element: ElementPath.reconstitute("entities"), detail: "x" })).toArray().length).toBe(1);
     const sketch = StateMachineSketch.reconstitute({ spec: MachineSpec.reconstitute("Order"), states: StateNames.of([]), fenceLine: LineNumber.reconstitute(1), unsupported: null });
     expect(StateMachineSketches.of([]).add(sketch).isEmpty()).toBe(false);
     const de = DomainEntitySketch.reconstitute({ name: EntityName.reconstitute("Order"), component: ComponentName.reconstitute("Core"), attributes: AttributeNames.of([]) });
@@ -321,13 +326,15 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(ContractParty.reconstitute("External: billing").declaresExternal()).toBe(true);
     expect(ContractParty.reconstitute("cart").declaresExternal()).toBe(false);
     expect(ContractParty.reconstitute("cart").equals(ContractParty.reconstitute("cart"))).toBe(true);
-    const row = {
+    const row = ContractRow.reconstitute({
       id: ContractId.reconstitute("1"),
       provider: ContractParty.reconstitute("cart"),
       consumer: ContractParty.reconstitute("billing"),
       owner: ContractParty.reconstitute("cart"),
       line: LineNumber.reconstitute(3),
-    };
+    });
+    expect(row.locationLabel()).toBe("contracts table row 1 (line 3)");
+    expect(row.owner().asString()).toBe("cart");
     const rows = ContractRows.of([]).add(row);
     expect([...rows]).toEqual([row]);
     expect(rows.toArray()).toEqual([row]);
@@ -347,7 +354,10 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect([...decls.sortedByName()].map((d) => d.name().asString())).toEqual(["a", "b"]);
     expect(decls.names().declares("a")).toBe(true);
     expect(decls.toArray().length).toBe(2);
-    const block = { index: BlockIndex.reconstitute(1), line: LineNumber.reconstitute(1), issue: null };
+    const block = SpecBlockAssessment.sound(BlockIndex.reconstitute(1), LineNumber.reconstitute(1));
+    expect(block.blockId()).toBe("contract:block-1");
+    expect(block.locationLabel()).toBe("yaml fence #1 (line 1)");
+    expect(block.matchIssue({ sound: () => "ok", unparseable: () => "u", notAMapping: () => "m", openapiWithoutPaths: () => "o" })).toBe("ok");
     const blocks = SpecBlockAssessments.of([]).add(block);
     expect([...blocks]).toEqual([block]);
     expect(blocks.toArray()).toEqual([block]);
@@ -363,7 +373,7 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
       name: EntityName.reconstitute("Order"),
       element: el,
       identifier: AttributeName.reconstitute("id"),
-      references: EntityReferences.of([]).add({ entity: EntityName.reconstitute("Line"), ownedBy: bName, element: el }),
+      references: EntityReferences.of([]).add(EntityReference.reconstitute({ entity: EntityName.reconstitute("Line"), ownedBy: bName, element: el })),
     });
     const a = Component.reconstitute({ name: aName, element: el, dependsOn: ComponentRefs.of([refAtoB]), dependents: ComponentRefs.of([refBtoA]), entities: ComponentEntities.of([entity]) });
     const b = Component.reconstitute({ name: bName, element: el, dependsOn: ComponentRefs.of([refBtoA]), dependents: ComponentRefs.of([]), entities: ComponentEntities.of([]) });
@@ -397,10 +407,11 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     const aDup = Component.reconstitute({ name: aName, element: ElementPath.reconstitute("components[9]"), dependsOn: ComponentRefs.of([]), dependents: ComponentRefs.of([]), entities: ComponentEntities.of([]) });
     const withDup = comps.add(aDup);
     expect(withDup.byName(aName)?.element().asString()).toBe("components[9]");
-    const errs = ComponentShapeErrors.of([]).add({ element: el, detail: "x" });
+    const errs = ComponentShapeErrors.of([]).add(ComponentShapeError.reconstitute({ element: el, detail: "x" }));
+    expect(errs.toArray()[0]?.detail()).toBe("x");
+    expect(errs.toArray()[0]?.element().asString()).toBe(el.asString());
     expect(errs.count()).toBe(1);
     expect([...errs].length).toBe(1);
-    expect(errs.toArray()[0]?.detail).toBe("x");
   });
 
   test("components own their shape checks: PascalCase, duplicates, self-dependency, ownership (wave 6)", () => {

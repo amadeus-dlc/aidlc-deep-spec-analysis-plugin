@@ -1757,3 +1757,20 @@ so the index no longer reads owner and refs. `SmtEventPairProbe` pulls
 its own overlap and joint verdicts from the results and names its two
 targets, so the plan facts no longer read query ids. 5 ledger entries
 reclaimed — the ledger holds 25 of 122.
+
+Wave 26 (same PR): the refcheck outcomes and rows own their
+interpretation. The seven parse outcomes (`ComponentCatalogOutcome`,
+`ContractsTableOutcome`, `DeclaredUnitsOutcome`, `DomainEntitiesOutcome`,
+`EntitiesOutcome`, `FunctionalSpecOutcome`, `RulesOutcome`) become
+commandable classes with named factories: the check materials interpret
+each through `match` — the absent, wrong-fence-count, unparseable and
+extracted branches keep their frozen skip and finding wording, and the
+extracted material now arrives as a handler argument instead of a field
+read behind a `kind` test. A parse line travels as a `LineNumber`, so
+three primitive fields leave the field ledger. `SpecBlockAssessment`
+names its own block id and location label and interprets its issue
+through `matchIssue`; `ContractRow` answers `connects` for the DAG edge
+check and builds its own location label; `ShapeError`,
+`ComponentShapeError` and `EntityReference` become classes the checks
+ask. 12 ledger entries reclaimed — the ledger holds 13 of 122; the
+primitive-field ceiling drops to 84.

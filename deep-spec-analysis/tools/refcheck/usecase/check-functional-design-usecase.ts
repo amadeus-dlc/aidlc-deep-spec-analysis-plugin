@@ -10,7 +10,7 @@ import {
   FunctionalCheckMaterials,
   ReferenceCheckReport,
   ReferenceCheckReportId,
-} from "../domain/index.ts";
+ EntitiesOutcome, RulesOutcome, FunctionalSpecOutcome, DomainEntitiesOutcome,} from "../domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./port/design-record-repository.ts";
 import type { ReferenceCheckReportRepository } from "./port/reference-check-report-repository.ts";
@@ -39,14 +39,14 @@ export class CheckFunctionalDesignUseCase {
     FunctionalCheckMaterials.of({
       unit: fd.unit,
       entitiesArtifact: fd.entitiesArtifact,
-      entities: fd.entities === null ? { kind: "absent" } : fd.entities.outcome,
+      entities: fd.entities === null ? EntitiesOutcome.absent() : fd.entities.outcome,
       rulesArtifact: fd.rulesArtifact,
-      rules: fd.rules === null ? { kind: "absent" } : fd.rules.outcome,
+      rules: fd.rules === null ? RulesOutcome.absent() : fd.rules.outcome,
       specArtifact: fd.specArtifact,
-      spec: fd.spec === null ? { kind: "absent" } : fd.spec.outcome,
+      spec: fd.spec === null ? FunctionalSpecOutcome.absent() : fd.spec.outcome,
       requirementIdsKnown: fd.requirements === null ? null : fd.requirements.outcome,
       componentsArtifact: fd.componentsArtifact,
-      domainEntities: fd.components === null ? { kind: "absent" } : fd.components.outcome,
+      domainEntities: fd.components === null ? DomainEntitiesOutcome.absent() : fd.components.outcome,
       siblingUnits: fd.siblingUnits,
     }).runChecks(ledger);
 

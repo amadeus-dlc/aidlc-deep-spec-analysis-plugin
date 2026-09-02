@@ -45,8 +45,6 @@ import {
   StateMachineSketch,
   StateMachineSketches,
   StateNames,
-} from "../domain/index.ts";
-import type {
   DomainEntitiesOutcome,
   EntitiesOutcome,
   FunctionalSpecOutcome,
@@ -84,7 +82,7 @@ function extractEntities(value: Json): DeclaredEntities {
   const collected: { entities: EntityDecl[]; rels: RelDecl[]; shapeErrors: ShapeError[] } = { entities: [], rels: [], shapeErrors: [] };
   const model = collected;
   if (!isObject(value) || !Array.isArray(value.entities)) {
-    model.shapeErrors.push({ element: ElementPath.reconstitute("entities"), detail: "top-level `entities:` list is missing" });
+    model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute("entities"), detail: "top-level `entities:` list is missing" }));
     return DeclaredEntities.reconstitute({
       entities: EntityDecls.of(collected.entities),
       rels: RelDecls.of(collected.rels),
@@ -94,12 +92,12 @@ function extractEntities(value: Json): DeclaredEntities {
   value.entities.forEach((raw, i) => {
     const element = `entities[${i}]`;
     if (!isObject(raw)) {
-      model.shapeErrors.push({ element: ElementPath.reconstitute(element), detail: "entity entry is not a mapping" });
+      model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute(element), detail: "entity entry is not a mapping" }));
       return;
     }
     const name = str(raw.name);
     if (name === null) {
-      model.shapeErrors.push({ element: ElementPath.reconstitute(`${element}.name`), detail: "entity has no string `name`" });
+      model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute(`${element}.name`), detail: "entity has no string `name`" }));
       return;
     }
     const attrs: AttrDecl[] = [];
@@ -107,17 +105,17 @@ function extractEntities(value: Json): DeclaredEntities {
       (raw.attributes as Json[]).forEach((a, j) => {
         const ael = `${element}.attributes[${j}]`;
         if (!isObject(a)) {
-          model.shapeErrors.push({ element: ElementPath.reconstitute(ael), detail: "attribute entry is not a mapping" });
+          model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute(ael), detail: "attribute entry is not a mapping" }));
           return;
         }
         const aname = str(a.name);
         if (aname === null) {
-          model.shapeErrors.push({ element: ElementPath.reconstitute(`${ael}.name`), detail: "attribute has no string `name`" });
+          model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute(`${ael}.name`), detail: "attribute has no string `name`" }));
           return;
         }
         const type = str(pick(a, ["type", "logical_type", "logical-type"]));
         if (type === null) {
-          model.shapeErrors.push({ element: ElementPath.reconstitute(`${ael}.type`), detail: `attribute "${name}.${aname}" has no logical type` });
+          model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute(`${ael}.type`), detail: `attribute "${name}.${aname}" has no logical type` }));
         }
         const allowedRaw = pick(a, ["allowed_values", "allowed-values", "allowed", "values"]);
         const allowed = Array.isArray(allowedRaw)
@@ -170,26 +168,26 @@ function extractEntities(value: Json): DeclaredEntities {
 }
 
 export function parseEntitiesDocument(md: string | null): EntitiesOutcome {
-  if (md === null) return { kind: "absent" };
+  if (md === null) return EntitiesOutcome.absent();
   const fences = extractFences(md, "yaml");
-  if (fences.length !== 1) return { kind: "wrong-fence-count", found: fences.length };
+  if (fences.length !== 1) return EntitiesOutcome.wrongFenceCount(fences.length);
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
-    return { kind: "unparseable", line: fences[0]?.line ?? 0, error: parsed.error };
+    return EntitiesOutcome.unparseable(LineNumber.reconstitute(fences[0]?.line ?? 0), parsed.error);
   }
-  return { kind: "extracted", model: extractEntities(parsed.value ?? null) };
+  return EntitiesOutcome.extracted(extractEntities(parsed.value ?? null));
 }
 
 export function parseRulesDocument(md: string | null): RulesOutcome {
-  if (md === null) return { kind: "absent" };
+  if (md === null) return RulesOutcome.absent();
   const fences = extractFences(md, "yaml");
-  if (fences.length !== 1) return { kind: "wrong-fence-count", found: fences.length };
+  if (fences.length !== 1) return RulesOutcome.wrongFenceCount(fences.length);
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
-    return { kind: "unparseable", line: fences[0]?.line ?? 0, error: parsed.error };
+    return RulesOutcome.unparseable(LineNumber.reconstitute(fences[0]?.line ?? 0), parsed.error);
   }
   const v = parsed.value ?? null;
-  if (!isObject(v) || !Array.isArray(v.rules)) return { kind: "no-rules-list" };
+  if (!isObject(v) || !Array.isArray(v.rules)) return RulesOutcome.noRulesList();
   const ruleList: RuleDecl[] = (v.rules as Json[]).map((raw, i) => {
     const element = `rules[${i}]`;
     if (!isObject(raw)) {
@@ -213,11 +211,11 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
       missing,
     });
   });
-  return { kind: "extracted", rules: RuleDecls.of(ruleList) };
+  return RulesOutcome.extracted(RuleDecls.of(ruleList));
 }
 
 export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecOutcome {
-  if (md === null) return { kind: "absent" };
+  if (md === null) return FunctionalSpecOutcome.absent();
   const machines: StateMachineSketch[] = [];
   const lines = md.split("\n");
   for (let i = 0; i < lines.length; i++) {
@@ -258,14 +256,14 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecOu
       break;
     }
   }
-  return { kind: "present", machines: StateMachineSketches.of(machines) };
+  return FunctionalSpecOutcome.present(StateMachineSketches.of(machines));
 }
 
 export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOutcome {
-  if (md === null) return { kind: "absent" };
+  if (md === null) return DomainEntitiesOutcome.absent();
   const compFence = extractFences(md, "yaml")[0];
   const parsed = compFence === undefined ? { error: "no yaml fence" } : parseYamlSubset(compFence.body);
-  if (parsed.error !== undefined) return { kind: "unusable", error: parsed.error };
+  if (parsed.error !== undefined) return DomainEntitiesOutcome.unusable(parsed.error);
   const value = "value" in parsed ? (parsed.value ?? null) : null;
   const out: DomainEntitySketch[] = [];
   if (isObject(value) && Array.isArray(value.components)) {
@@ -285,7 +283,7 @@ export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOu
       }
     }
   }
-  return { kind: "extracted", entities: DomainEntitySketches.of(out) };
+  return DomainEntitiesOutcome.extracted(DomainEntitySketches.of(out));
 }
 
 // 兄弟ユニットの entities.md 群を XS 用の索引へ。fence 無し・解析不能な

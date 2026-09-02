@@ -26,11 +26,7 @@ export class ContractRows {
 
   // CD-3：行が両方向で覆う (provider, consumer) 対の集合知識。
   coversEdge(from: string, to: string): boolean {
-    return this.#values.some(
-      (r) =>
-        (r.provider.asString() === from && r.consumer.asString() === to) ||
-        (r.consumer.asString() === from && r.provider.asString() === to),
-    );
+    return this.#values.some((r) => r.connects(from, to));
   }
 
   toArray(): readonly ContractRow[] {
