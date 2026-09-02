@@ -291,10 +291,10 @@ describe("design first-class collections", () => {
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
     expect([...fs.sortedCanonically()].length).toBe(1);
-    const sk = DesignSkips.of([]).add({ target: "DOB-1", reason: "timeout", unit: "u2" })
-      .concat(DesignSkips.of([{ target: "DOB-0", reason: "capability", unit: "u2" }]));
+    const sk = DesignSkips.of([]).add({ target: TargetId.reconstitute("DOB-1"), reason: "timeout", unit: "u2" })
+      .concat(DesignSkips.of([{ target: TargetId.reconstitute("DOB-0"), reason: "capability", unit: "u2" }]));
     expect(sk.count()).toBe(2);
-    expect(sk.sortedCanonically().toArray()[0]?.target).toBe("DOB-0");
+    expect(sk.sortedCanonically().toArray()[0]?.target.asString()).toBe("DOB-0");
     expect([...sk].length).toBe(2);
 
     const anchors = DesignInputAnchors.of([]).add({ artifact: "b.md", sha256: ContentHash.reconstitute("2".repeat(64)) })

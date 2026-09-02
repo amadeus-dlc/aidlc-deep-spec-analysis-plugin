@@ -77,7 +77,7 @@ export class DesignReport {
       method,
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
-        u.allTargets().map((t) => ({
+        [...u.allTargets()].map((t) => ({
           target: t,
           reason: "ir-version-mismatch",
           unit: u.name(),
@@ -105,7 +105,7 @@ export class DesignReport {
       method,
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
-        u.allTargets().map((t) => ({ target: t, reason: "unavailable", unit: u.name(), detail: skipDetail })),
+        [...u.allTargets()].map((t) => ({ target: t, reason: "unavailable", unit: u.name(), detail: skipDetail })),
       )),
       unavailableReason: reason,
     });

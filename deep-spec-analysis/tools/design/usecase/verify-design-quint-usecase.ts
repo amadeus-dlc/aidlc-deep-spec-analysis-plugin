@@ -153,7 +153,7 @@ export class VerifyDesignQuintUseCase {
         if (candidates.length === 0) continue;
         if (method !== "bounded") {
           skipped.push({
-            target: sm.id().asString(),
+            target: sm.id().asTargetId(),
             reason: "capability",
             unit: u.name(),
             detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
@@ -188,7 +188,7 @@ export class VerifyDesignQuintUseCase {
         }
         if (leftover.length > 0) {
           skipped.push({
-            target: sm.id().asString(),
+            target: sm.id().asTargetId(),
             reason: probesUsed >= this.#unreachCap ? "timeout" : "unavailable",
             unit: u.name(),
             detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id().asString()} (per-run cap ${this.#unreachCap} / budget reached, or the probe run failed)`,
@@ -233,7 +233,7 @@ export class VerifyDesignQuintUseCase {
           const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (this.#clock.now() - started));
           if (remaining < 3_000) {
             for (const e of extras) {
-              skipped.push({ target: e.reqId.asString(), reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" });
+              skipped.push({ target: e.reqId.asTargetId(), reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" });
             }
             continue;
           }
@@ -251,14 +251,14 @@ export class VerifyDesignQuintUseCase {
           const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
           if (run.exit !== 0 || run.doc === null) {
             for (const e of extras) {
-              skipped.push({ target: e.reqId.asString(), reason: "unavailable", unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` });
+              skipped.push({ target: e.reqId.asTargetId(), reason: "unavailable", unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` });
             }
             continue;
           }
           const remapped = lowered.remapVerdicts(u, run.doc);
           if (remapped.unavailable !== null) {
             for (const e of extras) {
-              skipped.push({ target: e.reqId.asString(), reason: "unavailable", unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` });
+              skipped.push({ target: e.reqId.asTargetId(), reason: "unavailable", unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` });
             }
             continue;
           }
@@ -280,7 +280,7 @@ export class VerifyDesignQuintUseCase {
           if (!hitExtra && designConflict) {
             for (const e of extras) {
               skipped.push({
-                target: e.reqId.asString(),
+                target: e.reqId.asTargetId(),
                 reason: "capability",
                 unit: u.name(),
                 detail: "the machine reachably violates its own design invariants first (see the design conflict findings) — refinement reachability is masked until those are resolved",

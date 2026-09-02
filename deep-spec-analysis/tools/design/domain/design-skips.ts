@@ -1,10 +1,9 @@
 import type { DesignSkipped } from "./design-skipped.ts";
-import { IdOrder } from "../../kernel/domain/id-order.ts";
 
 function sortDesignSkipped(skipped: readonly DesignSkipped[]): DesignSkipped[] {
   return [...skipped].sort((a, b) => {
     if (a.unit !== b.unit) return a.unit < b.unit ? -1 : 1;
-    const c = IdOrder.compare(a.target, b.target);
+    const c = a.target.compareTo(b.target);
     if (c !== 0) return c;
     return a.reason < b.reason ? -1 : a.reason > b.reason ? 1 : 0;
   });

@@ -1,3 +1,4 @@
+import { FrRefs } from "../../kernel/domain/index.ts";
 // v1 兄弟バックエンドの生 findings 文書 → 型付き判定面（SiblingVerdictDocument）。
 // 選別規則は旧 remapUnitDocument の読込部の凍結挙動：非オブジェクト → unreadable、
 // unavailable.reason → unavailable、findings は {kind:string, targets:array}
@@ -19,8 +20,8 @@ export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
     if (!isObject(f) || typeof f.kind !== "string" || !Array.isArray(f.targets)) continue;
     findings.push({
       kind: f.kind,
-      frRefs: strArr(f.frRefs),
-      targets: f.targets.filter((t): t is string => typeof t === "string"),
+      frRefs: FrRefs.of(strArr(f.frRefs)),
+      targets: f.targets.filter((t): t is string => typeof t === "string").map((t) => LoweredId.reconstitute(t)),
       witness: (f.witness ?? null) as unknown as DesignValue,
       detail: typeof f.detail === "string" ? f.detail : "",
     });

@@ -3,7 +3,7 @@
 // ドメインが行う。allUnitTargets / enumValuesOf は旧自由関数のメソッド化。
 
 import { DesignUnitId } from "./design-unit-id.ts";
-import { IdOrder } from "../../kernel/domain/index.ts";
+import { IdOrder, TargetIds } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "./design-machines.ts";
 import { DesignObligations } from "./design-obligations.ts";
 import { DesignScenarios } from "./design-scenarios.ts";
@@ -81,11 +81,11 @@ export class DesignUnit {
   }
 
   // このユニットでバックエンドが検査し得る全対象（義務・遷移・シナリオ）。
-  allTargets(): string[] {
-    return IdOrder.sortedUnique(
+  allTargets(): TargetIds {
+    return TargetIds.reconstitute(IdOrder.sortedUnique(
       [...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()],
       IdOrder.compare,
-    );
+    ));
   }
 
   // 属性パスの enum 宣言値——null は「属性が見つからない／enum でない」の区別

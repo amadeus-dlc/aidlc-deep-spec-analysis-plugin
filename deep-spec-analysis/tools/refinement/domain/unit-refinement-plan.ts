@@ -5,7 +5,7 @@
 // からの逐語移植——自由関数は UnitRefinementPlan.of（構築）と plan 自身の
 // 照会・skip 導出メソッドになった（OOUI 裁定）。
 
-import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, IdOrder, TargetId } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignFinding, DesignFindings, DesignSkips } from "../../design/domain/index.ts";
 import type { DesignSkipped, DesignUnit } from "../../design/domain/index.ts";
@@ -256,7 +256,7 @@ export class UnitRefinementPlan {
   smtStatusSkips(unitName: string): DesignSkips {
     const skipped: DesignSkipped[] = [];
     const skip = (target: string, reason: string, detail: string): void => {
-      skipped.push({ target, reason, unit: unitName, detail });
+      skipped.push({ target: TargetId.reconstitute(target), reason, unit: unitName, detail });
     };
     for (const [id, st] of this.sortedObligationStatuses()) {
       if (st.kind === "waived") skip(id, "waived", st.reason);
@@ -275,12 +275,12 @@ export class UnitRefinementPlan {
   quintStatusSkips(req: RefinementRequirements, unitName: string): DesignSkips {
     const skipped: DesignSkipped[] = [];
     for (const [rid, st] of [...this.#obligationStatus.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-      if (st.kind === "waived") skipped.push({ target: rid, reason: "waived", unit: unitName, detail: st.reason });
-      else if (st.kind === "capability") skipped.push({ target: rid, reason: "capability", unit: unitName, detail: st.detail });
+      if (st.kind === "waived") skipped.push({ target: TargetId.reconstitute(rid), reason: "waived", unit: unitName, detail: st.reason });
+      else if (st.kind === "capability") skipped.push({ target: TargetId.reconstitute(rid), reason: "capability", unit: unitName, detail: st.detail });
       else if (st.kind === "checkable") {
         const ob = req.obligationById(rid);
         if (ob !== undefined && ob.isEvent()) {
-          skipped.push({ target: rid, reason: "capability", unit: unitName, detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" });
+          skipped.push({ target: TargetId.reconstitute(rid), reason: "capability", unit: unitName, detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" });
         } else if (ob !== undefined && ob.isInvariantLike()) {
           const assertion = ob.assertion();
           if (assertion === undefined) continue;
@@ -290,16 +290,16 @@ export class UnitRefinementPlan {
           try {
             this.#ctx.substitute(assertion, false);
           } catch (err) {
-            skipped.push({ target: rid, reason: "compile-error", unit: unitName, detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` });
+            skipped.push({ target: TargetId.reconstitute(rid), reason: "compile-error", unit: unitName, detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` });
           }
         }
       }
     }
     for (const [rid, st] of [...this.#scenarioStatus.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-      if (st.kind === "waived") skipped.push({ target: rid, reason: "waived", unit: unitName, detail: st.reason });
-      else if (st.kind === "capability") skipped.push({ target: rid, reason: "capability", unit: unitName, detail: st.detail });
+      if (st.kind === "waived") skipped.push({ target: TargetId.reconstitute(rid), reason: "waived", unit: unitName, detail: st.reason });
+      else if (st.kind === "capability") skipped.push({ target: TargetId.reconstitute(rid), reason: "capability", unit: unitName, detail: st.detail });
       else if (st.kind === "checkable") {
-        skipped.push({ target: rid, reason: "capability", unit: unitName, detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)" });
+        skipped.push({ target: TargetId.reconstitute(rid), reason: "capability", unit: unitName, detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)" });
       }
     }
     return DesignSkips.of(skipped);

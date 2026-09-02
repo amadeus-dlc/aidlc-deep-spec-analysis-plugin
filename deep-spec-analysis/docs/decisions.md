@@ -1555,3 +1555,16 @@ for a ruling: index maps keyed by a primitive's string form
 (`kind`, `method`, `nature`, `pattern`), the doctor rows, and the
 numeric metadata the ruling deferred. DATA_MODEL_DEBT is untouched — the
 ledger holds 98 of 122.
+
+Wave 12 (same PR): the design and refinement skip vocabulary speaks
+`TargetId`. `DesignSkipped.target`, `DesignUnit.allTargets` and
+`RefinementRequirements.allTargetIds` carry the primitive (the design
+machine id gains `asTargetId`; the requirement ids already had it), the
+design skips sort through `compareTo`, the degraded design reports, the
+cross-check, the quint / SMT design use cases, the refinement plan and
+solver facts tell instead of assembling strings, and the serializer
+reconstitutes. `SiblingVerdictFinding` carries `FrRefs` and lowered ids
+(`LoweredId[]`) instead of raw arrays, so the remap pass maps through
+`asString()` at the one boundary where the lowering index is still
+keyed by strings. Three primitive-field descriptors leave the ledger
+(104 remain); DATA_MODEL_DEBT is untouched at 98 of 122.

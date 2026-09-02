@@ -11,7 +11,7 @@
 // 旧 deep-spec-design-lib.ts の lowerUnit からの逐語移植（Json 組み立ては
 // アダプタの serializer が担い、ここは型付き lowering を返す）。
 
-import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
+import { TargetIds, IdOrder, TargetId } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "./design-machines.ts";
 import type { DesignMachine } from "./design-machine.ts";
@@ -114,7 +114,7 @@ export class LoweredUnit {
     const shadowFindings: { finding: DesignFinding; subsumer: string; subsumed: string }[] = [];
 
     for (const f of doc.findings) {
-      const mapped = f.targets.map(mapTarget);
+      const mapped = f.targets.map((t) => mapTarget(t.asString()));
       const frRefs = f.frRefs;
       const detail = remapDetail(f.detail);
       let witness = f.witness;
@@ -130,7 +130,7 @@ export class LoweredUnit {
         findings.push(
           DesignFinding.reconstitute({
             kind: "unreachable",
-            frRefs: FrRefs.of(frRefs),
+            frRefs,
             targets: TargetIds.reconstitute([design]),
             witness,
             unit: u.name(),
@@ -145,7 +145,7 @@ export class LoweredUnit {
         shadowFindings.push({
           finding: DesignFinding.reconstitute({
             kind: "redundancy",
-            frRefs: FrRefs.of(frRefs),
+            frRefs,
             targets: TargetIds.reconstitute(IdOrder.sortedUnique([pair[0], pair[1]], IdOrder.compare)),
             witness,
             unit: u.name(),
@@ -169,7 +169,7 @@ export class LoweredUnit {
             if (!waived.has(t)) {
               waived.add(t);
               skipped.push({
-                target: t,
+                target: TargetId.reconstitute(t),
                 reason: "waived",
                 unit: u.name(),
                 detail: `machine ${first.id().asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
@@ -179,7 +179,7 @@ export class LoweredUnit {
           continue;
         }
       }
-      findings.push(DesignFinding.reconstitute({ kind: f.kind, frRefs: FrRefs.of(frRefs), targets: TargetIds.reconstitute(targets), witness, unit: u.name(), detail }));
+      findings.push(DesignFinding.reconstitute({ kind: f.kind, frRefs, targets: TargetIds.reconstitute(targets), witness, unit: u.name(), detail }));
     }
 
     // shadow の後段：死んだルール/遷移は既に unreachable——その空虚な包摂は何も
@@ -214,7 +214,7 @@ export class LoweredUnit {
       const key = `${design}|${s.reason}`;
       if (seenSkip.has(key)) continue;
       seenSkip.add(key);
-      const out: DesignSkipped = { target: design, reason: s.reason, unit: u.name() };
+      const out: DesignSkipped = { target: TargetId.reconstitute(design), reason: s.reason, unit: u.name() };
       if (typeof s.detail === "string") out.detail = remapDetail(s.detail);
       skipped.push(out);
     }

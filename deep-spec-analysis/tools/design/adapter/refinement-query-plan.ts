@@ -1,3 +1,4 @@
+import { TargetId } from "../../kernel/domain/index.ts";
 import type { RefinementAttr } from "./refinement-attr.ts";
 // refinement の SMT-LIB コンパイラ — v1（requirements/adapter/smt-plan）と
 // 統一しない**明示的な第 2 コンパイラ**（移行計画のアーキテクチャ判断 Q1 /
@@ -237,7 +238,7 @@ export function buildRefinementQueries(
   const pending = new Map<string, RefinementProbe>();
   const compileSkips: DesignSkipped[] = [];
   const alphaFail = (target: string, err: unknown): void => {
-    compileSkips.push({ target, reason: "compile-error", unit: u.name(), detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` });
+    compileSkips.push({ target: TargetId.reconstitute(target), reason: "compile-error", unit: u.name(), detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` });
   };
 
   const alphaCtx = plan.alphaContext();
