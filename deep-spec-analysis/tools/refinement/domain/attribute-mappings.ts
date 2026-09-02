@@ -1,5 +1,6 @@
 import type { Expression } from "../../kernel/domain/index.ts";
-import { AlphaError } from "./alpha-error.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import { RefinementMapDefect } from "./refinement-map-defect.ts";
 import type { AttributeMapping } from "./attribute-mapping.ts";
 
 // attrMap の写像のファーストクラスコレクション——要素は要件属性パスで識別される
@@ -42,23 +43,32 @@ export class AttributeMappings {
 
   // 要件の式を承認済み写像で設計の式へ書き換える。enum 属性の比較は「その要件値へ
   // 写る設計値」の選言へ展開し、post（primed）文脈では代入式の全参照を prime する。
-  substitute(e: Expression, post: boolean): Expression {
+  substitute(e: Expression, post: boolean): Result<Expression, RefinementMapDefect> {
     if (e.op === "eq" || e.op === "ne") {
       const [a, b] = e.args ?? [];
       const refArg = a?.op === "ref" ? a : b?.op === "ref" ? b : null;
       const enumArg = a?.op === "enum" ? a : b?.op === "enum" ? b : null;
       if (refArg && enumArg && typeof refArg.path === "string" && typeof enumArg.value === "string") {
         const expanded = this.byRequirementPath(refArg.path)?.expandComparison(e.op, enumArg.value, post || refArg.prime === true);
-        if (expanded !== null && expanded !== undefined) return expanded;
+        if (expanded !== null && expanded !== undefined) return ok(expanded);
       }
     }
     if (e.op === "ref" && typeof e.path === "string") {
       const mapping = this.byRequirementPath(e.path);
-      if (!mapping) throw new AlphaError(`requirements attribute "${e.path}" is not covered by the attrMap`);
+      if (!mapping) return err(RefinementMapDefect.uncoveredAttribute(e.path));
       return mapping.substituteForReference(e.path, post || e.prime === true);
     }
-    if (e.args) return { ...e, args: e.args.map((a) => this.substitute(a, post)) };
-    return e;
+    if (e.args) {
+      // 引数は宣言順に書き換え、最初の欠陥で止まる（旧 throw の順序と同じ）。
+      const args: Expression[] = [];
+      for (const a of e.args) {
+        const sub = this.substitute(a, post);
+        if (!sub.ok) return sub;
+        args.push(sub.value);
+      }
+      return ok({ ...e, args });
+    }
+    return ok(e);
   }
 
   // alpha(a)(pre) == alpha(a)(post) — 抽象フレーム（Q2）に使う等式。写像が無ければ null。

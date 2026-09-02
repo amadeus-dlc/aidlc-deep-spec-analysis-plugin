@@ -2018,3 +2018,17 @@ abstract frame equality (`equalityFor`). `AttributeMapping` is the keyed
 element and therefore a local entity (`isFor`); the plan hands the
 compiler `attributeMappings()` instead of a context. One indexed field
 leaves the field ledger (ceiling 82); goldens stay byte-identical.
+
+Wave 35 (same PR): ruling 15 lands — `AlphaError` becomes the domain
+error type `RefinementMapDefect`, named in the ubiquitous language and
+carried as a `Result` value. Its four variants are the map's defects the
+authoring guide already speaks of: an uncovered attribute, an enum
+mapping used outside an equality, an unspecified mapping, and an effect
+that is not a conjunction of primed assignments. Each variant renders
+its frozen message and knows its public face (`asCompileErrorSkip`, the
+`compile-error` skip with the frozen wording). `AttributeMappings.
+substitute`, `AttributeMapping.substituteForReference` and
+`EffectAssignments.ofEffect` return the defect instead of throwing; the
+plan, the event catalogue and the query builder branch on `ok`, and the
+builder keeps its try/catch only for the SMT compiler's own failures.
+Goldens stay byte-identical.

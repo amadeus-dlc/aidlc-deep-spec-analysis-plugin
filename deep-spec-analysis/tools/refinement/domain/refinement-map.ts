@@ -3,7 +3,7 @@
 // （オーナー裁定 7 — expr/enumMap の Option 対を型で畳む）。"unspecified" は
 // 契約4 スキーマ検証を通った文書では到達しない素通し形（旧実装は expr も
 // enumMap も無い entry を byReq へ登録だけしていた——挙動保存のため表現を残す。
-// alpha 到達時は AlphaError）。ユニットの帰属は DesignUnitId（集約 ID）で運び、
+// alpha 到達時は RefinementMapDefect）。ユニットの帰属は DesignUnitId（集約 ID）で運び、
 // 集まりはファーストクラスコレクションで運ぶ。
 
 import { DesignUnitId } from "../../design/domain/index.ts";

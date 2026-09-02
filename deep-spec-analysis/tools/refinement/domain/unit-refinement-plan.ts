@@ -291,11 +291,8 @@ export class UnitRefinementPlan {
           // alpha 置換の失敗を Quint 文書にも記録する（凍結解除 #38 項 1——
           // 旧挙動は義務が痕跡なく落ち、SMT 側だけが報告していた）。文言は
           // SMT 側の compile-error skip と逐語で対。
-          try {
-            this.#mappings.substitute(assertion, false);
-          } catch (err) {
-            skipped.push(DesignSkipped.reconstitute({ target: TargetId.reconstitute(rid), reason: "compile-error", unit: unitName, detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` }));
-          }
+          const substituted = this.#mappings.substitute(assertion, false);
+          if (!substituted.ok) skipped.push(substituted.error.asCompileErrorSkip(TargetId.reconstitute(rid), unitName));
         }
       }
     }
@@ -317,11 +314,9 @@ export class UnitRefinementPlan {
       if (!this.#obligationStatus.get(ob.id().asString())?.isCheckable()) continue;
       const assertion = ob.assertion();
       if (!ob.isInvariantLike() || assertion === undefined) continue;
-      try {
-        out.push(RefinementQuintInvariant.of(ob.id(), ob.frRefs(), this.#mappings.substitute(assertion, false)));
-      } catch {
-        // quintStatusSkips が compile-error skip として記録する（SMT 側と対）。
-      }
+      const substituted = this.#mappings.substitute(assertion, false);
+      // 欠陥は quintStatusSkips が compile-error skip として記録する（SMT 側と対）。
+      if (substituted.ok) out.push(RefinementQuintInvariant.of(ob.id(), ob.frRefs(), substituted.value));
     }
     return RefinementQuintInvariants.of(out);
   }

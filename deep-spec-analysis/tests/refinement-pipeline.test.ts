@@ -45,7 +45,7 @@ import {
 } from "../tools/design/adapter/index.ts";
 import { VerifyDesignQuintUseCase, VerifyDesignSmtUseCase } from "../tools/design/usecase/index.ts";
 import {
-  AlphaError,
+  RefinementMapDefect,
   AttributeMappings,
   DesignEventCatalog,
   EffectAssignments,
@@ -366,6 +366,12 @@ describe("attribute mapping totality", () => {
 });
 
 describe("alpha substitution", () => {
+  // 置換は Result で返る（裁定 15）——成功値を剥ぐ helper。
+  const substituted = (e: Expression, post: boolean): Expression => {
+    const r = ctx.substitute(e, post);
+    if (!r.ok) throw new Error(r.error.message());
+    return r.value;
+  };
   const ctx = AttributeMappings.of([
     wrapMapping(exprMapping("R.flag", "D.flag")),
     wrapMapping(enumMapping("R.state", "D.phase", { draft: "open", review: "open", done: "closed" })),
@@ -378,7 +384,7 @@ describe("alpha substitution", () => {
   });
 
   test("enum eq expands to the disjunction of design values mapping to the literal", () => {
-    const out = ctx.substitute({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "open" }] }, false);
+    const out = substituted({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "open" }] }, false);
     expect(out).toEqual({
       op: "or",
       args: [
@@ -386,25 +392,33 @@ describe("alpha substitution", () => {
         { op: "eq", args: [{ op: "ref", path: "D.phase" }, { op: "enum", value: "review" }] },
       ],
     });
-    const single = ctx.substitute({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "closed" }] }, false);
+    const single = substituted({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "closed" }] }, false);
     expect(single).toEqual({ op: "eq", args: [{ op: "ref", path: "D.phase" }, { op: "enum", value: "done" }] });
-    const none = ctx.substitute({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "ghost" }] }, false);
+    const none = substituted({ op: "eq", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "ghost" }] }, false);
     expect(none).toEqual({ op: "bool", value: false });
-    const ne = ctx.substitute({ op: "ne", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "closed" }] }, false);
+    const ne = substituted({ op: "ne", args: [{ op: "ref", path: "R.state" }, { op: "enum", value: "closed" }] }, false);
     expect(ne.op).toBe("not");
-    const primed = ctx.substitute({ op: "eq", args: [{ op: "ref", path: "R.state", prime: true }, { op: "enum", value: "closed" }] }, false);
+    const primed = substituted({ op: "eq", args: [{ op: "ref", path: "R.state", prime: true }, { op: "enum", value: "closed" }] }, false);
     expect(primed).toEqual({ op: "eq", args: [{ op: "ref", path: "D.phase", prime: true }, { op: "enum", value: "done" }] });
   });
 
   test("expression mappings substitute (primed in post context) and errors are frozen", () => {
-    expect(ctx.substitute({ op: "ref", path: "R.flag" }, false)).toEqual({ op: "ref", path: "D.flag" });
-    expect(ctx.substitute({ op: "ref", path: "R.flag" }, true)).toEqual({ op: "ref", path: "D.flag", prime: true });
-    expect(ctx.substitute({ op: "and", args: [{ op: "ref", path: "R.flag" }, { op: "bool", value: true }] }, false).args?.[0]).toEqual({ op: "ref", path: "D.flag" });
-    expect(() => ctx.substitute({ op: "ref", path: "R.missing" }, false)).toThrow(AlphaError);
-    expect(() => ctx.substitute({ op: "ref", path: "R.state" }, false))
-      .toThrow('enum-mapped requirements attribute "R.state" is only legal inside eq/ne against an enum literal');
-    expect(() => ctx.substitute({ op: "ref", path: "R.none" }, false))
-      .toThrow('attrMap entry for "R.none" declares neither an expression nor enum cases');
+    expect(substituted({ op: "ref", path: "R.flag" }, false)).toEqual({ op: "ref", path: "D.flag" });
+    expect(substituted({ op: "ref", path: "R.flag" }, true)).toEqual({ op: "ref", path: "D.flag", prime: true });
+    expect(substituted({ op: "and", args: [{ op: "ref", path: "R.flag" }, { op: "bool", value: true }] }, false).args?.[0]).toEqual({ op: "ref", path: "D.flag" });
+    const defectOf = (e: Expression): RefinementMapDefect => {
+      const r = ctx.substitute(e, false);
+      if (r.ok) throw new Error("expected a map defect");
+      return r.error;
+    };
+    expect(defectOf({ op: "ref", path: "R.missing" }).message()).toBe('requirements attribute "R.missing" is not covered by the attrMap');
+    expect(defectOf({ op: "ref", path: "R.state" }).message()).toBe('enum-mapped requirements attribute "R.state" is only legal inside eq/ne against an enum literal');
+    expect(defectOf({ op: "ref", path: "R.none" }).message()).toBe('attrMap entry for "R.none" declares neither an expression nor enum cases');
+    // 引数の欠陥は宣言順の最初のものが返る（旧 throw の順序）。
+    expect(defectOf({ op: "and", args: [{ op: "ref", path: "R.flag" }, { op: "ref", path: "R.none" }, { op: "ref", path: "R.missing" }] }).message()).toBe('attrMap entry for "R.none" declares neither an expression nor enum cases');
+    const skip = defectOf({ op: "ref", path: "R.missing" }).asCompileErrorSkip(TargetId.reconstitute("OB-1"), "u1");
+    expect(skip.reason()).toBe("compile-error");
+    expect(skip.detail()).toBe('alpha substitution failed: requirements attribute "R.missing" is not covered by the attrMap');
   });
 
   test("alphaEquality builds frame equalities: expression eq, enum class-iff, null for unmapped/unspecified", () => {
@@ -608,8 +622,10 @@ describe("event catalog and effect assignments", () => {
     expect(catalog.eventOf("DOB-2")).toBe(null);
     expect(catalog.eventOf("DOB-3")).toBe(null);
 
-    expect(() => EffectAssignments.ofEffect({ op: "or", args: [] })).toThrow("requirements effect is not a conjunction of primed assignments");
-    expect(() => EffectAssignments.ofEffect({ op: "eq", args: [{ op: "ref", path: "x" }, { op: "int", value: 1 }] })).toThrow(AlphaError);
+    const orEffect = EffectAssignments.ofEffect({ op: "or", args: [] });
+    expect(!orEffect.ok && orEffect.error.message()).toBe("requirements effect is not a conjunction of primed assignments");
+    const unprimed = EffectAssignments.ofEffect({ op: "eq", args: [{ op: "ref", path: "x" }, { op: "int", value: 1 }] });
+    expect(unprimed.ok).toBe(false);
   });
 });
 
