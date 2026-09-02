@@ -50,6 +50,8 @@ import {
   QuintMachineComponent,
   QuintMachineRunVerdict,
   QuintRuns,
+  QuintScenarioVerdict,
+  QuintTemporalVerdict,
   TraceStates,
   VerificationReport,
   VerificationReportId,
@@ -225,7 +227,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     const runs = QuintRuns.of({
       machine: QuintMachineRunVerdict.clean(),
       temporals: new Map(),
-      scenarios: new Map([["SC-1", { kind: "evaluated", violated: false }]]),
+      scenarios: new Map([["SC-1", QuintScenarioVerdict.evaluated(false)]]),
     });
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok(m)),
@@ -315,9 +317,9 @@ describe("quint verdict interpretation", () => {
       .toBe("leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them");
     const guarded = run({}, "simulation", [{ target: "OB-3", reason: "compile-error" }]);
     expect(guarded.skipped.toArray().filter((s) => s.target().asString() === "OB-3").length).toBe(1);
-    const timeout = run({ temporals: new Map([["OB-3", { kind: "timeout" }]]) }, "bounded");
+    const timeout = run({ temporals: new Map([["OB-3", QuintTemporalVerdict.timeout()]]) }, "bounded");
     expect(timeout.skipped.toArray().find((s) => s.target().asString() === "OB-3")?.detail()).toBe("temporal check exceeded its budget");
-    const violated = run({ temporals: new Map([["OB-3", { kind: "violation", trace: TraceStates.of([{ "T.ok": false }]) }]]) }, "bounded");
+    const violated = run({ temporals: new Map([["OB-3", QuintTemporalVerdict.violation(TraceStates.of([{ "T.ok": false }]))]]) }, "bounded");
     expect(plainFindings([violated.findings.toArray()[0]])[0]).toEqual({
       kind: "conflict",
       frRefs: (["FR-3"]),
@@ -325,7 +327,7 @@ describe("quint verdict interpretation", () => {
       witness: { trace: [{ "T.ok": false }] },
       detail: 'Temporal obligation OB-3 (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.',
     });
-    const clean = run({ temporals: new Map([["OB-3", { kind: "clean" }]]) }, "bounded");
+    const clean = run({ temporals: new Map([["OB-3", QuintTemporalVerdict.clean()]]) }, "bounded");
     expect([...clean.findings]).toEqual([]);
     expect([...run({}, "bounded").findings]).toEqual([]);
   });
@@ -342,12 +344,12 @@ describe("quint verdict interpretation", () => {
     const unbound = unboundFacts.interpret(machineModel, VerificationSkips.of([]), "simulation", QuintRuns.of(EMPTY_RUNS));
     expect(unbound.skipped.toArray().find((s) => s.target().asString() === "SC-1")?.detail())
       .toBe("quint scenario evaluation requires bindings for every declared attribute");
-    const timeout = run({ scenarios: new Map([["SC-1", { kind: "timeout" }]]) });
+    const timeout = run({ scenarios: new Map([["SC-1", QuintScenarioVerdict.timeout()]]) });
     expect(timeout.skipped.toArray().find((s) => s.target().asString() === "SC-1")?.detail()).toBe("scenario evaluation exceeded its budget");
-    const failed = run({ scenarios: new Map([["SC-1", { kind: "run-failed", outputTail: "x" }]]) });
+    const failed = run({ scenarios: new Map([["SC-1", QuintScenarioVerdict.runFailed("x")]]) });
     expect(failed.skipped.toArray().find((s) => s.target().asString() === "SC-1")?.detail()).toBe("quint run failed unexpectedly: x");
 
-    const acceptViolated = run({ scenarios: new Map([["SC-1", { kind: "evaluated", violated: true }]]) });
+    const acceptViolated = run({ scenarios: new Map([["SC-1", QuintScenarioVerdict.evaluated(true)]]) });
     expect(plainFindings([...acceptViolated.findings])).toEqual([{
       kind: "scenario-violation",
       frRefs: (["FR-1"]),
@@ -355,7 +357,7 @@ describe("quint verdict interpretation", () => {
       witness: { model: { "T.ok": false } },
       detail: "Accept scenario SC-1 describes a state the obligations rule out — the requirements reject an example that should be accepted.",
     }]);
-    const rejectAccepted = run({ scenarios: new Map([["SC-2", { kind: "evaluated", violated: false }]]) });
+    const rejectAccepted = run({ scenarios: new Map([["SC-2", QuintScenarioVerdict.evaluated(false)]]) });
     expect(plainFindings([...rejectAccepted.findings])).toEqual([{
       kind: "scenario-violation",
       frRefs: (["FR-2"]),
@@ -363,8 +365,8 @@ describe("quint verdict interpretation", () => {
       witness: { model: { "T.ok": true } },
       detail: "Reject scenario SC-2 is accepted by every obligation — the requirements do not exclude an example that should be rejected.",
     }]);
-    const quietAccept = run({ scenarios: new Map([["SC-1", { kind: "evaluated", violated: false }]]) });
-    const quietReject = run({ scenarios: new Map([["SC-2", { kind: "evaluated", violated: true }]]) });
+    const quietAccept = run({ scenarios: new Map([["SC-1", QuintScenarioVerdict.evaluated(false)]]) });
+    const quietReject = run({ scenarios: new Map([["SC-2", QuintScenarioVerdict.evaluated(true)]]) });
     expect([...quietAccept.findings, ...quietReject.findings]).toEqual([]);
   });
 });

@@ -451,8 +451,6 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "requirements/domain/background-assumption.ts",
   "requirements/domain/decoded-value.ts",
   "requirements/domain/fr-ref-claim.ts",
-  "requirements/domain/quint-scenario-verdict.ts",
-  "requirements/domain/quint-temporal-verdict.ts",
   "requirements/domain/smt-event-pair-probe.ts",
   "requirements/domain/trace-state.ts",
   "requirements/domain/verification-witness.ts",

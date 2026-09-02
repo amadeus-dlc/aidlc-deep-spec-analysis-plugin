@@ -1,7 +1,7 @@
 // requirements/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
 
 import { describe, expect, test } from "bun:test";
-import { FrRefs, TargetIds, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
+import { FrRefs, TargetId, TargetIds, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
 import {
   BackgroundAssumptionId,
   IrBackgroundDecl,
@@ -19,6 +19,8 @@ import {
   IrEntityName,
   IrTemporalDecl,
   VerificationSkipped,
+  QuintScenarioVerdict,
+  QuintTemporalVerdict,
 } from "../tools/requirements/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
@@ -262,5 +264,34 @@ describe("ir entity and temporal decls (well-formedness materials own their judg
     const none: unknown[] = [];
     IrTemporalDecl.reconstitute({}).inspectExpressions((expression) => none.push(expression));
     expect(none).toEqual([]);
+  });
+});
+
+describe("quint temporal and scenario verdicts", () => {
+  test("a temporal timeout skips its obligation with the frozen wording; a violation carries its trace; clean stays silent", () => {
+    const target = TargetId.reconstitute("OB-3");
+    const timeout = QuintTemporalVerdict.timeout();
+    expect(timeout.skipFor(target)?.reason()).toBe("timeout");
+    expect(timeout.skipFor(target)?.detail()).toBe("temporal check exceeded its budget");
+    expect(timeout.isViolation()).toBe(false);
+    expect(timeout.witness()).toEqual({ model: {} });
+    const violation = QuintTemporalVerdict.violation(TraceStates.of([{ "T.ok": false }]));
+    expect(violation.skipFor(target)).toBeNull();
+    expect(violation.isViolation()).toBe(true);
+    expect(violation.witness()).toEqual({ trace: [{ "T.ok": false }] });
+    expect(QuintTemporalVerdict.clean().skipFor(target)).toBeNull();
+    expect(QuintTemporalVerdict.clean().isViolation()).toBe(false);
+  });
+
+  test("a scenario timeout or failed run skips with the frozen wording; only an evaluated verdict can be violated", () => {
+    const target = TargetId.reconstitute("SC-1");
+    expect(QuintScenarioVerdict.timeout().skipFor(target)?.detail()).toBe("scenario evaluation exceeded its budget");
+    const failed = QuintScenarioVerdict.runFailed("boom");
+    expect(failed.skipFor(target)?.reason()).toBe("unavailable");
+    expect(failed.skipFor(target)?.detail()).toBe("quint run failed unexpectedly: boom");
+    expect(failed.isViolated()).toBe(false);
+    expect(QuintScenarioVerdict.evaluated(true).skipFor(target)).toBeNull();
+    expect(QuintScenarioVerdict.evaluated(true).isViolated()).toBe(true);
+    expect(QuintScenarioVerdict.evaluated(false).isViolated()).toBe(false);
   });
 });

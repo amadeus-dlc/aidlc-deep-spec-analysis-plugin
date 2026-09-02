@@ -1521,3 +1521,13 @@ refinement パス、lowered 文書のシリアライザは再構成しアクセ�
 される v1 文書はバイト同一。台帳から 4 エントリを回収し、残債は 122 中 45。
 `PRIMITIVE_FIELD_DEBT` は 88 へ（入れ子のレコード型の中にあった記述子 2 件が
 形の変化で消える）。
+
+波 21（同 PR）: quint の時相判定とシナリオ判定が機械判定に並ぶ。
+`QuintTemporalVerdict`（timeout／violation／clean）と `QuintScenarioVerdict`
+（timeout／run-failed／evaluated）が名前つきファクトリを持つ命令できる抽象
+データ型になり、それぞれ解釈が kind 分岐で組み立てていた skip（`skipFor`——
+凍結の budget 文言、CLI 出力尾を逐語で載せる実行失敗文言）と判定面
+（`isViolation` とトレースの witness、評価済みのときだけ真になる
+`isViolated`）を所有する。quint アダプタはファクトリで構築し、
+`QuintMachineFacts.interpret` は `kind` で分岐する代わりに命じる。台帳から
+2 エントリを回収し、残債は 122 中 43。

@@ -9,10 +9,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { QuintMachineRunVerdict, QuintRuns, TraceStates, VerificationSkips } from "../domain/index.ts";
+import { QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationSkips } from "../domain/index.ts";
 import type {
-  QuintScenarioVerdict,
-  QuintTemporalVerdict,
   RequirementsModel,
 } from "../domain/index.ts";
 import type { QuintCheckResult, QuintClient } from "../usecase/index.ts";
@@ -174,11 +172,11 @@ export class QuintClientImpl implements QuintClient {
         work,
       );
       if (run.timedOut) {
-        out.set(obId, { kind: "timeout" });
+        out.set(obId, QuintTemporalVerdict.timeout());
       } else if (run.itf) {
-        out.set(obId, { kind: "violation", trace: TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)) });
+        out.set(obId, QuintTemporalVerdict.violation(TraceStates.of(decodeItfTrace(run.itf, machine.varToPath))));
       } else {
-        out.set(obId, { kind: "clean" });
+        out.set(obId, QuintTemporalVerdict.clean());
       }
     }
     return out;
@@ -211,11 +209,11 @@ export class QuintClientImpl implements QuintClient {
         work,
       );
       if (run.timedOut) {
-        out.set(scId, { kind: "timeout" });
+        out.set(scId, QuintScenarioVerdict.timeout());
       } else if (!run.itf && `${run.stdout}${run.stderr}`.includes("error")) {
-        out.set(scId, { kind: "run-failed", outputTail: this.#outputTail(run) });
+        out.set(scId, QuintScenarioVerdict.runFailed(this.#outputTail(run)));
       } else {
-        out.set(scId, { kind: "evaluated", violated: run.itf !== null && itfStatus(run.itf) === "violation" });
+        out.set(scId, QuintScenarioVerdict.evaluated(run.itf !== null && itfStatus(run.itf) === "violation"));
       }
     }
     return out;

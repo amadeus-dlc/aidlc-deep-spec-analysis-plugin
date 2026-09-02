@@ -116,14 +116,15 @@ export class QuintMachineFacts {
       }
       const r = runs.temporalOf(ob.id());
       if (!r) continue;
-      if (r.kind === "timeout") {
-        skipped.push(VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "temporal check exceeded its budget" }));
-      } else if (r.kind === "violation") {
+      const skip = r.skipFor(target);
+        if (skip !== null) {
+        skipped.push(skip);
+      } else if (r.isViolation()) {
         findings.push(VerificationFinding.reconstitute({
           kind: "conflict",
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
-          witness: { trace: r.trace.toArray() },
+          witness: r.witness(),
           detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`,
         }));
       }
@@ -146,19 +147,14 @@ export class QuintMachineFacts {
       }
       const r = runs.scenarioOf(sc.id());
       if (!r) continue;
-      if (r.kind === "timeout" || r.kind === "run-failed") {
-        skipped.push(VerificationSkipped.reconstitute({
-          target,
-          reason: r.kind === "timeout" ? "timeout" : "unavailable",
-          detail: r.kind === "timeout"
-            ? "scenario evaluation exceeded its budget"
-            : `quint run failed unexpectedly: ${r.outputTail}`,
-        }));
+      const skip = r.skipFor(target);
+      if (skip !== null) {
+        skipped.push(skip);
         continue;
       }
       const state: TraceState & { [path: string]: boolean | number | string } = {};
       for (const [path, value] of sc.bindingEntriesCanonically()) state[path] = value;
-      if (sc.isAccept() && r.violated) {
+      if (sc.isAccept() && r.isViolated()) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
         const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
         findings.push(VerificationFinding.reconstitute({
@@ -169,7 +165,7 @@ export class QuintMachineFacts {
           detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out — the requirements reject an example that should be accepted.`,
         }));
       }
-      if (sc.isReject() && !r.violated) {
+      if (sc.isReject() && !r.isViolated()) {
         findings.push(VerificationFinding.reconstitute({
           kind: "scenario-violation",
           frRefs: model.frRefsOf(TargetIds.of([target])),
