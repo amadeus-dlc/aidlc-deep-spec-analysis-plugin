@@ -1435,3 +1435,14 @@ constructor と `reconstitute` の門を持つ命令できる class になり、
 construction ディレクトリ欠落の判定を所有する（`lacksConstructionDirectory`）。
 判事は凍結文言とその順序だけを持ち、アダプタとテストは再構成する。台帳から
 4 エントリを回収し、残債は 122 中 94。
+
+波 14（同 PR）: 宣言の形をした最後のデータモデルが落ちる。`IrEntityDecl`
+（requirements）は design の双子と同じく属性を座標と重複フラグつきで訪ね、
+モデルの well-formedness 判事は `name`／`attributes` を読む代わりに命じる。
+`IrTemporalDecl` は `IrObligationDecl.inspectExpressions` がフィールドを
+読んで綴っていた assert → from → to の式巡回（prime 禁止）を所有する。
+refcheck の `UnitDecl` は CD-3 の辺の選別（`declaredDependencies`: 値順の
+depends_on 名、未宣言の辺は units-generation の問題として落とす）を所有し、
+契約材料はフィルタする代わりに命じられた列を回る。アダプタとテストは
+再構成する。台帳から 3 エントリを回収し、残債は 122 中 91——`*-decl.ts`
+は台帳に残っていない。

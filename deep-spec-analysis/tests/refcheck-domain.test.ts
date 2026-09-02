@@ -3,7 +3,9 @@
 
 import { describe, expect, test } from "bun:test";
 import { ContentHash, FrRefs, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
-import { CATALOG_VERSION, type Finding, type Skipped, Findings, InputAnchors, Skips, WitnessRefs } from "../tools/refcheck/domain/index.ts";
+import { CATALOG_VERSION, type Finding, type Skipped, Findings, InputAnchors, Skips, WitnessRefs,
+  UnitDecl,
+} from "../tools/refcheck/domain/index.ts";
 
 function finding(kind: string, targets: string[], detail: string): Finding {
   return { kind, frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(targets), witness: { refs: WitnessRefs.of([]) }, detail };
@@ -333,11 +335,14 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
   });
 
   test("UnitDecls and SpecBlockAssessments hold declaration and assessment knowledge", () => {
-    const decl = { name: UnitName.reconstitute("b"), dependsOn: UnitNames.reconstitute(["a"]) };
-    const decls = UnitDecls.of([]).add(decl).add({ name: UnitName.reconstitute("a"), dependsOn: UnitNames.reconstitute([]) });
+    const decl = UnitDecl.reconstitute({ name: UnitName.reconstitute("b"), dependsOn: UnitNames.reconstitute(["a", "ghost"]) });
+    const decls = UnitDecls.of([]).add(decl).add(UnitDecl.reconstitute({ name: UnitName.reconstitute("a"), dependsOn: UnitNames.reconstitute([]) }));
+    // 宣言済みの依存先だけを値順で（未宣言 "ghost" は落ちる）。
+    expect(decl.declaredDependencies(decls).map((d) => d.asString())).toEqual(["a"]);
+    expect(decl.dependsOn().toArray().length).toBe(2);
     expect(decls.declares("b")).toBe(true);
     expect(decls.declares("z")).toBe(false);
-    expect([...decls.sortedByName()].map((d) => d.name.asString())).toEqual(["a", "b"]);
+    expect([...decls.sortedByName()].map((d) => d.name().asString())).toEqual(["a", "b"]);
     expect(decls.names().declares("a")).toBe(true);
     expect(decls.toArray().length).toBe(2);
     const block = { index: BlockIndex.reconstitute(1), line: LineNumber.reconstitute(1), issue: null };

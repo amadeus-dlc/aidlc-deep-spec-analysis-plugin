@@ -27,8 +27,6 @@ export class IrObligationDecl {
     if (this.#assert !== undefined) visitor(this.#assert, false);
     if (this.#guard !== undefined) visitor(this.#guard, false);
     if (this.#effect !== undefined) visitor(this.#effect, true);
-    if (this.#temporal?.assert !== undefined) visitor(this.#temporal.assert, false);
-    if (this.#temporal?.from !== undefined) visitor(this.#temporal.from, false);
-    if (this.#temporal?.to !== undefined) visitor(this.#temporal.to, false);
+    this.#temporal?.inspectExpressions(visitor);
   }
 }

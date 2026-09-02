@@ -40,7 +40,7 @@ export { type ContractsTableOutcome } from "./contracts-table-outcome.ts";
 export { type DeclaredUnitsOutcome } from "./declared-units-outcome.ts";
 export { type SpecBlockAssessment } from "./spec-block-assessment.ts";
 export { SpecBlockAssessments } from "./spec-block-assessments.ts";
-export { type UnitDecl } from "./unit-decl.ts";
+export { UnitDecl } from "./unit-decl.ts";
 export { UnitDecls } from "./unit-decls.ts";
 export { CONTRACT_FAMILIES, ContractCheckMaterials } from "./contract-check-materials.ts";
 export { type ContractCheckMaterialsSeed } from "./contract-check-materials-seed.ts";
