@@ -121,7 +121,7 @@ export class VerifyDesignQuintUseCase {
       const run = this.#siblingBackendClient.runLowered("quint", u, lowered, mainRemaining);
       if (run.exit === 127) {
         const reason =
-          (run.doc?.kind === "unavailable" ? run.doc.reason : null) ?? "quint CLI could not be executed by the lowered v1 backend";
+          run.doc?.unavailableReason() ?? "quint CLI could not be executed by the lowered v1 backend";
         const saved = this.#persist(DesignReport.backendUnavailable(id, model, irHash, method ?? "simulation", reason, "quint CLI missing"));
         if (!saved.ok) return { kind: "save-failed", error: saved.error };
         const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
@@ -210,86 +210,93 @@ export class VerifyDesignQuintUseCase {
           for (const t of reqTargets) skipped.push(DesignSkipped.reconstitute({ target: t, reason, unit: u.name(), detail }));
         }
       };
-      if (acq.kind === "absent") {
-        skipAll("absent-input", acq.error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
-      } else if (!acq.map.requirementsIrHash().equals(req.hash())) {
-        skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
-      } else if (!acq.map.designIrHash().equals(irHash)) {
-        skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR — re-author the map");
-      } else {
-        inputs = acq.inputs;
-        for (const u of model.units()) {
-          const unitMap = acq.map.unitMapOf(u.id());
-          if (!unitMap) {
-            for (const t of reqTargets) {
-              skipped.push(DesignSkipped.reconstitute({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
-            }
-            continue;
+      acq.match({
+        absent: (error) => {
+          skipAll("absent-input", error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
+        },
+        loaded: (map, mapArtifact, mapInputs) => {
+          if (!map.requirementsIrHash().equals(req.hash())) {
+            skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
+            return;
           }
-          const plan = UnitRefinementPlan.of(u, unitMap, req, acq.mapArtifact);
-          findings.push(...plan.gaps());
-          skipped.push(...plan.quintStatusSkips(req, u.name()));
-          const extras = plan.quintInvariants(req);
-          if (extras.isEmpty()) continue;
-          const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (this.#clock.now() - started));
-          if (remaining < 3_000) {
+          if (!map.designIrHash().equals(irHash)) {
+            skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR — re-author the map");
+            return;
+          }
+          inputs = mapInputs;
+          for (const u of model.units()) {
+            const unitMap = map.unitMapOf(u.id());
+            if (!unitMap) {
+              for (const t of reqTargets) {
+                skipped.push(DesignSkipped.reconstitute({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
+              }
+              continue;
+            }
+            const plan = UnitRefinementPlan.of(u, unitMap, req, mapArtifact);
+            findings.push(...plan.gaps());
+            skipped.push(...plan.quintStatusSkips(req, u.name()));
+            const extras = plan.quintInvariants(req);
+            if (extras.isEmpty()) continue;
+            const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (this.#clock.now() - started));
+            if (remaining < 3_000) {
+              for (const e of extras) {
+                skipped.push(DesignSkipped.reconstitute({ target: e.reqId.asTargetId(), reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" }));
+              }
+              continue;
+            }
+            const base = LoweredUnit.of(u, { synthetics: false });
+            let refinementObligations = base.obligations();
+            let refinementIndex = base.index();
+            let n = refinementObligations.count();
             for (const e of extras) {
-              skipped.push(DesignSkipped.reconstitute({ target: e.reqId.asTargetId(), reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" }));
+              n += 1;
+              const lowId = LoweredId.reconstitute(`OB-${n}`);
+              refinementObligations = refinementObligations.add(LoweredObligation.reconstitute({ id: lowId, nature: "invariant", frRefs: [...e.frRefs], assert: e.expr }));
+              refinementIndex = refinementIndex.withPassthrough(lowId.asString(), e.reqId.asString());
             }
-            continue;
-          }
-          const base = LoweredUnit.of(u, { synthetics: false });
-          let refinementObligations = base.obligations();
-          let refinementIndex = base.index();
-          let n = refinementObligations.count();
-          for (const e of extras) {
-            n += 1;
-            const lowId = LoweredId.reconstitute(`OB-${n}`);
-            refinementObligations = refinementObligations.add(LoweredObligation.reconstitute({ id: lowId, nature: "invariant", frRefs: [...e.frRefs], assert: e.expr }));
-            refinementIndex = refinementIndex.withPassthrough(lowId.asString(), e.reqId.asString());
-          }
-          const lowered = base.extendedWith(refinementObligations, refinementIndex);
-          const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
-          if (run.exit !== 0 || run.doc === null) {
-            for (const e of extras) {
-              skipped.push(DesignSkipped.reconstitute({ target: e.reqId.asTargetId(), reason: "unavailable", unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
+            const lowered = base.extendedWith(refinementObligations, refinementIndex);
+            const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
+            if (run.exit !== 0 || run.doc === null) {
+              for (const e of extras) {
+                skipped.push(DesignSkipped.reconstitute({ target: e.reqId.asTargetId(), reason: "unavailable", unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
+              }
+              continue;
             }
-            continue;
-          }
-          const remapped = lowered.remapVerdicts(u, run.doc);
-          if (remapped.unavailable !== null) {
-            for (const e of extras) {
-              skipped.push(DesignSkipped.reconstitute({ target: e.reqId.asTargetId(), reason: "unavailable", unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` }));
+            const remapped = lowered.remapVerdicts(u, run.doc);
+            if (remapped.unavailable !== null) {
+              for (const e of extras) {
+                skipped.push(DesignSkipped.reconstitute({ target: e.reqId.asTargetId(), reason: "unavailable", unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` }));
+              }
+              continue;
             }
-            continue;
-          }
-          const reqIdSet = extras.reqIds();
-          let hitExtra = false;
-          let designConflict = false;
-          // conflict 判定の再解釈（要件 id に届くかの判定と昇格文言）は
-          // finding 自身へ命じる（波7）。
-          for (const f of remapped.findings) {
-            if (!f.isConflict()) continue;
-            const violation = f.asRefinementViolation(reqIdSet, u.name());
-            if (violation !== null) {
-              hitExtra = true;
-              findings.push(violation);
-            } else {
-              designConflict = true;
+            const reqIdSet = extras.reqIds();
+            let hitExtra = false;
+            let designConflict = false;
+            // conflict 判定の再解釈（要件 id に届くかの判定と昇格文言）は
+            // finding 自身へ命じる（波7）。
+            for (const f of remapped.findings) {
+              if (!f.isConflict()) continue;
+              const violation = f.asRefinementViolation(reqIdSet, u.name());
+              if (violation !== null) {
+                hitExtra = true;
+                findings.push(violation);
+              } else {
+                designConflict = true;
+              }
             }
-          }
-          if (!hitExtra && designConflict) {
-            for (const e of extras) {
-              skipped.push(DesignSkipped.reconstitute({
-                target: e.reqId.asTargetId(),
-                reason: "capability",
-                unit: u.name(),
-                detail: "the machine reachably violates its own design invariants first (see the design conflict findings) — refinement reachability is masked until those are resolved",
-              }));
+            if (!hitExtra && designConflict) {
+              for (const e of extras) {
+                skipped.push(DesignSkipped.reconstitute({
+                  target: e.reqId.asTargetId(),
+                  reason: "capability",
+                  unit: u.name(),
+                  detail: "the machine reachably violates its own design invariants first (see the design conflict findings) — refinement reachability is masked until those are resolved",
+                }));
+              }
             }
           }
-        }
-      }
+        },
+      });
     }
 
     const finalMethod = method ?? "simulation";

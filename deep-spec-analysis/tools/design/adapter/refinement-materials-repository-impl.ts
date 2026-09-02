@@ -45,7 +45,7 @@ import {
   RefinementRequirements,
   UnmappedTargetRef,
   TransitionRef,
-  type RefinementMapAcquisition,
+  RefinementMapAcquisition,
 } from "../../refinement/domain/index.ts";
 import { DesignUnitId,
   DesignInputAnchor,
@@ -153,12 +153,12 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
 
   #loadMap(recordRoot: string, stageDir: string, modelPath: string): RefinementMapAcquisition {
     const path = join(stageDir, REFINEMENT_MAP_BASENAME);
-    if (!existsSync(path)) return { kind: "absent", error: null };
+    if (!existsSync(path)) return RefinementMapAcquisition.absent(null);
     // join は空文字列を返さないため parse は失敗し得ない（型の網羅のみ）。
     const mapPath = ArtifactPath.parse(path);
-    if (!mapPath.ok) return { kind: "absent", error: "defect: refinement map path derivation produced an empty path" };
+    if (!mapPath.ok) return RefinementMapAcquisition.absent("defect: refinement map path derivation produced an empty path");
     const parsed = parseRefinementMapDocument(new Uint8Array(readFileSync(path)), RefinementMapId.of(mapPath.value), this.#mapSchemaPath);
-    if (parsed.kind === "malformed") return { kind: "absent", error: parsed.error };
+    if (parsed.kind === "malformed") return RefinementMapAcquisition.absent(parsed.error);
     const map = parsed.map;
     const reqModelPath = join(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
     const mapArtifact = relArtifact(recordRoot, path);
@@ -167,7 +167,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
       DesignInputAnchor.reconstitute({ artifact: mapArtifact, sha256: ContentHash.ofText(readFileSync(path, "utf-8")) }),
       DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, reqModelPath), sha256: ContentHash.ofText(readFileSync(reqModelPath, "utf-8")) }),
     ];
-    return { kind: "loaded", map, mapArtifact, inputs };
+    return RefinementMapAcquisition.loaded(map, ArtifactPath.reconstitute(mapArtifact), inputs);
   }
 }
 

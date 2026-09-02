@@ -6,25 +6,25 @@ import { FrRefs } from "../../kernel/domain/index.ts";
 // は素通し。skipped は {target:string, reason:string} のみ。
 
 import { type Json, isObject, strArr } from "../../kernel/adapter/index.ts";
-import { LoweredId, SiblingVerdictFindings, SiblingVerdictSkips, SiblingVerdictSkip } from "../domain/index.ts";
-import type { DesignValue, SiblingVerdictDocument, SiblingVerdictFinding } from "../domain/index.ts";
+import { LoweredId, SiblingVerdictFindings, SiblingVerdictSkips, SiblingVerdictSkip, SiblingVerdictDocument, SiblingVerdictFinding } from "../domain/index.ts";
+import type { DesignValue } from "../domain/index.ts";
 
 
 export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
-  if (!isObject(raw)) return { kind: "unreadable" };
+  if (!isObject(raw)) return SiblingVerdictDocument.unreadable();
   if (isObject(raw.unavailable) && typeof raw.unavailable.reason === "string") {
-    return { kind: "unavailable", reason: raw.unavailable.reason, method: typeof raw.method === "string" ? raw.method : null };
+    return SiblingVerdictDocument.unavailable(raw.unavailable.reason, typeof raw.method === "string" ? raw.method : null);
   }
   const findings: SiblingVerdictFinding[] = [];
   for (const f of Array.isArray(raw.findings) ? raw.findings : []) {
     if (!isObject(f) || typeof f.kind !== "string" || !Array.isArray(f.targets)) continue;
-    findings.push({
+    findings.push(SiblingVerdictFinding.reconstitute({
       kind: f.kind,
       frRefs: FrRefs.of(strArr(f.frRefs)),
       targets: f.targets.filter((t): t is string => typeof t === "string").map((t) => LoweredId.reconstitute(t)),
       witness: (f.witness ?? null) as unknown as DesignValue,
       detail: typeof f.detail === "string" ? f.detail : "",
-    });
+    }));
   }
   const skipped: SiblingVerdictSkip[] = [];
   for (const s of Array.isArray(raw.skipped) ? raw.skipped : []) {
@@ -35,10 +35,5 @@ export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
       ...(typeof s.detail === "string" ? { detail: s.detail } : {}),
     }));
   }
-  return {
-    kind: "readable",
-    method: typeof raw.method === "string" ? raw.method : null,
-    findings: SiblingVerdictFindings.of(findings),
-    skipped: SiblingVerdictSkips.of(skipped),
-  };
+  return SiblingVerdictDocument.readable(typeof raw.method === "string" ? raw.method : null, SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
 }

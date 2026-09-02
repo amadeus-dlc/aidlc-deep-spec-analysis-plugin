@@ -48,6 +48,10 @@ import {
   LoweredBackground,
   LoweredOrigin,
   LoweredOriginRef,
+  SiblingVerdictDocument,
+  SiblingVerdictFinding,
+  SiblingVerdictFindings,
+  SiblingVerdictSkips,
 } from "../tools/design/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
@@ -533,5 +537,49 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     expect(shadow.pairRefs().map((r) => r.asString())).toEqual(["TR-1", "TR-2"]);
     expect(plain.pairRefs().map((r) => r.asString())).toEqual(["DOB-1", "DOB-1"]);
     expect(dead.design().asString()).toBe("TR-1");
+  });
+});
+
+describe("sibling verdict document and finding (the backend's answer owns its interpretation)", () => {
+  const finding = SiblingVerdictFinding.reconstitute({
+    kind: "conflict",
+    frRefs: FrRefs.of(["FR-1"]),
+    targets: [LoweredId.reconstitute("OB-1")],
+    witness: { core: ["g_OB_1", 7] },
+    detail: "x",
+  });
+  const readable = SiblingVerdictDocument.readable("exhaustive", SiblingVerdictFindings.of([finding]), SiblingVerdictSkips.of([]));
+
+  test("only an unavailable document reports a reason", () => {
+    expect(SiblingVerdictDocument.unreadable().unavailableReason()).toBe(null);
+    expect(SiblingVerdictDocument.unavailable("z3 missing", null).unavailableReason()).toBe("z3 missing");
+    expect(readable.unavailableReason()).toBe(null);
+  });
+
+  test("match hands each kind its own facts", () => {
+    const describeDoc = (doc: SiblingVerdictDocument): string =>
+      doc.match({
+        unreadable: () => "unreadable",
+        unavailable: (reason, method) => `unavailable:${reason}:${method}`,
+        readable: (method, findings, skipped) => `readable:${method}:${findings.toArray().length}:${skipped.toArray().length}`,
+      });
+    expect(describeDoc(SiblingVerdictDocument.unreadable())).toBe("unreadable");
+    expect(describeDoc(SiblingVerdictDocument.unavailable("boom", "simulation"))).toBe("unavailable:boom:simulation");
+    expect(describeDoc(readable)).toBe("readable:exhaustive:1:0");
+  });
+
+  test("a finding answers its kind and remaps only an unsat-core witness", () => {
+    expect(finding.kind()).toBe("conflict");
+    expect(finding.isKind("conflict")).toBe(true);
+    expect(finding.isKind("gap")).toBe(false);
+    expect(finding.frRefs().toArray()).toEqual(["FR-1"]);
+    expect(finding.targets().map((t) => t.asString())).toEqual(["OB-1"]);
+    expect(finding.detail()).toBe("x");
+    const upper = (core: unknown): string[] => (Array.isArray(core) ? core.map((c) => String(c).toUpperCase()) : []);
+    expect(finding.witnessWithCoreRemapped(upper)).toEqual({ core: ["G_OB_1", "7"] });
+    const model = SiblingVerdictFinding.reconstitute({ kind: "gap", frRefs: FrRefs.of([]), targets: [], witness: { model: { a: 1 } }, detail: "" });
+    expect(model.witnessWithCoreRemapped(upper)).toEqual({ model: { a: 1 } });
+    const bare = SiblingVerdictFinding.reconstitute({ kind: "gap", frRefs: FrRefs.of([]), targets: [], witness: null, detail: "" });
+    expect(bare.witnessWithCoreRemapped(upper)).toBe(null);
   });
 });

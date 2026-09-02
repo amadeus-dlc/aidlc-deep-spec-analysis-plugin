@@ -5,6 +5,7 @@
 // からの逐語移植——自由関数は UnitRefinementPlan.of（構築）と plan 自身の
 // 照会・skip 導出メソッドになった（OOUI 裁定）。
 
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import { FrRefs, TargetIds, IdOrder, TargetId } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignFinding, DesignFindings, DesignSkips } from "../../design/domain/index.ts";
@@ -48,7 +49,7 @@ export class UnitRefinementPlan {
   }
 
   // 旧 planUnitRefinement の逐語移植（構築ファクトリ）。
-  static of(u: DesignUnit, unitMap: RefinementUnitMap, req: RefinementRequirements, mapArtifact: string): UnitRefinementPlan {
+  static of(u: DesignUnit, unitMap: RefinementUnitMap, req: RefinementRequirements, mapArtifact: ArtifactPath): UnitRefinementPlan {
     const gaps: DesignFinding[] = [];
     const gap = (targets: string[], detail: string, frRefs: readonly string[] = []): void => {
       gaps.push(
@@ -56,7 +57,7 @@ export class UnitRefinementPlan {
           kind: "mapping-gap",
           frRefs: FrRefs.of(IdOrder.sortedUnique(frRefs, IdOrder.compare)),
           targets: TargetIds.reconstitute(IdOrder.sortedUnique(targets, IdOrder.compare)),
-          witness: { refs: [{ artifact: mapArtifact, element: `units[${unitMap.unit.asString()}]` }] },
+          witness: { refs: [{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit.asString()}]` }] },
           unit: u.name(),
           detail,
         }),

@@ -1714,3 +1714,17 @@ handed the design transition — the type carries the pair the old union
 left optional. `SiblingVerdictSkip` becomes a class so the verdict remap
 asks it for target, reason and detail. 3 ledger entries reclaimed — the
 ledger holds 40 of 122.
+
+Wave 23 (same PR): the sibling backend's answer and the refinement map's
+acquisition own their interpretation. `SiblingVerdictDocument`
+(unreadable / unavailable / readable) replaces the document union: the
+verdict remap interprets it through `match`, and the two verify use cases
+ask `unavailableReason` instead of reading `kind` and `reason`.
+`SiblingVerdictFinding` becomes a class that answers `isKind` and remaps
+its own unsat-core witness (`witnessWithCoreRemapped`), so the remap no
+longer inspects the witness shape. `RefinementMapAcquisition` (absent /
+loaded) replaces the acquisition union: both use cases interpret it
+through `match`, and the loaded map's artifact travels as an
+`ArtifactPath` instead of a string — one primitive field leaves the
+field ledger. 3 ledger entries reclaimed — the ledger holds 37 of 122;
+the primitive-field ceiling drops to 87.
