@@ -14,7 +14,6 @@ import { type Expression, Expressions } from "../../kernel/domain/index.ts";
 import { type IrAttributeDecl } from "./ir-attribute-decl.ts";
 import { IrBackgroundDecls } from "./ir-background-decls.ts";
 import { IrEntityDecls } from "./ir-entity-decls.ts";
-import type { IrModelDeclSeed } from "./ir-model-decl-seed.ts";
 import { IrObligationDecls } from "./ir-obligation-decls.ts";
 import { IrScenarioDecls } from "./ir-scenario-decls.ts";
 
@@ -41,7 +40,12 @@ export class IrModelDecl {
   readonly #scenarios: IrScenarioDecls;
   readonly #background: IrBackgroundDecls;
 
-  private constructor(seed: IrModelDeclSeed) {
+  private constructor(seed: {
+    readonly entities: IrEntityDecls;
+    readonly obligations: IrObligationDecls;
+    readonly scenarios: IrScenarioDecls;
+    readonly background: IrBackgroundDecls;
+  }) {
     this.#entities = seed.entities;
     this.#obligations = seed.obligations;
     this.#scenarios = seed.scenarios;
@@ -49,7 +53,12 @@ export class IrModelDecl {
   }
 
   // アダプタの寛容パースからの唯一の構築口。
-  static reconstitute(seed: IrModelDeclSeed): IrModelDecl {
+  static reconstitute(seed: {
+    readonly entities: IrEntityDecls;
+    readonly obligations: IrObligationDecls;
+    readonly scenarios: IrScenarioDecls;
+    readonly background: IrBackgroundDecls;
+  }): IrModelDecl {
     return new IrModelDecl(seed);
   }
 

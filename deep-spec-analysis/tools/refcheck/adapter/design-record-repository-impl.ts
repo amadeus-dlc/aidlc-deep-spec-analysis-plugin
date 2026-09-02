@@ -10,18 +10,11 @@ import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { ArtifactPath, ContentHash, RequirementIds } from "../../kernel/domain/index.ts";
-import {
-  findRecordRoot,
-  listSubdirectories,
-  readIfExists,
-  relArtifact,
-  writeFileAtomically,
-} from "../../kernel/adapter/index.ts";
+import { findRecordRoot, listSubdirectories, readIfExists, relArtifact, writeFileAtomically } from "../../kernel/adapter/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
   type DesignRecordId,
   DesignRecord,
-  type DesignRecordSeed,
   type InputAnchor,
   InputAnchors,
   UnitName,
@@ -29,13 +22,7 @@ import {
 import type { DesignRecordRepository } from "../usecase/index.ts";
 import { parseComponentCatalog } from "./component-catalog-parser.ts";
 import { assessSpecBlocks, parseContractsTable, parseDeclaredUnits } from "./contract-summary-parser.ts";
-import {
-  buildSiblingUnitEntities,
-  parseDomainEntitiesDocument,
-  parseEntitiesDocument,
-  parseFunctionalSpecDocument,
-  parseRulesDocument,
-} from "./functional-design-parser.ts";
+import { buildSiblingUnitEntities, parseDomainEntitiesDocument, parseEntitiesDocument, parseFunctionalSpecDocument, parseRulesDocument } from "./functional-design-parser.ts";
 
 export class DesignRecordRepositoryImpl implements DesignRecordRepository {
   findById(id: DesignRecordId): Result<DesignRecord, RepositoryError> {
@@ -56,7 +43,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const rel = (p: string): string => relArtifact(recordRoot, p);
     const input = (p: string, text: string): InputAnchor => ({ artifact: rel(p), sha256: ContentHash.ofText(text) });
 
-    const seed: DesignRecordSeed = {
+    const seed: Parameters<typeof DesignRecord.reconstitute>[0] = {
       id,
       target: input(artifactPath, md),
       sourceDocument: sourceBytes,
@@ -80,7 +67,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     }
   }
 
-  #declaredUnits(recordRoot: string | null): NonNullable<DesignRecordSeed["declaredUnits"]> {
+  #declaredUnits(recordRoot: string | null): NonNullable<Parameters<typeof DesignRecord.reconstitute>[0]["declaredUnits"]> {
     const depPath = recordRoot === null ? null : join(recordRoot, "inception", "units-generation", "unit-of-work-dependency.md");
     const depMd = depPath === null ? null : readIfExists(depPath);
     if (depPath === null || depMd === null) {
@@ -98,7 +85,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     };
   }
 
-  #functional(recordRoot: string | null, fdDir: string): NonNullable<DesignRecordSeed["functional"]> {
+  #functional(recordRoot: string | null, fdDir: string): NonNullable<Parameters<typeof DesignRecord.reconstitute>[0]["functional"]> {
     const rel = (p: string): string => relArtifact(recordRoot, p);
     const load = <T>(path: string, parse: (text: string) => T): { input: InputAnchor; outcome: T } | null => {
       const text = readIfExists(path);

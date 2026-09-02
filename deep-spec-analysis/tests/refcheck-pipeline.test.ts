@@ -44,7 +44,6 @@ import {
   COMPONENT_FAMILIES,
   CONTRACT_FAMILIES,
   FUNCTIONAL_FAMILIES,
-  type FunctionalCheckMaterialsSeed,
   ReferenceCheckReport,
   ReferenceCheckReportId,
   ComponentCheckMaterials,
@@ -251,7 +250,7 @@ describe("skip branches the fixtures do not exercise", () => {
   });
 });
 
-function functionalInput(overrides: Partial<FunctionalCheckMaterialsSeed>): FunctionalCheckMaterialsSeed {
+function functionalInput(overrides: Partial<Parameters<typeof FunctionalCheckMaterials.of>[0]>): Parameters<typeof FunctionalCheckMaterials.of>[0] {
   return {
     unit: UnitName.reconstitute("u1"),
     entitiesArtifact: ArtifactPath.reconstitute("e.md"),
@@ -268,7 +267,7 @@ function functionalInput(overrides: Partial<FunctionalCheckMaterialsSeed>): Func
   };
 }
 
-function functionalReport(overrides: Partial<FunctionalCheckMaterialsSeed>): ReferenceCheckReport {
+function functionalReport(overrides: Partial<Parameters<typeof FunctionalCheckMaterials.of>[0]>): ReferenceCheckReport {
   const input = functionalInput(overrides);
   return domainReport(FUNCTIONAL_FAMILIES, (l) => FunctionalCheckMaterials.of(input).runChecks(l), "functional-design", input.unit);
 }

@@ -10,7 +10,13 @@ import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import { type DeclaredEntities } from "./declared-entities.ts";
 import { type RuleDecls } from "./rule-decls.ts";
 import type { WitnessRef } from "./witness-ref.ts";
-import type { FunctionalCheckMaterialsSeed } from "./functional-check-materials-seed.ts";
+import type { ArtifactPath, RequirementIds } from "../../kernel/domain/index.ts";
+import type { DomainEntitiesOutcome } from "./domain-entities-outcome.ts";
+import type { EntitiesOutcome } from "./entities-outcome.ts";
+import type { FunctionalSpecOutcome } from "./functional-spec-outcome.ts";
+import type { RulesOutcome } from "./rules-outcome.ts";
+import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
+import type { UnitName } from "./unit-name.ts";
 
 const FD_E1 = CheckFamily.reconstitute("FD-E1");
 const FD_E2 = CheckFamily.reconstitute("FD-E2");
@@ -41,7 +47,20 @@ function ref(artifact: string, element: string, value?: string): WitnessRef {
   return value === undefined ? { artifact, element } : { artifact, element, value };
 }
 
-function runFunctionalChecksImpl(materials: FunctionalCheckMaterialsSeed, ledger: CheckFamilyLedger): void {
+function runFunctionalChecksImpl(materials: {
+  readonly unit: UnitName | undefined;
+  readonly entitiesArtifact: ArtifactPath;
+  readonly entities: EntitiesOutcome;
+  readonly rulesArtifact: ArtifactPath;
+  readonly rules: RulesOutcome;
+  readonly specArtifact: ArtifactPath;
+  readonly spec: FunctionalSpecOutcome;
+  // requirements.md が読めたときはその FR/NFR id 集合、読めなければ null。
+  readonly requirementIdsKnown: RequirementIds | null;
+  readonly componentsArtifact: ArtifactPath;
+  readonly domainEntities: DomainEntitiesOutcome;
+  readonly siblingUnits: SiblingUnitIndex;
+  }, ledger: CheckFamilyLedger): void {
   const entitiesArt = materials.entitiesArtifact.asString();
 
   // --- entities.md ----------------------------------------------------------
@@ -340,13 +359,52 @@ function runFunctionalChecksImpl(materials: FunctionalCheckMaterialsSeed, ledger
 // FD/XS 検査材料。検査の起動は材料自身の振る舞い（OOUI 裁定：旧
 // runFunctionalChecks の従属先）。
 export class FunctionalCheckMaterials {
-  readonly #seed: FunctionalCheckMaterialsSeed;
+  readonly #seed: {
+  readonly unit: UnitName | undefined;
+  readonly entitiesArtifact: ArtifactPath;
+  readonly entities: EntitiesOutcome;
+  readonly rulesArtifact: ArtifactPath;
+  readonly rules: RulesOutcome;
+  readonly specArtifact: ArtifactPath;
+  readonly spec: FunctionalSpecOutcome;
+  // requirements.md が読めたときはその FR/NFR id 集合、読めなければ null。
+  readonly requirementIdsKnown: RequirementIds | null;
+  readonly componentsArtifact: ArtifactPath;
+  readonly domainEntities: DomainEntitiesOutcome;
+  readonly siblingUnits: SiblingUnitIndex;
+  };
 
-  private constructor(seed: FunctionalCheckMaterialsSeed) {
+  private constructor(seed: {
+    readonly unit: UnitName | undefined;
+    readonly entitiesArtifact: ArtifactPath;
+    readonly entities: EntitiesOutcome;
+    readonly rulesArtifact: ArtifactPath;
+    readonly rules: RulesOutcome;
+    readonly specArtifact: ArtifactPath;
+    readonly spec: FunctionalSpecOutcome;
+    // requirements.md が読めたときはその FR/NFR id 集合、読めなければ null。
+    readonly requirementIdsKnown: RequirementIds | null;
+    readonly componentsArtifact: ArtifactPath;
+    readonly domainEntities: DomainEntitiesOutcome;
+    readonly siblingUnits: SiblingUnitIndex;
+  }) {
     this.#seed = seed;
   }
 
-  static of(seed: FunctionalCheckMaterialsSeed): FunctionalCheckMaterials {
+  static of(seed: {
+    readonly unit: UnitName | undefined;
+    readonly entitiesArtifact: ArtifactPath;
+    readonly entities: EntitiesOutcome;
+    readonly rulesArtifact: ArtifactPath;
+    readonly rules: RulesOutcome;
+    readonly specArtifact: ArtifactPath;
+    readonly spec: FunctionalSpecOutcome;
+    // requirements.md が読めたときはその FR/NFR id 集合、読めなければ null。
+    readonly requirementIdsKnown: RequirementIds | null;
+    readonly componentsArtifact: ArtifactPath;
+    readonly domainEntities: DomainEntitiesOutcome;
+    readonly siblingUnits: SiblingUnitIndex;
+  }): FunctionalCheckMaterials {
     return new FunctionalCheckMaterials(seed);
   }
 

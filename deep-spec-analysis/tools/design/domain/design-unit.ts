@@ -10,7 +10,6 @@ import { DesignScenarios } from "./design-scenarios.ts";
 import type { DesignValue } from "./design-value.ts";
 import { AttrPaths } from "./attr-paths.ts";
 import { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
-import type { DesignUnitSeed } from "./design-unit-seed.ts";
 
 
 
@@ -31,7 +30,15 @@ export class DesignUnit {
   readonly #scenarios: DesignScenarios;
   readonly #background: DesignBackgroundAssumptions;
 
-  private constructor(seed: DesignUnitSeed) {
+  private constructor(seed: {
+    readonly unit: string;
+    readonly rawEntities: DesignValue;
+    readonly attrPaths: AttrPaths;
+    readonly obligations: DesignObligations;
+    readonly machines: DesignMachines;
+    readonly scenarios: DesignScenarios;
+    readonly background: DesignBackgroundAssumptions;
+  }) {
     this.#unit = seed.unit;
     this.#rawEntities = seed.rawEntities;
     this.#attrPaths = seed.attrPaths;
@@ -42,7 +49,15 @@ export class DesignUnit {
   }
 
   // アダプタのパーサが解いた型付き部品からの唯一の構築口。
-  static reconstitute(seed: DesignUnitSeed): DesignUnit {
+  static reconstitute(seed: {
+    readonly unit: string;
+    readonly rawEntities: DesignValue;
+    readonly attrPaths: AttrPaths;
+    readonly obligations: DesignObligations;
+    readonly machines: DesignMachines;
+    readonly scenarios: DesignScenarios;
+    readonly background: DesignBackgroundAssumptions;
+  }): DesignUnit {
     return new DesignUnit(seed);
   }
 

@@ -11,7 +11,6 @@ import { FrRefClaims } from "./fr-ref-claims.ts";
 import type { IrModelDecl } from "./ir-model-decl.ts";
 import type { RequirementsSourceId } from "./requirements-source-id.ts";
 import { IrValidationMaterialsId } from "./ir-validation-materials-id.ts";
-import type { IrValidationMaterialsSeed } from "./ir-validation-materials-seed.ts";
 
 
 
@@ -25,7 +24,17 @@ export class IrValidationMaterials {
   readonly #sourceId: RequirementsSourceId;
   readonly #sourceDocument: Uint8Array;
 
-  private constructor(seed: IrValidationMaterialsSeed) {
+  private constructor(seed: {
+    readonly id: IrValidationMaterialsId;
+    readonly irVersion: IrVersion;
+    readonly schemaErrors: ErrorMessages;
+    readonly view: IrModelDecl;
+    readonly frClaims: FrRefClaims;
+    // IR の sourceDigest。文字列でなければ null（宣言なし）。
+    readonly declaredDigest: string | null;
+    readonly sourceId: RequirementsSourceId;
+    readonly sourceDocument: Uint8Array;
+  }) {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#schemaErrors = seed.schemaErrors;
@@ -37,7 +46,17 @@ export class IrValidationMaterials {
   }
 
   // アダプタの寛容パースからの唯一の構築口。
-  static reconstitute(seed: IrValidationMaterialsSeed): IrValidationMaterials {
+  static reconstitute(seed: {
+    readonly id: IrValidationMaterialsId;
+    readonly irVersion: IrVersion;
+    readonly schemaErrors: ErrorMessages;
+    readonly view: IrModelDecl;
+    readonly frClaims: FrRefClaims;
+    // IR の sourceDigest。文字列でなければ null（宣言なし）。
+    readonly declaredDigest: string | null;
+    readonly sourceId: RequirementsSourceId;
+    readonly sourceDocument: Uint8Array;
+  }): IrValidationMaterials {
     return new IrValidationMaterials(seed);
   }
 

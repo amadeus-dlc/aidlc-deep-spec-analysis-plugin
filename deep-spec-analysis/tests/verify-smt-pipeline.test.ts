@@ -52,7 +52,6 @@ import {
   Scenarios,
   BackgroundAssumptions,
   RequirementsModel,
-  type SmtPlanFactsSeed,
   SmtQueryVerdict,
   SmtEventPairProbes,
   SmtPlanFacts,
@@ -146,7 +145,7 @@ function solver(check: SmtCheck): Z3SolverClient {
   return { check: () => check };
 }
 
-const EMPTY_FACTS: SmtPlanFactsSeed = {
+const EMPTY_FACTS: Parameters<typeof SmtPlanFacts.of>[0] = {
   compiled: new Map(),
   skipped: VerificationSkips.of([]),
   labelToTarget: new Map(),

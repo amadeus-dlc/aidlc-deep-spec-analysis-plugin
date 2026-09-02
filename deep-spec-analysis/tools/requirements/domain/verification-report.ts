@@ -11,7 +11,6 @@ import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 import { CrossCheckedEntries } from "./cross-checked-entries.ts";
 import type { VerificationReportComposition } from "./verification-report-composition.ts";
-import type { VerificationReportSeed } from "./verification-report-seed.ts";
 
 export const SUPPORTED_IR_MAJOR = 1;
 
@@ -29,7 +28,16 @@ export class VerificationReport {
   readonly #crossChecked: CrossCheckedEntries | null;
   readonly #unavailableReason: string | null;
 
-  private constructor(seed: VerificationReportSeed) {
+  private constructor(seed: {
+    readonly id: VerificationReportId;
+    readonly irVersion: IrVersion;
+    readonly irHash: ContentHash;
+    readonly method: string;
+    readonly findings: VerificationFindings;
+    readonly skipped: VerificationSkips;
+    readonly crossChecked: CrossCheckedEntries | null;
+    readonly unavailableReason: string | null;
+  }) {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#irHash = seed.irHash;
@@ -152,7 +160,16 @@ export class VerificationReport {
   }
 
   // 書かれた文書からの再構成（ソートしない——書かれた姿が正）。
-  static reconstitute(seed: VerificationReportSeed): VerificationReport {
+  static reconstitute(seed: {
+    readonly id: VerificationReportId;
+    readonly irVersion: IrVersion;
+    readonly irHash: ContentHash;
+    readonly method: string;
+    readonly findings: VerificationFindings;
+    readonly skipped: VerificationSkips;
+    readonly crossChecked: CrossCheckedEntries | null;
+    readonly unavailableReason: string | null;
+  }): VerificationReport {
     return new VerificationReport(seed);
   }
 

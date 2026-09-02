@@ -1446,3 +1446,14 @@ depends_on 名、未宣言の辺は units-generation の問題として落とす
 契約材料はフィルタする代わりに命じられた列を回る。アダプタとテストは
 再構成する。台帳から 3 エントリを回収し、残債は 122 中 91——`*-decl.ts`
 は台帳に残っていない。
+
+波 15（同 PR）: seed が解散する。残っていた `*Seed` interface——design・
+refcheck・refinement・requirements にまたがる 25 件——はいずれも、それが
+種を蒔く集約だけが読む getter-only の形だった。波 2 の先例に従い、それぞれ
+ドアの無名インライン署名へ解散し（`private constructor` と `of`／
+`reconstitute` が props 型を自分で綴る）、seed ファイルと facade の再輸出は
+消え、外部の参照 4 箇所（形式モデルのパーサ、設計記録のリポジトリ、
+パイプラインテスト 2 本）はドアの引数型を名指す。seed のうち 7 件は台帳に
+載った primitive フィールドも運んでいたので、`PRIMITIVE_FIELD_DEBT` から
+それらの記述子が消える（上限 104 → 93）。台帳から 25 エントリを回収し、
+残債は 122 中 66。

@@ -8,7 +8,10 @@ import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import { ContractRows } from "./contract-rows.ts";
 import { type UnitDecls } from "./unit-decls.ts";
 import type { WitnessRef } from "./witness-ref.ts";
-import type { ContractCheckMaterialsSeed } from "./contract-check-materials-seed.ts";
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
+import type { ContractsTableOutcome } from "./contracts-table-outcome.ts";
+import type { DeclaredUnitsOutcome } from "./declared-units-outcome.ts";
+import type { SpecBlockAssessments } from "./spec-block-assessments.ts";
 
 const CD_1 = CheckFamily.reconstitute("CD-1");
 const CD_2 = CheckFamily.reconstitute("CD-2");
@@ -17,7 +20,13 @@ const CD_3 = CheckFamily.reconstitute("CD-3");
 export const CONTRACT_FAMILIES = CheckFamilies.of([CD_1, CD_2, CD_3]);
 
 
-function runContractChecksImpl(materials: ContractCheckMaterialsSeed, ledger: CheckFamilyLedger): void {
+function runContractChecksImpl(materials: {
+  readonly artifact: ArtifactPath;
+  readonly depArtifact: ArtifactPath;
+  readonly declaredUnits: DeclaredUnitsOutcome;
+  readonly contractsTable: ContractsTableOutcome;
+  readonly specBlocks: SpecBlockAssessments;
+  }, ledger: CheckFamilyLedger): void {
   const artifact = materials.artifact.asString();
   const depArtifact = materials.depArtifact.asString();
   const ref = (art: string, element: string, value?: string): WitnessRef =>
@@ -101,13 +110,31 @@ function runContractChecksImpl(materials: ContractCheckMaterialsSeed, ledger: Ch
 // CD 検査材料。検査の起動は材料自身の振る舞い（OOUI 裁定：旧
 // runContractChecks の従属先）。
 export class ContractCheckMaterials {
-  readonly #seed: ContractCheckMaterialsSeed;
+  readonly #seed: {
+  readonly artifact: ArtifactPath;
+  readonly depArtifact: ArtifactPath;
+  readonly declaredUnits: DeclaredUnitsOutcome;
+  readonly contractsTable: ContractsTableOutcome;
+  readonly specBlocks: SpecBlockAssessments;
+  };
 
-  private constructor(seed: ContractCheckMaterialsSeed) {
+  private constructor(seed: {
+    readonly artifact: ArtifactPath;
+    readonly depArtifact: ArtifactPath;
+    readonly declaredUnits: DeclaredUnitsOutcome;
+    readonly contractsTable: ContractsTableOutcome;
+    readonly specBlocks: SpecBlockAssessments;
+  }) {
     this.#seed = seed;
   }
 
-  static of(seed: ContractCheckMaterialsSeed): ContractCheckMaterials {
+  static of(seed: {
+    readonly artifact: ArtifactPath;
+    readonly depArtifact: ArtifactPath;
+    readonly declaredUnits: DeclaredUnitsOutcome;
+    readonly contractsTable: ContractsTableOutcome;
+    readonly specBlocks: SpecBlockAssessments;
+  }): ContractCheckMaterials {
     return new ContractCheckMaterials(seed);
   }
 

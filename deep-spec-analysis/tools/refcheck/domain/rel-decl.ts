@@ -1,17 +1,34 @@
 import { type CardinalityNotation } from "./cardinality-notation.ts";
 import { type ElementPath } from "./element-path.ts";
 import { type EntityName } from "./entity-name.ts";
-import type { RelDeclSeed } from "./rel-decl-seed.ts";
 
 // 関係宣言。基数の閉集合整合と方向の宣言義務を自分で判定する（旧 FD-E5）。
 export class RelDecl {
-  readonly #seed: RelDeclSeed;
+  readonly #seed: {
+  readonly element: ElementPath;
+  readonly from: EntityName | null;
+  readonly to: EntityName | null;
+  readonly cardinality: CardinalityNotation | null;
+  readonly hasDirection: boolean;
+  };
 
-  private constructor(seed: RelDeclSeed) {
+  private constructor(seed: {
+    readonly element: ElementPath;
+    readonly from: EntityName | null;
+    readonly to: EntityName | null;
+    readonly cardinality: CardinalityNotation | null;
+    readonly hasDirection: boolean;
+  }) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: RelDeclSeed): RelDecl {
+  static reconstitute(seed: {
+    readonly element: ElementPath;
+    readonly from: EntityName | null;
+    readonly to: EntityName | null;
+    readonly cardinality: CardinalityNotation | null;
+    readonly hasDirection: boolean;
+  }): RelDecl {
     return new RelDecl(seed);
   }
 

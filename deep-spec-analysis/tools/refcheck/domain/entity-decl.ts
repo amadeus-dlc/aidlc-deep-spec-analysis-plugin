@@ -1,19 +1,33 @@
 import { AttrDecl } from "./attr-decl.ts";
 import { AttrDecls } from "./attr-decls.ts";
-import type { EntityDeclSeed } from "./entity-decl-seed.ts";
 import { type ElementPath } from "./element-path.ts";
 import { type EntityName } from "./entity-name.ts";
 import { RelDecls } from "./rel-decls.ts";
 
 // エンティティ宣言。属性の重複・選定・解決は属性コレクションに委ねる。
 export class EntityDecl {
-  readonly #seed: EntityDeclSeed;
+  readonly #seed: {
+  readonly name: EntityName;
+  readonly element: ElementPath;
+  readonly attrs: AttrDecls;
+  readonly rels: RelDecls;
+  };
 
-  private constructor(seed: EntityDeclSeed) {
+  private constructor(seed: {
+    readonly name: EntityName;
+    readonly element: ElementPath;
+    readonly attrs: AttrDecls;
+    readonly rels: RelDecls;
+  }) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: EntityDeclSeed): EntityDecl {
+  static reconstitute(seed: {
+    readonly name: EntityName;
+    readonly element: ElementPath;
+    readonly attrs: AttrDecls;
+    readonly rels: RelDecls;
+  }): EntityDecl {
     return new EntityDecl(seed);
   }
 

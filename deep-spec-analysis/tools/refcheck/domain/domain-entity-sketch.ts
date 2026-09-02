@@ -1,17 +1,29 @@
-import type { DomainEntitySketchSeed } from "./domain-entity-sketch-seed.ts";
 import { type AttributeNames } from "./attribute-names.ts";
 import { type EntityName } from "./entity-name.ts";
+import type { ComponentName } from "./component-name.ts";
 
 // domain-design 側エンティティの素描。functional-design 側との被覆差分と
 // カタログ位置ラベル（凍結書式）を所有する。
 export class DomainEntitySketch {
-  readonly #seed: DomainEntitySketchSeed;
+  readonly #seed: {
+  readonly name: EntityName;
+  readonly component: ComponentName;
+  readonly attributes: AttributeNames;
+  };
 
-  private constructor(seed: DomainEntitySketchSeed) {
+  private constructor(seed: {
+    readonly name: EntityName;
+    readonly component: ComponentName;
+    readonly attributes: AttributeNames;
+  }) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: DomainEntitySketchSeed): DomainEntitySketch {
+  static reconstitute(seed: {
+    readonly name: EntityName;
+    readonly component: ComponentName;
+    readonly attributes: AttributeNames;
+  }): DomainEntitySketch {
     return new DomainEntitySketch(seed);
   }
 

@@ -10,7 +10,6 @@ import type { ContentHash } from "../../kernel/domain/index.ts";
 import { RefinementAttributes } from "./refinement-attributes.ts";
 import type { RefinementObligation } from "./refinement-obligation.ts";
 import { RefinementObligations } from "./refinement-obligations.ts";
-import type { RefinementRequirementsSeed } from "./refinement-requirements-seed.ts";
 import type { RefinementScenario } from "./refinement-scenario.ts";
 import { RefinementScenarios } from "./refinement-scenarios.ts";
 
@@ -29,7 +28,13 @@ export class RefinementRequirements {
   readonly #obligations: RefinementObligations;
   readonly #scenarios: RefinementScenarios;
 
-  private constructor(seed: RefinementRequirementsSeed) {
+  private constructor(seed: {
+    readonly id: FormalModelId;
+    readonly hash: ContentHash;
+    readonly attributes: RefinementAttributes;
+    readonly obligations: RefinementObligations;
+    readonly scenarios: RefinementScenarios;
+  }) {
     this.#id = seed.id;
     this.#hash = seed.hash;
     this.#attributes = seed.attributes;
@@ -38,7 +43,13 @@ export class RefinementRequirements {
   }
 
   // アダプタのパーサが解いた型付き部品からの唯一の構築口。
-  static reconstitute(seed: RefinementRequirementsSeed): RefinementRequirements {
+  static reconstitute(seed: {
+    readonly id: FormalModelId;
+    readonly hash: ContentHash;
+    readonly attributes: RefinementAttributes;
+    readonly obligations: RefinementObligations;
+    readonly scenarios: RefinementScenarios;
+  }): RefinementRequirements {
     return new RefinementRequirements(seed);
   }
 

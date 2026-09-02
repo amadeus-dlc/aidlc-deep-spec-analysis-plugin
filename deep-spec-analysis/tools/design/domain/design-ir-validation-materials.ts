@@ -7,7 +7,6 @@
 import type { ErrorMessages, IrVersion } from "../../kernel/domain/index.ts";
 import { type DesignUnitDecls } from "./design-unit-decls.ts";
 import { DesignIrValidationMaterialsId } from "./design-ir-validation-materials-id.ts";
-import type { DesignIrValidationMaterialsSeed } from "./design-ir-validation-materials-seed.ts";
 
 
 
@@ -18,7 +17,13 @@ export class DesignIrValidationMaterials {
   readonly #units: DesignUnitDecls;
   readonly #sourceDocument: Uint8Array;
 
-  private constructor(seed: DesignIrValidationMaterialsSeed) {
+  private constructor(seed: {
+    readonly id: DesignIrValidationMaterialsId;
+    readonly irVersion: IrVersion;
+    readonly schemaErrors: ErrorMessages;
+    readonly units: DesignUnitDecls;
+    readonly sourceDocument: Uint8Array;
+  }) {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#schemaErrors = seed.schemaErrors;
@@ -27,7 +32,13 @@ export class DesignIrValidationMaterials {
   }
 
   // アダプタの寛容パースからの唯一の構築口。
-  static reconstitute(seed: DesignIrValidationMaterialsSeed): DesignIrValidationMaterials {
+  static reconstitute(seed: {
+    readonly id: DesignIrValidationMaterialsId;
+    readonly irVersion: IrVersion;
+    readonly schemaErrors: ErrorMessages;
+    readonly units: DesignUnitDecls;
+    readonly sourceDocument: Uint8Array;
+  }): DesignIrValidationMaterials {
     return new DesignIrValidationMaterials(seed);
   }
 

@@ -10,7 +10,7 @@ import { Components } from "./components.ts";
 import { ComponentName } from "./component-name.ts";
 import { type ComponentCatalogOutcome } from "./component-catalog-outcome.ts";
 import type { WitnessRef } from "./witness-ref.ts";
-import type { ComponentCheckMaterialsSeed } from "./component-check-materials-seed.ts";
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
 
 const DD_0 = CheckFamily.reconstitute("DD-0");
 const DD_1 = CheckFamily.reconstitute("DD-1");
@@ -165,13 +165,22 @@ function runComponentChecksImpl(
 
 
 export class ComponentCheckMaterials {
-  readonly #seed: ComponentCheckMaterialsSeed;
+  readonly #seed: {
+  readonly outcome: ComponentCatalogOutcome;
+  readonly artifact: ArtifactPath;
+  };
 
-  private constructor(seed: ComponentCheckMaterialsSeed) {
+  private constructor(seed: {
+    readonly outcome: ComponentCatalogOutcome;
+    readonly artifact: ArtifactPath;
+  }) {
     this.#seed = seed;
   }
 
-  static of(seed: ComponentCheckMaterialsSeed): ComponentCheckMaterials {
+  static of(seed: {
+    readonly outcome: ComponentCatalogOutcome;
+    readonly artifact: ArtifactPath;
+  }): ComponentCheckMaterials {
     return new ComponentCheckMaterials(seed);
   }
 

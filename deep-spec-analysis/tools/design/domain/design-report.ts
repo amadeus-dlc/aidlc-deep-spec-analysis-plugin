@@ -15,7 +15,6 @@ import { CheckedUnits } from "./checked-units.ts";
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignInputAnchors } from "./design-input-anchors.ts";
 import type { DesignReportComposition } from "./design-report-composition.ts";
-import type { DesignReportSeed } from "./design-report-seed.ts";
 
 
 
@@ -38,7 +37,18 @@ export class DesignReport {
   readonly #crossChecked: DesignCrossCheckedEntries | null;
   readonly #unavailableReason: string | null;
 
-  private constructor(seed: DesignReportSeed) {
+  private constructor(seed: {
+    readonly id: DesignReportId;
+    readonly irVersion: IrVersion;
+    readonly irHash: ContentHash;
+    readonly method: string;
+    readonly findings: DesignFindings;
+    readonly skipped: DesignSkips;
+    readonly inputs: DesignInputAnchors | null;
+    readonly checked: CheckedUnits | null;
+    readonly crossChecked: DesignCrossCheckedEntries | null;
+    readonly unavailableReason: string | null;
+  }) {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#irHash = seed.irHash;
@@ -127,7 +137,18 @@ export class DesignReport {
   }
 
   // 書かれた文書からの再構成（ソートしない——書かれた姿が正）。
-  static reconstitute(seed: DesignReportSeed): DesignReport {
+  static reconstitute(seed: {
+    readonly id: DesignReportId;
+    readonly irVersion: IrVersion;
+    readonly irHash: ContentHash;
+    readonly method: string;
+    readonly findings: DesignFindings;
+    readonly skipped: DesignSkips;
+    readonly inputs: DesignInputAnchors | null;
+    readonly checked: CheckedUnits | null;
+    readonly crossChecked: DesignCrossCheckedEntries | null;
+    readonly unavailableReason: string | null;
+  }): DesignReport {
     return new DesignReport(seed);
   }
 

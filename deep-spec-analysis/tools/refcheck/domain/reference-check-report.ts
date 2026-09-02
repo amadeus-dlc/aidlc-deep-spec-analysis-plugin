@@ -15,7 +15,6 @@ import { Findings } from "./findings.ts";
 import { Skips } from "./skips.ts";
 import { InputAnchors } from "./input-anchors.ts";
 import { ReferenceCheckReportId } from "./reference-check-report-id.ts";
-import type { ReferenceCheckReportSeed } from "./reference-check-report-seed.ts";
 
 
 export class ReferenceCheckReport {
@@ -45,7 +44,13 @@ export class ReferenceCheckReport {
   // 検査結果からの新規構築。正準ソート（inputs は artifact 順・checked は
   // 一意化＋id 順・findings/skipped はカタログ順）は文書のドメイン的性質
   // なのでここで確定する。
-  static compose(seed: ReferenceCheckReportSeed): ReferenceCheckReport {
+  static compose(seed: {
+      readonly id: ReferenceCheckReportId;
+      readonly inputs: InputAnchors;
+      readonly checked: TargetIds;
+      readonly findings: Findings;
+      readonly skipped: Skips;
+  }): ReferenceCheckReport {
     return new ReferenceCheckReport(
       seed.id,
       seed.inputs.sortedByArtifact(),
@@ -64,55 +69,61 @@ export class ReferenceCheckReport {
 
   // 書かれた真実からの再構成（Repository の読出側だけが使う）。書込時に
   // 契約適合が保証されているため、並びも含め「書かれたまま」を保持する。
-  static reconstitute(seed: ReferenceCheckReportSeed & { readonly unavailableReason: string | null }): ReferenceCheckReport {
-    return new ReferenceCheckReport(
-      seed.id,
-      seed.inputs,
-      seed.checked,
-      seed.findings,
-      seed.skipped,
-      seed.unavailableReason,
-    );
-  }
+  static reconstitute(seed: {
+    readonly id: ReferenceCheckReportId;
+    readonly inputs: InputAnchors;
+    readonly checked: TargetIds;
+    readonly findings: Findings;
+    readonly skipped: Skips;
+    } & { readonly unavailableReason: string | null }): ReferenceCheckReport {
+      return new ReferenceCheckReport(
+        seed.id,
+        seed.inputs,
+        seed.checked,
+        seed.findings,
+        seed.skipped,
+        seed.unavailableReason,
+      );
+    }
 
-  id(): ReferenceCheckReportId {
-    return this.#id;
-  }
+    id(): ReferenceCheckReportId {
+      return this.#id;
+    }
 
-  inputs(): InputAnchors {
-    return this.#inputs;
-  }
+    inputs(): InputAnchors {
+      return this.#inputs;
+    }
 
-  checked(): TargetIds {
-    return this.#checked;
-  }
+    checked(): TargetIds {
+      return this.#checked;
+    }
 
-  findings(): Findings {
-    return this.#findings;
-  }
+    findings(): Findings {
+      return this.#findings;
+    }
 
-  skipped(): Skips {
-    return this.#skipped;
-  }
+    skipped(): Skips {
+      return this.#skipped;
+    }
 
-  unavailableReason(): string | null {
-    return this.#unavailableReason;
-  }
+    unavailableReason(): string | null {
+      return this.#unavailableReason;
+    }
 
-  isUnavailable(): boolean {
-    return this.#unavailableReason !== null;
-  }
+    isUnavailable(): boolean {
+      return this.#unavailableReason !== null;
+    }
 
-  findingsCount(): number {
-    return this.#findings.count();
-  }
+    findingsCount(): number {
+      return this.#findings.count();
+    }
 
-  skippedCount(): number {
-    return this.#skipped.count();
-  }
+    skippedCount(): number {
+      return this.#skipped.count();
+    }
 
-  // センサー verdict の述語：降格しておらず finding が 0 なら pass。
-  passes(): boolean {
-    return this.#unavailableReason === null && this.#findings.isEmpty();
+    // センサー verdict の述語：降格しておらず finding が 0 なら pass。
+    passes(): boolean {
+      return this.#unavailableReason === null && this.#findings.isEmpty();
+    }
   }
-}

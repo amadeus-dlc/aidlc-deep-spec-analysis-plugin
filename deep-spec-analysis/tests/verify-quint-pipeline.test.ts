@@ -45,7 +45,6 @@ import {
   Scenarios,
   BackgroundAssumptions,
   RequirementsModel,
-  type QuintRunsSeed,
   QuintMachineComponents,
   QuintMachineFacts,
   QuintMachineComponent,
@@ -142,7 +141,7 @@ function quint(result: QuintCheckResult): QuintClient {
   return { check: () => result };
 }
 
-const EMPTY_RUNS: QuintRunsSeed = { machine: null, temporals: new Map(), scenarios: new Map() };
+const EMPTY_RUNS: Parameters<typeof QuintRuns.of>[0] = { machine: null, temporals: new Map(), scenarios: new Map() };
 
 const HASH = "a".repeat(64);
 
@@ -257,7 +256,7 @@ describe("quint verdict interpretation", () => {
     eventIds: ObligationIds.of([ObligationId.reconstitute("OB-2")]),
     scenariosWithInit: [ScenarioId.reconstitute("SC-1"), ScenarioId.reconstitute("SC-2")],
   });
-  const run = (runs: Partial<QuintRunsSeed>, method = "simulation", compileSkips: { target: string; reason: string }[] = []) =>
+  const run = (runs: Partial<Parameters<typeof QuintRuns.of>[0]>, method = "simulation", compileSkips: { target: string; reason: string }[] = []) =>
     facts.interpret(machineModel, VerificationSkips.of(compileSkips.map((k) => ({ target: TargetId.reconstitute(k.target), reason: k.reason }))), method, QuintRuns.of({ ...EMPTY_RUNS, ...runs }));
 
   test("a machine timeout skips every machine target with the frozen budget wording", () => {

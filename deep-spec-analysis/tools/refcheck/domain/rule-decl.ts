@@ -3,18 +3,42 @@ import { type AppliesTo } from "./applies-to.ts";
 import { type BusinessRuleId } from "./business-rule-id.ts";
 import { type ElementPath } from "./element-path.ts";
 import { type RuleCategory } from "./rule-category.ts";
-import type { RuleDeclSeed } from "./rule-decl-seed.ts";
+import type { SourceIds } from "./source-ids.ts";
 
 // 規則宣言。finding target の選定（BR 形なら自分の id、でなければ族の
 // フォールバック）・source id の逆検証・category の閉集合整合を所有する。
 export class RuleDecl {
-  readonly #seed: RuleDeclSeed;
+  readonly #seed: {
+  readonly id: BusinessRuleId | null;
+  readonly element: ElementPath;
+  readonly category: RuleCategory | null;
+  readonly appliesTo: AppliesTo | null;
+  readonly sourceIds: SourceIds;
+  // 欠落キー名の列（文言材料——語彙値ではない）。
+  readonly missing: readonly string[];
+  };
 
-  private constructor(seed: RuleDeclSeed) {
+  private constructor(seed: {
+    readonly id: BusinessRuleId | null;
+    readonly element: ElementPath;
+    readonly category: RuleCategory | null;
+    readonly appliesTo: AppliesTo | null;
+    readonly sourceIds: SourceIds;
+    // 欠落キー名の列（文言材料——語彙値ではない）。
+    readonly missing: readonly string[];
+  }) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: RuleDeclSeed): RuleDecl {
+  static reconstitute(seed: {
+    readonly id: BusinessRuleId | null;
+    readonly element: ElementPath;
+    readonly category: RuleCategory | null;
+    readonly appliesTo: AppliesTo | null;
+    readonly sourceIds: SourceIds;
+    // 欠落キー名の列（文言材料——語彙値ではない）。
+    readonly missing: readonly string[];
+  }): RuleDecl {
     return new RuleDecl(seed);
   }
 

@@ -1597,3 +1597,16 @@ order, dangling edges dropped as units-generation's problem), so the
 contract materials iterate a told list instead of filtering. The
 adapters and the tests reconstitute. 3 ledger entries reclaimed — the
 ledger holds 91 of 122, and no `*-decl.ts` remains on it.
+
+Wave 15 (same PR): the seeds dissolve. Every remaining `*Seed`
+interface — twenty-five across design, refcheck, refinement and
+requirements — was a getter-only shape whose only reader was the
+aggregate it seeded. Following the wave-2 precedent, each one dissolves
+into the anonymous inline signature of its door (`private constructor`
+and `of` / `reconstitute` spell the props type themselves), the seed
+file and its facade export go, and the four outside references (the
+formal-model parser, the design-record repository, and two pipeline
+tests) name the door's parameter type instead. Seven of the seeds also
+carried ledgered primitive fields, so `PRIMITIVE_FIELD_DEBT` sheds their
+descriptors (ceiling 104 → 93). 25 ledger entries reclaimed — the ledger
+holds 66 of 122.

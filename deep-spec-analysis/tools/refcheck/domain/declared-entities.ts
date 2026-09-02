@@ -1,4 +1,3 @@
-import type { DeclaredEntitiesSeed } from "./declared-entities-seed.ts";
 import { EntityDecls } from "./entity-decls.ts";
 import { RelDecls } from "./rel-decls.ts";
 import { ShapeErrors } from "./shape-errors.ts";
@@ -7,13 +6,25 @@ import { ShapeErrors } from "./shape-errors.ts";
 // 選定はエンティティコレクションに委ね、最上位と各エンティティ配下の関係の
 // 合成順（凍結）を所有する。
 export class DeclaredEntities {
-  readonly #seed: DeclaredEntitiesSeed;
+  readonly #seed: {
+  readonly entities: EntityDecls;
+  readonly rels: RelDecls; // top-level relationships
+  readonly shapeErrors: ShapeErrors;
+  };
 
-  private constructor(seed: DeclaredEntitiesSeed) {
+  private constructor(seed: {
+    readonly entities: EntityDecls;
+    readonly rels: RelDecls; // top-level relationships
+    readonly shapeErrors: ShapeErrors;
+  }) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: DeclaredEntitiesSeed): DeclaredEntities {
+  static reconstitute(seed: {
+    readonly entities: EntityDecls;
+    readonly rels: RelDecls; // top-level relationships
+    readonly shapeErrors: ShapeErrors;
+  }): DeclaredEntities {
     return new DeclaredEntities(seed);
   }
 
