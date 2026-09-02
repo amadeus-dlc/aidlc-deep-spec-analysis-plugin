@@ -1,4 +1,4 @@
-import { Expressions, type Expression, type TriggerName } from "../../kernel/domain/index.ts";
+import { ExpressionTree, type Expression, type TriggerName } from "../../kernel/domain/index.ts";
 import { BrRefs } from "./br-refs.ts";
 import { type DesignTransitionId } from "./design-transition-id.ts";
 
@@ -42,13 +42,7 @@ export class DesignTransitionDecl {
   }
 
   assignsPrimedReferenceTo(path: string): boolean {
-    let assigned = false;
-    if (this.#effect !== undefined) {
-      Expressions.walk(this.#effect, (node) => {
-        if (node.op === "ref" && node.prime === true && node.path === path) assigned = true;
-      });
-    }
-    return assigned;
+    return this.#effect !== undefined && ExpressionTree.of(this.#effect).assignsPrimed(path);
   }
 
   inspectExpressions(visitor: (expression: Expression, primesAllowed: boolean) => void): void {

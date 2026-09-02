@@ -5,7 +5,7 @@
 // 旧 aidlc-sensor-deep-spec-design-ir-valid.ts の semanticErrors からの逐語
 // 移植で、文言と発生順序はそのまま観測面に出る。
 
-import { type Expression, Expressions } from "../../kernel/domain/index.ts";
+import { type Expression, ExpressionTree } from "../../kernel/domain/index.ts";
 import { BrReferenceIndex } from "./br-reference-index.ts";
 import { type BrRefs } from "./br-refs.ts";
 import { type DesignAttributeDecl } from "./design-attribute-decl.ts";
@@ -63,7 +63,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
       // unit (a "closed" literal on ticket.channel must not legalize
       // "closed" against ticket.status).
       const boundEnum = new Map<Expression, string>();
-      Expressions.walk(e, (node) => {
+      ExpressionTree.of(e).walk((node) => {
         const args = node.args ?? [];
         if (args.length === 2) {
           const ref = args.find((a) => a.op === "ref" && typeof a.path === "string");
@@ -71,7 +71,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
           if (ref && en) boundEnum.set(en, ref.path as string);
         }
       });
-      Expressions.walk(e, (node) => {
+      ExpressionTree.of(e).walk((node) => {
         if (node.op === "ref" && typeof node.path === "string") {
           if (!attrTypes.has(node.path)) errors.push(where(`${ctx}: unresolvable reference "${node.path}"`));
           if (node.prime === true && !primesAllowed) {

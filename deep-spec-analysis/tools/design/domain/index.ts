@@ -30,7 +30,6 @@ export { DesignFinding } from "./design-finding.ts";
 export { DesignFindings } from "./design-findings.ts";
 export { DesignSkipped } from "./design-skipped.ts";
 export { DesignSkips } from "./design-skips.ts";
-export { ExpressionCanonicalKey } from "./expression-canonical-key.ts";
 export { LoweredBackground } from "./lowered-background.ts";
 export { LoweredBackgrounds } from "./lowered-backgrounds.ts";
 export { LoweredId } from "./lowered-id.ts";

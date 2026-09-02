@@ -1965,3 +1965,18 @@ it `ObligationId`, the design ids, `TransitionRef`, `AttributePath`,
 The 25 callers that stripped a DP to a string to compare it now tell
 the DP to compare itself; every collection sorts its own elements.
 Goldens stay byte-identical.
+
+Wave 30 (same PR): rulings 2, 4 and 5 land — the expression companions
+dissolve into value objects. `ExpressionTree` (kernel) wraps the
+published `Expression` and owns the walk, prime detection, referenced
+paths, primed-assignment detection and canonical equality (the
+canonical key moved in from the design layer, still byte-equal to the
+kernel's canonical JSON, now proven pairwise); `asExpression` is its
+only door back to the published form. The state equality the lowering
+builds (`attrPath == enum(state)`) belongs to `DesignTransition` and
+`DesignIgnore`, and the evaluator that decides whether an invariant
+component holds in a trace state is private to
+`QuintMachineComponent.isViolatedIn`. `Expressions`,
+`ExpressionCanonicalKey` and `ExpressionEvaluation` are gone; the two
+compilers ask the tree instead of the companion. Goldens stay
+byte-identical.

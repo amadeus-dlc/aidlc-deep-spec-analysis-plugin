@@ -1752,3 +1752,14 @@ unparseable／extracted の各枝は凍結の skip・finding 文言を保ち、�
 `ReqAttributeValues.sortedUniqueCanonically`）だけになる。DP を文字列に剥いて
 比較していた 25 の呼び手は DP 自身に比較を命じ、コレクションは自分の要素を
 自分で並べる。golden はバイト同一。
+
+波 30（同 PR）: 裁定 2・4・5 が着地——式の随伴 class 群が値オブジェクトへ
+溶ける。kernel の `ExpressionTree` が published language の `Expression` を
+包み、走査・prime 検出・参照パス・prime 代入の検出・正準同一性（正準キーは
+design 層から kernel へ移り、kernel の正準 JSON とのバイト同一性を対ごとに
+証明）を所有する。published の形へ戻す門は `asExpression` だけ。lowering が
+組む状態の等式（`attrPath == enum(state)`）は `DesignTransition` と
+`DesignIgnore` のもの、不変量成分がトレース状態で成り立つかを決める評価器は
+`QuintMachineComponent.isViolatedIn` の非公開の内側になる。`Expressions`・
+`ExpressionCanonicalKey`・`ExpressionEvaluation` は消え、2 つのコンパイラは
+随伴ではなく木に問う。golden はバイト同一。

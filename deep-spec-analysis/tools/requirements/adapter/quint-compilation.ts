@@ -7,7 +7,7 @@
 // コンパイル時 skip を戻り値で返す（生成されるモジュール本文・skip 文言は
 // バイト同一）。
 
-import { type Expression, Expressions } from "../../kernel/domain/index.ts";
+import { type Expression, ExpressionTree } from "../../kernel/domain/index.ts";
 import type { CompiledQuintMachine } from "./compiled-quint-machine.ts";
 import {
   type AttributeDeclaration,
@@ -133,7 +133,7 @@ function decomposeEffect(effect: Expression): Map<string, Expression> {
     if (!target || !rhs || typeof target.path !== "string") {
       throw new CompileError("effect must be a conjunction of primed assignments (eq(prime-ref, expr))");
     }
-    if (Expressions.usesPrime(rhs)) throw new CompileError("assignment right-hand side must not use primed references");
+    if (ExpressionTree.of(rhs).usesPrime()) throw new CompileError("assignment right-hand side must not use primed references");
     if (assignments.has(target.path)) throw new CompileError(`attribute "${target.path}" assigned twice in one effect`);
     assignments.set(target.path, rhs);
   }
@@ -262,7 +262,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       continue;
     }
     try {
-      if (Expressions.usesPrime(event.guard)) throw new CompileError("guard must not use primed references");
+      if (ExpressionTree.of(event.guard).usesPrime()) throw new CompileError("guard must not use primed references");
       const guard = quintOf(event.guard, stateName);
       const assignments = decomposeEffect(event.effect);
       const action = qId("ev", ob.id().asString());

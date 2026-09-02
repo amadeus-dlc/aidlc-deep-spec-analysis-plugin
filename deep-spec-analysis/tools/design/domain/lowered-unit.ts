@@ -11,12 +11,11 @@
 // 旧 deep-spec-design-lib.ts の lowerUnit からの逐語移植（Json 組み立ては
 // アダプタの serializer が担い、ここは型付き lowering を返す）。
 
-import { TargetIds, TargetId } from "../../kernel/domain/index.ts";
+import { TargetIds, TargetId, ExpressionTree} from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "./design-machines.ts";
 import type { DesignMachine } from "./design-machine.ts";
 import type { DesignUnit } from "./design-unit.ts";
-import { ExpressionCanonicalKey } from "./expression-canonical-key.ts";
 import { DesignFindings } from "./design-findings.ts";
 import { DesignSkips } from "./design-skips.ts";
 import { DesignFinding } from "./design-finding.ts";
@@ -324,7 +323,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
       for (const a of list) {
         for (const b of list) {
           if (a === b) continue;
-          if (ExpressionCanonicalKey.of(a.effect) !== ExpressionCanonicalKey.of(b.effect)) continue;
+          if (!ExpressionTree.of(a.effect).isCanonicallyEqual(ExpressionTree.of(b.effect))) continue;
           // (guardB and not guardA) の空虚性は guardB => guardA を証明する：
           // b は a に包摂される（同トリガ・証明可能に狭いガード・同一効果）。
           push(
