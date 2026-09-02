@@ -32,4 +32,10 @@ export class WitnessRef {
   pointsAt(artifact: string, element: string): boolean {
     return this.#artifact === artifact && this.#element === element;
   }
+
+
+  // 検査が証拠の座標を指す門：成果物・要素パス・任意の生の値。
+  static at(artifact: string, element: string, value?: string): WitnessRef {
+    return new WitnessRef(value === undefined ? { artifact, element } : { artifact, element, value });
+  }
 }

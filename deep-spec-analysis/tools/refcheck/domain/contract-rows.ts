@@ -3,6 +3,9 @@
 // フィールドはドメインプリミティブ、集まりはファーストクラスコレクション。
 
 import type { ContractRow } from "./contract-row.ts";
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
+import type { UnitDecls } from "./unit-decls.ts";
 
 
 export class ContractRows {
@@ -32,5 +35,13 @@ export class ContractRows {
   toArray(): readonly ContractRow[] {
     return this.#values;
   }
-}
 
+
+  // CD-1: 各行の当事者が宣言済みユニットかを、行ごとに判定させる（発生順は
+  // 表の行順、凍結）。
+  checkPartiesDeclared(declared: UnitDecls, report: ReferenceCheckReport, artifact: ArtifactPath, depArtifact: ArtifactPath): void {
+    for (const row of this) {
+      row.checkPartiesDeclared(declared, report, artifact, depArtifact);
+    }
+  }
+}

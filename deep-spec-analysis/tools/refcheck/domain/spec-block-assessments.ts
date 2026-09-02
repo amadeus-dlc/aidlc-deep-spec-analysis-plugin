@@ -1,4 +1,6 @@
 import type { SpecBlockAssessment } from "./spec-block-assessment.ts";
+import type { ArtifactPath } from "../../kernel/domain/index.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
 
 export class SpecBlockAssessments {
   readonly #values: readonly SpecBlockAssessment[];
@@ -21,5 +23,13 @@ export class SpecBlockAssessments {
 
   toArray(): readonly SpecBlockAssessment[] {
     return this.#values;
+  }
+
+
+  // CD-2: 各ブロックに自分の健全性を判定させる（発生順はブロック順、凍結）。
+  check(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const block of this) {
+      block.check(report, artifact);
+    }
   }
 }

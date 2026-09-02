@@ -40,14 +40,8 @@ import {
   CheckFunctionalDesignUseCase,
 } from "../tools/refcheck/usecase/index.ts";
 import {
-  COMPONENT_FAMILIES,
-  CONTRACT_FAMILIES,
-  FUNCTIONAL_FAMILIES,
   ReferenceCheckReport,
   ReferenceCheckReportId,
-  ComponentCheckMaterials,
-  ContractCheckMaterials,
-  FunctionalCheckMaterials,
   BlockIndex,
   CheckFamilies,
   CheckFamily,
@@ -69,8 +63,10 @@ import {
   EntityName,
   SiblingUnitIndex,
   InputAnchor,
+  InputAnchors,
 } from "../tools/refcheck/domain/index.ts";
 import { InMemoryReferenceCheckReportRepository } from "./doubles/in-memory-reference-check-report-repository.ts";
+import type { Result } from "../tools/kernel/infrastructure/index.ts";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(pluginRoot, "tests", "fixtures", "refcheck");
@@ -238,22 +234,53 @@ describe("DesignRecord check gates (the aggregate owns its checks and its inputs
   });
 });
 
-function domainReport(
-  families: CheckFamilies,
-  run: (report: ReferenceCheckReport) => void,
-  backend = "components",
-  unit?: UnitName,
-): ReferenceCheckReport {
-  const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(ap("/tmp/r"), backend), families, unit);
-  run(report);
-  report.input(InputAnchor.reconstitute({ artifact: "x.md", sha256: ContentHash.reconstitute("a".repeat(64)) }));
-  return report;
+// 検査は集約の門を通す（裁定 11〜13・16）——record を組んで門を開き、
+// 開いたレポートで分岐を固定する。
+function anchor(artifact: string): InputAnchor {
+  return InputAnchor.reconstitute({ artifact, sha256: ContentHash.reconstitute("a".repeat(64)) });
+}
+
+function opened(gate: Result<ReferenceCheckReport, { readonly kind: "not-applicable" }>): ReferenceCheckReport {
+  if (!gate.ok) throw new Error("unreachable: the gate did not open");
+  return gate.value;
+}
+
+function componentsReport(md: string): ReferenceCheckReport {
+  return opened(DesignRecord.reconstitute({
+    id: DesignRecordId.of(ap("/tmp/rec/inception/domain-design/components.md")),
+    target: anchor("components.md"),
+    sourceDocument: new TextEncoder().encode(md),
+    componentCatalog: parseComponentCatalog(md),
+    contractSummary: null,
+    functional: null,
+  }).checkComponents(ap("/tmp/r")));
+}
+
+function contractReport(summary: {
+  declaredUnits: DeclaredUnitsOutcome | null;
+  contractsTable: ContractsTableOutcome;
+  specBlocks: SpecBlockAssessments;
+}): ReferenceCheckReport {
+  return opened(DesignRecord.reconstitute({
+    id: DesignRecordId.of(ap("/tmp/rec/inception/contract-design/contract-summary.md")),
+    target: anchor("contract-summary.md"),
+    sourceDocument: new Uint8Array(),
+    componentCatalog: null,
+    contractSummary: {
+      contractsTable: summary.contractsTable,
+      specBlocks: summary.specBlocks,
+      declaredUnits: {
+        artifactName: ArtifactPath.reconstitute("unit-of-work-dependency.md"),
+        document: summary.declaredUnits === null ? null : { input: anchor("unit-of-work-dependency.md"), outcome: summary.declaredUnits },
+      },
+    },
+    functional: null,
+  }).checkContracts(ap("/tmp/r")));
 }
 
 describe("skip branches the fixtures do not exercise", () => {
   test("a broken components fence blocks DD-1..DD-7 with unrecognized-format skips", () => {
-    const report = domainReport(COMPONENT_FAMILIES, (l) =>
-      ComponentCheckMaterials.of({ outcome: parseComponentCatalog("no fence at all"), artifact: ap("components.md") }).runChecks(l));
+    const report = componentsReport("no fence at all");
     expect(report.findingsCount()).toBe(1);
     expect(report.skippedCount()).toBe(7);
     expect(report.skipped().toArray().every((s) => s.reason() === "unrecognized-format")).toBe(true);
@@ -261,21 +288,17 @@ describe("skip branches the fixtures do not exercise", () => {
   });
 
   test("an unparseable components yaml block is a DD-0 finding carrying the parser error", () => {
-    const report = domainReport(COMPONENT_FAMILIES, (l) =>
-      ComponentCheckMaterials.of({ outcome: parseComponentCatalog("```yaml\na: &x 1\n```\n"), artifact: ap("components.md") }).runChecks(l));
+    const report = componentsReport("```yaml\na: &x 1\n```\n");
     expect(report.findings().toArray()[0]?.detail()).toContain("does not parse in the supported subset");
     expect(report.skippedCount()).toBe(7);
   });
 
   test("an absent dependency artifact skips CD-1/CD-3 as absent-input", () => {
-    const report = domainReport(CONTRACT_FAMILIES, (l) =>
-      ContractCheckMaterials.of({
-        artifact: ArtifactPath.reconstitute("contract-summary.md"),
-        depArtifact: ArtifactPath.reconstitute("unit-of-work-dependency.md"),
-        declaredUnits: DeclaredUnitsOutcome.absent(),
-        contractsTable: ContractsTableOutcome.absent(),
-        specBlocks: SpecBlockAssessments.of([]),
-      }).runChecks(l), "contract-summary");
+    const report = contractReport({
+      declaredUnits: null,
+      contractsTable: ContractsTableOutcome.absent(),
+      specBlocks: SpecBlockAssessments.of([]),
+    });
     const reasons = report.skipped().toArray().map((s) => `${s.target()}:${s.reason()}`);
     expect(reasons).toContain("check:CD-1:absent-input");
     expect(reasons).toContain("check:CD-3:absent-input");
@@ -283,18 +306,15 @@ describe("skip branches the fixtures do not exercise", () => {
   });
 
   test("an unusable units edge block and every spec-block issue kind are reported", () => {
-    const report = domainReport(CONTRACT_FAMILIES, (l) =>
-      ContractCheckMaterials.of({
-        artifact: ArtifactPath.reconstitute("contract-summary.md"),
-        depArtifact: ArtifactPath.reconstitute("unit-of-work-dependency.md"),
-        declaredUnits: DeclaredUnitsOutcome.unrecognized("no yaml fence with a top-level `units:` list"),
-        contractsTable: ContractsTableOutcome.rows(ContractRows.of([])),
-        specBlocks: SpecBlockAssessments.of([
-          SpecBlockAssessment.openapiWithoutPaths(BlockIndex.reconstitute(1), LineNumber.reconstitute(1)),
-          SpecBlockAssessment.notAMapping(BlockIndex.reconstitute(2), LineNumber.reconstitute(5)),
-          SpecBlockAssessment.unparseable(BlockIndex.reconstitute(3), LineNumber.reconstitute(9), "line 1: x"),
-        ]),
-      }).runChecks(l), "contract-summary");
+    const report = contractReport({
+      declaredUnits: DeclaredUnitsOutcome.unrecognized("no yaml fence with a top-level `units:` list"),
+      contractsTable: ContractsTableOutcome.rows(ContractRows.of([])),
+      specBlocks: SpecBlockAssessments.of([
+        SpecBlockAssessment.openapiWithoutPaths(BlockIndex.reconstitute(1), LineNumber.reconstitute(1)),
+        SpecBlockAssessment.notAMapping(BlockIndex.reconstitute(2), LineNumber.reconstitute(5)),
+        SpecBlockAssessment.unparseable(BlockIndex.reconstitute(3), LineNumber.reconstitute(9), "line 1: x"),
+      ]),
+    });
     const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain("CD-2: OpenAPI spec block carries `openapi:` but no `paths:`");
     expect(details).toContain("CD-2: spec block is not a YAML mapping");
@@ -305,26 +325,42 @@ describe("skip branches the fixtures do not exercise", () => {
   });
 });
 
-function functionalInput(overrides: Partial<Parameters<typeof FunctionalCheckMaterials.of>[0]>): Parameters<typeof FunctionalCheckMaterials.of>[0] {
-  return {
-    unit: UnitName.reconstitute("u1"),
-    entitiesArtifact: ArtifactPath.reconstitute("e.md"),
-    entities: EntitiesOutcome.absent(),
-    rulesArtifact: ArtifactPath.reconstitute("r.md"),
-    rules: RulesOutcome.absent(),
-    specArtifact: ArtifactPath.reconstitute("s.md"),
-    spec: FunctionalSpecOutcome.absent(),
-    requirementIdsKnown: null,
-    componentsArtifact: ArtifactPath.reconstitute("components.md"),
-    domainEntities: DomainEntitiesOutcome.absent(),
-    siblingUnits: SiblingUnitIndex.of(new Map()),
-    ...overrides,
-  };
-}
+type FunctionalOverrides = {
+  unit?: UnitName | undefined;
+  entities?: EntitiesOutcome;
+  rules?: RulesOutcome;
+  spec?: FunctionalSpecOutcome;
+  requirementIdsKnown?: RequirementIds | null;
+  domainEntities?: DomainEntitiesOutcome;
+  siblingUnits?: SiblingUnitIndex;
+};
 
-function functionalReport(overrides: Partial<Parameters<typeof FunctionalCheckMaterials.of>[0]>): ReferenceCheckReport {
-  const input = functionalInput(overrides);
-  return domainReport(FUNCTIONAL_FAMILIES, (l) => FunctionalCheckMaterials.of(input).runChecks(l), "functional-design", input.unit);
+// 文書は (input, outcome) の対か null（無い）。unit は明示の undefined で
+// 「判らない」を表す。
+function functionalReport(overrides: FunctionalOverrides): ReferenceCheckReport {
+  const doc = <T>(artifact: string, outcome: T | undefined): { input: InputAnchor; outcome: T } | null =>
+    outcome === undefined ? null : { input: anchor(artifact), outcome };
+  return opened(DesignRecord.reconstitute({
+    id: DesignRecordId.of(ap("/tmp/rec/construction/u1/functional-design/entities.md")),
+    target: anchor("e.md"),
+    sourceDocument: new Uint8Array(),
+    componentCatalog: null,
+    contractSummary: null,
+    functional: {
+      unit: "unit" in overrides ? overrides.unit : UnitName.reconstitute("u1"),
+      entitiesArtifact: ArtifactPath.reconstitute("e.md"),
+      entities: doc("e.md", overrides.entities),
+      rulesArtifact: ArtifactPath.reconstitute("r.md"),
+      rules: doc("r.md", overrides.rules),
+      specArtifact: ArtifactPath.reconstitute("s.md"),
+      spec: doc("s.md", overrides.spec),
+      requirements: doc("requirements.md", overrides.requirementIdsKnown ?? undefined),
+      componentsArtifact: ArtifactPath.reconstitute("components.md"),
+      components: doc("components.md", overrides.domainEntities),
+      siblingUnits: overrides.siblingUnits ?? SiblingUnitIndex.of(new Map()),
+      siblingInputs: InputAnchors.of([]),
+    },
+  }).checkFunctionalDesign(ap("/tmp/r")));
 }
 
 describe("functional branches the fixtures do not exercise", () => {
@@ -551,8 +587,9 @@ describe("functional branches the fixtures do not exercise", () => {
   });
 
   test("a degraded conformance still renders a schema-valid unavailable document", () => {
-    const bad = domainReport(COMPONENT_FAMILIES, (l) =>
-      l.finding(CheckFamily.reconstitute("DD-0"), "no-such-kind", ["check:DD-0"], [], "x"));
+    const bad = ReferenceCheckReport.open(ReferenceCheckReportId.of(ap("/tmp/r"), "components"), CheckFamilies.reconstitute(["DD-0"]));
+    bad.finding(CheckFamily.reconstitute("DD-0"), "no-such-kind", ["check:DD-0"], [], "x");
+    bad.input(anchor("x.md"));
     const conformed = conformToContract(bad, schema);
     expect(conformed.isUnavailable()).toBe(true);
     expect(JSON.parse(renderReportBytes(conformed)).unavailable.reason)

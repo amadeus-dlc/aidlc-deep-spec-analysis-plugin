@@ -2089,3 +2089,27 @@ match the record's document answers `not-applicable` through `Result`,
 the expected branch the sensor maps to its own `not-applicable`. The use
 cases shrink to: resolve the record, open the gate, conform, store.
 Goldens stay byte-identical; the field ledger is unchanged (ceiling 66).
+
+Wave 40 (same PR): rulings 11, 12 and 13 land — the checks become the
+declarations' own invariants, and the three `*CheckMaterials` (786
+lines) are gone. Each parse outcome judges its own shape and writes the
+blocked skips (`ComponentCatalogOutcome.check` for DD-0, `EntitiesOutcome`
+and `RulesOutcome` for FD-E1 and FD-R1, `DeclaredUnitsOutcome` and
+`ContractsTableOutcome` for the CD-1/CD-3 preconditions,
+`FunctionalSpecOutcome` and `DomainEntitiesOutcome` for FD-S and XS) and
+hands the content to the object that owns it: `Components.check` writes
+DD-1..DD-7, `ContractRow.checkPartiesDeclared` CD-1 against `UnitDecls`,
+`SpecBlockAssessment.check` CD-2, `UnitDecls.checkEdgesCovered` CD-3
+against `ContractRows`, `DeclaredEntities.check` FD-E1..E6,
+`RuleDecls.check` FD-R1..R5, `StateMachineSketch.check` FD-S1/S2 and
+`DomainEntitySketches.check` XS-1..3. The check families live in three
+small vocabulary files, `WitnessRef.at` is the door to a witness
+coordinate, and the `DesignRecord` gates only call the outcomes in the
+frozen order and record the inputs. Three contract-row getters nothing
+read any more are deleted. Goldens stay byte-identical; the field ledger
+is unchanged (ceiling 66).
+
+With this wave every one of the 22 rulings of 2026-09-02 is implemented,
+and the domain-object taxonomy programme under #71 is complete: the
+domain layer holds entities, value objects, first-class collections and
+domain events, and nothing else.

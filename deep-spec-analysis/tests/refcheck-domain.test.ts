@@ -268,7 +268,7 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
       line: LineNumber.reconstitute(3),
     });
     expect(row.locationLabel()).toBe("contracts table row 1 (line 3)");
-    expect(row.owner().asString()).toBe("cart");
+    expect(row.id().asString()).toBe("1");
     const rows = ContractRows.of([]).add(row);
     expect([...rows]).toEqual([row]);
     expect(rows.toArray()).toEqual([row]);
