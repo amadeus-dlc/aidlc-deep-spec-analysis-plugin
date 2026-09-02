@@ -1,6 +1,6 @@
 import { BackendName, ContentHash, FrRefs, IdOrder, TargetIds } from "../../kernel/domain/index.ts";
 import { CrossCheckedEntries } from "./cross-checked-entries.ts";
-import type { CrossCheckedEntry } from "./cross-checked-entry.ts";
+import { CrossCheckedEntry } from "./cross-checked-entry.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
@@ -77,8 +77,8 @@ export class VerificationReports {
       }
     }
     const crossChecked: CrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets].sort(IdOrder.compare)) }))
-      .sort((x, y) => (x.backend.asString() < y.backend.asString() ? -1 : x.backend.asString() > y.backend.asString() ? 1 : 0));
+      .map(([backend, targets]) => CrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets].sort(IdOrder.compare)) }))
+      .sort((x, y) => x.compareByBackend(y));
 
     return VerificationReport.compose({
       id,

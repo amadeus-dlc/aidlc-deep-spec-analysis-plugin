@@ -9,7 +9,7 @@ import { CheckFamilies } from "./check-families.ts";
 import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import { type DeclaredEntities } from "./declared-entities.ts";
 import { type RuleDecls } from "./rule-decls.ts";
-import type { WitnessRef } from "./witness-ref.ts";
+import { WitnessRef } from "./witness-ref.ts";
 import type { ArtifactPath, RequirementIds } from "../../kernel/domain/index.ts";
 import type { DomainEntitiesOutcome } from "./domain-entities-outcome.ts";
 import type { EntitiesOutcome } from "./entities-outcome.ts";
@@ -44,7 +44,7 @@ export const FUNCTIONAL_FAMILIES = CheckFamilies.of([
 
 
 function ref(artifact: string, element: string, value?: string): WitnessRef {
-  return value === undefined ? { artifact, element } : { artifact, element, value };
+  return WitnessRef.reconstitute(value === undefined ? { artifact, element } : { artifact, element, value });
 }
 
 function runFunctionalChecksImpl(materials: {

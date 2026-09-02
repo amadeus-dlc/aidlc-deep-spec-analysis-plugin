@@ -1,12 +1,30 @@
-// InputAnchor — 入力成果物の錨。検査が「どの入力成果物のどのバイト列に
-// 基づいたか」の宣言で、文書の inputs[] に逐語で載り（irHash の材料）、
-// 下流の陳腐化検出の根拠になる。requirements の SourceAnchor と同じ
-// 「内容による錨着」の語彙（旧名 InputEntry — 台帳行という技術語だった）。
-
 import type { ContentHash } from "../../kernel/domain/index.ts";
 
-export interface InputAnchor {
-  artifact: string;
-  sha256: ContentHash;
-}
+// refcheck 入力の錨——記録相対の成果物名と読んだ時点の sha256。成果物名順
+// （inputs[] の凍結順）と「同じ成果物か」「内容が変わったか」は錨自身の知識
+// （#71 波19）。
+export class InputAnchor {
+  readonly #artifact: string;
+  readonly #sha256: ContentHash;
 
+  private constructor(props: { artifact: string; sha256: ContentHash }) {
+    this.#artifact = props.artifact;
+    this.#sha256 = props.sha256;
+  }
+
+  static reconstitute(props: { artifact: string; sha256: ContentHash }): InputAnchor {
+    return new InputAnchor(props);
+  }
+
+  artifact(): string {
+    return this.#artifact;
+  }
+
+  sha256(): ContentHash {
+    return this.#sha256;
+  }
+
+  compareByArtifact(other: InputAnchor): number {
+    return this.#artifact < other.#artifact ? -1 : this.#artifact > other.#artifact ? 1 : 0;
+  }
+}

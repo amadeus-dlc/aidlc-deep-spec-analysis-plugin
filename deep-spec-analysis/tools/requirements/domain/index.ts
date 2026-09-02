@@ -26,7 +26,7 @@ export { type VerificationWitness } from "./verification-witness.ts";
 export { VerificationReportId } from "./verification-report-id.ts";
 export { SUPPORTED_IR_MAJOR, VerificationReport } from "./verification-report.ts";
 export { CrossCheckedEntries } from "./cross-checked-entries.ts";
-export { type CrossCheckedEntry } from "./cross-checked-entry.ts";
+export { CrossCheckedEntry } from "./cross-checked-entry.ts";
 export { VerificationReports } from "./verification-reports.ts";
 export { type SmtQueryStatus } from "./smt-query-status.ts";
 export { SmtQueryVerdict } from "./smt-query-verdict.ts";

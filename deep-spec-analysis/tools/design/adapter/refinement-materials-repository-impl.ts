@@ -47,7 +47,9 @@ import {
   TransitionRef,
   type RefinementMapAcquisition,
 } from "../../refinement/domain/index.ts";
-import { DesignUnitId } from "../domain/index.ts";
+import { DesignUnitId,
+  DesignInputAnchor,
+} from "../domain/index.ts";
 import type { RefinementMapParse } from "./refinement-map-parse.ts";
 import {
   RefinementMaterialsRepository,
@@ -161,9 +163,9 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
     const reqModelPath = join(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
     const mapArtifact = relArtifact(recordRoot, path);
     const inputs = [
-      { artifact: relArtifact(recordRoot, modelPath), sha256: ContentHash.ofText(readFileSync(modelPath, "utf-8")) },
-      { artifact: mapArtifact, sha256: ContentHash.ofText(readFileSync(path, "utf-8")) },
-      { artifact: relArtifact(recordRoot, reqModelPath), sha256: ContentHash.ofText(readFileSync(reqModelPath, "utf-8")) },
+      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, modelPath), sha256: ContentHash.ofText(readFileSync(modelPath, "utf-8")) }),
+      DesignInputAnchor.reconstitute({ artifact: mapArtifact, sha256: ContentHash.ofText(readFileSync(path, "utf-8")) }),
+      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, reqModelPath), sha256: ContentHash.ofText(readFileSync(reqModelPath, "utf-8")) }),
     ];
     return { kind: "loaded", map, mapArtifact, inputs };
   }

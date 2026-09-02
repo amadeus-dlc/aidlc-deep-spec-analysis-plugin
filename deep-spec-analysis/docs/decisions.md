@@ -1659,3 +1659,17 @@ also makes the frozen-wording assertions real rather than vacuous.
 2 ledger entries reclaimed — the ledger holds 54 of 122;
 `PRIMITIVE_FIELD_DEBT` keeps its total (three ledgered `kind` / `unit`
 fields change shape).
+
+Wave 19 (same PR): the small payload records become commandable.
+`WitnessRef` (refcheck) owns its evidence coordinate (`pointsAt`);
+`InputAnchor` (refcheck) and `DesignInputAnchor` (design) own the
+artifact order of `inputs[]` (`compareByArtifact`, the collections sort
+by delegation); `CrossCheckedEntry` (requirements) and
+`DesignCrossCheckedEntry` (design) own the backend order of
+`crossChecked[]` (`compareByBackend`). The refcheck materials' `ref`
+helpers, the record and refinement-materials repositories, the reports
+and the serializers reconstitute; the serializers read through the
+accessors. 5 ledger entries reclaimed — the ledger holds 49 of 122;
+`PRIMITIVE_FIELD_DEBT` keeps its total (the ledgered `artifact` /
+`element` / `value` strings change shape — they remain record-relative
+artifact names and element paths, candidates for their own primitives).

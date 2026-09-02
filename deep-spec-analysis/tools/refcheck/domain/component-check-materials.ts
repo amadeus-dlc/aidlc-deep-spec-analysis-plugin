@@ -9,7 +9,7 @@ import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import { Components } from "./components.ts";
 import { ComponentName } from "./component-name.ts";
 import { type ComponentCatalogOutcome } from "./component-catalog-outcome.ts";
-import type { WitnessRef } from "./witness-ref.ts";
+import { WitnessRef } from "./witness-ref.ts";
 import type { ArtifactPath } from "../../kernel/domain/index.ts";
 
 const DD_0 = CheckFamily.reconstitute("DD-0");
@@ -32,7 +32,7 @@ function runComponentChecksImpl(
   ledger: CheckFamilyLedger,
 ): void {
   const ref = (element: string, value?: string): WitnessRef =>
-    value === undefined ? { artifact, element } : { artifact, element, value };
+    WitnessRef.reconstitute(value === undefined ? { artifact, element } : { artifact, element, value });
 
   // --- DD-0: fence shape --------------------------------------------------
   let comps = Components.of([]);

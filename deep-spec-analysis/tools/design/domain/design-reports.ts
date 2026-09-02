@@ -1,6 +1,6 @@
 import { BackendName, ContentHash, FrRefs, IdOrder, TargetId, TargetIds } from "../../kernel/domain/index.ts";
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
-import type { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
+import { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
 import { DesignFindings } from "./design-findings.ts";
 import { DesignSkips } from "./design-skips.ts";
 import { DesignFinding } from "./design-finding.ts";
@@ -83,8 +83,8 @@ export class DesignReports {
       }
     }
     const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets].sort(IdOrder.compare)) }))
-      .sort((x, y) => (x.backend.asString() < y.backend.asString() ? -1 : x.backend.asString() > y.backend.asString() ? 1 : 0));
+      .map(([backend, targets]) => DesignCrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets].sort(IdOrder.compare)) }))
+      .sort((x, y) => x.compareByBackend(y));
 
     return DesignReport.compose({
       id,

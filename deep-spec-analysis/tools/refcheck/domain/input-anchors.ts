@@ -26,7 +26,7 @@ export class InputAnchors {
   }
 
   sortedByArtifact(): InputAnchors {
-    return new InputAnchors([...this.#values].sort((a, b) => (a.artifact < b.artifact ? -1 : a.artifact > b.artifact ? 1 : 0)));
+    return new InputAnchors([...this.#values].sort((a, b) => a.compareByArtifact(b)));
   }
 
   toArray(): readonly InputAnchor[] {

@@ -5,6 +5,8 @@ import { describe, expect, test } from "bun:test";
 import { ContentHash, FrRefs, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
 import { CATALOG_VERSION, Finding, Skipped, Findings, InputAnchors, Skips, WitnessRefs,
   UnitDecl,
+  InputAnchor,
+  WitnessRef,
 } from "../tools/refcheck/domain/index.ts";
 
 function finding(kind: string, targets: string[], detail: string): Finding {
@@ -496,7 +498,7 @@ describe("refcheck payload collections (first-class operations)", () => {
     const refs = FrRefs.of([]).add("FR-1");
     expect([...refs]).toEqual(["FR-1"]);
 
-    const wr = { artifact: "a.md", element: "e" };
+    const wr = WitnessRef.reconstitute({ artifact: "a.md", element: "e" });
     const wrs = WitnessRefs.of([]).add(wr);
     expect([...wrs]).toEqual([wr]);
     expect(wrs.toArray()).toEqual([wr]);
@@ -513,10 +515,10 @@ describe("refcheck payload collections (first-class operations)", () => {
     expect([...sks]).toEqual([sk]);
     expect(sks.count()).toBe(1);
 
-    const ia = { artifact: "b.md", sha256: ContentHash.reconstitute("a".repeat(64)) };
-    const ias = InputAnchors.of([]).add(ia).addAll([{ artifact: "a.md", sha256: ContentHash.reconstitute("b".repeat(64)) }]);
+    const ia = InputAnchor.reconstitute({ artifact: "b.md", sha256: ContentHash.reconstitute("a".repeat(64)) });
+    const ias = InputAnchors.of([]).add(ia).addAll([InputAnchor.reconstitute({ artifact: "a.md", sha256: ContentHash.reconstitute("b".repeat(64)) })]);
     expect([...ias].length).toBe(2);
-    expect(ias.sortedByArtifact().toArray().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
+    expect(ias.sortedByArtifact().toArray().map((i) => i.artifact())).toEqual(["a.md", "b.md"]);
   });
 });
 
@@ -588,5 +590,19 @@ describe("sketch collection pins (one-public-type refactor)", () => {
     const sms = StateMachineSketches.of([]).add(sm);
     expect([...sms].length).toBe(1);
     expect(sms.toArray().length).toBe(1);
+  });
+});
+
+describe("witness ref (a finding's evidence coordinate)", () => {
+  test("round-trips its parts, carries an optional raw value, and answers pointsAt", () => {
+    const bare = WitnessRef.reconstitute({ artifact: "inception/domain-design/components.md", element: "components[0].name" });
+    const valued = WitnessRef.reconstitute({ artifact: "a.md", element: "entities[1]", value: "Order Item" });
+    expect(bare.artifact()).toBe("inception/domain-design/components.md");
+    expect(bare.element()).toBe("components[0].name");
+    expect(bare.value()).toBeUndefined();
+    expect(valued.value()).toBe("Order Item");
+    expect(valued.pointsAt("a.md", "entities[1]")).toBe(true);
+    expect(valued.pointsAt("a.md", "entities[2]")).toBe(false);
+    expect(bare.pointsAt("b.md", "components[0].name")).toBe(false);
   });
 });

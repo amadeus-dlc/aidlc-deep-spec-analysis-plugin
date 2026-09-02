@@ -15,7 +15,7 @@ import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
   type DesignRecordId,
   DesignRecord,
-  type InputAnchor,
+  InputAnchor,
   InputAnchors,
   UnitName,
 } from "../domain/index.ts";
@@ -41,7 +41,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const isFunctional = basename(fdDir) === "functional-design";
     const recordRoot = findRecordRoot(isFunctional ? fdDir : dirname(artifactPath));
     const rel = (p: string): string => relArtifact(recordRoot, p);
-    const input = (p: string, text: string): InputAnchor => ({ artifact: rel(p), sha256: ContentHash.ofText(text) });
+    const input = (p: string, text: string): InputAnchor => (InputAnchor.reconstitute({ artifact: rel(p), sha256: ContentHash.ofText(text) }));
 
     const seed: Parameters<typeof DesignRecord.reconstitute>[0] = {
       id,
@@ -79,7 +79,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     return {
       artifactName: ArtifactPath.reconstitute(relArtifact(recordRoot, depPath)),
       document: {
-        input: { artifact: relArtifact(recordRoot, depPath), sha256: ContentHash.ofText(depMd) },
+        input: InputAnchor.reconstitute({ artifact: relArtifact(recordRoot, depPath), sha256: ContentHash.ofText(depMd) }),
         outcome: parseDeclaredUnits(depMd),
       },
     };
@@ -90,7 +90,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const load = <T>(path: string, parse: (text: string) => T): { input: InputAnchor; outcome: T } | null => {
       const text = readIfExists(path);
       if (text === null) return null;
-      return { input: { artifact: rel(path), sha256: ContentHash.ofText(text) }, outcome: parse(text) };
+      return { input: InputAnchor.reconstitute({ artifact: rel(path), sha256: ContentHash.ofText(text) }), outcome: parse(text) };
     };
 
     const unitDir = dirname(fdDir);
@@ -138,7 +138,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
       siblingInputs: InputAnchors.of(
         siblingTexts
           .filter((s) => s.path !== entitiesPath)
-          .map((s) => ({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) })),
+          .map((s) => (InputAnchor.reconstitute({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) }))),
       ),
     };
   }

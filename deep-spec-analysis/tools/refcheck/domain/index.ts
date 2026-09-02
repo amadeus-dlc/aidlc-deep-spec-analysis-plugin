@@ -1,13 +1,13 @@
 // refcheck/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
 export { CATALOG_VERSION } from "./catalog-version.ts";
-export { type WitnessRef } from "./witness-ref.ts";
+export { WitnessRef } from "./witness-ref.ts";
 export { WitnessRefs } from "./witness-refs.ts";
 export { Finding } from "./finding.ts";
 export { Findings } from "./findings.ts";
 export { Skips } from "./skips.ts";
 export { Skipped } from "./skipped.ts";
-export { type InputAnchor } from "./input-anchor.ts";
+export { InputAnchor } from "./input-anchor.ts";
 export { InputAnchors } from "./input-anchors.ts";
 export { ReferenceCheckReport } from "./reference-check-report.ts";
 export { ReferenceCheckReportId } from "./reference-check-report-id.ts";

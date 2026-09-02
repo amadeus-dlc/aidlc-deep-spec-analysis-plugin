@@ -451,7 +451,7 @@ describe("cross-check computation", () => {
       witness: { verdicts: { quint: "violated", smt: "clean" } },
       detail: 'Backends "quint" and "smt" disagree on scenario SC-1. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.',
     }]);
-    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toStrings() }))).toEqual([
+    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }))).toEqual([
       { backend: "quint", targets: ["SC-1", "SC-2"] },
       { backend: "smt", targets: ["SC-1", "SC-2"] },
     ]);
@@ -467,7 +467,7 @@ describe("cross-check computation", () => {
       sibling("down", { unavailable: "boom", violated: ["SC-2"] }),
     ]).crossChecked(id, m, ContentHash.reconstitute("h1"));
     expect(report.findings().toArray()).toEqual([]);
-    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toStrings() }))).toEqual([
+    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }))).toEqual([
       { backend: "quint", targets: ["SC-2"] },
       { backend: "smt", targets: ["SC-2"] },
     ]);
