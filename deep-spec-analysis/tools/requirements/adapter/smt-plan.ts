@@ -189,7 +189,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     if (ob.isInvariantLike()) {
       const assertion = ob.assertion();
       if (assertion === undefined) {
-        skipped.push({ target: ob.id().asString(), reason: "compile-error", detail: "invariant obligation lacks an assert expression" });
+        skipped.push({ target: ob.id().asTargetId(), reason: "compile-error", detail: "invariant obligation lacks an assert expression" });
         compiled.set(ob.id().asString(), false);
         continue;
       }
@@ -199,13 +199,13 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         invariantObs.push(ob);
         compiled.set(ob.id().asString(), true);
       } catch (err) {
-        skipped.push({ target: ob.id().asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+        skipped.push({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
         compiled.set(ob.id().asString(), false);
       }
     } else if (ob.isEvent()) {
       const event = ob.eventDefinition();
       if (event === null) {
-        skipped.push({ target: ob.id().asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
+        skipped.push({ target: ob.id().asTargetId(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
         compiled.set(ob.id().asString(), false);
         continue;
       }
@@ -216,12 +216,12 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         events.push(ob);
         compiled.set(ob.id().asString(), true);
       } catch (err) {
-        skipped.push({ target: ob.id().asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+        skipped.push({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
         compiled.set(ob.id().asString(), false);
       }
     } else {
       // state-temporal — このバックエンドの nature 範囲外（FR6.2）。
-      skipped.push({ target: ob.id().asString(), reason: "capability", detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend` });
+      skipped.push({ target: ob.id().asTargetId(), reason: "capability", detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend` });
       compiled.set(ob.id().asString(), false);
     }
   }
@@ -334,7 +334,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const scenarioQueries = new Map<string, string>();
   for (const sc of model.scenarios()) {
     if (sc.hasEvent()) {
-      skipped.push({ target: sc.id().asString(), reason: "capability", detail: "scenarios with a When-event are not checked by the SMT backend in v1" });
+      skipped.push({ target: sc.id().asTargetId(), reason: "capability", detail: "scenarios with a When-event are not checked by the SMT backend in v1" });
       continue;
     }
     try {
@@ -357,7 +357,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       queries.push({ id: qid, script, assumptions: [...baseAssumptions, name], model: modelVars });
       scenarioQueries.set(sc.id().asString(), qid);
     } catch (err) {
-      skipped.push({ target: sc.id().asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+      skipped.push({ target: sc.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
     }
   }
 

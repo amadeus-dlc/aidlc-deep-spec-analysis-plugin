@@ -289,7 +289,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
     DesignFinding.reconstitute({
       kind,
       frRefs: FrRefs.of(["FR-1"]),
-      targets: TargetIds.of(targets),
+      targets: TargetIds.reconstitute(targets),
       witness: { trace: [{ "T.s": "a" }] },
       unit: "u1",
       detail: "overlap",
@@ -299,7 +299,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
     const f = finding("conflict", ["FR-9", "TR-1"]);
     expect(f.kind()).toBe("conflict");
     expect(f.frRefs().toArray()).toEqual(["FR-1"]);
-    expect(f.targets().toArray()).toEqual(["FR-9", "TR-1"]);
+    expect(f.targets().toStrings()).toEqual(["FR-9", "TR-1"]);
     expect(f.witness()).toEqual({ trace: [{ "T.s": "a" }] });
     expect(f.unit()).toBe("u1");
     expect(f.detail()).toBe("overlap");
@@ -310,7 +310,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
   test("a conflict reaching requirement ids ascends to refinement-violation with the frozen wording", () => {
     const v = finding("conflict", ["FR-9", "TR-1"]).asRefinementViolation(new Set(["FR-9", "FR-10"]), "u1");
     expect(v?.kind()).toBe("refinement-violation");
-    expect(v?.targets().toArray()).toEqual(["FR-9"]);
+    expect(v?.targets().toStrings()).toEqual(["FR-9"]);
     expect(v?.frRefs().toArray()).toEqual(["FR-1"]);
     expect(v?.witness()).toEqual({ trace: [{ "T.s": "a" }] });
     expect(v?.unit()).toBe("u1");
@@ -328,7 +328,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
     const copy = finding("redundancy", ["TR-1", "TR-2"]).withDetail("mutual");
     expect(copy.kind()).toBe("redundancy");
     expect(copy.frRefs().toArray()).toEqual(["FR-1"]);
-    expect(copy.targets().toArray()).toEqual(["TR-1", "TR-2"]);
+    expect(copy.targets().toStrings()).toEqual(["TR-1", "TR-2"]);
     expect(copy.witness()).toEqual({ trace: [{ "T.s": "a" }] });
     expect(copy.unit()).toBe("u1");
     expect(copy.detail()).toBe("mutual");

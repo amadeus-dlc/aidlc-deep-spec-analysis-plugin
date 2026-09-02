@@ -16,7 +16,7 @@ import {
   QuintMachineComponents,
   QuintMachineFacts,
   ObligationIds,
-  type ObligationId,
+  type ObligationId, QuintMachineComponent, ScenarioId
 } from "../domain/index.ts";
 
 class CompileError extends Error {
@@ -191,22 +191,26 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
 
   // 不変量面：invariant/numeric 義務・state-temporal "always" 義務・背景制約・
   // 型境界。
-  const invariantComponents: { id: string; expr: Expression }[] = [];
+  const invariantComponents: QuintMachineComponent[] = [];
+  // 不変量定義の emit 順（成分 → 背景制約）は凍結。
+  const propDefs: { id: string; expr: Expression }[] = [];
   for (const ob of model.obligations()) {
     const assertion = ob.assertion();
     if (ob.isInvariantLike() && assertion !== undefined) {
-      invariantComponents.push({ id: ob.id().asString(), expr: assertion });
+      invariantComponents.push(QuintMachineComponent.reconstitute({ id: ob.id(), expression: assertion }));
+      propDefs.push({ id: ob.id().asString(), expr: assertion });
     }
     const temporal = ob.temporal();
     if (ob.isStateTemporal() && temporal?.pattern === "always" && temporal.assert !== undefined) {
-      invariantComponents.push({ id: ob.id().asString(), expr: temporal.assert });
+      invariantComponents.push(QuintMachineComponent.reconstitute({ id: ob.id(), expression: temporal.assert }));
+      propDefs.push({ id: ob.id().asString(), expr: temporal.assert });
     }
   }
-  const bgComponents = model.background().toArray().map((b) => ({ id: b.id, expr: b.assert }));
+  for (const b of model.background().toArray()) propDefs.push({ id: b.id.asString(), expr: b.assert });
 
   const invExprs: string[] = [];
-  for (const c of [...invariantComponents, ...bgComponents]) {
-    const def = qId("prop", typeof c.id === "string" ? c.id : c.id.asString());
+  for (const c of propDefs) {
+    const def = qId("prop", c.id);
     lines.push(`  val ${def} = ${quintOf(c.expr, stateName)}`);
     invExprs.push(def);
   }
@@ -232,7 +236,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
     if (model.attributeAt(path) === undefined) throw new CompileError(`unresolvable reference "${path}"`);
     return `n_${qVar(path)}`;
   };
-  const initConds = [...invariantComponents, ...bgComponents].map((c) => quintOf(c.expr, initName));
+  const initConds = propDefs.map((c) => quintOf(c.expr, initName));
   lines.push("    all {");
   for (const cond of initConds) lines.push(`      ${cond},`);
   for (const attr of attrs) lines.push(`      ${qVar(attr.path.asString())}' = n_${qVar(attr.path.asString())},`);
@@ -248,7 +252,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
     if (!ob.isEvent()) continue;
     const event = ob.eventDefinition();
     if (event === null) {
-      compileSkips.push({ target: ob.id().asString(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
+      compileSkips.push({ target: ob.id().asTargetId(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
       continue;
     }
     try {
@@ -265,7 +269,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       actionNames.push(action);
       eventIds.push(ob.id());
     } catch (err) {
-      compileSkips.push({ target: ob.id().asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+      compileSkips.push({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
     }
   }
   const idleParts = attrs.map((a) => `${qVar(a.path.asString())}' = ${qVar(a.path.asString())}`);
@@ -285,13 +289,14 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       lines.push(`  temporal ${qId("temp", ob.id().asString())} = always(${from} implies eventually(${to}))`);
       temporalNames.set(ob.id().asString(), qId("temp", ob.id().asString()));
     } catch (err) {
-      compileSkips.push({ target: ob.id().asString(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+      compileSkips.push({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
     }
   }
   lines.push("");
 
   // シナリオ init：全属性束縛・イベントなしのシナリオのみ。
   const scenarioInitActions = new Map<string, string>();
+  const scenariosWithInit: ScenarioId[] = [];
   for (const sc of model.scenarios()) {
     if (sc.hasEvent()) continue;
     const bindings = sc.bindings();
@@ -311,6 +316,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
     const initAction = qId("scInit", sc.id().asString());
     lines.push(`  action ${initAction} = all { ${parts.join(", ")} }`);
     scenarioInitActions.set(sc.id().asString(), initAction);
+    scenariosWithInit.push(sc.id());
   }
 
   lines.push("}");
@@ -319,7 +325,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
     facts: QuintMachineFacts.of({
       invariantComponents: QuintMachineComponents.of(invariantComponents),
       eventIds: ObligationIds.of(eventIds),
-      scenariosWithInit: new Set(scenarioInitActions.keys()),
+      scenariosWithInit,
     }),
     compileSkips,
     varToPath,

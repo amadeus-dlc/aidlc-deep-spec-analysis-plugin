@@ -45,7 +45,7 @@ export { TraceStates } from "./trace-states.ts";
 export { ExpressionEvaluation } from "./expression-evaluation.ts";
 export { QuintMachineFacts } from "./quint-machine-facts.ts";
 export { type InterpretedQuintVerdicts } from "./interpreted-quint-verdicts.ts";
-export { type QuintMachineComponent } from "./quint-machine-component.ts";
+export { QuintMachineComponent } from "./quint-machine-component.ts";
 export { QuintMachineComponents } from "./quint-machine-components.ts";
 export { type QuintMachineFactsSeed } from "./quint-machine-facts-seed.ts";
 export { QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";

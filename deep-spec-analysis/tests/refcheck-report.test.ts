@@ -52,7 +52,7 @@ function seed(
     inputs: InputAnchors.of(
       overrides.inputs ?? [{ artifact: "inception/domain-design/components.md", sha256: ContentHash.reconstitute("a".repeat(64)) }],
     ),
-    checked: TargetIds.of(overrides.checked ?? ["check:DD-0"]),
+    checked: TargetIds.reconstitute(overrides.checked ?? ["check:DD-0"]),
     findings: Findings.of(overrides.findings ?? []),
     skipped: Skips.of(overrides.skipped ?? []),
   });
@@ -82,7 +82,7 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     expect(report.isUnavailable()).toBe(false);
     expect(report.findingsCount()).toBe(0);
     expect(report.skippedCount()).toBe(0);
-    expect(report.checked().toArray()).toEqual(["check:DD-0", "check:DD-1"]);
+    expect(report.checked().toStrings()).toEqual(["check:DD-0", "check:DD-1"]);
     expect(report.inputs().toArray().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
     expect(report.unavailableReason()).toBe(null);
     expect(report.id().backendName().asString()).toBe("components");
@@ -93,7 +93,7 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     expect(degraded.isUnavailable()).toBe(true);
     expect(degraded.passes()).toBe(false);
     expect(degraded.unavailableReason()).toBe("why");
-    expect(degraded.checked().toArray()).toEqual([]);
+    expect(degraded.checked().toStrings()).toEqual([]);
     expect(degraded.findingsCount()).toBe(0);
     expect(degraded.inputs().toArray()).toHaveLength(1);
   });
@@ -110,7 +110,7 @@ describe("serializer (adapter owns the format knowledge)", () => {
   });
 
   test("a non-conforming document degrades with the frozen wording", () => {
-    const badFinding: Finding = { kind: "no-such-kind", frRefs: FrRefs.of([]), targets: TargetIds.of(["check:DD-0"]), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" };
+    const badFinding: Finding = { kind: "no-such-kind", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["check:DD-0"]), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" };
     const conformed = conformToContract(seed("/tmp/r", { findings: [badFinding] }), schema);
     expect(conformed.isUnavailable()).toBe(true);
     expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");

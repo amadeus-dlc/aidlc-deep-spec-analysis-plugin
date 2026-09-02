@@ -1,5 +1,6 @@
 import { err, ok } from "../../kernel/infrastructure/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
+import { TargetId } from "../../kernel/domain/index.ts";
 
 type ObligationIdError = { readonly kind: "empty-obligation-id"; readonly raw: string };
 
@@ -25,5 +26,10 @@ export class ObligationId {
 
   asString(): string {
     return this.#value;
+  }
+
+  // 義務 id は検査対象 id でもある（finding の targets / skip の target 面）。
+  asTargetId(): TargetId {
+    return TargetId.reconstitute(this.#value);
   }
 }

@@ -44,13 +44,7 @@ export class VerificationReports {
       .map((s) => ({
         backend: s.id().backendName().asString(),
         findings: s.findings().toArray(),
-        skippedTargets: new Set(
-          s
-            .skipped()
-            .toArray()
-            .filter((e) => typeof e.target === "string")
-            .map((e) => e.target),
-        ),
+        skippedTargets: new Set(s.skipped().toArray().map((e) => e.target.asString())),
       }));
 
     const scenarioById = new Map(model.scenarios().toArray().map((s) => [s.id().asString(), s]));
@@ -63,8 +57,8 @@ export class VerificationReports {
         if (!a || !b) continue;
         for (const sc of model.scenarios()) {
           if (a.skippedTargets.has(sc.id().asString()) || b.skippedTargets.has(sc.id().asString())) continue;
-          const va = a.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id().asString()));
-          const vb = b.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id().asString()));
+          const va = a.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id().asTargetId()));
+          const vb = b.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id().asTargetId()));
           (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id().asString());
           (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(sc.id().asString());
           if (va !== vb) {
@@ -74,7 +68,7 @@ export class VerificationReports {
             findings.push({
               kind: "cross-check-disagreement",
               frRefs: FrRefs.of(IdOrder.sortedUnique([...(scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? [])], IdOrder.compare)),
-              targets: TargetIds.of([sc.id().asString()]),
+              targets: TargetIds.of([sc.id().asTargetId()]),
               witness: { verdicts },
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
             });
@@ -83,7 +77,7 @@ export class VerificationReports {
       }
     }
     const crossChecked: CrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.of([...targets].sort(IdOrder.compare)) }))
+      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets].sort(IdOrder.compare)) }))
       .sort((x, y) => (x.backend.asString() < y.backend.asString() ? -1 : x.backend.asString() > y.backend.asString() ? 1 : 0));
 
     return VerificationReport.compose({

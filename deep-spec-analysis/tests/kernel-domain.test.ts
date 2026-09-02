@@ -17,7 +17,7 @@ import {
 } from "../tools/kernel/adapter/index.ts";
 import { smtIntOf, smtLit, smtName, smtVar } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok, unreachable } from "../tools/kernel/infrastructure/index.ts";
-import { Expressions, IdOrder, Names, TargetIds } from "../tools/kernel/domain/index.ts";
+import { Expressions, IdOrder, Names, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
 
 describe("result", () => {
   test("ok and err narrow through the ok discriminant", () => {
@@ -238,6 +238,44 @@ describe("schema — per-keyword exact messages", () => {
     expect(() => check({ definitions: {}, $ref: "#/definitions/ghost" } as Json, 1)).toThrow(
       "unresolvable $ref: #/definitions/ghost",
     );
+  });
+});
+
+describe("target id (the target vocabulary's primitive)", () => {
+  test("parse admits the findings-schema shapes and rejects the rest", () => {
+    for (const raw of ["OB-1", "SC-12", "BR1.2", "DOB-3", "DSC-1", "DBG-2", "SM-1", "TR-10", "component:Order", "unit:u1-orders", "check:DD-1"]) {
+      const r = TargetId.parse(raw);
+      expect(r.ok && r.value.asString()).toBe(raw);
+    }
+    for (const raw of ["", "ob-1", "OB1", "BG-1", "FR-1", "entity:Order Item", "X-1"]) {
+      expect(TargetId.parse(raw).ok).toBe(false);
+    }
+  });
+
+  test("reconstitute is verbatim, equality is by value, and the order is the canonical id order", () => {
+    const a = TargetId.reconstitute("OB-2");
+    const b = TargetId.reconstitute("OB-10");
+    expect(a.equals(TargetId.reconstitute("OB-2"))).toBe(true);
+    expect(a.equals(b)).toBe(false);
+    expect(a.compareTo(b)).toBeLessThan(0);
+    expect(b.compareTo(a)).toBeGreaterThan(0);
+    expect(a.compareTo(TargetId.reconstitute("OB-2"))).toBe(0);
+    expect(TargetId.reconstitute("weird id").asString()).toBe("weird id");
+  });
+
+  test("target ids collect primitives, reconstitute raw ids, and escape through toStrings", () => {
+    const ids = TargetIds.of([TargetId.reconstitute("OB-10")]).add(TargetId.reconstitute("OB-2")).add(TargetId.reconstitute("OB-2"));
+    expect(ids.toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
+    expect(ids.count()).toBe(3);
+    expect(ids.toArray().length).toBe(3);
+    expect(ids.includes(TargetId.reconstitute("OB-2"))).toBe(true);
+    expect(ids.includes(TargetId.reconstitute("OB-3"))).toBe(false);
+    expect([...ids].map((t) => t.asString())).toEqual(["OB-10", "OB-2", "OB-2"]);
+    expect(TargetIds.reconstitute(["SC-1", "OB-1"]).joined(",")).toBe("SC-1,OB-1");
+    // sortedCanonically keeps duplicates; sortedUniqueCanonically folds them.
+    const mixed = TargetIds.reconstitute(["OB-10", "OB-2", "OB-2", "SC-1"]);
+    expect(mixed.sortedCanonically().toStrings()).toEqual(["OB-2", "OB-2", "OB-10", "SC-1"]);
+    expect(mixed.sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10", "SC-1"]);
   });
 });
 

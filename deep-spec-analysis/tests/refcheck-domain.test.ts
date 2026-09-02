@@ -2,11 +2,11 @@
 // カタログ順序は golden バイトを決める凍結挙動——順位・タイブレークを固定する。
 
 import { describe, expect, test } from "bun:test";
-import { ContentHash, FrRefs, TargetIds } from "../tools/kernel/domain/index.ts";
+import { ContentHash, FrRefs, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
 import { CATALOG_VERSION, type Finding, type Skipped, Findings, InputAnchors, Skips, WitnessRefs } from "../tools/refcheck/domain/index.ts";
 
 function finding(kind: string, targets: string[], detail: string): Finding {
-  return { kind, frRefs: FrRefs.of([]), targets: TargetIds.of(targets), witness: { refs: WitnessRefs.of([]) }, detail };
+  return { kind, frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(targets), witness: { refs: WitnessRefs.of([]) }, detail };
 }
 
 describe("catalog-order", () => {
@@ -482,11 +482,11 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
 
 describe("refcheck payload collections (first-class operations)", () => {
   test("TargetIds, FrRefs, WitnessRefs, Findings, Skips, InputAnchors under add", () => {
-    const ids = TargetIds.of(["check:DD-1"]).add("check:DD-0").add("check:DD-1");
-    expect([...ids]).toEqual(["check:DD-1", "check:DD-0", "check:DD-1"]);
+    const ids = TargetIds.reconstitute(["check:DD-1"]).add(TargetId.reconstitute("check:DD-0")).add(TargetId.reconstitute("check:DD-1"));
+    expect([...ids].map((t) => t.asString())).toEqual(["check:DD-1", "check:DD-0", "check:DD-1"]);
     expect(ids.count()).toBe(3);
     expect(ids.joined(",")).toBe("check:DD-1,check:DD-0,check:DD-1");
-    expect(ids.sortedUniqueCanonically().toArray()).toEqual(["check:DD-0", "check:DD-1"]);
+    expect(ids.sortedUniqueCanonically().toStrings()).toEqual(["check:DD-0", "check:DD-1"]);
 
     const refs = FrRefs.of([]).add("FR-1");
     expect([...refs]).toEqual(["FR-1"]);

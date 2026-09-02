@@ -44,7 +44,7 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
     const out: { [k: string]: Json } = {
       kind: f.kind(),
       frRefs: f.frRefs().toArray() as unknown as Json,
-      targets: f.targets().toArray() as unknown as Json,
+      targets: f.targets().toStrings() as unknown as Json,
       witness: f.witness() as unknown as Json,
       unit: f.unit(),
       detail: f.detail(),
@@ -59,7 +59,7 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
   const crossChecked = report.crossChecked();
   // crossChecked エントリの凍結キー順は (backend, targets)。
   if (crossChecked !== null) {
-    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend.asString(), targets: [...e.targets.toArray()] }) as unknown as Json);
+    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toStrings() }) as unknown as Json);
   }
   return ordered;
 }
@@ -110,7 +110,7 @@ export function parseSiblingDesignReportDocument(
         return DesignFinding.reconstitute({
           kind: typeof entry.kind === "string" ? entry.kind : "",
           frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
-          targets: TargetIds.of(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
+          targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
           witness: (entry.witness ?? null) as unknown as DesignValue,
           unit: typeof entry.unit === "string" ? entry.unit : "",
           detail: typeof entry.detail === "string" ? entry.detail : "",
@@ -141,7 +141,7 @@ export function parseSiblingDesignReportDocument(
     crossChecked: Array.isArray(raw.crossChecked) ? DesignCrossCheckedEntries.of(
           (raw.crossChecked as Json[]).filter(isObject).map((e) => ({
             backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
-            targets: TargetIds.of(Array.isArray(e.targets) ? (e.targets.filter((t) => typeof t === "string") as string[]) : []),
+            targets: TargetIds.reconstitute(Array.isArray(e.targets) ? (e.targets.filter((t) => typeof t === "string") as string[]) : []),
           })),
         ) : null,
     unavailableReason: isObject(raw.unavailable)

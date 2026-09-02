@@ -1,3 +1,4 @@
+import type { TargetIds } from "../../kernel/domain/index.ts";
 import type { TraceState } from "./trace-state.ts";
 import type { TraceStates } from "./trace-states.ts";
 import type { VerificationSkipped } from "./verification-skipped.ts";
@@ -59,14 +60,14 @@ export class QuintMachineRunVerdict {
   // 対象ごとの skip（timeout は budget 文言、run-failed は method 別の失敗
   // 文言——いずれも golden 凍結、対象の順を保つ）。deadlock / violation /
   // clean は何も skip しない。
-  skipsFor(targets: readonly string[], bounded: boolean): VerificationSkipped[] {
+  skipsFor(targets: TargetIds, bounded: boolean): VerificationSkipped[] {
     const kind = this.#kind;
     if (kind === "timeout") {
-      return targets.map((target) => ({ target, reason: "timeout", detail: "machine invariant check exceeded its budget" }));
+      return [...targets].map((target) => ({ target, reason: "timeout", detail: "machine invariant check exceeded its budget" }));
     }
     if (kind === "run-failed") {
       const outputTail = this.#outputTail;
-      return targets.map((target) => ({
+      return [...targets].map((target) => ({
         target,
         reason: "unavailable",
         detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`,

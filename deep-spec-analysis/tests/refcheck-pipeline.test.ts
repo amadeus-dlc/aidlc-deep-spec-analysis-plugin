@@ -203,7 +203,7 @@ describe("skip branches the fixtures do not exercise", () => {
     expect(report.findingsCount()).toBe(1);
     expect(report.skippedCount()).toBe(7);
     expect(report.skipped().toArray().every((s) => s.reason === "unrecognized-format")).toBe(true);
-    expect(report.checked().toArray()).toEqual([]);
+    expect(report.checked().toStrings()).toEqual([]);
   });
 
   test("an unparseable components yaml block is a DD-0 finding carrying the parser error", () => {
@@ -225,7 +225,7 @@ describe("skip branches the fixtures do not exercise", () => {
     const reasons = report.skipped().toArray().map((s) => `${s.target}:${s.reason}`);
     expect(reasons).toContain("check:CD-1:absent-input");
     expect(reasons).toContain("check:CD-3:absent-input");
-    expect(report.checked().toArray()).toEqual(["check:CD-2"]);
+    expect(report.checked().toStrings()).toEqual(["check:CD-2"]);
   });
 
   test("an unusable units edge block and every spec-block issue kind are reported", () => {
@@ -278,7 +278,7 @@ describe("functional branches the fixtures do not exercise", () => {
     const report = functionalReport({ unit: undefined });
     expect(report.findingsCount()).toBe(0);
     expect(report.skippedCount()).toBe(16);
-    expect(report.checked().toArray()).toEqual([]);
+    expect(report.checked().toStrings()).toEqual([]);
     expect(report.skipped().toArray().every((s) => s.reason === "absent-input")).toBe(true);
   });
 
@@ -504,7 +504,7 @@ describe("functional branches the fixtures do not exercise", () => {
     expect(ledger.findings().toArray()[0]?.unit).toBe("u9");
     expect(ledger.skipped().toArray()[0]?.target).toBe("check:A-2");
     expect(ledger.skipped().toArray()[0]?.unit).toBe("u9");
-    expect(ledger.checkedTargets().toArray()).toEqual(["check:A-3"]);
+    expect(ledger.checkedTargets().toStrings()).toEqual(["check:A-3"]);
   });
 
   test("a degraded conformance still renders a schema-valid unavailable document", () => {

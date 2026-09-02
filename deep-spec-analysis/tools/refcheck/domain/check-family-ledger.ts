@@ -41,7 +41,7 @@ export class CheckFamilyLedger {
     const f: Finding = {
       kind,
       frRefs: FrRefs.of(IdOrder.sortedUnique(frRefs, IdOrder.compare)),
-      targets: TargetIds.of(IdOrder.sortedUnique(targets, IdOrder.compare)),
+      targets: TargetIds.reconstitute(IdOrder.sortedUnique(targets, IdOrder.compare)),
       witness: { refs: WitnessRefs.of(refs) },
       detail: family.prefixedDetail(detail),
     };
@@ -66,6 +66,6 @@ export class CheckFamilyLedger {
   }
 
   checkedTargets(): TargetIds {
-    return TargetIds.of(this.#families.checkedTargetsExcluding(this.#failed, this.#skippedFamilies));
+    return TargetIds.reconstitute(this.#families.checkedTargetsExcluding(this.#failed, this.#skippedFamilies));
   }
 }
