@@ -1,3 +1,6 @@
+// リードモデル（種別規律の裁定 22、2026-09-02）: 保存済みレポートと成果物を
+// 走査して presenter のために畳み込んだ投影。domain 層の住人ではなく、クエリ側
+// （usecase）に置く。
 import type { CoverageRow } from "./coverage-row.ts";
 
 // 要件検証カバレッジの査定集約——適格 intent 数・問題行・対象スコープ。

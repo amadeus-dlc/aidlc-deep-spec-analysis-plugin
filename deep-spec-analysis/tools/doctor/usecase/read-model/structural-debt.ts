@@ -1,3 +1,4 @@
+// リードモデル（裁定 22）: 参照整合の負債の投影。domain 層の住人ではない。
 import type { DebtRow } from "./debt-row.ts";
 
 // 構造負債の査定集約（phase 1、report-only）——走査済み成果物数と負債行。

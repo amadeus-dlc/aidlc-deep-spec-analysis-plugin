@@ -1,3 +1,4 @@
+// リードモデル（裁定 22）: 設計検証カバレッジの投影。domain 層の住人ではない。
 import type { RefinementStaleRow } from "./refinement-stale-row.ts";
 import type { UnitCoverageRow } from "./unit-coverage-row.ts";
 

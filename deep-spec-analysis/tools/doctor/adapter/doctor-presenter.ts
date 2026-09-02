@@ -1,11 +1,6 @@
 import { Check, CheckSeverity } from "../domain/index.ts";
-import type {
-  CoverageAssessment,
-  InstalledStatus,
-  SolverAvailability,
-  StructuralDebt,
-  UnitCoverage,
-} from "../domain/index.ts";
+import type { InstalledStatus, SolverAvailability } from "../domain/index.ts";
+import type { CoverageAssessment, StructuralDebt, UnitCoverage } from "../usecase/index.ts";
 
 // doctor 検査行の presenter——label/fix の凍結文言はすべてここに封じる
 //（移行 PR9、#22）。installer（scripts/install.ts）が grep する部分文字列

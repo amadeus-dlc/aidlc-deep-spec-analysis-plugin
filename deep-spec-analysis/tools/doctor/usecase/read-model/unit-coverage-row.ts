@@ -1,4 +1,4 @@
-import type { CoverageState } from "./coverage-state.ts";
+import type { CoverageState } from "../../domain/index.ts";
 
 // 設計検証カバレッジの問題行——どの intent のどのユニットが、未検証か失効か。
 // presenter は状態を `matchState` で解釈し、ユニットラベルを行に作らせる
