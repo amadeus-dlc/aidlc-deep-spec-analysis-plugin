@@ -48,6 +48,7 @@ import {
   type QuintRunsSeed,
   QuintMachineComponents,
   QuintMachineFacts,
+  QuintMachineRunVerdict,
   QuintRuns,
   TraceStates,
   VerificationReport,
@@ -215,7 +216,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
       scenariosWithInit: new Set(["SC-1"]),
     });
     const runs = QuintRuns.of({
-      machine: { kind: "clean" },
+      machine: QuintMachineRunVerdict.clean(),
       temporals: new Map(),
       scenarios: new Map([["SC-1", { kind: "evaluated", violated: false }]]),
     });
@@ -259,7 +260,7 @@ describe("quint verdict interpretation", () => {
     facts.interpret(machineModel, VerificationSkips.of(compileSkips), method, QuintRuns.of({ ...EMPTY_RUNS, ...runs }));
 
   test("a machine timeout skips every machine target with the frozen budget wording", () => {
-    const { skipped } = run({ machine: { kind: "timeout" } });
+    const { skipped } = run({ machine: QuintMachineRunVerdict.timeout() });
     expect(skipped.toArray().filter((s) => s.reason === "timeout").map((s) => `${s.target}:${s.detail}`)).toEqual([
       "OB-1:machine invariant check exceeded its budget",
       "OB-2:machine invariant check exceeded its budget",
@@ -267,7 +268,7 @@ describe("quint verdict interpretation", () => {
   });
 
   test("a deadlock is a completeness-gap over the event ids, with a model fallback witness", () => {
-    const withTrace = run({ machine: { kind: "deadlock", trace: TraceStates.of([{ "T.ok": true }]) } });
+    const withTrace = run({ machine: QuintMachineRunVerdict.deadlock(TraceStates.of([{ "T.ok": true }])) });
     expect([...withTrace.findings]).toEqual([{
       kind: "completeness-gap",
       frRefs: FrRefs.of(["FR-2"]),
@@ -275,12 +276,12 @@ describe("quint verdict interpretation", () => {
       witness: { trace: [{ "T.ok": true }] },
       detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
     }]);
-    const noTrace = run({ machine: { kind: "deadlock", trace: null } });
+    const noTrace = run({ machine: QuintMachineRunVerdict.deadlock(null) });
     expect(noTrace.findings.toArray()[0]?.witness).toEqual({ model: {} });
   });
 
   test("a violation trace is attributed to the failing components via pure evaluation", () => {
-    const attributed = run({ machine: { kind: "violation", trace: TraceStates.of([{ "T.ok": true }, { "T.ok": false }]) } });
+    const attributed = run({ machine: QuintMachineRunVerdict.violation(TraceStates.of([{ "T.ok": true }, { "T.ok": false }])) });
     expect([...attributed.findings]).toEqual([{
       kind: "conflict",
       frRefs: FrRefs.of(["FR-1", "FR-2"]),
@@ -288,16 +289,16 @@ describe("quint verdict interpretation", () => {
       witness: { trace: [{ "T.ok": true }, { "T.ok": false }] },
       detail: "The event machine can reach a state that violates OB-1 (step trace attached): the event rules do not preserve the obligation.",
     }]);
-    const unattributed = run({ machine: { kind: "violation", trace: TraceStates.of([{ "T.ok": true }]) } });
+    const unattributed = run({ machine: QuintMachineRunVerdict.violation(TraceStates.of([{ "T.ok": true }])) });
     expect(unattributed.findings.toArray()[0]?.targets.toArray()).toEqual(["OB-2"]);
   });
 
   test("a failed machine run skips its targets with the verify/run wording per method", () => {
-    const sim = run({ machine: { kind: "run-failed", outputTail: "boom" } });
+    const sim = run({ machine: QuintMachineRunVerdict.runFailed("boom") });
     expect(sim.skipped.toArray()[0]?.detail).toBe("quint run failed unexpectedly: boom");
-    const bounded = run({ machine: { kind: "run-failed", outputTail: "boom" } }, "bounded");
+    const bounded = run({ machine: QuintMachineRunVerdict.runFailed("boom") }, "bounded");
     expect(bounded.skipped.toArray()[0]?.detail).toBe("quint verify failed unexpectedly: boom");
-    expect([...run({ machine: { kind: "clean" } }).findings]).toEqual([]);
+    expect([...run({ machine: QuintMachineRunVerdict.clean() }).findings]).toEqual([]);
     expect([...run({}).findings]).toEqual([]);
   });
 

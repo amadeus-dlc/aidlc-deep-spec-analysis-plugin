@@ -2,7 +2,17 @@
 
 import { describe, expect, test } from "bun:test";
 import { FrRefs, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
-import { BackgroundAssumptionId, IrBackgroundDecl, Obligation, ObligationId, ObligationNature, Scenario, ScenarioId } from "../tools/requirements/domain/index.ts";
+import {
+  BackgroundAssumptionId,
+  IrBackgroundDecl,
+  Obligation,
+  ObligationId,
+  ObligationNature,
+  QuintMachineRunVerdict,
+  Scenario,
+  ScenarioId,
+  TraceStates,
+} from "../tools/requirements/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
 
@@ -173,5 +183,53 @@ describe("ir background decl", () => {
     bare.inspectExpressions((expression, primesAllowed) => none.push([expression.op, primesAllowed]));
     expect(none).toEqual([]);
     expect(bare.assertion()).toBeUndefined();
+  });
+});
+
+describe("quint machine run verdict", () => {
+  const targets = ["OB-1", "OB-2"];
+
+  test("timeout and run-failed abort the machine targets and skip each of them with the frozen wording", () => {
+    const timeout = QuintMachineRunVerdict.timeout();
+    expect(timeout.abortsMachineTargets()).toBe(true);
+    expect(timeout.skipsFor(targets, true)).toEqual([
+      { target: "OB-1", reason: "timeout", detail: "machine invariant check exceeded its budget" },
+      { target: "OB-2", reason: "timeout", detail: "machine invariant check exceeded its budget" },
+    ]);
+    const failed = QuintMachineRunVerdict.runFailed("boom");
+    expect(failed.abortsMachineTargets()).toBe(true);
+    expect(failed.skipsFor(targets, false).map((s) => s.detail)).toEqual([
+      "quint run failed unexpectedly: boom",
+      "quint run failed unexpectedly: boom",
+    ]);
+    expect(failed.skipsFor(["OB-1"], true)).toEqual([{ target: "OB-1", reason: "unavailable", detail: "quint verify failed unexpectedly: boom" }]);
+    expect([timeout, failed].some((v) => v.isDeadlock() || v.isViolation())).toBe(false);
+  });
+
+  test("deadlock and violation carry the trace as the witness, with the model fallback and the final state", () => {
+    const trace = TraceStates.of([{ "T.ok": true }, { "T.ok": false }]);
+    const deadlock = QuintMachineRunVerdict.deadlock(trace);
+    expect(deadlock.abortsMachineTargets()).toBe(false);
+    expect(deadlock.skipsFor(targets, true)).toEqual([]);
+    expect(deadlock.isDeadlock()).toBe(true);
+    expect(deadlock.isViolation()).toBe(false);
+    expect(deadlock.witness()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
+    const silent = QuintMachineRunVerdict.deadlock(null);
+    expect(silent.witness()).toEqual({ model: {} });
+    expect(silent.finalState()).toEqual({});
+    const violation = QuintMachineRunVerdict.violation(trace);
+    expect(violation.abortsMachineTargets()).toBe(false);
+    expect(violation.isViolation()).toBe(true);
+    expect(violation.isDeadlock()).toBe(false);
+    expect(violation.witness()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
+    expect(violation.finalState()).toEqual({ "T.ok": false });
+  });
+
+  test("a clean run neither aborts, skips, nor reports", () => {
+    const clean = QuintMachineRunVerdict.clean();
+    expect(clean.abortsMachineTargets()).toBe(false);
+    expect(clean.skipsFor(targets, false)).toEqual([]);
+    expect(clean.isDeadlock()).toBe(false);
+    expect(clean.isViolation()).toBe(false);
   });
 });

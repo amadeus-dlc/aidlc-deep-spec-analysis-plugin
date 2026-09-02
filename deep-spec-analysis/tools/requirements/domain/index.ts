@@ -48,7 +48,7 @@ export { type InterpretedQuintVerdicts } from "./interpreted-quint-verdicts.ts";
 export { type QuintMachineComponent } from "./quint-machine-component.ts";
 export { QuintMachineComponents } from "./quint-machine-components.ts";
 export { type QuintMachineFactsSeed } from "./quint-machine-facts-seed.ts";
-export { type QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";
+export { QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";
 export { type QuintRunsSeed } from "./quint-runs-seed.ts";
 export { QuintRuns } from "./quint-runs.ts";
 export { type QuintScenarioVerdict } from "./quint-scenario-verdict.ts";

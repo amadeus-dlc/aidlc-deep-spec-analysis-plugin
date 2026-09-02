@@ -1473,3 +1473,17 @@ and the deterministic:false waiver verdict (every conflict target is
 this machine's own transition and nondeterminism was declared). The
 quint usecase and the remap pass now tell instead of ask.
 2 ledger entries reclaimed — the ledger holds 100 of 122.
+
+Wave 8 (same PR): `QuintMachineRunVerdict` becomes commandable. The
+machine-phase verdict owns the phase-2 guard the quint adapter used
+to ask about (a timeout or a failed run aborts every machine target,
+so the temporal phase never runs them), the per-target skips the
+interpretation assembled by kind (the frozen budget wording for a
+timeout, the verify/run failure wording per method for a failed run
+— the CLI output tail carried verbatim, target order preserved), and
+the witness material (the decoded step trace, with the empty-model
+fallback for a deadlock the CLI left no ITF for) together with the
+final state the invariant attribution evaluates. The adapter
+reconstitutes through named factories and the interpretation tells
+instead of asking.
+1 ledger entry reclaimed — the ledger holds 99 of 122.
