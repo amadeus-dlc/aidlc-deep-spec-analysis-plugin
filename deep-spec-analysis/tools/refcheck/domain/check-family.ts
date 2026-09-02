@@ -1,5 +1,5 @@
 // CheckFamily — 検査ファミリー識別子（DD-0 / CD-1 / FD-E1 / XS-1 …）の
-// ドメインプリミティブ。台帳の描画規約はファミリー自身の知識：finding detail
+// ドメインプリミティブ。レポートの描画規約はファミリー自身の知識：finding detail
 // の `${family}: ${detail}` prefix と checked/skip target の `check:${family}`
 // はどちらも golden バイト凍結の文言面で、ここ以外では組み立てない。
 

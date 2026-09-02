@@ -1,11 +1,9 @@
 // functional-design の refcheck ユースケース。
 // Repository を保持し、execute は成果物パス（識別）を受けて内部で集約を解決し、
-// FD/XS 検査 → 組成 → 契約適合 → 永続化を起動する。inputs[] の集合は集約が
-// 凍結取得規則で解決済みの文書からそのまま導かれる。
+// ReferenceCheckReport を開いて FD/XS 検査 → 契約適合 → 永続化を起動する。
+// inputs[] の集合は集約が凍結取得規則で解決済みの文書からそのまま導かれる。
 
 import {
-  CheckFamilyLedger,
-  InputAnchors,
   FUNCTIONAL_FAMILIES,
   FunctionalCheckMaterials,
   ReferenceCheckReport,
@@ -35,7 +33,7 @@ export class CheckFunctionalDesignUseCase {
     const fd = record.value.functional();
     if (fd === null) return { kind: "not-applicable" };
 
-    const ledger = CheckFamilyLedger.of(FUNCTIONAL_FAMILIES, fd.unit);
+    const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(input.reportDirectory, "functional-design"), FUNCTIONAL_FAMILIES, fd.unit);
     FunctionalCheckMaterials.of({
       unit: fd.unit,
       entitiesArtifact: fd.entitiesArtifact,
@@ -48,23 +46,13 @@ export class CheckFunctionalDesignUseCase {
       componentsArtifact: fd.componentsArtifact,
       domainEntities: fd.components === null ? DomainEntitiesOutcome.absent() : fd.components.outcome,
       siblingUnits: fd.siblingUnits,
-    }).runChecks(ledger);
-
-    let inputs = InputAnchors.of([]);
-    if (fd.entities !== null) inputs = inputs.add(fd.entities.input);
-    if (fd.rules !== null) inputs = inputs.add(fd.rules.input);
-    if (fd.requirements !== null) inputs = inputs.add(fd.requirements.input);
-    if (fd.spec !== null) inputs = inputs.add(fd.spec.input);
-    if (fd.components !== null) inputs = inputs.add(fd.components.input);
-    inputs = inputs.addAll(fd.siblingInputs);
-
-    const report = ReferenceCheckReport.compose({
-      id: ReferenceCheckReportId.of(input.reportDirectory, "functional-design"),
-      inputs,
-      checked: ledger.checkedTargets(),
-      findings: ledger.findings(),
-      skipped: ledger.skipped(),
-    });
+    }).runChecks(report);
+    if (fd.entities !== null) report.input(fd.entities.input);
+    if (fd.rules !== null) report.input(fd.rules.input);
+    if (fd.requirements !== null) report.input(fd.requirements.input);
+    if (fd.spec !== null) report.input(fd.spec.input);
+    if (fd.components !== null) report.input(fd.components.input);
+    for (const anchor of fd.siblingInputs) report.input(anchor);
     // CQS: verdict はモードによらず conformedOf（照会）から導く——store は
     // 書くだけ（void）で、内部で同じ適合を通すため stdout とファイルは
     // 構造的に一致する（凍結挙動）。

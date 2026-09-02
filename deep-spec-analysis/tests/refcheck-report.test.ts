@@ -27,6 +27,8 @@ import {
 } from "../tools/refcheck/adapter/index.ts";
 import { FrRefs, TargetIds } from "../tools/kernel/domain/index.ts";
 import {
+  CheckFamilies,
+  CheckFamily,
   Finding,
   InputAnchor,
   type Skipped,
@@ -35,6 +37,7 @@ import {
   ReferenceCheckReport,
   ReferenceCheckReportId,
   Skips,
+  UnitName,
   WitnessRefs,
 } from "../tools/refcheck/domain/index.ts";
 
@@ -43,11 +46,12 @@ const schemaPath = join(
 );
 const schema = readContractSchema(schemaPath);
 
+// 書かれた真実の形で組む（serializer／Repository の契約はこの面を検証する）。
 function seed(
   directory: string,
   overrides: { inputs?: InputAnchor[]; checked?: string[]; findings?: Finding[]; skipped?: Skipped[] } = {},
 ) {
-  return ReferenceCheckReport.compose({
+  return ReferenceCheckReport.reconstitute({
     id: ReferenceCheckReportId.of(ap(directory), "components"),
     inputs: InputAnchors.of(
       overrides.inputs ?? [InputAnchor.reconstitute({ artifact: "inception/domain-design/components.md", sha256: ContentHash.reconstitute("a".repeat(64)) })],
@@ -55,7 +59,12 @@ function seed(
     checked: TargetIds.reconstitute(overrides.checked ?? ["check:DD-0"]),
     findings: Findings.of(overrides.findings ?? []),
     skipped: Skips.of(overrides.skipped ?? []),
+    unavailableReason: null,
   });
+}
+
+function anchor(artifact: string, fill: string): InputAnchor {
+  return InputAnchor.reconstitute({ artifact, sha256: ContentHash.reconstitute(fill.repeat(64)) });
 }
 
 describe("ReferenceCheckReportId", () => {
@@ -70,14 +79,13 @@ describe("ReferenceCheckReportId", () => {
 });
 
 describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
-  test("compose sorts the domain state and answers the verdict queries", () => {
-    const report = seed("/tmp/r", {
-      checked: ["check:DD-1", "check:DD-0", "check:DD-1"],
-      inputs: [
-        InputAnchor.reconstitute({ artifact: "b.md", sha256: ContentHash.reconstitute("b".repeat(64)) }),
-        InputAnchor.reconstitute({ artifact: "a.md", sha256: ContentHash.reconstitute("a".repeat(64)) }),
-      ],
-    });
+  test("open starts with every family checked, in canonical order, and answers the verdict queries", () => {
+    const report = ReferenceCheckReport.open(
+      ReferenceCheckReportId.of(ap("/tmp/r"), "components"),
+      CheckFamilies.reconstitute(["DD-1", "DD-0", "DD-1"]),
+    );
+    report.input(anchor("b.md", "b"));
+    report.input(anchor("a.md", "a"));
     expect(report.passes()).toBe(true);
     expect(report.isUnavailable()).toBe(false);
     expect(report.findingsCount()).toBe(0);
@@ -86,6 +94,43 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     expect(report.inputs().toArray().map((i) => i.artifact())).toEqual(["a.md", "b.md"]);
     expect(report.unavailableReason()).toBe(null);
     expect(report.id().backendName().asString()).toBe("components");
+  });
+
+  test("finding and skip remove their family from checked and render the frozen family prefixes", () => {
+    const report = ReferenceCheckReport.open(
+      ReferenceCheckReportId.of(ap("/tmp/r"), "functional-design"),
+      CheckFamilies.reconstitute(["A-1", "A-2", "A-3"]),
+      UnitName.reconstitute("u9"),
+    );
+    report.finding(CheckFamily.reconstitute("A-1"), "structure-invalid", ["check:A-1"], [], "boom");
+    report.skip(CheckFamily.reconstitute("A-2"), "absent-input", "gone");
+    expect(report.findings().toArray()[0]?.detail()).toBe("A-1: boom");
+    expect(report.findings().toArray()[0]?.unit()).toBe("u9");
+    expect(report.findings().toArray()[0]?.targets().toStrings()).toEqual(["check:A-1"]);
+    expect(report.skipped().toArray()[0]?.target()).toBe("check:A-2");
+    expect(report.skipped().toArray()[0]?.reason()).toBe("absent-input");
+    expect(report.skipped().toArray()[0]?.unit()).toBe("u9");
+    expect(report.checked().toStrings()).toEqual(["check:A-3"]);
+    expect(report.passes()).toBe(false);
+    expect(report.findingsCount()).toBe(1);
+    expect(report.skippedCount()).toBe(1);
+  });
+
+  test("a family failing twice leaves checked once; findings and skips keep the canonical order as they arrive", () => {
+    const report = ReferenceCheckReport.open(
+      ReferenceCheckReportId.of(ap("/tmp/r"), "components"),
+      CheckFamilies.reconstitute(["DD-0", "DD-1", "DD-2"]),
+    );
+    report.finding(CheckFamily.reconstitute("DD-1"), "reference-broken", ["check:DD-1"], [], "second kind");
+    report.finding(CheckFamily.reconstitute("DD-1"), "structure-invalid", ["check:DD-1"], [], "first kind");
+    report.finding(CheckFamily.reconstitute("DD-1"), "structure-invalid", ["check:DD-1"], [], "a earlier detail", ["FR-2", "FR-1", "FR-2"]);
+    report.skip(CheckFamily.reconstitute("DD-2"), "unrecognized-format", "later");
+    report.skip(CheckFamily.reconstitute("DD-0"), "absent-input", "earlier");
+    expect(report.findings().toArray().map((f) => f.detail())).toEqual(["DD-1: a earlier detail", "DD-1: first kind", "DD-1: second kind"]);
+    expect(report.findings().toArray()[0]?.frRefs().toArray()).toEqual(["FR-1", "FR-2"]);
+    expect(report.findings().toArray()[0]?.unit()).toBe(undefined);
+    expect(report.skipped().toArray().map((s) => s.target())).toEqual(["check:DD-0", "check:DD-2"]);
+    expect(report.checked().toStrings()).toEqual([]);
   });
 
   test("degraded keeps the inputs, empties the content, and fails the verdict", () => {

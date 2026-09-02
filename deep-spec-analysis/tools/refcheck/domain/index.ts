@@ -11,7 +11,6 @@ export { InputAnchor } from "./input-anchor.ts";
 export { InputAnchors } from "./input-anchors.ts";
 export { ReferenceCheckReport } from "./reference-check-report.ts";
 export { ReferenceCheckReportId } from "./reference-check-report-id.ts";
-export { CheckFamilyLedger } from "./check-family-ledger.ts";
 export { CheckFamily } from "./check-family.ts";
 export { CheckFamilies } from "./check-families.ts";
 export { UnitName } from "./unit-name.ts";

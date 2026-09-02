@@ -2055,3 +2055,18 @@ exported by the use-case facade; the pure value objects (`Check`,
 `VerificationStaleness`, `SolverAvailability`, `InstalledStatus`) stay in
 the domain. Sixteen primitive-field descriptors leave the domain ledger
 with them (ceiling 66); the doctor's JSON stays byte-identical.
+
+Wave 38 (same PR): ruling 14 lands — `CheckFamilyLedger` dissolves into
+the aggregate root `ReferenceCheckReport`. The report is the write side:
+`open(id, families, unit)` opens an empty document with every family
+checked, and `finding`, `skip` and `input` are its commands. The
+invariant `checked = every family − failed − skipped` is kept by the
+commands themselves (each finding or skip removes its family from
+`checked`), and so is the canonical order (inputs by artifact, checked
+unique and id-ordered, findings and skips in catalogue order) — there is
+no `compose` step left to forget. The three check materials run against
+the report (`runChecks(report)`), the use cases open the report, run the
+checks and record the inputs, `CheckFamilies.checkTargets` replaces the
+ledger's set arithmetic, and `TargetIds.excluding` is the kernel's
+contribution. Goldens stay byte-identical; the field ledger is unchanged
+(ceiling 66).

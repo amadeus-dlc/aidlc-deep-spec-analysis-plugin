@@ -220,11 +220,11 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(dd.value.asCheckTarget()).toBe("check:DD-1");
   });
 
-  test("CheckFamilies derives checked targets in declaration order under add", () => {
+  test("CheckFamilies carries its check targets in declaration order under add", () => {
     const fams = CheckFamilies.reconstitute(["A-1"]).add(CheckFamily.reconstitute("A-2")).add(CheckFamily.reconstitute("A-3"));
     expect([...fams].map((f) => f.asString())).toEqual(["A-1", "A-2", "A-3"]);
     expect(fams.toArray().length).toBe(3);
-    expect(fams.checkedTargetsExcluding(new Set(["A-2"]), new Set(["A-3"]))).toEqual(["check:A-1"]);
+    expect(fams.checkTargets().toStrings()).toEqual(["check:A-1", "check:A-2", "check:A-3"]);
   });
 
   test("UnitName and UnitNames carry declaration knowledge", () => {
