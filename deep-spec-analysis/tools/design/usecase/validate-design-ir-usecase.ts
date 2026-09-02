@@ -6,7 +6,7 @@
 // irVersion チェックより前に verdict へ落ちる。意味検査はスキーマ検証まで
 // 無傷の IR にのみ走る。
 
-import { type DesignModelId, DesignIrValidationMaterialsId, SUPPORTED_DESIGN_IR_MAJOR, designWellFormednessErrors } from "../domain/index.ts";
+import { type DesignModelId, DesignIrValidationMaterialsId, SUPPORTED_DESIGN_IR_MAJOR } from "../domain/index.ts";
 import type { DesignIrValidationMaterialsRepository } from "./port/design-ir-validation-materials-repository.ts";
 import type { ValidateDesignIrOutcome } from "./validate-design-ir-outcome.ts";
 
@@ -37,7 +37,7 @@ export class ValidateDesignIrUseCase {
     errors.push(...materials.schemaErrors());
 
     if (errors.length === 0) {
-      errors.push(...designWellFormednessErrors(materials.units()));
+      errors.push(...materials.units().wellFormednessErrors());
     }
 
     return { kind: "verdict", pass: errors.length === 0, errors };

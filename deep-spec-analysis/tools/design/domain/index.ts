@@ -79,7 +79,6 @@ export { DesignUnitDecls } from "./design-unit-decls.ts";
 export { InitialStates } from "./initial-states.ts";
 export { UnformalizedTargets } from "./unformalized-targets.ts";
 export { BrReferenceIndex } from "./br-reference-index.ts";
-export { designWellFormednessErrors } from "./design-well-formedness.ts";
 export { DesignModelId } from "./design-model-id.ts";
 export { DesignUnitId } from "./design-unit-id.ts";
 export { RefinementMaterialsId } from "./refinement-materials-id.ts";

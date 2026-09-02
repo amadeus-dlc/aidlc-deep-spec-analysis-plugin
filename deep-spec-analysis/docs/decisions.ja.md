@@ -1769,3 +1769,11 @@ design 層から kernel へ移り、kernel の正準 JSON とのバイト同一�
 refcheck の 4 つの名前 DP は `normalized()` でそれを返し、比較は `equals` に
 問い、索引は `asString` をキーにし、`MachineSpec.entityToken` は `EntityName` を
 返すので機能検査はもう生文字列を正規化しない。golden はバイト同一。
+
+波 32（同 PR）: 裁定 6 が着地——設計 IR の意味的整合性は宣言の不変条件になる。
+自由関数 `designWellFormednessErrors` は消え、`DesignUnitDecl.wellFormednessErrors`
+が 1 ユニットを判定し（属性カタログ、参照、enum リテラル、prime の合法性、
+種別横断の id 一意性、状態機械の整合、brRefs の逆検証と BR カバレッジ——各部分は
+既に自分で答える）、`DesignUnitDecls.wellFormednessErrors` がユニット横断の不変
+条件（ユニット名の一意性）の後ろでユニットを宣言順に集める。検証ユースケース
+は宣言に問う。文言と順序は凍結、golden はバイト同一。
