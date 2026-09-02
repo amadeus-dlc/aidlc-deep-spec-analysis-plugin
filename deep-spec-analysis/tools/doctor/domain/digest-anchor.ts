@@ -1,10 +1,21 @@
 import type { ContentHash } from "../../kernel/domain/index.ts";
 
-// sourceDigest 照合の材料対——モデルが宣言した anchor と、現在の
-// requirements.md バイトの実測 sha256。anchor は現行契約の必須宣言
-//（ir-valid の SourceAnchor が強制）で、持たないモデルは無条件に stale
-//（後方互換の mtime フォールバックはオーナー裁定 2026-09-01 で削除）。
-export interface DigestAnchor {
-  expected: ContentHash;
-  actual: ContentHash;
+// 検証時に記録した要件ダイジェストと現在のダイジェストの対——失効は内容
+// だけで決める（mtime では決めない）。（#71 波27）
+export class DigestAnchor {
+  readonly #expected: ContentHash;
+  readonly #actual: ContentHash;
+
+  private constructor(expected: ContentHash, actual: ContentHash) {
+    this.#expected = expected;
+    this.#actual = actual;
+  }
+
+  static of(expected: ContentHash, actual: ContentHash): DigestAnchor {
+    return new DigestAnchor(expected, actual);
+  }
+
+  isStale(): boolean {
+    return !this.#expected.equals(this.#actual);
+  }
 }

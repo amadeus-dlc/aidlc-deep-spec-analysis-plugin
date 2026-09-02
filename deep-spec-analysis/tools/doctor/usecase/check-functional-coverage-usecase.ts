@@ -1,5 +1,4 @@
-import { UnitCoverage } from "../domain/index.ts";
-import type { RefinementStaleRow, UnitCoverageRow } from "../domain/index.ts";
+import { RefinementStaleRow, UnitCoverage, UnitCoverageRow } from "../domain/index.ts";
 import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 
 // 設計検証カバレッジの査定（checks 配列の第 5 ブロック、unit 粒度）＋
@@ -25,15 +24,15 @@ export class CheckFunctionalCoverageUseCase {
       for (const unit of t.units) {
         eligible += 1;
         if (!modelUnits.has(unit.name) || !t.hasFindings || !completed.has(unit.name)) {
-          problems.push({ space: t.space, intent: t.intent, unit: unit.name, state: "unverified" });
+          problems.push(UnitCoverageRow.reconstitute({ space: t.space, intent: t.intent, unit: unit.name, state: "unverified" }));
           continue;
         }
         if (unit.newestArtifactMtime > t.modelMtime) {
-          problems.push({ space: t.space, intent: t.intent, unit: unit.name, state: "stale" });
+          problems.push(UnitCoverageRow.reconstitute({ space: t.space, intent: t.intent, unit: unit.name, state: "stale" }));
         }
       }
       if (t.modelMtime > 0 && t.hasFindings && t.requirementsModelMtime !== null && t.requirementsModelMtime > t.modelMtime) {
-        refinementStale.push({ space: t.space, intent: t.intent });
+        refinementStale.push(RefinementStaleRow.reconstitute({ space: t.space, intent: t.intent }));
       }
     }
     return UnitCoverage.of({ eligible, problems, refinementStale, scopes });

@@ -1,3 +1,4 @@
+import { DigestAnchor } from "../domain/index.ts";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { ContentHash } from "../../kernel/domain/index.ts";
@@ -117,7 +118,7 @@ export class DoctorWorkspaceClientImpl implements DoctorWorkspaceClient {
           hasModel,
           hasFindings,
           anchor: anchored
-            ? { expected: ContentHash.reconstitute(anchored), actual: ContentHash.ofBytes(readFileSync(requirements)) }
+            ? DigestAnchor.of(ContentHash.reconstitute(anchored), ContentHash.ofBytes(readFileSync(requirements)))
             : null,
         });
       }
