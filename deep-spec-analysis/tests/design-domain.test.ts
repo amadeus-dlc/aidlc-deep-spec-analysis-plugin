@@ -535,7 +535,7 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     expect(shadow.isSyntheticProbe()).toBe(true);
     expect(plain.isSyntheticProbe()).toBe(false);
     expect(plain.isKind("passthrough")).toBe(true);
-    expect(plain.kind()).toBe("passthrough");
+    expect(plain.isKind("passthrough")).toBe(true);
     expect(shadow.pairRefs().map((r) => r.asString())).toEqual(["TR-1", "TR-2"]);
     expect(plain.pairRefs().map((r) => r.asString())).toEqual(["DOB-1", "DOB-1"]);
     expect(dead.design().asString()).toBe("TR-1");
@@ -571,7 +571,7 @@ describe("sibling verdict document and finding (the backend's answer owns its in
   });
 
   test("a finding answers its kind and remaps only an unsat-core witness", () => {
-    expect(finding.kind()).toBe("conflict");
+    expect(finding.isKind("conflict")).toBe(true);
     expect(finding.isKind("conflict")).toBe(true);
     expect(finding.isKind("gap")).toBe(false);
     expect(finding.frRefs().toArray()).toEqual(["FR-1"]);

@@ -1,4 +1,4 @@
-import { Check } from "../domain/index.ts";
+import { Check, CheckSeverity } from "../domain/index.ts";
 import type {
   CoverageAssessment,
   InstalledStatus,
@@ -34,25 +34,25 @@ export class DoctorPresenter {
         pass: availability.hasZ3Package(),
         label: "deep-spec-analysis: z3-solver package present (SMT backend)",
         fix: "Run `bun add z3-solver` in the project root. Without it the SMT backend reports `unavailable` and skips its checks.",
-        severity: "advisory",
+        severity: CheckSeverity.advisory(),
       }),
       Check.reconstitute({
         pass: availability.hasNodeRuntime(),
         label: "deep-spec-analysis: node runtime on PATH (executes the z3 child process)",
         fix: "Install Node.js >= 23 (its TypeScript type-stripping runs the solver child). Without it the SMT backend falls back to bun, which currently aborts on z3's pthread build.",
-        severity: "advisory",
+        severity: CheckSeverity.advisory(),
       }),
       Check.reconstitute({
         pass: availability.hasQuintCli(),
         label: "deep-spec-analysis: quint CLI on PATH (Quint backend)",
         fix: "Run `npm i -g @informalsystems/quint`. Without it the Quint backend reports `unavailable` and skips its checks.",
-        severity: "advisory",
+        severity: CheckSeverity.advisory(),
       }),
       Check.reconstitute({
         pass: availability.hasApalache(),
         label: "deep-spec-analysis: Apalache available (quint verify, method: bounded)",
         fix: "Install a JDK (17+) and run any `quint verify` once so quint downloads its Apalache distribution into ~/.quint (or set APALACHE_DIST). Without it the Quint backend uses seeded simulation (method: simulation) and skips leads-to temporal obligations.",
-        severity: "advisory",
+        severity: CheckSeverity.advisory(),
       }),
     ];
   }
@@ -69,7 +69,7 @@ export class DoctorPresenter {
         fix:
           `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` +
           "then run `/aidlc --stage deep-spec-analysis-verify --single` to verify its requirements without advancing the workflow.",
-        severity: "advisory",
+        severity: CheckSeverity.advisory(),
       });
     });
     rows.push(Check.reconstitute({
@@ -78,7 +78,7 @@ export class DoctorPresenter {
         `deep-spec-analysis: verification coverage — ${assessment.verifiedCount()}/${assessment.eligibleCount()} ` +
         "eligible intents verified (scopes: " + assessment.scopes().join(", ") + ")",
       fix: "See the per-intent rows above for the exact command each unverified intent needs.",
-      severity: "advisory",
+      severity: CheckSeverity.advisory(),
     }));
     return rows;
   }
@@ -90,14 +90,14 @@ export class DoctorPresenter {
       fix:
         "Open the artifact and fix (or record as an accepted risk) each finding; " +
         "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
-      severity: "advisory",
+      severity: CheckSeverity.advisory(),
     }));
     if (debt.hasScans()) {
       rows.push(Check.reconstitute({
         pass: debt.totalFindings() === 0,
         label: `deep-spec-analysis: design refcheck — ${debt.totalFindings()} structural finding(s) across ${debt.scannedCount()} design artifact(s) scanned (report-only)`,
         fix: "See the per-artifact rows above.",
-        severity: "advisory",
+        severity: CheckSeverity.advisory(),
       }));
     }
     return rows;
@@ -111,7 +111,7 @@ export class DoctorPresenter {
       fix:
         `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` +
         "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
-      severity: "advisory",
+      severity: CheckSeverity.advisory(),
     }));
     for (const row of coverage.problems()) {
       const noun = row.matchState({
@@ -124,7 +124,7 @@ export class DoctorPresenter {
         fix:
           `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` +
           "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",
-        severity: "advisory",
+        severity: CheckSeverity.advisory(),
       }));
     }
     if (coverage.hasEligible()) {
@@ -134,7 +134,7 @@ export class DoctorPresenter {
           `deep-spec-analysis: design verification coverage — ${coverage.verifiedCount()}/${coverage.eligibleCount()} ` +
           "eligible units verified (scopes: " + coverage.scopes().join(", ") + ")",
         fix: "See the per-unit rows above for the exact command each unverified unit needs.",
-        severity: "advisory",
+        severity: CheckSeverity.advisory(),
       }));
     }
     return rows;

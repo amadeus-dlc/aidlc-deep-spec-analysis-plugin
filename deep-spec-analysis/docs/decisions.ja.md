@@ -1803,3 +1803,12 @@ golden はバイト同一。
 `EffectAssignments.ofEffect` は投げる代わりに欠陥を返し、計画・イベント
 カタログ・クエリ構築は `ok` で分岐する。構築側の try/catch は SMT コンパイラ
 自身の失敗にだけ残る。golden はバイト同一。
+
+波 36（同 PR）: 裁定 17〜21 が着地——分類文字列の型別名は domain 層の住人で
+なくなる。`LoweringKind` は `LoweredOrigin` の内部表現（テストは `isKind` で射影
+する）、`SmtQueryStatus` と `RefinementQueryStatus` は 2 つのクエリ判定の内部表現
+で、文脈ごとに 1 つ、共有しない。`CheckSeverity` は `Check` と `ManifestEntry` が
+共有する DP（`blocksDoctor`・`isAdvisory`・判定書への `asString`）、
+`CoverageState` は 2 つのカバレッジ行が共有する DP（`match`）になる。
+`CheckExecutionMode` はもともとドメインオブジェクトではなく、refcheck の usecase
+入力へ移る。doctor の JSON はバイト同一。

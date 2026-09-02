@@ -28,7 +28,6 @@ export { SUPPORTED_IR_MAJOR, VerificationReport } from "./verification-report.ts
 export { CrossCheckedEntries } from "./cross-checked-entries.ts";
 export { CrossCheckedEntry } from "./cross-checked-entry.ts";
 export { VerificationReports } from "./verification-reports.ts";
-export { type SmtQueryStatus } from "./smt-query-status.ts";
 export { SmtQueryVerdict } from "./smt-query-verdict.ts";
 export { SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 export { SmtVerificationPlan } from "./smt-verification-plan.ts";

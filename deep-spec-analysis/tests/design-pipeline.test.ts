@@ -16,6 +16,11 @@ import { fileURLToPath } from "node:url";
 import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
 import type { Json } from "../tools/kernel/adapter/index.ts";
 import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression, ExpressionTree} from "../tools/kernel/domain/index.ts";
+
+// 降ろし方は帰属の内部表現（裁定 17）——テストは公開の isKind で射影する。
+const ORIGIN_KINDS = ["passthrough", "transition", "ignore", "vac-dead", "vac-shadow"] as const;
+const kindOf = (e: LoweredOrigin | null | undefined): string | undefined => (e === undefined || e === null ? undefined : ORIGIN_KINDS.find((k) => e.isKind(k)));
+
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -73,7 +78,7 @@ import {
   LoweredScenario,
   LoweredBackground,
   SiblingVerdictSkip,
-} from "../tools/design/domain/index.ts";
+ LoweredOrigin,} from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -313,8 +318,8 @@ describe("lowering (typed compile-down)", () => {
       "OB-4:event",
       "OB-5:event",
     ]);
-    expect([low.index().originOf("OB-3")?.design().asString(), low.index().originOf("OB-3")?.kind()]).toEqual(["TR-1", "transition"]);
-    expect([low.index().originOf("OB-5")?.design().asString(), low.index().originOf("OB-5")?.kind()]).toEqual(["SM-1", "ignore"]);
+    expect([low.index().originOf("OB-3")?.design().asString(), kindOf(low.index().originOf("OB-3"))]).toEqual(["TR-1", "transition"]);
+    expect([low.index().originOf("OB-5")?.design().asString(), kindOf(low.index().originOf("OB-5"))]).toEqual(["SM-1", "ignore"]);
     expect(low.index().resolveDesignTarget("SC-1").design).toBe("DSC-1");
     expect(low.background().toArray()[0]?.id().asString()).toBe("BG-1");
     expect(low.index().attrPathOfMachine("SM-1")).toBe("Ticket.status");
@@ -329,9 +334,9 @@ describe("lowering (typed compile-down)", () => {
 
   test("synthetics add one vac-dead per candidate and shadow pairs for canonically equal effects", () => {
     const low = LoweredUnit.of(machineUnit, { synthetics: true });
-    const kinds = low.index().toOriginEntries().map(([, e]) => e.kind());
+    const kinds = low.index().toOriginEntries().map(([, e]) => kindOf(e));
     expect(kinds.filter((k) => k === "vac-dead").length).toBe(3); // DOB-1, TR-1, TR-2
-    const shadows = low.index().toOriginEntries().map(([, e]) => e).filter((e) => e.kind() === "vac-shadow");
+    const shadows = low.index().toOriginEntries().map(([, e]) => e).filter((e) => e.isKind("vac-shadow"));
     // 3 候補（DOB-1・TR-1・TR-2）はすべて同トリガ・正準同一効果
     // （eq(prime(status), "closed")）→ 全順序対 6 件。
     expect(shadows.map((s) => s.pairRefs().map((r) => r.asString()))).toEqual([
@@ -379,7 +384,7 @@ describe("lowering (typed compile-down)", () => {
       { op: "bool", value: false },
       { op: "bool", value: true },
     ]);
-    const ignoreGuards = low.obligations().toArray().filter((o) => low.index().originOf(o.id().asString())?.kind() === "ignore").map((o) => o.guard());
+    const ignoreGuards = low.obligations().toArray().filter((o) => low.index().originOf(o.id().asString())?.isKind("ignore")).map((o) => o.guard());
     expect(ignoreGuards[0]).toEqual({ op: "eq", args: [{ op: "ref", path: "T.b" }, { op: "enum", value: "x" }] });
     // 2 ユニットの compose はユニット名昇順を不変条件として適用する。
     const m = model([unit({ unit: "u2" }), unit({ unit: "u1" })]);
@@ -447,7 +452,7 @@ describe("remap (design vocabulary attribution)", () => {
   });
 
   test("a vac-dead conflict becomes unreachable with the transition/rule wording", () => {
-    const deadId = low.index().toOriginEntries().find(([, e]) => e.kind() === "vac-dead" && e.design().asString() === "TR-1")?.[0] as string;
+    const deadId = low.index().toOriginEntries().find(([, e]) => e.isKind("vac-dead") && e.design().asString() === "TR-1")?.[0] as string;
     const out = low.remapVerdicts(u, doc({
       findings: [{ kind: "conflict", frRefs: ["FR-1"], targets: [deadId], witness: { core: [`ant_${deadId.replace("-", "_")}`] }, detail: "x" }],
     }));
@@ -458,7 +463,7 @@ describe("remap (design vocabulary attribution)", () => {
   });
 
   test("mutual shadow pairs collapse into one equivalence finding; one-way stays subsumption", () => {
-    const ids = low.index().toOriginEntries().filter(([, e]) => e.kind() === "vac-shadow");
+    const ids = low.index().toOriginEntries().filter(([, e]) => e.isKind("vac-shadow"));
     const oneWay = low.remapVerdicts(u, doc({
       findings: [{ kind: "conflict", frRefs: [], targets: [ids[0]?.[0] as string], witness: { core: [] }, detail: "x" }],
     }));
@@ -472,7 +477,7 @@ describe("remap (design vocabulary attribution)", () => {
   });
 
   test("a same-machine conflict under deterministic:false is waived once per target", () => {
-    const trIds = low.index().toOriginEntries().filter(([, e]) => e.kind() === "transition").map(([id]) => id);
+    const trIds = low.index().toOriginEntries().filter(([, e]) => e.isKind("transition")).map(([id]) => id);
     const out = low.remapVerdicts(u, doc({
       findings: [
         { kind: "conflict", frRefs: [], targets: trIds, witness: { core: [] }, detail: "overlap" },
@@ -487,7 +492,7 @@ describe("remap (design vocabulary attribution)", () => {
   });
 
   test("details and witness cores are rewritten into design ids, and skips are deduped per (target, reason)", () => {
-    const trLow = low.index().toOriginEntries().find(([, e]) => e.kind() === "transition" && e.design().asString() === "TR-1")?.[0] as string;
+    const trLow = low.index().toOriginEntries().find(([, e]) => e.isKind("transition") && e.design().asString() === "TR-1")?.[0] as string;
     const out = low.remapVerdicts(u, doc({
       findings: [{
         kind: "completeness-gap",
@@ -728,7 +733,7 @@ describe("lowered collections and the lowering index (first-class operations)", 
 
   test("withPassthrough extends attribution immutably and rewrites fall back verbatim", () => {
     const extended = base.index().withPassthrough("OB-99", "FR-7");
-    expect([extended.originOf("OB-99")?.design().asString(), extended.originOf("OB-99")?.kind()]).toEqual(["FR-7", "passthrough"]);
+    expect([extended.originOf("OB-99")?.design().asString(), kindOf(extended.originOf("OB-99"))]).toEqual(["FR-7", "passthrough"]);
     expect(base.index().originOf("OB-99")).toBe(null);
     expect(extended.resolveDesignTarget("OB-99").design).toBe("FR-7");
     // 未知の lowered id は逐語で残る（detail・witness core とも）。

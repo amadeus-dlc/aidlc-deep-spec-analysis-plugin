@@ -41,7 +41,6 @@ export { LoweredScenario } from "./lowered-scenario.ts";
 export { LoweredScenarios } from "./lowered-scenarios.ts";
 export { LoweredUnit } from "./lowered-unit.ts";
 export { LoweringIndex } from "./lowering-index.ts";
-export { type LoweringKind } from "./lowering-kind.ts";
 export { SiblingVerdictDocument } from "./sibling-verdict-document.ts";
 export { SiblingVerdictFinding } from "./sibling-verdict-finding.ts";
 export { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";

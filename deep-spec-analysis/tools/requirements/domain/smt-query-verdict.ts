@@ -1,8 +1,11 @@
-import type { SmtQueryStatus } from "./smt-query-status.ts";
 
 // SMT クエリ 1 件の判定。主従の裁定（#71 波2）: 判定は命令できる抽象データ型
 // ——interpret が吸い出していた status 分類（undecided の 3 状態は #34 項 3 の
 // 三重バグの土壌だった）と witness 材料面を判定自身が所有する。
+// ソルバがクエリ 1 つに返す結果の種類——判定の内部表現（裁定 21）。外からは
+// isSat / isUnsat / isUndecided で問う。
+type SmtQueryStatus = "sat" | "unsat" | "unknown" | "budget" | "error";
+
 export class SmtQueryVerdict {
   readonly #status: SmtQueryStatus;
   readonly #decodedModel: { [path: string]: boolean | number | string } | undefined;

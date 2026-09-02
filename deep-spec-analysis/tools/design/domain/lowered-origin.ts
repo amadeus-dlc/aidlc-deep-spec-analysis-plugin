@@ -1,5 +1,7 @@
 import type { LoweredOriginRef } from "./lowered-origin-ref.ts";
-import type { LoweringKind } from "./lowering-kind.ts";
+
+// 降ろし方の閉じた集合——帰属の内部表現（裁定 17）。外からは isKind / isSyntheticProbe で問う。
+type LoweringKind = "passthrough" | "transition" | "ignore" | "vac-dead" | "vac-shadow";
 
 // lowered 義務の設計帰属——降ろし元の設計 id、降ろし方（passthrough / transition
 // / ignore / 到達不能プローブ / 影プローブ）、影プローブなら対。プローブか
@@ -21,10 +23,6 @@ export class LoweredOrigin {
 
   design(): LoweredOriginRef {
     return this.#design;
-  }
-
-  kind(): LoweringKind {
-    return this.#kind;
   }
 
   isKind(kind: LoweringKind): boolean {

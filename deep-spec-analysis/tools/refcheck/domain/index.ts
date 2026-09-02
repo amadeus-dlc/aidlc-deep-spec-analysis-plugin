@@ -65,7 +65,6 @@ export { FUNCTIONAL_FAMILIES, FunctionalCheckMaterials } from "./functional-chec
 export { DesignRecord } from "./design-record.ts";
 export { type LoadedDocument } from "./loaded-document.ts";
 export { DesignRecordId } from "./design-record-id.ts";
-export { type CheckExecutionMode } from "./check-execution-mode.ts";
 export { AllowedValue } from "./allowed-value.ts";
 export { AllowedValues } from "./allowed-values.ts";
 export { AppliesTo } from "./applies-to.ts";

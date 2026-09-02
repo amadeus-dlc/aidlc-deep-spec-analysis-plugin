@@ -1,9 +1,12 @@
 import type { DesignValue } from "../../design/domain/index.ts";
-import type { RefinementQueryStatus } from "./refinement-query-status.ts";
 
 // refinement クエリ 1 件の判定。主従の裁定（#71 波2）: interpret が吸い出して
 // いた status 分類と witness 材料面（pre/post の 2 状態トレース込み）を判定
 // 自身が所有する。
+// ソルバがクエリ 1 つに返す結果の種類——判定の内部表現（裁定 21）。外からは
+// isSat / isUnsat / isUndecided で問う。
+type RefinementQueryStatus = "sat" | "unsat" | "unknown" | "budget" | "error";
+
 export class RefinementQueryVerdict {
   readonly #status: RefinementQueryStatus;
   readonly #decodedModel: { [path: string]: DesignValue } | undefined;
