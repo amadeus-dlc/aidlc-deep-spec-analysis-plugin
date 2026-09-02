@@ -6,8 +6,8 @@ import { FrRefs } from "../../kernel/domain/index.ts";
 // は素通し。skipped は {target:string, reason:string} のみ。
 
 import { type Json, isObject, strArr } from "../../kernel/adapter/index.ts";
-import { LoweredId, SiblingVerdictFindings, SiblingVerdictSkips } from "../domain/index.ts";
-import type { DesignValue, SiblingVerdictDocument, SiblingVerdictFinding, SiblingVerdictSkip } from "../domain/index.ts";
+import { LoweredId, SiblingVerdictFindings, SiblingVerdictSkips, SiblingVerdictSkip } from "../domain/index.ts";
+import type { DesignValue, SiblingVerdictDocument, SiblingVerdictFinding } from "../domain/index.ts";
 
 
 export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
@@ -29,9 +29,11 @@ export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
   const skipped: SiblingVerdictSkip[] = [];
   for (const s of Array.isArray(raw.skipped) ? raw.skipped : []) {
     if (!isObject(s) || typeof s.target !== "string" || typeof s.reason !== "string") continue;
-    const out: SiblingVerdictSkip = { target: LoweredId.reconstitute(s.target), reason: s.reason };
-    if (typeof s.detail === "string") out.detail = s.detail;
-    skipped.push(out);
+    skipped.push(SiblingVerdictSkip.reconstitute({
+      target: LoweredId.reconstitute(s.target),
+      reason: s.reason,
+      ...(typeof s.detail === "string" ? { detail: s.detail } : {}),
+    }));
   }
   return {
     kind: "readable",

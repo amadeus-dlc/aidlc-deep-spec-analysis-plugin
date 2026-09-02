@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Json } from "../tools/kernel/adapter/index.ts";
 import { SystemClock } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, FrRefs, ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { TriggerName, FrRefs, ContentHash, ArtifactPath, TargetId } from "../tools/kernel/domain/index.ts";
 import type { Expression } from "../tools/kernel/domain/index.ts";
 import { AttributeBound, AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "../tools/requirements/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -67,14 +67,26 @@ import {
   type EventMapping,
   type RefinementAttribute,
   RefinementObligation,
-  type RefinementProbe,
+  RefinementProbe,
   RefinementQueryVerdict,
   RefinementScenario,
   type RefinementUnitMap,
   RefinementMaterials,
   RefinementMapId,
+  RefinementStatus,
 } from "../tools/refinement/domain/index.ts";
 import { FormalModelRepositoryImpl, buildSmtPlan } from "../tools/requirements/adapter/index.ts";
+
+// 被覆状態は class（#71 波22）——期待値は公開の面（checkable / gap / skip）から平文へ射影して比較する。
+const plainStatus = (st: RefinementStatus | undefined) => {
+  if (st === undefined) return undefined;
+  if (st.isCheckable()) return { kind: "checkable" };
+  const gap = st.gapDetail();
+  if (gap !== null) return { kind: "gap", detail: gap };
+  const skip = st.skipFor(TargetId.reconstitute("X-0"), "u");
+  return skip === null ? undefined : skip.reason() === "waived" ? { kind: "waived", reason: skip.detail() } : { kind: "capability", detail: skip.detail() };
+};
+
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const toolsDir = join(pluginRoot, "tools");
@@ -460,17 +472,17 @@ describe("plan classification and gap findings", () => {
 
   test("statuses classify checkable / waived / capability / gap, and gaps become findings", () => {
     const plan = UnitRefinementPlan.of(designUnit, unitMap, req, "construction/x/map.md");
-    expect(plan.statusOfObligation("OB-1")).toEqual({ kind: "checkable" });
-    expect(plan.statusOfObligation("OB-2")).toEqual({ kind: "checkable" });
+    expect(plainStatus(plan.statusOfObligation("OB-1"))).toEqual({ kind: "checkable" });
+    expect(plainStatus(plan.statusOfObligation("OB-2"))).toEqual({ kind: "checkable" });
     expect(plan.mappedTransitionsOf("OB-2").map((t) => t.asString())).toEqual(["TR-1"]);
-    expect(plan.statusOfObligation("OB-3")).toEqual({ kind: "capability", detail: "temporal refinement is outside v1 scope" });
-    expect(plan.statusOfObligation("OB-4")).toEqual({ kind: "waived", reason: "depends on unmapped attribute(s) R.orphan" });
-    expect(plan.statusOfObligation("OB-5")?.kind).toBe("gap");
-    expect(plan.statusOfObligation("OB-6")).toEqual({ kind: "capability", detail: 'nature "mystery" has no refinement check' });
-    expect(plan.statusOfScenario("SC-1")).toEqual({ kind: "checkable" });
-    expect(plan.statusOfScenario("SC-2")).toEqual({ kind: "waived", reason: "binds unmapped attribute(s) R.orphan" });
-    expect(plan.statusOfScenario("SC-3")).toEqual({ kind: "capability", detail: "event scenarios are not replayed in v1" });
-    expect(plan.statusOfScenario("SC-4")).toEqual({ kind: "waived", reason: "binds unmapped attribute(s) R.waived" });
+    expect(plainStatus(plan.statusOfObligation("OB-3"))).toEqual({ kind: "capability", detail: "temporal refinement is outside v1 scope" });
+    expect(plainStatus(plan.statusOfObligation("OB-4"))).toEqual({ kind: "waived", reason: "depends on unmapped attribute(s) R.orphan" });
+    expect(plainStatus(plan.statusOfObligation("OB-5"))?.kind).toBe("gap");
+    expect(plainStatus(plan.statusOfObligation("OB-6"))).toEqual({ kind: "capability", detail: 'nature "mystery" has no refinement check' });
+    expect(plainStatus(plan.statusOfScenario("SC-1"))).toEqual({ kind: "checkable" });
+    expect(plainStatus(plan.statusOfScenario("SC-2"))).toEqual({ kind: "waived", reason: "binds unmapped attribute(s) R.orphan" });
+    expect(plainStatus(plan.statusOfScenario("SC-3"))).toEqual({ kind: "capability", detail: "event scenarios are not replayed in v1" });
+    expect(plainStatus(plan.statusOfScenario("SC-4"))).toEqual({ kind: "waived", reason: "binds unmapped attribute(s) R.waived" });
     const gapDetails = plan.gaps().toArray().map((g) => g.detail());
     expect(gapDetails.some((d) => d.includes('requirements event trigger "ghost" has no eventMap entry'))).toBe(true);
     expect(plan.gaps().toArray().every((g) => g.kind() === "mapping-gap" && g.unit() === "u1")).toBe(true);
@@ -640,11 +652,11 @@ describe("refinement verdict interpretation", () => {
   test("each probe kind emits its frozen finding on the deciding verdict", () => {
     const out = run(
       facts([
-        ["rv:OB-1", { kind: "invariant", reqId: ObligationId.reconstitute("OB-1") }],
-        ["rs:SC-1", { kind: "scenario", reqId: ScenarioId.reconstitute("SC-1") }],
-        ["rs:SC-2", { kind: "scenario", reqId: ScenarioId.reconstitute("SC-2") }],
-        ["re:OB-2", { kind: "enabledness", reqId: ObligationId.reconstitute("OB-2") }],
-        ["rs2:OB-2:TR-1", { kind: "simulation", reqId: ObligationId.reconstitute("OB-2"), designId: TransitionRef.reconstitute("TR-1") }],
+        ["rv:OB-1", RefinementProbe.invariant(ObligationId.reconstitute("OB-1"))],
+        ["rs:SC-1", RefinementProbe.scenario(ScenarioId.reconstitute("SC-1"))],
+        ["rs:SC-2", RefinementProbe.scenario(ScenarioId.reconstitute("SC-2"))],
+        ["re:OB-2", RefinementProbe.enabledness(ObligationId.reconstitute("OB-2"))],
+        ["rs2:OB-2:TR-1", RefinementProbe.simulation(ObligationId.reconstitute("OB-2"), TransitionRef.reconstitute("TR-1"))],
       ]),
       [
         ["rv:OB-1", { status: "sat", decodedModel: { "D.flag": true } }],
@@ -671,12 +683,12 @@ describe("refinement verdict interpretation", () => {
   test("quiet verdicts emit nothing; undecided and missing become the frozen timeout skip", () => {
     const out = run(
       facts([
-        ["rv:OB-1", { kind: "invariant", reqId: ObligationId.reconstitute("OB-1") }],
-        ["rs:SC-1", { kind: "scenario", reqId: ScenarioId.reconstitute("SC-1") }],
-        ["rs:SC-2", { kind: "scenario", reqId: ScenarioId.reconstitute("SC-2") }],
-        ["re:OB-2", { kind: "enabledness", reqId: ObligationId.reconstitute("OB-2") }],
-        ["rs2:OB-2:TR-1", { kind: "simulation", reqId: ObligationId.reconstitute("OB-2"), designId: TransitionRef.reconstitute("TR-1") }],
-        ["rv:OB-9", { kind: "invariant", reqId: ObligationId.reconstitute("OB-9") }],
+        ["rv:OB-1", RefinementProbe.invariant(ObligationId.reconstitute("OB-1"))],
+        ["rs:SC-1", RefinementProbe.scenario(ScenarioId.reconstitute("SC-1"))],
+        ["rs:SC-2", RefinementProbe.scenario(ScenarioId.reconstitute("SC-2"))],
+        ["re:OB-2", RefinementProbe.enabledness(ObligationId.reconstitute("OB-2"))],
+        ["rs2:OB-2:TR-1", RefinementProbe.simulation(ObligationId.reconstitute("OB-2"), TransitionRef.reconstitute("TR-1"))],
+        ["rv:OB-9", RefinementProbe.invariant(ObligationId.reconstitute("OB-9"))],
       ]),
       [
         ["rv:OB-1", { status: "unsat" }],
@@ -809,7 +821,7 @@ describe("catalog misses in the enabledness path (frozen null-drop)", () => {
       req,
       "m.md",
     );
-    expect(plan.statusOfObligation("OB-2")).toEqual({ kind: "checkable" });
+    expect(plainStatus(plan.statusOfObligation("OB-2"))).toEqual({ kind: "checkable" });
     const built = buildRefinementQueries(u, req, plan);
     const enabledness = built.queries.find((q) => q.id === "re:OB-2");
     expect(enabledness).toBeDefined();
@@ -866,7 +878,7 @@ describe("split-file coverage pins (one-public-type refactor)", () => {
   test("solver facts expose compile skips and issue-order iteration; unmapped target parses", () => {
     const f = RefinementSolverFacts.of({
       pending: new Map<string, RefinementProbe>([
-        ["rv:OB-9", { kind: "invariant", reqId: ObligationId.reconstitute("OB-9") }],
+        ["rv:OB-9", RefinementProbe.invariant(ObligationId.reconstitute("OB-9"))],
       ]),
       compileSkips: DesignSkips.of([]),
     });

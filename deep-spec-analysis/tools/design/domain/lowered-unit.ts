@@ -205,16 +205,17 @@ export class LoweredUnit {
 
     const seenSkip = new Set<string>();
     for (const s of doc.skipped) {
-      const { design, entry } = mapTarget(s.target.asString());
+      const { design, entry } = mapTarget(s.target().asString());
       if (entry?.isSyntheticProbe()) continue; // 合成の予算ノイズ
-      const key = `${design}|${s.reason}`;
+      const detail = s.detail();
+      const key = `${design}|${s.reason()}`;
       if (seenSkip.has(key)) continue;
       seenSkip.add(key);
       skipped.push(DesignSkipped.reconstitute({
         target: TargetId.reconstitute(design),
-        reason: s.reason,
+        reason: s.reason(),
         unit: u.name(),
-        ...(typeof s.detail === "string" ? { detail: remapDetail(s.detail) } : {}),
+        ...(detail !== undefined ? { detail: remapDetail(detail) } : {}),
       }));
     }
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped), unavailable: null, method };
