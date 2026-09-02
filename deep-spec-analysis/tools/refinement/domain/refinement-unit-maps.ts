@@ -23,7 +23,7 @@ export class RefinementUnitMaps {
   }
 
   mapOf(unit: DesignUnitId): RefinementUnitMap | undefined {
-    return this.#values.find((m) => m.unit.equals(unit));
+    return this.#values.find((m) => m.isForUnit(unit));
   }
 
   toArray(): readonly RefinementUnitMap[] {

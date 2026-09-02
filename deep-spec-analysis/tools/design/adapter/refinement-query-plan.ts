@@ -269,7 +269,7 @@ export function buildRefinementQueries(
         const designGuards = mapped
           .map((id) => catalog.eventOf(id.asString()))
           .filter((d): d is DesignEvent => d !== null)
-          .map((d) => smtOfExpr(ctx, d.guard));
+          .map((d) => smtOfExpr(ctx, d.guard()));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
         const qe = assembleQuery(
           `re:${obId}`,
@@ -291,8 +291,8 @@ export function buildRefinementQueries(
         const assigned = EffectAssignments.ofEffect(event.effect);
         const frameParts: string[] = [];
         for (const a of req.attributes().sortedByPath()) {
-          if (assigned.covers(a.path.asString())) continue;
-          const eq = alphaCtx.equalityFor(a.path.asString());
+          if (assigned.covers(a.path().asString())) continue;
+          const eq = alphaCtx.equalityFor(a.path().asString());
           if (eq !== null) frameParts.push(smtOfExpr(ctx, eq));
         }
         const fBar = smtOfExpr(ctx, alphaCtx.substitute(event.effect, false));
@@ -300,9 +300,9 @@ export function buildRefinementQueries(
         for (const designId of mapped) {
           const ev = catalog.eventOf(designId.asString());
           if (!ev) continue;
-          const stepParts: string[] = [smtOfExpr(ctx, ev.guard)];
+          const stepParts: string[] = [smtOfExpr(ctx, ev.guard())];
           for (const attr of ctx.attrs) {
-            const rhs = ev.effectAssign.rhsOf(attr.path);
+            const rhs = ev.assignedRhsOf(attr.path);
             const target = smtVar(attr.path, true);
             if (rhs) {
               const rhsSmt = rhs.op === "enum" && typeof rhs.value === "string"

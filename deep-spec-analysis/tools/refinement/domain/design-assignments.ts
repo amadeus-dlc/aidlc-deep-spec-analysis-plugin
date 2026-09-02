@@ -16,7 +16,4 @@ export class DesignAssignments {
     return this.#values.get(path);
   }
 
-  count(): number {
-    return this.#values.size;
-  }
 }

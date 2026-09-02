@@ -26,7 +26,6 @@ import {
   LoweredUnit,
   RefinementMaterialsId,
   LoweredId,
-  LoweredObligation,
 } from "../domain/index.ts";
 
 import {
@@ -240,7 +239,7 @@ export class VerifyDesignQuintUseCase {
             const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (this.#clock.now() - started));
             if (remaining < 3_000) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({ target: e.reqId.asTargetId(), reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" }));
+                skipped.push(DesignSkipped.reconstitute({ target: e.reqTarget(), reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" }));
               }
               continue;
             }
@@ -251,21 +250,21 @@ export class VerifyDesignQuintUseCase {
             for (const e of extras) {
               n += 1;
               const lowId = LoweredId.reconstitute(`OB-${n}`);
-              refinementObligations = refinementObligations.add(LoweredObligation.reconstitute({ id: lowId, nature: "invariant", frRefs: [...e.frRefs], assert: e.expr }));
-              refinementIndex = refinementIndex.withPassthrough(lowId.asString(), e.reqId.asString());
+              refinementObligations = refinementObligations.add(e.loweredAs(lowId));
+              refinementIndex = refinementIndex.withPassthrough(lowId.asString(), e.reqId().asString());
             }
             const lowered = base.extendedWith(refinementObligations, refinementIndex);
             const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
             if (run.exit !== 0 || run.doc === null) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({ target: e.reqId.asTargetId(), reason: "unavailable", unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
+                skipped.push(DesignSkipped.reconstitute({ target: e.reqTarget(), reason: "unavailable", unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
               }
               continue;
             }
             const remapped = lowered.remapVerdicts(u, run.doc);
             if (remapped.unavailable !== null) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({ target: e.reqId.asTargetId(), reason: "unavailable", unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` }));
+                skipped.push(DesignSkipped.reconstitute({ target: e.reqTarget(), reason: "unavailable", unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` }));
               }
               continue;
             }
@@ -287,7 +286,7 @@ export class VerifyDesignQuintUseCase {
             if (!hitExtra && designConflict) {
               for (const e of extras) {
                 skipped.push(DesignSkipped.reconstitute({
-                  target: e.reqId.asTargetId(),
+                  target: e.reqTarget(),
                   reason: "capability",
                   unit: u.name(),
                   detail: "the machine reachably violates its own design invariants first (see the design conflict findings) — refinement reachability is masked until those are resolved",

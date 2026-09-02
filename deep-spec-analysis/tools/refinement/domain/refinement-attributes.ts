@@ -28,19 +28,19 @@ export class RefinementAttributes {
     const key = typeof path === "string" ? path : path.asString();
     let found: RefinementAttribute | undefined;
     for (const a of this.#values) {
-      if (a.path.asString() === key) found = a;
+      if (a.isAt(key)) found = a;
     }
     return found;
   }
 
   covers(path: AttributePath | string): boolean {
     const key = typeof path === "string" ? path : path.asString();
-    return this.#values.some((a) => a.path.asString() === key);
+    return this.#values.some((a) => a.isAt(key));
   }
 
   // 閉包検査・フレーム構築の走査順（path の辞書順）はコレクション知識。
   sortedByPath(): RefinementAttributes {
-    return new RefinementAttributes([...this.#values].sort((x, y) => (x.path.asString() < y.path.asString() ? -1 : 1)));
+    return new RefinementAttributes([...this.#values].sort((x, y) => (x.path().asString() < y.path().asString() ? -1 : 1)));
   }
 
   toArray(): readonly RefinementAttribute[] {

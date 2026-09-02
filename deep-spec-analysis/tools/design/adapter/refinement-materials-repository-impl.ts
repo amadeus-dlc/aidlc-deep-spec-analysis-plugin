@@ -9,7 +9,7 @@ import type { RefinementMaterialsId } from "../domain/index.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ArtifactPath, ContentHash, FrRefs, TriggerName } from "../../kernel/domain/index.ts";
-import { AttributeBound, AttributePath, ObligationId, ObligationNature, ScenarioId } from "../../refinement/domain/index.ts";
+import { AttributePath, ObligationId, ObligationNature, ScenarioId } from "../../refinement/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import {
   type Json,
@@ -34,12 +34,12 @@ import {
   TransitionRefs,
   UnmappedDeclarations,
   AttributeMapping,
-  type EventMapping,
-  type RefinementAttribute,
+  EventMapping,
+  RefinementAttribute,
   RefinementObligation,
   RefinementScenario,
-  type RefinementUnitMap,
-  type UnmappedTarget,
+  RefinementUnitMap,
+  UnmappedTarget,
   RefinementMap,
   RefinementMaterials,
   RefinementRequirements,
@@ -104,13 +104,11 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
         if (!isObject(attr) || typeof attr.name !== "string" || !isObject(attr.type)) continue;
         const t = attr.type;
         if (t.kind !== "bool" && t.kind !== "int" && t.kind !== "enum") continue;
-        attributes.push({
+        attributes.push(RefinementAttribute.reconstitute({
           path: AttributePath.reconstitute(`${ent.name}.${attr.name}`),
           kind: t.kind,
-          min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
-          max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
           values: Array.isArray(t.values) ? ReqAttributeValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
-        });
+        }));
       }
     }
     const obligations: RefinementObligation[] = [];
@@ -212,24 +210,24 @@ export function parseRefinementMapDocument(bytes: Uint8Array, id: RefinementMapI
     const eventMap: EventMapping[] = [];
     for (const e of Array.isArray(u.eventMap) ? u.eventMap : []) {
       if (!isObject(e) || typeof e.reqTrigger !== "string") continue;
-      eventMap.push({
+      eventMap.push(EventMapping.reconstitute({
         reqTrigger: TriggerName.reconstitute(e.reqTrigger),
         transitions: TransitionRefs.of(strArr(e.transitions).map((t) => TransitionRef.reconstitute(t))),
         waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
-      });
+      }));
     }
     const unmapped: UnmappedTarget[] = [];
     for (const un of Array.isArray(u.unmapped) ? u.unmapped : []) {
       if (isObject(un) && typeof un.target === "string") {
-        unmapped.push({ target: UnmappedTargetRef.reconstitute(un.target), reason: typeof un.reason === "string" ? un.reason : "" });
+        unmapped.push(UnmappedTarget.reconstitute({ target: UnmappedTargetRef.reconstitute(un.target), reason: typeof un.reason === "string" ? un.reason : "" }));
       }
     }
-    units.push({
+    units.push(RefinementUnitMap.reconstitute({
       unit: DesignUnitId.of(u.unit),
       attrMap: AttributeMappings.of(attrMap),
       eventMap: EventMappings.of(eventMap),
       unmapped: UnmappedDeclarations.of(unmapped),
-    });
+    }));
   }
   return {
     kind: "parsed",

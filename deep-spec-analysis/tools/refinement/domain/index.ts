@@ -5,7 +5,7 @@
 // design/adapter → refinement/domain）。
 
 export { RefinementRequirements } from "./refinement-requirements.ts";
-export { type RefinementAttribute } from "./refinement-attribute.ts";
+export { RefinementAttribute } from "./refinement-attribute.ts";
 export { RefinementAttributes } from "./refinement-attributes.ts";
 export { RefinementObligation } from "./refinement-obligation.ts";
 export { RefinementObligations } from "./refinement-obligations.ts";
@@ -15,15 +15,15 @@ export { ReqAttributeValues } from "./req-attribute-values.ts";
 export { RefinementMap } from "./refinement-map.ts";
 export { AttributeMapping } from "./attribute-mapping.ts";
 export { AttributeMappings } from "./attribute-mappings.ts";
-export { type EventMapping } from "./event-mapping.ts";
+export { EventMapping } from "./event-mapping.ts";
 export { EventMappings } from "./event-mappings.ts";
-export { type RefinementUnitMap } from "./refinement-unit-map.ts";
+export { RefinementUnitMap } from "./refinement-unit-map.ts";
 export { RefinementUnitMaps } from "./refinement-unit-maps.ts";
 export { TransitionRef } from "./transition-ref.ts";
 export { TransitionRefs } from "./transition-refs.ts";
 export { UnmappedDeclarations } from "./unmapped-declarations.ts";
 export { UnmappedTargetRef } from "./unmapped-target-ref.ts";
-export { type UnmappedTarget } from "./unmapped-target.ts";
+export { UnmappedTarget } from "./unmapped-target.ts";
 export { AlphaContext } from "./alpha-context.ts";
 export { AlphaError } from "./alpha-error.ts";
 export { UnitRefinementPlan } from "./unit-refinement-plan.ts";
@@ -31,14 +31,14 @@ export { RefinementStatus } from "./refinement-status.ts";
 export { EffectAssignments } from "./effect-assignments.ts";
 export { DesignEventCatalog } from "./design-event-catalog.ts";
 export { DesignAssignments } from "./design-assignments.ts";
-export { type DesignEvent } from "./design-event.ts";
+export { DesignEvent } from "./design-event.ts";
 export { RefinementSolverFacts } from "./refinement-solver-facts.ts";
 export { RefinementProbe } from "./refinement-probe.ts";
 export { type RefinementQueryStatus } from "./refinement-query-status.ts";
 export { RefinementQueryVerdict } from "./refinement-query-verdict.ts";
 export { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
 export { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
-export { type RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
+export { RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
 export { RefinementMapId } from "./refinement-map-id.ts";
 // RefinementRequirements の恒等 — 契約1 集約の識別子そのもの（プロファイルは
 // 恒等を変えない）。所有は requirements/domain。design のアダプタは refinement

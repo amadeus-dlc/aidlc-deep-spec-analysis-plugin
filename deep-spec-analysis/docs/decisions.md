@@ -1728,3 +1728,18 @@ through `match`, and the loaded map's artifact travels as an
 `ArtifactPath` instead of a string — one primitive field leaves the
 field ledger. 3 ledger entries reclaimed — the ledger holds 37 of 122;
 the primitive-field ceiling drops to 87.
+
+Wave 24 (same PR): the refinement map's records own their judgements.
+`RefinementUnitMap` answers `isForUnit` and hands the plan the event
+mapping of a trigger (`eventMappingOf`); `EventMapping` answers
+`isForTrigger` and `waiverReason` in place of the optional `waived`
+record the plan used to test; `UnmappedTarget` answers `isFor` so the
+declaration set no longer compares raw tokens; `RefinementAttribute`
+answers `isAt`, `isEnum` and `declaredValues` — its `min` / `max`, parsed
+but never read, are dropped. `DesignEvent` hands the SMT compiler its
+guard and the assigned right-hand side of an attribute
+(`assignedRhsOf`), and `RefinementQuintInvariant` names its target and
+builds the lowered invariant obligation the quint pass ships
+(`loweredAs`), so the use case no longer assembles it. The
+`RefTokenCarrier` alias dissolves into the declaration set's door
+signatures. 7 ledger entries reclaimed — the ledger holds 30 of 122.
