@@ -12,7 +12,7 @@ import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignFinding, DesignFindings, DesignSkips } from "../../design/domain/index.ts";
 import type { DesignUnit } from "../../design/domain/index.ts";
 import { DesignSkipped } from "../../design/domain/index.ts";
-import { AlphaContext } from "./alpha-context.ts";
+import type { AttributeMappings } from "./attribute-mappings.ts";
 import { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
 import { RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
 import { type AttributeMapping } from "./attribute-mapping.ts";
@@ -29,20 +29,20 @@ function exprRefs(e: Expression, out: Set<string>): void {
 // map 検査の結果（被覆分類・alpha 文脈・写像索引・mapping-gap findings）を
 // 閉じ込めた計画。露出 Map は死に、照会・skip 導出は plan 自身の振る舞い。
 export class UnitRefinementPlan {
-  readonly #ctx: AlphaContext;
+  readonly #mappings: AttributeMappings;
   readonly #obligationStatus: ReadonlyMap<string, RefinementStatus>;
   readonly #scenarioStatus: ReadonlyMap<string, RefinementStatus>;
   readonly #eventTransitions: ReadonlyMap<string, readonly TransitionRef[]>;
   readonly #gaps: DesignFindings;
 
   private constructor(props: {
-    ctx: AlphaContext;
+    mappings: AttributeMappings;
     obligationStatus: ReadonlyMap<string, RefinementStatus>;
     scenarioStatus: ReadonlyMap<string, RefinementStatus>;
     eventTransitions: ReadonlyMap<string, readonly TransitionRef[]>;
     gaps: DesignFindings;
   }) {
-    this.#ctx = props.ctx;
+    this.#mappings = props.mappings;
     this.#obligationStatus = props.obligationStatus;
     this.#scenarioStatus = props.scenarioStatus;
     this.#eventTransitions = props.eventTransitions;
@@ -221,7 +221,7 @@ export class UnitRefinementPlan {
     }
 
     return new UnitRefinementPlan({
-      ctx: AlphaContext.of(byReq),
+      mappings: unitMap.attrMap(),
       obligationStatus,
       scenarioStatus,
       eventTransitions,
@@ -229,8 +229,9 @@ export class UnitRefinementPlan {
     });
   }
 
-  alphaContext(): AlphaContext {
-    return this.#ctx;
+  // 承認済み写像——alpha 置換の門（裁定 10）。
+  attributeMappings(): AttributeMappings {
+    return this.#mappings;
   }
 
   gaps(): DesignFindings {
@@ -291,7 +292,7 @@ export class UnitRefinementPlan {
           // 旧挙動は義務が痕跡なく落ち、SMT 側だけが報告していた）。文言は
           // SMT 側の compile-error skip と逐語で対。
           try {
-            this.#ctx.substitute(assertion, false);
+            this.#mappings.substitute(assertion, false);
           } catch (err) {
             skipped.push(DesignSkipped.reconstitute({ target: TargetId.reconstitute(rid), reason: "compile-error", unit: unitName, detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` }));
           }
@@ -317,7 +318,7 @@ export class UnitRefinementPlan {
       const assertion = ob.assertion();
       if (!ob.isInvariantLike() || assertion === undefined) continue;
       try {
-        out.push(RefinementQuintInvariant.of(ob.id(), ob.frRefs(), this.#ctx.substitute(assertion, false)));
+        out.push(RefinementQuintInvariant.of(ob.id(), ob.frRefs(), this.#mappings.substitute(assertion, false)));
       } catch {
         // quintStatusSkips が compile-error skip として記録する（SMT 側と対）。
       }

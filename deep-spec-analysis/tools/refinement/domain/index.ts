@@ -24,7 +24,6 @@ export { TransitionRefs } from "./transition-refs.ts";
 export { UnmappedDeclarations } from "./unmapped-declarations.ts";
 export { UnmappedTargetRef } from "./unmapped-target-ref.ts";
 export { UnmappedTarget } from "./unmapped-target.ts";
-export { AlphaContext } from "./alpha-context.ts";
 export { AlphaError } from "./alpha-error.ts";
 export { UnitRefinementPlan } from "./unit-refinement-plan.ts";
 export { RefinementStatus } from "./refinement-status.ts";

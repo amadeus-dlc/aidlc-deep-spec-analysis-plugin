@@ -2,8 +2,9 @@ import { ReqAttributeValues } from "./req-attribute-values.ts";
 // 属性写像（attrMap の 1 エントリ）。閉じた 3 variant —— 式写像（bool/int）・
 // enum 場合分け・unspecified。α置換の材料（enum 比較の展開・写像式の代入・
 // 抽象フレーム等式）と全域性チェック（欠けケース・生成値の範囲）は写像自身が
-// 所有する。AlphaContext は文脈（索引と未カバー検出）、UnitRefinementPlan は
-// gap 文言（凍結面）だけを担う（主従の裁定・#71 波5）。
+// 所有する。AttributeMappings は索引と置換の駆動、UnitRefinementPlan は
+// gap 文言（凍結面）だけを担う（主従の裁定・#71 波5、裁定 10）。
+// 写像は要件属性パスで識別されるローカルエンティティ（識別規律、2026-09-02）。
 
 import { ExpressionTree, type Expression } from "../../kernel/domain/index.ts";
 import { type AttributePath } from "../../requirements/domain/index.ts";
@@ -39,6 +40,11 @@ export class AttributeMapping {
 
   static unspecified(req: AttributePath): AttributeMapping {
     return new AttributeMapping(req, { kind: "unspecified" });
+  }
+
+  // 同一性——この写像がその要件属性のものか。
+  isFor(reqPath: string): boolean {
+    return this.#req.asString() === reqPath;
   }
 
   req(): AttributePath {

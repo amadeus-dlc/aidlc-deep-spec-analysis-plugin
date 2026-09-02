@@ -2008,3 +2008,13 @@ that carried them as `facts` carry them as `plan`, and the doctor's
 per-unit scan record `FunctionalUnitFacts` is `FunctionalUnitScan`. The
 word *facts* is now free for domain events. Classification: value
 objects; goldens stay byte-identical.
+
+Wave 34 (same PR): ruling 10 lands — `AlphaContext` dissolves into the
+first-class collection `AttributeMappings`. The collection now owns the
+lookup by requirements attribute path (last declaration wins, the
+frozen index behaviour), `covers`, the alpha substitution (`substitute`,
+delegating expansion and reference substitution to the element) and the
+abstract frame equality (`equalityFor`). `AttributeMapping` is the keyed
+element and therefore a local entity (`isFor`); the plan hands the
+compiler `attributeMappings()` instead of a context. One indexed field
+leaves the field ledger (ceiling 82); goldens stay byte-identical.
