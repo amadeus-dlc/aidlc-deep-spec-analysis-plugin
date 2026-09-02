@@ -54,7 +54,7 @@ export class UnitRefinementPlan {
         DesignFinding.reconstitute({
           kind: "mapping-gap",
           frRefs: FrRefs.of(IdOrder.sortedUnique(frRefs, IdOrder.compare)),
-          targets: TargetIds.of(IdOrder.sortedUnique(targets, IdOrder.compare)),
+          targets: TargetIds.reconstitute(IdOrder.sortedUnique(targets, IdOrder.compare)),
           witness: { refs: [{ artifact: mapArtifact, element: `units[${unitMap.unit.asString()}]` }] },
           unit: u.name(),
           detail,

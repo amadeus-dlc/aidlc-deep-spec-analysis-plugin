@@ -63,10 +63,10 @@ export class QuintClientImpl implements QuintClient {
       const machineRun = this.#runMachinePhase(machine, modulePath, bounded, work);
       // phase 2 の「既に skip 済みの義務は走らせない」凍結ガード：コンパイル時
       // skip と、機械フェーズの判定が命じる対象一括 skip（timeout / run-failed）。
-      const skipTargets = new Set(machine.compileSkips.map((s) => s.target));
+      const skipTargets = new Set(machine.compileSkips.map((s) => s.target.asString()));
       if (machineRun !== null && machineRun.abortsMachineTargets()) {
         for (const t of machine.facts.machineTargets()) {
-          skipTargets.add(t);
+          skipTargets.add(t.asString());
         }
       }
       const temporals = bounded ? this.#runTemporalPhase(machine, modulePath, skipTargets, work) : new Map<string, QuintTemporalVerdict>();

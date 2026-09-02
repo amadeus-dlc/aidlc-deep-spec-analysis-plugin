@@ -493,7 +493,7 @@ describe("remap (design vocabulary attribution)", () => {
         { target: "SC-1", reason: "capability" },
       ],
     }));
-    expect(out.findings.toArray()[0]?.targets().toArray()).toEqual(["DSC-1", "TR-1"]);
+    expect(out.findings.toArray()[0]?.targets().toStrings()).toEqual(["DSC-1", "TR-1"]);
     expect(out.findings.toArray()[0]?.detail()).toBe("No rule for TR-1 applies");
     expect(out.findings.toArray()[0]?.witness()).toEqual({ core: ["g_TR_1", "ty_x"] });
     expect(out.skipped.toArray().map((s) => `${s.target}:${s.reason}`)).toEqual(["TR-1:timeout", "DSC-1:capability"]);
@@ -506,7 +506,7 @@ describe("report ordering, cross-check, and degradations", () => {
     DesignFinding.reconstitute({
       kind,
       frRefs: FrRefs.of([]),
-      targets: TargetIds.of(targets),
+      targets: TargetIds.reconstitute(targets),
       witness: { core: [] },
       unit: unitName,
       detail,
@@ -621,13 +621,13 @@ describe("report ordering, cross-check, and degradations", () => {
     const disagreement = report.findings().toArray()[0];
     expect(disagreement?.kind()).toBe("cross-check-disagreement");
     expect(disagreement?.frRefs().toArray()).toEqual(["FR-1", "FR-2"]);
-    expect(disagreement?.targets().toArray()).toEqual(["DSC-1"]);
+    expect(disagreement?.targets().toStrings()).toEqual(["DSC-1"]);
     expect(disagreement?.witness()).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
     expect(disagreement?.unit()).toBe("u1");
     expect(disagreement?.detail()).toBe(
       'Backends "quint" and "smt" disagree on scenario DSC-1 of unit u1. This signals a defect in the formalization or in a backend compiler, not in the design itself.',
     );
-    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toArray() }))).toEqual([
+    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toStrings() }))).toEqual([
       { backend: "quint", targets: ["DSC-1"] },
       { backend: "smt", targets: ["DSC-1"] },
     ]);

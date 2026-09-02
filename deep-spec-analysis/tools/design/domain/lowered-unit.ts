@@ -131,7 +131,7 @@ export class LoweredUnit {
           DesignFinding.reconstitute({
             kind: "unreachable",
             frRefs: FrRefs.of(frRefs),
-            targets: TargetIds.of([design]),
+            targets: TargetIds.reconstitute([design]),
             witness,
             unit: u.name(),
             detail: `The guard of ${design} can never hold under the entity constraints and invariants (witness core attached): the ${isTransition ? "transition" : "rule"} is dead.`,
@@ -146,7 +146,7 @@ export class LoweredUnit {
           finding: DesignFinding.reconstitute({
             kind: "redundancy",
             frRefs: FrRefs.of(frRefs),
-            targets: TargetIds.of(IdOrder.sortedUnique([pair[0], pair[1]], IdOrder.compare)),
+            targets: TargetIds.reconstitute(IdOrder.sortedUnique([pair[0], pair[1]], IdOrder.compare)),
             witness,
             unit: u.name(),
             detail: `${pair[1]} is subsumed by ${pair[0]}: same trigger, a provably narrower guard, and an identical effect — it can never apply where ${pair[0]} does not.`,
@@ -179,7 +179,7 @@ export class LoweredUnit {
           continue;
         }
       }
-      findings.push(DesignFinding.reconstitute({ kind: f.kind, frRefs: FrRefs.of(frRefs), targets: TargetIds.of(targets), witness, unit: u.name(), detail }));
+      findings.push(DesignFinding.reconstitute({ kind: f.kind, frRefs: FrRefs.of(frRefs), targets: TargetIds.reconstitute(targets), witness, unit: u.name(), detail }));
     }
 
     // shadow の後段：死んだルール/遷移は既に unreachable——その空虚な包摂は何も
@@ -198,7 +198,7 @@ export class LoweredUnit {
       const first = list[0];
       if (!first) continue;
       if (list.length >= 2 && directions.size >= 2) {
-        const [a, b] = first.finding.targets().toArray();
+        const [a, b] = first.finding.targets().toStrings();
         findings.push(
           first.finding.withDetail(`${a} and ${b} are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect — one of them can be removed.`),
         );

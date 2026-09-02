@@ -1,7 +1,7 @@
 // requirements/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
 
 import { describe, expect, test } from "bun:test";
-import { FrRefs, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
+import { FrRefs, TargetIds, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
 import {
   BackgroundAssumptionId,
   IrBackgroundDecl,
@@ -187,14 +187,16 @@ describe("ir background decl", () => {
 });
 
 describe("quint machine run verdict", () => {
-  const targets = ["OB-1", "OB-2"];
+  const targets = TargetIds.reconstitute(["OB-1", "OB-2"]);
+  const flat = (skips: readonly { target: { asString(): string }; reason: string; detail?: string }[]) =>
+    skips.map((s) => `${s.target.asString()}:${s.reason}:${s.detail}`);
 
   test("timeout and run-failed abort the machine targets and skip each of them with the frozen wording", () => {
     const timeout = QuintMachineRunVerdict.timeout();
     expect(timeout.abortsMachineTargets()).toBe(true);
-    expect(timeout.skipsFor(targets, true)).toEqual([
-      { target: "OB-1", reason: "timeout", detail: "machine invariant check exceeded its budget" },
-      { target: "OB-2", reason: "timeout", detail: "machine invariant check exceeded its budget" },
+    expect(flat(timeout.skipsFor(targets, true))).toEqual([
+      "OB-1:timeout:machine invariant check exceeded its budget",
+      "OB-2:timeout:machine invariant check exceeded its budget",
     ]);
     const failed = QuintMachineRunVerdict.runFailed("boom");
     expect(failed.abortsMachineTargets()).toBe(true);
@@ -202,7 +204,7 @@ describe("quint machine run verdict", () => {
       "quint run failed unexpectedly: boom",
       "quint run failed unexpectedly: boom",
     ]);
-    expect(failed.skipsFor(["OB-1"], true)).toEqual([{ target: "OB-1", reason: "unavailable", detail: "quint verify failed unexpectedly: boom" }]);
+    expect(flat(failed.skipsFor(TargetIds.reconstitute(["OB-1"]), true))).toEqual(["OB-1:unavailable:quint verify failed unexpectedly: boom"]);
     expect([timeout, failed].some((v) => v.isDeadlock() || v.isViolation())).toBe(false);
   });
 

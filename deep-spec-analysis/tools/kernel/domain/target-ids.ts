@@ -1,18 +1,26 @@
-// 名前空間付き target id の語彙。サニタイズ（safe）と、finding/checked
-// ペイロードが運ぶ id 列のファーストクラスコレクションを所有する。
-// 旧自由関数 safeTarget は TargetIds.safe に従属した（OOUI 裁定）。
+// finding / checked / crossChecked ペイロードが運ぶ target id 列のファースト
+// クラスコレクション。要素は TargetId（#71 波10——生 string の集合ではない）。
+// of は DP の門、reconstitute は凍結文書と生 id 材料からの逐語再構成。
+// 名前空間付き id のサニタイズ（safe）は refcheck 台帳の材料面として残る
+// （旧自由関数 safeTarget は TargetIds.safe に従属した——OOUI 裁定）。
 
 import { IdOrder } from "./id-order.ts";
+import { TargetId } from "./target-id.ts";
 
 export class TargetIds {
-  readonly #values: readonly string[];
+  readonly #values: readonly TargetId[];
 
-  private constructor(values: readonly string[]) {
+  private constructor(values: readonly TargetId[]) {
     this.#values = values;
   }
 
-  static of(values: readonly string[]): TargetIds {
+  static of(values: readonly TargetId[]): TargetIds {
     return new TargetIds([...values]);
+  }
+
+  // 凍結文書・生 id 材料からの逐語再構成。
+  static reconstitute(values: readonly string[]): TargetIds {
+    return new TargetIds(values.map((v) => TargetId.reconstitute(v)));
   }
 
   // Namespaced target ids (unit:…, component:…, entity:…) must satisfy the
@@ -26,11 +34,11 @@ export class TargetIds {
     return `${prefix}:${token === "" ? "unknown" : token}`;
   }
 
-  add(value: string): TargetIds {
+  add(value: TargetId): TargetIds {
     return new TargetIds([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<string> {
+  *[Symbol.iterator](): Iterator<TargetId> {
     yield* this.#values;
   }
 
@@ -38,20 +46,30 @@ export class TargetIds {
     return this.#values.length;
   }
 
-  includes(value: string): boolean {
-    return this.#values.includes(value);
+  includes(value: TargetId): boolean {
+    return this.#values.some((v) => v.equals(value));
+  }
+
+  // id 順のみ（一意化しない——重複を保つ面の凍結順）。
+  sortedCanonically(): TargetIds {
+    return new TargetIds([...this.#values].sort((a, b) => a.compareTo(b)));
   }
 
   // finding の targets 面の凍結正準形（一意化 + id 順）。
   sortedUniqueCanonically(): TargetIds {
-    return new TargetIds(IdOrder.sortedUnique([...this.#values]));
+    return TargetIds.reconstitute(IdOrder.sortedUnique(this.toStrings()));
   }
 
   joined(separator: string): string {
-    return this.#values.join(separator);
+    return this.toStrings().join(separator);
   }
 
-  toArray(): readonly string[] {
+  toArray(): readonly TargetId[] {
     return this.#values;
+  }
+
+  // 境界: 描画・アダプタ・生 id 材料専用。
+  toStrings(): string[] {
+    return this.#values.map((v) => v.asString());
   }
 }

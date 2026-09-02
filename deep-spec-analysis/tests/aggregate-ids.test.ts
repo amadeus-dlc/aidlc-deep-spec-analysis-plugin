@@ -3,7 +3,7 @@
 // equals は値による恒等比較。domain 90% 床のための分岐網羅。
 
 import { describe, expect, test } from "bun:test";
-import { TriggerName, ArtifactPath, BackendName, ContentHash, IrVersion, TargetIds } from "../tools/kernel/domain/index.ts";
+import { TriggerName, ArtifactPath, BackendName, ContentHash, IrVersion, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
 import {
   DesignAttributeName,
   DesignBackgroundId,
@@ -206,18 +206,18 @@ describe("requirements first-class collections", () => {
     expect([...bgs].length).toBe(1);
     expect(bgs.toArray()[0]?.id.asString()).toBe("B1");
 
-    const finding = { kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.of(["OB-1"]), witness: { core: [] }, detail: "d" };
+    const finding = { kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: { core: [] }, detail: "d" };
     const fs = VerificationFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
     expect([...fs.sortedCanonically()]).toEqual([finding]);
 
-    const sk = VerificationSkips.of([]).add({ target: "OB-2", reason: "timeout" })
-      .concat(VerificationSkips.of([{ target: "OB-1", reason: "capability" }]));
+    const sk = VerificationSkips.of([]).add({ target: TargetId.reconstitute("OB-2"), reason: "timeout" })
+      .concat(VerificationSkips.of([{ target: TargetId.reconstitute("OB-1"), reason: "capability" }]));
     expect(sk.count()).toBe(2);
-    expect(sk.sortedCanonically().toArray().map((s) => s.target)).toEqual(["OB-1", "OB-2"]);
+    expect(sk.sortedCanonically().toArray().map((s) => s.target.asString())).toEqual(["OB-1", "OB-2"]);
 
-    const cc = CrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.of(["SC-1"]) });
+    const cc = CrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.reconstitute(["SC-1"]) });
     expect([...cc].length).toBe(1);
     expect(cc.toArray()[0]?.backend.asString()).toBe("smt");
 
@@ -286,7 +286,7 @@ describe("design first-class collections", () => {
     expect(units.sortedByName().toArray()[0]?.name()).toBe("u2");
     expect([...units].length).toBe(1);
 
-    const finding = DesignFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.of(["DOB-1"]), witness: { refs: [] }, unit: "u2", detail: "d" });
+    const finding = DesignFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["DOB-1"]), witness: { refs: [] }, unit: "u2", detail: "d" });
     const fs = DesignFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
@@ -306,7 +306,7 @@ describe("design first-class collections", () => {
     expect(checked.sortedUniqueCanonically().toArray()).toEqual(["unit:u1", "unit:u2", "unit:u3"]);
     expect([...checked].length).toBe(4);
 
-    const cc = DesignCrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.of(["DSC-1"]) });
+    const cc = DesignCrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.reconstitute(["DSC-1"]) });
     expect(cc.toArray()[0]?.backend.asString()).toBe("smt");
     expect([...cc].length).toBe(1);
     expect([...DesignReports.of([])].length).toBe(0);

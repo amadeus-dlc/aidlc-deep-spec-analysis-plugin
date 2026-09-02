@@ -495,7 +495,6 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "requirements/domain/ir-model-decl-seed.ts",
   "requirements/domain/ir-temporal-decl.ts",
   "requirements/domain/ir-validation-materials-seed.ts",
-  "requirements/domain/quint-machine-component.ts",
   "requirements/domain/quint-machine-facts-seed.ts",
   "requirements/domain/quint-runs-seed.ts",
   "requirements/domain/quint-scenario-verdict.ts",

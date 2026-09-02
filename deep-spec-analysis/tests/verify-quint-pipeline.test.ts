@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { TriggerName, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
@@ -48,6 +48,7 @@ import {
   type QuintRunsSeed,
   QuintMachineComponents,
   QuintMachineFacts,
+  QuintMachineComponent,
   QuintMachineRunVerdict,
   QuintRuns,
   TraceStates,
@@ -179,7 +180,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     expect(written.ok && written.value.unavailableReason())
       .toBe("quint CLI is not available (install: npm i -g @informalsystems/quint)");
     expect(written.ok && written.value.method()).toBe("simulation");
-    expect(written.ok && written.value.skipped().toArray().map((s) => `${s.target}:${s.reason}:${s.detail}`))
+    expect(written.ok && written.value.skipped().toArray().map((s) => `${s.target.asString()}:${s.reason}:${s.detail}`))
       .toEqual(["OB-1:unavailable:quint CLI missing", "SC-1:unavailable:quint CLI missing"]);
     expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(true);
   });
@@ -199,7 +200,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     const written = reports.findById(VerificationReportId.of(ap(DIR), "quint"));
     expect(written.ok && written.value.method()).toBe("bounded");
     expect(written.ok && written.value.isUnavailable()).toBe(false);
-    expect(written.ok && written.value.skipped().toArray().map((s) => `${s.target}:${s.reason}`))
+    expect(written.ok && written.value.skipped().toArray().map((s) => `${s.target.asString()}:${s.reason}`))
       .toEqual(["OB-1:compile-error", "SC-1:compile-error"]);
     expect(written.ok && written.value.skipped().toArray()[0]?.detail).toBe('state variable name collision: "a_b"');
   });
@@ -211,9 +212,9 @@ describe("the verify-quint interactor over the InMemory double", () => {
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: { "T.x": 1 } }],
     });
     const facts = QuintMachineFacts.of({
-      invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "bool", value: true } }]),
+      invariantComponents: QuintMachineComponents.of([QuintMachineComponent.reconstitute({ id: ObligationId.reconstitute("OB-1"), expression: { op: "bool", value: true } })]),
       eventIds: ObligationIds.of([]),
-      scenariosWithInit: new Set(["SC-1"]),
+      scenariosWithInit: [ScenarioId.reconstitute("SC-1")],
     });
     const runs = QuintRuns.of({
       machine: QuintMachineRunVerdict.clean(),
@@ -252,16 +253,16 @@ describe("quint verdict interpretation", () => {
     ],
   });
   const facts = QuintMachineFacts.of({
-    invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "ref", path: "T.ok" } }]),
+    invariantComponents: QuintMachineComponents.of([QuintMachineComponent.reconstitute({ id: ObligationId.reconstitute("OB-1"), expression: { op: "ref", path: "T.ok" } })]),
     eventIds: ObligationIds.of([ObligationId.reconstitute("OB-2")]),
-    scenariosWithInit: new Set(["SC-1", "SC-2"]),
+    scenariosWithInit: [ScenarioId.reconstitute("SC-1"), ScenarioId.reconstitute("SC-2")],
   });
   const run = (runs: Partial<QuintRunsSeed>, method = "simulation", compileSkips: { target: string; reason: string }[] = []) =>
-    facts.interpret(machineModel, VerificationSkips.of(compileSkips), method, QuintRuns.of({ ...EMPTY_RUNS, ...runs }));
+    facts.interpret(machineModel, VerificationSkips.of(compileSkips.map((k) => ({ target: TargetId.reconstitute(k.target), reason: k.reason }))), method, QuintRuns.of({ ...EMPTY_RUNS, ...runs }));
 
   test("a machine timeout skips every machine target with the frozen budget wording", () => {
     const { skipped } = run({ machine: QuintMachineRunVerdict.timeout() });
-    expect(skipped.toArray().filter((s) => s.reason === "timeout").map((s) => `${s.target}:${s.detail}`)).toEqual([
+    expect(skipped.toArray().filter((s) => s.reason === "timeout").map((s) => `${s.target.asString()}:${s.detail}`)).toEqual([
       "OB-1:machine invariant check exceeded its budget",
       "OB-2:machine invariant check exceeded its budget",
     ]);
@@ -272,7 +273,7 @@ describe("quint verdict interpretation", () => {
     expect([...withTrace.findings]).toEqual([{
       kind: "completeness-gap",
       frRefs: FrRefs.of(["FR-2"]),
-      targets: TargetIds.of(["OB-2"]),
+      targets: TargetIds.reconstitute(["OB-2"]),
       witness: { trace: [{ "T.ok": true }] },
       detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
     }]);
@@ -285,12 +286,12 @@ describe("quint verdict interpretation", () => {
     expect([...attributed.findings]).toEqual([{
       kind: "conflict",
       frRefs: FrRefs.of(["FR-1", "FR-2"]),
-      targets: TargetIds.of(["OB-1"]),
+      targets: TargetIds.reconstitute(["OB-1"]),
       witness: { trace: [{ "T.ok": true }, { "T.ok": false }] },
       detail: "The event machine can reach a state that violates OB-1 (step trace attached): the event rules do not preserve the obligation.",
     }]);
     const unattributed = run({ machine: QuintMachineRunVerdict.violation(TraceStates.of([{ "T.ok": true }])) });
-    expect(unattributed.findings.toArray()[0]?.targets.toArray()).toEqual(["OB-2"]);
+    expect(unattributed.findings.toArray()[0]?.targets.toStrings()).toEqual(["OB-2"]);
   });
 
   test("a failed machine run skips its targets with the verify/run wording per method", () => {
@@ -304,17 +305,17 @@ describe("quint verdict interpretation", () => {
 
   test("temporal obligations: capability skip in simulation, verdicts in bounded, guard for skipped", () => {
     const sim = run({});
-    expect(sim.skipped.toArray().find((s) => s.target === "OB-3")?.detail)
+    expect(sim.skipped.toArray().find((s) => s.target.asString() === "OB-3")?.detail)
       .toBe("leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them");
     const guarded = run({}, "simulation", [{ target: "OB-3", reason: "compile-error" }]);
-    expect(guarded.skipped.toArray().filter((s) => s.target === "OB-3").length).toBe(1);
+    expect(guarded.skipped.toArray().filter((s) => s.target.asString() === "OB-3").length).toBe(1);
     const timeout = run({ temporals: new Map([["OB-3", { kind: "timeout" }]]) }, "bounded");
-    expect(timeout.skipped.toArray().find((s) => s.target === "OB-3")?.detail).toBe("temporal check exceeded its budget");
+    expect(timeout.skipped.toArray().find((s) => s.target.asString() === "OB-3")?.detail).toBe("temporal check exceeded its budget");
     const violated = run({ temporals: new Map([["OB-3", { kind: "violation", trace: TraceStates.of([{ "T.ok": false }]) }]]) }, "bounded");
     expect(violated.findings.toArray()[0]).toEqual({
       kind: "conflict",
       frRefs: FrRefs.of(["FR-3"]),
-      targets: TargetIds.of(["OB-3"]),
+      targets: TargetIds.reconstitute(["OB-3"]),
       witness: { trace: [{ "T.ok": false }] },
       detail: 'Temporal obligation OB-3 (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.',
     });
@@ -325,26 +326,26 @@ describe("quint verdict interpretation", () => {
 
   test("scenario verdicts: capability skips, budget/failure skips, and the frozen violation wording", () => {
     const base = run({});
-    expect(base.skipped.toArray().find((s) => s.target === "SC-3")?.detail)
+    expect(base.skipped.toArray().find((s) => s.target.asString() === "SC-3")?.detail)
       .toBe("scenarios with a When-event are not checked by the quint backend in v1");
     const unboundFacts = QuintMachineFacts.of({
-      invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "ref", path: "T.ok" } }]),
+      invariantComponents: QuintMachineComponents.of([QuintMachineComponent.reconstitute({ id: ObligationId.reconstitute("OB-1"), expression: { op: "ref", path: "T.ok" } })]),
       eventIds: ObligationIds.of([ObligationId.reconstitute("OB-2")]),
-      scenariosWithInit: new Set(),
+      scenariosWithInit: [],
     });
     const unbound = unboundFacts.interpret(machineModel, VerificationSkips.of([]), "simulation", QuintRuns.of(EMPTY_RUNS));
-    expect(unbound.skipped.toArray().find((s) => s.target === "SC-1")?.detail)
+    expect(unbound.skipped.toArray().find((s) => s.target.asString() === "SC-1")?.detail)
       .toBe("quint scenario evaluation requires bindings for every declared attribute");
     const timeout = run({ scenarios: new Map([["SC-1", { kind: "timeout" }]]) });
-    expect(timeout.skipped.toArray().find((s) => s.target === "SC-1")?.detail).toBe("scenario evaluation exceeded its budget");
+    expect(timeout.skipped.toArray().find((s) => s.target.asString() === "SC-1")?.detail).toBe("scenario evaluation exceeded its budget");
     const failed = run({ scenarios: new Map([["SC-1", { kind: "run-failed", outputTail: "x" }]]) });
-    expect(failed.skipped.toArray().find((s) => s.target === "SC-1")?.detail).toBe("quint run failed unexpectedly: x");
+    expect(failed.skipped.toArray().find((s) => s.target.asString() === "SC-1")?.detail).toBe("quint run failed unexpectedly: x");
 
     const acceptViolated = run({ scenarios: new Map([["SC-1", { kind: "evaluated", violated: true }]]) });
     expect([...acceptViolated.findings]).toEqual([{
       kind: "scenario-violation",
       frRefs: FrRefs.of(["FR-1"]),
-      targets: TargetIds.of(["OB-1", "SC-1"]),
+      targets: TargetIds.reconstitute(["OB-1", "SC-1"]),
       witness: { model: { "T.ok": false } },
       detail: "Accept scenario SC-1 describes a state the obligations rule out — the requirements reject an example that should be accepted.",
     }]);
@@ -352,7 +353,7 @@ describe("quint verdict interpretation", () => {
     expect([...rejectAccepted.findings]).toEqual([{
       kind: "scenario-violation",
       frRefs: FrRefs.of(["FR-2"]),
-      targets: TargetIds.of(["SC-2"]),
+      targets: TargetIds.reconstitute(["SC-2"]),
       witness: { model: { "T.ok": true } },
       detail: "Reject scenario SC-2 is accepted by every obligation — the requirements do not exclude an example that should be rejected.",
     }]);
@@ -399,7 +400,7 @@ describe("quint degradation reports", () => {
     });
     const r = VerificationReport.machineUncompilable(VerificationReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("h"), "simulation", "boom");
     expect(r.method()).toBe("simulation");
-    expect(r.skipped().toArray().map((s) => `${s.target}:${s.reason}:${s.detail}`))
+    expect(r.skipped().toArray().map((s) => `${s.target.asString()}:${s.reason}:${s.detail}`))
       .toEqual(["OB-2:compile-error:boom", "SC-1:compile-error:boom"]);
     const u = VerificationReport.quintUnavailable(VerificationReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("h"));
     expect(u.unavailableReason()).toBe("quint CLI is not available (install: npm i -g @informalsystems/quint)");
@@ -414,17 +415,17 @@ describe("quint facts collections (first-class operations)", () => {
     expect(TraceStates.of([]).finalState()).toEqual({});
     expect(traces.toArray()).toEqual([{ "T.ok": true }, { "T.ok": false }]);
 
-    const comps = QuintMachineComponents.of([]).add({ id: "OB-1", expr: { op: "ref", path: "T.ok" } });
+    const comps = QuintMachineComponents.of([]).add(QuintMachineComponent.reconstitute({ id: ObligationId.reconstitute("OB-1"), expression: { op: "ref", path: "T.ok" } }));
     expect(comps.isEmpty()).toBe(false);
     expect([...comps].length).toBe(1);
-    expect(comps.ids()).toEqual(["OB-1"]);
-    expect(comps.violatedBy({ "T.ok": false }).ids()).toEqual(["OB-1"]);
+    expect(comps.ids().toStrings()).toEqual(["OB-1"]);
+    expect(comps.violatedBy({ "T.ok": false }).ids().toStrings()).toEqual(["OB-1"]);
     expect(comps.violatedBy({ "T.ok": true }).isEmpty()).toBe(true);
     expect(comps.toArray().length).toBe(1);
 
-    const facts = QuintMachineFacts.of({ invariantComponents: comps, eventIds: ObligationIds.of([ObligationId.reconstitute("OB-9"), ObligationId.reconstitute("OB-2")]), scenariosWithInit: new Set() });
+    const facts = QuintMachineFacts.of({ invariantComponents: comps, eventIds: ObligationIds.of([ObligationId.reconstitute("OB-9"), ObligationId.reconstitute("OB-2")]), scenariosWithInit: [] });
     expect(facts.hasInvariantComponents()).toBe(true);
-    expect(facts.machineTargets()).toEqual(["OB-1", "OB-2", "OB-9"]);
+    expect(facts.machineTargets().toStrings()).toEqual(["OB-1", "OB-2", "OB-9"]);
   });
 });
 

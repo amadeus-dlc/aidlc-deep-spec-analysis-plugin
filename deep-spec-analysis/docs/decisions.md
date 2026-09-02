@@ -1497,3 +1497,31 @@ obligation's requirement refs onto every invariant component, yet the
 interpretation attributes findings through `RequirementsModel.frRefsOf`
 over the component ids, so the copy was never read. No ledger entry is
 reclaimed — the ledger still holds 99 of 122.
+
+Wave 10 (same PR): the target vocabulary gets its primitive. Ruling A
+had left the cross-aggregate target token without one — the
+`FrRefClaim.owner` carve-out let `TargetIds`, `IdOrder`, the component
+ids, `machineTargets`, the skip targets and `frRefsOf` all stay raw
+strings. `TargetId` lands in the kernel: `parse` checks the findings
+schema's `targetId` shapes (OB/SC, BR, the design DOB/DSC/DBG/SM/TR ids,
+the namespaced tokens), `reconstitute` is the verbatim door for frozen
+documents and raw id materials, and the id owns its canonical order
+(`compareTo`, delegating to `IdOrder`). `TargetIds` becomes a collection
+of `TargetId` (`of` over primitives, `reconstitute` over raw ids,
+`toStrings` at the boundary, `sortedCanonically` beside the unique
+form), and the requirements verification vocabulary speaks it end to
+end: `QuintMachineComponent` becomes commandable (its id is the
+`ObligationId` it descends from, the attribution evaluation is its own
+knowledge), `machineTargets`, the machine verdict's skips,
+`VerificationSkipped.target`, `RequirementsModel.allTargets` /
+`frRefsOf` (now returning `FrRefs`), the SMT interpretation, the
+degraded reports and the cross-check carry `TargetId`; `QuintRuns` looks
+up by `ObligationId` / `ScenarioId` and the facts hold scenario ids. The
+obligation and scenario ids gain `asTargetId`. Design, refinement and
+refcheck reconstitute their target lists from raw ids until their own
+waves (`DesignSkipped.target`, `SiblingVerdictFinding.targets` and the
+refcheck ledger's namespaced tokens stay strings, `TargetIds.safe` stays
+that ledger's sanitizer). The pass surfaced that bun's `toEqual` ignores
+private fields, so the touched skip expectations now compare through
+`asString()`; wording, order and goldens are unchanged.
+1 ledger entry reclaimed — the ledger holds 98 of 122.

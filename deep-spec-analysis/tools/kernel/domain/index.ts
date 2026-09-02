@@ -7,6 +7,7 @@ export { Expressions } from "./expressions.ts";
 export { ContentHash } from "./content-hash.ts";
 export { IrVersion } from "./ir-version.ts";
 export { IdOrder } from "./id-order.ts";
+export { TargetId } from "./target-id.ts";
 export { TargetIds } from "./target-ids.ts";
 export { FrRefs } from "./fr-refs.ts";
 export { BackendName } from "./backend-name.ts";
