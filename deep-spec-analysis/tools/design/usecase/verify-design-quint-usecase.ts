@@ -16,7 +16,7 @@ import {
   DesignSkips,
   DesignInputAnchors,
   CheckedUnits,
-  type DesignFinding,
+  DesignFinding,
   type DesignInputAnchor,
   type DesignSkipped,
   DesignReport,
@@ -147,18 +147,16 @@ export class VerifyDesignQuintUseCase {
 
       // 到達不能状態の検出（FR8.4）：bounded モードのみ・予算キャップつき。
       for (const sm of u.machines().sortedById()) {
-        const attrPath = lowered.index().attrPathOfMachine(sm.id.asString()) ?? DesignMachines.attrPathOf(sm);
-        const candidates = u
-          .enumValuesOf(attrPath)
-          .filter((s) => !sm.initial.includes(s))
-          .sort();
+        const attrPath = lowered.index().attrPathOfMachine(sm.id().asString()) ?? DesignMachines.attrPathOf(sm);
+        // 候補の選別（初期状態でない宣言値・昇順）は機械自身へ命じる（波7）。
+        const candidates = sm.nonInitialCandidates(u.enumValuesOf(attrPath));
         if (candidates.length === 0) continue;
         if (method !== "bounded") {
           skipped.push({
-            target: sm.id.asString(),
+            target: sm.id().asString(),
             reason: "capability",
             unit: u.name(),
-            detail: `unreachable-state detection for ${sm.id.asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
+            detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
           });
           continue;
         }
@@ -176,22 +174,24 @@ export class VerifyDesignQuintUseCase {
             continue;
           }
           if (!probe.reached) {
-            findings.push({
-              kind: "unreachable",
-              frRefs: FrRefs.of([]),
-              targets: TargetIds.of([sm.id.asString()]),
-              witness: { model: { [attrPath]: state } },
-              unit: u.name(),
-              detail: `State "${state}" of ${sm.id.asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state — it may be dead.`,
-            });
+            findings.push(
+              DesignFinding.reconstitute({
+                kind: "unreachable",
+                frRefs: FrRefs.of([]),
+                targets: TargetIds.of([sm.id().asString()]),
+                witness: { model: { [attrPath]: state } },
+                unit: u.name(),
+                detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state — it may be dead.`,
+              }),
+            );
           }
         }
         if (leftover.length > 0) {
           skipped.push({
-            target: sm.id.asString(),
+            target: sm.id().asString(),
             reason: probesUsed >= this.#unreachCap ? "timeout" : "unavailable",
             unit: u.name(),
-            detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id.asString()} (per-run cap ${this.#unreachCap} / budget reached, or the probe run failed)`,
+            detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id().asString()} (per-run cap ${this.#unreachCap} / budget reached, or the probe run failed)`,
           });
         }
       }
@@ -265,19 +265,14 @@ export class VerifyDesignQuintUseCase {
           const reqIdSet = extras.reqIds();
           let hitExtra = false;
           let designConflict = false;
+          // conflict 判定の再解釈（要件 id に届くかの判定と昇格文言）は
+          // finding 自身へ命じる（波7）。
           for (const f of remapped.findings) {
-            if (f.kind !== "conflict") continue;
-            const reqHits = f.targets.toArray().filter((t: string) => reqIdSet.has(t));
-            if (reqHits.length > 0) {
+            if (!f.isConflict()) continue;
+            const violation = f.asRefinementViolation(reqIdSet, u.name());
+            if (violation !== null) {
               hitExtra = true;
-              findings.push({
-                kind: "refinement-violation",
-                frRefs: f.frRefs,
-                targets: TargetIds.of(reqHits),
-                witness: f.witness,
-                unit: u.name(),
-                detail: `The design machine of unit ${u.name()} reaches a state that violates requirements obligation ${reqHits.join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,
-              });
+              findings.push(violation);
             } else {
               designConflict = true;
             }

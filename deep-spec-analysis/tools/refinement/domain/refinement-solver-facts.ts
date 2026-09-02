@@ -7,8 +7,8 @@
 // interpretRefinementVerdicts の逐語移植）。
 
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
-import { DesignFindings, DesignSkips } from "../../design/domain/index.ts";
-import type { DesignFinding, DesignSkipped } from "../../design/domain/index.ts";
+import { DesignFinding, DesignFindings, DesignSkips } from "../../design/domain/index.ts";
+import type { DesignSkipped } from "../../design/domain/index.ts";
 import { type UnitRefinementPlan } from "./unit-refinement-plan.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
 import type { InterpretedRefinementVerdicts } from "./interpreted-refinement-verdicts.ts";
@@ -59,60 +59,70 @@ export class RefinementSolverFacts {
       }
       if (p.kind === "invariant") {
         if (r.isSat()) {
-          findings.push({
-            kind: "refinement-violation",
-            frRefs: FrRefs.of(frOf(p.reqId.asString())),
-            targets: TargetIds.of([p.reqId.asString()]),
-            witness: { model: r.witnessModel() },
-            unit: unitName,
-            detail: `A design-legal state of unit ${unitName} violates requirements obligation ${p.reqId.asString()} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`,
-          });
+          findings.push(
+            DesignFinding.reconstitute({
+              kind: "refinement-violation",
+              frRefs: FrRefs.of(frOf(p.reqId.asString())),
+              targets: TargetIds.of([p.reqId.asString()]),
+              witness: { model: r.witnessModel() },
+              unit: unitName,
+              detail: `A design-legal state of unit ${unitName} violates requirements obligation ${p.reqId.asString()} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`,
+            }),
+          );
         }
       } else if (p.kind === "scenario") {
         const sc = req.scenarioById(p.reqId.asString());
         if (sc?.isAccept() === true && r.isUnsat()) {
-          findings.push({
-            kind: "refinement-violation",
-            frRefs: FrRefs.of(frOf(p.reqId.asString())),
-            targets: TargetIds.of([p.reqId.asString()]),
-            witness: { core: r.sortedCore() },
-            unit: unitName,
-            detail: `Accept scenario ${p.reqId.asString()} has no design-legal counterpart in unit ${unitName} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
-          });
+          findings.push(
+            DesignFinding.reconstitute({
+              kind: "refinement-violation",
+              frRefs: FrRefs.of(frOf(p.reqId.asString())),
+              targets: TargetIds.of([p.reqId.asString()]),
+              witness: { core: r.sortedCore() },
+              unit: unitName,
+              detail: `Accept scenario ${p.reqId.asString()} has no design-legal counterpart in unit ${unitName} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
+            }),
+          );
         }
         if (sc?.isReject() === true && r.isSat()) {
-          findings.push({
-            kind: "refinement-violation",
-            frRefs: FrRefs.of(frOf(p.reqId.asString())),
-            targets: TargetIds.of([p.reqId.asString()]),
-            witness: { model: r.witnessModel() },
-            unit: unitName,
-            detail: `Reject scenario ${p.reqId.asString()} is still admitted by unit ${unitName} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`,
-          });
+          findings.push(
+            DesignFinding.reconstitute({
+              kind: "refinement-violation",
+              frRefs: FrRefs.of(frOf(p.reqId.asString())),
+              targets: TargetIds.of([p.reqId.asString()]),
+              witness: { model: r.witnessModel() },
+              unit: unitName,
+              detail: `Reject scenario ${p.reqId.asString()} is still admitted by unit ${unitName} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`,
+            }),
+          );
         }
       } else if (p.kind === "enabledness") {
         if (r.isSat()) {
-          findings.push({
-            kind: "completeness-gap",
-            frRefs: FrRefs.of(frOf(p.reqId.asString())),
-            targets: TargetIds.of(IdOrder.sortedUnique([p.reqId.asString(), ...plan.mappedTransitionsOf(p.reqId.asString()).map((t) => t.asString())], IdOrder.compare)),
-            witness: { model: r.witnessModel() },
-            unit: unitName,
-            detail: `The requirements event ${p.reqId.asString()} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
-          });
+          findings.push(
+            DesignFinding.reconstitute({
+              kind: "completeness-gap",
+              frRefs: FrRefs.of(frOf(p.reqId.asString())),
+              targets: TargetIds.of(IdOrder.sortedUnique([p.reqId.asString(), ...plan.mappedTransitionsOf(p.reqId.asString()).map((t) => t.asString())], IdOrder.compare)),
+              witness: { model: r.witnessModel() },
+              unit: unitName,
+              detail: `The requirements event ${p.reqId.asString()} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
+            }),
+          );
         }
       } else if (p.kind === "simulation") {
         if (r.isSat()) {
-          findings.push({
-            kind: "refinement-violation",
-            frRefs: FrRefs.of(frOf(p.reqId.asString())),
-            // simulation probe の designId は構築時に必須——旧 `?? ""` +空除去は
-            // designId 未設定の防御で、必須化により恒等（挙動保存）。
-            targets: TargetIds.of(IdOrder.sortedUnique([p.reqId.asString(), p.designId.asString()], IdOrder.compare).filter((t) => t !== "")),
-            witness: { trace: r.witnessTrace() },
-            unit: unitName,
-            detail: `Design step ${p.designId.asString()} of unit ${unitName}, taken where requirements event ${p.reqId.asString()} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,
-          });
+          findings.push(
+            DesignFinding.reconstitute({
+              kind: "refinement-violation",
+              frRefs: FrRefs.of(frOf(p.reqId.asString())),
+              // simulation probe の designId は構築時に必須——旧 `?? ""` +空除去は
+              // designId 未設定の防御で、必須化により恒等（挙動保存）。
+              targets: TargetIds.of(IdOrder.sortedUnique([p.reqId.asString(), p.designId.asString()], IdOrder.compare).filter((t) => t !== "")),
+              witness: { trace: r.witnessTrace() },
+              unit: unitName,
+              detail: `Design step ${p.designId.asString()} of unit ${unitName}, taken where requirements event ${p.reqId.asString()} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,
+            }),
+          );
         }
       }
     }

@@ -19,7 +19,7 @@ import type { DesignUnit } from "./design-unit.ts";
 import { ExpressionCanonicalKey } from "./expression-canonical-key.ts";
 import { DesignFindings } from "./design-findings.ts";
 import { DesignSkips } from "./design-skips.ts";
-import type { DesignFinding } from "./design-finding.ts";
+import { DesignFinding } from "./design-finding.ts";
 import { type DesignSkipped } from "./design-skipped.ts";
 import type { DesignValue } from "./design-value.ts";
 import { type RemappedUnit } from "./remapped-unit.ts";
@@ -127,28 +127,30 @@ export class LoweredUnit {
         const design = synth.entry.design.asString();
         const isTransition = this.#index.isTransition(design);
         deadDesignIds.add(design);
-        findings.push({
-          kind: "unreachable",
-          frRefs: FrRefs.of(frRefs),
-          targets: TargetIds.of([design]),
-          witness,
-          unit: u.name(),
-          detail: `The guard of ${design} can never hold under the entity constraints and invariants (witness core attached): the ${isTransition ? "transition" : "rule"} is dead.`,
-        });
+        findings.push(
+          DesignFinding.reconstitute({
+            kind: "unreachable",
+            frRefs: FrRefs.of(frRefs),
+            targets: TargetIds.of([design]),
+            witness,
+            unit: u.name(),
+            detail: `The guard of ${design} can never hold under the entity constraints and invariants (witness core attached): the ${isTransition ? "transition" : "rule"} is dead.`,
+          }),
+        );
         continue;
       }
       if (synth?.entry?.kind === "vac-shadow" && f.kind === "conflict") {
         const pairRefs = synth.entry.pair ?? [synth.entry.design, synth.entry.design];
         const pair = [pairRefs[0].asString(), pairRefs[1].asString()] as const;
         shadowFindings.push({
-          finding: {
+          finding: DesignFinding.reconstitute({
             kind: "redundancy",
             frRefs: FrRefs.of(frRefs),
             targets: TargetIds.of(IdOrder.sortedUnique([pair[0], pair[1]], IdOrder.compare)),
             witness,
             unit: u.name(),
             detail: `${pair[1]} is subsumed by ${pair[0]}: same trigger, a provably narrower guard, and an identical effect — it can never apply where ${pair[0]} does not.`,
-          },
+          }),
           subsumer: pair[0],
           subsumed: pair[1],
         });
@@ -158,11 +160,11 @@ export class LoweredUnit {
 
       const targets = IdOrder.sortedUnique(mapped.map((m) => m.design), IdOrder.compare);
       // deterministic:false waiver：同トリガ conflict の対象がすべて、非決定を
-      // 宣言した 1 機械の遷移であるとき。
+      // 宣言した 1 機械の遷移であるとき（判定は機械自身へ命じる——波7）。
       if (f.kind === "conflict" && targets.length > 0) {
         const machines = targets.map((t) => this.#index.machineOfTransition(t));
         const first = machines[0];
-        if (first && machines.every((m) => m === first) && first.deterministic === false) {
+        if (first !== null && first !== undefined && first.waivesOverlapOf(machines)) {
           for (const t of targets) {
             if (!waived.has(t)) {
               waived.add(t);
@@ -170,14 +172,14 @@ export class LoweredUnit {
                 target: t,
                 reason: "waived",
                 unit: u.name(),
-                detail: `machine ${first.id.asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
+                detail: `machine ${first.id().asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
               });
             }
           }
           continue;
         }
       }
-      findings.push({ kind: f.kind, frRefs: FrRefs.of(frRefs), targets: TargetIds.of(targets), witness, unit: u.name(), detail });
+      findings.push(DesignFinding.reconstitute({ kind: f.kind, frRefs: FrRefs.of(frRefs), targets: TargetIds.of(targets), witness, unit: u.name(), detail }));
     }
 
     // shadow の後段：死んだルール/遷移は既に unreachable——その空虚な包摂は何も
@@ -185,7 +187,7 @@ export class LoweredUnit {
     const liveShadows = shadowFindings.filter((s) => !deadDesignIds.has(s.subsumed) && !deadDesignIds.has(s.subsumer));
     const byPair = new Map<string, typeof liveShadows>();
     for (const s of liveShadows) {
-      const key = s.finding.targets.joined(",");
+      const key = s.finding.targets().joined(",");
       const list = byPair.get(key) ?? [];
       list.push(s);
       byPair.set(key, list);
@@ -196,11 +198,10 @@ export class LoweredUnit {
       const first = list[0];
       if (!first) continue;
       if (list.length >= 2 && directions.size >= 2) {
-        const [a, b] = first.finding.targets.toArray();
-        findings.push({
-          ...first.finding,
-          detail: `${a} and ${b} are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect — one of them can be removed.`,
-        });
+        const [a, b] = first.finding.targets().toArray();
+        findings.push(
+          first.finding.withDetail(`${a} and ${b} are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect — one of them can be removed.`),
+        );
       } else {
         findings.push(first.finding);
       }
@@ -292,8 +293,8 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   //    ignores → 明示 no-op event。
   for (const sm of u.machines().sortedCanonically()) {
     const attrPath = DesignMachines.attrPathOf(sm);
-    attrPathOfMachine.set(sm.id.asString(), attrPath);
-    for (const tr of sm.transitions.sortedCanonically()) {
+    attrPathOfMachine.set(sm.id().asString(), attrPath);
+    for (const tr of sm.transitions().sortedCanonically()) {
       // compile-down の暗黙部は遷移／ignore 自身が所有する（波5b）。
       const guard = tr.loweredGuard(attrPath);
       const effect = tr.loweredEffect(attrPath);
@@ -304,11 +305,11 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
       machineOfTransition.set(tr.id().asString(), sm);
       candidates.push({ lowId, design: tr.id().asString(), trigger: tr.trigger().asString(), guard, effect });
     }
-    const sortedIgnores = sm.ignores.sortedByStateTrigger();
+    const sortedIgnores = sm.ignores().sortedByStateTrigger();
     for (const ig of sortedIgnores) {
       push(
         { nature: "event", frRefs: [], trigger: ig.trigger().asString(), guard: ig.loweredGuard(attrPath), effect: ig.loweredEffect(attrPath) },
-        { design: LoweredOriginRef.reconstitute(sm.id.asString()), kind: "ignore" },
+        { design: LoweredOriginRef.reconstitute(sm.id().asString()), kind: "ignore" },
       );
     }
   }

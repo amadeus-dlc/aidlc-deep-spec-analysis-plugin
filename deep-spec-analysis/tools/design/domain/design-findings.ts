@@ -25,13 +25,13 @@ function rankOf(kind: string): number {
 
 function sortDesignFindings(findings: readonly DesignFinding[]): DesignFinding[] {
   return [...findings].sort((a, b) => {
-    const kr = rankOf(a.kind) - rankOf(b.kind);
+    const kr = rankOf(a.kind()) - rankOf(b.kind());
     if (kr !== 0) return kr;
-    if (a.unit !== b.unit) return a.unit < b.unit ? -1 : 1;
-    const ta = a.targets.joined(",");
-    const tb = b.targets.joined(",");
+    if (a.unit() !== b.unit()) return a.unit() < b.unit() ? -1 : 1;
+    const ta = a.targets().joined(",");
+    const tb = b.targets().joined(",");
     if (ta !== tb) return ta < tb ? -1 : 1;
-    return a.detail < b.detail ? -1 : a.detail > b.detail ? 1 : 0;
+    return a.detail() < b.detail() ? -1 : a.detail() > b.detail() ? 1 : 0;
   });
 }
 

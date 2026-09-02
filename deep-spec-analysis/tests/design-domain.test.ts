@@ -1,13 +1,21 @@
 // design/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
 
 import { describe, expect, test } from "bun:test";
-import { FrRefs, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
+import { FrRefs, TargetIds, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
 import {
   BrRefs,
+  DesignAttributeName,
   DesignBackgroundDecl,
   DesignBackgroundId,
+  DesignEntityName,
+  DesignFinding,
   DesignIgnore,
+  DesignIgnores,
+  DesignMachine,
+  DesignMachineId,
   DesignTransition,
+  DesignTransitions,
+  InitialStates,
   DesignObligation,
   DesignObligationId,
   DesignObligationNature,
@@ -274,5 +282,93 @@ describe("design transition and ignore (compile-down owners)", () => {
     expect(ig.reason()).toBe("already closed");
     expect(ig.loweredGuard("T.s")).toEqual({ op: "eq", args: [{ op: "ref", path: "T.s" }, { op: "enum", value: "closed" }] });
     expect(ig.loweredEffect("T.s")).toEqual({ op: "eq", args: [{ op: "ref", path: "T.s", prime: true }, { op: "ref", path: "T.s" }] });
+  });
+});
+
+describe("design finding (conflict reinterpretation owner)", () => {
+  const finding = (kind: string, targets: string[]) =>
+    DesignFinding.reconstitute({
+      kind,
+      frRefs: FrRefs.of(["FR-1"]),
+      targets: TargetIds.of(targets),
+      witness: { trace: [{ "T.s": "a" }] },
+      unit: "u1",
+      detail: "overlap",
+    });
+
+  test("reconstitute round-trips every field through the accessors", () => {
+    const f = finding("conflict", ["FR-9", "TR-1"]);
+    expect(f.kind()).toBe("conflict");
+    expect(f.frRefs().toArray()).toEqual(["FR-1"]);
+    expect(f.targets().toArray()).toEqual(["FR-9", "TR-1"]);
+    expect(f.witness()).toEqual({ trace: [{ "T.s": "a" }] });
+    expect(f.unit()).toBe("u1");
+    expect(f.detail()).toBe("overlap");
+    expect(f.isConflict()).toBe(true);
+    expect(finding("unreachable", ["TR-1"]).isConflict()).toBe(false);
+  });
+
+  test("a conflict reaching requirement ids ascends to refinement-violation with the frozen wording", () => {
+    const v = finding("conflict", ["FR-9", "TR-1"]).asRefinementViolation(new Set(["FR-9", "FR-10"]), "u1");
+    expect(v?.kind()).toBe("refinement-violation");
+    expect(v?.targets().toArray()).toEqual(["FR-9"]);
+    expect(v?.frRefs().toArray()).toEqual(["FR-1"]);
+    expect(v?.witness()).toEqual({ trace: [{ "T.s": "a" }] });
+    expect(v?.unit()).toBe("u1");
+    expect(v?.detail()).toBe(
+      "The design machine of unit u1 reaches a state that violates requirements obligation FR-9 under the refinement map (step trace attached): the design can execute its way out of the verified requirements.",
+    );
+  });
+
+  test("a conflict that misses every requirement id, and any non-conflict, reinterprets to null", () => {
+    expect(finding("conflict", ["TR-1"]).asRefinementViolation(new Set(["FR-9"]), "u1")).toBeNull();
+    expect(finding("unreachable", ["FR-9"]).asRefinementViolation(new Set(["FR-9"]), "u1")).toBeNull();
+  });
+
+  test("withDetail copies every field and replaces only the wording", () => {
+    const copy = finding("redundancy", ["TR-1", "TR-2"]).withDetail("mutual");
+    expect(copy.kind()).toBe("redundancy");
+    expect(copy.frRefs().toArray()).toEqual(["FR-1"]);
+    expect(copy.targets().toArray()).toEqual(["TR-1", "TR-2"]);
+    expect(copy.witness()).toEqual({ trace: [{ "T.s": "a" }] });
+    expect(copy.unit()).toBe("u1");
+    expect(copy.detail()).toBe("mutual");
+  });
+});
+
+describe("design machine (probe candidates and the deterministic waiver)", () => {
+  const machine = (deterministic: boolean, id = "SM-1") =>
+    DesignMachine.reconstitute({
+      id: DesignMachineId.reconstitute(id),
+      entity: DesignEntityName.reconstitute("Ticket"),
+      attribute: DesignAttributeName.reconstitute("status"),
+      initial: InitialStates.of(["open"]),
+      transitions: DesignTransitions.of([
+        DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-1"), from: "open", to: "closed", trigger: TriggerName.reconstitute("close"), brRefs: BrRefs.of([]) }),
+      ]),
+      ignores: DesignIgnores.of([DesignIgnore.reconstitute({ state: "closed", trigger: TriggerName.reconstitute("close"), reason: "" })]),
+      deterministic,
+    });
+
+  test("reconstitute round-trips every field through the accessors", () => {
+    const sm = machine(true);
+    expect(sm.id().asString()).toBe("SM-1");
+    expect(sm.entity().asString()).toBe("Ticket");
+    expect(sm.attribute().asString()).toBe("status");
+    expect(sm.transitions().ids()).toEqual(["TR-1"]);
+    expect(sm.ignores().sortedByStateTrigger().toArray()[0]?.state()).toBe("closed");
+  });
+
+  test("nonInitialCandidates drops the initial states and sorts the rest ascending", () => {
+    expect(machine(true).nonInitialCandidates(["closed", "open", "archived"])).toEqual(["archived", "closed"]);
+    expect(machine(true).nonInitialCandidates(["open"])).toEqual([]);
+  });
+
+  test("waivesOverlapOf holds only when every target is this machine's and determinism is waived", () => {
+    const sm = machine(false);
+    expect(sm.waivesOverlapOf([sm, sm])).toBe(true);
+    expect(machine(true).waivesOverlapOf([sm, sm])).toBe(false);
+    expect(sm.waivesOverlapOf([sm, machine(false, "SM-2")])).toBe(false);
+    expect(sm.waivesOverlapOf([sm, null])).toBe(false);
   });
 });

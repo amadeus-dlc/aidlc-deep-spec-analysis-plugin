@@ -25,7 +25,7 @@ export class DesignEventCatalog {
     const out = new Map<string, DesignEvent>();
     for (const sm of u.machines()) {
       const attrPath = DesignMachines.attrPathOf(sm);
-      for (const tr of sm.transitions) {
+      for (const tr of sm.transitions()) {
         const guard: Expression = tr.loweredGuard(attrPath);
         const effectAssign = new Map<string, Expression>();
         effectAssign.set(...tr.stateAssignment(attrPath));

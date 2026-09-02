@@ -12,6 +12,7 @@ import type { SchemaUnreadable } from "../../kernel/adapter/index.ts";
 import {
   CheckedUnits,
   DesignCrossCheckedEntries,
+  DesignFinding,
   DesignFindings,
   DesignInputAnchors,
   DesignSkips,
@@ -41,12 +42,12 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
   // detail?)。witness は remap 素通し値（DesignValue）で逐語描画。
   ordered.findings = report.findings().toArray().map((f) => {
     const out: { [k: string]: Json } = {
-      kind: f.kind,
-      frRefs: f.frRefs.toArray() as unknown as Json,
-      targets: f.targets.toArray() as unknown as Json,
-      witness: f.witness as unknown as Json,
-      unit: f.unit,
-      detail: f.detail,
+      kind: f.kind(),
+      frRefs: f.frRefs().toArray() as unknown as Json,
+      targets: f.targets().toArray() as unknown as Json,
+      witness: f.witness() as unknown as Json,
+      unit: f.unit(),
+      detail: f.detail(),
     };
     return out as Json;
   });
@@ -106,14 +107,14 @@ export function parseSiblingDesignReportDocument(
     findings: DesignFindings.of(
       (Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []).map((e) => {
         const entry = e as { [k: string]: Json };
-        return {
+        return DesignFinding.reconstitute({
           kind: typeof entry.kind === "string" ? entry.kind : "",
           frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
           targets: TargetIds.of(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
           witness: (entry.witness ?? null) as unknown as DesignValue,
           unit: typeof entry.unit === "string" ? entry.unit : "",
           detail: typeof entry.detail === "string" ? entry.detail : "",
-        };
+        });
       }),
     ),
     skipped: DesignSkips.of(

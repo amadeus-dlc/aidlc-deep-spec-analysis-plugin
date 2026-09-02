@@ -1333,3 +1333,15 @@ no-op event）を、重複していた2箇所（`buildLowering` と
 ——いずれも `ComponentCheckMaterials` に漏れていた seen-map 走査と
 owners-map 走査の移設。materials は凍結文言の組み立てだけを担う。
 台帳から 3 エントリを回収し、残債は 122 中 102。
+
+波 7（同 PR）: `DesignFinding`／`DesignMachine` が命令できる class へ。
+finding は conflict 判定の refinement 再解釈（対象が要件 id に届く
+conflict は `refinement-violation` へ昇格する——文言は凍結、frRefs と
+witness は引き継ぐ。届かない conflict は設計自身の conflict として
+masked skip の勘定へ回す）と、相互包摂の畳み込みが使う文言差し替え
+複製を所有する。機械は到達不能プローブの候補選別（宣言 enum 値から
+初期状態を除いた昇順——capability skip 文言の states 列挙順そのもの）と
+deterministic:false waiver の判定（conflict の対象がすべてこの機械の
+遷移であり、かつ非決定を宣言済み）を所有する。quint ユースケースと
+remap は訊くのではなく命じる。台帳から 2 エントリを回収し、残債は
+122 中 100。

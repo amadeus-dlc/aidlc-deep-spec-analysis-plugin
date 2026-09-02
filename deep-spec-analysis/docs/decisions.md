@@ -1459,3 +1459,17 @@ pairing (DD-1) and the multi-owner grouping (DD-5) that used to live
 in `ComponentCheckMaterials` as a seen-map walk and an owners-map
 walk. The materials keep only the frozen finding wordings.
 3 ledger entries reclaimed — the ledger holds 102 of 122.
+
+Wave 7 (same PR): `DesignFinding` / `DesignMachine` become commandable.
+The finding owns the refinement reinterpretation of conflict verdicts
+(a conflict whose targets reach the requirement ids ascends to
+`refinement-violation` — frozen wording, frRefs and witness carried;
+a conflict that misses them stays a design conflict and feeds the
+masked-skip accounting) and the detail-only clone behind the
+mutual-redundancy fold. The machine owns the unreachable-probe
+candidate selection (declared enum values minus the initial states,
+ascending — the very order the capability-skip wording enumerates)
+and the deterministic:false waiver verdict (every conflict target is
+this machine's own transition and nondeterminism was declared). The
+quint usecase and the remap pass now tell instead of ask.
+2 ledger entries reclaimed — the ledger holds 100 of 122.
