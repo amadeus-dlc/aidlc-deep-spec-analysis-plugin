@@ -191,18 +191,18 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
 
   // 不変量面：invariant/numeric 義務・state-temporal "always" 義務・背景制約・
   // 型境界。
-  const invariantComponents: { id: string; expr: Expression; frRefs: string[] }[] = [];
+  const invariantComponents: { id: string; expr: Expression }[] = [];
   for (const ob of model.obligations()) {
     const assertion = ob.assertion();
     if (ob.isInvariantLike() && assertion !== undefined) {
-      invariantComponents.push({ id: ob.id().asString(), expr: assertion, frRefs: [...ob.frRefs().toArray()] });
+      invariantComponents.push({ id: ob.id().asString(), expr: assertion });
     }
     const temporal = ob.temporal();
     if (ob.isStateTemporal() && temporal?.pattern === "always" && temporal.assert !== undefined) {
-      invariantComponents.push({ id: ob.id().asString(), expr: temporal.assert, frRefs: [...ob.frRefs().toArray()] });
+      invariantComponents.push({ id: ob.id().asString(), expr: temporal.assert });
     }
   }
-  const bgComponents = model.background().toArray().map((b) => ({ id: b.id, expr: b.assert, frRefs: [] as string[] }));
+  const bgComponents = model.background().toArray().map((b) => ({ id: b.id, expr: b.assert }));
 
   const invExprs: string[] = [];
   for (const c of [...invariantComponents, ...bgComponents]) {

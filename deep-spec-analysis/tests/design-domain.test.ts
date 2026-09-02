@@ -276,10 +276,9 @@ describe("design transition and ignore (compile-down owners)", () => {
   });
 
   test("ignore lowers to an explicit no-op event and round-trips its fields", () => {
-    const ig = DesignIgnore.reconstitute({ state: "closed", trigger: TriggerName.reconstitute("close"), reason: "already closed" });
+    const ig = DesignIgnore.reconstitute({ state: "closed", trigger: TriggerName.reconstitute("close") });
     expect(ig.state()).toBe("closed");
     expect(ig.trigger().asString()).toBe("close");
-    expect(ig.reason()).toBe("already closed");
     expect(ig.loweredGuard("T.s")).toEqual({ op: "eq", args: [{ op: "ref", path: "T.s" }, { op: "enum", value: "closed" }] });
     expect(ig.loweredEffect("T.s")).toEqual({ op: "eq", args: [{ op: "ref", path: "T.s", prime: true }, { op: "ref", path: "T.s" }] });
   });
@@ -346,7 +345,7 @@ describe("design machine (probe candidates and the deterministic waiver)", () =>
       transitions: DesignTransitions.of([
         DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-1"), from: "open", to: "closed", trigger: TriggerName.reconstitute("close"), brRefs: BrRefs.of([]) }),
       ]),
-      ignores: DesignIgnores.of([DesignIgnore.reconstitute({ state: "closed", trigger: TriggerName.reconstitute("close"), reason: "" })]),
+      ignores: DesignIgnores.of([DesignIgnore.reconstitute({ state: "closed", trigger: TriggerName.reconstitute("close") })]),
       deterministic,
     });
 

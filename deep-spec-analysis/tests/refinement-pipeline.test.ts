@@ -193,7 +193,8 @@ type RawDesignObligation = Omit<Parameters<typeof DesignObligation.reconstitute>
   frRefs: string[];
 };
 type RawDesignTransition = Omit<Parameters<typeof DesignTransition.reconstitute>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
-type RawDesignIgnore = Omit<Parameters<typeof DesignIgnore.reconstitute>[0], "trigger"> & { trigger: string };
+// reason は design IR 上の必須注記（文書には残るが domain は運ばない——#71 波9）。
+type RawDesignIgnore = Omit<Parameters<typeof DesignIgnore.reconstitute>[0], "trigger"> & { trigger: string; reason: string };
 type RawDesignMachine = Omit<Parameters<typeof DesignMachine.reconstitute>[0], "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
   id: string;
   entity: string;
