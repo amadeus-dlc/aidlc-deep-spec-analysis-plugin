@@ -1449,3 +1449,13 @@ semantics of `DesignTransition` / `DesignIgnore` (implicit
 event) move from the two duplicated assembly sites
 (`buildLowering` and `DesignEventCatalog.of`) into the types
 themselves. 3 ledger entries reclaimed — the ledger holds 105 of 122.
+
+Wave 6 (same PR): `Component` / `ComponentEntity` / `ComponentRef`
+become commandable — the component declaration owns its name shape
+(DD-1 PascalCase) and its self-dependency detection (DD-3, through
+`ComponentRef.pointsAt`), the entity owns the identifier presence
+that makes it ownable (DD-5), and the collection owns the duplicate
+pairing (DD-1) and the multi-owner grouping (DD-5) that used to live
+in `ComponentCheckMaterials` as a seen-map walk and an owners-map
+walk. The materials keep only the frozen finding wordings.
+3 ledger entries reclaimed — the ledger holds 102 of 122.

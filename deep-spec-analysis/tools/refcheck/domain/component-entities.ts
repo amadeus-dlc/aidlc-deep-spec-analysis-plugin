@@ -22,7 +22,7 @@ export class ComponentEntities {
 
   // DD-6：owner がこの名前のエンティティを宣言しているか。
   declaresEntity(name: EntityName): boolean {
-    return this.#values.some((e) => e.name.equals(name));
+    return this.#values.some((e) => e.name().equals(name));
   }
 
   toArray(): readonly ComponentEntity[] {

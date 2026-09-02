@@ -3,9 +3,49 @@ import { type AttributeName } from "./attribute-name.ts";
 import { type ElementPath } from "./element-path.ts";
 import { type EntityName } from "./entity-name.ts";
 
-export interface ComponentEntity {
-  readonly name: EntityName;
-  readonly element: ElementPath;
-  readonly identifier: AttributeName | null;
-  readonly references: EntityReferences;
+// コンポーネントが所有するエンティティ宣言。所有の要件たる識別子の有無
+// （DD-5）はエンティティ自身が判定する（#71 波6）。
+export class ComponentEntity {
+  readonly #name: EntityName;
+  readonly #element: ElementPath;
+  readonly #identifier: AttributeName | null;
+  readonly #references: EntityReferences;
+
+  private constructor(props: {
+    name: EntityName;
+    element: ElementPath;
+    identifier: AttributeName | null;
+    references: EntityReferences;
+  }) {
+    this.#name = props.name;
+    this.#element = props.element;
+    this.#identifier = props.identifier;
+    this.#references = props.references;
+  }
+
+  static reconstitute(props: {
+    name: EntityName;
+    element: ElementPath;
+    identifier: AttributeName | null;
+    references: EntityReferences;
+  }): ComponentEntity {
+    return new ComponentEntity(props);
+  }
+
+  name(): EntityName {
+    return this.#name;
+  }
+
+  element(): ElementPath {
+    return this.#element;
+  }
+
+  references(): EntityReferences {
+    return this.#references;
+  }
+
+  // DD-5: 所有の要件たる識別子を持つか（未宣言・空文字は識別子なし——凍結条件）。
+  hasIdentifier(): boolean {
+    return this.#identifier !== null && !this.#identifier.isEmpty();
+  }
 }
