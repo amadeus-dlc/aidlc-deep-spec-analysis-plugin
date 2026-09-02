@@ -1868,3 +1868,89 @@ ruling and none is changed by this entry:
 Indexes over maps (`LoweringIndex`, `BrReferenceIndex`,
 `FrReferenceIndex`, `SiblingUnitIndex`, `DesignEventCatalog`) are read as
 first-class collections and need no ruling.
+
+## Domain-object taxonomy — the 22 rulings on the baseline audit (2026-09-02)
+
+The owner ruled on every citizen the baseline audit found outside the
+four kinds, one at a time, each against the measured facts. Five
+disciplines emerged with the rulings and bind future work:
+
+- **Invariants**: consistency is guarded by entities and value objects
+  as their own invariants; a domain service that merely packages a
+  check procedure is not made.
+- **Identity**: an element a collection looks up by key needs identity
+  and is therefore an entity (`AttributeMapping`, keyed by its
+  requirements attribute path, is a local entity); value objects are
+  only for what cannot be identified.
+- **Naming**: the word *facts* is reserved for domain events — things
+  that happened. A compiler's lookup table is a *plan*.
+- **Domain errors**: a domain error type is a domain-layer model, so its
+  type and variants must map to the ubiquitous language; an expected
+  failure is returned as a `Result` value, not thrown.
+- **Read models**: a CQRS read model — a projection folded from the
+  write side for presentation or query — is not a domain-layer citizen
+  and lives on the query side (`usecase`).
+
+The rulings, in queue order (implementation follows in waves; nothing
+in the code changes with this entry):
+
+1. `IdOrder` — dissolve into the value objects: a private kernel helper
+   behind the DPs' `compareTo` and the collections' canonical sorts.
+2. `Expressions` — dissolve into a kernel value object `ExpressionTree`
+   (walk, prime detection, reference enumeration); `eqRef` moves to the
+   equality builders (`DesignTransition`, `DesignIgnore`).
+3. `Names` — dissolve into a kernel domain primitive `NormalizedName`;
+   the refcheck name DPs return it and `MachineSpec.entityToken` returns
+   an `EntityName`.
+4. `ExpressionCanonicalKey` — dissolve into
+   `ExpressionTree.isCanonicallyEqual`.
+5. `ExpressionEvaluation` — dissolve into the value object
+   `QuintMachineComponent.isViolatedIn` (evaluator private to it).
+6. `designWellFormednessErrors` — dissolve: each `Design*Decl` judges
+   its own consistency as an invariant, `DesignUnitDecls` gathers the
+   cross-unit part; wording and order stay frozen.
+7. `SmtPlanFacts` — a value object, renamed `SmtVerificationPlan`.
+8. `QuintMachineFacts` → `QuintMachinePlan`, and the same-shaped
+   `RefinementSolverFacts` → `RefinementSolverPlan` (naming rule).
+9. `UnitRefinementPlan` — classified a value object; unchanged.
+10. `AlphaContext` — dissolve into the first-class collection
+    `AttributeMappings` (lookup by requirements path, `substitute` and
+    `equalityFor` delegating to the element); `AttributeMapping` is an
+    entity.
+11. `ComponentCheckMaterials` — dissolve: DD-0..DD-7 become invariants
+    of `ComponentCatalogOutcome` / `Components` / `Component`, and the
+    aggregate `DesignRecord.checkComponents(ledger)` writes them.
+12. `ContractCheckMaterials` — dissolve likewise (CD-1/CD-3 between
+    `ContractRow` and `UnitDecls`, CD-2 on `SpecBlockAssessment`);
+    `DesignRecord.checkContracts(ledger)`.
+13. `FunctionalCheckMaterials` — dissolve likewise (FD-E / FD-R / FD-S /
+    XS onto the declarations); `DesignRecord.checkFunctionalDesign`.
+14. `CheckFamilyLedger` — dissolve into the aggregate root
+    `ReferenceCheckReport`: `open(id, families, unit)`, `finding` and
+    `skip` as the report's commands, checked-targets derivation as its
+    invariant. It is the write side, not a read model.
+15. `AlphaError` — dissolve into an abstract data type named in the
+    ubiquitous language, `RefinementMapDefect` (uncovered attribute,
+    enum mapping outside equality, unspecified mapping, effect not an
+    assignment conjunction), returned through `Result`; each variant
+    renders its frozen wording and knows its `compile-error` skip.
+16. `LoadedDocument<Outcome>` — dissolve into the aggregate
+    `DesignRecord`, which keeps anchor and outcome inside and records
+    its own inputs; the `functional()` / `declaredUnits()` record doors
+    go with it. The data-model rule is corrected to catch generic
+    interfaces.
+17. `LoweringKind` — closed into `LoweredOrigin`'s private
+    representation.
+18. `CheckSeverity` — a domain primitive shared by `Check` and
+    `ManifestEntry` (`blocksDoctor`, `asString` for the document).
+19. `CoverageState` — a domain primitive shared by the two coverage
+    rows.
+20. `CheckExecutionMode` — not a domain object; moved to the usecase
+    input side.
+21. `SmtQueryStatus` / `RefinementQueryStatus` — closed into the two
+    verdict value objects' private representation; no cross-context
+    sharing.
+22. The doctor's `CoverageAssessment`, `UnitCoverage`, `StructuralDebt`
+    and their rows — read models, moved to `doctor/usecase`; the pure
+    value objects (`Check`, `CheckSeverity`, `ManifestEntry`,
+    `DigestAnchor`) stay in the domain.

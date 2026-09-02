@@ -1673,3 +1673,73 @@ unparseable／extracted の各枝は凍結の skip・finding 文言を保ち、�
 写像の索引（`LoweringIndex`・`BrReferenceIndex`・`FrReferenceIndex`・
 `SiblingUnitIndex`・`DesignEventCatalog`）はファーストクラスコレクションと
 読み、裁定は要らない。
+
+## ドメインオブジェクトの種別規律 — 基線監査 22 件の裁定（2026-09-02）
+
+オーナーは基線監査で 4 種別の外にいた住人を、実測を添えて 1 件ずつ裁定した。
+裁定と併せて 5 つの規律が立ち、以後の作業を拘束する:
+
+- **不変条件**: 整合性はエンティティと値オブジェクトが自分の不変条件として
+  守る。検査手順をオブジェクトに包んだだけのドメインサービスは作らない。
+- **識別**: コレクションからキーで検索される要素は識別が要るのでエンティティ
+  （要件属性パスで識別される `AttributeMapping` はローカルエンティティ）。値
+  オブジェクトは識別できないものにだけ使う。
+- **命名**: 「事実（facts）」という語はドメインイベント（成立した事態）に
+  取っておく。コンパイラの対応表は「計画（plan）」。
+- **ドメインエラー**: ドメインエラー型は domain 層のモデルであり、型と
+  バリアントがユビキタス言語に対応づくこと。予期された失敗は例外で投げず
+  `Result` の値で返す。
+- **リードモデル**: CQRS のリードモデル（表示や照会のために書き込み側の状態を
+  畳み込んだ投影）は domain 層の住人ではなく、クエリ側（usecase）に置く。
+
+裁定はキュー順に以下（実装は波で行う。この項目ではコードは変えない）:
+
+1. `IdOrder` — 値オブジェクトへ解体。DP の `compareTo` とコレクションの正準
+   ソートの内側の kernel 非公開ヘルパーへ。
+2. `Expressions` — kernel の値オブジェクト `ExpressionTree`（走査・prime 検出・
+   参照列挙）へ解体。`eqRef` は等式を作る側（`DesignTransition`・
+   `DesignIgnore`）へ。
+3. `Names` — kernel の DP `NormalizedName` へ解体。refcheck の名前 DP はそれを
+   返し、`MachineSpec.entityToken` は `EntityName` を返す。
+4. `ExpressionCanonicalKey` — `ExpressionTree.isCanonicallyEqual` へ解体。
+5. `ExpressionEvaluation` — 値オブジェクト `QuintMachineComponent.isViolatedIn`
+   の内側へ解体（評価器は非公開）。
+6. `designWellFormednessErrors` — 解体。各 `Design*Decl` が自分の整合性を不変
+   条件として判定し、ユニット横断分は `DesignUnitDecls` が集める。文言と順序は
+   凍結。
+7. `SmtPlanFacts` — 値オブジェクト。`SmtVerificationPlan` へ改名。
+8. `QuintMachineFacts` → `QuintMachinePlan`、同形の `RefinementSolverFacts` →
+   `RefinementSolverPlan`（命名規律）。
+9. `UnitRefinementPlan` — 値オブジェクトと分類。変更なし。
+10. `AlphaContext` — ファーストクラスコレクション `AttributeMappings` へ解体
+    （要件パスによる検索、要素へ委ねる `substitute`／`equalityFor`）。
+    `AttributeMapping` はエンティティ。
+11. `ComponentCheckMaterials` — 解体。DD-0〜DD-7 は `ComponentCatalogOutcome`／
+    `Components`／`Component` の不変条件になり、集約
+    `DesignRecord.checkComponents(ledger)` が書く。
+12. `ContractCheckMaterials` — 同様に解体（CD-1／CD-3 は `ContractRow` と
+    `UnitDecls` の間、CD-2 は `SpecBlockAssessment`）。
+    `DesignRecord.checkContracts(ledger)`。
+13. `FunctionalCheckMaterials` — 同様に解体（FD-E／FD-R／FD-S／XS を宣言側へ）。
+    `DesignRecord.checkFunctionalDesign`。
+14. `CheckFamilyLedger` — 集約ルート `ReferenceCheckReport` へ解体。
+    `open(id, families, unit)`、`finding`／`skip` はレポートのコマンド、
+    checked の導出はレポートの不変条件。書き込み側であってリードモデルではない。
+15. `AlphaError` — ユビキタス言語で名づけた抽象データ型 `RefinementMapDefect`
+    （属性が未カバー／enum 写像が等式の外／写像が未指定／効果が代入の連言で
+    ない）へ解体し、`Result` で返す。各バリアントが凍結文言を描画し、skip 理由
+    `compile-error` への対応を知る。
+16. `LoadedDocument<Outcome>` — 集約 `DesignRecord` の内側へ解体（アンカーと
+    結果を集約が持ち、inputs[] を自分で記録）。`functional()`／
+    `declaredUnits()` の record の門も消す。data-model ルールは型引数付き
+    interface も検出するよう修正。
+17. `LoweringKind` — `LoweredOrigin` の内部表現へ閉じ込める。
+18. `CheckSeverity` — `Check` と `ManifestEntry` が共有する DP（`blocksDoctor`、
+    文書への `asString`）。
+19. `CoverageState` — 2 つのカバレッジ行が共有する DP。
+20. `CheckExecutionMode` — ドメインオブジェクトではない。usecase の入力側へ。
+21. `SmtQueryStatus`／`RefinementQueryStatus` — 2 つの判定値オブジェクトの
+    内部表現へ閉じ込める。境界をまたぐ共有はしない。
+22. doctor の `CoverageAssessment`・`UnitCoverage`・`StructuralDebt` とその行 —
+    リードモデル。`doctor/usecase` へ移す。純粋な値オブジェクト（`Check`・
+    `CheckSeverity`・`ManifestEntry`・`DigestAnchor`）は domain に残る。
