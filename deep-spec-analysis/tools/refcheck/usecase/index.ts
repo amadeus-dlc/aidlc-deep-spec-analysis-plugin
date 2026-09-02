@@ -9,3 +9,4 @@ export { CheckContractSummaryUseCase } from "./check-contract-summary-usecase.ts
 export { type CheckContractSummaryInput } from "./check-contract-summary-input.ts";
 export { CheckFunctionalDesignUseCase } from "./check-functional-design-usecase.ts";
 export { type CheckFunctionalDesignInput } from "./check-functional-design-input.ts";
+export { type CheckExecutionMode } from "./check-execution-mode.ts";

@@ -1,4 +1,4 @@
-import type { CheckSeverity } from "./check-severity.ts";
+import { CheckSeverity } from "./check-severity.ts";
 
 // 設置台帳の 1 エントリ——harness 相対パスと、欠けたときの深刻度。
 // （#71 波27）
@@ -12,7 +12,7 @@ export class ManifestEntry {
   }
 
   static error(rel: string): ManifestEntry {
-    return new ManifestEntry(rel, "error");
+    return new ManifestEntry(rel, CheckSeverity.error());
   }
 
   rel(): string {

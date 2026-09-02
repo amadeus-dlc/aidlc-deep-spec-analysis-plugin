@@ -26,6 +26,6 @@ export class CoverageRow {
   }
 
   matchState<T>(handlers: { unverified: () => T; stale: () => T }): T {
-    return this.#state === "unverified" ? handlers.unverified() : handlers.stale();
+    return this.#state.match(handlers);
   }
 }

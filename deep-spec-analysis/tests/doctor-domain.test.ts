@@ -11,7 +11,7 @@ import {
   StructuralDebt,
   UnitCoverage,
   VerificationStaleness,
-} from "../tools/doctor/domain/index.ts";
+ CheckSeverity, CoverageState,} from "../tools/doctor/domain/index.ts";
 import { Check, CoverageRow, DebtRow, DigestAnchor, InstalledStatus, ManifestEntry, RefinementStaleRow, SolverAvailability, UnitCoverageRow } from "../tools/doctor/domain/index.ts";
 import { CheckFunctionalCoverageUseCase } from "../tools/doctor/usecase/index.ts";
 import type { DoctorWorkspaceClient } from "../tools/doctor/usecase/index.ts";
@@ -24,7 +24,8 @@ describe("installation manifest", () => {
     const entries: ManifestEntry[] = [...InstallationManifest.standard()];
     expect(entries).toHaveLength(43);
     expect(entries[0]?.rel()).toBe("sensors/aidlc-deep-spec-ir-valid.md");
-    expect(entries[0]?.severity()).toBe("error");
+    expect(entries[0]?.severity().asString()).toBe("error");
+    expect(entries[0]?.severity().blocksDoctor()).toBe(true);
     expect(entries[entries.length - 1]?.rel()).toBe("knowledge/aidlc-architect-agent/deep-spec-refinement-map-authoring.md");
     // doctor 自身のツリー（PR9 で追加）— entry と 3 canary。
     const rels = entries.map((e) => e.rel());
@@ -32,7 +33,7 @@ describe("installation manifest", () => {
     expect(rels).toContain("tools/doctor/domain/index.ts");
     expect(rels).toContain("tools/doctor/usecase/index.ts");
     expect(rels).toContain("tools/doctor/adapter/index.ts");
-    expect(entries.every((e) => e.severity() === "error")).toBe(true);
+    expect(entries.every((e) => e.severity().blocksDoctor())).toBe(true);
   });
 });
 
@@ -51,7 +52,7 @@ describe("assessment aggregates", () => {
   test("coverage assessment counts verified against eligible", () => {
     const a = CoverageAssessment.of({
       eligible: 3,
-      problems: [CoverageRow.reconstitute({ space: "default", intent: "i1", state: "unverified" })],
+      problems: [CoverageRow.reconstitute({ space: "default", intent: "i1", state: CoverageState.unverified() })],
       scopes: ["enterprise", "feature"],
     });
     expect(a.isClean()).toBe(false);
@@ -80,7 +81,7 @@ describe("assessment aggregates", () => {
   test("unit coverage carries unit problems and refinement staleness apart", () => {
     const u = UnitCoverage.of({
       eligible: 3,
-      problems: [UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u1", state: "stale" })],
+      problems: [UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u1", state: CoverageState.stale() })],
       refinementStale: [RefinementStaleRow.reconstitute({ space: "default", intent: "i1" })],
       scopes: ["feature"],
     });
@@ -96,12 +97,12 @@ describe("assessment aggregates", () => {
   });
 
   test("the health verdict keeps the frozen checks order and serialized shape", () => {
-    const row: Check = Check.reconstitute({ pass: true, label: "l", fix: "f", severity: "advisory" });
-    const v = HealthVerdict.of([row]).add(Check.reconstitute({ pass: false, label: "m", fix: "g", severity: "error" }));
+    const row: Check = Check.reconstitute({ pass: true, label: "l", fix: "f", severity: CheckSeverity.advisory() });
+    const v = HealthVerdict.of([row]).add(Check.reconstitute({ pass: false, label: "m", fix: "g", severity: CheckSeverity.error() }));
     expect([...v].map((c) => c.label())).toEqual(["l", "m"]);
     expect(row.passes()).toBe(true);
     expect(row.fix()).toBe("f");
-    expect(Check.reconstitute({ pass: true, label: "n", severity: "advisory" }).toDocument()).toEqual({ pass: true, label: "n", severity: "advisory" });
+    expect(Check.reconstitute({ pass: true, label: "n", severity: CheckSeverity.advisory() }).toDocument()).toEqual({ pass: true, label: "n", severity: "advisory" });
     expect(JSON.stringify(v.document())).toBe(
       '{"checks":[{"pass":true,"label":"l","fix":"f","severity":"advisory"},{"pass":false,"label":"m","fix":"g","severity":"error"}]}',
     );
@@ -126,15 +127,17 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
       [true, "deep-spec-analysis: quint CLI on PATH (Quint backend)"],
       [false, "deep-spec-analysis: Apalache available (quint verify, method: bounded)"],
     ]);
-    expect(solvers.every((c) => c.severity() === "advisory")).toBe(true);
+    expect(solvers.every((c) => c.severity().isAdvisory())).toBe(true);
+    expect(CheckSeverity.advisory().equals(CheckSeverity.advisory())).toBe(true);
+    expect(CheckSeverity.advisory().equals(CheckSeverity.error())).toBe(false);
   });
 
   test("coverage rows carry the grep-frozen nouns and the summary carries the scope list", () => {
     const rows = presenter.verificationCoverage(CoverageAssessment.of({
       eligible: 2,
       problems: [
-        CoverageRow.reconstitute({ space: "default", intent: "i1", state: "unverified" }),
-        CoverageRow.reconstitute({ space: "default", intent: "i2", state: "stale" }),
+        CoverageRow.reconstitute({ space: "default", intent: "i1", state: CoverageState.unverified() }),
+        CoverageRow.reconstitute({ space: "default", intent: "i2", state: CoverageState.stale() }),
       ],
       scopes: ["enterprise", "feature"],
     }));
@@ -166,8 +169,8 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
     const rows = presenter.functionalCoverage(UnitCoverage.of({
       eligible: 2,
       problems: [
-        UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u1", state: "unverified" }),
-        UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u2", state: "stale" }),
+        UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u1", state: CoverageState.unverified() }),
+        UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u2", state: CoverageState.stale() }),
       ],
       refinementStale: [RefinementStaleRow.reconstitute({ space: "default", intent: "i1" })],
       scopes: ["feature"],
@@ -208,6 +211,8 @@ describe("functional-coverage interactor — 判定と凍結順（stub repositor
     const plainState = (r: UnitCoverageRow): string => r.matchState({ unverified: () => "unverified", stale: () => "stale" });
     expect(out.problems().map((r) => `${r.unitLabel()}:${plainState(r)}`)).toEqual(["default/i1/u2:stale", "default/i1/u3:unverified"]);
     expect(out.problems().map((r) => r.intent())).toEqual(["i1", "i1"]);
+    expect(CoverageState.stale().equals(CoverageState.stale())).toBe(true);
+    expect(CoverageState.stale().equals(CoverageState.unverified())).toBe(false);
     expect(out.refinementStale().map((r) => `${r.intentLabel()}:${r.intent()}`)).toEqual(["default/i1:i1"]);
     expect(out.eligibleCount()).toBe(3);
   });

@@ -2032,3 +2032,15 @@ substitute`, `AttributeMapping.substituteForReference` and
 plan, the event catalogue and the query builder branch on `ok`, and the
 builder keeps its try/catch only for the SMT compiler's own failures.
 Goldens stay byte-identical.
+
+Wave 36 (same PR): rulings 17 to 21 land — the classification string
+aliases stop being domain-layer citizens. `LoweringKind` is the private
+representation of `LoweredOrigin` (the tests project it through
+`isKind`); `SmtQueryStatus` and `RefinementQueryStatus` are the private
+representation of the two query verdicts, one per context, no sharing.
+`CheckSeverity` becomes a domain primitive shared by `Check` and
+`ManifestEntry` (`blocksDoctor`, `isAdvisory`, `asString` for the
+document) and `CoverageState` a domain primitive shared by the two
+coverage rows (`match`). `CheckExecutionMode` was never a domain object
+and moves to the refcheck use-case inputs. The doctor's JSON stays
+byte-identical.

@@ -33,7 +33,6 @@ export { DesignAssignments } from "./design-assignments.ts";
 export { DesignEvent } from "./design-event.ts";
 export { RefinementSolverPlan } from "./refinement-solver-plan.ts";
 export { RefinementProbe } from "./refinement-probe.ts";
-export { type RefinementQueryStatus } from "./refinement-query-status.ts";
 export { RefinementQueryVerdict } from "./refinement-query-verdict.ts";
 export { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
 export { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
