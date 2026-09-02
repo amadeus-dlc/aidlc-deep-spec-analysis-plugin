@@ -1,4 +1,4 @@
-import type { QuintMachineFacts, QuintRuns, VerificationSkips } from "../../domain/index.ts";
+import type { QuintMachinePlan, QuintRuns, VerificationSkips } from "../../domain/index.ts";
 
 export type QuintCheckResult =
   | { readonly kind: "cli-unavailable" }
@@ -6,7 +6,7 @@ export type QuintCheckResult =
   | {
       readonly kind: "checked";
       readonly method: string;
-      readonly facts: QuintMachineFacts;
+      readonly plan: QuintMachinePlan;
       readonly compileSkips: VerificationSkips;
       readonly runs: QuintRuns;
     };

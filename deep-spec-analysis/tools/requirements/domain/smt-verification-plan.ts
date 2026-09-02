@@ -1,9 +1,11 @@
-// SMT 検証計画の「事実」——判定解釈に必要な、形式（SMT-LIB）を含まない面。
+// SMT 検証計画——コンパイラが要件モデルを SMT クエリに変換したときの対応表
+// （形式 SMT-LIB を含まない面）。計画は値オブジェクト（種別規律の裁定 7、
+// 2026-09-02——「事実」の名はドメインイベントに取っておく）。
 // クエリ id（"global" / "vac:OB-x" / "evo:a:b" / "evj:a:b" / "gap:trigger" /
 // "sc:SC-x"）とラベル→対象の対応、コンパイル時 skip がここに載る。
 // スクリプト本体はアダプタの計画ビルダが所有する。判定の解釈（旧
 // interpretSmtVerdicts——detail 文言は golden 凍結・返り値は未ソートで正準
-// ソートは VerificationReport.compose の不変条件）は facts 自身の振る舞い
+// ソートは VerificationReport.compose の不変条件）は plan 自身の振る舞い
 // （OOUI 裁定）。
 
 import { TargetIds } from "../../kernel/domain/index.ts";
@@ -17,7 +19,7 @@ import { VerificationSkips } from "./verification-skips.ts";
 import { SmtEventPairProbes } from "./smt-event-pair-probes.ts";
 import { VerificationWitness } from "./verification-witness.ts";
 
-export class SmtPlanFacts {
+export class SmtVerificationPlan {
   readonly #compiled: ReadonlyMap<string, boolean>;
   readonly #skipped: VerificationSkips;
   readonly #labelToTarget: ReadonlyMap<string, string>;
@@ -48,8 +50,8 @@ export class SmtPlanFacts {
     readonly eventPairs: SmtEventPairProbes;
     readonly gapTriggers: ReadonlyMap<string, readonly string[]>;
     readonly scenarioQueries: ReadonlyMap<string, string>;
-  }): SmtPlanFacts {
-    return new SmtPlanFacts({
+  }): SmtVerificationPlan {
+    return new SmtVerificationPlan({
       compiled: new Map(seed.compiled),
       skipped: seed.skipped,
       labelToTarget: new Map(seed.labelToTarget),

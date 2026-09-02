@@ -81,7 +81,7 @@ export class VerifyRequirementsQuintUseCase {
       return { kind: "machine-uncompilable" };
     }
 
-    const interpreted = checked.facts.interpret(model, checked.compileSkips, checked.method, checked.runs);
+    const interpreted = checked.plan.interpret(model, checked.compileSkips, checked.method, checked.runs);
     const report = VerificationReport.compose({
       id,
       irVersion: model.irVersion(),

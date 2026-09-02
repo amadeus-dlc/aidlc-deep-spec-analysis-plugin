@@ -63,14 +63,14 @@ export class QuintClientImpl implements QuintClient {
       // skip と、機械フェーズの判定が命じる対象一括 skip（timeout / run-failed）。
       const skipTargets = new Set(machine.compileSkips.map((s) => s.target().asString()));
       if (machineRun !== null && machineRun.abortsMachineTargets()) {
-        for (const t of machine.facts.machineTargets()) {
+        for (const t of machine.plan.machineTargets()) {
           skipTargets.add(t.asString());
         }
       }
       const temporals = bounded ? this.#runTemporalPhase(machine, modulePath, skipTargets, work) : new Map<string, QuintTemporalVerdict>();
       const scenarios = this.#runScenarioPhase(machine, modulePath, work);
       const runs = QuintRuns.of({ machine: machineRun, temporals, scenarios });
-      return { kind: "checked", method, facts: machine.facts, compileSkips: VerificationSkips.of(machine.compileSkips), runs };
+      return { kind: "checked", method, plan: machine.plan, compileSkips: VerificationSkips.of(machine.compileSkips), runs };
     } finally {
       rmSync(work, { recursive: true, force: true });
     }
@@ -115,7 +115,7 @@ export class QuintClientImpl implements QuintClient {
     bounded: boolean,
     work: string,
   ): QuintMachineRunVerdict | null {
-    if (!machine.facts.hasInvariantComponents()) return null;
+    if (!machine.plan.hasInvariantComponents()) return null;
     const itfPath = join(work, "machine.itf.json");
     const run = bounded
       ? this.#runQuint(

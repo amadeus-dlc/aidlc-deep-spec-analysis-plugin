@@ -30,7 +30,7 @@ import {
   VerificationReportRepositoryImpl,
   renderVerificationReportBytes,
 } from "../tools/requirements/adapter/index.ts";
-import { BackgroundAssumption, Scenario, Obligation, AttributeDeclaration, AttributeDeclarations, AttributeValues, FrRefs, ObligationId, ObligationNature, ScenarioId, Obligations, Scenarios, BackgroundAssumptions, RequirementsModel, QuintMachineComponents, QuintMachineFacts, QuintMachineComponent, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationReportId, VerificationSkips, FormalModelId, ObligationIds, VerificationSkipped, VerificationFinding, VerificationReport} from "../tools/requirements/domain/index.ts";
+import { BackgroundAssumption, Scenario, Obligation, AttributeDeclaration, AttributeDeclarations, AttributeValues, FrRefs, ObligationId, ObligationNature, ScenarioId, Obligations, Scenarios, BackgroundAssumptions, RequirementsModel, QuintMachineComponents, QuintMachinePlan, QuintMachineComponent, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationReportId, VerificationSkips, FormalModelId, ObligationIds, VerificationSkipped, VerificationFinding, VerificationReport} from "../tools/requirements/domain/index.ts";
 import {
   type FormalModelRepository,
   type QuintCheckResult,
@@ -188,7 +188,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
       obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-1"], assert: { op: "bool", value: true } }],
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: { "T.x": 1 } }],
     });
-    const facts = QuintMachineFacts.of({
+    const plan = QuintMachinePlan.of({
       invariantComponents: QuintMachineComponents.of([QuintMachineComponent.reconstitute({ id: ObligationId.reconstitute("OB-1"), expression: { op: "bool", value: true } })]),
       eventIds: ObligationIds.of([]),
       scenariosWithInit: [ScenarioId.reconstitute("SC-1")],
@@ -201,7 +201,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok(m)),
       reports,
-      quint({ kind: "checked", method: "bounded", facts, compileSkips: VerificationSkips.of([]), runs }),
+      quint({ kind: "checked", method: "bounded", plan, compileSkips: VerificationSkips.of([]), runs }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("verified");
     expect(outcome.kind === "verified" && outcome.pass).toBe(false);
@@ -229,13 +229,13 @@ describe("quint verdict interpretation", () => {
       { id: ScenarioId.reconstitute("SC-3"), kind: "accept", frRefs: [], bindings: {}, event: { trigger: TriggerName.reconstitute("go") } },
     ],
   });
-  const facts = QuintMachineFacts.of({
+  const plan = QuintMachinePlan.of({
     invariantComponents: QuintMachineComponents.of([QuintMachineComponent.reconstitute({ id: ObligationId.reconstitute("OB-1"), expression: { op: "ref", path: "T.ok" } })]),
     eventIds: ObligationIds.of([ObligationId.reconstitute("OB-2")]),
     scenariosWithInit: [ScenarioId.reconstitute("SC-1"), ScenarioId.reconstitute("SC-2")],
   });
   const run = (runs: Partial<Parameters<typeof QuintRuns.of>[0]>, method = "simulation", compileSkips: { target: string; reason: string }[] = []) =>
-    facts.interpret(machineModel, VerificationSkips.of(compileSkips.map((k) => VerificationSkipped.reconstitute({ target: TargetId.reconstitute(k.target), reason: k.reason }))), method, QuintRuns.of({ ...EMPTY_RUNS, ...runs }));
+    plan.interpret(machineModel, VerificationSkips.of(compileSkips.map((k) => VerificationSkipped.reconstitute({ target: TargetId.reconstitute(k.target), reason: k.reason }))), method, QuintRuns.of({ ...EMPTY_RUNS, ...runs }));
 
   test("a machine timeout skips every machine target with the frozen budget wording", () => {
     const { skipped } = run({ machine: QuintMachineRunVerdict.timeout() });
@@ -305,7 +305,7 @@ describe("quint verdict interpretation", () => {
     const base = run({});
     expect(base.skipped.toArray().find((s) => s.target().asString() === "SC-3")?.detail())
       .toBe("scenarios with a When-event are not checked by the quint backend in v1");
-    const unboundFacts = QuintMachineFacts.of({
+    const unboundFacts = QuintMachinePlan.of({
       invariantComponents: QuintMachineComponents.of([QuintMachineComponent.reconstitute({ id: ObligationId.reconstitute("OB-1"), expression: { op: "ref", path: "T.ok" } })]),
       eventIds: ObligationIds.of([ObligationId.reconstitute("OB-2")]),
       scenariosWithInit: [],
@@ -389,7 +389,7 @@ describe("quint degradation reports", () => {
   });
 });
 
-describe("quint facts collections (first-class operations)", () => {
+describe("quint plan collections (first-class operations)", () => {
   test("TraceStates and QuintMachineComponents own their step/attribution knowledge", () => {
     const traces = TraceStates.of([{ "T.ok": true }]).add({ "T.ok": false });
     expect([...traces].length).toBe(2);
@@ -405,9 +405,9 @@ describe("quint facts collections (first-class operations)", () => {
     expect(comps.violatedBy({ "T.ok": true }).isEmpty()).toBe(true);
     expect(comps.toArray().length).toBe(1);
 
-    const facts = QuintMachineFacts.of({ invariantComponents: comps, eventIds: ObligationIds.of([ObligationId.reconstitute("OB-9"), ObligationId.reconstitute("OB-2")]), scenariosWithInit: [] });
-    expect(facts.hasInvariantComponents()).toBe(true);
-    expect(facts.machineTargets().toStrings()).toEqual(["OB-1", "OB-2", "OB-9"]);
+    const plan = QuintMachinePlan.of({ invariantComponents: comps, eventIds: ObligationIds.of([ObligationId.reconstitute("OB-9"), ObligationId.reconstitute("OB-2")]), scenariosWithInit: [] });
+    expect(plan.hasInvariantComponents()).toBe(true);
+    expect(plan.machineTargets().toStrings()).toEqual(["OB-1", "OB-2", "OB-9"]);
   });
 });
 

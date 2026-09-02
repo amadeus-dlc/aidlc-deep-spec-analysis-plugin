@@ -1,6 +1,6 @@
 // IR → Quint モジュールのコンパイラ。Quint という形式の知識（変数名符号化・
 // 式構文・action/temporal/init の台本）はすべてここに封じ、判定解釈に必要な
-// 事実（QuintMachineFacts）だけをドメイン語彙で返す。
+// 事実（QuintMachinePlan）だけをドメイン語彙で返す。
 // 旧 aidlc-sensor-deep-spec-verify-quint.ts の qVar / qId / qLit / quintOf /
 // decomposeEffect / domainOf / quintType / compileMachine からの逐語移植。
 // CQS 修正：旧 compileMachine は引数の skipped[] を破壊していた——ここでは
@@ -14,7 +14,7 @@ import {
   type RequirementsModel,
   VerificationSkipped,
   QuintMachineComponents,
-  QuintMachineFacts,
+  QuintMachinePlan,
   ObligationIds,
   type ObligationId, QuintMachineComponent, ScenarioId
 } from "../domain/index.ts";
@@ -328,7 +328,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   lines.push("}");
   return {
     moduleText: `${lines.join("\n")}\n`,
-    facts: QuintMachineFacts.of({
+    plan: QuintMachinePlan.of({
       invariantComponents: QuintMachineComponents.of(invariantComponents),
       eventIds: ObligationIds.of(eventIds),
       scenariosWithInit,

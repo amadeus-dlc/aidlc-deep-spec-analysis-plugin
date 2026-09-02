@@ -58,7 +58,7 @@ import {
   RefinementUnitMaps,
   RefinementRequirements,
   RefinementScenarios,
-  RefinementSolverFacts,
+  RefinementSolverPlan,
   ReqAttributeValues,
   TransitionRef,
   TransitionRefs,
@@ -654,14 +654,14 @@ describe("refinement verdict interpretation", () => {
     req,
     ArtifactPath.reconstitute("m.md"),
   );
-  const facts = (entries: [string, RefinementProbe][]): RefinementSolverFacts =>
-    RefinementSolverFacts.of({ pending: new Map(entries), compileSkips: DesignSkips.of([]) });
-  const run = (f: RefinementSolverFacts, results: [string, Parameters<typeof RefinementQueryVerdict.reconstitute>[0]][]) =>
+  const solverPlan = (entries: [string, RefinementProbe][]): RefinementSolverPlan =>
+    RefinementSolverPlan.of({ pending: new Map(entries), compileSkips: DesignSkips.of([]) });
+  const run = (f: RefinementSolverPlan, results: [string, Parameters<typeof RefinementQueryVerdict.reconstitute>[0]][]) =>
     f.interpret(RefinementQueryVerdicts.of(new Map(results.map(([id, v]) => [id, RefinementQueryVerdict.reconstitute(v)]))), req, plan, "u1");
 
   test("each probe kind emits its frozen finding on the deciding verdict", () => {
     const out = run(
-      facts([
+      solverPlan([
         ["rv:OB-1", RefinementProbe.invariant(ObligationId.reconstitute("OB-1"))],
         ["rs:SC-1", RefinementProbe.scenario(ScenarioId.reconstitute("SC-1"))],
         ["rs:SC-2", RefinementProbe.scenario(ScenarioId.reconstitute("SC-2"))],
@@ -692,7 +692,7 @@ describe("refinement verdict interpretation", () => {
 
   test("quiet verdicts emit nothing; undecided and missing become the frozen timeout skip", () => {
     const out = run(
-      facts([
+      solverPlan([
         ["rv:OB-1", RefinementProbe.invariant(ObligationId.reconstitute("OB-1"))],
         ["rs:SC-1", RefinementProbe.scenario(ScenarioId.reconstitute("SC-1"))],
         ["rs:SC-2", RefinementProbe.scenario(ScenarioId.reconstitute("SC-2"))],
@@ -845,7 +845,7 @@ describe("catalog misses in the enabledness path (frozen null-drop)", () => {
     expect(enabledness).toBeDefined();
     // 発火可能な設計ガードなし → notEnabled は "true"（黙った除外の凍結面）。
     expect(enabledness?.script).toContain("(assert (=> ne_OB_2 true))");
-    expect(built.facts.compileSkips().toArray()).toEqual([]);
+    expect(built.plan.compileSkips().toArray()).toEqual([]);
   });
 });
 
@@ -893,8 +893,8 @@ describe("RefinementMapRepository (owner ruling: writable where writing is defin
 });
 
 describe("split-file coverage pins (one-public-type refactor)", () => {
-  test("solver facts expose compile skips and issue-order iteration; unmapped target parses", () => {
-    const f = RefinementSolverFacts.of({
+  test("solver plan expose compile skips and issue-order iteration; unmapped target parses", () => {
+    const f = RefinementSolverPlan.of({
       pending: new Map<string, RefinementProbe>([
         ["rv:OB-9", RefinementProbe.invariant(ObligationId.reconstitute("OB-9"))],
       ]),
@@ -929,7 +929,7 @@ describe("thaw pins — quint alpha skips, timeout break, exact decode (#34/#38)
       detail: 'alpha substitution failed: attrMap entry for "R.flag" declares neither an expression nor enum cases',
     }]);
     // SMT 側の compileSkips と逐語で対（凍結解除 #38 項 1 の対称性）。
-    expect(buildRefinementQueries(u, req, plan).facts.compileSkips().toArray()).toEqual(quint);
+    expect(buildRefinementQueries(u, req, plan).plan.compileSkips().toArray()).toEqual(quint);
   });
 
   test("a timed-out runtime is not retried on the fallback runtime (thaw #38 item 2)", () => {

@@ -1,4 +1,4 @@
-import type { FunctionalUnitFacts } from "./functional-unit-facts.ts";
+import type { FunctionalUnitScan } from "./functional-unit-scan.ts";
 
 // 設計検証カバレッジの走査材料 1 件——スコープ適格で functional-design を持つ
 // unit が 1 つ以上ある intent。モデルの units[] 台帳・backend 文書の checked[]
@@ -6,7 +6,7 @@ import type { FunctionalUnitFacts } from "./functional-unit-facts.ts";
 export interface FunctionalTarget {
   space: string;
   intent: string;
-  units: readonly FunctionalUnitFacts[];
+  units: readonly FunctionalUnitScan[];
   modelMtime: number;
   modelUnits: readonly string[];
   completedUnits: readonly string[];

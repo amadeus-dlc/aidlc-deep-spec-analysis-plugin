@@ -1777,3 +1777,11 @@ refcheck の 4 つの名前 DP は `normalized()` でそれを返し、比較は
 既に自分で答える）、`DesignUnitDecls.wellFormednessErrors` がユニット横断の不変
 条件（ユニット名の一意性）の後ろでユニットを宣言順に集める。検証ユースケース
 は宣言に問う。文言と順序は凍結、golden はバイト同一。
+
+波 33（同 PR）: 裁定 7・8 が着地——コンパイラの対応表 3 つが「事実」を名乗るのを
+やめる。`SmtPlanFacts` は `SmtVerificationPlan`、`QuintMachineFacts` は
+`QuintMachinePlan`、`RefinementSolverFacts` は `RefinementSolverPlan` になり、
+それらを `facts` として運んでいた port とクライアントは `plan` として運ぶ。
+doctor のユニット走査 record `FunctionalUnitFacts` も `FunctionalUnitScan` に
+なる。「事実」という語はドメインイベントのために空く。種別は値オブジェクト、
+golden はバイト同一。

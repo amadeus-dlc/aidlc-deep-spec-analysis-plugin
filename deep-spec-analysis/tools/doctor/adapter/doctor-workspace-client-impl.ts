@@ -6,7 +6,7 @@ import type {
   DesignArtifactRef,
   DoctorWorkspaceClient,
   FunctionalTarget,
-  FunctionalUnitFacts,
+  FunctionalUnitScan,
   VerificationTarget,
 } from "../usecase/index.ts";
 import type { DoctorWorkspaceClientConfig } from "./doctor-workspace-client-config.ts";
@@ -221,7 +221,7 @@ export class DoctorWorkspaceClientImpl implements DoctorWorkspaceClient {
             hasFindings = false;
           }
         }
-        const units: FunctionalUnitFacts[] = unitDirs.map((unit) => {
+        const units: FunctionalUnitScan[] = unitDirs.map((unit) => {
           const fdDir = join(constructionDir, unit, "functional-design");
           let newest = 0;
           for (const f of ["entities.md", "rules.md", "functional-spec.md"]) {
