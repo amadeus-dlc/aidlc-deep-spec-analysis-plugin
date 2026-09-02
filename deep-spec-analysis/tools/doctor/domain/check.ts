@@ -1,12 +1,43 @@
 import type { CheckSeverity } from "./check-severity.ts";
 
-// doctor 文書の公開契約行（docs/reference/18-plugin-mechanism.md）——
-// stdout の {"checks":[...]} に載る published language。プロパティの挿入順
-// （pass, label, fix, severity）が直列化バイトに現れるため、presenter は
-// この順でリテラルを組む。
-export interface Check {
-  pass: boolean;
-  label: string;
-  fix?: string;
-  severity: CheckSeverity;
+// doctor 検査行 1 件——合否・label・fix・深刻度。判定書はこの行に自分の
+// 直列化面（プロパティ順 pass, label, fix, severity は凍結バイト）を作らせる
+// （#71 波27）。
+export class Check {
+  readonly #pass: boolean;
+  readonly #label: string;
+  readonly #fix: string | undefined;
+  readonly #severity: CheckSeverity;
+
+  private constructor(props: { pass: boolean; label: string; fix?: string; severity: CheckSeverity }) {
+    this.#pass = props.pass;
+    this.#label = props.label;
+    this.#fix = props.fix;
+    this.#severity = props.severity;
+  }
+
+  static reconstitute(props: { pass: boolean; label: string; fix?: string; severity: CheckSeverity }): Check {
+    return new Check(props);
+  }
+
+  passes(): boolean {
+    return this.#pass;
+  }
+
+  label(): string {
+    return this.#label;
+  }
+
+  fix(): string | undefined {
+    return this.#fix;
+  }
+
+  severity(): CheckSeverity {
+    return this.#severity;
+  }
+
+  // 判定書の 1 行（凍結のプロパティ順）。
+  toDocument(): { pass: boolean; label: string; fix?: string; severity: CheckSeverity } {
+    return { pass: this.#pass, label: this.#label, ...(this.#fix !== undefined ? { fix: this.#fix } : {}), severity: this.#severity };
+  }
 }

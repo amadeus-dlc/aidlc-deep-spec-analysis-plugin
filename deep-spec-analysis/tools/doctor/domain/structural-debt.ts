@@ -25,7 +25,7 @@ export class StructuralDebt {
   }
 
   totalFindings(): number {
-    return this.#rows.reduce((n, r) => n + r.findings, 0);
+    return this.#rows.reduce((n, r) => n + r.findingCount(), 0);
   }
 
   rows(): readonly DebtRow[] {

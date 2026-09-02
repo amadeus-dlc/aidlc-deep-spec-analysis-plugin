@@ -12,7 +12,7 @@ import {
   UnitCoverage,
   VerificationStaleness,
 } from "../tools/doctor/domain/index.ts";
-import type { Check, ManifestEntry } from "../tools/doctor/domain/index.ts";
+import { Check, CoverageRow, DebtRow, DigestAnchor, InstalledStatus, ManifestEntry, RefinementStaleRow, SolverAvailability, UnitCoverageRow } from "../tools/doctor/domain/index.ts";
 import { CheckFunctionalCoverageUseCase } from "../tools/doctor/usecase/index.ts";
 import type { DoctorWorkspaceClient } from "../tools/doctor/usecase/index.ts";
 import { DoctorPresenter } from "../tools/doctor/adapter/index.ts";
@@ -23,22 +23,23 @@ describe("installation manifest", () => {
   test("the ledger carries every composed file in the frozen order", () => {
     const entries: ManifestEntry[] = [...InstallationManifest.standard()];
     expect(entries).toHaveLength(43);
-    expect(entries[0]).toEqual({ rel: "sensors/aidlc-deep-spec-ir-valid.md", severity: "error" });
-    expect(entries[entries.length - 1]).toEqual({ rel: "knowledge/aidlc-architect-agent/deep-spec-refinement-map-authoring.md", severity: "error" });
+    expect(entries[0]?.rel()).toBe("sensors/aidlc-deep-spec-ir-valid.md");
+    expect(entries[0]?.severity()).toBe("error");
+    expect(entries[entries.length - 1]?.rel()).toBe("knowledge/aidlc-architect-agent/deep-spec-refinement-map-authoring.md");
     // doctor 自身のツリー（PR9 で追加）— entry と 3 canary。
-    const rels = entries.map((e) => e.rel);
+    const rels = entries.map((e) => e.rel());
     expect(rels).toContain("tools/deep-spec-analysis-doctor.ts");
     expect(rels).toContain("tools/doctor/domain/index.ts");
     expect(rels).toContain("tools/doctor/usecase/index.ts");
     expect(rels).toContain("tools/doctor/adapter/index.ts");
-    expect(entries.every((e) => e.severity === "error")).toBe(true);
+    expect(entries.every((e) => e.severity() === "error")).toBe(true);
   });
 });
 
 describe("verification staleness — sourceDigest 照合と mtime フォールバックの純粋判断", () => {
   test("an anchor decides by content, never by mtime", () => {
-    expect(VerificationStaleness.of({ anchor: { expected: h("a"), actual: h("b") } }).isStale()).toBe(true);
-    expect(VerificationStaleness.of({ anchor: { expected: h("a"), actual: h("a") } }).isStale()).toBe(false);
+    expect(VerificationStaleness.of({ anchor: DigestAnchor.of(h("a"), h("b")) }).isStale()).toBe(true);
+    expect(VerificationStaleness.of({ anchor: DigestAnchor.of(h("a"), h("a")) }).isStale()).toBe(false);
   });
 
   test("a model without an anchor is unconditionally stale (backward-compat mtime heuristic removed)", () => {
@@ -50,7 +51,7 @@ describe("assessment aggregates", () => {
   test("coverage assessment counts verified against eligible", () => {
     const a = CoverageAssessment.of({
       eligible: 3,
-      problems: [{ space: "default", intent: "i1", state: "unverified" }],
+      problems: [CoverageRow.reconstitute({ space: "default", intent: "i1", state: "unverified" })],
       scopes: ["enterprise", "feature"],
     });
     expect(a.isClean()).toBe(false);
@@ -65,8 +66,8 @@ describe("assessment aggregates", () => {
     const d = StructuralDebt.of({
       scanned: 2,
       rows: [
-        { space: "default", intent: "i1", artifact: "inception/domain-design/components.md", findings: 3 },
-        { space: "default", intent: "i1", artifact: "construction/u1/functional-design", findings: 2 },
+        DebtRow.reconstitute({ space: "default", intent: "i1", artifact: "inception/domain-design/components.md", findings: 3 }),
+        DebtRow.reconstitute({ space: "default", intent: "i1", artifact: "construction/u1/functional-design", findings: 2 }),
       ],
     });
     expect(d.hasScans()).toBe(true);
@@ -79,8 +80,8 @@ describe("assessment aggregates", () => {
   test("unit coverage carries unit problems and refinement staleness apart", () => {
     const u = UnitCoverage.of({
       eligible: 3,
-      problems: [{ space: "default", intent: "i1", unit: "u1", state: "stale" }],
-      refinementStale: [{ space: "default", intent: "i1" }],
+      problems: [UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u1", state: "stale" })],
+      refinementStale: [RefinementStaleRow.reconstitute({ space: "default", intent: "i1" })],
       scopes: ["feature"],
     });
     expect(u.hasEligible()).toBe(true);
@@ -95,9 +96,12 @@ describe("assessment aggregates", () => {
   });
 
   test("the health verdict keeps the frozen checks order and serialized shape", () => {
-    const row: Check = { pass: true, label: "l", fix: "f", severity: "advisory" };
-    const v = HealthVerdict.of([row]).add({ pass: false, label: "m", fix: "g", severity: "error" });
-    expect([...v].map((c) => c.label)).toEqual(["l", "m"]);
+    const row: Check = Check.reconstitute({ pass: true, label: "l", fix: "f", severity: "advisory" });
+    const v = HealthVerdict.of([row]).add(Check.reconstitute({ pass: false, label: "m", fix: "g", severity: "error" }));
+    expect([...v].map((c) => c.label())).toEqual(["l", "m"]);
+    expect(row.passes()).toBe(true);
+    expect(row.fix()).toBe("f");
+    expect(Check.reconstitute({ pass: true, label: "n", severity: "advisory" }).toDocument()).toEqual({ pass: true, label: "n", severity: "advisory" });
     expect(JSON.stringify(v.document())).toBe(
       '{"checks":[{"pass":true,"label":"l","fix":"f","severity":"advisory"},{"pass":false,"label":"m","fix":"g","severity":"error"}]}',
     );
@@ -108,39 +112,39 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
   const presenter = new DoctorPresenter({ harnessDir: ".claude" });
 
   test("manifest and solver rows render the legacy bytes", () => {
-    const rows = presenter.installation([{ entry: { rel: "sensors/aidlc-deep-spec-ir-valid.md", severity: "error" }, present: false }]);
-    expect(rows[0]).toEqual({
+    const rows = presenter.installation([InstalledStatus.of(ManifestEntry.error("sensors/aidlc-deep-spec-ir-valid.md"), false)]);
+    expect(rows[0]?.toDocument()).toEqual({
       pass: false,
       label: "deep-spec-analysis: sensors/aidlc-deep-spec-ir-valid.md installed",
       fix: "Run `bun .claude/tools/aidlc-utility.ts plugin-sync` (or re-run the plugin's `hooks/compose.ts`).",
       severity: "error",
     });
-    const solvers = presenter.solvers({ z3Package: true, nodeRuntime: false, quintCli: true, apalache: false });
-    expect(solvers.map((c) => [c.pass, c.label])).toEqual([
+    const solvers = presenter.solvers(SolverAvailability.of({ z3Package: true, nodeRuntime: false, quintCli: true, apalache: false }));
+    expect(solvers.map((c) => [c.passes(), c.label()])).toEqual([
       [true, "deep-spec-analysis: z3-solver package present (SMT backend)"],
       [false, "deep-spec-analysis: node runtime on PATH (executes the z3 child process)"],
       [true, "deep-spec-analysis: quint CLI on PATH (Quint backend)"],
       [false, "deep-spec-analysis: Apalache available (quint verify, method: bounded)"],
     ]);
-    expect(solvers.every((c) => c.severity === "advisory")).toBe(true);
+    expect(solvers.every((c) => c.severity() === "advisory")).toBe(true);
   });
 
   test("coverage rows carry the grep-frozen nouns and the summary carries the scope list", () => {
     const rows = presenter.verificationCoverage(CoverageAssessment.of({
       eligible: 2,
       problems: [
-        { space: "default", intent: "i1", state: "unverified" },
-        { space: "default", intent: "i2", state: "stale" },
+        CoverageRow.reconstitute({ space: "default", intent: "i1", state: "unverified" }),
+        CoverageRow.reconstitute({ space: "default", intent: "i2", state: "stale" }),
       ],
       scopes: ["enterprise", "feature"],
     }));
-    expect(rows[0]?.label).toBe("deep-spec-analysis: intent default/i1 has requirements with no deep-spec verification");
-    expect(rows[1]?.label).toBe("deep-spec-analysis: intent default/i2 changed its requirements after the last deep-spec verification");
-    expect(rows[0]?.fix).toBe(
+    expect(rows[0]?.label()).toBe("deep-spec-analysis: intent default/i1 has requirements with no deep-spec verification");
+    expect(rows[1]?.label()).toBe("deep-spec-analysis: intent default/i2 changed its requirements after the last deep-spec verification");
+    expect(rows[0]?.fix()).toBe(
       "Make it the active intent (`bun .claude/tools/aidlc-utility.ts intent i1`), " +
       "then run `/aidlc --stage deep-spec-analysis-verify --single` to verify its requirements without advancing the workflow.",
     );
-    expect(rows[2]).toEqual({
+    expect(rows[2]?.toDocument()).toEqual({
       pass: false,
       label: "deep-spec-analysis: verification coverage — 0/2 eligible intents verified (scopes: enterprise, feature)",
       fix: "See the per-intent rows above for the exact command each unverified intent needs.",
@@ -151,10 +155,10 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
   test("debt rows and the report-only summary render the legacy bytes; no scans, no summary", () => {
     const rows = presenter.structuralDebt(StructuralDebt.of({
       scanned: 3,
-      rows: [{ space: "default", intent: "i1", artifact: "inception/domain-design/components.md", findings: 4 }],
+      rows: [DebtRow.reconstitute({ space: "default", intent: "i1", artifact: "inception/domain-design/components.md", findings: 4 })],
     }));
-    expect(rows[0]?.label).toBe("deep-spec-analysis: default/i1 inception/domain-design/components.md has 4 reference-integrity finding(s)");
-    expect(rows[1]?.label).toBe("deep-spec-analysis: design refcheck — 4 structural finding(s) across 3 design artifact(s) scanned (report-only)");
+    expect(rows[0]?.label()).toBe("deep-spec-analysis: default/i1 inception/domain-design/components.md has 4 reference-integrity finding(s)");
+    expect(rows[1]?.label()).toBe("deep-spec-analysis: design refcheck — 4 structural finding(s) across 3 design artifact(s) scanned (report-only)");
     expect(presenter.structuralDebt(StructuralDebt.of({ scanned: 0, rows: [] }))).toHaveLength(0);
   });
 
@@ -162,13 +166,13 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
     const rows = presenter.functionalCoverage(UnitCoverage.of({
       eligible: 2,
       problems: [
-        { space: "default", intent: "i1", unit: "u1", state: "unverified" },
-        { space: "default", intent: "i1", unit: "u2", state: "stale" },
+        UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u1", state: "unverified" }),
+        UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u2", state: "stale" }),
       ],
-      refinementStale: [{ space: "default", intent: "i1" }],
+      refinementStale: [RefinementStaleRow.reconstitute({ space: "default", intent: "i1" })],
       scopes: ["feature"],
     }));
-    expect(rows.map((c) => c.label)).toEqual([
+    expect(rows.map((c) => c.label())).toEqual([
       "deep-spec-analysis: intent default/i1 re-verified its requirements after the last design verification (refinement evidence is stale)",
       "deep-spec-analysis: unit default/i1/u1 has functional-design artifacts with no deep-spec design verification",
       "deep-spec-analysis: unit default/i1/u2 changed its functional-design artifacts after the last design verification",
@@ -201,11 +205,10 @@ describe("functional-coverage interactor — 判定と凍結順（stub repositor
       }],
     };
     const out = new CheckFunctionalCoverageUseCase(repo).execute();
-    expect(out.problems()).toEqual([
-      { space: "default", intent: "i1", unit: "u2", state: "stale" },
-      { space: "default", intent: "i1", unit: "u3", state: "unverified" },
-    ]);
-    expect(out.refinementStale()).toEqual([{ space: "default", intent: "i1" }]);
+    const plainState = (r: UnitCoverageRow): string => r.matchState({ unverified: () => "unverified", stale: () => "stale" });
+    expect(out.problems().map((r) => `${r.unitLabel()}:${plainState(r)}`)).toEqual(["default/i1/u2:stale", "default/i1/u3:unverified"]);
+    expect(out.problems().map((r) => r.intent())).toEqual(["i1", "i1"]);
+    expect(out.refinementStale().map((r) => `${r.intentLabel()}:${r.intent()}`)).toEqual(["default/i1:i1"]);
     expect(out.eligibleCount()).toBe(3);
   });
 });

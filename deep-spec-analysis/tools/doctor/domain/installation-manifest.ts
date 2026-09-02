@@ -1,6 +1,6 @@
-import type { ManifestEntry } from "./manifest-entry.ts";
+import { ManifestEntry } from "./manifest-entry.ts";
 
-const err = (rel: string): ManifestEntry => ({ rel, severity: "error" });
+const err = (rel: string): ManifestEntry => ManifestEntry.error(rel);
 
 // compose が運ぶべきファイルの台帳（entry・doctor・スキーマ・knowledge・
 // 各コンテキスト canary）。行順は doctor stdout の manifest 検査行の凍結順。

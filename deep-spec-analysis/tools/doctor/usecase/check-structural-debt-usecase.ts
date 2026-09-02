@@ -1,5 +1,4 @@
-import { StructuralDebt } from "../domain/index.ts";
-import type { DebtRow } from "../domain/index.ts";
+import { DebtRow, StructuralDebt } from "../domain/index.ts";
 import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 import type { RefcheckBackendClient } from "./port/refcheck-backend-client.ts";
 
@@ -22,7 +21,7 @@ export class CheckStructuralDebtUseCase {
       const findings = this.#backend.reportOnlyFindings(ref.tool, ref.artifactPath);
       if (findings === null) continue;
       scanned += 1;
-      if (findings > 0) rows.push({ space: ref.space, intent: ref.intent, artifact: ref.label, findings });
+      if (findings > 0) rows.push(DebtRow.reconstitute({ space: ref.space, intent: ref.intent, artifact: ref.label, findings }));
     }
     return StructuralDebt.of({ scanned, rows });
   }

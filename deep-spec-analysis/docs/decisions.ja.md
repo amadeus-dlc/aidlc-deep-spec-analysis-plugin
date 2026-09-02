@@ -1591,3 +1591,15 @@ unparseable／extracted の各枝は凍結の skip・finding 文言を保ち、�
 ラベルを自分で作る。`ShapeError`・`ComponentShapeError`・`EntityReference` は
 検査が問う class になる。台帳から 12 エントリを回収し、残債は 122 中 13。
 プリミティブ台帳の上限は 84 へ下がる。
+
+波 27（同 PR）: doctor の行が自分の判断を所有する。`Check` は `passes`・
+`label`・`fix`・`severity` に答え、判定書の行（`toDocument`——凍結のプロパティ
+順）を自分で書く class になり、健全性判定はもう素の record を晒さない。
+カバレッジ行（`CoverageRow`・`UnitCoverageRow`・`RefinementStaleRow`）は状態を
+`matchState` で解釈し、intent／ユニットのラベルを自分で作る。`DebtRow` は
+`findingCount` と所在ラベルに答え、`DigestAnchor` は `isStale` を自分で決め、
+`ManifestEntry` は `error(rel)` で鋳造され、`InstalledStatus` と
+`SolverAvailability` は在否の問いに答える。presenter は凍結の label・fix を
+すべて保ちつつ、もうフィールドを読まない。台帳から 9 エントリを回収し、残債は
+122 中 4——JSON 値の形（`DesignValue`・`DecodedValue`・`TraceState`・
+`VerificationWitness`）で、次の波で裁定する。

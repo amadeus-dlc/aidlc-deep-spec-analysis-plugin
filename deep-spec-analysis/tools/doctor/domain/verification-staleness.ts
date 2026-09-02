@@ -17,6 +17,6 @@ export class VerificationStaleness {
   }
 
   isStale(): boolean {
-    return this.#anchor === null ? true : !this.#anchor.expected.equals(this.#anchor.actual);
+    return this.#anchor === null ? true : this.#anchor.isStale();
   }
 }

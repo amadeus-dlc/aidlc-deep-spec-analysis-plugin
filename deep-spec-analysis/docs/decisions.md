@@ -1774,3 +1774,17 @@ check and builds its own location label; `ShapeError`,
 `ComponentShapeError` and `EntityReference` become classes the checks
 ask. 12 ledger entries reclaimed — the ledger holds 13 of 122; the
 primitive-field ceiling drops to 84.
+
+Wave 27 (same PR): the doctor's rows own their judgements. `Check`
+becomes a class that answers `passes`, `label`, `fix` and `severity`
+and writes its own document row (`toDocument`, the frozen property
+order), so the health verdict no longer exposes the raw records. The
+coverage rows (`CoverageRow`, `UnitCoverageRow`, `RefinementStaleRow`)
+interpret their state through `matchState` and build their own intent
+and unit labels; `DebtRow` answers `findingCount` and its location
+label; `DigestAnchor` decides `isStale` itself; `ManifestEntry` is
+minted through `error(rel)`; `InstalledStatus` and `SolverAvailability`
+answer presence questions. The presenter keeps every frozen label and
+fix but no longer reads fields. 9 ledger entries reclaimed — the ledger
+holds 4 of 122: the JSON value shapes (`DesignValue`, `DecodedValue`,
+`TraceState`, `VerificationWitness`), ruled on in the next wave.

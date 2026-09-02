@@ -22,7 +22,7 @@ export class HealthVerdict {
   }
 
   // 境界: stdout へ直列化される published 形。
-  document(): { checks: readonly Check[] } {
-    return { checks: this.#values };
+  document(): { checks: readonly ReturnType<Check["toDocument"]>[] } {
+    return { checks: this.#values.map((c) => c.toDocument()) };
   }
 }

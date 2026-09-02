@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { SolverAvailability } from "../domain/index.ts";
+import { SolverAvailability } from "../domain/index.ts";
 import type { SolverProbeClient } from "../usecase/index.ts";
 import type { SolverProbeClientConfig } from "./solver-probe-client-config.ts";
 
@@ -30,11 +30,11 @@ export class SolverProbeClientImpl implements SolverProbeClient {
         apalacheDist = false;
       }
     }
-    return {
+    return SolverAvailability.of({
       z3Package: existsSync(join(this.#config.projectDir, "node_modules", "z3-solver", "package.json")),
       nodeRuntime: this.#probe("node", ["--version"]),
       quintCli: this.#probe(this.#config.quintBin, ["--version"]),
       apalache: this.#probe("java", ["-version"]) && apalacheDist,
-    };
+    });
   }
 }
