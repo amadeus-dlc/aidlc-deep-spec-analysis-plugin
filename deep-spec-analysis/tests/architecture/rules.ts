@@ -535,6 +535,193 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
   return out;
 }
 
+// ルール: domain 層に primitive 型のフィールドを置かない（Ruling A「domain
+// primitives everywhere」2026-08-31、#71 波11 で機械化）。bool を除く
+// string / number とその列・集合・map をフィールドに持つ domain の class・
+// 公開 interface／type はドメインプリミティブへ包むかドアの内側へ隠す。
+// 裁定の恒久除外: DP ラッパー自身（唯一の #value）、prose（detail /
+// reason / message 等の説明文とその列）、state トークン（enum 宣言値への
+// 参照: state / from / to とその列）、design の attrPath、Expression
+// published language、FrRefClaim.owner（義務／シナリオ混成の参照トークン）。
+// PRIMITIVE_FIELD_DEBT は着手時の全数棚卸し（縮小専用——増やす変更は裁定
+// 違反で、波が 1 件返すたびにここから消す。DATA_MODEL_DEBT と同じ規律）。
+// 既知の限界: 非公開の type 別名（Result のエラー材料）と index signature
+// 型（{ [k: string]: … }）は見ない。
+export const PRIMITIVE_FIELD_EXCLUSIONS: ReadonlySet<string> = new Set([
+  "kernel/domain/expression.ts",
+  "kernel/domain/error-messages.ts",
+  "design/domain/attr-paths.ts",
+  "design/domain/declared-values.ts",
+  "design/domain/initial-states.ts",
+  "requirements/domain/attribute-values.ts",
+  "requirements/domain/ir-declared-values.ts",
+  "requirements/domain/fr-ref-claim.ts",
+  "refinement/domain/req-attribute-values.ts",
+]);
+
+const PROSE_FIELD_NAMES: ReadonlySet<string> = new Set([
+  "detail", "details", "reason", "unavailableReason", "unavailable", "unsupported", "missing", "missingKeys",
+  "message", "messages", "error", "outputTail", "label", "fix", "rulesMarkdown", "description", "text",
+]);
+
+const STATE_TOKEN_FIELD_NAMES: ReadonlySet<string> = new Set(["state", "from", "to", "attrPath"]);
+
+const PRIMITIVE_TYPE_SHAPES: readonly RegExp[] = [
+  /^(?:readonly)?(?:string|number)(?:\[\])?$/,
+  /^(?:Readonly)?(?:Set|Array)<(?:string|number)>$/,
+  /^(?:Readonly)?Map<(?:string|number),/,
+  /^(?:Readonly)?Map<[^,]+,(?:readonly)?(?:string|number)(?:\[\])?>$/,
+];
+
+function isPrimitiveShape(rawType: string): boolean {
+  let type = rawType.replace(/\s+/g, "");
+  for (;;) {
+    const stripped = type.replace(/\|(?:undefined|null)$/, "").replace(/^\((.*)\)$/, "$1");
+    if (stripped === type) break;
+    type = stripped;
+  }
+  return PRIMITIVE_TYPE_SHAPES.some((shape) => shape.test(type));
+}
+
+function braceGroups(text: string): string[] {
+  const out: string[] = [];
+  const stack: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "{") stack.push(i);
+    else if (c === "}" && stack.length > 0) {
+      const start = stack.pop() ?? 0;
+      out.push(text.slice(start + 1, i));
+    }
+  }
+  return out;
+}
+
+function blankNested(body: string): string {
+  let depth = 0;
+  let out = "";
+  for (const c of body) {
+    if (c === "{") depth++;
+    else if (c === "}") depth--;
+    else if (depth === 0) out += c;
+    else if (c === "\n") out += c;
+  }
+  return out;
+}
+
+// 検出器: primitive 型フィールドの記述子（"name: type"）を返す。層・除外・
+// 台帳の判断は noPrimitiveFieldsInDomain が担う（台帳の陳腐化検査もこれを使う）。
+export function primitiveFieldsOf(rawSource: string): string[] {
+  const source = stripStrings(rawSource);
+  const out: string[] = [];
+  const privateFields = [...source.matchAll(/^\s+(?:static\s+)?(?:readonly\s+)?(#\w+)\??:\s*([^;=]+?);?$/gm)];
+  const isPrimitiveWrapper = privateFields.length === 1 && privateFields[0]?.[1] === "#value";
+  if (!isPrimitiveWrapper) {
+    for (const m of privateFields) {
+      const name = (m[1] ?? "").slice(1);
+      const type = m[2] ?? "";
+      if (PROSE_FIELD_NAMES.has(name) || STATE_TOKEN_FIELD_NAMES.has(name)) continue;
+      if (isPrimitiveShape(type)) out.push(`#${name}: ${type.trim()}`);
+    }
+  }
+  // 宣言本文は次のトップレベル宣言（export / type / class / const …）の直前まで。
+  for (const decl of source.matchAll(/^export (?:interface|type) (\w+)[\s\S]*?(?=\n(?:export|type|interface|class|const|function|let)\s|$(?![\s\S]))/gm)) {
+    for (const group of braceGroups(decl[0])) {
+      for (const member of blankNested(group).split(/[;\n]/)) {
+        const prop = /^\s*(?:readonly\s+)?(\w+)\??:\s*(.+?)\s*$/.exec(member);
+        if (!prop) continue;
+        const name = prop[1] ?? "";
+        const type = prop[2] ?? "";
+        if (PROSE_FIELD_NAMES.has(name) || STATE_TOKEN_FIELD_NAMES.has(name)) continue;
+        if (isPrimitiveShape(type)) out.push(`${decl[1]}.${name}: ${type}`);
+      }
+    }
+  }
+  return out;
+}
+
+export const PRIMITIVE_FIELD_DEBT: ReadonlySet<string> = new Set([
+  "design/domain/br-reference-index.ts",
+  "design/domain/br-refs.ts",
+  "design/domain/checked-units.ts",
+  "design/domain/design-attribute-decl.ts",
+  "design/domain/design-finding.ts",
+  "design/domain/design-input-anchor.ts",
+  "design/domain/design-report-composition.ts",
+  "design/domain/design-report-seed.ts",
+  "design/domain/design-report.ts",
+  "design/domain/design-skipped.ts",
+  "design/domain/design-unit-seed.ts",
+  "design/domain/design-unit.ts",
+  "design/domain/lowered-obligation.ts",
+  "design/domain/lowered-scenario.ts",
+  "design/domain/lowering-index.ts",
+  "design/domain/remapped-unit.ts",
+  "design/domain/sibling-verdict-document.ts",
+  "design/domain/sibling-verdict-finding.ts",
+  "design/domain/unformalized-targets.ts",
+  "doctor/domain/coverage-assessment.ts",
+  "doctor/domain/coverage-row.ts",
+  "doctor/domain/debt-row.ts",
+  "doctor/domain/manifest-entry.ts",
+  "doctor/domain/refinement-stale-row.ts",
+  "doctor/domain/structural-debt.ts",
+  "doctor/domain/unit-coverage-row.ts",
+  "doctor/domain/unit-coverage.ts",
+  "kernel/domain/fr-refs.ts",
+  "kernel/domain/requirement-ids.ts",
+  "refcheck/domain/component-catalog-outcome.ts",
+  "refcheck/domain/entities-outcome.ts",
+  "refcheck/domain/entity-decls.ts",
+  "refcheck/domain/finding.ts",
+  "refcheck/domain/input-anchor.ts",
+  "refcheck/domain/rules-outcome.ts",
+  "refcheck/domain/skipped.ts",
+  "refcheck/domain/witness-ref.ts",
+  "refinement/domain/alpha-context.ts",
+  "refinement/domain/design-assignments.ts",
+  "refinement/domain/design-event-catalog.ts",
+  "refinement/domain/effect-assignments.ts",
+  "refinement/domain/refinement-map-acquisition.ts",
+  "refinement/domain/refinement-query-verdict.ts",
+  "refinement/domain/refinement-query-verdicts.ts",
+  "refinement/domain/refinement-solver-facts.ts",
+  "refinement/domain/unit-refinement-plan.ts",
+  "requirements/domain/attribute-declarations.ts",
+  "requirements/domain/fr-reference-index.ts",
+  "requirements/domain/ir-attribute-decl.ts",
+  "requirements/domain/ir-validation-materials-seed.ts",
+  "requirements/domain/ir-validation-materials.ts",
+  "requirements/domain/obligation.ts",
+  "requirements/domain/quint-machine-facts.ts",
+  "requirements/domain/quint-runs-seed.ts",
+  "requirements/domain/quint-runs.ts",
+  "requirements/domain/requirements-source-seed.ts",
+  "requirements/domain/requirements-source.ts",
+  "requirements/domain/smt-event-pair-probe.ts",
+  "requirements/domain/smt-plan-facts-seed.ts",
+  "requirements/domain/smt-plan-facts.ts",
+  "requirements/domain/smt-query-verdict.ts",
+  "requirements/domain/smt-query-verdicts.ts",
+  "requirements/domain/source-anchor.ts",
+  "requirements/domain/verification-finding.ts",
+  "requirements/domain/verification-report-composition.ts",
+  "requirements/domain/verification-report-seed.ts",
+  "requirements/domain/verification-report.ts",
+  "requirements/domain/verification-witness.ts",
+]);
+
+export function noPrimitiveFieldsInDomain(relPath: string, rawSource: string): Violation[] {
+  const loc = locationOf(relPath);
+  if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
+  if (PRIMITIVE_FIELD_EXCLUSIONS.has(relPath) || PRIMITIVE_FIELD_DEBT.has(relPath)) return [];
+  return primitiveFieldsOf(rawSource).map((field) => ({
+    path: relPath,
+    rule: "no-primitive-fields-in-domain",
+    detail: `primitive-typed field ${field} — wrap it in a domain primitive or keep it behind a DP door`,
+  }));
+}
+
 // ルール: CQS——コマンドは返さない（オーナー裁定 2026-09-01）。ポートの
 // store は書くだけ：正常時は void で、集約を読み込んで返さない。複数件の
 // 書き込みだけが正常件数か事前採番の集約 ID 集合を返してよい（現行ポートに
@@ -623,6 +810,7 @@ export const ALL_RULES = [
   portsLiveInPortDir,
   commandsReturnVoid,
   noDataModelsInDomain,
+  noPrimitiveFieldsInDomain,
 ] as const;
 
 export function violationsOf(relPath: string, source: string): Violation[] {

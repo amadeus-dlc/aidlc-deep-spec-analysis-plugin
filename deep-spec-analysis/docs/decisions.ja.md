@@ -1389,3 +1389,21 @@ design・refinement・refcheck は自分の波まで生 id からの再構成に
 比較しないことが判明したため、触れた skip の期待値は `asString()` 経由で
 比較する。文言・順序・golden は不変。台帳から 1 エントリを回収し、残債は
 122 中 98。
+
+波 11（同 PR）: Ruling A に機械検査を与える。「domain primitives
+everywhere」の裁定はこれまで手作業で適用され（PR #54〜#60）、生 string が
+domain オブジェクトへ戻るドリフトを止めるものがなかった——波 10 の target
+語彙がまさにそれだった。アーキテクチャスイートは `no-primitive-fields-in-
+domain` を走らせる: domain の class と公開 interface／type 別名の
+string／number フィールド（スカラ、列、集合、それらをキーか値に持つ map）は
+裁定の除外——bool、DP ラッパー自身（唯一の `#value`）、prose（`detail`、
+`reason`、`message` 等とその列）、state トークン（`state`、`from`、`to` と
+宣言値／初期状態の集合）、design の `attrPath`、`Expression` published
+language、`FrRefClaim.owner`——を除いてすべて違反。着手時の全数棚卸しは
+縮小専用台帳 `PRIMITIVE_FIELD_DEBT`（domain 68 ファイル・108 フィールド）で、
+エントリが primitive フィールドを失った瞬間に陳腐化ガードがスイートを
+落とすので、台帳は縮む一方になる。既知の限界: 非公開の type 別名（Result
+のエラー材料）と index signature 型は見ない。裁定待ち: プリミティブの文字列
+形をキーにした索引 map（DP の門の内側の `ReadonlyMap<string, …>`）、分類
+文字列（`kind`、`method`、`nature`、`pattern`）、doctor の行、裁定が保留した
+数値メタデータ。DATA_MODEL_DEBT は不変——残債は 122 中 98。
