@@ -83,6 +83,7 @@ import {
   BackgroundAssumptionId,
   IrValidationMaterialsId,
   FrRefClaims,
+  FrRefClaim,
   IrEntityDecl,
   IrTemporalDecl,
 } from "../tools/requirements/domain/index.ts";
@@ -325,9 +326,9 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
 describe("FrReferenceIndex", () => {
   test("collects owners per frRef and reports the missing ones sorted", () => {
     const index = FrReferenceIndex.of([
-      { owner: "OB-2", frRefs: FrRefs.of(["FR-1", "FR-9"]) },
-      { owner: "OB-1", frRefs: FrRefs.of(["FR-9"]) },
-      { owner: "scenarios[3]", frRefs: FrRefs.of([]) },
+      FrRefClaim.of("OB-2", FrRefs.of(["FR-1", "FR-9"])),
+      FrRefClaim.of("OB-1", FrRefs.of(["FR-9"])),
+      FrRefClaim.of("scenarios[3]", FrRefs.of([])),
     ]);
     expect(index.referencedIds().sort()).toEqual(["FR-1", "FR-9"]);
     expect(index.missingErrors(RequirementIds.of(["FR-1"]))).toEqual([
@@ -1077,9 +1078,11 @@ describe("materials aggregates and the persistence round-trip (repository ruling
   });
 
   test("FrRefClaims first-class collection feeds the reverse index", () => {
-    const claims = FrRefClaims.of([]).add({ owner: "OB-1", frRefs: FrRefs.of(["FR-1"]) });
+    const claims = FrRefClaims.of([]).add(FrRefClaim.of("OB-1", FrRefs.of(["FR-1"])));
     expect([...claims].length).toBe(1);
-    expect(claims.toArray()[0]?.owner).toBe("OB-1");
+    const owners = new Map<string, string[]>();
+    claims.toArray()[0]?.claimInto(owners);
+    expect([...owners]).toEqual([["FR-1", ["OB-1"]]]);
   });
 });
 

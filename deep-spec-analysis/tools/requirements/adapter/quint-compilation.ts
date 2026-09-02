@@ -141,18 +141,20 @@ function decomposeEffect(effect: Expression): Map<string, Expression> {
 }
 
 function domainOf(attr: AttributeDeclaration): string {
-  if (attr.kind === "bool") return "Set(true, false)";
-  if (attr.kind === "enum") return `Set(${(attr.values?.toArray() ?? []).map((v) => JSON.stringify(v)).join(", ")})`;
-  if (attr.min === undefined || attr.max === undefined) {
-    throw new CompileError(`int attribute "${attr.path.asString()}" lacks min/max — bounded domains are required by the quint backend`);
-  }
-  return `(${attr.min.asNumber()}).to(${attr.max.asNumber()})`;
+  return attr.match({
+    bool: () => "Set(true, false)",
+    enum: (values) => `Set(${(values?.toArray() ?? []).map((v) => JSON.stringify(v)).join(", ")})`,
+    int: (min, max) => {
+      if (min === undefined || max === undefined) {
+        throw new CompileError(`int attribute "${attr.path().asString()}" lacks min/max — bounded domains are required by the quint backend`);
+      }
+      return `(${min.asNumber()}).to(${max.asNumber()})`;
+    },
+  });
 }
 
 function quintType(attr: AttributeDeclaration): string {
-  if (attr.kind === "bool") return "bool";
-  if (attr.kind === "int") return "int";
-  return "str";
+  return attr.match({ bool: () => "bool", int: () => "int", enum: () => "str" });
 }
 
 export type QuintCompilation =
@@ -172,9 +174,9 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   const attrs = model.attributes().toArray();
   const varToPath = new Map<string, string>();
   for (const attr of attrs) {
-    const v = qVar(attr.path.asString());
+    const v = qVar(attr.path().asString());
     if (varToPath.has(v)) throw new CompileError(`state variable name collision: "${v}"`);
-    varToPath.set(v, attr.path.asString());
+    varToPath.set(v, attr.path().asString());
   }
   const stateName = (path: string, primed: boolean): string => {
     if (model.attributeAt(path) === undefined) throw new CompileError(`unresolvable reference "${path}"`);
@@ -186,7 +188,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   for (const attr of attrs) domainOf(attr);
 
   const lines: string[] = ["module main {"];
-  for (const attr of attrs) lines.push(`  var ${qVar(attr.path.asString())}: ${quintType(attr)}`);
+  for (const attr of attrs) lines.push(`  var ${qVar(attr.path().asString())}: ${quintType(attr)}`);
   lines.push("");
 
   // 不変量面：invariant/numeric 義務・state-temporal "always" 義務・背景制約・
@@ -206,7 +208,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       propDefs.push({ id: ob.id().asString(), expr: temporal.assert });
     }
   }
-  for (const b of model.background().toArray()) propDefs.push({ id: b.id.asString(), expr: b.assert });
+  for (const b of model.background().toArray()) propDefs.push({ id: b.id().asString(), expr: b.assertion() });
 
   const invExprs: string[] = [];
   for (const c of propDefs) {
@@ -216,11 +218,15 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   }
   const boundExprs: string[] = [];
   for (const attr of attrs) {
-    if (attr.kind === "int") {
-      boundExprs.push(`(${qVar(attr.path.asString())} >= ${attr.min?.asNumber()} and ${qVar(attr.path.asString())} <= ${attr.max?.asNumber()})`);
-    } else if (attr.kind === "enum") {
-      boundExprs.push(`${domainOf(attr)}.contains(${qVar(attr.path.asString())})`);
-    }
+    attr.match({
+      int: (min, max) => {
+        boundExprs.push(`(${qVar(attr.path().asString())} >= ${min?.asNumber()} and ${qVar(attr.path().asString())} <= ${max?.asNumber()})`);
+      },
+      enum: () => {
+        boundExprs.push(`${domainOf(attr)}.contains(${qVar(attr.path().asString())})`);
+      },
+      bool: () => {},
+    });
   }
   const invAllParts = [...invExprs, ...boundExprs];
   lines.push(`  val invAll = ${invAllParts.length > 0 ? `and(${invAllParts.join(", ")})` : "true"}`);
@@ -229,7 +235,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   // init：領域・背景・不変量を満たす任意の状態。
   lines.push("  action init = {");
   for (const attr of attrs) {
-    lines.push(`    nondet n_${qVar(attr.path.asString())} = ${domainOf(attr)}.oneOf()`);
+    lines.push(`    nondet n_${qVar(attr.path().asString())} = ${domainOf(attr)}.oneOf()`);
   }
   const initName = (path: string, primed: boolean): string => {
     if (primed) throw new CompileError("primed reference outside an effect");
@@ -239,7 +245,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   const initConds = propDefs.map((c) => quintOf(c.expr, initName));
   lines.push("    all {");
   for (const cond of initConds) lines.push(`      ${cond},`);
-  for (const attr of attrs) lines.push(`      ${qVar(attr.path.asString())}' = n_${qVar(attr.path.asString())},`);
+  for (const attr of attrs) lines.push(`      ${qVar(attr.path().asString())}' = n_${qVar(attr.path().asString())},`);
   lines.push("      true");
   lines.push("    }");
   lines.push("  }");
@@ -262,8 +268,8 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       const action = qId("ev", ob.id().asString());
       const parts: string[] = [guard];
       for (const attr of attrs) {
-        const rhs = assignments.get(attr.path.asString());
-        parts.push(`${qVar(attr.path.asString())}' = ${rhs ? quintOf(rhs, stateName) : qVar(attr.path.asString())}`);
+        const rhs = assignments.get(attr.path().asString());
+        parts.push(`${qVar(attr.path().asString())}' = ${rhs ? quintOf(rhs, stateName) : qVar(attr.path().asString())}`);
       }
       lines.push(`  action ${action} = all { ${parts.join(", ")} }`);
       actionNames.push(action);
@@ -272,7 +278,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       compileSkips.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) }));
     }
   }
-  const idleParts = attrs.map((a) => `${qVar(a.path.asString())}' = ${qVar(a.path.asString())}`);
+  const idleParts = attrs.map((a) => `${qVar(a.path().asString())}' = ${qVar(a.path().asString())}`);
   lines.push(`  action idle = all { ${idleParts.join(", ")} }`);
   lines.push(`  action step = any { ${actionNames.length > 0 ? actionNames.join(", ") : "idle"} }`);
   lines.push("");
@@ -301,16 +307,16 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
     if (sc.hasEvent()) continue;
     const bindings = sc.bindings();
     const boundPaths = new Set(Object.keys(bindings));
-    if (attrs.some((a) => !boundPaths.has(a.path.asString()))) continue;
+    if (attrs.some((a) => !boundPaths.has(a.path().asString()))) continue;
     const parts: string[] = [];
     let okAll = true;
     for (const attr of attrs) {
-      const value = bindings[attr.path.asString()];
+      const value = bindings[attr.path().asString()];
       if (value === undefined) {
         okAll = false;
         break;
       }
-      parts.push(`${qVar(attr.path.asString())}' = ${qLit(value)}`);
+      parts.push(`${qVar(attr.path().asString())}' = ${qLit(value)}`);
     }
     if (!okAll) continue;
     const initAction = qId("scInit", sc.id().asString());

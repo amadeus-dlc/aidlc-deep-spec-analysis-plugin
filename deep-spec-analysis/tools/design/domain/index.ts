@@ -21,7 +21,7 @@ export { DesignScenarioId } from "./design-scenario-id.ts";
 export { DesignScenarios } from "./design-scenarios.ts";
 export { DesignUnit } from "./design-unit.ts";
 export { AttrPaths } from "./attr-paths.ts";
-export { type DesignBackgroundAssumption } from "./design-background-assumption.ts";
+export { DesignBackgroundAssumption } from "./design-background-assumption.ts";
 export { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
 export { DesignBackgroundId } from "./design-background-id.ts";
 export { DesignUnits } from "./design-units.ts";

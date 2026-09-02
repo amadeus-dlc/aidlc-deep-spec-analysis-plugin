@@ -6,7 +6,7 @@
 
 import { type Json, isObject, strArr } from "../../kernel/adapter/index.ts";
 import { FrRefs, IrVersion, type Expression, TriggerName } from "../../kernel/domain/index.ts";
-import { BrRefs, DesignBackgroundId, type DesignBackgroundAssumption, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, DesignIgnores, DesignTransitions, DesignUnits, InitialStates, DesignIgnore, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignMachine, DesignObligation, DesignScenario, DesignTransition, type DesignValue, DesignUnit,
+import { BrRefs, DesignBackgroundId, DesignBackgroundAssumption, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, DesignIgnores, DesignTransitions, DesignUnits, InitialStates, DesignIgnore, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignMachine, DesignObligation, DesignScenario, DesignTransition, type DesignValue, DesignUnit,
   DesignModel,
 } from "../domain/index.ts";
 
@@ -101,7 +101,7 @@ export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.
     const background: DesignBackgroundAssumption[] = [];
     for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
       if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
-      background.push({ id: DesignBackgroundId.reconstitute(bg.id), assert: bg.assert as unknown as Expression });
+      background.push(DesignBackgroundAssumption.reconstitute({ id: DesignBackgroundId.reconstitute(bg.id), assert: bg.assert as unknown as Expression }));
     }
     units.push(
       DesignUnit.reconstitute({

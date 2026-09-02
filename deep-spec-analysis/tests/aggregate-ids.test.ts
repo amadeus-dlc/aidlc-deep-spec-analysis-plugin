@@ -171,6 +171,7 @@ describe("IrVersion", () => {
 import {
   AttributeBound,
   AttributeDeclarations,
+  AttributeDeclaration,
   AttributePath,
   AttributeValues,
   BackgroundAssumptionId,
@@ -179,6 +180,7 @@ import {
   ObligationNature,
   ScenarioId,
   BackgroundAssumptions,
+  BackgroundAssumption,
   CrossCheckedEntries,
   Obligations,
   Obligation,
@@ -196,8 +198,9 @@ describe("requirements first-class collections", () => {
     expect([...RequirementIds.of(["FR-1"])]).toEqual(["FR-1"]);
     expect([...RequirementIds.extractFrom("- FR-1 と NFR-2.1").toArray()].sort()).toEqual(["FR-1", "NFR-2.1"]);
 
-    const attrs = AttributeDeclarations.of([]).add({ path: AttributePath.reconstitute("o.qty"), kind: "int", min: AttributeBound.reconstitute(0), max: AttributeBound.reconstitute(5) });
-    expect(attrs.byPath("o.qty")?.kind).toBe("int");
+    const attrs = AttributeDeclarations.of([]).add(AttributeDeclaration.reconstitute({ path: AttributePath.reconstitute("o.qty"), kind: "int", min: AttributeBound.reconstitute(0), max: AttributeBound.reconstitute(5) }));
+    expect(attrs.byPath("o.qty")?.isInt()).toBe(true);
+    expect(attrs.byPath("o.qty")?.match({ bool: () => "b", int: (min, max) => `${min?.asNumber()}..${max?.asNumber()}`, enum: () => "e" })).toBe("0..5");
     expect(attrs.toArray().length).toBe(1);
 
     const obs = Obligations.of([]).add(Obligation.reconstitute({ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: FrRefs.of(["FR-1"]) }));
@@ -209,9 +212,10 @@ describe("requirements first-class collections", () => {
     expect(scs.byId("SC-1")?.kind()).toBe("accept");
     expect(scs.ids()).toEqual(["SC-1"]);
 
-    const bgs = BackgroundAssumptions.of([]).add({ id: BackgroundAssumptionId.reconstitute("B1"), assert: { op: "bool", value: true } });
+    const bgs = BackgroundAssumptions.of([]).add(BackgroundAssumption.reconstitute({ id: BackgroundAssumptionId.reconstitute("B1"), assert: { op: "bool", value: true } }));
     expect([...bgs].length).toBe(1);
-    expect(bgs.toArray()[0]?.id.asString()).toBe("B1");
+    expect(bgs.toArray()[0]?.id().asString()).toBe("B1");
+    expect(bgs.toArray()[0]?.assertion()).toEqual({ op: "bool", value: true });
 
     const finding = VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: { core: [] }, detail: "d" });
     const fs = VerificationFindings.of([]).add(finding);
@@ -237,6 +241,7 @@ import {
   AttrPaths,
   CheckedUnits,
   DesignBackgroundAssumptions,
+  DesignBackgroundAssumption,
   DesignCrossCheckedEntries,
   DesignFindings,
   DesignInputAnchors,
@@ -273,7 +278,7 @@ describe("design first-class collections", () => {
     expect(DesignScenarios.of([DesignScenario.reconstitute({ id: DesignScenarioId.reconstitute("DSC-9"), kind: "reject", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} })]).toArray().length).toBe(1);
     expect(DesignScenarios.of([]).add(DesignScenario.reconstitute({ id: DesignScenarioId.reconstitute("DSC-1"), kind: "accept", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} })).ids()).toEqual(["DSC-1"]);
     expect([...DesignScenarios.of([])].length).toBe(0);
-    expect(DesignBackgroundAssumptions.of([]).add({ id: DesignBackgroundId.reconstitute("DBG-1"), assert: { op: "bool", value: true } }).toArray().length).toBe(1);
+    expect(DesignBackgroundAssumptions.of([]).add(DesignBackgroundAssumption.reconstitute({ id: DesignBackgroundId.reconstitute("DBG-1"), assert: { op: "bool", value: true } })).toArray().length).toBe(1);
     expect([...DesignBackgroundAssumptions.of([])].length).toBe(0);
     const paths = AttrPaths.of(["T.s"]).add("T.x");
     expect(paths.has("T.x")).toBe(true);

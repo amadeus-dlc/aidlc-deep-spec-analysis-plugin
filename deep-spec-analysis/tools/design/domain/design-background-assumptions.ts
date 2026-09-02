@@ -1,4 +1,3 @@
-import { IdOrder } from "../../kernel/domain/index.ts";
 import type { DesignBackgroundAssumption } from "./design-background-assumption.ts";
 
 // 設計背景仮定のファーストクラスコレクション。
@@ -19,7 +18,7 @@ export class DesignBackgroundAssumptions {
 
   // lowering の凍結順：IdOrder 正準順（DesignTransitions.sortedCanonically と同じ面）。
   sortedCanonically(): DesignBackgroundAssumptions {
-    return new DesignBackgroundAssumptions([...this.#values].sort((a, b) => IdOrder.compare(a.id.asString(), b.id.asString())));
+    return new DesignBackgroundAssumptions([...this.#values].sort((a, b) => a.compareTo(b)));
   }
 
   *[Symbol.iterator](): Iterator<DesignBackgroundAssumption> {

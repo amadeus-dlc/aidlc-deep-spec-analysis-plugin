@@ -411,7 +411,6 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
 // 違反で、波が 1 件返すたびにここから消す。LEGACY_FILES と同じ規律）。
 // Expression は寛容 published language の既裁定で恒久除外。
 export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
-  "design/domain/design-background-assumption.ts",
   "design/domain/design-value.ts",
   "doctor/domain/check.ts",
   "doctor/domain/coverage-row.ts",
@@ -434,11 +433,7 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "refcheck/domain/rules-outcome.ts",
   "refcheck/domain/shape-error.ts",
   "refcheck/domain/spec-block-assessment.ts",
-  "requirements/domain/attribute-declaration.ts",
-  "requirements/domain/background-assumption.ts",
   "requirements/domain/decoded-value.ts",
-  "requirements/domain/fr-ref-claim.ts",
-  "requirements/domain/smt-event-pair-probe.ts",
   "requirements/domain/trace-state.ts",
   "requirements/domain/verification-witness.ts",
 ]);
@@ -635,7 +630,7 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["requirements/domain/quint-machine-facts.ts", new Set(["#scenariosWithInit: ReadonlySet<string>"])],
   ["requirements/domain/quint-runs.ts", new Set(["#temporals: ReadonlyMap<string, QuintTemporalVerdict>", "#scenarios: ReadonlyMap<string, QuintScenarioVerdict>"])],
   ["requirements/domain/requirements-source.ts", new Set(["#digest: string"])],
-  ["requirements/domain/smt-event-pair-probe.ts", new Set(["SmtEventPairProbe.qOverlap: string", "SmtEventPairProbe.qJoint: string"])],
+  ["requirements/domain/smt-event-pair-probe.ts", new Set(["#qOverlap: string", "#qJoint: string"])],
   ["requirements/domain/smt-plan-facts.ts", new Set(["#compiled: ReadonlyMap<string, boolean>", "#labelToTarget: ReadonlyMap<string, string>", "#gapTriggers: ReadonlyMap<string, readonly string[]>", "#scenarioQueries: ReadonlyMap<string, string>"])],
   ["requirements/domain/smt-query-verdict.ts", new Set(["#core: string[] | undefined"])],
   ["requirements/domain/smt-query-verdicts.ts", new Set(["#values: ReadonlyMap<string, SmtQueryVerdict>"])],

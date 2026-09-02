@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
 import type { Json } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression } from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -44,7 +44,7 @@ import {
   DesignMachines,
   DesignObligations,
   DesignScenarios,
-  type DesignBackgroundAssumption,
+  DesignBackgroundAssumption,
   DesignIgnore,
   DesignMachine,
   DesignObligation,
@@ -209,7 +209,7 @@ function unit(seed: {
   obligations?: RawDesignObligation[];
   machines?: RawDesignMachine[];
   scenarios?: RawDesignScenario[];
-  background?: (Omit<DesignBackgroundAssumption, "id"> & { id: string })[];
+  background?: { id: string; assert: Expression }[];
 }): DesignUnit {
   return DesignUnit.reconstitute({
     unit: seed.unit ?? "u1",
@@ -251,7 +251,7 @@ function unit(seed: {
       })),
     ),
     background: DesignBackgroundAssumptions.of(
-      (seed.background ?? []).map((b) => ({ ...b, id: DesignBackgroundId.reconstitute(b.id) })),
+      (seed.background ?? []).map((b) => DesignBackgroundAssumption.reconstitute({ ...b, id: DesignBackgroundId.reconstitute(b.id) })),
     ),
   });
 }

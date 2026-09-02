@@ -1566,3 +1566,14 @@ record の代わりに `isForTrigger` と `waiverReason` に答える。`Unmappe
 は対象を名乗り、quint パスが載せる lowering 上の不変量義務を自分で作る
 （`loweredAs`）——ユースケースはもう組み立てない。`RefTokenCarrier` 別名は
 宣言集合の門の署名へ溶ける。台帳から 7 エントリを回収し、残債は 122 中 30。
+
+波 25（同 PR）: 要件モデルの宣言が自分の判断を所有する。`AttributeDeclaration`
+（bool／int／enum）は SMT と quint のコンパイラへ種類ごとの材料——int の上下限、
+enum の宣言値——を `match` で渡す。コンパイラが `kind` で分岐して optional な
+フィールドを調べる代わりに。残る読みは `isBool`・`isInt`・`isEnum`・`isAt` と
+上下限の accessor が受ける。`BackgroundAssumption` と
+`DesignBackgroundAssumption` は `id` と `assertion` に答え、設計側は自分で正準順
+に並ぶ（`compareTo`）。`FrRefClaim` は逆引き索引へ自分の owner を積む
+（`claimInto`）——索引はもう owner と refs を読まない。`SmtEventPairProbe` は
+判定結果から自分の overlap／joint 判定を引き、2 つの対象を名乗る——計画事実は
+もうクエリ id を読まない。台帳から 5 エントリを回収し、残債は 122 中 25。

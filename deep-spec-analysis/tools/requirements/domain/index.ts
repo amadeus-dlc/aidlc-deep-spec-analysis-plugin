@@ -1,6 +1,6 @@
 // requirements/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
-export { type AttributeDeclaration, AttributeBound } from "./attribute-declaration.ts";
+export { AttributeDeclaration, AttributeBound } from "./attribute-declaration.ts";
 export { AttributeDeclarations } from "./attribute-declarations.ts";
 export { AttributePath } from "./attribute-path.ts";
 export { AttributeValues } from "./attribute-values.ts";
@@ -16,7 +16,7 @@ export { ScenarioId } from "./scenario-id.ts";
 export { Scenarios } from "./scenarios.ts";
 export { RequirementsModel } from "./requirements-model.ts";
 export { BackgroundAssumptionId } from "./background-assumption-id.ts";
-export { type BackgroundAssumption } from "./background-assumption.ts";
+export { BackgroundAssumption } from "./background-assumption.ts";
 export { BackgroundAssumptions } from "./background-assumptions.ts";
 export { VerificationFinding } from "./verification-finding.ts";
 export { VerificationFindings } from "./verification-findings.ts";
@@ -32,7 +32,7 @@ export { type SmtQueryStatus } from "./smt-query-status.ts";
 export { SmtQueryVerdict } from "./smt-query-verdict.ts";
 export { SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 export { SmtPlanFacts } from "./smt-plan-facts.ts";
-export { type SmtEventPairProbe } from "./smt-event-pair-probe.ts";
+export { SmtEventPairProbe } from "./smt-event-pair-probe.ts";
 export { SmtEventPairProbes } from "./smt-event-pair-probes.ts";
 export { type TraceState } from "./trace-state.ts";
 export { type DecodedValue } from "./decoded-value.ts";
@@ -62,7 +62,7 @@ export { IrScenarioDecl } from "./ir-scenario-decl.ts";
 export { IrScenarioDecls } from "./ir-scenario-decls.ts";
 export { IrTemporalDecl } from "./ir-temporal-decl.ts";
 export { FrReferenceIndex } from "./fr-reference-index.ts";
-export { type FrRefClaim } from "./fr-ref-claim.ts";
+export { FrRefClaim } from "./fr-ref-claim.ts";
 export { FrRefClaims } from "./fr-ref-claims.ts";
 export { SourceAnchor } from "./source-anchor.ts";
 export { RequirementsSourceId } from "./requirements-source-id.ts";

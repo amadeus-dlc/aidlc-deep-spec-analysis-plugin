@@ -369,7 +369,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   let bgN = 0;
   for (const bg of u.background().sortedCanonically()) {
     bgN += 1;
-    background.push(LoweredBackground.reconstitute({ id: LoweredId.reconstitute(`BG-${bgN}`), assert: bg.assert }));
+    background.push(LoweredBackground.reconstitute({ id: LoweredId.reconstitute(`BG-${bgN}`), assert: bg.assertion() }));
   }
 
   return {

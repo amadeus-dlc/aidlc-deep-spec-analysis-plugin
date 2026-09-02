@@ -160,7 +160,7 @@ export function designBase(
   if (!primed) {
     for (const bg of u.background()) {
       try {
-        constraints.push({ name: smtName("bg", bg.id.asString()), smt: smtOfExpr(ctx, bg.assert) });
+        constraints.push({ name: smtName("bg", bg.id().asString()), smt: smtOfExpr(ctx, bg.assertion()) });
       } catch {
         // コンパイルできない背景は落とす——設計パスが報告する。
       }
