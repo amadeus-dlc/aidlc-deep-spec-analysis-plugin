@@ -202,6 +202,8 @@ describe("rule red/green examples (detection power proof)", () => {
 
   test("no-primitive-fields-in-domain flags string/number fields outside the debt set", () => {
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export class Foo {\n  readonly #name: string;\n  readonly #ok: boolean;\n}")).toHaveLength(1);
+    // 初期化子つきでも型で検出する（レビュー指摘の回帰）。
+    expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", 'export class Foo {\n  readonly #name: string = "x";\n  #count = 0;\n}')).toHaveLength(1);
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export class Foo {\n  readonly #ids: ReadonlySet<string>;\n  readonly #count: number;\n  readonly #byId: ReadonlyMap<string, Foo>;\n}")).toHaveLength(3);
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export interface Foo {\n  readonly count: number;\n  readonly flag: boolean;\n  readonly names?: readonly string[];\n}")).toHaveLength(2);
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", 'export type Foo =\n  | { readonly kind: "a"; readonly core: string[] }\n  | { readonly kind: "b" };\n')).toHaveLength(1);
@@ -212,6 +214,8 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n  readonly reason?: string;\n  readonly [k: string]: string;\n  readonly on: () => void;\n}")).toHaveLength(0);
     expect(noPrimitiveFieldsInDomain("kernel/domain/expression.ts", "export interface Expression {\n  readonly op: string;\n}")).toHaveLength(0);
     expect(noPrimitiveFieldsInDomain("kernel/domain/fr-refs.ts", "export class FrRefs {\n  readonly #values: readonly string[];\n}")).toHaveLength(0);
+    // 台帳はフィールド単位: 台帳内ファイルへの新しい primitive フィールドは違反（レビュー指摘の回帰）。
+    expect(noPrimitiveFieldsInDomain("kernel/domain/fr-refs.ts", "export class FrRefs {\n  readonly #values: readonly string[];\n  readonly #newcomer: string;\n}")).toHaveLength(1);
     expect(noPrimitiveFieldsInDomain("design/adapter/foo.ts", "export class Foo {\n  readonly #name: string;\n}")).toHaveLength(0);
     // 検出器はコメント・文字列内の型らしき記述に反応しない。
     expect(primitiveFieldsOf("export class Foo {\n  // readonly #ghost: string;\n  readonly #label: string;\n  readonly #real: number;\n}")).toEqual(["#real: number"]);
@@ -262,10 +266,14 @@ describe("the real tools/ tree", () => {
     expect(all).toEqual([]);
   });
 
-  test("the primitive-field ledger is shrink-only: every entry still carries a primitive field", () => {
-    for (const rel of PRIMITIVE_FIELD_DEBT) {
+  test("the primitive-field ledger is shrink-only: every ledgered field descriptor is still detected", () => {
+    // 台帳の記述子はすべて実ツリーに残っていること（消えたら台帳から落とす）。
+    // 逆向き（台帳にない記述子は違反）は「every file passes every architecture rule」が担う。
+    for (const [rel, fields] of PRIMITIVE_FIELD_DEBT) {
       expect(files).toContain(rel);
-      expect(primitiveFieldsOf(readFileSync(join(toolsDir, rel), "utf-8"))).not.toHaveLength(0);
+      const actual = new Set(primitiveFieldsOf(readFileSync(join(toolsDir, rel), "utf-8")));
+      for (const field of fields) expect(actual).toContain(field);
+      expect(fields.size).toBeGreaterThan(0);
     }
     for (const rel of PRIMITIVE_FIELD_EXCLUSIONS) expect(files).toContain(rel);
   });

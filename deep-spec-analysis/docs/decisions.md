@@ -1538,10 +1538,13 @@ wrapper itself (a class whose only field is `#value`), prose (`detail`,
 `reason`, `message`, … and their lists), state tokens (`state`, `from`,
 `to` and the declared-value / initial-state collections), the design
 `attrPath`, the `Expression` published language and `FrRefClaim.owner`.
-The starting inventory is a shrink-only ledger, `PRIMITIVE_FIELD_DEBT`:
-68 domain files carrying 108 primitive fields, and a stale-entry guard
-fails the suite as soon as an entry no longer carries one, so the
-ledger can only shrink. Known limits: non-exported type aliases (Result
+The starting inventory is a shrink-only ledger, `PRIMITIVE_FIELD_DEBT`,
+kept field by field (a descriptor `name: type` per file): 68 domain
+files carrying 107 distinct primitive fields. A new primitive field in
+a ledgered file is a violation, and a stale-entry guard fails the suite
+as soon as a ledgered descriptor is no longer detected, so the ledger
+can only shrink (the file-level first cut and the initializer blind
+spot `#x: string = …` were review findings, fixed in the same PR). Known limits: non-exported type aliases (Result
 error materials) and index-signature records are not inspected. Open
 for a ruling: index maps keyed by a primitive's string form
 (`ReadonlyMap<string, …>` behind DP doors), classification strings

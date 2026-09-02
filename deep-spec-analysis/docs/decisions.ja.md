@@ -1400,9 +1400,12 @@ string／number フィールド（スカラ、列、集合、それらをキー�
 `reason`、`message` 等とその列）、state トークン（`state`、`from`、`to` と
 宣言値／初期状態の集合）、design の `attrPath`、`Expression` published
 language、`FrRefClaim.owner`——を除いてすべて違反。着手時の全数棚卸しは
-縮小専用台帳 `PRIMITIVE_FIELD_DEBT`（domain 68 ファイル・108 フィールド）で、
-エントリが primitive フィールドを失った瞬間に陳腐化ガードがスイートを
-落とすので、台帳は縮む一方になる。既知の限界: 非公開の type 別名（Result
+縮小専用台帳 `PRIMITIVE_FIELD_DEBT` で、ファイルごとの記述子（`name: type`）
+単位に持つ（domain 68 ファイル・107 個の primitive フィールド）。台帳内
+ファイルへの新しい primitive フィールドは違反、台帳の記述子が検出されなく
+なった瞬間に陳腐化ガードがスイートを落とすので、台帳は縮む一方になる
+（ファイル単位だった初版と初期化子 `#x: string = …` の死角はレビュー指摘で、
+同 PR で修正）。既知の限界: 非公開の type 別名（Result
 のエラー材料）と index signature 型は見ない。裁定待ち: プリミティブの文字列
 形をキーにした索引 map（DP の門の内側の `ReadonlyMap<string, …>`）、分類
 文字列（`kind`、`method`、`nature`、`pattern`）、doctor の行、裁定が保留した
