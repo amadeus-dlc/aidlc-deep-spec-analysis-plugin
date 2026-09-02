@@ -1,7 +1,8 @@
+import { TargetIds } from "../../kernel/domain/index.ts";
 import { CheckFamily } from "./check-family.ts";
 
-// 検査ファミリー台帳面のファーストクラスコレクション（宣言順を保持——
-// checked targets の並び順は宣言順に filter が走る凍結挙動）。
+// 検査ファミリー面のファーストクラスコレクション（宣言順を保持）。レポートは
+// これを開いた時点の checked とし、finding／skip が family を外していく。
 export class CheckFamilies {
   readonly #values: readonly CheckFamily[];
 
@@ -25,9 +26,10 @@ export class CheckFamilies {
     yield* this.#values;
   }
 
-  // 「checked = 全 family − failed − skipped」の導出は台帳向けの集合知識。
-  checkedTargetsExcluding(failed: ReadonlySet<string>, skipped: ReadonlySet<string>): string[] {
-    return this.#values.filter((f) => !failed.has(f.asString()) && !skipped.has(f.asString())).map((f) => f.asCheckTarget());
+  // 全 family の check target（`check:${family}`）——レポートを開いた時点の
+  // checked の材料。
+  checkTargets(): TargetIds {
+    return TargetIds.reconstitute(this.#values.map((f) => f.asCheckTarget()));
   }
 
   toArray(): readonly CheckFamily[] {

@@ -1,10 +1,8 @@
 // contract-summary.md の refcheck ユースケース。
 // Repository を保持し、execute は成果物パス（識別）を受けて内部で集約を解決し、
-// CD 検査 → 組成 → 契約適合 → 永続化を起動する。
+// ReferenceCheckReport を開いて CD 検査 → 契約適合 → 永続化を起動する。
 
 import {
-  CheckFamilyLedger,
-  InputAnchors,
   CONTRACT_FAMILIES,
   ContractCheckMaterials,
   ReferenceCheckReport,
@@ -37,24 +35,16 @@ export class CheckContractSummaryUseCase {
     const declaredUnits = record.value.declaredUnits();
     if (contractsTable === null || specBlocks === null || declaredUnits === null) return { kind: "not-applicable" };
 
-    const ledger = CheckFamilyLedger.of(CONTRACT_FAMILIES);
+    const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(input.reportDirectory, "contract-summary"), CONTRACT_FAMILIES);
     ContractCheckMaterials.of({
       artifact: ArtifactPath.reconstitute(record.value.target().artifact()),
       depArtifact: declaredUnits.artifactName,
       declaredUnits: declaredUnits.document === null ? DeclaredUnitsOutcome.absent() : declaredUnits.document.outcome,
       contractsTable,
       specBlocks,
-    }).runChecks(ledger);
-
-    let inputs = InputAnchors.of([record.value.target()]);
-    if (declaredUnits.document !== null) inputs = inputs.add(declaredUnits.document.input);
-    const report = ReferenceCheckReport.compose({
-      id: ReferenceCheckReportId.of(input.reportDirectory, "contract-summary"),
-      inputs,
-      checked: ledger.checkedTargets(),
-      findings: ledger.findings(),
-      skipped: ledger.skipped(),
-    });
+    }).runChecks(report);
+    report.input(record.value.target());
+    if (declaredUnits.document !== null) report.input(declaredUnits.document.input);
     // CQS: verdict はモードによらず conformedOf（照会）から導く——store は
     // 書くだけ（void）で、内部で同じ適合を通すため stdout とファイルは
     // 構造的に一致する（凍結挙動）。

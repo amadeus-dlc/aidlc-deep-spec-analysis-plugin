@@ -271,6 +271,8 @@ describe("target id (the target vocabulary's primitive)", () => {
     expect(ids.toArray().length).toBe(3);
     expect(ids.includes(TargetId.reconstitute("OB-2"))).toBe(true);
     expect(ids.includes(TargetId.reconstitute("OB-3"))).toBe(false);
+    expect(ids.excluding(TargetId.reconstitute("OB-2")).toStrings()).toEqual(["OB-10"]);
+    expect(ids.excluding(TargetId.reconstitute("OB-3")).toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect([...ids].map((t) => t.asString())).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect(TargetIds.reconstitute(["SC-1", "OB-1"]).joined(",")).toBe("SC-1,OB-1");
     // sortedCanonically keeps duplicates; sortedUniqueCanonically folds them.

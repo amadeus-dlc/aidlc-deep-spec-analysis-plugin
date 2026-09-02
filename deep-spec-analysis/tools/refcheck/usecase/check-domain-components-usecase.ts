@@ -1,11 +1,9 @@
 // components.md の refcheck ユースケース。
 // Repository を保持し、execute は成果物パス（識別）を受けて内部で集約
-// （DesignRecord）を解決し、DD 検査 → ReferenceCheckReport 組成 → 契約適合 →
+// （DesignRecord）を解決し、ReferenceCheckReport を開いて DD 検査 → 契約適合 →
 // 永続化までを起動する。verdict は conformed（＝書かれる姿）から導出。
 
 import {
-  CheckFamilyLedger,
-  InputAnchors,
   COMPONENT_FAMILIES,
   ComponentCheckMaterials,
   ReferenceCheckReport,
@@ -36,15 +34,9 @@ export class CheckDomainComponentsUseCase {
     const catalog = record.value.componentCatalog();
     if (catalog === null) return { kind: "not-applicable" };
 
-    const ledger = CheckFamilyLedger.of(COMPONENT_FAMILIES);
-    ComponentCheckMaterials.of({ outcome: catalog, artifact: ArtifactPath.reconstitute(record.value.target().artifact()) }).runChecks(ledger);
-    const report = ReferenceCheckReport.compose({
-      id: ReferenceCheckReportId.of(input.reportDirectory, "components"),
-      inputs: InputAnchors.of([record.value.target()]),
-      checked: ledger.checkedTargets(),
-      findings: ledger.findings(),
-      skipped: ledger.skipped(),
-    });
+    const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(input.reportDirectory, "components"), COMPONENT_FAMILIES);
+    ComponentCheckMaterials.of({ outcome: catalog, artifact: ArtifactPath.reconstitute(record.value.target().artifact()) }).runChecks(report);
+    report.input(record.value.target());
     // CQS: verdict はモードによらず conformedOf（照会）から導く——store は
     // 書くだけ（void）で、内部で同じ適合を通すため stdout とファイルは
     // 構造的に一致する（凍結挙動）。

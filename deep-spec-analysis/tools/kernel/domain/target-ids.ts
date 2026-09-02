@@ -1,7 +1,7 @@
 // finding / checked / crossChecked ペイロードが運ぶ target id 列のファースト
 // クラスコレクション。要素は TargetId（#71 波10——生 string の集合ではない）。
 // of は DP の門、reconstitute は凍結文書と生 id 材料からの逐語再構成。
-// 名前空間付き id のサニタイズ（safe）は refcheck 台帳の材料面として残る
+// 名前空間付き id のサニタイズ（safe）は refcheck レポートの材料面として残る
 // （旧自由関数 safeTarget は TargetIds.safe に従属した——OOUI 裁定）。
 
 import { sortedUniqueCanonically } from "./canonical-order.ts";
@@ -48,6 +48,12 @@ export class TargetIds {
 
   includes(value: TargetId): boolean {
     return this.#values.some((v) => v.equals(value));
+  }
+
+  // value と等しい id を除いた列（順序は保つ）。refcheck レポートが
+  // finding／skip の family を checked から外す不変条件の材料。
+  excluding(value: TargetId): TargetIds {
+    return new TargetIds(this.#values.filter((v) => !v.equals(value)));
   }
 
   // id 順のみ（一意化しない——重複を保つ面の凍結順）。

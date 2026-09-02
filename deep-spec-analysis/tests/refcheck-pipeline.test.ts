@@ -40,7 +40,6 @@ import {
   CheckFunctionalDesignUseCase,
 } from "../tools/refcheck/usecase/index.ts";
 import {
-  CheckFamilyLedger,
   COMPONENT_FAMILIES,
   CONTRACT_FAMILIES,
   FUNCTIONAL_FAMILIES,
@@ -49,7 +48,6 @@ import {
   ComponentCheckMaterials,
   ContractCheckMaterials,
   FunctionalCheckMaterials,
-  InputAnchors,
   BlockIndex,
   CheckFamilies,
   CheckFamily,
@@ -188,19 +186,14 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 
 function domainReport(
   families: CheckFamilies,
-  run: (ledger: CheckFamilyLedger) => void,
+  run: (report: ReferenceCheckReport) => void,
   backend = "components",
   unit?: UnitName,
 ): ReferenceCheckReport {
-  const ledger = CheckFamilyLedger.of(families, unit);
-  run(ledger);
-  return ReferenceCheckReport.compose({
-    id: ReferenceCheckReportId.of(ap("/tmp/r"), backend),
-    inputs: InputAnchors.of([InputAnchor.reconstitute({ artifact: "x.md", sha256: ContentHash.reconstitute("a".repeat(64)) })]),
-    checked: ledger.checkedTargets(),
-    findings: ledger.findings(),
-    skipped: ledger.skipped(),
-  });
+  const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(ap("/tmp/r"), backend), families, unit);
+  run(report);
+  report.input(InputAnchor.reconstitute({ artifact: "x.md", sha256: ContentHash.reconstitute("a".repeat(64)) }));
+  return report;
 }
 
 describe("skip branches the fixtures do not exercise", () => {
@@ -501,17 +494,6 @@ describe("functional branches the fixtures do not exercise", () => {
     });
     const reasons = report.skipped().toArray().map((s) => `${s.target()}:${s.reason()}`);
     expect(reasons).toContain("check:XS-3:unrecognized-format");
-  });
-
-  test("the ledger records findings and skips against their families and derives checked", () => {
-    const ledger = CheckFamilyLedger.of(CheckFamilies.reconstitute(["A-1", "A-2", "A-3"]), UnitName.reconstitute("u9"));
-    ledger.finding(CheckFamily.reconstitute("A-1"), "structure-invalid", ["check:A-1"], [], "boom");
-    ledger.skip(CheckFamily.reconstitute("A-2"), "absent-input", "gone");
-    expect(ledger.findings().toArray()[0]?.detail()).toBe("A-1: boom");
-    expect(ledger.findings().toArray()[0]?.unit()).toBe("u9");
-    expect(ledger.skipped().toArray()[0]?.target()).toBe("check:A-2");
-    expect(ledger.skipped().toArray()[0]?.unit()).toBe("u9");
-    expect(ledger.checkedTargets().toStrings()).toEqual(["check:A-3"]);
   });
 
   test("a degraded conformance still renders a schema-valid unavailable document", () => {

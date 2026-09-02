@@ -4,26 +4,44 @@
 // だけを話す。JSON・正準直列化・スキーマ適合検証は**形式の知識**であり
 // アダプタ層の責務（オーナー裁定 2026-08-30：Json はユビキタス言語ではない）。
 //
+// 検査の書き込み側は本集約ルートが所有する（種別規律の裁定 14、2026-09-02）。
+// `open` が検査ファミリー面で空の文書を開き、`finding`／`skip`／`input` は
+// レポートのコマンド（void）。「checked = 全 family − failed − skipped」の
+// 導出と正準順（inputs は artifact 順・checked は一意化＋id 順・findings と
+// skipped はカタログ順）はレポートの不変条件——どのコマンドの後でも成立する。
+// 描画（finding detail の `${family}: ${detail}`、checked／skip target の
+// `check:${family}`）は CheckFamily の知識で、golden バイト凍結。unit は
+// functional センサーのみが持つ（finding／skip のキー順の末尾、凍結）。
+//
 // 入口は 3 つ：
-//   - compose      … 検査結果から新規に組む（正準ソートまでが構築の仕事）
+//   - open         … 検査ファミリーで空の文書を開く（検査はコマンドで書き込む）
 //   - degraded     … 契約不適合と判定された文書の降格形（理由文言は emitter＝
 //                    アダプタが組んで渡す。inputs は保持、内容は空になる——凍結挙動）
 //   - reconstitute … 書かれた真実（アダプタが型付きに解いた状態）からの再構成
 
-import { TargetIds } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetId, TargetIds } from "../../kernel/domain/index.ts";
+import type { CheckFamilies } from "./check-families.ts";
+import type { CheckFamily } from "./check-family.ts";
+import { Finding } from "./finding.ts";
 import { Findings } from "./findings.ts";
-import { Skips } from "./skips.ts";
+import type { InputAnchor } from "./input-anchor.ts";
 import { InputAnchors } from "./input-anchors.ts";
 import { ReferenceCheckReportId } from "./reference-check-report-id.ts";
+import { Skipped } from "./skipped.ts";
+import { Skips } from "./skips.ts";
+import type { UnitName } from "./unit-name.ts";
+import type { WitnessRef } from "./witness-ref.ts";
+import { WitnessRefs } from "./witness-refs.ts";
 
 
 export class ReferenceCheckReport {
   readonly #id: ReferenceCheckReportId;
-  readonly #inputs: InputAnchors;
-  readonly #checked: TargetIds;
-  readonly #findings: Findings;
-  readonly #skipped: Skips;
+  #inputs: InputAnchors;
+  #checked: TargetIds;
+  #findings: Findings;
+  #skipped: Skips;
   readonly #unavailableReason: string | null;
+  readonly #unit: UnitName | undefined;
 
   private constructor(
     id: ReferenceCheckReportId,
@@ -32,6 +50,7 @@ export class ReferenceCheckReport {
     findings: Findings,
     skipped: Skips,
     unavailableReason: string | null,
+    unit: UnitName | undefined,
   ) {
     this.#id = id;
     this.#inputs = inputs;
@@ -39,32 +58,27 @@ export class ReferenceCheckReport {
     this.#findings = findings;
     this.#skipped = skipped;
     this.#unavailableReason = unavailableReason;
+    this.#unit = unit;
   }
 
-  // 検査結果からの新規構築。正準ソート（inputs は artifact 順・checked は
-  // 一意化＋id 順・findings/skipped はカタログ順）は文書のドメイン的性質
-  // なのでここで確定する。
-  static compose(seed: {
-      readonly id: ReferenceCheckReportId;
-      readonly inputs: InputAnchors;
-      readonly checked: TargetIds;
-      readonly findings: Findings;
-      readonly skipped: Skips;
-  }): ReferenceCheckReport {
+  // 検査ファミリーで空の文書を開く。開いた時点では全 family が checked で、
+  // finding／skip がその family を checked から外していく（不変条件）。
+  static open(id: ReferenceCheckReportId, families: CheckFamilies, unit?: UnitName): ReferenceCheckReport {
     return new ReferenceCheckReport(
-      seed.id,
-      seed.inputs.sortedByArtifact(),
-      seed.checked.sortedUniqueCanonically(),
-      seed.findings.sortedCanonically(),
-      seed.skipped.sortedCanonically(),
+      id,
+      InputAnchors.of([]),
+      families.checkTargets().sortedUniqueCanonically(),
+      Findings.of([]),
+      Skips.of([]),
       null,
+      unit,
     );
   }
 
   // 契約不適合時の降格形。inputs は保持し内容を空にする（凍結挙動）。
   // 理由文言は emitter（アダプタ）が組んで渡す——ドメインは値として保持する。
   degraded(reason: string): ReferenceCheckReport {
-    return new ReferenceCheckReport(this.#id, this.#inputs, TargetIds.of([]), Findings.of([]), Skips.of([]), reason);
+    return new ReferenceCheckReport(this.#id, this.#inputs, TargetIds.of([]), Findings.of([]), Skips.of([]), reason, undefined);
   }
 
   // 書かれた真実からの再構成（Repository の読出側だけが使う）。書込時に
@@ -83,7 +97,40 @@ export class ReferenceCheckReport {
         seed.findings,
         seed.skipped,
         seed.unavailableReason,
+        undefined,
       );
+    }
+
+    // family の finding を記録する。detail は family prefix 付きで描画され、
+    // その family は checked から外れる。findings はカタログ順を保つ。
+    finding(family: CheckFamily, kind: string, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
+      this.#findings = this.#findings.add(Finding.reconstitute({
+        kind,
+        frRefs: FrRefs.of(frRefs).sortedUnique(),
+        targets: TargetIds.reconstitute(targets).sortedUniqueCanonically(),
+        witness: { refs: WitnessRefs.of(refs) },
+        detail: family.prefixedDetail(detail),
+        ...(this.#unit !== undefined ? { unit: this.#unit.asString() } : {}),
+      })).sortedCanonically();
+      this.#checked = this.#checked.excluding(TargetId.reconstitute(family.asCheckTarget()));
+    }
+
+    // family の skip を記録する。その family は checked から外れる。
+    // skipped は target → reason の正準順を保つ。
+    skip(family: CheckFamily, reason: string, detail: string): void {
+      this.#skipped = this.#skipped.add(Skipped.reconstitute({
+        target: family.asCheckTarget(),
+        reason,
+        detail,
+        ...(this.#unit !== undefined ? { unit: this.#unit.asString() } : {}),
+      })).sortedCanonically();
+      this.#checked = this.#checked.excluding(TargetId.reconstitute(family.asCheckTarget()));
+    }
+
+    // 検査が読んだ文書をアンカーとして記録する。inputs は artifact 順を保つ
+    // （irHash の材料になる凍結正準形）。
+    input(anchor: InputAnchor): void {
+      this.#inputs = this.#inputs.add(anchor).sortedByArtifact();
     }
 
     id(): ReferenceCheckReportId {

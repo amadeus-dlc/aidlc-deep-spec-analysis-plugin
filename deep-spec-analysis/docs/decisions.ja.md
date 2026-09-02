@@ -1822,3 +1822,15 @@ golden はバイト同一。
 `VerificationStaleness`・`SolverAvailability`・`InstalledStatus`）は domain に
 残る。プリミティブ台帳の記述子 16 件が一緒に domain を出て（上限 66）、doctor の
 JSON はバイト同一。
+
+波 38（同 PR）: 裁定 14 が着地——`CheckFamilyLedger` が集約ルート
+`ReferenceCheckReport` へ溶ける。レポートが書き込み側で、`open(id, families,
+unit)` が全 family を checked にした空の文書を開き、`finding`・`skip`・`input`
+がそのコマンドになる。「checked = 全 family − failed − skipped」の不変条件は
+コマンド自身が守り（finding／skip はその family を checked から外す）、正準順
+（inputs は artifact 順・checked は一意化＋id 順・findings と skipped はカタログ
+順）も同様——忘れうる `compose` の手順はもうない。3 つの検査材料はレポートに
+対して走り（`runChecks(report)`）、usecase はレポートを開いて検査を走らせ
+inputs を記録する。`CheckFamilies.checkTargets` が台帳の集合演算に代わり、
+kernel は `TargetIds.excluding` を出す。golden はバイト同一、プリミティブ台帳は
+変わらない（上限 66）。

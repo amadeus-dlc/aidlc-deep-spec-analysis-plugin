@@ -4,7 +4,7 @@
 import { TargetIds } from "../../kernel/domain/index.ts";
 import { CheckFamily } from "./check-family.ts";
 import { CheckFamilies } from "./check-families.ts";
-import type { CheckFamilyLedger } from "./check-family-ledger.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { ContractRows } from "./contract-rows.ts";
 import { type UnitDecls } from "./unit-decls.ts";
 import { WitnessRef } from "./witness-ref.ts";
@@ -26,7 +26,7 @@ function runContractChecksImpl(materials: {
   readonly declaredUnits: DeclaredUnitsOutcome;
   readonly contractsTable: ContractsTableOutcome;
   readonly specBlocks: SpecBlockAssessments;
-  }, ledger: CheckFamilyLedger): void {
+  }, report: ReferenceCheckReport): void {
   const artifact = materials.artifact.asString();
   const depArtifact = materials.depArtifact.asString();
   const ref = (art: string, element: string, value?: string): WitnessRef =>
@@ -35,13 +35,13 @@ function runContractChecksImpl(materials: {
   // --- declared units (unit-of-work-dependency.md edge block) --------------
   const units: UnitDecls | null = materials.declaredUnits.match({
     absent: () => {
-      ledger.skip(CD_1, "absent-input", "unit-of-work-dependency.md is not present under this intent record — declared units are unknown");
-      ledger.skip(CD_3, "absent-input", "unit-of-work-dependency.md is not present under this intent record — the unit dependency DAG is unknown");
+      report.skip(CD_1, "absent-input", "unit-of-work-dependency.md is not present under this intent record — declared units are unknown");
+      report.skip(CD_3, "absent-input", "unit-of-work-dependency.md is not present under this intent record — the unit dependency DAG is unknown");
       return null;
     },
     unrecognized: (error) => {
-      ledger.skip(CD_1, "unrecognized-format", `unit-of-work-dependency.md carries no parseable \`units:\` edge block${error ? ` (${error})` : ""}`);
-      ledger.skip(CD_3, "unrecognized-format", "blocked: the units edge block is unusable");
+      report.skip(CD_1, "unrecognized-format", `unit-of-work-dependency.md carries no parseable \`units:\` edge block${error ? ` (${error})` : ""}`);
+      report.skip(CD_3, "unrecognized-format", "blocked: the units edge block is unusable");
       return null;
     },
     declared: (declaredUnits) => {
@@ -52,8 +52,8 @@ function runContractChecksImpl(materials: {
   // --- CD-1: contracts table -------------------------------------------------
   const rows: ContractRows | null = materials.contractsTable.match({
     absent: () => {
-      if (units !== null) ledger.skip(CD_1, "unrecognized-format", "no markdown table with a Provider column found");
-      ledger.skip(CD_3, "unrecognized-format", "no contracts table — DAG edge coverage cannot be checked");
+      if (units !== null) report.skip(CD_1, "unrecognized-format", "no markdown table with a Provider column found");
+      report.skip(CD_3, "unrecognized-format", "no contracts table — DAG edge coverage cannot be checked");
       return null;
     },
     rows: (tableRows) => {
@@ -62,17 +62,17 @@ function runContractChecksImpl(materials: {
         for (const row of tableRows) {
           const el = row.locationLabel();
           if (!row.provider().isBlank() && !declared.declares(row.provider().asString())) {
-            ledger.finding(CD_1, "reference-broken", [`contract:${row.id().asString()}`, TargetIds.safe("unit", row.provider().asString())],
+            report.finding(CD_1, "reference-broken", [`contract:${row.id().asString()}`, TargetIds.safe("unit", row.provider().asString())],
               [ref(artifact, el, row.provider().asString()), ref(depArtifact, "units")],
               `Provider Unit "${row.provider().asString()}" is not a declared unit`);
           }
           if (!row.consumer().isBlank() && !declared.declares(row.consumer().asString()) && !row.consumer().declaresExternal()) {
-            ledger.finding(CD_1, "reference-broken", [`contract:${row.id().asString()}`, TargetIds.safe("unit", row.consumer().asString())],
+            report.finding(CD_1, "reference-broken", [`contract:${row.id().asString()}`, TargetIds.safe("unit", row.consumer().asString())],
               [ref(artifact, el, row.consumer().asString()), ref(depArtifact, "units")],
               `Consumer "${row.consumer().asString()}" is neither a declared unit nor \`External: …\``);
           }
           if (!row.owner().isBlank() && !declared.declares(row.owner().asString())) {
-            ledger.finding(CD_1, "reference-broken", [`contract:${row.id().asString()}`, TargetIds.safe("unit", row.owner().asString())],
+            report.finding(CD_1, "reference-broken", [`contract:${row.id().asString()}`, TargetIds.safe("unit", row.owner().asString())],
               [ref(artifact, el, row.owner().asString()), ref(depArtifact, "units")],
               `Owner "${row.owner().asString()}" is not a declared unit`);
           }
@@ -89,14 +89,14 @@ function runContractChecksImpl(materials: {
     block.matchIssue({
       sound: () => {},
       unparseable: (error) => {
-        ledger.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el)],
+        report.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el)],
           `spec block does not parse in the supported YAML subset: ${error}`);
       },
       notAMapping: () => {
-        ledger.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el)], "spec block is not a YAML mapping");
+        report.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el)], "spec block is not a YAML mapping");
       },
       openapiWithoutPaths: () => {
-        ledger.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el, "openapi")],
+        report.finding(CD_2, "structure-invalid", [blockId], [ref(artifact, el, "openapi")],
           "OpenAPI spec block carries `openapi:` but no `paths:`");
       },
     });
@@ -110,7 +110,7 @@ function runContractChecksImpl(materials: {
       for (const dep of u.declaredDependencies(units)) {
         const depName = dep.asString();
         if (!rows.coversEdge(depName, uName)) {
-          ledger.finding(CD_3, "consistency-mismatch", [TargetIds.safe("unit", depName), TargetIds.safe("unit", uName)],
+          report.finding(CD_3, "consistency-mismatch", [TargetIds.safe("unit", depName), TargetIds.safe("unit", uName)],
             [ref(depArtifact, `units (${uName} depends_on ${depName})`), ref(artifact, "contracts table")],
             `unit dependency edge "${uName}" -> "${depName}" has no contracts-table row in either orientation`);
         }
@@ -150,7 +150,7 @@ export class ContractCheckMaterials {
     return new ContractCheckMaterials(seed);
   }
 
-  runChecks(ledger: CheckFamilyLedger): void {
-    runContractChecksImpl(this.#seed, ledger);
+  runChecks(report: ReferenceCheckReport): void {
+    runContractChecksImpl(this.#seed, report);
   }
 }
