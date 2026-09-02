@@ -432,8 +432,10 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
   const source = stripStrings(rawSource);
   const out: Violation[] = [];
   // 型引数付き（export interface X<T> {）も拾う——LoadedDocument<Outcome> が
-  // 抜けていた穴（種別規律の裁定 16、#71 波39）。
-  for (const m of source.matchAll(/^export interface (\w+)(?:<[^>]*>)?\s*(?:extends [\w<>, ]+)?\{([\s\S]*?)^\}/gm)) {
+  // 抜けていた穴（種別規律の裁定 16、#71 波39）。型引数の角括弧は 2 段まで
+  // ネストを追う（X<T extends Promise<string>>——レビュー指摘の回避経路）。
+  const typeParams = "(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?";
+  for (const m of source.matchAll(new RegExp(`^export interface (\\w+)${typeParams}\\s*(?:extends [\\w<>, ]+)?\\{([\\s\\S]*?)^\\}`, "gm"))) {
     const name = m[1] ?? "";
     if (name === "Expression") continue;
     if (!/^\s+\w+\([^)]*\):/m.test(m[2] ?? "")) {

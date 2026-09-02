@@ -188,6 +188,13 @@ describe("rule red/green examples (detection power proof)", () => {
   test("no-data-models-in-domain flags getter-only shapes outside the debt set", () => {
     expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  readonly a: string;\n}")).not.toHaveLength(0);
     expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n}")).toHaveLength(0);
+    // 型引数付き interface も data model（波39 で塞いだ穴）——ネストした型引数と
+    // extends 節を経由しても回避できない。
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T> {\n  readonly t: T;\n}")).not.toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T extends Promise<string>> {\n  readonly t: T;\n}")).not.toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T extends Map<string, Set<number>>> {\n  readonly t: T;\n}")).not.toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T extends Promise<string>> extends Bar<T> {\n  readonly t: T;\n}")).not.toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T extends Promise<string>> {\n  judge(t: T): boolean;\n}")).toHaveLength(0);
     expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { a: string };\n')).not.toHaveLength(0);
     expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { kind: "a" } | { kind: "b" };\n')).not.toHaveLength(0);
     expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = "a" | "b";\n')).toHaveLength(0);
