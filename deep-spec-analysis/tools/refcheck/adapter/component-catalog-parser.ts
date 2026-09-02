@@ -19,11 +19,7 @@ import {
   EntityName,
   EntityReferences,
 } from "../domain/index.ts";
-import type {
-  ComponentCatalogOutcome,
-  ComponentShapeError,
-  EntityReference,
-} from "../domain/index.ts";
+import { ComponentCatalogOutcome, ComponentShapeError, EntityReference, LineNumber } from "../domain/index.ts";
 
 function str(v: Json): string | null {
   return typeof v === "string" ? v : null;
@@ -33,18 +29,18 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
   const shapeErrors: ComponentShapeError[] = [];
   const comps: Component[] = [];
   if (!isObject(value) || !Array.isArray(value.components)) {
-    shapeErrors.push({ element: ElementPath.reconstitute("components"), detail: "top-level `components:` list is missing" });
+    shapeErrors.push(ComponentShapeError.reconstitute({ element: ElementPath.reconstitute("components"), detail: "top-level `components:` list is missing" }));
     return { comps: Components.of(comps), shapeErrors: ComponentShapeErrors.of(shapeErrors) };
   }
   value.components.forEach((raw, i) => {
     const element = `components[${i}]`;
     if (!isObject(raw)) {
-      shapeErrors.push({ element: ElementPath.reconstitute(element), detail: "component entry is not a mapping" });
+      shapeErrors.push(ComponentShapeError.reconstitute({ element: ElementPath.reconstitute(element), detail: "component entry is not a mapping" }));
       return;
     }
     const name = str(raw.name);
     if (name === null) {
-      shapeErrors.push({ element: ElementPath.reconstitute(`${element}.name`), detail: "component has no string `name`" });
+      shapeErrors.push(ComponentShapeError.reconstitute({ element: ElementPath.reconstitute(`${element}.name`), detail: "component has no string `name`" }));
       return;
     }
     const refs = (key: "depends_on" | "dependents"): ComponentRefs => {
@@ -70,11 +66,11 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
             const target = str(ref.entity);
             const ownedBy = str(ref.owned_by);
             if (target !== null && ownedBy !== null) {
-              references.push({
+              references.push(EntityReference.reconstitute({
                 entity: EntityName.reconstitute(target),
                 ownedBy: ComponentName.reconstitute(ownedBy),
                 element: ElementPath.reconstitute(`${element}.entities[${j}].references[${k}]`),
-              });
+              }));
             }
           });
         }
@@ -101,12 +97,12 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
 export function parseComponentCatalog(md: string): ComponentCatalogOutcome {
   const fences = extractFences(md, "yaml");
   if (fences.length !== 1) {
-    return { kind: "wrong-fence-count", found: fences.length };
+    return ComponentCatalogOutcome.wrongFenceCount(fences.length);
   }
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
-    return { kind: "unparseable", line: fences[0]?.line ?? 0, error: parsed.error };
+    return ComponentCatalogOutcome.unparseable(LineNumber.reconstitute(fences[0]?.line ?? 0), parsed.error);
   }
   const { comps, shapeErrors } = extractComponents(parsed.value ?? null);
-  return { kind: "extracted", components: comps, shapeErrors };
+  return ComponentCatalogOutcome.extracted(comps, shapeErrors);
 }

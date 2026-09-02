@@ -9,7 +9,7 @@ import {
   ContractCheckMaterials,
   ReferenceCheckReport,
   ReferenceCheckReportId,
-} from "../domain/index.ts";
+ DeclaredUnitsOutcome,} from "../domain/index.ts";
 import { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./port/design-record-repository.ts";
@@ -41,7 +41,7 @@ export class CheckContractSummaryUseCase {
     ContractCheckMaterials.of({
       artifact: ArtifactPath.reconstitute(record.value.target().artifact()),
       depArtifact: declaredUnits.artifactName,
-      declaredUnits: declaredUnits.document === null ? { kind: "absent" } : declaredUnits.document.outcome,
+      declaredUnits: declaredUnits.document === null ? DeclaredUnitsOutcome.absent() : declaredUnits.document.outcome,
       contractsTable,
       specBlocks,
     }).runChecks(ledger);

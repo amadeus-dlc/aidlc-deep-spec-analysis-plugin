@@ -56,6 +56,13 @@ import {
   ContractRows,
   LineNumber,
   SpecBlockAssessments,
+  SpecBlockAssessment,
+  DeclaredUnitsOutcome,
+  ContractsTableOutcome,
+  EntitiesOutcome,
+  RulesOutcome,
+  FunctionalSpecOutcome,
+  DomainEntitiesOutcome,
   UnitName,
   AttributeName,
   AttributeNames,
@@ -218,8 +225,8 @@ describe("skip branches the fixtures do not exercise", () => {
       ContractCheckMaterials.of({
         artifact: ArtifactPath.reconstitute("contract-summary.md"),
         depArtifact: ArtifactPath.reconstitute("unit-of-work-dependency.md"),
-        declaredUnits: { kind: "absent" },
-        contractsTable: { kind: "absent" },
+        declaredUnits: DeclaredUnitsOutcome.absent(),
+        contractsTable: ContractsTableOutcome.absent(),
         specBlocks: SpecBlockAssessments.of([]),
       }).runChecks(l), "contract-summary");
     const reasons = report.skipped().toArray().map((s) => `${s.target()}:${s.reason()}`);
@@ -233,12 +240,12 @@ describe("skip branches the fixtures do not exercise", () => {
       ContractCheckMaterials.of({
         artifact: ArtifactPath.reconstitute("contract-summary.md"),
         depArtifact: ArtifactPath.reconstitute("unit-of-work-dependency.md"),
-        declaredUnits: { kind: "unrecognized", error: "no yaml fence with a top-level `units:` list" },
-        contractsTable: { kind: "rows", rows: ContractRows.of([]) },
+        declaredUnits: DeclaredUnitsOutcome.unrecognized("no yaml fence with a top-level `units:` list"),
+        contractsTable: ContractsTableOutcome.rows(ContractRows.of([])),
         specBlocks: SpecBlockAssessments.of([
-          { index: BlockIndex.reconstitute(1), line: LineNumber.reconstitute(1), issue: { kind: "openapi-without-paths" } },
-          { index: BlockIndex.reconstitute(2), line: LineNumber.reconstitute(5), issue: { kind: "not-a-mapping" } },
-          { index: BlockIndex.reconstitute(3), line: LineNumber.reconstitute(9), issue: { kind: "unparseable", error: "line 1: x" } },
+          SpecBlockAssessment.openapiWithoutPaths(BlockIndex.reconstitute(1), LineNumber.reconstitute(1)),
+          SpecBlockAssessment.notAMapping(BlockIndex.reconstitute(2), LineNumber.reconstitute(5)),
+          SpecBlockAssessment.unparseable(BlockIndex.reconstitute(3), LineNumber.reconstitute(9), "line 1: x"),
         ]),
       }).runChecks(l), "contract-summary");
     const details = report.findings().toArray().map((f) => f.detail()).join("\n");
@@ -255,14 +262,14 @@ function functionalInput(overrides: Partial<Parameters<typeof FunctionalCheckMat
   return {
     unit: UnitName.reconstitute("u1"),
     entitiesArtifact: ArtifactPath.reconstitute("e.md"),
-    entities: { kind: "absent" },
+    entities: EntitiesOutcome.absent(),
     rulesArtifact: ArtifactPath.reconstitute("r.md"),
-    rules: { kind: "absent" },
+    rules: RulesOutcome.absent(),
     specArtifact: ArtifactPath.reconstitute("s.md"),
-    spec: { kind: "absent" },
+    spec: FunctionalSpecOutcome.absent(),
     requirementIdsKnown: null,
     componentsArtifact: ArtifactPath.reconstitute("components.md"),
-    domainEntities: { kind: "absent" },
+    domainEntities: DomainEntitiesOutcome.absent(),
     siblingUnits: SiblingUnitIndex.of(new Map()),
     ...overrides,
   };

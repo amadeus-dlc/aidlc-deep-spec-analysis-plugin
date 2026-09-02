@@ -105,7 +105,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
 
     // requirements.md は rules が使えるときだけ読む（凍結された取得条件）。
     const reqPath = recordRoot === null ? null : join(recordRoot, "inception", "requirements-analysis", "requirements.md");
-    const requirements = rules !== null && rules.outcome.kind === "extracted" && reqPath !== null
+    const requirements = rules !== null && rules.outcome.isExtracted() && reqPath !== null
       ? load(reqPath, (t) => RequirementIds.extractFrom(t))
       : null;
 
@@ -114,7 +114,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
 
     // 兄弟ユニットは components カタログが解析できたときだけ読む。
     const siblingTexts: { unit: string; path: string; text: string }[] = [];
-    if (components !== null && components.outcome.kind === "extracted" && recordRoot !== null) {
+    if (components !== null && components.outcome.isExtracted() && recordRoot !== null) {
       const constructionDir = join(recordRoot, "construction");
       for (const u of listSubdirectories(constructionDir)) {
         const p = join(constructionDir, u, "functional-design", "entities.md");
