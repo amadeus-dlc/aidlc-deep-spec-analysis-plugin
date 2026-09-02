@@ -14,7 +14,7 @@ import type { CheckFamily } from "./check-family.ts";
 import { type CheckFamilies } from "./check-families.ts";
 import { Findings } from "./findings.ts";
 import { Skips } from "./skips.ts";
-import type { Finding } from "./finding.ts";
+import { Finding } from "./finding.ts";
 import type { UnitName } from "./unit-name.ts";
 import { WitnessRefs } from "./witness-refs.ts";
 import type { WitnessRef } from "./witness-ref.ts";
@@ -38,15 +38,14 @@ export class CheckFamilyLedger {
   }
 
   finding(family: CheckFamily, kind: string, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
-    const f: Finding = {
+    this.#findings.push(Finding.reconstitute({
       kind,
       frRefs: FrRefs.of(IdOrder.sortedUnique(frRefs, IdOrder.compare)),
       targets: TargetIds.reconstitute(IdOrder.sortedUnique(targets, IdOrder.compare)),
       witness: { refs: WitnessRefs.of(refs) },
       detail: family.prefixedDetail(detail),
-    };
-    if (this.#unit !== undefined) f.unit = this.#unit.asString();
-    this.#findings.push(f);
+      ...(this.#unit !== undefined ? { unit: this.#unit.asString() } : {}),
+    }));
     this.#failed.add(family.asString());
   }
 

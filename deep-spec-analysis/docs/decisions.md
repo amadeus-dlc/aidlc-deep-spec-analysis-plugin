@@ -1642,3 +1642,20 @@ accessors. The refcheck target stays the namespaced string token (its
 own ledger material). 3 ledger entries reclaimed — the ledger holds 56 of
 122; `PRIMITIVE_FIELD_DEBT` keeps its total (the two ledgered `unit`
 fields merely change shape).
+
+Wave 18 (same PR): the finding records join `DesignFinding`.
+`VerificationFinding` (requirements) and `Finding` (refcheck) invert
+into commandable classes; each owns the material of its canonical
+order (`compareWithin` — the kind rank stays with the collection that
+owns the rank table, the record supplies the joined-targets and detail
+tie-breaks), the requirement finding owns `isKind` and `implicates`
+(the cross-check used to read `kind` and `targets.includes`), and the
+refcheck finding carries its witness refs behind `witnessRefs`. The
+quint / SMT interpretations, the cross-check and the refcheck ledger
+reconstitute; the serializers read through the accessors and
+reconstitute on parse. The tests project findings to plain records
+before comparing (bun's `toEqual` ignores `#private` fields), which
+also makes the frozen-wording assertions real rather than vacuous.
+2 ledger entries reclaimed — the ledger holds 54 of 122;
+`PRIMITIVE_FIELD_DEBT` keeps its total (three ledgered `kind` / `unit`
+fields change shape).

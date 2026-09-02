@@ -1484,3 +1484,16 @@ class に反転し、それぞれ正準順（`compareTo`——target、次いで
 トークンのまま（その台帳の材料面）。台帳から 3 エントリを回収し、残債は
 122 中 56。`PRIMITIVE_FIELD_DEBT` の総数は変わらない（台帳に載る `unit` 2 件
 が形を変えるだけ）。
+
+波 18（同 PR）: finding 記録が `DesignFinding` に並ぶ。`VerificationFinding`
+（requirements）と `Finding`（refcheck）が命令できる class に反転し、それぞれ
+正準順の材料（`compareWithin`——kind 順位表は順位表を所有するコレクションに
+残し、記録は targets の結合キーと detail の同順位比較を差し出す）を所有し、
+要件 finding は `isKind` と `implicates`（クロスチェックが `kind` と
+`targets.includes` を読んでいた判断）を、refcheck finding は witness ref 列を
+`witnessRefs` の内側に持つ。quint／SMT の解釈・クロスチェック・refcheck
+台帳は再構成し、シリアライザはアクセサで読んでパース時に再構成する。テスト
+は比較前に finding を平文へ射影する（bun の `toEqual` は `#private` を見ない）
+ので、凍結文言の検証も空振りでなく実のものになる。台帳から 2 エントリを
+回収し、残債は 122 中 54。`PRIMITIVE_FIELD_DEBT` の総数は変わらない（台帳に
+載る `kind`／`unit` 3 件が形を変える）。

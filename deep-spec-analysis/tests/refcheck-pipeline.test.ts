@@ -208,7 +208,7 @@ describe("skip branches the fixtures do not exercise", () => {
   test("an unparseable components yaml block is a DD-0 finding carrying the parser error", () => {
     const report = domainReport(COMPONENT_FAMILIES, (l) =>
       ComponentCheckMaterials.of({ outcome: parseComponentCatalog("```yaml\na: &x 1\n```\n"), artifact: ap("components.md") }).runChecks(l));
-    expect(report.findings().toArray()[0]?.detail).toContain("does not parse in the supported subset");
+    expect(report.findings().toArray()[0]?.detail()).toContain("does not parse in the supported subset");
     expect(report.skippedCount()).toBe(7);
   });
 
@@ -240,7 +240,7 @@ describe("skip branches the fixtures do not exercise", () => {
           { index: BlockIndex.reconstitute(3), line: LineNumber.reconstitute(9), issue: { kind: "unparseable", error: "line 1: x" } },
         ]),
       }).runChecks(l), "contract-summary");
-    const details = report.findings().toArray().map((f) => f.detail).join("\n");
+    const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain("CD-2: OpenAPI spec block carries `openapi:` but no `paths:`");
     expect(details).toContain("CD-2: spec block is not a YAML mapping");
     expect(details).toContain("CD-2: spec block does not parse in the supported YAML subset");
@@ -288,7 +288,7 @@ describe("functional branches the fixtures do not exercise", () => {
       spec: parseFunctionalSpecDocument("# no machines\n"),
       domainEntities: parseDomainEntitiesDocument("```yaml\nbroken: &x 1\n```\n"),
     });
-    const details = report.findings().toArray().map((f) => f.detail).join("\n");
+    const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain("FD-E1: yaml block does not parse in the supported subset");
     expect(details).toContain("FD-R1: top-level `rules:` list is missing");
     const reasons = report.skipped().toArray().map((s) => `${s.target()}:${s.reason()}`);
@@ -304,7 +304,7 @@ describe("functional branches the fixtures do not exercise", () => {
       entities: parseEntitiesDocument(twoFences),
       rules: parseRulesDocument(twoFences),
     });
-    const details = report.findings().toArray().map((f) => f.detail).join("\n");
+    const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain("FD-E1: entities.md must carry exactly one fenced yaml source-of-truth block (found 2)");
     expect(details).toContain("FD-R1: rules.md must carry exactly one fenced yaml source-of-truth block (found 2)");
   });
@@ -348,7 +348,7 @@ describe("functional branches the fixtures do not exercise", () => {
       entities: parseEntitiesDocument(entitiesMd),
       spec: parseFunctionalSpecDocument(specMd),
     });
-    const details = report.findings().toArray().map((f) => f.detail).join("\n");
+    const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain('FD-S1: state machine names entity "Ghost"');
     const reasons = report.skipped().toArray().map((s) => `${s.reason()}:${s.detail() ?? ""}`).join("\n");
     expect(reasons).toContain("choice/fork/join nodes are outside the supported stateDiagram subset");
@@ -388,7 +388,7 @@ describe("functional branches the fixtures do not exercise", () => {
       "",
     ].join("\n");
     const report = functionalReport({ entities: parseEntitiesDocument(md) });
-    const details = report.findings().toArray().map((f) => f.detail).join("\n");
+    const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain('entity "Order" is declared more than once');
     expect(details).toContain('attribute "Order.qty" is declared more than once');
     expect(details).toContain("declares allowed values but its type");
@@ -427,7 +427,7 @@ describe("functional branches the fixtures do not exercise", () => {
       rules: parseRulesDocument(rulesMd),
       requirementIdsKnown: RequirementIds.of(["FR-1"]),
     });
-    const details = report.findings().toArray().map((f) => f.detail).join("\n");
+    const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain('rule id "BR1.1" is declared more than once');
     expect(details).toContain('rule id "rogue" does not match BR{group}.{seq}');
     expect(details).toContain('applies-to "nothing here" does not resolve');
@@ -456,7 +456,7 @@ describe("functional branches the fixtures do not exercise", () => {
       rules: parseRulesDocument("```yaml\nrules:\n  - id: BR1.1\n    statement: s\n    category: validation\n    source: FR-9\n```\n"),
       spec: parseFunctionalSpecDocument("# prose only\n"),
     });
-    const details = report.findings().toArray().map((f) => f.detail).join("\n");
+    const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain("entity entry is not a mapping");
     expect(details).toContain("default 1 is below min 5");
     expect(details).toContain("relationship declares a cardinality but no direction");
@@ -464,7 +464,7 @@ describe("functional branches the fixtures do not exercise", () => {
     expect(reasons).toContain("check:FD-R3:absent-input");
 
     const broken = functionalReport({ rules: parseRulesDocument("```yaml\nrules: &x 1\n```\n") });
-    expect(broken.findings().toArray().map((f) => f.detail).join("\n"))
+    expect(broken.findings().toArray().map((f) => f.detail()).join("\n"))
       .toContain("FD-R1: yaml block does not parse in the supported subset");
     expect(broken.skipped().toArray().map((s) => `${s.target()}:${s.reason()}`)).toContain("check:FD-R4:unrecognized-format");
   });
@@ -480,7 +480,7 @@ describe("functional branches the fixtures do not exercise", () => {
     });
     const skipDetails = report.skipped().toArray().map((s) => s.detail() ?? "").join("\n");
     expect(skipDetails).toContain('no `### State Machine: Order` heading with a stateDiagram fence found');
-    const details = report.findings().toArray().map((f) => f.detail).join("\n");
+    const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain('domain-design declares attribute(s) audit_flag on "Order"');
   });
 
@@ -499,8 +499,8 @@ describe("functional branches the fixtures do not exercise", () => {
     const ledger = CheckFamilyLedger.of(CheckFamilies.reconstitute(["A-1", "A-2", "A-3"]), UnitName.reconstitute("u9"));
     ledger.finding(CheckFamily.reconstitute("A-1"), "structure-invalid", ["check:A-1"], [], "boom");
     ledger.skip(CheckFamily.reconstitute("A-2"), "absent-input", "gone");
-    expect(ledger.findings().toArray()[0]?.detail).toBe("A-1: boom");
-    expect(ledger.findings().toArray()[0]?.unit).toBe("u9");
+    expect(ledger.findings().toArray()[0]?.detail()).toBe("A-1: boom");
+    expect(ledger.findings().toArray()[0]?.unit()).toBe("u9");
     expect(ledger.skipped().toArray()[0]?.target()).toBe("check:A-2");
     expect(ledger.skipped().toArray()[0]?.unit()).toBe("u9");
     expect(ledger.checkedTargets().toStrings()).toEqual(["check:A-3"]);

@@ -53,14 +53,7 @@ export class Findings {
 
   sortedCanonically(): Findings {
     return new Findings(
-      [...this.#values].sort((a, b) => {
-        const kr = rankOf(a.kind) - rankOf(b.kind);
-        if (kr !== 0) return kr;
-        const ta = a.targets.joined(",");
-        const tb = b.targets.joined(",");
-        if (ta !== tb) return ta < tb ? -1 : 1;
-        return a.detail < b.detail ? -1 : a.detail > b.detail ? 1 : 0;
-      }),
+      [...this.#values].sort((a, b) => a.compareWithin(b, rankOf)),
     );
   }
 
