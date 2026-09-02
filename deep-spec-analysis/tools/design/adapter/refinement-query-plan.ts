@@ -242,7 +242,7 @@ export function buildRefinementQueries(
     compileSkips.push(DesignSkipped.reconstitute({ target: TargetId.reconstitute(target), reason: "compile-error", unit: u.name(), detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` }));
   };
 
-  const alphaCtx = plan.alphaContext();
+  const mappings = plan.attributeMappings();
   for (const [obId, st] of plan.sortedObligationStatuses()) {
     if (!st.isCheckable()) continue;
     const ob = req.obligationById(obId);
@@ -250,7 +250,7 @@ export function buildRefinementQueries(
     const assertion = ob.assertion();
     if (ob.isInvariantLike() && assertion !== undefined) {
       try {
-        const alphaP = alphaCtx.substitute(assertion, false);
+        const alphaP = mappings.substitute(assertion, false);
         const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP)})` }], modelVars);
         queries.push(q);
         pending.set(q.id, RefinementProbe.invariant(ObligationId.reconstitute(obId)));
@@ -263,7 +263,7 @@ export function buildRefinementQueries(
     if (event !== null) {
       const mapped = plan.mappedTransitionsOf(obId);
       try {
-        const alphaG = alphaCtx.substitute(event.guard, false);
+        const alphaG = mappings.substitute(event.guard, false);
         // enabledness：alpha(guard) は成り立つが、写像済み設計イベントが
         // ひとつも発火可能でない。
         const designGuards = mapped
@@ -292,10 +292,10 @@ export function buildRefinementQueries(
         const frameParts: string[] = [];
         for (const a of req.attributes().sortedByPath()) {
           if (assigned.covers(a.path().asString())) continue;
-          const eq = alphaCtx.equalityFor(a.path().asString());
+          const eq = mappings.equalityFor(a.path().asString());
           if (eq !== null) frameParts.push(smtOfExpr(ctx, eq));
         }
-        const fBar = smtOfExpr(ctx, alphaCtx.substitute(event.effect, false));
+        const fBar = smtOfExpr(ctx, mappings.substitute(event.effect, false));
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
           const ev = catalog.eventOf(designId.asString());
@@ -343,7 +343,7 @@ export function buildRefinementQueries(
       for (const [path, value] of sc.bindingEntriesCanonically()) {
         const lit: Expression = typeof value === "boolean" ? { op: "bool", value } : typeof value === "number" ? { op: "int", value } : { op: "enum", value };
         const constraint: Expression = { op: "eq", args: [{ op: "ref", path }, lit] };
-        parts.push(smtOfExpr(ctx, alphaCtx.substitute(constraint, false)));
+        parts.push(smtOfExpr(ctx, mappings.substitute(constraint, false)));
       }
       const q = assembleQuery(
         `rs:${scId}`,

@@ -45,7 +45,6 @@ import {
 } from "../tools/design/adapter/index.ts";
 import { VerifyDesignQuintUseCase, VerifyDesignSmtUseCase } from "../tools/design/usecase/index.ts";
 import {
-  AlphaContext,
   AlphaError,
   AttributeMappings,
   DesignEventCatalog,
@@ -367,13 +366,11 @@ describe("attribute mapping totality", () => {
 });
 
 describe("alpha substitution", () => {
-  const ctx = AlphaContext.of(
-    new Map<string, AttributeMapping>([
-      ["R.flag", wrapMapping(exprMapping("R.flag", "D.flag"))],
-      ["R.state", wrapMapping(enumMapping("R.state", "D.phase", { draft: "open", review: "open", done: "closed" }))],
-      ["R.none", wrapMapping({ kind: "unspecified", req: "R.none" })],
-    ]),
-  );
+  const ctx = AttributeMappings.of([
+    wrapMapping(exprMapping("R.flag", "D.flag")),
+    wrapMapping(enumMapping("R.state", "D.phase", { draft: "open", review: "open", done: "closed" })),
+    wrapMapping({ kind: "unspecified", req: "R.none" }),
+  ]);
 
   test("covers reports membership of the approved mapping index", () => {
     expect(ctx.covers("R.flag")).toBe(true);

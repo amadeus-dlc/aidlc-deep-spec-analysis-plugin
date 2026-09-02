@@ -565,7 +565,7 @@ export function primitiveFieldsOf(rawSource: string): string[] {
 
 // 台帳の記述子総数の上限。台帳が縮んだら下げる——上げる変更は裁定違反で、
 // 新しい負債を記述子ごと台帳へ足す抜け道を diff 上で可視化する（レビュー指摘）。
-export const PRIMITIVE_FIELD_DEBT_CEILING = 83;
+export const PRIMITIVE_FIELD_DEBT_CEILING = 82;
 
 export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([
   ["design/domain/br-reference-index.ts", new Set(["#ids: Set<string>"])],
@@ -601,7 +601,6 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["refcheck/domain/rules-outcome.ts", new Set(["#found: number"])],
   ["refcheck/domain/skipped.ts", new Set(["#target: string", "#unit: string | undefined"])],
   ["refcheck/domain/witness-ref.ts", new Set(["#artifact: string", "#element: string", "#value: string | undefined"])],
-  ["refinement/domain/alpha-context.ts", new Set(["#byReq: ReadonlyMap<string, AttributeMapping>"])],
   ["refinement/domain/design-assignments.ts", new Set(["#values: ReadonlyMap<string, Expression>"])],
   ["refinement/domain/design-event-catalog.ts", new Set(["#events: ReadonlyMap<string, DesignEvent>"])],
   ["refinement/domain/effect-assignments.ts", new Set(["#values: ReadonlyMap<string, Expression>"])],

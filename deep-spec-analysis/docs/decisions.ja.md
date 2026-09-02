@@ -1785,3 +1785,11 @@ refcheck の 4 つの名前 DP は `normalized()` でそれを返し、比較は
 doctor のユニット走査 record `FunctionalUnitFacts` も `FunctionalUnitScan` に
 なる。「事実」という語はドメインイベントのために空く。種別は値オブジェクト、
 golden はバイト同一。
+
+波 34（同 PR）: 裁定 10 が着地——`AlphaContext` がファーストクラスコレクション
+`AttributeMappings` へ溶ける。コレクションは要件属性パスによる検索（重複は
+最後の宣言が勝つ、凍結の索引挙動）、`covers`、alpha 置換（`substitute`——展開と
+参照の置換は要素へ委ねる）、抽象フレーム等式（`equalityFor`）を所有する。
+`AttributeMapping` はキーで引かれる要素なのでローカルエンティティ（`isFor`）。
+計画はコンパイラへ文脈ではなく `attributeMappings()` を渡す。索引フィールドが
+1 つプリミティブ台帳から消え（上限 82）、golden はバイト同一。
