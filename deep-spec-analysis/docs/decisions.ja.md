@@ -1812,3 +1812,13 @@ golden はバイト同一。
 `CoverageState` は 2 つのカバレッジ行が共有する DP（`match`）になる。
 `CheckExecutionMode` はもともとドメインオブジェクトではなく、refcheck の usecase
 入力へ移る。doctor の JSON はバイト同一。
+
+波 37（同 PR）: 裁定 22 が着地——doctor のリードモデルが domain 層を出る。
+`CoverageAssessment`・`UnitCoverage`・`StructuralDebt` とその行（`CoverageRow`・
+`UnitCoverageRow`・`RefinementStaleRow`・`DebtRow`）は presenter のために
+ワークスペースを畳み込んだ CQRS の投影なので `doctor/usecase/read-model/` に
+住み、usecase の facade が公開する。純粋な値オブジェクト（`Check`・
+`CheckSeverity`・`CoverageState`・`ManifestEntry`・`DigestAnchor`・
+`VerificationStaleness`・`SolverAvailability`・`InstalledStatus`）は domain に
+残る。プリミティブ台帳の記述子 16 件が一緒に domain を出て（上限 66）、doctor の
+JSON はバイト同一。

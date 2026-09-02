@@ -2,18 +2,10 @@
 // 判定書の checks 配列順・label/fix の部分文字列（install.ts が grep する
 // "no deep-spec verification" / "verification coverage" 等）は観測面。
 
+import { HealthVerdict, InstallationManifest, VerificationStaleness, CheckSeverity, CoverageState, Check, DigestAnchor, InstalledStatus, ManifestEntry, SolverAvailability } from "../tools/doctor/domain/index.ts";
+import { CoverageRow, DebtRow, RefinementStaleRow, UnitCoverageRow, CoverageAssessment, StructuralDebt, UnitCoverage, CheckFunctionalCoverageUseCase } from "../tools/doctor/usecase/index.ts";
 import { describe, expect, test } from "bun:test";
 import { ContentHash } from "../tools/kernel/domain/index.ts";
-import {
-  CoverageAssessment,
-  HealthVerdict,
-  InstallationManifest,
-  StructuralDebt,
-  UnitCoverage,
-  VerificationStaleness,
- CheckSeverity, CoverageState,} from "../tools/doctor/domain/index.ts";
-import { Check, CoverageRow, DebtRow, DigestAnchor, InstalledStatus, ManifestEntry, RefinementStaleRow, SolverAvailability, UnitCoverageRow } from "../tools/doctor/domain/index.ts";
-import { CheckFunctionalCoverageUseCase } from "../tools/doctor/usecase/index.ts";
 import type { DoctorWorkspaceClient } from "../tools/doctor/usecase/index.ts";
 import { DoctorPresenter } from "../tools/doctor/adapter/index.ts";
 

@@ -1,4 +1,5 @@
-import { DebtRow, StructuralDebt } from "../domain/index.ts";
+import { DebtRow } from "./read-model/debt-row.ts";
+import { StructuralDebt } from "./read-model/structural-debt.ts";
 import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 import type { RefcheckBackendClient } from "./port/refcheck-backend-client.ts";
 

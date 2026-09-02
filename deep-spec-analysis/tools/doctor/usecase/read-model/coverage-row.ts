@@ -1,4 +1,4 @@
-import type { CoverageState } from "./coverage-state.ts";
+import type { CoverageState } from "../../domain/index.ts";
 
 // 要件検証カバレッジの問題行——どの intent が、未検証か失効か。presenter は
 // 状態を `matchState` で解釈し、intent ラベルを行に作らせる（#71 波27）。

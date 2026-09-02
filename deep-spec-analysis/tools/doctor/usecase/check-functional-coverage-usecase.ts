@@ -1,4 +1,7 @@
-import { RefinementStaleRow, UnitCoverage, UnitCoverageRow , CoverageState} from "../domain/index.ts";
+import { CoverageState } from "../domain/index.ts";
+import { RefinementStaleRow } from "./read-model/refinement-stale-row.ts";
+import { UnitCoverage } from "./read-model/unit-coverage.ts";
+import { UnitCoverageRow } from "./read-model/unit-coverage-row.ts";
 import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 
 // 設計検証カバレッジの査定（checks 配列の第 5 ブロック、unit 粒度）＋

@@ -13,3 +13,11 @@ export { CheckSolversUseCase } from "./check-solvers-usecase.ts";
 export { CheckVerificationCoverageUseCase } from "./check-verification-coverage-usecase.ts";
 export { CheckStructuralDebtUseCase } from "./check-structural-debt-usecase.ts";
 export { CheckFunctionalCoverageUseCase } from "./check-functional-coverage-usecase.ts";
+// リードモデル（裁定 22）——クエリ側の投影。presenter が読む。
+export { CoverageRow } from "./read-model/coverage-row.ts";
+export { CoverageAssessment } from "./read-model/coverage-assessment.ts";
+export { DebtRow } from "./read-model/debt-row.ts";
+export { StructuralDebt } from "./read-model/structural-debt.ts";
+export { UnitCoverageRow } from "./read-model/unit-coverage-row.ts";
+export { RefinementStaleRow } from "./read-model/refinement-stale-row.ts";
+export { UnitCoverage } from "./read-model/unit-coverage.ts";

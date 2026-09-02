@@ -2044,3 +2044,14 @@ document) and `CoverageState` a domain primitive shared by the two
 coverage rows (`match`). `CheckExecutionMode` was never a domain object
 and moves to the refcheck use-case inputs. The doctor's JSON stays
 byte-identical.
+
+Wave 37 (same PR): ruling 22 lands — the doctor's read models leave the
+domain layer. `CoverageAssessment`, `UnitCoverage`, `StructuralDebt` and
+their rows (`CoverageRow`, `UnitCoverageRow`, `RefinementStaleRow`,
+`DebtRow`) are CQRS projections folded from the workspace for the
+presenter, so they now live under `doctor/usecase/read-model/` and are
+exported by the use-case facade; the pure value objects (`Check`,
+`CheckSeverity`, `CoverageState`, `ManifestEntry`, `DigestAnchor`,
+`VerificationStaleness`, `SolverAvailability`, `InstalledStatus`) stay in
+the domain. Sixteen primitive-field descriptors leave the domain ledger
+with them (ceiling 66); the doctor's JSON stays byte-identical.
