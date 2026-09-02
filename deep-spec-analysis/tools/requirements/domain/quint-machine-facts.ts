@@ -17,7 +17,7 @@ import type { VerificationFinding } from "./verification-finding.ts";
 import { type VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
-import type { InterpretedQuintVerdicts } from "./interpreted-quint-verdicts.ts";
+
 import { QuintMachineComponents } from "./quint-machine-components.ts";
 
 export class QuintMachineFacts {
@@ -63,7 +63,10 @@ export class QuintMachineFacts {
     compileSkips: VerificationSkips,
     method: string,
     runs: QuintRuns,
-  ): InterpretedQuintVerdicts {
+  ): {
+    findings: VerificationFindings;
+    skipped: VerificationSkips;
+  } {
     const bounded = method === "bounded";
     const findings: VerificationFinding[] = [];
     const skipped: VerificationSkipped[] = [...compileSkips.toArray()];

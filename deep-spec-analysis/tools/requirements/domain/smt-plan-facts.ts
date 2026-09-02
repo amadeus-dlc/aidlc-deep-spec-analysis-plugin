@@ -13,12 +13,8 @@ import type { VerificationFinding } from "./verification-finding.ts";
 import { type VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
-import type { InterpretedVerdicts } from "./interpreted-verdicts.ts";
+
 import { SmtEventPairProbes } from "./smt-event-pair-probes.ts";
-
-
-
-
 
 export class SmtPlanFacts {
   readonly #compiled: ReadonlyMap<string, boolean>;
@@ -68,7 +64,10 @@ export class SmtPlanFacts {
   }
 
   // 旧 interpretSmtVerdicts の逐語移植。
-  interpret(model: RequirementsModel, results: SmtQueryVerdicts): InterpretedVerdicts {
+  interpret(model: RequirementsModel, results: SmtQueryVerdicts): {
+    findings: VerificationFindings;
+    skipped: VerificationSkips;
+  } {
     const findings: VerificationFinding[] = [];
     const skipped: VerificationSkipped[] = [...this.#skipped.toArray()];
     const conflictKeys = new Set<string>();

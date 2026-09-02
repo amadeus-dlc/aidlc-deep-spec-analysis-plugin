@@ -14,14 +14,6 @@ import type { DesignReportId } from "./design-report-id.ts";
 import { CheckedUnits } from "./checked-units.ts";
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignInputAnchors } from "./design-input-anchors.ts";
-import type { DesignReportComposition } from "./design-report-composition.ts";
-
-
-
-
-
-
-
 
 export const SUPPORTED_DESIGN_IR_MAJOR = 1;
 
@@ -121,7 +113,18 @@ export class DesignReport {
     });
   }
 
-  static compose(input: DesignReportComposition): DesignReport {
+  static compose(input: {
+    readonly id: DesignReportId;
+    readonly irVersion: IrVersion;
+    readonly irHash: ContentHash;
+    readonly method: string;
+    readonly findings: DesignFindings;
+    readonly skipped: DesignSkips;
+    readonly inputs?: DesignInputAnchors;
+    readonly checked?: CheckedUnits;
+    readonly crossChecked?: DesignCrossCheckedEntries;
+    readonly unavailableReason?: string;
+  }): DesignReport {
     return new DesignReport({
       id: input.id,
       irVersion: input.irVersion,

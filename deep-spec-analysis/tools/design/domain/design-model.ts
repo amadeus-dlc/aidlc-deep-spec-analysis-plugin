@@ -5,8 +5,6 @@
 import type { DesignModelId } from "./design-model-id.ts";
 import type { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import { DesignUnits } from "./design-units.ts";
-import type { DesignModelComposition } from "./design-model-composition.ts";
-
 
 export class DesignModel {
   readonly #id: DesignModelId;
@@ -15,7 +13,15 @@ export class DesignModel {
   readonly #irVersion: IrVersion;
   readonly #units: DesignUnits;
 
-  private constructor(input: DesignModelComposition, units: DesignUnits) {
+  private constructor(input: {
+    readonly id: DesignModelId;
+    // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
+    readonly irHash: ContentHash;
+    // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。
+    readonly sourceDocument: Uint8Array;
+    readonly irVersion: IrVersion;
+    readonly units: DesignUnits;
+  }, units: DesignUnits) {
     this.#id = input.id;
     this.#irHash = input.irHash;
     this.#sourceDocument = new Uint8Array(input.sourceDocument);
@@ -24,7 +30,15 @@ export class DesignModel {
   }
 
   // ユニット名昇順を不変条件としてここで一度だけ適用する。
-  static compose(input: DesignModelComposition): DesignModel {
+  static compose(input: {
+    readonly id: DesignModelId;
+    // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
+    readonly irHash: ContentHash;
+    // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。
+    readonly sourceDocument: Uint8Array;
+    readonly irVersion: IrVersion;
+    readonly units: DesignUnits;
+  }): DesignModel {
     return new DesignModel(input, input.units.sortedByName());
   }
 

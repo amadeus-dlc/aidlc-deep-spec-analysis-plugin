@@ -11,7 +11,7 @@ import { DesignFinding, DesignFindings, DesignSkips } from "../../design/domain/
 import type { DesignSkipped } from "../../design/domain/index.ts";
 import { type UnitRefinementPlan } from "./unit-refinement-plan.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
-import type { InterpretedRefinementVerdicts } from "./interpreted-refinement-verdicts.ts";
+
 import type { RefinementProbe } from "./refinement-probe.ts";
 import { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
 
@@ -46,7 +46,10 @@ export class RefinementSolverFacts {
     req: RefinementRequirements,
     plan: UnitRefinementPlan,
     unitName: string,
-  ): InterpretedRefinementVerdicts {
+  ): {
+    findings: DesignFindings;
+    skipped: DesignSkips;
+  } {
     const findings: DesignFinding[] = [];
     const skipped: DesignSkipped[] = [];
     const frOf = (reqId: string): string[] => IdOrder.sortedUnique([...req.frRefsOf(reqId)], IdOrder.compare);

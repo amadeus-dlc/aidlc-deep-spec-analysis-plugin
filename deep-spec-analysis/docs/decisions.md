@@ -1610,3 +1610,17 @@ tests) name the door's parameter type instead. Seven of the seeds also
 carried ledgered primitive fields, so `PRIMITIVE_FIELD_DEBT` sheds their
 descriptors (ceiling 104 → 93). 25 ledger entries reclaimed — the ledger
 holds 66 of 122.
+
+Wave 16 (same PR): the single-reader shapes dissolve the same way. The
+three `Interpreted*Verdicts` return types, the two report
+`*Composition` door types, `DesignModelComposition` and `RemappedUnit`
+each had exactly one reader in their own layer; each becomes the inline
+signature of that reader (the interpretation's return type, the
+`compose` door, the remap's return type), the design-model parser and
+its pipeline test name `DesignModel.compose`'s parameter type, and the
+files and facade exports go. Three of them carried a ledgered `method`
+string, so `PRIMITIVE_FIELD_DEBT` sheds those descriptors (ceiling 93 →
+90). 7 ledger entries reclaimed — the ledger holds 59 of 122. What
+remains on it is record-shaped and multi-reader (findings, skips,
+witnesses, anchors, rows, outcomes, verdict unions), the material for
+commandable waves rather than dissolution.

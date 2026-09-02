@@ -22,7 +22,7 @@ import { DesignSkips } from "./design-skips.ts";
 import { DesignFinding } from "./design-finding.ts";
 import { type DesignSkipped } from "./design-skipped.ts";
 import type { DesignValue } from "./design-value.ts";
-import { type RemappedUnit } from "./remapped-unit.ts";
+
 import { type SiblingVerdictDocument } from "./sibling-verdict-document.ts";
 import type { LoweredBackground } from "./lowered-background.ts";
 import { LoweredBackgrounds } from "./lowered-backgrounds.ts";
@@ -34,15 +34,6 @@ import { LoweredOriginRef } from "./lowered-origin-ref.ts";
 import type { LoweredScenario } from "./lowered-scenario.ts";
 import { LoweredScenarios } from "./lowered-scenarios.ts";
 import { LoweringIndex } from "./lowering-index.ts";
-
-
-
-
-
-
-
-
-
 
 // lowering の結果（3 コレクション + 帰属索引）。構築（旧 lowerUnit）・
 // refinement 追加パスによる不変拡張・v1 判定の設計語彙への remap（旧
@@ -92,7 +83,12 @@ export class LoweredUnit {
 
   // remap — lowered v1 判定を設計語彙（DOB/TR/SM/DSC id・unit 帰属）へ写す。
   // 旧 remapUnitDocument の逐語移植。
-  remapVerdicts(u: DesignUnit, doc: SiblingVerdictDocument): RemappedUnit {
+  remapVerdicts(u: DesignUnit, doc: SiblingVerdictDocument): {
+    readonly findings: DesignFindings;
+    readonly skipped: DesignSkips;
+    unavailable: string | null;
+    method: string | null;
+  } {
     if (doc.kind === "unreadable") {
       return { findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: "sibling backend produced no findings document", method: null };
     }
@@ -222,16 +218,10 @@ export class LoweredUnit {
   }
 }
 
-
-
-
 // SMT 変数名は設計 id の英数字化（remap の witness core 書き換えと同じ規則）。
 function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
-
-
-
 
 function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   obligations: LoweredObligations;
