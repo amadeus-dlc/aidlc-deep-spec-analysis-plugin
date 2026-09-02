@@ -4,7 +4,8 @@
 // なった（OOUI 裁定）。
 
 import type { Expression } from "../../kernel/domain/index.ts";
-import { AlphaError } from "./alpha-error.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import { RefinementMapDefect } from "./refinement-map-defect.ts";
 
 export class EffectAssignments {
   readonly #values: ReadonlyMap<string, Expression>;
@@ -13,8 +14,8 @@ export class EffectAssignments {
     this.#values = values;
   }
 
-  // 効果式を分解して構築する。連言の primed 代入以外は AlphaError（凍結文言）。
-  static ofEffect(effect: Expression): EffectAssignments {
+  // 効果式を分解して構築する。連言の primed 代入以外は地図の欠陥（凍結文言）。
+  static ofEffect(effect: Expression): Result<EffectAssignments, RefinementMapDefect> {
     const assignments = new Map<string, Expression>();
     const terms: Expression[] = [];
     const flatten = (e: Expression): void => {
@@ -23,13 +24,13 @@ export class EffectAssignments {
     };
     flatten(effect);
     for (const term of terms) {
-      if (term.op !== "eq") throw new AlphaError("requirements effect is not a conjunction of primed assignments");
+      if (term.op !== "eq") return err(RefinementMapDefect.effectNotAssignmentConjunction());
       const [a, b] = term.args ?? [];
       const target = a?.op === "ref" && a.prime === true ? a : b?.op === "ref" && b.prime === true ? b : null;
-      if (!target || typeof target.path !== "string") throw new AlphaError("requirements effect is not a conjunction of primed assignments");
+      if (!target || typeof target.path !== "string") return err(RefinementMapDefect.effectNotAssignmentConjunction());
       assignments.set(target.path, term);
     }
-    return new EffectAssignments(assignments);
+    return ok(new EffectAssignments(assignments));
   }
 
   covers(path: string): boolean {

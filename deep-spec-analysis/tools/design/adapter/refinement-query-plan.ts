@@ -12,7 +12,11 @@ import type { RefinementAttr } from "./refinement-attr.ts";
 // 旧 refinement-lib の designSmtCtx / smtOfExpr / designBase / assembleQuery /
 // decodeDesignModel とクエリ構築部からの逐語移植。
 
-import { ObligationId, ScenarioId } from "../../refinement/domain/index.ts";
+import {
+  ObligationId,
+  ScenarioId,
+  type RefinementMapDefect,
+} from "../../refinement/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { smtIntOf, smtLit, smtName, smtVar } from "../../kernel/adapter/index.ts";
 import { DesignSkips } from "../domain/index.ts";
@@ -238,9 +242,12 @@ export function buildRefinementQueries(
   const queries: RefinementChildQuery[] = [];
   const pending = new Map<string, RefinementProbe>();
   const compileSkips: DesignSkipped[] = [];
-  const alphaFail = (target: string, err: unknown): void => {
-    compileSkips.push(DesignSkipped.reconstitute({ target: TargetId.reconstitute(target), reason: "compile-error", unit: u.name(), detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` }));
+  // alpha 置換の欠陥（RefinementMapDefect）と SMT コンパイル失敗（例外）は同じ
+  // 凍結文言の compile-error skip に落ちる。
+  const alphaFail = (target: string, message: string): void => {
+    compileSkips.push(DesignSkipped.reconstitute({ target: TargetId.reconstitute(target), reason: "compile-error", unit: u.name(), detail: `alpha substitution failed: ${message}` }));
   };
+  const failureMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
   const mappings = plan.attributeMappings();
   for (const [obId, st] of plan.sortedObligationStatuses()) {
@@ -249,21 +256,29 @@ export function buildRefinementQueries(
     if (!ob) continue;
     const assertion = ob.assertion();
     if (ob.isInvariantLike() && assertion !== undefined) {
+      const alphaP = mappings.substitute(assertion, false);
+      if (!alphaP.ok) {
+        alphaFail(obId, alphaP.error.message());
+        continue;
+      }
       try {
-        const alphaP = mappings.substitute(assertion, false);
-        const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP)})` }], modelVars);
+        const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP.value)})` }], modelVars);
         queries.push(q);
         pending.set(q.id, RefinementProbe.invariant(ObligationId.reconstitute(obId)));
       } catch (err) {
-        alphaFail(obId, err);
+        alphaFail(obId, failureMessage(err));
       }
       continue;
     }
     const event = ob.eventDefinition();
     if (event !== null) {
       const mapped = plan.mappedTransitionsOf(obId);
+      const alphaG = mappings.substitute(event.guard, false);
+      if (!alphaG.ok) {
+        alphaFail(obId, alphaG.error.message());
+        continue;
+      }
       try {
-        const alphaG = mappings.substitute(event.guard, false);
         // enabledness：alpha(guard) は成り立つが、写像済み設計イベントが
         // ひとつも発火可能でない。
         const designGuards = mapped
@@ -276,7 +291,7 @@ export function buildRefinementQueries(
           pre.decls,
           [
             ...pre.constraints,
-            { name: smtName("ag", obId), smt: smtOfExpr(ctx, alphaG) },
+            { name: smtName("ag", obId), smt: smtOfExpr(ctx, alphaG.value) },
             { name: smtName("ne", obId), smt: notEnabled },
           ],
           modelVars,
@@ -288,14 +303,24 @@ export function buildRefinementQueries(
         // が成り立つところで踏んだ 1 歩の抽象 post が、要件効果か抽象フレーム
         // （Q2：未代入の要件属性は抽象値を保つ。unmapped 属性のフレーム等式は
         // 検査不能なので省く）に反する。
-        const assigned = EffectAssignments.ofEffect(event.effect);
+        const decomposed = EffectAssignments.ofEffect(event.effect);
+        if (!decomposed.ok) {
+          alphaFail(obId, decomposed.error.message());
+          continue;
+        }
+        const assigned = decomposed.value;
         const frameParts: string[] = [];
         for (const a of req.attributes().sortedByPath()) {
           if (assigned.covers(a.path().asString())) continue;
           const eq = mappings.equalityFor(a.path().asString());
           if (eq !== null) frameParts.push(smtOfExpr(ctx, eq));
         }
-        const fBar = smtOfExpr(ctx, mappings.substitute(event.effect, false));
+        const alphaF = mappings.substitute(event.effect, false);
+        if (!alphaF.ok) {
+          alphaFail(obId, alphaF.error.message());
+          continue;
+        }
+        const fBar = smtOfExpr(ctx, alphaF.value);
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
           const ev = catalog.eventOf(designId.asString());
@@ -320,7 +345,7 @@ export function buildRefinementQueries(
               ...pre.constraints,
               ...post.constraints,
               { name: smtName("step", designId.asString()), smt: `(and ${stepParts.join(" ")})` },
-              { name: smtName("ag2", obId), smt: smtOfExpr(ctx, alphaG) },
+              { name: smtName("ag2", obId), smt: smtOfExpr(ctx, alphaG.value) },
               { name: smtName("viol", obId), smt: `(not ${postCond})` },
             ],
             modelVarsBoth,
@@ -329,7 +354,7 @@ export function buildRefinementQueries(
           pending.set(qs.id, RefinementProbe.simulation(ObligationId.reconstitute(obId), designId));
         }
       } catch (err) {
-        alphaFail(obId, err);
+        alphaFail(obId, failureMessage(err));
       }
     }
   }
@@ -338,12 +363,22 @@ export function buildRefinementQueries(
     if (!st.isCheckable()) continue;
     const sc = req.scenarioById(scId);
     if (!sc) continue;
+    let defect: RefinementMapDefect | null = null;
     try {
       const parts: string[] = [];
       for (const [path, value] of sc.bindingEntriesCanonically()) {
         const lit: Expression = typeof value === "boolean" ? { op: "bool", value } : typeof value === "number" ? { op: "int", value } : { op: "enum", value };
         const constraint: Expression = { op: "eq", args: [{ op: "ref", path }, lit] };
-        parts.push(smtOfExpr(ctx, mappings.substitute(constraint, false)));
+        const bound = mappings.substitute(constraint, false);
+        if (!bound.ok) {
+          defect = bound.error;
+          break;
+        }
+        parts.push(smtOfExpr(ctx, bound.value));
+      }
+      if (defect !== null) {
+        alphaFail(scId, defect.message());
+        continue;
       }
       const q = assembleQuery(
         `rs:${scId}`,
@@ -354,7 +389,7 @@ export function buildRefinementQueries(
       queries.push(q);
       pending.set(q.id, RefinementProbe.scenario(ScenarioId.reconstitute(scId)));
     } catch (err) {
-      alphaFail(scId, err);
+      alphaFail(scId, failureMessage(err));
     }
   }
 

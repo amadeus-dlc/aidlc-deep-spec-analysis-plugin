@@ -8,7 +8,8 @@ import { ReqAttributeValues } from "./req-attribute-values.ts";
 
 import { ExpressionTree, type Expression } from "../../kernel/domain/index.ts";
 import { type AttributePath } from "../../requirements/domain/index.ts";
-import { AlphaError } from "./alpha-error.ts";
+import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import { RefinementMapDefect } from "./refinement-map-defect.ts";
 
 type Variant =
   | { readonly kind: "expression"; readonly expr: Expression }
@@ -84,18 +85,18 @@ export class AttributeMapping {
   }
 
   // 素の参照への代入（旧 alphaExpr の ref 分岐）。enum-cases は eq/ne の外では
-  // 不適法、unspecified は材料なし——いずれも凍結文言の AlphaError（旧実装の
+  // 不適法、unspecified は材料なし——いずれも凍結文言の RefinementMapDefect（旧実装の
   // TypeError 落ちを材料つきに置き換えた意図的逸脱を保存する）。
-  substituteForReference(reqPath: string, primed: boolean): Expression {
+  substituteForReference(reqPath: string, primed: boolean): Result<Expression, RefinementMapDefect> {
     const variant = this.#variant;
     if (variant.kind === "enum-cases") {
-      throw new AlphaError(`enum-mapped requirements attribute "${reqPath}" is only legal inside eq/ne against an enum literal`);
+      return err(RefinementMapDefect.enumMappingOutsideEquality(reqPath));
     }
     if (variant.kind === "unspecified") {
-      throw new AlphaError(`attrMap entry for "${reqPath}" declares neither an expression nor enum cases`);
+      return err(RefinementMapDefect.unspecifiedMapping(reqPath));
     }
     const substituted = variant.expr;
-    return primed ? primeAll(substituted) : substituted;
+    return ok(primed ? primeAll(substituted) : substituted);
   }
 
   // 抽象フレーム等式（旧 alphaEquality）: alpha(a)(pre) == alpha(a)(post)。

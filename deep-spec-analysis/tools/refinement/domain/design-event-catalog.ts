@@ -31,13 +31,14 @@ export class DesignEventCatalog {
         effectAssign.set(...tr.stateAssignment(attrPath));
         const explicitEffect = tr.effect();
         if (explicitEffect !== undefined) {
-          try {
-            for (const [path, term] of EffectAssignments.ofEffect(explicitEffect)) {
+          const assigned = EffectAssignments.ofEffect(explicitEffect);
+          if (assigned.ok) {
+            for (const [path, term] of assigned.value) {
               const [a, b] = term.args ?? [];
               const rhs = a?.op === "ref" && a.prime === true ? b : a;
               if (rhs) effectAssign.set(path, rhs);
             }
-          } catch {
+          } else {
             // コンパイルできない追加効果：設計パスが報告する。この遷移の
             // シミュレーションは下流の SMT コンパイルで fail closed になる。
           }
@@ -49,14 +50,13 @@ export class DesignEventCatalog {
       const event = ob.guardedEffect();
       if (event === null) continue;
       const effectAssign = new Map<string, Expression>();
-      try {
-        for (const [path, term] of EffectAssignments.ofEffect(event.effect)) {
-          const [a, b] = term.args ?? [];
-          const rhs = a?.op === "ref" && a.prime === true ? b : a;
-          if (rhs) effectAssign.set(path, rhs);
-        }
-      } catch {
-        continue;
+      const assigned = EffectAssignments.ofEffect(event.effect);
+      // 分解不能な event 義務はカタログに載らない（凍結挙動）。
+      if (!assigned.ok) continue;
+      for (const [path, term] of assigned.value) {
+        const [a, b] = term.args ?? [];
+        const rhs = a?.op === "ref" && a.prime === true ? b : a;
+        if (rhs) effectAssign.set(path, rhs);
       }
       out.set(ob.id().asString(), DesignEvent.of(event.guard, DesignAssignments.of(effectAssign)));
     }

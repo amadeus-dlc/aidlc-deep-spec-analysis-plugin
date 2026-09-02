@@ -1793,3 +1793,13 @@ golden はバイト同一。
 `AttributeMapping` はキーで引かれる要素なのでローカルエンティティ（`isFor`）。
 計画はコンパイラへ文脈ではなく `attributeMappings()` を渡す。索引フィールドが
 1 つプリミティブ台帳から消え（上限 82）、golden はバイト同一。
+
+波 35（同 PR）: 裁定 15 が着地——`AlphaError` はユビキタス言語で名づけたドメイン
+エラー型 `RefinementMapDefect` になり、`Result` の値で運ばれる。4 つのバリアント
+は執筆ガイドが語る地図の欠陥そのもの——属性が未カバー、enum 写像が等式の外で
+使われた、写像が未指定、効果が prime 代入の連言でない。各バリアントは凍結文言を
+描画し、公開の面（`asCompileErrorSkip`——凍結文言の compile-error skip）を知る。
+`AttributeMappings.substitute`・`AttributeMapping.substituteForReference`・
+`EffectAssignments.ofEffect` は投げる代わりに欠陥を返し、計画・イベント
+カタログ・クエリ構築は `ok` で分岐する。構築側の try/catch は SMT コンパイラ
+自身の失敗にだけ残る。golden はバイト同一。
