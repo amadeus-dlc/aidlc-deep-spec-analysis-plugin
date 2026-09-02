@@ -1700,3 +1700,17 @@ verbatim) and its verdict face (`isViolation` with the trace witness;
 constructs through the factories and `QuintMachineFacts.interpret` tells
 instead of branching on `kind`. 2 ledger entries reclaimed — the ledger
 holds 43 of 122.
+
+Wave 22 (same PR): the refinement plan's statuses and probes, and the
+sibling-verdict skips, own their judgements. `RefinementStatus`
+(checkable / waived / gap / capability) replaces the status union: the
+plan asks `isCheckable`, reads a gap through `gapDetail`, and orders the
+status to produce its own skip (`skipFor` — the waived reason and the
+capability wording, verbatim) instead of switching on `kind` at three
+sites. `RefinementProbe` (invariant / enabledness / simulation /
+scenario) replaces the pending-question union: the solver facts
+interpret a verdict through `match`, and only the simulation handler is
+handed the design transition — the type carries the pair the old union
+left optional. `SiblingVerdictSkip` becomes a class so the verdict remap
+asks it for target, reason and detail. 3 ledger entries reclaimed — the
+ledger holds 40 of 122.

@@ -72,6 +72,7 @@ import {
   LoweredObligation,
   LoweredScenario,
   LoweredBackground,
+  SiblingVerdictSkip,
 } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
@@ -429,7 +430,7 @@ describe("remap (design vocabulary attribution)", () => {
       findings: SiblingVerdictFindings.of(
         (input.findings ?? []).map((f) => ({ ...f, frRefs: FrRefs.of(f.frRefs), targets: f.targets.map((t) => LoweredId.reconstitute(t)) })) as never,
       ),
-      skipped: SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => ({ ...k, target: LoweredId.reconstitute(k.target) }))),
+      skipped: SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.reconstitute({ ...k, target: LoweredId.reconstitute(k.target) }))),
     });
 
   test("unavailable and unreadable sibling documents pass straight through", () => {
@@ -740,7 +741,7 @@ describe("lowered collections and the lowering index (first-class operations)", 
     expect([...findings]).toEqual([finding]);
     expect(findings.toArray()).toEqual([finding]);
 
-    const skip = { target: LoweredId.reconstitute("OB-1"), reason: "timeout" };
+    const skip = SiblingVerdictSkip.reconstitute({ target: LoweredId.reconstitute("OB-1"), reason: "timeout" });
     const skips = SiblingVerdictSkips.of([]).add(skip);
     expect([...skips]).toEqual([skip]);
     expect(skips.toArray()).toEqual([skip]);

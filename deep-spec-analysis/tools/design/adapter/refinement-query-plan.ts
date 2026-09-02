@@ -22,7 +22,7 @@ import type { RefinementChildQuery } from "./refinement-child-query.ts";
 import type { RefinementSmtContext } from "./refinement-smt-context.ts";
 import {
   type DesignEvent,
-  type RefinementProbe,
+  RefinementProbe,
   type RefinementRequirements,
   RefinementSolverFacts,
   type UnitRefinementPlan,
@@ -244,7 +244,7 @@ export function buildRefinementQueries(
 
   const alphaCtx = plan.alphaContext();
   for (const [obId, st] of plan.sortedObligationStatuses()) {
-    if (st.kind !== "checkable") continue;
+    if (!st.isCheckable()) continue;
     const ob = req.obligationById(obId);
     if (!ob) continue;
     const assertion = ob.assertion();
@@ -253,7 +253,7 @@ export function buildRefinementQueries(
         const alphaP = alphaCtx.substitute(assertion, false);
         const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP)})` }], modelVars);
         queries.push(q);
-        pending.set(q.id, { kind: "invariant", reqId: ObligationId.reconstitute(obId) });
+        pending.set(q.id, RefinementProbe.invariant(ObligationId.reconstitute(obId)));
       } catch (err) {
         alphaFail(obId, err);
       }
@@ -282,7 +282,7 @@ export function buildRefinementQueries(
           modelVars,
         );
         queries.push(qe);
-        pending.set(qe.id, { kind: "enabledness", reqId: ObligationId.reconstitute(obId) });
+        pending.set(qe.id, RefinementProbe.enabledness(ObligationId.reconstitute(obId)));
 
         // 写像済み設計イベントごとのワンステップシミュレーション：alpha(guard)
         // が成り立つところで踏んだ 1 歩の抽象 post が、要件効果か抽象フレーム
@@ -326,7 +326,7 @@ export function buildRefinementQueries(
             modelVarsBoth,
           );
           queries.push(qs);
-          pending.set(qs.id, { kind: "simulation", reqId: ObligationId.reconstitute(obId), designId });
+          pending.set(qs.id, RefinementProbe.simulation(ObligationId.reconstitute(obId), designId));
         }
       } catch (err) {
         alphaFail(obId, err);
@@ -335,7 +335,7 @@ export function buildRefinementQueries(
   }
 
   for (const [scId, st] of plan.sortedScenarioStatuses()) {
-    if (st.kind !== "checkable") continue;
+    if (!st.isCheckable()) continue;
     const sc = req.scenarioById(scId);
     if (!sc) continue;
     try {
@@ -352,7 +352,7 @@ export function buildRefinementQueries(
         modelVars,
       );
       queries.push(q);
-      pending.set(q.id, { kind: "scenario", reqId: ScenarioId.reconstitute(scId) });
+      pending.set(q.id, RefinementProbe.scenario(ScenarioId.reconstitute(scId)));
     } catch (err) {
       alphaFail(scId, err);
     }

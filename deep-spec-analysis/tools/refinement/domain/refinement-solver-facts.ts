@@ -57,77 +57,83 @@ export class RefinementSolverFacts {
     for (const [queryId, p] of this.#pending) {
       const r = results.verdictOf(queryId);
       if (!r || r.isUndecided()) {
-        skipped.push(DesignSkipped.reconstitute({ target: p.reqId.asTargetId(), reason: "timeout", unit: unitName, detail: `refinement query ${queryId} exceeded the solver budget or errored` }));
+        skipped.push(DesignSkipped.reconstitute({ target: p.reqTarget(), reason: "timeout", unit: unitName, detail: `refinement query ${queryId} exceeded the solver budget or errored` }));
         continue;
       }
-      if (p.kind === "invariant") {
-        if (r.isSat()) {
-          findings.push(
-            DesignFinding.reconstitute({
-              kind: "refinement-violation",
-              frRefs: FrRefs.of(frOf(p.reqId.asString())),
-              targets: TargetIds.reconstitute([p.reqId.asString()]),
-              witness: { model: r.witnessModel() },
-              unit: unitName,
-              detail: `A design-legal state of unit ${unitName} violates requirements obligation ${p.reqId.asString()} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`,
-            }),
-          );
-        }
-      } else if (p.kind === "scenario") {
-        const sc = req.scenarioById(p.reqId.asString());
-        if (sc?.isAccept() === true && r.isUnsat()) {
-          findings.push(
-            DesignFinding.reconstitute({
-              kind: "refinement-violation",
-              frRefs: FrRefs.of(frOf(p.reqId.asString())),
-              targets: TargetIds.reconstitute([p.reqId.asString()]),
-              witness: { core: r.sortedCore() },
-              unit: unitName,
-              detail: `Accept scenario ${p.reqId.asString()} has no design-legal counterpart in unit ${unitName} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
-            }),
-          );
-        }
-        if (sc?.isReject() === true && r.isSat()) {
-          findings.push(
-            DesignFinding.reconstitute({
-              kind: "refinement-violation",
-              frRefs: FrRefs.of(frOf(p.reqId.asString())),
-              targets: TargetIds.reconstitute([p.reqId.asString()]),
-              witness: { model: r.witnessModel() },
-              unit: unitName,
-              detail: `Reject scenario ${p.reqId.asString()} is still admitted by unit ${unitName} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`,
-            }),
-          );
-        }
-      } else if (p.kind === "enabledness") {
-        if (r.isSat()) {
-          findings.push(
-            DesignFinding.reconstitute({
-              kind: "completeness-gap",
-              frRefs: FrRefs.of(frOf(p.reqId.asString())),
-              targets: TargetIds.reconstitute(IdOrder.sortedUnique([p.reqId.asString(), ...plan.mappedTransitionsOf(p.reqId.asString()).map((t) => t.asString())], IdOrder.compare)),
-              witness: { model: r.witnessModel() },
-              unit: unitName,
-              detail: `The requirements event ${p.reqId.asString()} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
-            }),
-          );
-        }
-      } else if (p.kind === "simulation") {
-        if (r.isSat()) {
-          findings.push(
-            DesignFinding.reconstitute({
-              kind: "refinement-violation",
-              frRefs: FrRefs.of(frOf(p.reqId.asString())),
-              // simulation probe の designId は構築時に必須——旧 `?? ""` +空除去は
-              // designId 未設定の防御で、必須化により恒等（挙動保存）。
-              targets: TargetIds.reconstitute(IdOrder.sortedUnique([p.reqId.asString(), p.designId.asString()], IdOrder.compare).filter((t) => t !== "")),
-              witness: { trace: r.witnessTrace() },
-              unit: unitName,
-              detail: `Design step ${p.designId.asString()} of unit ${unitName}, taken where requirements event ${p.reqId.asString()} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,
-            }),
-          );
-        }
-      }
+      // 種類ごとの解釈は問いへ命じる（#71 波22）。
+      p.match({
+        invariant: (reqId) => {
+          if (r.isSat()) {
+            findings.push(
+              DesignFinding.reconstitute({
+                kind: "refinement-violation",
+                frRefs: FrRefs.of(frOf(reqId.asString())),
+                targets: TargetIds.reconstitute([reqId.asString()]),
+                witness: { model: r.witnessModel() },
+                unit: unitName,
+                detail: `A design-legal state of unit ${unitName} violates requirements obligation ${reqId.asString()} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`,
+              }),
+            );
+          }
+        },
+        scenario: (reqId) => {
+          const sc = req.scenarioById(reqId.asString());
+          if (sc?.isAccept() === true && r.isUnsat()) {
+            findings.push(
+              DesignFinding.reconstitute({
+                kind: "refinement-violation",
+                frRefs: FrRefs.of(frOf(reqId.asString())),
+                targets: TargetIds.reconstitute([reqId.asString()]),
+                witness: { core: r.sortedCore() },
+                unit: unitName,
+                detail: `Accept scenario ${reqId.asString()} has no design-legal counterpart in unit ${unitName} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
+              }),
+            );
+          }
+          if (sc?.isReject() === true && r.isSat()) {
+            findings.push(
+              DesignFinding.reconstitute({
+                kind: "refinement-violation",
+                frRefs: FrRefs.of(frOf(reqId.asString())),
+                targets: TargetIds.reconstitute([reqId.asString()]),
+                witness: { model: r.witnessModel() },
+                unit: unitName,
+                detail: `Reject scenario ${reqId.asString()} is still admitted by unit ${unitName} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`,
+              }),
+            );
+          }
+        },
+        enabledness: (reqId) => {
+          if (r.isSat()) {
+            findings.push(
+              DesignFinding.reconstitute({
+                kind: "completeness-gap",
+                frRefs: FrRefs.of(frOf(reqId.asString())),
+                targets: TargetIds.reconstitute(IdOrder.sortedUnique([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())], IdOrder.compare)),
+                witness: { model: r.witnessModel() },
+                unit: unitName,
+                detail: `The requirements event ${reqId.asString()} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
+              }),
+            );
+          }
+        },
+        simulation: (reqId, designId) => {
+          if (r.isSat()) {
+            findings.push(
+              DesignFinding.reconstitute({
+                kind: "refinement-violation",
+                frRefs: FrRefs.of(frOf(reqId.asString())),
+                // simulation probe の designId は構築時に必須——旧 `?? ""` +空除去は
+                // designId 未設定の防御で、必須化により恒等（挙動保存）。
+                targets: TargetIds.reconstitute(IdOrder.sortedUnique([reqId.asString(), designId.asString()], IdOrder.compare).filter((t) => t !== "")),
+                witness: { trace: r.witnessTrace() },
+                unit: unitName,
+                detail: `Design step ${designId.asString()} of unit ${unitName}, taken where requirements event ${reqId.asString()} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,
+              }),
+            );
+          }
+        },
+      });
     }
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped) };
   }

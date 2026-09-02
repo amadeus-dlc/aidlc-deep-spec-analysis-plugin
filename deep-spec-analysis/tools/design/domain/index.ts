@@ -46,7 +46,7 @@ export { type LoweringKind } from "./lowering-kind.ts";
 export { type SiblingVerdictDocument } from "./sibling-verdict-document.ts";
 export { type SiblingVerdictFinding } from "./sibling-verdict-finding.ts";
 export { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";
-export { type SiblingVerdictSkip } from "./sibling-verdict-skip.ts";
+export { SiblingVerdictSkip } from "./sibling-verdict-skip.ts";
 export { SiblingVerdictSkips } from "./sibling-verdict-skips.ts";
 export { DesignReportId } from "./design-report-id.ts";
 export { SUPPORTED_DESIGN_IR_MAJOR, DesignReport } from "./design-report.ts";

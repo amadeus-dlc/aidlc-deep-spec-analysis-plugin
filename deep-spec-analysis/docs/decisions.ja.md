@@ -1531,3 +1531,14 @@ refinement パス、lowered 文書のシリアライザは再構成しアクセ�
 `isViolated`）を所有する。quint アダプタはファクトリで構築し、
 `QuintMachineFacts.interpret` は `kind` で分岐する代わりに命じる。台帳から
 2 エントリを回収し、残債は 122 中 43。
+
+波 22（同 PR）: refinement 計画の被覆状態と問い、sibling 判定の skip が
+自分の判断を所有する。`RefinementStatus`（checkable／waived／gap／
+capability）が状態 union を置き換え、計画は `isCheckable` で問い、gap は
+`gapDetail` で読み、skip は状態自身に命じて作らせる（`skipFor`——waived の
+理由と capability の文言は逐語）——3 箇所で `kind` 分岐していた代わりに。
+`RefinementProbe`（invariant／enabledness／simulation／scenario）が保留中
+の問いの union を置き換え、ソルバ事実は `match` で判定を解釈し、設計遷移は
+simulation の handler にだけ渡る——旧 union が optional にしていた対を型が
+運ぶ。`SiblingVerdictSkip` は class になり、判定の再割り当ては target・
+reason・detail を問う。台帳から 3 エントリを回収し、残債は 122 中 40。
