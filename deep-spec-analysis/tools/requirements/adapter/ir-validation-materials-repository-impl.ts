@@ -20,7 +20,7 @@ import { ArtifactPath, AttributeBound, ErrorMessages, IrVersion, type Expression
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import {
-  type FrRefClaim,
+  FrRefClaim,
   IrAttributeDecl,
   IrBackgroundDecl,
   IrEntityDecl,
@@ -130,7 +130,7 @@ function collectFrClaims(ir: { [k: string]: Json }): FrRefClaim[] {
       const owner = typeof entry.id === "string" ? entry.id : `${section}[${i}]`;
       const refs = entry.frRefs ?? null;
       if (!Array.isArray(refs)) return;
-      claims.push({ owner, frRefs: FrRefs.of(refs.filter((r) => typeof r === "string") as string[]) });
+      claims.push(FrRefClaim.of(owner, FrRefs.of(refs.filter((r) => typeof r === "string") as string[])));
     });
   }
   return claims;

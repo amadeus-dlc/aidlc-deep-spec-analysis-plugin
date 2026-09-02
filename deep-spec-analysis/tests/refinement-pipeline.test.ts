@@ -27,7 +27,7 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, DesignMachine, DesignObligation, DesignScenario, DesignIgnore, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId,
+import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignBackgroundAssumption, DesignMachine, DesignObligation, DesignScenario, DesignIgnore, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId,
 
   LoweredId,
 } from "../tools/design/domain/index.ts";
@@ -235,7 +235,7 @@ function unit(seed: {
   obligations?: RawDesignObligation[];
   machines?: RawDesignMachine[];
   scenarios?: RawDesignScenario[];
-  background?: (Omit<DesignBackgroundAssumption, "id"> & { id: string })[];
+  background?: { id: string; assert: Expression }[];
 }): DesignUnitType {
   return DesignUnit.reconstitute({
     unit: seed.unit ?? "u1",
@@ -270,7 +270,7 @@ function unit(seed: {
       (seed.scenarios ?? []).map((s) => DesignScenario.reconstitute({ ...s, id: DesignScenarioId.reconstitute(s.id), brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
     ),
     background: DesignBackgroundAssumptions.of(
-      (seed.background ?? []).map((b) => ({ ...b, id: DesignBackgroundId.reconstitute(b.id) })),
+      (seed.background ?? []).map((b) => DesignBackgroundAssumption.reconstitute({ ...b, id: DesignBackgroundId.reconstitute(b.id) })),
     ),
   });
 }

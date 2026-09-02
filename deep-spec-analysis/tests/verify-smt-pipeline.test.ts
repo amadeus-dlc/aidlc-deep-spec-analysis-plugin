@@ -36,10 +36,10 @@ import {
   VerificationFindings,
   VerificationReports,
   VerificationSkips,
-  type BackgroundAssumption,
+  BackgroundAssumption,
   Scenario,
   Obligation,
-  type AttributeDeclaration,
+  AttributeDeclaration,
   AttributeDeclarations,
   AttributeValues,
   FrRefs,
@@ -54,6 +54,7 @@ import {
   RequirementsModel,
   SmtQueryVerdict,
   SmtEventPairProbes,
+  SmtEventPairProbe,
   SmtPlanFacts,
   SmtQueryVerdicts,
   VerificationReport,
@@ -83,7 +84,7 @@ const schema = readContractSchema(schemaPath);
 const sensorPath = join(pluginRoot, "tools", "aidlc-sensor-deep-spec-verify-smt.ts");
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
-type RawAttributeDeclaration = Omit<AttributeDeclaration, "values"> & { values?: string[] };
+type RawAttributeDeclaration = Omit<Parameters<typeof AttributeDeclaration.reconstitute>[0], "values"> & { values?: string[] };
 type RawObligation = Omit<Parameters<typeof Obligation.reconstitute>[0], "frRefs" | "trigger"> & { frRefs: string[]; trigger?: string };
 type RawScenario = Omit<Parameters<typeof Scenario.reconstitute>[0], "frRefs"> & { frRefs: string[] };
 function model(seed: {
@@ -99,7 +100,7 @@ function model(seed: {
     sourceDocument: new Uint8Array(),
     irVersion: seed.irVersion ?? IrVersion.reconstitute("1.0.0"),
     attributes: AttributeDeclarations.of(
-      (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
+      (seed.attributes ?? []).map((a) => AttributeDeclaration.reconstitute({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
     ),
     obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.reconstitute({ ...o, frRefs: FrRefs.of(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
     scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.reconstitute({ ...s, frRefs: FrRefs.of(s.frRefs) }))),
@@ -291,7 +292,7 @@ describe("smt verdict interpretation", () => {
     compiled: new Map([["OB-1", true], ["OB-2", true], ["OB-3", true], ["OB-4", true]]),
     skipped: VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-9"), reason: "capability", detail: "seed" })]),
     labelToTarget: new Map([["ob_OB_1", "OB-1"], ["ob_OB_2", "OB-2"], ["ty_x", "TY-x"], ["bg_B1", "B1"]]),
-    eventPairs: SmtEventPairProbes.of([{ qOverlap: "evo:OB-3:OB-4", qJoint: "evj:OB-3:OB-4", a: ObligationId.reconstitute("OB-3"), b: ObligationId.reconstitute("OB-4"), trigger: TriggerName.reconstitute("submit") }]),
+    eventPairs: SmtEventPairProbes.of([SmtEventPairProbe.of({ qOverlap: "evo:OB-3:OB-4", qJoint: "evj:OB-3:OB-4", a: ObligationId.reconstitute("OB-3"), b: ObligationId.reconstitute("OB-4"), trigger: TriggerName.reconstitute("submit") })]),
     gapTriggers: new Map([["submit", ["OB-3", "OB-4"]]]),
     scenarioQueries: new Map([["SC-1", "sc:SC-1"], ["SC-2", "sc:SC-2"]]),
   });
@@ -602,17 +603,20 @@ describe("degradation reports and ordering", () => {
         { id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("event"), frRefs: ["FR-1", "FR-2"] },
       ],
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: ["FR-2"], bindings: {} }],
-      background: [{ id: BackgroundAssumptionId.reconstitute("B1"), assert: { op: "bool", value: true } }],
+      background: [BackgroundAssumption.reconstitute({ id: BackgroundAssumptionId.reconstitute("B1"), assert: { op: "bool", value: true } })],
     });
     expect(m.allTargets().toStrings()).toEqual(["OB-1", "OB-2", "SC-1"]);
     expect(m.frRefsOf(TargetIds.reconstitute(["OB-1", "SC-1"])).toArray()).toEqual(["FR-1", "FR-2"]);
     expect(m.frRefsOf(TargetIds.reconstitute(["nope"])).toArray()).toEqual([]);
-    expect(m.attributeAt("Ticket.priority")?.max?.asNumber()).toBe(3);
+    expect(m.attributeAt("Ticket.priority")?.maxBound()?.asNumber()).toBe(3);
+    expect(m.attributeAt("Ticket.priority")?.minBound()?.asNumber()).toBe(0);
+    expect(m.attributeAt("Ticket.priority")?.isInt()).toBe(true);
+    expect(m.attributeAt("Ticket.priority")?.isAt("Ticket.priority")).toBe(true);
     expect(m.attributeAt("nope")).toBe(undefined);
     expect(m.attributes().toArray().length).toBe(1);
     expect(m.obligations().toArray().length).toBe(2);
     expect(m.scenarios().toArray().length).toBe(1);
-    expect(m.background().toArray()[0]?.id.asString()).toBe("B1");
+    expect(m.background().toArray()[0]?.id().asString()).toBe("B1");
     expect(m.irVersion().asString()).toBe("1.0.0");
     expect(m.supportsMajor(1)).toBe(true);
   });
@@ -620,7 +624,8 @@ describe("degradation reports and ordering", () => {
 
 describe("smt facts collections (first-class operations)", () => {
   test("SmtEventPairProbes holds issuance order under add", () => {
-    const probe = { qOverlap: "evo:a:b", qJoint: "evj:a:b", a: ObligationId.reconstitute("OB-1"), b: ObligationId.reconstitute("OB-2"), trigger: TriggerName.reconstitute("go") };
+    const probe = SmtEventPairProbe.of({ qOverlap: "evo:a:b", qJoint: "evj:a:b", a: ObligationId.reconstitute("OB-1"), b: ObligationId.reconstitute("OB-2"), trigger: TriggerName.reconstitute("go") });
+    expect(probe.targets().toStrings()).toEqual(["OB-1", "OB-2"]);
     const probes = SmtEventPairProbes.of([]).add(probe);
     expect([...probes]).toEqual([probe]);
     expect(probes.toArray()).toEqual([probe]);

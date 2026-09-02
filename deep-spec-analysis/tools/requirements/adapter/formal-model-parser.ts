@@ -14,8 +14,8 @@ import {
   ObligationId,
   ObligationNature,
   ScenarioId,
-  type AttributeDeclaration,
-  type BackgroundAssumption,
+  AttributeDeclaration,
+  BackgroundAssumption,
   Obligation,
   Scenario,
   AttributeDeclarations,
@@ -40,13 +40,13 @@ export function parseFormalModel(raw: Json): Omit<Parameters<typeof Requirements
       const t = attr.type;
       const kind = t.kind;
       if (kind !== "bool" && kind !== "int" && kind !== "enum") continue;
-      attributes.push({
+      attributes.push(AttributeDeclaration.reconstitute({
         path: AttributePath.reconstitute(`${ent.name}.${attr.name}`),
         kind,
         min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
         max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
         values: Array.isArray(t.values) ? AttributeValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
-      });
+      }));
     }
   }
   const obligations: Obligation[] = [];
@@ -85,7 +85,7 @@ export function parseFormalModel(raw: Json): Omit<Parameters<typeof Requirements
   const background: BackgroundAssumption[] = [];
   for (const bg of Array.isArray(raw.background) ? raw.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
-    background.push({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: bg.assert as unknown as Expression });
+    background.push(BackgroundAssumption.reconstitute({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: bg.assert as unknown as Expression }));
   }
   return {
     irVersion: irVersion.value,

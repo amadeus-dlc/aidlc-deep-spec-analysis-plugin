@@ -31,10 +31,10 @@ import {
   renderVerificationReportBytes,
 } from "../tools/requirements/adapter/index.ts";
 import {
-  type BackgroundAssumption,
+  BackgroundAssumption,
   Scenario,
   Obligation,
-  type AttributeDeclaration,
+  AttributeDeclaration,
   AttributeDeclarations,
   AttributeValues,
   FrRefs,
@@ -81,7 +81,7 @@ const schemaPath = join(pluginRoot, "tools", "data", "deep-spec-findings-schema.
 const schema = readContractSchema(schemaPath);
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
-type RawAttributeDeclaration = Omit<AttributeDeclaration, "values"> & { values?: string[] };
+type RawAttributeDeclaration = Omit<Parameters<typeof AttributeDeclaration.reconstitute>[0], "values"> & { values?: string[] };
 type RawObligation = Omit<Parameters<typeof Obligation.reconstitute>[0], "frRefs" | "trigger"> & { frRefs: string[]; trigger?: string };
 type RawScenario = Omit<Parameters<typeof Scenario.reconstitute>[0], "frRefs"> & { frRefs: string[] };
 function model(seed: {
@@ -97,7 +97,7 @@ function model(seed: {
     sourceDocument: new Uint8Array(),
     irVersion: seed.irVersion ?? IrVersion.reconstitute("1.0.0"),
     attributes: AttributeDeclarations.of(
-      (seed.attributes ?? []).map((a) => ({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
+      (seed.attributes ?? []).map((a) => AttributeDeclaration.reconstitute({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
     ),
     obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.reconstitute({ ...o, frRefs: FrRefs.of(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
     scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.reconstitute({ ...s, frRefs: FrRefs.of(s.frRefs) }))),

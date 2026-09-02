@@ -8,7 +8,7 @@ export class AttributeDeclarations {
 
   private constructor(values: readonly AttributeDeclaration[]) {
     this.#values = values;
-    this.#byPath = new Map(values.map((a) => [a.path.asString(), a]));
+    this.#byPath = new Map(values.map((a) => [a.path().asString(), a]));
   }
 
   static of(values: readonly AttributeDeclaration[]): AttributeDeclarations {
@@ -31,7 +31,7 @@ export class AttributeDeclarations {
   // duplicate-attribute 検査が表面化し、等値時に 1 を返す挙動も凍結面
   // （return 0 への正規化は重複時の安定順を変え得るため PR10 の凍結台帳で扱う）。
   sortedByPath(): AttributeDeclarations {
-    return new AttributeDeclarations([...this.#values].sort((a, b) => (a.path.asString() < b.path.asString() ? -1 : 1)));
+    return new AttributeDeclarations([...this.#values].sort((a, b) => (a.path().asString() < b.path().asString() ? -1 : 1)));
   }
 
   toArray(): readonly AttributeDeclaration[] {

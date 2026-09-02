@@ -50,6 +50,8 @@ import {
   LoweredOriginRef,
   SiblingVerdictDocument,
   SiblingVerdictFinding,
+  DesignBackgroundAssumption,
+  DesignBackgroundAssumptions,
   SiblingVerdictFindings,
   SiblingVerdictSkips,
 } from "../tools/design/domain/index.ts";
@@ -581,5 +583,20 @@ describe("sibling verdict document and finding (the backend's answer owns its in
     expect(model.witnessWithCoreRemapped(upper)).toEqual({ model: { a: 1 } });
     const bare = SiblingVerdictFinding.reconstitute({ kind: "gap", frRefs: FrRefs.of([]), targets: [], witness: null, detail: "" });
     expect(bare.witnessWithCoreRemapped(upper)).toBe(null);
+  });
+});
+
+describe("design background assumption (an assumption owns its identity and canonical order)", () => {
+  test("id, assertion and the numeric-tail order", () => {
+    const bg = (id: string, value: boolean): DesignBackgroundAssumption =>
+      DesignBackgroundAssumption.reconstitute({ id: DesignBackgroundId.reconstitute(id), assert: { op: "bool", value } });
+    const b10 = bg("BG-10", true);
+    const b2 = bg("BG-2", false);
+    expect(b10.id().asString()).toBe("BG-10");
+    expect(b2.assertion()).toEqual({ op: "bool", value: false });
+    expect(b2.compareTo(b10)).toBeLessThan(0);
+    expect(b10.compareTo(b2)).toBeGreaterThan(0);
+    expect(b2.compareTo(bg("BG-2", true))).toBe(0);
+    expect(DesignBackgroundAssumptions.of([b10, b2]).sortedCanonically().toArray().map((b) => b.id().asString())).toEqual(["BG-2", "BG-10"]);
   });
 });

@@ -19,13 +19,7 @@ export class FrReferenceIndex {
   // 主張の宣言順に owner を積む（同一 frRef の owner 列は報告時に整列）。
   static of(claims: readonly FrRefClaim[]): FrReferenceIndex {
     const ownersByRef = new Map<string, string[]>();
-    for (const claim of claims) {
-      for (const ref of claim.frRefs) {
-        const owners = ownersByRef.get(ref) ?? [];
-        owners.push(claim.owner);
-        ownersByRef.set(ref, owners);
-      }
-    }
+    for (const claim of claims) claim.claimInto(ownersByRef);
     return new FrReferenceIndex(ownersByRef);
   }
 

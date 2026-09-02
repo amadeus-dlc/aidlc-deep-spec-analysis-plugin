@@ -15,7 +15,7 @@ import {
   type Obligation,
   type RequirementsModel,
   VerificationSkipped,
-  type SmtEventPairProbe,
+  SmtEventPairProbe,
 } from "../domain/index.ts";
 
 
@@ -37,10 +37,11 @@ interface NamedConstraint {
 
 function enumCode(model: RequirementsModel, attrPath: string, value: string): number {
   const attr = model.attributeAt(attrPath);
-  if (!attr || attr.kind !== "enum" || !attr.values) {
+  const values = attr?.declaredValues();
+  if (!attr || !attr.isEnum() || !values) {
     throw new CompileError(`"${attrPath}" is not an enum attribute`);
   }
-  const idx = attr.values.indexOf(value);
+  const idx = values.indexOf(value);
   if (idx < 0) throw new CompileError(`enum value "${value}" is not declared on "${attrPath}"`);
   return idx;
 }
@@ -117,19 +118,19 @@ export function decodeSolverModel(
 ): { [path: string]: boolean | number | string } {
   const out: { [path: string]: boolean | number | string } = {};
   for (const attr of model.attributes().sortedByPath()) {
-    const raw = values[smtVar(attr.path.asString(), false)];
+    const raw = values[smtVar(attr.path().asString(), false)];
     if (raw === undefined) continue;
-    if (attr.kind === "bool") {
-      out[attr.path.asString()] = raw === "true";
+    if (attr.isBool()) {
+      out[attr.path().asString()] = raw === "true";
     } else {
       const n = smtIntOf(raw);
       if (!Number.isSafeInteger(n)) {
         // 安全整数範囲外は number で正確に持てない——正確な十進文字列で運ぶ
         //（凍結解除 #34 項 4。読めない生値はそのまま生値）。
         const m = raw.match(/^\(-\s*(\d+)\)$/);
-        out[attr.path.asString()] = m ? `-${m[1]}` : raw;
-      } else if (attr.kind === "enum" && attr.values) out[attr.path.asString()] = attr.values.valueAt(n) ?? n;
-      else out[attr.path.asString()] = n;
+        out[attr.path().asString()] = m ? `-${m[1]}` : raw;
+      } else if (attr.isEnum() && attr.declaredValues()) out[attr.path().asString()] = attr.declaredValues()?.valueAt(n) ?? n;
+      else out[attr.path().asString()] = n;
     }
   }
   return out;
@@ -143,38 +144,39 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const decls: string[] = [];
   const primedDecls: string[] = [];
   for (const attr of model.attributes()) {
-    const sort = attr.kind === "bool" ? "Bool" : "Int";
-    decls.push(`(declare-const ${smtVar(attr.path.asString(), false)} ${sort})`);
-    primedDecls.push(`(declare-const ${smtVar(attr.path.asString(), true)} ${sort})`);
+    const sort = attr.isBool() ? "Bool" : "Int";
+    decls.push(`(declare-const ${smtVar(attr.path().asString(), false)} ${sort})`);
+    primedDecls.push(`(declare-const ${smtVar(attr.path().asString(), true)} ${sort})`);
   }
 
   const typeBounds: NamedConstraint[] = [];
   const primedTypeBounds: NamedConstraint[] = [];
   for (const attr of model.attributes()) {
     const bounds = (primed: boolean): string | null => {
-      const v = smtVar(attr.path.asString(), primed);
-      if (attr.kind === "enum" && attr.values) {
-        return `(and (>= ${v} 0) (<= ${v} ${attr.values.count() - 1}))`;
-      }
-      if (attr.kind === "int" && (attr.min !== undefined || attr.max !== undefined)) {
-        const parts: string[] = [];
-        if (attr.min !== undefined) parts.push(`(>= ${v} ${smtLit(attr.min.asNumber())})`);
-        if (attr.max !== undefined) parts.push(`(<= ${v} ${smtLit(attr.max.asNumber())})`);
-        return parts.length === 1 ? (parts[0] ?? null) : `(and ${parts.join(" ")})`;
-      }
-      return null;
+      const v = smtVar(attr.path().asString(), primed);
+      return attr.match({
+        enum: (values) => (values ? `(and (>= ${v} 0) (<= ${v} ${values.count() - 1}))` : null),
+        int: (min, max) => {
+          if (min === undefined && max === undefined) return null;
+          const parts: string[] = [];
+          if (min !== undefined) parts.push(`(>= ${v} ${smtLit(min.asNumber())})`);
+          if (max !== undefined) parts.push(`(<= ${v} ${smtLit(max.asNumber())})`);
+          return parts.length === 1 ? (parts[0] ?? null) : `(and ${parts.join(" ")})`;
+        },
+        bool: () => null,
+      });
     };
     const cur = bounds(false);
-    if (cur) typeBounds.push({ name: smtName("ty", attr.path.asString()), smt: cur });
+    if (cur) typeBounds.push({ name: smtName("ty", attr.path().asString()), smt: cur });
     const nxt = bounds(true);
-    if (nxt) primedTypeBounds.push({ name: smtName("typ", attr.path.asString()), smt: nxt });
+    if (nxt) primedTypeBounds.push({ name: smtName("typ", attr.path().asString()), smt: nxt });
   }
 
   const bg: NamedConstraint[] = [];
   for (const b of model.background()) {
     try {
-      bg.push({ name: smtName("bg", b.id.asString()), smt: smtOf(model, b.assert) });
-      labelToTarget.set(smtName("bg", b.id.asString()), b.id.asString());
+      bg.push({ name: smtName("bg", b.id().asString()), smt: smtOf(model, b.assertion()) });
+      labelToTarget.set(smtName("bg", b.id().asString()), b.id().asString());
     } catch (err) {
       // コンパイルできない背景仮定は全クエリから落ちる。OB/SC の id を持たない
       // ため skipped[] を占められず、不変量の detail 経由でだけ観測される。
@@ -235,8 +237,8 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   ].join("\n");
   const baseAssumptions = [...typeBounds, ...bg, ...invariants].map((c) => c.name);
   const modelVars = model.attributes().toArray().map((a) => ({
-    name: smtVar(a.path.asString(), false),
-    sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool",
+    name: smtVar(a.path().asString(), false),
+    sort: (a.isBool() ? "Bool" : "Int") as "Int" | "Bool",
   }));
 
   const queries: SmtChildQuery[] = [];
@@ -307,7 +309,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
           assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
           model: [],
         });
-        eventPairs.push({ qOverlap, qJoint, a: a.id(), b: b.id(), trigger: TriggerName.reconstitute(trigger) });
+        eventPairs.push(SmtEventPairProbe.of({ qOverlap, qJoint, a: a.id(), b: b.id(), trigger: TriggerName.reconstitute(trigger) }));
       }
     }
   }
@@ -344,8 +346,8 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         const attr = model.attributeAt(path);
         if (!attr) throw new CompileError(`binding references unknown attribute "${path}"`);
         const v = smtVar(path, false);
-        if (attr.kind === "bool") parts.push(`(= ${v} ${value === true})`);
-        else if (attr.kind === "int") {
+        if (attr.isBool()) parts.push(`(= ${v} ${value === true})`);
+        else if (attr.isInt()) {
           const n = typeof value === "number" ? value : Number.NaN;
           if (!Number.isInteger(n)) throw new CompileError(`binding for int attribute "${path}" is not an integer`);
           parts.push(`(= ${v} ${smtLit(n)})`);

@@ -142,20 +142,20 @@ export class SmtPlanFacts {
 
     // (a) 同トリガの矛盾効果。
     for (const pair of this.#eventPairs) {
-      const overlap = results.verdictOf(pair.qOverlap);
-      const joint = results.verdictOf(pair.qJoint);
+      const overlap = pair.overlapVerdictIn(results);
+      const joint = pair.jointVerdictIn(results);
       if (!overlap || !joint) continue;
       if (overlap.isSat() && joint.isUnsat()) {
         addConflict(
-          TargetIds.of([pair.a.asTargetId(), pair.b.asTargetId()]).sortedUniqueCanonically(),
+          pair.targets().sortedUniqueCanonically(),
           [...joint.coreLabels()],
-          `Events ${pair.a.asString()} and ${pair.b.asString()} for trigger "${pair.trigger.asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`,
+          `Events ${pair.a().asString()} and ${pair.b().asString()} for trigger "${pair.trigger().asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`,
         );
       } else if (overlap.isUndecided() || joint.isUndecided()) {
         // 未決（unknown/budget/error）は skip——3 状態の列挙が interpret ごとに
         // 散在していたのが #34 項 3 の土壌で、判定面 isUndecided() に収束した
         //（主従の裁定 #71 波2）。
-        timeoutSkip(TargetIds.of([pair.a.asTargetId(), pair.b.asTargetId()]), `event-pair check for trigger "${pair.trigger.asString()}"`);
+        timeoutSkip(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`);
       }
     }
 

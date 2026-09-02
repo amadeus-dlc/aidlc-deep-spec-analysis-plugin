@@ -1,7 +1,26 @@
 import type { Expression } from "../../kernel/domain/expression.ts";
-import { BackgroundAssumptionId } from "./background-assumption-id.ts";
+import type { BackgroundAssumptionId } from "./background-assumption-id.ts";
 
-export interface BackgroundAssumption {
-  id: BackgroundAssumptionId;
-  assert: Expression;
+// 要件 IR の背景仮定 1 件——id と表明。コンパイラは id で名前を付け、表明を
+// 自分の言語へ落とす（#71 波25）。
+export class BackgroundAssumption {
+  readonly #id: BackgroundAssumptionId;
+  readonly #assert: Expression;
+
+  private constructor(id: BackgroundAssumptionId, assert: Expression) {
+    this.#id = id;
+    this.#assert = assert;
+  }
+
+  static reconstitute(props: { id: BackgroundAssumptionId; assert: Expression }): BackgroundAssumption {
+    return new BackgroundAssumption(props.id, props.assert);
+  }
+
+  id(): BackgroundAssumptionId {
+    return this.#id;
+  }
+
+  assertion(): Expression {
+    return this.#assert;
+  }
 }

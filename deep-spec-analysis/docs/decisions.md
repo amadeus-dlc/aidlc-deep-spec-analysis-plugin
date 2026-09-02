@@ -1743,3 +1743,17 @@ builds the lowered invariant obligation the quint pass ships
 (`loweredAs`), so the use case no longer assembles it. The
 `RefTokenCarrier` alias dissolves into the declaration set's door
 signatures. 7 ledger entries reclaimed — the ledger holds 30 of 122.
+
+Wave 25 (same PR): the requirements model's declarations own their
+judgements. `AttributeDeclaration` (bool / int / enum) hands the SMT and
+quint compilers the material of its kind through `match` — the bounds of
+an int, the declared values of an enum — instead of the compilers
+switching on `kind` and testing optional fields; `isBool`, `isInt`,
+`isEnum`, `isAt` and the bound accessors serve the remaining reads.
+`BackgroundAssumption` and `DesignBackgroundAssumption` answer `id` and
+`assertion`; the design one orders itself canonically (`compareTo`).
+`FrRefClaim` registers its owner into the reverse index (`claimInto`),
+so the index no longer reads owner and refs. `SmtEventPairProbe` pulls
+its own overlap and joint verdicts from the results and names its two
+targets, so the plan facts no longer read query ids. 5 ledger entries
+reclaimed — the ledger holds 25 of 122.
