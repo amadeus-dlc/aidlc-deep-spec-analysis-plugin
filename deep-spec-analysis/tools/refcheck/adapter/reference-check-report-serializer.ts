@@ -17,7 +17,7 @@ import { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import {
   CATALOG_VERSION,
   type Finding,
-  type Skipped,
+  Skipped,
   type WitnessRef,
   Findings,
   InputAnchors,
@@ -62,9 +62,11 @@ function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
     return out as Json;
   });
   ordered.skipped = report.skipped().toArray().map((sk) => {
-    const out: { [k: string]: Json } = { target: sk.target, reason: sk.reason };
-    if (sk.detail !== undefined) out.detail = sk.detail;
-    if (sk.unit !== undefined) out.unit = sk.unit;
+    const out: { [k: string]: Json } = { target: sk.target(), reason: sk.reason() };
+    const detail = sk.detail();
+    if (detail !== undefined) out.detail = detail;
+    const unit = sk.unit();
+    if (unit !== undefined) out.unit = unit;
     return out as Json;
   });
   return ordered;
@@ -149,13 +151,12 @@ export function parseReportDocument(
       skipped: Skips.of(
         (raw.skipped as Json[]).map((e) => {
           const entry = isObject(e) ? e : {};
-          const sk: Skipped = {
+          return Skipped.reconstitute({
             target: typeof entry.target === "string" ? entry.target : "",
             reason: typeof entry.reason === "string" ? entry.reason : "",
-          };
-          if (typeof entry.detail === "string") sk.detail = entry.detail;
-          if (typeof entry.unit === "string") sk.unit = entry.unit;
-          return sk;
+            ...(typeof entry.detail === "string" ? { detail: entry.detail } : {}),
+            ...(typeof entry.unit === "string" ? { unit: entry.unit } : {}),
+          });
         }),
       ),
       unavailableReason: unavailable,

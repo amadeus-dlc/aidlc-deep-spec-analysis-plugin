@@ -17,7 +17,7 @@ import {
   CheckedUnits,
   type DesignFinding,
   type DesignInputAnchor,
-  type DesignSkipped,
+  DesignSkipped,
   DesignReport,
   DesignReportId,
   type DesignModel,
@@ -102,7 +102,7 @@ export class VerifyDesignSmtUseCase {
     for (const u of model.units()) {
       if (this.#clock.now() - started > RUN_BUDGET_MS) {
         for (const t of u.allTargets()) {
-          skipped.push({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" });
+          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -112,7 +112,7 @@ export class VerifyDesignSmtUseCase {
       const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
       if (remaining < 3_000) {
         for (const t of u.allTargets()) {
-          skipped.push({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" });
+          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -128,14 +128,14 @@ export class VerifyDesignSmtUseCase {
       }
       if (run.doc === null) {
         for (const t of u.allTargets()) {
-          skipped.push({ target: t, reason: "unavailable", unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` });
+          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
         }
         continue;
       }
       const remapped = lowered.remapVerdicts(u, run.doc);
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
-          skipped.push({ target: t, reason: "unavailable", unit: u.name(), detail: remapped.unavailable });
+          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: remapped.unavailable }));
         }
         continue;
       }
@@ -155,7 +155,7 @@ export class VerifyDesignSmtUseCase {
       const reqTargets = req.allTargetIds();
       const skipAll = (reason: string, detail: string): void => {
         for (const u of model.units()) {
-          for (const t of reqTargets) skipped.push({ target: t, reason, unit: u.name(), detail });
+          for (const t of reqTargets) skipped.push(DesignSkipped.reconstitute({ target: t, reason, unit: u.name(), detail }));
         }
       };
       if (acq.kind === "absent") {
@@ -170,14 +170,14 @@ export class VerifyDesignSmtUseCase {
           const unitMap = acq.map.unitMapOf(u.id());
           if (!unitMap) {
             for (const t of reqTargets) {
-              skipped.push({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` });
+              skipped.push(DesignSkipped.reconstitute({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
             }
             continue;
           }
           const refRemaining = REFINEMENT_DEADLINE_MS - (this.#clock.now() - started);
           if (refRemaining < 5_000) {
             for (const t of reqTargets) {
-              skipped.push({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before the refinement pass" });
+              skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before the refinement pass" }));
             }
             continue;
           }
@@ -187,7 +187,7 @@ export class VerifyDesignSmtUseCase {
             // 旧挙動：unavailable のユニットは gap / status / compile skip を
             // 捨て、全要件対象を一括 unavailable として記録する。
             for (const t of reqTargets) {
-              skipped.push({ target: t, reason: "unavailable", unit: u.name(), detail: check.result.reason });
+              skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: check.result.reason }));
             }
             continue;
           }

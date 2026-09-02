@@ -44,7 +44,7 @@ export class VerificationReports {
       .map((s) => ({
         backend: s.id().backendName().asString(),
         findings: s.findings().toArray(),
-        skippedTargets: new Set(s.skipped().toArray().map((e) => e.target.asString())),
+        skippedTargets: new Set(s.skipped().toArray().map((e) => e.target().asString())),
       }));
 
     const scenarioById = new Map(model.scenarios().toArray().map((s) => [s.id().asString(), s]));

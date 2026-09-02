@@ -18,6 +18,7 @@ import {
   IrEntityDecl,
   IrEntityName,
   IrTemporalDecl,
+  VerificationSkipped,
 } from "../tools/requirements/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
@@ -194,8 +195,8 @@ describe("ir background decl", () => {
 
 describe("quint machine run verdict", () => {
   const targets = TargetIds.reconstitute(["OB-1", "OB-2"]);
-  const flat = (skips: readonly { target: { asString(): string }; reason: string; detail?: string }[]) =>
-    skips.map((s) => `${s.target.asString()}:${s.reason}:${s.detail}`);
+  const flat = (skips: readonly VerificationSkipped[]) =>
+    skips.map((s) => `${s.target().asString()}:${s.reason()}:${s.detail()}`);
 
   test("timeout and run-failed abort the machine targets and skip each of them with the frozen wording", () => {
     const timeout = QuintMachineRunVerdict.timeout();
@@ -206,7 +207,7 @@ describe("quint machine run verdict", () => {
     ]);
     const failed = QuintMachineRunVerdict.runFailed("boom");
     expect(failed.abortsMachineTargets()).toBe(true);
-    expect(failed.skipsFor(targets, false).map((s) => s.detail)).toEqual([
+    expect(failed.skipsFor(targets, false).map((s) => s.detail())).toEqual([
       "quint run failed unexpectedly: boom",
       "quint run failed unexpectedly: boom",
     ]);

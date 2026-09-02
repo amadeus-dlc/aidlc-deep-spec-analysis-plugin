@@ -8,6 +8,7 @@ import { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import { VerificationFindings } from "./verification-findings.ts";
+import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 import { CrossCheckedEntries } from "./cross-checked-entries.ts";
 
@@ -74,11 +75,11 @@ export class VerificationReport {
       irHash,
       method,
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => ({
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => (VerificationSkipped.reconstitute({
         target: t,
         reason: "ir-version-mismatch",
         detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`,
-      }))),
+      })))),
     });
   }
 
@@ -100,8 +101,8 @@ export class VerificationReport {
       skipped: VerificationSkips.of([
         ...planSkipped.toArray(),
         ...[...model.allTargets()]
-          .filter((t) => !planSkipped.toArray().some((s) => s.target.equals(t)))
-          .map((t) => ({ target: t, reason: "unavailable", detail: "z3 could not be executed" })),
+          .filter((t) => !planSkipped.toArray().some((s) => s.isFor(t)))
+          .map((t) => (VerificationSkipped.reconstitute({ target: t, reason: "unavailable", detail: "z3 could not be executed" }))),
       ]),
       unavailableReason: reason,
     });
@@ -115,7 +116,7 @@ export class VerificationReport {
       irHash,
       method: "simulation",
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => ({ target: t, reason: "unavailable", detail: "quint CLI missing" }))),
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => (VerificationSkipped.reconstitute({ target: t, reason: "unavailable", detail: "quint CLI missing" })))),
       unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)",
     });
   }
@@ -135,8 +136,8 @@ export class VerificationReport {
       method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
-        ...model.obligations().toArray().map((ob) => ({ target: ob.id().asTargetId(), reason: "compile-error", detail: machineError })),
-        ...model.scenarios().toArray().map((sc) => ({ target: sc.id().asTargetId(), reason: "compile-error", detail: machineError })),
+        ...model.obligations().toArray().map((ob) => (VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: machineError }))),
+        ...model.scenarios().toArray().map((sc) => (VerificationSkipped.reconstitute({ target: sc.id().asTargetId(), reason: "compile-error", detail: machineError }))),
       ]),
     });
   }

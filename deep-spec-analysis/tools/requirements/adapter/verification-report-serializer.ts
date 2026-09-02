@@ -14,7 +14,7 @@ import {
   CrossCheckedEntries,
   VerificationFindings,
   VerificationSkips,
-  type VerificationSkipped,
+  VerificationSkipped,
   type VerificationWitness,
   VerificationReport,
   VerificationReportId,
@@ -45,8 +45,9 @@ function orderedDocument(report: VerificationReport): { [k: string]: Json } {
     return out as Json;
   });
   ordered.skipped = report.skipped().toArray().map((sk) => {
-    const out: { [k: string]: Json } = { target: sk.target.asString(), reason: sk.reason };
-    if (sk.detail !== undefined) out.detail = sk.detail;
+    const out: { [k: string]: Json } = { target: sk.target().asString(), reason: sk.reason() };
+    const detail = sk.detail();
+    if (detail !== undefined) out.detail = detail;
     return out as Json;
   });
   const crossChecked = report.crossChecked();
@@ -130,12 +131,11 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
     ),
     skipped: VerificationSkips.of(
       skipped.map((entry) => {
-        const sk: VerificationSkipped = {
+        return VerificationSkipped.reconstitute({
           target: TargetId.reconstitute(typeof entry.target === "string" ? entry.target : ""),
           reason: typeof entry.reason === "string" ? entry.reason : "",
-        };
-        if (typeof entry.detail === "string") sk.detail = entry.detail;
-        return sk;
+          ...(typeof entry.detail === "string" ? { detail: entry.detail } : {}),
+        });
       }),
     ),
     crossChecked: Array.isArray(raw.crossChecked)

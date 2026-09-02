@@ -9,6 +9,7 @@
 import { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
 import type { DesignModel } from "./design-model.ts";
 import { DesignFindings } from "./design-findings.ts";
+import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
 import type { DesignReportId } from "./design-report-id.ts";
 import { CheckedUnits } from "./checked-units.ts";
@@ -79,12 +80,12 @@ export class DesignReport {
       method,
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
-        [...u.allTargets()].map((t) => ({
+        [...u.allTargets()].map((t) => (DesignSkipped.reconstitute({
           target: t,
           reason: "ir-version-mismatch",
           unit: u.name(),
           detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
-        })),
+        }))),
       )),
     });
   }
@@ -107,7 +108,7 @@ export class DesignReport {
       method,
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
-        [...u.allTargets()].map((t) => ({ target: t, reason: "unavailable", unit: u.name(), detail: skipDetail })),
+        [...u.allTargets()].map((t) => (DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: skipDetail }))),
       )),
       unavailableReason: reason,
     });

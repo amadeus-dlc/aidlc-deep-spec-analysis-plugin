@@ -10,7 +10,7 @@ import { TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { type SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 import type { VerificationFinding } from "./verification-finding.ts";
-import { type VerificationSkipped } from "./verification-skipped.ts";
+import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 
@@ -104,7 +104,7 @@ export class SmtPlanFacts {
 
     const timeoutSkip = (targets: TargetIds, what: string): void => {
       for (const t of targets) {
-        skipped.push({ target: t, reason: "timeout", detail: `${what} exceeded the solver budget` });
+        skipped.push(VerificationSkipped.reconstitute({ target: t, reason: "timeout", detail: `${what} exceeded the solver budget` }));
       }
     };
 

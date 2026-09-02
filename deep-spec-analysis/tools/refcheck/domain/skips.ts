@@ -1,4 +1,3 @@
-import { IdOrder } from "../../kernel/domain/index.ts";
 import type { Skipped } from "./skipped.ts";
 
 // skip 記録のファーストクラスコレクション。正準ソート（target → reason）を
@@ -28,11 +27,7 @@ export class Skips {
 
   sortedCanonically(): Skips {
     return new Skips(
-      [...this.#values].sort((a, b) => {
-        const c = IdOrder.compare(a.target, b.target);
-        if (c !== 0) return c;
-        return a.reason < b.reason ? -1 : a.reason > b.reason ? 1 : 0;
-      }),
+      [...this.#values].sort((a, b) => a.compareTo(b)),
     );
   }
 

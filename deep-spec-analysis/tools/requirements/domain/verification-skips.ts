@@ -1,11 +1,7 @@
 import type { VerificationSkipped } from "./verification-skipped.ts";
 
 function sortVerificationSkipped(skipped: readonly VerificationSkipped[]): VerificationSkipped[] {
-  return [...skipped].sort((a, b) => {
-    const c = a.target.compareTo(b.target);
-    if (c !== 0) return c;
-    return a.reason < b.reason ? -1 : a.reason > b.reason ? 1 : 0;
-  });
+  return [...skipped].sort((a, b) => a.compareTo(b));
 }
 
 export class VerificationSkips {

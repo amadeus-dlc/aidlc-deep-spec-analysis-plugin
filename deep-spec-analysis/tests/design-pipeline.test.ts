@@ -23,7 +23,7 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, CheckedUnits, DesignFindings, DesignInputAnchors, DesignReports, DesignSkips, DesignUnits, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, DesignIgnore, DesignMachine, DesignObligation, DesignScenario, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignTransitions, InitialStates, DesignFinding, type DesignSkipped, type SiblingVerdictDocument, SiblingVerdictFindings, SiblingVerdictSkips, DesignModel, DesignReport, DesignReportId, DesignUnit, ExpressionCanonicalKey, LoweredUnit, DesignModelId, LoweredOriginRef, LoweredId } from "../tools/design/domain/index.ts";
+import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, CheckedUnits, DesignFindings, DesignInputAnchors, DesignReports, DesignSkips, DesignUnits, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, DesignIgnore, DesignMachine, DesignObligation, DesignScenario, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignTransitions, InitialStates, DesignFinding, DesignSkipped, type SiblingVerdictDocument, SiblingVerdictFindings, SiblingVerdictSkips, DesignModel, DesignReport, DesignReportId, DesignUnit, ExpressionCanonicalKey, LoweredUnit, DesignModelId, LoweredOriginRef, LoweredId } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -85,12 +85,12 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
               const candidates = sm.nonInitialCandidates(u.enumValuesOf(attrPath));
               if (candidates.length === 0) continue;
               expect(method).not.toBe("bounded");
-              skipped.push({
+              skipped.push(DesignSkipped.reconstitute({
                 target: sm.id().asTargetId(),
                 reason: "capability",
                 unit: u.name(),
                 detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
-              });
+              }));
             }
           }
         }
@@ -426,8 +426,8 @@ describe("remap (design vocabulary attribution)", () => {
       ],
     }));
     expect(out.findings.toArray()).toEqual([]);
-    expect(out.skipped.toArray().map((s) => `${s.target.asString()}:${s.reason}`)).toEqual(["TR-1:waived", "TR-2:waived"]);
-    expect(out.skipped.toArray()[0]?.detail).toBe(
+    expect(out.skipped.toArray().map((s) => `${s.target().asString()}:${s.reason()}`)).toEqual(["TR-1:waived", "TR-2:waived"]);
+    expect(out.skipped.toArray()[0]?.detail()).toBe(
       "machine SM-1 declares deterministic: false — the same-(state,trigger) overlap check is waived by the model",
     );
   });
@@ -451,8 +451,8 @@ describe("remap (design vocabulary attribution)", () => {
     expect(out.findings.toArray()[0]?.targets().toStrings()).toEqual(["DSC-1", "TR-1"]);
     expect(out.findings.toArray()[0]?.detail()).toBe("No rule for TR-1 applies");
     expect(out.findings.toArray()[0]?.witness()).toEqual({ core: ["g_TR_1", "ty_x"] });
-    expect(out.skipped.toArray().map((s) => `${s.target.asString()}:${s.reason}`)).toEqual(["TR-1:timeout", "DSC-1:capability"]);
-    expect(out.skipped.toArray()[0]?.detail).toBe("check for TR-1 timed out");
+    expect(out.skipped.toArray().map((s) => `${s.target().asString()}:${s.reason()}`)).toEqual(["TR-1:timeout", "DSC-1:capability"]);
+    expect(out.skipped.toArray()[0]?.detail()).toBe("check for TR-1 timed out");
   });
 });
 
@@ -495,11 +495,11 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(sorted[1]?.detail()).toBe("c");
     expect(sorted[3]?.unit()).toBe("u1");
     const skips = DesignSkips.of([
-      { target: TargetId.reconstitute("TR-2"), reason: "timeout", unit: "u2" },
-      { target: TargetId.reconstitute("TR-10"), reason: "waived", unit: "u1" },
-      { target: TargetId.reconstitute("TR-2"), reason: "capability", unit: "u1" },
+      DesignSkipped.reconstitute({ target: TargetId.reconstitute("TR-2"), reason: "timeout", unit: "u2" }),
+      DesignSkipped.reconstitute({ target: TargetId.reconstitute("TR-10"), reason: "waived", unit: "u1" }),
+      DesignSkipped.reconstitute({ target: TargetId.reconstitute("TR-2"), reason: "capability", unit: "u1" }),
     ]).sortedCanonically().toArray();
-    expect(skips.map((s) => `${s.unit}:${s.target.asString()}:${s.reason}`)).toEqual([
+    expect(skips.map((s) => `${s.unit()}:${s.target().asString()}:${s.reason()}`)).toEqual([
       "u1:TR-2:capability",
       "u1:TR-10:waived",
       "u2:TR-2:timeout",
@@ -563,7 +563,7 @@ describe("report ordering, cross-check, and degradations", () => {
         irHash: HASH,
         method: "exhaustive",
         findings: DesignFindings.of(violated ? [f("scenario-violation", "u1", ["DSC-1"], "x")] : []),
-        skipped: DesignSkips.of(skipKey ? [{ target: TargetId.reconstitute("DSC-1"), reason: "capability", unit: "u1" }] : []),
+        skipped: DesignSkips.of(skipKey ? [DesignSkipped.reconstitute({ target: TargetId.reconstitute("DSC-1"), reason: "capability", unit: "u1" })] : []),
         inputs: null,
         checked: null,
         crossChecked: null,
@@ -611,16 +611,16 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(unread.irHash().equals(ContentHash.ofText(""))).toBe(true);
 
     const mismatch = DesignReport.versionMismatch(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation");
-    expect(mismatch.skipped().toArray().map((s) => `${s.unit}:${s.target.asString()}:${s.reason}`)).toEqual([
+    expect(mismatch.skipped().toArray().map((s) => `${s.unit()}:${s.target().asString()}:${s.reason()}`)).toEqual([
       "u1:DOB-1:ir-version-mismatch",
       "u1:DSC-1:ir-version-mismatch",
       "u1:TR-1:ir-version-mismatch",
     ]);
-    expect(mismatch.skipped().toArray()[0]?.detail).toBe("design IR major version 2 is not supported by this backend (supports 1.x.x)");
+    expect(mismatch.skipped().toArray()[0]?.detail()).toBe("design IR major version 2 is not supported by this backend (supports 1.x.x)");
 
     const down = DesignReport.backendUnavailable(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation", "quint CLI is not available", "quint CLI missing");
     expect(down.unavailableReason()).toBe("quint CLI is not available");
-    expect(down.skipped().toArray().every((s) => s.reason === "unavailable" && s.detail === "quint CLI missing")).toBe(true);
+    expect(down.skipped().toArray().every((s) => s.reason() === "unavailable" && s.detail() === "quint CLI missing")).toBe(true);
   });
 
   test("the reachability variant keeps only events plus the single probe, and probeReached demands the final state", () => {

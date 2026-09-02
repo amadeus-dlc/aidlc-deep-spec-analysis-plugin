@@ -18,7 +18,7 @@ import type { Finding } from "./finding.ts";
 import type { UnitName } from "./unit-name.ts";
 import { WitnessRefs } from "./witness-refs.ts";
 import type { WitnessRef } from "./witness-ref.ts";
-import type { Skipped } from "./skipped.ts";
+import { Skipped } from "./skipped.ts";
 
 export class CheckFamilyLedger {
   readonly #families: CheckFamilies;
@@ -51,9 +51,12 @@ export class CheckFamilyLedger {
   }
 
   skip(family: CheckFamily, reason: string, detail: string): void {
-    const s: Skipped = { target: family.asCheckTarget(), reason, detail };
-    if (this.#unit !== undefined) s.unit = this.#unit.asString();
-    this.#skipped.push(s);
+    this.#skipped.push(Skipped.reconstitute({
+      target: family.asCheckTarget(),
+      reason,
+      detail,
+      ...(this.#unit !== undefined ? { unit: this.#unit.asString() } : {}),
+    }));
     this.#skippedFamilies.add(family.asString());
   }
 
