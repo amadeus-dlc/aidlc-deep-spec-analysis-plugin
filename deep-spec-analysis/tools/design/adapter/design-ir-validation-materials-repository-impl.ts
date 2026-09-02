@@ -25,7 +25,7 @@ import { err as repoErr } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignAttributeDecl, DesignBackgroundDecl } from "../domain/index.ts";
-import type {
+import {
   DesignEntityDecl,
   DesignIgnoreDecl,
   DesignMachineDecl,
@@ -99,7 +99,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
         max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
       }));
     }
-    entities.push({ name: DesignEntityName.reconstitute(ent.name), attributes: DesignAttributeDecls.of(attributes) });
+    entities.push(DesignEntityDecl.reconstitute({ name: DesignEntityName.reconstitute(ent.name), attributes: DesignAttributeDecls.of(attributes) }));
   }
 
   const obligations: DesignObligationDecl[] = [];
@@ -145,9 +145,9 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     const ignores: DesignIgnoreDecl[] = [];
     for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
       if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
-      ignores.push({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger) });
+      ignores.push(DesignIgnoreDecl.reconstitute({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger) }));
     }
-    stateMachines.push({ id: DesignMachineId.reconstitute(sm.id), attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) });
+    stateMachines.push(DesignMachineDecl.reconstitute({ id: DesignMachineId.reconstitute(sm.id), attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
   }
 
   const scenarios: DesignScenarioDecl[] = [];
@@ -181,7 +181,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
   const rulesPath = recordRoot === null ? null : join(recordRoot, "construction", unitName, "functional-design", "rules.md");
   const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
 
-  return {
+  return DesignUnitDecl.reconstitute({
     unit: DesignUnitId.of(unitName),
     entities: DesignEntityDecls.of(entities),
     obligations: DesignObligationDecls.of(obligations),
@@ -191,7 +191,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     unformalizedTargets: UnformalizedTargets.of(unformalizedTargets),
     directoryExists,
     rulesMarkdown,
-  };
+  });
 }
 
 export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValidationMaterialsRepository {

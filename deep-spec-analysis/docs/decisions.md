@@ -1568,3 +1568,19 @@ reconstitutes. `SiblingVerdictFinding` carries `FrRefs` and lowered ids
 `asString()` at the one boundary where the lowering index is still
 keyed by strings. Three primitive-field descriptors leave the ledger
 (104 remain); DATA_MODEL_DEBT is untouched at 98 of 122.
+
+Wave 13 (same PR): the design IR declarations stop being data models.
+`DesignEntityDecl`, `DesignIgnoreDecl`, `DesignMachineDecl` and
+`DesignUnitDecl` — the well-formedness materials the adapter's tolerant
+parse hands to the judge — become commandable classes with private
+constructors and `reconstitute` doors, and the judgements the judge used
+to make by reading their fields move onto them: the entity walks its
+attributes with the coordinate and the duplicate flag
+(`inspectAttributes`), the ignore knows whether its state belongs to the
+machine's state set and its transition cell key (`isStateAmong`,
+`cellKey`), the machine selects the initial states outside the state set
+in declaration order (`initialStatesOutside`), and the unit owns the
+construction-directory judgement (`lacksConstructionDirectory`). The
+judge keeps only the frozen wordings and their order; the adapter and
+the tests reconstitute. 4 ledger entries reclaimed — the ledger holds 94
+of 122.

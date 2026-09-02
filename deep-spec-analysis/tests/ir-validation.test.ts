@@ -23,10 +23,11 @@ import {
   DesignAttributeDecl,
   DesignAttributeDecls,
   DesignBackgroundDecls,
+  DesignEntityDecl,
   DesignEntityDecls,
-  type DesignIgnoreDecl,
+  DesignIgnoreDecl,
   DesignIgnoreDecls,
-  type DesignMachineDecl,
+  DesignMachineDecl,
   DesignMachineDecls,
   DesignModelId,
   DesignObligationDecl,
@@ -35,7 +36,7 @@ import {
   DesignScenarioDecls,
   DesignTransitionDecl,
   DesignTransitionDecls,
-  type DesignUnitDecl,
+  DesignUnitDecl,
   DesignUnitDecls,
   designWellFormednessErrors,
   InitialStates,
@@ -574,8 +575,8 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   type RawEntity = { name: string; attributes: RawAttr[] };
   type RawObligation = Omit<Parameters<typeof DesignObligationDecl.reconstitute>[0], "id" | "origin" | "brRefs"> & { id: string; origin?: string; brRefs?: string[] };
   type RawTransition = Omit<Parameters<typeof DesignTransitionDecl.reconstitute>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs?: string[]; trigger?: string };
-  type RawIgnore = Omit<DesignIgnoreDecl, "trigger"> & { trigger: string };
-  type RawMachine = Omit<DesignMachineDecl, "id" | "initial" | "transitions" | "ignores"> & {
+  type RawIgnore = Omit<Parameters<typeof DesignIgnoreDecl.reconstitute>[0], "trigger"> & { trigger: string };
+  type RawMachine = Omit<Parameters<typeof DesignMachineDecl.reconstitute>[0], "id" | "initial" | "transitions" | "ignores"> & {
     id: string;
     initial: string[];
     transitions: RawTransition[];
@@ -599,10 +600,10 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
   };
   const brRefs = (refs: string[] | undefined) => (refs === undefined ? undefined : BrRefs.of(refs));
   function unit(overrides: RawUnit): DesignUnitDecl {
-    return {
+    return DesignUnitDecl.reconstitute({
       unit: DesignUnitId.of("u1"),
       entities: DesignEntityDecls.of(
-        (overrides.entities ?? []).map((e) => ({
+        (overrides.entities ?? []).map((e) => DesignEntityDecl.reconstitute({
           name: DesignEntityName.reconstitute(e.name),
           attributes: DesignAttributeDecls.of(
             e.attributes.map((a) => DesignAttributeDecl.reconstitute({
@@ -624,7 +625,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
         })),
       ),
       stateMachines: DesignMachineDecls.of(
-        (overrides.stateMachines ?? []).map((sm) => ({
+        (overrides.stateMachines ?? []).map((sm) => DesignMachineDecl.reconstitute({
           ...sm,
           id: DesignMachineId.reconstitute(sm.id),
           initial: InitialStates.of(sm.initial),
@@ -636,7 +637,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
               trigger: tr.trigger === undefined ? undefined : TriggerName.reconstitute(tr.trigger),
             })),
           ),
-          ignores: DesignIgnoreDecls.of(sm.ignores.map((g) => ({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
+          ignores: DesignIgnoreDecls.of(sm.ignores.map((g) => DesignIgnoreDecl.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
         })),
       ),
       scenarios: DesignScenarioDecls.of(
@@ -648,7 +649,7 @@ describe("designWellFormednessErrors (contract 3 domain branches)", () => {
       unformalizedTargets: UnformalizedTargets.of(overrides.unformalizedTargets ?? []),
       directoryExists: overrides.directoryExists ?? true,
       rulesMarkdown: overrides.rulesMarkdown ?? null,
-    };
+    });
   }
 
   test("duplicate unit names are reported once per repeat", () => {
@@ -903,7 +904,7 @@ describe("design decl collections (first-class operations)", () => {
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
 
-    const entity = { name: DesignEntityName.reconstitute("t"), attributes: attrs };
+    const entity = DesignEntityDecl.reconstitute({ name: DesignEntityName.reconstitute("t"), attributes: attrs });
     const entities = DesignEntityDecls.of([]).add(entity);
     expect([...entities]).toEqual([entity]);
     expect(entities.toArray()).toEqual([entity]);
@@ -918,12 +919,12 @@ describe("design decl collections (first-class operations)", () => {
     expect([...trs]).toEqual([tr]);
     expect(trs.toArray()).toEqual([tr]);
 
-    const ig = { state: "open", trigger: TriggerName.reconstitute("close") };
+    const ig = DesignIgnoreDecl.reconstitute({ state: "open", trigger: TriggerName.reconstitute("close") });
     const igs = DesignIgnoreDecls.of([]).add(ig);
     expect([...igs]).toEqual([ig]);
     expect(igs.toArray()).toEqual([ig]);
 
-    const sm = { id: DesignMachineId.reconstitute("SM-1"), attrPath: "t.state", initial, transitions: trs, ignores: igs };
+    const sm = DesignMachineDecl.reconstitute({ id: DesignMachineId.reconstitute("SM-1"), attrPath: "t.state", initial, transitions: trs, ignores: igs });
     const sms = DesignMachineDecls.of([]).add(sm);
     expect([...sms]).toEqual([sm]);
     expect(sms.toArray()).toEqual([sm]);
@@ -938,7 +939,7 @@ describe("design decl collections (first-class operations)", () => {
     expect([...bgs]).toEqual([bg]);
     expect(bgs.toArray()).toEqual([bg]);
 
-    const ud: DesignUnitDecl = {
+    const ud = DesignUnitDecl.reconstitute({
       unit: DesignUnitId.of("u1"),
       entities,
       obligations: obs,
@@ -948,7 +949,7 @@ describe("design decl collections (first-class operations)", () => {
       unformalizedTargets: unformalized,
       directoryExists: true,
       rulesMarkdown: null,
-    };
+    });
     const uds = DesignUnitDecls.of([]).add(ud);
     expect([...uds]).toEqual([ud]);
     expect(uds.toArray()).toEqual([ud]);

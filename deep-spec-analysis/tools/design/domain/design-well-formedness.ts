@@ -16,7 +16,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
   const unitNames = new Set<string>();
 
   for (const unitView of units) {
-    const unitName = unitView.unit.asString();
+    const unitName = unitView.unit().asString();
     const where = (s: string): string => `unit ${unitName}: ${s}`;
     if (unitNames.has(unitName)) errors.push(`duplicate unit "${unitName}"`);
     unitNames.add(unitName);
@@ -25,12 +25,10 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     // 主従の裁定（#71 波1）: カタログは宣言そのものを保持し、判断は宣言へ
     // 命じる——判事は文言（凍結面）だけを所有する。
     const attrTypes = new Map<string, DesignAttributeDecl>();
-    for (const ent of unitView.entities) {
-      const attrNames = new Set<string>();
-      for (const attr of ent.attributes) {
-        const coord = `${ent.name.asString()}.${attr.name().asString()}`;
-        if (attrNames.has(attr.name().asString())) errors.push(where(`duplicate attribute "${coord}"`));
-        attrNames.add(attr.name().asString());
+    for (const ent of unitView.entities()) {
+      // 座標と重複はエンティティ宣言に問う（#71 波13）。
+      ent.inspectAttributes((coord, attr, duplicated) => {
+        if (duplicated) errors.push(where(`duplicate attribute "${coord}"`));
         if (attr.lacksIntBounds()) {
           errors.push(
             where(`${coord}: int attributes require min and max — the Quint backend needs bounded domains`),
@@ -43,7 +41,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
           errors.push(where(`${coord}: bounds must be safe integers`));
         }
         attrTypes.set(coord, attr);
-      }
+      });
     }
 
     // SMT 変数符号化はドットを下線に潰すため、下線を含む識別子どうしで
@@ -109,7 +107,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
       for (const b of refs) brRefsUsed.add(b);
     };
 
-    for (const ob of unitView.obligations) {
+    for (const ob of unitView.obligations()) {
       const ctx = `obligation ${ob.id().asString()}`;
       dup(ob.id().asString(), ctx);
       collectBr(ob.brRefs());
@@ -119,10 +117,10 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
       ob.inspectExpressions((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
     }
 
-    for (const sm of unitView.stateMachines) {
-      const ctx = `machine ${sm.id.asString()}`;
-      dup(sm.id.asString(), ctx);
-      const attrPath = sm.attrPath;
+    for (const sm of unitView.stateMachines()) {
+      const ctx = `machine ${sm.id().asString()}`;
+      dup(sm.id().asString(), ctx);
+      const attrPath = sm.attrPath();
       const attr = attrTypes.get(attrPath);
       if (!attr) {
         errors.push(where(`${ctx}: lifecycle attribute "${attrPath}" is not declared`));
@@ -133,13 +131,11 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
         errors.push(where(`${ctx}: lifecycle attribute "${attrPath}" is not an enum — its values are the state set`));
         continue;
       }
-      for (const s of sm.initial) {
-        if (!states.includes(s)) {
-          errors.push(where(`${ctx}: initial state "${s}" is not a value of ${attrPath}`));
-        }
+      for (const s of sm.initialStatesOutside(states)) {
+        errors.push(where(`${ctx}: initial state "${s}" is not a value of ${attrPath}`));
       }
       const transitionCells = new Set<string>();
-      for (const tr of sm.transitions) {
+      for (const tr of sm.transitions()) {
         const tctx = `transition ${tr.id().asString()}`;
         dup(tr.id().asString(), tctx);
         collectBr(tr.brRefs());
@@ -155,19 +151,19 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
           errors.push(where(`${tctx}: the effect assigns the machine's own attribute "${attrPath}" — state' = to is implicit`));
         }
       }
-      for (const ig of sm.ignores) {
-        if (!states.includes(ig.state)) {
-          errors.push(where(`${ctx}: ignores state "${ig.state}" is not a value of ${attrPath}`));
+      for (const ig of sm.ignores()) {
+        if (!ig.isStateAmong(states)) {
+          errors.push(where(`${ctx}: ignores state "${ig.state()}" is not a value of ${attrPath}`));
         }
-        if (transitionCells.has(`${ig.state}|${ig.trigger.asString()}`)) {
+        if (transitionCells.has(ig.cellKey())) {
           errors.push(
-            where(`${ctx}: ignores (${ig.state}, ${ig.trigger.asString()}) collides with a declared transition for the same (state, trigger)`),
+            where(`${ctx}: ignores (${ig.state()}, ${ig.trigger().asString()}) collides with a declared transition for the same (state, trigger)`),
           );
         }
       }
     }
 
-    for (const sc of unitView.scenarios) {
+    for (const sc of unitView.scenarios()) {
       const ctx = `scenario ${sc.id().asString()}`;
       dup(sc.id().asString(), ctx);
       collectBr(sc.brRefs());
@@ -183,7 +179,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
     }
 
-    for (const bg of unitView.background) {
+    for (const bg of unitView.background()) {
       const ctx = `background ${bg.id().asString()}`;
       dup(bg.id().asString(), ctx);
       bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
@@ -193,12 +189,12 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
     // A unit name that matches no construction directory is an error even
     // with zero brRefs: a typo would otherwise erase the whole BR coverage
     // check silently ("Silence is a contract violation").
-    if (!unitView.directoryExists) {
+    if (unitView.lacksConstructionDirectory()) {
       errors.push(
         where(`no construction/${unitName}/ directory exists under this record — the unit name matches no unit-of-work, so BR coverage cannot be verified`),
       );
     }
-    const rulesMd = unitView.rulesMarkdown;
+    const rulesMd = unitView.rulesMarkdown();
     if (rulesMd === null) {
       if (brRefsUsed.size > 0) {
         errors.push(
@@ -210,7 +206,7 @@ export function designWellFormednessErrors(units: DesignUnitDecls): string[] {
       for (const br of [...brRefsUsed].sort()) {
         if (!known.has(br)) errors.push(where(`brRef "${br}" does not exist in rules.md`));
       }
-      const unformalizedTargets = unitView.unformalizedTargets;
+      const unformalizedTargets = unitView.unformalizedTargets();
       for (const br of known.sortedIds()) {
         if (!brRefsUsed.has(br) && !unformalizedTargets.covers(br)) {
           errors.push(
