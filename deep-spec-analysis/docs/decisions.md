@@ -1806,7 +1806,7 @@ unlike the ledger, it is not a debt to shrink. `DATA_MODEL_DEBT` is now
 empty (122 → 0) and stays shrink-only, so any new record in the domain
 fails the rule outright. The primitive-field ceiling drops to 83.
 
-## Domain-object taxonomy ruling — entities, value objects and first-class collections; everything else by human ruling (2026-09-02)
+## Domain-object taxonomy ruling — entities, value objects, first-class collections and domain events; everything else by human ruling (2026-09-02)
 
 The owner ruled the closed set of domain-object kinds that may live in
 `tools/*/domain` without a further ruling:
@@ -1821,6 +1821,11 @@ The owner ruled the closed set of domain-object kinds that may live in
   commandable abstract data types (verdicts, outcomes, statuses).
 - **First-class collections** — the wrappers that hide an array, a set
   or a map behind collection knowledge.
+- **Domain events** — the immutable records of something that happened
+  in the domain, named in the past tense and raised by an aggregate.
+  The baseline audit found none in the current domain layers (the
+  `*Event` names there — `DesignEvent`, the event obligations — are the
+  IR's vocabulary for guarded transitions, i.e. value objects).
 
 Everything else is not implemented on the agent's own judgement:
 
@@ -1834,9 +1839,9 @@ Everything else is not implemented on the agent's own judgement:
   proposed countermeasure, and is implemented only after the ruling.
 
 The wave ritual reports every domain file that cannot be classified as
-one of the three kinds. The baseline audit of 2026-09-02 (296 exported
+one of the four kinds. The baseline audit of 2026-09-02 (296 exported
 classes, 1 free function, 11 type aliases under `tools/*/domain`) found
-the following citizens outside the three kinds; each awaits the owner's
+the following citizens outside the four kinds; each awaits the owner's
 ruling and none is changed by this entry:
 
 - Companion (static-only) classes, i.e. domain services in class form:
