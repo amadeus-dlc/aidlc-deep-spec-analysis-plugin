@@ -37,7 +37,6 @@ export { SmtEventPairProbes } from "./smt-event-pair-probes.ts";
 export { type TraceState } from "./trace-state.ts";
 export { type DecodedValue } from "./decoded-value.ts";
 export { TraceStates } from "./trace-states.ts";
-export { ExpressionEvaluation } from "./expression-evaluation.ts";
 export { QuintMachineFacts } from "./quint-machine-facts.ts";
 export { QuintMachineComponent } from "./quint-machine-component.ts";
 export { QuintMachineComponents } from "./quint-machine-components.ts";

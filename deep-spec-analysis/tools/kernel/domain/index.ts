@@ -3,7 +3,7 @@
 // アダプタ層の知識であり、ユビキタス言語ではない（オーナー裁定 2026-08-30）。
 
 export { type Expression } from "./expression.ts";
-export { Expressions } from "./expressions.ts";
+export { ExpressionTree } from "./expression-tree.ts";
 export { ContentHash } from "./content-hash.ts";
 export { IrVersion } from "./ir-version.ts";
 export { TargetId } from "./target-id.ts";

@@ -5,7 +5,7 @@
 // smtOf / buildPlan からの逐語移植（IrDoc → RequirementsModel の読み替えのみ）。
 // 描画語彙（smtVar/smtName/smtLit/smtIntOf）は移行 PR8 で kernel 共有へ。
 
-import { type Expression, Expressions, TriggerName } from "../../kernel/domain/index.ts";
+import { type Expression, ExpressionTree, TriggerName } from "../../kernel/domain/index.ts";
 import { smtIntOf, smtLit, smtName, smtVar } from "../../kernel/adapter/index.ts";
 import type { SmtChildQuery } from "./smt-child-query.ts";
 import {
@@ -212,7 +212,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         continue;
       }
       try {
-        if (Expressions.usesPrime(event.guard)) throw new CompileError("guard must not use primed references");
+        if (ExpressionTree.of(event.guard).usesPrime()) throw new CompileError("guard must not use primed references");
         smtOf(model, event.guard);
         smtOf(model, event.effect);
         events.push(ob);

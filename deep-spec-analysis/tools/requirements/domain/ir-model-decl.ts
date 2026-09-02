@@ -10,7 +10,7 @@
 // ときの黙殺条件（isObject / typeof チェック）はパーサ側へ移り、ここに来る
 // 時点で型は確定している。
 
-import { type Expression, Expressions } from "../../kernel/domain/index.ts";
+import { type Expression, ExpressionTree } from "../../kernel/domain/index.ts";
 import { type IrAttributeDecl } from "./ir-attribute-decl.ts";
 import { IrBackgroundDecls } from "./ir-background-decls.ts";
 import { IrEntityDecls } from "./ir-entity-decls.ts";
@@ -106,7 +106,7 @@ export class IrModelDecl {
     }
 
     const checkExpr = (e: Expression, where: string, primesAllowed: boolean): void => {
-      Expressions.walk(e, (node) => {
+      ExpressionTree.of(e).walk((node) => {
         if (node.op === "ref" && typeof node.path === "string") {
           if (!attrTypes.has(node.path)) {
             errors.push(`${where}: unresolvable reference "${node.path}"`);

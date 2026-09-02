@@ -3,7 +3,7 @@
 // 所有する（#71 波5b）。承認理由（reason）は design IR 上の必須注記として
 // 文書に残るが、domain から読む者はいないので運ばない（#71 波9）。
 
-import { Expressions, type Expression, type TriggerName } from "../../kernel/domain/index.ts";
+import { type Expression, type TriggerName } from "../../kernel/domain/index.ts";
 
 export class DesignIgnore {
   readonly #state: string;
@@ -23,7 +23,7 @@ export class DesignIgnore {
 
   // compile-down のガード: その状態に居るときだけ no-op が発火する。
   loweredGuard(attrPath: string): Expression {
-    return Expressions.eqRef(attrPath, false, this.#state);
+    return { op: "eq", args: [{ op: "ref", path: attrPath }, { op: "enum", value: this.#state }] };
   }
 
   // compile-down の効果: 状態は動かない（state' == state の明示 no-op）。

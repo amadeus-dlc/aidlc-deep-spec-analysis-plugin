@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, TargetId, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { TriggerName, TargetId, ContentHash, IrVersion, ArtifactPath, type Expression} from "../tools/kernel/domain/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
@@ -30,38 +30,7 @@ import {
   VerificationReportRepositoryImpl,
   renderVerificationReportBytes,
 } from "../tools/requirements/adapter/index.ts";
-import {
-  BackgroundAssumption,
-  Scenario,
-  Obligation,
-  AttributeDeclaration,
-  AttributeDeclarations,
-  AttributeValues,
-  FrRefs,
-  ObligationId,
-  ObligationNature,
-  ScenarioId,
-  Obligations,
-  Scenarios,
-  BackgroundAssumptions,
-  RequirementsModel,
-  QuintMachineComponents,
-  QuintMachineFacts,
-  QuintMachineComponent,
-  QuintMachineRunVerdict,
-  QuintRuns,
-  QuintScenarioVerdict,
-  QuintTemporalVerdict,
-  TraceStates,
-  VerificationReport,
-  VerificationReportId,
-  VerificationSkips,
-  ExpressionEvaluation,
-  FormalModelId,
-  ObligationIds,
-  VerificationSkipped,
-  VerificationFinding,
-} from "../tools/requirements/domain/index.ts";
+import { BackgroundAssumption, Scenario, Obligation, AttributeDeclaration, AttributeDeclarations, AttributeValues, FrRefs, ObligationId, ObligationNature, ScenarioId, Obligations, Scenarios, BackgroundAssumptions, RequirementsModel, QuintMachineComponents, QuintMachineFacts, QuintMachineComponent, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationReportId, VerificationSkips, FormalModelId, ObligationIds, VerificationSkipped, VerificationFinding, VerificationReport} from "../tools/requirements/domain/index.ts";
 import {
   type FormalModelRepository,
   type QuintCheckResult,
@@ -371,32 +340,37 @@ describe("quint verdict interpretation", () => {
   });
 });
 
-describe("expression evaluation (pure attribution)", () => {
+describe("expression evaluation (the invariant component's own attribution, ruling 5)", () => {
   const state = { "T.n": 3, "T.b": true, "T.s": "on" };
   const ref = (path: string) => ({ op: "ref", path });
   const int = (value: number) => ({ op: "int", value });
+  // 成分は「式が true でないとき違反」——holds は評価が true のときだけ真になる。
+  const violated = (expression: Expression): boolean => QuintMachineComponent.reconstitute({ id: ObligationId.reconstitute("OB-1"), expression }).isViolatedIn(state);
+  const holds = (expression: Expression): boolean => !violated(expression);
+  const equalsInt = (expression: Expression, value: number): Expression => ({ op: "eq", args: [expression, int(value)] });
 
   test("boolean, comparison, and arithmetic operators evaluate over the state", () => {
-    expect(ExpressionEvaluation.evaluate({ op: "and", args: [{ op: "bool", value: true }, ref("T.b")] }, state)).toBe(true);
-    expect(ExpressionEvaluation.evaluate({ op: "or", args: [{ op: "bool", value: false }] }, state)).toBe(false);
-    expect(ExpressionEvaluation.evaluate({ op: "not", args: [ref("T.b")] }, state)).toBe(false);
-    expect(ExpressionEvaluation.evaluate({ op: "implies", args: [ref("T.b"), { op: "bool", value: false }] }, state)).toBe(false);
-    expect(ExpressionEvaluation.evaluate({ op: "iff", args: [ref("T.b"), { op: "bool", value: true }] }, state)).toBe(true);
-    expect(ExpressionEvaluation.evaluate({ op: "eq", args: [ref("T.s"), { op: "enum", value: "on" }] }, state)).toBe(true);
-    expect(ExpressionEvaluation.evaluate({ op: "ne", args: [ref("T.n"), int(3)] }, state)).toBe(false);
-    expect(ExpressionEvaluation.evaluate({ op: "lt", args: [ref("T.n"), int(4)] }, state)).toBe(true);
-    expect(ExpressionEvaluation.evaluate({ op: "le", args: [ref("T.n"), int(3)] }, state)).toBe(true);
-    expect(ExpressionEvaluation.evaluate({ op: "gt", args: [ref("T.n"), int(3)] }, state)).toBe(false);
-    expect(ExpressionEvaluation.evaluate({ op: "ge", args: [ref("T.n"), int(3)] }, state)).toBe(true);
-    expect(ExpressionEvaluation.evaluate({ op: "add", args: [ref("T.n"), int(1)] }, state)).toBe(4);
-    expect(ExpressionEvaluation.evaluate({ op: "sub", args: [ref("T.n"), int(1)] }, state)).toBe(2);
-    expect(ExpressionEvaluation.evaluate({ op: "mul", args: [ref("T.n"), int(2)] }, state)).toBe(6);
+    expect(holds({ op: "and", args: [{ op: "bool", value: true }, ref("T.b")] })).toBe(true);
+    expect(holds({ op: "or", args: [{ op: "bool", value: false }] })).toBe(false);
+    expect(holds({ op: "not", args: [ref("T.b")] })).toBe(false);
+    expect(holds({ op: "implies", args: [ref("T.b"), { op: "bool", value: false }] })).toBe(false);
+    expect(holds({ op: "iff", args: [ref("T.b"), { op: "bool", value: true }] })).toBe(true);
+    expect(holds({ op: "eq", args: [ref("T.s"), { op: "enum", value: "on" }] })).toBe(true);
+    expect(holds({ op: "ne", args: [ref("T.n"), int(3)] })).toBe(false);
+    expect(holds({ op: "lt", args: [ref("T.n"), int(4)] })).toBe(true);
+    expect(holds({ op: "le", args: [ref("T.n"), int(3)] })).toBe(true);
+    expect(holds({ op: "gt", args: [ref("T.n"), int(3)] })).toBe(false);
+    expect(holds({ op: "ge", args: [ref("T.n"), int(3)] })).toBe(true);
+    expect(holds(equalsInt({ op: "add", args: [ref("T.n"), int(1)] }, 4))).toBe(true);
+    expect(holds(equalsInt({ op: "sub", args: [ref("T.n"), int(1)] }, 2))).toBe(true);
+    expect(holds(equalsInt({ op: "mul", args: [ref("T.n"), int(2)] }, 6))).toBe(true);
   });
 
-  test("missing references and unknown operators fall to null (tolerant evaluation)", () => {
-    expect(ExpressionEvaluation.evaluate({ op: "ref", path: "T.missing" }, state)).toBe(null);
-    expect(ExpressionEvaluation.evaluate({ op: "mystery" }, state)).toBe(null);
-    expect(ExpressionEvaluation.evaluate({ op: "int", value: 7 }, state)).toBe(7);
+  test("missing references and unknown operators fall to null (tolerant evaluation counts as violated)", () => {
+    expect(violated({ op: "ref", path: "T.missing" })).toBe(true);
+    expect(violated({ op: "mystery" })).toBe(true);
+    expect(holds(equalsInt({ op: "int", value: 7 }, 7))).toBe(true);
+    expect(holds({ op: "eq", args: [{ op: "ref", path: "T.missing" }, { op: "mystery" }] })).toBe(true);
   });
 });
 
@@ -437,8 +411,3 @@ describe("quint facts collections (first-class operations)", () => {
   });
 });
 
-describe("companion seals", () => {
-  test("ExpressionEvaluation is sealed", () => {
-    expect(ExpressionEvaluation.isSealed()).toBe(true);
-  });
-});

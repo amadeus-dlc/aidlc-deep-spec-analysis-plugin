@@ -5,7 +5,7 @@ import { ReqAttributeValues } from "./req-attribute-values.ts";
 // 所有する。AlphaContext は文脈（索引と未カバー検出）、UnitRefinementPlan は
 // gap 文言（凍結面）だけを担う（主従の裁定・#71 波5）。
 
-import { Expressions, type Expression } from "../../kernel/domain/index.ts";
+import { ExpressionTree, type Expression } from "../../kernel/domain/index.ts";
 import { type AttributePath } from "../../requirements/domain/index.ts";
 import { AlphaError } from "./alpha-error.ts";
 
@@ -140,10 +140,6 @@ export class AttributeMapping {
   referencedPaths(): readonly string[] {
     const variant = this.#variant;
     if (variant.kind !== "expression") return [];
-    const refs = new Set<string>();
-    Expressions.walk(variant.expr, (node) => {
-      if (node.op === "ref" && typeof node.path === "string") refs.add(node.path);
-    });
-    return [...refs].sort();
+    return ExpressionTree.of(variant.expr).referencedPaths();
   }
 }

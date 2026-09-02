@@ -3,7 +3,7 @@
 // ∧ 明示効果、代入表の state 遷移代入）は遷移自身が所有する——lowering と
 // イベントカタログの2箇所に重複していた知識をここに戻す（#71 波5b）。
 
-import { Expressions, type Expression, type TriggerName } from "../../kernel/domain/index.ts";
+import { type Expression, type TriggerName } from "../../kernel/domain/index.ts";
 import { type BrRefs } from "./br-refs.ts";
 import { DesignTransitionId } from "./design-transition-id.ts";
 
@@ -38,15 +38,21 @@ export class DesignTransition {
   effect(): Expression | undefined { return this.#effect; }
   brRefs(): BrRefs { return this.#brRefs; }
 
+  // `attrPath == enum(state)`（prime なら `attrPath' == enum(state)`）——状態機械の
+  // 暗黙ガード／効果の符号。ignore の no-op 等式と同じ形（裁定 2）。
+  #stateEquality(attrPath: string, state: string, prime: boolean): Expression {
+    return { op: "eq", args: [prime ? { op: "ref", path: attrPath, prime: true } : { op: "ref", path: attrPath }, { op: "enum", value: state }] };
+  }
+
   // compile-down の暗黙ガード: 遷移は出自状態に居るときだけ発火する。
   loweredGuard(attrPath: string): Expression {
-    const base = Expressions.eqRef(attrPath, false, this.#from);
+    const base = this.#stateEquality(attrPath, this.#from, false);
     return this.#guard === undefined ? base : { op: "and", args: [base, this.#guard] };
   }
 
   // compile-down の暗黙効果: 発火すれば状態は行先へ進む。
   loweredEffect(attrPath: string): Expression {
-    const base = Expressions.eqRef(attrPath, true, this.#to);
+    const base = this.#stateEquality(attrPath, this.#to, true);
     return this.#effect === undefined ? base : { op: "and", args: [base, this.#effect] };
   }
 

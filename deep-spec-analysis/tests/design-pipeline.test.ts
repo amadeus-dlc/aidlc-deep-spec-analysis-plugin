@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
 import type { Json } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression } from "../tools/kernel/domain/index.ts";
+import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression, ExpressionTree} from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -65,7 +65,6 @@ import {
   DesignReport,
   DesignReportId,
   DesignUnit,
-  ExpressionCanonicalKey,
   LoweredUnit,
   DesignModelId,
   LoweredId,
@@ -396,9 +395,14 @@ describe("lowering (typed compile-down)", () => {
       { op: "and", args: [{ op: "bool", value: true }, { op: "int", value: -3 }] },
       { op: "not", args: [{ op: "ref", path: "A.b" }] },
     ];
-    for (const s of samples) {
-      expect(ExpressionCanonicalKey.of(s)).toBe(canonicalStringify(s as unknown as Json));
+    for (const a of samples) {
+      for (const b of samples) {
+        const sameBytes = canonicalStringify(a as unknown as Json) === canonicalStringify(b as unknown as Json);
+        expect(ExpressionTree.of(a).isCanonicallyEqual(ExpressionTree.of(b))).toBe(sameBytes);
+      }
     }
+    // キー順に依らない正準性——並べ替えた同値の木は同一。
+    expect(ExpressionTree.of({ op: "eq", args: [{ path: "A.b", op: "ref" }, { value: "x", op: "enum" }] }).isCanonicallyEqual(ExpressionTree.of(samples[0] as never))).toBe(false);
   });
 });
 
@@ -748,8 +752,3 @@ describe("lowered collections and the lowering index (first-class operations)", 
   });
 });
 
-describe("companion seals", () => {
-  test("ExpressionCanonicalKey is sealed", () => {
-    expect(ExpressionCanonicalKey.isSealed()).toBe(true);
-  });
-});
