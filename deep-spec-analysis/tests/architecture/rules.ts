@@ -414,15 +414,12 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "design/domain/design-background-assumption.ts",
   "design/domain/design-cross-checked-entry.ts",
   "design/domain/design-input-anchor.ts",
-  "design/domain/design-model-composition.ts",
-  "design/domain/design-report-composition.ts",
   "design/domain/design-skipped.ts",
   "design/domain/design-value.ts",
   "design/domain/lowered-background.ts",
   "design/domain/lowered-obligation.ts",
   "design/domain/lowered-origin.ts",
   "design/domain/lowered-scenario.ts",
-  "design/domain/remapped-unit.ts",
   "design/domain/sibling-verdict-document.ts",
   "design/domain/sibling-verdict-finding.ts",
   "design/domain/sibling-verdict-skip.ts",
@@ -453,7 +450,6 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "refcheck/domain/witness-ref.ts",
   "refinement/domain/design-event.ts",
   "refinement/domain/event-mapping.ts",
-  "refinement/domain/interpreted-refinement-verdicts.ts",
   "refinement/domain/ref-token-carrier.ts",
   "refinement/domain/refinement-attribute.ts",
   "refinement/domain/refinement-map-acquisition.ts",
@@ -467,14 +463,11 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "requirements/domain/cross-checked-entry.ts",
   "requirements/domain/decoded-value.ts",
   "requirements/domain/fr-ref-claim.ts",
-  "requirements/domain/interpreted-quint-verdicts.ts",
-  "requirements/domain/interpreted-verdicts.ts",
   "requirements/domain/quint-scenario-verdict.ts",
   "requirements/domain/quint-temporal-verdict.ts",
   "requirements/domain/smt-event-pair-probe.ts",
   "requirements/domain/trace-state.ts",
   "requirements/domain/verification-finding.ts",
-  "requirements/domain/verification-report-composition.ts",
   "requirements/domain/verification-skipped.ts",
   "requirements/domain/verification-witness.ts",
 ]);
@@ -619,7 +612,7 @@ export function primitiveFieldsOf(rawSource: string): string[] {
 
 // 台帳の記述子総数の上限。台帳が縮んだら下げる——上げる変更は裁定違反で、
 // 新しい負債を記述子ごと台帳へ足す抜け道を diff 上で可視化する（レビュー指摘）。
-export const PRIMITIVE_FIELD_DEBT_CEILING = 93;
+export const PRIMITIVE_FIELD_DEBT_CEILING = 90;
 
 export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([
   ["design/domain/br-reference-index.ts", new Set(["#ids: Set<string>"])],
@@ -628,14 +621,12 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["design/domain/design-attribute-decl.ts", new Set(["#kind: string"])],
   ["design/domain/design-finding.ts", new Set(["#kind: string", "#unit: string"])],
   ["design/domain/design-input-anchor.ts", new Set(["DesignInputAnchor.artifact: string"])],
-  ["design/domain/design-report-composition.ts", new Set(["DesignReportComposition.method: string"])],
   ["design/domain/design-report.ts", new Set(["#method: string"])],
   ["design/domain/design-skipped.ts", new Set(["DesignSkipped.unit: string"])],
   ["design/domain/design-unit.ts", new Set(["#unit: string"])],
   ["design/domain/lowered-obligation.ts", new Set(["LoweredObligation.pattern: string", "LoweredObligation.nature: string", "LoweredObligation.frRefs: string[]", "LoweredObligation.trigger: string"])],
   ["design/domain/lowered-scenario.ts", new Set(["LoweredScenario.trigger: string", "LoweredScenario.frRefs: string[]"])],
   ["design/domain/lowering-index.ts", new Set(["#origins: ReadonlyMap<string, LoweredOrigin>", "#scenarioDesignIds: ReadonlyMap<string, string>", "#machinesByTransition: ReadonlyMap<string, DesignMachine>", "#attrPathsByMachine: ReadonlyMap<string, string>"])],
-  ["design/domain/remapped-unit.ts", new Set(["RemappedUnit.method: string | null"])],
   ["design/domain/sibling-verdict-document.ts", new Set(["SiblingVerdictDocument.method: string | null"])],
   ["design/domain/sibling-verdict-finding.ts", new Set(["SiblingVerdictFinding.kind: string"])],
   ["design/domain/unformalized-targets.ts", new Set(["#values: ReadonlySet<string>"])],
@@ -680,7 +671,6 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["requirements/domain/smt-query-verdicts.ts", new Set(["#values: ReadonlyMap<string, SmtQueryVerdict>"])],
   ["requirements/domain/source-anchor.ts", new Set(["#declared: string | null", "#actual: string"])],
   ["requirements/domain/verification-finding.ts", new Set(["VerificationFinding.kind: string"])],
-  ["requirements/domain/verification-report-composition.ts", new Set(["VerificationReportComposition.method: string"])],
   ["requirements/domain/verification-report.ts", new Set(["#method: string"])],
   ["requirements/domain/verification-witness.ts", new Set(["VerificationWitness.core: string[]"])],
 ]);

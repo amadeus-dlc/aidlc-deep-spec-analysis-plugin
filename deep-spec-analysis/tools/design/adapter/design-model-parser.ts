@@ -1,4 +1,4 @@
-// 契約3 設計 IR（生 Json）→ DesignModelComposition の寛容パース。欠損・型不一致
+// 契約3 設計 IR（生 Json）→ Parameters<typeof DesignModel.compose>[0] の寛容パース。欠損・型不一致
 // のエントリは黙って落とす（旧 parseDesignIr の凍結挙動——design-ir-valid
 // センサーが別途厳密検査を担う）。集約として成立しない形は凍結文言の文字列で
 // 返す。ユニットのソートは DesignModel.compose の不変条件。
@@ -6,39 +6,12 @@
 
 import { type Json, isObject, strArr } from "../../kernel/adapter/index.ts";
 import { FrRefs, IrVersion, type Expression, TriggerName } from "../../kernel/domain/index.ts";
-import {
-  BrRefs,
-  DesignBackgroundId,
-  type DesignBackgroundAssumption,
-  DesignAttributeName,
-  DesignEntityName,
-  DesignMachineId,
-  DesignObligationId,
-  DesignObligationNature,
-  DesignObligationOrigin,
-  DesignScenarioId,
-  DesignTransitionId,
-  DesignIgnores,
-  DesignTransitions,
-  DesignUnits,
-  InitialStates,
-  DesignIgnore,
-  AttrPaths,
-  DesignBackgroundAssumptions,
-  DesignMachines,
-  DesignObligations,
-  DesignScenarios,
-  DesignMachine,
-  type DesignModelComposition,
-  DesignObligation,
-  DesignScenario,
-  DesignTransition,
-  type DesignValue,
-  DesignUnit,
+import { BrRefs, DesignBackgroundId, type DesignBackgroundAssumption, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, DesignIgnores, DesignTransitions, DesignUnits, InitialStates, DesignIgnore, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignMachine, DesignObligation, DesignScenario, DesignTransition, type DesignValue, DesignUnit,
+  DesignModel,
 } from "../domain/index.ts";
 
 
-export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" | "irHash" | "sourceDocument"> | string {
+export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.compose>[0], "id" | "irHash" | "sourceDocument"> | string {
   if (!isObject(raw)) return "design IR is not a JSON object";
   if (raw.irKind !== "design") return 'document is not a design IR (missing `"irKind": "design"`)';
   const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");

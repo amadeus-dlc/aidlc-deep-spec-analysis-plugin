@@ -23,54 +23,7 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import {
-  DesignBackgroundId,
-  DesignAttributeName,
-  DesignEntityName,
-  DesignMachineId,
-  DesignObligationId,
-  DesignObligationNature,
-  DesignObligationOrigin,
-  DesignScenarioId,
-  DesignTransitionId,
-  CheckedUnits,
-  DesignFindings,
-  DesignInputAnchors,
-  DesignReports,
-  DesignSkips,
-  DesignUnits,
-  AttrPaths,
-  DesignBackgroundAssumptions,
-  DesignMachines,
-  DesignObligations,
-  DesignScenarios,
-  type DesignBackgroundAssumption,
-  DesignIgnore,
-  DesignMachine,
-  DesignObligation,
-  DesignScenario,
-  DesignTransition,
-  type DesignValue,
-  BrRefs,
-  DesignIgnores,
-  DesignTransitions,
-  InitialStates,
-  DesignFinding,
-  type DesignModelComposition,
-  type DesignSkipped,
-  type SiblingVerdictDocument,
-  SiblingVerdictFindings,
-  SiblingVerdictSkips,
-  DesignModel,
-  DesignReport,
-  DesignReportId,
-  DesignUnit,
-  ExpressionCanonicalKey,
-  LoweredUnit,
-  DesignModelId,
-  LoweredOriginRef,
-  LoweredId,
-} from "../tools/design/domain/index.ts";
+import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, CheckedUnits, DesignFindings, DesignInputAnchors, DesignReports, DesignSkips, DesignUnits, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, DesignIgnore, DesignMachine, DesignObligation, DesignScenario, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignTransitions, InitialStates, DesignFinding, type DesignSkipped, type SiblingVerdictDocument, SiblingVerdictFindings, SiblingVerdictSkips, DesignModel, DesignReport, DesignReportId, DesignUnit, ExpressionCanonicalKey, LoweredUnit, DesignModelId, LoweredOriginRef, LoweredId } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -259,7 +212,7 @@ function model(units: DesignUnit[], irVersion = "1.0.0"): DesignModel {
     sourceDocument: new Uint8Array(),
     irVersion: IrVersion.reconstitute(irVersion),
     units: DesignUnits.of(units),
-  } satisfies DesignModelComposition);
+  } satisfies Parameters<typeof DesignModel.compose>[0]);
 }
 
 describe("lowering (typed compile-down)", () => {

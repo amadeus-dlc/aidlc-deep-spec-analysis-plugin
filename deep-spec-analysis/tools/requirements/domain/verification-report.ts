@@ -10,13 +10,8 @@ import type { VerificationReportId } from "./verification-report-id.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 import { CrossCheckedEntries } from "./cross-checked-entries.ts";
-import type { VerificationReportComposition } from "./verification-report-composition.ts";
 
 export const SUPPORTED_IR_MAJOR = 1;
-
-
-
-
 
 export class VerificationReport {
   readonly #id: VerificationReportId;
@@ -146,7 +141,16 @@ export class VerificationReport {
     });
   }
 
-  static compose(input: VerificationReportComposition): VerificationReport {
+  static compose(input: {
+    readonly id: VerificationReportId;
+    readonly irVersion: IrVersion;
+    readonly irHash: ContentHash;
+    readonly method: string;
+    readonly findings: VerificationFindings;
+    readonly skipped: VerificationSkips;
+    readonly crossChecked?: CrossCheckedEntries;
+    readonly unavailableReason?: string;
+  }): VerificationReport {
     return new VerificationReport({
       id: input.id,
       irVersion: input.irVersion,

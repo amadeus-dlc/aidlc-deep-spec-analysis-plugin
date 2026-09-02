@@ -1457,3 +1457,15 @@ refcheck・refinement・requirements にまたがる 25 件——はいずれも
 載った primitive フィールドも運んでいたので、`PRIMITIVE_FIELD_DEBT` から
 それらの記述子が消える（上限 104 → 93）。台帳から 25 エントリを回収し、
 残債は 122 中 66。
+
+波 16（同 PR）: 読み手が 1 つの形も同じ道で解散する。`Interpreted*Verdicts`
+の返り値型 3 件、レポートの `*Composition` ドア型 2 件、
+`DesignModelComposition`、`RemappedUnit` はいずれも自層の読み手が 1 つ
+だけで、それぞれその読み手のインライン署名（解釈の返り値型、`compose` の
+門、remap の返り値型）になり、設計モデルのパーサとそのパイプラインテストは
+`DesignModel.compose` の引数型を名指し、ファイルと facade の再輸出は消える。
+うち 3 件は台帳に載った `method` 文字列を運んでいたので、
+`PRIMITIVE_FIELD_DEBT` からその記述子が消える（上限 93 → 90）。台帳から
+7 エントリを回収し、残債は 122 中 59。残るのはレコード形で読み手が複数の
+もの（finding、skip、witness、anchor、row、outcome、判定の共用体）で、
+解散ではなく命令できる class への反転の材料である。
