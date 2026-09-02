@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { ContentHash, FrRefs, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
-import { CATALOG_VERSION, type Finding, type Skipped, Findings, InputAnchors, Skips, WitnessRefs,
+import { CATALOG_VERSION, type Finding, Skipped, Findings, InputAnchors, Skips, WitnessRefs,
   UnitDecl,
 } from "../tools/refcheck/domain/index.ts";
 
@@ -47,11 +47,11 @@ describe("catalog-order", () => {
 
   test("skips sort by id order on target, then by reason", () => {
     const skips: Skipped[] = [
-      { target: "check:FD-E10", reason: "b" },
-      { target: "check:FD-E2", reason: "a" },
-      { target: "check:FD-E2", reason: "A" },
+      Skipped.reconstitute({ target: "check:FD-E10", reason: "b" }),
+      Skipped.reconstitute({ target: "check:FD-E2", reason: "a" }),
+      Skipped.reconstitute({ target: "check:FD-E2", reason: "A" }),
     ];
-    expect(Skips.of(skips).sortedCanonically().toArray().map((s) => `${s.target}/${s.reason}`)).toEqual([
+    expect(Skips.of(skips).sortedCanonically().toArray().map((s) => `${s.target()}/${s.reason()}`)).toEqual([
       "check:FD-E2/A",
       "check:FD-E2/a",
       "check:FD-E10/b",
@@ -508,7 +508,7 @@ describe("refcheck payload collections (first-class operations)", () => {
     expect(fs.isEmpty()).toBe(false);
     expect(Findings.of([]).isEmpty()).toBe(true);
 
-    const sk = { target: "check:DD-1", reason: "waived" };
+    const sk = Skipped.reconstitute({ target: "check:DD-1", reason: "waived" });
     const sks = Skips.of([]).add(sk);
     expect([...sks]).toEqual([sk]);
     expect(sks.count()).toBe(1);

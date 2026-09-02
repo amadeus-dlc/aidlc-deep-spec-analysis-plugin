@@ -6,7 +6,7 @@ export { WitnessRefs } from "./witness-refs.ts";
 export { type Finding } from "./finding.ts";
 export { Findings } from "./findings.ts";
 export { Skips } from "./skips.ts";
-export { type Skipped } from "./skipped.ts";
+export { Skipped } from "./skipped.ts";
 export { type InputAnchor } from "./input-anchor.ts";
 export { InputAnchors } from "./input-anchors.ts";
 export { ReferenceCheckReport } from "./reference-check-report.ts";

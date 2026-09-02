@@ -1469,3 +1469,18 @@ refcheck・refinement・requirements にまたがる 25 件——はいずれも
 7 エントリを回収し、残債は 122 中 59。残るのはレコード形で読み手が複数の
 もの（finding、skip、witness、anchor、row、outcome、判定の共用体）で、
 解散ではなく命令できる class への反転の材料である。
+
+波 17（同 PR）: skip 記録が命令できる class へ。`VerificationSkipped`
+（requirements）、`DesignSkipped`（design）、`Skipped`（refcheck）は
+getter-only interface から private constructor と `reconstitute` の門を持つ
+class に反転し、それぞれ正準順（`compareTo`——target、次いで reason。design
+は unit が先）を所有するので 3 つの skip コレクションはフィールドを読む
+代わりに委譲して並び、要件と設計の記録は「その対象の skip か」（`isFor`）を
+所有する——quint の解釈と縮退 SMT 文書が `target.equals` で綴っていた判断
+である。生産者——quint／SMT のコンパイラと解釈、機械判定の skip、縮退
+文書、設計ユースケース、refinement の計画とソルバ事実、refcheck 台帳——は
+すべて再構成し、シリアライザはアクセサで読んでパース時に再構成し、テストは
+`asString()` とアクセサで比較する。refcheck の target は名前空間付き文字列
+トークンのまま（その台帳の材料面）。台帳から 3 エントリを回収し、残債は
+122 中 56。`PRIMITIVE_FIELD_DEBT` の総数は変わらない（台帳に載る `unit` 2 件
+が形を変えるだけ）。

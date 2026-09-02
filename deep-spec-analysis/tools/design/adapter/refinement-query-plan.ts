@@ -16,7 +16,8 @@ import { ObligationId, ScenarioId } from "../../refinement/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { smtIntOf, smtLit, smtName, smtVar } from "../../kernel/adapter/index.ts";
 import { DesignSkips } from "../domain/index.ts";
-import type { DesignSkipped, DesignUnit, DesignValue } from "../domain/index.ts";
+import type { DesignUnit, DesignValue } from "../domain/index.ts";
+import { DesignSkipped } from "../domain/index.ts";
 import type { RefinementChildQuery } from "./refinement-child-query.ts";
 import type { RefinementSmtContext } from "./refinement-smt-context.ts";
 import {
@@ -238,7 +239,7 @@ export function buildRefinementQueries(
   const pending = new Map<string, RefinementProbe>();
   const compileSkips: DesignSkipped[] = [];
   const alphaFail = (target: string, err: unknown): void => {
-    compileSkips.push({ target: TargetId.reconstitute(target), reason: "compile-error", unit: u.name(), detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` });
+    compileSkips.push(DesignSkipped.reconstitute({ target: TargetId.reconstitute(target), reason: "compile-error", unit: u.name(), detail: `alpha substitution failed: ${err instanceof Error ? err.message : String(err)}` }));
   };
 
   const alphaCtx = plan.alphaContext();

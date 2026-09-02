@@ -1,7 +1,7 @@
 // design/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
 
 import { describe, expect, test } from "bun:test";
-import { FrRefs, TargetIds, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
+import { FrRefs, TargetIds, TriggerName, type Expression, TargetId } from "../tools/kernel/domain/index.ts";
 import {
   BrRefs,
   DesignAttributeName,
@@ -40,6 +40,8 @@ import {
   DesignUnitDecl,
   DesignUnitId,
   UnformalizedTargets,
+  DesignSkipped,
+  DesignSkips,
 } from "../tools/design/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
@@ -451,5 +453,26 @@ describe("design decls (well-formedness materials own their judgements)", () => 
     expect(present.background().toArray()).toEqual([]);
     expect([...present.unformalizedTargets()]).toEqual(["BR1.1"]);
     expect(present.rulesMarkdown()).toBe("# rules");
+  });
+});
+
+describe("design skipped (a skip record owns its identity and canonical order)", () => {
+  test("round-trips its parts, answers isFor, and sorts by unit, then target, then reason", () => {
+    const a = DesignSkipped.reconstitute({ target: TargetId.reconstitute("TR-2"), reason: "timeout", unit: "u2", detail: "budget" });
+    const b = DesignSkipped.reconstitute({ target: TargetId.reconstitute("TR-10"), reason: "waived", unit: "u1" });
+    const c = DesignSkipped.reconstitute({ target: TargetId.reconstitute("TR-2"), reason: "capability", unit: "u1" });
+    expect(a.target().asString()).toBe("TR-2");
+    expect(a.reason()).toBe("timeout");
+    expect(a.unit()).toBe("u2");
+    expect(a.detail()).toBe("budget");
+    expect(b.detail()).toBeUndefined();
+    expect(a.isFor(TargetId.reconstitute("TR-2"))).toBe(true);
+    expect(a.isFor(TargetId.reconstitute("TR-3"))).toBe(false);
+    expect(DesignSkips.of([a, b, c]).sortedCanonically().toArray().map((s) => `${s.unit()}:${s.target().asString()}:${s.reason()}`)).toEqual([
+      "u1:TR-2:capability",
+      "u1:TR-10:waived",
+      "u2:TR-2:timeout",
+    ]);
+    expect(a.compareTo(a)).toBe(0);
   });
 });

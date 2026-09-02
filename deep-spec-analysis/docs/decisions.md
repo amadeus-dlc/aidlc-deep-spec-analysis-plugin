@@ -1624,3 +1624,21 @@ string, so `PRIMITIVE_FIELD_DEBT` sheds those descriptors (ceiling 93 →
 remains on it is record-shaped and multi-reader (findings, skips,
 witnesses, anchors, rows, outcomes, verdict unions), the material for
 commandable waves rather than dissolution.
+
+Wave 17 (same PR): the skip records become commandable. `VerificationSkipped`
+(requirements), `DesignSkipped` (design) and `Skipped` (refcheck) invert
+from getter-only interfaces into classes with private constructors and
+`reconstitute` doors; each owns its canonical order (`compareTo` — target
+then reason, the design one unit first — so the three skip collections
+sort by delegation instead of reading fields) and the requirement and
+design records own "is this skip for that target" (`isFor`), which the
+quint interpretation and the degraded SMT report used to spell out with
+`target.equals`. Every producer — the quint / SMT compilers and
+interpretations, the machine verdict's skips, the degraded reports, the
+design use cases, the refinement plan and solver facts, the refcheck
+ledger — reconstitutes; the serializers read through the accessors and
+reconstitute on parse; the tests compare through `asString()` and the
+accessors. The refcheck target stays the namespaced string token (its
+own ledger material). 3 ledger entries reclaimed — the ledger holds 56 of
+122; `PRIMITIVE_FIELD_DEBT` keeps its total (the two ledgered `unit`
+fields merely change shape).

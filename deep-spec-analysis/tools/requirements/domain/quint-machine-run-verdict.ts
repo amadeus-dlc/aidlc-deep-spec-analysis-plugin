@@ -1,7 +1,7 @@
 import type { TargetIds } from "../../kernel/domain/index.ts";
 import type { TraceState } from "./trace-state.ts";
 import type { TraceStates } from "./trace-states.ts";
-import type { VerificationSkipped } from "./verification-skipped.ts";
+import { VerificationSkipped } from "./verification-skipped.ts";
 import type { VerificationWitness } from "./verification-witness.ts";
 
 // 機械フェーズ（イベント機械下の到達可能な不変量違反・デッドロック探索）
@@ -63,15 +63,15 @@ export class QuintMachineRunVerdict {
   skipsFor(targets: TargetIds, bounded: boolean): VerificationSkipped[] {
     const kind = this.#kind;
     if (kind === "timeout") {
-      return [...targets].map((target) => ({ target, reason: "timeout", detail: "machine invariant check exceeded its budget" }));
+      return [...targets].map((target) => (VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "machine invariant check exceeded its budget" })));
     }
     if (kind === "run-failed") {
       const outputTail = this.#outputTail;
-      return [...targets].map((target) => ({
+      return [...targets].map((target) => (VerificationSkipped.reconstitute({
         target,
         reason: "unavailable",
         detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`,
-      }));
+      })));
     }
     return [];
   }

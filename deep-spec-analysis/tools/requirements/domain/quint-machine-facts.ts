@@ -14,7 +14,7 @@ import type { RequirementsModel } from "./requirements-model.ts";
 import type { ScenarioId } from "./scenario-id.ts";
 import type { TraceState } from "./trace-state.ts";
 import type { VerificationFinding } from "./verification-finding.ts";
-import { type VerificationSkipped } from "./verification-skipped.ts";
+import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 
@@ -105,19 +105,19 @@ export class QuintMachineFacts {
     for (const ob of model.obligations()) {
       if (!ob.isStateTemporal() || ob.temporal()?.pattern !== "leads-to") continue;
       const target = ob.id().asTargetId();
-      if (skipped.some((s) => s.target.equals(target))) continue;
+      if (skipped.some((s) => s.isFor(target))) continue;
       if (!bounded) {
-        skipped.push({
+        skipped.push(VerificationSkipped.reconstitute({
           target,
           reason: "capability",
           detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them",
-        });
+        }));
         continue;
       }
       const r = runs.temporalOf(ob.id());
       if (!r) continue;
       if (r.kind === "timeout") {
-        skipped.push({ target, reason: "timeout", detail: "temporal check exceeded its budget" });
+        skipped.push(VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "temporal check exceeded its budget" }));
       } else if (r.kind === "violation") {
         findings.push({
           kind: "conflict",
@@ -133,27 +133,27 @@ export class QuintMachineFacts {
     for (const sc of model.scenarios()) {
       const target = sc.id().asTargetId();
       if (sc.hasEvent()) {
-        skipped.push({ target, reason: "capability", detail: "scenarios with a When-event are not checked by the quint backend in v1" });
+        skipped.push(VerificationSkipped.reconstitute({ target, reason: "capability", detail: "scenarios with a When-event are not checked by the quint backend in v1" }));
         continue;
       }
       if (!this.#hasInitFor(sc.id())) {
-        skipped.push({
+        skipped.push(VerificationSkipped.reconstitute({
           target,
           reason: "capability",
           detail: "quint scenario evaluation requires bindings for every declared attribute",
-        });
+        }));
         continue;
       }
       const r = runs.scenarioOf(sc.id());
       if (!r) continue;
       if (r.kind === "timeout" || r.kind === "run-failed") {
-        skipped.push({
+        skipped.push(VerificationSkipped.reconstitute({
           target,
           reason: r.kind === "timeout" ? "timeout" : "unavailable",
           detail: r.kind === "timeout"
             ? "scenario evaluation exceeded its budget"
             : `quint run failed unexpectedly: ${r.outputTail}`,
-        });
+        }));
         continue;
       }
       const state: TraceState & { [path: string]: boolean | number | string } = {};

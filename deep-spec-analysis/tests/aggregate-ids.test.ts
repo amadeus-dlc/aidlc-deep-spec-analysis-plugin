@@ -27,8 +27,11 @@ import {
   RefinementMaterialsId,
   LoweredOriginRef,
   LoweredId,
+  DesignSkipped,
 } from "../tools/design/domain/index.ts";
-import { ObligationIds } from "../tools/requirements/domain/index.ts";
+import { ObligationIds,
+  VerificationSkipped,
+} from "../tools/requirements/domain/index.ts";
 import { RefinementMapId } from "../tools/refinement/domain/index.ts";
 import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
 import { FormalModelId } from "../tools/requirements/domain/index.ts";
@@ -212,10 +215,10 @@ describe("requirements first-class collections", () => {
     expect(fs.count()).toBe(1);
     expect([...fs.sortedCanonically()]).toEqual([finding]);
 
-    const sk = VerificationSkips.of([]).add({ target: TargetId.reconstitute("OB-2"), reason: "timeout" })
-      .concat(VerificationSkips.of([{ target: TargetId.reconstitute("OB-1"), reason: "capability" }]));
+    const sk = VerificationSkips.of([]).add(VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-2"), reason: "timeout" }))
+      .concat(VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-1"), reason: "capability" })]));
     expect(sk.count()).toBe(2);
-    expect(sk.sortedCanonically().toArray().map((s) => s.target.asString())).toEqual(["OB-1", "OB-2"]);
+    expect(sk.sortedCanonically().toArray().map((s) => s.target().asString())).toEqual(["OB-1", "OB-2"]);
 
     const cc = CrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.reconstitute(["SC-1"]) });
     expect([...cc].length).toBe(1);
@@ -291,10 +294,10 @@ describe("design first-class collections", () => {
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
     expect([...fs.sortedCanonically()].length).toBe(1);
-    const sk = DesignSkips.of([]).add({ target: TargetId.reconstitute("DOB-1"), reason: "timeout", unit: "u2" })
-      .concat(DesignSkips.of([{ target: TargetId.reconstitute("DOB-0"), reason: "capability", unit: "u2" }]));
+    const sk = DesignSkips.of([]).add(DesignSkipped.reconstitute({ target: TargetId.reconstitute("DOB-1"), reason: "timeout", unit: "u2" }))
+      .concat(DesignSkips.of([DesignSkipped.reconstitute({ target: TargetId.reconstitute("DOB-0"), reason: "capability", unit: "u2" })]));
     expect(sk.count()).toBe(2);
-    expect(sk.sortedCanonically().toArray()[0]?.target.asString()).toBe("DOB-0");
+    expect(sk.sortedCanonically().toArray()[0]?.target().asString()).toBe("DOB-0");
     expect([...sk].length).toBe(2);
 
     const anchors = DesignInputAnchors.of([]).add({ artifact: "b.md", sha256: ContentHash.reconstitute("2".repeat(64)) })

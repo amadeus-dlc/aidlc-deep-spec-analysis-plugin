@@ -43,7 +43,7 @@ export class DesignReports {
       .map((s) => ({
         backend: s.id().backendName().asString(),
         findings: s.findings().toArray(),
-        skipped: new Set(s.skipped().toArray().map((e) => `${e.unit}|${e.target.asString()}`)),
+        skipped: new Set(s.skipped().toArray().map((e) => `${e.unit()}|${e.target().asString()}`)),
       }));
 
     const findings: DesignFinding[] = [];

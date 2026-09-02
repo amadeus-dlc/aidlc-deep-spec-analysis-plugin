@@ -61,6 +61,7 @@ import {
   type VerificationFinding,
   FormalModelId,
   ObligationId,
+  VerificationSkipped,
 } from "../tools/requirements/domain/index.ts";
 import {
   type FormalModelRepository,
@@ -200,9 +201,9 @@ describe("the verify-smt interactor over the InMemory double", () => {
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("version-mismatch");
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
-    expect(written.ok && written.value.skipped().toArray().map((s) => `${s.target.asString()}:${s.reason}`))
+    expect(written.ok && written.value.skipped().toArray().map((s) => `${s.target().asString()}:${s.reason()}`))
       .toEqual(["OB-1:ir-version-mismatch", "SC-1:ir-version-mismatch"]);
-    expect(written.ok && written.value.skipped().toArray()[0]?.detail)
+    expect(written.ok && written.value.skipped().toArray()[0]?.detail())
       .toBe("IR major version 2 is not supported by this backend (supports 1.x.x)");
     expect(reports.findById(VerificationReportId.of(ap(DIR), "cross-check")).ok).toBe(true);
   });
@@ -217,7 +218,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     });
     const facts = SmtPlanFacts.of({
       ...EMPTY_FACTS,
-      skipped: VerificationSkips.of([{ target: TargetId.reconstitute("OB-2"), reason: "capability", detail: 'nature "state-temporal" is checked by a state-machine backend, not the SMT backend' }]),
+      skipped: VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-2"), reason: "capability", detail: 'nature "state-temporal" is checked by a state-machine backend, not the SMT backend' })]),
     });
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
@@ -228,9 +229,9 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
     expect(written.ok && written.value.unavailableReason())
       .toBe("no runtime could execute the z3 child process (node: not on PATH)");
-    expect(written.ok && written.value.skipped().toArray().map((s) => `${s.target.asString()}:${s.reason}`))
+    expect(written.ok && written.value.skipped().toArray().map((s) => `${s.target().asString()}:${s.reason()}`))
       .toEqual(["OB-1:unavailable", "OB-2:capability"]);
-    expect(written.ok && written.value.skipped().toArray()[0]?.detail).toBe("z3 could not be executed");
+    expect(written.ok && written.value.skipped().toArray()[0]?.detail()).toBe("z3 could not be executed");
   });
 
   test("a solved run interprets, persists the conformed report, and converges cross-check", () => {
@@ -283,7 +284,7 @@ describe("smt verdict interpretation", () => {
   });
   const facts = SmtPlanFacts.of({
     compiled: new Map([["OB-1", true], ["OB-2", true], ["OB-3", true], ["OB-4", true]]),
-    skipped: VerificationSkips.of([{ target: TargetId.reconstitute("OB-9"), reason: "capability", detail: "seed" }]),
+    skipped: VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-9"), reason: "capability", detail: "seed" })]),
     labelToTarget: new Map([["ob_OB_1", "OB-1"], ["ob_OB_2", "OB-2"], ["ty_x", "TY-x"], ["bg_B1", "B1"]]),
     eventPairs: SmtEventPairProbes.of([{ qOverlap: "evo:OB-3:OB-4", qJoint: "evj:OB-3:OB-4", a: ObligationId.reconstitute("OB-3"), b: ObligationId.reconstitute("OB-4"), trigger: TriggerName.reconstitute("submit") }]),
     gapTriggers: new Map([["submit", ["OB-3", "OB-4"]]]),
@@ -301,7 +302,7 @@ describe("smt verdict interpretation", () => {
       witness: { core: ["ob_OB_1", "ob_OB_2", "ty_x"] },
       detail: "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.",
     }]);
-    expect([...skipped].map((k) => ({ ...k, target: k.target.asString() }))).toEqual([{ target: "OB-9", reason: "capability", detail: "seed" }]);
+    expect([...skipped].map((k) => ({ target: k.target().asString(), reason: k.reason(), detail: k.detail() }))).toEqual([{ target: "OB-9", reason: "capability", detail: "seed" }]);
   });
 
   test("global unsat suppresses vacuity findings, and an empty core falls back to all invariants", () => {
@@ -322,7 +323,7 @@ describe("smt verdict interpretation", () => {
 
   test("global timeout skips every compiled invariant", () => {
     const { skipped } = run([["global", { status: "unknown" }]]);
-    expect(skipped.toArray().slice(1).map((k) => ({ ...k, target: k.target.asString() }))).toEqual([
+    expect(skipped.toArray().slice(1).map((k) => ({ target: k.target().asString(), reason: k.reason(), detail: k.detail() }))).toEqual([
       { target: "OB-1", reason: "timeout", detail: "global consistency check exceeded the solver budget" },
       { target: "OB-2", reason: "timeout", detail: "global consistency check exceeded the solver budget" },
     ]);
@@ -341,7 +342,7 @@ describe("smt verdict interpretation", () => {
 
   test("vacuity budget becomes a timeout skip for that obligation", () => {
     const { skipped } = run([["vac:OB-2", { status: "budget" }]]);
-    expect(skipped.toArray().slice(1).map((k) => ({ ...k, target: k.target.asString() }))).toEqual([
+    expect(skipped.toArray().slice(1).map((k) => ({ target: k.target().asString(), reason: k.reason(), detail: k.detail() }))).toEqual([
       { target: "OB-2", reason: "timeout", detail: "vacuity check for OB-2 exceeded the solver budget" },
     ]);
   });
@@ -361,7 +362,7 @@ describe("smt verdict interpretation", () => {
       ["evo:OB-3:OB-4", { status: "sat" }],
       ["evj:OB-3:OB-4", { status: "unknown" }],
     ]);
-    expect(skipped.toArray().slice(1).map((s) => s.target.asString())).toEqual(["OB-3", "OB-4"]);
+    expect(skipped.toArray().slice(1).map((s) => s.target().asString())).toEqual(["OB-3", "OB-4"]);
     expect(run([["evo:OB-3:OB-4", { status: "sat" }]]).skipped.toArray().length).toBe(1);
   });
 
@@ -371,7 +372,7 @@ describe("smt verdict interpretation", () => {
       ["evj:OB-3:OB-4", { status: "error" }],
     ]);
     expect(findings.toArray()).toHaveLength(0);
-    expect(skipped.toArray().slice(1).map((k) => ({ ...k, target: k.target.asString() }))).toEqual([
+    expect(skipped.toArray().slice(1).map((k) => ({ target: k.target().asString(), reason: k.reason(), detail: k.detail() }))).toEqual([
       { target: "OB-3", reason: "timeout", detail: 'event-pair check for trigger "submit" exceeded the solver budget' },
       { target: "OB-4", reason: "timeout", detail: 'event-pair check for trigger "submit" exceeded the solver budget' },
     ]);
@@ -387,7 +388,7 @@ describe("smt verdict interpretation", () => {
       detail: 'No rule for trigger "submit" applies to the witness state: the behavior of this input region is unspecified.',
     }]);
     expect([...run([["gap:submit", { status: "unsat" }]]).findings]).toEqual([]);
-    expect(run([["gap:submit", { status: "error" }]]).skipped.toArray().slice(1).map((s) => s.target.asString())).toEqual(["OB-3", "OB-4"]);
+    expect(run([["gap:submit", { status: "error" }]]).skipped.toArray().slice(1).map((s) => s.target().asString())).toEqual(["OB-3", "OB-4"]);
   });
 
   test("scenario verdicts: accept-unsat and reject-sat violate, undecided skips, missing is silent", () => {
@@ -400,7 +401,7 @@ describe("smt verdict interpretation", () => {
     expect(findings.toArray()[1]?.witness).toEqual({ model: { "Ticket.done": false } });
     expect(findings.toArray()[0]?.detail).toStartWith("Accept scenario SC-1 describes a state");
     expect(findings.toArray()[1]?.detail).toStartWith("Reject scenario SC-2 is still satisfiable");
-    expect(run([["sc:SC-1", { status: "budget" }]]).skipped.toArray().slice(1).map((s) => s.target.asString())).toEqual(["SC-1"]);
+    expect(run([["sc:SC-1", { status: "budget" }]]).skipped.toArray().slice(1).map((s) => s.target().asString())).toEqual(["SC-1"]);
     expect([...run([]).findings]).toEqual([]);
   });
 });
@@ -431,7 +432,7 @@ describe("cross-check computation", () => {
         witness: { core: [] },
         detail: "x",
       }))),
-      skipped: VerificationSkips.of((input.skippedTargets ?? []).map((t) => ({ target: TargetId.reconstitute(t), reason: "capability" }))),
+      skipped: VerificationSkips.of((input.skippedTargets ?? []).map((t) => (VerificationSkipped.reconstitute({ target: TargetId.reconstitute(t), reason: "capability" })))),
       crossChecked: null,
       unavailableReason: input.unavailable ?? null,
     });
@@ -495,16 +496,16 @@ describe("degradation reports and ordering", () => {
     expect(m.supportsMajor(1)).toBe(false);
     expect(m.majorVersion()).toBe(3);
     const vm = VerificationReport.versionMismatch(VerificationReportId.of(ap("/v"), "smt"), m, ContentHash.reconstitute("h"), "exhaustive");
-    expect(vm.skipped().toArray().map((s) => s.target.asString())).toEqual(["OB-2", "SC-1"]);
+    expect(vm.skipped().toArray().map((s) => s.target().asString())).toEqual(["OB-2", "SC-1"]);
     const su = VerificationReport.solverUnavailable(
       VerificationReportId.of(ap("/v"), "smt"),
       m,
       ContentHash.reconstitute("h"),
-      VerificationSkips.of([{ target: TargetId.reconstitute("OB-2"), reason: "compile-error", detail: "invariant obligation lacks an assert expression" }]),
+      VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-2"), reason: "compile-error", detail: "invariant obligation lacks an assert expression" })]),
       "z3-solver is not available in this project: nope",
     );
     expect(su.unavailableReason()).toBe("z3-solver is not available in this project: nope");
-    expect(su.skipped().toArray().map((s) => `${s.target.asString()}:${s.reason}`)).toEqual(["OB-2:compile-error", "SC-1:unavailable"]);
+    expect(su.skipped().toArray().map((s) => `${s.target().asString()}:${s.reason()}`)).toEqual(["OB-2:compile-error", "SC-1:unavailable"]);
   });
 
   test("finding order: kind rank, then joined targets, then detail; unknown kinds sink to rank 9", () => {
@@ -532,11 +533,11 @@ describe("degradation reports and ordering", () => {
       "mystery:X-1:z",
     ]);
     const skips = VerificationSkips.of([
-      { target: TargetId.reconstitute("OB-10"), reason: "timeout" },
-      { target: TargetId.reconstitute("OB-2"), reason: "unavailable" },
-      { target: TargetId.reconstitute("OB-2"), reason: "capability" },
+      VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-10"), reason: "timeout" }),
+      VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-2"), reason: "unavailable" }),
+      VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-2"), reason: "capability" }),
     ]).sortedCanonically();
-    expect(skips.toArray().map((s) => `${s.target.asString()}:${s.reason}`)).toEqual([
+    expect(skips.toArray().map((s) => `${s.target().asString()}:${s.reason()}`)).toEqual([
       "OB-2:capability",
       "OB-2:unavailable",
       "OB-10:timeout",
@@ -557,10 +558,10 @@ describe("degradation reports and ordering", () => {
         { kind: "scenario-violation", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["SC-1"]), witness: { core: [] }, detail: "b" },
         { kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: { core: [] }, detail: "a" },
       ]),
-      skipped: VerificationSkips.of([{ target: TargetId.reconstitute("OB-2"), reason: "timeout" }, { target: TargetId.reconstitute("OB-1"), reason: "capability" }]),
+      skipped: VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-2"), reason: "timeout" }), VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-1"), reason: "capability" })]),
     });
     expect(composed.findings().toArray().map((x) => x.kind)).toEqual(["conflict", "scenario-violation"]);
-    expect(composed.skipped().toArray().map((x) => x.target.asString())).toEqual(["OB-1", "OB-2"]);
+    expect(composed.skipped().toArray().map((x) => x.target().asString())).toEqual(["OB-1", "OB-2"]);
     expect(composed.passes()).toBe(false);
     const degraded = composed.degraded("why");
     expect(degraded.unavailableReason()).toBe("why");

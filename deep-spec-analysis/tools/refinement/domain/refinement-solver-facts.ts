@@ -8,7 +8,7 @@
 
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import { DesignFinding, DesignFindings, DesignSkips } from "../../design/domain/index.ts";
-import type { DesignSkipped } from "../../design/domain/index.ts";
+import { DesignSkipped } from "../../design/domain/index.ts";
 import { type UnitRefinementPlan } from "./unit-refinement-plan.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
 
@@ -57,7 +57,7 @@ export class RefinementSolverFacts {
     for (const [queryId, p] of this.#pending) {
       const r = results.verdictOf(queryId);
       if (!r || r.isUndecided()) {
-        skipped.push({ target: p.reqId.asTargetId(), reason: "timeout", unit: unitName, detail: `refinement query ${queryId} exceeded the solver budget or errored` });
+        skipped.push(DesignSkipped.reconstitute({ target: p.reqId.asTargetId(), reason: "timeout", unit: unitName, detail: `refinement query ${queryId} exceeded the solver budget or errored` }));
         continue;
       }
       if (p.kind === "invariant") {

@@ -20,7 +20,7 @@ import { ExpressionCanonicalKey } from "./expression-canonical-key.ts";
 import { DesignFindings } from "./design-findings.ts";
 import { DesignSkips } from "./design-skips.ts";
 import { DesignFinding } from "./design-finding.ts";
-import { type DesignSkipped } from "./design-skipped.ts";
+import { DesignSkipped } from "./design-skipped.ts";
 import type { DesignValue } from "./design-value.ts";
 
 import { type SiblingVerdictDocument } from "./sibling-verdict-document.ts";
@@ -164,12 +164,12 @@ export class LoweredUnit {
           for (const t of targets) {
             if (!waived.has(t)) {
               waived.add(t);
-              skipped.push({
+              skipped.push(DesignSkipped.reconstitute({
                 target: TargetId.reconstitute(t),
                 reason: "waived",
                 unit: u.name(),
                 detail: `machine ${first.id().asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
-              });
+              }));
             }
           }
           continue;
@@ -210,9 +210,12 @@ export class LoweredUnit {
       const key = `${design}|${s.reason}`;
       if (seenSkip.has(key)) continue;
       seenSkip.add(key);
-      const out: DesignSkipped = { target: TargetId.reconstitute(design), reason: s.reason, unit: u.name() };
-      if (typeof s.detail === "string") out.detail = remapDetail(s.detail);
-      skipped.push(out);
+      skipped.push(DesignSkipped.reconstitute({
+        target: TargetId.reconstitute(design),
+        reason: s.reason,
+        unit: u.name(),
+        ...(typeof s.detail === "string" ? { detail: remapDetail(s.detail) } : {}),
+      }));
     }
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped), unavailable: null, method };
   }

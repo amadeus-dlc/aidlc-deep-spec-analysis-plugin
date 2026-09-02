@@ -28,7 +28,7 @@ export { DesignUnits } from "./design-units.ts";
 export { DesignModel } from "./design-model.ts";
 export { DesignFinding } from "./design-finding.ts";
 export { DesignFindings } from "./design-findings.ts";
-export { type DesignSkipped } from "./design-skipped.ts";
+export { DesignSkipped } from "./design-skipped.ts";
 export { DesignSkips } from "./design-skips.ts";
 export { ExpressionCanonicalKey } from "./expression-canonical-key.ts";
 export { type LoweredBackground } from "./lowered-background.ts";

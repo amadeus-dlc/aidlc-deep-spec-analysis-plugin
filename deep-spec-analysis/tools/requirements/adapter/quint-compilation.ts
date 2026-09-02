@@ -12,7 +12,7 @@ import type { CompiledQuintMachine } from "./compiled-quint-machine.ts";
 import {
   type AttributeDeclaration,
   type RequirementsModel,
-  type VerificationSkipped,
+  VerificationSkipped,
   QuintMachineComponents,
   QuintMachineFacts,
   ObligationIds,
@@ -252,7 +252,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
     if (!ob.isEvent()) continue;
     const event = ob.eventDefinition();
     if (event === null) {
-      compileSkips.push({ target: ob.id().asTargetId(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" });
+      compileSkips.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" }));
       continue;
     }
     try {
@@ -269,7 +269,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       actionNames.push(action);
       eventIds.push(ob.id());
     } catch (err) {
-      compileSkips.push({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+      compileSkips.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) }));
     }
   }
   const idleParts = attrs.map((a) => `${qVar(a.path.asString())}' = ${qVar(a.path.asString())}`);
@@ -289,7 +289,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       lines.push(`  temporal ${qId("temp", ob.id().asString())} = always(${from} implies eventually(${to}))`);
       temporalNames.set(ob.id().asString(), qId("temp", ob.id().asString()));
     } catch (err) {
-      compileSkips.push({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) });
+      compileSkips.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) }));
     }
   }
   lines.push("");
