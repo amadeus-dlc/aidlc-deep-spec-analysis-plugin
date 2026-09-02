@@ -5,7 +5,7 @@
 // smtOf / buildPlan からの逐語移植（IrDoc → RequirementsModel の読み替えのみ）。
 // 描画語彙（smtVar/smtName/smtLit/smtIntOf）は移行 PR8 で kernel 共有へ。
 
-import { type Expression, Expressions, IdOrder, TriggerName } from "../../kernel/domain/index.ts";
+import { type Expression, Expressions, TriggerName } from "../../kernel/domain/index.ts";
 import { smtIntOf, smtLit, smtName, smtVar } from "../../kernel/adapter/index.ts";
 import type { SmtChildQuery } from "./smt-child-query.ts";
 import {
@@ -328,7 +328,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     queries.push({ id: `gap:${trigger}`, script, assumptions: [...baseAssumptions, name], model: modelVars });
     gapTriggers.set(
       trigger,
-      list.map((ev) => ev.id().asString()).sort(IdOrder.compare),
+      list.map((ev) => ev.id()).sort((a, b) => a.compareTo(b)).map((id) => id.asString()),
     );
   }
 

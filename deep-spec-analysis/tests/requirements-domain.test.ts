@@ -21,7 +21,7 @@ import {
   VerificationSkipped,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
- VerificationWitness,} from "../tools/requirements/domain/index.ts";
+ VerificationWitness, AttributePath,} from "../tools/requirements/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
 
@@ -304,5 +304,12 @@ describe("verification witness (the contract-2 witness owns its document face)",
     expect(VerificationWitness.trace([{ "T.ok": true }, { "T.ok": false }]).toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
     expect(VerificationWitness.fromDocument(undefined).toDocument()).toEqual({ core: [] });
     expect(VerificationWitness.fromDocument({ model: { x: 1 } }).toDocument()).toEqual({ model: { x: 1 } });
+  });
+});
+
+describe("attribute paths order canonically (ruling 1)", () => {
+  test("segments compare numerically after the letter skeleton", () => {
+    expect(AttributePath.reconstitute("R.a2").compareTo(AttributePath.reconstitute("R.a10"))).toBeLessThan(0);
+    expect(AttributePath.reconstitute("R.b").compareTo(AttributePath.reconstitute("R.a"))).toBeGreaterThan(0);
   });
 });

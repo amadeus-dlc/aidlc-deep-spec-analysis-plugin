@@ -1,4 +1,3 @@
-import { IdOrder } from "../../kernel/domain/index.ts";
 import { TransitionRef } from "./transition-ref.ts";
 
 // eventMap の transitions（写像先の設計 遷移/義務 id）のコレクション。
@@ -30,9 +29,9 @@ export class TransitionRefs {
     return this.#values.map((t) => t.asString()).filter((t) => !declared.has(t)).sort();
   }
 
-  // eventTransitions 索引が持つ正準順（IdOrder.compare）。
+  // eventTransitions 索引が持つ正準順（TransitionRef.compareTo）。
   sortedCanonically(): readonly TransitionRef[] {
-    return [...this.#values].sort((a, b) => IdOrder.compare(a.asString(), b.asString()));
+    return [...this.#values].sort((a, b) => a.compareTo(b));
   }
 
   toArray(): readonly TransitionRef[] {

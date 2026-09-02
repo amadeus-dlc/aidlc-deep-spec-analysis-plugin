@@ -3,11 +3,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { ContentHash, FrRefs, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
-import { CATALOG_VERSION, Finding, Skipped, Findings, InputAnchors, Skips, WitnessRefs,
-  UnitDecl,
-  InputAnchor,
-  WitnessRef,
-} from "../tools/refcheck/domain/index.ts";
+import { CATALOG_VERSION, Finding, Skipped, Findings, InputAnchors, Skips, WitnessRefs, UnitDecl, InputAnchor, WitnessRef, ComponentName, AllowedValue, AppliesTo, AttributeDefault, AttributeName, BusinessRuleId, CardinalityNotation, ElementPath, EntityName, MachineSpec, NumericBound, ReferenceTarget, RuleCategory, SourceId, StateName, TypeName, AllowedValues, AttrDecl, AttrDecls, AttributeNames, BlockIndex, CheckFamilies, CheckFamily, Component, ComponentEntities, ComponentEntity, ComponentRef, ComponentRefs, Components, ComponentShapeErrors, ComponentShapeError, ContractRow, EntityReference, SpecBlockAssessment, ShapeError, ContractId, ContractParty, ContractRows, EntityReferences, LineNumber, SpecBlockAssessments, UnitDecls, UnitName, UnitNames, DomainEntitySketch, DomainEntitySketches, EntityDecl, EntityDecls, RelDecl, RelDecls, RuleDecl, RuleDecls, ShapeErrors, SiblingUnitIndex, SourceIds, StateMachineSketch, StateMachineSketches, StateNames } from "../tools/refcheck/domain/index.ts";
 
 function finding(kind: string, targets: string[], detail: string): Finding {
   return Finding.reconstitute({ kind, frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(targets), witness: { refs: WitnessRefs.of([]) }, detail });
@@ -67,24 +63,6 @@ describe("catalog-order", () => {
 
 // functional-design 語彙 DP — parse（strict 境界）と reconstitute（凍結再水和）
 // の二面性、および照合・描画の解釈語彙の分岐網羅。
-import {
-  AllowedValue,
-  AppliesTo,
-  AttributeDefault,
-  AttributeName,
-  BusinessRuleId,
-  CardinalityNotation,
-  ComponentName,
-  ElementPath,
-  EntityName,
-  MachineSpec,
-  NumericBound,
-  ReferenceTarget,
-  RuleCategory,
-  SourceId,
-  StateName,
-  TypeName,
-} from "../tools/refcheck/domain/index.ts";
 
 describe("functional-design vocabulary domain primitives", () => {
   test("token DPs: parse rejects the empty string, reconstitute is verbatim, equals is by value", () => {
@@ -157,50 +135,6 @@ describe("functional-design vocabulary domain primitives", () => {
 });
 
 // ファーストクラスコレクション — 不変の追加・巡回・境界脱出口・集合知識の分岐網羅。
-import {
-  AllowedValues,
-  AttrDecl,
-  AttrDecls,
-  AttributeNames,
-  BlockIndex,
-  CheckFamilies,
-  CheckFamily,
-  Component,
-  ComponentEntities,
-  ComponentEntity,
-  ComponentRef,
-  ComponentRefs,
-  Components,
-  ComponentShapeErrors,
-  ComponentShapeError,
-  ContractRow,
-  EntityReference,
-  SpecBlockAssessment,
-  ShapeError,
-  ContractId,
-  ContractParty,
-  ContractRows,
-  EntityReferences,
-  LineNumber,
-  SpecBlockAssessments,
-  UnitDecls,
-  UnitName,
-  UnitNames,
-  DomainEntitySketch,
-  DomainEntitySketches,
-  EntityDecl,
-  EntityDecls,
-  RelDecl,
-  RelDecls,
-  RuleDecl,
-  RuleDecls,
-  ShapeErrors,
-  SiblingUnitIndex,
-  SourceIds,
-  StateMachineSketch,
-  StateMachineSketches,
-  StateNames,
-} from "../tools/refcheck/domain/index.ts";
 
 describe("first-class collections", () => {
   const attr = (name: string, allowed: string[] | null = null): AttrDecl =>
@@ -615,5 +549,13 @@ describe("witness ref (a finding's evidence coordinate)", () => {
     expect(valued.pointsAt("a.md", "entities[1]")).toBe(true);
     expect(valued.pointsAt("a.md", "entities[2]")).toBe(false);
     expect(bare.pointsAt("b.md", "components[0].name")).toBe(false);
+  });
+});
+
+describe("component names order canonically (ruling 1: the id value object owns the order)", () => {
+  test("numeric tails compare as numbers", () => {
+    expect(ComponentName.reconstitute("Svc2").compareTo(ComponentName.reconstitute("Svc10"))).toBeLessThan(0);
+    expect(ComponentName.reconstitute("Svc10").compareTo(ComponentName.reconstitute("Svc2"))).toBeGreaterThan(0);
+    expect(ComponentName.reconstitute("Svc").compareTo(ComponentName.reconstitute("Svc"))).toBe(0);
   });
 });

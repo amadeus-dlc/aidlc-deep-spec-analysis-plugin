@@ -1,4 +1,3 @@
-import { IdOrder } from "../../kernel/domain/index.ts";
 import type { DesignTransition } from "./design-transition.ts";
 
 // 遷移のファーストクラスコレクション。id の正準順（lowering の凍結順）を所有。
@@ -26,7 +25,7 @@ export class DesignTransitions {
   }
 
   sortedCanonically(): DesignTransitions {
-    return new DesignTransitions([...this.#values].sort((a, b) => IdOrder.compare(a.id().asString(), b.id().asString())));
+    return new DesignTransitions([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
   }
 
   toArray(): readonly DesignTransition[] {

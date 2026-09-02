@@ -4,7 +4,7 @@
 // ir-valid の errors[]・契約2 の unavailable.reason として golden バイトに
 // 現れるため、文言は「含む」ではなく完全一致で固定する。
 
-import { AttributeBound, ContentHash, RequirementIds } from "../tools/kernel/domain/index.ts";
+import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, Expressions, Names } from "../tools/kernel/domain/index.ts";
 import { describe, expect, test } from "bun:test";
 import {
   canonicalStringify,
@@ -17,7 +17,6 @@ import {
 } from "../tools/kernel/adapter/index.ts";
 import { smtIntOf, smtLit, smtName, smtVar } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok, unreachable } from "../tools/kernel/infrastructure/index.ts";
-import { Expressions, IdOrder, Names, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
 
 describe("result", () => {
   test("ok and err narrow through the ok discriminant", () => {
@@ -71,20 +70,22 @@ describe("canonical-json + content-hash", () => {
   });
 });
 
-describe("id-order", () => {
+describe("canonical id order (owned by the id value object, ruling 1)", () => {
+  const cmp = (a: string, b: string): number => TargetId.reconstitute(a).compareTo(TargetId.reconstitute(b));
   test("letter skeleton orders before numeric segments", () => {
-    expect(IdOrder.compare("DD-2", "FD-1")).toBeLessThan(0);
-    expect(IdOrder.compare("OB-2", "OB-10")).toBeLessThan(0);
-    expect(IdOrder.compare("BR1.2", "BR1.10")).toBeLessThan(0);
-    expect(IdOrder.compare("OB-1", "OB-1")).toBe(0);
+    expect(cmp("DD-2", "FD-1")).toBeLessThan(0);
+    expect(cmp("OB-2", "OB-10")).toBeLessThan(0);
+    expect(cmp("BR1.2", "BR1.10")).toBeLessThan(0);
+    expect(cmp("OB-1", "OB-1")).toBe(0);
   });
 
   test("a shorter id sorts before its extension (missing segment pads with -1)", () => {
-    expect(IdOrder.compare("BR1", "BR1.1")).toBeLessThan(0);
+    expect(cmp("BR1", "BR1.1")).toBeLessThan(0);
   });
 
-  test("sortedUnique deduplicates then sorts with the given comparator", () => {
-    expect(IdOrder.sortedUnique(["OB-10", "OB-2", "OB-2"], IdOrder.compare)).toEqual(["OB-2", "OB-10"]);
+  test("the collections deduplicate then sort canonically", () => {
+    expect(TargetIds.reconstitute(["OB-10", "OB-2", "OB-2"]).sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10"]);
+    expect(FrRefs.of(["FR-10", "FR-2", "FR-2"]).sortedUnique().toArray()).toEqual(["FR-2", "FR-10"]);
   });
 });
 
@@ -300,7 +301,6 @@ describe("target-ids / requirement-ids / names", () => {
 
 describe("companion seals", () => {
   test("static companions are sealed (ctor spent at class initialization)", () => {
-    expect(IdOrder.isSealed()).toBe(true);
     expect(Names.isSealed()).toBe(true);
     expect(Expressions.isSealed()).toBe(true);
   });

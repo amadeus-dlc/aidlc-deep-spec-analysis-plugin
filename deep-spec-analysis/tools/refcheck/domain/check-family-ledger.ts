@@ -9,7 +9,7 @@
 // CQS: finding / skip は void のコマンド、findings / skipped / checkedTargets
 // はクエリ。unit は functional センサーのみが持つ（キー順の末尾、凍結）。
 
-import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import type { CheckFamily } from "./check-family.ts";
 import { type CheckFamilies } from "./check-families.ts";
 import { Findings } from "./findings.ts";
@@ -40,8 +40,8 @@ export class CheckFamilyLedger {
   finding(family: CheckFamily, kind: string, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
     this.#findings.push(Finding.reconstitute({
       kind,
-      frRefs: FrRefs.of(IdOrder.sortedUnique(frRefs, IdOrder.compare)),
-      targets: TargetIds.reconstitute(IdOrder.sortedUnique(targets, IdOrder.compare)),
+      frRefs: FrRefs.of(frRefs).sortedUnique(),
+      targets: TargetIds.reconstitute(targets).sortedUniqueCanonically(),
       witness: { refs: WitnessRefs.of(refs) },
       detail: family.prefixedDetail(detail),
       ...(this.#unit !== undefined ? { unit: this.#unit.asString() } : {}),

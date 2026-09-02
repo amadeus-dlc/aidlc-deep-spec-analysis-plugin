@@ -1,4 +1,4 @@
-import { BackendName, ContentHash, FrRefs, IdOrder, TargetIds } from "../../kernel/domain/index.ts";
+import { BackendName, ContentHash, FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import { CrossCheckedEntries } from "./cross-checked-entries.ts";
 import { CrossCheckedEntry } from "./cross-checked-entry.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
@@ -68,7 +68,7 @@ export class VerificationReports {
             verdicts[b.backend] = vb ? "violated" : "clean";
             findings.push(VerificationFinding.reconstitute({
               kind: "cross-check-disagreement",
-              frRefs: FrRefs.of(IdOrder.sortedUnique([...(scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? [])], IdOrder.compare)),
+              frRefs: FrRefs.of([...(scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? [])]).sortedUnique(),
               targets: TargetIds.of([sc.id().asTargetId()]),
               witness: VerificationWitness.verdicts(verdicts),
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
@@ -78,7 +78,7 @@ export class VerificationReports {
       }
     }
     const crossChecked: CrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => CrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets].sort(IdOrder.compare)) }))
+      .map(([backend, targets]) => CrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets]).sortedCanonically() }))
       .sort((x, y) => x.compareByBackend(y));
 
     return VerificationReport.compose({

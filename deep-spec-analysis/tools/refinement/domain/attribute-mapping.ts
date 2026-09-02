@@ -1,10 +1,11 @@
+import { ReqAttributeValues } from "./req-attribute-values.ts";
 // 属性写像（attrMap の 1 エントリ）。閉じた 3 variant —— 式写像（bool/int）・
 // enum 場合分け・unspecified。α置換の材料（enum 比較の展開・写像式の代入・
 // 抽象フレーム等式）と全域性チェック（欠けケース・生成値の範囲）は写像自身が
 // 所有する。AlphaContext は文脈（索引と未カバー検出）、UnitRefinementPlan は
 // gap 文言（凍結面）だけを担う（主従の裁定・#71 波5）。
 
-import { Expressions, IdOrder, type Expression } from "../../kernel/domain/index.ts";
+import { Expressions, type Expression } from "../../kernel/domain/index.ts";
 import { type AttributePath } from "../../requirements/domain/index.ts";
 import { AlphaError } from "./alpha-error.ts";
 
@@ -96,7 +97,7 @@ export class AttributeMapping {
   abstractFrameEquality(): Expression | null {
     const variant = this.#variant;
     if (variant.kind === "enum-cases") {
-      const values = IdOrder.sortedUnique(Object.values(variant.cases), IdOrder.compare);
+      const values = ReqAttributeValues.of(Object.values(variant.cases)).sortedUniqueCanonically().toArray();
       // 2 つの設計値が等しく抽象されるのは同じ要件値へ写るとき：要件値ごとに
       // 「pre がその類に居る iff post がその類に居る」。
       const classes = values.map((reqValue) => {
@@ -127,11 +128,11 @@ export class AttributeMapping {
   }
 
   // 生成値の範囲（enum-cases 専門）: cases の生成値のうち要件属性の値でない
-  // もの（IdOrder 昇順・重複なし）。
+  // もの（正準順・重複なし）。
   producedValuesOutside(reqValues: { includes(value: string): boolean } | undefined): readonly string[] {
     const variant = this.#variant;
     if (variant.kind !== "enum-cases") return [];
-    return IdOrder.sortedUnique(Object.values(variant.cases).filter((rv) => !(reqValues?.includes(rv) ?? false)), IdOrder.compare);
+    return ReqAttributeValues.of(Object.values(variant.cases).filter((rv) => !(reqValues?.includes(rv) ?? false))).sortedUniqueCanonically().toArray();
   }
 
   // 式写像が参照する設計属性パス（昇順・重複なし）。enum-cases / unspecified

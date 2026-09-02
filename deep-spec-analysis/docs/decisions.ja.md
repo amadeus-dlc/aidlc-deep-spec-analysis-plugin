@@ -1743,3 +1743,12 @@ unparseable／extracted の各枝は凍結の skip・finding 文言を保ち、�
 22. doctor の `CoverageAssessment`・`UnitCoverage`・`StructuralDebt` とその行 —
     リードモデル。`doctor/usecase` へ移す。純粋な値オブジェクト（`Check`・
     `CheckSeverity`・`ManifestEntry`・`DigestAnchor`）は domain に残る。
+
+波 29（同 PR）: 裁定 1 が着地——`IdOrder` が値オブジェクトへ溶ける。正準順
+（英字骨格→数値セグメント）は facade が出さない kernel 非公開ヘルパーになり、
+公開の門は id 値オブジェクトの `compareTo`（`TargetId`、それを通して
+`ObligationId`・設計の各 id・`TransitionRef`・`AttributePath`・`ComponentName`）
+とコレクションの正準ソート（`TargetIds`、`FrRefs.sortedUnique`、
+`ReqAttributeValues.sortedUniqueCanonically`）だけになる。DP を文字列に剥いて
+比較していた 25 の呼び手は DP 自身に比較を命じ、コレクションは自分の要素を
+自分で並べる。golden はバイト同一。

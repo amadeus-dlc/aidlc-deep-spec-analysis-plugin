@@ -11,7 +11,7 @@
 // 旧 deep-spec-design-lib.ts の lowerUnit からの逐語移植（Json 組み立ては
 // アダプタの serializer が担い、ここは型付き lowering を返す）。
 
-import { TargetIds, IdOrder, TargetId } from "../../kernel/domain/index.ts";
+import { TargetIds, TargetId } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "./design-machines.ts";
 import type { DesignMachine } from "./design-machine.ts";
@@ -143,7 +143,7 @@ export class LoweredUnit {
           finding: DesignFinding.reconstitute({
             kind: "redundancy",
             frRefs,
-            targets: TargetIds.reconstitute(IdOrder.sortedUnique([pair[0], pair[1]], IdOrder.compare)),
+            targets: TargetIds.reconstitute([pair[0], pair[1]]).sortedUniqueCanonically(),
             witness,
             unit: u.name(),
             detail: `${pair[1]} is subsumed by ${pair[0]}: same trigger, a provably narrower guard, and an identical effect — it can never apply where ${pair[0]} does not.`,
@@ -155,7 +155,7 @@ export class LoweredUnit {
       }
       if (synth) continue; // 合成に触れる他の判定はノイズ
 
-      const targets = IdOrder.sortedUnique(mapped.map((m) => m.design), IdOrder.compare);
+      const targets = TargetIds.reconstitute(mapped.map((m) => m.design)).sortedUniqueCanonically().toStrings();
       // deterministic:false waiver：同トリガ conflict の対象がすべて、非決定を
       // 宣言した 1 機械の遷移であるとき（判定は機械自身へ命じる——波7）。
       if (f.isKind("conflict") && targets.length > 0) {

@@ -6,7 +6,7 @@
 // detail 文言は golden 凍結）は facts 自身の振る舞い（OOUI 裁定——旧
 // interpretRefinementVerdicts の逐語移植）。
 
-import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import { DesignFinding, DesignFindings, DesignSkips } from "../../design/domain/index.ts";
 import { DesignSkipped } from "../../design/domain/index.ts";
 import { type UnitRefinementPlan } from "./unit-refinement-plan.ts";
@@ -52,7 +52,7 @@ export class RefinementSolverFacts {
   } {
     const findings: DesignFinding[] = [];
     const skipped: DesignSkipped[] = [];
-    const frOf = (reqId: string): string[] => IdOrder.sortedUnique([...req.frRefsOf(reqId)], IdOrder.compare);
+    const frOf = (reqId: string): FrRefs => FrRefs.of([...req.frRefsOf(reqId)]).sortedUnique();
 
     for (const [queryId, p] of this.#pending) {
       const r = results.verdictOf(queryId);
@@ -67,7 +67,7 @@ export class RefinementSolverFacts {
             findings.push(
               DesignFinding.reconstitute({
                 kind: "refinement-violation",
-                frRefs: FrRefs.of(frOf(reqId.asString())),
+                frRefs: frOf(reqId.asString()),
                 targets: TargetIds.reconstitute([reqId.asString()]),
                 witness: { model: r.witnessModel() },
                 unit: unitName,
@@ -82,7 +82,7 @@ export class RefinementSolverFacts {
             findings.push(
               DesignFinding.reconstitute({
                 kind: "refinement-violation",
-                frRefs: FrRefs.of(frOf(reqId.asString())),
+                frRefs: frOf(reqId.asString()),
                 targets: TargetIds.reconstitute([reqId.asString()]),
                 witness: { core: r.sortedCore() },
                 unit: unitName,
@@ -94,7 +94,7 @@ export class RefinementSolverFacts {
             findings.push(
               DesignFinding.reconstitute({
                 kind: "refinement-violation",
-                frRefs: FrRefs.of(frOf(reqId.asString())),
+                frRefs: frOf(reqId.asString()),
                 targets: TargetIds.reconstitute([reqId.asString()]),
                 witness: { model: r.witnessModel() },
                 unit: unitName,
@@ -108,8 +108,8 @@ export class RefinementSolverFacts {
             findings.push(
               DesignFinding.reconstitute({
                 kind: "completeness-gap",
-                frRefs: FrRefs.of(frOf(reqId.asString())),
-                targets: TargetIds.reconstitute(IdOrder.sortedUnique([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())], IdOrder.compare)),
+                frRefs: frOf(reqId.asString()),
+                targets: TargetIds.reconstitute([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())]).sortedUniqueCanonically(),
                 witness: { model: r.witnessModel() },
                 unit: unitName,
                 detail: `The requirements event ${reqId.asString()} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
@@ -122,10 +122,10 @@ export class RefinementSolverFacts {
             findings.push(
               DesignFinding.reconstitute({
                 kind: "refinement-violation",
-                frRefs: FrRefs.of(frOf(reqId.asString())),
+                frRefs: frOf(reqId.asString()),
                 // simulation probe の designId は構築時に必須——旧 `?? ""` +空除去は
                 // designId 未設定の防御で、必須化により恒等（挙動保存）。
-                targets: TargetIds.reconstitute(IdOrder.sortedUnique([reqId.asString(), designId.asString()], IdOrder.compare).filter((t) => t !== "")),
+                targets: TargetIds.reconstitute([reqId.asString(), designId.asString()].filter((t) => t !== "")).sortedUniqueCanonically(),
                 witness: { trace: r.witnessTrace() },
                 unit: unitName,
                 detail: `Design step ${designId.asString()} of unit ${unitName}, taken where requirements event ${reqId.asString()} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,

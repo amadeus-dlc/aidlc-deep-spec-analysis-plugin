@@ -305,7 +305,7 @@ describe("lowering (typed compile-down)", () => {
 
   test("numbering, maps, and the implicit machine encoding are stable", () => {
     const low = LoweredUnit.of(machineUnit, { synthetics: false });
-    // 義務は IdOrder.compare 順（DOB-1 が DOB-2 の前）→ OB-1=DOB-1(event)、
+    // 義務は id の正準順（DOB-1 が DOB-2 の前）→ OB-1=DOB-1(event)、
     // OB-2=DOB-2(invariant)、以後 TR-1/TR-2/ignore。
     expect(low.obligations().toArray().map((o) => `${o.id().asString()}:${o.nature()}`)).toEqual([
       "OB-1:event",

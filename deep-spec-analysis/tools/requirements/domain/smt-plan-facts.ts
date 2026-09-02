@@ -6,7 +6,7 @@
 // ソートは VerificationReport.compose の不変条件）は facts 自身の振る舞い
 // （OOUI 裁定）。
 
-import { TargetIds, IdOrder } from "../../kernel/domain/index.ts";
+import { TargetIds } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { type SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 import { VerificationFinding } from "./verification-finding.ts";
@@ -85,7 +85,7 @@ export class SmtPlanFacts {
       const targets = core
         .map((label) => this.#labelToTarget.get(label))
         .filter((t): t is string => typeof t === "string" && t.startsWith("OB-"));
-      return TargetIds.reconstitute(IdOrder.sortedUnique(targets, IdOrder.compare));
+      return TargetIds.reconstitute(targets).sortedUniqueCanonically();
     };
 
     const addConflict = (targets: TargetIds, core: string[], detail: string): void => {

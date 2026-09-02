@@ -1954,3 +1954,14 @@ in the code changes with this entry):
     and their rows — read models, moved to `doctor/usecase`; the pure
     value objects (`Check`, `CheckSeverity`, `ManifestEntry`,
     `DigestAnchor`) stay in the domain.
+
+Wave 29 (same PR): ruling 1 lands — `IdOrder` dissolves into the value
+objects. The canonical order (letter skeleton, then numeric segments)
+becomes a kernel-private helper that no facade exports; the public
+doors are the id value objects' `compareTo` (`TargetId`, and through
+it `ObligationId`, the design ids, `TransitionRef`, `AttributePath`,
+`ComponentName`) and the collections' canonical sorts (`TargetIds`,
+`FrRefs.sortedUnique`, `ReqAttributeValues.sortedUniqueCanonically`).
+The 25 callers that stripped a DP to a string to compare it now tell
+the DP to compare itself; every collection sorts its own elements.
+Goldens stay byte-identical.

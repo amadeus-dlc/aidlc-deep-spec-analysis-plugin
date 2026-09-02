@@ -1,4 +1,4 @@
-import { BackendName, ContentHash, FrRefs, IdOrder, TargetId, TargetIds } from "../../kernel/domain/index.ts";
+import { BackendName, ContentHash, FrRefs, TargetId, TargetIds } from "../../kernel/domain/index.ts";
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
 import { DesignFindings } from "./design-findings.ts";
@@ -70,7 +70,7 @@ export class DesignReports {
               findings.push(
                 DesignFinding.reconstitute({
                   kind: "cross-check-disagreement",
-                  frRefs: FrRefs.of(IdOrder.sortedUnique([...sc.frRefs()], IdOrder.compare)),
+                  frRefs: FrRefs.of([...sc.frRefs()]).sortedUnique(),
                   targets: TargetIds.reconstitute([sc.id().asString()]),
                   witness: { verdicts },
                   unit: u.name(),
@@ -83,7 +83,7 @@ export class DesignReports {
       }
     }
     const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => DesignCrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets].sort(IdOrder.compare)) }))
+      .map(([backend, targets]) => DesignCrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets]).sortedCanonically() }))
       .sort((x, y) => x.compareByBackend(y));
 
     return DesignReport.compose({

@@ -5,8 +5,9 @@
 // からの逐語移植——自由関数は UnitRefinementPlan.of（構築）と plan 自身の
 // 照会・skip 導出メソッドになった（OOUI 裁定）。
 
+import { AttributePath } from "../../requirements/domain/index.ts";
 import type { ArtifactPath } from "../../kernel/domain/index.ts";
-import { FrRefs, TargetIds, IdOrder, TargetId } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, TargetId } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignFinding, DesignFindings, DesignSkips } from "../../design/domain/index.ts";
 import type { DesignUnit } from "../../design/domain/index.ts";
@@ -55,8 +56,8 @@ export class UnitRefinementPlan {
       gaps.push(
         DesignFinding.reconstitute({
           kind: "mapping-gap",
-          frRefs: FrRefs.of(IdOrder.sortedUnique(frRefs, IdOrder.compare)),
-          targets: TargetIds.reconstitute(IdOrder.sortedUnique(targets, IdOrder.compare)),
+          frRefs: FrRefs.of(frRefs).sortedUnique(),
+          targets: TargetIds.reconstitute(targets).sortedUniqueCanonically(),
           witness: { refs: [{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }] },
           unit: u.name(),
           detail,
@@ -159,7 +160,7 @@ export class UnitRefinementPlan {
         }
         const covG = attrsCovered(ob.guard());
         const covE = attrsCovered(ob.effect());
-        const missing = IdOrder.sortedUnique([...covG.missing, ...covE.missing], IdOrder.compare);
+        const missing = [...new Set([...covG.missing, ...covE.missing])].sort((a, b) => AttributePath.reconstitute(a).compareTo(AttributePath.reconstitute(b)));
         if (!entry || entry.transitions().isEmpty()) {
           obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`requirements event trigger "${trigger === undefined ? "?" : trigger.asString()}" has no eventMap entry (map it to design transitions or waive it)`));
           continue;
@@ -206,13 +207,13 @@ export class UnitRefinementPlan {
     }
 
     // 義務/シナリオの gap 分類は mapping-gap finding へ昇格する。
-    for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => IdOrder.compare(a[0], b[0]))) {
+    for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => TargetId.reconstitute(a[0]).compareTo(TargetId.reconstitute(b[0])))) {
       const gapDetail = st.gapDetail();
         if (gapDetail !== null) {
         gap([id], `${id}: ${gapDetail}`, req.obligationById(id)?.frRefs().toArray() ?? []);
       }
     }
-    for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => IdOrder.compare(a[0], b[0]))) {
+    for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => TargetId.reconstitute(a[0]).compareTo(TargetId.reconstitute(b[0])))) {
       const gapDetail = st.gapDetail();
         if (gapDetail !== null) {
         gap([id], `${id}: ${gapDetail}`, req.scenarioById(id)?.frRefs().toArray() ?? []);
@@ -236,13 +237,13 @@ export class UnitRefinementPlan {
     return this.#gaps;
   }
 
-  // 正準順（IdOrder.compare）の被覆分類——SMT クエリ構築・skip 記録の凍結順。
+  // 正準順（TargetId.compareTo）の被覆分類——SMT クエリ構築・skip 記録の凍結順。
   sortedObligationStatuses(): readonly (readonly [string, RefinementStatus])[] {
-    return [...this.#obligationStatus.entries()].sort((a, b) => IdOrder.compare(a[0], b[0]));
+    return [...this.#obligationStatus.entries()].sort((a, b) => TargetId.reconstitute(a[0]).compareTo(TargetId.reconstitute(b[0])));
   }
 
   sortedScenarioStatuses(): readonly (readonly [string, RefinementStatus])[] {
-    return [...this.#scenarioStatus.entries()].sort((a, b) => IdOrder.compare(a[0], b[0]));
+    return [...this.#scenarioStatus.entries()].sort((a, b) => TargetId.reconstitute(a[0]).compareTo(TargetId.reconstitute(b[0])));
   }
 
   statusOfObligation(id: string): RefinementStatus | undefined {
@@ -273,7 +274,7 @@ export class UnitRefinementPlan {
 
   // Quint パスの被覆 skip：さらに checkable の event 義務・シナリオを
   // 「SMT 専用検査」の capability として記録（旧 quintRefinementStatusSkips。
-  // 走査順は旧実装どおり素の辞書順——IdOrder.compare ではない凍結挙動）。
+  // 走査順は旧実装どおり素の辞書順——正準順ではない凍結挙動）。
   quintStatusSkips(req: RefinementRequirements, unitName: string): DesignSkips {
     const skipped: DesignSkipped[] = [];
     for (const [rid, st] of [...this.#obligationStatus.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {

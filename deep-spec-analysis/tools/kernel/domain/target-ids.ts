@@ -4,7 +4,7 @@
 // 名前空間付き id のサニタイズ（safe）は refcheck 台帳の材料面として残る
 // （旧自由関数 safeTarget は TargetIds.safe に従属した——OOUI 裁定）。
 
-import { IdOrder } from "./id-order.ts";
+import { sortedUniqueCanonically } from "./canonical-order.ts";
 import { TargetId } from "./target-id.ts";
 
 export class TargetIds {
@@ -57,7 +57,7 @@ export class TargetIds {
 
   // finding の targets 面の凍結正準形（一意化 + id 順）。
   sortedUniqueCanonically(): TargetIds {
-    return TargetIds.reconstitute(IdOrder.sortedUnique(this.toStrings()));
+    return TargetIds.reconstitute(sortedUniqueCanonically(this.toStrings()));
   }
 
   joined(separator: string): string {

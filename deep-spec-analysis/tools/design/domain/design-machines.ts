@@ -1,4 +1,3 @@
-import { IdOrder } from "../../kernel/domain/index.ts";
 import type { DesignMachine } from "./design-machine.ts";
 
 // 状態機械のファーストクラスコレクション。全遷移 id の導出を所有する。
@@ -31,9 +30,9 @@ export class DesignMachines {
     return new DesignMachines([...this.#values].sort((a, b) => (a.id().asString() < b.id().asString() ? -1 : 1)));
   }
 
-  // lowering の凍結順：IdOrder 正準順（sortedById＝probe 凍結順とは別面）。
+  // lowering の凍結順：id の正準順（sortedById＝probe 凍結順とは別面）。
   sortedCanonically(): DesignMachines {
-    return new DesignMachines([...this.#values].sort((a, b) => IdOrder.compare(a.id().asString(), b.id().asString())));
+    return new DesignMachines([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
   }
 
   // 機械の生涯属性の座標（entity.attribute——lowering・触媒・文言の共有導出）。
