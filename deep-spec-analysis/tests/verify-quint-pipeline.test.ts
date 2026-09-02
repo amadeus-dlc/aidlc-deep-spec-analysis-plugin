@@ -72,7 +72,7 @@ import { InMemoryVerificationReportRepository } from "./doubles/in-memory-verifi
 
 // 判定レコードは class（#71 波18）——期待値は平文へ射影して比較する（bun の toEqual は #private を見ない）。
 const plainFindings = (findings: Iterable<VerificationFinding>) =>
-  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toArray(), targets: f.targets().toStrings(), witness: f.witness(), detail: f.detail() }));
+  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toArray(), targets: f.targets().toStrings(), witness: f.witness().toDocument(), detail: f.detail() }));
 
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -286,7 +286,7 @@ describe("quint verdict interpretation", () => {
       detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
     }]);
     const noTrace = run({ machine: QuintMachineRunVerdict.deadlock(null) });
-    expect(noTrace.findings.toArray()[0]?.witness()).toEqual({ model: {} });
+    expect(noTrace.findings.toArray()[0]?.witness().toDocument()).toEqual({ model: {} });
   });
 
   test("a violation trace is attributed to the failing components via pure evaluation", () => {

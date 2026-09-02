@@ -21,7 +21,7 @@ import {
   VerificationSkipped,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
-} from "../tools/requirements/domain/index.ts";
+ VerificationWitness,} from "../tools/requirements/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
 
@@ -224,15 +224,15 @@ describe("quint machine run verdict", () => {
     expect(deadlock.skipsFor(targets, true)).toEqual([]);
     expect(deadlock.isDeadlock()).toBe(true);
     expect(deadlock.isViolation()).toBe(false);
-    expect(deadlock.witness()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
+    expect(deadlock.witness().toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
     const silent = QuintMachineRunVerdict.deadlock(null);
-    expect(silent.witness()).toEqual({ model: {} });
+    expect(silent.witness().toDocument()).toEqual({ model: {} });
     expect(silent.finalState()).toEqual({});
     const violation = QuintMachineRunVerdict.violation(trace);
     expect(violation.abortsMachineTargets()).toBe(false);
     expect(violation.isViolation()).toBe(true);
     expect(violation.isDeadlock()).toBe(false);
-    expect(violation.witness()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
+    expect(violation.witness().toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
     expect(violation.finalState()).toEqual({ "T.ok": false });
   });
 
@@ -274,11 +274,11 @@ describe("quint temporal and scenario verdicts", () => {
     expect(timeout.skipFor(target)?.reason()).toBe("timeout");
     expect(timeout.skipFor(target)?.detail()).toBe("temporal check exceeded its budget");
     expect(timeout.isViolation()).toBe(false);
-    expect(timeout.witness()).toEqual({ model: {} });
+    expect(timeout.witness().toDocument()).toEqual({ model: {} });
     const violation = QuintTemporalVerdict.violation(TraceStates.of([{ "T.ok": false }]));
     expect(violation.skipFor(target)).toBeNull();
     expect(violation.isViolation()).toBe(true);
-    expect(violation.witness()).toEqual({ trace: [{ "T.ok": false }] });
+    expect(violation.witness().toDocument()).toEqual({ trace: [{ "T.ok": false }] });
     expect(QuintTemporalVerdict.clean().skipFor(target)).toBeNull();
     expect(QuintTemporalVerdict.clean().isViolation()).toBe(false);
   });
@@ -293,5 +293,16 @@ describe("quint temporal and scenario verdicts", () => {
     expect(QuintScenarioVerdict.evaluated(true).skipFor(target)).toBeNull();
     expect(QuintScenarioVerdict.evaluated(true).isViolated()).toBe(true);
     expect(QuintScenarioVerdict.evaluated(false).isViolated()).toBe(false);
+  });
+});
+
+describe("verification witness (the contract-2 witness owns its document face)", () => {
+  test("each face serializes verbatim and the document round-trips through the frozen blind cast", () => {
+    expect(VerificationWitness.core(["b", "a"]).toDocument()).toEqual({ core: ["b", "a"] });
+    expect(VerificationWitness.model({ "T.ok": true, "T.n": 2 }).toDocument()).toEqual({ model: { "T.ok": true, "T.n": 2 } });
+    expect(VerificationWitness.verdicts({ quint: "violated", smt: "clean" }).toDocument()).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
+    expect(VerificationWitness.trace([{ "T.ok": true }, { "T.ok": false }]).toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
+    expect(VerificationWitness.fromDocument(undefined).toDocument()).toEqual({ core: [] });
+    expect(VerificationWitness.fromDocument({ model: { x: 1 } }).toDocument()).toEqual({ model: { x: 1 } });
   });
 });

@@ -7,6 +7,7 @@ import { VerificationSkips } from "./verification-skips.ts";
 import { VerificationFinding } from "./verification-finding.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import { VerificationReport } from "./verification-report.ts";
+import { VerificationWitness } from "./verification-witness.ts";
 
 // 兄弟文書のファーストクラスコレクション（クロスチェックの入力）。
 export class VerificationReports {
@@ -69,7 +70,7 @@ export class VerificationReports {
               kind: "cross-check-disagreement",
               frRefs: FrRefs.of(IdOrder.sortedUnique([...(scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? [])], IdOrder.compare)),
               targets: TargetIds.of([sc.id().asTargetId()]),
-              witness: { verdicts },
+              witness: VerificationWitness.verdicts(verdicts),
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
             }));
           }

@@ -2,7 +2,7 @@ import type { TargetIds } from "../../kernel/domain/index.ts";
 import type { TraceState } from "./trace-state.ts";
 import type { TraceStates } from "./trace-states.ts";
 import { VerificationSkipped } from "./verification-skipped.ts";
-import type { VerificationWitness } from "./verification-witness.ts";
+import { VerificationWitness } from "./verification-witness.ts";
 
 // 機械フェーズ（イベント機械下の到達可能な不変量違反・デッドロック探索）
 // 1 回分の判定。主従の裁定（#71 波8）: 判定は命令できる抽象データ型——
@@ -88,7 +88,7 @@ export class QuintMachineRunVerdict {
   // へ退避する（凍結挙動）。
   witness(): VerificationWitness {
     const trace = this.#trace;
-    return trace !== null ? { trace: trace.toArray() } : { model: {} };
+    return trace !== null ? VerificationWitness.trace(trace.toArray()) : VerificationWitness.model({});
   }
 
   // 帰属評価に使う最終状態（violation のトレース末尾。trace を欠けば空状態）。

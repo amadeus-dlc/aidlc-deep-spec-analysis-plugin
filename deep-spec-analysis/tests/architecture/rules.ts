@@ -410,17 +410,25 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
 // する。DATA_MODEL_DEBT は着手時の全数棚卸し（縮小専用——増やす変更は裁定
 // 違反で、波が 1 件返すたびにここから消す。LEGACY_FILES と同じ規律）。
 // Expression は寛容 published language の既裁定で恒久除外。
-export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
+// 台帳は波28で空になった（122 → 0）。縮小専用の規律はそのまま——新しい
+// エントリを足す変更は裁定違反。
+export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([]);
+
+// 裁定（#71 波28）: published language の JSON 値の形は data model ではない。
+// DesignValue / DecodedValue は JSON 値そのものの再帰型、TraceState は
+// witness.trace[i]（属性パス → 復号値）の写像型で、どれも getter を持たず
+// 振る舞いも持ち得ない（findings スキーマが形を決める）。Expression と同じ
+// 恒久除外——DATA_MODEL_DEBT とは違い、縮小の対象ではない。
+export const PUBLISHED_VALUE_SHAPES: ReadonlySet<string> = new Set([
   "design/domain/design-value.ts",
   "requirements/domain/decoded-value.ts",
   "requirements/domain/trace-state.ts",
-  "requirements/domain/verification-witness.ts",
 ]);
 
 export function noDataModelsInDomain(relPath: string, rawSource: string): Violation[] {
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
-  if (DATA_MODEL_DEBT.has(relPath)) return [];
+  if (DATA_MODEL_DEBT.has(relPath) || PUBLISHED_VALUE_SHAPES.has(relPath)) return [];
   const source = stripStrings(rawSource);
   const out: Violation[] = [];
   for (const m of source.matchAll(/^export interface (\w+)\s*(?:extends [\w<>, ]+)?\{([\s\S]*?)^\}/gm)) {
@@ -557,7 +565,7 @@ export function primitiveFieldsOf(rawSource: string): string[] {
 
 // 台帳の記述子総数の上限。台帳が縮んだら下げる——上げる変更は裁定違反で、
 // 新しい負債を記述子ごと台帳へ足す抜け道を diff 上で可視化する（レビュー指摘）。
-export const PRIMITIVE_FIELD_DEBT_CEILING = 84;
+export const PRIMITIVE_FIELD_DEBT_CEILING = 83;
 
 export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([
   ["design/domain/br-reference-index.ts", new Set(["#ids: Set<string>"])],
@@ -616,7 +624,6 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["requirements/domain/source-anchor.ts", new Set(["#declared: string | null", "#actual: string"])],
   ["requirements/domain/verification-finding.ts", new Set(["#kind: string"])],
   ["requirements/domain/verification-report.ts", new Set(["#method: string"])],
-  ["requirements/domain/verification-witness.ts", new Set(["VerificationWitness.core: string[]"])],
 ]);
 
 export function noPrimitiveFieldsInDomain(relPath: string, rawSource: string): Violation[] {

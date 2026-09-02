@@ -15,6 +15,7 @@ import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 
 import { SmtEventPairProbes } from "./smt-event-pair-probes.ts";
+import { VerificationWitness } from "./verification-witness.ts";
 
 export class SmtPlanFacts {
   readonly #compiled: ReadonlyMap<string, boolean>;
@@ -97,7 +98,7 @@ export class SmtPlanFacts {
         kind: "conflict",
         frRefs: model.frRefsOf(effective),
         targets: effective,
-        witness: { core: [...core].sort() },
+        witness: VerificationWitness.core([...core].sort()),
         detail,
       }));
     };
@@ -168,7 +169,7 @@ export class SmtPlanFacts {
           kind: "completeness-gap",
           frRefs: model.frRefsOf(TargetIds.reconstitute(eventIds)),
           targets: TargetIds.reconstitute(eventIds),
-          witness: { model: r.witnessModel() },
+          witness: VerificationWitness.model(r.witnessModel()),
           detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
         }));
       } else if (r.isUndecided()) {
@@ -192,7 +193,7 @@ export class SmtPlanFacts {
           kind: "scenario-violation",
           frRefs: model.frRefsOf(targets),
           targets,
-          witness: { core: r.sortedCore() },
+          witness: VerificationWitness.core(r.sortedCore()),
           detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
         }));
       }
@@ -201,7 +202,7 @@ export class SmtPlanFacts {
           kind: "scenario-violation",
           frRefs: model.frRefsOf(TargetIds.of([sc.id().asTargetId()])),
           targets: TargetIds.of([sc.id().asTargetId()]),
-          witness: { model: r.witnessModel() },
+          witness: VerificationWitness.model(r.witnessModel()),
           detail: `Reject scenario ${sc.id().asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
         }));
       }
