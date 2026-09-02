@@ -2070,3 +2070,22 @@ checks and record the inputs, `CheckFamilies.checkTargets` replaces the
 ledger's set arithmetic, and `TargetIds.excluding` is the kernel's
 contribution. Goldens stay byte-identical; the field ledger is unchanged
 (ceiling 66).
+
+Wave 39 (same PR): ruling 16 lands — the design record owns its
+documents and its checks. `LoadedDocument<Outcome>`, the generic record
+that slipped past the data-model rule, dissolves: a loaded document is an
+(anchor, outcome) pair that lives only inside `DesignRecord`, and the
+rule now catches type-parameterised interfaces too. The record's view
+getters (`componentCatalog`, `contractsTable`, `specBlocks`,
+`declaredUnits`, `functional`) are gone; what remains readable from the
+outside is the id and the source bytes for `store`. In their place the
+aggregate has three gates — `checkComponents`, `checkContracts`,
+`checkFunctionalDesign` — each taking the report directory: the gate
+opens the `ReferenceCheckReport` itself (the check families and the
+unit are the record's knowledge, which is why the report is opened
+there rather than handed in), runs the checks, records every document
+it read as an input, and returns the open report; a gate that does not
+match the record's document answers `not-applicable` through `Result`,
+the expected branch the sensor maps to its own `not-applicable`. The use
+cases shrink to: resolve the record, open the gate, conform, store.
+Goldens stay byte-identical; the field ledger is unchanged (ceiling 66).

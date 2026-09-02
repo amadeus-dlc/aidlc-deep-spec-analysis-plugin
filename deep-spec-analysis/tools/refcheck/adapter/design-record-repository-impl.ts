@@ -48,9 +48,9 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
       target: input(artifactPath, md),
       sourceDocument: sourceBytes,
       componentCatalog: targetBase === "components.md" ? parseComponentCatalog(md) : null,
-      contractsTable: targetBase === "contract-summary.md" ? parseContractsTable(md) : null,
-      specBlocks: targetBase === "contract-summary.md" ? assessSpecBlocks(md) : null,
-      declaredUnits: targetBase === "contract-summary.md" ? this.#declaredUnits(recordRoot) : null,
+      contractSummary: targetBase === "contract-summary.md"
+        ? { contractsTable: parseContractsTable(md), specBlocks: assessSpecBlocks(md), declaredUnits: this.#declaredUnits(recordRoot) }
+        : null,
       functional: isFunctional ? this.#functional(recordRoot, fdDir) : null,
     };
     return ok(DesignRecord.reconstitute(seed));
@@ -67,7 +67,7 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     }
   }
 
-  #declaredUnits(recordRoot: string | null): NonNullable<Parameters<typeof DesignRecord.reconstitute>[0]["declaredUnits"]> {
+  #declaredUnits(recordRoot: string | null): NonNullable<Parameters<typeof DesignRecord.reconstitute>[0]["contractSummary"]>["declaredUnits"] {
     const depPath = recordRoot === null ? null : join(recordRoot, "inception", "units-generation", "unit-of-work-dependency.md");
     const depMd = depPath === null ? null : readIfExists(depPath);
     if (depPath === null || depMd === null) {

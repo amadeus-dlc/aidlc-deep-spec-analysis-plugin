@@ -64,6 +64,7 @@ import {
   UnitName,
   AttributeName,
   AttributeNames,
+  DesignRecord,
   DesignRecordId,
   EntityName,
   SiblingUnitIndex,
@@ -183,6 +184,59 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 });
 
 // --- 以下はドメイン検査の分岐固定（use case を介さない直接駆動） -------------
+
+describe("DesignRecord check gates (the aggregate owns its checks and its inputs)", () => {
+  const componentsRecord = () => DesignRecord.reconstitute({
+    id: DesignRecordId.of(ap("/tmp/rec/inception/domain-design/components.md")),
+    target: InputAnchor.reconstitute({ artifact: "inception/domain-design/components.md", sha256: ContentHash.reconstitute("c".repeat(64)) }),
+    sourceDocument: new TextEncoder().encode("no fence at all"),
+    componentCatalog: parseComponentCatalog("no fence at all"),
+    contractSummary: null,
+    functional: null,
+  });
+  const contractRecord = () => DesignRecord.reconstitute({
+    id: DesignRecordId.of(ap("/tmp/rec/inception/contract-design/contract-summary.md")),
+    target: InputAnchor.reconstitute({ artifact: "inception/contract-design/contract-summary.md", sha256: ContentHash.reconstitute("d".repeat(64)) }),
+    sourceDocument: new TextEncoder().encode(""),
+    componentCatalog: null,
+    contractSummary: {
+      contractsTable: ContractsTableOutcome.absent(),
+      specBlocks: SpecBlockAssessments.of([]),
+      declaredUnits: { artifactName: ArtifactPath.reconstitute("inception/units-generation/unit-of-work-dependency.md"), document: null },
+    },
+    functional: null,
+  });
+
+  test("a components record opens its report, runs DD, and records itself as the input", () => {
+    const record = componentsRecord();
+    const checked = record.checkComponents(ap("/tmp/rec/inception/domain-design/deep-spec-refcheck"));
+    if (!checked.ok) throw new Error("unreachable");
+    expect(checked.value.id().backendName().asString()).toBe("components");
+    expect(checked.value.inputs().toArray().map((i) => i.artifact())).toEqual(["inception/domain-design/components.md"]);
+    expect(checked.value.findingsCount()).toBe(1);
+    expect(checked.value.skippedCount()).toBe(7);
+    expect(Buffer.from(record.sourceDocument()).toString("utf-8")).toBe("no fence at all");
+  });
+
+  test("a contract-summary record without the units document opens its report with the target as the only input", () => {
+    const checked = contractRecord().checkContracts(ap("/tmp/rec/inception/contract-design/deep-spec-refcheck"));
+    if (!checked.ok) throw new Error("unreachable");
+    expect(checked.value.id().backendName().asString()).toBe("contract-summary");
+    expect(checked.value.inputs().toArray().map((i) => i.artifact())).toEqual(["inception/contract-design/contract-summary.md"]);
+    const reasons = checked.value.skipped().toArray().map((s) => `${s.target()}:${s.reason()}`);
+    expect(reasons).toContain("check:CD-1:absent-input");
+    expect(reasons).toContain("check:CD-3:absent-input");
+  });
+
+  test("a gate that does not match the record's document is not applicable", () => {
+    const components = componentsRecord();
+    expect(components.checkContracts(ap("/tmp/x")).ok).toBe(false);
+    expect(components.checkFunctionalDesign(ap("/tmp/x")).ok).toBe(false);
+    const contract = contractRecord();
+    expect(contract.checkComponents(ap("/tmp/x")).ok).toBe(false);
+    expect(contract.checkFunctionalDesign(ap("/tmp/x")).ok).toBe(false);
+  });
+});
 
 function domainReport(
   families: CheckFamilies,
