@@ -1509,3 +1509,15 @@ class に反転し、それぞれ正準順（`compareTo`——target、次いで
 122 中 49。`PRIMITIVE_FIELD_DEBT` の総数は変わらない（台帳に載る `artifact`／
 `element`／`value` の文字列が形を変えるだけ——記録相対の成果物名と要素パスで、
 固有のプリミティブの候補）。
+
+波 20（同 PR）: lowered v1 ペイロードがデータモデルであることをやめる。
+`LoweredObligation`、`LoweredScenario`、`LoweredBackground`、`LoweredOrigin`
+（design）が命令できる class に反転する: 義務はイベントかどうかを知り、
+シナリオは accept と reject を区別し、帰属は remap が `kind` と `pair` を
+読んで訊いていたこと——合成の到達不能プローブか（`isSyntheticProbe`、
+`isKind`）、影プローブが立つ対（`pairRefs`。対を持たない帰属は自分自身と
+対になる凍結の退避）——を所有する。降ろし、降ろし索引、quint ユースケースの
+refinement パス、lowered 文書のシリアライザは再構成しアクセサで読む。描画
+される v1 文書はバイト同一。台帳から 4 エントリを回収し、残債は 122 中 45。
+`PRIMITIVE_FIELD_DEBT` は 88 へ（入れ子のレコード型の中にあった記述子 2 件が
+形の変化で消える）。

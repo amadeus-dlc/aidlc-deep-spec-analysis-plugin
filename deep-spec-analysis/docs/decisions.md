@@ -1673,3 +1673,18 @@ accessors. 5 ledger entries reclaimed — the ledger holds 49 of 122;
 `PRIMITIVE_FIELD_DEBT` keeps its total (the ledgered `artifact` /
 `element` / `value` strings change shape — they remain record-relative
 artifact names and element paths, candidates for their own primitives).
+
+Wave 20 (same PR): the lowered v1 payload stops being data models.
+`LoweredObligation`, `LoweredScenario`, `LoweredBackground` and
+`LoweredOrigin` (design) invert into commandable classes: the obligation
+knows whether it is an event, the scenario knows accept from reject,
+and the origin owns what the remap used to ask by reading `kind` and
+`pair` — whether it is a synthetic vacuity probe (`isSyntheticProbe`,
+`isKind`) and the pair a shadow probe stands for (`pairRefs`, a lone
+origin pairing with itself, the frozen fallback). The lowering, the
+lowering index, the quint use case's refinement pass and the lowered
+document serializer reconstitute and read through accessors; the
+rendered v1 document is byte-identical. 4 ledger entries reclaimed — the
+ledger holds 45 of 122; `PRIMITIVE_FIELD_DEBT` drops to 88 (two
+descriptors that lived inside nested record types disappear with the
+shape change).

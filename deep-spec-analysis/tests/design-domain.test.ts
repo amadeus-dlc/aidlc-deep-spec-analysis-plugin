@@ -42,6 +42,12 @@ import {
   UnformalizedTargets,
   DesignSkipped,
   DesignSkips,
+  LoweredId,
+  LoweredObligation,
+  LoweredScenario,
+  LoweredBackground,
+  LoweredOrigin,
+  LoweredOriginRef,
 } from "../tools/design/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
@@ -474,5 +480,58 @@ describe("design skipped (a skip record owns its identity and canonical order)",
       "u2:TR-2:timeout",
     ]);
     expect(a.compareTo(a)).toBe(0);
+  });
+});
+
+describe("lowered records (the v1 payload the sibling backends receive)", () => {
+  test("obligation knows whether it is an event and carries its optional parts", () => {
+    const invariant = LoweredObligation.reconstitute({ id: LoweredId.reconstitute("OB-1"), nature: "invariant", frRefs: ["FR-1"], assert: { op: "bool", value: true } });
+    const event = LoweredObligation.reconstitute({
+      id: LoweredId.reconstitute("OB-2"), nature: "event", frRefs: [], trigger: "close",
+      guard: { op: "bool", value: true }, effect: { op: "bool", value: true },
+      temporal: { pattern: "always", assert: { op: "bool", value: false } },
+    });
+    expect(invariant.isEvent()).toBe(false);
+    expect(event.isEvent()).toBe(true);
+    expect(invariant.id().asString()).toBe("OB-1");
+    expect(invariant.nature()).toBe("invariant");
+    expect(invariant.frRefs()).toEqual(["FR-1"]);
+    expect(invariant.assertion()).toEqual({ op: "bool", value: true });
+    expect(invariant.trigger()).toBeUndefined();
+    expect(event.trigger()).toBe("close");
+    expect(event.guard()).toEqual({ op: "bool", value: true });
+    expect(event.effect()).toEqual({ op: "bool", value: true });
+    expect(event.temporal()?.pattern).toBe("always");
+  });
+
+  test("scenario knows accept from reject and carries its bindings, event, and expectation", () => {
+    const accept = LoweredScenario.reconstitute({ id: LoweredId.reconstitute("SC-1"), kind: "accept", frRefs: ["FR-2"], bindings: { "T.x": 1 } });
+    const reject = LoweredScenario.reconstitute({ id: LoweredId.reconstitute("SC-2"), kind: "reject", frRefs: [], bindings: {}, event: { trigger: "go" }, expect: { op: "bool", value: true } });
+    expect(accept.isAccept()).toBe(true);
+    expect(reject.isAccept()).toBe(false);
+    expect(accept.id().asString()).toBe("SC-1");
+    expect(accept.kind()).toBe("accept");
+    expect(accept.frRefs()).toEqual(["FR-2"]);
+    expect(accept.bindings()).toEqual({ "T.x": 1 });
+    expect(accept.event()).toBeUndefined();
+    expect(reject.event()).toEqual({ trigger: "go" });
+    expect(reject.expectation()).toEqual({ op: "bool", value: true });
+    const bg = LoweredBackground.reconstitute({ id: LoweredId.reconstitute("BG-1"), assert: { op: "bool", value: true } });
+    expect(bg.id().asString()).toBe("BG-1");
+    expect(bg.assertion()).toEqual({ op: "bool", value: true });
+  });
+
+  test("origin tells probes from attributions and pairs a shadow probe (a lone origin pairs with itself)", () => {
+    const dead = LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute("TR-1"), kind: "vac-dead" });
+    const shadow = LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute("TR-1|TR-2"), kind: "vac-shadow", pair: [LoweredOriginRef.reconstitute("TR-1"), LoweredOriginRef.reconstitute("TR-2")] });
+    const plain = LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute("DOB-1"), kind: "passthrough" });
+    expect(dead.isSyntheticProbe()).toBe(true);
+    expect(shadow.isSyntheticProbe()).toBe(true);
+    expect(plain.isSyntheticProbe()).toBe(false);
+    expect(plain.isKind("passthrough")).toBe(true);
+    expect(plain.kind()).toBe("passthrough");
+    expect(shadow.pairRefs().map((r) => r.asString())).toEqual(["TR-1", "TR-2"]);
+    expect(plain.pairRefs().map((r) => r.asString())).toEqual(["DOB-1", "DOB-1"]);
+    expect(dead.design().asString()).toBe("TR-1");
   });
 });
