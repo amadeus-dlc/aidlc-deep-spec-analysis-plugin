@@ -1,3 +1,4 @@
+import { TargetId } from "../../kernel/domain/index.ts";
 // enum 属性の宣言値のコレクション（宣言順を保持——decode の序数対応に効く）。
 export class ReqAttributeValues {
   readonly #values: readonly string[];
@@ -20,6 +21,11 @@ export class ReqAttributeValues {
 
   includes(value: string): boolean {
     return this.#values.includes(value);
+  }
+
+  // 正準順で重複を除いた値の列（enumMap の値域検査と等式構築の凍結順。裁定 1）。
+  sortedUniqueCanonically(): ReqAttributeValues {
+    return new ReqAttributeValues([...new Set(this.#values)].sort((a, b) => TargetId.reconstitute(a).compareTo(TargetId.reconstitute(b))));
   }
 
   toArray(): readonly string[] {

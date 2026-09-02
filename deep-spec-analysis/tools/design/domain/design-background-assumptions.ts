@@ -16,7 +16,7 @@ export class DesignBackgroundAssumptions {
     return new DesignBackgroundAssumptions([...this.#values, value]);
   }
 
-  // lowering の凍結順：IdOrder 正準順（DesignTransitions.sortedCanonically と同じ面）。
+  // lowering の凍結順：id の正準順（DesignTransitions.sortedCanonically と同じ面）。
   sortedCanonically(): DesignBackgroundAssumptions {
     return new DesignBackgroundAssumptions([...this.#values].sort((a, b) => a.compareTo(b)));
   }

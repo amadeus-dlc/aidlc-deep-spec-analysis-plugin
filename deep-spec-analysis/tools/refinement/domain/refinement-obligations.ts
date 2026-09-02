@@ -1,4 +1,3 @@
-import { IdOrder } from "../../kernel/domain/index.ts";
 import type { RefinementObligation } from "./refinement-obligation.ts";
 
 // 要件義務のファーストクラスコレクション。id 索引は最後の宣言が勝つ
@@ -31,7 +30,7 @@ export class RefinementObligations {
   }
 
   sortedCanonically(): RefinementObligations {
-    return new RefinementObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id().asString(), b.id().asString())));
+    return new RefinementObligations([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
   }
 
   toArray(): readonly RefinementObligation[] {

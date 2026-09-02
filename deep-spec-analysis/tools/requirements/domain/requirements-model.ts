@@ -4,7 +4,7 @@
 // supportsMajor）は旧センサーの自由関数群を集約メソッドへ移したもの。
 // 配列を生で運ばない：部品はファーストクラスコレクションで受け取り・返す。
 
-import { type IrVersion, FrRefs, IdOrder, TargetIds } from "../../kernel/domain/index.ts";
+import { type IrVersion, FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import { type AttributeDeclaration } from "./attribute-declaration.ts";
 import { AttributeDeclarations } from "./attribute-declarations.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
@@ -116,7 +116,7 @@ export class RequirementsModel {
 
   // 境界: 縮退文書の skip 対象列（義務 id ＋シナリオ id の昇順——凍結順）。
   allTargets(): TargetIds {
-    return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#scenarios.ids()].sort(IdOrder.compare));
+    return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#scenarios.ids()]).sortedCanonically();
   }
 
   // 対象 id 列が指す義務・シナリオの FR 参照（一意・正準順）。
@@ -128,6 +128,6 @@ export class RequirementsModel {
       const sc = this.#scenarios.byId(t.asString());
       if (sc) refs.push(...sc.frRefs());
     }
-    return FrRefs.of(IdOrder.sortedUnique(refs, IdOrder.compare));
+    return FrRefs.of(refs).sortedUnique();
   }
 }

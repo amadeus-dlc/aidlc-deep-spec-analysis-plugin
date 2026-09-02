@@ -4,7 +4,6 @@
 // 運ぶ。DD-1 の重複検出・DD-5 の所有競合・DD-7 の閉路検出は集まり＝
 // Components の知識。
 
-import { IdOrder } from "../../kernel/domain/index.ts";
 import { type ComponentName } from "./component-name.ts";
 import type { Component } from "./component.ts";
 import { type ComponentEntity } from "./component-entity.ts";
@@ -86,13 +85,10 @@ export class Components {
     const declared = new Set(this.#values.map((c) => c.name().asString()));
     const adj = new Map<string, string[]>();
     for (const c of [...this.#values].sort((a, b) => (a.name().asString() < b.name().asString() ? -1 : 1))) {
-      adj.set(
-        c.name().asString(),
-        IdOrder.sortedUnique(
-          c.dependsOn().toArray().map((d) => d.component().asString()).filter((n) => declared.has(n)),
-          IdOrder.compare,
-        ),
-      );
+      const deps = c.dependsOn().toArray().map((d) => d.component()).filter((n) => declared.has(n.asString())).sort((a, b) => a.compareTo(b));
+      const names: string[] = [];
+      for (const n of deps) if (!names.includes(n.asString())) names.push(n.asString());
+      adj.set(c.name().asString(), names);
     }
     const cycles = new Map<string, string[]>();
     const state = new Map<string, "active" | "done">();

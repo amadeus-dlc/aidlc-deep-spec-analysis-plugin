@@ -2,10 +2,11 @@
 // id——要件の義務／シナリオ、設計の宣言、BR、名前空間付きトークン——で、
 // findings スキーマの targetId 定義が唯一の強い不変条件（parse が検証する）。
 // 凍結文書と生 id 材料の再構成は reconstitute（逐語）。正準順序（英字骨格→
-// 数値セグメント）は id 自身が所有し、比較器は IdOrder に従属する（#71 波10）。
+// 数値セグメント）は id 自身が所有する（#71 波10。比較器は kernel 非公開の
+// canonical-order へ降格——種別規律の裁定 1）。
 
 import { type Result, err, ok } from "../infrastructure/index.ts";
-import { IdOrder } from "./id-order.ts";
+import { compareCanonically } from "./canonical-order.ts";
 
 type TargetIdError = { readonly kind: "malformed-target-id"; readonly raw: string };
 
@@ -39,7 +40,7 @@ export class TargetId {
 
   // 正準順序——skipped ソートと finding の targets 面（= golden バイト）を決める。
   compareTo(other: TargetId): number {
-    return IdOrder.compare(this.#value, other.#value);
+    return compareCanonically(this.#value, other.#value);
   }
 
   asString(): string {

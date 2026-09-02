@@ -1,4 +1,4 @@
-import { IdOrder } from "../../kernel/domain/index.ts";
+import { TargetId } from "../../kernel/domain/index.ts";
 
 // refcheck skip 記録（無沈黙台帳の 1 行）——対象・理由・任意の帰属ユニットと
 // 説明。正準順（target → reason）は記録自身の知識（#71 波17）。target は
@@ -39,7 +39,7 @@ export class Skipped {
 
   // 正準順: target の id 順、次いで reason の辞書順。
   compareTo(other: Skipped): number {
-    const c = IdOrder.compare(this.#target, other.#target);
+    const c = TargetId.reconstitute(this.#target).compareTo(TargetId.reconstitute(other.#target));
     if (c !== 0) return c;
     return this.#reason < other.#reason ? -1 : this.#reason > other.#reason ? 1 : 0;
   }

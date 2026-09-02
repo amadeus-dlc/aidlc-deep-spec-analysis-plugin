@@ -24,6 +24,11 @@ export class ObligationId {
     return this.#value === other.#value;
   }
 
+  // 正準順（英字骨格→数値セグメント）——kernel の TargetId が所有する順序に従う（裁定 1）。
+  compareTo(other: ObligationId): number {
+    return this.asTargetId().compareTo(other.asTargetId());
+  }
+
   asString(): string {
     return this.#value;
   }

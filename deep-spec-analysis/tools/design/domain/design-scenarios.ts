@@ -1,4 +1,3 @@
-import { IdOrder } from "../../kernel/domain/index.ts";
 import type { DesignScenario } from "./design-scenario.ts";
 
 // 設計シナリオのファーストクラスコレクション。
@@ -17,9 +16,9 @@ export class DesignScenarios {
     return new DesignScenarios([...this.#values, value]);
   }
 
-  // lowering の凍結順：IdOrder 正準順（DesignTransitions.sortedCanonically と同じ面）。
+  // lowering の凍結順：id の正準順（DesignTransitions.sortedCanonically と同じ面）。
   sortedCanonically(): DesignScenarios {
-    return new DesignScenarios([...this.#values].sort((a, b) => IdOrder.compare(a.id().asString(), b.id().asString())));
+    return new DesignScenarios([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
   }
 
   *[Symbol.iterator](): Iterator<DesignScenario> {

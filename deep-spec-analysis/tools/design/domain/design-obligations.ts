@@ -1,4 +1,3 @@
-import { IdOrder } from "../../kernel/domain/index.ts";
 import type { DesignObligation } from "./design-obligation.ts";
 
 // 設計義務のファーストクラスコレクション。id 列の導出を所有する。
@@ -17,9 +16,9 @@ export class DesignObligations {
     return new DesignObligations([...this.#values, value]);
   }
 
-  // lowering の凍結順：IdOrder 正準順（DesignTransitions.sortedCanonically と同じ面）。
+  // lowering の凍結順：id の正準順（DesignTransitions.sortedCanonically と同じ面）。
   sortedCanonically(): DesignObligations {
-    return new DesignObligations([...this.#values].sort((a, b) => IdOrder.compare(a.id().asString(), b.id().asString())));
+    return new DesignObligations([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
   }
 
   *[Symbol.iterator](): Iterator<DesignObligation> {

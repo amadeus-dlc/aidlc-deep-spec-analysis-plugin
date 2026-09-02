@@ -726,7 +726,7 @@ describe("refinement collections (first-class operations)", () => {
     expect(tr.isEmpty()).toBe(false);
     expect(TransitionRefs.of([]).isEmpty()).toBe(true);
     expect(tr.unknownAmong(new Set(["TR-2"]))).toEqual(["TR-10"]);
-    // unknownAmong は素の辞書順、sortedCanonically は IdOrder.compare（数値尾）。
+    // unknownAmong は素の辞書順、sortedCanonically は正準順（数値尾）。
     expect(tr.sortedCanonically().map((t) => t.asString())).toEqual(["TR-2", "TR-10"]);
     expect(tr.toArray().map((t) => t.asString())).toEqual(["TR-2", "TR-10"]);
     expect(tref("TR-1").equals(tref("TR-1"))).toBe(true);
@@ -960,5 +960,16 @@ describe("thaw pins — quint alpha skips, timeout break, exact decode (#34/#38)
     expect(decodeDesignModel(ctx, { v_o_n: "10000000000000000000021" }, false)).toEqual({ "o.n": "10000000000000000000021" });
     expect(decodeDesignModel(ctx, { v_o_n: "(- 10000000000000000000021)" }, false)).toEqual({ "o.n": "-10000000000000000000021" });
     expect(decodeDesignModel(ctx, { v_o_n: "7" }, false)).toEqual({ "o.n": 7 });
+  });
+});
+
+describe("unmapped dependencies of an event obligation are listed in canonical order (ruling 1)", () => {
+  test("guard and effect dependencies merge, deduplicate and sort by attribute path", () => {
+    const req = requirements({
+      attributes: [{ path: "R.b", kind: "bool" }, { path: "R.a", kind: "bool" }],
+      obligations: [{ id: "OB-1", nature: "event", frRefs: [], trigger: "go", guard: { op: "ref", path: "R.b" }, effect: { op: "ref", path: "R.a" } }],
+    });
+    const plan = UnitRefinementPlan.of(unit({}), refUnitMap({ unmapped: [{ target: "R.a", reason: "" }, { target: "R.b", reason: "" }] }), req, ArtifactPath.reconstitute("m.md"));
+    expect(plainStatus(plan.statusOfObligation("OB-1"))).toEqual({ kind: "gap", detail: 'requirements event trigger "go" has no eventMap entry (map it to design transitions or waive it)' });
   });
 });
