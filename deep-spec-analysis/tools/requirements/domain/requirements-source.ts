@@ -6,7 +6,6 @@
 
 import type { ArtifactPath, RequirementIds } from "../../kernel/domain/index.ts";
 import type { RequirementsSourceId } from "./requirements-source-id.ts";
-import type { RequirementsSourceSeed } from "./requirements-source-seed.ts";
 
 
 export class RequirementsSource {
@@ -16,7 +15,13 @@ export class RequirementsSource {
   readonly #digest: string;
   readonly #sourceDocument: Uint8Array;
 
-  private constructor(seed: RequirementsSourceSeed) {
+  private constructor(seed: {
+    readonly id: RequirementsSourceId;
+    readonly sourcePath: ArtifactPath;
+    readonly knownIds: RequirementIds;
+    readonly digest: string;
+    readonly sourceDocument: Uint8Array;
+  }) {
     this.#id = seed.id;
     this.#sourcePath = seed.sourcePath;
     this.#knownIds = seed.knownIds;
@@ -25,7 +30,13 @@ export class RequirementsSource {
   }
 
   // アダプタの解決からの唯一の構築口。
-  static reconstitute(seed: RequirementsSourceSeed): RequirementsSource {
+  static reconstitute(seed: {
+    readonly id: RequirementsSourceId;
+    readonly sourcePath: ArtifactPath;
+    readonly knownIds: RequirementIds;
+    readonly digest: string;
+    readonly sourceDocument: Uint8Array;
+  }): RequirementsSource {
     return new RequirementsSource(seed);
   }
 

@@ -19,7 +19,6 @@ import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 import type { InterpretedQuintVerdicts } from "./interpreted-quint-verdicts.ts";
 import { QuintMachineComponents } from "./quint-machine-components.ts";
-import type { QuintMachineFactsSeed } from "./quint-machine-facts-seed.ts";
 
 export class QuintMachineFacts {
   readonly #invariantComponents: QuintMachineComponents;
@@ -32,7 +31,11 @@ export class QuintMachineFacts {
     this.#scenariosWithInit = props.scenariosWithInit;
   }
 
-  static of(seed: QuintMachineFactsSeed): QuintMachineFacts {
+  static of(seed: {
+    readonly invariantComponents: QuintMachineComponents;
+    readonly eventIds: ObligationIds;
+    readonly scenariosWithInit: readonly ScenarioId[];
+  }): QuintMachineFacts {
     return new QuintMachineFacts({
       invariantComponents: seed.invariantComponents,
       eventIds: seed.eventIds,

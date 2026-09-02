@@ -15,7 +15,6 @@ import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 import type { InterpretedVerdicts } from "./interpreted-verdicts.ts";
 import { SmtEventPairProbes } from "./smt-event-pair-probes.ts";
-import type { SmtPlanFactsSeed } from "./smt-plan-facts-seed.ts";
 
 
 
@@ -29,7 +28,14 @@ export class SmtPlanFacts {
   readonly #gapTriggers: ReadonlyMap<string, readonly string[]>;
   readonly #scenarioQueries: ReadonlyMap<string, string>;
 
-  private constructor(seed: SmtPlanFactsSeed) {
+  private constructor(seed: {
+    readonly compiled: ReadonlyMap<string, boolean>;
+    readonly skipped: VerificationSkips;
+    readonly labelToTarget: ReadonlyMap<string, string>;
+    readonly eventPairs: SmtEventPairProbes;
+    readonly gapTriggers: ReadonlyMap<string, readonly string[]>;
+    readonly scenarioQueries: ReadonlyMap<string, string>;
+  }) {
     this.#compiled = seed.compiled;
     this.#skipped = seed.skipped;
     this.#labelToTarget = seed.labelToTarget;
@@ -38,7 +44,14 @@ export class SmtPlanFacts {
     this.#scenarioQueries = seed.scenarioQueries;
   }
 
-  static of(seed: SmtPlanFactsSeed): SmtPlanFacts {
+  static of(seed: {
+    readonly compiled: ReadonlyMap<string, boolean>;
+    readonly skipped: VerificationSkips;
+    readonly labelToTarget: ReadonlyMap<string, string>;
+    readonly eventPairs: SmtEventPairProbes;
+    readonly gapTriggers: ReadonlyMap<string, readonly string[]>;
+    readonly scenarioQueries: ReadonlyMap<string, string>;
+  }): SmtPlanFacts {
     return new SmtPlanFacts({
       compiled: new Map(seed.compiled),
       skipped: seed.skipped,

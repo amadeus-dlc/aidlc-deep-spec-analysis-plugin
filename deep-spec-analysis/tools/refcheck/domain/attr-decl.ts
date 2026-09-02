@@ -1,21 +1,58 @@
-import type { AttrDeclSeed } from "./attr-decl-seed.ts";
 import { type AttributeDefault } from "./attribute-default.ts";
 import { type AttributeName } from "./attribute-name.ts";
 import { type ElementPath } from "./element-path.ts";
 import { type NumericBound } from "./numeric-bound.ts";
 import { type ReferenceTarget } from "./reference-target.ts";
 import { type StateNames } from "./state-names.ts";
+import type { AllowedValues } from "./allowed-values.ts";
+import type { TypeName } from "./type-name.ts";
 
 // 属性宣言。型区分との整合・範囲と既定値の整合・ライフサイクル候補性という
 // ドメイン知識を自分で判定する（旧 FD-E2/E3 の条件式の移設）。
 export class AttrDecl {
-  readonly #seed: AttrDeclSeed;
+  readonly #seed: {
+  readonly name: AttributeName;
+  readonly element: ElementPath;
+  readonly type: TypeName | null;
+  readonly uniqueIsTrue: boolean;
+  readonly references: ReferenceTarget | null;
+  readonly allowed: AllowedValues | null;
+  readonly def: AttributeDefault | null;
+  readonly minDeclared: boolean;
+  readonly maxDeclared: boolean;
+  readonly min: NumericBound | null;
+  readonly max: NumericBound | null;
+  };
 
-  private constructor(seed: AttrDeclSeed) {
+  private constructor(seed: {
+    readonly name: AttributeName;
+    readonly element: ElementPath;
+    readonly type: TypeName | null;
+    readonly uniqueIsTrue: boolean;
+    readonly references: ReferenceTarget | null;
+    readonly allowed: AllowedValues | null;
+    readonly def: AttributeDefault | null;
+    readonly minDeclared: boolean;
+    readonly maxDeclared: boolean;
+    readonly min: NumericBound | null;
+    readonly max: NumericBound | null;
+  }) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: AttrDeclSeed): AttrDecl {
+  static reconstitute(seed: {
+    readonly name: AttributeName;
+    readonly element: ElementPath;
+    readonly type: TypeName | null;
+    readonly uniqueIsTrue: boolean;
+    readonly references: ReferenceTarget | null;
+    readonly allowed: AllowedValues | null;
+    readonly def: AttributeDefault | null;
+    readonly minDeclared: boolean;
+    readonly maxDeclared: boolean;
+    readonly min: NumericBound | null;
+    readonly max: NumericBound | null;
+  }): AttrDecl {
     return new AttrDecl(seed);
   }
 

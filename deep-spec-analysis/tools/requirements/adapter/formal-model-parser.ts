@@ -1,4 +1,4 @@
-// 契約1 IR（生 Json）→ RequirementsModelSeed の寛容パース。欠損・型不一致の
+// 契約1 IR（生 Json）→ Parameters<typeof RequirementsModel.reconstitute>[0] の寛容パース。欠損・型不一致の
 // エントリは黙って落とす（旧 parseIr の凍結挙動——ir-valid センサーが別途
 // 厳密検査を担う）。集約として成立しない形は凍結文言の文字列で返す。
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
@@ -17,17 +17,17 @@ import {
   type AttributeDeclaration,
   type BackgroundAssumption,
   Obligation,
-  type RequirementsModelSeed,
   Scenario,
   AttributeDeclarations,
   BackgroundAssumptions,
   Obligations,
   Scenarios,
+  RequirementsModel,
 } from "../domain/index.ts";
 
 // 恒等（FormalModelId）は Repository が findById の引数から注入する——
 // パーサは文書の中身しか知らない。
-export function parseFormalModel(raw: Json): Omit<RequirementsModelSeed, "id" | "irHash" | "sourceDocument"> | string {
+export function parseFormalModel(raw: Json): Omit<Parameters<typeof RequirementsModel.reconstitute>[0], "id" | "irHash" | "sourceDocument"> | string {
   if (!isObject(raw)) return "IR is not a JSON object";
   const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
   if (!irVersion.ok) return "IR lacks a semver irVersion";

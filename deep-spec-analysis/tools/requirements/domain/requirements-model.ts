@@ -12,7 +12,6 @@ import type { FormalModelId } from "./formal-model-id.ts";
 import { Obligations } from "./obligations.ts";
 import { Scenarios } from "./scenarios.ts";
 import { BackgroundAssumptions } from "./background-assumptions.ts";
-import type { RequirementsModelSeed } from "./requirements-model-seed.ts";
 
 
 
@@ -29,7 +28,18 @@ export class RequirementsModel {
   readonly #scenarios: Scenarios;
   readonly #background: BackgroundAssumptions;
 
-  private constructor(seed: RequirementsModelSeed) {
+  private constructor(seed: {
+    readonly id: FormalModelId;
+    // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
+    readonly irHash: ContentHash;
+    // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。
+    readonly sourceDocument: Uint8Array;
+    readonly irVersion: IrVersion;
+    readonly attributes: AttributeDeclarations;
+    readonly obligations: Obligations;
+    readonly scenarios: Scenarios;
+    readonly background: BackgroundAssumptions;
+  }) {
     this.#id = seed.id;
     this.#irHash = seed.irHash;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
@@ -41,7 +51,18 @@ export class RequirementsModel {
   }
 
   // アダプタのパーサが解いた型付き部品からの唯一の構築口。
-  static reconstitute(seed: RequirementsModelSeed): RequirementsModel {
+  static reconstitute(seed: {
+    readonly id: FormalModelId;
+    // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
+    readonly irHash: ContentHash;
+    // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。
+    readonly sourceDocument: Uint8Array;
+    readonly irVersion: IrVersion;
+    readonly attributes: AttributeDeclarations;
+    readonly obligations: Obligations;
+    readonly scenarios: Scenarios;
+    readonly background: BackgroundAssumptions;
+  }): RequirementsModel {
     return new RequirementsModel(seed);
   }
 

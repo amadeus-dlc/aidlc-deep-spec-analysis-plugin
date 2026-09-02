@@ -1,16 +1,31 @@
 import { type MachineSpec } from "./machine-spec.ts";
 import { type StateNames } from "./state-names.ts";
-import type { StateMachineSketchSeed } from "./state-machine-sketch-seed.ts";
+import type { LineNumber } from "./line-number.ts";
 
 // 状態機械の素描。自分の位置ラベル（凍結書式）と spec 分解を所有する。
 export class StateMachineSketch {
-  readonly #seed: StateMachineSketchSeed;
+  readonly #seed: {
+  readonly spec: MachineSpec; // "Entity" or "Entity.attribute" from the heading
+  readonly states: StateNames;
+  readonly fenceLine: LineNumber;
+  readonly unsupported: string | null; // 文言材料（理由のプローズ）
+  };
 
-  private constructor(seed: StateMachineSketchSeed) {
+  private constructor(seed: {
+    readonly spec: MachineSpec; // "Entity" or "Entity.attribute" from the heading
+    readonly states: StateNames;
+    readonly fenceLine: LineNumber;
+    readonly unsupported: string | null; // 文言材料（理由のプローズ）
+  }) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: StateMachineSketchSeed): StateMachineSketch {
+  static reconstitute(seed: {
+    readonly spec: MachineSpec; // "Entity" or "Entity.attribute" from the heading
+    readonly states: StateNames;
+    readonly fenceLine: LineNumber;
+    readonly unsupported: string | null; // 文言材料（理由のプローズ）
+  }): StateMachineSketch {
     return new StateMachineSketch(seed);
   }
 

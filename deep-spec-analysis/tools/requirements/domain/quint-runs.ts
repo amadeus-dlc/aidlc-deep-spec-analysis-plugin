@@ -6,7 +6,6 @@
 import type { ObligationId } from "./obligation-id.ts";
 import type { QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";
 import type { ScenarioId } from "./scenario-id.ts";
-import type { QuintRunsSeed } from "./quint-runs-seed.ts";
 import type { QuintScenarioVerdict } from "./quint-scenario-verdict.ts";
 import type { QuintTemporalVerdict } from "./quint-temporal-verdict.ts";
 
@@ -15,13 +14,21 @@ export class QuintRuns {
   readonly #temporals: ReadonlyMap<string, QuintTemporalVerdict>;
   readonly #scenarios: ReadonlyMap<string, QuintScenarioVerdict>;
 
-  private constructor(seed: QuintRunsSeed) {
+  private constructor(seed: {
+    readonly machine: QuintMachineRunVerdict | null;
+    readonly temporals: ReadonlyMap<string, QuintTemporalVerdict>;
+    readonly scenarios: ReadonlyMap<string, QuintScenarioVerdict>;
+  }) {
     this.#machine = seed.machine;
     this.#temporals = seed.temporals;
     this.#scenarios = seed.scenarios;
   }
 
-  static of(seed: QuintRunsSeed): QuintRuns {
+  static of(seed: {
+    readonly machine: QuintMachineRunVerdict | null;
+    readonly temporals: ReadonlyMap<string, QuintTemporalVerdict>;
+    readonly scenarios: ReadonlyMap<string, QuintScenarioVerdict>;
+  }): QuintRuns {
     return new QuintRuns({
       machine: seed.machine,
       temporals: new Map(seed.temporals),
