@@ -1688,3 +1688,15 @@ rendered v1 document is byte-identical. 4 ledger entries reclaimed — the
 ledger holds 45 of 122; `PRIMITIVE_FIELD_DEBT` drops to 88 (two
 descriptors that lived inside nested record types disappear with the
 shape change).
+
+Wave 21 (same PR): the quint temporal and scenario verdicts join the
+machine verdict. `QuintTemporalVerdict` (timeout / violation / clean) and
+`QuintScenarioVerdict` (timeout / run-failed / evaluated) become
+commandable abstract data types with named factories: each owns the skip
+the interpretation used to assemble by kind (`skipFor` — the frozen
+budget wording, the run-failure wording with the CLI output tail
+verbatim) and its verdict face (`isViolation` with the trace witness;
+`isViolated`, true only for an evaluated verdict). The quint adapter
+constructs through the factories and `QuintMachineFacts.interpret` tells
+instead of branching on `kind`. 2 ledger entries reclaimed — the ledger
+holds 43 of 122.
