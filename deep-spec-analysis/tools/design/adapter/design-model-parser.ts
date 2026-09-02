@@ -92,7 +92,7 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
       const ignores: DesignIgnore[] = [];
       for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
         if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
-        ignores.push(DesignIgnore.reconstitute({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger), reason: typeof ig.reason === "string" ? ig.reason : "" }));
+        ignores.push(DesignIgnore.reconstitute({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger) }));
       }
       machines.push(
         DesignMachine.reconstitute({

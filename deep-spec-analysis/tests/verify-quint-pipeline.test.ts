@@ -211,7 +211,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: { "T.x": 1 } }],
     });
     const facts = QuintMachineFacts.of({
-      invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "bool", value: true }, frRefs: ["FR-1"] }]),
+      invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "bool", value: true } }]),
       eventIds: ObligationIds.of([]),
       scenariosWithInit: new Set(["SC-1"]),
     });
@@ -252,7 +252,7 @@ describe("quint verdict interpretation", () => {
     ],
   });
   const facts = QuintMachineFacts.of({
-    invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "ref", path: "T.ok" }, frRefs: ["FR-1"] }]),
+    invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "ref", path: "T.ok" } }]),
     eventIds: ObligationIds.of([ObligationId.reconstitute("OB-2")]),
     scenariosWithInit: new Set(["SC-1", "SC-2"]),
   });
@@ -328,7 +328,7 @@ describe("quint verdict interpretation", () => {
     expect(base.skipped.toArray().find((s) => s.target === "SC-3")?.detail)
       .toBe("scenarios with a When-event are not checked by the quint backend in v1");
     const unboundFacts = QuintMachineFacts.of({
-      invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "ref", path: "T.ok" }, frRefs: ["FR-1"] }]),
+      invariantComponents: QuintMachineComponents.of([{ id: "OB-1", expr: { op: "ref", path: "T.ok" } }]),
       eventIds: ObligationIds.of([ObligationId.reconstitute("OB-2")]),
       scenariosWithInit: new Set(),
     });
@@ -414,7 +414,7 @@ describe("quint facts collections (first-class operations)", () => {
     expect(TraceStates.of([]).finalState()).toEqual({});
     expect(traces.toArray()).toEqual([{ "T.ok": true }, { "T.ok": false }]);
 
-    const comps = QuintMachineComponents.of([]).add({ id: "OB-1", expr: { op: "ref", path: "T.ok" }, frRefs: [] });
+    const comps = QuintMachineComponents.of([]).add({ id: "OB-1", expr: { op: "ref", path: "T.ok" } });
     expect(comps.isEmpty()).toBe(false);
     expect([...comps].length).toBe(1);
     expect(comps.ids()).toEqual(["OB-1"]);

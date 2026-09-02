@@ -1487,3 +1487,13 @@ final state the invariant attribution evaluates. The adapter
 reconstitutes through named factories and the interpretation tells
 instead of asking.
 1 ledger entry reclaimed — the ledger holds 99 of 122.
+
+Wave 9 (same PR): two dead fields fall. `DesignIgnore` stops carrying
+`reason` — the design IR keeps it as a required human-approval note on
+the document (contract 3), but nothing downstream ever read it off the
+domain object, so the parser stops lifting it and the type sheds the
+field. `QuintMachineComponent` sheds `frRefs` — the compiler copied the
+obligation's requirement refs onto every invariant component, yet the
+interpretation attributes findings through `RequirementsModel.frRefsOf`
+over the component ids, so the copy was never read. No ledger entry is
+reclaimed — the ledger still holds 99 of 122.

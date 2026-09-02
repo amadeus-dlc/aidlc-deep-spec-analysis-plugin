@@ -340,7 +340,7 @@ describe("design part collections (first-class operations)", () => {
     expect(trs.ids()).toEqual(["TR-10", "TR-2"]);
     expect(trs.sortedCanonically().toArray().map((t) => t.id().asString())).toEqual(["TR-2", "TR-10"]);
 
-    const igs = DesignIgnores.of([DesignIgnore.reconstitute({ state: "y", trigger: TriggerName.reconstitute("go"), reason: "" })]).add(DesignIgnore.reconstitute({ state: "x", trigger: TriggerName.reconstitute("go"), reason: "" }));
+    const igs = DesignIgnores.of([DesignIgnore.reconstitute({ state: "y", trigger: TriggerName.reconstitute("go") })]).add(DesignIgnore.reconstitute({ state: "x", trigger: TriggerName.reconstitute("go") }));
     expect([...igs].length).toBe(2);
     expect(igs.sortedByStateTrigger().toArray().map((i) => i.state())).toEqual(["x", "y"]);
     expect(igs.toArray().length).toBe(2);
