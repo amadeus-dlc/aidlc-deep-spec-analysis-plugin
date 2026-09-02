@@ -1980,3 +1980,11 @@ component holds in a trace state is private to
 `ExpressionCanonicalKey` and `ExpressionEvaluation` are gone; the two
 compilers ask the tree instead of the companion. Goldens stay
 byte-identical.
+
+Wave 31 (same PR): ruling 3 lands — `Names` dissolves into the domain
+primitive `NormalizedName` (kernel). The cross-artifact matching rule
+(lower-case, alphanumerics only) and equality belong to the primitive;
+the four refcheck name primitives return it from `normalized()`,
+comparisons ask `equals`, indexes key on `asString`, and
+`MachineSpec.entityToken` returns an `EntityName` so the functional
+check no longer normalizes a raw string. Goldens stay byte-identical.

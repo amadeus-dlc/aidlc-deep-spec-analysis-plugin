@@ -1763,3 +1763,9 @@ design 層から kernel へ移り、kernel の正準 JSON とのバイト同一�
 `QuintMachineComponent.isViolatedIn` の非公開の内側になる。`Expressions`・
 `ExpressionCanonicalKey`・`ExpressionEvaluation` は消え、2 つのコンパイラは
 随伴ではなく木に問う。golden はバイト同一。
+
+波 31（同 PR）: 裁定 3 が着地——`Names` が kernel の DP `NormalizedName` へ
+溶ける。成果物横断の照合規則（小文字化・英数字のみ）と同一性はこの DP のもの。
+refcheck の 4 つの名前 DP は `normalized()` でそれを返し、比較は `equals` に
+問い、索引は `asString` をキーにし、`MachineSpec.entityToken` は `EntityName` を
+返すので機能検査はもう生文字列を正規化しない。golden はバイト同一。

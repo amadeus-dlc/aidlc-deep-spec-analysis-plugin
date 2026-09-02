@@ -1,3 +1,4 @@
+import type { NormalizedName } from "../../kernel/domain/index.ts";
 import { EntityDecl } from "./entity-decl.ts";
 import { type AppliesTo } from "./applies-to.ts";
 import { type ReferenceTarget } from "./reference-target.ts";
@@ -39,8 +40,8 @@ export class EntityDecls {
     return this.#names.has(value);
   }
 
-  byNormalizedName(normalized: string): EntityDecl | undefined {
-    return this.#values.find((e) => e.name().normalized() === normalized);
+  byNormalizedName(normalized: NormalizedName): EntityDecl | undefined {
+    return this.#values.find((e) => e.name().normalized().equals(normalized));
   }
 
   lifecycleOnly(): EntityDecl[] {

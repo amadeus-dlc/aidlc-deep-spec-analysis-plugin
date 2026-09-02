@@ -26,14 +26,14 @@ export class AllowedValues {
 
   // FD-S1: 図の状態のうち許容値に無いもの（正規化照合・値の昇順——凍結順）。
   rogueAmong(states: StateNames): string[] {
-    const norm = new Set(this.#values.map((v) => v.normalized()));
-    return states.toArray().filter((s) => !norm.has(s.normalized())).map((s) => s.asString()).sort();
+    const norm = new Set(this.#values.map((v) => v.normalized().asString()));
+    return states.toArray().filter((s) => !norm.has(s.normalized().asString())).map((s) => s.asString()).sort();
   }
 
   // FD-S2: 許容値のうちどの図状態にも現れないもの。
   absentFrom(states: StateNames): string[] {
-    const stateNorm = new Set(states.toArray().map((s) => s.normalized()));
-    return this.#values.filter((v) => !stateNorm.has(v.normalized())).map((v) => v.asString()).sort();
+    const stateNorm = new Set(states.toArray().map((s) => s.normalized().asString()));
+    return this.#values.filter((v) => !stateNorm.has(v.normalized().asString())).map((v) => v.asString()).sort();
   }
 
   toArray(): readonly AllowedValue[] {
