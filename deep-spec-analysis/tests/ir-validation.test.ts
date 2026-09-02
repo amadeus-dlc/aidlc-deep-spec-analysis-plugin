@@ -83,6 +83,8 @@ import {
   BackgroundAssumptionId,
   IrValidationMaterialsId,
   FrRefClaims,
+  IrEntityDecl,
+  IrTemporalDecl,
 } from "../tools/requirements/domain/index.ts";
 import { ValidateIrUseCase, type ValidateIrOutcome } from "../tools/requirements/usecase/index.ts";
 
@@ -388,7 +390,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
   type RawIrAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawIrEntity = { name: string; attributes: RawIrAttr[] };
-  type RawIrObligation = Omit<Parameters<typeof IrObligationDecl.reconstitute>[0], "id"> & { id: string };
+  type RawIrObligation = Omit<Parameters<typeof IrObligationDecl.reconstitute>[0], "id" | "temporal"> & { id: string; temporal?: Parameters<typeof IrTemporalDecl.reconstitute>[0] };
   type RawIrScenario = Omit<Parameters<typeof IrScenarioDecl.reconstitute>[0], "id" | "bindings"> & { id: string; bindings: (readonly [string, unknown])[] };
   type RawIrBackground = Omit<Parameters<typeof IrBackgroundDecl.reconstitute>[0], "id"> & { id: string };
   function irView(overrides: {
@@ -399,7 +401,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   }): IrModelDecl {
     return IrModelDecl.reconstitute({
       entities: IrEntityDecls.of(
-        (overrides.entities ?? []).map((e) => ({
+        (overrides.entities ?? []).map((e) => IrEntityDecl.reconstitute({
           name: IrEntityName.reconstitute(e.name),
           attributes: IrAttributeDecls.of(
             e.attributes.map((a) => IrAttributeDecl.reconstitute({
@@ -413,7 +415,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
         })),
       ),
       obligations: IrObligationDecls.of(
-        (overrides.obligations ?? []).map((ob) => IrObligationDecl.reconstitute({ ...ob, id: ObligationId.reconstitute(ob.id) })),
+        (overrides.obligations ?? []).map((ob) => IrObligationDecl.reconstitute({ ...ob, id: ObligationId.reconstitute(ob.id), temporal: ob.temporal === undefined ? undefined : IrTemporalDecl.reconstitute(ob.temporal) })),
       ),
       scenarios: IrScenarioDecls.of(
         (overrides.scenarios ?? []).map((sc) => IrScenarioDecl.reconstitute({ ...sc, id: ScenarioId.reconstitute(sc.id), bindings: IrBindingPairs.of(sc.bindings) })),
@@ -969,7 +971,7 @@ describe("contract-1 decl collections (first-class operations)", () => {
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
 
-    const ent = { name: IrEntityName.reconstitute("t"), attributes: attrs };
+    const ent = IrEntityDecl.reconstitute({ name: IrEntityName.reconstitute("t"), attributes: attrs });
     const ents = IrEntityDecls.of([]).add(ent);
     expect([...ents]).toEqual([ent]);
     expect(ents.toArray()).toEqual([ent]);

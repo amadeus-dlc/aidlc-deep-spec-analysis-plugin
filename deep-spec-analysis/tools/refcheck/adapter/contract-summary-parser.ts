@@ -14,13 +14,11 @@ import {
   SpecBlockAssessments,
   UnitDecls,
   UnitName,
-  UnitNames,
-} from "../domain/index.ts";
+  UnitNames, UnitDecl } from "../domain/index.ts";
 import type {
   ContractsTableOutcome,
   DeclaredUnitsOutcome,
   SpecBlockAssessment,
-  UnitDecl,
 } from "../domain/index.ts";
 
 export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
@@ -37,7 +35,7 @@ export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
       const dependsOn = Array.isArray(raw.depends_on)
         ? (raw.depends_on as Json[]).filter((d): d is string => typeof d === "string")
         : [];
-      units.push({ name: UnitName.reconstitute(raw.name), dependsOn: UnitNames.reconstitute(dependsOn) });
+      units.push(UnitDecl.reconstitute({ name: UnitName.reconstitute(raw.name), dependsOn: UnitNames.reconstitute(dependsOn) }));
     }
     if (units.length === 0) return { kind: "unrecognized" };
     return { kind: "declared", units: UnitDecls.of(units) };

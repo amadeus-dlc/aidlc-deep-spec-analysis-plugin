@@ -23,7 +23,7 @@ import {
   type FrRefClaim,
   IrAttributeDecl,
   IrBackgroundDecl,
-  type IrEntityDecl,
+  IrEntityDecl,
   FrRefs,
   IrAttributeDecls,
   IrBackgroundDecls,
@@ -43,8 +43,7 @@ import {
   ObligationId,
   IrEntityName,
   IrAttributeName,
-  BackgroundAssumptionId,
-} from "../domain/index.ts";
+  BackgroundAssumptionId, IrTemporalDecl } from "../domain/index.ts";
 import type { IrValidationMaterialsRepository } from "../usecase/index.ts";
 import type { IrValidationMaterialsConfig } from "./ir-validation-materials-config.ts";
 
@@ -72,7 +71,7 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
         max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
       }));
     }
-    entities.push({ name: IrEntityName.reconstitute(ent.name), attributes: IrAttributeDecls.of(attributes) });
+    entities.push(IrEntityDecl.reconstitute({ name: IrEntityName.reconstitute(ent.name), attributes: IrAttributeDecls.of(attributes) }));
   }
 
   const obligations: IrObligationDecl[] = [];
@@ -87,11 +86,11 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
       temporal:
         temporal === null
           ? undefined
-          : {
+          : IrTemporalDecl.reconstitute({
               assert: asExpression(temporal.assert ?? null),
               from: asExpression(temporal.from ?? null),
               to: asExpression(temporal.to ?? null),
-            },
+            }),
     }));
   }
 

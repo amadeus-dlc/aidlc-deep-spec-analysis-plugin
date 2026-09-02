@@ -22,16 +22,16 @@ export class UnitDecls {
   }
 
   declares(value: string): boolean {
-    return this.#values.some((u) => u.name.asString() === value);
+    return this.#values.some((u) => u.name().asString() === value);
   }
 
   names(): UnitNames {
-    return UnitNames.of(this.#values.map((u) => u.name));
+    return UnitNames.of(this.#values.map((u) => u.name()));
   }
 
   // CD-3 の走査順（unit 名の辞書順）はコレクション知識。
   sortedByName(): UnitDecls {
-    return new UnitDecls([...this.#values].sort((a, b) => (a.name.asString() < b.name.asString() ? -1 : 1)));
+    return new UnitDecls([...this.#values].sort((a, b) => (a.name().asString() < b.name().asString() ? -1 : 1)));
   }
 
   toArray(): readonly UnitDecl[] {

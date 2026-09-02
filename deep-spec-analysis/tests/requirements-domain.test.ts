@@ -12,6 +12,12 @@ import {
   Scenario,
   ScenarioId,
   TraceStates,
+  IrAttributeDecl,
+  IrAttributeDecls,
+  IrAttributeName,
+  IrEntityDecl,
+  IrEntityName,
+  IrTemporalDecl,
 } from "../tools/requirements/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
@@ -233,5 +239,27 @@ describe("quint machine run verdict", () => {
     expect(clean.skipsFor(targets, false)).toEqual([]);
     expect(clean.isDeadlock()).toBe(false);
     expect(clean.isViolation()).toBe(false);
+  });
+});
+
+describe("ir entity and temporal decls (well-formedness materials own their judgements)", () => {
+  test("entity decl visits attributes with their coordinate and flags a repeated name from its second occurrence", () => {
+    const attr = (name: string) => IrAttributeDecl.reconstitute({ name: IrAttributeName.reconstitute(name), kind: "bool" });
+    const entity = IrEntityDecl.reconstitute({ name: IrEntityName.reconstitute("order"), attributes: IrAttributeDecls.of([attr("qty"), attr("qty"), attr("paid")]) });
+    const seen: [string, boolean][] = [];
+    entity.inspectAttributes((coordinate, attribute, duplicated) => seen.push([`${coordinate}=${attribute.name().asString()}`, duplicated]));
+    expect(seen).toEqual([["order.qty=qty", false], ["order.qty=qty", true], ["order.paid=paid", false]]);
+    expect(entity.name().asString()).toBe("order");
+    expect(entity.attributes().toArray().length).toBe(3);
+  });
+
+  test("temporal decl visits assert, from and to in that order with primes forbidden, and silence when absent", () => {
+    const full = IrTemporalDecl.reconstitute({ assert: lit(true), from: { op: "ref", path: "a" }, to: { op: "ref", path: "b" } });
+    const seen: [string, boolean][] = [];
+    full.inspectExpressions((expression, primesAllowed) => seen.push([expression.op, primesAllowed]));
+    expect(seen).toEqual([["lit", false], ["ref", false], ["ref", false]]);
+    const none: unknown[] = [];
+    IrTemporalDecl.reconstitute({}).inspectExpressions((expression) => none.push(expression));
+    expect(none).toEqual([]);
   });
 });

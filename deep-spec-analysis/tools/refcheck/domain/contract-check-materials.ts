@@ -84,10 +84,10 @@ function runContractChecksImpl(materials: ContractCheckMaterialsSeed, ledger: Ch
   // --- CD-3: DAG edge coverage ----------------------------------------------
   if (units !== null && materials.contractsTable.kind !== "absent") {
     for (const u of units.sortedByName()) {
-      const uName = u.name.asString();
-      for (const dep of u.dependsOn.sortedByValue()) {
+      const uName = u.name().asString();
+      // 宙に浮いた辺（未宣言の依存先）は宣言が落とす——units-generation の問題。
+      for (const dep of u.declaredDependencies(units)) {
         const depName = dep.asString();
-        if (!units.declares(depName)) continue; // dangling edge is units-generation's problem
         if (!rows.coversEdge(depName, uName)) {
           ledger.finding(CD_3, "consistency-mismatch", [TargetIds.safe("unit", depName), TargetIds.safe("unit", uName)],
             [ref(depArtifact, `units (${uName} depends_on ${depName})`), ref(artifact, "contracts table")],

@@ -63,24 +63,22 @@ export class IrModelDecl {
 
     const entityNames = new Set<string>();
     for (const ent of this.#entities) {
-      const entName = ent.name.asString();
+      const entName = ent.name().asString();
       if (entityNames.has(entName)) errors.push(`schema: duplicate entity "${entName}"`);
       entityNames.add(entName);
-      const attrNames = new Set<string>();
-      for (const attr of ent.attributes) {
-        const attrName = attr.name().asString();
-        if (attrNames.has(attrName)) {
-          errors.push(`schema: duplicate attribute "${entName}.${attrName}"`);
+      // 座標と重複はエンティティ宣言に問う（#71 波14）。
+      ent.inspectAttributes((coord, attr, duplicated) => {
+        if (duplicated) {
+          errors.push(`schema: duplicate attribute "${coord}"`);
         }
-        attrNames.add(attrName);
         if (attr.boundsInverted()) {
-          errors.push(`schema: ${entName}.${attrName}: min > max`);
+          errors.push(`schema: ${coord}: min > max`);
         }
         if (attr.boundsOutsideSafeRange()) {
-          errors.push(`schema: ${entName}.${attrName}: bounds must be safe integers`);
+          errors.push(`schema: ${coord}: bounds must be safe integers`);
         }
-        attrTypes.set(`${entName}.${attrName}`, attr);
-      }
+        attrTypes.set(coord, attr);
+      });
     }
 
     // SMT 変数符号化はドットを下線に潰すため、下線を含む識別子どうしで

@@ -1584,3 +1584,16 @@ construction-directory judgement (`lacksConstructionDirectory`). The
 judge keeps only the frozen wordings and their order; the adapter and
 the tests reconstitute. 4 ledger entries reclaimed — the ledger holds 94
 of 122.
+
+Wave 14 (same PR): the last declaration-shaped data models fall.
+`IrEntityDecl` (requirements) walks its attributes with the coordinate
+and the duplicate flag, exactly as its design twin does, and the model
+well-formedness judge tells it instead of reading `name` and
+`attributes`; `IrTemporalDecl` owns the assert → from → to expression
+walk (primes forbidden) that `IrObligationDecl.inspectExpressions` used
+to spell out over its fields; the refcheck `UnitDecl` owns the CD-3
+edge selection (`declaredDependencies`: the depends_on names in value
+order, dangling edges dropped as units-generation's problem), so the
+contract materials iterate a told list instead of filtering. The
+adapters and the tests reconstitute. 3 ledger entries reclaimed — the
+ledger holds 91 of 122, and no `*-decl.ts` remains on it.
