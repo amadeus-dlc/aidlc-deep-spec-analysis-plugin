@@ -24,6 +24,22 @@ import {
   DesignScenarioId,
   DesignTransitionDecl,
   DesignTransitionId,
+  DeclaredValues,
+  DesignAttributeDecl,
+  DesignAttributeDecls,
+  DesignEntityDecl,
+  DesignEntityDecls,
+  DesignIgnoreDecl,
+  DesignIgnoreDecls,
+  DesignMachineDecl,
+  DesignMachineDecls,
+  DesignObligationDecls,
+  DesignScenarioDecls,
+  DesignBackgroundDecls,
+  DesignTransitionDecls,
+  DesignUnitDecl,
+  DesignUnitId,
+  UnformalizedTargets,
 } from "../tools/design/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
@@ -369,5 +385,71 @@ describe("design machine (probe candidates and the deterministic waiver)", () =>
     expect(machine(true).waivesOverlapOf([sm, sm])).toBe(false);
     expect(sm.waivesOverlapOf([sm, machine(false, "SM-2")])).toBe(false);
     expect(sm.waivesOverlapOf([sm, null])).toBe(false);
+  });
+});
+
+describe("design decls (well-formedness materials own their judgements)", () => {
+  const attr = (name: string) => DesignAttributeDecl.reconstitute({ name: DesignAttributeName.reconstitute(name), kind: "enum", values: DeclaredValues.of(["open", "closed"]) });
+
+  test("entity decl visits attributes with their coordinate and flags a repeated name from its second occurrence", () => {
+    const entity = DesignEntityDecl.reconstitute({
+      name: DesignEntityName.reconstitute("ticket"),
+      attributes: DesignAttributeDecls.of([attr("status"), attr("status"), attr("owner")]),
+    });
+    const seen: [string, boolean][] = [];
+    entity.inspectAttributes((coordinate, attribute, duplicated) => seen.push([`${coordinate}=${attribute.name().asString()}`, duplicated]));
+    expect(seen).toEqual([["ticket.status=status", false], ["ticket.status=status", true], ["ticket.owner=owner", false]]);
+    expect(entity.name().asString()).toBe("ticket");
+    expect(entity.attributes().toArray().length).toBe(3);
+  });
+
+  test("ignore decl knows whether its state belongs to the machine's state set and its transition cell key", () => {
+    const ig = DesignIgnoreDecl.reconstitute({ state: "closed", trigger: TriggerName.reconstitute("close") });
+    expect(ig.isStateAmong(DeclaredValues.of(["open", "closed"]))).toBe(true);
+    expect(ig.isStateAmong(DeclaredValues.of(["open"]))).toBe(false);
+    expect(ig.cellKey()).toBe("closed|close");
+    expect(ig.state()).toBe("closed");
+    expect(ig.trigger().asString()).toBe("close");
+  });
+
+  test("machine decl selects the initial states outside the state set in declaration order and round-trips its parts", () => {
+    const sm = DesignMachineDecl.reconstitute({
+      id: DesignMachineId.reconstitute("SM-1"),
+      attrPath: "ticket.status",
+      initial: InitialStates.of(["ghost", "open", "phantom"]),
+      transitions: DesignTransitionDecls.of([]),
+      ignores: DesignIgnoreDecls.of([]),
+    });
+    expect(sm.initialStatesOutside(DeclaredValues.of(["open", "closed"]))).toEqual(["ghost", "phantom"]);
+    expect(sm.id().asString()).toBe("SM-1");
+    expect(sm.attrPath()).toBe("ticket.status");
+    expect([...sm.initial()]).toEqual(["ghost", "open", "phantom"]);
+    expect(sm.transitions().toArray()).toEqual([]);
+    expect(sm.ignores().toArray()).toEqual([]);
+  });
+
+  test("unit decl owns the construction-directory judgement and round-trips its materials", () => {
+    const build = (directoryExists: boolean) => DesignUnitDecl.reconstitute({
+      unit: DesignUnitId.of("u1"),
+      entities: DesignEntityDecls.of([]),
+      obligations: DesignObligationDecls.of([]),
+      stateMachines: DesignMachineDecls.of([]),
+      scenarios: DesignScenarioDecls.of([]),
+      background: DesignBackgroundDecls.of([]),
+      unformalizedTargets: UnformalizedTargets.of(["BR1.1"]),
+      directoryExists,
+      rulesMarkdown: "# rules",
+    });
+    expect(build(false).lacksConstructionDirectory()).toBe(true);
+    const present = build(true);
+    expect(present.lacksConstructionDirectory()).toBe(false);
+    expect(present.unit().asString()).toBe("u1");
+    expect(present.entities().toArray()).toEqual([]);
+    expect(present.obligations().toArray()).toEqual([]);
+    expect(present.stateMachines().toArray()).toEqual([]);
+    expect(present.scenarios().toArray()).toEqual([]);
+    expect(present.background().toArray()).toEqual([]);
+    expect([...present.unformalizedTargets()]).toEqual(["BR1.1"]);
+    expect(present.rulesMarkdown()).toBe("# rules");
   });
 });

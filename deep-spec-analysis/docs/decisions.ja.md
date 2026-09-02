@@ -1423,3 +1423,15 @@ id は既に持っていた）、design の skip は `compareTo` で並び、縮
 lowering 索引がまだ文字列キーである唯一の境界で `asString()` を通す。台帳
 から primitive フィールド記述子 3 件が消えた（残 104）。DATA_MODEL_DEBT は
 122 中 98 のまま。
+
+波 13（同 PR）: 設計 IR の宣言がデータモデルであることをやめる。
+`DesignEntityDecl`、`DesignIgnoreDecl`、`DesignMachineDecl`、`DesignUnitDecl`
+——アダプタの寛容パースが判事へ渡す well-formedness 検査材料——が private
+constructor と `reconstitute` の門を持つ命令できる class になり、判事が
+フィールドを読んで下していた判断が宣言へ移る: エンティティは属性を座標と
+重複フラグつきで訪ね（`inspectAttributes`）、ignore は自分の状態が機械の
+状態集合に属するかと遷移セルのキーを知り（`isStateAmong`、`cellKey`）、機械は
+状態集合の外にある初期状態を宣言順に選び（`initialStatesOutside`）、ユニットは
+construction ディレクトリ欠落の判定を所有する（`lacksConstructionDirectory`）。
+判事は凍結文言とその順序だけを持ち、アダプタとテストは再構成する。台帳から
+4 エントリを回収し、残債は 122 中 94。
