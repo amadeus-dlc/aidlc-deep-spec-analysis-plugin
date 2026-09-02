@@ -1849,3 +1849,23 @@ data-model ルールをすり抜けていた generic record `LoadedDocument<Outc
 `Result` で `not-applicable` を返し、sensor はそれを自分の `not-applicable` に
 写す（期待分岐）。usecase は「record を解決し、門を開き、適合させ、書く」だけ
 になった。golden はバイト同一、プリミティブ台帳は変わらない（上限 66）。
+
+波 40（同 PR）: 裁定 11・12・13 が着地——検査が宣言の不変条件になり、3 つの
+`*CheckMaterials`（786 行）は消える。各解析結果は自分の形を判定して blocked
+スキップを書き（DD-0 は `ComponentCatalogOutcome.check`、FD-E1／FD-R1 は
+`EntitiesOutcome`／`RulesOutcome`、CD-1／CD-3 の前提は `DeclaredUnitsOutcome`／
+`ContractsTableOutcome`、FD-S／XS は `FunctionalSpecOutcome`／
+`DomainEntitiesOutcome`）、中身はそれを所有する対象へ渡す——`Components.check`
+が DD-1..DD-7、`ContractRow.checkPartiesDeclared` が `UnitDecls` に対する CD-1、
+`SpecBlockAssessment.check` が CD-2、`UnitDecls.checkEdgesCovered` が
+`ContractRows` に対する CD-3、`DeclaredEntities.check` が FD-E1..E6、
+`RuleDecls.check` が FD-R1..R5、`StateMachineSketch.check` が FD-S1／S2、
+`DomainEntitySketches.check` が XS-1..3 を書く。検査ファミリーは 3 つの小さな
+語彙ファイルに住み、`WitnessRef.at` が証拠座標の門になり、`DesignRecord` の門は
+解析結果を凍結の順に呼んで inputs を記録するだけになる。誰も読まなくなった
+契約行の getter 3 つは削除。golden はバイト同一、プリミティブ台帳は変わらない
+（上限 66）。
+
+この波で 2026-09-02 の裁定 22 件はすべて実装され、#71 の種別規律プログラムは
+完了した。domain 層にあるのはエンティティ・値オブジェクト・ファーストクラス
+コレクション・ドメインイベントだけで、それ以外は無い。
