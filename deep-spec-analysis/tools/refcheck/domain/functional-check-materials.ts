@@ -3,7 +3,7 @@
 // からの逐語移動（golden バイト凍結。並びはソートで正規化されるが、tie の
 // 挙動まで変えないため発行順も保存する）。
 
-import { TargetIds, Names } from "../../kernel/domain/index.ts";
+import { TargetIds } from "../../kernel/domain/index.ts";
 import { CheckFamily } from "./check-family.ts";
 import { CheckFamilies } from "./check-families.ts";
 import type { CheckFamilyLedger } from "./check-family-ledger.ts";
@@ -289,7 +289,8 @@ function runFunctionalChecksImpl(materials: {
         }
       }
       for (const m of machines) {
-        const entName = m.spec().entityToken();
+        const entity = m.spec().entityToken();
+        const entName = entity.asString();
         const attrName = m.spec().attributeToken();
         const el = m.locationLabel();
         if (m.unsupported() !== null) {
@@ -297,7 +298,7 @@ function runFunctionalChecksImpl(materials: {
           ledger.skip(FD_S2, "unrecognized-format", `${el}: ${m.unsupported()}`);
           continue;
         }
-        const ent = entities.entities().byNormalizedName(Names.normalize(entName));
+        const ent = entities.entities().byNormalizedName(entity.normalized());
         if (!ent) {
           ledger.finding(FD_S1, "consistency-mismatch", [TargetIds.safe("entity", entName)], [ref(specArt, el, entName)],
             `state machine names entity "${entName}" which is not declared in entities.md`);
@@ -347,7 +348,7 @@ function runFunctionalChecksImpl(materials: {
       // 正規化名での一意化と整列はコレクションが所有する（重複宣言そのものは
       // DD-5 の finding）。
       for (const de of domainEntities.sortedDistinctByNormalizedName()) {
-        const key = de.name().normalized();
+        const key = de.name().normalized().asString();
         const definers = unitEntities.definersOf(key);
         if (definers.length >= 2) {
           ledger.finding(XS_1, "consistency-mismatch", [TargetIds.safe("entity", de.name().asString())],

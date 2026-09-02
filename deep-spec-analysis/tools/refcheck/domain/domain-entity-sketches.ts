@@ -27,7 +27,7 @@ export class DomainEntitySketches {
     const seen = new Set<string>();
     const out: DomainEntitySketch[] = [];
     for (const de of sorted) {
-      const key = de.name().normalized();
+      const key = de.name().normalized().asString();
       if (seen.has(key)) continue;
       seen.add(key);
       out.push(de);

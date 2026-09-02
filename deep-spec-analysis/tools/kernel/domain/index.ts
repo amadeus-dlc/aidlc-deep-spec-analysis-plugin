@@ -11,7 +11,7 @@ export { TargetIds } from "./target-ids.ts";
 export { FrRefs } from "./fr-refs.ts";
 export { BackendName } from "./backend-name.ts";
 export { RequirementIds } from "./requirement-ids.ts";
-export { Names } from "./names.ts";
+export { NormalizedName } from "./normalized-name.ts";
 export { ArtifactPath } from "./artifact-path.ts";
 export { AttributeBound } from "./attribute-bound.ts";
 export { ErrorMessages } from "./error-messages.ts";

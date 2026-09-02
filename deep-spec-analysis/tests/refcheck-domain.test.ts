@@ -93,7 +93,7 @@ describe("functional-design vocabulary domain primitives", () => {
   });
 
   test("interpretation vocabulary: normalization, shape, spec decomposition, defaults, bounds", () => {
-    expect(EntityName.reconstitute("Order Item").normalized()).toBe(StateName.reconstitute("order_item").normalized());
+    expect(EntityName.reconstitute("Order Item").normalized().equals(StateName.reconstitute("order_item").normalized())).toBe(true);
     expect(TypeName.reconstitute("Decimal").normalized()).toBe("decimal");
     expect(CardinalityNotation.reconstitute(" 1 : n ").normalizedToken()).toBe("1:N");
     expect(BusinessRuleId.reconstitute("BR1.2").matchesShape()).toBe(true);
@@ -103,11 +103,11 @@ describe("functional-design vocabulary domain primitives", () => {
     expect(BusinessRuleId.reconstitute("BR1.2").equals(BusinessRuleId.reconstitute("BR1.2"))).toBe(true);
     expect(BusinessRuleId.reconstitute("BR1.2").asString()).toBe("BR1.2");
     expect(RuleCategory.reconstitute("Validation").normalized()).toBe("validation");
-    expect(AttributeName.reconstitute("Status").normalized()).toBe("status");
-    expect(AllowedValue.reconstitute("Open").normalized()).toBe("open");
+    expect(AttributeName.reconstitute("Status").normalized().asString()).toBe("status");
+    expect(AllowedValue.reconstitute("Open").normalized().asString()).toBe("open");
 
     const spec = MachineSpec.reconstitute("Order.status");
-    expect(spec.entityToken()).toBe("Order");
+    expect(spec.entityToken().asString()).toBe("Order");
     expect(spec.attributeToken()).toBe("status");
     expect(MachineSpec.reconstitute("Order").attributeToken()).toBe(undefined);
     expect(spec.asString()).toBe("Order.status");

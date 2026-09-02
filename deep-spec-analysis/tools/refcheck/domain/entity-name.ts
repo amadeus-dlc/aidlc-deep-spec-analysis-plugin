@@ -5,7 +5,7 @@
 // 照合・描画の解釈（正規化・整形）は語彙自身が所有し、検査は意味論だけを書く。
 
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
-import { Names } from "../../kernel/domain/index.ts";
+import { NormalizedName } from "../../kernel/domain/index.ts";
 
 type TokenError = { readonly kind: "empty-token"; readonly raw: string };
 
@@ -21,7 +21,7 @@ export class EntityName {
   // 境界: 文言・witness 位置に逐語で載る宣言名。
   asString(): string { return this.#value; }
   // 照合はケース・区切りを畳んだ正規化名で行う（XS/FD-S の凍結挙動）。
-  normalized(): string { return Names.normalize(this.#value); }
+  normalized(): NormalizedName { return NormalizedName.of(this.#value); }
 }
 
 

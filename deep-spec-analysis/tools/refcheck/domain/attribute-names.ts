@@ -29,7 +29,7 @@ export class AttributeNames {
 
   // 正規化名での被覆判定（XS-3 の照合知識）。
   coversNormalized(name: AttributeName): boolean {
-    return this.#values.some((v) => v.normalized() === name.normalized());
+    return this.#values.some((v) => v.normalized().equals(name.normalized()));
   }
 
   // 境界: 描画・アダプタ専用。

@@ -1,4 +1,4 @@
-import { Names } from "../../kernel/domain/index.ts";
+import { NormalizedName } from "../../kernel/domain/index.ts";
 import { err, ok } from "../../kernel/infrastructure/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 
@@ -14,5 +14,5 @@ export class StateName {
   static reconstitute(raw: string): StateName { return new StateName(raw); }
   equals(other: StateName): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
-  normalized(): string { return Names.normalize(this.#value); }
+  normalized(): NormalizedName { return NormalizedName.of(this.#value); }
 }

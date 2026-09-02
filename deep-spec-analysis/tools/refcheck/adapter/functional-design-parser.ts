@@ -298,7 +298,7 @@ export function buildSiblingUnitEntities(texts: readonly { unit: string; text: s
     const model = extractEntities(parsed.value ?? null);
     const map = new Map<string, { name: EntityName; attrs: AttributeNames }>();
     for (const e of model.entities()) {
-      map.set(e.name().normalized(), { name: e.name(), attrs: AttributeNames.of(e.attrs().names()) });
+      map.set(e.name().normalized().asString(), { name: e.name(), attrs: AttributeNames.of(e.attrs().names()) });
     }
     unitEntities.set(unit, map);
   }

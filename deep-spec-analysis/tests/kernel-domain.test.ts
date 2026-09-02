@@ -4,7 +4,7 @@
 // ir-valid の errors[]・契約2 の unavailable.reason として golden バイトに
 // 現れるため、文言は「含む」ではなく完全一致で固定する。
 
-import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, Names } from "../tools/kernel/domain/index.ts";
+import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName } from "../tools/kernel/domain/index.ts";
 import { describe, expect, test } from "bun:test";
 import {
   canonicalStringify,
@@ -294,16 +294,12 @@ describe("target-ids / requirement-ids / names", () => {
   });
 
   test("normalizeName casefolds and strips non-alphanumerics", () => {
-    expect(Names.normalize("Order_Item")).toBe("orderitem");
-    expect(Names.normalize("OrderItem")).toBe("orderitem");
+    expect(NormalizedName.of("Order_Item").asString()).toBe("orderitem");
+    expect(NormalizedName.of("Order_Item").equals(NormalizedName.of("order item"))).toBe(true);
+    expect(NormalizedName.of("OrderItem").asString()).toBe("orderitem");
   });
 });
 
-describe("companion seals", () => {
-  test("static companions are sealed (ctor spent at class initialization)", () => {
-    expect(Names.isSealed()).toBe(true);
-  });
-});
 
 describe("smt-symbols — shared rendering vocabulary (PR8, thaw #34 item 4)", () => {
   test("smtVar / smtName render the frozen encodings", () => {
