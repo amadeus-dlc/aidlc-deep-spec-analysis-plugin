@@ -18,6 +18,7 @@ import {
   type VerificationWitness,
   VerificationReport,
   VerificationReportId,
+  VerificationFinding,
 } from "../domain/index.ts";
 
 function orderedDocument(report: VerificationReport): { [k: string]: Json } {
@@ -36,11 +37,11 @@ function orderedDocument(report: VerificationReport): { [k: string]: Json } {
   // witness ユニオンの内側は素通し値（材料）で逐語描画。
   ordered.findings = report.findings().toArray().map((f) => {
     const out: { [k: string]: Json } = {
-      kind: f.kind,
-      frRefs: f.frRefs.toArray() as unknown as Json,
-      targets: f.targets.toStrings() as unknown as Json,
-      witness: f.witness as unknown as Json,
-      detail: f.detail,
+      kind: f.kind(),
+      frRefs: f.frRefs().toArray() as unknown as Json,
+      targets: f.targets().toStrings() as unknown as Json,
+      witness: f.witness() as unknown as Json,
+      detail: f.detail(),
     };
     return out as Json;
   });
@@ -120,13 +121,13 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
     findings: VerificationFindings.of(
       (Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []).map((e) => {
         const entry = e as { [k: string]: Json };
-        return {
+        return VerificationFinding.reconstitute({
           kind: typeof entry.kind === "string" ? entry.kind : "",
           frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
           targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
           witness: (entry.witness ?? { core: [] }) as unknown as VerificationWitness,
           detail: typeof entry.detail === "string" ? entry.detail : "",
-        };
+        });
       }),
     ),
     skipped: VerificationSkips.of(

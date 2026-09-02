@@ -18,7 +18,7 @@ export { RequirementsModel } from "./requirements-model.ts";
 export { BackgroundAssumptionId } from "./background-assumption-id.ts";
 export { type BackgroundAssumption } from "./background-assumption.ts";
 export { BackgroundAssumptions } from "./background-assumptions.ts";
-export { type VerificationFinding } from "./verification-finding.ts";
+export { VerificationFinding } from "./verification-finding.ts";
 export { VerificationFindings } from "./verification-findings.ts";
 export { VerificationSkipped } from "./verification-skipped.ts";
 export { VerificationSkips } from "./verification-skips.ts";

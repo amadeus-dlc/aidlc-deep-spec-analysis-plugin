@@ -3,7 +3,7 @@
 export { CATALOG_VERSION } from "./catalog-version.ts";
 export { type WitnessRef } from "./witness-ref.ts";
 export { WitnessRefs } from "./witness-refs.ts";
-export { type Finding } from "./finding.ts";
+export { Finding } from "./finding.ts";
 export { Findings } from "./findings.ts";
 export { Skips } from "./skips.ts";
 export { Skipped } from "./skipped.ts";

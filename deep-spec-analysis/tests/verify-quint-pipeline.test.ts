@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { TriggerName, TargetId, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
@@ -58,6 +58,7 @@ import {
   FormalModelId,
   ObligationIds,
   VerificationSkipped,
+  VerificationFinding,
 } from "../tools/requirements/domain/index.ts";
 import {
   type FormalModelRepository,
@@ -66,6 +67,11 @@ import {
   VerifyRequirementsQuintUseCase,
 } from "../tools/requirements/usecase/index.ts";
 import { InMemoryVerificationReportRepository } from "./doubles/in-memory-verification-report-repository.ts";
+
+// 判定レコードは class（#71 波18）——期待値は平文へ射影して比較する（bun の toEqual は #private を見ない）。
+const plainFindings = (findings: Iterable<VerificationFinding>) =>
+  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toArray(), targets: f.targets().toStrings(), witness: f.witness(), detail: f.detail() }));
+
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(pluginRoot, "tests", "fixtures", "conformance");
@@ -230,7 +236,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     expect(outcome.kind === "verified" && outcome.pass).toBe(false);
     expect(outcome.kind === "verified" && outcome.method).toBe("bounded");
     const written = reports.findById(VerificationReportId.of(ap(DIR), "quint"));
-    expect(written.ok && written.value.findings().toArray()[0]?.kind).toBe("scenario-violation");
+    expect(written.ok && written.value.findings().toArray()[0]?.kind()).toBe("scenario-violation");
     const bytes = written.ok ? renderVerificationReportBytes(written.value) : "";
     expect(JSON.parse(bytes).method).toBe("bounded");
     expect(Object.keys(JSON.parse(bytes))).toEqual(["backend", "irVersion", "irHash", "method", "findings", "skipped"]);
@@ -270,28 +276,28 @@ describe("quint verdict interpretation", () => {
 
   test("a deadlock is a completeness-gap over the event ids, with a model fallback witness", () => {
     const withTrace = run({ machine: QuintMachineRunVerdict.deadlock(TraceStates.of([{ "T.ok": true }])) });
-    expect([...withTrace.findings]).toEqual([{
+    expect(plainFindings([...withTrace.findings])).toEqual([{
       kind: "completeness-gap",
-      frRefs: FrRefs.of(["FR-2"]),
-      targets: TargetIds.reconstitute(["OB-2"]),
+      frRefs: (["FR-2"]),
+      targets: (["OB-2"]),
       witness: { trace: [{ "T.ok": true }] },
       detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
     }]);
     const noTrace = run({ machine: QuintMachineRunVerdict.deadlock(null) });
-    expect(noTrace.findings.toArray()[0]?.witness).toEqual({ model: {} });
+    expect(noTrace.findings.toArray()[0]?.witness()).toEqual({ model: {} });
   });
 
   test("a violation trace is attributed to the failing components via pure evaluation", () => {
     const attributed = run({ machine: QuintMachineRunVerdict.violation(TraceStates.of([{ "T.ok": true }, { "T.ok": false }])) });
-    expect([...attributed.findings]).toEqual([{
+    expect(plainFindings([...attributed.findings])).toEqual([{
       kind: "conflict",
-      frRefs: FrRefs.of(["FR-1", "FR-2"]),
-      targets: TargetIds.reconstitute(["OB-1"]),
+      frRefs: (["FR-1", "FR-2"]),
+      targets: (["OB-1"]),
       witness: { trace: [{ "T.ok": true }, { "T.ok": false }] },
       detail: "The event machine can reach a state that violates OB-1 (step trace attached): the event rules do not preserve the obligation.",
     }]);
     const unattributed = run({ machine: QuintMachineRunVerdict.violation(TraceStates.of([{ "T.ok": true }])) });
-    expect(unattributed.findings.toArray()[0]?.targets.toStrings()).toEqual(["OB-2"]);
+    expect(unattributed.findings.toArray()[0]?.targets().toStrings()).toEqual(["OB-2"]);
   });
 
   test("a failed machine run skips its targets with the verify/run wording per method", () => {
@@ -312,10 +318,10 @@ describe("quint verdict interpretation", () => {
     const timeout = run({ temporals: new Map([["OB-3", { kind: "timeout" }]]) }, "bounded");
     expect(timeout.skipped.toArray().find((s) => s.target().asString() === "OB-3")?.detail()).toBe("temporal check exceeded its budget");
     const violated = run({ temporals: new Map([["OB-3", { kind: "violation", trace: TraceStates.of([{ "T.ok": false }]) }]]) }, "bounded");
-    expect(violated.findings.toArray()[0]).toEqual({
+    expect(plainFindings([violated.findings.toArray()[0]])[0]).toEqual({
       kind: "conflict",
-      frRefs: FrRefs.of(["FR-3"]),
-      targets: TargetIds.reconstitute(["OB-3"]),
+      frRefs: (["FR-3"]),
+      targets: (["OB-3"]),
       witness: { trace: [{ "T.ok": false }] },
       detail: 'Temporal obligation OB-3 (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.',
     });
@@ -342,18 +348,18 @@ describe("quint verdict interpretation", () => {
     expect(failed.skipped.toArray().find((s) => s.target().asString() === "SC-1")?.detail()).toBe("quint run failed unexpectedly: x");
 
     const acceptViolated = run({ scenarios: new Map([["SC-1", { kind: "evaluated", violated: true }]]) });
-    expect([...acceptViolated.findings]).toEqual([{
+    expect(plainFindings([...acceptViolated.findings])).toEqual([{
       kind: "scenario-violation",
-      frRefs: FrRefs.of(["FR-1"]),
-      targets: TargetIds.reconstitute(["OB-1", "SC-1"]),
+      frRefs: (["FR-1"]),
+      targets: (["OB-1", "SC-1"]),
       witness: { model: { "T.ok": false } },
       detail: "Accept scenario SC-1 describes a state the obligations rule out — the requirements reject an example that should be accepted.",
     }]);
     const rejectAccepted = run({ scenarios: new Map([["SC-2", { kind: "evaluated", violated: false }]]) });
-    expect([...rejectAccepted.findings]).toEqual([{
+    expect(plainFindings([...rejectAccepted.findings])).toEqual([{
       kind: "scenario-violation",
-      frRefs: FrRefs.of(["FR-2"]),
-      targets: TargetIds.reconstitute(["SC-2"]),
+      frRefs: (["FR-2"]),
+      targets: (["SC-2"]),
       witness: { model: { "T.ok": true } },
       detail: "Reject scenario SC-2 is accepted by every obligation — the requirements do not exclude an example that should be rejected.",
     }]);

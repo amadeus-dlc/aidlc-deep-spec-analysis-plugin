@@ -9,7 +9,7 @@
 import { TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { type SmtQueryVerdicts } from "./smt-query-verdicts.ts";
-import type { VerificationFinding } from "./verification-finding.ts";
+import { VerificationFinding } from "./verification-finding.ts";
 import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
@@ -93,13 +93,13 @@ export class SmtPlanFacts {
       const key = effective.joined(",");
       if (conflictKeys.has(key)) return;
       conflictKeys.add(key);
-      findings.push({
+      findings.push(VerificationFinding.reconstitute({
         kind: "conflict",
         frRefs: model.frRefsOf(effective),
         targets: effective,
         witness: { core: [...core].sort() },
         detail,
-      });
+      }));
     };
 
     const timeoutSkip = (targets: TargetIds, what: string): void => {
@@ -164,13 +164,13 @@ export class SmtPlanFacts {
       const r = results.verdictOf(`gap:${trigger}`);
       if (!r) continue;
       if (r.isSat()) {
-        findings.push({
+        findings.push(VerificationFinding.reconstitute({
           kind: "completeness-gap",
           frRefs: model.frRefsOf(TargetIds.reconstitute(eventIds)),
           targets: TargetIds.reconstitute(eventIds),
           witness: { model: r.witnessModel() },
           detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
-        });
+        }));
       } else if (r.isUndecided()) {
         timeoutSkip(TargetIds.reconstitute(eventIds), `completeness check for trigger "${trigger}"`);
       }
@@ -188,22 +188,22 @@ export class SmtPlanFacts {
       }
       if (sc.isAccept() && r.isUnsat()) {
         const targets = TargetIds.of([sc.id().asTargetId(), ...coreToTargets([...r.coreLabels()])]).sortedUniqueCanonically();
-        findings.push({
+        findings.push(VerificationFinding.reconstitute({
           kind: "scenario-violation",
           frRefs: model.frRefsOf(targets),
           targets,
           witness: { core: r.sortedCore() },
           detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
-        });
+        }));
       }
       if (sc.isReject() && r.isSat()) {
-        findings.push({
+        findings.push(VerificationFinding.reconstitute({
           kind: "scenario-violation",
           frRefs: model.frRefsOf(TargetIds.of([sc.id().asTargetId()])),
           targets: TargetIds.of([sc.id().asTargetId()]),
           witness: { model: r.witnessModel() },
           detail: `Reject scenario ${sc.id().asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
-        });
+        }));
       }
     }
 

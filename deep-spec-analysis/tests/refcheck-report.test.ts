@@ -27,7 +27,7 @@ import {
 } from "../tools/refcheck/adapter/index.ts";
 import { FrRefs, TargetIds } from "../tools/kernel/domain/index.ts";
 import {
-  type Finding,
+  Finding,
   type InputAnchor,
   type Skipped,
   Findings,
@@ -110,7 +110,7 @@ describe("serializer (adapter owns the format knowledge)", () => {
   });
 
   test("a non-conforming document degrades with the frozen wording", () => {
-    const badFinding: Finding = { kind: "no-such-kind", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["check:DD-0"]), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" };
+    const badFinding: Finding = Finding.reconstitute({ kind: "no-such-kind", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["check:DD-0"]), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
     const conformed = conformToContract(seed("/tmp/r", { findings: [badFinding] }), schema);
     expect(conformed.isUnavailable()).toBe(true);
     expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");

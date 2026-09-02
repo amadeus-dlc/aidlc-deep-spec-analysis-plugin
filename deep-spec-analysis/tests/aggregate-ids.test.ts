@@ -31,6 +31,7 @@ import {
 } from "../tools/design/domain/index.ts";
 import { ObligationIds,
   VerificationSkipped,
+  VerificationFinding,
 } from "../tools/requirements/domain/index.ts";
 import { RefinementMapId } from "../tools/refinement/domain/index.ts";
 import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
@@ -209,7 +210,7 @@ describe("requirements first-class collections", () => {
     expect([...bgs].length).toBe(1);
     expect(bgs.toArray()[0]?.id.asString()).toBe("B1");
 
-    const finding = { kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: { core: [] }, detail: "d" };
+    const finding = VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: { core: [] }, detail: "d" });
     const fs = VerificationFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);

@@ -13,7 +13,7 @@ import { type ObligationIds } from "./obligation-ids.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { ScenarioId } from "./scenario-id.ts";
 import type { TraceState } from "./trace-state.ts";
-import type { VerificationFinding } from "./verification-finding.ts";
+import { VerificationFinding } from "./verification-finding.ts";
 import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
@@ -79,25 +79,25 @@ export class QuintMachineFacts {
       // timeout / run-failed の対象一括 skip は判定が組む（#71 波8）。
       skipped.push(...machineRun.skipsFor(machineTargets, bounded));
       if (machineRun.isDeadlock()) {
-        findings.push({
+        findings.push(VerificationFinding.reconstitute({
           kind: "completeness-gap",
           frRefs: model.frRefsOf(eventTargets),
           targets: this.#eventIds.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
           witness: machineRun.witness(),
           detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
-        });
+        }));
       } else if (machineRun.isViolation()) {
         const violatedComponents = this.#invariantComponents.violatedBy(machineRun.finalState());
         const targets = violatedComponents.isEmpty()
           ? eventTargets.sortedCanonically()
           : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
-        findings.push({
+        findings.push(VerificationFinding.reconstitute({
           kind: "conflict",
           frRefs: model.frRefsOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
           targets,
           witness: machineRun.witness(),
           detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`,
-        });
+        }));
       }
     }
 
@@ -119,13 +119,13 @@ export class QuintMachineFacts {
       if (r.kind === "timeout") {
         skipped.push(VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "temporal check exceeded its budget" }));
       } else if (r.kind === "violation") {
-        findings.push({
+        findings.push(VerificationFinding.reconstitute({
           kind: "conflict",
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: { trace: r.trace.toArray() },
           detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`,
-        });
+        }));
       }
     }
 
@@ -161,22 +161,22 @@ export class QuintMachineFacts {
       if (sc.isAccept() && r.violated) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
         const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
-        findings.push({
+        findings.push(VerificationFinding.reconstitute({
           kind: "scenario-violation",
           frRefs: model.frRefsOf(targets),
           targets,
           witness: { model: state },
           detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out — the requirements reject an example that should be accepted.`,
-        });
+        }));
       }
       if (sc.isReject() && !r.violated) {
-        findings.push({
+        findings.push(VerificationFinding.reconstitute({
           kind: "scenario-violation",
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: { model: state },
           detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation — the requirements do not exclude an example that should be rejected.`,
-        });
+        }));
       }
     }
 

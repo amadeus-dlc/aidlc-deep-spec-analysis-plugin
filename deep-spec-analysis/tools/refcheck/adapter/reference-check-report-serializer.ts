@@ -16,7 +16,7 @@ import type { SchemaUnreadable } from "../../kernel/adapter/schema-unreadable.ts
 import { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
 import {
   CATALOG_VERSION,
-  type Finding,
+  Finding,
   Skipped,
   type WitnessRef,
   Findings,
@@ -46,19 +46,20 @@ function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
   ordered.inputs = inputs;
   ordered.checked = report.checked().toStrings() as unknown as Json;
   ordered.findings = report.findings().toArray().map((f) => {
-    const refs = f.witness.refs.toArray().map((r) => {
+    const refs = f.witnessRefs().toArray().map((r) => {
       const out: { [k: string]: Json } = { artifact: r.artifact, element: r.element };
       if (r.value !== undefined) out.value = r.value;
       return out as Json;
     });
     const out: { [k: string]: Json } = {
-      kind: f.kind,
-      frRefs: f.frRefs.toArray() as unknown as Json,
-      targets: f.targets.toStrings() as unknown as Json,
+      kind: f.kind(),
+      frRefs: f.frRefs().toArray() as unknown as Json,
+      targets: f.targets().toStrings() as unknown as Json,
       witness: { refs },
-      detail: f.detail,
+      detail: f.detail(),
     };
-    if (f.unit !== undefined) out.unit = f.unit;
+    const unit = f.unit();
+    if (unit !== undefined) out.unit = unit;
     return out as Json;
   });
   ordered.skipped = report.skipped().toArray().map((sk) => {
@@ -137,15 +138,14 @@ export function parseReportDocument(
                 return out;
               })
             : [];
-          const f: Finding = {
+          return Finding.reconstitute({
             kind: typeof entry.kind === "string" ? entry.kind : "",
             frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
             targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
             witness: { refs: WitnessRefs.of(refs) },
             detail: typeof entry.detail === "string" ? entry.detail : "",
-          };
-          if (typeof entry.unit === "string") f.unit = entry.unit;
-          return f;
+            ...(typeof entry.unit === "string" ? { unit: entry.unit } : {}),
+          });
         }),
       ),
       skipped: Skips.of(

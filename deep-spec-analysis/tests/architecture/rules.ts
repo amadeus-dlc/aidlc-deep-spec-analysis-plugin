@@ -439,7 +439,6 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "refcheck/domain/domain-entities-outcome.ts",
   "refcheck/domain/entities-outcome.ts",
   "refcheck/domain/entity-reference.ts",
-  "refcheck/domain/finding.ts",
   "refcheck/domain/functional-spec-outcome.ts",
   "refcheck/domain/input-anchor.ts",
   "refcheck/domain/rules-outcome.ts",
@@ -465,7 +464,6 @@ export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([
   "requirements/domain/quint-temporal-verdict.ts",
   "requirements/domain/smt-event-pair-probe.ts",
   "requirements/domain/trace-state.ts",
-  "requirements/domain/verification-finding.ts",
   "requirements/domain/verification-witness.ts",
 ]);
 
@@ -640,7 +638,7 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["refcheck/domain/component-catalog-outcome.ts", new Set(["ComponentCatalogOutcome.found: number", "ComponentCatalogOutcome.line: number"])],
   ["refcheck/domain/entities-outcome.ts", new Set(["EntitiesOutcome.found: number", "EntitiesOutcome.line: number"])],
   ["refcheck/domain/entity-decls.ts", new Set(["#names: Set<string>"])],
-  ["refcheck/domain/finding.ts", new Set(["Finding.kind: string", "Finding.unit: string"])],
+  ["refcheck/domain/finding.ts", new Set(["#kind: string", "#unit: string | undefined"])],
   ["refcheck/domain/input-anchor.ts", new Set(["InputAnchor.artifact: string"])],
   ["refcheck/domain/rules-outcome.ts", new Set(["RulesOutcome.found: number", "RulesOutcome.line: number"])],
   ["refcheck/domain/skipped.ts", new Set(["#target: string", "#unit: string | undefined"])],
@@ -667,7 +665,7 @@ export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = ne
   ["requirements/domain/smt-query-verdict.ts", new Set(["#core: string[] | undefined"])],
   ["requirements/domain/smt-query-verdicts.ts", new Set(["#values: ReadonlyMap<string, SmtQueryVerdict>"])],
   ["requirements/domain/source-anchor.ts", new Set(["#declared: string | null", "#actual: string"])],
-  ["requirements/domain/verification-finding.ts", new Set(["VerificationFinding.kind: string"])],
+  ["requirements/domain/verification-finding.ts", new Set(["#kind: string"])],
   ["requirements/domain/verification-report.ts", new Set(["#method: string"])],
   ["requirements/domain/verification-witness.ts", new Set(["VerificationWitness.core: string[]"])],
 ]);

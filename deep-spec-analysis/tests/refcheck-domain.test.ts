@@ -3,12 +3,12 @@
 
 import { describe, expect, test } from "bun:test";
 import { ContentHash, FrRefs, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
-import { CATALOG_VERSION, type Finding, Skipped, Findings, InputAnchors, Skips, WitnessRefs,
+import { CATALOG_VERSION, Finding, Skipped, Findings, InputAnchors, Skips, WitnessRefs,
   UnitDecl,
 } from "../tools/refcheck/domain/index.ts";
 
 function finding(kind: string, targets: string[], detail: string): Finding {
-  return { kind, frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(targets), witness: { refs: WitnessRefs.of([]) }, detail };
+  return Finding.reconstitute({ kind, frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(targets), witness: { refs: WitnessRefs.of([]) }, detail });
 }
 
 describe("catalog-order", () => {
@@ -20,7 +20,7 @@ describe("catalog-order", () => {
       finding("reference-broken", ["component:A"], "x"),
       finding("conflict", ["OB-9"], "y"),
     ]).sortedCanonically().toArray();
-    expect(sorted.map((f) => `${f.kind}/${f.detail}`)).toEqual([
+    expect(sorted.map((f) => `${f.kind()}/${f.detail()}`)).toEqual([
       "conflict/y",
       "structure-invalid/a",
       "structure-invalid/b",
@@ -31,7 +31,7 @@ describe("catalog-order", () => {
 
   test("an unknown kind ranks after every catalogued kind (fallback 99)", () => {
     const sorted = Findings.of([finding("mystery-kind", ["X-1"], "m"), finding("cross-check-disagreement", ["SC-1"], "c")]).sortedCanonically().toArray();
-    expect(sorted[0]?.kind).toBe("cross-check-disagreement");
+    expect(sorted[0]?.kind()).toBe("cross-check-disagreement");
   });
 
   test("a prototype-inherited name as kind falls back like any unknown kind (no NaN ranks)", () => {
@@ -40,9 +40,9 @@ describe("catalog-order", () => {
       finding("constructor", ["X-2"], "c"),
       finding("conflict", ["OB-1"], "k"),
     ]).sortedCanonically().toArray();
-    expect(sorted[0]?.kind).toBe("conflict");
+    expect(sorted[0]?.kind()).toBe("conflict");
     // 両者とも fallback 99 で同順位 → targets 文字列比較で "X-1" が先。
-    expect(sorted.slice(1).map((f) => f.kind)).toEqual(["toString", "constructor"]);
+    expect(sorted.slice(1).map((f) => f.kind())).toEqual(["toString", "constructor"]);
   });
 
   test("skips sort by id order on target, then by reason", () => {

@@ -16,14 +16,7 @@ function rankOf(kind: string): number {
 }
 
 function sortVerificationFindings(findings: readonly VerificationFinding[]): VerificationFinding[] {
-  return [...findings].sort((a, b) => {
-    const kr = rankOf(a.kind) - rankOf(b.kind);
-    if (kr !== 0) return kr;
-    const ta = a.targets.joined(",");
-    const tb = b.targets.joined(",");
-    if (ta !== tb) return ta < tb ? -1 : 1;
-    return a.detail < b.detail ? -1 : a.detail > b.detail ? 1 : 0;
-  });
+  return [...findings].sort((a, b) => a.compareWithin(b, rankOf));
 }
 
 export class VerificationFindings {

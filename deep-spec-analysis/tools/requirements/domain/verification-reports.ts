@@ -4,7 +4,7 @@ import type { CrossCheckedEntry } from "./cross-checked-entry.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
-import type { VerificationFinding } from "./verification-finding.ts";
+import { VerificationFinding } from "./verification-finding.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import { VerificationReport } from "./verification-report.ts";
 
@@ -57,21 +57,21 @@ export class VerificationReports {
         if (!a || !b) continue;
         for (const sc of model.scenarios()) {
           if (a.skippedTargets.has(sc.id().asString()) || b.skippedTargets.has(sc.id().asString())) continue;
-          const va = a.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id().asTargetId()));
-          const vb = b.findings.some((f) => f.kind === "scenario-violation" && f.targets.includes(sc.id().asTargetId()));
+          const va = a.findings.some((f) => f.isKind("scenario-violation") && f.implicates(sc.id().asTargetId()));
+          const vb = b.findings.some((f) => f.isKind("scenario-violation") && f.implicates(sc.id().asTargetId()));
           (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id().asString());
           (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(sc.id().asString());
           if (va !== vb) {
             const verdicts: { [backend: string]: "violated" | "clean" } = {};
             verdicts[a.backend] = va ? "violated" : "clean";
             verdicts[b.backend] = vb ? "violated" : "clean";
-            findings.push({
+            findings.push(VerificationFinding.reconstitute({
               kind: "cross-check-disagreement",
               frRefs: FrRefs.of(IdOrder.sortedUnique([...(scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? [])], IdOrder.compare)),
               targets: TargetIds.of([sc.id().asTargetId()]),
               witness: { verdicts },
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
-            });
+            }));
           }
         }
       }
