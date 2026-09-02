@@ -1617,3 +1617,59 @@ unparseable／extracted の各枝は凍結の skip・finding 文言を保ち、�
 これを飛ばす——台帳と違い、縮小すべき負債ではない。`DATA_MODEL_DEBT` は空に
 なり（122 → 0）、縮小専用のまま——domain に新しい record を置けばルールが
 そのまま落とす。プリミティブ台帳の上限は 83 へ下がる。
+
+## ドメインオブジェクトの種別規律の裁定 — エンティティ・値オブジェクト・ファーストクラスコレクション・ドメインイベント、それ以外は人間の裁定（2026-09-02）
+
+オーナーは、`tools/*/domain` に追加の裁定なしで置いてよいドメインオブジェクトの
+種別を閉じた集合として裁定した:
+
+- **エンティティ** — *ローカルエンティティ*（集約の内側で同一性を持つ）か、
+  *集約のルートエンティティ*（グローバルエンティティ。リポジトリの port が
+  id で見つけるもの: `DesignModel`・`DesignRecord`・`RequirementsModel`・
+  `RequirementsSource`・`RefinementMap`・`RefinementMaterials`・
+  `IrValidationMaterials`・`DesignIrValidationMaterials`、およびレポート集約）。
+- **値オブジェクト** — ドメインプリミティブ、振る舞いを持つ record、命令できる
+  抽象データ型（判定・解析結果・状態）。
+- **ファーストクラスコレクション** — 配列・集合・写像をコレクション知識の
+  内側に隠すラッパー。
+- **ドメインイベント** — ドメインで起きた出来事の不変の記録。過去形で名づけ、
+  集約が発する。基線監査では現在の domain 層に該当なし（`DesignEvent` や
+  event 義務など `*Event` の名は IR のガードつき遷移の語彙、すなわち値
+  オブジェクト）。
+
+それ以外はエージェントの判断で実装しない:
+
+- **ドメインサービス**（どのエンティティにも値オブジェクトにも属さない状態
+  なしの操作）は、個別に人間の明示的な裁定があるときだけ許される。
+- **その他のあらゆる種類のドメインオブジェクト** — "facts"・"materials"・
+  "context"・"ledger"・"plan" 型のオブジェクト、随伴（static のみ）class、
+  自由関数、例外型、generic な record — は、*実測ありの*問題（コードベースの
+  数字）と対策内容を添えてオーナーの裁定にかけ、裁定の後にだけ実装する。
+
+波の儀式は、4 種別のどれにも分類できない domain ファイルをすべて報告する。
+2026-09-02 の基線監査（`tools/*/domain` の公開 class 296、自由関数 1、
+型別名 11）で 4 種別の外にいる住人は以下。いずれもオーナーの裁定待ちで、
+この項目では何も変えていない:
+
+- 随伴（static のみ）class、すなわち class 形のドメインサービス:
+  `IdOrder`・`Expressions`・`Names`（kernel）、`ExpressionCanonicalKey`
+  （design）、`ExpressionEvaluation`（requirements）。コメントは「OOUI 裁定」を
+  引くが、本ファイルにその記録はない。
+- 自由関数: `designWellFormednessErrors`（design）。
+- オブジェクト形のサービスと解釈器: `SmtPlanFacts`・`QuintMachineFacts`
+  （判定解釈）、`UnitRefinementPlan`（計画）、`AlphaContext`（置換）、
+  `ComponentCheckMaterials`・`ContractCheckMaterials`・
+  `FunctionalCheckMaterials`（検査の走行）。
+- コマンドとクエリを持つが同一性を持たない可変の累積器: `CheckFamilyLedger`
+  （refcheck）。
+- domain 内の例外型: `AlphaError`（refinement）。
+- data-model ルールの interface パターンが型引数を受けないためにすり抜けて
+  いる getter だけの generic record: `LoadedDocument<Outcome>`（refcheck）——
+  裁定対象であると同時にルールの穴。
+- プリミティブ台帳で保留中の分類文字列の別名: `LoweringKind`・
+  `CheckSeverity`・`CoverageState`・`CheckExecutionMode`・
+  `RefinementQueryStatus`・`SmtQueryStatus`。
+
+写像の索引（`LoweringIndex`・`BrReferenceIndex`・`FrReferenceIndex`・
+`SiblingUnitIndex`・`DesignEventCatalog`）はファーストクラスコレクションと
+読み、裁定は要らない。

@@ -54,6 +54,8 @@
 
 ## Mandated
 
+- **ドメインオブジェクトの種別規律（2026-09-02 オーナー裁定）**: domain 層に置くドメインオブジェクトは、エンティティ（ローカルエンティティ、または集約のルートエンティティ＝グローバルエンティティ）、値オブジェクト、配列やコレクションを隠すファーストクラスコレクション、ドメインイベント（ドメインで起きた出来事の不変の記録）のいずれかを基本とする。ドメインサービスを作るときは人間の裁定が必須。これ以外の種類のドメインオブジェクト（facts／materials／context／ledger／plan 型、随伴 static class、自由関数、例外型、generic record など）を実装したい場合は、必ず実測ありの問題と対策内容を添えて人間の裁定にかけ、裁定の後にだけ実装する。裁定の記録先は `deep-spec-analysis/docs/decisions.md`（および `.ja.md`）。
+
 <!-- Populated by practices-discovery affirmation gate. -->
 <!-- Format: ALWAYS [behavior] (affirmed [date]) -->
 <!-- Example: ALWAYS use Result<T,E> for fallible operations in service layer (affirmed 2026-05-17) -->
