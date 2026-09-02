@@ -44,7 +44,7 @@ function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
   const reason = report.unavailableReason();
   if (reason !== null) ordered.unavailable = { reason };
   ordered.inputs = inputs;
-  ordered.checked = report.checked().toArray() as unknown as Json;
+  ordered.checked = report.checked().toStrings() as unknown as Json;
   ordered.findings = report.findings().toArray().map((f) => {
     const refs = f.witness.refs.toArray().map((r) => {
       const out: { [k: string]: Json } = { artifact: r.artifact, element: r.element };
@@ -54,7 +54,7 @@ function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
     const out: { [k: string]: Json } = {
       kind: f.kind,
       frRefs: f.frRefs.toArray() as unknown as Json,
-      targets: f.targets.toArray() as unknown as Json,
+      targets: f.targets.toStrings() as unknown as Json,
       witness: { refs },
       detail: f.detail,
     };
@@ -119,7 +119,7 @@ export function parseReportDocument(
           };
         }),
       ),
-      checked: TargetIds.of((raw.checked as Json[]).filter((c): c is string => typeof c === "string")),
+      checked: TargetIds.reconstitute((raw.checked as Json[]).filter((c): c is string => typeof c === "string")),
       findings: Findings.of(
         (raw.findings as Json[]).map((e) => {
           const entry = isObject(e) ? e : {};
@@ -138,7 +138,7 @@ export function parseReportDocument(
           const f: Finding = {
             kind: typeof entry.kind === "string" ? entry.kind : "",
             frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
-            targets: TargetIds.of(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
+            targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
             witness: { refs: WitnessRefs.of(refs) },
             detail: typeof entry.detail === "string" ? entry.detail : "",
           };

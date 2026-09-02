@@ -5,7 +5,7 @@
 // 責務。conformToFindingsContract が「書き手は不適合ファイルを決して出さない」
 // の実装（refcheck と同じ規律・同じ凍結文言）。
 
-import { BackendName, ContentHash, FrRefs, IrVersion, TargetIds, type ArtifactPath } from "../../kernel/domain/index.ts";
+import { BackendName, ContentHash, FrRefs, IrVersion, TargetId, TargetIds, type ArtifactPath } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
@@ -38,21 +38,21 @@ function orderedDocument(report: VerificationReport): { [k: string]: Json } {
     const out: { [k: string]: Json } = {
       kind: f.kind,
       frRefs: f.frRefs.toArray() as unknown as Json,
-      targets: f.targets.toArray() as unknown as Json,
+      targets: f.targets.toStrings() as unknown as Json,
       witness: f.witness as unknown as Json,
       detail: f.detail,
     };
     return out as Json;
   });
   ordered.skipped = report.skipped().toArray().map((sk) => {
-    const out: { [k: string]: Json } = { target: sk.target, reason: sk.reason };
+    const out: { [k: string]: Json } = { target: sk.target.asString(), reason: sk.reason };
     if (sk.detail !== undefined) out.detail = sk.detail;
     return out as Json;
   });
   const crossChecked = report.crossChecked();
   // crossChecked エントリの凍結キー順は (backend, targets)。
   if (crossChecked !== null) {
-    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend.asString(), targets: [...e.targets.toArray()] }) as unknown as Json);
+    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toStrings() }) as unknown as Json);
   }
   return ordered;
 }
@@ -122,7 +122,7 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
         return {
           kind: typeof entry.kind === "string" ? entry.kind : "",
           frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
-          targets: TargetIds.of(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
+          targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
           witness: (entry.witness ?? { core: [] }) as unknown as VerificationWitness,
           detail: typeof entry.detail === "string" ? entry.detail : "",
         };
@@ -131,7 +131,7 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
     skipped: VerificationSkips.of(
       skipped.map((entry) => {
         const sk: VerificationSkipped = {
-          target: typeof entry.target === "string" ? entry.target : "",
+          target: TargetId.reconstitute(typeof entry.target === "string" ? entry.target : ""),
           reason: typeof entry.reason === "string" ? entry.reason : "",
         };
         if (typeof entry.detail === "string") sk.detail = entry.detail;
@@ -142,7 +142,7 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
       ? CrossCheckedEntries.of(
           (raw.crossChecked as Json[]).filter(isObject).map((e) => ({
             backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
-            targets: TargetIds.of(Array.isArray(e.targets) ? (e.targets.filter((t) => typeof t === "string") as string[]) : []),
+            targets: TargetIds.reconstitute(Array.isArray(e.targets) ? (e.targets.filter((t) => typeof t === "string") as string[]) : []),
           })),
         )
       : null,

@@ -1,3 +1,4 @@
+import { TargetIds } from "../../kernel/domain/index.ts";
 import { ObligationId } from "./obligation-id.ts";
 
 // 義務のファーストクラスコレクション。id 検索と id 列の導出を所有する。
@@ -29,5 +30,10 @@ export class ObligationIds {
 
   toStrings(): string[] {
     return this.#values.map((v) => v.asString());
+  }
+
+  // 検査対象 id 列としての面（宣言順を保つ）。
+  toTargetIds(): TargetIds {
+    return TargetIds.of(this.#values.map((v) => v.asTargetId()));
   }
 }

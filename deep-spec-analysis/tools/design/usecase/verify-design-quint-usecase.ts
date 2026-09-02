@@ -178,7 +178,7 @@ export class VerifyDesignQuintUseCase {
               DesignFinding.reconstitute({
                 kind: "unreachable",
                 frRefs: FrRefs.of([]),
-                targets: TargetIds.of([sm.id().asString()]),
+                targets: TargetIds.reconstitute([sm.id().asString()]),
                 witness: { model: { [attrPath]: state } },
                 unit: u.name(),
                 detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state — it may be dead.`,

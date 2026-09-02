@@ -1365,3 +1365,27 @@ parser は拾い上げを止め、型はフィールドを捨てる。`QuintMach
 複写していたが、解釈は成分 id から `RequirementsModel.frRefsOf` で帰属
 するので、複写は一度も読まれていなかった。台帳の回収はなし——残債は
 122 中 99 のまま。
+
+波 10（同 PR）: target 語彙にプリミティブを与える。Ruling A は集約を
+またぐ target トークンに DP を与えておらず、`FrRefClaim.owner` の除外に
+乗って `TargetIds`・`IdOrder`・成分 id・`machineTargets`・skip の target・
+`frRefsOf` がすべて生 string のままだった。kernel に `TargetId` を置く:
+`parse` は findings スキーマの `targetId` 形（OB/SC、BR、設計の
+DOB/DSC/DBG/SM/TR、名前空間付きトークン）を検証し、`reconstitute` は凍結
+文書と生 id 材料の逐語の門、正準順序は id 自身が所有する（`compareTo`、
+`IdOrder` に従属）。`TargetIds` は `TargetId` の集合になり（`of` は DP の
+門、`reconstitute` は生 id の門、`toStrings` は境界、一意化しない
+`sortedCanonically` を併置）、requirements の検証語彙は端から端まで
+これを話す: `QuintMachineComponent` は命令できる class へ（id は降りて
+きた `ObligationId`、帰属評価は成分自身の知識）、`machineTargets`、機械
+判定の skip、`VerificationSkipped.target`、`RequirementsModel.allTargets`／
+`frRefsOf`（`FrRefs` を返す）、SMT の解釈、縮退文書、クロスチェックが
+`TargetId` を運び、`QuintRuns` は `ObligationId`／`ScenarioId` で引き、
+facts はシナリオ id を持つ。義務 id とシナリオ id は `asTargetId` を得る。
+design・refinement・refcheck は自分の波まで生 id からの再構成にとどめる
+（`DesignSkipped.target`、`SiblingVerdictFinding.targets`、refcheck 台帳の
+名前空間付きトークンは string のまま、`TargetIds.safe` はその台帳の
+サニタイザとして残る）。この波で bun の `toEqual` が private フィールドを
+比較しないことが判明したため、触れた skip の期待値は `asString()` 経由で
+比較する。文言・順序・golden は不変。台帳から 1 エントリを回収し、残債は
+122 中 98。

@@ -1,5 +1,7 @@
+import type { TargetId } from "../../kernel/domain/index.ts";
+
 export interface VerificationSkipped {
-  target: string;
+  target: TargetId;
   reason: string;
   detail?: string;
 }

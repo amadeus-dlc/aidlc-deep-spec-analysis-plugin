@@ -3,7 +3,9 @@
 // 逐語で載る。フェーズ横断の判定面（機械・時相・シナリオ）は QuintRuns が
 // クラスとして持ち、露出 Map は死んだ。
 
+import type { ObligationId } from "./obligation-id.ts";
 import type { QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";
+import type { ScenarioId } from "./scenario-id.ts";
 import type { QuintRunsSeed } from "./quint-runs-seed.ts";
 import type { QuintScenarioVerdict } from "./quint-scenario-verdict.ts";
 import type { QuintTemporalVerdict } from "./quint-temporal-verdict.ts";
@@ -31,11 +33,11 @@ export class QuintRuns {
     return this.#machine;
   }
 
-  temporalOf(obligationId: string): QuintTemporalVerdict | undefined {
-    return this.#temporals.get(obligationId);
+  temporalOf(obligationId: ObligationId): QuintTemporalVerdict | undefined {
+    return this.#temporals.get(obligationId.asString());
   }
 
-  scenarioOf(scenarioId: string): QuintScenarioVerdict | undefined {
-    return this.#scenarios.get(scenarioId);
+  scenarioOf(scenarioId: ScenarioId): QuintScenarioVerdict | undefined {
+    return this.#scenarios.get(scenarioId.asString());
   }
 }

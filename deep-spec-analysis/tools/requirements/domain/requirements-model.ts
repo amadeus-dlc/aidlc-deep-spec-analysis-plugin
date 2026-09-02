@@ -4,7 +4,7 @@
 // supportsMajor）は旧センサーの自由関数群を集約メソッドへ移したもの。
 // 配列を生で運ばない：部品はファーストクラスコレクションで受け取り・返す。
 
-import { type IrVersion, IdOrder } from "../../kernel/domain/index.ts";
+import { type IrVersion, FrRefs, IdOrder, TargetIds } from "../../kernel/domain/index.ts";
 import { type AttributeDeclaration } from "./attribute-declaration.ts";
 import { AttributeDeclarations } from "./attribute-declarations.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
@@ -94,18 +94,19 @@ export class RequirementsModel {
   }
 
   // 境界: 縮退文書の skip 対象列（義務 id ＋シナリオ id の昇順——凍結順）。
-  allTargets(): string[] {
-    return [...this.#obligations.ids(), ...this.#scenarios.ids()].sort(IdOrder.compare);
+  allTargets(): TargetIds {
+    return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#scenarios.ids()].sort(IdOrder.compare));
   }
 
-  frRefsOf(targets: readonly string[]): string[] {
+  // 対象 id 列が指す義務・シナリオの FR 参照（一意・正準順）。
+  frRefsOf(targets: TargetIds): FrRefs {
     const refs: string[] = [];
     for (const t of targets) {
-      const ob = this.#obligations.byId(t);
+      const ob = this.#obligations.byId(t.asString());
       if (ob) refs.push(...ob.frRefs());
-      const sc = this.#scenarios.byId(t);
+      const sc = this.#scenarios.byId(t.asString());
       if (sc) refs.push(...sc.frRefs());
     }
-    return IdOrder.sortedUnique(refs, IdOrder.compare);
+    return FrRefs.of(IdOrder.sortedUnique(refs, IdOrder.compare));
   }
 }

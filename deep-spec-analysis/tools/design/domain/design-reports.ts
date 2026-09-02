@@ -1,4 +1,4 @@
-import { BackendName, ContentHash, FrRefs, IdOrder, TargetIds } from "../../kernel/domain/index.ts";
+import { BackendName, ContentHash, FrRefs, IdOrder, TargetId, TargetIds } from "../../kernel/domain/index.ts";
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import type { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
 import { DesignFindings } from "./design-findings.ts";
@@ -64,7 +64,7 @@ export class DesignReports {
             const key = `${u.name()}|${sc.id().asString()}`;
             if (a.skipped.has(key) || b.skipped.has(key)) continue;
             const verdictOf = (d: (typeof docs)[number]): boolean =>
-              d.findings.some((f) => f.kind() === "scenario-violation" && f.unit() === u.name() && f.targets().includes(sc.id().asString()));
+              d.findings.some((f) => f.kind() === "scenario-violation" && f.unit() === u.name() && f.targets().includes(TargetId.reconstitute(sc.id().asString())));
             const va = verdictOf(a);
             const vb = verdictOf(b);
             (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id().asString());
@@ -77,7 +77,7 @@ export class DesignReports {
                 DesignFinding.reconstitute({
                   kind: "cross-check-disagreement",
                   frRefs: FrRefs.of(IdOrder.sortedUnique([...sc.frRefs()], IdOrder.compare)),
-                  targets: TargetIds.of([sc.id().asString()]),
+                  targets: TargetIds.reconstitute([sc.id().asString()]),
                   witness: { verdicts },
                   unit: u.name(),
                   detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()} of unit ${u.name()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`,
@@ -89,7 +89,7 @@ export class DesignReports {
       }
     }
     const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.of([...targets].sort(IdOrder.compare)) }))
+      .map(([backend, targets]) => ({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets].sort(IdOrder.compare)) }))
       .sort((x, y) => (x.backend.asString() < y.backend.asString() ? -1 : x.backend.asString() > y.backend.asString() ? 1 : 0));
 
     return DesignReport.compose({

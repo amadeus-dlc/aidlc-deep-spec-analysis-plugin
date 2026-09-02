@@ -76,7 +76,7 @@ export class DesignFinding {
   // masked skip の勘定へ回す。
   asRefinementViolation(reqIds: ReadonlySet<string>, unit: string): DesignFinding | null {
     if (this.#kind !== "conflict") return null;
-    const reqHits = this.#targets.toArray().filter((t) => reqIds.has(t));
+    const reqHits = this.#targets.toArray().filter((t) => reqIds.has(t.asString()));
     if (reqHits.length === 0) return null;
     return new DesignFinding({
       kind: "refinement-violation",
@@ -84,7 +84,7 @@ export class DesignFinding {
       targets: TargetIds.of(reqHits),
       witness: this.#witness,
       unit,
-      detail: `The design machine of unit ${unit} reaches a state that violates requirements obligation ${reqHits.join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,
+      detail: `The design machine of unit ${unit} reaches a state that violates requirements obligation ${reqHits.map((t) => t.asString()).join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,
     });
   }
 
