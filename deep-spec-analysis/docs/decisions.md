@@ -1805,3 +1805,61 @@ exclusion, `PUBLISHED_VALUE_SHAPES`, which the data-model rule skips —
 unlike the ledger, it is not a debt to shrink. `DATA_MODEL_DEBT` is now
 empty (122 → 0) and stays shrink-only, so any new record in the domain
 fails the rule outright. The primitive-field ceiling drops to 83.
+
+## Domain-object taxonomy ruling — entities, value objects and first-class collections; everything else by human ruling (2026-09-02)
+
+The owner ruled the closed set of domain-object kinds that may live in
+`tools/*/domain` without a further ruling:
+
+- **Entities** — either a *local entity* (identity inside its aggregate)
+  or an *aggregate root* (the global entity a repository port finds by
+  id: `DesignModel`, `DesignRecord`, `RequirementsModel`,
+  `RequirementsSource`, `RefinementMap`, `RefinementMaterials`,
+  `IrValidationMaterials`, `DesignIrValidationMaterials`, and the
+  report aggregates).
+- **Value objects** — domain primitives, records with behaviour, and the
+  commandable abstract data types (verdicts, outcomes, statuses).
+- **First-class collections** — the wrappers that hide an array, a set
+  or a map behind collection knowledge.
+
+Everything else is not implemented on the agent's own judgement:
+
+- A **domain service** (a stateless operation that belongs to no entity
+  or value object) is admitted only by an explicit human ruling, case by
+  case.
+- **Any other kind of domain object** — a "facts", "materials",
+  "context", "ledger" or "plan" object, a companion (static-only) class,
+  a free function, an exception type, a generic record — is brought to
+  the owner with a *measured* problem (numbers from the codebase) and the
+  proposed countermeasure, and is implemented only after the ruling.
+
+The wave ritual reports every domain file that cannot be classified as
+one of the three kinds. The baseline audit of 2026-09-02 (296 exported
+classes, 1 free function, 11 type aliases under `tools/*/domain`) found
+the following citizens outside the three kinds; each awaits the owner's
+ruling and none is changed by this entry:
+
+- Companion (static-only) classes, i.e. domain services in class form:
+  `IdOrder`, `Expressions`, `Names` (kernel), `ExpressionCanonicalKey`
+  (design), `ExpressionEvaluation` (requirements). Their comments cite an
+  "OOUI ruling" that has no written entry in this file.
+- A free function: `designWellFormednessErrors` (design).
+- Object-form services and interpreters: `SmtPlanFacts`,
+  `QuintMachineFacts` (verdict interpretation), `UnitRefinementPlan`
+  (planning), `AlphaContext` (substitution), `ComponentCheckMaterials`,
+  `ContractCheckMaterials`, `FunctionalCheckMaterials` (check runners).
+- A mutable accumulator with commands and queries but no identity:
+  `CheckFamilyLedger` (refcheck).
+- An exception type in the domain: `AlphaError` (refinement).
+- A getter-only generic record that escapes the data-model rule because
+  the rule's interface pattern does not accept a type parameter:
+  `LoadedDocument<Outcome>` (refcheck) — a rule gap as well as a citizen
+  to rule on.
+- Classification string aliases already listed as pending under the
+  primitive-field ledger: `LoweringKind`, `CheckSeverity`,
+  `CoverageState`, `CheckExecutionMode`, `RefinementQueryStatus`,
+  `SmtQueryStatus`.
+
+Indexes over maps (`LoweringIndex`, `BrReferenceIndex`,
+`FrReferenceIndex`, `SiblingUnitIndex`, `DesignEventCatalog`) are read as
+first-class collections and need no ruling.
