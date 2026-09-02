@@ -32,7 +32,7 @@ export class Z3SolverClientImpl implements Z3SolverClient {
     const outcome = this.#runChild(plan.queries);
     if (outcome.unavailable !== undefined || !outcome.results) {
       return {
-        facts: plan.facts,
+        plan: plan.plan,
         result: { kind: "unavailable", reason: outcome.unavailable ?? "solver child produced no results" },
       };
     }
@@ -44,7 +44,7 @@ export class Z3SolverClientImpl implements Z3SolverClient {
         core: r.core,
       }));
     }
-    return { facts: plan.facts, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(verdicts) } };
+    return { plan: plan.plan, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(verdicts) } };
   }
 
   #runChild(queries: SmtChildQuery[]): { results?: Map<string, SmtChildResult>; unavailable?: string } {

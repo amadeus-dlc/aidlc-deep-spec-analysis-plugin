@@ -5,7 +5,7 @@ export { type SolverProbeClient } from "./port/solver-probe-client.ts";
 export { type RefcheckBackendClient } from "./port/refcheck-backend-client.ts";
 export { type VerificationTarget } from "./port/verification-target.ts";
 export { type DesignArtifactRef } from "./port/design-artifact-ref.ts";
-export { type FunctionalUnitFacts } from "./port/functional-unit-facts.ts";
+export { type FunctionalUnitScan } from "./port/functional-unit-scan.ts";
 export { type FunctionalTarget } from "./port/functional-target.ts";
 export { type DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 export { CheckInstallationUseCase } from "./check-installation-usecase.ts";

@@ -3,7 +3,7 @@ import type { ObligationId } from "./obligation-id.ts";
 import type { SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 
 // 同トリガのイベント対 (a, b) に発行した 2 問——ガードの重なり（overlap）と
-// 効果の両立（joint）。事実の解釈は対自身に判定を引かせ、対象を問う
+// 効果の両立（joint）。計画の解釈は対自身に判定を引かせ、対象を問う
 // （#71 波25）。
 export class SmtEventPairProbe {
   readonly #qOverlap: string;

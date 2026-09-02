@@ -1,6 +1,6 @@
 // IR → SMT-LIB の検証計画ビルダ。SMT-LIB という形式の知識（変数名符号化・
 // s 式・仮定間接化つき baseScript・クエリ台本）はすべてここに封じ、判定解釈に
-// 必要な事実（SmtPlanFacts）だけをドメイン語彙で返す。
+// 必要な事実（SmtVerificationPlan）だけをドメイン語彙で返す。
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の smtVar / smtName / enumCode /
 // smtOf / buildPlan からの逐語移植（IrDoc → RequirementsModel の読み替えのみ）。
 // 描画語彙（smtVar/smtName/smtLit/smtIntOf）は移行 PR8 で kernel 共有へ。
@@ -10,7 +10,7 @@ import { smtIntOf, smtLit, smtName, smtVar } from "../../kernel/adapter/index.ts
 import type { SmtChildQuery } from "./smt-child-query.ts";
 import {
   SmtEventPairProbes,
-  SmtPlanFacts,
+  SmtVerificationPlan,
   VerificationSkips,
   type Obligation,
   type RequirementsModel,
@@ -21,7 +21,7 @@ import {
 
 export interface SmtPlan {
   queries: SmtChildQuery[];
-  facts: SmtPlanFacts;
+  plan: SmtVerificationPlan;
 }
 
 class CompileError extends Error {
@@ -365,7 +365,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
 
   return {
     queries,
-    facts: SmtPlanFacts.of({
+    plan: SmtVerificationPlan.of({
       compiled,
       skipped: VerificationSkips.of(skipped),
       labelToTarget,

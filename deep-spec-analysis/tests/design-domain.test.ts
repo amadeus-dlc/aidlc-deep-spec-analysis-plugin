@@ -558,7 +558,7 @@ describe("sibling verdict document and finding (the backend's answer owns its in
     expect(readable.unavailableReason()).toBe(null);
   });
 
-  test("match hands each kind its own facts", () => {
+  test("match hands each kind its own plan", () => {
     const describeDoc = (doc: SiblingVerdictDocument): string =>
       doc.match({
         unreadable: () => "unreadable",

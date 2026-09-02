@@ -55,7 +55,7 @@ import {
   SmtQueryVerdict,
   SmtEventPairProbes,
   SmtEventPairProbe,
-  SmtPlanFacts,
+  SmtVerificationPlan,
   SmtQueryVerdicts,
   VerificationReport,
   VerificationReportId,
@@ -152,7 +152,7 @@ function solver(check: SmtCheck): Z3SolverClient {
   return { check: () => check };
 }
 
-const EMPTY_FACTS: Parameters<typeof SmtPlanFacts.of>[0] = {
+const EMPTY_PLAN: Parameters<typeof SmtVerificationPlan.of>[0] = {
   compiled: new Map(),
   skipped: VerificationSkips.of([]),
   labelToTarget: new Map(),
@@ -169,7 +169,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(err({ kind: "not-found", path: "/x" })),
       reports,
-      solver({ facts: SmtPlanFacts.of(EMPTY_FACTS), result: { kind: "solved", verdicts: SmtQueryVerdicts.of(new Map()) } }),
+      solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: SmtQueryVerdicts.of(new Map()) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("not-applicable");
     const stored = reports.findAllByDirectory(ap(DIR));
@@ -182,7 +182,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(err({ kind: "corrupt", path: "/x", cause: "IR lacks a semver irVersion" })),
       reports,
-      solver({ facts: SmtPlanFacts.of(EMPTY_FACTS), result: { kind: "solved", verdicts: SmtQueryVerdicts.of(new Map()) } }),
+      solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: SmtQueryVerdicts.of(new Map()) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("model-unreadable");
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
@@ -203,7 +203,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
       reports,
-      solver({ facts: SmtPlanFacts.of(EMPTY_FACTS), result: { kind: "solved", verdicts: SmtQueryVerdicts.of(new Map()) } }),
+      solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: SmtQueryVerdicts.of(new Map()) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("version-mismatch");
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
@@ -222,14 +222,14 @@ describe("the verify-smt interactor over the InMemory double", () => {
         { id: ObligationId.reconstitute("OB-2"), nature: ObligationNature.reconstitute("state-temporal"), frRefs: [] },
       ],
     });
-    const facts = SmtPlanFacts.of({
-      ...EMPTY_FACTS,
+    const plan = SmtVerificationPlan.of({
+      ...EMPTY_PLAN,
       skipped: VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-2"), reason: "capability", detail: 'nature "state-temporal" is checked by a state-machine backend, not the SMT backend' })]),
     });
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
       reports,
-      solver({ facts, result: { kind: "unavailable", reason: "no runtime could execute the z3 child process (node: not on PATH)" } }),
+      solver({ plan, result: { kind: "unavailable", reason: "no runtime could execute the z3 child process (node: not on PATH)" } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("solver-unavailable");
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
@@ -246,8 +246,8 @@ describe("the verify-smt interactor over the InMemory double", () => {
       obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-1"] }],
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: {} }],
     });
-    const facts = SmtPlanFacts.of({
-      ...EMPTY_FACTS,
+    const plan = SmtVerificationPlan.of({
+      ...EMPTY_PLAN,
       compiled: new Map([["OB-1", true]]),
       labelToTarget: new Map([["ob_OB_1", "OB-1"]]),
       scenarioQueries: new Map([["SC-1", "sc:SC-1"]]),
@@ -259,7 +259,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
       reports,
-      solver({ facts, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(verdicts) } }),
+      solver({ plan, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(verdicts) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("verified");
     expect(outcome.kind === "verified" && outcome.pass).toBe(false);
@@ -288,7 +288,7 @@ describe("smt verdict interpretation", () => {
       { id: ScenarioId.reconstitute("SC-2"), kind: "reject", frRefs: ["FR-2"], bindings: {} },
     ],
   });
-  const facts = SmtPlanFacts.of({
+  const plan = SmtVerificationPlan.of({
     compiled: new Map([["OB-1", true], ["OB-2", true], ["OB-3", true], ["OB-4", true]]),
     skipped: VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-9"), reason: "capability", detail: "seed" })]),
     labelToTarget: new Map([["ob_OB_1", "OB-1"], ["ob_OB_2", "OB-2"], ["ty_x", "TY-x"], ["bg_B1", "B1"]]),
@@ -297,7 +297,7 @@ describe("smt verdict interpretation", () => {
     scenarioQueries: new Map([["SC-1", "sc:SC-1"], ["SC-2", "sc:SC-2"]]),
   });
   const run = (entries: [string, Parameters<typeof SmtQueryVerdict.reconstitute>[0]][]) =>
-    facts.interpret(twoInvariants, SmtQueryVerdicts.of(new Map(entries.map(([id, v]) => [id, SmtQueryVerdict.reconstitute(v)]))));
+    plan.interpret(twoInvariants, SmtQueryVerdicts.of(new Map(entries.map(([id, v]) => [id, SmtQueryVerdict.reconstitute(v)]))));
 
   test("global unsat becomes one conflict attributed via the OB-prefixed core labels", () => {
     const { findings, skipped } = run([["global", { status: "unsat", core: ["ty_x", "ob_OB_2", "ob_OB_1"] }]]);
@@ -322,7 +322,7 @@ describe("smt verdict interpretation", () => {
 
   test("a conflict with no effective targets is dropped entirely", () => {
     const bare = model({ obligations: [{ id: ObligationId.reconstitute("OB-3"), nature: ObligationNature.reconstitute("event"), frRefs: [] }] });
-    const { findings } = SmtPlanFacts.of({ ...EMPTY_FACTS, compiled: new Map([["OB-3", true]]) })
+    const { findings } = SmtVerificationPlan.of({ ...EMPTY_PLAN, compiled: new Map([["OB-3", true]]) })
       .interpret(bare, SmtQueryVerdicts.of(new Map([["global", SmtQueryVerdict.reconstitute({ status: "unsat", core: [] })]])));
     expect([...findings]).toEqual([]);
   });
@@ -627,7 +627,7 @@ describe("degradation reports and ordering", () => {
   });
 });
 
-describe("smt facts collections (first-class operations)", () => {
+describe("smt plan collections (first-class operations)", () => {
   test("SmtEventPairProbes holds issuance order under add", () => {
     const probe = SmtEventPairProbe.of({ qOverlap: "evo:a:b", qJoint: "evj:a:b", a: ObligationId.reconstitute("OB-1"), b: ObligationId.reconstitute("OB-2"), trigger: TriggerName.reconstitute("go") });
     expect(probe.targets().toStrings()).toEqual(["OB-1", "OB-2"]);

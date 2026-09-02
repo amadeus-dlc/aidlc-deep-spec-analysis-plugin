@@ -37,11 +37,11 @@ export class RefinementSolverClientImpl implements RefinementSolverClient {
   check(unit: DesignUnit, requirements: RefinementRequirements, plan: UnitRefinementPlan, budgetMs: number): RefinementCheck {
     const built = buildRefinementQueries(unit, requirements, plan);
     if (built.queries.length === 0) {
-      return { facts: built.facts, result: { kind: "no-queries" } };
+      return { plan: built.plan, result: { kind: "no-queries" } };
     }
     const child = this.#runChild(built.queries, budgetMs);
     if (child.results === null) {
-      return { facts: built.facts, result: { kind: "unavailable", reason: child.unavailable ?? "z3 unavailable" } };
+      return { plan: built.plan, result: { kind: "unavailable", reason: child.unavailable ?? "z3 unavailable" } };
     }
     const verdicts = new Map<string, RefinementQueryVerdict>();
     for (const [queryId, r] of child.results) {
@@ -52,7 +52,7 @@ export class RefinementSolverClientImpl implements RefinementSolverClient {
         core: r.core,
       }));
     }
-    return { facts: built.facts, result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(verdicts) } };
+    return { plan: built.plan, result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(verdicts) } };
   }
 
   #runChild(queries: RefinementChildQuery[], budgetMs: number): { results: Map<string, RefinementChildResult> | null; unavailable: string | null } {

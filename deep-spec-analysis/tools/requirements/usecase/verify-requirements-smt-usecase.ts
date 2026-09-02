@@ -64,14 +64,14 @@ export class VerifyRequirementsSmtUseCase {
 
     const run = this.#z3SolverClient.check(model);
     if (run.result.kind === "unavailable") {
-      const saved = this.#persist(VerificationReport.solverUnavailable(id, model, irHash, run.facts.planSkipped(), run.result.reason));
+      const saved = this.#persist(VerificationReport.solverUnavailable(id, model, irHash, run.plan.planSkipped(), run.result.reason));
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
       if (!cross.ok) return { kind: "save-failed", error: cross.error };
       return { kind: "solver-unavailable" };
     }
 
-    const interpreted = run.facts.interpret(model, run.result.verdicts);
+    const interpreted = run.plan.interpret(model, run.result.verdicts);
     const report = VerificationReport.compose({
       id,
       irVersion: model.irVersion(),

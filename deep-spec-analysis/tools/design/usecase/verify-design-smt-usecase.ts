@@ -199,9 +199,9 @@ export class VerifyDesignSmtUseCase {
             }
             findings.push(...plan.gaps());
             skipped.push(...plan.smtStatusSkips(u.name()));
-            skipped.push(...check.facts.compileSkips());
+            skipped.push(...check.plan.compileSkips());
             if (check.result.kind === "solved") {
-              const interpreted = check.facts.interpret(check.result.verdicts, req, plan, u.name());
+              const interpreted = check.plan.interpret(check.result.verdicts, req, plan, u.name());
               findings.push(...interpreted.findings);
               skipped.push(...interpreted.skipped);
             }

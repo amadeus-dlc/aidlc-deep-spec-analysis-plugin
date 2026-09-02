@@ -1,9 +1,9 @@
-// refinement ソルバ実行の型付き判定と計画事実。SMT-LIB スクリプト・z3 の生
+// refinement ソルバ実行の型付き判定と計画（対応表）。SMT-LIB スクリプト・z3 の生
 // 表現はアダプタ（第 2 コンパイラ＋クライアント）が持ち、ドメインへは
 // クエリ id（"rv:OB-x" / "re:OB-x" / "rs2:OB-x:TR-y" / "rs:SC-x"）ごとの
 // 判定と、その id が何の検査だったか（Pending）だけが届く。decoded モデルは
 // pre / post（primed）の両状態。判定の解釈（4 種の検査 → findings / skips、
-// detail 文言は golden 凍結）は facts 自身の振る舞い（OOUI 裁定——旧
+// detail 文言は golden 凍結）は plan 自身の振る舞い（OOUI 裁定——旧
 // interpretRefinementVerdicts の逐語移植）。
 
 import { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
@@ -15,9 +15,9 @@ import type { RefinementRequirements } from "./refinement-requirements.ts";
 import type { RefinementProbe } from "./refinement-probe.ts";
 import { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
 
-// クエリ計画の事実：発行順の Pending 索引と、alpha 置換・SMT コンパイル失敗
+// クエリ計画（値オブジェクト、裁定 8——旧 RefinementSolverFacts）：発行順の Pending 索引と、alpha 置換・SMT コンパイル失敗
 // による compile-error skip（構築時に確定）。
-export class RefinementSolverFacts {
+export class RefinementSolverPlan {
   readonly #pending: ReadonlyMap<string, RefinementProbe>;
   readonly #compileSkips: DesignSkips;
 
@@ -26,8 +26,8 @@ export class RefinementSolverFacts {
     this.#compileSkips = props.compileSkips;
   }
 
-  static of(props: { pending: ReadonlyMap<string, RefinementProbe>; compileSkips: DesignSkips }): RefinementSolverFacts {
-    return new RefinementSolverFacts({ pending: new Map(props.pending), compileSkips: props.compileSkips });
+  static of(props: { pending: ReadonlyMap<string, RefinementProbe>; compileSkips: DesignSkips }): RefinementSolverPlan {
+    return new RefinementSolverPlan({ pending: new Map(props.pending), compileSkips: props.compileSkips });
   }
 
   compileSkips(): DesignSkips {

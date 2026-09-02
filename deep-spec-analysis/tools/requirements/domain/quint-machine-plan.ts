@@ -1,10 +1,12 @@
-// Quint 状態機械の「事実」——判定解釈に必要な、形式（Quint テキスト）を
+// Quint 状態機械の計画——コンパイラが機械を組んだときの対応表で、形式
+// （Quint テキスト）を含まない面（種別規律の裁定 8——値オブジェクト）。旧名
+// QuintMachineFacts の「事実」はドメインイベントに取っておく。判定解釈に必要な、形式（Quint テキスト）を
 // 含まない面。不変量成分（帰属評価に使う式つき）・イベント義務 id・
 // 全属性が束縛された init 可能シナリオの集合がここに載る。
 // モジュール本文と変数名対応はアダプタのコンパイラが所有する。判定の解釈
 // （旧 interpretQuintVerdicts——detail 文言は golden 凍結・返り値は未ソートで
 // 正準ソートは VerificationReport.compose の不変条件、phase 2 の「既に skip
-// 済みの義務は走らせない」ガードも逐語）は facts 自身の振る舞い（OOUI 裁定）。
+// 済みの義務は走らせない」ガードも逐語）は plan 自身の振る舞い（OOUI 裁定）。
 // 対象 id は TargetId / TargetIds で運ぶ（#71 波10——生 string の列ではない）。
 
 import { TargetIds } from "../../kernel/domain/index.ts";
@@ -21,7 +23,7 @@ import { VerificationSkips } from "./verification-skips.ts";
 import { QuintMachineComponents } from "./quint-machine-components.ts";
 import { VerificationWitness } from "./verification-witness.ts";
 
-export class QuintMachineFacts {
+export class QuintMachinePlan {
   readonly #invariantComponents: QuintMachineComponents;
   readonly #eventIds: ObligationIds;
   readonly #scenariosWithInit: ReadonlySet<string>;
@@ -36,8 +38,8 @@ export class QuintMachineFacts {
     readonly invariantComponents: QuintMachineComponents;
     readonly eventIds: ObligationIds;
     readonly scenariosWithInit: readonly ScenarioId[];
-  }): QuintMachineFacts {
-    return new QuintMachineFacts({
+  }): QuintMachinePlan {
+    return new QuintMachinePlan({
       invariantComponents: seed.invariantComponents,
       eventIds: seed.eventIds,
       scenariosWithInit: new Set(seed.scenariosWithInit.map((id) => id.asString())),

@@ -2,7 +2,7 @@ import { TargetIds } from "../../kernel/domain/index.ts";
 import { ObligationId } from "./obligation-id.ts";
 
 // 義務のファーストクラスコレクション。id 検索と id 列の導出を所有する。
-// 義務 id のファーストクラスコレクション(facts のイベント義務面など、
+// 義務 id のファーストクラスコレクション(plan のイベント義務面など、
 // 部分集合の id 列を運ぶ)。宣言順を保持し、toStrings() は境界(照会 API・
 // TargetIds/frRefsOf の生 id 材料)専用の脱出口。
 export class ObligationIds {

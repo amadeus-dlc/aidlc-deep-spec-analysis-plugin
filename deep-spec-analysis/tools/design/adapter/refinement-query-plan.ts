@@ -8,7 +8,7 @@ import type { RefinementAttr } from "./refinement-attr.ts";
 // pre/post の基底を組み、alpha 置換済みの要件性質で 4 種のクエリ
 // （rv: 静的違反・re: enabledness・rs2: ワンステップシミュレーション・
 // rs: シナリオ再生）を発行する。alpha / SMT コンパイルの失敗は凍結文言の
-// compile-error skip（facts.compileSkips）に落ちる。
+// compile-error skip（plan.compileSkips）に落ちる。
 // 旧 refinement-lib の designSmtCtx / smtOfExpr / designBase / assembleQuery /
 // decodeDesignModel とクエリ構築部からの逐語移植。
 
@@ -24,7 +24,7 @@ import {
   type DesignEvent,
   RefinementProbe,
   type RefinementRequirements,
-  RefinementSolverFacts,
+  RefinementSolverPlan,
   type UnitRefinementPlan,
   DesignEventCatalog,
   EffectAssignments,
@@ -218,12 +218,12 @@ export function decodeDesignModel(
 
 export interface RefinementQueryPlan {
   queries: RefinementChildQuery[];
-  facts: RefinementSolverFacts;
+  plan: RefinementSolverPlan;
   context: RefinementSmtContext;
 }
 
 // クエリ計画の構築 — 旧 runUnitRefinementSmt のクエリ構築部（867-999 行）。
-// alpha / SMT コンパイル失敗は凍結文言の compile-error skip として facts に載る。
+// alpha / SMT コンパイル失敗は凍結文言の compile-error skip として plan に載る。
 export function buildRefinementQueries(
   u: DesignUnit,
   req: RefinementRequirements,
@@ -358,5 +358,5 @@ export function buildRefinementQueries(
     }
   }
 
-  return { queries, facts: RefinementSolverFacts.of({ pending, compileSkips: DesignSkips.of(compileSkips) }), context: ctx };
+  return { queries, plan: RefinementSolverPlan.of({ pending, compileSkips: DesignSkips.of(compileSkips) }), context: ctx };
 }
