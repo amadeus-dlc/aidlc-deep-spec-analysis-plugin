@@ -19,6 +19,7 @@ import {
   VerificationReport,
   VerificationReportId,
   VerificationFinding,
+  CrossCheckedEntry,
 } from "../domain/index.ts";
 
 function orderedDocument(report: VerificationReport): { [k: string]: Json } {
@@ -54,7 +55,7 @@ function orderedDocument(report: VerificationReport): { [k: string]: Json } {
   const crossChecked = report.crossChecked();
   // crossChecked エントリの凍結キー順は (backend, targets)。
   if (crossChecked !== null) {
-    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toStrings() }) as unknown as Json);
+    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
   }
   return ordered;
 }
@@ -141,7 +142,7 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
     ),
     crossChecked: Array.isArray(raw.crossChecked)
       ? CrossCheckedEntries.of(
-          (raw.crossChecked as Json[]).filter(isObject).map((e) => ({
+          (raw.crossChecked as Json[]).filter(isObject).map((e) => CrossCheckedEntry.reconstitute({
             backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
             targets: TargetIds.reconstitute(Array.isArray(e.targets) ? (e.targets.filter((t) => typeof t === "string") as string[]) : []),
           })),

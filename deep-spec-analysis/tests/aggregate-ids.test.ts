@@ -28,10 +28,13 @@ import {
   LoweredOriginRef,
   LoweredId,
   DesignSkipped,
+  DesignInputAnchor,
+  DesignCrossCheckedEntry,
 } from "../tools/design/domain/index.ts";
 import { ObligationIds,
   VerificationSkipped,
   VerificationFinding,
+  CrossCheckedEntry,
 } from "../tools/requirements/domain/index.ts";
 import { RefinementMapId } from "../tools/refinement/domain/index.ts";
 import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
@@ -221,9 +224,9 @@ describe("requirements first-class collections", () => {
     expect(sk.count()).toBe(2);
     expect(sk.sortedCanonically().toArray().map((s) => s.target().asString())).toEqual(["OB-1", "OB-2"]);
 
-    const cc = CrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.reconstitute(["SC-1"]) });
+    const cc = CrossCheckedEntries.of([]).add(CrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute("smt"), targets: TargetIds.reconstitute(["SC-1"]) }));
     expect([...cc].length).toBe(1);
-    expect(cc.toArray()[0]?.backend.asString()).toBe("smt");
+    expect(cc.toArray()[0]?.backend().asString()).toBe("smt");
 
     expect([...VerificationReports.of([])].length).toBe(0);
   });
@@ -301,17 +304,17 @@ describe("design first-class collections", () => {
     expect(sk.sortedCanonically().toArray()[0]?.target().asString()).toBe("DOB-0");
     expect([...sk].length).toBe(2);
 
-    const anchors = DesignInputAnchors.of([]).add({ artifact: "b.md", sha256: ContentHash.reconstitute("2".repeat(64)) })
-      .add({ artifact: "a.md", sha256: ContentHash.reconstitute("1".repeat(64)) });
-    expect(anchors.sortedByArtifact().toArray().map((a) => a.artifact)).toEqual(["a.md", "b.md"]);
+    const anchors = DesignInputAnchors.of([]).add(DesignInputAnchor.reconstitute({ artifact: "b.md", sha256: ContentHash.reconstitute("2".repeat(64)) }))
+      .add(DesignInputAnchor.reconstitute({ artifact: "a.md", sha256: ContentHash.reconstitute("1".repeat(64)) }));
+    expect(anchors.sortedByArtifact().toArray().map((a) => a.artifact())).toEqual(["a.md", "b.md"]);
     expect([...anchors].length).toBe(2);
 
     const checked = CheckedUnits.of(["unit:u2", "unit:u1", "unit:u1"]).add("unit:u3");
     expect(checked.sortedUniqueCanonically().toArray()).toEqual(["unit:u1", "unit:u2", "unit:u3"]);
     expect([...checked].length).toBe(4);
 
-    const cc = DesignCrossCheckedEntries.of([]).add({ backend: BackendName.reconstitute("smt"), targets: TargetIds.reconstitute(["DSC-1"]) });
-    expect(cc.toArray()[0]?.backend.asString()).toBe("smt");
+    const cc = DesignCrossCheckedEntries.of([]).add(DesignCrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute("smt"), targets: TargetIds.reconstitute(["DSC-1"]) }));
+    expect(cc.toArray()[0]?.backend().asString()).toBe("smt");
     expect([...cc].length).toBe(1);
     expect([...DesignReports.of([])].length).toBe(0);
     expect(DesignReports.of([]).toArray().length).toBe(0);

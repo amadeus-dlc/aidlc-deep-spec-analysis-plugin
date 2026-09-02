@@ -7,7 +7,7 @@ import { CheckFamilies } from "./check-families.ts";
 import type { CheckFamilyLedger } from "./check-family-ledger.ts";
 import { ContractRows } from "./contract-rows.ts";
 import { type UnitDecls } from "./unit-decls.ts";
-import type { WitnessRef } from "./witness-ref.ts";
+import { WitnessRef } from "./witness-ref.ts";
 import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import type { ContractsTableOutcome } from "./contracts-table-outcome.ts";
 import type { DeclaredUnitsOutcome } from "./declared-units-outcome.ts";
@@ -30,7 +30,7 @@ function runContractChecksImpl(materials: {
   const artifact = materials.artifact.asString();
   const depArtifact = materials.depArtifact.asString();
   const ref = (art: string, element: string, value?: string): WitnessRef =>
-    value === undefined ? { artifact: art, element } : { artifact: art, element, value };
+    WitnessRef.reconstitute(value === undefined ? { artifact: art, element } : { artifact: art, element, value });
 
   // --- declared units (unit-of-work-dependency.md edge block) --------------
   let units: UnitDecls | null = null;

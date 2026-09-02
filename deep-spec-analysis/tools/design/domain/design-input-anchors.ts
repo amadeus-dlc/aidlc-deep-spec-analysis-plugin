@@ -22,7 +22,7 @@ export class DesignInputAnchors {
   }
 
   sortedByArtifact(): DesignInputAnchors {
-    return new DesignInputAnchors([...this.#values].sort((a, b) => (a.artifact < b.artifact ? -1 : a.artifact > b.artifact ? 1 : 0)));
+    return new DesignInputAnchors([...this.#values].sort((a, b) => a.compareByArtifact(b)));
   }
 
   toArray(): readonly DesignInputAnchor[] {

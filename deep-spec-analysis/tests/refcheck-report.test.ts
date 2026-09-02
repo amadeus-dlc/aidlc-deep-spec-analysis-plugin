@@ -28,7 +28,7 @@ import {
 import { FrRefs, TargetIds } from "../tools/kernel/domain/index.ts";
 import {
   Finding,
-  type InputAnchor,
+  InputAnchor,
   type Skipped,
   Findings,
   InputAnchors,
@@ -50,7 +50,7 @@ function seed(
   return ReferenceCheckReport.compose({
     id: ReferenceCheckReportId.of(ap(directory), "components"),
     inputs: InputAnchors.of(
-      overrides.inputs ?? [{ artifact: "inception/domain-design/components.md", sha256: ContentHash.reconstitute("a".repeat(64)) }],
+      overrides.inputs ?? [InputAnchor.reconstitute({ artifact: "inception/domain-design/components.md", sha256: ContentHash.reconstitute("a".repeat(64)) })],
     ),
     checked: TargetIds.reconstitute(overrides.checked ?? ["check:DD-0"]),
     findings: Findings.of(overrides.findings ?? []),
@@ -74,8 +74,8 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     const report = seed("/tmp/r", {
       checked: ["check:DD-1", "check:DD-0", "check:DD-1"],
       inputs: [
-        { artifact: "b.md", sha256: ContentHash.reconstitute("b".repeat(64)) },
-        { artifact: "a.md", sha256: ContentHash.reconstitute("a".repeat(64)) },
+        InputAnchor.reconstitute({ artifact: "b.md", sha256: ContentHash.reconstitute("b".repeat(64)) }),
+        InputAnchor.reconstitute({ artifact: "a.md", sha256: ContentHash.reconstitute("a".repeat(64)) }),
       ],
     });
     expect(report.passes()).toBe(true);
@@ -83,7 +83,7 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     expect(report.findingsCount()).toBe(0);
     expect(report.skippedCount()).toBe(0);
     expect(report.checked().toStrings()).toEqual(["check:DD-0", "check:DD-1"]);
-    expect(report.inputs().toArray().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
+    expect(report.inputs().toArray().map((i) => i.artifact())).toEqual(["a.md", "b.md"]);
     expect(report.unavailableReason()).toBe(null);
     expect(report.id().backendName().asString()).toBe("components");
   });

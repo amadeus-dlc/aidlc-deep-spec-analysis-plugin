@@ -62,6 +62,7 @@ import {
   DesignRecordId,
   EntityName,
   SiblingUnitIndex,
+  InputAnchor,
 } from "../tools/refcheck/domain/index.ts";
 import { InMemoryReferenceCheckReportRepository } from "./doubles/in-memory-reference-check-report-repository.ts";
 
@@ -188,7 +189,7 @@ function domainReport(
   run(ledger);
   return ReferenceCheckReport.compose({
     id: ReferenceCheckReportId.of(ap("/tmp/r"), backend),
-    inputs: InputAnchors.of([{ artifact: "x.md", sha256: ContentHash.reconstitute("a".repeat(64)) }]),
+    inputs: InputAnchors.of([InputAnchor.reconstitute({ artifact: "x.md", sha256: ContentHash.reconstitute("a".repeat(64)) })]),
     checked: ledger.checkedTargets(),
     findings: ledger.findings(),
     skipped: ledger.skipped(),

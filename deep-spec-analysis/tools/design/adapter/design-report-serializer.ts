@@ -20,6 +20,8 @@ import {
   type DesignValue,
   DesignReport,
   DesignReportId,
+  DesignInputAnchor,
+  DesignCrossCheckedEntry,
 } from "../domain/index.ts";
 
 function orderedDocument(report: DesignReport): { [k: string]: Json } {
@@ -33,7 +35,7 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
   if (reason !== null) ordered.unavailable = { reason };
   const inputs = report.inputs();
   // ContentHash は境界（描画）で asString() へ落とす（キー順は旧挿入順）。
-  if (inputs !== null) ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact, sha256: i.sha256.asString() })) as unknown as Json;
+  if (inputs !== null) ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
   const checked = report.checked();
   if (checked !== null) ordered.checked = checked.toArray() as unknown as Json;
   // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
@@ -60,7 +62,7 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
   const crossChecked = report.crossChecked();
   // crossChecked エントリの凍結キー順は (backend, targets)。
   if (crossChecked !== null) {
-    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toStrings() }) as unknown as Json);
+    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
   }
   return ordered;
 }
@@ -131,15 +133,15 @@ export function parseSiblingDesignReportDocument(
     inputs: Array.isArray(raw.inputs)
       ? DesignInputAnchors.of((raw.inputs as Json[]).map((e) => {
           const entry = isObject(e) ? e : {};
-          return {
+          return DesignInputAnchor.reconstitute({
             artifact: typeof entry.artifact === "string" ? entry.artifact : "",
             sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : ""),
-          };
+          });
         }))
       : null,
     checked: Array.isArray(raw.checked) ? CheckedUnits.of((raw.checked as Json[]).filter((c): c is string => typeof c === "string")) : null,
     crossChecked: Array.isArray(raw.crossChecked) ? DesignCrossCheckedEntries.of(
-          (raw.crossChecked as Json[]).filter(isObject).map((e) => ({
+          (raw.crossChecked as Json[]).filter(isObject).map((e) => DesignCrossCheckedEntry.reconstitute({
             backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
             targets: TargetIds.reconstitute(Array.isArray(e.targets) ? (e.targets.filter((t) => typeof t === "string") as string[]) : []),
           })),

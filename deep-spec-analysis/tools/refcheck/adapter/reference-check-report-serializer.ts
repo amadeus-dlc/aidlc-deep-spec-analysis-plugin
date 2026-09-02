@@ -18,13 +18,14 @@ import {
   CATALOG_VERSION,
   Finding,
   Skipped,
-  type WitnessRef,
+  WitnessRef,
   Findings,
   InputAnchors,
   ReferenceCheckReport,
   type ReferenceCheckReportId,
   Skips,
   WitnessRefs,
+  InputAnchor,
 } from "../domain/index.ts";
 
 function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
@@ -34,7 +35,7 @@ function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
   // detail, unit?)、witness ref は (artifact, element, value?)、skip は
   // (target, reason, detail?, unit?)。ペイロードのコレクションはこの描画点で
   // だけ toArray() に降りる。
-  const inputs = report.inputs().toArray().map((i) => ({ artifact: i.artifact, sha256: i.sha256.asString() })) as unknown as Json;
+  const inputs = report.inputs().toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
   const ordered: { [k: string]: Json } = {
     backend: report.id().backendName().asString(),
     irVersion: CATALOG_VERSION,
@@ -47,8 +48,9 @@ function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
   ordered.checked = report.checked().toStrings() as unknown as Json;
   ordered.findings = report.findings().toArray().map((f) => {
     const refs = f.witnessRefs().toArray().map((r) => {
-      const out: { [k: string]: Json } = { artifact: r.artifact, element: r.element };
-      if (r.value !== undefined) out.value = r.value;
+      const out: { [k: string]: Json } = { artifact: r.artifact(), element: r.element() };
+      const value = r.value();
+      if (value !== undefined) out.value = value;
       return out as Json;
     });
     const out: { [k: string]: Json } = {
@@ -116,10 +118,10 @@ export function parseReportDocument(
       inputs: InputAnchors.of(
         (raw.inputs as Json[]).map((e) => {
           const entry = isObject(e) ? e : {};
-          return {
+          return InputAnchor.reconstitute({
             artifact: typeof entry.artifact === "string" ? entry.artifact : "",
             sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : ""),
-          };
+          });
         }),
       ),
       checked: TargetIds.reconstitute((raw.checked as Json[]).filter((c): c is string => typeof c === "string")),
@@ -130,12 +132,11 @@ export function parseReportDocument(
           const refs = Array.isArray(witness.refs)
             ? witness.refs.map((r) => {
                 const rr = isObject(r) ? r : {};
-                const out: WitnessRef = {
+                return WitnessRef.reconstitute({
                   artifact: typeof rr.artifact === "string" ? rr.artifact : "",
                   element: typeof rr.element === "string" ? rr.element : "",
-                };
-                if (typeof rr.value === "string") out.value = rr.value;
-                return out;
+                  ...(typeof rr.value === "string" ? { value: rr.value } : {}),
+                });
               })
             : [];
           return Finding.reconstitute({

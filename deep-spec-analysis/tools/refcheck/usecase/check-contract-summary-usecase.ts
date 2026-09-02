@@ -39,7 +39,7 @@ export class CheckContractSummaryUseCase {
 
     const ledger = CheckFamilyLedger.of(CONTRACT_FAMILIES);
     ContractCheckMaterials.of({
-      artifact: ArtifactPath.reconstitute(record.value.target().artifact),
+      artifact: ArtifactPath.reconstitute(record.value.target().artifact()),
       depArtifact: declaredUnits.artifactName,
       declaredUnits: declaredUnits.document === null ? { kind: "absent" } : declaredUnits.document.outcome,
       contractsTable,

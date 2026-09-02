@@ -23,7 +23,9 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, CheckedUnits, DesignFindings, DesignInputAnchors, DesignReports, DesignSkips, DesignUnits, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, DesignIgnore, DesignMachine, DesignObligation, DesignScenario, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignTransitions, InitialStates, DesignFinding, DesignSkipped, type SiblingVerdictDocument, SiblingVerdictFindings, SiblingVerdictSkips, DesignModel, DesignReport, DesignReportId, DesignUnit, ExpressionCanonicalKey, LoweredUnit, DesignModelId, LoweredOriginRef, LoweredId } from "../tools/design/domain/index.ts";
+import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, CheckedUnits, DesignFindings, DesignInputAnchors, DesignReports, DesignSkips, DesignUnits, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, DesignIgnore, DesignMachine, DesignObligation, DesignScenario, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignTransitions, InitialStates, DesignFinding, DesignSkipped, type SiblingVerdictDocument, SiblingVerdictFindings, SiblingVerdictSkips, DesignModel, DesignReport, DesignReportId, DesignUnit, ExpressionCanonicalKey, LoweredUnit, DesignModelId, LoweredOriginRef, LoweredId,
+  DesignInputAnchor,
+} from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -515,12 +517,12 @@ describe("report ordering, cross-check, and degradations", () => {
       findings: DesignFindings.of([f("conflict", "u1", ["DOB-1"], "c")]),
       skipped: DesignSkips.of([]),
       inputs: DesignInputAnchors.of([
-        { artifact: "b.md", sha256: ContentHash.reconstitute("2".repeat(64)) },
-        { artifact: "a.md", sha256: ContentHash.reconstitute("1".repeat(64)) },
+        DesignInputAnchor.reconstitute({ artifact: "b.md", sha256: ContentHash.reconstitute("2".repeat(64)) }),
+        DesignInputAnchor.reconstitute({ artifact: "a.md", sha256: ContentHash.reconstitute("1".repeat(64)) }),
       ]),
       checked: CheckedUnits.of(["unit:u2", "unit:u1", "unit:u1"]),
     });
-    expect(report.inputs()?.toArray().map((i) => i.artifact)).toEqual(["a.md", "b.md"]);
+    expect(report.inputs()?.toArray().map((i) => i.artifact())).toEqual(["a.md", "b.md"]);
     expect(report.checked()?.toArray()).toEqual(["unit:u1", "unit:u2"]);
     expect(report.passes()).toBe(false);
     expect(report.findingsCount()).toBe(1);
@@ -582,7 +584,7 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(disagreement?.detail()).toBe(
       'Backends "quint" and "smt" disagree on scenario DSC-1 of unit u1. This signals a defect in the formalization or in a backend compiler, not in the design itself.',
     );
-    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toStrings() }))).toEqual([
+    expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }))).toEqual([
       { backend: "quint", targets: ["DSC-1"] },
       { backend: "smt", targets: ["DSC-1"] },
     ]);

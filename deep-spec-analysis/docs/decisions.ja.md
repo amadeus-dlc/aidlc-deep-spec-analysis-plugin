@@ -1497,3 +1497,15 @@ class に反転し、それぞれ正準順（`compareTo`——target、次いで
 ので、凍結文言の検証も空振りでなく実のものになる。台帳から 2 エントリを
 回収し、残債は 122 中 54。`PRIMITIVE_FIELD_DEBT` の総数は変わらない（台帳に
 載る `kind`／`unit` 3 件が形を変える）。
+
+波 19（同 PR）: 小さなペイロード記録が命令できる class へ。`WitnessRef`
+（refcheck）は証拠の座標を所有し（`pointsAt`）、`InputAnchor`（refcheck）と
+`DesignInputAnchor`（design）は `inputs[]` の成果物名順を所有し
+（`compareByArtifact`——コレクションは委譲して並ぶ）、`CrossCheckedEntry`
+（requirements）と `DesignCrossCheckedEntry`（design）は `crossChecked[]` の
+バックエンド名順を所有する（`compareByBackend`）。refcheck 材料の `ref`
+ヘルパ、記録と refinement 材料のリポジトリ、レポート、シリアライザは
+再構成し、シリアライザはアクセサで読む。台帳から 5 エントリを回収し、残債は
+122 中 49。`PRIMITIVE_FIELD_DEBT` の総数は変わらない（台帳に載る `artifact`／
+`element`／`value` の文字列が形を変えるだけ——記録相対の成果物名と要素パスで、
+固有のプリミティブの候補）。
