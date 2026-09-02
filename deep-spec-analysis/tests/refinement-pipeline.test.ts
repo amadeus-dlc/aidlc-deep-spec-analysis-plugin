@@ -527,14 +527,14 @@ describe("plan classification and gap findings", () => {
 
   test("status skips differ by backend flavor (frozen wordings)", () => {
     const plan = UnitRefinementPlan.of(designUnit, unitMap, req, "m.md");
-    const smtSkips = plan.smtStatusSkips("u1").toArray().map((s) => `${s.target}:${s.reason}`);
+    const smtSkips = plan.smtStatusSkips("u1").toArray().map((s) => `${s.target.asString()}:${s.reason}`);
     expect(smtSkips).toContain("OB-3:capability");
     expect(smtSkips).toContain("OB-4:waived");
     expect(smtSkips).not.toContain("OB-2:capability");
     const quintSkips = plan.quintStatusSkips(req, "u1").toArray();
-    expect(quintSkips.find((s) => s.target === "OB-2")?.detail)
+    expect(quintSkips.find((s) => s.target.asString() === "OB-2")?.detail)
       .toBe("event simulation and enabledness are checked by the SMT refinement pass only in v1");
-    expect(quintSkips.find((s) => s.target === "SC-1")?.detail)
+    expect(quintSkips.find((s) => s.target.asString() === "SC-1")?.detail)
       .toBe("scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)");
   });
 
@@ -686,7 +686,7 @@ describe("refinement verdict interpretation", () => {
       ],
     );
     expect(out.findings.toArray()).toEqual([]);
-    expect(out.skipped.toArray().map((s) => `${s.target}:${s.reason}`)).toEqual(["OB-2:timeout", "OB-9:timeout"]);
+    expect(out.skipped.toArray().map((s) => `${s.target.asString()}:${s.reason}`)).toEqual(["OB-2:timeout", "OB-9:timeout"]);
     expect(out.skipped.toArray()[0]?.detail).toBe("refinement query rs2:OB-2:TR-1 exceeded the solver budget or errored");
   });
 });
@@ -891,7 +891,7 @@ describe("thaw pins — quint alpha skips, timeout break, exact decode (#34/#38)
     const req = reqOneInvariant();
     const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [{ kind: "unspecified", req: "R.flag" }] }), req, "m.md");
     const quint = plan.quintStatusSkips(req, "u1").toArray().filter((s) => s.reason === "compile-error");
-    expect(quint).toEqual([{
+    expect(quint.map((s) => ({ ...s, target: s.target.asString() }))).toEqual([{
       target: "OB-1",
       reason: "compile-error",
       unit: "u1",

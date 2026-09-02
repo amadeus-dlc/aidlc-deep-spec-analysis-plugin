@@ -1,3 +1,4 @@
+import { TargetIds } from "../../kernel/domain/index.ts";
 // refinement が見る要件形式モデル（契約1）のビュー。requirements コンテキスト
 // とは別の寛容プロファイル（background / temporal / ears を運ばない・不在や
 // 不読は null）で、refinement 検査に必要な面だけを型で持つ。hash は生 IR の
@@ -72,8 +73,8 @@ export class RefinementRequirements {
 
   // 旧 entry の reqTargets（義務 → シナリオの宣言順・未ソート——最終文書は
   // compose が正準ソートする）。
-  allTargetIds(): string[] {
-    return [...this.#obligations.toArray().map((o) => o.id().asString()), ...this.#scenarios.toArray().map((s) => s.id().asString())];
+  allTargetIds(): TargetIds {
+    return TargetIds.of([...this.#obligations.toArray().map((o) => o.id().asTargetId()), ...this.#scenarios.toArray().map((s) => s.id().asTargetId())]);
   }
 
   frRefsOf(id: string): readonly string[] {

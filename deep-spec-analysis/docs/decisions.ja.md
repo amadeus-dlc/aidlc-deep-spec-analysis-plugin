@@ -1412,3 +1412,14 @@ language、`FrRefClaim.owner`——を除いてすべて違反。着手時の全
 形をキーにした索引 map（DP の門の内側の `ReadonlyMap<string, …>`）、分類
 文字列（`kind`、`method`、`nature`、`pattern`）、doctor の行、裁定が保留した
 数値メタデータ。DATA_MODEL_DEBT は不変——残債は 122 中 98。
+
+波 12（同 PR）: design と refinement の skip 語彙が `TargetId` を話す。
+`DesignSkipped.target`、`DesignUnit.allTargets`、`RefinementRequirements.
+allTargetIds` がプリミティブを運び（設計機械 id は `asTargetId` を得る。要件
+id は既に持っていた）、design の skip は `compareTo` で並び、縮退文書・クロス
+チェック・quint／SMT の設計ユースケース・refinement の計画とソルバ事実は
+文字列を組む代わりに命じ、シリアライザは再構成する。`SiblingVerdictFinding`
+は生配列の代わりに `FrRefs` と lowered id（`LoweredId[]`）を運び、remap は
+lowering 索引がまだ文字列キーである唯一の境界で `asString()` を通す。台帳
+から primitive フィールド記述子 3 件が消えた（残 104）。DATA_MODEL_DEBT は
+122 中 98 のまま。

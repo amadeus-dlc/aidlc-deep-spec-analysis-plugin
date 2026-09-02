@@ -1,5 +1,6 @@
 import { err, ok } from "../../kernel/infrastructure/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
+import { TargetId } from "../../kernel/domain/index.ts";
 
 type DesignMachineTokenError = { readonly kind: "empty-machine-token"; readonly raw: string };
 
@@ -25,5 +26,10 @@ export class DesignMachineId {
 
   asString(): string {
     return this.#value;
+  }
+
+  // 機械 id は検査対象 id でもある（skip の target 面）。
+  asTargetId(): TargetId {
+    return TargetId.reconstitute(this.#value);
   }
 }

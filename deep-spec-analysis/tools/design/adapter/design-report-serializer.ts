@@ -4,7 +4,7 @@
 // `JSON.stringify(・, null, 2) + "\n"` の描画・findings スキーマ自己検証・
 // 降格文言（golden 凍結）は本モジュールの責務。
 
-import { BackendName, ContentHash, FrRefs, IrVersion, TargetIds, type ArtifactPath } from "../../kernel/domain/index.ts";
+import { BackendName, ContentHash, FrRefs, IrVersion, TargetIds, type ArtifactPath, TargetId } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
 import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
@@ -52,7 +52,7 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
     return out as Json;
   });
   ordered.skipped = report.skipped().toArray().map((sk) => {
-    const out: { [k: string]: Json } = { target: sk.target, reason: sk.reason, unit: sk.unit };
+    const out: { [k: string]: Json } = { target: sk.target.asString(), reason: sk.reason, unit: sk.unit };
     if (sk.detail !== undefined) out.detail = sk.detail;
     return out as Json;
   });
@@ -120,7 +120,7 @@ export function parseSiblingDesignReportDocument(
     skipped: DesignSkips.of(
       skipped.map((entry) => {
         const sk: DesignSkipped = {
-          target: typeof entry.target === "string" ? entry.target : "",
+          target: TargetId.reconstitute(typeof entry.target === "string" ? entry.target : ""),
           reason: typeof entry.reason === "string" ? entry.reason : "",
           unit: typeof entry.unit === "string" ? entry.unit : "",
         };

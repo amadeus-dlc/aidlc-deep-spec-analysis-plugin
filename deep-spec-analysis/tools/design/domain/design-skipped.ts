@@ -1,5 +1,7 @@
+import type { TargetId } from "../../kernel/domain/index.ts";
+
 export interface DesignSkipped {
-  target: string;
+  target: TargetId;
   reason: string;
   unit: string;
   detail?: string;

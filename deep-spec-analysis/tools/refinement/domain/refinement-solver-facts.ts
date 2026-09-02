@@ -54,7 +54,7 @@ export class RefinementSolverFacts {
     for (const [queryId, p] of this.#pending) {
       const r = results.verdictOf(queryId);
       if (!r || r.isUndecided()) {
-        skipped.push({ target: p.reqId.asString(), reason: "timeout", unit: unitName, detail: `refinement query ${queryId} exceeded the solver budget or errored` });
+        skipped.push({ target: p.reqId.asTargetId(), reason: "timeout", unit: unitName, detail: `refinement query ${queryId} exceeded the solver budget or errored` });
         continue;
       }
       if (p.kind === "invariant") {

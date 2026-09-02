@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
 import type { Json } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, FrRefs, TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath } from "../tools/kernel/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -133,7 +133,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
               if (candidates.length === 0) continue;
               expect(method).not.toBe("bounded");
               skipped.push({
-                target: sm.id().asString(),
+                target: sm.id().asTargetId(),
                 reason: "capability",
                 unit: u.name(),
                 detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
@@ -424,7 +424,9 @@ describe("remap (design vocabulary attribution)", () => {
     ({
       kind: "readable",
       method: "exhaustive",
-      findings: SiblingVerdictFindings.of((input.findings ?? []) as never),
+      findings: SiblingVerdictFindings.of(
+        (input.findings ?? []).map((f) => ({ ...f, frRefs: FrRefs.of(f.frRefs), targets: f.targets.map((t) => LoweredId.reconstitute(t)) })) as never,
+      ),
       skipped: SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => ({ ...k, target: LoweredId.reconstitute(k.target) }))),
     });
 
@@ -471,7 +473,7 @@ describe("remap (design vocabulary attribution)", () => {
       ],
     }));
     expect(out.findings.toArray()).toEqual([]);
-    expect(out.skipped.toArray().map((s) => `${s.target}:${s.reason}`)).toEqual(["TR-1:waived", "TR-2:waived"]);
+    expect(out.skipped.toArray().map((s) => `${s.target.asString()}:${s.reason}`)).toEqual(["TR-1:waived", "TR-2:waived"]);
     expect(out.skipped.toArray()[0]?.detail).toBe(
       "machine SM-1 declares deterministic: false — the same-(state,trigger) overlap check is waived by the model",
     );
@@ -496,7 +498,7 @@ describe("remap (design vocabulary attribution)", () => {
     expect(out.findings.toArray()[0]?.targets().toStrings()).toEqual(["DSC-1", "TR-1"]);
     expect(out.findings.toArray()[0]?.detail()).toBe("No rule for TR-1 applies");
     expect(out.findings.toArray()[0]?.witness()).toEqual({ core: ["g_TR_1", "ty_x"] });
-    expect(out.skipped.toArray().map((s) => `${s.target}:${s.reason}`)).toEqual(["TR-1:timeout", "DSC-1:capability"]);
+    expect(out.skipped.toArray().map((s) => `${s.target.asString()}:${s.reason}`)).toEqual(["TR-1:timeout", "DSC-1:capability"]);
     expect(out.skipped.toArray()[0]?.detail).toBe("check for TR-1 timed out");
   });
 });
@@ -540,11 +542,11 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(sorted[1]?.detail()).toBe("c");
     expect(sorted[3]?.unit()).toBe("u1");
     const skips = DesignSkips.of([
-      { target: "TR-2", reason: "timeout", unit: "u2" },
-      { target: "TR-10", reason: "waived", unit: "u1" },
-      { target: "TR-2", reason: "capability", unit: "u1" },
+      { target: TargetId.reconstitute("TR-2"), reason: "timeout", unit: "u2" },
+      { target: TargetId.reconstitute("TR-10"), reason: "waived", unit: "u1" },
+      { target: TargetId.reconstitute("TR-2"), reason: "capability", unit: "u1" },
     ]).sortedCanonically().toArray();
-    expect(skips.map((s) => `${s.unit}:${s.target}:${s.reason}`)).toEqual([
+    expect(skips.map((s) => `${s.unit}:${s.target.asString()}:${s.reason}`)).toEqual([
       "u1:TR-2:capability",
       "u1:TR-10:waived",
       "u2:TR-2:timeout",
@@ -608,7 +610,7 @@ describe("report ordering, cross-check, and degradations", () => {
         irHash: HASH,
         method: "exhaustive",
         findings: DesignFindings.of(violated ? [f("scenario-violation", "u1", ["DSC-1"], "x")] : []),
-        skipped: DesignSkips.of(skipKey ? [{ target: "DSC-1", reason: "capability", unit: "u1" }] : []),
+        skipped: DesignSkips.of(skipKey ? [{ target: TargetId.reconstitute("DSC-1"), reason: "capability", unit: "u1" }] : []),
         inputs: null,
         checked: null,
         crossChecked: null,
@@ -647,7 +649,7 @@ describe("report ordering, cross-check, and degradations", () => {
     });
     const m = model([u1], "2.0.0");
     expect(m.supportsMajor(1)).toBe(false);
-    expect(u1.allTargets()).toEqual(["DOB-1", "DSC-1", "TR-1"]);
+    expect(u1.allTargets().toStrings()).toEqual(["DOB-1", "DSC-1", "TR-1"]);
     expect(u1.enumValuesOf("T.s")).toEqual([]);
 
     const unread = DesignReport.irUnreadable(DesignReportId.of(ap("/v"), "smt"), "exhaustive", "design IR carries no units[]");
@@ -656,7 +658,7 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(unread.irHash().equals(ContentHash.ofText(""))).toBe(true);
 
     const mismatch = DesignReport.versionMismatch(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.reconstitute("a".repeat(64)), "simulation");
-    expect(mismatch.skipped().toArray().map((s) => `${s.unit}:${s.target}:${s.reason}`)).toEqual([
+    expect(mismatch.skipped().toArray().map((s) => `${s.unit}:${s.target.asString()}:${s.reason}`)).toEqual([
       "u1:DOB-1:ir-version-mismatch",
       "u1:DSC-1:ir-version-mismatch",
       "u1:TR-1:ir-version-mismatch",
@@ -731,7 +733,7 @@ describe("lowered collections and the lowering index (first-class operations)", 
   });
 
   test("sibling verdict collections keep document order under add", () => {
-    const finding = { kind: "conflict", frRefs: [], targets: ["OB-1"], witness: { core: [] }, detail: "x" };
+    const finding = { kind: "conflict", frRefs: FrRefs.of([]), targets: [LoweredId.reconstitute("OB-1")], witness: { core: [] }, detail: "x" };
     const findings = SiblingVerdictFindings.of([]).add(finding);
     expect([...findings]).toEqual([finding]);
     expect(findings.toArray()).toEqual([finding]);
