@@ -13,7 +13,7 @@ import type { DesignUnit } from "../../design/domain/index.ts";
 import { DesignSkipped } from "../../design/domain/index.ts";
 import { AlphaContext } from "./alpha-context.ts";
 import { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
-import { type RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
+import { RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
 import { type AttributeMapping } from "./attribute-mapping.ts";
 import { type RefinementUnitMap } from "./refinement-unit-map.ts";
 import { type TransitionRef } from "./transition-ref.ts";
@@ -57,16 +57,16 @@ export class UnitRefinementPlan {
           kind: "mapping-gap",
           frRefs: FrRefs.of(IdOrder.sortedUnique(frRefs, IdOrder.compare)),
           targets: TargetIds.reconstitute(IdOrder.sortedUnique(targets, IdOrder.compare)),
-          witness: { refs: [{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit.asString()}]` }] },
+          witness: { refs: [{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }] },
           unit: u.name(),
           detail,
         }),
       );
     };
     const byReq = new Map<string, AttributeMapping>();
-    const unmapped = unitMap.unmapped;
+    const unmapped = unitMap.unmapped();
 
-    for (const m of unitMap.attrMap) {
+    for (const m of unitMap.attrMap()) {
       const reqPath = m.req().asString();
       const gapTarget = [`attr:${reqPath.replace(/[^A-Za-z0-9_./-]/g, "-")}`];
       if (byReq.has(reqPath)) gap(gapTarget, `attrMap maps "${reqPath}" more than once`);
@@ -79,8 +79,8 @@ export class UnitRefinementPlan {
       // 判断は写像へ命じる（波5）——plan は gap 文言（凍結面）だけを所有する。
       if (m.isEnumCases()) {
         const from = m.enumFrom() ?? "";
-        if (reqAttr.kind !== "enum") {
-          gap(gapTarget, `attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind}`);
+        if (!reqAttr.isEnum()) {
+          gap(gapTarget, `attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind()}`);
         }
         if (!u.attrPaths().has(from)) {
           gap(gapTarget, `enumMap.from "${from}" is not a design attribute of unit ${u.name()}`);
@@ -95,7 +95,7 @@ export class UnitRefinementPlan {
         if (missing.length > 0) {
           gap(gapTarget, `enumMap for "${reqPath}" is not total over "${from}": missing case(s) ${missing.join(", ")}`);
         }
-        const badResults = m.producedValuesOutside(reqAttr.values);
+        const badResults = m.producedValuesOutside(reqAttr.declaredValues());
         if (badResults.length > 0) {
           gap(gapTarget, `enumMap for "${reqPath}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`);
         }
@@ -110,10 +110,10 @@ export class UnitRefinementPlan {
 
     // 属性の閉包：要件の全属性は写像されるか unmapped[] に居る。
     for (const a of req.attributes().sortedByPath()) {
-      if (!byReq.has(a.path.asString()) && !unmapped.covers(a.path)) {
+      if (!byReq.has(a.path().asString()) && !unmapped.covers(a.path())) {
         gap(
-          [`attr:${a.path.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`],
-          `requirements attribute "${a.path.asString()}" is neither mapped by attrMap nor listed in unmapped[] — silence is a contract violation`,
+          [`attr:${a.path().asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`],
+          `requirements attribute "${a.path().asString()}" is neither mapped by attrMap nor listed in unmapped[] — silence is a contract violation`,
         );
       }
     }
@@ -151,19 +151,20 @@ export class UnitRefinementPlan {
       }
       if (ob.isEvent()) {
         const trigger = ob.trigger();
-        const entry = trigger === undefined ? undefined : unitMap.eventMap.ofTrigger(trigger);
-        if (entry?.waived) {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.waived(entry.waived.reason));
+        const entry = trigger === undefined ? undefined : unitMap.eventMappingOf(trigger);
+        const waiver = entry?.waiverReason() ?? null;
+        if (waiver !== null) {
+          obligationStatus.set(ob.id().asString(), RefinementStatus.waived(waiver));
           continue;
         }
         const covG = attrsCovered(ob.guard());
         const covE = attrsCovered(ob.effect());
         const missing = IdOrder.sortedUnique([...covG.missing, ...covE.missing], IdOrder.compare);
-        if (!entry || entry.transitions.isEmpty()) {
+        if (!entry || entry.transitions().isEmpty()) {
           obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`requirements event trigger "${trigger === undefined ? "?" : trigger.asString()}" has no eventMap entry (map it to design transitions or waive it)`));
           continue;
         }
-        const badIds = entry.transitions.unknownAmong(designIds);
+        const badIds = entry.transitions().unknownAmong(designIds);
         if (badIds.length > 0) {
           obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`eventMap for "${trigger?.asString()}" names unknown design id(s) ${badIds.join(", ")}`));
           continue;
@@ -177,7 +178,7 @@ export class UnitRefinementPlan {
           continue;
         }
         obligationStatus.set(ob.id().asString(), RefinementStatus.checkable());
-        eventTransitions.set(ob.id().asString(), entry.transitions.sortedCanonically());
+        eventTransitions.set(ob.id().asString(), entry.transitions().sortedCanonically());
         continue;
       }
       obligationStatus.set(ob.id().asString(), RefinementStatus.capability(`nature "${ob.nature().asString()}" has no refinement check`));
@@ -315,7 +316,7 @@ export class UnitRefinementPlan {
       const assertion = ob.assertion();
       if (!ob.isInvariantLike() || assertion === undefined) continue;
       try {
-        out.push({ reqId: ob.id(), frRefs: ob.frRefs(), expr: this.#ctx.substitute(assertion, false) });
+        out.push(RefinementQuintInvariant.of(ob.id(), ob.frRefs(), this.#ctx.substitute(assertion, false)));
       } catch {
         // quintStatusSkips が compile-error skip として記録する（SMT 側と対）。
       }

@@ -19,7 +19,7 @@ import type { Json } from "../tools/kernel/adapter/index.ts";
 import { SystemClock } from "../tools/kernel/adapter/index.ts";
 import { TriggerName, FrRefs, ContentHash, ArtifactPath, TargetId } from "../tools/kernel/domain/index.ts";
 import type { Expression } from "../tools/kernel/domain/index.ts";
-import { AttributeBound, AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "../tools/requirements/domain/index.ts";
+import { AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "../tools/requirements/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -28,6 +28,8 @@ function ap(raw: string): ArtifactPath {
 }
 
 import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, DesignMachine, DesignObligation, DesignScenario, DesignIgnore, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId,
+
+  LoweredId,
 } from "../tools/design/domain/index.ts";
 import { type DesignUnit as DesignUnitType } from "../tools/design/domain/index.ts";
 import {
@@ -64,13 +66,15 @@ import {
   UnmappedDeclarations,
   UnmappedTargetRef,
   AttributeMapping,
-  type EventMapping,
-  type RefinementAttribute,
+  EventMapping,
+  RefinementAttribute,
+  RefinementQuintInvariant,
+  RefinementUnitMap,
+  UnmappedTarget,
   RefinementObligation,
   RefinementProbe,
   RefinementQueryVerdict,
   RefinementScenario,
-  type RefinementUnitMap,
   RefinementMaterials,
   RefinementMapId,
   RefinementStatus,
@@ -273,7 +277,7 @@ function unit(seed: {
 
 // テストの読みやすさのため素の配列・素の id で書き、ここで一括して DP と
 // コレクションに包む（アダプタの門と同型）。
-type RawReqAttribute = Omit<RefinementAttribute, "path" | "min" | "max" | "values"> & { path: string; min?: number; max?: number; values?: string[] };
+type RawReqAttribute = { path: string; kind: "bool" | "int" | "enum"; min?: number; max?: number; values?: string[] };
 type RawReqObligation = Omit<Parameters<typeof RefinementObligation.reconstitute>[0], "id" | "nature" | "frRefs" | "trigger"> & { id: string; nature: string; frRefs: string[]; trigger?: string };
 type RawReqScenario = Omit<Parameters<typeof RefinementScenario.reconstitute>[0], "id" | "frRefs" | "event"> & { id: string; frRefs: string[]; event?: { trigger: string } };
 function requirements(seed: {
@@ -285,11 +289,9 @@ function requirements(seed: {
     id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
     hash: ContentHash.reconstitute("a".repeat(64)),
     attributes: RefinementAttributes.of(
-      (seed.attributes ?? []).map((a) => ({
-        ...a,
+      (seed.attributes ?? []).map((a) => RefinementAttribute.reconstitute({
         path: AttributePath.reconstitute(a.path),
-        min: a.min === undefined ? undefined : AttributeBound.reconstitute(a.min),
-        max: a.max === undefined ? undefined : AttributeBound.reconstitute(a.max),
+        kind: a.kind,
         values: a.values === undefined ? undefined : ReqAttributeValues.of(a.values),
       })),
     ),
@@ -317,7 +319,7 @@ type RawAttributeMapping =
   | { kind: "expression"; req: string; expr: Expression }
   | { kind: "enum-cases"; req: string; from: string; cases: { [designValue: string]: string } }
   | { kind: "unspecified"; req: string };
-type RawEventMapping = Omit<EventMapping, "reqTrigger" | "transitions"> & { reqTrigger: string; transitions: string[] };
+type RawEventMapping = { reqTrigger: string; transitions: string[]; waived?: { reason: string } };
 type RawUnmappedTarget = { target: string; reason: string };
 function wrapMapping(m: RawAttributeMapping): AttributeMapping {
   const req = AttributePath.reconstitute(m.req);
@@ -336,16 +338,16 @@ function refUnitMap(seed: {
   eventMap?: RawEventMapping[];
   unmapped?: RawUnmappedTarget[];
 }): RefinementUnitMap {
-  return {
+  return RefinementUnitMap.reconstitute({
     unit: DesignUnitId.of(seed.unit ?? "u1"),
     attrMap: AttributeMappings.of((seed.attrMap ?? []).map(wrapMapping)),
     eventMap: EventMappings.of(
-      (seed.eventMap ?? []).map((e) => ({ ...e, reqTrigger: TriggerName.reconstitute(e.reqTrigger), transitions: TransitionRefs.of(e.transitions.map((t) => TransitionRef.reconstitute(t))) })),
+      (seed.eventMap ?? []).map((e) => EventMapping.reconstitute({ ...e, reqTrigger: TriggerName.reconstitute(e.reqTrigger), transitions: TransitionRefs.of(e.transitions.map((t) => TransitionRef.reconstitute(t))) })),
     ),
     unmapped: UnmappedDeclarations.of(
-      (seed.unmapped ?? []).map((un) => ({ ...un, target: UnmappedTargetRef.reconstitute(un.target) })),
+      (seed.unmapped ?? []).map((un) => UnmappedTarget.reconstitute({ ...un, target: UnmappedTargetRef.reconstitute(un.target) })),
     ),
-  };
+  });
 }
 
 const exprMapping = (req: string, path: string) =>
@@ -561,8 +563,8 @@ describe("plan classification and gap findings", () => {
   test("quint extras carry alpha(P) for checkable invariants only", () => {
     const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.reconstitute("m.md"));
     const extras = plan.quintInvariants(req);
-    expect(extras.toArray().map((e) => e.reqId.asString())).toEqual(["OB-1"]);
-    expect(extras.toArray()[0]?.expr).toEqual({ op: "ref", path: "D.flag" });
+    expect(extras.toArray().map((e) => e.reqId().asString())).toEqual(["OB-1"]);
+    expect(extras.toArray()[0]?.loweredAs(LoweredId.reconstitute("OB-9")).assertion()).toEqual({ op: "ref", path: "D.flag" });
   });
 });
 
@@ -598,12 +600,13 @@ describe("event catalog and effect assignments", () => {
       ],
     });
     const catalog = DesignEventCatalog.of(u);
-    expect(catalog.eventOf("TR-1")?.guard.op).toBe("and");
-    expect(catalog.eventOf("TR-1")?.effectAssign.rhsOf("D.s")).toEqual({ op: "enum", value: "b" });
-    expect(catalog.eventOf("TR-1")?.effectAssign.rhsOf("D.n")).toEqual({ op: "int", value: 1 });
+    expect(catalog.eventOf("TR-1")?.guard().op).toBe("and");
+    expect(catalog.eventOf("TR-1")?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
+    expect(catalog.eventOf("TR-1")?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 1 });
     // 分解不能な追加効果は暗黙代入だけが残る（設計パスが報告する）。
-    expect(catalog.eventOf("TR-2")?.effectAssign.count()).toBe(1);
-    expect(catalog.eventOf("DOB-1")?.effectAssign.rhsOf("D.n")).toEqual({ op: "int", value: 2 });
+    expect(catalog.eventOf("TR-2")?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
+    expect(catalog.eventOf("TR-2")?.assignedRhsOf("D.n")).toBe(undefined);
+    expect(catalog.eventOf("DOB-1")?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 2 });
     // 分解不能な event 義務はカタログに載らない。
     expect(catalog.eventOf("DOB-2")).toBe(null);
     expect(catalog.eventOf("DOB-3")).toBe(null);
@@ -730,16 +733,18 @@ describe("refinement collections (first-class operations)", () => {
     expect(TransitionRef.parse("").ok).toBe(false);
 
     const trig = (raw: string): TriggerName => TriggerName.reconstitute(raw);
-    const em = EventMappings.of([]).add({ reqTrigger: trig("go"), transitions: TransitionRefs.of([tref("TR-1")]) })
-      .add({ reqTrigger: trig("go"), transitions: TransitionRefs.of([tref("TR-9")]) });
+    const em = EventMappings.of([]).add(EventMapping.reconstitute({ reqTrigger: trig("go"), transitions: TransitionRefs.of([tref("TR-1")]) }))
+      .add(EventMapping.reconstitute({ reqTrigger: trig("go"), transitions: TransitionRefs.of([tref("TR-9")]), waived: { reason: "later" } }));
     expect([...em].length).toBe(2);
     // 重複トリガは最後の宣言が勝つ（旧 new Map の凍結挙動）。
-    expect([...(em.ofTrigger(trig("go"))?.transitions ?? TransitionRefs.of([]))].map((t) => t.asString())).toEqual(["TR-9"]);
+    expect([...(em.ofTrigger(trig("go"))?.transitions() ?? TransitionRefs.of([]))].map((t) => t.asString())).toEqual(["TR-9"]);
+    expect(em.ofTrigger(trig("go"))?.waiverReason()).toBe("later");
+    expect(em.toArray()[0]?.waiverReason()).toBe(null);
     expect(em.ofTrigger(trig("ghost"))).toBe(undefined);
     expect(em.toArray().length).toBe(2);
 
     const uref = (raw: string): UnmappedTargetRef => UnmappedTargetRef.reconstitute(raw);
-    const un = UnmappedDeclarations.of([{ target: uref("R.x"), reason: "first" }]).add({ target: uref("R.x"), reason: "last" });
+    const un = UnmappedDeclarations.of([UnmappedTarget.reconstitute({ target: uref("R.x"), reason: "first" })]).add(UnmappedTarget.reconstitute({ target: uref("R.x"), reason: "last" }));
     expect([...un].length).toBe(2);
     expect(un.covers("R.x")).toBe(true);
     expect(un.covers("R.y")).toBe(false);
@@ -767,16 +772,19 @@ describe("refinement collections (first-class operations)", () => {
     expect(vals.toArray()).toEqual(["open", "closed"]);
 
     const apath = (raw: string): AttributePath => AttributePath.reconstitute(raw);
-    const attrs = RefinementAttributes.of([{ path: apath("R.b"), kind: "bool" }])
-      .add({ path: apath("R.a"), kind: "int" })
-      .add({ path: apath("R.a"), kind: "bool" });
+    const attrs = RefinementAttributes.of([RefinementAttribute.reconstitute({ path: apath("R.b"), kind: "bool" })])
+      .add(RefinementAttribute.reconstitute({ path: apath("R.a"), kind: "int" }))
+      .add(RefinementAttribute.reconstitute({ path: apath("R.a"), kind: "bool", values: ReqAttributeValues.of(["x"]) }));
     expect([...attrs].length).toBe(3);
     expect(attrs.covers("R.a")).toBe(true);
     expect(attrs.covers("R.z")).toBe(false);
     // path 索引は最後の宣言が勝つ。
-    expect(attrs.byPath("R.a")?.kind).toBe("bool");
+    expect(attrs.byPath("R.a")?.kind()).toBe("bool");
+    expect(attrs.byPath("R.a")?.isEnum()).toBe(false);
+    expect(attrs.byPath("R.a")?.declaredValues()?.toArray()).toEqual(["x"]);
+    expect(attrs.byPath("R.b")?.isAt(apath("R.b"))).toBe(true);
     expect(attrs.byPath("R.z")).toBe(undefined);
-    expect(attrs.sortedByPath().toArray().map((a) => a.path.asString())).toEqual(["R.a", "R.a", "R.b"]);
+    expect(attrs.sortedByPath().toArray().map((a) => a.path().asString())).toEqual(["R.a", "R.a", "R.b"]);
 
     const rob = (id: string, nature: string) => RefinementObligation.reconstitute({ id: ObligationId.reconstitute(id), nature: ObligationNature.reconstitute(nature), frRefs: FrRefs.of([]) });
     const obs = RefinementObligations.of([rob("OB-2", "invariant")])
@@ -798,11 +806,14 @@ describe("refinement collections (first-class operations)", () => {
   });
 
   test("quint invariant collection knows its req ids", () => {
-    const inv = RefinementQuintInvariants.of([]).add({ reqId: ObligationId.reconstitute("OB-1"), frRefs: FrRefs.of([]), expr: { op: "bool", value: true } });
+    const inv = RefinementQuintInvariants.of([]).add(RefinementQuintInvariant.of(ObligationId.reconstitute("OB-1"), FrRefs.of(["FR-1"]), { op: "bool", value: true }));
     expect(inv.isEmpty()).toBe(false);
     expect([...inv].length).toBe(1);
     expect([...inv.reqIds()]).toEqual(["OB-1"]);
-    expect(inv.toArray()[0]?.reqId.asString()).toBe("OB-1");
+    expect(inv.toArray()[0]?.reqId().asString()).toBe("OB-1");
+    expect(inv.toArray()[0]?.reqTarget().asString()).toBe("OB-1");
+    const lowered = inv.toArray()[0]?.loweredAs(LoweredId.reconstitute("OB-7"));
+    expect(lowered?.id().asString()).toBe("OB-7");
   });
 });
 

@@ -9,7 +9,7 @@ import { DesignMachines } from "../../design/domain/index.ts";
 import type { DesignUnit } from "../../design/domain/index.ts";
 import { EffectAssignments } from "./effect-assignments.ts";
 import { DesignAssignments } from "./design-assignments.ts";
-import type { DesignEvent } from "./design-event.ts";
+import { DesignEvent } from "./design-event.ts";
 
 
 
@@ -42,7 +42,7 @@ export class DesignEventCatalog {
             // シミュレーションは下流の SMT コンパイルで fail closed になる。
           }
         }
-        out.set(tr.id().asString(), { guard, effectAssign: DesignAssignments.of(effectAssign) });
+        out.set(tr.id().asString(), DesignEvent.of(guard, DesignAssignments.of(effectAssign)));
       }
     }
     for (const ob of u.obligations()) {
@@ -58,7 +58,7 @@ export class DesignEventCatalog {
       } catch {
         continue;
       }
-      out.set(ob.id().asString(), { guard: event.guard, effectAssign: DesignAssignments.of(effectAssign) });
+      out.set(ob.id().asString(), DesignEvent.of(event.guard, DesignAssignments.of(effectAssign)));
     }
     return new DesignEventCatalog(out);
   }

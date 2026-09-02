@@ -25,7 +25,7 @@ export class EventMappings {
   ofTrigger(reqTrigger: TriggerName): EventMapping | undefined {
     let found: EventMapping | undefined;
     for (const e of this.#values) {
-      if (e.reqTrigger.equals(reqTrigger)) found = e;
+      if (e.isForTrigger(reqTrigger)) found = e;
     }
     return found;
   }

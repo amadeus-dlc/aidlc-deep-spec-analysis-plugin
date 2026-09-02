@@ -32,7 +32,7 @@ export class RefinementQuintInvariants {
   }
 
   reqIds(): ReadonlySet<string> {
-    return new Set(this.#values.map((e) => e.reqId.asString()));
+    return new Set(this.#values.map((e) => e.reqId().asString()));
   }
 
   toArray(): readonly RefinementQuintInvariant[] {

@@ -1,7 +1,6 @@
-import type { RefTokenCarrier } from "./ref-token-carrier.ts";
 import type { UnmappedTarget } from "./unmapped-target.ts";
 
-function tokenOf(carrier: RefTokenCarrier): string {
+function tokenOf(carrier: string | { asString(): string }): string {
   return typeof carrier === "string" ? carrier : carrier.asString();
 }
 
@@ -26,20 +25,20 @@ export class UnmappedDeclarations {
     yield* this.#values;
   }
 
-  covers(target: RefTokenCarrier): boolean {
+  covers(target: string | { asString(): string }): boolean {
     const t = tokenOf(target);
-    return this.#values.some((x) => x.target.asString() === t);
+    return this.#values.some((x) => x.isFor(t));
   }
 
-  coversAll(targets: readonly RefTokenCarrier[]): boolean {
+  coversAll(targets: readonly (string | { asString(): string })[]): boolean {
     return targets.every((t) => this.covers(t));
   }
 
-  reasonOf(target: RefTokenCarrier): string | undefined {
+  reasonOf(target: string | { asString(): string }): string | undefined {
     const t = tokenOf(target);
     let found: string | undefined;
     for (const x of this.#values) {
-      if (x.target.asString() === t) found = x.reason;
+      if (x.isFor(t)) found = x.reason();
     }
     return found;
   }

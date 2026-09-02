@@ -1554,3 +1554,15 @@ readable）が文書 union を置き換え、判定の再割り当ては `match`
 ケースは `match` で解釈し、読めた map の成果物パスは文字列ではなく
 `ArtifactPath` で運ぶ——プリミティブ台帳からフィールドが 1 つ消える。台帳から
 3 エントリを回収し、残債は 122 中 37。プリミティブ台帳の上限は 87 へ下がる。
+
+波 24（同 PR）: refinement map の record 群が自分の判断を所有する。
+`RefinementUnitMap` は `isForUnit` に答え、トリガのイベント写像を計画へ渡す
+（`eventMappingOf`）。`EventMapping` は計画が調べていた optional な `waived`
+record の代わりに `isForTrigger` と `waiverReason` に答える。`UnmappedTarget`
+は `isFor` に答え、宣言集合はもう素のトークンを比較しない。
+`RefinementAttribute` は `isAt`・`isEnum`・`declaredValues` に答え、解析される
+だけで誰も読まなかった `min`／`max` を落とす。`DesignEvent` は SMT コンパイラ
+へガードと属性の代入右辺（`assignedRhsOf`）を渡し、`RefinementQuintInvariant`
+は対象を名乗り、quint パスが載せる lowering 上の不変量義務を自分で作る
+（`loweredAs`）——ユースケースはもう組み立てない。`RefTokenCarrier` 別名は
+宣言集合の門の署名へ溶ける。台帳から 7 エントリを回収し、残債は 122 中 30。
