@@ -28,7 +28,7 @@ import {
   DesignMachines,
   DesignObligations,
   DesignScenarios,
-  type DesignMachine,
+  DesignMachine,
   type DesignModelComposition,
   DesignObligation,
   DesignScenario,
@@ -94,15 +94,17 @@ export function parseDesignModel(raw: Json): Omit<DesignModelComposition, "id" |
         if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
         ignores.push(DesignIgnore.reconstitute({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger), reason: typeof ig.reason === "string" ? ig.reason : "" }));
       }
-      machines.push({
-        id: DesignMachineId.reconstitute(sm.id),
-        entity: DesignEntityName.reconstitute(sm.entity),
-        attribute: DesignAttributeName.reconstitute(sm.attribute),
-        initial: InitialStates.of(strArr(sm.initial)),
-        transitions: DesignTransitions.of(transitions),
-        ignores: DesignIgnores.of(ignores),
-        deterministic: sm.deterministic !== false,
-      });
+      machines.push(
+        DesignMachine.reconstitute({
+          id: DesignMachineId.reconstitute(sm.id),
+          entity: DesignEntityName.reconstitute(sm.entity),
+          attribute: DesignAttributeName.reconstitute(sm.attribute),
+          initial: InitialStates.of(strArr(sm.initial)),
+          transitions: DesignTransitions.of(transitions),
+          ignores: DesignIgnores.of(ignores),
+          deterministic: sm.deterministic !== false,
+        }),
+      );
     }
     const scenarios: DesignScenario[] = [];
     for (const sc of Array.isArray(rawUnit.scenarios) ? rawUnit.scenarios : []) {

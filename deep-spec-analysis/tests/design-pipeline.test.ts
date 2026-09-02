@@ -46,7 +46,7 @@ import {
   DesignScenarios,
   type DesignBackgroundAssumption,
   DesignIgnore,
-  type DesignMachine,
+  DesignMachine,
   DesignObligation,
   DesignScenario,
   DesignTransition,
@@ -55,7 +55,7 @@ import {
   DesignIgnores,
   DesignTransitions,
   InitialStates,
-  type DesignFinding,
+  DesignFinding,
   type DesignModelComposition,
   type DesignSkipped,
   type SiblingVerdictDocument,
@@ -128,18 +128,15 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
           if (backend === "quint") {
             // entry と同じ到達性検出フェーズ：simulation では capability skip。
             for (const sm of u.machines().sortedById()) {
-              const attrPath = lowered.index().attrPathOfMachine(sm.id.asString()) ?? `${sm.entity.asString()}.${sm.attribute.asString()}`;
-              const candidates = u
-                .enumValuesOf(attrPath)
-                .filter((s) => !sm.initial.includes(s))
-                .sort();
+              const attrPath = lowered.index().attrPathOfMachine(sm.id().asString()) ?? `${sm.entity().asString()}.${sm.attribute().asString()}`;
+              const candidates = sm.nonInitialCandidates(u.enumValuesOf(attrPath));
               if (candidates.length === 0) continue;
               expect(method).not.toBe("bounded");
               skipped.push({
-                target: sm.id.asString(),
+                target: sm.id().asString(),
                 reason: "capability",
                 unit: u.name(),
-                detail: `unreachable-state detection for ${sm.id.asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
+                detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
               });
             }
           }
@@ -186,7 +183,7 @@ type RawDesignObligation = Omit<Parameters<typeof DesignObligation.reconstitute>
 };
 type RawDesignTransition = Omit<Parameters<typeof DesignTransition.reconstitute>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
 type RawDesignIgnore = Omit<Parameters<typeof DesignIgnore.reconstitute>[0], "trigger"> & { trigger: string };
-type RawDesignMachine = Omit<DesignMachine, "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
+type RawDesignMachine = Omit<Parameters<typeof DesignMachine.reconstitute>[0], "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
   id: string;
   entity: string;
   attribute: string;
@@ -225,17 +222,19 @@ function unit(seed: {
       })),
     ),
     machines: DesignMachines.of(
-      (seed.machines ?? []).map((m) => ({
-        ...m,
-        id: DesignMachineId.reconstitute(m.id),
-        entity: DesignEntityName.reconstitute(m.entity),
-        attribute: DesignAttributeName.reconstitute(m.attribute),
-        initial: InitialStates.of(m.initial),
-        transitions: DesignTransitions.of(
-          m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
-        ),
-        ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
-      })),
+      (seed.machines ?? []).map((m) =>
+        DesignMachine.reconstitute({
+          ...m,
+          id: DesignMachineId.reconstitute(m.id),
+          entity: DesignEntityName.reconstitute(m.entity),
+          attribute: DesignAttributeName.reconstitute(m.attribute),
+          initial: InitialStates.of(m.initial),
+          transitions: DesignTransitions.of(
+            m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
+          ),
+          ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
+        }),
+      ),
     ),
     scenarios: DesignScenarios.of(
       (seed.scenarios ?? []).map((s) => DesignScenario.reconstitute({
@@ -315,7 +314,7 @@ describe("lowering (typed compile-down)", () => {
     expect(low.index().resolveDesignTarget("SC-1").design).toBe("DSC-1");
     expect(low.background().toArray()[0]?.id.asString()).toBe("BG-1");
     expect(low.index().attrPathOfMachine("SM-1")).toBe("Ticket.status");
-    expect(low.index().machineOfTransition("TR-1")?.id.asString()).toBe("SM-1");
+    expect(low.index().machineOfTransition("TR-1")?.id().asString()).toBe("SM-1");
     // 遷移の暗黙ガード：state==from（追加ガードがあれば and 結合）。
     expect(low.obligations().toArray()[2]?.guard).toEqual({
       op: "eq",
@@ -442,8 +441,8 @@ describe("remap (design vocabulary attribution)", () => {
     const out = low.remapVerdicts(u, doc({
       findings: [{ kind: "conflict", frRefs: ["FR-1"], targets: [deadId], witness: { core: [`ant_${deadId.replace("-", "_")}`] }, detail: "x" }],
     }));
-    expect(out.findings.toArray()[0]?.kind).toBe("unreachable");
-    expect(out.findings.toArray()[0]?.detail).toBe(
+    expect(out.findings.toArray()[0]?.kind()).toBe("unreachable");
+    expect(out.findings.toArray()[0]?.detail()).toBe(
       "The guard of TR-1 can never hold under the entity constraints and invariants (witness core attached): the transition is dead.",
     );
   });
@@ -453,13 +452,13 @@ describe("remap (design vocabulary attribution)", () => {
     const oneWay = low.remapVerdicts(u, doc({
       findings: [{ kind: "conflict", frRefs: [], targets: [ids[0]?.[0] as string], witness: { core: [] }, detail: "x" }],
     }));
-    expect(oneWay.findings.toArray()[0]?.kind).toBe("redundancy");
-    expect(oneWay.findings.toArray()[0]?.detail).toContain("is subsumed by");
+    expect(oneWay.findings.toArray()[0]?.kind()).toBe("redundancy");
+    expect(oneWay.findings.toArray()[0]?.detail()).toContain("is subsumed by");
     const mutual = low.remapVerdicts(u, doc({
       findings: ids.map(([id]) => ({ kind: "conflict", frRefs: [], targets: [id], witness: { core: [] }, detail: "x" })),
     }));
     expect(mutual.findings.count()).toBe(1);
-    expect(mutual.findings.toArray()[0]?.detail).toContain("are mutually redundant");
+    expect(mutual.findings.toArray()[0]?.detail()).toContain("are mutually redundant");
   });
 
   test("a same-machine conflict under deterministic:false is waived once per target", () => {
@@ -493,23 +492,24 @@ describe("remap (design vocabulary attribution)", () => {
         { target: "SC-1", reason: "capability" },
       ],
     }));
-    expect(out.findings.toArray()[0]?.targets.toArray()).toEqual(["DSC-1", "TR-1"]);
-    expect(out.findings.toArray()[0]?.detail).toBe("No rule for TR-1 applies");
-    expect(out.findings.toArray()[0]?.witness).toEqual({ core: ["g_TR_1", "ty_x"] });
+    expect(out.findings.toArray()[0]?.targets().toArray()).toEqual(["DSC-1", "TR-1"]);
+    expect(out.findings.toArray()[0]?.detail()).toBe("No rule for TR-1 applies");
+    expect(out.findings.toArray()[0]?.witness()).toEqual({ core: ["g_TR_1", "ty_x"] });
     expect(out.skipped.toArray().map((s) => `${s.target}:${s.reason}`)).toEqual(["TR-1:timeout", "DSC-1:capability"]);
     expect(out.skipped.toArray()[0]?.detail).toBe("check for TR-1 timed out");
   });
 });
 
 describe("report ordering, cross-check, and degradations", () => {
-  const f = (kind: string, unitName: string, targets: string[], detail: string): DesignFinding => ({
-    kind,
-    frRefs: FrRefs.of([]),
-    targets: TargetIds.of(targets),
-    witness: { core: [] },
-    unit: unitName,
-    detail,
-  });
+  const f = (kind: string, unitName: string, targets: string[], detail: string): DesignFinding =>
+    DesignFinding.reconstitute({
+      kind,
+      frRefs: FrRefs.of([]),
+      targets: TargetIds.of(targets),
+      witness: { core: [] },
+      unit: unitName,
+      detail,
+    });
 
   test("the 11-kind order sorts kind, then unit, then targets, then detail; unknown sinks to 99", () => {
     const sorted = DesignFindings.of([
@@ -523,7 +523,7 @@ describe("report ordering, cross-check, and degradations", () => {
       f("mapping-gap", "u1", ["FR-1"], "mg"),
       f("conflict", "u1", ["DOB-1"], "a"),
     ]).sortedCanonically().toArray();
-    expect(sorted.map((x) => x.kind)).toEqual([
+    expect(sorted.map((x) => x.kind())).toEqual([
       "conflict",
       "conflict",
       "unreachable",
@@ -535,9 +535,9 @@ describe("report ordering, cross-check, and degradations", () => {
       "mystery",
     ]);
     // 同 kind・同 unit・同 targets の 2 conflict は detail 昇順（a が c の前）。
-    expect(sorted[0]?.detail).toBe("a");
-    expect(sorted[1]?.detail).toBe("c");
-    expect(sorted[3]?.unit).toBe("u1");
+    expect(sorted[0]?.detail()).toBe("a");
+    expect(sorted[1]?.detail()).toBe("c");
+    expect(sorted[3]?.unit()).toBe("u1");
     const skips = DesignSkips.of([
       { target: "TR-2", reason: "timeout", unit: "u2" },
       { target: "TR-10", reason: "waived", unit: "u1" },
@@ -618,12 +618,12 @@ describe("report ordering, cross-check, and degradations", () => {
       sibling("smt", false),
     ]).crossChecked(DesignReportId.of(ap("/v"), "cross-check"), m, HASH);
     const disagreement = report.findings().toArray()[0];
-    expect(disagreement?.kind).toBe("cross-check-disagreement");
-    expect(disagreement?.frRefs.toArray()).toEqual(["FR-1", "FR-2"]);
-    expect(disagreement?.targets.toArray()).toEqual(["DSC-1"]);
-    expect(disagreement?.witness).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
-    expect(disagreement?.unit).toBe("u1");
-    expect(disagreement?.detail).toBe(
+    expect(disagreement?.kind()).toBe("cross-check-disagreement");
+    expect(disagreement?.frRefs().toArray()).toEqual(["FR-1", "FR-2"]);
+    expect(disagreement?.targets().toArray()).toEqual(["DSC-1"]);
+    expect(disagreement?.witness()).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
+    expect(disagreement?.unit()).toBe("u1");
+    expect(disagreement?.detail()).toBe(
       'Backends "quint" and "smt" disagree on scenario DSC-1 of unit u1. This signals a defect in the formalization or in a backend compiler, not in the design itself.',
     );
     expect(report.crossChecked()?.toArray().map((e) => ({ backend: e.backend.asString(), targets: e.targets.toArray() }))).toEqual([

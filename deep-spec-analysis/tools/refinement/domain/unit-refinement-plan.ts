@@ -7,8 +7,8 @@
 
 import { FrRefs, TargetIds, IdOrder } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
-import { DesignFindings, DesignSkips } from "../../design/domain/index.ts";
-import type { DesignFinding, DesignSkipped, DesignUnit } from "../../design/domain/index.ts";
+import { DesignFinding, DesignFindings, DesignSkips } from "../../design/domain/index.ts";
+import type { DesignSkipped, DesignUnit } from "../../design/domain/index.ts";
 import { AlphaContext } from "./alpha-context.ts";
 import { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
 import { type RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
@@ -50,14 +50,16 @@ export class UnitRefinementPlan {
   static of(u: DesignUnit, unitMap: RefinementUnitMap, req: RefinementRequirements, mapArtifact: string): UnitRefinementPlan {
     const gaps: DesignFinding[] = [];
     const gap = (targets: string[], detail: string, frRefs: readonly string[] = []): void => {
-      gaps.push({
-        kind: "mapping-gap",
-        frRefs: FrRefs.of(IdOrder.sortedUnique(frRefs, IdOrder.compare)),
-        targets: TargetIds.of(IdOrder.sortedUnique(targets, IdOrder.compare)),
-        witness: { refs: [{ artifact: mapArtifact, element: `units[${unitMap.unit.asString()}]` }] },
-        unit: u.name(),
-        detail,
-      });
+      gaps.push(
+        DesignFinding.reconstitute({
+          kind: "mapping-gap",
+          frRefs: FrRefs.of(IdOrder.sortedUnique(frRefs, IdOrder.compare)),
+          targets: TargetIds.of(IdOrder.sortedUnique(targets, IdOrder.compare)),
+          witness: { refs: [{ artifact: mapArtifact, element: `units[${unitMap.unit.asString()}]` }] },
+          unit: u.name(),
+          detail,
+        }),
+      );
     };
     const byReq = new Map<string, AttributeMapping>();
     const unmapped = unitMap.unmapped;

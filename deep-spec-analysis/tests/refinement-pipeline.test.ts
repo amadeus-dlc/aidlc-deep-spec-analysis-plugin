@@ -27,7 +27,7 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, type DesignMachine, DesignObligation, DesignScenario, DesignIgnore, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId } from "../tools/design/domain/index.ts";
+import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, type DesignBackgroundAssumption, DesignMachine, DesignObligation, DesignScenario, DesignIgnore, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId } from "../tools/design/domain/index.ts";
 import { type DesignUnit as DesignUnitType } from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
@@ -194,7 +194,7 @@ type RawDesignObligation = Omit<Parameters<typeof DesignObligation.reconstitute>
 };
 type RawDesignTransition = Omit<Parameters<typeof DesignTransition.reconstitute>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
 type RawDesignIgnore = Omit<Parameters<typeof DesignIgnore.reconstitute>[0], "trigger"> & { trigger: string };
-type RawDesignMachine = Omit<DesignMachine, "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
+type RawDesignMachine = Omit<Parameters<typeof DesignMachine.reconstitute>[0], "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
   id: string;
   entity: string;
   attribute: string;
@@ -227,17 +227,19 @@ function unit(seed: {
       })),
     ),
     machines: DesignMachines.of(
-      (seed.machines ?? []).map((m) => ({
-        ...m,
-        id: DesignMachineId.reconstitute(m.id),
-        entity: DesignEntityName.reconstitute(m.entity),
-        attribute: DesignAttributeName.reconstitute(m.attribute),
-        initial: InitialStates.of(m.initial),
-        transitions: DesignTransitions.of(
-          m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
-        ),
-        ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
-      })),
+      (seed.machines ?? []).map((m) =>
+        DesignMachine.reconstitute({
+          ...m,
+          id: DesignMachineId.reconstitute(m.id),
+          entity: DesignEntityName.reconstitute(m.entity),
+          attribute: DesignAttributeName.reconstitute(m.attribute),
+          initial: InitialStates.of(m.initial),
+          transitions: DesignTransitions.of(
+            m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
+          ),
+          ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
+        }),
+      ),
     ),
     scenarios: DesignScenarios.of(
       (seed.scenarios ?? []).map((s) => DesignScenario.reconstitute({ ...s, id: DesignScenarioId.reconstitute(s.id), brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
@@ -467,10 +469,10 @@ describe("plan classification and gap findings", () => {
     expect(plan.statusOfScenario("SC-2")).toEqual({ kind: "waived", reason: "binds unmapped attribute(s) R.orphan" });
     expect(plan.statusOfScenario("SC-3")).toEqual({ kind: "capability", detail: "event scenarios are not replayed in v1" });
     expect(plan.statusOfScenario("SC-4")).toEqual({ kind: "waived", reason: "binds unmapped attribute(s) R.waived" });
-    const gapDetails = plan.gaps().toArray().map((g) => g.detail);
+    const gapDetails = plan.gaps().toArray().map((g) => g.detail());
     expect(gapDetails.some((d) => d.includes('requirements event trigger "ghost" has no eventMap entry'))).toBe(true);
-    expect(plan.gaps().toArray().every((g) => g.kind === "mapping-gap" && g.unit === "u1")).toBe(true);
-    expect(plan.gaps().toArray()[0]?.witness).toEqual({ refs: [{ artifact: "construction/x/map.md", element: "units[u1]" }] });
+    expect(plan.gaps().toArray().every((g) => g.kind() === "mapping-gap" && g.unit() === "u1")).toBe(true);
+    expect(plan.gaps().toArray()[0]?.witness()).toEqual({ refs: [{ artifact: "construction/x/map.md", element: "units[u1]" }] });
   });
 
   test("map defects each produce their frozen gap wording", () => {
@@ -503,7 +505,7 @@ describe("plan classification and gap findings", () => {
       ],
     });
     const plan = UnitRefinementPlan.of(designUnit, badMap, reqLocal, "m.md");
-    const details = plan.gaps().toArray().map((g) => g.detail).join("\n");
+    const details = plan.gaps().toArray().map((g) => g.detail()).join("\n");
     expect(details).toContain('attrMap maps "R.flag" more than once');
     expect(details).toContain('attrMap entry "R.ghost" names no attribute of the requirements IR');
     expect(details).toContain('enumMap.from "D.missing" is not a design attribute of unit u1');
@@ -650,18 +652,18 @@ describe("refinement verdict interpretation", () => {
         ["rs2:OB-2:TR-1", { status: "sat", decodedModel: { "D.s": "a" }, decodedPostModel: { "D.s": "b" } }],
       ],
     );
-    expect(out.findings.toArray().map((f) => `${f.kind}:${f.targets.joined(",")}`)).toEqual([
+    expect(out.findings.toArray().map((f) => `${f.kind()}:${f.targets().joined(",")}`)).toEqual([
       "refinement-violation:OB-1",
       "refinement-violation:SC-1",
       "refinement-violation:SC-2",
       "completeness-gap:OB-2,TR-1,TR-2",
       "refinement-violation:OB-2,TR-1",
     ]);
-    expect(out.findings.toArray()[0]?.frRefs.toArray()).toEqual(["FR-1", "FR-2"]);
-    expect(out.findings.toArray()[1]?.witness).toEqual({ core: ["inv_a", "inv_b"] });
-    expect(out.findings.toArray()[4]?.witness).toEqual({ trace: [{ "D.s": "a" }, { "D.s": "b" }] });
-    expect(out.findings.toArray()[0]?.detail).toContain("The design admits what the verified requirements forbid.");
-    expect(out.findings.toArray()[4]?.detail).toContain("produces an abstract post-state that violates the requirements effect or the abstract frame");
+    expect(out.findings.toArray()[0]?.frRefs().toArray()).toEqual(["FR-1", "FR-2"]);
+    expect(out.findings.toArray()[1]?.witness()).toEqual({ core: ["inv_a", "inv_b"] });
+    expect(out.findings.toArray()[4]?.witness()).toEqual({ trace: [{ "D.s": "a" }, { "D.s": "b" }] });
+    expect(out.findings.toArray()[0]?.detail()).toContain("The design admits what the verified requirements forbid.");
+    expect(out.findings.toArray()[4]?.detail()).toContain("produces an abstract post-state that violates the requirements effect or the abstract frame");
   });
 
   test("quiet verdicts emit nothing; undecided and missing become the frozen timeout skip", () => {

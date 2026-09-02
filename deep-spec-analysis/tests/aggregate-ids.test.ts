@@ -8,6 +8,8 @@ import {
   DesignAttributeName,
   DesignBackgroundId,
   DesignEntityName,
+  DesignFinding,
+  DesignMachine,
   DesignMachineId,
   DesignObligationId,
   DesignObligationNature,
@@ -244,7 +246,7 @@ import {
 
 describe("design first-class collections", () => {
   const ob = DesignObligation.reconstitute({ id: DesignObligationId.reconstitute("DOB-1"), nature: DesignObligationNature.reconstitute("invariant"), origin: DesignObligationOrigin.reconstitute(""), brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), assert: { op: "bool", value: true } });
-  const machine = {
+  const machine = DesignMachine.reconstitute({
     id: DesignMachineId.reconstitute("SM-1"),
     entity: DesignEntityName.reconstitute("T"),
     attribute: DesignAttributeName.reconstitute("s"),
@@ -252,7 +254,7 @@ describe("design first-class collections", () => {
     deterministic: true,
     transitions: DesignTransitions.of([DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-1"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) })]),
     ignores: DesignIgnores.of([]),
-  };
+  });
 
   test("immutable add, iteration, and set knowledge", () => {
     expect(DesignObligations.of([]).add(ob).ids()).toEqual(["DOB-1"]);
@@ -284,7 +286,7 @@ describe("design first-class collections", () => {
     expect(units.sortedByName().toArray()[0]?.name()).toBe("u2");
     expect([...units].length).toBe(1);
 
-    const finding = { kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.of(["DOB-1"]), witness: { refs: [] }, unit: "u2", detail: "d" };
+    const finding = DesignFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.of(["DOB-1"]), witness: { refs: [] }, unit: "u2", detail: "d" });
     const fs = DesignFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
@@ -462,17 +464,18 @@ describe("design identity primitives (issue #46 wave 5b)", () => {
 
 describe("DesignMachines frozen probe order (PR#55 review)", () => {
   test("sortedById restores id order regardless of input order (legacy verbatim comparator)", () => {
-    const mk = (id: string) => ({
-      id: DesignMachineId.reconstitute(id),
-      entity: DesignEntityName.reconstitute("Ticket"),
-      attribute: DesignAttributeName.reconstitute("status"),
-      initial: InitialStates.of(["open"]),
-      deterministic: true,
-      transitions: DesignTransitions.of([]),
-      ignores: DesignIgnores.of([]),
-    });
+    const mk = (id: string) =>
+      DesignMachine.reconstitute({
+        id: DesignMachineId.reconstitute(id),
+        entity: DesignEntityName.reconstitute("Ticket"),
+        attribute: DesignAttributeName.reconstitute("status"),
+        initial: InitialStates.of(["open"]),
+        deterministic: true,
+        transitions: DesignTransitions.of([]),
+        ignores: DesignIgnores.of([]),
+      });
     const sorted = DesignMachines.of([mk("SM-2"), mk("SM-1")]).sortedById();
-    expect(sorted.toArray().map((m) => m.id.asString())).toEqual(["SM-1", "SM-2"]);
+    expect(sorted.toArray().map((m) => m.id().asString())).toEqual(["SM-1", "SM-2"]);
   });
 });
 
