@@ -535,6 +535,208 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
   return out;
 }
 
+// ルール: domain 層に primitive 型のフィールドを置かない（Ruling A「domain
+// primitives everywhere」2026-08-31、#71 波11 で機械化）。bool を除く
+// string / number とその列・集合・map をフィールドに持つ domain の class・
+// 公開 interface／type はドメインプリミティブへ包むかドアの内側へ隠す。
+// 裁定の恒久除外: DP ラッパー自身（唯一の #value）、prose（detail /
+// reason / message 等の説明文とその列）、state トークン（enum 宣言値への
+// 参照: state / from / to とその列）、design の attrPath、Expression
+// published language、FrRefClaim.owner（義務／シナリオ混成の参照トークン）。
+// PRIMITIVE_FIELD_DEBT は着手時の全数棚卸し——ファイルごとの記述子（"name: type"）
+// の集合で、縮小専用（増やす変更は裁定違反で、波が 1 件返すたびにここから消す。
+// DATA_MODEL_DEBT と同じ規律だが粒度はフィールド）。台帳内ファイルへ新しい
+// primitive フィールドを足せば違反、台帳の記述子が消えれば陳腐化ガードが落ちる。
+// 既知の限界: 非公開の type 別名（Result のエラー材料）と index signature
+// 型（{ [k: string]: … }）は見ない。
+export const PRIMITIVE_FIELD_EXCLUSIONS: ReadonlySet<string> = new Set([
+  "kernel/domain/expression.ts",
+  "kernel/domain/error-messages.ts",
+  "design/domain/attr-paths.ts",
+  "design/domain/declared-values.ts",
+  "design/domain/initial-states.ts",
+  "requirements/domain/attribute-values.ts",
+  "requirements/domain/ir-declared-values.ts",
+  "requirements/domain/fr-ref-claim.ts",
+  "refinement/domain/req-attribute-values.ts",
+]);
+
+const PROSE_FIELD_NAMES: ReadonlySet<string> = new Set([
+  "detail", "details", "reason", "unavailableReason", "unavailable", "unsupported", "missing", "missingKeys",
+  "message", "messages", "error", "outputTail", "label", "fix", "rulesMarkdown", "description", "text",
+]);
+
+const STATE_TOKEN_FIELD_NAMES: ReadonlySet<string> = new Set(["state", "from", "to", "attrPath"]);
+
+const PRIMITIVE_TYPE_SHAPES: readonly RegExp[] = [
+  /^(?:readonly)?(?:string|number)(?:\[\])?$/,
+  /^(?:Readonly)?(?:Set|Array)<(?:string|number)>$/,
+  /^(?:Readonly)?Map<(?:string|number),/,
+  /^(?:Readonly)?Map<[^,]+,(?:readonly)?(?:string|number)(?:\[\])?>$/,
+];
+
+function isPrimitiveShape(rawType: string): boolean {
+  let type = rawType.replace(/\s+/g, "");
+  for (;;) {
+    const stripped = type.replace(/\|(?:undefined|null)$/, "").replace(/^\((.*)\)$/, "$1");
+    if (stripped === type) break;
+    type = stripped;
+  }
+  return PRIMITIVE_TYPE_SHAPES.some((shape) => shape.test(type));
+}
+
+function braceGroups(text: string): string[] {
+  const out: string[] = [];
+  const stack: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "{") stack.push(i);
+    else if (c === "}" && stack.length > 0) {
+      const start = stack.pop() ?? 0;
+      out.push(text.slice(start + 1, i));
+    }
+  }
+  return out;
+}
+
+function blankNested(body: string): string {
+  let depth = 0;
+  let out = "";
+  for (const c of body) {
+    if (c === "{") depth++;
+    else if (c === "}") depth--;
+    else if (depth === 0) out += c;
+    else if (c === "\n") out += c;
+  }
+  return out;
+}
+
+// 検出器: primitive 型フィールドの記述子（"name: type"）を返す。層・除外・
+// 台帳の判断は noPrimitiveFieldsInDomain が担う（台帳の陳腐化検査もこれを使う）。
+export function primitiveFieldsOf(rawSource: string): string[] {
+  const source = stripStrings(rawSource);
+  const out: string[] = [];
+  // private フィールド: 型注釈つき（初期化子・definite assignment `!`・無インデントも
+  // 含む）と、型注釈なしの初期化子（リテラルから string / number を推定——文字列は
+  // stripStrings で空リテラルになっている）。レビュー指摘の死角をすべて塞ぐ。
+  const typedFields = [...source.matchAll(/^\s*(?:static\s+)?(?:readonly\s+)?(#\w+)[?!]?:\s*([^;=]+?)(?:\s*=\s*[^;]*)?;?$/gm)]
+    .map((m) => ({ name: (m[1] ?? "").slice(1), type: (m[2] ?? "").trim() }));
+  const inferredFields = [...source.matchAll(/^\s*(?:static\s+)?(?:readonly\s+)?(#\w+)\s*=\s*([^;]+?);?$/gm)]
+    .map((m) => ({ name: (m[1] ?? "").slice(1), initializer: (m[2] ?? "").trim() }))
+    .filter((f) => /^-?[0-9][0-9_.]*$/.test(f.initializer) || /^(?:""|''|``)$/.test(f.initializer))
+    .map((f) => ({ name: f.name, type: /^-?[0-9]/.test(f.initializer) ? "number" : "string" }));
+  const privateFields = [...typedFields, ...inferredFields];
+  const isPrimitiveWrapper = privateFields.length === 1 && privateFields[0]?.name === "value";
+  if (!isPrimitiveWrapper) {
+    for (const { name, type } of privateFields) {
+      if (PROSE_FIELD_NAMES.has(name) || STATE_TOKEN_FIELD_NAMES.has(name)) continue;
+      if (isPrimitiveShape(type)) out.push(`#${name}: ${type}`);
+    }
+  }
+  // 宣言本文は次のトップレベル宣言（export / type / class / const …）の直前まで。
+  for (const decl of source.matchAll(/^export (?:interface|type) (\w+)[\s\S]*?(?=\n(?:export|type|interface|class|const|function|let)\s|$(?![\s\S]))/gm)) {
+    for (const group of braceGroups(decl[0])) {
+      for (const member of blankNested(group).split(/[;\n]/)) {
+        const prop = /^\s*(?:readonly\s+)?(\w+)\??:\s*(.+?)\s*$/.exec(member);
+        if (!prop) continue;
+        const name = prop[1] ?? "";
+        const type = prop[2] ?? "";
+        if (PROSE_FIELD_NAMES.has(name) || STATE_TOKEN_FIELD_NAMES.has(name)) continue;
+        if (isPrimitiveShape(type)) out.push(`${decl[1]}.${name}: ${type}`);
+      }
+    }
+  }
+  return out;
+}
+
+// 台帳の記述子総数の上限。台帳が縮んだら下げる——上げる変更は裁定違反で、
+// 新しい負債を記述子ごと台帳へ足す抜け道を diff 上で可視化する（レビュー指摘）。
+export const PRIMITIVE_FIELD_DEBT_CEILING = 107;
+
+export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([
+  ["design/domain/br-reference-index.ts", new Set(["#ids: Set<string>"])],
+  ["design/domain/br-refs.ts", new Set(["#values: readonly string[]"])],
+  ["design/domain/checked-units.ts", new Set(["#values: readonly string[]"])],
+  ["design/domain/design-attribute-decl.ts", new Set(["#kind: string"])],
+  ["design/domain/design-finding.ts", new Set(["#kind: string", "#unit: string"])],
+  ["design/domain/design-input-anchor.ts", new Set(["DesignInputAnchor.artifact: string"])],
+  ["design/domain/design-report-composition.ts", new Set(["DesignReportComposition.method: string"])],
+  ["design/domain/design-report-seed.ts", new Set(["DesignReportSeed.method: string"])],
+  ["design/domain/design-report.ts", new Set(["#method: string"])],
+  ["design/domain/design-skipped.ts", new Set(["DesignSkipped.target: string", "DesignSkipped.unit: string"])],
+  ["design/domain/design-unit-seed.ts", new Set(["DesignUnitSeed.unit: string"])],
+  ["design/domain/design-unit.ts", new Set(["#unit: string"])],
+  ["design/domain/lowered-obligation.ts", new Set(["LoweredObligation.pattern: string", "LoweredObligation.nature: string", "LoweredObligation.frRefs: string[]", "LoweredObligation.trigger: string"])],
+  ["design/domain/lowered-scenario.ts", new Set(["LoweredScenario.trigger: string", "LoweredScenario.frRefs: string[]"])],
+  ["design/domain/lowering-index.ts", new Set(["#origins: ReadonlyMap<string, LoweredOrigin>", "#scenarioDesignIds: ReadonlyMap<string, string>", "#machinesByTransition: ReadonlyMap<string, DesignMachine>", "#attrPathsByMachine: ReadonlyMap<string, string>"])],
+  ["design/domain/remapped-unit.ts", new Set(["RemappedUnit.method: string | null"])],
+  ["design/domain/sibling-verdict-document.ts", new Set(["SiblingVerdictDocument.method: string | null"])],
+  ["design/domain/sibling-verdict-finding.ts", new Set(["SiblingVerdictFinding.kind: string", "SiblingVerdictFinding.frRefs: string[]", "SiblingVerdictFinding.targets: string[]"])],
+  ["design/domain/unformalized-targets.ts", new Set(["#values: ReadonlySet<string>"])],
+  ["doctor/domain/coverage-assessment.ts", new Set(["#eligible: number", "#scopes: readonly string[]"])],
+  ["doctor/domain/coverage-row.ts", new Set(["CoverageRow.space: string", "CoverageRow.intent: string"])],
+  ["doctor/domain/debt-row.ts", new Set(["DebtRow.space: string", "DebtRow.intent: string", "DebtRow.artifact: string", "DebtRow.findings: number"])],
+  ["doctor/domain/manifest-entry.ts", new Set(["ManifestEntry.rel: string"])],
+  ["doctor/domain/refinement-stale-row.ts", new Set(["RefinementStaleRow.space: string", "RefinementStaleRow.intent: string"])],
+  ["doctor/domain/structural-debt.ts", new Set(["#scanned: number"])],
+  ["doctor/domain/unit-coverage-row.ts", new Set(["UnitCoverageRow.space: string", "UnitCoverageRow.intent: string", "UnitCoverageRow.unit: string"])],
+  ["doctor/domain/unit-coverage.ts", new Set(["#eligible: number", "#scopes: readonly string[]"])],
+  ["kernel/domain/fr-refs.ts", new Set(["#values: readonly string[]"])],
+  ["kernel/domain/requirement-ids.ts", new Set(["#values: ReadonlySet<string>"])],
+  ["refcheck/domain/component-catalog-outcome.ts", new Set(["ComponentCatalogOutcome.found: number", "ComponentCatalogOutcome.line: number"])],
+  ["refcheck/domain/entities-outcome.ts", new Set(["EntitiesOutcome.found: number", "EntitiesOutcome.line: number"])],
+  ["refcheck/domain/entity-decls.ts", new Set(["#names: Set<string>"])],
+  ["refcheck/domain/finding.ts", new Set(["Finding.kind: string", "Finding.unit: string"])],
+  ["refcheck/domain/input-anchor.ts", new Set(["InputAnchor.artifact: string"])],
+  ["refcheck/domain/rules-outcome.ts", new Set(["RulesOutcome.found: number", "RulesOutcome.line: number"])],
+  ["refcheck/domain/skipped.ts", new Set(["Skipped.target: string", "Skipped.unit: string"])],
+  ["refcheck/domain/witness-ref.ts", new Set(["WitnessRef.artifact: string", "WitnessRef.element: string", "WitnessRef.value: string"])],
+  ["refinement/domain/alpha-context.ts", new Set(["#byReq: ReadonlyMap<string, AttributeMapping>"])],
+  ["refinement/domain/design-assignments.ts", new Set(["#values: ReadonlyMap<string, Expression>"])],
+  ["refinement/domain/design-event-catalog.ts", new Set(["#events: ReadonlyMap<string, DesignEvent>"])],
+  ["refinement/domain/effect-assignments.ts", new Set(["#values: ReadonlyMap<string, Expression>"])],
+  ["refinement/domain/refinement-map-acquisition.ts", new Set(["RefinementMapAcquisition.mapArtifact: string"])],
+  ["refinement/domain/refinement-query-verdict.ts", new Set(["#core: string[] | undefined"])],
+  ["refinement/domain/refinement-query-verdicts.ts", new Set(["#values: ReadonlyMap<string, RefinementQueryVerdict>"])],
+  ["refinement/domain/refinement-solver-facts.ts", new Set(["#pending: ReadonlyMap<string, RefinementProbe>"])],
+  ["refinement/domain/unit-refinement-plan.ts", new Set(["#obligationStatus: ReadonlyMap<string, RefinementStatus>", "#scenarioStatus: ReadonlyMap<string, RefinementStatus>", "#eventTransitions: ReadonlyMap<string, readonly TransitionRef[]>"])],
+  ["requirements/domain/attribute-declarations.ts", new Set(["#byPath: Map<string, AttributeDeclaration>"])],
+  ["requirements/domain/fr-reference-index.ts", new Set(["#ownersByRef: Map<string, string[]>"])],
+  ["requirements/domain/ir-attribute-decl.ts", new Set(["#kind: string"])],
+  ["requirements/domain/ir-validation-materials-seed.ts", new Set(["IrValidationMaterialsSeed.declaredDigest: string | null"])],
+  ["requirements/domain/ir-validation-materials.ts", new Set(["#declaredDigest: string | null"])],
+  ["requirements/domain/obligation.ts", new Set(["#ears: string | undefined"])],
+  ["requirements/domain/quint-machine-facts.ts", new Set(["#scenariosWithInit: ReadonlySet<string>"])],
+  ["requirements/domain/quint-runs-seed.ts", new Set(["QuintRunsSeed.temporals: ReadonlyMap<string, QuintTemporalVerdict>", "QuintRunsSeed.scenarios: ReadonlyMap<string, QuintScenarioVerdict>"])],
+  ["requirements/domain/quint-runs.ts", new Set(["#temporals: ReadonlyMap<string, QuintTemporalVerdict>", "#scenarios: ReadonlyMap<string, QuintScenarioVerdict>"])],
+  ["requirements/domain/requirements-source-seed.ts", new Set(["RequirementsSourceSeed.digest: string"])],
+  ["requirements/domain/requirements-source.ts", new Set(["#digest: string"])],
+  ["requirements/domain/smt-event-pair-probe.ts", new Set(["SmtEventPairProbe.qOverlap: string", "SmtEventPairProbe.qJoint: string"])],
+  ["requirements/domain/smt-plan-facts-seed.ts", new Set(["SmtPlanFactsSeed.compiled: ReadonlyMap<string, boolean>", "SmtPlanFactsSeed.labelToTarget: ReadonlyMap<string, string>", "SmtPlanFactsSeed.gapTriggers: ReadonlyMap<string, readonly string[]>", "SmtPlanFactsSeed.scenarioQueries: ReadonlyMap<string, string>"])],
+  ["requirements/domain/smt-plan-facts.ts", new Set(["#compiled: ReadonlyMap<string, boolean>", "#labelToTarget: ReadonlyMap<string, string>", "#gapTriggers: ReadonlyMap<string, readonly string[]>", "#scenarioQueries: ReadonlyMap<string, string>"])],
+  ["requirements/domain/smt-query-verdict.ts", new Set(["#core: string[] | undefined"])],
+  ["requirements/domain/smt-query-verdicts.ts", new Set(["#values: ReadonlyMap<string, SmtQueryVerdict>"])],
+  ["requirements/domain/source-anchor.ts", new Set(["#declared: string | null", "#actual: string"])],
+  ["requirements/domain/verification-finding.ts", new Set(["VerificationFinding.kind: string"])],
+  ["requirements/domain/verification-report-composition.ts", new Set(["VerificationReportComposition.method: string"])],
+  ["requirements/domain/verification-report-seed.ts", new Set(["VerificationReportSeed.method: string"])],
+  ["requirements/domain/verification-report.ts", new Set(["#method: string"])],
+  ["requirements/domain/verification-witness.ts", new Set(["VerificationWitness.core: string[]"])],
+]);
+
+export function noPrimitiveFieldsInDomain(relPath: string, rawSource: string): Violation[] {
+  const loc = locationOf(relPath);
+  if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
+  if (PRIMITIVE_FIELD_EXCLUSIONS.has(relPath)) return [];
+  // 台帳はフィールド記述子単位——台帳内ファイルへの新規流入も違反になる。
+  const ledgered = PRIMITIVE_FIELD_DEBT.get(relPath) ?? new Set<string>();
+  return primitiveFieldsOf(rawSource).filter((field) => !ledgered.has(field)).map((field) => ({
+    path: relPath,
+    rule: "no-primitive-fields-in-domain",
+    detail: `primitive-typed field ${field} — wrap it in a domain primitive or keep it behind a DP door`,
+  }));
+}
+
 // ルール: CQS——コマンドは返さない（オーナー裁定 2026-09-01）。ポートの
 // store は書くだけ：正常時は void で、集約を読み込んで返さない。複数件の
 // 書き込みだけが正常件数か事前採番の集約 ID 集合を返してよい（現行ポートに
@@ -623,6 +825,7 @@ export const ALL_RULES = [
   portsLiveInPortDir,
   commandsReturnVoid,
   noDataModelsInDomain,
+  noPrimitiveFieldsInDomain,
 ] as const;
 
 export function violationsOf(relPath: string, source: string): Violation[] {

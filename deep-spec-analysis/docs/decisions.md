@@ -1525,3 +1525,33 @@ that ledger's sanitizer). The pass surfaced that bun's `toEqual` ignores
 private fields, so the touched skip expectations now compare through
 `asString()`; wording, order and goldens are unchanged.
 1 ledger entry reclaimed — the ledger holds 98 of 122.
+
+Wave 11 (same PR): Ruling A gets its mechanical check. Until now the
+"domain primitives everywhere" ruling was applied by hand (PRs #54–#60)
+and nothing stopped a raw string from drifting back onto a domain
+object — the wave-10 target vocabulary was one such drift. The
+architecture suite now runs `no-primitive-fields-in-domain`: every
+string / number field (scalars, arrays, sets, maps keyed by or holding
+them) on a domain class or a public interface / type alias is a
+violation unless the ruling excludes it — booleans, the primitive
+wrapper itself (a class whose only field is `#value`), prose (`detail`,
+`reason`, `message`, … and their lists), state tokens (`state`, `from`,
+`to` and the declared-value / initial-state collections), the design
+`attrPath`, the `Expression` published language and `FrRefClaim.owner`.
+The starting inventory is a shrink-only ledger, `PRIMITIVE_FIELD_DEBT`,
+kept field by field (a descriptor `name: type` per file): 68 domain
+files carrying 107 distinct primitive fields. A new primitive field in
+a ledgered file is a violation, and a stale-entry guard fails the suite
+as soon as a ledgered descriptor is no longer detected, so the ledger
+can only shrink (the file-level first cut and the initializer blind
+spot `#x: string = …` were review findings, fixed in the same PR; a
+second round added the unindented, definite-assignment `#x!: T` and
+untyped-initializer `#x = 0` forms, and a frozen descriptor ceiling,
+`PRIMITIVE_FIELD_DEBT_CEILING`, that turns any addition to the ledger
+into a visible edit — lower it when the ledger shrinks, never raise it). Known limits: non-exported type aliases (Result
+error materials) and index-signature records are not inspected. Open
+for a ruling: index maps keyed by a primitive's string form
+(`ReadonlyMap<string, …>` behind DP doors), classification strings
+(`kind`, `method`, `nature`, `pattern`), the doctor rows, and the
+numeric metadata the ruling deferred. DATA_MODEL_DEBT is untouched — the
+ledger holds 98 of 122.
