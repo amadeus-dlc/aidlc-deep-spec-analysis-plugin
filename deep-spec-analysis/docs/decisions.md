@@ -1788,3 +1788,20 @@ answer presence questions. The presenter keeps every frozen label and
 fix but no longer reads fields. 9 ledger entries reclaimed — the ledger
 holds 4 of 122: the JSON value shapes (`DesignValue`, `DecodedValue`,
 `TraceState`, `VerificationWitness`), ruled on in the next wave.
+
+Wave 28 (same PR): the ledger closes. `VerificationWitness` — the
+contract-2 witness (unsat core / decoded model / per-backend verdicts /
+step trace) — becomes a class with one factory per face and a single
+document door (`toDocument`, verbatim; `fromDocument` keeps the frozen
+blind cast with the empty-core default), so the quint verdicts, the
+SMT plan facts and the cross-check mint witnesses instead of assembling
+records and the serializer asks the witness for its document. The three
+remaining entries are ruled on rather than converted: `DesignValue` and
+`DecodedValue` are the recursive JSON value type itself and `TraceState`
+is the `witness.trace[i]` map (attribute path → decoded value); none of
+them has a getter or can carry behaviour, because the findings schema
+fixes their shape. They join `Expression` under a named permanent
+exclusion, `PUBLISHED_VALUE_SHAPES`, which the data-model rule skips —
+unlike the ledger, it is not a debt to shrink. `DATA_MODEL_DEBT` is now
+empty (122 → 0) and stays shrink-only, so any new record in the domain
+fails the rule outright. The primitive-field ceiling drops to 83.

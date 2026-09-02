@@ -1603,3 +1603,17 @@ unparseable／extracted の各枝は凍結の skip・finding 文言を保ち、�
 すべて保ちつつ、もうフィールドを読まない。台帳から 9 エントリを回収し、残債は
 122 中 4——JSON 値の形（`DesignValue`・`DecodedValue`・`TraceState`・
 `VerificationWitness`）で、次の波で裁定する。
+
+波 28（同 PR）: 台帳が閉じる。契約2 の witness（unsat core／復号済み
+モデル／バックエンド別判定／ステップトレース）である `VerificationWitness`
+が面ごとのファクトリと 1 つの文書の門（`toDocument`——逐語。`fromDocument`
+は空 core を既定とする凍結の盲目キャストを保つ）を持つ class になり、quint
+判定・SMT 計画事実・相互検証は record を組み立てる代わりに witness を鋳造し、
+直列化器は witness に文書を問う。残る 3 件は変換ではなく裁定で扱う。
+`DesignValue` と `DecodedValue` は JSON 値そのものの再帰型、`TraceState` は
+`witness.trace[i]`（属性パス → 復号値）の写像型で、どれも getter を持たず振る
+舞いを持ち得ない——findings スキーマが形を決めるからだ。`Expression` と並ぶ
+名前つきの恒久除外 `PUBLISHED_VALUE_SHAPES` に入り、data-model ルールは
+これを飛ばす——台帳と違い、縮小すべき負債ではない。`DATA_MODEL_DEBT` は空に
+なり（122 → 0）、縮小専用のまま——domain に新しい record を置けばルールが
+そのまま落とす。プリミティブ台帳の上限は 83 へ下がる。

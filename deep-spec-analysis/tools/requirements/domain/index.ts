@@ -22,7 +22,7 @@ export { VerificationFinding } from "./verification-finding.ts";
 export { VerificationFindings } from "./verification-findings.ts";
 export { VerificationSkipped } from "./verification-skipped.ts";
 export { VerificationSkips } from "./verification-skips.ts";
-export { type VerificationWitness } from "./verification-witness.ts";
+export { VerificationWitness } from "./verification-witness.ts";
 export { VerificationReportId } from "./verification-report-id.ts";
 export { SUPPORTED_IR_MAJOR, VerificationReport } from "./verification-report.ts";
 export { CrossCheckedEntries } from "./cross-checked-entries.ts";

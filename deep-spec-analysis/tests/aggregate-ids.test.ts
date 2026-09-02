@@ -35,7 +35,7 @@ import { ObligationIds,
   VerificationSkipped,
   VerificationFinding,
   CrossCheckedEntry,
-} from "../tools/requirements/domain/index.ts";
+ VerificationWitness,} from "../tools/requirements/domain/index.ts";
 import { RefinementMapId } from "../tools/refinement/domain/index.ts";
 import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
 import { FormalModelId } from "../tools/requirements/domain/index.ts";
@@ -217,7 +217,7 @@ describe("requirements first-class collections", () => {
     expect(bgs.toArray()[0]?.id().asString()).toBe("B1");
     expect(bgs.toArray()[0]?.assertion()).toEqual({ op: "bool", value: true });
 
-    const finding = VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: { core: [] }, detail: "d" });
+    const finding = VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: VerificationWitness.core([]), detail: "d" });
     const fs = VerificationFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);

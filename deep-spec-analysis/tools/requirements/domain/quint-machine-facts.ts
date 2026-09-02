@@ -19,6 +19,7 @@ import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 
 import { QuintMachineComponents } from "./quint-machine-components.ts";
+import { VerificationWitness } from "./verification-witness.ts";
 
 export class QuintMachineFacts {
   readonly #invariantComponents: QuintMachineComponents;
@@ -161,7 +162,7 @@ export class QuintMachineFacts {
           kind: "scenario-violation",
           frRefs: model.frRefsOf(targets),
           targets,
-          witness: { model: state },
+          witness: VerificationWitness.model(state),
           detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out — the requirements reject an example that should be accepted.`,
         }));
       }
@@ -170,7 +171,7 @@ export class QuintMachineFacts {
           kind: "scenario-violation",
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
-          witness: { model: state },
+          witness: VerificationWitness.model(state),
           detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation — the requirements do not exclude an example that should be rejected.`,
         }));
       }

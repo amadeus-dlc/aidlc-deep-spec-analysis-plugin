@@ -63,7 +63,7 @@ import {
   FormalModelId,
   ObligationId,
   VerificationSkipped,
-} from "../tools/requirements/domain/index.ts";
+ VerificationWitness,} from "../tools/requirements/domain/index.ts";
 import {
   type FormalModelRepository,
   type SmtCheck,
@@ -74,7 +74,7 @@ import { InMemoryVerificationReportRepository } from "./doubles/in-memory-verifi
 
 // 判定レコードは class（#71 波18）——期待値は平文へ射影して比較する（bun の toEqual は #private を見ない）。
 const plainFindings = (findings: Iterable<VerificationFinding>) =>
-  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toArray(), targets: f.targets().toStrings(), witness: f.witness(), detail: f.detail() }));
+  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toArray(), targets: f.targets().toStrings(), witness: f.witness().toDocument(), detail: f.detail() }));
 
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -403,8 +403,8 @@ describe("smt verdict interpretation", () => {
       ["sc:SC-2", { status: "sat", decodedModel: { "Ticket.done": false } }],
     ]);
     expect(findings.toArray().map((f) => f.targets().toStrings())).toEqual([["OB-1", "SC-1"], ["SC-2"]]);
-    expect(findings.toArray()[0]?.witness()).toEqual({ core: ["ob_OB_1", "ty_x"] });
-    expect(findings.toArray()[1]?.witness()).toEqual({ model: { "Ticket.done": false } });
+    expect(findings.toArray()[0]?.witness().toDocument()).toEqual({ core: ["ob_OB_1", "ty_x"] });
+    expect(findings.toArray()[1]?.witness().toDocument()).toEqual({ model: { "Ticket.done": false } });
     expect(findings.toArray()[0]?.detail()).toStartWith("Accept scenario SC-1 describes a state");
     expect(findings.toArray()[1]?.detail()).toStartWith("Reject scenario SC-2 is still satisfiable");
     expect(run([["sc:SC-1", { status: "budget" }]]).skipped.toArray().slice(1).map((s) => s.target().asString())).toEqual(["SC-1"]);
@@ -435,7 +435,7 @@ describe("cross-check computation", () => {
         kind: "scenario-violation",
         frRefs: FrRefs.of([]),
         targets: TargetIds.reconstitute([t]),
-        witness: { core: [] },
+        witness: VerificationWitness.core([]),
         detail: "x",
       })))),
       skipped: VerificationSkips.of((input.skippedTargets ?? []).map((t) => (VerificationSkipped.reconstitute({ target: TargetId.reconstitute(t), reason: "capability" })))),
@@ -519,7 +519,7 @@ describe("degradation reports and ordering", () => {
       kind,
       frRefs: FrRefs.of([]),
       targets: TargetIds.reconstitute(targets),
-      witness: { core: [] },
+      witness: VerificationWitness.core([]),
       detail,
     }));
     const sorted = VerificationFindings.of([
@@ -561,8 +561,8 @@ describe("degradation reports and ordering", () => {
       irHash: ContentHash.reconstitute("h"),
       method: "exhaustive",
       findings: VerificationFindings.of([
-        VerificationFinding.reconstitute({ kind: "scenario-violation", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["SC-1"]), witness: { core: [] }, detail: "b" }),
-        VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: { core: [] }, detail: "a" }),
+        VerificationFinding.reconstitute({ kind: "scenario-violation", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["SC-1"]), witness: VerificationWitness.core([]), detail: "b" }),
+        VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: VerificationWitness.core([]), detail: "a" }),
       ]),
       skipped: VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-2"), reason: "timeout" }), VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-1"), reason: "capability" })]),
     });
