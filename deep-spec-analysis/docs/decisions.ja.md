@@ -1345,3 +1345,14 @@ deterministic:false waiver の判定（conflict の対象がすべてこの機�
 遷移であり、かつ非決定を宣言済み）を所有する。quint ユースケースと
 remap は訊くのではなく命じる。台帳から 2 エントリを回収し、残債は
 122 中 100。
+
+波 8（同 PR）: `QuintMachineRunVerdict` が命令できる class へ。機械
+フェーズの判定は、quint アダプタが kind を訊いていた phase 2 のガード
+（timeout と実行失敗は機械対象を一括 skip するので、時相フェーズは
+それらを走らせない）と、解釈が kind 分岐で組み立てていた対象ごとの
+skip（timeout は凍結の budget 文言、実行失敗は method 別の verify／run
+失敗文言——CLI 出力尾は逐語で載り、対象の順は保つ）と、witness 材料面
+（復号済みステップトレース。ITF を残さなかった deadlock は空 model へ
+退避）および不変量の帰属評価が使う最終状態を所有する。アダプタは
+名前つきファクトリで再構成し、解釈は訊く代わりに命じる。台帳から
+1 エントリを回収し、残債は 122 中 99。

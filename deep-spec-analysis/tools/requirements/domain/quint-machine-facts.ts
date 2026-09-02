@@ -65,21 +65,18 @@ export class QuintMachineFacts {
     // 1) イベント機械下で到達可能な不変量違反・デッドロック。
     const machineRun = runs.machineRun();
     if (machineRun !== null) {
-      const run = machineRun;
-      if (run.kind === "timeout") {
-        for (const t of machineTargets) {
-          skipped.push({ target: t, reason: "timeout", detail: "machine invariant check exceeded its budget" });
-        }
-      } else if (run.kind === "deadlock") {
+      // timeout / run-failed の対象一括 skip は判定が組む（#71 波8）。
+      skipped.push(...machineRun.skipsFor(machineTargets, bounded));
+      if (machineRun.isDeadlock()) {
         findings.push({
           kind: "completeness-gap",
           frRefs: FrRefs.of(model.frRefsOf(this.#eventIds.toStrings())),
           targets: TargetIds.of(this.#eventIds.isEmpty() ? machineTargets : this.#eventIds.toStrings().sort(IdOrder.compare)),
-          witness: run.trace !== null ? { trace: run.trace.toArray() } : { model: {} },
+          witness: machineRun.witness(),
           detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
         });
-      } else if (run.kind === "violation") {
-        const violatedComponents = this.#invariantComponents.violatedBy(run.trace.finalState());
+      } else if (machineRun.isViolation()) {
+        const violatedComponents = this.#invariantComponents.violatedBy(machineRun.finalState());
         const targets = violatedComponents.isEmpty()
           ? this.#eventIds.toStrings().sort(IdOrder.compare)
           : IdOrder.sortedUnique([...violatedComponents.ids()], IdOrder.compare);
@@ -87,17 +84,9 @@ export class QuintMachineFacts {
           kind: "conflict",
           frRefs: FrRefs.of(model.frRefsOf(IdOrder.sortedUnique([...targets, ...this.#eventIds.toStrings()], IdOrder.compare))),
           targets: TargetIds.of(targets),
-          witness: { trace: run.trace.toArray() },
+          witness: machineRun.witness(),
           detail: `The event machine can reach a state that violates ${targets.join(", ")} (step trace attached): the event rules do not preserve the obligation.`,
         });
-      } else if (run.kind === "run-failed") {
-        for (const t of machineTargets) {
-          skipped.push({
-            target: t,
-            reason: "unavailable",
-            detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${run.outputTail}`,
-          });
-        }
       }
     }
 

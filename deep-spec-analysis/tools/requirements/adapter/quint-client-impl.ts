@@ -9,9 +9,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { QuintRuns, TraceStates, VerificationSkips } from "../domain/index.ts";
+import { QuintMachineRunVerdict, QuintRuns, TraceStates, VerificationSkips } from "../domain/index.ts";
 import type {
-  QuintMachineRunVerdict,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
   RequirementsModel,
@@ -63,9 +62,9 @@ export class QuintClientImpl implements QuintClient {
     try {
       const machineRun = this.#runMachinePhase(machine, modulePath, bounded, work);
       // phase 2 の「既に skip 済みの義務は走らせない」凍結ガード：コンパイル時
-      // skip と、機械フェーズの timeout / run-failed による対象一括 skip。
+      // skip と、機械フェーズの判定が命じる対象一括 skip（timeout / run-failed）。
       const skipTargets = new Set(machine.compileSkips.map((s) => s.target));
-      if (machineRun !== null && (machineRun.kind === "timeout" || machineRun.kind === "run-failed")) {
+      if (machineRun !== null && machineRun.abortsMachineTargets()) {
         for (const t of machine.facts.machineTargets()) {
           skipTargets.add(t);
         }
@@ -142,18 +141,18 @@ export class QuintClientImpl implements QuintClient {
           RUN_TIMEOUT_MS,
           work,
         );
-    if (run.timedOut) return { kind: "timeout" };
+    if (run.timedOut) return QuintMachineRunVerdict.timeout();
     if (`${run.stdout}\n${run.stderr}`.toLowerCase().includes("deadlock")) {
-      return { kind: "deadlock", trace: run.itf ? TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)) : null };
+      return QuintMachineRunVerdict.deadlock(run.itf ? TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)) : null);
     }
     const violated = run.itf !== null && (itfStatus(run.itf) === "violation" || (bounded && !!run.itf));
     if (violated && run.itf) {
-      return { kind: "violation", trace: TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)) };
+      return QuintMachineRunVerdict.violation(TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)));
     }
     if (!violated && run.itf === null && `${run.stdout}${run.stderr}`.includes("error")) {
-      return { kind: "run-failed", outputTail: this.#outputTail(run) };
+      return QuintMachineRunVerdict.runFailed(this.#outputTail(run));
     }
-    return { kind: "clean" };
+    return QuintMachineRunVerdict.clean();
   }
 
   // 2) leads-to 時相義務（bounded のみ）。モジュールに emit された時相定義
