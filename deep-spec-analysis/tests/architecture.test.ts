@@ -29,6 +29,7 @@ import {
   noPrimitiveFieldsInDomain,
   primitiveFieldsOf,
   PRIMITIVE_FIELD_DEBT,
+  PRIMITIVE_FIELD_DEBT_CEILING,
   PRIMITIVE_FIELD_EXCLUSIONS,
   noTestPayloads,
   onlySanctionedImports,
@@ -202,8 +203,13 @@ describe("rule red/green examples (detection power proof)", () => {
 
   test("no-primitive-fields-in-domain flags string/number fields outside the debt set", () => {
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export class Foo {\n  readonly #name: string;\n  readonly #ok: boolean;\n}")).toHaveLength(1);
-    // 初期化子つきでも型で検出する（レビュー指摘の回帰）。
-    expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", 'export class Foo {\n  readonly #name: string = "x";\n  #count = 0;\n}')).toHaveLength(1);
+    // 初期化子つき（型注釈あり／なし）、definite assignment `!`、無インデントでも検出する（レビュー指摘の回帰）。
+    expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", 'export class Foo {\n  readonly #name: string = "x";\n  #count = 0;\n  #code = "";\n  #set = new Set<string>();\n}').map((v) => v.detail)).toEqual([
+      "primitive-typed field #name: string — wrap it in a domain primitive or keep it behind a DP door",
+      "primitive-typed field #count: number — wrap it in a domain primitive or keep it behind a DP door",
+      "primitive-typed field #code: string — wrap it in a domain primitive or keep it behind a DP door",
+    ]);
+    expect(primitiveFieldsOf("export class Foo {\n#name: string;\n  #count!: number;\n  static #n: number;\n}")).toEqual(["#name: string", "#count: number", "#n: number"]);
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export class Foo {\n  readonly #ids: ReadonlySet<string>;\n  readonly #count: number;\n  readonly #byId: ReadonlyMap<string, Foo>;\n}")).toHaveLength(3);
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export interface Foo {\n  readonly count: number;\n  readonly flag: boolean;\n  readonly names?: readonly string[];\n}")).toHaveLength(2);
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", 'export type Foo =\n  | { readonly kind: "a"; readonly core: string[] }\n  | { readonly kind: "b" };\n')).toHaveLength(1);
@@ -276,6 +282,9 @@ describe("the real tools/ tree", () => {
       expect(fields.size).toBeGreaterThan(0);
     }
     for (const rel of PRIMITIVE_FIELD_EXCLUSIONS) expect(files).toContain(rel);
+    // 台帳へ記述子ごと新しい負債を足す抜け道は上限定数で塞ぐ（縮んだら下げる、上げない）。
+    const total = [...PRIMITIVE_FIELD_DEBT.values()].reduce((n, fields) => n + fields.size, 0);
+    expect(total).toBeLessThanOrEqual(PRIMITIVE_FIELD_DEBT_CEILING);
   });
 
   test("every file is either layered, an entry, legacy, or data — nothing unclassified", () => {

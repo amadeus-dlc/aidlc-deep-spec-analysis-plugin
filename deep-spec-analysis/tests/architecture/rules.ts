@@ -616,15 +616,21 @@ function blankNested(body: string): string {
 export function primitiveFieldsOf(rawSource: string): string[] {
   const source = stripStrings(rawSource);
   const out: string[] = [];
-  // 初期化子つき（`#x: string = …;`）も型だけを取る（レビュー指摘: 初期化子で検査を逃れられた）。
-  const privateFields = [...source.matchAll(/^\s+(?:static\s+)?(?:readonly\s+)?(#\w+)\??:\s*([^;=]+?)(?:\s*=\s*[^;]*)?;?$/gm)];
-  const isPrimitiveWrapper = privateFields.length === 1 && privateFields[0]?.[1] === "#value";
+  // private フィールド: 型注釈つき（初期化子・definite assignment `!`・無インデントも
+  // 含む）と、型注釈なしの初期化子（リテラルから string / number を推定——文字列は
+  // stripStrings で空リテラルになっている）。レビュー指摘の死角をすべて塞ぐ。
+  const typedFields = [...source.matchAll(/^\s*(?:static\s+)?(?:readonly\s+)?(#\w+)[?!]?:\s*([^;=]+?)(?:\s*=\s*[^;]*)?;?$/gm)]
+    .map((m) => ({ name: (m[1] ?? "").slice(1), type: (m[2] ?? "").trim() }));
+  const inferredFields = [...source.matchAll(/^\s*(?:static\s+)?(?:readonly\s+)?(#\w+)\s*=\s*([^;]+?);?$/gm)]
+    .map((m) => ({ name: (m[1] ?? "").slice(1), initializer: (m[2] ?? "").trim() }))
+    .filter((f) => /^-?[0-9][0-9_.]*$/.test(f.initializer) || /^(?:""|''|``)$/.test(f.initializer))
+    .map((f) => ({ name: f.name, type: /^-?[0-9]/.test(f.initializer) ? "number" : "string" }));
+  const privateFields = [...typedFields, ...inferredFields];
+  const isPrimitiveWrapper = privateFields.length === 1 && privateFields[0]?.name === "value";
   if (!isPrimitiveWrapper) {
-    for (const m of privateFields) {
-      const name = (m[1] ?? "").slice(1);
-      const type = m[2] ?? "";
+    for (const { name, type } of privateFields) {
       if (PROSE_FIELD_NAMES.has(name) || STATE_TOKEN_FIELD_NAMES.has(name)) continue;
-      if (isPrimitiveShape(type)) out.push(`#${name}: ${type.trim()}`);
+      if (isPrimitiveShape(type)) out.push(`#${name}: ${type}`);
     }
   }
   // 宣言本文は次のトップレベル宣言（export / type / class / const …）の直前まで。
@@ -642,6 +648,10 @@ export function primitiveFieldsOf(rawSource: string): string[] {
   }
   return out;
 }
+
+// 台帳の記述子総数の上限。台帳が縮んだら下げる——上げる変更は裁定違反で、
+// 新しい負債を記述子ごと台帳へ足す抜け道を diff 上で可視化する（レビュー指摘）。
+export const PRIMITIVE_FIELD_DEBT_CEILING = 107;
 
 export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([
   ["design/domain/br-reference-index.ts", new Set(["#ids: Set<string>"])],

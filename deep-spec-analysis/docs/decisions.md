@@ -1544,7 +1544,11 @@ files carrying 107 distinct primitive fields. A new primitive field in
 a ledgered file is a violation, and a stale-entry guard fails the suite
 as soon as a ledgered descriptor is no longer detected, so the ledger
 can only shrink (the file-level first cut and the initializer blind
-spot `#x: string = …` were review findings, fixed in the same PR). Known limits: non-exported type aliases (Result
+spot `#x: string = …` were review findings, fixed in the same PR; a
+second round added the unindented, definite-assignment `#x!: T` and
+untyped-initializer `#x = 0` forms, and a frozen descriptor ceiling,
+`PRIMITIVE_FIELD_DEBT_CEILING`, that turns any addition to the ledger
+into a visible edit — lower it when the ledger shrinks, never raise it). Known limits: non-exported type aliases (Result
 error materials) and index-signature records are not inspected. Open
 for a ruling: index maps keyed by a primitive's string form
 (`ReadonlyMap<string, …>` behind DP doors), classification strings

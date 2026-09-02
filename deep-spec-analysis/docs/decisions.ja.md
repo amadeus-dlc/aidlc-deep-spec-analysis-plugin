@@ -1405,7 +1405,9 @@ language、`FrRefClaim.owner`——を除いてすべて違反。着手時の全
 ファイルへの新しい primitive フィールドは違反、台帳の記述子が検出されなく
 なった瞬間に陳腐化ガードがスイートを落とすので、台帳は縮む一方になる
 （ファイル単位だった初版と初期化子 `#x: string = …` の死角はレビュー指摘で、
-同 PR で修正）。既知の限界: 非公開の type 別名（Result
+同 PR で修正。二巡目で無インデント・definite assignment `#x!: T`・型注釈
+なし初期化子 `#x = 0` の形と、台帳への追加を diff 上で可視化する記述子総数の
+上限定数 `PRIMITIVE_FIELD_DEBT_CEILING` を加えた——縮んだら下げ、上げない）。既知の限界: 非公開の type 別名（Result
 のエラー材料）と index signature 型は見ない。裁定待ち: プリミティブの文字列
 形をキーにした索引 map（DP の門の内側の `ReadonlyMap<string, …>`）、分類
 文字列（`kind`、`method`、`nature`、`pattern`）、doctor の行、裁定が保留した
