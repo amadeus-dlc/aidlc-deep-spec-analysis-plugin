@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, TargetId, ContentHash, IrVersion, ArtifactPath, type Expression, KeyedIndex } from "../tools/kernel/domain/index.ts";
+import { TriggerName, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression, KeyedIndex } from "../tools/kernel/domain/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
@@ -112,6 +112,41 @@ describe("in-process golden equivalence (interactor over real Impls, real quint 
       rmSync(record, { recursive: true, force: true });
     }
   }, 90_000);
+});
+
+// 予算超過の経路を実 CLI で踏む（issue #128）。quint 0.32 は Apalache サーバの
+// 後始末ハンドラを exit / SIGINT / SIGUSR1 / SIGUSR2 / uncaughtException にだけ
+// 登録するので、クライアントは既定の SIGTERM ではなく SIGINT で止める。SIGINT を
+// 受けた quint は自分で exit するため res.signal は null になりうる——予算超過の
+// 判定が signal ではなく ETIMEDOUT に載っていることをここで固定する（載っていな
+// ければ timeout は run-failed に化けて golden の skip 文言が変わる）。孤児サーバ
+// が実際に片付くことは実 Apalache を要するので live smoke が受け持つ。
+describe("the machine phase over the real quint CLI, run out of budget", () => {
+  test("an exhausted budget stays a timeout verdict — no throw, and the frozen skip wording holds", () => {
+    const client = new QuintClientImpl({
+      quintBin: join(pluginRoot, "node_modules", ".bin", "quint"),
+      methodOverride: "simulation",
+      apalacheDistSet: false,
+      homeDirectory: "",
+      // 実測: この機械の quint run は約 200ms、起動だけでも 130ms を切らない。
+      // 50ms はどの環境でも確実に予算を割る。
+      timeoutOverrideMs: 50,
+    });
+    const outcome = client.check(model({
+      attributes: [{ path: AttributePath.reconstitute("order.state"), kind: "enum", values: ["open", "closed"] }],
+      obligations: [{
+        id: ObligationId.reconstitute("OB-1"),
+        nature: ObligationNature.reconstitute("invariant"),
+        frRefs: [],
+        assert: { op: "ne", args: [{ op: "ref", path: "order.state" }, { op: "enum", value: "closed" }] },
+      }],
+    }));
+    expect(outcome.kind).toBe("checked");
+    const machine = outcome.kind === "checked" ? outcome.runs.machineRun() : null;
+    expect(machine?.abortsMachineTargets()).toBe(true);
+    expect(machine?.skipsFor(TargetIds.reconstitute(["OB-1"]), false).map((s) => `${s.target().asString()}:${s.reason()}:${s.detail()}`))
+      .toEqual(["OB-1:timeout:machine invariant check exceeded its budget"]);
+  }, 60_000);
 });
 
 // --- interactor の全経路（InMemory ダブル＋素の値のみ） ----------------------

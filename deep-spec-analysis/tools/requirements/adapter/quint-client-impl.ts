@@ -3,7 +3,8 @@
 // decode を持ち、型付き判定だけを返す。quintBin・method 上書き・
 // APALACHE_DIST の有無・HOME は entry が環境から注入する（process.* は
 // entry 限定のため）。seed・ステップ/サンプル予算・タイムアウトは決定論の
-// 一部として凍結。旧 main の CLI 編成部からの逐語移植。
+// 一部として凍結（config の timeoutOverrideMs だけがテスト用の注入口）。
+// 旧 main の CLI 編成部からの逐語移植。
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -95,9 +96,22 @@ export class QuintClientImpl implements QuintClient {
     }
   }
 
+  // 予算超過は SIGINT で止める（spawnSync の既定 SIGTERM ではない）。quint 0.32 は
+  // Apalache サーバを spawn したとき、その後始末ハンドラを exit / SIGINT /
+  // SIGUSR1 / SIGUSR2 / uncaughtException にだけ登録する——SIGTERM には付かない。
+  // SIGTERM で殺すとサーバは孤児として生き残り、しかもその cwd は下の一時
+  // ディレクトリなので check() の後片付けで消える。以後の `quint verify` は
+  // すべてその孤児に接続して `<消えた cwd>/_apalache-out/server/…/log2.smt
+  // (No such file or directory)` で落ちる（実測、issue #128）。SIGINT なら
+  // quint 自身の後始末が走り、サーバごと終わる。
+  // タイムアウト判定は res.error.code === "ETIMEDOUT" を第一の証拠にする——
+  // SIGINT を受けた quint は後始末のあと自分で exit するので res.signal は
+  // null になりうる（bun でも node でも実測）。signal 判定は退避経路。
   #runQuint(args: string[], itfPath: string | null, timeoutMs: number, cwd: string): QuintRun {
-    const res = spawnSync(this.#config.quintBin, args, { encoding: "utf-8", timeout: timeoutMs, cwd });
-    const timedOut = res.signal === "SIGTERM" || res.signal === "SIGKILL";
+    const budget = this.#config.timeoutOverrideMs ?? timeoutMs;
+    const res = spawnSync(this.#config.quintBin, args, { encoding: "utf-8", timeout: budget, cwd, killSignal: "SIGINT" });
+    const errorCode = (res.error as { code?: unknown } | undefined)?.code;
+    const timedOut = errorCode === "ETIMEDOUT" || res.signal === "SIGINT" || res.signal === "SIGTERM" || res.signal === "SIGKILL";
     let itf: string | null = null;
     if (itfPath && existsSync(itfPath)) {
       try {

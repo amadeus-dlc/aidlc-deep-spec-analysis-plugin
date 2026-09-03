@@ -21,7 +21,7 @@ AI-DLC v2 のための Kiro 流 **Deep Spec Analysis**：追加合成プラグ�
 | 設計検証ステージ（フェーズ②） | `stages/construction/deep-spec-analysis-functional-verify.md` | `functional-design` 後の Construction 集約ステージ（scopes: `enterprise`, `feature`）：全ユニットのエンティティ/ルール/状態機械を設計 IR（契約3、`tools/data/deep-spec-design-ir-schema.json`——遷移・`ignores[]`・`initial` を持つネイティブ状態機械）へ形式化し、設計バックエンドを実行、A/B/X ゲート、承認済み設計改訂の適用（上流凍結：requirements には決して触れない） |
 | 設計バックエンド（フェーズ②） | `sensors/aidlc-deep-spec-design-{ir-valid,verify-smt,verify-quint}.md` + `tools/aidlc-sensor-deep-spec-design-*.ts` + `tools/design/{domain,usecase,adapter}/` | コンパイルダウン再利用：各ユニットを契約1 文書へロワリングし、実証済み v1 バックエンドを子プロセス実行。findings は設計語彙（DOB/TR/SM/DSC、ユニット帰責）へリマップ。合成 vacuity 相乗りによる新 kind：`unreachable`（デッドガード；bounded モードの到達不能状態も、予算キャップ付き）と `redundancy`（シャドーイング、相互ペアは畳み込み）。`deterministic: false` の機械は `waived` skip |
 | refinement（フェーズ③） | `tools/data/deep-spec-refinement-map-schema.json` + `tools/refinement/domain/` + knowledge | 人間がゲートする抽象化関数（契約4：attrMap 式／全域 enumMap、eventMap、無沈黙台帳 unmapped[]、二重コンテンツハッシュアンカー）と、それが設計バックエンド内で可能にする検査：ᾱ 代入した要件不変条件（静的は v1 z3 子プロセス、到達可能は Quint トレース）、イベントの enabledness と抽象フレーム付き 1 ステップ模擬、シナリオ再生、`mapping-gap` 閉包 findings。写像の欠如・陳腐化は明示 skip になり、決して沈黙しない |
-| doctor | `tools/deep-spec-analysis-doctor.ts` | 可用性の advisory 検査（z3-solver・node・quint・Apalache、導入コマンド付き）、要件検証カバレッジ（unverified/stale intent——stale 判定は `sourceDigest` のコンテンツハッシュ、mtime はレガシーフォールバックのみ）、既存設計成果物の report-only 構造負債スキャン |
+| doctor | `tools/deep-spec-analysis-doctor.ts` | 可用性の advisory 検査（z3-solver・node・quint・Apalache、導入コマンド付き。Apalache 行は 8822 番に既にサーバが待ち受けているときだけ trivial spec を verify するので、検証できなくなった孤児サーバでは fail する）、要件検証カバレッジ（unverified/stale intent——stale 判定は `sourceDigest` のコンテンツハッシュ、mtime はレガシーフォールバックのみ）、既存設計成果物の report-only 構造負債スキャン |
 
 ## インストールと前提
 

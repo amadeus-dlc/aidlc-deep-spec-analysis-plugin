@@ -46,7 +46,11 @@ export class DoctorPresenter {
       Check.reconstitute({
         pass: availability.hasApalache(),
         label: "deep-spec-analysis: Apalache available (quint verify, method: bounded)",
-        fix: "Install a JDK (17+) and run any `quint verify` once so quint downloads its Apalache distribution into ~/.quint (or set APALACHE_DIST). Without it the Quint backend uses seeded simulation (method: simulation) and skips leads-to temporal obligations.",
+        // 陳腐化した待ち受けサーバは「入れ方」を教えても直らない——止め方を教える
+        // （issue #128）。導入手順の文言は逐語凍結のまま残す。
+        fix: availability.apalacheServerIsStale()
+          ? "An Apalache server is listening on localhost:8822 but cannot verify — typically an orphan that still holds a deleted working directory. Stop it (`lsof -nP -iTCP:8822 -sTCP:LISTEN` shows the PID, then `kill <pid>`); quint starts a fresh server on the next `quint verify`."
+          : "Install a JDK (17+) and run any `quint verify` once so quint downloads its Apalache distribution into ~/.quint (or set APALACHE_DIST). Without it the Quint backend uses seeded simulation (method: simulation) and skips leads-to temporal obligations.",
         severity: CheckSeverity.advisory(),
       }),
     ];
