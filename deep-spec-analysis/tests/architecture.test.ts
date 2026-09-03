@@ -28,9 +28,9 @@ import {
   noDataModelsInDomain,
   noPrimitiveFieldsInDomain,
   primitiveFieldsOf,
-  PRIMITIVE_FIELD_DEBT,
-  PRIMITIVE_FIELD_DEBT_CEILING,
-  PRIMITIVE_FIELD_EXCLUSIONS,
+  PUBLISHED_LANGUAGE,
+  domainFieldsArePrivate,
+  publishedLanguageLayers,
   noTestPayloads,
   onlySanctionedImports,
   privateConstructorInDomain,
@@ -188,6 +188,14 @@ describe("rule red/green examples (detection power proof)", () => {
   test("no-data-models-in-domain flags getter-only shapes outside the debt set", () => {
     expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  readonly a: string;\n}")).not.toHaveLength(0);
     expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n}")).toHaveLength(0);
+    // #80: メソッドを添えてもプロパティが 1 つでもあればデータモデル（「メソッドが一つあれば合格」の抜け道を塞ぐ）。
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  readonly a: string;\n  judge(): boolean;\n}")).toHaveLength(1);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n  on: () => void;\n}")).toHaveLength(1);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n  readonly [k: string]: string;\n}")).toHaveLength(1);
+    // 公開言語の表の項目だけが免除——表のパスにある表の名前で、別名は免除されない。
+    expect(noDataModelsInDomain("kernel/domain/expression.ts", "export interface Expression {\n  readonly op: string;\n}")).toHaveLength(0);
+    expect(noDataModelsInDomain("kernel/domain/expression.ts", "export interface Sneak {\n  readonly op: string;\n}")).toHaveLength(1);
+    expect(noDataModelsInDomain("design/domain/expression.ts", "export interface Expression {\n  readonly op: string;\n}")).toHaveLength(1);
     // 型引数付き interface も data model（波39 で塞いだ穴）——ネストした型引数と
     // extends 節を経由しても回避できない。
     expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T> {\n  readonly t: T;\n}")).not.toHaveLength(0);
@@ -235,6 +243,32 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(primitiveFieldsOf("export class Foo {\n  // readonly #ghost: string;\n  readonly #label: string;\n  readonly #real: number;\n}")).toEqual(["#real: number"]);
   });
 
+  test("domain-fields-are-private flags every non-# field of a domain class and ignores door signatures", () => {
+    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly bar: string;\n  #ok: string;\n}")).toHaveLength(1);
+    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  public count = 0;\n  private secret: number;\n  static readonly EMPTY = new Foo();\n  protected x?: string;\n}")).toHaveLength(4);
+    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly #bar: string;\n  static #cache: Foo | null = null;\n  bar(): string {\n    return this.#bar;\n  }\n}")).toHaveLength(0);
+    // ドア署名の無名インライン object 型（深さ 2）の行はフィールドではない。
+    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly #id: string;\n  static reconstitute(seed: {\n    readonly id: string;\n    readonly name?: string;\n  }): Foo {\n    return new Foo(seed);\n  }\n  match<T>(handlers: { a: () => T; b: (x: number) => T }): T {\n    const local: { readonly k: string } = { k: \"\" };\n    return handlers.a();\n  }\n}")).toHaveLength(0);
+    // 型引数の制約に `{` を持つ generic class でも本体を見る（レビュー指摘の回帰）。
+    expect(domainFieldsArePrivate("kernel/domain/foo.ts", "export class Idx<K extends { asString(): string }, V> {\n  readonly leak: string;\n  readonly #ok: V;\n}")).toHaveLength(1);
+    expect(domainFieldsArePrivate("kernel/domain/foo.ts", "export class Idx<K extends { asString(): string }, V extends (x: K) => boolean> {\n  readonly #ok: V;\n}")).toHaveLength(0);
+    // 複数行の引数リスト（丸括弧の中）の行もフィールドではない。
+    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly #id: string;\n  static versionMismatch(\n    id: string,\n    model: number,\n    method: string,\n  ): Foo {\n    return new Foo(id);\n  }\n}")).toHaveLength(0);
+    expect(domainFieldsArePrivate("design/adapter/foo.ts", "export class Foo {\n  readonly bar: string;\n}")).toHaveLength(0);
+    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Boom extends Error {\n  readonly code: number;\n}")).toHaveLength(1);
+  });
+
+  test("published-language-layers confines every table entry to its layers", () => {
+    expect(publishedLanguageLayers("design/usecase/foo.ts", 'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}')).toHaveLength(1);
+    expect(publishedLanguageLayers("design/domain/foo.ts", 'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}')).toHaveLength(0);
+    expect(publishedLanguageLayers("design/adapter/foo.ts", "const x: AttrPaths = y;")).toHaveLength(1);
+    expect(publishedLanguageLayers("design/domain/foo.ts", "const x: AttrPaths = y;")).toHaveLength(0);
+    expect(publishedLanguageLayers("aidlc-sensor-deep-spec-verify-smt.ts", "const k = KeyedIndex.empty();")).toHaveLength(1);
+    // 文字列・コメントの中の名前には反応しない。
+    expect(publishedLanguageLayers("design/usecase/foo.ts", '// Expression is documented here\nconst s = "Expression";')).toHaveLength(0);
+    expect(publishedLanguageLayers("design/usecase/foo.ts", "const expressionCount = 1;")).toHaveLength(0);
+  });
+
   test("no-export-star flags a wildcard re-export, passes an explicit facade", () => {
     expect(noExportStar("kernel/domain/index.ts", 'export * from "./digest.ts";')).not.toHaveLength(0);
     expect(noExportStar("kernel/domain/index.ts", 'export { Digest } from "./digest.ts";')).toHaveLength(0);
@@ -280,19 +314,22 @@ describe("the real tools/ tree", () => {
     expect(all).toEqual([]);
   });
 
-  test("the primitive-field ledger is shrink-only: every ledgered field descriptor is still detected", () => {
-    // 台帳の記述子はすべて実ツリーに残っていること（消えたら台帳から落とす）。
-    // 逆向き（台帳にない記述子は違反）は「every file passes every architecture rule」が担う。
-    for (const [rel, fields] of PRIMITIVE_FIELD_DEBT) {
+  test("the published-language table is the only exemption: every entry exists, exports its name, and lives in the domain", () => {
+    // 表の項目はパス・理由・利用可能層を持ち、その名前の型をそのファイルが公開する。
+    for (const [rel, entry] of PUBLISHED_LANGUAGE) {
       expect(files).toContain(rel);
-      const actual = new Set(primitiveFieldsOf(readFileSync(join(toolsDir, rel), "utf-8")));
-      for (const field of fields) expect(actual).toContain(field);
-      expect(fields.size).toBeGreaterThan(0);
+      const loc = locationOf(rel);
+      expect(typeof loc !== "string" && loc?.layer).toBe("domain");
+      expect(entry.reason.length).toBeGreaterThan(0);
+      expect(entry.layers.length).toBeGreaterThan(0);
+      const source = readFileSync(join(toolsDir, rel), "utf-8");
+      expect(new RegExp(`^export (?:class|interface|type) ${entry.name}\\b`, "m").test(source)).toBe(true);
     }
-    for (const rel of PRIMITIVE_FIELD_EXCLUSIONS) expect(files).toContain(rel);
-    // 台帳へ記述子ごと新しい負債を足す抜け道は上限定数で塞ぐ（縮んだら下げる、上げない）。
-    const total = [...PRIMITIVE_FIELD_DEBT.values()].reduce((n, fields) => n + fields.size, 0);
-    expect(total).toBeLessThanOrEqual(PRIMITIVE_FIELD_DEBT_CEILING);
+    // domain の公開 interface は表の項目だけ（データモデルの再流入は規則が止める）。
+    const interfaces = files
+      .filter((rel) => { const loc = locationOf(rel); return typeof loc !== "string" && loc?.layer === "domain"; })
+      .flatMap((rel) => [...readFileSync(join(toolsDir, rel), "utf-8").matchAll(/^export interface (\w+)/gm)].map((m) => `${rel}:${m[1]}`));
+    expect(interfaces).toEqual(["kernel/domain/expression.ts:Expression"]);
   });
 
   test("every file is either layered, an entry, legacy, or data — nothing unclassified", () => {

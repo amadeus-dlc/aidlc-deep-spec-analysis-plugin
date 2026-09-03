@@ -2020,3 +2020,23 @@ prose。生文字列の門は `reconstitute`、DP の門は `of`、境界の読�
 ので、計画のデッドロック分岐は CLI が告げる bounded モードでしか動かない。
 simulation で新たに検出するのは背景制約・型境界の到達可能な違反である。既存の
 golden は不変（全 fixture に不変量がある）、新 golden は固定 seed で決定的。
+
+単位 4（同 PR）: 裁定 5 が着地——最終アーキテクチャゲート #80 が閉じる。縮小
+専用の台帳は消えた: `DATA_MODEL_DEBT`、`PRIMITIVE_FIELD_DEBT` とその上限は
+陳腐化ガードごと削除、名前ベースの除外リスト（`PRIMITIVE_FIELD_EXCLUSIONS`、
+単位 1 以降は `PUBLISHED_VALUE_SHAPES` も）も消えた。残るのは表 1 つ
+`PUBLISHED_LANGUAGE`——11 項目、それぞれパス・公開する名前・domain オブジェクト
+でない理由（published な式ツリー、表現プリミティブ `KeyedIndex`／`KeySet`、
+prose の列 `ErrorMessages`、宣言値・初期状態・属性パスの state トークン集合、
+owner が混成トークンの `FrRefClaim`）・利用可能層（`domain` と `adapter`。
+`AttrPaths` だけ `domain`）。ゲートは規則 3 つ: `no-data-models-in-domain` は
+プロパティを持つ公開 interface／object 型をすべてデータモデルとし、メソッドが
+添えてあっても免除しない（red example `readonly a: string`＋`judge()` を固定）、
+免除は自分のパスの表項目だけ。`domain-fields-are-private` は domain class の
+`#` でないフィールド（public・protected・TS private・static・readonly）をすべて
+違反にする（走査は波括弧と丸括弧の深さを追い、ドア署名や複数行の引数リストは
+フィールドと見ない）。`published-language-layers` は表項目の名前を許可層の外で
+使うファイルを違反にする（usecase と entry は公開言語を直接扱わない）。実ツリー
+は 3 つとも例外なしで通る。表に項目を足すのは裁定であって便宜ではない。
+
+単位 4 で 2026-09-03 の裁定はすべて実装され、#80 は閉じる。
