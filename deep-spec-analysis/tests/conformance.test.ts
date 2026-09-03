@@ -116,6 +116,26 @@ describe("deep-spec-ir-valid", () => {
   });
 });
 
+describe("a background-and-events model runs the quint machine phase (ruling 4, 2026-09-03)", () => {
+  // 不変量義務が 1 つも無いモデルは、かつて機械フェーズを飛ばし、イベントが
+  // 背景制約や型境界を破る到達可能状態を見逃していた。ゲートを外した挙動を
+  // golden で固定する: refund が amount を負にする trace が conflict として出る
+  //（quint 0.32 の run はデッドロックを報告しないので、simulation で新たに
+  // 捕まるのはこの種の違反。デッドロックは CLI が告げる bounded 側の分岐）。
+  test("quint backend (simulation) reports the reachable background violation over the event obligations", () => {
+    const { modelPath, verifyDir } = makeRecord(join(fixtures, "conformance", "background-events", "deep-spec-analysis-formal-model.md"));
+    const run = fireSensor("aidlc-sensor-deep-spec-verify-quint.ts", modelPath, quintEnv);
+    expect(run.status).toBe(0);
+    expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, findings_count: 1, method: "simulation" });
+    const written = readFileSync(join(verifyDir, "quint.json"), "utf-8");
+    expect(written).toBe(readFileSync(join(expected, "background-events", "quint.json"), "utf-8"));
+    const doc = JSON.parse(written) as { findings: { kind: string; targets: string[]; witness: { trace?: { "order.amount": number }[] } }[] };
+    expect(doc.findings.map((f) => f.kind)).toEqual(["conflict"]);
+    expect(doc.findings[0]?.targets).toEqual(["OB-1", "OB-2", "OB-3"]);
+    expect(doc.findings[0]?.witness.trace?.at(-1)?.["order.amount"]).toBeLessThan(0);
+  }, 240_000);
+});
+
 describe("backend conformance (expected findings, byte-for-byte)", () => {
   const canonical = join(fixtures, "conformance", "deep-spec-analysis-formal-model.md");
   let modelPath = "";

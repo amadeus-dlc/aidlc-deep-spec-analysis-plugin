@@ -2284,3 +2284,22 @@ and `ArtifactPath` the witness coordinate, `TargetId` the refcheck skip,
 counts. `Obligation.ears` and `WitnessRef.value` are prose. The raw-string
 doors are now `reconstitute`, the primitive doors `of`, and the boundary
 readers `toStrings`. Goldens stay byte-identical.
+
+Unit 3 (same PR): ruling 4 lands — the Quint machine phase runs without
+invariant obligations. The `hasInvariantComponents` gate in the Quint
+client is gone (and so is the method), so a model with only background
+constraints and event obligations gets its event machine simulated: the
+compiler already folded the background constraints and the type bounds
+into `invAll`, and the phase now catches a state the events can reach
+that breaks them. The new conformance fixture
+`conformance/background-events` (three events, one background
+constraint, no invariant) has a refund event with no floor; the frozen
+golden shows the conflict over the three event obligations with the
+six-step trace that drives the amount below zero — a defect the gated
+phase could not see. One honest limit: Quint 0.32's `run` does not
+report deadlocks (a disabled `step` just ends the trace with "no
+violation"), so the deadlock branch of the plan only fires where the CLI
+says so — bounded mode; in simulation what the phase newly detects is
+the reachable violation of background constraints and type bounds. The
+existing goldens are unchanged (every fixture carries an invariant); the
+new golden is deterministic under the fixed seed.
