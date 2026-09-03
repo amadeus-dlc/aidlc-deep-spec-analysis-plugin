@@ -124,7 +124,12 @@ beforeAll(() => {
   if (!installOk) {
     throw new Error(`installer failed (${res.status}): ${res.stderr || res.stdout}`);
   }
-});
+  // This hook spawns two engine processes (intent-create, then the installer
+  // with its build and compose). bun's default 5 s hook budget is enough on a
+  // developer machine (~0.6 s) but a loaded CI runner crossed it once and the
+  // killed installer surfaced as `installer failed (null)`, so the hook gets
+  // its own explicit budget, matching the spawn timeouts above.
+}, { timeout: 300_000 });
 
 afterAll(() => {
   if (sandbox) rmSync(sandbox, { recursive: true, force: true });
