@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -30,6 +31,10 @@ jobs:
 
       - name: Install pinned dev dependencies (solvers, types, tsc)
         run: bun install --frozen-lockfile
+
+      - name: Verify release tag matches plugin manifest
+        if: startsWith(github.ref, 'refs/tags/')
+        run: bun scripts/release.ts --check-tag "$GITHUB_REF_NAME"
 
       - name: Typecheck
         run: bunx tsc --noEmit

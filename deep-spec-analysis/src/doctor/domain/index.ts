@@ -10,3 +10,4 @@ export { SolverAvailability } from "./solver-availability.ts";
 export { DigestAnchor } from "./digest-anchor.ts";
 export { VerificationStaleness } from "./verification-staleness.ts";
 export { CoverageState } from "./coverage-state.ts";
+export { PluginVersion } from "./plugin-version.ts";

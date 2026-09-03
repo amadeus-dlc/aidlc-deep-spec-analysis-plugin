@@ -7,14 +7,16 @@
 // blocks the workflow.
 //
 // 合成ルート（entry、移行 PR9/#22）: env 読取と配線だけを持つ。checks 配列順
-// ＝ 5 ユースケースの実行順（マニフェスト → ソルバ → 要件カバレッジ →
-// 構造負債 → 設計カバレッジ）は凍結。label/fix の文言は presenter に封じる。
+// ＝ 6 ユースケースの実行順（マニフェスト → version advisory → ソルバ →
+// 要件カバレッジ → 構造負債 → 設計カバレッジ）は凍結。version 行は既存の
+// installation ブロック直後へ挿入し、既存行同士の順序は変えない。
 
 import { join } from "node:path";
 import { HealthVerdict } from "@deep-spec/doctor-domain";
 import {
   CheckFunctionalCoverageUseCase,
   CheckInstallationUseCase,
+  CheckVersionAdvisoryUseCase,
   CheckSolversUseCase,
   CheckStructuralDebtUseCase,
   CheckVerificationCoverageUseCase,
@@ -22,12 +24,14 @@ import {
 import {
   DoctorPresenter,
   DoctorWorkspaceClientImpl,
+  GitHubReleaseTagsClientImpl,
   HarnessFileClientImpl,
+  InstallationProvenanceClientImpl,
   RefcheckBackendClientImpl,
   SolverProbeClientImpl,
 } from "@deep-spec/doctor-adapter";
 
-function main(): void {
+async function main(): Promise<void> {
   const projectDir = process.env.AIDLC_PROJECT_DIR || process.cwd();
   const harnessDir = process.env.AIDLC_HARNESS_DIR || ".claude";
   const root = join(projectDir, harnessDir);
@@ -44,6 +48,10 @@ function main(): void {
   });
   const verdict = HealthVerdict.of([
     ...presenter.installation(new CheckInstallationUseCase(new HarnessFileClientImpl({ root })).execute()),
+    presenter.version(await new CheckVersionAdvisoryUseCase(
+      new InstallationProvenanceClientImpl({ harnessRoot: root }),
+      new GitHubReleaseTagsClientImpl({ repository: "j5ik2o/deep-spec-analysis" }),
+    ).execute()),
     ...presenter.solvers(
       new CheckSolversUseCase(
         new SolverProbeClientImpl({
@@ -65,4 +73,4 @@ function main(): void {
   process.stdout.write(`${JSON.stringify(verdict.document())}\n`);
 }
 
-main();
+await main();
