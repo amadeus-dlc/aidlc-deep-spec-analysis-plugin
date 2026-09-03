@@ -10,8 +10,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { readContractSchema } from "@deep-spec/kernel-adapter";
+import { ContentHash, ArtifactPath } from "@deep-spec/kernel-domain";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -19,13 +19,13 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { err } from "../tools/kernel/infrastructure/index.ts";
+import { err } from "@deep-spec/kernel-infrastructure";
 import {
   ReferenceCheckReportRepositoryImpl,
   conformToContract,
   renderReportBytes,
-} from "../tools/refcheck/adapter/index.ts";
-import { FrRefs, TargetIds } from "../tools/kernel/domain/index.ts";
+} from "@deep-spec/refcheck-adapter";
+import { FrRefs, TargetIds } from "@deep-spec/kernel-domain";
 import {
   CheckFamilies,
   CheckFamily,
@@ -39,10 +39,10 @@ import {
   Skips,
   UnitName,
   WitnessRefs,
-} from "../tools/refcheck/domain/index.ts";
+} from "@deep-spec/refcheck-domain";
 
 const schemaPath = join(
-  dirname(fileURLToPath(import.meta.url)), "..", "tools", "data", "deep-spec-findings-schema.json",
+  dirname(fileURLToPath(import.meta.url)), "..", "src", "entries", "data", "deep-spec-findings-schema.json",
 );
 const schema = readContractSchema(schemaPath);
 

@@ -15,6 +15,7 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   cpSync,
   existsSync,
@@ -48,9 +49,45 @@ const quintEnv = {
   AIDLC_DEEP_SPEC_QUINT_BIN: quintBin,
 };
 
+// 出荷形（FR2.1）: プラグインが harness へ運ぶのは entry バンドル 10 本と
+// data/ の契約スキーマ 4 本の計 14 ファイルだけ。バンドルの中身は bundle 済み
+// JS だが、上流ディスパッチャが manifest の command から .ts で終わるトークンを
+// 探すのでファイル名は .ts のまま。旧構成の層ディレクトリはもう配布しないので、
+// tombstone で消え compose 先に残らないことも表明する。
+const PLUGIN_BUNDLES = [
+  "aidlc-sensor-deep-spec-ir-valid.ts",
+  "aidlc-sensor-deep-spec-verify-smt.ts",
+  "aidlc-sensor-deep-spec-verify-quint.ts",
+  "aidlc-sensor-deep-spec-refcheck-domain.ts",
+  "aidlc-sensor-deep-spec-refcheck-contract.ts",
+  "aidlc-sensor-deep-spec-refcheck-functional.ts",
+  "aidlc-sensor-deep-spec-design-ir-valid.ts",
+  "aidlc-sensor-deep-spec-design-verify-smt.ts",
+  "aidlc-sensor-deep-spec-design-verify-quint.ts",
+  "deep-spec-analysis-doctor.ts",
+];
+const PLUGIN_SCHEMAS = [
+  "deep-spec-ir-schema.json",
+  "deep-spec-findings-schema.json",
+  "deep-spec-design-ir-schema.json",
+  "deep-spec-refinement-map-schema.json",
+];
+const PLUGIN_LAYER_DIRS = ["kernel", "requirements", "design", "refinement", "refcheck", "doctor"];
+
 let sandbox = "";
 let installOk = false;
 let installOut = "";
+
+// 導入先に置かれたプラグイン出荷物の指紋（名前＋内容ハッシュ）。再実行が
+// 何も落とさず何も書き換えないことの比較基準。
+function pluginToolsFingerprint(): string[] {
+  const tools = join(sandbox, ".claude", "tools");
+  const digest = (path: string): string => createHash("sha256").update(readFileSync(path)).digest("hex");
+  return [
+    ...PLUGIN_BUNDLES.map((b) => `${b}:${digest(join(tools, b))}`),
+    ...PLUGIN_SCHEMAS.map((s) => `data/${s}:${digest(join(tools, "data", s))}`),
+  ].sort();
+}
 
 function inSandbox(
   command: string[],
@@ -474,7 +511,7 @@ describe("sensors against the real intent record", () => {
 });
 
 describe("phase-1 refcheck sensors compose into the sandbox", () => {
-  test("the refcheck sensors, tools, and shared lib are composed into the harness tree", () => {
+  test("the refcheck sensors and the shipped bundles are composed into the harness tree", () => {
     for (const sensor of [
       "aidlc-deep-spec-refcheck-domain.md",
       "aidlc-deep-spec-refcheck-contract.md",
@@ -482,30 +519,32 @@ describe("phase-1 refcheck sensors compose into the sandbox", () => {
     ]) {
       expect(existsSync(join(sandbox, ".claude", "sensors", sensor))).toBe(true);
     }
-    for (const tool of [
-      "aidlc-sensor-deep-spec-refcheck-domain.ts",
-      "aidlc-sensor-deep-spec-refcheck-contract.ts",
-      "aidlc-sensor-deep-spec-refcheck-functional.ts",
-      "refcheck/domain/index.ts",
-      "refcheck/usecase/index.ts",
-      "refcheck/adapter/index.ts",
-      "kernel/infrastructure/index.ts",
-      "kernel/domain/index.ts",
-      "kernel/usecase/index.ts",
-      "kernel/adapter/index.ts",
-      "requirements/domain/index.ts",
-      "requirements/usecase/index.ts",
-      "requirements/adapter/index.ts",
-      "design/domain/index.ts",
-      "design/usecase/index.ts",
-      "design/adapter/index.ts",
-      "refinement/domain/index.ts",
-      "doctor/domain/index.ts",
-      "doctor/usecase/index.ts",
-      "doctor/adapter/index.ts",
-    ]) {
-      expect(existsSync(join(sandbox, ".claude", "tools", tool))).toBe(true);
+    // 出荷形は entry バンドル 10 本＋data/ のスキーマ 4 本の計 14 ファイルだけ。
+    // 層ツリーはソース側（src/）にしか無く、compose の対象ではない。
+    const tools = join(sandbox, ".claude", "tools");
+    for (const bundle of PLUGIN_BUNDLES) {
+      expect(existsSync(join(tools, bundle))).toBe(true);
     }
+    for (const schema of PLUGIN_SCHEMAS) {
+      expect(existsSync(join(tools, "data", schema))).toBe(true);
+    }
+    for (const legacy of PLUGIN_LAYER_DIRS) {
+      expect(existsSync(join(tools, legacy))).toBe(false);
+    }
+    // プラグインが tools/ に持ち込むのはこの 14 ファイルちょうど（他は core の
+    // 出荷物）。deep-spec を名に持つものを数え、ディレクトリが 0 であることも見る。
+    const owned = readdirSync(tools, { withFileTypes: true }).filter((e) => e.name.includes("deep-spec"));
+    expect(owned.filter((e) => e.isDirectory())).toHaveLength(0);
+    expect(owned.map((e) => e.name).sort()).toEqual([...PLUGIN_BUNDLES].sort());
+    // data/ には core の compose 台帳（plugin-files-*.json など）も同居するので、
+    // プラグインが持ち込む契約スキーマだけを名前の形で切り出して数える。
+    expect(
+      readdirSync(join(tools, "data"), { withFileTypes: true })
+        .filter((e) => e.isFile() && e.name.startsWith("deep-spec-") && e.name.endsWith("-schema.json"))
+        .map((e) => e.name)
+        .sort(),
+    ).toEqual([...PLUGIN_SCHEMAS].sort());
+    expect(owned.length + PLUGIN_SCHEMAS.length).toBe(14);
   });
 
   test("the contributions wire the refcheck sensors into the core design stages", () => {
@@ -695,6 +734,55 @@ describe("upgrade path — re-running the installer refreshes stale plugin files
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("upgrade cleanup");
     expect(existsSync(retired)).toBe(false);
+  });
+
+  // 出荷形が「層ツリー ＋ 素の entry」から「bundle 済み entry ＋ data/」へ移った
+  // 以上、アップグレード先に旧構成が残っていてはならない。entry のファイル名は
+  // 変わらないので旧 entry は upgrade refresh が現行版へ置き換え、二度と配布され
+  // ない層ディレクトリは tombstone が消す——経路は違うが、結果はどちらも 14
+  // ファイルちょうど。ディスパッチャは basename で解決するので、旧実装が 1 本でも
+  // 残れば新バンドルより先に掴まれ得る。
+  test("the previous version's orphan entries and layer directories are cleaned away on upgrade", () => {
+    const tools = join(sandbox, ".claude", "tools");
+    for (const bundle of PLUGIN_BUNDLES) {
+      writeFileSync(join(tools, bundle), "// v0.5.x の孤児 entry\n");
+    }
+    for (const dir of PLUGIN_LAYER_DIRS) {
+      mkdirSync(join(tools, dir, "domain"), { recursive: true });
+      writeFileSync(join(tools, dir, "domain", "index.ts"), "// v0.5.x の孤児 facade\n");
+    }
+    const res = spawnSync("bun", [installer, "--project", sandbox, "--skip-build"], {
+      encoding: "utf-8",
+      timeout: 300_000,
+    });
+    expect(res.status).toBe(0);
+    // 層ディレクトリは tombstone 経路、旧 entry は refresh 経路で消える。
+    expect(res.stdout).toContain("upgrade cleanup");
+    expect(res.stdout).toContain("upgrade refresh");
+    // プラグインが tools/ 直下に残すのはバンドル 10 本だけ（層ディレクトリは 0）。
+    const named = readdirSync(tools, { withFileTypes: true }).filter((e) => e.name.includes("deep-spec"));
+    expect(named.filter((e) => e.isDirectory())).toHaveLength(0);
+    expect(named.map((e) => e.name).sort()).toEqual([...PLUGIN_BUNDLES].sort());
+    for (const dir of PLUGIN_LAYER_DIRS) expect(existsSync(join(tools, dir))).toBe(false);
+    for (const schema of PLUGIN_SCHEMAS) expect(existsSync(join(tools, "data", schema))).toBe(true);
+    // 孤児が 1 本も残らず、出荷形は 14 ファイルちょうどに戻っている。
+    expect(named.length + PLUGIN_SCHEMAS.length).toBe(14);
+    // 置き換えられた entry は孤児のプレースホルダではなく現行のバンドル。
+    for (const bundle of PLUGIN_BUNDLES) {
+      expect(readFileSync(join(tools, bundle), "utf-8")).not.toContain("v0.5.x の孤児 entry");
+    }
+  });
+
+  test("a second run drops nothing and leaves the shipped bytes untouched", () => {
+    const before = pluginToolsFingerprint();
+    const res = spawnSync("bun", [installer, "--project", sandbox, "--skip-build"], {
+      encoding: "utf-8",
+      timeout: 300_000,
+    });
+    expect(res.status).toBe(0);
+    // 孤児が無いので tombstone は 1 件も動かない（動けば冪等でない）。
+    expect(res.stdout).not.toContain("upgrade cleanup");
+    expect(pluginToolsFingerprint()).toEqual(before);
   });
 });
 

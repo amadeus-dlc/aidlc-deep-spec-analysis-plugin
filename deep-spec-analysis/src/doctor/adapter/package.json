@@ -1,0 +1,14 @@
+{
+  "name": "@deep-spec/doctor-adapter",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@deep-spec/doctor-domain": "workspace:*",
+    "@deep-spec/doctor-usecase": "workspace:*",
+    "@deep-spec/kernel-domain": "workspace:*"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@deep-spec/kernel-domain",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@deep-spec/kernel-infrastructure": "workspace:*"
+  }
+}

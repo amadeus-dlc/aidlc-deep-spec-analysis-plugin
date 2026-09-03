@@ -13,9 +13,9 @@ import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { canonicalStringify, extractFences } from "../tools/kernel/adapter/index.ts";
-import type { Json } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression, ExpressionTree} from "../tools/kernel/domain/index.ts";
+import { canonicalStringify, extractFences } from "@deep-spec/kernel-adapter";
+import type { Json } from "@deep-spec/kernel-adapter";
+import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression, ExpressionTree} from "@deep-spec/kernel-domain";
 
 // 降ろし方は帰属の内部表現（裁定 17）——テストは公開の isKind で射影する。
 const ORIGIN_KINDS = ["passthrough", "transition", "ignore", "vac-dead", "vac-shadow"] as const;
@@ -82,7 +82,7 @@ import {
   DesignEntityDecl,
   DesignAttributeDecls,
   DesignAttributeDecl
-} from "../tools/design/domain/index.ts";
+} from "@deep-spec/design-domain";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -91,12 +91,15 @@ import {
   reachabilityVariant,
   parseDesignEntities,
   renderDesignEntities
-} from "../tools/design/adapter/index.ts";
+} from "@deep-spec/design-adapter";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const toolsDir = join(pluginRoot, "tools");
+// スキーマ原本はソースツリー側（src/entries/data/）。toolsDir は生成される配布物の
+// spawn 先で、原本の置き場ではない。
+const dataDir = join(pluginRoot, "src", "entries", "data");
 const fixtures = join(pluginRoot, "tests", "fixtures", "design");
-const schemaPath = join(toolsDir, "data", "deep-spec-findings-schema.json");
+const schemaPath = join(dataDir, "deep-spec-findings-schema.json");
 const quintBin = join(pluginRoot, "node_modules", ".bin", "quint");
 
 function golden(file: string): string {
@@ -119,7 +122,10 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
       // 兄弟 v1 spawn の決定論条件（E2E スイートと同じ seeded simulation）を
       // 明示注入する（bun の spawnSync は実行時の process.env 変異を継がない）。
       const sibling = new SiblingBackendClientImpl({
-        toolsDirectory: toolsDir,
+        siblingToolPaths: {
+          smt: join(toolsDir, "aidlc-sensor-deep-spec-verify-smt.ts"),
+          quint: join(toolsDir, "aidlc-sensor-deep-spec-verify-quint.ts"),
+        },
         workingDirectory: pluginRoot,
         spawnEnvironment: { ...process.env, AIDLC_DEEP_SPEC_QUINT_METHOD: "simulation", AIDLC_DEEP_SPEC_QUINT_BIN: quintBin },
       });

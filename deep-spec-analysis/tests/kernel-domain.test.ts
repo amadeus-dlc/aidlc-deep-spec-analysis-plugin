@@ -4,7 +4,7 @@
 // ir-valid の errors[]・契約2 の unavailable.reason として golden バイトに
 // 現れるため、文言は「含む」ではなく完全一致で固定する。
 
-import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName, KeyedIndex, KeySet, RequirementId, QueryLabel, AttributeKind, VerificationMethod, FindingKind } from "../tools/kernel/domain/index.ts";
+import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName, KeyedIndex, KeySet, RequirementId, QueryLabel, AttributeKind, VerificationMethod, FindingKind } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
 import {
   canonicalStringify,
@@ -14,9 +14,9 @@ import {
   parseYamlSubset,
   type Json,
   validateSchema,
-} from "../tools/kernel/adapter/index.ts";
-import { smtIntOf, smtLit, smtName, smtVar } from "../tools/kernel/adapter/index.ts";
-import { type Result, err, ok, unreachable } from "../tools/kernel/infrastructure/index.ts";
+} from "@deep-spec/kernel-adapter";
+import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
+import { type Result, err, ok, unreachable } from "@deep-spec/kernel-infrastructure";
 
 describe("result", () => {
   test("ok and err narrow through the ok discriminant", () => {

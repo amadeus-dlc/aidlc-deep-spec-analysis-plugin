@@ -14,8 +14,8 @@ import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { RequirementIds, ContentHash, ArtifactPath } from "../tools/kernel/domain/index.ts";
+import { readContractSchema } from "@deep-spec/kernel-adapter";
+import { RequirementIds, ContentHash, ArtifactPath } from "@deep-spec/kernel-domain";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -33,12 +33,12 @@ import {
   parseFunctionalSpecDocument,
   parseRulesDocument,
   renderReportBytes,
-} from "../tools/refcheck/adapter/index.ts";
+} from "@deep-spec/refcheck-adapter";
 import {
   CheckContractSummaryUseCase,
   CheckDomainComponentsUseCase,
   CheckFunctionalDesignUseCase,
-} from "../tools/refcheck/usecase/index.ts";
+} from "@deep-spec/refcheck-usecase";
 import {
   ReferenceCheckReport,
   ReferenceCheckReportId,
@@ -64,13 +64,13 @@ import {
   SiblingUnitIndex,
   InputAnchor,
   InputAnchors,
-} from "../tools/refcheck/domain/index.ts";
+} from "@deep-spec/refcheck-domain";
 import { InMemoryReferenceCheckReportRepository } from "./doubles/in-memory-reference-check-report-repository.ts";
-import type { Result } from "../tools/kernel/infrastructure/index.ts";
+import type { Result } from "@deep-spec/kernel-infrastructure";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(pluginRoot, "tests", "fixtures", "refcheck");
-const schemaPath = join(pluginRoot, "tools", "data", "deep-spec-findings-schema.json");
+const schemaPath = join(pluginRoot, "src", "entries", "data", "deep-spec-findings-schema.json");
 const schema = readContractSchema(schemaPath);
 
 function golden(variant: string, file: string): string {

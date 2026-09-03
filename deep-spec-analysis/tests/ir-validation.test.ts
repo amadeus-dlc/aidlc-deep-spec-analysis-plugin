@@ -12,15 +12,15 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } f
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TriggerName, ArtifactPath, AttributeBound, ErrorMessages, RequirementIds, TargetId } from "../tools/kernel/domain/index.ts";
-import { DesignIrValidationMaterialsRepositoryImpl, DesignModelRepositoryImpl } from "../tools/design/adapter/index.ts";
-import { BindingPairs, BrReferenceIndex, BrRefs, DeclaredValues, DesignBackgroundDecl, DesignAttributeDecl, DesignAttributeDecls, DesignBackgroundDecls, DesignEntityDecl, DesignEntityDecls, DesignIgnoreDecl, DesignIgnoreDecls, DesignMachineDecl, DesignMachineDecls, DesignModelId, DesignObligationDecl, DesignObligationDecls, DesignScenarioDecl, DesignScenarioDecls, DesignTransitionDecl, DesignTransitionDecls, DesignUnitDecl, DesignUnitDecls, InitialStates, UnformalizedTargets, DesignUnitId, DesignTransitionId, DesignScenarioId, DesignObligationOrigin, DesignObligationId, DesignMachineId, DesignEntityName, DesignBackgroundId, DesignAttributeName, DesignIrValidationMaterialsId, BrRef } from "../tools/design/domain/index.ts";
-import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "../tools/design/usecase/index.ts";
+import { TriggerName, ArtifactPath, AttributeBound, ErrorMessages, RequirementIds, TargetId } from "@deep-spec/kernel-domain";
+import { DesignIrValidationMaterialsRepositoryImpl, DesignModelRepositoryImpl } from "@deep-spec/design-adapter";
+import { BindingPairs, BrReferenceIndex, BrRefs, DeclaredValues, DesignBackgroundDecl, DesignAttributeDecl, DesignAttributeDecls, DesignBackgroundDecls, DesignEntityDecl, DesignEntityDecls, DesignIgnoreDecl, DesignIgnoreDecls, DesignMachineDecl, DesignMachineDecls, DesignModelId, DesignObligationDecl, DesignObligationDecls, DesignScenarioDecl, DesignScenarioDecls, DesignTransitionDecl, DesignTransitionDecls, DesignUnitDecl, DesignUnitDecls, InitialStates, UnformalizedTargets, DesignUnitId, DesignTransitionId, DesignScenarioId, DesignObligationOrigin, DesignObligationId, DesignMachineId, DesignEntityName, DesignBackgroundId, DesignAttributeName, DesignIrValidationMaterialsId, BrRef } from "@deep-spec/design-domain";
+import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "@deep-spec/design-usecase";
 import {
   FormalModelRepositoryImpl,
   IrValidationMaterialsRepositoryImpl,
   RequirementsSourceRepositoryImpl,
-} from "../tools/requirements/adapter/index.ts";
+} from "@deep-spec/requirements-adapter";
 import {
   FormalModelId,
   FrReferenceIndex,
@@ -49,14 +49,17 @@ import {
   FrRefClaim,
   IrEntityDecl,
   IrTemporalDecl,
-} from "../tools/requirements/domain/index.ts";
-import { ValidateIrUseCase, type ValidateIrOutcome } from "../tools/requirements/usecase/index.ts";
+} from "@deep-spec/requirements-domain";
+import { ValidateIrUseCase, type ValidateIrOutcome } from "@deep-spec/requirements-usecase";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const toolsDir = join(pluginRoot, "tools");
+// スキーマ原本はソースツリー側（src/entries/data/）。toolsDir は生成される配布物の
+// spawn 先で、原本の置き場ではない。
+const dataDir = join(pluginRoot, "src", "entries", "data");
 const fixtures = join(pluginRoot, "tests", "fixtures");
-const irSchemaPath = join(toolsDir, "data", "deep-spec-ir-schema.json");
-const designSchemaPath = join(toolsDir, "data", "deep-spec-design-ir-schema.json");
+const irSchemaPath = join(dataDir, "deep-spec-ir-schema.json");
+const designSchemaPath = join(dataDir, "deep-spec-design-ir-schema.json");
 
 const MAX_REPORTED_ERRORS = 25;
 

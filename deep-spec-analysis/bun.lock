@@ -11,8 +11,237 @@
         "z3-solver": "5.2.0",
       },
     },
+    "src/design/adapter": {
+      "name": "@deep-spec/design-adapter",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/design-domain": "workspace:*",
+        "@deep-spec/design-usecase": "workspace:*",
+        "@deep-spec/kernel-adapter": "workspace:*",
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+        "@deep-spec/kernel-usecase": "workspace:*",
+        "@deep-spec/refinement-domain": "workspace:*",
+      },
+    },
+    "src/design/domain": {
+      "name": "@deep-spec/design-domain",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+      },
+    },
+    "src/design/usecase": {
+      "name": "@deep-spec/design-usecase",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/design-domain": "workspace:*",
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+        "@deep-spec/kernel-usecase": "workspace:*",
+        "@deep-spec/refinement-domain": "workspace:*",
+      },
+    },
+    "src/doctor/adapter": {
+      "name": "@deep-spec/doctor-adapter",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/doctor-domain": "workspace:*",
+        "@deep-spec/doctor-usecase": "workspace:*",
+        "@deep-spec/kernel-domain": "workspace:*",
+      },
+    },
+    "src/doctor/domain": {
+      "name": "@deep-spec/doctor-domain",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/kernel-domain": "workspace:*",
+      },
+    },
+    "src/doctor/usecase": {
+      "name": "@deep-spec/doctor-usecase",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/doctor-domain": "workspace:*",
+      },
+    },
+    "src/entries": {
+      "name": "@deep-spec/entries",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/design-adapter": "workspace:*",
+        "@deep-spec/design-domain": "workspace:*",
+        "@deep-spec/design-usecase": "workspace:*",
+        "@deep-spec/doctor-adapter": "workspace:*",
+        "@deep-spec/doctor-domain": "workspace:*",
+        "@deep-spec/doctor-usecase": "workspace:*",
+        "@deep-spec/kernel-adapter": "workspace:*",
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/refcheck-adapter": "workspace:*",
+        "@deep-spec/refcheck-domain": "workspace:*",
+        "@deep-spec/refcheck-usecase": "workspace:*",
+        "@deep-spec/requirements-adapter": "workspace:*",
+        "@deep-spec/requirements-domain": "workspace:*",
+        "@deep-spec/requirements-usecase": "workspace:*",
+      },
+    },
+    "src/kernel/adapter": {
+      "name": "@deep-spec/kernel-adapter",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+        "@deep-spec/kernel-usecase": "workspace:*",
+      },
+    },
+    "src/kernel/domain": {
+      "name": "@deep-spec/kernel-domain",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+      },
+    },
+    "src/kernel/infrastructure": {
+      "name": "@deep-spec/kernel-infrastructure",
+      "version": "0.0.0",
+    },
+    "src/kernel/usecase": {
+      "name": "@deep-spec/kernel-usecase",
+      "version": "0.0.0",
+    },
+    "src/refcheck/adapter": {
+      "name": "@deep-spec/refcheck-adapter",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/kernel-adapter": "workspace:*",
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+        "@deep-spec/kernel-usecase": "workspace:*",
+        "@deep-spec/refcheck-domain": "workspace:*",
+        "@deep-spec/refcheck-usecase": "workspace:*",
+      },
+    },
+    "src/refcheck/domain": {
+      "name": "@deep-spec/refcheck-domain",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+      },
+    },
+    "src/refcheck/usecase": {
+      "name": "@deep-spec/refcheck-usecase",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+        "@deep-spec/kernel-usecase": "workspace:*",
+        "@deep-spec/refcheck-domain": "workspace:*",
+      },
+    },
+    "src/refinement/domain": {
+      "name": "@deep-spec/refinement-domain",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/design-domain": "workspace:*",
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+        "@deep-spec/requirements-domain": "workspace:*",
+      },
+    },
+    "src/requirements/adapter": {
+      "name": "@deep-spec/requirements-adapter",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/kernel-adapter": "workspace:*",
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+        "@deep-spec/kernel-usecase": "workspace:*",
+        "@deep-spec/requirements-domain": "workspace:*",
+        "@deep-spec/requirements-usecase": "workspace:*",
+      },
+    },
+    "src/requirements/domain": {
+      "name": "@deep-spec/requirements-domain",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+      },
+    },
+    "src/requirements/usecase": {
+      "name": "@deep-spec/requirements-usecase",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+        "@deep-spec/kernel-usecase": "workspace:*",
+        "@deep-spec/requirements-domain": "workspace:*",
+      },
+    },
+    "tests": {
+      "name": "@deep-spec/tests",
+      "version": "0.0.0",
+      "dependencies": {
+        "@deep-spec/design-adapter": "workspace:*",
+        "@deep-spec/design-domain": "workspace:*",
+        "@deep-spec/design-usecase": "workspace:*",
+        "@deep-spec/doctor-adapter": "workspace:*",
+        "@deep-spec/doctor-domain": "workspace:*",
+        "@deep-spec/doctor-usecase": "workspace:*",
+        "@deep-spec/kernel-adapter": "workspace:*",
+        "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
+        "@deep-spec/kernel-usecase": "workspace:*",
+        "@deep-spec/refcheck-adapter": "workspace:*",
+        "@deep-spec/refcheck-domain": "workspace:*",
+        "@deep-spec/refcheck-usecase": "workspace:*",
+        "@deep-spec/refinement-domain": "workspace:*",
+        "@deep-spec/requirements-adapter": "workspace:*",
+        "@deep-spec/requirements-domain": "workspace:*",
+        "@deep-spec/requirements-usecase": "workspace:*",
+      },
+    },
   },
   "packages": {
+    "@deep-spec/design-adapter": ["@deep-spec/design-adapter@workspace:src/design/adapter"],
+
+    "@deep-spec/design-domain": ["@deep-spec/design-domain@workspace:src/design/domain"],
+
+    "@deep-spec/design-usecase": ["@deep-spec/design-usecase@workspace:src/design/usecase"],
+
+    "@deep-spec/doctor-adapter": ["@deep-spec/doctor-adapter@workspace:src/doctor/adapter"],
+
+    "@deep-spec/doctor-domain": ["@deep-spec/doctor-domain@workspace:src/doctor/domain"],
+
+    "@deep-spec/doctor-usecase": ["@deep-spec/doctor-usecase@workspace:src/doctor/usecase"],
+
+    "@deep-spec/entries": ["@deep-spec/entries@workspace:src/entries"],
+
+    "@deep-spec/kernel-adapter": ["@deep-spec/kernel-adapter@workspace:src/kernel/adapter"],
+
+    "@deep-spec/kernel-domain": ["@deep-spec/kernel-domain@workspace:src/kernel/domain"],
+
+    "@deep-spec/kernel-infrastructure": ["@deep-spec/kernel-infrastructure@workspace:src/kernel/infrastructure"],
+
+    "@deep-spec/kernel-usecase": ["@deep-spec/kernel-usecase@workspace:src/kernel/usecase"],
+
+    "@deep-spec/refcheck-adapter": ["@deep-spec/refcheck-adapter@workspace:src/refcheck/adapter"],
+
+    "@deep-spec/refcheck-domain": ["@deep-spec/refcheck-domain@workspace:src/refcheck/domain"],
+
+    "@deep-spec/refcheck-usecase": ["@deep-spec/refcheck-usecase@workspace:src/refcheck/usecase"],
+
+    "@deep-spec/refinement-domain": ["@deep-spec/refinement-domain@workspace:src/refinement/domain"],
+
+    "@deep-spec/requirements-adapter": ["@deep-spec/requirements-adapter@workspace:src/requirements/adapter"],
+
+    "@deep-spec/requirements-domain": ["@deep-spec/requirements-domain@workspace:src/requirements/domain"],
+
+    "@deep-spec/requirements-usecase": ["@deep-spec/requirements-usecase@workspace:src/requirements/usecase"],
+
+    "@deep-spec/tests": ["@deep-spec/tests@workspace:tests"],
+
     "@grpc/grpc-js": ["@grpc/grpc-js@1.14.4", "", { "dependencies": { "@grpc/proto-loader": "^0.8.0", "@js-sdsl/ordered-map": "^4.4.2" } }, "sha512-k9Dj3DV/itK9D06Y8f190Qgop7/Ui+D0njFV3LHMPwPT75DpXLQohE9Wmz0QElrJnzsjB7KPWiKJbOl7IPDArQ=="],
 
     "@grpc/proto-loader": ["@grpc/proto-loader@0.7.15", "", { "dependencies": { "lodash.camelcase": "^4.3.0", "long": "^5.0.0", "protobufjs": "^7.2.5", "yargs": "^17.7.2" }, "bin": { "proto-loader-gen-types": "build/bin/proto-loader-gen-types.js" } }, "sha512-tMXdRCfYVixjuFK+Hk0Q1s38gV9zDiDJfWL3h1rv4Qc39oILCu1TRTDt7+fGUI8K4G1Fj125Hx/ru3azECWTyQ=="],

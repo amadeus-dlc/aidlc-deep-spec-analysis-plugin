@@ -4,18 +4,19 @@
 //   1. red/green example — 各ルールが違反を実際に検出できることを、実ツリーへ
 //      適用する前にインラインの fixture ソースで証明する（カスタム検査の DoD:
 //      検出力の証明なきルールはそれ自体がレビュー指摘）。
-//   2. 実ツリー走査 — tools/ 配下の全 .ts を走査し違反ゼロを表明する。
-//      旧 LEGACY_FILES 免除は PR10 で空化済み——フラットに残るのは合成ルート
-//      (entry)の 10 ファイルだけで、それ以外の未分類ファイルは違反になる。
+//   2. 実ツリー走査 — src/ 配下の全 .ts を走査し違反ゼロを表明する。
+//      合成ルート(entry)は src/entries/ の 10 ファイルだけで、層にも entries にも
+//      属さないファイルは未分類として違反になる。
 
 import { describe, expect, test } from "bun:test";
-import { lstatSync, readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ENTRY_FILES,
   layerDirection,
   locationOf,
+  noCrossPackageRelativeImports,
   noEntryImports,
   noEnums,
   noExportStar,
@@ -38,16 +39,20 @@ import {
   violationsOf,
 } from "./architecture/rules.ts";
 
-const toolsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "tools");
+const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
 
-function walkToolsFiles(dir = toolsDir): string[] {
+// isolated linker は各パッケージ直下に node_modules/ を作り、その中身は他
+// パッケージへのシンボリックリンク。名前とリンク種別の両方で落とす（潜ると
+// 同じファイルを何度も検査し、循環すれば降下が終わらない）。走査するのは
+// src/ の TypeScript 原本だけで、束ねた配布物（tools/*.ts）は対象にしない。
+function walkSrcFiles(dir = srcDir): string[] {
   const out: string[] = [];
-  for (const entry of readdirSync(dir).sort()) {
-    const p = join(dir, entry);
-    const stat = lstatSync(p);
-    expect(stat.isSymbolicLink()).toBe(false);
-    if (stat.isDirectory()) out.push(...walkToolsFiles(p));
-    else if (entry.endsWith(".ts")) out.push(relative(toolsDir, p));
+  const entries = readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+    if (entry.name === "node_modules" || entry.isSymbolicLink()) continue;
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkSrcFiles(p));
+    else if (entry.name.endsWith(".ts")) out.push(relative(srcDir, p));
   }
   return out;
 }
@@ -80,7 +85,7 @@ describe("rule red/green examples (detection power proof)", () => {
   });
 
   test("no-entry-imports flags an import of a composition root", () => {
-    expect(noEntryImports("kernel/adapter/x.ts", 'import { m } from "../../aidlc-sensor-deep-spec-ir-valid.ts";')).not.toHaveLength(0);
+    expect(noEntryImports("kernel/adapter/x.ts", 'import { m } from "../../entries/aidlc-sensor-deep-spec-ir-valid.ts";')).not.toHaveLength(0);
     expect(noEntryImports("kernel/adapter/x.ts", 'import { m } from "./y.ts";')).toHaveLength(0);
   });
 
@@ -166,7 +171,7 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(onePublicTypePerFile("kernel/usecase/verify-usecase.ts", "export class VerifyUseCase {}")).toHaveLength(0);
     expect(onePublicTypePerFile("kernel/domain/index.ts", "export class Sneaky {}")).not.toHaveLength(0);
     expect(onePublicTypePerFile("kernel/domain/index.ts", 'export { Token } from "./token.ts";')).toHaveLength(0);
-    expect(onePublicTypePerFile("aidlc-sensor-deep-spec-ir-valid.ts", "export type Verdict = { pass: boolean };")).not.toHaveLength(0);
+    expect(onePublicTypePerFile("entries/aidlc-sensor-deep-spec-ir-valid.ts", "export type Verdict = { pass: boolean };")).not.toHaveLength(0);
     expect(onePublicTypePerFile("kernel/domain/token.ts", 'const s = "export class Fake {}";\nexport class Token {}')).toHaveLength(0);
   });
 
@@ -263,7 +268,7 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(publishedLanguageLayers("design/domain/foo.ts", 'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}')).toHaveLength(0);
     expect(publishedLanguageLayers("design/adapter/foo.ts", "const x: AttrPaths = y;")).toHaveLength(1);
     expect(publishedLanguageLayers("design/domain/foo.ts", "const x: AttrPaths = y;")).toHaveLength(0);
-    expect(publishedLanguageLayers("aidlc-sensor-deep-spec-verify-smt.ts", "const k = KeyedIndex.empty();")).toHaveLength(1);
+    expect(publishedLanguageLayers("entries/aidlc-sensor-deep-spec-verify-smt.ts", "const k = KeyedIndex.empty();")).toHaveLength(1);
     // 文字列・コメントの中の名前には反応しない。
     expect(publishedLanguageLayers("design/usecase/foo.ts", '// Expression is documented here\nconst s = "Expression";')).toHaveLength(0);
     expect(publishedLanguageLayers("design/usecase/foo.ts", "const expressionCount = 1;")).toHaveLength(0);
@@ -282,7 +287,48 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(layerDirection("design/usecase/x.ts", 'import { y } from "../domain/y.ts";')).toHaveLength(0);
   });
 
-  test("a relative import escaping tools/ (unclassified target) is flagged", () => {
+  test("layer-direction reads the context and layer from a bare package specifier", () => {
+    // red: 方向違反（kernel/domain → requirements/domain は同一でも kernel でもない）。
+    expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/requirements-domain";')).not.toHaveLength(0);
+    // green: どの層も kernel の同層以下へは降りられる。
+    expect(layerDirection("requirements/domain/x.ts", 'import { y } from "@deep-spec/kernel-domain";')).toHaveLength(0);
+    // red: 同一コンテキストでも層の向きは守る（domain → adapter）。
+    expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/kernel-adapter";')).not.toHaveLength(0);
+    // green: 公認のコンテキスト横断エッジは bare でも通る。
+    expect(layerDirection("refinement/domain/x.ts", 'import { y } from "@deep-spec/requirements-domain";')).toHaveLength(0);
+    expect(layerDirection("design/usecase/x.ts", 'import { y } from "@deep-spec/refinement-domain";')).toHaveLength(0);
+    expect(layerDirection("requirements/usecase/x.ts", 'import { ok } from "@deep-spec/kernel-infrastructure";')).toHaveLength(0);
+    // red: 合成ルートのパッケージと、層パッケージでない @deep-spec/* は素通ししない。
+    expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/entries";')).not.toHaveLength(0);
+    expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/kernel-sneaky";')).not.toHaveLength(0);
+    expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/unknown-thing";')).not.toHaveLength(0);
+    // green: node:* と公認 npm は only-sanctioned-imports の担当で、方向規律の辺ではない。
+    expect(layerDirection("kernel/domain/x.ts", 'import { createHash } from "node:crypto";')).toHaveLength(0);
+    expect(layerDirection("kernel/adapter/x.ts", 'const m = await import("z3-solver");')).toHaveLength(0);
+  });
+
+  // 7.1: FR1.5 の穴——相対で隣のパッケージへ潜ると isolated linker の依存宣言を
+  // 迂回できる。パッケージ境界を越える相対 import はそれ自体が違反。
+  test("no-cross-package-relative-imports flags relatives leaving the package, passes those inside it", () => {
+    // red: 隣のコンテキストへ出る／同一コンテキストの別の層へ出る。
+    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "../../requirements/domain/index.ts";')).not.toHaveLength(0);
+    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "../adapter/y.ts";')).not.toHaveLength(0);
+    // red: 合成ルートも自分のパッケージ（entries/）から出られない。
+    expect(noCrossPackageRelativeImports("entries/deep-spec-analysis-doctor.ts", 'import { y } from "../doctor/adapter/index.ts";')).not.toHaveLength(0);
+    // red: src/ の外へ脱出する相対も同じ違反。
+    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { h } from "../../../tests/helper.ts";')).not.toHaveLength(0);
+    // green: パッケージ内なら兄弟も入れ子も親ディレクトリも通る。
+    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "./y.ts";')).toHaveLength(0);
+    expect(noCrossPackageRelativeImports("design/usecase/verify-usecase.ts", 'import { y } from "./port/foo-repository.ts";')).toHaveLength(0);
+    expect(noCrossPackageRelativeImports("design/usecase/port/foo-repository.ts", 'import { y } from "../y.ts";')).toHaveLength(0);
+    expect(noCrossPackageRelativeImports("entries/deep-spec-analysis-doctor.ts", 'import { y } from "./y.ts";')).toHaveLength(0);
+    // green: 層をまたぐ正規の書き方（bare specifier）はこの規則の対象外。
+    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "@deep-spec/kernel-adapter";')).toHaveLength(0);
+    // コメント中の相対 import には反応しない（他の規則と同じ前処理を通る証明）。
+    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", '// import { y } from "../adapter/y.ts";\nconst v = 1;')).toHaveLength(0);
+  });
+
+  test("a relative import escaping src/ (unclassified target) is flagged", () => {
     expect(layerDirection("kernel/domain/x.ts", 'import { h } from "../../../tests/helper.ts";')).not.toHaveLength(0);
   });
 
@@ -294,27 +340,34 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(layerDirection("refcheck/adapter/x.ts", 'import { ok } from "../../kernel/infrastructure/index.ts";')).toHaveLength(0);
   });
 
-  test("locationOf classifies entries, legacy files, data, and layered paths", () => {
-    expect(locationOf("aidlc-sensor-deep-spec-ir-valid.ts")).toBe("entry");
-    expect(locationOf("deep-spec-analysis-doctor.ts")).toBe("entry");
-    expect(locationOf("data/deep-spec-ir-schema.json")).toBe("data");
+  test("locationOf classifies entries, data, and layered paths — everything else is unclassified", () => {
+    expect(locationOf("entries/aidlc-sensor-deep-spec-ir-valid.ts")).toBe("entry");
+    expect(locationOf("entries/deep-spec-analysis-doctor.ts")).toBe("entry");
+    expect(locationOf("entries/data/deep-spec-ir-schema.json")).toBe("data");
     expect(locationOf("kernel/domain/digest.ts")).toEqual({ context: "kernel", layer: "domain" });
+    // 旧フラット配置（src/ 直下）はもう entry ではない——未分類として違反になる。
+    expect(locationOf("aidlc-sensor-deep-spec-ir-valid.ts")).toBeNull();
+    // 契約スキーマの原本は entries/data/ にある。src/ 直下の旧 data/ はもう分類されない。
+    expect(locationOf("data/deep-spec-ir-schema.json")).toBeNull();
+    expect(locationOf("entries/sneaky.ts")).toBeNull();
   });
 });
 
-describe("the real tools/ tree", () => {
-  const files = walkToolsFiles();
+describe("the real src/ tree", () => {
+  const files = walkSrcFiles();
 
-  test("contains the nine flat sensor entries and the doctor", () => {
+  test("contains the nine sensor entries and the doctor under entries/", () => {
     for (const entry of ENTRY_FILES) expect(files).toContain(entry);
   });
 
   test("every file passes every architecture rule", () => {
-    const all = files.flatMap((rel) => violationsOf(rel, readFileSync(join(toolsDir, rel), "utf-8")));
+    const all = files.flatMap((rel) => violationsOf(rel, readFileSync(join(srcDir, rel), "utf-8")));
     expect(all).toEqual([]);
   });
 
   test("the published-language table is the only exemption: every entry exists, exports its name, and lives in the domain", () => {
+    // 表の項目を足すのは裁定であって便宜ではない——件数を凍結しておく。
+    expect(PUBLISHED_LANGUAGE.size).toBe(11);
     // 表の項目はパス・理由・利用可能層を持ち、その名前の型をそのファイルが公開する。
     for (const [rel, entry] of PUBLISHED_LANGUAGE) {
       expect(files).toContain(rel);
@@ -322,26 +375,26 @@ describe("the real tools/ tree", () => {
       expect(typeof loc !== "string" && loc?.layer).toBe("domain");
       expect(entry.reason.length).toBeGreaterThan(0);
       expect(entry.layers.length).toBeGreaterThan(0);
-      const source = readFileSync(join(toolsDir, rel), "utf-8");
+      const source = readFileSync(join(srcDir, rel), "utf-8");
       expect(new RegExp(`^export (?:class|interface|type) ${entry.name}\\b`, "m").test(source)).toBe(true);
     }
     // domain の公開 interface は表の項目だけ（データモデルの再流入は規則が止める）。
     const interfaces = files
       .filter((rel) => { const loc = locationOf(rel); return typeof loc !== "string" && loc?.layer === "domain"; })
-      .flatMap((rel) => [...readFileSync(join(toolsDir, rel), "utf-8").matchAll(/^export interface (\w+)/gm)].map((m) => `${rel}:${m[1]}`));
+      .flatMap((rel) => [...readFileSync(join(srcDir, rel), "utf-8").matchAll(/^export interface (\w+)/gm)].map((m) => `${rel}:${m[1]}`));
     expect(interfaces).toEqual(["kernel/domain/expression.ts:Expression"]);
   });
 
-  test("every file is either layered, an entry, legacy, or data — nothing unclassified", () => {
+  test("every file is either layered, an entry, or data — nothing unclassified", () => {
     const unclassified = files.filter((rel) => locationOf(rel) === null);
     expect(unclassified).toEqual([]);
   });
 
-  test("the legacy allowlist is empty — every flat file is a sanctioned entry (PR10 closeout)", () => {
-    const flat = files.filter((rel) => !rel.includes("/"));
-    for (const rel of flat) expect(ENTRY_FILES.has(rel)).toBe(true);
+  test("nothing sits directly under src/, and the entries package is the fixed set of ten", () => {
+    expect(files.filter((rel) => !rel.includes("/"))).toEqual([]);
     // entry は層規律の免除ではなく配線役割: 9 センサー + doctor の固定集合から
-    // 増えない(新規フラットファイルはこのテストで落ちる)。
+    // 増えない(entries/ に足した新規ファイルはこのテストで落ちる)。
+    expect(files.filter((rel) => rel.startsWith("entries/")).sort()).toEqual([...ENTRY_FILES].sort());
     expect(ENTRY_FILES.size).toBe(10);
   });
 });

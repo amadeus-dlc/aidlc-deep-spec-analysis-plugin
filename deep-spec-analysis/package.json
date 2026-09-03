@@ -1,6 +1,11 @@
 {
   "name": "deep-spec-analysis-plugin-dev",
   "private": true,
+  "workspaces": [
+    "src/*/*",
+    "src/entries",
+    "tests"
+  ],
   "description": "Dev-only harness for the deep-spec-analysis AIDLC plugin: pinned solver backends for the conformance tests. Nothing here ships — plugin projections carry only the conventional content directories.",
   "devDependencies": {
     "@informalsystems/quint": "0.32.0",

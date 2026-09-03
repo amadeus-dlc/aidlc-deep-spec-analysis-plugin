@@ -1,0 +1,56 @@
+// ReferenceCheckReportRepository の実 Gateway 実装。
+// 保存先／読出元は集約識別子（directory + fileName）から導出する。
+// 契約適合は serializer の知識で実装し、store は常に conformed な姿を書いて
+// 適合済み集約を返す——「不適合ファイルを決して出さない」の実装点。
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import { type Json } from "@deep-spec/kernel-adapter";
+import { readContractSchema } from "@deep-spec/kernel-adapter";
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
+import type { ReferenceCheckReport, ReferenceCheckReportId } from "@deep-spec/refcheck-domain";
+import type { ReferenceCheckReportRepository } from "@deep-spec/refcheck-usecase";
+import { conformToContract, parseReportDocument, renderReportBytes } from "./reference-check-report-serializer.ts";
+
+export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportRepository {
+  readonly #findingsSchemaPath: string;
+
+  constructor(findingsSchemaPath: string) {
+    this.#findingsSchemaPath = findingsSchemaPath;
+  }
+
+  findById(aggregateId: ReferenceCheckReportId): Result<ReferenceCheckReport, RepositoryError> {
+    const path = join(aggregateId.directory().asString(), aggregateId.fileName());
+    if (!existsSync(path)) {
+      return err({ kind: "not-found", path });
+    }
+    let raw: Json;
+    try {
+      raw = JSON.parse(readFileSync(path, "utf-8")) as Json;
+    } catch (e) {
+      return err({ kind: "corrupt", path, cause: e instanceof Error ? e.message : String(e) });
+    }
+    const report = parseReportDocument(aggregateId, raw);
+    if (!report.ok) {
+      return err({ kind: "corrupt", path, cause: report.error.cause });
+    }
+    return report;
+  }
+
+  conformedOf(report: ReferenceCheckReport): ReferenceCheckReport {
+    return conformToContract(report, readContractSchema(this.#findingsSchemaPath));
+  }
+
+  store(report: ReferenceCheckReport): Result<void, RepositoryError> {
+    const conformed = this.conformedOf(report);
+    const path = join(conformed.id().directory().asString(), conformed.id().fileName());
+    try {
+      mkdirSync(conformed.id().directory().asString(), { recursive: true });
+      writeFileSync(path, renderReportBytes(conformed), "utf-8");
+      return ok(undefined);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
+    }
+  }
+}

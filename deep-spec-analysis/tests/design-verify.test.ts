@@ -21,10 +21,13 @@ import { cpSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
+import { canonicalStringify } from "@deep-spec/kernel-adapter";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const toolsDir = join(pluginRoot, "tools");
+// スキーマ原本はソースツリー側（src/entries/data/）。toolsDir は生成される配布物の
+// spawn 先で、原本の置き場ではない。
+const dataDir = join(pluginRoot, "src", "entries", "data");
 const fixtures = join(pluginRoot, "tests", "fixtures", "design");
 const expected = join(fixtures, "expected");
 const quintBin = join(pluginRoot, "node_modules", ".bin", "quint");
@@ -167,8 +170,8 @@ describe("design backend conformance (expected findings, byte-for-byte)", () => 
 
 describe("contract separation (design vs requirements)", () => {
   test("the shared schema definitions are byte-identical to contract 1 (FR15.4)", () => {
-    const c1 = JSON.parse(readFileSync(join(toolsDir, "data", "deep-spec-ir-schema.json"), "utf-8"));
-    const c3 = JSON.parse(readFileSync(join(toolsDir, "data", "deep-spec-design-ir-schema.json"), "utf-8"));
+    const c1 = JSON.parse(readFileSync(join(dataDir, "deep-spec-ir-schema.json"), "utf-8"));
+    const c3 = JSON.parse(readFileSync(join(dataDir, "deep-spec-design-ir-schema.json"), "utf-8"));
     for (const key of ["identifier", "attrPath", "frRef", "frRefs", "entity", "attribute", "attrType", "temporalSpec"]) {
       expect(canonicalStringify(c3.definitions[key])).toBe(canonicalStringify(c1.definitions[key]));
     }

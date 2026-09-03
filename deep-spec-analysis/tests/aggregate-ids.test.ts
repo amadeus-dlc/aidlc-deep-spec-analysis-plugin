@@ -3,7 +3,7 @@
 // equals は値による恒等比較。domain 90% 床のための分岐網羅。
 
 import { describe, expect, test } from "bun:test";
-import { TriggerName, ArtifactPath, BackendName, ContentHash, IrVersion, TargetId, TargetIds, RequirementId, UnitName } from "../tools/kernel/domain/index.ts";
+import { TriggerName, ArtifactPath, BackendName, ContentHash, IrVersion, TargetId, TargetIds, RequirementId, UnitName } from "@deep-spec/kernel-domain";
 import {
   DesignAttributeName,
   DesignBackgroundId,
@@ -32,15 +32,15 @@ import {
   DesignCrossCheckedEntry,
   DesignWitness,
   DesignEntityDecls
-} from "../tools/design/domain/index.ts";
+} from "@deep-spec/design-domain";
 import { ObligationIds,
   VerificationSkipped,
   VerificationFinding,
   CrossCheckedEntry,
- VerificationWitness,} from "../tools/requirements/domain/index.ts";
-import { RefinementMapId } from "../tools/refinement/domain/index.ts";
-import { DesignRecordId } from "../tools/refcheck/domain/index.ts";
-import { FormalModelId } from "../tools/requirements/domain/index.ts";
+ VerificationWitness,} from "@deep-spec/requirements-domain";
+import { RefinementMapId } from "@deep-spec/refinement-domain";
+import { DesignRecordId } from "@deep-spec/refcheck-domain";
+import { FormalModelId } from "@deep-spec/requirements-domain";
 
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -191,8 +191,8 @@ import {
   VerificationFindings,
   VerificationReports,
   VerificationSkips,
-} from "../tools/requirements/domain/index.ts";
-import { RequirementIds } from "../tools/kernel/domain/index.ts";
+} from "@deep-spec/requirements-domain";
+import { RequirementIds } from "@deep-spec/kernel-domain";
 
 describe("requirements first-class collections", () => {
   test("immutable add and boundary escape across the cluster", () => {
@@ -256,7 +256,7 @@ import {
   DesignSkips,
   DesignUnit,
   DesignUnits,
-} from "../tools/design/domain/index.ts";
+} from "@deep-spec/design-domain";
 
 describe("design first-class collections", () => {
   const ob = DesignObligation.reconstitute({ id: DesignObligationId.reconstitute("DOB-1"), nature: DesignObligationNature.reconstitute("invariant"), origin: DesignObligationOrigin.reconstitute(""), brRefs: BrRefs.reconstitute([]), frRefs: FrRefs.reconstitute([]), assert: { op: "bool", value: true } });

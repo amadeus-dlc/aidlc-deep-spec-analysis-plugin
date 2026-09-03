@@ -1,0 +1,13 @@
+{
+  "name": "@deep-spec/kernel-adapter",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@deep-spec/kernel-infrastructure": "workspace:*",
+    "@deep-spec/kernel-usecase": "workspace:*"
+  }
+}

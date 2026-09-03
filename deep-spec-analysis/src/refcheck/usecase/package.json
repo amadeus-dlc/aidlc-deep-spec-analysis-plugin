@@ -1,0 +1,15 @@
+{
+  "name": "@deep-spec/refcheck-usecase",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@deep-spec/kernel-domain": "workspace:*",
+    "@deep-spec/kernel-infrastructure": "workspace:*",
+    "@deep-spec/kernel-usecase": "workspace:*",
+    "@deep-spec/refcheck-domain": "workspace:*"
+  }
+}

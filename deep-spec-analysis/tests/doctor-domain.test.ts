@@ -2,29 +2,34 @@
 // 判定書の checks 配列順・label/fix の部分文字列（install.ts が grep する
 // "no deep-spec verification" / "verification coverage" 等）は観測面。
 
-import { HealthVerdict, InstallationManifest, VerificationStaleness, CheckSeverity, CoverageState, Check, DigestAnchor, InstalledStatus, ManifestEntry, SolverAvailability } from "../tools/doctor/domain/index.ts";
-import { CoverageRow, DebtRow, RefinementStaleRow, UnitCoverageRow, CoverageAssessment, StructuralDebt, UnitCoverage, CheckFunctionalCoverageUseCase } from "../tools/doctor/usecase/index.ts";
+import { HealthVerdict, InstallationManifest, VerificationStaleness, CheckSeverity, CoverageState, Check, DigestAnchor, InstalledStatus, ManifestEntry, SolverAvailability } from "@deep-spec/doctor-domain";
+import { CoverageRow, DebtRow, RefinementStaleRow, UnitCoverageRow, CoverageAssessment, StructuralDebt, UnitCoverage, CheckFunctionalCoverageUseCase } from "@deep-spec/doctor-usecase";
 import { describe, expect, test } from "bun:test";
-import { ContentHash } from "../tools/kernel/domain/index.ts";
-import type { DoctorWorkspaceClient } from "../tools/doctor/usecase/index.ts";
-import { DoctorPresenter } from "../tools/doctor/adapter/index.ts";
+import { ContentHash } from "@deep-spec/kernel-domain";
+import type { DoctorWorkspaceClient } from "@deep-spec/doctor-usecase";
+import { DoctorPresenter } from "@deep-spec/doctor-adapter";
 
 const h = (text: string): ContentHash => ContentHash.ofText(text);
 
 describe("installation manifest", () => {
   test("the ledger carries every composed file in the frozen order", () => {
     const entries: ManifestEntry[] = [...InstallationManifest.standard()];
-    expect(entries).toHaveLength(43);
+    // 出荷形（sensors 9 + entry バンドル 10 + data/ 4 + knowledge 3）。層ツリーの
+    // canary は配布物に存在しないので台帳からも消えている。
+    expect(entries).toHaveLength(26);
     expect(entries[0]?.rel()).toBe("sensors/aidlc-deep-spec-ir-valid.md");
     expect(entries[0]?.severity().asString()).toBe("error");
     expect(entries[0]?.severity().blocksDoctor()).toBe(true);
     expect(entries[entries.length - 1]?.rel()).toBe("knowledge/aidlc-architect-agent/deep-spec-refinement-map-authoring.md");
-    // doctor 自身のツリー（PR9 で追加）— entry と 3 canary。
     const rels = entries.map((e) => e.rel());
     expect(rels).toContain("tools/deep-spec-analysis-doctor.ts");
-    expect(rels).toContain("tools/doctor/domain/index.ts");
-    expect(rels).toContain("tools/doctor/usecase/index.ts");
-    expect(rels).toContain("tools/doctor/adapter/index.ts");
+    // 台帳は tools/ 直下のバンドルと data/ しか見ない——層ディレクトリは出荷しない。
+    // バンドルのファイル名は .ts のまま（上流ディスパッチャが .ts を要求する）。
+    expect(rels.filter((r) => r.startsWith("tools/") && r.endsWith(".ts"))).toHaveLength(10);
+    expect(rels.filter((r) => r.startsWith("tools/data/"))).toHaveLength(4);
+    expect(rels.some((r) => r.endsWith(".js"))).toBe(false);
+    // 層ディレクトリの canary（tools/<layer>/... ）は 1 行も残っていない。
+    expect(rels.filter((r) => r.startsWith("tools/") && r.slice("tools/".length).includes("/") && !r.startsWith("tools/data/"))).toHaveLength(0);
     expect(entries.every((e) => e.severity().blocksDoctor())).toBe(true);
   });
 });

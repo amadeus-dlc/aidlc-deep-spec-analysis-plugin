@@ -21,11 +21,14 @@ aidlc-workflows（submodule）とこのリポジトリの `.claude/`（シェル
 ## 3. インストール先の後入れアップグレード（公式手順と実証）
 
 1. `cp -R aidlc-workflows/dist/claude/. <project>/`——shipped stage graph が復元され、**composed plugin entries（plugin stage）と contribution merge（core stage の `sensors:` への注入）が消える**。`aidlc/spaces/default/memory/*.md` と `.mcp.json` は dist と同一なら失われるものは無い
-2. `bun deep-spec-analysis/scripts/install.ts --project <project>`——build → **upgrade refresh**（dist payload と同名の既存ファイルだけを除去）→ no-clobber compose。冪等
-3. 検証の信号:
+2. `bun deep-spec-analysis/scripts/install.ts --project <project>`——build → **upgrade refresh**（dist payload と同名の既存ファイルだけを除去し、tombstone はファイルだけでなくディレクトリも再帰削除する）→ no-clobber compose。冪等
+3. **`dist/claude/tools` は 14 ファイル。** src/・tools 配布分離（2026-09-03。`docs/decisions.ja.md` 参照）以降、`.ts` を逐語コピーした 472 ファイルではなく、entry ごとに束ねた bundle 10 本＋`data/` 4 本になった。旧構成からの後入れアップグレードでは、upgrade refresh が同名ファイルを置き換え、tombstone が層ディレクトリ 6 本（`tools/{kernel,requirements,design,refinement,refcheck,doctor}/`）を再帰削除する。実測: 旧構成を導入していたサンドボックスの `.claude/tools/` が 616 → 85 ファイルになった
+4. **`tools/<entry>.ts` は `.ts` の名を着た bundle 済み JavaScript。** ファイル名は上流ディスパッチャの契約の一部——`aidlc-workflows/core/tools/aidlc-sensor.ts` の `resolveScriptPath` は manifest の `command` から `.ts` で終わるトークンを探し、無ければ `dispatchError` で落ちる。**これを知らずに `.js` に変えるとセンサーが dispatchError で落ちる**
+5. 検証の信号:
    - `bun aidlc-workflows/core/tools/aidlc-plugin-test.ts deep-spec-analysis --install <project>` が `Plugin test: CLEAN`、**`Changed files (0) / Drops: 0 / Idempotent second compose: true`**——これが冪等性の権威ある信号
    - `upgrade refresh: removed N files` の N は「除去した同名ファイル数」であって変更数ではない（1 回目 151、2 回目 486 でも正常）
    - stage-graph の slug 一覧が before と一致、sensors 9／sensor tools 9／doctor が揃う、core stage 3 つの frontmatter に `deep-spec-refcheck-*` が戻る
+   - **`tools/` が 14 ファイルであること**、**doctor の manifest 行から層 facade の canary 17 行が消えていること**を確認する
    - doctor の before／after 差分が plugin 由来の行だけ
 
 ## 4. 2.7.x で知っておくこと

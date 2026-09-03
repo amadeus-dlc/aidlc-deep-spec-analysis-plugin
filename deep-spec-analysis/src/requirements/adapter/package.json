@@ -1,0 +1,17 @@
+{
+  "name": "@deep-spec/requirements-adapter",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "dependencies": {
+    "@deep-spec/kernel-adapter": "workspace:*",
+    "@deep-spec/kernel-domain": "workspace:*",
+    "@deep-spec/kernel-infrastructure": "workspace:*",
+    "@deep-spec/kernel-usecase": "workspace:*",
+    "@deep-spec/requirements-domain": "workspace:*",
+    "@deep-spec/requirements-usecase": "workspace:*"
+  }
+}
