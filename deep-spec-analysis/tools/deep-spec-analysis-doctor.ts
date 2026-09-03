@@ -1366,7 +1366,7 @@ import { existsSync as existsSync2, mkdtempSync, readdirSync, rmSync, writeFileS
 import { tmpdir } from "os";
 import { join as join2 } from "path";
 function listenProbe(port) {
-  return `const s=require("node:net").connect(${port},"127.0.0.1");` + "s.setTimeout(300);" + 's.on("connect",()=>{s.destroy()});' + 's.on("timeout",()=>{s.destroy();throw new Error("no apalache server")});' + 's.on("error",()=>{throw new Error("no apalache server")});';
+  return `const s=require("node:net").connect(${port},"127.0.0.1");` + "s.setTimeout(300);" + 's.on("connect",()=>{s.destroy();s.unref()});' + 's.on("timeout",()=>{s.destroy();throw new Error("no apalache server")});' + 's.on("error",()=>{throw new Error("no apalache server")});';
 }
 var PROBE_MODULE = `module probe {
   var x: int
