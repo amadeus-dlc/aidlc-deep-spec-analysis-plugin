@@ -46,7 +46,7 @@ module probe {
 
 **修復**: 孤児を `kill <pid>` する。quint は次回の verify で自動的にサーバを立て直す。
 
-**設計上の対策**（#128 の PR）: (1) `#runQuint` は `detached: true` で quint をプロセスグループのリーダーにし、タイムアウトで戻ったら `process.kill(-pid, "SIGTERM")` でグループごと止める——孤児が生まれない。(2) doctor は静的判定（JDK＋`~/.quint/apalache-dist-*`）に加え、**8822 に listen 中のサーバがあるときだけ** trivial spec を verify し、失敗なら stale として `Apalache available` 行を fail にし、`fix` に停止手順を出す。listen していなければ probe しない（doctor に JVM 起動コストを持ち込まない）。
+**設計上の対策**（#128、実装済み）: (1) `#runQuint` は quint を **`killSignal: "SIGINT"`** で止める——quint 自身の後始末ハンドラが走り、Apalache もろとも終わる。予算超過の判定は `res.error.code === "ETIMEDOUT"` を第一の証拠にする（SIGINT を処理した quint は自分で exit するので `signal` は null になりうる。旧来の `signal === "SIGTERM"` 判定だと中断された検証をクリーンと誤読する）。当初案の `detached: true` ＋ 負 pid へのグループ kill は採れない——**bun 1.3.13 の `spawnSync` は `detached` を無視する**（子の pgid が親のまま。node 24 は尊重する）ので、bun で走るセンサーでは送るべきグループが存在しない。残る危険は、SIGTERM を無視する JVM があると quint のハンドラがそこで待ち `spawnSync` が止まること。ディスパッチャのセンサー予算（`timeout_seconds` 75／85）が上限になる。(2) doctor は静的判定（JDK＋`~/.quint/apalache-dist-*`）に加え、**8822 に listen 中のサーバがあるときだけ** trivial spec を verify し、失敗なら stale として `Apalache available` 行を fail にし、`fix` に停止手順を出す。listen していなければ probe しない（doctor に JVM 起動コストを持ち込まない。実測: 待ち受けなし 0.23 秒、実サーバ相手 0.43 秒）。listen 判定は `availability()` を同期に保つため、entry が注入したランタイム（`process.execPath`）の子プロセスで `node:net` の connect を試す。
 
 ## 5. サンドボックス実射の読み方
 
