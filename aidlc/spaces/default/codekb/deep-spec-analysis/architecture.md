@@ -1,5 +1,34 @@
 # deep-spec-analysis — アーキテクチャ
 
+## Focused scan 更新: 導入・更新サブシステム
+
+今回確認した導入経路は、単一の `scripts/install.ts` が CLI 解釈、source checkout の特定、framework toolchain の特定、projection build、既存 payload の refresh／tombstone、compose、doctor を直列に実行する構造である。source root は `import.meta.dir`、builder・`plugin-targets.json`・dry-run の plugin test は sibling `aidlc-workflows/core/tools` から解決されるため、stdin bootstrap や配布 archive と処理本体を分離する port がない。
+
+目標アーキテクチャでは、既存の安全境界（build 完了前は導入先を変更しない）を保ったまま、次の5責務に分ける必要がある。
+
+1. CLI/options: source selector と update mode の入力契約を検証する。
+2. Source resolver: local／branch／tag／latest を一時 `deep-spec-analysis/` へ解決し、manifest と選択 ref を確定する。
+3. Destination toolchain resolver: `<project>/<harness>/tools/` から builder、target data、必要なら plugin test を解決し、未導入なら変更前に停止する。
+4. Installer transaction: build 済み projection に対して既存 refresh → recursive tombstone → no-clobber compose → verify を行う。
+5. Provenance/update: 成功後だけ原子的に来歴を保存し、再実行では source 種別に応じた候補と記録版を比較する。
+
+これは実装済みコンポーネント一覧ではなく、Developer Scan から導いた変更境界である。source resolver、provenance store、release script、version doctor check は現時点で存在しない。
+
+```mermaid
+flowchart LR
+  CLI["install.ts CLI"] --> RES["Source resolver（未実装）"]
+  RES --> SRC["local checkout / GitHub tarball"]
+  CLI --> DST["Destination toolchain resolver（未実装）"]
+  DST --> BUILD["<project>/<harness>/tools/aidlc-plugin-build.ts"]
+  SRC --> BUILD
+  BUILD --> TX["既存 refresh → tombstone → compose"]
+  TX --> VERIFY["plugin test / doctor"]
+  VERIFY --> PROV["install provenance atomic write（未実装）"]
+  PROV --> UPDATE["--update / version advisory（未実装）"]
+```
+
+以降の既存分析は形式検証ランタイム全体の前回 store 由来で、今回の focused scan では再検証していない。
+
 出典は developer link の handoff（`inception/reverse-engineering/developer-scan.md`。層別のファイル数・依存表・スパイク結果は実測）と `docs/decisions.ja.md`（設計判断記録）。層別の数字は `component-inventory.md`、依存表は `dependencies.md` に 1 回だけ載せ、ここでは参照する。
 
 ## Architecture Analysis
@@ -131,6 +160,34 @@ flowchart TB
 6. **残骸の除去**: `bunfig.toml` の存在しない除外 2 件、`rules.ts` 冒頭の古い LEGACY コメント
 
 ## Interaction Diagrams
+
+### 0. tag／local source からの導入・更新（目標フロー）
+
+破線相当の「解決」「来歴比較」「release」は未実装であり、既存の refresh／compose 経路へ接続する設計対象である。
+
+```mermaid
+sequenceDiagram
+  actor U as 利用者
+  participant I as scripts/install.ts
+  participant S as Source resolver（未実装）
+  participant G as GitHub archive/tags API または local checkout
+  participant T as 導入先 harness toolchain
+  participant C as refresh/tombstone/compose
+  participant P as provenance store（未実装）
+  participant D as doctor
+  U->>I: --from / --ref / --tag / latest または --update
+  I->>P: --update 時は記録 source を読む
+  I->>S: selector を解決
+  S->>G: source と version を取得
+  G-->>S: 一時 deep-spec-analysis/ と選択 ref
+  I->>T: builder/target data/plugin test を解決
+  T-->>I: build 済み projection または導入不足エラー
+  I->>C: build 成功後にだけ既存 transaction を開始
+  C-->>I: compose/verify 結果
+  I->>P: 成功時だけ provenance を atomic write
+  I->>D: 記録版と最新 tag の advisory
+  I-->>U: changed / no-op / actionable error
+```
 
 ### 1. センサーの発火（ディスパッチャ → entry → usecase → adapter → 子プロセスのソルバー → findings JSON）
 

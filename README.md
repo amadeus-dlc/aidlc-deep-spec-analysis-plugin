@@ -26,13 +26,43 @@ This is the development workspace. The plugin itself lives in [`deep-spec-analys
 
 ### Install into your AI-DLC project
 
+Install a specific stable release. The bootstrap script and the installed
+source come from the same immutable tag:
+
 ```sh
-git clone --recurse-submodules https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin.git
-cd aidlc-deep-spec-analysis-plugin
-bun deep-spec-analysis/scripts/install.ts --project <your-aidlc-project>   # --harness codex, kiro, … (default: claude)
+VERSION=v0.5.0
+curl -fsSL "https://raw.githubusercontent.com/j5ik2o/deep-spec-analysis/${VERSION}/deep-spec-analysis/scripts/install.ts" |
+  bun - --project <your-aidlc-project> --tag "${VERSION}"   # --harness codex, kiro, … (default: claude)
 ```
 
-The installer builds the harness projection under `deep-spec-analysis/dist/<harness>/` — a **real host plugin** (Claude Code, Codex, Copilot, Cursor, Kiro, Kiro IDE, opencode) — and composes the stage, sensors, tools, and knowledge into the project's harness tree (`.claude/`, `.codex/`, …). Store harnesses (Claude Code, Codex, Copilot, opencode) compose directly from `dist/` and nothing is copied into the project; the storeless kinds (Kiro, Kiro IDE, Cursor) first get the projection folder-dropped into the project root, as those hosts expect. Add `--dry-run` to verify the compose without touching the project. Nothing outside that project is touched; disabling the plugin recomposes the vanilla workflow. Re-running the installer is also the **upgrade path**: it refreshes the plugin's own previously composed files before composing (the compose hook itself never overwrites existing files), so a new plugin version never leaves stale schemas or tools behind. `/aidlc --doctor` reports solver availability.
+The installer downloads the tagged source, builds the harness projection under
+`deep-spec-analysis/dist/<harness>/`, and composes the stage, sensors, tools,
+and knowledge into the project's harness tree (`.claude/`, `.codex/`, …).
+Store harnesses (Claude Code, Codex, Copilot, opencode) compose directly from
+`dist/` and copy nothing into the project; storeless harnesses (Kiro, Kiro IDE,
+Cursor) first folder-drop the projection into the project root, as those hosts
+expect. Add `--dry-run` to verify the compose without touching the project.
+Nothing outside that project is changed, and disabling the plugin recomposes
+the vanilla workflow. During an update the installer refreshes the plugin's own
+previously composed files before composing, so stale schemas and tools do not
+survive a version change. `/aidlc --doctor` reports solver availability.
+
+Source and update selectors:
+
+| Option | Meaning |
+|---|---|
+| no selector | Resolve and install the latest stable Semantic Versioning tag. |
+| `--tag v0.5.0` | Install one immutable release. This is the recommended production path. |
+| `--from <repo-root>` | Build from a local checkout; useful while developing the plugin. |
+| `--ref <branch>` | Download a moving branch ref. Use this only to follow development, not for a reproducible installation. |
+| `--update` | Reuse the recorded selector: latest resolves again, while local and ref reacquire the same source. A fixed tag is already immutable and returns `Changed 0`. It cannot be combined with a selector. |
+
+Each successful install records its version, source selector, timestamp, and
+payload digest at `<harness>/tools/data/deep-spec-analysis-install.json` in the
+target project. Here `<harness>` is the selected harness tree, such as
+`.claude` or `.codex`. Plugin distribution does not use an npm package or a
+GitHub Release asset; tagged and branch installs fetch GitHub source archives
+directly.
 
 > The installer is a folder-drop: it has no install-time trust gate, so only point it at a build you would run code from. For a store-mediated trust prompt, use the host plugin flows below instead.
 
@@ -72,10 +102,11 @@ On the next session start the plugin's SessionStart hook composes into `.claude/
 
 ## Development
 
-Setup is the Quickstart clone plus dev dependencies:
+For development, clone the repository and install its dev dependencies:
 
 ```sh
-cd deep-spec-analysis
+git clone --recurse-submodules https://github.com/j5ik2o/deep-spec-analysis.git
+cd deep-spec-analysis/deep-spec-analysis
 bun install        # dev dependencies only — installs nothing into any project
 ```
 

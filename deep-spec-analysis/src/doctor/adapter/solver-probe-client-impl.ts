@@ -9,12 +9,13 @@ import type { SolverProbeClientConfig } from "./solver-probe-client-config.ts";
 // 127.0.0.1:<port> に繋がるかだけを答える子スクリプト（exit 0 = 待ち受けあり）。
 // availability() は同期のままにしたいので、非同期 socket を子プロセスに閉じ込める。
 // bun と node のどちらで評価しても同じに動く（`-e` ＋ require("node:net")）。
-// 繋がれば socket を閉じて自然に終わり（0）、繋がらなければ投げて非ゼロで終わる。
+// 繋がれば socket を閉じて event loop から外し、繋がらなければ投げて非ゼロ
+// で終わる。adapter 層から process.* を直接操作しない。
 function listenProbe(port: number): string {
   return (
     `const s=require("node:net").connect(${port},"127.0.0.1");` +
     "s.setTimeout(300);" +
-    's.on("connect",()=>{s.destroy()});' +
+    's.on("connect",()=>{s.destroy();s.unref()});' +
     's.on("timeout",()=>{s.destroy();throw new Error("no apalache server")});' +
     's.on("error",()=>{throw new Error("no apalache server")});'
   );

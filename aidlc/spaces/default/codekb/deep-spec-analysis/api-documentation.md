@@ -1,5 +1,34 @@
 # deep-spec-analysis — API ドキュメント
 
+## Focused scan 更新: installer／update／release 契約
+
+### 現行 installer CLI
+
+`bun deep-spec-analysis/scripts/install.ts --project <path>` を入口とし、`--project`（必須）、`--harness <name>`、`--dry-run`、`--skip-build`、`--help` を受ける。未知の引数は入力エラーで停止する。現行 source は実行中 checkout の plugin root に固定され、build／dry-run／target mapping は sibling `aidlc-workflows/core/tools` に依存する。`--from`、`--ref`、`--tag`、`--update` はまだ存在しない。
+
+### 目標 source selector と update API
+
+状態ファイルで確定している選択優先度は `--from <local checkout> > --ref <branch> > --tag <tag> > 無指定（GitHub tags API の semver 最大）`。remote source は tarball を一時ディレクトリ内の `deep-spec-analysis/` に展開し、導入先 `<project>/<harness>/tools/aidlc-plugin-build.ts` で build する。builder が無い場合は、利用先に本家 AI-DLC が未導入であることを案内し、target を変更せず停止する。
+
+ただし次は未確定で、実装時に CLI contract として固定する必要がある。
+
+- selector の複数指定を拒否するか、優先順位どおり採用するか
+- `--from` が workspace root と plugin root のどちらを受けるか
+- slash を含む ref、semver prerelease、tags API pagination、HTTP timeout／retry
+- local／mutable branch／fixed tag ごとの `--update` の再解決規則
+
+### 目標 provenance filesystem contract
+
+保存先は `<harness>/tools/data/deep-spec-analysis-install.json`。予定フィールドは `version`、`ref`、`source`、`installed_at`、`payload_sha256` で、compose 成功後にだけ atomic write する。これは plugin payload ではなく installer 管理メタデータなので `contributes.tools` と tombstone の対象外とする。同版の `--update` はこのファイルを書き直す前に no-op し、Changed 0 を維持する。schema version、source の正規形、payload digest の対象集合と canonicalization はまだ未確定である。
+
+### 目標 release CLI
+
+`scripts/release.ts` は未実装。単なる version bump → tag → push では manifest の変更が tag に入らないため、clean tree／branch 検査、manifest 更新、commit、`v<version>` tag、commit と tag の push、途中失敗時の復旧案内を一つの契約として定義する必要がある。GitHub Release asset は本 intent の対象外。
+
+### doctor 互換性
+
+現行 doctor の出力は `{ "checks": [{ "pass", "label", "fix?", "severity?" }] }` で、`skip`／`status` フィールドは無い。ネットワーク不通を「skip」として表現する際に新フィールドを足すと host contract が変わるため、既存 shape 内で advisory を表すか、明示的な契約変更として扱う。以下の既存センサー／doctor API 全体は前回 store 由来で、今回再検証したのは doctor の installation 関連型・entry・presenter と installer からの呼び出し境界である。
+
 外部面（センサー CLI・doctor CLI・子プロセス協定・契約スキーマ・環境変数）と内部面（各層 facade の公開型・ユースケース）。出典は developer link の handoff と `sensors/*.md` の frontmatter、各 `index.ts` の再輸出一覧。**外部面の項目と文言は外部仕様として不変**（`docs/decisions.ja.md` の裁定）。
 
 ## 外部面 1: センサー CLI（entry 9 本）

@@ -25,6 +25,18 @@ AI-DLC v2 のための Kiro 流 **Deep Spec Analysis**：追加合成プラグ�
 
 ## インストールと前提
 
+AI-DLC v2 を導入済みのプロジェクトへ、安定版の不変タグから直接インストールします。
+
+```sh
+VERSION=v0.5.0
+curl -fsSL "https://raw.githubusercontent.com/j5ik2o/deep-spec-analysis/${VERSION}/deep-spec-analysis/scripts/install.ts" |
+  bun - --project <your-aidlc-project> --tag "${VERSION}"   # 必要に応じて --harness codex, kiro, … を追加
+```
+
+取得元を指定しない場合は、最新の安定版 SemVer タグを解決します。`--tag <tag>` は不変のリリースを固定し、`--from <repo-root>` はローカルのチェックアウトを使います。`--ref <branch>` は移動する開発ブランチを追従するためのオプションであり、再現可能な導入には使わないでください。`--update` は前回記録した取得元を再利用します。latest は最新タグを再解決し、local と ref は同じ取得元を取り直し、固定タグは `Changed 0` で終了します。`--update` と取得元オプションは併用できません。
+
+導入の来歴は、対象プロジェクトの `<harness>/tools/data/deep-spec-analysis-install.json` に保存されます。`<harness>` は `.claude` や `.codex` などのハーネスツリーで、記録にはバージョン、解決済みの取得元、導入日時、ペイロードのダイジェストが含まれます。プラグインの配布に npm パッケージや GitHub Release のアセットは使いません。リモート導入では GitHub のソースアーカイブを直接取得します。
+
 必須ランタイムは **bun** のみ。バックエンドは優雅に劣化する——以下はすべて任意かつ advisory（`/aidlc --doctor` が教えてくれる）：
 
 ```bash
@@ -38,7 +50,7 @@ npm i -g @informalsystems/quint
 #   JDK 17+ を入れて `quint verify` を一度実行（Apalache が ~/.quint にダウンロードされる）
 ```
 
-ビルド／インストールは通常の AIDLC プラグインと同じ：
+ローカルのチェックアウトから開発する場合、検証とビルドは通常の AIDLC プラグインと同じです：
 
 ```bash
 bun <checkout>/core/tools/aidlc-plugin-validate.ts .

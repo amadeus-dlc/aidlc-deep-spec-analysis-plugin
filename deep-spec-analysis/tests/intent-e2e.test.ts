@@ -152,7 +152,7 @@ beforeAll(() => {
     join(intentsDir, active, "inception", "requirements-analysis", "requirements.md"),
   );
 
-  const res = spawnSync("bun", [installer, "--project", sandbox], {
+  const res = spawnSync("bun", [installer, "--project", sandbox, "--from", workspaceRoot], {
     encoding: "utf-8",
     timeout: 300_000,
   });
@@ -188,6 +188,20 @@ describe("installer onto a vanilla install", () => {
     }
     const graph = readFileSync(join(sandbox, ".claude", "tools", "data", "stage-graph.json"), "utf-8");
     expect(graph).toContain("deep-spec-analysis-verify");
+  });
+
+  test("same-source update is Changed 0 and preserves provenance bytes and mtime", () => {
+    const provenance = join(sandbox, ".claude", "tools", "data", "deep-spec-analysis-install.json");
+    const beforeBytes = readFileSync(provenance);
+    const beforeMtime = Bun.file(provenance).lastModified;
+    const result = spawnSync("bun", [installer, "--project", sandbox, "--update"], {
+      encoding: "utf-8",
+      timeout: 300_000,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("Changed 0");
+    expect(readFileSync(provenance)).toEqual(beforeBytes);
+    expect(Bun.file(provenance).lastModified).toBe(beforeMtime);
   });
 });
 

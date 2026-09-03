@@ -1,6 +1,6 @@
 // @bun
 // src/entries/deep-spec-analysis-doctor.ts
-import { join as join5 } from "path";
+import { join as join6 } from "path";
 
 // src/doctor/domain/check-severity.ts
 class CheckSeverity {
@@ -940,6 +940,42 @@ class CoverageState {
     return this.#value === other.#value;
   }
 }
+// src/doctor/domain/plugin-version.ts
+class PluginVersion {
+  #major;
+  #minor;
+  #patch;
+  constructor(major, minor, patch) {
+    this.#major = major;
+    this.#minor = minor;
+    this.#patch = patch;
+  }
+  static parse(raw) {
+    const match = raw.match(/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
+    const major = match?.[1];
+    const minor = match?.[2];
+    const patch = match?.[3];
+    if (major === undefined || minor === undefined || patch === undefined)
+      return null;
+    return new PluginVersion(BigInt(major), BigInt(minor), BigInt(patch));
+  }
+  isOlderThan(other) {
+    if (this.#major !== other.#major)
+      return this.#major < other.#major;
+    if (this.#minor !== other.#minor)
+      return this.#minor < other.#minor;
+    return this.#patch < other.#patch;
+  }
+  equals(other) {
+    return this.#major === other.#major && this.#minor === other.#minor && this.#patch === other.#patch;
+  }
+  asString() {
+    return `${this.#major}.${this.#minor}.${this.#patch}`;
+  }
+  asTag() {
+    return `v${this.asString()}`;
+  }
+}
 // src/doctor/usecase/check-installation-usecase.ts
 class CheckInstallationUseCase {
   #files;
@@ -952,6 +988,88 @@ class CheckInstallationUseCase {
       out.push(InstalledStatus.of(entry, this.#files.isInstalled(entry.rel())));
     }
     return out;
+  }
+}
+// src/doctor/usecase/read-model/version-advisory.ts
+class VersionAdvisory {
+  #variant;
+  constructor(variant) {
+    this.#variant = variant;
+  }
+  static current(props) {
+    return new VersionAdvisory({ kind: "current", ...props });
+  }
+  static updateAvailable(props) {
+    return new VersionAdvisory({ kind: "update-available", ...props });
+  }
+  static skipped(props) {
+    return new VersionAdvisory({ kind: "skipped", ...props });
+  }
+  static provenanceMissing() {
+    return new VersionAdvisory({ kind: "provenance-missing" });
+  }
+  static provenanceMalformed(reason) {
+    return new VersionAdvisory({ kind: "provenance-malformed", reason });
+  }
+  match(cases) {
+    const variant = this.#variant;
+    if (variant.kind === "provenance-missing")
+      return cases.provenanceMissing();
+    if (variant.kind === "provenance-malformed")
+      return cases.provenanceMalformed(variant.reason);
+    if (variant.kind === "skipped")
+      return cases.skipped(variant);
+    return variant.kind === "update-available" ? cases.updateAvailable(variant) : cases.current(variant);
+  }
+}
+
+// src/doctor/usecase/check-version-advisory-usecase.ts
+class CheckVersionAdvisoryUseCase {
+  #provenance;
+  #releaseTags;
+  constructor(provenance, releaseTags) {
+    this.#provenance = provenance;
+    this.#releaseTags = releaseTags;
+  }
+  async execute() {
+    const provenance = this.#provenance.read();
+    if (provenance.kind === "missing")
+      return VersionAdvisory.provenanceMissing();
+    if (provenance.kind === "malformed")
+      return VersionAdvisory.provenanceMalformed(provenance.reason);
+    const installed = PluginVersion.parse(provenance.version);
+    if (!installed)
+      return VersionAdvisory.provenanceMalformed("version is not a stable Semantic Version");
+    const releaseTags = await this.#releaseTags.list();
+    if (releaseTags.kind === "unavailable") {
+      return VersionAdvisory.skipped({
+        installedVersion: installed.asString(),
+        source: provenance.source,
+        ref: provenance.ref,
+        reason: releaseTags.reason
+      });
+    }
+    let latest = null;
+    for (const raw of releaseTags.tags) {
+      const candidate = PluginVersion.parse(raw);
+      if (candidate && (!latest || latest.isOlderThan(candidate)))
+        latest = candidate;
+    }
+    if (!latest) {
+      return VersionAdvisory.skipped({
+        installedVersion: installed.asString(),
+        source: provenance.source,
+        ref: provenance.ref,
+        reason: "GitHub returned no stable Semantic Versioning tag"
+      });
+    }
+    const values = {
+      installedVersion: installed.asString(),
+      latestVersion: latest.asTag(),
+      source: provenance.source,
+      ref: provenance.ref
+    };
+    return installed.isOlderThan(latest) ? VersionAdvisory.updateAvailable(values) : VersionAdvisory.current(values);
   }
 }
 // src/doctor/usecase/check-solvers-usecase.ts
@@ -1248,7 +1366,7 @@ import { existsSync as existsSync2, mkdtempSync, readdirSync, rmSync, writeFileS
 import { tmpdir } from "os";
 import { join as join2 } from "path";
 function listenProbe(port) {
-  return `const s=require("node:net").connect(${port},"127.0.0.1");` + "s.setTimeout(300);" + 's.on("connect",()=>{s.destroy()});' + 's.on("timeout",()=>{s.destroy();throw new Error("no apalache server")});' + 's.on("error",()=>{throw new Error("no apalache server")});';
+  return `const s=require("node:net").connect(${port},"127.0.0.1");` + "s.setTimeout(300);" + 's.on("connect",()=>{s.destroy();s.unref()});' + 's.on("timeout",()=>{s.destroy();throw new Error("no apalache server")});' + 's.on("error",()=>{throw new Error("no apalache server")});';
 }
 var PROBE_MODULE = `module probe {
   var x: int
@@ -1548,6 +1666,73 @@ class DoctorWorkspaceClientImpl {
     return out;
   }
 }
+// src/doctor/adapter/installation-provenance-client-impl.ts
+import { existsSync as existsSync5, readFileSync as readFileSync2 } from "fs";
+import { join as join5 } from "path";
+var SOURCE_KINDS = new Set(["local", "ref", "tag", "latest"]);
+
+class InstallationProvenanceClientImpl {
+  #path;
+  constructor(config) {
+    this.#path = join5(config.harnessRoot, "tools", "data", "deep-spec-analysis-install.json");
+  }
+  read() {
+    if (!existsSync5(this.#path))
+      return { kind: "missing" };
+    let value;
+    try {
+      value = JSON.parse(readFileSync2(this.#path, "utf-8"));
+    } catch {
+      return { kind: "malformed", reason: "file is not readable JSON" };
+    }
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return { kind: "malformed", reason: "document must be an object" };
+    }
+    const row = value;
+    if (typeof row.version !== "string" || typeof row.ref !== "string" || row.ref.length === 0 || typeof row.source !== "string" || !SOURCE_KINDS.has(row.source) || typeof row.installed_at !== "string" || row.installed_at.length === 0 || typeof row.payload_sha256 !== "string" || !/^sha256:[0-9a-f]{64}$/.test(row.payload_sha256)) {
+      return { kind: "malformed", reason: "required provenance fields are invalid" };
+    }
+    return { kind: "found", version: row.version, ref: row.ref, source: row.source };
+  }
+}
+// src/doctor/adapter/git-hub-release-tags-client-impl.ts
+class GitHubReleaseTagsClientImpl {
+  #repository;
+  #fetcher;
+  #timeoutMs;
+  constructor(config) {
+    this.#repository = config.repository;
+    this.#fetcher = config.fetcher ?? globalThis.fetch;
+    this.#timeoutMs = config.timeoutMs ?? 5000;
+  }
+  async list() {
+    const tags = [];
+    try {
+      for (let page = 1;page <= 100; page++) {
+        const response = await this.#fetcher(`https://api.github.com/repos/${this.#repository}/tags?per_page=100&page=${page}`, {
+          headers: { Accept: "application/vnd.github+json", "User-Agent": "deep-spec-analysis-doctor" },
+          signal: AbortSignal.timeout(this.#timeoutMs)
+        });
+        if (!response.ok)
+          return { kind: "unavailable", reason: `GitHub tags API returned HTTP ${response.status}` };
+        const body = await response.json();
+        if (!Array.isArray(body))
+          return { kind: "unavailable", reason: "GitHub tags API returned an invalid document" };
+        for (const entry of body) {
+          if (entry && typeof entry === "object" && typeof entry.name === "string") {
+            tags.push(entry.name);
+          }
+        }
+        if (body.length < 100)
+          return { kind: "available", tags };
+      }
+      return { kind: "unavailable", reason: "GitHub tags API pagination limit was exceeded" };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { kind: "unavailable", reason: message.replace(/[\r\n]+/g, " ") || "network request failed" };
+    }
+  }
+}
 // src/doctor/adapter/doctor-presenter.ts
 class DoctorPresenter {
   #harnessDir;
@@ -1561,6 +1746,38 @@ class DoctorPresenter {
       fix: `Run \`bun ${this.#harnessDir}/tools/aidlc-utility.ts plugin-sync\` (or re-run the plugin's \`hooks/compose.ts\`).`,
       severity: s.entry().severity()
     }));
+  }
+  version(advisory) {
+    return advisory.match({
+      current: ({ installedVersion, latestVersion, source, ref }) => Check.reconstitute({
+        pass: true,
+        label: `deep-spec-analysis: version ${installedVersion} from ${source} ${ref} is current (latest stable tag: ${latestVersion})`,
+        severity: CheckSeverity.advisory()
+      }),
+      updateAvailable: ({ installedVersion, latestVersion, source, ref }) => Check.reconstitute({
+        pass: false,
+        label: `deep-spec-analysis: update available \u2014 version ${installedVersion} from ${source} ${ref}; latest stable tag is ${latestVersion}`,
+        fix: "Re-run the installer with `--project . --update` (and the same `--harness` selector used for this installation).",
+        severity: CheckSeverity.advisory()
+      }),
+      skipped: ({ installedVersion, source, ref, reason }) => Check.reconstitute({
+        pass: true,
+        label: `deep-spec-analysis: version update check skipped for ${installedVersion} from ${source} ${ref} \u2014 ${reason}`,
+        severity: CheckSeverity.advisory()
+      }),
+      provenanceMissing: () => Check.reconstitute({
+        pass: false,
+        label: "deep-spec-analysis: version update check unavailable \u2014 installation provenance is missing",
+        fix: `Re-run the installer normally (without \`--update\`) to create ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
+        severity: CheckSeverity.advisory()
+      }),
+      provenanceMalformed: (reason) => Check.reconstitute({
+        pass: false,
+        label: `deep-spec-analysis: version update check unavailable \u2014 installation provenance is malformed (${reason})`,
+        fix: `Re-run the installer normally (without \`--update\`) to replace ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
+        severity: CheckSeverity.advisory()
+      })
+    });
   }
   solvers(availability) {
     return [
@@ -1659,10 +1876,10 @@ class DoctorPresenter {
   }
 }
 // src/entries/deep-spec-analysis-doctor.ts
-function main() {
+async function main() {
   const projectDir = process.env.AIDLC_PROJECT_DIR || process.cwd();
   const harnessDir = process.env.AIDLC_HARNESS_DIR || ".claude";
-  const root = join5(projectDir, harnessDir);
+  const root = join6(projectDir, harnessDir);
   const presenter = new DoctorPresenter({ harnessDir });
   const workspace = new DoctorWorkspaceClientImpl({
     projectDir,
@@ -1675,6 +1892,7 @@ function main() {
   });
   const verdict = HealthVerdict.of([
     ...presenter.installation(new CheckInstallationUseCase(new HarnessFileClientImpl({ root })).execute()),
+    presenter.version(await new CheckVersionAdvisoryUseCase(new InstallationProvenanceClientImpl({ harnessRoot: root }), new GitHubReleaseTagsClientImpl({ repository: "j5ik2o/deep-spec-analysis" })).execute()),
     ...presenter.solvers(new CheckSolversUseCase(new SolverProbeClientImpl({
       projectDir,
       quintBin: process.env.AIDLC_DEEP_SPEC_QUINT_BIN || "quint",
@@ -1690,4 +1908,4 @@ function main() {
   process.stdout.write(`${JSON.stringify(verdict.document())}
 `);
 }
-main();
+await main();

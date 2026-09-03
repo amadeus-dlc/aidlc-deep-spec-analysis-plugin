@@ -1,6 +1,6 @@
 import { Check, CheckSeverity } from "@deep-spec/doctor-domain";
 import type { InstalledStatus, SolverAvailability } from "@deep-spec/doctor-domain";
-import type { CoverageAssessment, StructuralDebt, UnitCoverage } from "@deep-spec/doctor-usecase";
+import type { CoverageAssessment, StructuralDebt, UnitCoverage, VersionAdvisory } from "@deep-spec/doctor-usecase";
 
 // doctor 検査行の presenter——label/fix の凍結文言はすべてここに封じる
 //（移行 PR9、#22）。installer（scripts/install.ts）が grep する部分文字列
@@ -21,6 +21,39 @@ export class DoctorPresenter {
       fix: `Run \`bun ${this.#harnessDir}/tools/aidlc-utility.ts plugin-sync\` (or re-run the plugin's \`hooks/compose.ts\`).`,
       severity: s.entry().severity(),
     }));
+  }
+
+  version(advisory: VersionAdvisory): Check {
+    return advisory.match({
+      current: ({ installedVersion, latestVersion, source, ref }) => Check.reconstitute({
+        pass: true,
+        label: `deep-spec-analysis: version ${installedVersion} from ${source} ${ref} is current (latest stable tag: ${latestVersion})`,
+        severity: CheckSeverity.advisory(),
+      }),
+      updateAvailable: ({ installedVersion, latestVersion, source, ref }) => Check.reconstitute({
+        pass: false,
+        label: `deep-spec-analysis: update available — version ${installedVersion} from ${source} ${ref}; latest stable tag is ${latestVersion}`,
+        fix: "Re-run the installer with `--project . --update` (and the same `--harness` selector used for this installation).",
+        severity: CheckSeverity.advisory(),
+      }),
+      skipped: ({ installedVersion, source, ref, reason }) => Check.reconstitute({
+        pass: true,
+        label: `deep-spec-analysis: version update check skipped for ${installedVersion} from ${source} ${ref} — ${reason}`,
+        severity: CheckSeverity.advisory(),
+      }),
+      provenanceMissing: () => Check.reconstitute({
+        pass: false,
+        label: "deep-spec-analysis: version update check unavailable — installation provenance is missing",
+        fix: `Re-run the installer normally (without \`--update\`) to create ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
+        severity: CheckSeverity.advisory(),
+      }),
+      provenanceMalformed: (reason) => Check.reconstitute({
+        pass: false,
+        label: `deep-spec-analysis: version update check unavailable — installation provenance is malformed (${reason})`,
+        fix: `Re-run the installer normally (without \`--update\`) to replace ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
+        severity: CheckSeverity.advisory(),
+      }),
+    });
   }
 
   solvers(availability: SolverAvailability): Check[] {

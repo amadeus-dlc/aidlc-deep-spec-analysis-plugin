@@ -32,6 +32,30 @@ Inspired by Kiro's
 
 ## Install & prerequisites
 
+Install an immutable stable tag directly into a project that already has
+AI-DLC v2:
+
+```sh
+VERSION=v0.5.0
+curl -fsSL "https://raw.githubusercontent.com/j5ik2o/deep-spec-analysis/${VERSION}/deep-spec-analysis/scripts/install.ts" |
+  bun - --project <your-aidlc-project> --tag "${VERSION}"   # add --harness codex, kiro, … as needed
+```
+
+Without a source selector, the installer resolves the latest stable SemVer
+tag. `--tag <tag>` pins an immutable release, `--from <repo-root>` uses a local
+checkout, and `--ref <branch>` follows a moving development branch and should
+not be used for reproducible installations. `--update` reuses the installation
+source recorded on the previous run: latest resolves again, local and ref
+reacquire the same source, and a fixed tag returns `Changed 0`. Do not combine
+`--update` with a source selector.
+
+The provenance record is written to
+`<harness>/tools/data/deep-spec-analysis-install.json` in the target project,
+where `<harness>` is a tree such as `.claude` or `.codex`. It includes the
+version, resolved source, install time, and payload digest. The plugin is not
+distributed as an npm package or a GitHub Release asset; remote installs fetch
+GitHub source archives.
+
 Required runtime: **bun** only. The backends degrade gracefully — everything
 below is optional and advisory (`/aidlc --doctor` will tell you):
 
@@ -46,7 +70,7 @@ npm i -g @informalsystems/quint
 #   install a JDK 17+ and run any `quint verify` once (downloads Apalache to ~/.quint)
 ```
 
-Build/install the plugin like any AIDLC plugin:
+To develop from a local checkout, validate or build it like any AIDLC plugin:
 
 ```bash
 bun <checkout>/core/tools/aidlc-plugin-validate.ts .

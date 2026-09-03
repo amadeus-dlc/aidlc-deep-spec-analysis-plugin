@@ -26,13 +26,32 @@
 
 ### AI-DLC プロジェクトへのインストール
 
+安定版のタグを指定してインストールします。ブートストラップスクリプトと
+インストール対象のソースは、同じ不変のタグから取得されます。
+
 ```sh
-git clone --recurse-submodules https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin.git
-cd aidlc-deep-spec-analysis-plugin
-bun deep-spec-analysis/scripts/install.ts --project <your-aidlc-project>   # --harness codex, kiro, …（既定: claude）
+VERSION=v0.5.0
+curl -fsSL "https://raw.githubusercontent.com/j5ik2o/deep-spec-analysis/${VERSION}/deep-spec-analysis/scripts/install.ts" |
+  bun - --project <your-aidlc-project> --tag "${VERSION}"   # --harness codex, kiro, …（既定: claude）
 ```
 
-インストーラは `deep-spec-analysis/dist/<harness>/` にハーネス投影——**本物のホストプラグイン**（Claude Code, Codex, Copilot, Cursor, Kiro, Kiro IDE, opencode）——をビルドし、ステージ・センサー・ツール・knowledge をプロジェクトのハーネスツリー（`.claude/`, `.codex/`, …）へ compose します。store 系ハーネス（Claude Code, Codex, Copilot, opencode）は `dist/` から直接 compose し、プロジェクトへは何もコピーしません。ストアを持たない種別（Kiro, Kiro IDE, Cursor）は、そのホストの流儀どおり、まず投影をプロジェクトルートへフォルダドロップします。`--dry-run` を付ければプロジェクトに触れずに compose を検証できます。対象プロジェクトの外には何も置かれず、プラグインを無効化すれば素のワークフローに再 compose されます。インストーラの再実行はそのまま**アップグレード経路**でもあります：compose 前にプラグイン自身の既 compose ファイルをリフレッシュするため（compose フック自体は既存ファイルを決して上書きしません）、新バージョンが古いスキーマやツールを残すことはありません。`/aidlc --doctor` がソルバーの可用性を報告します。
+インストーラはタグのソースをダウンロードし、`deep-spec-analysis/dist/<harness>/` にハーネス投影をビルドします。そのうえで、ステージ・センサー・ツール・knowledge をプロジェクトのハーネスツリー（`.claude/`, `.codex/`, …）へ compose します。
+
+ストアを持つハーネス（Claude Code、Codex、Copilot、opencode）は `dist/` から直接 compose するため、投影をプロジェクトへコピーしません。ストアを持たないハーネス（Kiro、Kiro IDE、Cursor）は、各ホストの流儀に従い、先に投影をプロジェクトルートへ配置します。`--dry-run` を付ければ、プロジェクトに触れずに compose を検証できます。対象プロジェクトの外は変更しません。プラグインを無効化すれば、素のワークフローに再 compose されます。
+
+更新時は、以前 compose したプラグイン自身のファイルを先に入れ替えます。バージョンを上げても、古いスキーマやツールは残りません。ソルバーの可用性は `/aidlc --doctor` で確認できます。
+
+取得元と更新方法は次のとおりです。
+
+| オプション | 動作 |
+|---|---|
+| 指定なし | 最新の安定版 SemVer タグを解決してインストールします。 |
+| `--tag v0.5.0` | 不変のリリースを 1 つ指定します。本番利用ではこの方法を推奨します。 |
+| `--from <repo-root>` | ローカルのチェックアウトからビルドします。プラグインの開発時に使います。 |
+| `--ref <branch>` | 移動するブランチ ref をダウンロードします。再現可能な導入ではなく、開発版を追従するときだけ使ってください。 |
+| `--update` | 記録済みの取得元を再利用します。latest は最新タグを再解決し、local と ref は同じ取得元を取り直します。固定タグは不変なので `Changed 0` で終了します。取得元オプションとは併用できません。 |
+
+インストールに成功すると、バージョン、取得元、日時、ペイロードのダイジェストが、対象プロジェクトの `<harness>/tools/data/deep-spec-analysis-install.json` に記録されます。`<harness>` は `.claude` や `.codex` など、選択したハーネスツリーです。プラグインの配布に npm パッケージや GitHub Release のアセットは使いません。タグまたはブランチのソースアーカイブを GitHub から直接取得します。
 
 > インストーラはフォルダドロップ方式で、インストール時の信頼ゲートがありません。コードを実行してよいと判断したビルドにだけ向けてください。ストア経由の信頼プロンプトが必要なら、後述のホストプラグインフローを使ってください。
 
@@ -72,10 +91,11 @@ codex plugin add aidlc-deep-spec-analysis@aidlc-plugins   # 初回のみフッ�
 
 ## 開発
 
-セットアップはクイックスタートの clone に dev 依存を足すだけです：
+開発する場合は、リポジトリを clone して dev 依存を導入します：
 
 ```sh
-cd deep-spec-analysis
+git clone --recurse-submodules https://github.com/j5ik2o/deep-spec-analysis.git
+cd deep-spec-analysis/deep-spec-analysis
 bun install        # dev 依存のみ——どのプロジェクトにも何もインストールしません
 ```
 

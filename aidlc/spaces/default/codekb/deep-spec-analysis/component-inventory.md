@@ -1,8 +1,68 @@
 # deep-spec-analysis — コンポーネント一覧
 
+今回の `analyzed.components` は、次の見出し8件と逐語一致する。以降に残す前回 store の全体 inventory は `UNVERIFIED` な履歴知識であり、今回の verified component list には含めない。
+
+## 今回検証したコンポーネント
+
+### Installer CLI / Transaction
+
+- **実体**: `deep-spec-analysis/scripts/install.ts`
+- **責務**: 現行 CLI、projection build、plugin-owned payload refresh、file/directory tombstone、no-clobber compose、verify、doctor 呼び出し。
+- **依存**: source checkout、sibling `aidlc-workflows/core/tools`、導入先 filesystem。
+- **評価**: at-risk。取得元と処理本体が `import.meta.dir` で密結合し、346行に責務が集中する。build 完了前は target を変更しない境界は保持すべき。
+
+### Tool Bundle Builder
+
+- **実体**: `deep-spec-analysis/scripts/build-tools.ts`
+- **責務**: `src/entries` から bundle 10本を生成し、契約 schema 4本と合わせた14-file `tools/` を作る。
+- **依存**: Bun bundler、workspace packages、`z3-solver` external contract。
+- **評価**: healthy。決定的な build 入力だが、新 installer からは導入先 harness の plugin builder を通じて利用する。
+
+### Plugin Manifest / Version
+
+- **実体**: `deep-spec-analysis/.aidlc-plugin/plugin.json`
+- **責務**: plugin 名・version と contributions を宣言する配布識別子。
+- **依存**: CI validator、将来の release/tag consistency check。
+- **評価**: at-risk。version は0.5.0だが tag はまだ無く、一致を保証する gate もない。
+
+### Doctor Installation Status
+
+- **実体**: `deep-spec-analysis/src/doctor/{domain,usecase,adapter}`、`src/entries/deep-spec-analysis-doctor.ts`
+- **責務**: installation manifest を検査して既存 doctor JSON へ描画する。将来は provenance と latest tag の advisory を担う候補。
+- **依存**: harness filesystem port、entry の composition、ネットワーク用の新 port（未実装）。
+- **評価**: at-risk。現行 `Check` に skip status がなく、既存5ブロックの順序と JSON shape が外部契約。
+
+### Installer / Doctor Test Suites
+
+- **実体**: `deep-spec-analysis/tests/intent-e2e.test.ts`、`plugin.test.ts`、`doctor-domain.test.ts`
+- **責務**: 導入・upgrade・tombstone・冪等性、plugin CLEAN、doctor domain／presenter の回帰検証。
+- **依存**: Bun Test、一時 sandbox、現在は一部で `aidlc-workflows` submodule。
+- **評価**: healthy but incomplete。source selector、provenance、same-version update、network failure、tag consistency の検査は未実装。
+
+### CI / Release Gate
+
+- **実体**: `.github/workflows/ci.yml`
+- **責務**: typecheck、generated bundle drift、coverage、plugin validate、7 harness build。
+- **依存**: Bun 1.3.13、Node 24、submodule checkout。
+- **評価**: healthy for development、at-risk for release。tag trigger と manifest/tag equality は未実装。
+
+### Runtime / Workspace Configuration
+
+- **実体**: `deep-spec-analysis/package.json`、`bun.lock`、`bunfig.toml`、`tsconfig.json`、各 `src/*/*/package.json`、`mise.toml`、`renovate.json`。
+- **責務**: exact dependency、workspace package boundary、strict typecheck、domain coverage floor、runtime pin、dependency update policy。
+- **評価**: healthy。installer bootstrap の利用先へこれらの devDependencies をそのまま導入する構成ではない。
+
+### Installation Documentation
+
+- **実体**: `README.ja.md`、`deep-spec-analysis/README.ja.md`、`deep-spec-analysis/tests/README.ja.md`
+- **責務**: 利用者の導入、開発、テストの入口。
+- **評価**: degraded for target UX。現行は clone `--recurse-submodules` と checkout 前提で、tag bootstrap／`--update`／provenance を説明しない。
+
+## 前回 store の全体 inventory（今回未再検証）
+
 コンポーネント名は `reverse-engineering-timestamp.md` の `analyzed.components` と逐語一致させている（見出しがそのまま名前）。数値は developer link の実測（HEAD `94d64a3`、`.ts` 468 本の import を機械集計）。依存エッジの全表は `dependencies.md`、責務の背景は `architecture.md`。
 
-## コンポーネント一覧（リポジトリ直下）
+### コンポーネント一覧（リポジトリ直下）
 
 ### deep-spec-analysis/tools
 
