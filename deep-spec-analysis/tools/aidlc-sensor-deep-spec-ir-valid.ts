@@ -2219,6 +2219,15 @@ class QuintMachinePlan {
     const machineTargets = this.machineTargets();
     const eventTargets = this.#eventIds.toTargetIds();
     const machineRun = runs.machineRun();
+    if (machineRun === null) {
+      for (const target of machineTargets) {
+        skipped.push(VerificationSkipped.reconstitute({
+          target,
+          reason: "unavailable",
+          detail: "quint returned no machine run: the event machine was not decided"
+        }));
+      }
+    }
     if (machineRun !== null) {
       skipped.push(...machineRun.skipsFor(machineTargets, bounded));
       if (machineRun.isDeadlock()) {
@@ -2256,8 +2265,14 @@ class QuintMachinePlan {
         continue;
       }
       const r = runs.temporalOf(ob.id());
-      if (!r)
+      if (!r) {
+        skipped.push(VerificationSkipped.reconstitute({
+          target,
+          reason: "unavailable",
+          detail: "quint returned no run for this temporal obligation"
+        }));
         continue;
+      }
       const skip = r.skipFor(target);
       if (skip !== null) {
         skipped.push(skip);
@@ -2286,8 +2301,14 @@ class QuintMachinePlan {
         continue;
       }
       const r = runs.scenarioOf(sc.id());
-      if (!r)
+      if (!r) {
+        skipped.push(VerificationSkipped.reconstitute({
+          target,
+          reason: "unavailable",
+          detail: "quint returned no run for this scenario"
+        }));
         continue;
+      }
       const skip = r.skipFor(target);
       if (skip !== null) {
         skipped.push(skip);
