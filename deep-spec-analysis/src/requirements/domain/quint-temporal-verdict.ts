@@ -8,31 +8,42 @@ import { VerificationWitness } from "./verification-witness.ts";
 // 分岐で組み立てていた skip（budget 文言は golden 凍結）と witness 材料面を
 // 判定自身が所有する。
 export class QuintTemporalVerdict {
-  readonly #kind: "timeout" | "violation" | "clean";
+  readonly #kind: "timeout" | "run-failed" | "violation" | "clean";
   readonly #trace: TraceStates | null;
+  readonly #outputTail: string;
 
-  private constructor(props: { kind: "timeout" | "violation" | "clean"; trace: TraceStates | null }) {
+  private constructor(props: { kind: "timeout" | "run-failed" | "violation" | "clean"; trace: TraceStates | null; outputTail: string }) {
     this.#kind = props.kind;
     this.#trace = props.trace;
+    this.#outputTail = props.outputTail;
   }
 
   static timeout(): QuintTemporalVerdict {
-    return new QuintTemporalVerdict({ kind: "timeout", trace: null });
+    return new QuintTemporalVerdict({ kind: "timeout", trace: null, outputTail: "" });
+  }
+
+  // 予算内で答えが返らなかった（spawn 失敗・非ゼロ終了・error 出力）。verify は
+  // 違反時にだけ ITF を書くので、ITF 無しを無条件に clean と読むと失敗が pass に
+  // 化ける。シナリオ判定の run-failed と同じ語彙で、outputTail は CLI の生出力尾。
+  static runFailed(outputTail: string): QuintTemporalVerdict {
+    return new QuintTemporalVerdict({ kind: "run-failed", trace: null, outputTail });
   }
 
   // 反例トレースつきの違反（"from" に届いて "to" に届かない経路）。
   static violation(trace: TraceStates): QuintTemporalVerdict {
-    return new QuintTemporalVerdict({ kind: "violation", trace });
+    return new QuintTemporalVerdict({ kind: "violation", trace, outputTail: "" });
   }
 
   static clean(): QuintTemporalVerdict {
-    return new QuintTemporalVerdict({ kind: "clean", trace: null });
+    return new QuintTemporalVerdict({ kind: "clean", trace: null, outputTail: "" });
   }
 
-  // 予算超過の skip（凍結文言）。violation / clean は skip しない。
+  // 予算超過・実行失敗の skip（凍結文言）。violation / clean は skip しない。
   skipFor(target: TargetId): VerificationSkipped | null {
-    if (this.#kind !== "timeout") return null;
-    return VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "temporal check exceeded its budget" });
+    const kind = this.#kind;
+    if (kind === "timeout") return VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "temporal check exceeded its budget" });
+    if (kind === "run-failed") return VerificationSkipped.reconstitute({ target, reason: "unavailable", detail: `quint verify failed unexpectedly: ${this.#outputTail}` });
+    return null;
   }
 
   isViolation(): boolean {
