@@ -12,6 +12,7 @@ import type { RefinementObligation } from "./refinement-obligation.ts";
 import { RefinementObligations } from "./refinement-obligations.ts";
 import type { RefinementScenario } from "./refinement-scenario.ts";
 import { RefinementScenarios } from "./refinement-scenarios.ts";
+import { FrRefs } from "../../kernel/domain/index.ts";
 
 
 
@@ -88,7 +89,7 @@ export class RefinementRequirements {
     return TargetIds.of([...this.#obligations.toArray().map((o) => o.id().asTargetId()), ...this.#scenarios.toArray().map((s) => s.id().asTargetId())]);
   }
 
-  frRefsOf(id: string): readonly string[] {
-    return this.#obligations.byId(id)?.frRefs().toArray() ?? this.#scenarios.byId(id)?.frRefs().toArray() ?? [];
+  frRefsOf(id: string): FrRefs {
+    return this.#obligations.byId(id)?.frRefs() ?? this.#scenarios.byId(id)?.frRefs() ?? FrRefs.of([]);
   }
 }

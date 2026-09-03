@@ -1,13 +1,14 @@
 import { CheckSeverity } from "./check-severity.ts";
+import { ArtifactPath } from "../../kernel/domain/index.ts";
 
 // 設置台帳の 1 エントリ——harness 相対パスと、欠けたときの深刻度。
 // （#71 波27）
 export class ManifestEntry {
-  readonly #rel: string;
+  readonly #rel: ArtifactPath;
   readonly #severity: CheckSeverity;
 
   private constructor(rel: string, severity: CheckSeverity) {
-    this.#rel = rel;
+    this.#rel = ArtifactPath.reconstitute(rel);
     this.#severity = severity;
   }
 
@@ -16,7 +17,7 @@ export class ManifestEntry {
   }
 
   rel(): string {
-    return this.#rel;
+    return this.#rel.asString();
   }
 
   severity(): CheckSeverity {

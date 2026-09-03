@@ -9,7 +9,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationSkips } from "../domain/index.ts";
+import { ScenarioId, ObligationId, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationSkips } from "../domain/index.ts";
 import type {
   RequirementsModel,
 } from "../domain/index.ts";
@@ -18,6 +18,7 @@ import { decodeItfTrace, itfStatus } from "./itf-decoder.ts";
 import { type CompiledQuintMachine } from "./compiled-quint-machine.ts";
 import { compileQuintMachine } from "./quint-compilation.ts";
 import type { QuintClientConfig } from "./quint-client-config.ts";
+import { KeyedIndex } from "../../kernel/domain/index.ts";
 
 const SEED = "0x2a";
 const MAX_STEPS = 8;
@@ -69,7 +70,11 @@ export class QuintClientImpl implements QuintClient {
       }
       const temporals = bounded ? this.#runTemporalPhase(machine, modulePath, skipTargets, work) : new Map<string, QuintTemporalVerdict>();
       const scenarios = this.#runScenarioPhase(machine, modulePath, work);
-      const runs = QuintRuns.of({ machine: machineRun, temporals, scenarios });
+      const runs = QuintRuns.of({
+        machine: machineRun,
+        temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationId.reconstitute(id), v] as const)),
+        scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioId.reconstitute(id), v] as const)),
+      });
       return { kind: "checked", method, plan: machine.plan, compileSkips: VerificationSkips.of(machine.compileSkips), runs };
     } finally {
       rmSync(work, { recursive: true, force: true });

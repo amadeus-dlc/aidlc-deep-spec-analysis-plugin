@@ -177,7 +177,7 @@ export class VerifyDesignQuintUseCase {
             findings.push(
               DesignFinding.reconstitute({
                 kind: "unreachable",
-                frRefs: FrRefs.of([]),
+                frRefs: FrRefs.reconstitute([]),
                 targets: TargetIds.reconstitute([sm.id().asString()]),
                 witness: DesignWitness.model({ [attrPath]: state }),
                 unit: u.name(),
@@ -307,7 +307,7 @@ export class VerifyDesignQuintUseCase {
       findings: DesignFindings.of(findings),
       skipped: DesignSkips.of(skipped),
       ...(inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {}),
-      checked: CheckedUnits.of(checkedUnits),
+      checked: CheckedUnits.reconstitute(checkedUnits),
     });
     // CQS: verdict は conformedOf（照会）から導き、store は書くだけ（void）。
     const conformed = this.#designReportRepository.conformedOf(report);

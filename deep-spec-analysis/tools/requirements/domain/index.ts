@@ -2,14 +2,14 @@
 
 export { AttributeDeclaration, AttributeBound } from "./attribute-declaration.ts";
 export { AttributeDeclarations } from "./attribute-declarations.ts";
-export { AttributePath } from "./attribute-path.ts";
+export { AttributePath } from "../../kernel/domain/index.ts";
 export { AttributeValues } from "./attribute-values.ts";
 // FrRefs は kernel 所有の共有語彙（requirements の facade からも見える）。
 export { FrRefs } from "../../kernel/domain/index.ts";
 export { Obligation } from "./obligation.ts";
 export { ObligationId } from "./obligation-id.ts";
 export { ObligationIds } from "./obligation-ids.ts";
-export { ObligationNature } from "./obligation-nature.ts";
+export { ObligationNature } from "../../kernel/domain/index.ts";
 export { Obligations } from "./obligations.ts";
 export { Scenario } from "./scenario.ts";
 export { ScenarioId } from "./scenario-id.ts";

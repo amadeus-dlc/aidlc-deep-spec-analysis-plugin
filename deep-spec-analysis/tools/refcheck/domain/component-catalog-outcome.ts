@@ -5,13 +5,14 @@ import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import { DD_0, DD_1, DD_2, DD_3, DD_4, DD_5, DD_6, DD_7 } from "./component-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { WitnessRef } from "./witness-ref.ts";
+import { FenceCount } from "./fence-count.ts";
 
 // components.md の yaml 真実源ブロックの解析結果——フェンス数が違う、解析
 // できない、抽出できた（成分と形の誤り）。DD 検査は `match` で解釈へ命じる
 // ——kind を読んで分岐する代わりに（#71 波26）。
 export class ComponentCatalogOutcome {
   readonly #kind: "wrong-fence-count" | "unparseable" | "extracted";
-  readonly #found: number;
+  readonly #found: FenceCount;
   readonly #line: LineNumber | null;
   readonly #error: string | null;
   readonly #components: Components | null;
@@ -26,7 +27,7 @@ export class ComponentCatalogOutcome {
     shapeErrors: ComponentShapeErrors | null;
   }) {
     this.#kind = props.kind;
-    this.#found = props.found;
+    this.#found = FenceCount.of(props.found);
     this.#line = props.line;
     this.#error = props.error;
     this.#components = props.components;
@@ -50,7 +51,7 @@ export class ComponentCatalogOutcome {
     unparseable: (line: LineNumber, error: string) => T;
     extracted: (components: Components, shapeErrors: ComponentShapeErrors) => T;
   }): T {
-    if (this.#kind === "wrong-fence-count") return handlers.wrongFenceCount(this.#found);
+    if (this.#kind === "wrong-fence-count") return handlers.wrongFenceCount(this.#found.asNumber());
     if (this.#kind === "unparseable" && this.#line !== null) return handlers.unparseable(this.#line, this.#error ?? "");
     if (this.#components === null || this.#shapeErrors === null) throw new Error("defect: an extracted component catalog carries no components");
     return handlers.extracted(this.#components, this.#shapeErrors);

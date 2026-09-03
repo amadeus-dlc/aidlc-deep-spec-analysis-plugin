@@ -4,7 +4,7 @@
 // ir-valid の errors[]・契約2 の unavailable.reason として golden バイトに
 // 現れるため、文言は「含む」ではなく完全一致で固定する。
 
-import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName, KeyedIndex } from "../tools/kernel/domain/index.ts";
+import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName, KeyedIndex, KeySet, RequirementId, QueryLabel, AttributeKind, VerificationMethod, FindingKind } from "../tools/kernel/domain/index.ts";
 import { describe, expect, test } from "bun:test";
 import {
   canonicalStringify,
@@ -85,7 +85,7 @@ describe("canonical id order (owned by the id value object, ruling 1)", () => {
 
   test("the collections deduplicate then sort canonically", () => {
     expect(TargetIds.reconstitute(["OB-10", "OB-2", "OB-2"]).sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10"]);
-    expect(FrRefs.of(["FR-10", "FR-2", "FR-2"]).sortedUnique().toArray()).toEqual(["FR-2", "FR-10"]);
+    expect(FrRefs.reconstitute(["FR-10", "FR-2", "FR-2"]).sortedUnique().toStrings()).toEqual(["FR-2", "FR-10"]);
   });
 });
 
@@ -292,7 +292,7 @@ describe("target-ids / requirement-ids / names", () => {
   });
 
   test("requirementIds finds FR/NFR ids with optional dash and dotted segments", () => {
-    expect([...RequirementIds.extractFrom("FR-1 covers NFR2.1 but FRX-9 does not; FR-1 repeats")].sort()).toEqual(["FR-1", "NFR2.1"]);
+    expect([...RequirementIds.extractFrom("FR-1 covers NFR2.1 but FRX-9 does not; FR-1 repeats")].map((id) => id.asString()).sort()).toEqual(["FR-1", "NFR2.1"]);
   });
 
   test("normalizeName casefolds and strips non-alphanumerics", () => {
@@ -362,5 +362,54 @@ describe("KeyedIndex (the keyed-index representation primitive, ruling 3-1)", ()
     // the original is untouched
     expect(index.get(id("OB-2"))).toBe(2);
     expect(index.has(id("OB-3"))).toBe(false);
+  });
+});
+
+describe("the 2026-09-03 kernel primitives (rulings 3-1 to 3-3)", () => {
+  test("KeySet keeps insertion order, dedupes by string form, and with() is a no-op for a present key", () => {
+    const empty = KeySet.empty<TargetId>();
+    expect(empty.isEmpty()).toBe(true);
+    expect(empty.size()).toBe(0);
+    const set = KeySet.of([TargetId.reconstitute("OB-2"), TargetId.reconstitute("OB-1"), TargetId.reconstitute("OB-2")]);
+    expect(set.size()).toBe(2);
+    expect(set.has(TargetId.reconstitute("OB-1"))).toBe(true);
+    expect(set.has(TargetId.reconstitute("OB-9"))).toBe(false);
+    expect(set.with(TargetId.reconstitute("OB-1"))).toBe(set);
+    const grown = set.with(TargetId.reconstitute("OB-3"));
+    expect([...grown].map((t) => t.asString())).toEqual(["OB-2", "OB-1", "OB-3"]);
+    expect(grown.toArray().length).toBe(3);
+    expect(set.size()).toBe(2);
+  });
+
+  test("RequirementId, QueryLabel and RequirementIds", () => {
+    const a = RequirementId.reconstitute("FR-2");
+    expect(a.equals(RequirementId.reconstitute("FR-2"))).toBe(true);
+    expect(a.equals(RequirementId.reconstitute("FR-10"))).toBe(false);
+    expect(a.compareTo(RequirementId.reconstitute("FR-10"))).toBeLessThan(0);
+    expect(a.asString()).toBe("FR-2");
+    const ids = RequirementIds.of([a, RequirementId.reconstitute("NFR-1")]);
+    expect(ids.has(a)).toBe(true);
+    expect(ids.toArray().map((id) => id.asString())).toEqual(["FR-2", "NFR-1"]);
+    expect(ids.add(RequirementId.reconstitute("FR-3")).toStrings()).toEqual(["FR-2", "NFR-1", "FR-3"]);
+    const q = QueryLabel.reconstitute("gap:submit");
+    expect(q.equals(QueryLabel.reconstitute("gap:submit"))).toBe(true);
+    expect(q.compareTo(QueryLabel.reconstitute("global"))).toBeLessThan(0);
+    expect(q.compareTo(QueryLabel.reconstitute("gap:submit"))).toBe(0);
+    expect(QueryLabel.reconstitute("z").compareTo(q)).toBeGreaterThan(0);
+    expect(q.asString()).toBe("gap:submit");
+  });
+
+  test("AttributeKind and VerificationMethod", () => {
+    const k = AttributeKind.reconstitute("enum");
+    expect(k.isEnum()).toBe(true);
+    expect(k.isInt()).toBe(false);
+    expect(k.isBool()).toBe(false);
+    expect(k.equals(AttributeKind.reconstitute("enum"))).toBe(true);
+    expect(AttributeKind.reconstitute("").asString()).toBe("");
+    const m = VerificationMethod.reconstitute("bounded");
+    expect(m.equals(VerificationMethod.reconstitute("bounded"))).toBe(true);
+    expect(m.equals(VerificationMethod.reconstitute("static"))).toBe(false);
+    expect(m.asString()).toBe("bounded");
+    expect(FindingKind.reconstitute("conflict").compareTo(FindingKind.reconstitute("redundancy"))).toBeLessThan(0);
   });
 });

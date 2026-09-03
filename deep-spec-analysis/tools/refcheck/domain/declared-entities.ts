@@ -113,7 +113,7 @@ export class DeclaredEntities {
     // FD-E4 / FD-E5: 関係宣言が自分の整合を告げる。
     for (const r of this.allRels()) {
       for (const endpoint of [r.from(), r.to()]) {
-        if (endpoint !== null && !this.entities().containsNamed(endpoint.asString())) {
+        if (endpoint !== null && !this.entities().containsNamed(endpoint)) {
           report.finding(FD_E4, "reference-broken", [TargetIds.safe("entity", endpoint.asString())], [WitnessRef.at(art, r.element().asString(), endpoint.asString())],
             `relationship endpoint "${endpoint.asString()}" is not a declared entity`);
         }

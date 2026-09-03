@@ -4,19 +4,10 @@ import type { VerificationFinding } from "./verification-finding.ts";
 // 拡張 11-kind 表とは意図的に別実装のまま保つ（統一しない——バイト安全優先。
 // 順序互換は tests/kind-rank.test.ts が機械証明）。旧
 // verification-finding-order.ts から吸収し、コレクションだけが使う。
-const KIND_RANK: { [k: string]: number } = {
-  conflict: 0,
-  "completeness-gap": 1,
-  "scenario-violation": 2,
-  "cross-check-disagreement": 3,
-};
-
-function rankOf(kind: string): number {
-  return Object.hasOwn(KIND_RANK, kind) ? (KIND_RANK[kind] as number) : 9;
-}
-
+// 正準ソートは要素の `compareTo` に問う（kind 順位は kernel の FindingKind——
+// v1 の 4 種の相対順序は 11 種の表と一致する、裁定 3-2）。
 function sortVerificationFindings(findings: readonly VerificationFinding[]): VerificationFinding[] {
-  return [...findings].sort((a, b) => a.compareWithin(b, rankOf));
+  return [...findings].sort((a, b) => a.compareTo(b));
 }
 
 export class VerificationFindings {

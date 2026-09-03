@@ -1,4 +1,4 @@
-import { TargetIds, type TriggerName } from "../../kernel/domain/index.ts";
+import { TargetIds, type TriggerName, QueryLabel } from "../../kernel/domain/index.ts";
 import type { ObligationId } from "./obligation-id.ts";
 import type { SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 
@@ -6,13 +6,13 @@ import type { SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 // 効果の両立（joint）。計画の解釈は対自身に判定を引かせ、対象を問う
 // （#71 波25）。
 export class SmtEventPairProbe {
-  readonly #qOverlap: string;
-  readonly #qJoint: string;
+  readonly #qOverlap: QueryLabel;
+  readonly #qJoint: QueryLabel;
   readonly #a: ObligationId;
   readonly #b: ObligationId;
   readonly #trigger: TriggerName;
 
-  private constructor(props: { qOverlap: string; qJoint: string; a: ObligationId; b: ObligationId; trigger: TriggerName }) {
+  private constructor(props: { qOverlap: QueryLabel; qJoint: QueryLabel; a: ObligationId; b: ObligationId; trigger: TriggerName }) {
     this.#qOverlap = props.qOverlap;
     this.#qJoint = props.qJoint;
     this.#a = props.a;
@@ -20,7 +20,7 @@ export class SmtEventPairProbe {
     this.#trigger = props.trigger;
   }
 
-  static of(props: { qOverlap: string; qJoint: string; a: ObligationId; b: ObligationId; trigger: TriggerName }): SmtEventPairProbe {
+  static of(props: { qOverlap: QueryLabel; qJoint: QueryLabel; a: ObligationId; b: ObligationId; trigger: TriggerName }): SmtEventPairProbe {
     return new SmtEventPairProbe(props);
   }
 

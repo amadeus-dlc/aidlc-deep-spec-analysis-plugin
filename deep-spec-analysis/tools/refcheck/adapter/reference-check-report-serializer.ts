@@ -55,7 +55,7 @@ function orderedDocument(report: ReferenceCheckReport): { [k: string]: Json } {
     });
     const out: { [k: string]: Json } = {
       kind: f.kind(),
-      frRefs: f.frRefs().toArray() as unknown as Json,
+      frRefs: f.frRefs().toStrings() as unknown as Json,
       targets: f.targets().toStrings() as unknown as Json,
       witness: { refs },
       detail: f.detail(),
@@ -141,7 +141,7 @@ export function parseReportDocument(
             : [];
           return Finding.reconstitute({
             kind: typeof entry.kind === "string" ? entry.kind : "",
-            frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
+            frRefs: FrRefs.reconstitute(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
             targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
             witness: { refs: WitnessRefs.of(refs) },
             detail: typeof entry.detail === "string" ? entry.detail : "",

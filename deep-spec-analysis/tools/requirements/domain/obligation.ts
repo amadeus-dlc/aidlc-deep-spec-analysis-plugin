@@ -4,7 +4,7 @@
 import type { Expression } from "../../kernel/domain/expression.ts";
 import type { FrRefs, TriggerName } from "../../kernel/domain/index.ts";
 import { ObligationId } from "./obligation-id.ts";
-import { ObligationNature } from "./obligation-nature.ts";
+import { ObligationNature } from "../../kernel/domain/index.ts";
 
 type TemporalExpressions = {
   readonly pattern: string;

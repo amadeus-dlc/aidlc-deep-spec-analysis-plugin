@@ -127,7 +127,7 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     report.skip(CheckFamily.reconstitute("DD-2"), "unrecognized-format", "later");
     report.skip(CheckFamily.reconstitute("DD-0"), "absent-input", "earlier");
     expect(report.findings().toArray().map((f) => f.detail())).toEqual(["DD-1: a earlier detail", "DD-1: first kind", "DD-1: second kind"]);
-    expect(report.findings().toArray()[0]?.frRefs().toArray()).toEqual(["FR-1", "FR-2"]);
+    expect(report.findings().toArray()[0]?.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(report.findings().toArray()[0]?.unit()).toBe(undefined);
     expect(report.skipped().toArray().map((s) => s.target())).toEqual(["check:DD-0", "check:DD-2"]);
     expect(report.checked().toStrings()).toEqual([]);
@@ -155,7 +155,7 @@ describe("serializer (adapter owns the format knowledge)", () => {
   });
 
   test("a non-conforming document degrades with the frozen wording", () => {
-    const badFinding: Finding = Finding.reconstitute({ kind: "no-such-kind", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["check:DD-0"]), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
+    const badFinding: Finding = Finding.reconstitute({ kind: "no-such-kind", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["check:DD-0"]), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
     const conformed = conformToContract(seed("/tmp/r", { findings: [badFinding] }), schema);
     expect(conformed.isUnavailable()).toBe(true);
     expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");

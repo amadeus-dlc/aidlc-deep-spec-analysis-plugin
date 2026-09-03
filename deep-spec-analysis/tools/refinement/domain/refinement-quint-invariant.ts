@@ -30,6 +30,6 @@ export class RefinementQuintInvariant {
 
   // 兄弟バックエンドへ渡す lowering 上の invariant 義務（id は呼び手が採番）。
   loweredAs(id: LoweredId): LoweredObligation {
-    return LoweredObligation.reconstitute({ id, nature: "invariant", frRefs: [...this.#frRefs], assert: this.#expr });
+    return LoweredObligation.reconstitute({ id, nature: "invariant", frRefs: this.#frRefs, assert: this.#expr });
   }
 }

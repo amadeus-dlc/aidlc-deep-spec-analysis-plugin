@@ -1,6 +1,6 @@
-import { TargetId } from "../../kernel/domain/index.ts";
-import { err, ok } from "../../kernel/infrastructure/index.ts";
-import type { Result } from "../../kernel/infrastructure/index.ts";
+import { TargetId } from "./target-id.ts";
+import { err, ok } from "../infrastructure/index.ts";
+import type { Result } from "../infrastructure/index.ts";
 
 type AttributePathError = { readonly kind: "empty-attribute-path"; readonly raw: string };
 

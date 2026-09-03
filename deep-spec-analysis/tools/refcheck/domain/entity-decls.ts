@@ -2,16 +2,18 @@ import type { NormalizedName } from "../../kernel/domain/index.ts";
 import { EntityDecl } from "./entity-decl.ts";
 import { type AppliesTo } from "./applies-to.ts";
 import { type ReferenceTarget } from "./reference-target.ts";
+import { KeySet } from "../../kernel/domain/index.ts";
+import { EntityName } from "./entity-name.ts";
 
 // エンティティ宣言のコレクション。重複・所属・正規化名解決・ライフサイクル
 // 対象の選定・あいまい照合という集合の知識を所有する。
 export class EntityDecls {
   readonly #values: readonly EntityDecl[];
-  readonly #names: Set<string>;
+  readonly #names: KeySet<EntityName>;
 
   private constructor(values: readonly EntityDecl[]) {
     this.#values = values;
-    this.#names = new Set(values.map((e) => e.name().asString()));
+    this.#names = KeySet.of(values.map((e) => e.name()));
   }
 
   static of(values: readonly EntityDecl[]): EntityDecls {
@@ -36,8 +38,8 @@ export class EntityDecls {
     return dups;
   }
 
-  containsNamed(value: string): boolean {
-    return this.#names.has(value);
+  containsNamed(name: EntityName): boolean {
+    return this.#names.has(name);
   }
 
   byNormalizedName(normalized: NormalizedName): EntityDecl | undefined {
@@ -52,7 +54,7 @@ export class EntityDecls {
   // 小文字包含の緩い照合（凍結挙動）。
   resolvesReference(reference: ReferenceTarget): boolean {
     const token = reference.entityToken();
-    if (token !== null) return this.#names.has(token);
+    if (token !== null) return this.#names.has(EntityName.reconstitute(token));
     return this.#values.some((d) => reference.looselyMentions(d.name()));
   }
 

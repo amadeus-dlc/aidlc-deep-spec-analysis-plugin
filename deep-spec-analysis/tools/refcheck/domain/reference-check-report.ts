@@ -29,7 +29,7 @@ import { InputAnchors } from "./input-anchors.ts";
 import { ReferenceCheckReportId } from "./reference-check-report-id.ts";
 import { Skipped } from "./skipped.ts";
 import { Skips } from "./skips.ts";
-import type { UnitName } from "./unit-name.ts";
+import type { UnitName } from "../../kernel/domain/index.ts";
 import type { WitnessRef } from "./witness-ref.ts";
 import { WitnessRefs } from "./witness-refs.ts";
 
@@ -106,7 +106,7 @@ export class ReferenceCheckReport {
     finding(family: CheckFamily, kind: string, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
       this.#findings = this.#findings.add(Finding.reconstitute({
         kind,
-        frRefs: FrRefs.of(frRefs).sortedUnique(),
+        frRefs: FrRefs.reconstitute(frRefs).sortedUnique(),
         targets: TargetIds.reconstitute(targets).sortedUniqueCanonically(),
         witness: { refs: WitnessRefs.of(refs) },
         detail: family.prefixedDetail(detail),

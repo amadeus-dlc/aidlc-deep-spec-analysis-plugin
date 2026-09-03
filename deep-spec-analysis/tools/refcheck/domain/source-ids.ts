@@ -1,4 +1,4 @@
-import type { RequirementIds } from "../../kernel/domain/index.ts";
+import { RequirementId, type RequirementIds } from "../../kernel/domain/index.ts";
 import { SourceId } from "./source-id.ts";
 
 export class SourceIds {
@@ -22,7 +22,7 @@ export class SourceIds {
 
   // FD-R3: requirements.md に存在しない source id（値の昇順——凍結順）。
   valuesMissingFrom(known: RequirementIds): string[] {
-    return this.#values.map((id) => id.asString()).filter((id) => !known.has(id)).sort();
+    return this.#values.map((id) => id.asString()).filter((id) => !known.has(RequirementId.reconstitute(id))).sort();
   }
 
   toArray(): readonly SourceId[] {

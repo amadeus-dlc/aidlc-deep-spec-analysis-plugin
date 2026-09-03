@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, TargetId, ContentHash, IrVersion, ArtifactPath, type Expression} from "../tools/kernel/domain/index.ts";
+import { TriggerName, TargetId, ContentHash, IrVersion, ArtifactPath, type Expression, KeyedIndex } from "../tools/kernel/domain/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
@@ -46,7 +46,7 @@ function st(values: { [path: string]: boolean | number | string }): TraceState {
 
 // 判定レコードは class（#71 波18）——期待値は平文へ射影して比較する（bun の toEqual は #private を見ない）。
 const plainFindings = (findings: Iterable<VerificationFinding>) =>
-  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toArray(), targets: f.targets().toStrings(), witness: f.witness().toDocument(), detail: f.detail() }));
+  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toStrings(), targets: f.targets().toStrings(), witness: f.witness().toDocument(), detail: f.detail() }));
 
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -73,8 +73,8 @@ function model(seed: {
     attributes: AttributeDeclarations.of(
       (seed.attributes ?? []).map((a) => AttributeDeclaration.reconstitute({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
     ),
-    obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.reconstitute({ ...o, frRefs: FrRefs.of(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
-    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.reconstitute({ ...s, frRefs: FrRefs.of(s.frRefs) }))),
+    obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.reconstitute({ ...o, frRefs: FrRefs.reconstitute(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
+    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.reconstitute({ ...s, frRefs: FrRefs.reconstitute(s.frRefs) }))),
     background: BackgroundAssumptions.of(seed.background ?? []),
   });
 }
@@ -124,7 +124,15 @@ function quint(result: QuintCheckResult): QuintClient {
   return { check: () => result };
 }
 
-const EMPTY_RUNS: Parameters<typeof QuintRuns.of>[0] = { machine: null, temporals: new Map(), scenarios: new Map() };
+// テスト用: 生 id の対 → DP キーの索引（裁定 3-1）。
+function temporalsOf(entries: readonly (readonly [string, QuintTemporalVerdict])[]): KeyedIndex<ObligationId, QuintTemporalVerdict> {
+  return KeyedIndex.of(entries.map(([id, v]) => [ObligationId.reconstitute(id), v] as const));
+}
+function scenariosOf(entries: readonly (readonly [string, QuintScenarioVerdict])[]): KeyedIndex<ScenarioId, QuintScenarioVerdict> {
+  return KeyedIndex.of(entries.map(([id, v]) => [ScenarioId.reconstitute(id), v] as const));
+}
+
+const EMPTY_RUNS: Parameters<typeof QuintRuns.of>[0] = { machine: null, temporals: temporalsOf([]), scenarios: scenariosOf([]) };
 
 const HASH = "a".repeat(64);
 
@@ -200,8 +208,8 @@ describe("the verify-quint interactor over the InMemory double", () => {
     });
     const runs = QuintRuns.of({
       machine: QuintMachineRunVerdict.clean(),
-      temporals: new Map(),
-      scenarios: new Map([["SC-1", QuintScenarioVerdict.evaluated(false)]]),
+      temporals: temporalsOf([]),
+      scenarios: scenariosOf([["SC-1", QuintScenarioVerdict.evaluated(false)]]),
     });
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok(m)),
@@ -291,9 +299,9 @@ describe("quint verdict interpretation", () => {
       .toBe("leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them");
     const guarded = run({}, "simulation", [{ target: "OB-3", reason: "compile-error" }]);
     expect(guarded.skipped.toArray().filter((s) => s.target().asString() === "OB-3").length).toBe(1);
-    const timeout = run({ temporals: new Map([["OB-3", QuintTemporalVerdict.timeout()]]) }, "bounded");
+    const timeout = run({ temporals: temporalsOf([["OB-3", QuintTemporalVerdict.timeout()]]) }, "bounded");
     expect(timeout.skipped.toArray().find((s) => s.target().asString() === "OB-3")?.detail()).toBe("temporal check exceeded its budget");
-    const violated = run({ temporals: new Map([["OB-3", QuintTemporalVerdict.violation(TraceStates.of([st({ "T.ok": false })]))]]) }, "bounded");
+    const violated = run({ temporals: temporalsOf([["OB-3", QuintTemporalVerdict.violation(TraceStates.of([st({ "T.ok": false })]))]]) }, "bounded");
     expect(plainFindings([violated.findings.toArray()[0]])[0]).toEqual({
       kind: "conflict",
       frRefs: (["FR-3"]),
@@ -301,7 +309,7 @@ describe("quint verdict interpretation", () => {
       witness: { trace: [{ "T.ok": false }] },
       detail: 'Temporal obligation OB-3 (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.',
     });
-    const clean = run({ temporals: new Map([["OB-3", QuintTemporalVerdict.clean()]]) }, "bounded");
+    const clean = run({ temporals: temporalsOf([["OB-3", QuintTemporalVerdict.clean()]]) }, "bounded");
     expect([...clean.findings]).toEqual([]);
     expect([...run({}, "bounded").findings]).toEqual([]);
   });
@@ -318,12 +326,12 @@ describe("quint verdict interpretation", () => {
     const unbound = unboundFacts.interpret(machineModel, VerificationSkips.of([]), "simulation", QuintRuns.of(EMPTY_RUNS));
     expect(unbound.skipped.toArray().find((s) => s.target().asString() === "SC-1")?.detail())
       .toBe("quint scenario evaluation requires bindings for every declared attribute");
-    const timeout = run({ scenarios: new Map([["SC-1", QuintScenarioVerdict.timeout()]]) });
+    const timeout = run({ scenarios: scenariosOf([["SC-1", QuintScenarioVerdict.timeout()]]) });
     expect(timeout.skipped.toArray().find((s) => s.target().asString() === "SC-1")?.detail()).toBe("scenario evaluation exceeded its budget");
-    const failed = run({ scenarios: new Map([["SC-1", QuintScenarioVerdict.runFailed("x")]]) });
+    const failed = run({ scenarios: scenariosOf([["SC-1", QuintScenarioVerdict.runFailed("x")]]) });
     expect(failed.skipped.toArray().find((s) => s.target().asString() === "SC-1")?.detail()).toBe("quint run failed unexpectedly: x");
 
-    const acceptViolated = run({ scenarios: new Map([["SC-1", QuintScenarioVerdict.evaluated(true)]]) });
+    const acceptViolated = run({ scenarios: scenariosOf([["SC-1", QuintScenarioVerdict.evaluated(true)]]) });
     expect(plainFindings([...acceptViolated.findings])).toEqual([{
       kind: "scenario-violation",
       frRefs: (["FR-1"]),
@@ -331,7 +339,7 @@ describe("quint verdict interpretation", () => {
       witness: { model: { "T.ok": false } },
       detail: "Accept scenario SC-1 describes a state the obligations rule out — the requirements reject an example that should be accepted.",
     }]);
-    const rejectAccepted = run({ scenarios: new Map([["SC-2", QuintScenarioVerdict.evaluated(false)]]) });
+    const rejectAccepted = run({ scenarios: scenariosOf([["SC-2", QuintScenarioVerdict.evaluated(false)]]) });
     expect(plainFindings([...rejectAccepted.findings])).toEqual([{
       kind: "scenario-violation",
       frRefs: (["FR-2"]),
@@ -339,8 +347,8 @@ describe("quint verdict interpretation", () => {
       witness: { model: { "T.ok": true } },
       detail: "Reject scenario SC-2 is accepted by every obligation — the requirements do not exclude an example that should be rejected.",
     }]);
-    const quietAccept = run({ scenarios: new Map([["SC-1", QuintScenarioVerdict.evaluated(false)]]) });
-    const quietReject = run({ scenarios: new Map([["SC-2", QuintScenarioVerdict.evaluated(true)]]) });
+    const quietAccept = run({ scenarios: scenariosOf([["SC-1", QuintScenarioVerdict.evaluated(false)]]) });
+    const quietReject = run({ scenarios: scenariosOf([["SC-2", QuintScenarioVerdict.evaluated(true)]]) });
     expect([...quietAccept.findings, ...quietReject.findings]).toEqual([]);
   });
 });

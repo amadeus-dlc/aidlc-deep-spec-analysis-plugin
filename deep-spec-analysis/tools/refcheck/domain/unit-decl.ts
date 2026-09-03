@@ -1,5 +1,5 @@
 import type { UnitDecls } from "./unit-decls.ts";
-import type { UnitName } from "./unit-name.ts";
+import type { UnitName } from "../../kernel/domain/index.ts";
 import { UnitNames } from "./unit-names.ts";
 
 // units エッジブロックの 1 宣言（unit 名と depends_on）。CD-3 が走査する

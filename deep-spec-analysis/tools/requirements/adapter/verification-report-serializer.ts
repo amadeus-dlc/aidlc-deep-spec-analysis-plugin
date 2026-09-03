@@ -39,7 +39,7 @@ function orderedDocument(report: VerificationReport): { [k: string]: Json } {
   ordered.findings = report.findings().toArray().map((f) => {
     const out: { [k: string]: Json } = {
       kind: f.kind(),
-      frRefs: f.frRefs().toArray() as unknown as Json,
+      frRefs: f.frRefs().toStrings() as unknown as Json,
       targets: f.targets().toStrings() as unknown as Json,
       witness: f.witness().toDocument() as unknown as Json,
       detail: f.detail(),
@@ -124,7 +124,7 @@ function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json 
         const entry = e as { [k: string]: Json };
         return VerificationFinding.reconstitute({
           kind: typeof entry.kind === "string" ? entry.kind : "",
-          frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
+          frRefs: FrRefs.reconstitute(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
           targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
           witness: VerificationWitness.fromDocument(entry.witness),
           detail: typeof entry.detail === "string" ? entry.detail : "",

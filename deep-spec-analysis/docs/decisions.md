@@ -2251,3 +2251,36 @@ attributes, int bounds and enum values included — and invents nothing.
 `PUBLISHED_VALUE_SHAPES` exemption is deleted with the three aliases;
 `kernel/domain/keyed-index.ts` joins the representation exclusions.
 Goldens stay byte-identical; the field ledger is unchanged (ceiling 66).
+
+Unit 2 (same PR): rulings 3-1 to 3-4 land — the primitive-field ledger
+is empty (107 → 0; the ceiling is 0 and the constant itself waits for
+#80). Nothing was excused: every descriptor was factored. Two kernel
+representation primitives, `KeyedIndex<K, V>` and `KeySet<K>`, own the
+only string-keyed maps in the domain and join the exclusions on the
+same reasoning as a domain primitive's single `#value`; every index and
+set in the domain now keys by a domain primitive — `LoweringIndex`
+(`LoweredId`, `DesignTransitionId`, `DesignMachineId`), `QuintRuns` and
+`UnitRefinementPlan` (`ObligationId`, `ScenarioId`), the two query
+verdict collections and `RefinementSolverPlan` (`QueryLabel`),
+`SmtVerificationPlan` (`ObligationId`, `QueryLabel` → `TargetId`,
+`TriggerName` → `TargetIds`, `ScenarioId` → `QueryLabel`),
+`AttributeDeclarations`, `DesignAssignments` and `EffectAssignments`
+(`AttributePath`), `DesignEventCatalog` (`TargetId`), `FrReferenceIndex`
+(`RequirementId` → `TargetIds`), `RequirementIds`, `UnformalizedTargets`,
+`BrReferenceIndex` and the entity-name set. The string arrays became
+arrays of primitives: `FrRefs` over the new kernel `RequirementId`
+(shared by the declared ids and the references — one vocabulary),
+`BrRefs` over `BrRef`, `CheckedUnits` over `UnitName`, the lowered
+records' `frRefs`, and the unsat cores over `QueryLabel`. The
+classification strings became kernel primitives — `FindingKind` (one
+rank table where five copies stood; the kind-rank test now proves the
+single table's order), `VerificationMethod`, `AttributeKind` — and the
+vocabulary strings took their existing primitives: `UnitName`,
+`AttributePath` and `ObligationNature` were promoted to the kernel,
+`ArtifactPath` anchors the inputs and the manifest entry, `ElementPath`
+and `ArtifactPath` the witness coordinate, `TargetId` the refcheck skip,
+`TriggerName` the lowered obligation, `ContentHash` the four digests,
+`QueryLabel` the event-pair probe, and `FenceCount` the three fence
+counts. `Obligation.ears` and `WitnessRef.value` are prose. The raw-string
+doors are now `reconstitute`, the primitive doors `of`, and the boundary
+readers `toStrings`. Goldens stay byte-identical.

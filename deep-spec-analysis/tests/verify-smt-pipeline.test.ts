@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "../tools/kernel/adapter/index.ts";
 import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
-import { TriggerName, TargetId, TargetIds, ArtifactPath, ContentHash, IrVersion, ExpressionTree } from "../tools/kernel/domain/index.ts";
+import { TriggerName, TargetId, TargetIds, ArtifactPath, ContentHash, IrVersion, ExpressionTree, KeyedIndex, KeySet, QueryLabel } from "../tools/kernel/domain/index.ts";
 import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
 
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -74,7 +74,7 @@ import { InMemoryVerificationReportRepository } from "./doubles/in-memory-verifi
 
 // 判定レコードは class（#71 波18）——期待値は平文へ射影して比較する（bun の toEqual は #private を見ない）。
 const plainFindings = (findings: Iterable<VerificationFinding>) =>
-  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toArray(), targets: f.targets().toStrings(), witness: f.witness().toDocument(), detail: f.detail() }));
+  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toStrings(), targets: f.targets().toStrings(), witness: f.witness().toDocument(), detail: f.detail() }));
 
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -102,8 +102,8 @@ function model(seed: {
     attributes: AttributeDeclarations.of(
       (seed.attributes ?? []).map((a) => AttributeDeclaration.reconstitute({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
     ),
-    obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.reconstitute({ ...o, frRefs: FrRefs.of(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
-    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.reconstitute({ ...s, frRefs: FrRefs.of(s.frRefs) }))),
+    obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.reconstitute({ ...o, frRefs: FrRefs.reconstitute(o.frRefs), trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger) }))),
+    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.reconstitute({ ...s, frRefs: FrRefs.reconstitute(s.frRefs) }))),
     background: BackgroundAssumptions.of(seed.background ?? []),
   });
 }
@@ -152,13 +152,30 @@ function solver(check: SmtCheck): Z3SolverClient {
   return { check: () => check };
 }
 
+// テスト用: 生 id の対 → DP キーの索引・集合（裁定 3-1）。
+function compiledOf(ids: readonly string[]): KeySet<ObligationId> {
+  return KeySet.of(ids.map((id) => ObligationId.reconstitute(id)));
+}
+function labelsOf(entries: readonly (readonly [string, string])[]): KeyedIndex<QueryLabel, TargetId> {
+  return KeyedIndex.of(entries.map(([label, target]) => [QueryLabel.reconstitute(label), TargetId.reconstitute(target)] as const));
+}
+function gapsOf(entries: readonly (readonly [string, readonly string[]])[]): KeyedIndex<TriggerName, TargetIds> {
+  return KeyedIndex.of(entries.map(([trigger, ids]) => [TriggerName.reconstitute(trigger), TargetIds.reconstitute(ids)] as const));
+}
+function scenarioQueriesOf(entries: readonly (readonly [string, string])[]): KeyedIndex<ScenarioId, QueryLabel> {
+  return KeyedIndex.of(entries.map(([sc, qid]) => [ScenarioId.reconstitute(sc), QueryLabel.reconstitute(qid)] as const));
+}
+function verdictsOf(entries: readonly (readonly [string, SmtQueryVerdict])[]): SmtQueryVerdicts {
+  return SmtQueryVerdicts.of(KeyedIndex.of(entries.map(([id, v]) => [QueryLabel.reconstitute(id), v] as const)));
+}
+
 const EMPTY_PLAN: Parameters<typeof SmtVerificationPlan.of>[0] = {
-  compiled: new Map(),
+  compiled: compiledOf([]),
   skipped: VerificationSkips.of([]),
-  labelToTarget: new Map(),
+  labelToTarget: labelsOf([]),
   eventPairs: SmtEventPairProbes.of([]),
-  gapTriggers: new Map(),
-  scenarioQueries: new Map(),
+  gapTriggers: gapsOf([]),
+  scenarioQueries: scenarioQueriesOf([]),
 };
 
 describe("the verify-smt interactor over the InMemory double", () => {
@@ -169,7 +186,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(err({ kind: "not-found", path: "/x" })),
       reports,
-      solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: SmtQueryVerdicts.of(new Map()) } }),
+      solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: verdictsOf([]) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("not-applicable");
     const stored = reports.findAllByDirectory(ap(DIR));
@@ -182,7 +199,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(err({ kind: "corrupt", path: "/x", cause: "IR lacks a semver irVersion" })),
       reports,
-      solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: SmtQueryVerdicts.of(new Map()) } }),
+      solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: verdictsOf([]) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("model-unreadable");
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
@@ -203,7 +220,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
       reports,
-      solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: SmtQueryVerdicts.of(new Map()) } }),
+      solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: verdictsOf([]) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("version-mismatch");
     const written = reports.findById(VerificationReportId.of(ap(DIR), "smt"));
@@ -248,18 +265,18 @@ describe("the verify-smt interactor over the InMemory double", () => {
     });
     const plan = SmtVerificationPlan.of({
       ...EMPTY_PLAN,
-      compiled: new Map([["OB-1", true]]),
-      labelToTarget: new Map([["ob_OB_1", "OB-1"]]),
-      scenarioQueries: new Map([["SC-1", "sc:SC-1"]]),
+      compiled: compiledOf(["OB-1"]),
+      labelToTarget: labelsOf([["ob_OB_1", "OB-1"]]),
+      scenarioQueries: scenarioQueriesOf([["SC-1", "sc:SC-1"]]),
     });
-    const verdicts = new Map<string, SmtQueryVerdict>([
+    const verdicts = verdictsOf([
       ["global", SmtQueryVerdict.reconstitute({ status: "sat", decodedModel: {} })],
       ["sc:SC-1", SmtQueryVerdict.reconstitute({ status: "sat", decodedModel: { "Ticket.priority": 1 } })],
     ]);
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
       reports,
-      solver({ plan, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(verdicts) } }),
+      solver({ plan, result: { kind: "solved", verdicts } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("verified");
     expect(outcome.kind === "verified" && outcome.pass).toBe(false);
@@ -289,15 +306,15 @@ describe("smt verdict interpretation", () => {
     ],
   });
   const plan = SmtVerificationPlan.of({
-    compiled: new Map([["OB-1", true], ["OB-2", true], ["OB-3", true], ["OB-4", true]]),
+    compiled: compiledOf(["OB-1", "OB-2", "OB-3", "OB-4"]),
     skipped: VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-9"), reason: "capability", detail: "seed" })]),
-    labelToTarget: new Map([["ob_OB_1", "OB-1"], ["ob_OB_2", "OB-2"], ["ty_x", "TY-x"], ["bg_B1", "B1"]]),
-    eventPairs: SmtEventPairProbes.of([SmtEventPairProbe.of({ qOverlap: "evo:OB-3:OB-4", qJoint: "evj:OB-3:OB-4", a: ObligationId.reconstitute("OB-3"), b: ObligationId.reconstitute("OB-4"), trigger: TriggerName.reconstitute("submit") })]),
-    gapTriggers: new Map([["submit", ["OB-3", "OB-4"]]]),
-    scenarioQueries: new Map([["SC-1", "sc:SC-1"], ["SC-2", "sc:SC-2"]]),
+    labelToTarget: labelsOf([["ob_OB_1", "OB-1"], ["ob_OB_2", "OB-2"], ["ty_x", "TY-x"], ["bg_B1", "B1"]]),
+    eventPairs: SmtEventPairProbes.of([SmtEventPairProbe.of({ qOverlap: QueryLabel.reconstitute("evo:OB-3:OB-4"), qJoint: QueryLabel.reconstitute("evj:OB-3:OB-4"), a: ObligationId.reconstitute("OB-3"), b: ObligationId.reconstitute("OB-4"), trigger: TriggerName.reconstitute("submit") })]),
+    gapTriggers: gapsOf([["submit", ["OB-3", "OB-4"]]]),
+    scenarioQueries: scenarioQueriesOf([["SC-1", "sc:SC-1"], ["SC-2", "sc:SC-2"]]),
   });
   const run = (entries: [string, Parameters<typeof SmtQueryVerdict.reconstitute>[0]][]) =>
-    plan.interpret(twoInvariants, SmtQueryVerdicts.of(new Map(entries.map(([id, v]) => [id, SmtQueryVerdict.reconstitute(v)]))));
+    plan.interpret(twoInvariants, verdictsOf(entries.map(([id, v]) => [id, SmtQueryVerdict.reconstitute(v)] as const)));
 
   test("global unsat becomes one conflict attributed via the OB-prefixed core labels", () => {
     const { findings, skipped } = run([["global", { status: "unsat", core: ["ty_x", "ob_OB_2", "ob_OB_1"] }]]);
@@ -322,8 +339,8 @@ describe("smt verdict interpretation", () => {
 
   test("a conflict with no effective targets is dropped entirely", () => {
     const bare = model({ obligations: [{ id: ObligationId.reconstitute("OB-3"), nature: ObligationNature.reconstitute("event"), frRefs: [] }] });
-    const { findings } = SmtVerificationPlan.of({ ...EMPTY_PLAN, compiled: new Map([["OB-3", true]]) })
-      .interpret(bare, SmtQueryVerdicts.of(new Map([["global", SmtQueryVerdict.reconstitute({ status: "unsat", core: [] })]])));
+    const { findings } = SmtVerificationPlan.of({ ...EMPTY_PLAN, compiled: compiledOf(["OB-3"]) })
+      .interpret(bare, verdictsOf([["global", SmtQueryVerdict.reconstitute({ status: "unsat", core: [] })]]));
     expect([...findings]).toEqual([]);
   });
 
@@ -433,7 +450,7 @@ describe("cross-check computation", () => {
       method: "exhaustive",
       findings: VerificationFindings.of((input.violated ?? []).map((t): VerificationFinding => (VerificationFinding.reconstitute({
         kind: "scenario-violation",
-        frRefs: FrRefs.of([]),
+        frRefs: FrRefs.reconstitute([]),
         targets: TargetIds.reconstitute([t]),
         witness: VerificationWitness.core([]),
         detail: "x",
@@ -517,7 +534,7 @@ describe("degradation reports and ordering", () => {
   test("finding order: kind rank, then joined targets, then detail; unknown kinds sink to rank 9", () => {
     const f = (kind: string, targets: string[], detail: string): VerificationFinding => (VerificationFinding.reconstitute({
       kind,
-      frRefs: FrRefs.of([]),
+      frRefs: FrRefs.reconstitute([]),
       targets: TargetIds.reconstitute(targets),
       witness: VerificationWitness.core([]),
       detail,
@@ -561,8 +578,8 @@ describe("degradation reports and ordering", () => {
       irHash: ContentHash.reconstitute("h"),
       method: "exhaustive",
       findings: VerificationFindings.of([
-        VerificationFinding.reconstitute({ kind: "scenario-violation", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["SC-1"]), witness: VerificationWitness.core([]), detail: "b" }),
-        VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: VerificationWitness.core([]), detail: "a" }),
+        VerificationFinding.reconstitute({ kind: "scenario-violation", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["SC-1"]), witness: VerificationWitness.core([]), detail: "b" }),
+        VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["OB-1"]), witness: VerificationWitness.core([]), detail: "a" }),
       ]),
       skipped: VerificationSkips.of([VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-2"), reason: "timeout" }), VerificationSkipped.reconstitute({ target: TargetId.reconstitute("OB-1"), reason: "capability" })]),
     });
@@ -611,7 +628,7 @@ describe("degradation reports and ordering", () => {
       background: [BackgroundAssumption.reconstitute({ id: BackgroundAssumptionId.reconstitute("B1"), assert: { op: "bool", value: true } })],
     });
     expect(m.allTargets().toStrings()).toEqual(["OB-1", "OB-2", "SC-1"]);
-    expect(m.frRefsOf(TargetIds.reconstitute(["OB-1", "SC-1"])).toArray()).toEqual(["FR-1", "FR-2"]);
+    expect(m.frRefsOf(TargetIds.reconstitute(["OB-1", "SC-1"])).toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(m.frRefsOf(TargetIds.reconstitute(["nope"])).toArray()).toEqual([]);
     expect(m.attributeAt("Ticket.priority")?.maxBound()?.asNumber()).toBe(3);
     expect(m.attributeAt("Ticket.priority")?.minBound()?.asNumber()).toBe(0);
@@ -629,7 +646,7 @@ describe("degradation reports and ordering", () => {
 
 describe("smt plan collections (first-class operations)", () => {
   test("SmtEventPairProbes holds issuance order under add", () => {
-    const probe = SmtEventPairProbe.of({ qOverlap: "evo:a:b", qJoint: "evj:a:b", a: ObligationId.reconstitute("OB-1"), b: ObligationId.reconstitute("OB-2"), trigger: TriggerName.reconstitute("go") });
+    const probe = SmtEventPairProbe.of({ qOverlap: QueryLabel.reconstitute("evo:a:b"), qJoint: QueryLabel.reconstitute("evj:a:b"), a: ObligationId.reconstitute("OB-1"), b: ObligationId.reconstitute("OB-2"), trigger: TriggerName.reconstitute("go") });
     expect(probe.targets().toStrings()).toEqual(["OB-1", "OB-2"]);
     const probes = SmtEventPairProbes.of([]).add(probe);
     expect([...probes]).toEqual([probe]);

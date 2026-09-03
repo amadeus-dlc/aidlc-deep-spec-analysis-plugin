@@ -1,4 +1,4 @@
-import type { FrRefs } from "../../kernel/domain/index.ts";
+import { type FrRefs, FindingKind } from "../../kernel/domain/index.ts";
 import type { DesignWitness } from "./design-witness.ts";
 import type { LoweredId } from "./lowered-id.ts";
 
@@ -6,14 +6,14 @@ import type { LoweredId } from "./lowered-id.ts";
 // 判定の再割り当て（LoweredUnit.remapVerdicts）は種類を問い、対象を写像し、
 // witness の core 形を finding 自身に書き換えさせる（#71 波23）。
 export class SiblingVerdictFinding {
-  readonly #kind: string;
+  readonly #kind: FindingKind;
   readonly #frRefs: FrRefs;
   readonly #targets: readonly LoweredId[];
   readonly #witness: DesignWitness;
   readonly #detail: string;
 
   private constructor(props: { kind: string; frRefs: FrRefs; targets: readonly LoweredId[]; witness: DesignWitness; detail: string }) {
-    this.#kind = props.kind;
+    this.#kind = FindingKind.reconstitute(props.kind);
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
@@ -25,11 +25,11 @@ export class SiblingVerdictFinding {
   }
 
   kind(): string {
-    return this.#kind;
+    return this.#kind.asString();
   }
 
   isKind(kind: string): boolean {
-    return this.#kind === kind;
+    return this.#kind.equals(FindingKind.reconstitute(kind));
   }
 
   frRefs(): FrRefs {

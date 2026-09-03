@@ -18,9 +18,9 @@ export class FrRefClaim {
   // 参照する FR ごとに owner を積む（主張の宣言順）。
   claimInto(ownersByRef: Map<string, string[]>): void {
     for (const ref of this.#frRefs) {
-      const owners = ownersByRef.get(ref) ?? [];
+      const owners = ownersByRef.get(ref.asString()) ?? [];
       owners.push(this.#owner);
-      ownersByRef.set(ref, owners);
+      ownersByRef.set(ref.asString(), owners);
     }
   }
 }

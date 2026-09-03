@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Json } from "../tools/kernel/adapter/index.ts";
 import { SystemClock } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, FrRefs, ContentHash, ArtifactPath, TargetId } from "../tools/kernel/domain/index.ts";
+import { TriggerName, FrRefs, ContentHash, ArtifactPath, TargetId, KeyedIndex, QueryLabel } from "../tools/kernel/domain/index.ts";
 import type { Expression } from "../tools/kernel/domain/index.ts";
 import { AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "../tools/requirements/domain/index.ts";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -273,8 +273,8 @@ function unit(seed: {
         id: DesignObligationId.reconstitute(o.id),
         nature: DesignObligationNature.reconstitute(o.nature),
         origin: DesignObligationOrigin.reconstitute(o.origin),
-        brRefs: BrRefs.of(o.brRefs),
-        frRefs: FrRefs.of(o.frRefs),
+        brRefs: BrRefs.reconstitute(o.brRefs),
+        frRefs: FrRefs.reconstitute(o.frRefs),
       })),
     ),
     machines: DesignMachines.of(
@@ -286,14 +286,14 @@ function unit(seed: {
           attribute: DesignAttributeName.reconstitute(m.attribute),
           initial: InitialStates.of(m.initial),
           transitions: DesignTransitions.of(
-            m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
+            m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.reconstitute(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
           ),
           ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
         }),
       ),
     ),
     scenarios: DesignScenarios.of(
-      (seed.scenarios ?? []).map((s) => DesignScenario.reconstitute({ ...s, id: DesignScenarioId.reconstitute(s.id), brRefs: BrRefs.of(s.brRefs), frRefs: FrRefs.of(s.frRefs) })),
+      (seed.scenarios ?? []).map((s) => DesignScenario.reconstitute({ ...s, id: DesignScenarioId.reconstitute(s.id), brRefs: BrRefs.reconstitute(s.brRefs), frRefs: FrRefs.reconstitute(s.frRefs) })),
     ),
     background: DesignBackgroundAssumptions.of(
       (seed.background ?? []).map((b) => DesignBackgroundAssumption.reconstitute({ ...b, id: DesignBackgroundId.reconstitute(b.id) })),
@@ -326,7 +326,7 @@ function requirements(seed: {
         ...o,
         id: ObligationId.reconstitute(o.id),
         nature: ObligationNature.reconstitute(o.nature),
-        frRefs: FrRefs.of(o.frRefs),
+        frRefs: FrRefs.reconstitute(o.frRefs),
         trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger),
       })),
     ),
@@ -334,7 +334,7 @@ function requirements(seed: {
       (seed.scenarios ?? []).map((s) => RefinementScenario.reconstitute({
         ...s,
         id: ScenarioId.reconstitute(s.id),
-        frRefs: FrRefs.of(s.frRefs),
+        frRefs: FrRefs.reconstitute(s.frRefs),
         event: s.event === undefined ? undefined : { trigger: TriggerName.reconstitute(s.event.trigger) },
       })),
     ),
@@ -638,16 +638,16 @@ describe("event catalog and effect assignments", () => {
       ],
     });
     const catalog = DesignEventCatalog.of(u);
-    expect(catalog.eventOf("TR-1")?.guard().op).toBe("and");
-    expect(catalog.eventOf("TR-1")?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
-    expect(catalog.eventOf("TR-1")?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 1 });
+    expect(catalog.eventOf(TargetId.reconstitute("TR-1"))?.guard().op).toBe("and");
+    expect(catalog.eventOf(TargetId.reconstitute("TR-1"))?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
+    expect(catalog.eventOf(TargetId.reconstitute("TR-1"))?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 1 });
     // 分解不能な追加効果は暗黙代入だけが残る（設計パスが報告する）。
-    expect(catalog.eventOf("TR-2")?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
-    expect(catalog.eventOf("TR-2")?.assignedRhsOf("D.n")).toBe(undefined);
-    expect(catalog.eventOf("DOB-1")?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 2 });
+    expect(catalog.eventOf(TargetId.reconstitute("TR-2"))?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
+    expect(catalog.eventOf(TargetId.reconstitute("TR-2"))?.assignedRhsOf("D.n")).toBe(undefined);
+    expect(catalog.eventOf(TargetId.reconstitute("DOB-1"))?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 2 });
     // 分解不能な event 義務はカタログに載らない。
-    expect(catalog.eventOf("DOB-2")).toBe(null);
-    expect(catalog.eventOf("DOB-3")).toBe(null);
+    expect(catalog.eventOf(TargetId.reconstitute("DOB-2"))).toBe(null);
+    expect(catalog.eventOf(TargetId.reconstitute("DOB-3"))).toBe(null);
 
     const orEffect = EffectAssignments.ofEffect({ op: "or", args: [] });
     expect(!orEffect.ok && orEffect.error.message()).toBe("requirements effect is not a conjunction of primed assignments");
@@ -695,9 +695,9 @@ describe("refinement verdict interpretation", () => {
     ArtifactPath.reconstitute("m.md"),
   );
   const solverPlan = (entries: [string, RefinementProbe][]): RefinementSolverPlan =>
-    RefinementSolverPlan.of({ pending: new Map(entries), compileSkips: DesignSkips.of([]) });
+    RefinementSolverPlan.of({ pending: KeyedIndex.of(entries.map(([id, p]) => [QueryLabel.reconstitute(id), p] as const)), compileSkips: DesignSkips.of([]) });
   const run = (f: RefinementSolverPlan, results: [string, Parameters<typeof RefinementQueryVerdict.reconstitute>[0]][]) =>
-    f.interpret(RefinementQueryVerdicts.of(new Map(results.map(([id, v]) => [id, RefinementQueryVerdict.reconstitute(v)]))), req, plan, "u1");
+    f.interpret(RefinementQueryVerdicts.of(KeyedIndex.of(results.map(([id, v]) => [QueryLabel.reconstitute(id), RefinementQueryVerdict.reconstitute(v)] as const))), req, plan, "u1");
 
   test("each probe kind emits its frozen finding on the deciding verdict", () => {
     const out = run(
@@ -723,7 +723,7 @@ describe("refinement verdict interpretation", () => {
       "completeness-gap:OB-2,TR-1,TR-2",
       "refinement-violation:OB-2,TR-1",
     ]);
-    expect(out.findings.toArray()[0]?.frRefs().toArray()).toEqual(["FR-1", "FR-2"]);
+    expect(out.findings.toArray()[0]?.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(out.findings.toArray()[1]?.witness().toDocument()).toEqual({ core: ["inv_a", "inv_b"] });
     expect(out.findings.toArray()[4]?.witness().toDocument()).toEqual({ trace: [{ "D.s": "a" }, { "D.s": "b" }] });
     expect(out.findings.toArray()[0]?.detail()).toContain("The design admits what the verified requirements forbid.");
@@ -826,7 +826,7 @@ describe("refinement collections (first-class operations)", () => {
     expect(attrs.byPath("R.z")).toBe(undefined);
     expect(attrs.sortedByPath().toArray().map((a) => a.path().asString())).toEqual(["R.a", "R.a", "R.b"]);
 
-    const rob = (id: string, nature: string) => RefinementObligation.reconstitute({ id: ObligationId.reconstitute(id), nature: ObligationNature.reconstitute(nature), frRefs: FrRefs.of([]) });
+    const rob = (id: string, nature: string) => RefinementObligation.reconstitute({ id: ObligationId.reconstitute(id), nature: ObligationNature.reconstitute(nature), frRefs: FrRefs.reconstitute([]) });
     const obs = RefinementObligations.of([rob("OB-2", "invariant")])
       .add(rob("OB-1", "event"))
       .add(rob("OB-1", "numeric"));
@@ -835,7 +835,7 @@ describe("refinement collections (first-class operations)", () => {
     expect(obs.byId("OB-9")).toBe(undefined);
     expect(obs.sortedCanonically().toArray().map((o) => o.id().asString())).toEqual(["OB-1", "OB-1", "OB-2"]);
 
-    const rsc = (id: string, kind: "accept" | "reject") => RefinementScenario.reconstitute({ id: ScenarioId.reconstitute(id), kind, frRefs: FrRefs.of([]), bindings: {} });
+    const rsc = (id: string, kind: "accept" | "reject") => RefinementScenario.reconstitute({ id: ScenarioId.reconstitute(id), kind, frRefs: FrRefs.reconstitute([]), bindings: {} });
     const scs = RefinementScenarios.of([rsc("SC-2", "accept")])
       .add(rsc("SC-1", "reject"))
       .add(rsc("SC-1", "accept"));
@@ -846,7 +846,7 @@ describe("refinement collections (first-class operations)", () => {
   });
 
   test("quint invariant collection knows its req ids", () => {
-    const inv = RefinementQuintInvariants.of([]).add(RefinementQuintInvariant.of(ObligationId.reconstitute("OB-1"), FrRefs.of(["FR-1"]), { op: "bool", value: true }));
+    const inv = RefinementQuintInvariants.of([]).add(RefinementQuintInvariant.of(ObligationId.reconstitute("OB-1"), FrRefs.reconstitute(["FR-1"]), { op: "bool", value: true }));
     expect(inv.isEmpty()).toBe(false);
     expect([...inv].length).toBe(1);
     expect([...inv.reqIds()]).toEqual(["OB-1"]);
@@ -935,12 +935,12 @@ describe("RefinementMapRepository (owner ruling: writable where writing is defin
 describe("split-file coverage pins (one-public-type refactor)", () => {
   test("solver plan expose compile skips and issue-order iteration; unmapped target parses", () => {
     const f = RefinementSolverPlan.of({
-      pending: new Map<string, RefinementProbe>([
-        ["rv:OB-9", RefinementProbe.invariant(ObligationId.reconstitute("OB-9"))],
+      pending: KeyedIndex.of([
+        [QueryLabel.reconstitute("rv:OB-9"), RefinementProbe.invariant(ObligationId.reconstitute("OB-9"))] as const,
       ]),
       compileSkips: DesignSkips.of([]),
     });
-    expect([...f].map(([id]) => id)).toEqual(["rv:OB-9"]);
+    expect([...f].map(([id]) => id.asString())).toEqual(["rv:OB-9"]);
     expect(f.compileSkips().toArray()).toEqual([]);
     const parsed = UnmappedTargetRef.parse("OB-1");
     expect(parsed.ok && parsed.value.equals(UnmappedTargetRef.reconstitute("OB-1"))).toBe(true);

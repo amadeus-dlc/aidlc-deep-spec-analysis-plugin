@@ -15,6 +15,7 @@ import { type SmtChildQuery } from "./smt-child-query.ts";
 import { buildSmtPlan, decodeSolverModel } from "./smt-plan.ts";
 import type { SmtChildResult } from "./smt-child-result.ts";
 import type { Z3SolverClientConfig } from "./z3-solver-client-config.ts";
+import { KeyedIndex, QueryLabel } from "../../kernel/domain/index.ts";
 
 const CHILD_BUDGET_MS = 45_000;
 const CHILD_WALL_TIMEOUT_MS = 55_000;
@@ -36,15 +37,15 @@ export class Z3SolverClientImpl implements Z3SolverClient {
         result: { kind: "unavailable", reason: outcome.unavailable ?? "solver child produced no results" },
       };
     }
-    const verdicts = new Map<string, SmtQueryVerdict>();
+    const verdicts: (readonly [QueryLabel, SmtQueryVerdict])[] = [];
     for (const [id, r] of outcome.results) {
-      verdicts.set(id, SmtQueryVerdict.reconstitute({
+      verdicts.push([QueryLabel.reconstitute(id), SmtQueryVerdict.reconstitute({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
         core: r.core,
-      }));
+      })]);
     }
-    return { plan: plan.plan, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(verdicts) } };
+    return { plan: plan.plan, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(KeyedIndex.of(verdicts)) } };
   }
 
   #runChild(queries: SmtChildQuery[]): { results?: Map<string, SmtChildResult>; unavailable?: string } {

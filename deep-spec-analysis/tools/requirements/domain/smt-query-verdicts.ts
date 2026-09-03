@@ -1,19 +1,21 @@
+// SmtQueryVerdicts — クエリ id（QueryLabel）→ SMT 判定の索引。内側は
+// KeyedIndex（裁定 3-1、2026-09-03）。
+
+import { KeyedIndex, type QueryLabel } from "../../kernel/domain/index.ts";
 import type { SmtQueryVerdict } from "./smt-query-verdict.ts";
 
-
-// クエリ id → 判定のファーストクラスな判定面。
 export class SmtQueryVerdicts {
-  readonly #values: ReadonlyMap<string, SmtQueryVerdict>;
+  readonly #values: KeyedIndex<QueryLabel, SmtQueryVerdict>;
 
-  private constructor(values: ReadonlyMap<string, SmtQueryVerdict>) {
+  private constructor(values: KeyedIndex<QueryLabel, SmtQueryVerdict>) {
     this.#values = values;
   }
 
-  static of(values: ReadonlyMap<string, SmtQueryVerdict>): SmtQueryVerdicts {
-    return new SmtQueryVerdicts(new Map(values));
+  static of(values: KeyedIndex<QueryLabel, SmtQueryVerdict>): SmtQueryVerdicts {
+    return new SmtQueryVerdicts(values);
   }
 
-  verdictOf(queryId: string): SmtQueryVerdict | undefined {
+  verdictOf(queryId: QueryLabel): SmtQueryVerdict | undefined {
     return this.#values.get(queryId);
   }
 }

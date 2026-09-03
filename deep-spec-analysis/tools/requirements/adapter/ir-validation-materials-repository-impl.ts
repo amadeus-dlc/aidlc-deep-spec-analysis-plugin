@@ -130,7 +130,7 @@ function collectFrClaims(ir: { [k: string]: Json }): FrRefClaim[] {
       const owner = typeof entry.id === "string" ? entry.id : `${section}[${i}]`;
       const refs = entry.frRefs ?? null;
       if (!Array.isArray(refs)) return;
-      claims.push(FrRefClaim.of(owner, FrRefs.of(refs.filter((r) => typeof r === "string") as string[])));
+      claims.push(FrRefClaim.of(owner, FrRefs.reconstitute(refs.filter((r) => typeof r === "string") as string[])));
     });
   }
   return claims;

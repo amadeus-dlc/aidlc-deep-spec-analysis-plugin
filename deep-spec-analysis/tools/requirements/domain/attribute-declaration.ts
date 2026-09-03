@@ -1,6 +1,6 @@
 export { AttributeBound } from "../../kernel/domain/attribute-bound.ts";
 import type { AttributeBound } from "../../kernel/domain/attribute-bound.ts";
-import type { AttributePath } from "./attribute-path.ts";
+import type { AttributePath } from "../../kernel/domain/index.ts";
 import type { AttributeValues } from "./attribute-values.ts";
 
 // 要件 IR の属性宣言——パス・種類（bool／int／enum）・int の上下限・enum の

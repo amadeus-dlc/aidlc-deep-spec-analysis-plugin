@@ -1979,3 +1979,30 @@ materials が共有）が lowered 文書と refinement の SMT 文脈に型付�
 運ぶ。`PUBLISHED_VALUE_SHAPES` の除外は 3 つの型別名とともに消え、
 `kernel/domain/keyed-index.ts` が表現プリミティブの除外に加わる。golden は
 バイト同一、プリミティブ台帳は変わらない（上限 66）。
+
+単位 2（同 PR）: 裁定 3-1〜3-4 が着地——プリミティブ台帳が空になる（107 → 0。
+上限は 0 で、定数そのものの削除は #80 が行う）。除外は一つも足していない——
+全記述子を因数分解した。kernel の表現プリミティブ `KeyedIndex<K, V>` と
+`KeySet<K>` が domain で唯一 string キーの Map を持ち、DP の唯一の `#value` と
+同じ理屈で除外に載る。domain の索引と集合はすべて DP をキーにする——
+`LoweringIndex`（`LoweredId`・`DesignTransitionId`・`DesignMachineId`）、
+`QuintRuns` と `UnitRefinementPlan`（`ObligationId`・`ScenarioId`）、2 つの
+クエリ判定コレクションと `RefinementSolverPlan`（`QueryLabel`）、
+`SmtVerificationPlan`（`ObligationId`、`QueryLabel` → `TargetId`、`TriggerName`
+→ `TargetIds`、`ScenarioId` → `QueryLabel`）、`AttributeDeclarations`・
+`DesignAssignments`・`EffectAssignments`（`AttributePath`）、
+`DesignEventCatalog`（`TargetId`）、`FrReferenceIndex`（`RequirementId` →
+`TargetIds`）、`RequirementIds`・`UnformalizedTargets`・`BrReferenceIndex`・
+実体名の集合。string 配列は DP の配列になった——`FrRefs` は新設の kernel
+`RequirementId`（宣言された id と参照は同じ語彙）、`BrRefs` は `BrRef`、
+`CheckedUnits` は `UnitName`、lowered 記録の `frRefs`、unsat core は
+`QueryLabel`。分類文字列は kernel の DP——`FindingKind`（5 つの複製があった
+順位表は 1 つになり、kind-rank の試験は単一表の性質を証明する）、
+`VerificationMethod`、`AttributeKind`——になり、語彙文字列は既存の DP を
+当てた: `UnitName`・`AttributePath`・`ObligationNature` は kernel へ昇格、
+`ArtifactPath` が inputs のアンカーと manifest の項目、`ElementPath` と
+`ArtifactPath` が witness 座標、`TargetId` が refcheck の skip、`TriggerName` が
+lowered 義務、`ContentHash` が digest 4 件、`QueryLabel` が event-pair probe、
+`FenceCount` が fence 個数 3 件。`Obligation.ears` と `WitnessRef.value` は
+prose。生文字列の門は `reconstitute`、DP の門は `of`、境界の読み手は
+`toStrings` に揃えた。golden はバイト同一。

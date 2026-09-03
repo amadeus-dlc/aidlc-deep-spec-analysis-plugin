@@ -4,7 +4,7 @@
 // degraded は契約適合の降格形（findings/skipped/crossChecked を空にして
 // unavailable 理由だけ残す——旧 writeFindingsDoc の自己検証降格と同じ姿）。
 
-import { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
+import { ContentHash, IrVersion, VerificationMethod } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import { VerificationFindings } from "./verification-findings.ts";
@@ -18,7 +18,7 @@ export class VerificationReport {
   readonly #id: VerificationReportId;
   readonly #irVersion: IrVersion;
   readonly #irHash: ContentHash;
-  readonly #method: string;
+  readonly #method: VerificationMethod;
   readonly #findings: VerificationFindings;
   readonly #skipped: VerificationSkips;
   readonly #crossChecked: CrossCheckedEntries | null;
@@ -37,7 +37,7 @@ export class VerificationReport {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#irHash = seed.irHash;
-    this.#method = seed.method;
+    this.#method = VerificationMethod.reconstitute(seed.method);
     this.#findings = seed.findings;
     this.#skipped = seed.skipped;
     this.#crossChecked = seed.crossChecked;
@@ -185,7 +185,7 @@ export class VerificationReport {
       id: this.#id,
       irVersion: this.#irVersion,
       irHash: this.#irHash,
-      method: this.#method,
+      method: this.#method.asString(),
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([]),
       crossChecked: null,
@@ -206,7 +206,7 @@ export class VerificationReport {
   }
 
   method(): string {
-    return this.#method;
+    return this.#method.asString();
   }
 
   findings(): VerificationFindings {

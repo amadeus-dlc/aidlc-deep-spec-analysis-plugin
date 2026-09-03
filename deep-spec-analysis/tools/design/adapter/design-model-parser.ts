@@ -30,8 +30,8 @@ export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.
         id: DesignObligationId.reconstitute(ob.id),
         nature: DesignObligationNature.reconstitute(ob.nature),
         origin: DesignObligationOrigin.reconstitute(typeof ob.origin === "string" ? ob.origin : ""),
-        brRefs: BrRefs.of(strArr(ob.brRefs)),
-        frRefs: FrRefs.of(strArr(ob.frRefs)),
+        brRefs: BrRefs.reconstitute(strArr(ob.brRefs)),
+        frRefs: FrRefs.reconstitute(strArr(ob.frRefs)),
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
         trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
@@ -53,7 +53,7 @@ export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.
           trigger: TriggerName.reconstitute(tr.trigger),
           guard: isObject(tr.guard) ? (tr.guard as unknown as Expression) : undefined,
           effect: isObject(tr.effect) ? (tr.effect as unknown as Expression) : undefined,
-          brRefs: BrRefs.of(strArr(tr.brRefs)),
+          brRefs: BrRefs.reconstitute(strArr(tr.brRefs)),
         }));
       }
       const ignores: DesignIgnore[] = [];
@@ -85,8 +85,8 @@ export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.
       scenarios.push(DesignScenario.reconstitute({
         id: DesignScenarioId.reconstitute(sc.id),
         kind,
-        brRefs: BrRefs.of(strArr(sc.brRefs)),
-        frRefs: FrRefs.of(strArr(sc.frRefs)),
+        brRefs: BrRefs.reconstitute(strArr(sc.brRefs)),
+        frRefs: FrRefs.reconstitute(strArr(sc.frRefs)),
         bindings,
         event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
         expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,

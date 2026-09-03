@@ -6,7 +6,7 @@
 // detail 文言は golden 凍結）は plan 自身の振る舞い（OOUI 裁定——旧
 // interpretRefinementVerdicts の逐語移植）。
 
-import { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
+import { FrRefs, TargetIds, KeyedIndex, QueryLabel } from "../../kernel/domain/index.ts";
 import { DesignFinding, DesignFindings, DesignSkips } from "../../design/domain/index.ts";
 import { DesignSkipped } from "../../design/domain/index.ts";
 import { type UnitRefinementPlan } from "./unit-refinement-plan.ts";
@@ -19,16 +19,16 @@ import { DesignWitness } from "../../design/domain/index.ts";
 // クエリ計画（値オブジェクト、裁定 8——旧 RefinementSolverFacts）：発行順の Pending 索引と、alpha 置換・SMT コンパイル失敗
 // による compile-error skip（構築時に確定）。
 export class RefinementSolverPlan {
-  readonly #pending: ReadonlyMap<string, RefinementProbe>;
+  readonly #pending: KeyedIndex<QueryLabel, RefinementProbe>;
   readonly #compileSkips: DesignSkips;
 
-  private constructor(props: { pending: ReadonlyMap<string, RefinementProbe>; compileSkips: DesignSkips }) {
+  private constructor(props: { pending: KeyedIndex<QueryLabel, RefinementProbe>; compileSkips: DesignSkips }) {
     this.#pending = props.pending;
     this.#compileSkips = props.compileSkips;
   }
 
-  static of(props: { pending: ReadonlyMap<string, RefinementProbe>; compileSkips: DesignSkips }): RefinementSolverPlan {
-    return new RefinementSolverPlan({ pending: new Map(props.pending), compileSkips: props.compileSkips });
+  static of(props: { pending: KeyedIndex<QueryLabel, RefinementProbe>; compileSkips: DesignSkips }): RefinementSolverPlan {
+    return new RefinementSolverPlan({ pending: props.pending, compileSkips: props.compileSkips });
   }
 
   compileSkips(): DesignSkips {
@@ -37,8 +37,8 @@ export class RefinementSolverPlan {
 
   // 発行順の Pending 走査（timeout skip の記録順——最終文書は compose が
   // 正準ソートする）。
-  *[Symbol.iterator](): Iterator<readonly [string, RefinementProbe]> {
-    yield* this.#pending.entries();
+  *[Symbol.iterator](): Iterator<readonly [QueryLabel, RefinementProbe]> {
+    yield* this.#pending;
   }
 
   // 旧 interpretRefinementVerdicts の逐語移植。
@@ -53,12 +53,12 @@ export class RefinementSolverPlan {
   } {
     const findings: DesignFinding[] = [];
     const skipped: DesignSkipped[] = [];
-    const frOf = (reqId: string): FrRefs => FrRefs.of([...req.frRefsOf(reqId)]).sortedUnique();
+    const frOf = (reqId: string): FrRefs => req.frRefsOf(reqId).sortedUnique();
 
     for (const [queryId, p] of this.#pending) {
       const r = results.verdictOf(queryId);
       if (!r || r.isUndecided()) {
-        skipped.push(DesignSkipped.reconstitute({ target: p.reqTarget(), reason: "timeout", unit: unitName, detail: `refinement query ${queryId} exceeded the solver budget or errored` }));
+        skipped.push(DesignSkipped.reconstitute({ target: p.reqTarget(), reason: "timeout", unit: unitName, detail: `refinement query ${queryId.asString()} exceeded the solver budget or errored` }));
         continue;
       }
       // 種類ごとの解釈は問いへ命じる（#71 波22）。

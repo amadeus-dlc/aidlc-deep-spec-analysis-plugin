@@ -163,7 +163,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
             method: backend === "smt" ? "exhaustive" : (method ?? "simulation"),
             findings: DesignFindings.of(findings),
             skipped: DesignSkips.of(skipped),
-            checked: CheckedUnits.of(checkedUnits),
+            checked: CheckedUnits.reconstitute(checkedUnits),
           }),
         );
         expect(stored.ok).toBe(true);
@@ -253,8 +253,8 @@ function unit(seed: {
         id: DesignObligationId.reconstitute(o.id),
         nature: DesignObligationNature.reconstitute(o.nature),
         origin: DesignObligationOrigin.reconstitute(o.origin),
-        brRefs: BrRefs.of(o.brRefs),
-        frRefs: FrRefs.of(o.frRefs),
+        brRefs: BrRefs.reconstitute(o.brRefs),
+        frRefs: FrRefs.reconstitute(o.frRefs),
         trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger),
       })),
     ),
@@ -267,7 +267,7 @@ function unit(seed: {
           attribute: DesignAttributeName.reconstitute(m.attribute),
           initial: InitialStates.of(m.initial),
           transitions: DesignTransitions.of(
-            m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.of(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
+            m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.reconstitute(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
           ),
           ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
         }),
@@ -277,8 +277,8 @@ function unit(seed: {
       (seed.scenarios ?? []).map((s) => DesignScenario.reconstitute({
         ...s,
         id: DesignScenarioId.reconstitute(s.id),
-        brRefs: BrRefs.of(s.brRefs),
-        frRefs: FrRefs.of(s.frRefs),
+        brRefs: BrRefs.reconstitute(s.brRefs),
+        frRefs: FrRefs.reconstitute(s.frRefs),
         event: s.event === undefined ? undefined : { trigger: TriggerName.reconstitute(s.event.trigger) },
       })),
     ),
@@ -465,7 +465,7 @@ describe("remap (design vocabulary attribution)", () => {
     SiblingVerdictDocument.readable(
       "exhaustive",
       SiblingVerdictFindings.of(
-        (input.findings ?? []).map((f) => SiblingVerdictFinding.reconstitute({ ...f, witness: DesignWitness.fromDocument(f.witness), frRefs: FrRefs.of(f.frRefs), targets: f.targets.map((t) => LoweredId.reconstitute(t)) })),
+        (input.findings ?? []).map((f) => SiblingVerdictFinding.reconstitute({ ...f, witness: DesignWitness.fromDocument(f.witness), frRefs: FrRefs.reconstitute(f.frRefs), targets: f.targets.map((t) => LoweredId.reconstitute(t)) })),
       ),
       SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.reconstitute({ ...k, target: LoweredId.reconstitute(k.target) }))),
     );
@@ -547,7 +547,7 @@ describe("report ordering, cross-check, and degradations", () => {
   const f = (kind: string, unitName: string, targets: string[], detail: string): DesignFinding =>
     DesignFinding.reconstitute({
       kind,
-      frRefs: FrRefs.of([]),
+      frRefs: FrRefs.reconstitute([]),
       targets: TargetIds.reconstitute(targets),
       witness: DesignWitness.core([]),
       unit: unitName,
@@ -605,10 +605,10 @@ describe("report ordering, cross-check, and degradations", () => {
         DesignInputAnchor.reconstitute({ artifact: "b.md", sha256: ContentHash.reconstitute("2".repeat(64)) }),
         DesignInputAnchor.reconstitute({ artifact: "a.md", sha256: ContentHash.reconstitute("1".repeat(64)) }),
       ]),
-      checked: CheckedUnits.of(["unit:u2", "unit:u1", "unit:u1"]),
+      checked: CheckedUnits.reconstitute(["unit:u2", "unit:u1", "unit:u1"]),
     });
     expect(report.inputs()?.toArray().map((i) => i.artifact())).toEqual(["a.md", "b.md"]);
-    expect(report.checked()?.toArray()).toEqual(["unit:u1", "unit:u2"]);
+    expect(report.checked()?.toStrings()).toEqual(["unit:u1", "unit:u2"]);
     expect(report.passes()).toBe(false);
     expect(report.findingsCount()).toBe(1);
     expect(report.skippedCount()).toBe(0);
@@ -662,7 +662,7 @@ describe("report ordering, cross-check, and degradations", () => {
     ]).crossChecked(DesignReportId.of(ap("/v"), "cross-check"), m, HASH);
     const disagreement = report.findings().toArray()[0];
     expect(disagreement?.kind()).toBe("cross-check-disagreement");
-    expect(disagreement?.frRefs().toArray()).toEqual(["FR-1", "FR-2"]);
+    expect(disagreement?.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(disagreement?.targets().toStrings()).toEqual(["DSC-1"]);
     expect(disagreement?.witness().toDocument()).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
     expect(disagreement?.unit()).toBe("u1");
@@ -743,12 +743,12 @@ describe("lowered collections and the lowering index (first-class operations)", 
   const base = LoweredUnit.of(u, { synthetics: false });
 
   test("of/add/iterator/count/toArray hold OB/SC/BG numbering order", () => {
-    const obs = base.obligations().add(LoweredObligation.reconstitute({ id: LoweredId.reconstitute("OB-99"), nature: "invariant", frRefs: [] }));
+    const obs = base.obligations().add(LoweredObligation.reconstitute({ id: LoweredId.reconstitute("OB-99"), nature: "invariant", frRefs: FrRefs.of([]) }));
     expect(obs.count()).toBe(base.obligations().count() + 1);
     expect([...obs].at(-1)?.id().asString()).toBe("OB-99");
     expect(obs.toArray().at(-1)?.nature()).toBe("invariant");
 
-    const scs = base.scenarios().add(LoweredScenario.reconstitute({ id: LoweredId.reconstitute("SC-99"), kind: "accept", frRefs: [], bindings: {} }));
+    const scs = base.scenarios().add(LoweredScenario.reconstitute({ id: LoweredId.reconstitute("SC-99"), kind: "accept", frRefs: FrRefs.of([]), bindings: {} }));
     expect(scs.count()).toBe(base.scenarios().count() + 1);
     expect([...scs].at(-1)?.id().asString()).toBe("SC-99");
     expect(scs.toArray().at(-1)?.kind()).toBe("accept");
@@ -773,7 +773,7 @@ describe("lowered collections and the lowering index (first-class operations)", 
   });
 
   test("sibling verdict collections keep document order under add", () => {
-    const finding = SiblingVerdictFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: [LoweredId.reconstitute("OB-1")], witness: DesignWitness.core([]), detail: "x" });
+    const finding = SiblingVerdictFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.reconstitute([]), targets: [LoweredId.reconstitute("OB-1")], witness: DesignWitness.core([]), detail: "x" });
     const findings = SiblingVerdictFindings.of([]).add(finding);
     expect([...findings]).toEqual([finding]);
     expect(findings.toArray()).toEqual([finding]);

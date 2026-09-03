@@ -74,7 +74,7 @@ function strArrayOrUndefined(v: Json): string[] | undefined {
 // 宣言済みはコレクションで運ぶ。
 function brRefsOrUndefined(v: Json): BrRefs | undefined {
   const arr = strArrayOrUndefined(v);
-  return arr === undefined ? undefined : BrRefs.of(arr);
+  return arr === undefined ? undefined : BrRefs.reconstitute(arr);
 }
 
 function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordRoot: string | null): DesignUnitDecl {
@@ -166,7 +166,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     stateMachines: DesignMachineDecls.of(stateMachines),
     scenarios: DesignScenarioDecls.of(scenarios),
     background: DesignBackgroundDecls.of(background),
-    unformalizedTargets: UnformalizedTargets.of(unformalizedTargets),
+    unformalizedTargets: UnformalizedTargets.reconstitute(unformalizedTargets),
     directoryExists,
     rulesMarkdown,
   });

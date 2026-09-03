@@ -9,12 +9,12 @@
 // 済みの義務は走らせない」ガードも逐語）は plan 自身の振る舞い（OOUI 裁定）。
 // 対象 id は TargetId / TargetIds で運ぶ（#71 波10——生 string の列ではない）。
 
-import { TargetIds } from "../../kernel/domain/index.ts";
+import { TargetIds, KeySet } from "../../kernel/domain/index.ts";
 import { type QuintRuns } from "./quint-runs.ts";
 import { type ObligationIds } from "./obligation-ids.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { ScenarioId } from "./scenario-id.ts";
-import { AttributePath } from "./attribute-path.ts";
+import { AttributePath } from "../../kernel/domain/index.ts";
 import { TraceState } from "./trace-state.ts";
 import { TraceValue } from "./trace-value.ts";
 import { VerificationFinding } from "./verification-finding.ts";
@@ -28,9 +28,9 @@ import { VerificationWitness } from "./verification-witness.ts";
 export class QuintMachinePlan {
   readonly #invariantComponents: QuintMachineComponents;
   readonly #eventIds: ObligationIds;
-  readonly #scenariosWithInit: ReadonlySet<string>;
+  readonly #scenariosWithInit: KeySet<ScenarioId>;
 
-  private constructor(props: { invariantComponents: QuintMachineComponents; eventIds: ObligationIds; scenariosWithInit: ReadonlySet<string> }) {
+  private constructor(props: { invariantComponents: QuintMachineComponents; eventIds: ObligationIds; scenariosWithInit: KeySet<ScenarioId> }) {
     this.#invariantComponents = props.invariantComponents;
     this.#eventIds = props.eventIds;
     this.#scenariosWithInit = props.scenariosWithInit;
@@ -44,7 +44,7 @@ export class QuintMachinePlan {
     return new QuintMachinePlan({
       invariantComponents: seed.invariantComponents,
       eventIds: seed.eventIds,
-      scenariosWithInit: new Set(seed.scenariosWithInit.map((id) => id.asString())),
+      scenariosWithInit: KeySet.of(seed.scenariosWithInit),
     });
   }
 
@@ -59,7 +59,7 @@ export class QuintMachinePlan {
 
   // 全属性が束縛され init アクションが emit されたシナリオか。
   #hasInitFor(id: ScenarioId): boolean {
-    return this.#scenariosWithInit.has(id.asString());
+    return this.#scenariosWithInit.has(id);
   }
 
   // 旧 interpretQuintVerdicts の逐語移植。

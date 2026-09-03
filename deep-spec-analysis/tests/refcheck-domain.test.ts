@@ -2,11 +2,11 @@
 // カタログ順序は golden バイトを決める凍結挙動——順位・タイブレークを固定する。
 
 import { describe, expect, test } from "bun:test";
-import { ContentHash, FrRefs, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
+import { ContentHash, FrRefs, TargetId, TargetIds, RequirementId } from "../tools/kernel/domain/index.ts";
 import { CATALOG_VERSION, Finding, Skipped, Findings, InputAnchors, Skips, WitnessRefs, UnitDecl, InputAnchor, WitnessRef, ComponentName, AllowedValue, AppliesTo, AttributeDefault, AttributeName, BusinessRuleId, CardinalityNotation, ElementPath, EntityName, MachineSpec, NumericBound, ReferenceTarget, RuleCategory, SourceId, StateName, TypeName, AllowedValues, AttrDecl, AttrDecls, AttributeNames, BlockIndex, CheckFamilies, CheckFamily, Component, ComponentEntities, ComponentEntity, ComponentRef, ComponentRefs, Components, ComponentShapeErrors, ComponentShapeError, ContractRow, EntityReference, SpecBlockAssessment, ShapeError, ContractId, ContractParty, ContractRows, EntityReferences, LineNumber, SpecBlockAssessments, UnitDecls, UnitName, UnitNames, DomainEntitySketch, DomainEntitySketches, EntityDecl, EntityDecls, RelDecl, RelDecls, RuleDecl, RuleDecls, ShapeErrors, SiblingUnitIndex, SourceIds, StateMachineSketch, StateMachineSketches, StateNames } from "../tools/refcheck/domain/index.ts";
 
 function finding(kind: string, targets: string[], detail: string): Finding {
-  return Finding.reconstitute({ kind, frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(targets), witness: { refs: WitnessRefs.of([]) }, detail });
+  return Finding.reconstitute({ kind, frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(targets), witness: { refs: WitnessRefs.of([]) }, detail });
 }
 
 describe("catalog-order", () => {
@@ -188,8 +188,8 @@ describe("first-class collections", () => {
 
     const decls = EntityDecls.of([entity("Order"), entity("Order")]);
     expect(decls.duplicatesByName().length).toBe(1);
-    expect(decls.containsNamed("Order")).toBe(true);
-    expect(decls.containsNamed("Ghost")).toBe(false);
+    expect(decls.containsNamed(EntityName.reconstitute("Order"))).toBe(true);
+    expect(decls.containsNamed(EntityName.reconstitute("Ghost"))).toBe(false);
 
     const rels = RelDecls.of([]).concat(RelDecls.of([RelDecl.reconstitute({ element: ElementPath.reconstitute("r[0]"), from: null, to: null, cardinality: null, hasDirection: true })]));
     expect(rels.toArray().length).toBe(1);
@@ -440,8 +440,8 @@ describe("refcheck payload collections (first-class operations)", () => {
     expect(ids.joined(",")).toBe("check:DD-1,check:DD-0,check:DD-1");
     expect(ids.sortedUniqueCanonically().toStrings()).toEqual(["check:DD-0", "check:DD-1"]);
 
-    const refs = FrRefs.of([]).add("FR-1");
-    expect([...refs]).toEqual(["FR-1"]);
+    const refs = FrRefs.reconstitute([]).add(RequirementId.reconstitute("FR-1"));
+    expect(refs.toStrings()).toEqual(["FR-1"]);
 
     const wr = WitnessRef.reconstitute({ artifact: "a.md", element: "e" });
     const wrs = WitnessRefs.of([]).add(wr);

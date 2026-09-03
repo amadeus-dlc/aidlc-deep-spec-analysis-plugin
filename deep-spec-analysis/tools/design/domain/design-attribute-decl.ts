@@ -1,4 +1,4 @@
-import type { AttributeBound } from "../../kernel/domain/index.ts";
+import { type AttributeBound, AttributeKind } from "../../kernel/domain/index.ts";
 import type { DeclaredValues } from "./declared-values.ts";
 import { type DesignAttributeName } from "./design-attribute-name.ts";
 
@@ -10,7 +10,7 @@ import { type DesignAttributeName } from "./design-attribute-name.ts";
 // 構築ドア（I/O 文脈）だけに残る。文言と発生順は判事側の凍結面のまま。
 export class DesignAttributeDecl {
   readonly #name: DesignAttributeName;
-  readonly #kind: string;
+  readonly #kind: AttributeKind;
   // 執筆者向けの説明文（契約3 の任意項目——ツールは読まず、lowered 文書へ逐語で運ぶ）。
   readonly #description: string | undefined;
   readonly #values: DeclaredValues | undefined;
@@ -21,7 +21,7 @@ export class DesignAttributeDecl {
   //（データモデル）を domain 層に住まわせない（主従の裁定・補遺）。
   private constructor(props: { name: DesignAttributeName; kind: string; description?: string; values?: DeclaredValues; min?: AttributeBound; max?: AttributeBound }) {
     this.#name = props.name;
-    this.#kind = props.kind;
+    this.#kind = AttributeKind.reconstitute(props.kind);
     this.#description = props.description;
     this.#values = props.values;
     this.#min = props.min;
@@ -39,11 +39,11 @@ export class DesignAttributeDecl {
 
   // int 属性に必須の有界性（Quint backend の有限領域要件）を欠くか。
   lacksIntBounds(): boolean {
-    return this.#kind === "int" && (this.#min === undefined || this.#max === undefined);
+    return this.#kind.isInt() && (this.#min === undefined || this.#max === undefined);
   }
 
   boundsInverted(): boolean {
-    return this.#kind === "int" && this.#min !== undefined && this.#max !== undefined && this.#min.exceeds(this.#max);
+    return this.#kind.isInt() && this.#min !== undefined && this.#max !== undefined && this.#min.exceeds(this.#max);
   }
 
   boundsOutsideSafeRange(): boolean {
@@ -54,30 +54,30 @@ export class DesignAttributeDecl {
   }
 
   isEnum(): boolean {
-    return this.#kind === "enum";
+    return this.#kind.isEnum();
   }
 
   admitsEnumLiteral(value: string): boolean {
-    return this.#kind === "enum" && (this.#values?.includes(value) ?? false);
+    return this.#kind.isEnum() && (this.#values?.includes(value) ?? false);
   }
 
   // scenario binding の適合（bool / 安全整数 int / 宣言済み enum 値）。
   fitsBinding(value: unknown): boolean {
     return (
-      (this.#kind === "bool" && typeof value === "boolean") ||
-      (this.#kind === "int" && typeof value === "number" && Number.isSafeInteger(value)) ||
-      (this.#kind === "enum" && typeof value === "string" && (this.#values?.includes(value) ?? false))
+      (this.#kind.isBool() && typeof value === "boolean") ||
+      (this.#kind.isInt() && typeof value === "number" && Number.isSafeInteger(value)) ||
+      (this.#kind.isEnum() && typeof value === "string" && (this.#values?.includes(value) ?? false))
     );
   }
 
   // machine の状態集合面——enum でなければ null（判事が凍結文言で報告する）。
   enumStates(): DeclaredValues | null {
-    return this.#kind === "enum" && this.#values !== undefined ? this.#values : null;
+    return this.#kind.isEnum() && this.#values !== undefined ? this.#values : null;
   }
 
   // 文言材料（binding 不適合文言の "${kind} attribute" 描画点）。
   kindLabel(): string {
-    return this.#kind;
+    return this.#kind.asString();
   }
 
   // 境界: lowered 文書の描画と SMT 文脈（adapter）専用の読み手。

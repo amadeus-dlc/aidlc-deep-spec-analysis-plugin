@@ -1,5 +1,6 @@
 import type { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";
 import type { SiblingVerdictSkips } from "./sibling-verdict-skips.ts";
+import { VerificationMethod } from "../../kernel/domain/index.ts";
 
 // v1 兄弟バックエンドの findings 文書の型付き判定面——読めなかった
 // （unreadable）、バックエンドが不能を申告した（unavailable）、読めた
@@ -8,7 +9,7 @@ import type { SiblingVerdictSkips } from "./sibling-verdict-skips.ts";
 export class SiblingVerdictDocument {
   readonly #kind: "unreadable" | "unavailable" | "readable";
   readonly #reason: string | null;
-  readonly #method: string | null;
+  readonly #method: VerificationMethod | null;
   readonly #findings: SiblingVerdictFindings | null;
   readonly #skipped: SiblingVerdictSkips | null;
 
@@ -21,7 +22,7 @@ export class SiblingVerdictDocument {
   }) {
     this.#kind = props.kind;
     this.#reason = props.reason;
-    this.#method = props.method;
+    this.#method = props.method === null ? null : VerificationMethod.reconstitute(props.method);
     this.#findings = props.findings;
     this.#skipped = props.skipped;
   }
@@ -49,8 +50,8 @@ export class SiblingVerdictDocument {
     readable: (method: string | null, findings: SiblingVerdictFindings, skipped: SiblingVerdictSkips) => T;
   }): T {
     if (this.#kind === "unreadable") return handlers.unreadable();
-    if (this.#kind === "unavailable") return handlers.unavailable(this.#reason ?? "", this.#method);
+    if (this.#kind === "unavailable") return handlers.unavailable(this.#reason ?? "", this.#method?.asString() ?? null);
     if (this.#findings === null || this.#skipped === null) throw new Error("defect: a readable sibling document carries no verdicts");
-    return handlers.readable(this.#method, this.#findings, this.#skipped);
+    return handlers.readable(this.#method?.asString() ?? null, this.#findings, this.#skipped);
   }
 }
