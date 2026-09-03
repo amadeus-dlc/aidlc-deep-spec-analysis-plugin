@@ -516,7 +516,7 @@ describe("functional branches the fixtures do not exercise", () => {
     const report = functionalReport({
       entities: parseEntitiesDocument(entitiesMd),
       rules: parseRulesDocument(rulesMd),
-      requirementIdsKnown: RequirementIds.of(["FR-1"]),
+      requirementIdsKnown: RequirementIds.reconstitute(["FR-1"]),
     });
     const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain('rule id "BR1.1" is declared more than once');

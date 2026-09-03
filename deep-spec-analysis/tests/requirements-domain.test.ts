@@ -38,7 +38,7 @@ describe("obligation", () => {
     Obligation.reconstitute({
       id: ObligationId.reconstitute("OB-1"),
       nature: ObligationNature.reconstitute("event"),
-      frRefs: FrRefs.of(["FR-1"]),
+      frRefs: FrRefs.reconstitute(["FR-1"]),
       trigger: TriggerName.reconstitute("submit"),
       guard: lit(true),
       effect: lit(false),
@@ -56,7 +56,7 @@ describe("obligation", () => {
       Obligation.reconstitute({
         id: ObligationId.reconstitute("OB-2"),
         nature: ObligationNature.reconstitute("invariant"),
-        frRefs: FrRefs.of([]),
+        frRefs: FrRefs.reconstitute([]),
         assert: lit(true),
       }).eventDefinition(),
     ).toBeNull();
@@ -67,7 +67,7 @@ describe("obligation", () => {
     const implied = Obligation.reconstitute({
       id: ObligationId.reconstitute("OB-3"),
       nature: ObligationNature.reconstitute("invariant"),
-      frRefs: FrRefs.of([]),
+      frRefs: FrRefs.reconstitute([]),
       assert: { op: "implies", args: [antecedent, lit(false)] },
     });
     expect(implied.vacuityAntecedent()).toBe(antecedent);
@@ -75,7 +75,7 @@ describe("obligation", () => {
       Obligation.reconstitute({
         id: ObligationId.reconstitute("OB-4"),
         nature: ObligationNature.reconstitute("invariant"),
-        frRefs: FrRefs.of([]),
+        frRefs: FrRefs.reconstitute([]),
         assert: lit(true),
       }).vacuityAntecedent(),
     ).toBeUndefined();
@@ -85,7 +85,7 @@ describe("obligation", () => {
     const obligation = Obligation.reconstitute({
       id: ObligationId.reconstitute("OB-5"),
       nature: ObligationNature.reconstitute("state-temporal"),
-      frRefs: FrRefs.of([]),
+      frRefs: FrRefs.reconstitute([]),
       assert: { op: "a" },
       guard: { op: "g" },
       effect: { op: "e" },
@@ -107,7 +107,7 @@ describe("obligation", () => {
     const obligation = Obligation.reconstitute({
       id: ObligationId.reconstitute("OB-6"),
       nature: ObligationNature.reconstitute("numeric"),
-      frRefs: FrRefs.of(["FR-9"]),
+      frRefs: FrRefs.reconstitute(["FR-9"]),
       ears: "the system shall ...",
       assert: lit(true),
       trigger: TriggerName.reconstitute("tick"),
@@ -117,7 +117,7 @@ describe("obligation", () => {
     });
     expect(obligation.id().asString()).toBe("OB-6");
     expect(obligation.nature().asString()).toBe("numeric");
-    expect(obligation.frRefs().toArray()).toEqual(["FR-9"]);
+    expect(obligation.frRefs().toStrings()).toEqual(["FR-9"]);
     expect(obligation.ears()).toBe("the system shall ...");
     expect(obligation.assertion()).toEqual(lit(true));
     expect(obligation.trigger()?.asString()).toBe("tick");
@@ -137,7 +137,7 @@ describe("scenario", () => {
     Scenario.reconstitute({
       id: ScenarioId.reconstitute("SC-1"),
       kind,
-      frRefs: FrRefs.of(["FR-1"]),
+      frRefs: FrRefs.reconstitute(["FR-1"]),
       bindings: { b: 2, a: 1 },
     });
 
@@ -145,14 +145,14 @@ describe("scenario", () => {
     const withEvent = Scenario.reconstitute({
       id: ScenarioId.reconstitute("SC-2"),
       kind: "accept",
-      frRefs: FrRefs.of(["FR-1", "FR-2"]),
+      frRefs: FrRefs.reconstitute(["FR-1", "FR-2"]),
       bindings: { a: 1 },
       event: { trigger: TriggerName.reconstitute("submit") },
       expect: lit(true),
     });
     expect(withEvent.id().asString()).toBe("SC-2");
     expect(withEvent.kind()).toBe("accept");
-    expect(withEvent.frRefs().toArray()).toEqual(["FR-1", "FR-2"]);
+    expect(withEvent.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(withEvent.eventTrigger()?.asString()).toBe("submit");
     expect(withEvent.expectation()).toEqual(lit(true));
     expect(withEvent.isAccept()).toBe(true);

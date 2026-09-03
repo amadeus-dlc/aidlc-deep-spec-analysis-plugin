@@ -5,20 +5,21 @@ import type { DeclaredEntities } from "./declared-entities.ts";
 import { FD_R1, FD_R2, FD_R3, FD_R4, FD_R5 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { WitnessRef } from "./witness-ref.ts";
+import { FenceCount } from "./fence-count.ts";
 
 // rules.md の yaml 真実源ブロックの解析結果——文書が無い、フェンス数が違う、
 // 解析できない、`rules:` リストが無い、抽出できた。FD-R 検査は `match` で
 // 解釈へ命じる（#71 波26）。
 export class RulesOutcome {
   readonly #kind: "absent" | "wrong-fence-count" | "unparseable" | "no-rules-list" | "extracted";
-  readonly #found: number;
+  readonly #found: FenceCount;
   readonly #line: LineNumber | null;
   readonly #error: string | null;
   readonly #rules: RuleDecls | null;
 
   private constructor(props: { kind: "absent" | "wrong-fence-count" | "unparseable" | "no-rules-list" | "extracted"; found: number; line: LineNumber | null; error: string | null; rules: RuleDecls | null }) {
     this.#kind = props.kind;
-    this.#found = props.found;
+    this.#found = FenceCount.of(props.found);
     this.#line = props.line;
     this.#error = props.error;
     this.#rules = props.rules;
@@ -57,7 +58,7 @@ export class RulesOutcome {
     extracted: (rules: RuleDecls) => T;
   }): T {
     if (this.#kind === "absent") return handlers.absent();
-    if (this.#kind === "wrong-fence-count") return handlers.wrongFenceCount(this.#found);
+    if (this.#kind === "wrong-fence-count") return handlers.wrongFenceCount(this.#found.asNumber());
     if (this.#kind === "unparseable" && this.#line !== null) return handlers.unparseable(this.#line, this.#error ?? "");
     if (this.#kind === "no-rules-list") return handlers.noRulesList();
     if (this.#rules === null) throw new Error("defect: an extracted rules document carries no rules");

@@ -1,4 +1,4 @@
-import { TargetId } from "../../kernel/domain/index.ts";
+import { TargetId, KeyedIndex, QueryLabel } from "../../kernel/domain/index.ts";
 import type { RefinementAttr } from "./refinement-attr.ts";
 // refinement の SMT-LIB コンパイラ — v1（requirements/adapter/smt-plan）と
 // 統一しない**明示的な第 2 コンパイラ**（移行計画のアーキテクチャ判断 Q1 /
@@ -276,7 +276,7 @@ export function buildRefinementQueries(
         // enabledness：alpha(guard) は成り立つが、写像済み設計イベントが
         // ひとつも発火可能でない。
         const designGuards = mapped
-          .map((id) => catalog.eventOf(id.asString()))
+          .map((id) => catalog.eventOf(TargetId.reconstitute(id.asString())))
           .filter((d): d is DesignEvent => d !== null)
           .map((d) => smtOfExpr(ctx, d.guard()));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
@@ -305,7 +305,7 @@ export function buildRefinementQueries(
         const assigned = decomposed.value;
         const frameParts: string[] = [];
         for (const a of req.attributes().sortedByPath()) {
-          if (assigned.covers(a.path().asString())) continue;
+          if (assigned.covers(a.path())) continue;
           const eq = mappings.equalityFor(a.path().asString());
           if (eq !== null) frameParts.push(smtOfExpr(ctx, eq));
         }
@@ -317,7 +317,7 @@ export function buildRefinementQueries(
         const fBar = smtOfExpr(ctx, alphaF.value);
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
-          const ev = catalog.eventOf(designId.asString());
+          const ev = catalog.eventOf(TargetId.reconstitute(designId.asString()));
           if (!ev) continue;
           const stepParts: string[] = [smtOfExpr(ctx, ev.guard())];
           for (const attr of ctx.attrs) {
@@ -387,5 +387,9 @@ export function buildRefinementQueries(
     }
   }
 
-  return { queries, plan: RefinementSolverPlan.of({ pending, compileSkips: DesignSkips.of(compileSkips) }), context: ctx };
+  return {
+    queries,
+    plan: RefinementSolverPlan.of({ pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.reconstitute(id), probe] as const)), compileSkips: DesignSkips.of(compileSkips) }),
+    context: ctx,
+  };
 }

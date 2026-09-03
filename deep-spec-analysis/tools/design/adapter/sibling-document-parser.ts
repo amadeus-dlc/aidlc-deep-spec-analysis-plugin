@@ -20,7 +20,7 @@ export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
     if (!isObject(f) || typeof f.kind !== "string" || !Array.isArray(f.targets)) continue;
     findings.push(SiblingVerdictFinding.reconstitute({
       kind: f.kind,
-      frRefs: FrRefs.of(strArr(f.frRefs)),
+      frRefs: FrRefs.reconstitute(strArr(f.frRefs)),
       targets: f.targets.filter((t): t is string => typeof t === "string").map((t) => LoweredId.reconstitute(t)),
       witness: DesignWitness.fromDocument(f.witness ?? null),
       detail: typeof f.detail === "string" ? f.detail : "",

@@ -1,22 +1,22 @@
-// 要件イベント効果の代入分解 — eq(prime(ref), rhs) の連言だけを効果として
-// 受理し、代入対象の要件属性ごとに項を持つ。旧 reqEffectAssignments の
-// 逐語移植——自由関数は EffectAssignments.ofEffect（構築）と自身の照会に
-// なった（OOUI 裁定）。
+// EffectAssignments — 効果式（prime 代入の連言）を属性パス → 代入項の索引に
+// 解いたもの。キーは AttributePath、内側は KeyedIndex（裁定 3-1、2026-09-03）。
+// 連言でない・代入でない効果は RefinementMapDefect として Result で返す
+//（裁定 15）。同じ属性への重複代入は後勝ち（Map と同じ——位置は最初のまま、
+// 凍結挙動）。
 
-import type { Expression } from "../../kernel/domain/index.ts";
+import { AttributePath, KeyedIndex, type Expression } from "../../kernel/domain/index.ts";
 import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
 import { RefinementMapDefect } from "./refinement-map-defect.ts";
 
 export class EffectAssignments {
-  readonly #values: ReadonlyMap<string, Expression>;
+  readonly #values: KeyedIndex<AttributePath, Expression>;
 
-  private constructor(values: ReadonlyMap<string, Expression>) {
+  private constructor(values: KeyedIndex<AttributePath, Expression>) {
     this.#values = values;
   }
 
-  // 効果式を分解して構築する。連言の primed 代入以外は地図の欠陥（凍結文言）。
   static ofEffect(effect: Expression): Result<EffectAssignments, RefinementMapDefect> {
-    const assignments = new Map<string, Expression>();
+    const assignments: (readonly [AttributePath, Expression])[] = [];
     const terms: Expression[] = [];
     const flatten = (e: Expression): void => {
       if (e.op === "and") for (const a of e.args ?? []) flatten(a);
@@ -28,16 +28,16 @@ export class EffectAssignments {
       const [a, b] = term.args ?? [];
       const target = a?.op === "ref" && a.prime === true ? a : b?.op === "ref" && b.prime === true ? b : null;
       if (!target || typeof target.path !== "string") return err(RefinementMapDefect.effectNotAssignmentConjunction());
-      assignments.set(target.path, term);
+      assignments.push([AttributePath.reconstitute(target.path), term]);
     }
-    return ok(new EffectAssignments(assignments));
+    return ok(new EffectAssignments(KeyedIndex.of(assignments)));
   }
 
-  covers(path: string): boolean {
+  covers(path: AttributePath): boolean {
     return this.#values.has(path);
   }
 
-  *[Symbol.iterator](): Iterator<readonly [string, Expression]> {
-    yield* this.#values.entries();
+  *[Symbol.iterator](): Iterator<readonly [AttributePath, Expression]> {
+    yield* this.#values;
   }
 }

@@ -33,7 +33,7 @@ import type { InputAnchor } from "./input-anchor.ts";
 import type { InputAnchors } from "./input-anchors.ts";
 import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
 import type { SpecBlockAssessments } from "./spec-block-assessments.ts";
-import type { UnitName } from "./unit-name.ts";
+import type { UnitName } from "../../kernel/domain/index.ts";
 
 // 検査の門が開かない理由：対象成果物がその検査の文書ではない。
 type CheckNotApplicable = { readonly kind: "not-applicable" };

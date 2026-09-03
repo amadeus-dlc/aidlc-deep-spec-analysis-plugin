@@ -4,7 +4,7 @@
 // supportsMajor）は旧センサーの自由関数群を集約メソッドへ移したもの。
 // 配列を生で運ばない：部品はファーストクラスコレクションで受け取り・返す。
 
-import { type IrVersion, FrRefs, TargetIds } from "../../kernel/domain/index.ts";
+import { type IrVersion, FrRefs, TargetIds, RequirementId, AttributePath } from "../../kernel/domain/index.ts";
 import { type AttributeDeclaration } from "./attribute-declaration.ts";
 import { AttributeDeclarations } from "./attribute-declarations.ts";
 import type { ContentHash } from "../../kernel/domain/index.ts";
@@ -99,7 +99,7 @@ export class RequirementsModel {
   }
 
   attributeAt(path: string): AttributeDeclaration | undefined {
-    return this.#attributes.byPath(path);
+    return this.#attributes.byPath(AttributePath.reconstitute(path));
   }
 
   obligations(): Obligations {
@@ -121,7 +121,7 @@ export class RequirementsModel {
 
   // 対象 id 列が指す義務・シナリオの FR 参照（一意・正準順）。
   frRefsOf(targets: TargetIds): FrRefs {
-    const refs: string[] = [];
+    const refs: RequirementId[] = [];
     for (const t of targets) {
       const ob = this.#obligations.byId(t.asString());
       if (ob) refs.push(...ob.frRefs());

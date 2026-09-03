@@ -55,7 +55,7 @@ export function parseFormalModel(raw: Json): Omit<Parameters<typeof Requirements
     obligations.push(Obligation.reconstitute({
       id: ObligationId.reconstitute(ob.id),
       nature: ObligationNature.reconstitute(ob.nature),
-      frRefs: FrRefs.of(strArr(ob.frRefs)),
+      frRefs: FrRefs.reconstitute(strArr(ob.frRefs)),
       ears: typeof ob.ears === "string" ? ob.ears : undefined,
       assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
       trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
@@ -76,7 +76,7 @@ export function parseFormalModel(raw: Json): Omit<Parameters<typeof Requirements
     scenarios.push(Scenario.reconstitute({
       id: ScenarioId.reconstitute(sc.id),
       kind,
-      frRefs: FrRefs.of(strArr(sc.frRefs)),
+      frRefs: FrRefs.reconstitute(strArr(sc.frRefs)),
       bindings,
       event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
       expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,

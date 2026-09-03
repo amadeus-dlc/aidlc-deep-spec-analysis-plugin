@@ -3,7 +3,7 @@
 // equals は値による恒等比較。domain 90% 床のための分岐網羅。
 
 import { describe, expect, test } from "bun:test";
-import { TriggerName, ArtifactPath, BackendName, ContentHash, IrVersion, TargetId, TargetIds } from "../tools/kernel/domain/index.ts";
+import { TriggerName, ArtifactPath, BackendName, ContentHash, IrVersion, TargetId, TargetIds, RequirementId, UnitName } from "../tools/kernel/domain/index.ts";
 import {
   DesignAttributeName,
   DesignBackgroundId,
@@ -196,21 +196,21 @@ import { RequirementIds } from "../tools/kernel/domain/index.ts";
 
 describe("requirements first-class collections", () => {
   test("immutable add and boundary escape across the cluster", () => {
-    expect(RequirementIds.of([]).add("FR-1").has("FR-1")).toBe(true);
-    expect([...RequirementIds.of(["FR-1"])]).toEqual(["FR-1"]);
-    expect([...RequirementIds.extractFrom("- FR-1 と NFR-2.1").toArray()].sort()).toEqual(["FR-1", "NFR-2.1"]);
+    expect(RequirementIds.reconstitute([]).add(RequirementId.reconstitute("FR-1")).has(RequirementId.reconstitute("FR-1"))).toBe(true);
+    expect([...RequirementIds.reconstitute(["FR-1"])].map((id) => id.asString())).toEqual(["FR-1"]);
+    expect([...RequirementIds.extractFrom("- FR-1 と NFR-2.1").toStrings()].sort()).toEqual(["FR-1", "NFR-2.1"]);
 
     const attrs = AttributeDeclarations.of([]).add(AttributeDeclaration.reconstitute({ path: AttributePath.reconstitute("o.qty"), kind: "int", min: AttributeBound.reconstitute(0), max: AttributeBound.reconstitute(5) }));
-    expect(attrs.byPath("o.qty")?.isInt()).toBe(true);
-    expect(attrs.byPath("o.qty")?.match({ bool: () => "b", int: (min, max) => `${min?.asNumber()}..${max?.asNumber()}`, enum: () => "e" })).toBe("0..5");
+    expect(attrs.byPath(AttributePath.reconstitute("o.qty"))?.isInt()).toBe(true);
+    expect(attrs.byPath(AttributePath.reconstitute("o.qty"))?.match({ bool: () => "b", int: (min, max) => `${min?.asNumber()}..${max?.asNumber()}`, enum: () => "e" })).toBe("0..5");
     expect(attrs.toArray().length).toBe(1);
 
-    const obs = Obligations.of([]).add(Obligation.reconstitute({ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: FrRefs.of(["FR-1"]) }));
+    const obs = Obligations.of([]).add(Obligation.reconstitute({ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: FrRefs.reconstitute(["FR-1"]) }));
     expect(obs.byId("OB-1")?.nature().asString()).toBe("invariant");
     expect(obs.ids()).toEqual(["OB-1"]);
     expect([...obs].length).toBe(1);
 
-    const scs = Scenarios.of([]).add(Scenario.reconstitute({ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: FrRefs.of([]), bindings: {} }));
+    const scs = Scenarios.of([]).add(Scenario.reconstitute({ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: FrRefs.reconstitute([]), bindings: {} }));
     expect(scs.byId("SC-1")?.kind()).toBe("accept");
     expect(scs.ids()).toEqual(["SC-1"]);
 
@@ -219,7 +219,7 @@ describe("requirements first-class collections", () => {
     expect(bgs.toArray()[0]?.id().asString()).toBe("B1");
     expect(bgs.toArray()[0]?.assertion()).toEqual({ op: "bool", value: true });
 
-    const finding = VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["OB-1"]), witness: VerificationWitness.core([]), detail: "d" });
+    const finding = VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["OB-1"]), witness: VerificationWitness.core([]), detail: "d" });
     const fs = VerificationFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
@@ -259,14 +259,14 @@ import {
 } from "../tools/design/domain/index.ts";
 
 describe("design first-class collections", () => {
-  const ob = DesignObligation.reconstitute({ id: DesignObligationId.reconstitute("DOB-1"), nature: DesignObligationNature.reconstitute("invariant"), origin: DesignObligationOrigin.reconstitute(""), brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), assert: { op: "bool", value: true } });
+  const ob = DesignObligation.reconstitute({ id: DesignObligationId.reconstitute("DOB-1"), nature: DesignObligationNature.reconstitute("invariant"), origin: DesignObligationOrigin.reconstitute(""), brRefs: BrRefs.reconstitute([]), frRefs: FrRefs.reconstitute([]), assert: { op: "bool", value: true } });
   const machine = DesignMachine.reconstitute({
     id: DesignMachineId.reconstitute("SM-1"),
     entity: DesignEntityName.reconstitute("T"),
     attribute: DesignAttributeName.reconstitute("s"),
     initial: InitialStates.of(["a"]),
     deterministic: true,
-    transitions: DesignTransitions.of([DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-1"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) })]),
+    transitions: DesignTransitions.of([DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-1"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.reconstitute([]) })]),
     ignores: DesignIgnores.of([]),
   });
 
@@ -277,8 +277,8 @@ describe("design first-class collections", () => {
     expect([...DesignMachines.of([machine])].length).toBe(1);
     expect(DesignMachines.of([machine]).toArray().length).toBe(1);
     expect(DesignObligations.of([ob]).toArray().length).toBe(1);
-    expect(DesignScenarios.of([DesignScenario.reconstitute({ id: DesignScenarioId.reconstitute("DSC-9"), kind: "reject", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} })]).toArray().length).toBe(1);
-    expect(DesignScenarios.of([]).add(DesignScenario.reconstitute({ id: DesignScenarioId.reconstitute("DSC-1"), kind: "accept", brRefs: BrRefs.of([]), frRefs: FrRefs.of([]), bindings: {} })).ids()).toEqual(["DSC-1"]);
+    expect(DesignScenarios.of([DesignScenario.reconstitute({ id: DesignScenarioId.reconstitute("DSC-9"), kind: "reject", brRefs: BrRefs.reconstitute([]), frRefs: FrRefs.reconstitute([]), bindings: {} })]).toArray().length).toBe(1);
+    expect(DesignScenarios.of([]).add(DesignScenario.reconstitute({ id: DesignScenarioId.reconstitute("DSC-1"), kind: "accept", brRefs: BrRefs.reconstitute([]), frRefs: FrRefs.reconstitute([]), bindings: {} })).ids()).toEqual(["DSC-1"]);
     expect([...DesignScenarios.of([])].length).toBe(0);
     expect(DesignBackgroundAssumptions.of([]).add(DesignBackgroundAssumption.reconstitute({ id: DesignBackgroundId.reconstitute("DBG-1"), assert: { op: "bool", value: true } })).toArray().length).toBe(1);
     expect([...DesignBackgroundAssumptions.of([])].length).toBe(0);
@@ -299,7 +299,7 @@ describe("design first-class collections", () => {
     expect(units.sortedByName().toArray()[0]?.name()).toBe("u2");
     expect([...units].length).toBe(1);
 
-    const finding = DesignFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["DOB-1"]), witness: DesignWitness.refs([]), unit: "u2", detail: "d" });
+    const finding = DesignFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["DOB-1"]), witness: DesignWitness.refs([]), unit: "u2", detail: "d" });
     const fs = DesignFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
@@ -315,8 +315,8 @@ describe("design first-class collections", () => {
     expect(anchors.sortedByArtifact().toArray().map((a) => a.artifact())).toEqual(["a.md", "b.md"]);
     expect([...anchors].length).toBe(2);
 
-    const checked = CheckedUnits.of(["unit:u2", "unit:u1", "unit:u1"]).add("unit:u3");
-    expect(checked.sortedUniqueCanonically().toArray()).toEqual(["unit:u1", "unit:u2", "unit:u3"]);
+    const checked = CheckedUnits.reconstitute(["unit:u2", "unit:u1", "unit:u1"]).add(UnitName.reconstitute("unit:u3"));
+    expect(checked.sortedUniqueCanonically().toStrings()).toEqual(["unit:u1", "unit:u2", "unit:u3"]);
     expect([...checked].length).toBe(4);
 
     const cc = DesignCrossCheckedEntries.of([]).add(DesignCrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute("smt"), targets: TargetIds.reconstitute(["DSC-1"]) }));
@@ -329,9 +329,9 @@ describe("design first-class collections", () => {
 
 describe("requirements value collections (first-class operations)", () => {
   test("FrRefs and AttributeValues hold declaration order and ordinal knowledge", () => {
-    const refs = FrRefs.of(["FR-2"]).add("FR-1");
-    expect([...refs]).toEqual(["FR-2", "FR-1"]);
-    expect(refs.toArray()).toEqual(["FR-2", "FR-1"]);
+    const refs = FrRefs.reconstitute(["FR-2"]).add(RequirementId.reconstitute("FR-1"));
+    expect([...refs].map((r) => r.asString())).toEqual(["FR-2", "FR-1"]);
+    expect(refs.toStrings()).toEqual(["FR-2", "FR-1"]);
 
     const values = AttributeValues.of(["open"]).add("closed");
     expect([...values]).toEqual(["open", "closed"]);
@@ -346,8 +346,8 @@ describe("requirements value collections (first-class operations)", () => {
 
 describe("design part collections (first-class operations)", () => {
   test("DesignTransitions and DesignIgnores own their frozen orders under add", () => {
-    const t1 = DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-2"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) });
-    const t2 = DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-10"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.of([]) });
+    const t1 = DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-2"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.reconstitute([]) });
+    const t2 = DesignTransition.reconstitute({ id: DesignTransitionId.reconstitute("TR-10"), from: "a", to: "b", trigger: TriggerName.reconstitute("t"), brRefs: BrRefs.reconstitute([]) });
     const trs = DesignTransitions.of([t2]).add(t1);
     expect([...trs].length).toBe(2);
     expect(trs.ids()).toEqual(["TR-10", "TR-2"]);

@@ -3,7 +3,7 @@ import { TargetIds, type ArtifactPath } from "../../kernel/domain/index.ts";
 import { XS_1, XS_2, XS_3 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
-import type { UnitName } from "./unit-name.ts";
+import type { UnitName } from "../../kernel/domain/index.ts";
 import { WitnessRef } from "./witness-ref.ts";
 
 // domain-design 側素描のコレクション。名前順の整列と正規化名での一意化

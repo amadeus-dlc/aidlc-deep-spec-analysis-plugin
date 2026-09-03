@@ -1,4 +1,4 @@
-import { UnitName } from "./unit-name.ts";
+import { UnitName } from "../../kernel/domain/index.ts";
 
 // unit 名のファーストクラスコレクション（depends_on の並びなど宣言順を保持）。
 export class UnitNames {

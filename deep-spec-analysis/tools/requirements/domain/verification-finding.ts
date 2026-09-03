@@ -1,4 +1,4 @@
-import type { FrRefs, TargetId, TargetIds } from "../../kernel/domain/index.ts";
+import { type FrRefs, type TargetId, type TargetIds, FindingKind } from "../../kernel/domain/index.ts";
 import type { VerificationWitness } from "./verification-witness.ts";
 
 // v1 検証 finding（契約2）——kind・要件参照・対象・witness・説明。契約2 の
@@ -8,14 +8,14 @@ import type { VerificationWitness } from "./verification-witness.ts";
 // witness は型付きユニオン——unsat core のラベル列・decode 済み状態モデル・
 // クロスチェック判定表・状態機械のステップトレース。
 export class VerificationFinding {
-  readonly #kind: string;
+  readonly #kind: FindingKind;
   readonly #frRefs: FrRefs;
   readonly #targets: TargetIds;
   readonly #witness: VerificationWitness;
   readonly #detail: string;
 
   private constructor(props: { kind: string; frRefs: FrRefs; targets: TargetIds; witness: VerificationWitness; detail: string }) {
-    this.#kind = props.kind;
+    this.#kind = FindingKind.reconstitute(props.kind);
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
@@ -27,7 +27,7 @@ export class VerificationFinding {
   }
 
   kind(): string {
-    return this.#kind;
+    return this.#kind.asString();
   }
 
   frRefs(): FrRefs {
@@ -47,7 +47,7 @@ export class VerificationFinding {
   }
 
   isKind(kind: string): boolean {
-    return this.#kind === kind;
+    return this.#kind.equals(FindingKind.reconstitute(kind));
   }
 
   implicates(target: TargetId): boolean {
@@ -56,8 +56,8 @@ export class VerificationFinding {
 
   // 正準順の材料: kind 順位は所有者（コレクション）が引き、同順位なら targets の
   // 結合キー、次いで detail の辞書順。
-  compareWithin(other: VerificationFinding, rankOf: (kind: string) => number): number {
-    const kr = rankOf(this.#kind) - rankOf(other.#kind);
+  compareTo(other: VerificationFinding): number {
+    const kr = this.#kind.compareTo(other.#kind);
     if (kr !== 0) return kr;
     const ta = this.#targets.joined(",");
     const tb = other.#targets.joined(",");

@@ -1,6 +1,6 @@
 import type { Expression } from "../../kernel/domain/expression.ts";
 import type { ObligationId } from "./obligation-id.ts";
-import { AttributePath } from "./attribute-path.ts";
+import { AttributePath } from "../../kernel/domain/index.ts";
 import type { TraceState } from "./trace-state.ts";
 import { TraceValue } from "./trace-value.ts";
 

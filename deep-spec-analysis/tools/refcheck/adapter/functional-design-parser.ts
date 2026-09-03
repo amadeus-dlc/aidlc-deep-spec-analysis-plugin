@@ -207,7 +207,7 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
       element: ElementPath.reconstitute(element),
       category: category === null ? null : RuleCategory.reconstitute(category),
       appliesTo: appliesTo === null ? null : AppliesTo.reconstitute(appliesTo),
-      sourceIds: SourceIds.of([...RequirementIds.extractFrom(sourceText)].map((v) => SourceId.reconstitute(v))),
+      sourceIds: SourceIds.of([...RequirementIds.extractFrom(sourceText)].map((v) => SourceId.reconstitute(v.asString()))),
       missing,
     });
   });

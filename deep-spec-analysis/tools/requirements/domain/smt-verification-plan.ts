@@ -8,7 +8,7 @@
 // ソートは VerificationReport.compose の不変条件）は plan 自身の振る舞い
 // （OOUI 裁定）。
 
-import { TargetIds } from "../../kernel/domain/index.ts";
+import { TargetIds, KeySet, KeyedIndex, QueryLabel, TargetId, TriggerName } from "../../kernel/domain/index.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { type SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 import { VerificationFinding } from "./verification-finding.ts";
@@ -18,22 +18,24 @@ import { VerificationSkips } from "./verification-skips.ts";
 
 import { SmtEventPairProbes } from "./smt-event-pair-probes.ts";
 import { VerificationWitness } from "./verification-witness.ts";
+import type { ObligationId } from "./obligation-id.ts";
+import type { ScenarioId } from "./scenario-id.ts";
 
 export class SmtVerificationPlan {
-  readonly #compiled: ReadonlyMap<string, boolean>;
+  readonly #compiled: KeySet<ObligationId>;
   readonly #skipped: VerificationSkips;
-  readonly #labelToTarget: ReadonlyMap<string, string>;
+  readonly #labelToTarget: KeyedIndex<QueryLabel, TargetId>;
   readonly #eventPairs: SmtEventPairProbes;
-  readonly #gapTriggers: ReadonlyMap<string, readonly string[]>;
-  readonly #scenarioQueries: ReadonlyMap<string, string>;
+  readonly #gapTriggers: KeyedIndex<TriggerName, TargetIds>;
+  readonly #scenarioQueries: KeyedIndex<ScenarioId, QueryLabel>;
 
   private constructor(seed: {
-    readonly compiled: ReadonlyMap<string, boolean>;
+    readonly compiled: KeySet<ObligationId>;
     readonly skipped: VerificationSkips;
-    readonly labelToTarget: ReadonlyMap<string, string>;
+    readonly labelToTarget: KeyedIndex<QueryLabel, TargetId>;
     readonly eventPairs: SmtEventPairProbes;
-    readonly gapTriggers: ReadonlyMap<string, readonly string[]>;
-    readonly scenarioQueries: ReadonlyMap<string, string>;
+    readonly gapTriggers: KeyedIndex<TriggerName, TargetIds>;
+    readonly scenarioQueries: KeyedIndex<ScenarioId, QueryLabel>;
   }) {
     this.#compiled = seed.compiled;
     this.#skipped = seed.skipped;
@@ -44,20 +46,20 @@ export class SmtVerificationPlan {
   }
 
   static of(seed: {
-    readonly compiled: ReadonlyMap<string, boolean>;
+    readonly compiled: KeySet<ObligationId>;
     readonly skipped: VerificationSkips;
-    readonly labelToTarget: ReadonlyMap<string, string>;
+    readonly labelToTarget: KeyedIndex<QueryLabel, TargetId>;
     readonly eventPairs: SmtEventPairProbes;
-    readonly gapTriggers: ReadonlyMap<string, readonly string[]>;
-    readonly scenarioQueries: ReadonlyMap<string, string>;
+    readonly gapTriggers: KeyedIndex<TriggerName, TargetIds>;
+    readonly scenarioQueries: KeyedIndex<ScenarioId, QueryLabel>;
   }): SmtVerificationPlan {
     return new SmtVerificationPlan({
-      compiled: new Map(seed.compiled),
+      compiled: seed.compiled,
       skipped: seed.skipped,
-      labelToTarget: new Map(seed.labelToTarget),
+      labelToTarget: seed.labelToTarget,
       eventPairs: seed.eventPairs,
-      gapTriggers: new Map(seed.gapTriggers),
-      scenarioQueries: new Map(seed.scenarioQueries),
+      gapTriggers: seed.gapTriggers,
+      scenarioQueries: seed.scenarioQueries,
     });
   }
 
@@ -78,19 +80,19 @@ export class SmtVerificationPlan {
       model
         .obligations()
         .toArray()
-        .filter((o) => o.isInvariantLike() && this.#compiled.get(o.id().asString()))
+        .filter((o) => o.isInvariantLike() && this.#compiled.has(o.id()))
         .map((o) => o.id().asTargetId()),
     );
 
     // ラベル→対象の対応（seed の生 id 材料）から義務 id だけを対象列へ。
-    const coreToTargets = (core: string[]): TargetIds => {
+    const coreToTargets = (core: readonly QueryLabel[]): TargetIds => {
       const targets = core
         .map((label) => this.#labelToTarget.get(label))
-        .filter((t): t is string => typeof t === "string" && t.startsWith("OB-"));
-      return TargetIds.reconstitute(targets).sortedUniqueCanonically();
+        .filter((t): t is TargetId => t !== undefined && t.asString().startsWith("OB-"));
+      return TargetIds.of(targets).sortedUniqueCanonically();
     };
 
-    const addConflict = (targets: TargetIds, core: string[], detail: string): void => {
+    const addConflict = (targets: TargetIds, core: readonly QueryLabel[], detail: string): void => {
       const effective = targets.count() > 0 ? targets : invariantIds;
       if (effective.count() === 0) return;
       const key = effective.joined(",");
@@ -100,7 +102,7 @@ export class SmtVerificationPlan {
         kind: "conflict",
         frRefs: model.frRefsOf(effective),
         targets: effective,
-        witness: VerificationWitness.core([...core].sort()),
+        witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
         detail,
       }));
     };
@@ -112,7 +114,7 @@ export class SmtVerificationPlan {
     };
 
     // (a) 大域一貫性。
-    const global = results.verdictOf("global");
+    const global = results.verdictOf(QueryLabel.reconstitute("global"));
     let globallyUnsat = false;
     if (global?.isUnsat()) {
       globallyUnsat = true;
@@ -128,7 +130,7 @@ export class SmtVerificationPlan {
     // (a) 前件空虚（大域 unsat のときは冗長な派生なので黙る）。
     if (!globallyUnsat) {
       for (const ob of model.obligations()) {
-        const r = results.verdictOf(`vac:${ob.id().asString()}`);
+        const r = results.verdictOf(QueryLabel.reconstitute(`vac:${ob.id().asString()}`));
         if (!r) continue;
         if (r.isUnsat()) {
           const targets = TargetIds.of([...coreToTargets([...r.coreLabels()]), ob.id().asTargetId()]).sortedUniqueCanonically();
@@ -163,25 +165,26 @@ export class SmtVerificationPlan {
     }
 
     // (b) 完全性ギャップ。
-    for (const [trigger, eventIds] of [...this.#gapTriggers.entries()].sort()) {
-      const r = results.verdictOf(`gap:${trigger}`);
+    for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => (a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0))) {
+      const trigger = triggerName.asString();
+      const r = results.verdictOf(QueryLabel.reconstitute(`gap:${trigger}`));
       if (!r) continue;
       if (r.isSat()) {
         findings.push(VerificationFinding.reconstitute({
           kind: "completeness-gap",
-          frRefs: model.frRefsOf(TargetIds.reconstitute(eventIds)),
-          targets: TargetIds.reconstitute(eventIds),
+          frRefs: model.frRefsOf(eventIds),
+          targets: eventIds,
           witness: VerificationWitness.model(r.witnessModel()),
           detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
         }));
       } else if (r.isUndecided()) {
-        timeoutSkip(TargetIds.reconstitute(eventIds), `completeness check for trigger "${trigger}"`);
+        timeoutSkip(eventIds, `completeness check for trigger "${trigger}"`);
       }
     }
 
     // (c) シナリオ。
     for (const sc of model.scenarios()) {
-      const qid = this.#scenarioQueries.get(sc.id().asString());
+      const qid = this.#scenarioQueries.get(sc.id());
       if (!qid) continue;
       const r = results.verdictOf(qid);
       if (!r) continue;

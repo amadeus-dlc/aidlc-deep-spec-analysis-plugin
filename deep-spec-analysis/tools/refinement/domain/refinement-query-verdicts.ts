@@ -1,18 +1,21 @@
+// RefinementQueryVerdicts — クエリ id（QueryLabel）→ refinement 判定の索引。
+// 内側は KeyedIndex（裁定 3-1、2026-09-03）。
+
+import { KeyedIndex, type QueryLabel } from "../../kernel/domain/index.ts";
 import type { RefinementQueryVerdict } from "./refinement-query-verdict.ts";
 
-// クエリ id → 判定のファーストクラスな判定面。
 export class RefinementQueryVerdicts {
-  readonly #values: ReadonlyMap<string, RefinementQueryVerdict>;
+  readonly #values: KeyedIndex<QueryLabel, RefinementQueryVerdict>;
 
-  private constructor(values: ReadonlyMap<string, RefinementQueryVerdict>) {
+  private constructor(values: KeyedIndex<QueryLabel, RefinementQueryVerdict>) {
     this.#values = values;
   }
 
-  static of(values: ReadonlyMap<string, RefinementQueryVerdict>): RefinementQueryVerdicts {
-    return new RefinementQueryVerdicts(new Map(values));
+  static of(values: KeyedIndex<QueryLabel, RefinementQueryVerdict>): RefinementQueryVerdicts {
+    return new RefinementQueryVerdicts(values);
   }
 
-  verdictOf(queryId: string): RefinementQueryVerdict | undefined {
+  verdictOf(queryId: QueryLabel): RefinementQueryVerdict | undefined {
     return this.#values.get(queryId);
   }
 }

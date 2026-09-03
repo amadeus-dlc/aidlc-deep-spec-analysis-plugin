@@ -5,7 +5,7 @@
 // （RefinementMaterialsId と同じ規律）。sourceDocument は成果物の原文
 // （原文材料——store の往復則 findById∘store がバイト恒等になる永続化面）。
 
-import type { ErrorMessages, IrVersion } from "../../kernel/domain/index.ts";
+import { type ErrorMessages, type IrVersion, ContentHash } from "../../kernel/domain/index.ts";
 import { FrReferenceIndex } from "./fr-reference-index.ts";
 import { FrRefClaims } from "./fr-ref-claims.ts";
 import type { IrModelDecl } from "./ir-model-decl.ts";
@@ -20,7 +20,7 @@ export class IrValidationMaterials {
   readonly #schemaErrors: ErrorMessages;
   readonly #view: IrModelDecl;
   readonly #frClaims: FrRefClaims;
-  readonly #declaredDigest: string | null;
+  readonly #declaredDigest: ContentHash | null;
   readonly #sourceId: RequirementsSourceId;
   readonly #sourceDocument: Uint8Array;
 
@@ -40,7 +40,7 @@ export class IrValidationMaterials {
     this.#schemaErrors = seed.schemaErrors;
     this.#view = seed.view;
     this.#frClaims = seed.frClaims;
-    this.#declaredDigest = seed.declaredDigest;
+    this.#declaredDigest = seed.declaredDigest === null ? null : ContentHash.reconstitute(seed.declaredDigest);
     this.#sourceId = seed.sourceId;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
@@ -82,7 +82,7 @@ export class IrValidationMaterials {
   }
 
   declaredDigest(): string | null {
-    return this.#declaredDigest;
+    return this.#declaredDigest?.asString() ?? null;
   }
 
   sourceId(): RequirementsSourceId {

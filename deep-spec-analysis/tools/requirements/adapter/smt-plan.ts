@@ -5,10 +5,10 @@
 // smtOf / buildPlan からの逐語移植（IrDoc → RequirementsModel の読み替えのみ）。
 // 描画語彙（smtVar/smtName/smtLit/smtIntOf）は移行 PR8 で kernel 共有へ。
 
-import { type Expression, ExpressionTree, TriggerName } from "../../kernel/domain/index.ts";
+import { type Expression, ExpressionTree, TriggerName, KeyedIndex, KeySet, QueryLabel, TargetId, TargetIds } from "../../kernel/domain/index.ts";
 import { smtIntOf, smtLit, smtName, smtVar } from "../../kernel/adapter/index.ts";
 import type { SmtChildQuery } from "./smt-child-query.ts";
-import {
+import { ObligationId, ScenarioId,
   SmtEventPairProbes,
   SmtVerificationPlan,
   VerificationSkips,
@@ -309,7 +309,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
           assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
           model: [],
         });
-        eventPairs.push(SmtEventPairProbe.of({ qOverlap, qJoint, a: a.id(), b: b.id(), trigger: TriggerName.reconstitute(trigger) }));
+        eventPairs.push(SmtEventPairProbe.of({ qOverlap: QueryLabel.reconstitute(qOverlap), qJoint: QueryLabel.reconstitute(qJoint), a: a.id(), b: b.id(), trigger: TriggerName.reconstitute(trigger) }));
       }
     }
   }
@@ -366,12 +366,12 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   return {
     queries,
     plan: SmtVerificationPlan.of({
-      compiled,
+      compiled: KeySet.of([...compiled].filter(([, ok]) => ok).map(([id]) => ObligationId.reconstitute(id))),
       skipped: VerificationSkips.of(skipped),
-      labelToTarget,
+      labelToTarget: KeyedIndex.of([...labelToTarget].map(([label, target]) => [QueryLabel.reconstitute(label), TargetId.reconstitute(target)] as const)),
       eventPairs: SmtEventPairProbes.of(eventPairs),
-      gapTriggers,
-      scenarioQueries,
+      gapTriggers: KeyedIndex.of([...gapTriggers].map(([trigger, ids]) => [TriggerName.reconstitute(trigger), TargetIds.reconstitute(ids)] as const)),
+      scenarioQueries: KeyedIndex.of([...scenarioQueries].map(([sc, qid]) => [ScenarioId.reconstitute(sc), QueryLabel.reconstitute(qid)] as const)),
     }),
   };
 }

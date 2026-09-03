@@ -37,7 +37,7 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
   // ContentHash は境界（描画）で asString() へ落とす（キー順は旧挿入順）。
   if (inputs !== null) ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
   const checked = report.checked();
-  if (checked !== null) ordered.checked = checked.toArray() as unknown as Json;
+  if (checked !== null) ordered.checked = checked.toStrings() as unknown as Json;
   // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
   // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
   // frRefs, targets, witness, unit, detail)、skip は (target, reason, unit,
@@ -45,7 +45,7 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
   ordered.findings = report.findings().toArray().map((f) => {
     const out: { [k: string]: Json } = {
       kind: f.kind(),
-      frRefs: f.frRefs().toArray() as unknown as Json,
+      frRefs: f.frRefs().toStrings() as unknown as Json,
       targets: f.targets().toStrings() as unknown as Json,
       witness: f.witness().toDocument() as unknown as Json,
       unit: f.unit(),
@@ -112,7 +112,7 @@ export function parseSiblingDesignReportDocument(
         const entry = e as { [k: string]: Json };
         return DesignFinding.reconstitute({
           kind: typeof entry.kind === "string" ? entry.kind : "",
-          frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
+          frRefs: FrRefs.reconstitute(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
           targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
           witness: DesignWitness.fromDocument(entry.witness ?? null),
           unit: typeof entry.unit === "string" ? entry.unit : "",
@@ -139,7 +139,7 @@ export function parseSiblingDesignReportDocument(
           });
         }))
       : null,
-    checked: Array.isArray(raw.checked) ? CheckedUnits.of((raw.checked as Json[]).filter((c): c is string => typeof c === "string")) : null,
+    checked: Array.isArray(raw.checked) ? CheckedUnits.reconstitute((raw.checked as Json[]).filter((c): c is string => typeof c === "string")) : null,
     crossChecked: Array.isArray(raw.crossChecked) ? DesignCrossCheckedEntries.of(
           (raw.crossChecked as Json[]).filter(isObject).map((e) => DesignCrossCheckedEntry.reconstitute({
             backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),

@@ -1,4 +1,4 @@
-import type { FrRefs, TargetIds } from "../../kernel/domain/index.ts";
+import { type FrRefs, type TargetIds, FindingKind, UnitName } from "../../kernel/domain/index.ts";
 import { type WitnessRefs } from "./witness-refs.ts";
 
 // refcheck finding（無沈黙台帳の 1 行）——kind・要件参照・対象・witness ref
@@ -6,19 +6,19 @@ import { type WitnessRefs } from "./witness-refs.ts";
 // Findings が所有する）は記録自身の知識（#71 波18）。kind は分類文字列、
 // detail は prose（裁定の恒久除外）。
 export class Finding {
-  readonly #kind: string;
+  readonly #kind: FindingKind;
   readonly #frRefs: FrRefs;
   readonly #targets: TargetIds;
   readonly #witness: WitnessRefs;
-  readonly #unit: string | undefined;
+  readonly #unit: UnitName | undefined;
   readonly #detail: string;
 
   private constructor(props: { kind: string; frRefs: FrRefs; targets: TargetIds; witness: { refs: WitnessRefs }; unit?: string; detail: string }) {
-    this.#kind = props.kind;
+    this.#kind = FindingKind.reconstitute(props.kind);
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness.refs;
-    this.#unit = props.unit;
+    this.#unit = props.unit === undefined ? undefined : UnitName.reconstitute(props.unit);
     this.#detail = props.detail;
   }
 
@@ -27,7 +27,7 @@ export class Finding {
   }
 
   kind(): string {
-    return this.#kind;
+    return this.#kind.asString();
   }
 
   frRefs(): FrRefs {
@@ -43,7 +43,7 @@ export class Finding {
   }
 
   unit(): string | undefined {
-    return this.#unit;
+    return this.#unit?.asString();
   }
 
   detail(): string {
@@ -52,8 +52,8 @@ export class Finding {
 
   // 正準順の材料: kind 順位は所有者（コレクション）が引き、同順位なら targets の
   // 結合キー、次いで detail の辞書順。
-  compareWithin(other: Finding, rankOf: (kind: string) => number): number {
-    const kr = rankOf(this.#kind) - rankOf(other.#kind);
+  compareTo(other: Finding): number {
+    const kr = this.#kind.compareTo(other.#kind);
     if (kr !== 0) return kr;
     const ta = this.#targets.joined(",");
     const tb = other.#targets.joined(",");

@@ -459,6 +459,7 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
 export const PRIMITIVE_FIELD_EXCLUSIONS: ReadonlySet<string> = new Set([
   // 索引の表現プリミティブ——string キーの Map を持つ唯一の場所（裁定 3-1、2026-09-03）。
   "kernel/domain/keyed-index.ts",
+  "kernel/domain/key-set.ts",
   "kernel/domain/expression.ts",
   "kernel/domain/error-messages.ts",
   "design/domain/attr-paths.ts",
@@ -473,6 +474,9 @@ export const PRIMITIVE_FIELD_EXCLUSIONS: ReadonlySet<string> = new Set([
 const PROSE_FIELD_NAMES: ReadonlySet<string> = new Set([
   "detail", "details", "reason", "unavailableReason", "unavailable", "unsupported", "missing", "missingKeys",
   "message", "messages", "error", "outputTail", "label", "fix", "rulesMarkdown", "description", "text",
+  // 裁定 3-2／3-3（2026-09-03）: EARS 正規化文（契約1 の項目、LLM が読む）と
+  // witness ref の原文トークン（サニタイズ前の値を人間のために逐語で残す欄）。
+  "ears", "value",
 ]);
 
 const STATE_TOKEN_FIELD_NAMES: ReadonlySet<string> = new Set(["state", "from", "to", "attrPath"]);
@@ -560,58 +564,11 @@ export function primitiveFieldsOf(rawSource: string): string[] {
 
 // 台帳の記述子総数の上限。台帳が縮んだら下げる——上げる変更は裁定違反で、
 // 新しい負債を記述子ごと台帳へ足す抜け道を diff 上で可視化する（レビュー指摘）。
-export const PRIMITIVE_FIELD_DEBT_CEILING = 66;
+// 台帳は裁定 3-1〜3-4（2026-09-03）で空になった（107 → 0）。縮小専用の規律は
+// そのまま——新しいエントリを足す変更は裁定違反。定数そのものの削除は #80。
+export const PRIMITIVE_FIELD_DEBT_CEILING = 0;
 
-export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([
-  ["design/domain/br-reference-index.ts", new Set(["#ids: Set<string>"])],
-  ["design/domain/br-refs.ts", new Set(["#values: readonly string[]"])],
-  ["design/domain/checked-units.ts", new Set(["#values: readonly string[]"])],
-  ["design/domain/design-attribute-decl.ts", new Set(["#kind: string"])],
-  ["design/domain/design-finding.ts", new Set(["#kind: string", "#unit: string"])],
-  ["design/domain/design-input-anchor.ts", new Set(["#artifact: string"])],
-  ["design/domain/design-report.ts", new Set(["#method: string"])],
-  ["design/domain/design-skipped.ts", new Set(["#unit: string"])],
-  ["design/domain/design-unit.ts", new Set(["#unit: string"])],
-  ["design/domain/lowered-obligation.ts", new Set(["#nature: string", "#frRefs: readonly string[]", "#trigger: string | undefined"])],
-  ["design/domain/lowered-scenario.ts", new Set(["#frRefs: readonly string[]"])],
-  ["design/domain/lowering-index.ts", new Set(["#origins: ReadonlyMap<string, LoweredOrigin>", "#scenarioDesignIds: ReadonlyMap<string, string>", "#machinesByTransition: ReadonlyMap<string, DesignMachine>", "#attrPathsByMachine: ReadonlyMap<string, string>"])],
-  ["design/domain/sibling-verdict-document.ts", new Set(["#method: string | null"])],
-  ["design/domain/sibling-verdict-finding.ts", new Set(["#kind: string"])],
-  ["design/domain/unformalized-targets.ts", new Set(["#values: ReadonlySet<string>"])],
-  ["doctor/domain/manifest-entry.ts", new Set(["#rel: string"])],
-  ["kernel/domain/fr-refs.ts", new Set(["#values: readonly string[]"])],
-  ["kernel/domain/requirement-ids.ts", new Set(["#values: ReadonlySet<string>"])],
-  ["refcheck/domain/component-catalog-outcome.ts", new Set(["#found: number"])],
-  ["refcheck/domain/entities-outcome.ts", new Set(["#found: number"])],
-  ["refcheck/domain/entity-decls.ts", new Set(["#names: Set<string>"])],
-  ["refcheck/domain/finding.ts", new Set(["#kind: string", "#unit: string | undefined"])],
-  ["refcheck/domain/input-anchor.ts", new Set(["#artifact: string"])],
-  ["refcheck/domain/rules-outcome.ts", new Set(["#found: number"])],
-  ["refcheck/domain/skipped.ts", new Set(["#target: string", "#unit: string | undefined"])],
-  ["refcheck/domain/witness-ref.ts", new Set(["#artifact: string", "#element: string", "#value: string | undefined"])],
-  ["refinement/domain/design-assignments.ts", new Set(["#values: ReadonlyMap<string, Expression>"])],
-  ["refinement/domain/design-event-catalog.ts", new Set(["#events: ReadonlyMap<string, DesignEvent>"])],
-  ["refinement/domain/effect-assignments.ts", new Set(["#values: ReadonlyMap<string, Expression>"])],
-  ["refinement/domain/refinement-query-verdict.ts", new Set(["#core: string[] | undefined"])],
-  ["refinement/domain/refinement-query-verdicts.ts", new Set(["#values: ReadonlyMap<string, RefinementQueryVerdict>"])],
-  ["refinement/domain/refinement-solver-plan.ts", new Set(["#pending: ReadonlyMap<string, RefinementProbe>"])],
-  ["refinement/domain/unit-refinement-plan.ts", new Set(["#obligationStatus: ReadonlyMap<string, RefinementStatus>", "#scenarioStatus: ReadonlyMap<string, RefinementStatus>", "#eventTransitions: ReadonlyMap<string, readonly TransitionRef[]>"])],
-  ["requirements/domain/attribute-declarations.ts", new Set(["#byPath: Map<string, AttributeDeclaration>"])],
-  ["requirements/domain/fr-reference-index.ts", new Set(["#ownersByRef: Map<string, string[]>"])],
-  ["requirements/domain/ir-attribute-decl.ts", new Set(["#kind: string"])],
-  ["requirements/domain/ir-validation-materials.ts", new Set(["#declaredDigest: string | null"])],
-  ["requirements/domain/obligation.ts", new Set(["#ears: string | undefined"])],
-  ["requirements/domain/quint-machine-plan.ts", new Set(["#scenariosWithInit: ReadonlySet<string>"])],
-  ["requirements/domain/quint-runs.ts", new Set(["#temporals: ReadonlyMap<string, QuintTemporalVerdict>", "#scenarios: ReadonlyMap<string, QuintScenarioVerdict>"])],
-  ["requirements/domain/requirements-source.ts", new Set(["#digest: string"])],
-  ["requirements/domain/smt-event-pair-probe.ts", new Set(["#qOverlap: string", "#qJoint: string"])],
-  ["requirements/domain/smt-verification-plan.ts", new Set(["#compiled: ReadonlyMap<string, boolean>", "#labelToTarget: ReadonlyMap<string, string>", "#gapTriggers: ReadonlyMap<string, readonly string[]>", "#scenarioQueries: ReadonlyMap<string, string>"])],
-  ["requirements/domain/smt-query-verdict.ts", new Set(["#core: string[] | undefined"])],
-  ["requirements/domain/smt-query-verdicts.ts", new Set(["#values: ReadonlyMap<string, SmtQueryVerdict>"])],
-  ["requirements/domain/source-anchor.ts", new Set(["#declared: string | null", "#actual: string"])],
-  ["requirements/domain/verification-finding.ts", new Set(["#kind: string"])],
-  ["requirements/domain/verification-report.ts", new Set(["#method: string"])],
-]);
+export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([]);
 
 export function noPrimitiveFieldsInDomain(relPath: string, rawSource: string): Violation[] {
   const loc = locationOf(relPath);

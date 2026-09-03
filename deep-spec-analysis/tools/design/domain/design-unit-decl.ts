@@ -1,4 +1,4 @@
-import { type Expression, ExpressionTree } from "../../kernel/domain/index.ts";
+import { type Expression, ExpressionTree, TargetId } from "../../kernel/domain/index.ts";
 import { BrReferenceIndex } from "./br-reference-index.ts";
 import { type BrRefs } from "./br-refs.ts";
 import { type DesignAttributeDecl } from "./design-attribute-decl.ts";
@@ -9,6 +9,7 @@ import { type DesignObligationDecls } from "./design-obligation-decls.ts";
 import { type DesignScenarioDecls } from "./design-scenario-decls.ts";
 import { type DesignUnitId } from "./design-unit-id.ts";
 import { type UnformalizedTargets } from "./unformalized-targets.ts";
+import { BrRef } from "./br-ref.ts";
 
 // 契約3 設計 IR の well-formedness 検査材料。スキーマ検証を通過した設計 IR を、
 // アダプタの寛容パースが型付きに解体したもの。ユニットごとの BR 材料
@@ -198,7 +199,7 @@ export class DesignUnitDecl {
     const brRefsUsed = new Set<string>();
     const collectBr = (refs: BrRefs | undefined): void => {
       if (refs === undefined) return;
-      for (const b of refs) brRefsUsed.add(b);
+      for (const b of refs) brRefsUsed.add(b.asString());
     };
 
     for (const ob of this.#obligations) {
@@ -298,11 +299,11 @@ export class DesignUnitDecl {
     } else {
       const known = BrReferenceIndex.fromRules(rulesMd);
       for (const br of [...brRefsUsed].sort()) {
-        if (!known.has(br)) errors.push(where(`brRef "${br}" does not exist in rules.md`));
+        if (!known.has(BrRef.reconstitute(br))) errors.push(where(`brRef "${br}" does not exist in rules.md`));
       }
       const unformalizedTargets = this.#unformalizedTargets;
       for (const br of known.sortedIds()) {
-        if (!brRefsUsed.has(br) && !unformalizedTargets.covers(br)) {
+        if (!brRefsUsed.has(br) && !unformalizedTargets.covers(TargetId.reconstitute(br))) {
           errors.push(
             where(`BR coverage: rule ${br} in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] — silence is a contract violation`),
           );

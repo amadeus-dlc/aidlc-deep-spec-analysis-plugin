@@ -3,7 +3,7 @@ import type { ArtifactPath } from "../../kernel/domain/index.ts";
 import { XS_1, XS_2, XS_3 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
-import type { UnitName } from "./unit-name.ts";
+import type { UnitName } from "../../kernel/domain/index.ts";
 
 // domain-design の components.md から読む実体スケッチ——文書が無い（absent）、
 // yaml が使えない（unusable：理由つき）、抽出できた（extracted）。XS 検査は

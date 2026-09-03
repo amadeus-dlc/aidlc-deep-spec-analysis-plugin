@@ -4,7 +4,7 @@
 // 解決された所在（sourcePath）は store の書き先として集約が保持する。
 // digest と原文の整合を守るため、バイト列は構築・照会の両方で防御コピー。
 
-import type { ArtifactPath, RequirementIds } from "../../kernel/domain/index.ts";
+import { type ArtifactPath, type RequirementIds, ContentHash } from "../../kernel/domain/index.ts";
 import type { RequirementsSourceId } from "./requirements-source-id.ts";
 
 
@@ -12,7 +12,7 @@ export class RequirementsSource {
   readonly #id: RequirementsSourceId;
   readonly #sourcePath: ArtifactPath;
   readonly #knownIds: RequirementIds;
-  readonly #digest: string;
+  readonly #digest: ContentHash;
   readonly #sourceDocument: Uint8Array;
 
   private constructor(seed: {
@@ -25,7 +25,7 @@ export class RequirementsSource {
     this.#id = seed.id;
     this.#sourcePath = seed.sourcePath;
     this.#knownIds = seed.knownIds;
-    this.#digest = seed.digest;
+    this.#digest = ContentHash.reconstitute(seed.digest);
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
 
@@ -55,7 +55,7 @@ export class RequirementsSource {
 
   // 境界: 凍結文言の source anchoring と照合されるダイジェスト。
   digest(): string {
-    return this.#digest;
+    return this.#digest.asString();
   }
 
   // 境界: store が書く原文（バイト逐語——防御コピー）。

@@ -1,83 +1,56 @@
-// KIND_RANK 順序保存の機械証明（issue #13 / 親 #12）。
+// finding.kind の正準順位——契約2 の findings 並びの土台。順位表は kernel の
+// FindingKind が 1 つだけ所有する（種別規律の裁定 3-2、2026-09-03——旧 5 表の
+// lockstep 証明はこの単一表の性質の証明に置き換わった）。
 //
-// リポジトリには 2 系統の rank 表が存在する:
-//   - v1 バックエンド（verify-smt / verify-quint）: 4 kind、未知は 9
-//   - 拡張系（refcheck / design）: 11 kind、未知は 99
-// 将来の統一が byte-safe であるための必要条件は「v1 が出力し得る全 kind
-// 対で相対順序が一致し、かつ未知 fallback が既知 rank を全て超える」こと。
-// 表は非公開 const のため、ソーステキストから正規表現で抽出して照合する
-// （転記ではなく実コードに紐づいた証明にするため）。
+//   - 11 種の順位は凍結（v1 が出力し得る 4 種の相対順序もこの表のとおり）
+//   - 未知の kind は既知のどれよりも後ろ（不適合文書の降格試験がそれを運ぶ）
+//   - parse は閉集合、reconstitute は逐語
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { FindingKind } from "../tools/kernel/domain/index.ts";
 
-const toolsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "tools");
+const FROZEN_ORDER = [
+  "conflict",
+  "completeness-gap",
+  "scenario-violation",
+  "unreachable",
+  "redundancy",
+  "refinement-violation",
+  "mapping-gap",
+  "structure-invalid",
+  "reference-broken",
+  "consistency-mismatch",
+  "cross-check-disagreement",
+];
 
-function extractKindRank(file: string): { table: Map<string, number>; fallback: number } {
-  const source = readFileSync(join(toolsDir, file), "utf-8");
-  const block = source.match(/const KIND_RANK[^=]*=\s*\{([\s\S]*?)\};/);
-  if (!block) throw new Error(`${file}: KIND_RANK table not found`);
-  const table = new Map<string, number>();
-  for (const entry of block[1].matchAll(/"?([a-z-]+)"?\s*:\s*(\d+)/g)) {
-    table.set(entry[1], Number(entry[2]));
-  }
-  // fallback の綴りは 2 形式ある: 旧 `KIND_RANK[k] ?? 99` と、prototype 汚染
-  // 対策後の `Object.hasOwn(KIND_RANK, k) ? (KIND_RANK[k] as number) : 99`。
-  const fallbackMatch =
-    source.match(/KIND_RANK\[[^\]]+\]\s*\?\?\s*(\d+)/) ??
-    source.match(/Object\.hasOwn\(KIND_RANK,[^)]*\)\s*\?\s*\(KIND_RANK\[[^\]]+\]\s+as\s+number\)\s*:\s*(\d+)/);
-  if (!fallbackMatch) throw new Error(`${file}: KIND_RANK fallback not found`);
-  return { table, fallback: Number(fallbackMatch[1]) };
-}
-
-// PR4 で verify-quint の重複表が消え、v1 表の定義は 1 箇所に収束した。
-const V1_FILES = ["requirements/domain/verification-findings.ts"];
-const EXTENDED_FILES = ["refcheck/domain/findings.ts", "design/domain/design-findings.ts"];
-
-describe("kind-rank order preservation", () => {
-  test("the v1 backend table is the single shared domain VO", () => {
-    const v1 = extractKindRank(V1_FILES[0]);
-    expect([...v1.table.keys()].sort()).toEqual([
-      "completeness-gap",
-      "conflict",
-      "cross-check-disagreement",
-      "scenario-violation",
-    ]);
-    expect(v1.fallback).toBe(9);
-  });
-
-  test("the two extended tables are identical", () => {
-    const [lib, design] = EXTENDED_FILES.map(extractKindRank);
-    expect([...lib.table.entries()].sort()).toEqual([...design.table.entries()].sort());
-    expect(lib.fallback).toBe(design.fallback);
-  });
-
-  test("the extended table preserves the relative order of every v1 kind pair", () => {
-    const v1 = extractKindRank(V1_FILES[0]);
-    const extended = extractKindRank(EXTENDED_FILES[0]);
-    const kinds = [...v1.table.keys()];
-    expect(kinds.length).toBe(4);
-    for (const a of kinds) {
-      expect(extended.table.has(a)).toBe(true);
-      for (const b of kinds) {
-        const v1Sign = Math.sign((v1.table.get(a) ?? v1.fallback) - (v1.table.get(b) ?? v1.fallback));
-        const extSign = Math.sign((extended.table.get(a) ?? extended.fallback) - (extended.table.get(b) ?? extended.fallback));
-        expect(`${a} vs ${b}: ${extSign}`).toBe(`${a} vs ${b}: ${v1Sign}`);
+describe("finding kind order preservation", () => {
+  test("the eleven kinds keep their frozen canonical order", () => {
+    expect(FindingKind.canonicalOrder()).toEqual(FROZEN_ORDER);
+    for (let i = 0; i < FROZEN_ORDER.length; i++) {
+      for (let j = 0; j < FROZEN_ORDER.length; j++) {
+        const c = FindingKind.reconstitute(FROZEN_ORDER[i] ?? "").compareTo(FindingKind.reconstitute(FROZEN_ORDER[j] ?? ""));
+        expect(Math.sign(c)).toBe(Math.sign(i - j));
       }
     }
   });
 
-  test("both unknown fallbacks exceed every known rank in their table", () => {
-    for (const file of [...V1_FILES, ...EXTENDED_FILES]) {
-      const { table, fallback } = extractKindRank(file);
-      // fallback は歴史的な固定値（v1=9・拡張=99）。golden に効く定数なので
-      // 「既知 rank より大きい」だけでなく値そのものを固定する。
-      expect(fallback).toBe(V1_FILES.includes(file) ? 9 : 99);
-      for (const [kind, rank] of table) {
-        expect(`${file} ${kind} ${rank < fallback}`).toBe(`${file} ${kind} true`);
+  test("the v1 backends' four kinds keep their relative order", () => {
+    const v1 = ["conflict", "completeness-gap", "scenario-violation", "cross-check-disagreement"];
+    for (let i = 0; i < v1.length; i++) {
+      for (let j = i + 1; j < v1.length; j++) {
+        expect(FindingKind.reconstitute(v1[i] ?? "").compareTo(FindingKind.reconstitute(v1[j] ?? ""))).toBeLessThan(0);
       }
     }
+  });
+
+  test("an unknown kind sorts after every known kind, parses as an error, and reconstitutes verbatim", () => {
+    const unknown = FindingKind.reconstitute("no-such-kind");
+    for (const known of FROZEN_ORDER) expect(unknown.compareTo(FindingKind.reconstitute(known))).toBeGreaterThan(0);
+    expect(unknown.compareTo(FindingKind.reconstitute("toString"))).toBe(0);
+    expect(FindingKind.parse("no-such-kind").ok).toBe(false);
+    expect(FindingKind.parse("conflict").ok).toBe(true);
+    expect(unknown.asString()).toBe("no-such-kind");
+    expect(FindingKind.reconstitute("conflict").isConflict()).toBe(true);
+    expect(FindingKind.reconstitute("conflict").equals(FindingKind.reconstitute("conflict"))).toBe(true);
   });
 });

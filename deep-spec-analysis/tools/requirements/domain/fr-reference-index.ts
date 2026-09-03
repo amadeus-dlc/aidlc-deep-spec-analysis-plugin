@@ -1,37 +1,33 @@
-// FrReferenceIndex — IR が主張する frRef の逆索引（FR5.2 逆トレーサビリティ）。
-// 「どの frRef を誰が使っているか」を保持し、requirements.md 側の既知 id 集合と
-// 突き合わせて未存在参照を報告する。owner の解決（id が無ければ
-// `<section>[<i>]`）はアダプタの寛容パースの責務で、ここは索引と照合だけ。
-// 旧 ir-valid の collectFrRefs ＋ 照合ループからの逐語移植。
+// FrReferenceIndex — 義務・シナリオが指す要件 id → 指した側の id 列の索引
+//（逆引き検証の材料）。キーは RequirementId、値は TargetIds、内側は KeyedIndex
+//（裁定 3-1、2026-09-03）。claim の集約は構築の門で行い、索引は不変。
 
-import type { RequirementIds } from "../../kernel/domain/index.ts";
+import { KeyedIndex, RequirementId, type RequirementIds, TargetIds } from "../../kernel/domain/index.ts";
 import type { FrRefClaim } from "./fr-ref-claim.ts";
 
-
-
 export class FrReferenceIndex {
-  readonly #ownersByRef: Map<string, string[]>;
+  readonly #ownersByRef: KeyedIndex<RequirementId, TargetIds>;
 
-  private constructor(ownersByRef: Map<string, string[]>) {
+  private constructor(ownersByRef: KeyedIndex<RequirementId, TargetIds>) {
     this.#ownersByRef = ownersByRef;
   }
 
-  // 主張の宣言順に owner を積む（同一 frRef の owner 列は報告時に整列）。
   static of(claims: readonly FrRefClaim[]): FrReferenceIndex {
     const ownersByRef = new Map<string, string[]>();
     for (const claim of claims) claim.claimInto(ownersByRef);
-    return new FrReferenceIndex(ownersByRef);
+    return new FrReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.reconstitute(ref), TargetIds.reconstitute(owners)] as const)));
   }
 
+  // 境界: 参照された要件 id（描画順は索引の挿入順）。
   referencedIds(): string[] {
-    return [...this.#ownersByRef.keys()];
+    return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
   }
 
-  // requirements.md に存在しない frRef を、id 昇順・owner 昇順で報告する。
+  // requirements.md に存在しない参照の凍結文言（id 昇順、所有者昇順）。
   missingErrors(known: RequirementIds): string[] {
-    const missing = [...this.#ownersByRef.keys()].filter((id) => !known.has(id)).sort();
+    const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
     return missing.map((id) => {
-      const owners = (this.#ownersByRef.get(id) ?? []).sort().join(", ");
+      const owners = [...(this.#ownersByRef.get(RequirementId.reconstitute(id))?.toStrings() ?? [])].sort().join(", ");
       return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
     });
   }

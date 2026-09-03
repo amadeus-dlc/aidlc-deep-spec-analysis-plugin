@@ -6,7 +6,7 @@
 // （findings/skipped/inputs/checked/crossChecked を空にして unavailable 理由
 // だけ残す——旧 writeDesignDoc の自己検証降格と同じ姿）。
 
-import { ContentHash, IrVersion } from "../../kernel/domain/index.ts";
+import { ContentHash, IrVersion, VerificationMethod } from "../../kernel/domain/index.ts";
 import type { DesignModel } from "./design-model.ts";
 import { DesignFindings } from "./design-findings.ts";
 import { DesignSkipped } from "./design-skipped.ts";
@@ -22,7 +22,7 @@ export class DesignReport {
   readonly #id: DesignReportId;
   readonly #irVersion: IrVersion;
   readonly #irHash: ContentHash;
-  readonly #method: string;
+  readonly #method: VerificationMethod;
   readonly #findings: DesignFindings;
   readonly #skipped: DesignSkips;
   readonly #inputs: DesignInputAnchors | null;
@@ -45,7 +45,7 @@ export class DesignReport {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#irHash = seed.irHash;
-    this.#method = seed.method;
+    this.#method = VerificationMethod.reconstitute(seed.method);
     this.#findings = seed.findings;
     this.#skipped = seed.skipped;
     this.#inputs = seed.inputs;
@@ -163,7 +163,7 @@ export class DesignReport {
       id: this.#id,
       irVersion: this.#irVersion,
       irHash: this.#irHash,
-      method: this.#method,
+      method: this.#method.asString(),
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of([]),
       inputs: null,
@@ -186,7 +186,7 @@ export class DesignReport {
   }
 
   method(): string {
-    return this.#method;
+    return this.#method.asString();
   }
 
   findings(): DesignFindings {

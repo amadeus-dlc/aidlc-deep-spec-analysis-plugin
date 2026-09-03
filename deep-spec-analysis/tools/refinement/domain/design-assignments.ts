@@ -1,19 +1,21 @@
-import type { Expression } from "../../kernel/domain/index.ts";
+// DesignAssignments — 設計イベントの効果（属性パス → 右辺式）の索引。キーは
+// AttributePath、内側は KeyedIndex（裁定 3-1、2026-09-03）。
 
-// 1 イベント分の代入表（設計属性パス → prime なし右辺）。
+import type { AttributePath, Expression } from "../../kernel/domain/index.ts";
+import { KeyedIndex } from "../../kernel/domain/index.ts";
+
 export class DesignAssignments {
-  readonly #values: ReadonlyMap<string, Expression>;
+  readonly #values: KeyedIndex<AttributePath, Expression>;
 
-  private constructor(values: ReadonlyMap<string, Expression>) {
+  private constructor(values: KeyedIndex<AttributePath, Expression>) {
     this.#values = values;
   }
 
-  static of(values: ReadonlyMap<string, Expression>): DesignAssignments {
-    return new DesignAssignments(new Map(values));
+  static of(values: KeyedIndex<AttributePath, Expression>): DesignAssignments {
+    return new DesignAssignments(values);
   }
 
-  rhsOf(path: string): Expression | undefined {
+  rhsOf(path: AttributePath): Expression | undefined {
     return this.#values.get(path);
   }
-
 }

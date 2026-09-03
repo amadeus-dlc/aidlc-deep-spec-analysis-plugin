@@ -17,6 +17,7 @@ import type { RefinementCheck, RefinementSolverClient } from "../usecase/index.t
 import { type RefinementChildQuery } from "./refinement-child-query.ts";
 import { buildRefinementQueries, decodeDesignModel } from "./refinement-query-plan.ts";
 import type { RefinementSolverClientConfig } from "./refinement-solver-client-config.ts";
+import { KeyedIndex, QueryLabel } from "../../kernel/domain/index.ts";
 
 interface RefinementChildResult {
   id: string;
@@ -43,16 +44,16 @@ export class RefinementSolverClientImpl implements RefinementSolverClient {
     if (child.results === null) {
       return { plan: built.plan, result: { kind: "unavailable", reason: child.unavailable ?? "z3 unavailable" } };
     }
-    const verdicts = new Map<string, RefinementQueryVerdict>();
+    const verdicts: (readonly [QueryLabel, RefinementQueryVerdict])[] = [];
     for (const [queryId, r] of child.results) {
-      verdicts.set(queryId, RefinementQueryVerdict.reconstitute({
+      verdicts.push([QueryLabel.reconstitute(queryId), RefinementQueryVerdict.reconstitute({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
         decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
         core: r.core,
-      }));
+      })]);
     }
-    return { plan: built.plan, result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(verdicts) } };
+    return { plan: built.plan, result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)) } };
   }
 
   #runChild(queries: RefinementChildQuery[], budgetMs: number): { results: Map<string, RefinementChildResult> | null; unavailable: string | null } {

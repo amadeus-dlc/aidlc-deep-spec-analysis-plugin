@@ -55,6 +55,7 @@ export { DesignInputAnchor } from "./design-input-anchor.ts";
 export { DesignInputAnchors } from "./design-input-anchors.ts";
 export { DesignReports } from "./design-reports.ts";
 export { BindingPairs } from "./binding-pairs.ts";
+export { BrRef } from "./br-ref.ts";
 export { BrRefs } from "./br-refs.ts";
 export { DeclaredValues } from "./declared-values.ts";
 export { DesignAttributeDecl } from "./design-attribute-decl.ts";

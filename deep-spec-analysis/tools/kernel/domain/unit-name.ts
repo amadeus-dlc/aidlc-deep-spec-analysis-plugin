@@ -2,7 +2,7 @@
 // 帰属（functional センサーの unit キー、契約表の Provider/Consumer/Owner、
 // units エッジブロックの宣言）として話す語彙。
 
-import { type Result, err, ok } from "../../kernel/infrastructure/index.ts";
+import { type Result, err, ok } from "../infrastructure/index.ts";
 
 type UnitNameError = { readonly kind: "empty-unit-name"; readonly raw: string };
 

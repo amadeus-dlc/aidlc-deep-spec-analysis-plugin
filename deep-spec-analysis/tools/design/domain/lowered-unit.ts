@@ -11,7 +11,7 @@
 // 旧 deep-spec-design-lib.ts の lowerUnit からの逐語移植（Json 組み立ては
 // アダプタの serializer が担い、ここは型付き lowering を返す）。
 
-import { TargetIds, TargetId, ExpressionTree} from "../../kernel/domain/index.ts";
+import { AttributePath, KeyedIndex, TargetIds, TargetId, ExpressionTree, FrRefs } from "../../kernel/domain/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "./design-machines.ts";
 import type { DesignMachine } from "./design-machine.ts";
@@ -34,6 +34,9 @@ import { LoweredOriginRef } from "./lowered-origin-ref.ts";
 import { LoweredScenario } from "./lowered-scenario.ts";
 import { LoweredScenarios } from "./lowered-scenarios.ts";
 import { LoweringIndex } from "./lowering-index.ts";
+import { DesignScenarioId } from "./design-scenario-id.ts";
+import { DesignTransitionId } from "./design-transition-id.ts";
+import { DesignMachineId } from "./design-machine-id.ts";
 
 // lowering の結果（3 コレクション + 帰属索引）。構築（旧 lowerUnit）・
 // refinement 追加パスによる不変拡張・v1 判定の設計語彙への remap（旧
@@ -255,7 +258,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   for (const ob of u.obligations().sortedCanonically()) {
     const lowered: Omit<Parameters<typeof LoweredObligation.reconstitute>[0], "id"> = {
       nature: ob.nature().asString(),
-      frRefs: [...ob.frRefs()],
+      frRefs: ob.frRefs(),
     };
     const assertion = ob.assertion();
     const trigger = ob.trigger();
@@ -284,7 +287,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
       const guard = tr.loweredGuard(attrPath);
       const effect = tr.loweredEffect(attrPath);
       const lowId = push(
-        { nature: "event", frRefs: [], trigger: tr.trigger().asString(), guard, effect },
+        { nature: "event", frRefs: FrRefs.of([]), trigger: tr.trigger().asString(), guard, effect },
         LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(tr.id().asString()), kind: "transition" }),
       );
       machineOfTransition.set(tr.id().asString(), sm);
@@ -293,7 +296,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     const sortedIgnores = sm.ignores().sortedByStateTrigger();
     for (const ig of sortedIgnores) {
       push(
-        { nature: "event", frRefs: [], trigger: ig.trigger().asString(), guard: ig.loweredGuard(attrPath), effect: ig.loweredEffect(attrPath) },
+        { nature: "event", frRefs: FrRefs.of([]), trigger: ig.trigger().asString(), guard: ig.loweredGuard(attrPath), effect: ig.loweredEffect(attrPath) },
         LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(sm.id().asString()), kind: "ignore" }),
       );
     }
@@ -304,7 +307,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
   if (opts.synthetics) {
     for (const c of candidates) {
       push(
-        { nature: "invariant", frRefs: [], assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } },
+        { nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } },
         LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(c.design), kind: "vac-dead" }),
       );
     }
@@ -325,7 +328,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
           push(
             {
               nature: "invariant",
-              frRefs: [],
+              frRefs: FrRefs.of([]),
               assert: {
                 op: "implies",
                 args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }],
@@ -354,7 +357,7 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     scenarios.push(LoweredScenario.reconstitute({
       id: LoweredId.reconstitute(lowId),
       kind: sc.kind(),
-      frRefs: [...sc.frRefs()],
+      frRefs: sc.frRefs(),
       bindings: { ...sc.bindings() },
       ...(eventTrigger !== undefined ? { event: { trigger: eventTrigger.asString() } } : {}),
       ...(expectation !== undefined ? { expect: expectation } : {}),
@@ -372,10 +375,10 @@ function buildLowering(u: DesignUnit, opts: { synthetics: boolean }): {
     scenarios: LoweredScenarios.of(scenarios),
     background: LoweredBackgrounds.of(background),
     index: LoweringIndex.of({
-      origins: map,
-      scenarioDesignIds: scenarioMap,
-      machinesByTransition: machineOfTransition,
-      attrPathsByMachine: attrPathOfMachine,
+      origins: KeyedIndex.of([...map].map(([id, origin]) => [LoweredId.reconstitute(id), origin] as const)),
+      scenarioDesignIds: KeyedIndex.of([...scenarioMap].map(([id, dsc]) => [LoweredId.reconstitute(id), DesignScenarioId.reconstitute(dsc)] as const)),
+      machinesByTransition: KeyedIndex.of([...machineOfTransition].map(([id, sm]) => [DesignTransitionId.reconstitute(id), sm] as const)),
+      attrPathsByMachine: KeyedIndex.of([...attrPathOfMachine].map(([id, path]) => [DesignMachineId.reconstitute(id), AttributePath.reconstitute(path)] as const)),
     }),
   };
 }

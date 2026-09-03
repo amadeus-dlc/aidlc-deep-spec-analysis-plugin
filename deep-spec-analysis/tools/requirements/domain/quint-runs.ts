@@ -8,16 +8,17 @@ import type { QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";
 import type { ScenarioId } from "./scenario-id.ts";
 import type { QuintScenarioVerdict } from "./quint-scenario-verdict.ts";
 import type { QuintTemporalVerdict } from "./quint-temporal-verdict.ts";
+import { KeyedIndex } from "../../kernel/domain/index.ts";
 
 export class QuintRuns {
   readonly #machine: QuintMachineRunVerdict | null;
-  readonly #temporals: ReadonlyMap<string, QuintTemporalVerdict>;
-  readonly #scenarios: ReadonlyMap<string, QuintScenarioVerdict>;
+  readonly #temporals: KeyedIndex<ObligationId, QuintTemporalVerdict>;
+  readonly #scenarios: KeyedIndex<ScenarioId, QuintScenarioVerdict>;
 
   private constructor(seed: {
     readonly machine: QuintMachineRunVerdict | null;
-    readonly temporals: ReadonlyMap<string, QuintTemporalVerdict>;
-    readonly scenarios: ReadonlyMap<string, QuintScenarioVerdict>;
+    readonly temporals: KeyedIndex<ObligationId, QuintTemporalVerdict>;
+    readonly scenarios: KeyedIndex<ScenarioId, QuintScenarioVerdict>;
   }) {
     this.#machine = seed.machine;
     this.#temporals = seed.temporals;
@@ -26,13 +27,13 @@ export class QuintRuns {
 
   static of(seed: {
     readonly machine: QuintMachineRunVerdict | null;
-    readonly temporals: ReadonlyMap<string, QuintTemporalVerdict>;
-    readonly scenarios: ReadonlyMap<string, QuintScenarioVerdict>;
+    readonly temporals: KeyedIndex<ObligationId, QuintTemporalVerdict>;
+    readonly scenarios: KeyedIndex<ScenarioId, QuintScenarioVerdict>;
   }): QuintRuns {
     return new QuintRuns({
       machine: seed.machine,
-      temporals: new Map(seed.temporals),
-      scenarios: new Map(seed.scenarios),
+      temporals: seed.temporals,
+      scenarios: seed.scenarios,
     });
   }
 
@@ -41,10 +42,10 @@ export class QuintRuns {
   }
 
   temporalOf(obligationId: ObligationId): QuintTemporalVerdict | undefined {
-    return this.#temporals.get(obligationId.asString());
+    return this.#temporals.get(obligationId);
   }
 
   scenarioOf(scenarioId: ScenarioId): QuintScenarioVerdict | undefined {
-    return this.#scenarios.get(scenarioId.asString());
+    return this.#scenarios.get(scenarioId);
   }
 }

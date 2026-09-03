@@ -1,5 +1,6 @@
-import type { Expression } from "../../kernel/domain/index.ts";
+import { type Expression, ObligationNature, TriggerName } from "../../kernel/domain/index.ts";
 import type { LoweredId } from "./lowered-id.ts";
+import type { FrRefs } from "../../kernel/domain/index.ts";
 
 // lowered v1 義務（兄弟バックエンドへ渡す契約1 の形）。id は lowered 語彙
 // （OB-n）、nature は分類文字列、trigger は lowered 文書の生トリガ名。ペイロード
@@ -7,10 +8,10 @@ import type { LoweredId } from "./lowered-id.ts";
 // 契約1 の時相宣言そのまま（pattern と assert / from / to）。
 export class LoweredObligation {
   readonly #id: LoweredId;
-  readonly #nature: string;
-  readonly #frRefs: readonly string[];
+  readonly #nature: ObligationNature;
+  readonly #frRefs: FrRefs;
   readonly #assert: Expression | undefined;
-  readonly #trigger: string | undefined;
+  readonly #trigger: TriggerName | undefined;
   readonly #guard: Expression | undefined;
   readonly #effect: Expression | undefined;
   readonly #temporal: { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression } | undefined;
@@ -18,7 +19,7 @@ export class LoweredObligation {
   private constructor(props: {
     id: LoweredId;
     nature: string;
-    frRefs: readonly string[];
+    frRefs: FrRefs;
     assert?: Expression;
     trigger?: string;
     guard?: Expression;
@@ -26,10 +27,10 @@ export class LoweredObligation {
     temporal?: { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression };
   }) {
     this.#id = props.id;
-    this.#nature = props.nature;
-    this.#frRefs = [...props.frRefs];
+    this.#nature = ObligationNature.reconstitute(props.nature);
+    this.#frRefs = props.frRefs;
     this.#assert = props.assert;
-    this.#trigger = props.trigger;
+    this.#trigger = props.trigger === undefined ? undefined : TriggerName.reconstitute(props.trigger);
     this.#guard = props.guard;
     this.#effect = props.effect;
     this.#temporal = props.temporal;
@@ -38,7 +39,7 @@ export class LoweredObligation {
   static reconstitute(props: {
     id: LoweredId;
     nature: string;
-    frRefs: readonly string[];
+    frRefs: FrRefs;
     assert?: Expression;
     trigger?: string;
     guard?: Expression;
@@ -53,10 +54,10 @@ export class LoweredObligation {
   }
 
   nature(): string {
-    return this.#nature;
+    return this.#nature.asString();
   }
 
-  frRefs(): readonly string[] {
+  frRefs(): FrRefs {
     return this.#frRefs;
   }
 
@@ -65,7 +66,7 @@ export class LoweredObligation {
   }
 
   trigger(): string | undefined {
-    return this.#trigger;
+    return this.#trigger?.asString();
   }
 
   guard(): Expression | undefined {

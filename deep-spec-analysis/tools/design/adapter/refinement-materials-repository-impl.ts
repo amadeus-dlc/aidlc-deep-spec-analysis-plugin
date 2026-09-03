@@ -117,7 +117,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
       obligations.push(RefinementObligation.reconstitute({
         id: ObligationId.reconstitute(ob.id),
         nature: ObligationNature.reconstitute(ob.nature),
-        frRefs: FrRefs.of(strArr(ob.frRefs)),
+        frRefs: FrRefs.reconstitute(strArr(ob.frRefs)),
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
         trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
@@ -135,7 +135,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
       scenarios.push(RefinementScenario.reconstitute({
         id: ScenarioId.reconstitute(sc.id),
         kind: sc.kind,
-        frRefs: FrRefs.of(strArr(sc.frRefs)),
+        frRefs: FrRefs.reconstitute(strArr(sc.frRefs)),
         bindings,
         event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
       }));

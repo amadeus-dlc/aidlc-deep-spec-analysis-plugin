@@ -225,9 +225,11 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", 'export class Foo {\n  readonly #detail: string;\n  readonly #from: string;\n  readonly #kind: "a" | "b";\n}')).toHaveLength(0);
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n  readonly reason?: string;\n  readonly [k: string]: string;\n  readonly on: () => void;\n}")).toHaveLength(0);
     expect(noPrimitiveFieldsInDomain("kernel/domain/expression.ts", "export interface Expression {\n  readonly op: string;\n}")).toHaveLength(0);
-    expect(noPrimitiveFieldsInDomain("kernel/domain/fr-refs.ts", "export class FrRefs {\n  readonly #values: readonly string[];\n}")).toHaveLength(0);
-    // 台帳はフィールド単位: 台帳内ファイルへの新しい primitive フィールドは違反（レビュー指摘の回帰）。
-    expect(noPrimitiveFieldsInDomain("kernel/domain/fr-refs.ts", "export class FrRefs {\n  readonly #values: readonly string[];\n  readonly #newcomer: string;\n}")).toHaveLength(1);
+    // 台帳は空（裁定 3-1〜3-4）: コレクション形の primitive も台帳の陰に隠れず違反になる。
+    expect(noPrimitiveFieldsInDomain("kernel/domain/fr-refs.ts", "export class FrRefs {\n  readonly #values: readonly string[];\n}")).toHaveLength(1);
+    expect(noPrimitiveFieldsInDomain("kernel/domain/fr-refs.ts", "export class FrRefs {\n  readonly #values: readonly string[];\n  readonly #newcomer: string;\n}")).toHaveLength(2);
+    // prose の除外（裁定 3-2／3-3）: EARS 文と witness の原文トークン。
+    expect(noPrimitiveFieldsInDomain("requirements/domain/foo.ts", "export class Foo {\n  readonly #ears: string | undefined;\n  readonly #value: string | undefined;\n  readonly #x: number;\n}")).toHaveLength(1);
     expect(noPrimitiveFieldsInDomain("design/adapter/foo.ts", "export class Foo {\n  readonly #name: string;\n}")).toHaveLength(0);
     // 検出器はコメント・文字列内の型らしき記述に反応しない。
     expect(primitiveFieldsOf("export class Foo {\n  // readonly #ghost: string;\n  readonly #label: string;\n  readonly #real: number;\n}")).toEqual(["#real: number"]);

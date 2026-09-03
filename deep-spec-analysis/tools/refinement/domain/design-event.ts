@@ -1,5 +1,6 @@
 import type { Expression } from "../../kernel/domain/index.ts";
 import type { DesignAssignments } from "./design-assignments.ts";
+import { AttributePath } from "../../kernel/domain/index.ts";
 
 // 設計側の 1 イベント（遷移または guarded effect 義務）の lowering 面——
 // ガードと、効果が代入する属性ごとの右辺。refinement クエリはガードを
@@ -23,6 +24,6 @@ export class DesignEvent {
 
   // 効果が属性 path へ代入する右辺。代入しなければ undefined（フレーム）。
   assignedRhsOf(path: string): Expression | undefined {
-    return this.#effectAssign.rhsOf(path);
+    return this.#effectAssign.rhsOf(AttributePath.reconstitute(path));
   }
 }

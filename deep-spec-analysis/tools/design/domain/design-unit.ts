@@ -3,7 +3,7 @@
 // ドメインが行う。allUnitTargets / enumValuesOf は旧自由関数のメソッド化。
 
 import { DesignUnitId } from "./design-unit-id.ts";
-import { TargetIds } from "../../kernel/domain/index.ts";
+import { TargetIds, UnitName } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "./design-machines.ts";
 import { DesignObligations } from "./design-obligations.ts";
 import { DesignScenarios } from "./design-scenarios.ts";
@@ -19,7 +19,7 @@ import { DesignBackgroundAssumptions } from "./design-background-assumptions.ts"
 
 
 export class DesignUnit {
-  readonly #unit: string;
+  readonly #unit: UnitName;
   // 契約3 の実体宣言（型付き）。属性座標と enum 宣言値はここから答える。
   readonly #entities: DesignEntityDecls;
   readonly #attrPaths: AttrPaths;
@@ -36,7 +36,7 @@ export class DesignUnit {
     readonly scenarios: DesignScenarios;
     readonly background: DesignBackgroundAssumptions;
   }) {
-    this.#unit = seed.unit;
+    this.#unit = UnitName.reconstitute(seed.unit);
     this.#entities = seed.entities;
     // 属性座標（`Entity.attr`）は宣言から導く——一意化し宣言順（凍結挙動）。
     const coordinates = new Set<string>();
@@ -63,12 +63,12 @@ export class DesignUnit {
   }
 
   id(): DesignUnitId {
-    return DesignUnitId.of(this.#unit);
+    return DesignUnitId.of(this.#unit.asString());
   }
 
   // 境界: 文書・文言に逐語で載るユニット名（恒等の値）。
   name(): string {
-    return this.#unit;
+    return this.#unit.asString();
   }
 
   // 境界: lowering が契約1 文書の schema.entities へ逐語で埋め込む断片。

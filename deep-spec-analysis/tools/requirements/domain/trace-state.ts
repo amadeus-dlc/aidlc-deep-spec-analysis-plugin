@@ -4,7 +4,7 @@
 // scenario binding の正準順）で、`toDocument` がその順で逐語に降りる。
 
 import { KeyedIndex } from "../../kernel/domain/index.ts";
-import { AttributePath } from "./attribute-path.ts";
+import { AttributePath } from "../../kernel/domain/index.ts";
 import { TraceValue } from "./trace-value.ts";
 
 export class TraceState {

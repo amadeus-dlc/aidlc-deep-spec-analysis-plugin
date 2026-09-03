@@ -12,45 +12,9 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } f
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TriggerName, ArtifactPath, AttributeBound, ErrorMessages, RequirementIds } from "../tools/kernel/domain/index.ts";
+import { TriggerName, ArtifactPath, AttributeBound, ErrorMessages, RequirementIds, TargetId } from "../tools/kernel/domain/index.ts";
 import { DesignIrValidationMaterialsRepositoryImpl, DesignModelRepositoryImpl } from "../tools/design/adapter/index.ts";
-import {
-  BindingPairs,
-  BrReferenceIndex,
-  BrRefs,
-  DeclaredValues,
-  DesignBackgroundDecl,
-  DesignAttributeDecl,
-  DesignAttributeDecls,
-  DesignBackgroundDecls,
-  DesignEntityDecl,
-  DesignEntityDecls,
-  DesignIgnoreDecl,
-  DesignIgnoreDecls,
-  DesignMachineDecl,
-  DesignMachineDecls,
-  DesignModelId,
-  DesignObligationDecl,
-  DesignObligationDecls,
-  DesignScenarioDecl,
-  DesignScenarioDecls,
-  DesignTransitionDecl,
-  DesignTransitionDecls,
-  DesignUnitDecl,
-  DesignUnitDecls,
-  InitialStates,
-  UnformalizedTargets,
-  DesignUnitId,
-  DesignTransitionId,
-  DesignScenarioId,
-  DesignObligationOrigin,
-  DesignObligationId,
-  DesignMachineId,
-  DesignEntityName,
-  DesignBackgroundId,
-  DesignAttributeName,
-  DesignIrValidationMaterialsId,
-} from "../tools/design/domain/index.ts";
+import { BindingPairs, BrReferenceIndex, BrRefs, DeclaredValues, DesignBackgroundDecl, DesignAttributeDecl, DesignAttributeDecls, DesignBackgroundDecls, DesignEntityDecl, DesignEntityDecls, DesignIgnoreDecl, DesignIgnoreDecls, DesignMachineDecl, DesignMachineDecls, DesignModelId, DesignObligationDecl, DesignObligationDecls, DesignScenarioDecl, DesignScenarioDecls, DesignTransitionDecl, DesignTransitionDecls, DesignUnitDecl, DesignUnitDecls, InitialStates, UnformalizedTargets, DesignUnitId, DesignTransitionId, DesignScenarioId, DesignObligationOrigin, DesignObligationId, DesignMachineId, DesignEntityName, DesignBackgroundId, DesignAttributeName, DesignIrValidationMaterialsId, BrRef } from "../tools/design/domain/index.ts";
 import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "../tools/design/usecase/index.ts";
 import {
   FormalModelRepositoryImpl,
@@ -325,15 +289,15 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
 describe("FrReferenceIndex", () => {
   test("collects owners per frRef and reports the missing ones sorted", () => {
     const index = FrReferenceIndex.of([
-      FrRefClaim.of("OB-2", FrRefs.of(["FR-1", "FR-9"])),
-      FrRefClaim.of("OB-1", FrRefs.of(["FR-9"])),
-      FrRefClaim.of("scenarios[3]", FrRefs.of([])),
+      FrRefClaim.of("OB-2", FrRefs.reconstitute(["FR-1", "FR-9"])),
+      FrRefClaim.of("OB-1", FrRefs.reconstitute(["FR-9"])),
+      FrRefClaim.of("scenarios[3]", FrRefs.reconstitute([])),
     ]);
     expect(index.referencedIds().sort()).toEqual(["FR-1", "FR-9"]);
-    expect(index.missingErrors(RequirementIds.of(["FR-1"]))).toEqual([
+    expect(index.missingErrors(RequirementIds.reconstitute(["FR-1"]))).toEqual([
       'frRef "FR-9" (used by OB-1, OB-2) does not exist in requirements.md',
     ]);
-    expect(index.missingErrors(RequirementIds.of(["FR-1", "FR-9"]))).toEqual([]);
+    expect(index.missingErrors(RequirementIds.reconstitute(["FR-1", "FR-9"]))).toEqual([]);
   });
 });
 
@@ -353,7 +317,7 @@ describe("RequirementsSourceId", () => {
     writeFileSync(join(record, "construction", "requirements-analysis", "requirements.md"), "- FR-1: x\n");
     const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(record)));
     expect(source.ok).toBe(true);
-    expect([...(source.ok ? source.value.knownIds() : [])]).toEqual(["FR-1"]);
+    expect([...(source.ok ? source.value.knownIds() : [])].map((id) => id.asString())).toEqual(["FR-1"]);
     const missing = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(join(record, "nowhere"))));
     expect(!missing.ok && missing.error.kind).toBe("not-found");
   });
@@ -381,8 +345,8 @@ describe("BrReferenceIndex", () => {
   test("extracts BR ids from rules markdown", () => {
     const index = BrReferenceIndex.fromRules("- BR2.1 なにか\n- BR1.10 別の規則\n- BR1.10 再掲\n- BRX.1 は id ではない\n");
     expect(index.sortedIds()).toEqual(["BR1.10", "BR2.1"]);
-    expect(index.has("BR2.1")).toBe(true);
-    expect(index.has("BR9.9")).toBe(false);
+    expect(index.has(BrRef.reconstitute("BR2.1"))).toBe(true);
+    expect(index.has(BrRef.reconstitute("BR9.9"))).toBe(false);
   });
 });
 
@@ -600,7 +564,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
     directoryExists?: boolean;
     rulesMarkdown?: string | null;
   };
-  const brRefs = (refs: string[] | undefined) => (refs === undefined ? undefined : BrRefs.of(refs));
+  const brRefs = (refs: string[] | undefined) => (refs === undefined ? undefined : BrRefs.reconstitute(refs));
   function unit(overrides: RawUnit): DesignUnitDecl {
     return DesignUnitDecl.reconstitute({
       unit: DesignUnitId.of("u1"),
@@ -648,7 +612,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
       background: DesignBackgroundDecls.of(
         (overrides.background ?? []).map((bg) => DesignBackgroundDecl.reconstitute({ ...bg, id: DesignBackgroundId.reconstitute(bg.id) })),
       ),
-      unformalizedTargets: UnformalizedTargets.of(overrides.unformalizedTargets ?? []),
+      unformalizedTargets: UnformalizedTargets.reconstitute(overrides.unformalizedTargets ?? []),
       directoryExists: overrides.directoryExists ?? true,
       rulesMarkdown: overrides.rulesMarkdown ?? null,
     });
@@ -880,19 +844,19 @@ describe("design decl collections (first-class operations)", () => {
     expect(values.includes("c")).toBe(false);
     expect(values.toArray()).toEqual(["a", "b"]);
 
-    const refs = BrRefs.of(["BR1.1"]).add("BR1.2");
-    expect([...refs]).toEqual(["BR1.1", "BR1.2"]);
-    expect(refs.toArray()).toEqual(["BR1.1", "BR1.2"]);
+    const refs = BrRefs.reconstitute(["BR1.1"]).add(BrRef.reconstitute("BR1.2"));
+    expect([...refs].map((r) => r.asString())).toEqual(["BR1.1", "BR1.2"]);
+    expect(refs.toStrings()).toEqual(["BR1.1", "BR1.2"]);
 
     const initial = InitialStates.of(["open"]).add("closed");
     expect([...initial]).toEqual(["open", "closed"]);
     expect(initial.toArray()).toEqual(["open", "closed"]);
 
-    const unformalized = UnformalizedTargets.of(["BR2.1"]).add("BR2.2");
-    expect([...unformalized]).toEqual(["BR2.1", "BR2.2"]);
-    expect(unformalized.covers("BR2.2")).toBe(true);
-    expect(unformalized.covers("BR9.9")).toBe(false);
-    expect(unformalized.toArray()).toEqual(["BR2.1", "BR2.2"]);
+    const unformalized = UnformalizedTargets.reconstitute(["BR2.1"]).add(TargetId.reconstitute("BR2.2"));
+    expect([...unformalized].map((t) => t.asString())).toEqual(["BR2.1", "BR2.2"]);
+    expect(unformalized.covers(TargetId.reconstitute("BR2.2"))).toBe(true);
+    expect(unformalized.covers(TargetId.reconstitute("BR9.9"))).toBe(false);
+    expect(unformalized.toStrings()).toEqual(["BR2.1", "BR2.2"]);
 
     const bindings = BindingPairs.of([["t.flag", true]]).add(["t.n", 1]);
     expect([...bindings]).toEqual([
@@ -1077,7 +1041,7 @@ describe("materials aggregates and the persistence round-trip (repository ruling
   });
 
   test("FrRefClaims first-class collection feeds the reverse index", () => {
-    const claims = FrRefClaims.of([]).add(FrRefClaim.of("OB-1", FrRefs.of(["FR-1"])));
+    const claims = FrRefClaims.of([]).add(FrRefClaim.of("OB-1", FrRefs.reconstitute(["FR-1"])));
     expect([...claims].length).toBe(1);
     const owners = new Map<string, string[]>();
     claims.toArray()[0]?.claimInto(owners);

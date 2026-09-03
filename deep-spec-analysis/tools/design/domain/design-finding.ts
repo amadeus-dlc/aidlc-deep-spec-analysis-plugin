@@ -4,15 +4,15 @@
 // 要件 id に届く conflict は refinement-violation へ昇格する——文言は凍結）
 // は finding 自身が所有する（#71 波7）。
 
-import { TargetIds, type FrRefs } from "../../kernel/domain/index.ts";
+import { TargetIds, type FrRefs, FindingKind, UnitName } from "../../kernel/domain/index.ts";
 import type { DesignWitness } from "./design-witness.ts";
 
 export class DesignFinding {
-  readonly #kind: string;
+  readonly #kind: FindingKind;
   readonly #frRefs: FrRefs;
   readonly #targets: TargetIds;
   readonly #witness: DesignWitness;
-  readonly #unit: string;
+  readonly #unit: UnitName;
   readonly #detail: string;
 
   private constructor(props: {
@@ -23,11 +23,11 @@ export class DesignFinding {
     unit: string;
     detail: string;
   }) {
-    this.#kind = props.kind;
+    this.#kind = FindingKind.reconstitute(props.kind);
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
-    this.#unit = props.unit;
+    this.#unit = UnitName.reconstitute(props.unit);
     this.#detail = props.detail;
   }
 
@@ -43,7 +43,7 @@ export class DesignFinding {
   }
 
   kind(): string {
-    return this.#kind;
+    return this.#kind.asString();
   }
 
   frRefs(): FrRefs {
@@ -59,7 +59,7 @@ export class DesignFinding {
   }
 
   unit(): string {
-    return this.#unit;
+    return this.#unit.asString();
   }
 
   detail(): string {
@@ -67,7 +67,7 @@ export class DesignFinding {
   }
 
   isConflict(): boolean {
-    return this.#kind === "conflict";
+    return this.#kind.isConflict();
   }
 
   // conflict 判定の refinement 再解釈：対象が追加不変量の要件 id に届くなら
@@ -75,7 +75,7 @@ export class DesignFinding {
   // 要件 id に届かないときは null——後者は設計自身の conflict で、呼び手は
   // masked skip の勘定へ回す。
   asRefinementViolation(reqIds: ReadonlySet<string>, unit: string): DesignFinding | null {
-    if (this.#kind !== "conflict") return null;
+    if (!this.#kind.isConflict()) return null;
     const reqHits = this.#targets.toArray().filter((t) => reqIds.has(t.asString()));
     if (reqHits.length === 0) return null;
     return new DesignFinding({
@@ -89,13 +89,19 @@ export class DesignFinding {
   }
 
   // 文言だけを差し替えた複製（相互包摂の畳み込み——凍結面は detail のみ）。
+  // 正準順の材料: kind 順位（kernel の FindingKind）。unit → targets → detail の
+  // tiebreak はコレクションが持つ。
+  compareKindTo(other: DesignFinding): number {
+    return this.#kind.compareTo(other.#kind);
+  }
+
   withDetail(detail: string): DesignFinding {
     return new DesignFinding({
-      kind: this.#kind,
+      kind: this.#kind.asString(),
       frRefs: this.#frRefs,
       targets: this.#targets,
       witness: this.#witness,
-      unit: this.#unit,
+      unit: this.#unit.asString(),
       detail,
     });
   }
