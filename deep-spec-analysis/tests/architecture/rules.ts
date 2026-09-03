@@ -732,17 +732,17 @@ export function commandsReturnVoid(relPath: string, rawSource: string): Violatio
 //   domain  → 同一コンテキスト domain・kernel/domain（＋infrastructure）
 //   usecase → 同一コンテキスト {usecase,domain}・kernel/{usecase,domain}（＋infrastructure）
 //   adapter → 同一コンテキスト {adapter,usecase,domain}・kernel 全層
-// 公認のコンテキスト横断エッジは 2 本のみ:
+// 公認のコンテキスト横断エッジは 4 本のみ:
 //   refinement/domain → {requirements,design}/domain
-//   design/usecase    → refinement/domain
-const ALLOWED_LAYER_TARGETS: { [k in Layer]: readonly Layer[] } = {
+//   design/{usecase,adapter} → refinement/domain
+export const ALLOWED_LAYER_TARGETS: { [k in Layer]: readonly Layer[] } = {
   infrastructure: ["infrastructure"],
   domain: ["domain", "infrastructure"],
   usecase: ["usecase", "domain", "infrastructure"],
   adapter: ["adapter", "usecase", "domain", "infrastructure"],
 };
 
-const SANCTIONED_CROSS_CONTEXT: readonly { from: string; to: string }[] = [
+export const SANCTIONED_CROSS_CONTEXT: readonly { from: string; to: string }[] = [
   { from: "refinement/domain", to: "requirements/domain" },
   { from: "refinement/domain", to: "design/domain" },
   { from: "design/usecase", to: "refinement/domain" },
@@ -783,6 +783,74 @@ export function layerDirection(relPath: string, source: string): Violation[] {
     );
     if (!(sameOrKernel && layerOk) && !sanctioned) {
       out.push({ path: relPath, rule: "layer-direction", detail: `forbidden edge ${edge} (import "${spec}")` });
+    }
+  }
+  return out;
+}
+
+// ルール: 依存「宣言」そのものの方向（FR1.2）。layer-direction が検査するのは
+// 書かれた import で、宣言は検査していなかった。しかし isolated linker が張るのは
+// package.json の dependencies なので、禁止方向の辺を宣言しただけで——import を
+// 一行も書かなくても——構造による強制がそこだけ静かに開く。以後の防衛線は
+// テスト時の layer-direction だけに戻り、それはこの分離が終わらせようとした
+// 状態そのものである。だから宣言側も import と同じ表で検査し、宣言表と許可表が
+// 同じ事実を指すことを固定する。
+//
+// relPath は src/ からの相対（`<ctx>/<layer>/package.json`）。
+const LAYER_PACKAGE_NAME = /^@deep-spec\/([a-z]+)-([a-z]+)$/;
+
+export function manifestDependencyDirection(
+  relPath: string,
+  manifest: { readonly name?: unknown; readonly dependencies?: unknown },
+): Violation[] {
+  const rule = "manifest-dependency-direction";
+  const out: Violation[] = [];
+  const segments = relPath.split("/");
+  const context = segments[0] ?? "";
+  const layer = segments[1] ?? "";
+  if (
+    segments.length !== 3 || segments[2] !== "package.json" ||
+    !(CONTEXTS as readonly string[]).includes(context) || !(LAYERS as readonly string[]).includes(layer)
+  ) {
+    return [{ path: relPath, rule, detail: `not a layer package manifest (expected "<context>/<layer>/package.json")` }];
+  }
+  const expectedName = `@deep-spec/${context}-${layer}`;
+  if (manifest.name !== expectedName) {
+    out.push({ path: relPath, rule, detail: `name is ${JSON.stringify(manifest.name)} — a layer package is named "${expectedName}"` });
+  }
+  const declared = manifest.dependencies;
+  if (declared !== undefined && (typeof declared !== "object" || declared === null || Array.isArray(declared))) {
+    return [...out, { path: relPath, rule, detail: "dependencies is not an object" }];
+  }
+  const entries = Object.entries((declared ?? {}) as { [k: string]: unknown });
+  for (const [spec, version] of entries) {
+    const match = LAYER_PACKAGE_NAME.exec(spec);
+    const targetContext = match?.[1] ?? "";
+    const targetLayer = match?.[2] ?? "";
+    if (
+      match === null || !(CONTEXTS as readonly string[]).includes(targetContext) ||
+      !(LAYERS as readonly string[]).includes(targetLayer)
+    ) {
+      // 層パッケージ以外を宣言する経路は塞ぐ——合成ルート（@deep-spec/entries）も
+      // 未知の名前も、層から辿れる依存にはしない。
+      out.push({ path: relPath, rule, detail: `declares "${spec}", which is not a layer package` });
+      continue;
+    }
+    if (version !== "workspace:*") {
+      out.push({ path: relPath, rule, detail: `"${spec}" is declared as ${JSON.stringify(version)} — layer edges are "workspace:*"` });
+    }
+    const edge = `${context}/${layer}→${targetContext}/${targetLayer}`;
+    if (targetContext === context && targetLayer === layer) {
+      out.push({ path: relPath, rule, detail: `declares itself (${edge})` });
+      continue;
+    }
+    const layerOk = (ALLOWED_LAYER_TARGETS[layer as Layer] as readonly string[]).includes(targetLayer);
+    const sameOrKernel = targetContext === context || targetContext === "kernel";
+    const sanctioned = SANCTIONED_CROSS_CONTEXT.some(
+      (e) => e.from === `${context}/${layer}` && e.to === `${targetContext}/${targetLayer}`,
+    );
+    if (!(sameOrKernel && layerOk) && !sanctioned) {
+      out.push({ path: relPath, rule, detail: `forbidden edge ${edge}` });
     }
   }
   return out;
