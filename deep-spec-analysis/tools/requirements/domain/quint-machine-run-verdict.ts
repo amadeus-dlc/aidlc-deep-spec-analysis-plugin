@@ -1,5 +1,5 @@
 import type { TargetIds } from "../../kernel/domain/index.ts";
-import type { TraceState } from "./trace-state.ts";
+import { TraceState } from "./trace-state.ts";
 import type { TraceStates } from "./trace-states.ts";
 import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationWitness } from "./verification-witness.ts";
@@ -93,6 +93,6 @@ export class QuintMachineRunVerdict {
 
   // 帰属評価に使う最終状態（violation のトレース末尾。trace を欠けば空状態）。
   finalState(): TraceState {
-    return this.#trace?.finalState() ?? {};
+    return this.#trace?.finalState() ?? TraceState.empty();
   }
 }

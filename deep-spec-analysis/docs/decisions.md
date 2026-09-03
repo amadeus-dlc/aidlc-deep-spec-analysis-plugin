@@ -2203,7 +2203,9 @@ data; a getter an I/O boundary reads is not forced out.
      is prose, not vocabulary.
    - 3-4, numeric metadata (3): `FenceCount` (`of`, `asNumber`) for the
      three outcomes' fence counts; the frozen wording renders through it.
-   After 3-1 to 3-4 the ledger is empty.
+   The four groups add up to 65; the 66th descriptor is `Obligation.#ears`,
+   which leaves the rule's scope as prose. After 3-1 to 3-4 the ledger is
+   empty.
 4. **The Quint machine phase runs without invariant obligations.** Today
    `hasInvariantComponents` skips the machine run for a model with only
    background constraints and event obligations, the plan then emits
@@ -2219,7 +2221,33 @@ data; a getter an I/O boundary reads is not forced out.
    with their ceilings and staleness guards; tighten the data-model rule
    so that any exported interface or object type with properties in the
    domain is a data model (with the `readonly a: string` + `judge()` red
-   example); add a rule that domain class fields are `#private`; replace
+   example) — the only exemption being the entries of the published-language
+   table, each carried with its reason and its allowed layers (`Expression`
+   today, and the representation primitives `KeyedIndex` / `KeySet`); add a rule that domain class fields are `#private`; replace
    the two name-based exclusion lists with one published-language table
    of path, reason and allowed layers, enforced on imports. Then #80
    closes.
+
+Unit 1 (same PR): ruling 2 lands — the values own their semantics.
+`TraceValue` (`isTrue`, `asNumber`, `equals`, `toDocument`) and the
+`TraceState` class (`valueAt`, `toDocument`, keyed by `AttributePath`
+through the new kernel `KeyedIndex`) replace the `DecodedValue` /
+`TraceState` aliases; `QuintMachineComponent.evaluate` now asks the
+values instead of testing `v === true`, `typeof v === "number"` and
+`JSON.stringify`. `DesignWitness` (core / model / verdicts / trace /
+refs, `fromDocument` / `toDocument`, `remapCore`) replaces the
+`DesignValue` witness on `DesignFinding` and `SiblingVerdictFinding`;
+the lowered unit hands it a label rewrite and the `"core" in witness`
+test lives inside the value. `DesignUnit` holds `DesignEntityDecls`
+instead of `rawEntities`, derives its attribute coordinates from them and
+answers `declaredEnumValuesOf` / `enumValuesOf` from the declarations;
+the adapter's `parseDesignEntities` / `renderDesignEntities` (shared by
+the model parser and the validation materials) give the lowered
+document and the refinement SMT context a typed projection, and
+`design-pipeline.test.ts` pins that the projection reproduces every
+fixture's `schema.entities` byte for byte — descriptions on entities and
+attributes, int bounds and enum values included — and invents nothing.
+`RefinementQueryVerdict` carries scalar decoded models. The
+`PUBLISHED_VALUE_SHAPES` exemption is deleted with the three aliases;
+`kernel/domain/keyed-index.ts` joins the representation exclusions.
+Goldens stay byte-identical; the field ledger is unchanged (ceiling 66).

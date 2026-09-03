@@ -5,13 +5,13 @@
 // は finding 自身が所有する（#71 波7）。
 
 import { TargetIds, type FrRefs } from "../../kernel/domain/index.ts";
-import type { DesignValue } from "./design-value.ts";
+import type { DesignWitness } from "./design-witness.ts";
 
 export class DesignFinding {
   readonly #kind: string;
   readonly #frRefs: FrRefs;
   readonly #targets: TargetIds;
-  readonly #witness: DesignValue;
+  readonly #witness: DesignWitness;
   readonly #unit: string;
   readonly #detail: string;
 
@@ -19,7 +19,7 @@ export class DesignFinding {
     kind: string;
     frRefs: FrRefs;
     targets: TargetIds;
-    witness: DesignValue;
+    witness: DesignWitness;
     unit: string;
     detail: string;
   }) {
@@ -35,7 +35,7 @@ export class DesignFinding {
     kind: string;
     frRefs: FrRefs;
     targets: TargetIds;
-    witness: DesignValue;
+    witness: DesignWitness;
     unit: string;
     detail: string;
   }): DesignFinding {
@@ -54,7 +54,7 @@ export class DesignFinding {
     return this.#targets;
   }
 
-  witness(): DesignValue {
+  witness(): DesignWitness {
     return this.#witness;
   }
 

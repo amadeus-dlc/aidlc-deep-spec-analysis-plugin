@@ -9,7 +9,7 @@ type WitnessDocument =
   | { readonly core: string[] }
   | { readonly model: { [path: string]: boolean | number | string } }
   | { readonly verdicts: { [backend: string]: "violated" | "clean" } }
-  | { readonly trace: TraceState[] };
+  | { readonly trace: ReturnType<TraceState["toDocument"]>[] };
 
 export class VerificationWitness {
   readonly #document: WitnessDocument;
@@ -31,7 +31,7 @@ export class VerificationWitness {
   }
 
   static trace(states: readonly TraceState[]): VerificationWitness {
-    return new VerificationWitness({ trace: [...states] });
+    return new VerificationWitness({ trace: states.map((state) => state.toDocument()) });
   }
 
   static fromDocument(raw: unknown): VerificationWitness {

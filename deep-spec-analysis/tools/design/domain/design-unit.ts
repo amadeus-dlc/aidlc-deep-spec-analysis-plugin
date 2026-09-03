@@ -7,7 +7,8 @@ import { TargetIds } from "../../kernel/domain/index.ts";
 import { DesignMachines } from "./design-machines.ts";
 import { DesignObligations } from "./design-obligations.ts";
 import { DesignScenarios } from "./design-scenarios.ts";
-import type { DesignValue } from "./design-value.ts";
+import type { DesignAttributeDecl } from "./design-attribute-decl.ts";
+import type { DesignEntityDecls } from "./design-entity-decls.ts";
 import { AttrPaths } from "./attr-paths.ts";
 import { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
 
@@ -17,13 +18,10 @@ import { DesignBackgroundAssumptions } from "./design-background-assumptions.ts"
 
 
 
-function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
 export class DesignUnit {
   readonly #unit: string;
-  readonly #rawEntities: DesignValue;
+  // 契約3 の実体宣言（型付き）。属性座標と enum 宣言値はここから答える。
+  readonly #entities: DesignEntityDecls;
   readonly #attrPaths: AttrPaths;
   readonly #obligations: DesignObligations;
   readonly #machines: DesignMachines;
@@ -32,16 +30,20 @@ export class DesignUnit {
 
   private constructor(seed: {
     readonly unit: string;
-    readonly rawEntities: DesignValue;
-    readonly attrPaths: AttrPaths;
+    readonly entities: DesignEntityDecls;
     readonly obligations: DesignObligations;
     readonly machines: DesignMachines;
     readonly scenarios: DesignScenarios;
     readonly background: DesignBackgroundAssumptions;
   }) {
     this.#unit = seed.unit;
-    this.#rawEntities = seed.rawEntities;
-    this.#attrPaths = seed.attrPaths;
+    this.#entities = seed.entities;
+    // 属性座標（`Entity.attr`）は宣言から導く——一意化し宣言順（凍結挙動）。
+    const coordinates = new Set<string>();
+    for (const ent of seed.entities) {
+      for (const attr of ent.attributes()) coordinates.add(`${ent.name().asString()}.${attr.name().asString()}`);
+    }
+    this.#attrPaths = AttrPaths.of([...coordinates]);
     this.#obligations = seed.obligations;
     this.#machines = seed.machines;
     this.#scenarios = seed.scenarios;
@@ -51,8 +53,7 @@ export class DesignUnit {
   // アダプタのパーサが解いた型付き部品からの唯一の構築口。
   static reconstitute(seed: {
     readonly unit: string;
-    readonly rawEntities: DesignValue;
-    readonly attrPaths: AttrPaths;
+    readonly entities: DesignEntityDecls;
     readonly obligations: DesignObligations;
     readonly machines: DesignMachines;
     readonly scenarios: DesignScenarios;
@@ -71,8 +72,9 @@ export class DesignUnit {
   }
 
   // 境界: lowering が契約1 文書の schema.entities へ逐語で埋め込む断片。
-  rawEntities(): DesignValue {
-    return this.#rawEntities;
+  // 境界: lowered 文書の描画と refinement の SMT 文脈（adapter）が読む。
+  entities(): DesignEntityDecls {
+    return this.#entities;
   }
 
   attrPaths(): AttrPaths {
@@ -100,37 +102,26 @@ export class DesignUnit {
     return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()]).sortedUniqueCanonically();
   }
 
-  // 属性パスの enum 宣言値——null は「属性が見つからない／enum でない」の区別
-  // （空配列と混ぜない——refinement の gap 文言の分岐が異なる）。旧 refinement
-  // 自由関数 designEnumValues のメソッド化（OOUI 裁定）。
-  declaredEnumValuesOf(attrPath: string): string[] | null {
-    if (!Array.isArray(this.#rawEntities)) return null;
-    for (const ent of this.#rawEntities) {
-      if (!isRecord(ent) || typeof ent.name !== "string") continue;
-      for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
-        if (!isRecord(attr) || typeof attr.name !== "string" || !isRecord(attr.type)) continue;
-        if (`${ent.name}.${attr.name}` !== attrPath) continue;
-        if (attr.type.kind !== "enum") return null;
-        const values = attr.type.values;
-        return Array.isArray(values) ? (values.filter((v): v is string => typeof v === "string") as string[]) : null;
+  // 属性座標の宣言を引く（最初に一致した宣言——凍結挙動）。
+  #attributeAt(attrPath: string): DesignAttributeDecl | null {
+    for (const ent of this.#entities) {
+      for (const attr of ent.attributes()) {
+        if (`${ent.name().asString()}.${attr.name().asString()}` === attrPath) return attr;
       }
     }
     return null;
   }
 
+  // 属性パスの enum 宣言値——null は「属性が見つからない／enum でない」の区別
+  // （空配列と混ぜない——refinement の gap 文言の分岐が異なる）。旧 refinement
+  // 自由関数 designEnumValues のメソッド化（OOUI 裁定）。判定は宣言に問う。
+  declaredEnumValuesOf(attrPath: string): string[] | null {
+    const values = this.#attributeAt(attrPath)?.enumStates() ?? null;
+    return values === null ? null : [...values.toArray()];
+  }
+
   // 属性パスの enum 宣言値（未宣言・非 enum は空）。旧 enumValuesOf の逐語移植。
   enumValuesOf(attrPath: string): string[] {
-    if (!Array.isArray(this.#rawEntities)) return [];
-    for (const ent of this.#rawEntities) {
-      if (!isRecord(ent) || typeof ent.name !== "string") continue;
-      for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
-        if (!isRecord(attr) || typeof attr.name !== "string" || !isRecord(attr.type)) continue;
-        if (`${ent.name}.${attr.name}` !== attrPath) continue;
-        const values = attr.type.values;
-        return Array.isArray(values) ? (values.filter((v): v is string => typeof v === "string") as string[]) : [];
-      }
-    }
-    return [];
+    return this.declaredEnumValuesOf(attrPath) ?? [];
   }
 }
-

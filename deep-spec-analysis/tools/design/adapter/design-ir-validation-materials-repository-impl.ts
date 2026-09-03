@@ -19,22 +19,19 @@ import {
   readIfExists,
   validateSchema,
 } from "../../kernel/adapter/index.ts";
-import { AttributeBound, ErrorMessages, IrVersion, TriggerName } from "../../kernel/domain/index.ts";
+import { ErrorMessages, IrVersion, TriggerName } from "../../kernel/domain/index.ts";
 import { type Result, ok } from "../../kernel/infrastructure/index.ts";
 import { err as repoErr } from "../../kernel/infrastructure/index.ts";
 import type { RepositoryError } from "../../kernel/usecase/index.ts";
 import type { Expression } from "../../kernel/domain/index.ts";
-import { DesignAttributeDecl, DesignBackgroundDecl } from "../domain/index.ts";
+import { DesignBackgroundDecl } from "../domain/index.ts";
 import {
-  DesignEntityDecl,
   DesignIgnoreDecl,
   DesignMachineDecl,
   DesignUnitDecl,
 } from "../domain/index.ts";
 import {
-  DesignAttributeName,
   DesignBackgroundId,
-  DesignEntityName,
   DesignMachineId,
   DesignObligationId,
   DesignObligationDecl,
@@ -46,10 +43,7 @@ import {
   DesignUnitId,
   BindingPairs,
   BrRefs,
-  DeclaredValues,
-  DesignAttributeDecls,
   DesignBackgroundDecls,
-  DesignEntityDecls,
   DesignIgnoreDecls,
   DesignMachineDecls,
   DesignObligationDecls,
@@ -62,6 +56,7 @@ import {
 import { DesignIrValidationMaterials, DesignIrValidationMaterialsId, SUPPORTED_DESIGN_IR_MAJOR } from "../domain/index.ts";
 import type { DesignIrValidationMaterialsRepository } from "../usecase/index.ts";
 import type { DesignIrValidationMaterialsConfig } from "./design-ir-validation-materials-config.ts";
+import { parseDesignEntities } from "./design-entities-parser.ts";
 
 const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 
@@ -83,24 +78,7 @@ function brRefsOrUndefined(v: Json): BrRefs | undefined {
 }
 
 function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordRoot: string | null): DesignUnitDecl {
-  const entities: DesignEntityDecl[] = [];
-  const schema = isObject(rawUnit.schema) ? rawUnit.schema : {};
-  for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
-    if (!isObject(ent) || typeof ent.name !== "string") continue;
-    const attributes: DesignAttributeDecl[] = [];
-    for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
-      if (!isObject(attr) || typeof attr.name !== "string") continue;
-      const t = isObject(attr.type) ? attr.type : {};
-      attributes.push(DesignAttributeDecl.reconstitute({
-        name: DesignAttributeName.reconstitute(attr.name),
-        kind: typeof t.kind === "string" ? t.kind : "",
-        values: Array.isArray(t.values) ? DeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
-        min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
-        max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
-      }));
-    }
-    entities.push(DesignEntityDecl.reconstitute({ name: DesignEntityName.reconstitute(ent.name), attributes: DesignAttributeDecls.of(attributes) }));
-  }
+  const entities = parseDesignEntities(isObject(rawUnit.schema) ? rawUnit.schema : {});
 
   const obligations: DesignObligationDecl[] = [];
   for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
@@ -183,7 +161,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
 
   return DesignUnitDecl.reconstitute({
     unit: DesignUnitId.of(unitName),
-    entities: DesignEntityDecls.of(entities),
+    entities,
     obligations: DesignObligationDecls.of(obligations),
     stateMachines: DesignMachineDecls.of(stateMachines),
     scenarios: DesignScenarioDecls.of(scenarios),

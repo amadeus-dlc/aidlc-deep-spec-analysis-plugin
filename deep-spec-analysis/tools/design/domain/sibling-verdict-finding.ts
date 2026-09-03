@@ -1,5 +1,5 @@
 import type { FrRefs } from "../../kernel/domain/index.ts";
-import type { DesignValue } from "./design-value.ts";
+import type { DesignWitness } from "./design-witness.ts";
 import type { LoweredId } from "./lowered-id.ts";
 
 // 兄弟バックエンドが返した finding 1 件——lowering 側の id で書かれている。
@@ -9,10 +9,10 @@ export class SiblingVerdictFinding {
   readonly #kind: string;
   readonly #frRefs: FrRefs;
   readonly #targets: readonly LoweredId[];
-  readonly #witness: DesignValue;
+  readonly #witness: DesignWitness;
   readonly #detail: string;
 
-  private constructor(props: { kind: string; frRefs: FrRefs; targets: readonly LoweredId[]; witness: DesignValue; detail: string }) {
+  private constructor(props: { kind: string; frRefs: FrRefs; targets: readonly LoweredId[]; witness: DesignWitness; detail: string }) {
     this.#kind = props.kind;
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
@@ -20,7 +20,7 @@ export class SiblingVerdictFinding {
     this.#detail = props.detail;
   }
 
-  static reconstitute(props: { kind: string; frRefs: FrRefs; targets: readonly LoweredId[]; witness: DesignValue; detail: string }): SiblingVerdictFinding {
+  static reconstitute(props: { kind: string; frRefs: FrRefs; targets: readonly LoweredId[]; witness: DesignWitness; detail: string }): SiblingVerdictFinding {
     return new SiblingVerdictFinding(props);
   }
 
@@ -44,13 +44,9 @@ export class SiblingVerdictFinding {
     return this.#detail;
   }
 
-  // witness が unsat core（`{ core: [...] }`）の形なら core だけを書き換えて
-  // 返し、それ以外の witness はそのまま運ぶ。
-  witnessWithCoreRemapped(remapCore: (core: DesignValue) => DesignValue): DesignValue {
-    const witness = this.#witness;
-    if (witness !== null && typeof witness === "object" && !Array.isArray(witness) && "core" in witness) {
-      return { core: remapCore(witness.core ?? null) };
-    }
-    return witness;
+  // core のラベル（lowered id）を design id へ書き換えた witness——形の判定は
+  // witness 自身が行う（裁定 2、2026-09-03）。
+  witnessRemappedBy(rewrite: (label: string) => string): DesignWitness {
+    return this.#witness.remapCore(rewrite);
   }
 }

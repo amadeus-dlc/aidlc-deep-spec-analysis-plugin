@@ -27,9 +27,13 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignBackgroundAssumption, DesignMachine, DesignObligation, DesignScenario, DesignIgnore, DesignTransition, type DesignValue, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId,
+import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignBackgroundAssumption, DesignMachine, DesignObligation, DesignScenario, DesignIgnore, DesignTransition, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId,
 
   LoweredId,
+  DesignEntityDecls,
+  DesignEntityDecl,
+  DesignAttributeDecls,
+  DesignAttributeDecl
 } from "../tools/design/domain/index.ts";
 import { type DesignUnit as DesignUnitType } from "../tools/design/domain/index.ts";
 import {
@@ -42,6 +46,7 @@ import {
   decodeDesignModel,
   type RefinementSmtContext,
   RefinementMapRepositoryImpl,
+  parseDesignEntities
 } from "../tools/design/adapter/index.ts";
 import { VerifyDesignQuintUseCase, VerifyDesignSmtUseCase } from "../tools/design/usecase/index.ts";
 import {
@@ -227,9 +232,32 @@ type RawDesignMachine = Omit<Parameters<typeof DesignMachine.reconstitute>[0], "
   ignores: RawDesignIgnore[];
 };
 type RawDesignScenario = Omit<Parameters<typeof DesignScenario.reconstitute>[0], "id" | "brRefs" | "frRefs"> & { id: string; brRefs: string[]; frRefs: string[] };
+
+// テスト用: 生の entities JSON と属性座標から型付き実体宣言を組む（裁定 2 で
+// DesignUnit は生 JSON を持たなくなった）。座標だけ与えられた属性は kind "" の
+// 宣言として補う——旧 attrPaths の役目。
+function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDecls {
+  let declared = parseDesignEntities({ entities: raw });
+  const covered = new Set<string>();
+  for (const ent of declared) for (const attr of ent.attributes()) covered.add(`${ent.name().asString()}.${attr.name().asString()}`);
+  const extra = new Map<string, string[]>();
+  for (const path of attrPaths) {
+    if (covered.has(path)) continue;
+    const dot = path.indexOf(".");
+    extra.set(path.slice(0, dot), [...(extra.get(path.slice(0, dot)) ?? []), path.slice(dot + 1)]);
+  }
+  for (const [entity, attrs] of extra) {
+    declared = declared.add(DesignEntityDecl.reconstitute({
+      name: DesignEntityName.reconstitute(entity),
+      attributes: DesignAttributeDecls.of(attrs.map((a) => DesignAttributeDecl.reconstitute({ name: DesignAttributeName.reconstitute(a), kind: "" }))),
+    }));
+  }
+  return declared;
+}
+
 function unit(seed: {
   unit?: string;
-  rawEntities?: DesignValue;
+  rawEntities?: Json[];
   attrPaths?: Set<string>;
   obligations?: RawDesignObligation[];
   machines?: RawDesignMachine[];
@@ -238,8 +266,7 @@ function unit(seed: {
 }): DesignUnitType {
   return DesignUnit.reconstitute({
     unit: seed.unit ?? "u1",
-    rawEntities: seed.rawEntities ?? [],
-    attrPaths: AttrPaths.of([...(seed.attrPaths ?? new Set<string>())]),
+    entities: entitiesOf(seed.rawEntities ?? [], seed.attrPaths ?? new Set<string>()),
     obligations: DesignObligations.of(
       (seed.obligations ?? []).map((o) => DesignObligation.reconstitute({
         ...o,
@@ -506,7 +533,7 @@ describe("plan classification and gap findings", () => {
     const gapDetails = plan.gaps().toArray().map((g) => g.detail());
     expect(gapDetails.some((d) => d.includes('requirements event trigger "ghost" has no eventMap entry'))).toBe(true);
     expect(plan.gaps().toArray().every((g) => g.kind() === "mapping-gap" && g.unit() === "u1")).toBe(true);
-    expect(plan.gaps().toArray()[0]?.witness()).toEqual({ refs: [{ artifact: "construction/x/map.md", element: "units[u1]" }] });
+    expect(plan.gaps().toArray()[0]?.witness().toDocument()).toEqual({ refs: [{ artifact: "construction/x/map.md", element: "units[u1]" }] });
   });
 
   test("map defects each produce their frozen gap wording", () => {
@@ -697,8 +724,8 @@ describe("refinement verdict interpretation", () => {
       "refinement-violation:OB-2,TR-1",
     ]);
     expect(out.findings.toArray()[0]?.frRefs().toArray()).toEqual(["FR-1", "FR-2"]);
-    expect(out.findings.toArray()[1]?.witness()).toEqual({ core: ["inv_a", "inv_b"] });
-    expect(out.findings.toArray()[4]?.witness()).toEqual({ trace: [{ "D.s": "a" }, { "D.s": "b" }] });
+    expect(out.findings.toArray()[1]?.witness().toDocument()).toEqual({ core: ["inv_a", "inv_b"] });
+    expect(out.findings.toArray()[4]?.witness().toDocument()).toEqual({ trace: [{ "D.s": "a" }, { "D.s": "b" }] });
     expect(out.findings.toArray()[0]?.detail()).toContain("The design admits what the verified requirements forbid.");
     expect(out.findings.toArray()[4]?.detail()).toContain("produces an abstract post-state that violates the requirements effect or the abstract frame");
   });

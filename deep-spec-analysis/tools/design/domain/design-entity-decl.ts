@@ -7,19 +7,27 @@ import { type DesignEntityName } from "./design-entity-name.ts";
 // （凍結面）だけを所有する（#71 波13）。
 export class DesignEntityDecl {
   readonly #name: DesignEntityName;
+  // 執筆者向けの説明文（契約3 の任意項目——ツールは読まず、lowered 文書へ逐語で運ぶ）。
+  readonly #description: string | undefined;
   readonly #attributes: DesignAttributeDecls;
 
-  private constructor(props: { name: DesignEntityName; attributes: DesignAttributeDecls }) {
+  private constructor(props: { name: DesignEntityName; description?: string; attributes: DesignAttributeDecls }) {
     this.#name = props.name;
+    this.#description = props.description;
     this.#attributes = props.attributes;
   }
 
-  static reconstitute(props: { name: DesignEntityName; attributes: DesignAttributeDecls }): DesignEntityDecl {
+  static reconstitute(props: { name: DesignEntityName; description?: string; attributes: DesignAttributeDecls }): DesignEntityDecl {
     return new DesignEntityDecl(props);
   }
 
   name(): DesignEntityName {
     return this.#name;
+  }
+
+  // 境界: lowered 文書の描画専用。
+  description(): string | undefined {
+    return this.#description;
   }
 
   attributes(): DesignAttributeDecls {

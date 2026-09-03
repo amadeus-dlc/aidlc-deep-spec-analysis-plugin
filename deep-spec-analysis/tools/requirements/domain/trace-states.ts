@@ -1,4 +1,4 @@
-import type { TraceState } from "./trace-state.ts";
+import { TraceState } from "./trace-state.ts";
 
 // 復号済みトレースのファーストクラスコレクション（ステップ順を保持——
 // witness の trace ペイロードへ toArray() で降りる）。
@@ -23,7 +23,7 @@ export class TraceStates {
 
   // 最終状態（不変量の帰属評価に使う）。空トレースは空状態。
   finalState(): TraceState {
-    return this.#values[this.#values.length - 1] ?? {};
+    return this.#values[this.#values.length - 1] ?? TraceState.empty();
   }
 
   toArray(): TraceState[] {

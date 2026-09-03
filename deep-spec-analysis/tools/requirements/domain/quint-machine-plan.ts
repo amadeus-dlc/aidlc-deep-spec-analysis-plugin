@@ -14,7 +14,9 @@ import { type QuintRuns } from "./quint-runs.ts";
 import { type ObligationIds } from "./obligation-ids.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { ScenarioId } from "./scenario-id.ts";
-import type { TraceState } from "./trace-state.ts";
+import { AttributePath } from "./attribute-path.ts";
+import { TraceState } from "./trace-state.ts";
+import { TraceValue } from "./trace-value.ts";
 import { VerificationFinding } from "./verification-finding.ts";
 import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationFindings } from "./verification-findings.ts";
@@ -155,8 +157,10 @@ export class QuintMachinePlan {
         skipped.push(skip);
         continue;
       }
-      const state: TraceState & { [path: string]: boolean | number | string } = {};
-      for (const [path, value] of sc.bindingEntriesCanonically()) state[path] = value;
+      const bindings = sc.bindingEntriesCanonically();
+      const state = TraceState.of(bindings.map(([path, value]) => [AttributePath.reconstitute(path), TraceValue.of(value)] as const));
+      const boundModel: { [path: string]: boolean | number | string } = {};
+      for (const [path, value] of bindings) boundModel[path] = value;
       if (sc.isAccept() && r.isViolated()) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
         const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
@@ -164,7 +168,7 @@ export class QuintMachinePlan {
           kind: "scenario-violation",
           frRefs: model.frRefsOf(targets),
           targets,
-          witness: VerificationWitness.model(state),
+          witness: VerificationWitness.model(boundModel),
           detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out — the requirements reject an example that should be accepted.`,
         }));
       }
@@ -173,7 +177,7 @@ export class QuintMachinePlan {
           kind: "scenario-violation",
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
-          witness: VerificationWitness.model(state),
+          witness: VerificationWitness.model(boundModel),
           detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation — the requirements do not exclude an example that should be rejected.`,
         }));
       }

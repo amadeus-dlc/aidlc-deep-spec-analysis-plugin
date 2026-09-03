@@ -1,6 +1,6 @@
 // design/domain の公開 facade — 明示列挙のみ（export * 禁止）。
 
-export { type DesignValue } from "./design-value.ts";
+export { DesignWitness } from "./design-witness.ts";
 export { DesignTransition } from "./design-transition.ts";
 export { DesignTransitionId } from "./design-transition-id.ts";
 export { DesignTransitions } from "./design-transitions.ts";

@@ -7,7 +7,7 @@ import { FrRefs } from "../../kernel/domain/index.ts";
 
 import { type Json, isObject, strArr } from "../../kernel/adapter/index.ts";
 import { LoweredId, SiblingVerdictFindings, SiblingVerdictSkips, SiblingVerdictSkip, SiblingVerdictDocument, SiblingVerdictFinding } from "../domain/index.ts";
-import type { DesignValue } from "../domain/index.ts";
+import { DesignWitness } from "../domain/index.ts";
 
 
 export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
@@ -22,7 +22,7 @@ export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
       kind: f.kind,
       frRefs: FrRefs.of(strArr(f.frRefs)),
       targets: f.targets.filter((t): t is string => typeof t === "string").map((t) => LoweredId.reconstitute(t)),
-      witness: (f.witness ?? null) as unknown as DesignValue,
+      witness: DesignWitness.fromDocument(f.witness ?? null),
       detail: typeof f.detail === "string" ? f.detail : "",
     }));
   }

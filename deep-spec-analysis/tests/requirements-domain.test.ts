@@ -21,7 +21,15 @@ import {
   VerificationSkipped,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
- VerificationWitness, AttributePath,} from "../tools/requirements/domain/index.ts";
+ VerificationWitness, AttributePath,
+  TraceState,
+  TraceValue
+} from "../tools/requirements/domain/index.ts";
+
+// テスト用: 平文の状態 → TraceState（裁定 2 で値オブジェクトになった）。
+function st(values: { [path: string]: boolean | number | string }): TraceState {
+  return TraceState.of(Object.entries(values).map(([path, value]) => [AttributePath.reconstitute(path), TraceValue.of(value)] as const));
+}
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
 
@@ -218,7 +226,7 @@ describe("quint machine run verdict", () => {
   });
 
   test("deadlock and violation carry the trace as the witness, with the model fallback and the final state", () => {
-    const trace = TraceStates.of([{ "T.ok": true }, { "T.ok": false }]);
+    const trace = TraceStates.of([st({ "T.ok": true }), st({ "T.ok": false })]);
     const deadlock = QuintMachineRunVerdict.deadlock(trace);
     expect(deadlock.abortsMachineTargets()).toBe(false);
     expect(deadlock.skipsFor(targets, true)).toEqual([]);
@@ -227,13 +235,13 @@ describe("quint machine run verdict", () => {
     expect(deadlock.witness().toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
     const silent = QuintMachineRunVerdict.deadlock(null);
     expect(silent.witness().toDocument()).toEqual({ model: {} });
-    expect(silent.finalState()).toEqual({});
+    expect(silent.finalState().toDocument()).toEqual({});
     const violation = QuintMachineRunVerdict.violation(trace);
     expect(violation.abortsMachineTargets()).toBe(false);
     expect(violation.isViolation()).toBe(true);
     expect(violation.isDeadlock()).toBe(false);
     expect(violation.witness().toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
-    expect(violation.finalState()).toEqual({ "T.ok": false });
+    expect(violation.finalState().toDocument()).toEqual({ "T.ok": false });
   });
 
   test("a clean run neither aborts, skips, nor reports", () => {
@@ -275,7 +283,7 @@ describe("quint temporal and scenario verdicts", () => {
     expect(timeout.skipFor(target)?.detail()).toBe("temporal check exceeded its budget");
     expect(timeout.isViolation()).toBe(false);
     expect(timeout.witness().toDocument()).toEqual({ model: {} });
-    const violation = QuintTemporalVerdict.violation(TraceStates.of([{ "T.ok": false }]));
+    const violation = QuintTemporalVerdict.violation(TraceStates.of([st({ "T.ok": false })]));
     expect(violation.skipFor(target)).toBeNull();
     expect(violation.isViolation()).toBe(true);
     expect(violation.witness().toDocument()).toEqual({ trace: [{ "T.ok": false }] });
@@ -301,7 +309,7 @@ describe("verification witness (the contract-2 witness owns its document face)",
     expect(VerificationWitness.core(["b", "a"]).toDocument()).toEqual({ core: ["b", "a"] });
     expect(VerificationWitness.model({ "T.ok": true, "T.n": 2 }).toDocument()).toEqual({ model: { "T.ok": true, "T.n": 2 } });
     expect(VerificationWitness.verdicts({ quint: "violated", smt: "clean" }).toDocument()).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
-    expect(VerificationWitness.trace([{ "T.ok": true }, { "T.ok": false }]).toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
+    expect(VerificationWitness.trace([st({ "T.ok": true }), st({ "T.ok": false })]).toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
     expect(VerificationWitness.fromDocument(undefined).toDocument()).toEqual({ core: [] });
     expect(VerificationWitness.fromDocument({ model: { x: 1 } }).toDocument()).toEqual({ model: { x: 1 } });
   });
@@ -311,5 +319,30 @@ describe("attribute paths order canonically (ruling 1)", () => {
   test("segments compare numerically after the letter skeleton", () => {
     expect(AttributePath.reconstitute("R.a2").compareTo(AttributePath.reconstitute("R.a10"))).toBeLessThan(0);
     expect(AttributePath.reconstitute("R.b").compareTo(AttributePath.reconstitute("R.a"))).toBeGreaterThan(0);
+  });
+});
+
+describe("trace values and states own their semantics (ruling 2)", () => {
+  test("truth is `true` itself, numbers coerce only from numbers, equality is the verbatim JSON", () => {
+    expect(TraceValue.of(true).isTrue()).toBe(true);
+    expect(TraceValue.of(1).isTrue()).toBe(false);
+    expect(TraceValue.of("true").isTrue()).toBe(false);
+    expect(TraceValue.of(3).asNumber()).toBe(3);
+    expect(Number.isNaN(TraceValue.of("3").asNumber())).toBe(true);
+    expect(Number.isNaN(TraceValue.absent().asNumber())).toBe(true);
+    expect(TraceValue.of({ a: [1, "x"] }).equals(TraceValue.of({ a: [1, "x"] }))).toBe(true);
+    expect(TraceValue.of({ a: 1 }).equals(TraceValue.of({ a: 2 }))).toBe(false);
+    expect(TraceValue.ofLiteral(undefined).toDocument()).toBe(null);
+    expect(TraceValue.ofLiteral("on").toDocument()).toBe("on");
+    expect(TraceValue.ofBoolean(false).toDocument()).toBe(false);
+    expect(TraceValue.ofNumber(2.5).toDocument()).toBe(2.5);
+  });
+
+  test("a state resolves references, answers absent for unknown paths, and renders in insertion order", () => {
+    const state = st({ "T.b": true, "T.a": 1 });
+    expect(state.valueAt(AttributePath.reconstitute("T.a")).asNumber()).toBe(1);
+    expect(state.valueAt(AttributePath.reconstitute("T.zzz")).toDocument()).toBe(null);
+    expect(Object.keys(state.toDocument())).toEqual(["T.b", "T.a"]);
+    expect(TraceState.empty().toDocument()).toEqual({});
   });
 });

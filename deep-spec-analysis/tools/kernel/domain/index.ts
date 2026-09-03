@@ -16,3 +16,4 @@ export { ArtifactPath } from "./artifact-path.ts";
 export { AttributeBound } from "./attribute-bound.ts";
 export { ErrorMessages } from "./error-messages.ts";
 export { TriggerName } from "./trigger-name.ts";
+export { KeyedIndex } from "./keyed-index.ts";

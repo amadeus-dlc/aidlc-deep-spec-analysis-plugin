@@ -20,6 +20,7 @@ import { type RefinementUnitMap } from "./refinement-unit-map.ts";
 import { type TransitionRef } from "./transition-ref.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
 import { RefinementStatus } from "./refinement-status.ts";
+import { DesignWitness } from "../../design/domain/index.ts";
 
 function exprRefs(e: Expression, out: Set<string>): void {
   if (e.op === "ref" && typeof e.path === "string") out.add(e.path);
@@ -58,7 +59,7 @@ export class UnitRefinementPlan {
           kind: "mapping-gap",
           frRefs: FrRefs.of(frRefs).sortedUnique(),
           targets: TargetIds.reconstitute(targets).sortedUniqueCanonically(),
-          witness: { refs: [{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }] },
+          witness: DesignWitness.refs([{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }]),
           unit: u.name(),
           detail,
         }),

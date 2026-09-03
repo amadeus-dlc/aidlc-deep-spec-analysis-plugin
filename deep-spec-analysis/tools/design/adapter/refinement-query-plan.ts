@@ -20,7 +20,7 @@ import {
 import type { Expression } from "../../kernel/domain/index.ts";
 import { smtIntOf, smtLit, smtName, smtVar } from "../../kernel/adapter/index.ts";
 import { DesignSkips } from "../domain/index.ts";
-import type { DesignUnit, DesignValue } from "../domain/index.ts";
+import type { DesignUnit } from "../domain/index.ts";
 import { DesignSkipped } from "../domain/index.ts";
 import type { RefinementChildQuery } from "./refinement-child-query.ts";
 import type { RefinementSmtContext } from "./refinement-smt-context.ts";
@@ -42,28 +42,22 @@ class SmtCompileError extends Error {
   }
 }
 
-function isRecord(v: DesignValue): v is { [k: string]: DesignValue } {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
 export function refinementSmtContext(u: DesignUnit): RefinementSmtContext {
   const attrs: RefinementAttr[] = [];
-  const rawEntities = u.rawEntities();
-  if (Array.isArray(rawEntities)) {
-    for (const ent of rawEntities) {
-      if (!isRecord(ent) || typeof ent.name !== "string") continue;
-      for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
-        if (!isRecord(attr) || typeof attr.name !== "string" || !isRecord(attr.type)) continue;
-        const t = attr.type;
-        if (t.kind !== "bool" && t.kind !== "int" && t.kind !== "enum") continue;
-        attrs.push({
-          path: `${ent.name}.${attr.name}`,
-          kind: t.kind,
-          min: typeof t.min === "number" ? t.min : undefined,
-          max: typeof t.max === "number" ? t.max : undefined,
-          values: Array.isArray(t.values) ? (t.values.filter((v) => typeof v === "string") as string[]) : undefined,
-        });
-      }
+  for (const ent of u.entities()) {
+    for (const attr of ent.attributes()) {
+      const kind = attr.kindLabel();
+      if (kind !== "bool" && kind !== "int" && kind !== "enum") continue;
+      const min = attr.minBound();
+      const max = attr.maxBound();
+      const values = attr.enumStates();
+      attrs.push({
+        path: `${ent.name().asString()}.${attr.name().asString()}`,
+        kind,
+        ...(min !== undefined ? { min: min.asNumber() } : {}),
+        ...(max !== undefined ? { max: max.asNumber() } : {}),
+        ...(values !== null ? { values: [...values.toArray()] } : {}),
+      });
     }
   }
   return { attrs, byPath: new Map(attrs.map((a) => [a.path, a])) };
@@ -200,8 +194,8 @@ export function decodeDesignModel(
   ctx: RefinementSmtContext,
   model: { [name: string]: string },
   primed: boolean,
-): { [path: string]: DesignValue } {
-  const out: { [path: string]: DesignValue } = {};
+): { [path: string]: boolean | number | string } {
+  const out: { [path: string]: boolean | number | string } = {};
   for (const attr of [...ctx.attrs].sort((a, b) => (a.path < b.path ? -1 : 1))) {
     const raw = model[smtVar(attr.path, primed)];
     if (raw === undefined) continue;

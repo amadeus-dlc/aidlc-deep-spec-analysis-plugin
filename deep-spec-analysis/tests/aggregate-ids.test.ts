@@ -30,6 +30,8 @@ import {
   DesignSkipped,
   DesignInputAnchor,
   DesignCrossCheckedEntry,
+  DesignWitness,
+  DesignEntityDecls
 } from "../tools/design/domain/index.ts";
 import { ObligationIds,
   VerificationSkipped,
@@ -286,8 +288,7 @@ describe("design first-class collections", () => {
     expect([...AttrPaths.of([]).toArray()]).toEqual([]);
 
     const u = DesignUnit.reconstitute({
-      unit: "u2", rawEntities: [],
-      attrPaths: AttrPaths.of([]),
+      unit: "u2", entities: DesignEntityDecls.of([]),
       obligations: DesignObligations.of([ob]),
       machines: DesignMachines.of([machine]),
       scenarios: DesignScenarios.of([]),
@@ -298,7 +299,7 @@ describe("design first-class collections", () => {
     expect(units.sortedByName().toArray()[0]?.name()).toBe("u2");
     expect([...units].length).toBe(1);
 
-    const finding = DesignFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["DOB-1"]), witness: { refs: [] }, unit: "u2", detail: "d" });
+    const finding = DesignFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: TargetIds.reconstitute(["DOB-1"]), witness: DesignWitness.refs([]), unit: "u2", detail: "d" });
     const fs = DesignFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
