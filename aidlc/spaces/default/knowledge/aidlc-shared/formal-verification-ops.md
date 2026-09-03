@@ -53,3 +53,13 @@ module probe {
 - 実射は必ず実ディスパッチャ（`.claude/tools/aidlc-sensor.ts fire <id> --stage <slug> --output-path <path>`）経由で行う。センサーの outcome は advisory なので、exit code が非 0 になるのは dispatch エラーだけ。
 - ディスパッチャの detail md は **active intent** の `.aidlc-sensors/` に落ちる。別 intent の成果物に発火するときは先に intent を切り替える（doctor の `fix` 文字列がその順で書いてある）。findings JSON は成果物の隣の正しい場所に出る。
 - 期待値の基線は `docs/decisions.ja.md` の実射行（例: intent-e2e fixture で ir-valid pass／SMT 5 件／Quint 2 件／cross-check {SC-3, SC-5}）。
+
+## 6. quint が答えられなかった実行は clean に化けない（2026-09-03 実測）
+
+#132 の CI が同一コミットで赤→緑になった件の根本原因。`QuintClientImpl.#runQuint` は `timedOut`・出力・ITF しか持ち帰らず、**spawn 失敗（`res.error` の ETIMEDOUT 以外——CI 負荷下の EAGAIN 等）と終了コード（`res.status`）を捨てていた**。各フェーズは「ITF が無く、出力に**小文字の** `error` が無い」を clean と読んだので、OOM の `FATAL ERROR`、Node の `TypeError`、出力の無い fork 失敗はどれも「違反なし」に化け、simulation の findings が 0 件（skip はモデル由来の `capability` 3 件だけ）になって golden 比較が落ちた。temporal フェーズは error 文字列すら見ず、ITF 無しを無条件に clean としていた。
+
+実測（quint 0.32）: 健全な `quint run` は clean でも violation でも ITF を書く。終了コードは clean=0、violation=1。出力に `error` は大文字小文字とも 0 件。`quint verify` は違反時にだけ ITF を書くので、bounded の ITF 無しは clean と失敗の二択になる。
+
+対策（同 PR）: `QuintRun.failed`（`!timedOut && (res.error !== undefined || res.status !== 0)`——シグナル死は `status` が null なので含まれる）を第一の証拠にし、error 語は大文字小文字を問わず拾う（`#didNotAnswer`）。machine／scenario は ITF 無し＋failed で run-failed、temporal も同じ分岐を得た（`QuintTemporalVerdict.runFailed` → `unavailable` / `quint verify failed unexpectedly: <出力尾>`）。健全経路は不変なので golden は無変更。red example は `--version` だけ通して `FATAL ERROR: … heap out of memory` を吐いて 134 で死ぬ偽 quint。
+
+診断: findings が 0 件で skip 理由が `unavailable`＋`quint run failed unexpectedly: <出力尾>` なら quint が完走していない。`capability` だけなら仕様の限界。CI で実際に踏んだトリガー（EAGAIN か OOM か）は初回の失敗ログが再実行で上書きされ未確定——再現したら skip の detail に出力尾が載るので、それで確定する。

@@ -5984,23 +5984,31 @@ class QuintScenarioVerdict {
 class QuintTemporalVerdict {
   #kind;
   #trace;
+  #outputTail;
   constructor(props) {
     this.#kind = props.kind;
     this.#trace = props.trace;
+    this.#outputTail = props.outputTail;
   }
   static timeout() {
-    return new QuintTemporalVerdict({ kind: "timeout", trace: null });
+    return new QuintTemporalVerdict({ kind: "timeout", trace: null, outputTail: "" });
+  }
+  static runFailed(outputTail) {
+    return new QuintTemporalVerdict({ kind: "run-failed", trace: null, outputTail });
   }
   static violation(trace) {
-    return new QuintTemporalVerdict({ kind: "violation", trace });
+    return new QuintTemporalVerdict({ kind: "violation", trace, outputTail: "" });
   }
   static clean() {
-    return new QuintTemporalVerdict({ kind: "clean", trace: null });
+    return new QuintTemporalVerdict({ kind: "clean", trace: null, outputTail: "" });
   }
   skipFor(target) {
-    if (this.#kind !== "timeout")
-      return null;
-    return VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "temporal check exceeded its budget" });
+    const kind = this.#kind;
+    if (kind === "timeout")
+      return VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "temporal check exceeded its budget" });
+    if (kind === "run-failed")
+      return VerificationSkipped.reconstitute({ target, reason: "unavailable", detail: `quint verify failed unexpectedly: ${this.#outputTail}` });
+    return null;
   }
   isViolation() {
     return this.#kind === "violation";

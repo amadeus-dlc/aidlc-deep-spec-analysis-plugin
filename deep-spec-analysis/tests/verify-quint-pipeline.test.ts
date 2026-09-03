@@ -9,7 +9,7 @@
 //    全経路を踏めることを証明する。
 
 import { describe, expect, test } from "bun:test";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -147,6 +147,74 @@ describe("the machine phase over the real quint CLI, run out of budget", () => {
     expect(machine?.skipsFor(TargetIds.reconstitute(["OB-1"]), false).map((s) => `${s.target().asString()}:${s.reason()}:${s.detail()}`))
       .toEqual(["OB-1:timeout:machine invariant check exceeded its budget"]);
   }, 60_000);
+});
+
+// 答えられなかった実行は clean ではない（#132 の CI が同一コミットで赤→緑になった
+// 件の根本原因）。#runQuint は timedOut と出力と ITF しか持ち帰らず、spawn 失敗
+// （CI 負荷下の EAGAIN）も非ゼロ終了も捨てていた。その上で各フェーズは「ITF が
+// 無く、出力に小文字の "error" も無い」を clean と読んだ——OOM の "FATAL ERROR"、
+// Node の "TypeError"、出力の無い fork 失敗はどれも小文字の "error" を含まない
+// ので「違反なし」に化け、simulation の findings が 0 件になって golden 比較が
+// 気まぐれに落ちた。健全な quint は clean でも violation でも ITF を書き、clean
+// は 0 で終わる（実測、quint 0.32）。だから ITF 無しはプロセスの事実で見分ける。
+describe("a quint that dies without saying 'error' is run-failed, never clean", () => {
+  const tail = "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory";
+  const fakeQuint = (dir: string): string => {
+    const bin = join(dir, "quint");
+    writeFileSync(bin, [
+      "#!/bin/sh",
+      // probe は通す——CLI は「在る」。壊れるのは実行のほう。
+      'if [ "$1" = "--version" ]; then echo 0.32.0; exit 0; fi',
+      `echo "${tail}" >&2`,
+      "exit 134",
+    ].join("\n"), { mode: 0o755 });
+    return bin;
+  };
+  const brokenModel = () => model({
+    attributes: [{ path: AttributePath.reconstitute("order.state"), kind: "enum", values: ["open", "closed"] }],
+    obligations: [{
+      id: ObligationId.reconstitute("OB-1"),
+      nature: ObligationNature.reconstitute("invariant"),
+      frRefs: [],
+      assert: { op: "ne", args: [{ op: "ref", path: "order.state" }, { op: "enum", value: "closed" }] },
+    }],
+    scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: { "order.state": "open" } }],
+  });
+
+  test("simulation: the machine phase and the scenario phase both say unavailable, with the output tail", () => {
+    const dir = mkdtempSync(join(tmpdir(), "deep-spec-fake-quint-"));
+    try {
+      const client = new QuintClientImpl({ quintBin: fakeQuint(dir), methodOverride: "simulation", apalacheDistSet: false, homeDirectory: "" });
+      const m = brokenModel();
+      const outcome = client.check(m);
+      expect(outcome.kind).toBe("checked");
+      if (outcome.kind !== "checked") return;
+      const machine = outcome.runs.machineRun();
+      expect(machine?.abortsMachineTargets()).toBe(true);
+      expect(machine?.skipsFor(TargetIds.reconstitute(["OB-1"]), false).map((s) => `${s.target().asString()}:${s.reason()}:${s.detail()}`))
+        .toEqual([`OB-1:unavailable:quint run failed unexpectedly: ${tail}`]);
+      expect(outcome.runs.scenarioOf(ScenarioId.reconstitute("SC-1"))?.skipFor(TargetId.reconstitute("SC-1"))?.detail())
+        .toBe(`quint run failed unexpectedly: ${tail}`);
+      // interpret まで通しても findings 0 件のまま黙らない——対象が理由つきで skip に残る。
+      const { findings, skipped } = outcome.plan.interpret(m, outcome.compileSkips, outcome.method, outcome.runs);
+      expect([...findings]).toEqual([]);
+      expect(skipped.toArray().map((s) => `${s.target().asString()}:${s.reason()}`)).toEqual(["OB-1:unavailable", "SC-1:unavailable"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  // temporal は bounded（実 Apalache）でしか実 CLI を踏めないので、値オブジェクトの
+  // 側で「失敗は unavailable」を固定する。adapter 側の分岐は machine / scenario と
+  // 同じ #didNotAnswer なので、その述語の検出力は上のテストが担う。
+  test("bounded: a temporal run that failed is unavailable with the verify wording, never clean", () => {
+    const failed = QuintTemporalVerdict.runFailed(tail);
+    expect(failed.isViolation()).toBe(false);
+    expect(failed.skipFor(TargetId.reconstitute("OB-2"))?.reason()).toBe("unavailable");
+    expect(failed.skipFor(TargetId.reconstitute("OB-2"))?.detail()).toBe(`quint verify failed unexpectedly: ${tail}`);
+    expect(failed.witness().toDocument()).toEqual({ model: {} });
+    expect(QuintTemporalVerdict.clean().skipFor(TargetId.reconstitute("OB-2"))).toBeNull();
+  });
 });
 
 // --- interactor の全経路（InMemory ダブル＋素の値のみ） ----------------------
