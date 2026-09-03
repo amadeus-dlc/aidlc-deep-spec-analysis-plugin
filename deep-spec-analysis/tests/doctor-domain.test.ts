@@ -112,7 +112,7 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
       fix: "Run `bun .claude/tools/aidlc-utility.ts plugin-sync` (or re-run the plugin's `hooks/compose.ts`).",
       severity: "error",
     });
-    const solvers = presenter.solvers(SolverAvailability.of({ z3Package: true, nodeRuntime: false, quintCli: true, apalache: false }));
+    const solvers = presenter.solvers(SolverAvailability.of({ z3Package: true, nodeRuntime: false, quintCli: true, apalache: false, apalacheServerStale: false }));
     expect(solvers.map((c) => [c.passes(), c.label()])).toEqual([
       [true, "deep-spec-analysis: z3-solver package present (SMT backend)"],
       [false, "deep-spec-analysis: node runtime on PATH (executes the z3 child process)"],
@@ -122,6 +122,34 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
     expect(solvers.every((c) => c.severity().isAdvisory())).toBe(true);
     expect(CheckSeverity.advisory().equals(CheckSeverity.advisory())).toBe(true);
     expect(CheckSeverity.advisory().equals(CheckSeverity.error())).toBe(false);
+  });
+
+  // issue #128: 配布物と JDK が在っても、8822 番の孤児サーバが消えた作業
+  // ディレクトリを掴んでいれば verify は落ちる。Apalache 行はその区別を語る。
+  test("a stale Apalache server fails the Apalache row and swaps the fix for how to stop it", () => {
+    const stale = SolverAvailability.of({ z3Package: true, nodeRuntime: true, quintCli: true, apalache: true, apalacheServerStale: true });
+    expect(stale.apalacheServerIsStale()).toBe(true);
+    expect(stale.hasApalache()).toBe(false);
+    const row = presenter.solvers(stale)[3];
+    expect(row?.passes()).toBe(false);
+    expect(row?.label()).toBe("deep-spec-analysis: Apalache available (quint verify, method: bounded)");
+    expect(row?.fix()).toBe(
+      "An Apalache server is listening on localhost:8822 but cannot verify — typically an orphan that still holds a deleted working directory. " +
+      "Stop it (`lsof -nP -iTCP:8822 -sTCP:LISTEN` shows the PID, then `kill <pid>`); quint starts a fresh server on the next `quint verify`.",
+    );
+    expect(row?.severity().isAdvisory()).toBe(true);
+  });
+
+  test("a healthy Apalache passes the row and keeps the frozen install fix", () => {
+    const healthy = SolverAvailability.of({ z3Package: true, nodeRuntime: true, quintCli: true, apalache: true, apalacheServerStale: false });
+    expect(healthy.apalacheServerIsStale()).toBe(false);
+    expect(healthy.hasApalache()).toBe(true);
+    const row = presenter.solvers(healthy)[3];
+    expect(row?.passes()).toBe(true);
+    expect(row?.fix()).toBe(
+      "Install a JDK (17+) and run any `quint verify` once so quint downloads its Apalache distribution into ~/.quint (or set APALACHE_DIST). " +
+      "Without it the Quint backend uses seeded simulation (method: simulation) and skips leads-to temporal obligations.",
+    );
   });
 
   test("coverage rows carry the grep-frozen nouns and the summary carries the scope list", () => {

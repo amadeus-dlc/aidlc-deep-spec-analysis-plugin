@@ -43,6 +43,10 @@ function main(): void {
           quintBin: process.env.AIDLC_DEEP_SPEC_QUINT_BIN || "quint",
           apalacheDistDeclared: Boolean(process.env.APALACHE_DIST),
           homeDir: process.env.HOME ?? "",
+          // quint 0.32 の既定エンドポイント。ここの待ち受けが陳腐化しているか
+          // どうかで Apalache 行の意味が決まる（issue #128）。
+          apalachePort: 8822,
+          runtimeBin: process.execPath,
         }),
       ).execute(),
     ),

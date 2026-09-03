@@ -2329,3 +2329,63 @@ directly). The real tree passes all three with no exception. Adding a
 table entry is a ruling, not a convenience.
 
 With unit 4 every ruling of 2026-09-03 is implemented and #80 closes.
+
+## The orphaned Apalache server — quint's cleanup runs on SIGINT, and the doctor learns to notice (2026-09-03, #128)
+
+A bounded verification that exceeds its budget used to poison every
+verification after it. The mechanism, measured end to end: quint 0.32
+starts an Apalache server when none is listening on 8822 and installs
+its shutdown handler on `exit`, `SIGINT`, `SIGUSR1`, `SIGUSR2` and
+`uncaughtException` — **not** on `SIGTERM`, which is exactly the signal
+`spawnSync`'s timeout sends by default. So the budget expired, quint died
+without running the handler, and the Apalache server survived as an orphan
+whose working directory was the per-run temporary directory the client
+deletes in its `finally`. From then on every `quint verify` connected to
+that orphan and failed with
+`<deleted cwd>/_apalache-out/server/<start>/log0.smt (No such file or
+directory)`; the sensor degraded its obligations to
+`skipped[].reason="unavailable"`, which is the correct degradation, while
+the doctor's `Apalache available` row stayed green because it only asked
+whether `java -version` runs and whether a distribution sits in `~/.quint`.
+A row that says "available" about a solver that cannot verify a single
+line is worse than no row.
+
+Two changes, one at the cause and one at the diagnosis.
+
+**The client stops the server it started.** `QuintClientImpl` now passes
+`killSignal: "SIGINT"` on every quint invocation, so a budget overrun
+runs quint's own cleanup path and the Apalache child dies with it. The
+process-group route (`detached: true` plus a negative-pid kill) was
+measured and rejected: bun's `spawnSync` ignores `detached` — the child
+keeps the parent's process group, so there is no group to signal — while
+node's honours it, and the sensors run under bun. Timeout detection moved
+with the signal: a quint that handles SIGINT exits by itself, so the run
+comes back with `status: 0` and `signal: null`, and the old
+`signal === "SIGTERM"` test would have read an aborted verification as a
+clean one. The evidence is now `error.code === "ETIMEDOUT"`, which both
+runtimes set whatever the child does, with the signal test kept as a
+fallback. Measured A/B against the real quint and the real Apalache, same
+spec and same 5s budget: with SIGTERM the server is still listening on
+8822 after the working directory is deleted; with SIGINT the port is
+free. Residual risk, stated plainly: quint's handler kills Apalache and
+waits for it, so a JVM that ignored SIGTERM would leave `spawnSync`
+blocked where SIGTERM would have returned. The exchange is a rare hang
+against a routine, permanent breakage of the bounded backend.
+
+**The doctor asks whether Apalache can verify, not whether it is
+installed.** The `Apalache available` row still carries its frozen label,
+but it is now measured: if the static check passes and something is
+listening on 8822, the probe writes a four-line spec to a temporary
+directory and verifies it. A non-zero exit means the server cannot
+verify, `hasApalache()` turns false, and the row's fix says how to stop
+the orphan (`lsof -nP -iTCP:8822 -sTCP:LISTEN`, then `kill`) instead of
+how to install a JDK. The frozen install wording is untouched for every
+other case. The listening test is what keeps this cheap: nothing on the
+port means no probe and no JVM, so the common run costs nothing —
+measured at 0.23s with the port free and 0.43s against a live server, and
+`quint verify` is never spawned when nothing is listening. The port
+(8822, quint's default) and the runtime that evaluates the connect probe
+are injected by the entry, since only a composition root may read
+`process.*`. This changes what the row means: `Apalache available` now
+asserts that a bounded verification would actually run.
+
