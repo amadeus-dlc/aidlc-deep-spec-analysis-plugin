@@ -1,0 +1,22 @@
+{
+  "name": "@deep-spec/entries",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@deep-spec/design-adapter": "workspace:*",
+    "@deep-spec/design-domain": "workspace:*",
+    "@deep-spec/design-usecase": "workspace:*",
+    "@deep-spec/doctor-adapter": "workspace:*",
+    "@deep-spec/doctor-domain": "workspace:*",
+    "@deep-spec/doctor-usecase": "workspace:*",
+    "@deep-spec/kernel-adapter": "workspace:*",
+    "@deep-spec/kernel-domain": "workspace:*",
+    "@deep-spec/refcheck-adapter": "workspace:*",
+    "@deep-spec/refcheck-domain": "workspace:*",
+    "@deep-spec/refcheck-usecase": "workspace:*",
+    "@deep-spec/requirements-adapter": "workspace:*",
+    "@deep-spec/requirements-domain": "workspace:*",
+    "@deep-spec/requirements-usecase": "workspace:*"
+  }
+}

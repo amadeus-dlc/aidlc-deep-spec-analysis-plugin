@@ -2092,3 +2092,94 @@ available` 行はラベルを凍結したまま、実測になった。静的検
 読んでよいのは合成ルートだけだからだ。これは行の意味を変える: `Apalache
 available` は「bounded 検証が実際に走る」ことを主張するようになった。
 
+## src/・tools 配布分離の裁定——tools/ は生成物になり、src/ が唯一の編集対象になる（2026-09-03）
+
+`tools/` は開発時のソースと出荷物を兼ねていて、層のあいだの依存方向は
+`tests/architecture/rules.ts` の `layer-direction` 規則——テスト実行時の
+検出——だけが守っていた。この分離で `src/` を唯一の編集対象にし、
+`tools/` は `src/entries/` から機械生成した bundle だけを置く成果物に
+した。目的は依存方向を構造で強制することにあり、テスト実行時の検出を
+唯一の防衛線にしないことにある。
+
+- **層をパッケージにする。** `src/<ctx>/<layer>/` の 17 層と
+  `src/entries/`、`tests` を bun workspace のメンバーにした。各
+  `package.json` は `exports` を `"."` → `"./index.ts"` だけに絞り、
+  `dependencies` には実際に import している辺だけを `workspace:*` で
+  宣言する。`bunfig.toml` の `[install] linker = "isolated"` と
+  組み合わせると、宣言していない層は実行時にも `tsc` でも解決できない。
+- **`tests` を workspace メンバーにした裁定——実測の帰結。** 当初案は
+  root `package.json` の `dependencies` に層を列挙するものだった。実測
+  すると、root に置いた `@deep-spec/*` は未宣言の層からの import でも
+  root の `node_modules` へ上位探索して解決してしまい、`tsc` も
+  `TS2307` を出さなくなって、境界検出そのものが丸ごと無効になった。
+  `tests` を workspace メンバーにすると `@deep-spec/*` は
+  `tests/node_modules/` にだけ張られ、依存 0 の層からの import は
+  `Cannot find module` になる。
+- **越境相対 import を止める新規則。** bare specifier だけでは `../` で
+  パッケージ境界を越える経路が残るため、`tests/architecture/rules.ts`
+  に `no-cross-package-relative-imports` を足した（18 本 → 19 本）。
+  `locationOf` は `src/` 基点になり、`layer-direction` は bare
+  specifier の辺でも方向を判定する。既存規則の検出力は落ちていない。
+- **生成器と drift guard。** `scripts/build-tools.ts` が entry ごとに
+  1 本ずつ
+  `bun build --target=bun --external z3-solver --sourcemap=none` で
+  束ねる——code splitting なし、minify なし。chunk 名の揺れで manifest
+  と doctor が不安定になるのを避けるためだ。`--check` は一時ディレク
+  トリに再生成して byte 比較し、差分があれば差分ファイル名を出して
+  非ゼロ終了する。CI は typecheck の直後にこれを走らせる。upstream の
+  `aidlc-runner-gen check` と同じ型。実測: 生成は 106ms、同一ソースから
+  byte 同一、出力先パスを変えても不変（ソースパスは cwd 相対で埋め込ま
+  れるため、生成器は cwd を package root に固定する）。
+- **出荷物のファイル名は `.ts` のまま——裁定。** 当初は `.js` にする
+  計画だったが、上流の実行経路が `.ts` を要求すると分かった。
+  `aidlc-workflows/core/tools/aidlc-sensor.ts` の `resolveScriptPath`
+  は manifest の `command` から `.ts` で終わるトークンを探し、無ければ
+  `dispatchError` で落ちる。`aidlc-utility.ts` の doctor チェックも
+  `<plugin>-doctor.ts` を決め打ちしている。一方、配布経路
+  （`aidlc-plugin-validate` / `aidlc-plugin-build` / compose）に拡張子
+  の検査は 1 件も無い。「upstream の契約は変えない」という制約と両立
+  するのは出荷物名を `.ts` に保つことだけで、中身が bundle 済み JS でも
+  bun は実行でき、node 24 も型ストリップでそのまま通す（`--smt-child`
+  の子プロセス経路を実測、exit 0）。findings JSON と verdict 行は `.js`
+  名と byte 同一で、`smt.json` は凍結 golden と一致した。要件を書いた
+  時点で実行経路を確認していなかったのが原因で、コード知識ベースの
+  「拡張子を見る工程は無い」という記述自体は正しかった——ただし
+  projection・validate・compose についての話だった。
+- **契約スキーマの原本は entry と同階層に置く。** entry は
+  `dirname(fileURLToPath(import.meta.url))` からの相対で `data/` を
+  引く。出荷物では `tools/<entry>.ts` と `tools/data/` が同階層なので
+  成立するが、原本を `src/data/` に置くとソースツリーでは解決しない。
+  原本を `src/entries/data/` として entry と同階層に置くことで、相対
+  規則がソースと出荷物で一致し、`bun src/entries/<entry>.ts` の直接
+  実行も生きる。
+- **bundle サイズ上限を 512 KiB に見直した——裁定。** 当初の「300 KB
+  以下」は requirements 系 entry だけの実測に基づいており、241
+  モジュールを束ねる design 系 3 本（291〜300 KB、最大 300,296 バイト）
+  を織り込んでいなかった。単位の解釈次第で 189 バイト差で落ちる脆い
+  ゲートになるため、閾値を通すために単位を選ぶのではなく、上限自体を
+  見直した。目的は異常な肥大化の検出であって、特定の数値ではない。
+- **installer の tombstone がディレクトリを扱えるようになった。**
+  `REMOVED_PAYLOADS` をファイルとディレクトリの両対応にし、6 コンテキ
+  ストの層ディレクトリ
+  （`tools/{kernel,requirements,design,refinement,refcheck,doctor}/`）を
+  再帰削除するようにした。旧 entry 10 本はファイル名が変わらないので、
+  既存の upgrade refresh がその場で置き換える。実測: 導入済みサンド
+  ボックスの `.claude/tools/` が 616 → 85 ファイル（プラグイン分は
+  bundle 10 本＋スキーマ 4 本）になり、層ディレクトリ 6 本が消えた。
+- **外部仕様の変更は 1 点だけ。** doctor の installation manifest から
+  層 facade の canary 17 行が消える。層が配布されなくなる以上これは
+  避けられず、この変更の目的そのものの帰結だ。entry 行のラベルは
+  `.ts` のまま変わらない。IR・findings JSON・cross-check・refcheck
+  レポート・verdict 行・exit code の意味はすべて不変。
+
+証拠: `bunx tsc --noEmit` exit 0。`bun test --coverage` 496 pass /
+1 skip / 0 fail（カバレッジ床 0.9 を維持）。`aidlc-plugin-validate`
+VALID。7 ハーネス全部が build 成功し、`dist/claude/tools` は 14
+ファイル。`aidlc-plugin-test` が CLEAN（`Changed files (0)` /
+`Drops: 0` / `Idempotent second compose: true`）。doctor は 31
+checks、fail 0。実サンドボックスへの実ディスパッチャ実射
+（`260829-feature` fixture）は ir-valid pass / SMT 5 findings・
+skipped 2・exhaustive / Quint 2 findings・skipped 3・bounded（実
+Apalache） / cross-check SC-3・SC-5 で disagreement 0 となり、3
+ファイルとも移行前の基線と byte 同一。golden とパリティスナップ
+ショットは無変更。

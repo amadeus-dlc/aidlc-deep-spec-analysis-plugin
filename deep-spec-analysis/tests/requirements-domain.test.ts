@@ -1,7 +1,7 @@
 // requirements/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
 
 import { describe, expect, test } from "bun:test";
-import { FrRefs, TargetId, TargetIds, TriggerName, type Expression } from "../tools/kernel/domain/index.ts";
+import { FrRefs, TargetId, TargetIds, TriggerName, type Expression } from "@deep-spec/kernel-domain";
 import {
   BackgroundAssumptionId,
   IrBackgroundDecl,
@@ -24,7 +24,7 @@ import {
  VerificationWitness, AttributePath,
   TraceState,
   TraceValue
-} from "../tools/requirements/domain/index.ts";
+} from "@deep-spec/requirements-domain";
 
 // テスト用: 平文の状態 → TraceState（裁定 2 で値オブジェクトになった）。
 function st(values: { [path: string]: boolean | number | string }): TraceState {

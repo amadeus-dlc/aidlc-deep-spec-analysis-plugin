@@ -197,25 +197,48 @@ function refreshPluginPayloads(): number {
   return refreshed;
 }
 
-// 廃止済みペイロードの tombstone: かつて配布し、もう dist に存在しないファイル。
-// compose は no-clobber・refresh は「現 dist に在るもの」しか消せないため、
-// ここに載せない限りアップグレード先へ孤児として残り続ける。後方互換の残骸を
-// 残さない——ファイルを廃止したら同じ変更でこのリストに追記すること。
-const REMOVED_PAYLOADS: string[][] = [
-  ["tools", "deep-spec-lib.ts"], // DDD 移行 PR2a で refcheck/ と kernel/ へ解体
-  ["tools", "deep-spec-design-lib.ts"], // DDD 移行 PR5 で design/ へ解体
-  ["tools", "deep-spec-refinement-lib.ts"], // DDD 移行 PR6 で refinement/ と design/ へ解体
-  ["tools", "design", "domain", "design-temporal-decl.ts"], // TDA 波3 で DesignObligationDecl の構築口へ解散
+// 廃止済みペイロードの tombstone: かつて配布し、もう dist に存在しないファイル
+// またはディレクトリ。compose は no-clobber・refresh は「現 dist に在るもの」
+// しか消せないため、ここに載せない限りアップグレード先へ孤児として残り続ける。
+// 後方互換の残骸を残さない——何かを廃止したら同じ変更でこのリストに追記すること。
+interface RemovedPayload {
+  readonly parts: readonly string[];
+  // "directory" は中身ごと消す（層ツリーのように再帰的に廃止されたもの）。
+  readonly kind: "file" | "directory";
+}
+
+const file = (...parts: string[]): RemovedPayload => ({ parts, kind: "file" });
+const directory = (...parts: string[]): RemovedPayload => ({ parts, kind: "directory" });
+
+const REMOVED_PAYLOADS: readonly RemovedPayload[] = [
+  file("tools", "deep-spec-lib.ts"), // DDD 移行 PR2a で refcheck/ と kernel/ へ解体
+  file("tools", "deep-spec-design-lib.ts"), // DDD 移行 PR5 で design/ へ解体
+  file("tools", "deep-spec-refinement-lib.ts"), // DDD 移行 PR6 で refinement/ と design/ へ解体
+  file("tools", "design", "domain", "design-temporal-decl.ts"), // TDA 波3 で DesignObligationDecl の構築口へ解散
+  // src/bundle 分離: entry は tools/<name>.ts の bundle 済み単一ファイルになり、
+  // 層ツリーは配布物から消えた（ソースは src/ にしか無い）。entry のファイル名は
+  // 変わらないので旧版の entry は upgrade refresh が現行版へ置き換える——tombstone
+  // が要るのは、二度と配布されない層ディレクトリだけ。
+  directory("tools", "kernel"),
+  directory("tools", "requirements"),
+  directory("tools", "design"),
+  directory("tools", "refinement"),
+  directory("tools", "refcheck"),
+  directory("tools", "doctor"),
 ];
 
 function removeTombstonedPayloads(): number {
   let removed = 0;
-  for (const parts of REMOVED_PAYLOADS) {
-    const dst = join(projectDir, target.harnessLeaf, ...parts);
-    if (existsSync(dst)) {
-      rmSync(dst, { force: true });
-      removed += 1;
+  for (const payload of REMOVED_PAYLOADS) {
+    const dst = join(projectDir, target.harnessLeaf, ...payload.parts);
+    if (!existsSync(dst)) continue;
+    try {
+      rmSync(dst, { force: true, recursive: payload.kind === "directory" });
+    } catch (error) {
+      // 消せない孤児を黙って見逃すと、次のセンサー発火が古い実装を掴む。
+      fail(`cannot remove retired payload ${dst}: ${error instanceof Error ? error.message : String(error)}`);
     }
+    removed += 1;
   }
   return removed;
 }

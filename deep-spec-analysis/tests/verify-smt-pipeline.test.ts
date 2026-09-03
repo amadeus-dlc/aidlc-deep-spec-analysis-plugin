@@ -14,10 +14,10 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
-import { TriggerName, TargetId, TargetIds, ArtifactPath, ContentHash, IrVersion, ExpressionTree, KeyedIndex, KeySet, QueryLabel } from "../tools/kernel/domain/index.ts";
-import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
+import { readContractSchema } from "@deep-spec/kernel-adapter";
+import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import { TriggerName, TargetId, TargetIds, ArtifactPath, ContentHash, IrVersion, ExpressionTree, KeyedIndex, KeySet, QueryLabel } from "@deep-spec/kernel-domain";
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
 
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
@@ -31,7 +31,7 @@ import {
   Z3SolverClientImpl,
   parseSiblingReportDocument,
   renderVerificationReportBytes,
-} from "../tools/requirements/adapter/index.ts";
+} from "@deep-spec/requirements-adapter";
 import {
   VerificationFindings,
   VerificationReports,
@@ -63,13 +63,13 @@ import {
   FormalModelId,
   ObligationId,
   VerificationSkipped,
- VerificationWitness,} from "../tools/requirements/domain/index.ts";
+ VerificationWitness,} from "@deep-spec/requirements-domain";
 import {
   type FormalModelRepository,
   type SmtCheck,
   VerifyRequirementsSmtUseCase,
   type Z3SolverClient,
-} from "../tools/requirements/usecase/index.ts";
+} from "@deep-spec/requirements-usecase";
 import { InMemoryVerificationReportRepository } from "./doubles/in-memory-verification-report-repository.ts";
 
 // 判定レコードは class（#71 波18）——期待値は平文へ射影して比較する（bun の toEqual は #private を見ない）。
@@ -79,7 +79,7 @@ const plainFindings = (findings: Iterable<VerificationFinding>) =>
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(pluginRoot, "tests", "fixtures", "conformance");
-const schemaPath = join(pluginRoot, "tools", "data", "deep-spec-findings-schema.json");
+const schemaPath = join(pluginRoot, "src", "entries", "data", "deep-spec-findings-schema.json");
 const schema = readContractSchema(schemaPath);
 const sensorPath = join(pluginRoot, "tools", "aidlc-sensor-deep-spec-verify-smt.ts");
 

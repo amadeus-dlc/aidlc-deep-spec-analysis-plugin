@@ -4,6 +4,13 @@ English | [日本語](README.ja.md)
 
 Run with `bun install && bun test` from the plugin root.
 
+The suites that spawn a sensor drive the SHIPPED artifact — the bundles
+under `tools/`, generated from `src/entries/` by `bun scripts/build-tools.ts`
+— never a `src/` source file. Each bundle keeps a `.ts` filename (the AI-DLC
+sensor dispatcher resolves a manifest `command` by looking for a token ending
+in `.ts`) but its contents are bundled JavaScript. Regenerate `tools/` after
+touching `src/`, or the spawn suites exercise the previous build.
+
 - `plugin.test.ts` — offline content validation via the sibling
   `aidlc-workflows` checkout's `aidlc-plugin-validate.ts` (set
   `AIDLC_WORKFLOWS_CHECKOUT` if the checkout lives elsewhere).
@@ -11,7 +18,7 @@ Run with `bun install && bun test` from the plugin root.
   throwaway vanilla AI-DLC install: `scripts/install.ts` (store harness ⇒
   compose only, no folder-drop) → real intent minting → scope routing
   (classic SKIPs, feature EXECUTEs) → sensors fired from the INSTALLED
-  `.claude/tools` — including through the REAL dispatcher
+  `.claude/tools` bundles — including through the REAL dispatcher
   (`aidlc-sensor.ts fire`) — against the intent's record. Covers the
   upgrade path (a stale composed schema is refreshed by the installer),
   the phase-1 refcheck scenario (broken record → doctor debt → fixed →
@@ -44,6 +51,11 @@ Run with `bun install && bun test` from the plugin root.
   waived obligation, an attribute-closure violation), plus degradation
   (absent map, stale hashes, missing unit entry) — always explicit skips,
   never silence.
+- `build-tools.test.ts` — the generator's drift guard (committed `tools/`
+  matches `src/`, and `--check` names a changed/missing/extra bundle),
+  determinism (two runs are byte-identical), and the shipping shape (exactly
+  10 `.ts` bundles + 4 schemas under `data/`, no bare `.js` artifact, each
+  bundle under the size ceiling).
 
 Solvers are exact-pinned devDependencies (`z3-solver`,
 `@informalsystems/quint`) so expected files stay stable; the quint backend
@@ -51,8 +63,9 @@ is forced to `simulation` in tests (bounded/Apalache is exercised live on
 the sandbox). A `node` runtime is required for the z3 child process (tests
 skip the SMT assertions with a warning if absent).
 
-Fixtures live here (never under `tools/` — compose refuses test payloads in
-the shipped tree).
+Fixtures live here (never under `src/` or `tools/` — the `no-test-payloads`
+architecture rule refuses them in the source tree, and compose refuses them
+in the shipped tree).
 
 ## Post-migration internal suites (DDD / Clean Architecture)
 
@@ -63,7 +76,7 @@ the shipped tree).
   TS enums, and non-null assertions. Every rule proves its detection power
   on inline fixtures (red examples) before scanning the real tree. The
   old LEGACY_FILES exemption was emptied in PR10 — the only flat files
-  are the ten entry composition roots.
+  under `src/` are the ten `src/entries/` composition roots.
 - `parity/` — byte-parity snapshots of every pipeline output against the
   pre-migration (pre-PR7) base; fails unless `diff -r` is empty.
 - `kernel-domain.test.ts`, `aggregate-ids.test.ts`, `ir-validation.test.ts`,

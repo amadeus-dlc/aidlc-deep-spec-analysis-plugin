@@ -4,6 +4,14 @@
 
 プラグインルートで `bun install && bun test` を実行する。
 
+センサーを spawn するスイートは出荷物——`src/entries/` から
+`bun scripts/build-tools.ts` が生成した `tools/` 配下のバンドル——を
+駆動する。`src/` のソースを直接実行することはない。バンドルのファイル名は
+`.ts` のまま（AI-DLC のセンサーディスパッチャは manifest の `command` から
+`.ts` で終わるトークンを探して起動スクリプトを決める）だが、中身は bundle
+済みの JavaScript である。`src/` を触ったら `tools/` を再生成すること。
+さもないと spawn 系スイートは前回のビルドを検査してしまう。
+
 - `plugin.test.ts` — 隣接する `aidlc-workflows` checkout の
   `aidlc-plugin-validate.ts` によるオフライン内容検証（checkout が別の場所に
   ある場合は `AIDLC_WORKFLOWS_CHECKOUT` を設定）。
@@ -11,7 +19,7 @@
   決定論的エンドツーエンド経路：`scripts/install.ts`（store ハーネス ⇒
   compose のみ、フォルダドロップなし）→ 実 intent の鋳造 → スコープ
   ルーティング（classic は SKIP、feature は EXECUTE）→ インストール済み
-  `.claude/tools` からのセンサー発火——**本物のディスパッチャ
+  `.claude/tools` のバンドルからのセンサー発火——**本物のディスパッチャ
   （`aidlc-sensor.ts fire`）経由を含む**——を intent のレコードに対して行う。
   アップグレード経路（陳腐化した composed スキーマをインストーラが
   リフレッシュ）、フェーズ①の refcheck シナリオ（壊れたレコード → doctor の
@@ -40,6 +48,11 @@
   しまう reject シナリオ・enabledness の穴・waived な義務・属性閉包違反）、
   および劣化（写像欠如・陳腐化ハッシュ・ユニット項目欠如）——常に明示 skip で、
   決して沈黙しない。
+- `build-tools.test.ts` — 生成器の drift guard（コミット済み `tools/` が
+  `src/` と一致すること、`--check` が変更・欠落・余剰のバンドルを名指しする
+  こと）、決定論（2 回生成してバイト同一）、出荷形（`.ts` バンドル 10 本＋
+  `data/` のスキーマ 4 本ちょうど、素の `.js` は 1 本も無し、各バンドルは
+  サイズ上限内）。
 
 ソルバーは exact-pin の devDependencies（`z3-solver`・
 `@informalsystems/quint`）なので期待ファイルは安定する。quint バックエンドは
@@ -47,8 +60,8 @@
 実射検証）。z3 子プロセスには `node` ランタイムが必要（無い場合、SMT 系の
 アサーションは警告付きでスキップ）。
 
-fixture はここに置く（決して `tools/` 配下に置かない——compose は出荷ツリー内の
-テストペイロードを拒否する）。
+fixture はここに置く（`src/` にも `tools/` にも置かない——`no-test-payloads`
+のアーキテクチャ規則がソースツリーで拒否し、compose が出荷ツリーで拒否する）。
 
 ## 移行後の内部スイート（DDD/Clean Architecture）
 
@@ -57,8 +70,8 @@ fixture はここに置く（決して `tools/` 配下に置かない——compo
   process.*/import.meta・facade の export * 禁止・domain の private
   constructor 規律・get アクセサ/TS enum/非 null 表明の禁止。各ルールは
   実樹適用の前にインライン fixture で検出力を証明する（red example 必須）。
-  旧 LEGACY_FILES 免除は PR10 で空化——フラットは entry（合成ルート）10
-  ファイルのみ。
+  旧 LEGACY_FILES 免除は PR10 で空化——`src/` でフラットなのは
+  `src/entries/` の合成ルート 10 ファイルのみ。
 - `parity/` — 移行の基底（pre-PR7）に対する全パイプライン出力のバイト
   パリティスナップショット（`diff -r` が空でなければ落ちる）。
 - `kernel-domain.test.ts`・`aggregate-ids.test.ts`・`ir-validation.test.ts`・

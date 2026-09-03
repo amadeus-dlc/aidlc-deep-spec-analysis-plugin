@@ -4,13 +4,13 @@
 // findAllByDirectory は実装と同じ凍結取得規則（cross-check 除外・ファイル名順）
 // をキー空間上で再現する。
 
-import { type Result, err, ok } from "../../tools/kernel/infrastructure/index.ts";
-import type { ArtifactPath } from "../../tools/kernel/domain/index.ts";
-import type { Schema, SchemaUnreadable } from "../../tools/kernel/adapter/index.ts";
-import { conformToFindingsContract } from "../../tools/requirements/adapter/index.ts";
-import { type VerificationReport, type VerificationReportId, VerificationReports } from "../../tools/requirements/domain/index.ts";
-import type { RepositoryError } from "../../tools/kernel/usecase/index.ts";
-import type { VerificationReportRepository } from "../../tools/requirements/usecase/index.ts";
+import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import type { ArtifactPath } from "@deep-spec/kernel-domain";
+import type { Schema, SchemaUnreadable } from "@deep-spec/kernel-adapter";
+import { conformToFindingsContract } from "@deep-spec/requirements-adapter";
+import { type VerificationReport, type VerificationReportId, VerificationReports } from "@deep-spec/requirements-domain";
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
+import type { VerificationReportRepository } from "@deep-spec/requirements-usecase";
 
 export class InMemoryVerificationReportRepository implements VerificationReportRepository {
   readonly #findingsSchema: Result<Schema, SchemaUnreadable>;

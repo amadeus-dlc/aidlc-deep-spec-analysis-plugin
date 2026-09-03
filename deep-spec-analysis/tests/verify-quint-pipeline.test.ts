@@ -13,10 +13,10 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readContractSchema } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression, KeyedIndex } from "../tools/kernel/domain/index.ts";
-import { type Result, err, ok } from "../tools/kernel/infrastructure/index.ts";
-import type { RepositoryError } from "../tools/kernel/usecase/index.ts";
+import { readContractSchema } from "@deep-spec/kernel-adapter";
+import { TriggerName, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression, KeyedIndex } from "@deep-spec/kernel-domain";
+import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
 
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
@@ -29,14 +29,14 @@ import {
   QuintClientImpl,
   VerificationReportRepositoryImpl,
   renderVerificationReportBytes,
-} from "../tools/requirements/adapter/index.ts";
-import { BackgroundAssumption, Scenario, Obligation, AttributeDeclaration, AttributeDeclarations, AttributeValues, FrRefs, ObligationId, ObligationNature, ScenarioId, Obligations, Scenarios, BackgroundAssumptions, RequirementsModel, QuintMachineComponents, QuintMachinePlan, QuintMachineComponent, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationReportId, VerificationSkips, FormalModelId, ObligationIds, VerificationSkipped, VerificationFinding, VerificationReport, AttributePath, TraceState, TraceValue } from "../tools/requirements/domain/index.ts";
+} from "@deep-spec/requirements-adapter";
+import { BackgroundAssumption, Scenario, Obligation, AttributeDeclaration, AttributeDeclarations, AttributeValues, FrRefs, ObligationId, ObligationNature, ScenarioId, Obligations, Scenarios, BackgroundAssumptions, RequirementsModel, QuintMachineComponents, QuintMachinePlan, QuintMachineComponent, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationReportId, VerificationSkips, FormalModelId, ObligationIds, VerificationSkipped, VerificationFinding, VerificationReport, AttributePath, TraceState, TraceValue } from "@deep-spec/requirements-domain";
 import {
   type FormalModelRepository,
   type QuintCheckResult,
   type QuintClient,
   VerifyRequirementsQuintUseCase,
-} from "../tools/requirements/usecase/index.ts";
+} from "@deep-spec/requirements-usecase";
 import { InMemoryVerificationReportRepository } from "./doubles/in-memory-verification-report-repository.ts";
 
 // テスト用: 平文の状態 → TraceState（裁定 2 で値オブジェクトになった）。
@@ -51,7 +51,7 @@ const plainFindings = (findings: Iterable<VerificationFinding>) =>
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(pluginRoot, "tests", "fixtures", "conformance");
-const schemaPath = join(pluginRoot, "tools", "data", "deep-spec-findings-schema.json");
+const schemaPath = join(pluginRoot, "src", "entries", "data", "deep-spec-findings-schema.json");
 const schema = readContractSchema(schemaPath);
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。

@@ -15,11 +15,11 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Json } from "../tools/kernel/adapter/index.ts";
-import { SystemClock } from "../tools/kernel/adapter/index.ts";
-import { TriggerName, FrRefs, ContentHash, ArtifactPath, TargetId, KeyedIndex, QueryLabel } from "../tools/kernel/domain/index.ts";
-import type { Expression } from "../tools/kernel/domain/index.ts";
-import { AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "../tools/requirements/domain/index.ts";
+import type { Json } from "@deep-spec/kernel-adapter";
+import { SystemClock } from "@deep-spec/kernel-adapter";
+import { TriggerName, FrRefs, ContentHash, ArtifactPath, TargetId, KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
+import type { Expression } from "@deep-spec/kernel-domain";
+import { AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "@deep-spec/requirements-domain";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -34,8 +34,8 @@ import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachin
   DesignEntityDecl,
   DesignAttributeDecls,
   DesignAttributeDecl
-} from "../tools/design/domain/index.ts";
-import { type DesignUnit as DesignUnitType } from "../tools/design/domain/index.ts";
+} from "@deep-spec/design-domain";
+import { type DesignUnit as DesignUnitType } from "@deep-spec/design-domain";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
@@ -47,8 +47,8 @@ import {
   type RefinementSmtContext,
   RefinementMapRepositoryImpl,
   parseDesignEntities
-} from "../tools/design/adapter/index.ts";
-import { VerifyDesignQuintUseCase, VerifyDesignSmtUseCase } from "../tools/design/usecase/index.ts";
+} from "@deep-spec/design-adapter";
+import { VerifyDesignQuintUseCase, VerifyDesignSmtUseCase } from "@deep-spec/design-usecase";
 import {
   RefinementMapDefect,
   AttributeMappings,
@@ -83,8 +83,8 @@ import {
   RefinementMapId,
   RefinementStatus,
   RefinementMapAcquisition,
-} from "../tools/refinement/domain/index.ts";
-import { FormalModelRepositoryImpl, buildSmtPlan } from "../tools/requirements/adapter/index.ts";
+} from "@deep-spec/refinement-domain";
+import { FormalModelRepositoryImpl, buildSmtPlan } from "@deep-spec/requirements-adapter";
 
 // 被覆状態は class（#71 波22）——期待値は公開の面（checkable / gap / skip）から平文へ射影して比較する。
 const plainStatus = (st: RefinementStatus | undefined) => {
@@ -99,9 +99,12 @@ const plainStatus = (st: RefinementStatus | undefined) => {
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const toolsDir = join(pluginRoot, "tools");
+// スキーマ原本はソースツリー側（src/entries/data/）。toolsDir は生成される配布物の
+// spawn 先で、原本の置き場ではない。
+const dataDir = join(pluginRoot, "src", "entries", "data");
 const fixtures = join(pluginRoot, "tests", "fixtures", "refinement");
-const findingsSchemaPath = join(toolsDir, "data", "deep-spec-findings-schema.json");
-const mapSchemaPath = join(toolsDir, "data", "deep-spec-refinement-map-schema.json");
+const findingsSchemaPath = join(dataDir, "deep-spec-findings-schema.json");
+const mapSchemaPath = join(dataDir, "deep-spec-refinement-map-schema.json");
 const quintBin = join(pluginRoot, "node_modules", ".bin", "quint");
 const MODEL_RELPATH = ["construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"];
 
@@ -114,7 +117,10 @@ function wiring(record: string) {
   const verifyDir = join(dirname(modelPath), "deep-spec-design-verify");
   const reports = new DesignReportRepositoryImpl(findingsSchemaPath);
   const sibling = new SiblingBackendClientImpl({
-    toolsDirectory: toolsDir,
+    siblingToolPaths: {
+      smt: join(toolsDir, "aidlc-sensor-deep-spec-verify-smt.ts"),
+      quint: join(toolsDir, "aidlc-sensor-deep-spec-verify-quint.ts"),
+    },
     workingDirectory: pluginRoot,
     spawnEnvironment: { ...process.env, AIDLC_DEEP_SPEC_QUINT_METHOD: "simulation", AIDLC_DEEP_SPEC_QUINT_BIN: quintBin },
   });

@@ -1,0 +1,206 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "deep-spec-refinement-map-schema.json",
+  "title": "Deep Spec refinement map (contract 4)",
+  "description": "The explicit abstraction function connecting the VERIFIED requirements IR (contract 1) to the design IR (contract 3), one entry per unit. LLM-authored and human-gated like the IRs; deterministic tools validate it and check property preservation under it. Direction: standard data refinement — each REQUIREMENTS attribute is defined by an expression over DESIGN attributes, so substituting the map into a requirements property is purely mechanical. The two content hashes anchor the map to the exact documents it maps between; a mismatch skips every refinement check with reason stale-input.",
+  "type": "object",
+  "required": ["mapVersion", "requirementsIrHash", "designIrHash", "units"],
+  "additionalProperties": false,
+  "properties": {
+    "mapVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "description": "SemVer of the refinement-map contract line."
+    },
+    "requirementsIrHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of the canonical (key-sorted) JSON of the requirements IR this map abstracts TO."
+    },
+    "designIrHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of the canonical (key-sorted) JSON of the design IR this map abstracts FROM."
+    },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/unitMap" }
+    }
+  },
+  "definitions": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9_]*$"
+    },
+    "attrPath": {
+      "type": "string",
+      "pattern": "^[a-z][a-zA-Z0-9_]*\\.[a-z][a-zA-Z0-9_]*$"
+    },
+    "expr": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["op", "args"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "enum": ["and", "or"] },
+            "args": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/expr" } }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "args"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "not" },
+            "args": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "#/definitions/expr" } }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "args"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "enum": ["implies", "iff", "eq", "ne", "lt", "le", "gt", "ge", "add", "sub", "mul"] },
+            "args": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/definitions/expr" } }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "path"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "ref" },
+            "path": { "$ref": "#/definitions/attrPath" },
+            "prime": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "bool" },
+            "value": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "int" },
+            "value": { "type": "integer" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["op", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "op": { "const": "enum" },
+            "value": { "$ref": "#/definitions/identifier" }
+          }
+        }
+      ]
+    },
+    "unitMap": {
+      "type": "object",
+      "required": ["unit", "attrMap", "eventMap", "unmapped"],
+      "additionalProperties": false,
+      "properties": {
+        "unit": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+        },
+        "attrMap": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/attrMapping" }
+        },
+        "eventMap": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/eventMapping" }
+        },
+        "unmapped": {
+          "type": "array",
+          "description": "The no-silence ledger: every requirements obligation, scenario, or attribute this map deliberately does not cover, with the reason.",
+          "items": {
+            "type": "object",
+            "required": ["target", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "target": {
+                "type": "string",
+                "description": "OB-n, SC-n, or a requirements entity.attribute path."
+              },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "attrMapping": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["req", "expr"],
+          "additionalProperties": false,
+          "description": "A bool/int requirements attribute defined by a prime-free expression over DESIGN attribute refs.",
+          "properties": {
+            "req": { "$ref": "#/definitions/attrPath" },
+            "expr": { "$ref": "#/definitions/expr" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["req", "enumMap"],
+          "additionalProperties": false,
+          "description": "An enum requirements attribute defined by a total mapping from a DESIGN enum attribute's values (merging is allowed).",
+          "properties": {
+            "req": { "$ref": "#/definitions/attrPath" },
+            "enumMap": {
+              "type": "object",
+              "required": ["from", "cases"],
+              "additionalProperties": false,
+              "properties": {
+                "from": { "$ref": "#/definitions/attrPath" },
+                "cases": {
+                  "type": "object",
+                  "minProperties": 1,
+                  "propertyNames": { "pattern": "^[a-z][a-zA-Z0-9_]*$" },
+                  "additionalProperties": { "$ref": "#/definitions/identifier" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "eventMapping": {
+      "type": "object",
+      "required": ["reqTrigger"],
+      "additionalProperties": false,
+      "description": "Which design transitions/event obligations simulate a requirements event. `waived` records a human-accepted non-simulation (skipped with reason waived, never silence).",
+      "properties": {
+        "reqTrigger": { "$ref": "#/definitions/identifier" },
+        "transitions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^(TR|DOB)-[0-9]+$"
+          }
+        },
+        "waived": {
+          "type": "object",
+          "required": ["reason"],
+          "additionalProperties": false,
+          "properties": {
+            "reason": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

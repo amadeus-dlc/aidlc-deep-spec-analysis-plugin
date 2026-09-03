@@ -1,0 +1,24 @@
+{
+  "stage": "code-generation",
+  "version": 1,
+  "writes": [
+    { "path": "deep-spec-analysis/src/" },
+    { "path": "deep-spec-analysis/tools/" },
+    { "path": "deep-spec-analysis/tests/" },
+    { "path": "deep-spec-analysis/scripts/build-tools.ts" },
+    { "path": "deep-spec-analysis/scripts/install.ts" },
+    { "path": "deep-spec-analysis/scripts/smt-stress.ts" },
+    { "path": "deep-spec-analysis/sensors/" },
+    { "path": "deep-spec-analysis/stages/" },
+    { "path": "deep-spec-analysis/docs/decisions.md" },
+    { "path": "deep-spec-analysis/docs/decisions.ja.md" },
+    { "path": "deep-spec-analysis/package.json" },
+    { "path": "deep-spec-analysis/bun.lock" },
+    { "path": "deep-spec-analysis/bunfig.toml" },
+    { "path": "deep-spec-analysis/tsconfig.json" },
+    { "path": "deep-spec-analysis/README.md" },
+    { "path": "deep-spec-analysis/README.ja.md" },
+    { "path": ".github/workflows/ci.yml" },
+    { "path": "aidlc/spaces/default/knowledge/aidlc-shared/aidlc-engine-operations.md" }
+  ]
+}

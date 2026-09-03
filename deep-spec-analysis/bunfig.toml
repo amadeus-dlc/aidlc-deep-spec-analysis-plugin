@@ -1,9 +1,16 @@
 # テスト設定 — domain 層の 90% カバレッジ床（DDD 移行の品質ゲート、issue #14）。
 #
-# 計測対象は tools/ のレイヤード domain 層のみ。センサー CLI・レガシー lib・
+# 計測対象は src/ のレイヤード domain 層のみ。センサー CLI（src/entries/）・
 # scripts・テスト補助はカバレッジ計測から除外する（CLI は子プロセス実行で
 # in-process 計測に乗らず、golden/e2e スイートが実効カバレッジを担う）。
+# 生成物 tools/ は除外を書く必要がない——実測でも計測に一切現れない
+# （全て子プロセス実行のため in-process 計測に乗らない）。
 # CI は `bun test --coverage` で走り、床を割ると exit 非ゼロで落ちる。
+
+[install]
+# 層パッケージ間の依存は宣言したものだけを解決可能にする（pnpm 形式の
+# 分離レイアウト）。未宣言の @deep-spec/* は import 時点で解決に失敗する。
+linker = "isolated"
 
 [test]
 coverageThreshold = 0.9
@@ -11,21 +18,19 @@ coverageSkipTestFiles = true
 coveragePathIgnorePatterns = [
   "tests/**",
   "scripts/**",
-  "tools/aidlc-sensor-*.ts",
-  "tools/deep-spec-analysis-doctor.ts",
-  "tools/deep-spec-lib.ts",
-  "tools/deep-spec-refinement-lib.ts",
-  "tools/data/**",
+  "src/entries/aidlc-sensor-*.ts",
+  "src/entries/deep-spec-analysis-doctor.ts",
+  "src/entries/data/**",
   # 数値ゲートの憲章は「domain 層に 90%」。adapter/usecase は契約テストで
   # 検証するが、per-file 閾値の対象には含めない（I/O 分岐の網羅は spawn 系
   # スイートと sandbox が担う）。
-  "tools/kernel/adapter/**",
-  "tools/refcheck/adapter/**",
-  "tools/refcheck/usecase/**",
-  "tools/requirements/adapter/**",
-  "tools/requirements/usecase/**",
-  "tools/design/adapter/**",
-  "tools/design/usecase/**",
-  "tools/doctor/adapter/**",
-  "tools/doctor/usecase/**",
+  "src/kernel/adapter/**",
+  "src/refcheck/adapter/**",
+  "src/refcheck/usecase/**",
+  "src/requirements/adapter/**",
+  "src/requirements/usecase/**",
+  "src/design/adapter/**",
+  "src/design/usecase/**",
+  "src/doctor/adapter/**",
+  "src/doctor/usecase/**",
 ]

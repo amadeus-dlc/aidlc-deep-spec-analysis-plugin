@@ -7,7 +7,7 @@
 //   - parse は閉集合、reconstitute は逐語
 
 import { describe, expect, test } from "bun:test";
-import { FindingKind } from "../tools/kernel/domain/index.ts";
+import { FindingKind } from "@deep-spec/kernel-domain";
 
 const FROZEN_ORDER = [
   "conflict",

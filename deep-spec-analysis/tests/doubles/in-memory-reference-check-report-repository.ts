@@ -3,13 +3,13 @@
 // 契約適合は実 serializer を使う——「不適合を書かない」という Repository の
 // 不変条件はダブルでも本物でなければならない。
 
-import { type Result, err, ok } from "../../tools/kernel/infrastructure/index.ts";
-import type { Schema } from "../../tools/kernel/adapter/index.ts";
-import type { SchemaUnreadable } from "../../tools/kernel/adapter/index.ts";
-import type { RepositoryError } from "../../tools/kernel/usecase/index.ts";
-import { conformToContract } from "../../tools/refcheck/adapter/index.ts";
-import type { ReferenceCheckReport, ReferenceCheckReportId } from "../../tools/refcheck/domain/index.ts";
-import type { ReferenceCheckReportRepository } from "../../tools/refcheck/usecase/index.ts";
+import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import type { Schema } from "@deep-spec/kernel-adapter";
+import type { SchemaUnreadable } from "@deep-spec/kernel-adapter";
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
+import { conformToContract } from "@deep-spec/refcheck-adapter";
+import type { ReferenceCheckReport, ReferenceCheckReportId } from "@deep-spec/refcheck-domain";
+import type { ReferenceCheckReportRepository } from "@deep-spec/refcheck-usecase";
 
 export class InMemoryReferenceCheckReportRepository implements ReferenceCheckReportRepository {
   readonly #findingsSchema: Result<Schema, SchemaUnreadable>;

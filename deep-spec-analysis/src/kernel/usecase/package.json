@@ -1,0 +1,9 @@
+{
+  "name": "@deep-spec/kernel-usecase",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  }
+}

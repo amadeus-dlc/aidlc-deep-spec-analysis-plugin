@@ -34,6 +34,11 @@ jobs:
       - name: Typecheck
         run: bunx tsc --noEmit
 
+      # tools/ は src/entries/ から機械生成した成果物。原本と配布物が食い違うと
+      # ディスパッチャが古い挙動を実行するので、再生成して byte 比較する。
+      - name: Generated tools/ is in sync with src/
+        run: bun scripts/build-tools.ts --check
+
       - name: Conformance tests (byte-exact findings, determinism)
         run: bun test --coverage
 

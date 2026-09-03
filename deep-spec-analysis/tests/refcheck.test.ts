@@ -18,10 +18,13 @@ import { cpSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateSchema } from "../tools/kernel/adapter/index.ts";
+import { validateSchema } from "@deep-spec/kernel-adapter";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const toolsDir = join(pluginRoot, "tools");
+// スキーマ原本はソースツリー側（src/entries/data/）。toolsDir は生成される配布物の
+// spawn 先で、原本の置き場ではない。
+const dataDir = join(pluginRoot, "src", "entries", "data");
 const fixtures = join(pluginRoot, "tests", "fixtures", "refcheck");
 const expected = join(fixtures, "expected");
 
@@ -203,7 +206,7 @@ describe("refcheck degradation (never a crash, never silence)", () => {
 });
 
 describe("contract-2 schema conformance of every golden findings file (FR1.3)", () => {
-  const schemaDoc = JSON.parse(readFileSync(join(toolsDir, "data", "deep-spec-findings-schema.json"), "utf-8"));
+  const schemaDoc = JSON.parse(readFileSync(join(dataDir, "deep-spec-findings-schema.json"), "utf-8"));
   const goldenDirs = [
     join(pluginRoot, "tests", "fixtures", "conformance", "expected"),
     join(expected, "broken"),

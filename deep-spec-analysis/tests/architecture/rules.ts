@@ -1,11 +1,8 @@
-// アーキテクチャルール — tools/ 配下の import 方向と層規律を検査する純粋関数群。
+// アーキテクチャルール — src/ 配下の import 方向と層規律を検査する純粋関数群。
 //
-// 各ルールは (tools/ からの相対パス, ソーステキスト) を受けて違反を返す。
+// 各ルールは (src/ からの相対パス, ソーステキスト) を受けて違反を返す。
 // テスト側は必ず red example（違反を検出できることの証明）と green example を
 // 先に流してから実ツリーへ適用する（カスタム検査の DoD）。
-//
-// 現行のフラット 13 ファイルは LEGACY 扱いで層規律の対象外。移行 PR が
-// 進むたびに LEGACY 集合が縮み、PR10 で空になる（issue #23）。
 
 export interface Violation {
   readonly path: string;
@@ -13,23 +10,21 @@ export interface Violation {
   readonly detail: string;
 }
 
-// 移行前から存在するフラット構成のファイル。層規律（process/io/方向）を免除。
-// 削除されたらこの集合からも消すこと（増やす変更は移行の逆行）。
-// 合成ルート（フラット必須の entry）。ディスパッチャが basename 解決するため
-// tools/ 直下から動かせない。層規律の免除ではなく「配線だけを持つ役割」で、
-// process.*/import.meta を許される唯一の場所。旧 LEGACY_FILES 免除は PR10 で
-// 空化された——entry 以外のフラットファイルは未分類として違反になる。
+// 合成ルート（entry）。ディスパッチャが basename で解決するため src/entries/ に
+// 平置きし、配布物にもその名前で束ねられる。層規律の免除ではなく「配線だけを
+// 持つ役割」で、process.*/import.meta を許される唯一の場所。entries/ の外に
+// 平置きのファイルは無く、層にも entries にも属さないパスは未分類として違反。
 export const ENTRY_FILES: ReadonlySet<string> = new Set([
-  "aidlc-sensor-deep-spec-ir-valid.ts",
-  "aidlc-sensor-deep-spec-verify-smt.ts",
-  "aidlc-sensor-deep-spec-verify-quint.ts",
-  "aidlc-sensor-deep-spec-refcheck-domain.ts",
-  "aidlc-sensor-deep-spec-refcheck-contract.ts",
-  "aidlc-sensor-deep-spec-refcheck-functional.ts",
-  "aidlc-sensor-deep-spec-design-ir-valid.ts",
-  "aidlc-sensor-deep-spec-design-verify-smt.ts",
-  "aidlc-sensor-deep-spec-design-verify-quint.ts",
-  "deep-spec-analysis-doctor.ts",
+  "entries/aidlc-sensor-deep-spec-ir-valid.ts",
+  "entries/aidlc-sensor-deep-spec-verify-smt.ts",
+  "entries/aidlc-sensor-deep-spec-verify-quint.ts",
+  "entries/aidlc-sensor-deep-spec-refcheck-domain.ts",
+  "entries/aidlc-sensor-deep-spec-refcheck-contract.ts",
+  "entries/aidlc-sensor-deep-spec-refcheck-functional.ts",
+  "entries/aidlc-sensor-deep-spec-design-ir-valid.ts",
+  "entries/aidlc-sensor-deep-spec-design-verify-smt.ts",
+  "entries/aidlc-sensor-deep-spec-design-verify-quint.ts",
+  "entries/deep-spec-analysis-doctor.ts",
 ]);
 
 const CONTEXTS = ["kernel", "requirements", "design", "refinement", "refcheck", "doctor"] as const;
@@ -38,6 +33,11 @@ const CONTEXTS = ["kernel", "requirements", "design", "refinement", "refcheck", 
 // RPC クライアント・永続化は置かない——それらは adapter のゲートウェイ責務。
 const LAYERS = ["infrastructure", "domain", "usecase", "adapter"] as const;
 
+// 層パッケージの bare specifier の接頭辞。src/<ctx>/<layer>/ の 17 層は
+// それぞれ workspace パッケージ @deep-spec/<ctx>-<layer> で、層をまたぐ辺は
+// この形だけで書く（src/entries/ は @deep-spec/entries）。
+const PACKAGE_SCOPE = "@deep-spec/";
+
 type Layer = (typeof LAYERS)[number];
 
 interface Location {
@@ -45,10 +45,14 @@ interface Location {
   readonly layer: Layer;
 }
 
-export function locationOf(relPath: string): Location | "entry" | "legacy" | "data" | null {
+// 受け取るパスは src/ からの相対（kernel/domain/digest.ts・
+// entries/deep-spec-analysis-doctor.ts・entries/data/deep-spec-ir-schema.json）。
+// 契約スキーマは entry と同階層の entries/data/ にある——entry は自ファイルから
+// の相対で data/ を引くので、ソースツリーと出荷物で相対関係を揃えてある。
+export function locationOf(relPath: string): Location | "entry" | "data" | null {
   if (ENTRY_FILES.has(relPath)) return "entry";
   const segments = relPath.split("/");
-  if (segments[0] === "data") return "data";
+  if (segments[0] === "entries" && segments[1] === "data") return "data";
   if (segments.length >= 3 && (CONTEXTS as readonly string[]).includes(segments[0]) && (LAYERS as readonly string[]).includes(segments[1])) {
     return { context: segments[0], layer: segments[1] as Layer };
   }
@@ -158,6 +162,30 @@ export function importSpecifiers(rawSource: string): string[] {
   return specs;
 }
 
+// bare specifier のターゲットを分類する。@deep-spec/<ctx>-<layer> は層
+// パッケージ、@deep-spec/entries は合成ルート、それ以外（node:* や公認 npm）は
+// 層規律の対象外＝null。
+function packageLocationOf(specifier: string): Location | "entry" | null {
+  if (!specifier.startsWith(PACKAGE_SCOPE)) return null;
+  const name = specifier.slice(PACKAGE_SCOPE.length).split("/")[0] ?? "";
+  if (name === "entries") return "entry";
+  for (const context of CONTEXTS) {
+    if (!name.startsWith(`${context}-`)) continue;
+    const layer = name.slice(context.length + 1);
+    if ((LAYERS as readonly string[]).includes(layer)) return { context, layer: layer as Layer };
+  }
+  return null;
+}
+
+// パッケージのディレクトリ（src/ からの相対）。層は <ctx>/<layer>、entry は
+// entries。data と未分類はパッケージを持たない。
+function packageRootOf(relPath: string): string | null {
+  const loc = locationOf(relPath);
+  if (loc === "entry") return "entries";
+  if (loc === null || typeof loc === "string") return null;
+  return relPath.split("/").slice(0, 2).join("/");
+}
+
 function resolveRelative(fromRelPath: string, specifier: string): string {
   const base = fromRelPath.split("/").slice(0, -1);
   for (const seg of specifier.split("/")) {
@@ -168,7 +196,7 @@ function resolveRelative(fromRelPath: string, specifier: string): string {
   return base.join("/");
 }
 
-// ルール: tools/ にテストペイロードを置かない（validator/compose の双方が拒否・drop する）。
+// ルール: src/ にテストペイロードを置かない（validator/compose の双方が拒否・drop する）。
 export function noTestPayloads(relPath: string, _source: string): Violation[] {
   const segments = relPath.split("/");
   const badDir = segments.slice(0, -1).find((s) => s === "tests" || s === "fixtures" || s === "__tests__");
@@ -181,14 +209,18 @@ export function noTestPayloads(relPath: string, _source: string): Violation[] {
   return out;
 }
 
-// ルール: 外部依存を持ち込まない。許されるのは node:* / 相対 import /
-// 公認の optional 依存（z3-solver の動的 import）のみ。
+// ルール: 外部依存を持ち込まない。許されるのは node:* / パッケージ内の相対
+// import / 層パッケージの bare specifier（@deep-spec/*）/ 公認の optional
+// 依存（z3-solver の動的 import）のみ。@deep-spec/* の行き先が実在する層かは
+// layer-direction が、パッケージの外へ出る相対 import は
+// no-cross-package-relative-imports が受け持つ。
 const ALLOWED_NPM: ReadonlySet<string> = new Set(["z3-solver"]);
 
 export function onlySanctionedImports(relPath: string, source: string): Violation[] {
   const out: Violation[] = [];
   for (const spec of importSpecifiers(source)) {
-    const sanctioned = spec.startsWith("node:") || spec.startsWith("./") || spec.startsWith("../") || ALLOWED_NPM.has(spec);
+    const sanctioned =
+      spec.startsWith("node:") || spec.startsWith("./") || spec.startsWith("../") || spec.startsWith(PACKAGE_SCOPE) || ALLOWED_NPM.has(spec);
     if (!sanctioned) out.push({ path: relPath, rule: "only-sanctioned-imports", detail: `import "${spec}"` });
   }
   // 動的 import の引数が引用符リテラルでないもの（テンプレートリテラル・
@@ -215,6 +247,28 @@ export function noEntryImports(relPath: string, source: string): Violation[] {
     if (ENTRY_FILES.has(target)) {
       out.push({ path: relPath, rule: "no-entry-imports", detail: `imports the composition root "${target}"` });
     }
+  }
+  return out;
+}
+
+// ルール: パッケージの外へ出る相対 import を禁じる（FR1.5）。層をまたぐ辺は
+// bare specifier（@deep-spec/<ctx>-<layer>）で書く——相対で潜り込むと isolated
+// linker が張った「宣言済みの依存だけ」というゲートを迂回でき、層規律が実行時に
+// 素通りする。パッケージ内（自分の <ctx>/<layer>/ 配下、entry なら entries/
+// 配下）に閉じる相対 import だけが通る。
+export function noCrossPackageRelativeImports(relPath: string, source: string): Violation[] {
+  const root = packageRootOf(relPath);
+  if (root === null) return [];
+  const out: Violation[] = [];
+  for (const spec of importSpecifiers(source)) {
+    if (!spec.startsWith(".")) continue;
+    const target = resolveRelative(relPath, spec);
+    if (target === root || target.startsWith(`${root}/`)) continue;
+    out.push({
+      path: relPath,
+      rule: "no-cross-package-relative-imports",
+      detail: `relative import "${spec}" leaves package ${root} (resolves to "${target}") — cross-package edges are bare specifiers`,
+    });
   }
   return out;
 }
@@ -702,12 +756,18 @@ export function layerDirection(relPath: string, source: string): Violation[] {
   if (loc === null || typeof loc === "string") return [];
   const out: Violation[] = [];
   for (const spec of importSpecifiers(source)) {
-    if (!spec.startsWith(".")) continue;
-    const target = resolveRelative(relPath, spec);
-    const targetLoc = locationOf(target);
+    // 辺は 2 種——層パッケージの bare specifier（層をまたぐ辺の正規の書き方）と、
+    // 解決してから分類する相対 import（実ツリーではパッケージ内に閉じるが、
+    // 外へ出た相対も方向を判定し続ける——検出力を二重に持たせる）。node:* と
+    // 公認 npm は only-sanctioned-imports の担当なのでここでは見ない。
+    const relative = spec.startsWith(".");
+    if (!relative && !spec.startsWith(PACKAGE_SCOPE)) continue;
+    const target = relative ? resolveRelative(relPath, spec) : spec;
+    const targetLoc = relative ? locationOf(target) : packageLocationOf(spec);
     if (targetLoc === null) {
-      // 未分類ターゲット（tools/ 外への脱出や層に属さないファイル）を
-      // 素通しにすると検査全体の回避経路になるため違反にする。
+      // 未分類ターゲット（src/ 外への脱出、層に属さないファイル、層パッケージで
+      // ない @deep-spec/*）を素通しにすると検査全体の回避経路になるため
+      // 違反にする。
       out.push({ path: relPath, rule: "layer-direction", detail: `layered file imports unclassified "${target}"` });
       continue;
     }
@@ -732,6 +792,7 @@ export const ALL_RULES = [
   noTestPayloads,
   onlySanctionedImports,
   noEntryImports,
+  noCrossPackageRelativeImports,
   noIoInPureLayers,
   processOnlyInEntries,
   noExportStar,

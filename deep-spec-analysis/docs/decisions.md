@@ -2389,3 +2389,111 @@ are injected by the entry, since only a composition root may read
 `process.*`. This changes what the row means: `Apalache available` now
 asserts that a bounded verification would actually run.
 
+## The src/tools distribution split — tools/ becomes a generated bundle, src/ is the only place anyone edits (2026-09-03)
+
+`tools/` had doubled as both the development source and the shipped
+artifact, and the dependency direction between layers was enforced
+only by the test-time `layer-direction` rule in
+`tests/architecture/rules.ts`. This split makes `src/` the sole
+editing target and turns `tools/` into a build artifact holding
+nothing but bundles machine-generated from `src/entries/` — the goal
+is to enforce dependency direction structurally, rather than leave
+test-time detection as the only line of defense.
+
+- **Layers become packages.** The seventeen `src/<ctx>/<layer>/`
+  directories, `src/entries/`, and `tests` all became members of a
+  bun workspace. Each package's `package.json` narrows `exports` to
+  `"."` → `"./index.ts"` only, and declares in `dependencies` exactly
+  the edges it actually imports, each as `workspace:*`. Paired with
+  `bunfig.toml`'s `[install] linker = "isolated"`, an undeclared
+  layer is unresolvable both at runtime and under `tsc`.
+- **Making `tests` a workspace member — a ruling from measurement.**
+  The original plan listed every layer in root `package.json`'s
+  `dependencies`. Measured against it: an `@deep-spec/*` package
+  placed at root let an import from an *undeclared* layer resolve
+  anyway, via upward `node_modules` lookup to the root — and `tsc`
+  stopped emitting `TS2307` for it, silently disabling the whole
+  boundary check. Making `tests` a workspace member instead means
+  `@deep-spec/*` is linked only under `tests/node_modules/`; an
+  import from a zero-dependency layer now fails with
+  `Cannot find module`.
+- **A new rule closes the relative-import escape.** A bare specifier
+  alone still leaves a `../` path across package boundaries, so
+  `tests/architecture/rules.ts` gained
+  `no-cross-package-relative-imports` (eighteen rules → nineteen).
+  `locationOf` is now rooted at `src/`, and `layer-direction` judges
+  direction across bare-specifier edges too. No existing rule lost
+  detection power.
+- **The generator and its drift guard.** `scripts/build-tools.ts`
+  bundles each entry individually with
+  `bun build --target=bun --external z3-solver --sourcemap=none` — no
+  code splitting, no minify, to avoid the manifest and doctor
+  destabilizing on chunk-name drift. `--check` regenerates into a
+  temp directory, compares byte for byte, and exits non-zero naming
+  the differing files. CI runs it immediately after typecheck — the
+  same shape as upstream's `aidlc-runner-gen check`. Measured:
+  generation takes 106ms, is byte-identical from the same source, and
+  is invariant to the output path (source paths are embedded
+  cwd-relative, so the generator pins its own cwd to the package
+  root).
+- **Shipped filenames stay `.ts` — a ruling.** The plan had been to
+  ship `.js`; it turned out the upstream dispatch path requires
+  `.ts`. `aidlc-workflows/core/tools/aidlc-sensor.ts`'s
+  `resolveScriptPath` looks in the manifest's `command` for a token
+  ending `.ts` and calls `dispatchError` if none exists, and
+  `aidlc-utility.ts`'s doctor check hardcodes `<plugin>-doctor.ts`.
+  The distribution path — `aidlc-plugin-validate` /
+  `aidlc-plugin-build` / compose — checks no extension at all. Given
+  the constraint of not touching the upstream contract, keeping
+  shipped filenames `.ts` is the only compatible answer: bun executes
+  the bundled JS underneath regardless of the name, and node 24's
+  type-stripping passes it through unchanged (verified on the
+  `--smt-child` subprocess path, exit 0). The findings JSON and
+  verdict line came back byte-identical to a `.js`-named run, and
+  `smt.json` matched the frozen golden. The requirement had been
+  written without checking the execution path; the reverse-engineered
+  code knowledge base's claim that nothing checks extensions was
+  correct, but only for projection, validate, and compose.
+- **Contract schemas stay next to their entry.** Each entry resolves
+  `data/` relative to `dirname(fileURLToPath(import.meta.url))`. In
+  the shipped tree `tools/<entry>.ts` and `tools/data/` sit at the
+  same level, so this resolves; originals living at `src/data/` would
+  not resolve from the source tree. Keeping the originals under
+  `src/entries/data/`, alongside their entry, keeps the relative rule
+  identical in both the source tree and the shipped tree — and
+  `bun src/entries/<entry>.ts` still runs directly.
+- **The bundle-size ceiling moved to 512 KiB — a ruling.** The
+  original "300 KB or less" figure came from measuring only the
+  requirements-family entries; it did not account for the three
+  design-family entries, which bundle 241 modules each and land at
+  291–300 KB (300,296 bytes at the largest). That made the gate
+  fragile enough to fail on a 189-byte difference depending on which
+  unit you read it in — rather than pick units to make the number
+  pass, the ceiling itself was revised. The point of the gate is
+  catching abnormal bloat, not a specific figure.
+- **The installer tombstone now handles directories.**
+  `REMOVED_PAYLOADS` covers both files and directories and
+  recursively deletes the six context layer directories
+  (`tools/{kernel,requirements,design,refinement,refcheck,doctor}/`).
+  The ten old entry files keep their filenames, so the existing
+  upgrade refresh replaces them in place. Measured: an
+  already-installed sandbox's `.claude/tools/` went from 616 to 85
+  files (the plugin's own share: ten bundles plus four schema files),
+  and the six layer directories disappeared.
+- **One, and only one, external-contract change.** Doctor's
+  installation manifest loses the seventeen layer-facade canary
+  lines — unavoidable once layers stop shipping, and exactly the
+  point of the change. Entry rows keep their `.ts` labels unchanged.
+  The IR, findings JSON, cross-check, refcheck reports, verdict
+  lines, and exit-code meanings are all untouched.
+
+Evidence: `bunx tsc --noEmit` exit 0; `bun test --coverage` 496 pass /
+1 skip / 0 fail with the 0.9 coverage floor held; `aidlc-plugin-validate`
+VALID; all 7 harness builds succeed with `dist/claude/tools` at 14
+files; `aidlc-plugin-test` CLEAN (`Changed files (0)` / `Drops: 0` /
+`Idempotent second compose: true`); doctor 31 checks, 0 fail. A real
+dispatch against a real sandbox (the `260829-feature` fixture) came
+back ir-valid pass / SMT 5 findings, 2 skipped, exhaustive / Quint 2
+findings, 3 skipped, bounded (real Apalache) / cross-check SC-3, SC-5
+with 0 disagreement — all three output files byte-identical to the
+pre-migration baseline. Golden and parity snapshots are unchanged.
