@@ -1869,3 +1869,90 @@ data-model ルールをすり抜けていた generic record `LoadedDocument<Outc
 この波で 2026-09-02 の裁定 22 件はすべて実装され、#71 の種別規律プログラムは
 完了した。domain 層にあるのはエンティティ・値オブジェクト・ファーストクラス
 コレクション・ドメインイベントだけで、それ以外は無い。
+
+## 種別規律——残る裁定キューの裁定と、2 つの規律（2026-09-03）
+
+裁定 22 件の実装が終わり、残っていたキューをオーナーが 1 問ずつ裁定した。
+まずこのセッションで立った規律 2 つ、次に裁定 8 件。実装は 5 つの単位で行う
+（波ではない——2026-09-03 のオーナー指示で波数は増やさず、意味のある単位で
+閉じる）: 0 この記録、1 裁定 2、2 裁定 3-1〜3-4、3 裁定 4、4 裁定 5。
+
+**規律: 外部仕様は変えない。** LLM と人間が読むもの——要件 IR（契約1）、
+設計 IR（契約3）、refinement map、findings 文書（契約2）、doctor の出力——は
+published 契約である。「ツールが読まない」は文書項目を消す理由にも、それを
+運ぶ domain のフィールドを消す理由にもならない。`Obligation.ears` は EARS
+正規化文で、執筆ガイドが LLM に書かせ、後続の工程で LLM が読むので残す。消して
+よいのは、文書項目に対応せず、I/O にも domain にも読み手がない in-memory の
+フィールド／getter だけ。波22・24・40 の削除はすべてこれに当たる——どの
+コミットもスキーマ・執筆ガイド・stage・expected 文書に触れておらず、golden は
+バイト同一だった。
+
+**規律: getter は I/O の読み手のために残す。** Repository／serializer／
+presenter が永続化や描画のために読む getter は残し、I/O にも domain にも読み手
+がなくなった getter は消す。domain のロジックが getter で中身を引き出して
+オブジェクトの外で判断することはしない——その判断はオブジェクト自身の振る舞い
+にする。エンティティは `id()` を持つ。getter の全廃が理想なのは外に読み手が
+いない場合だけで、I/O が読む getter を無理に消さない。
+
+1. **in-memory の死にフィールド（波22・24）——追認。**
+   `RefinementAttribute.min`／`max`（refinement 縦割りが IR の属性範囲を写した
+   もので、refinement 検査は読まない。IR は持ち続け、`IrAttributeDecl` は今も
+   使う）、`DesignAssignments.count`、`RefinementProbe.reqId` アクセサは削除の
+   まま。必要になった機能と一緒に戻す。
+2. **published な値の形が domain ロジックを外へ漏らしていた——値オブジェクト
+   にする。** オーナーの求めで厳密に調べると、`DesignValue`／`DecodedValue`／
+   `TraceState` の意味論が型の外で計算されていた: `QuintMachineComponent.
+   evaluate` が真偽（`v === true`）・数値化（`typeof v === "number"`）・
+   `JSON.stringify` による等価を決め、`DesignUnit.declaredEnumValuesOf`／
+   `enumValuesOf` が `#rawEntities`——設計 IR の実体宣言を生 JSON で抱えた
+   もの——を `Array.isArray`／`attr.type.kind`／`attr.type.values` と構造的に
+   歩く（これは witness の値ではなく、除外の陰に隠れた「外から読むデータ
+   モデル」そのもの）。`LoweredUnit.remapCore` と `SiblingVerdictFinding.
+   witnessWithCoreRemapped` は witness の形（`"core" in witness`）を判定して
+   組み直す。裁定: (a) `DesignUnit` は enum 宣言値を型付き宣言から答え、
+   `rawEntities` を追放し、serializer と refinement query plan には型付き射影を
+   出す。(b) `TraceState` は class（`valueAt`・`toDocument`）になり、要素
+   `TraceValue`（`isTrue`・`asNumber`・`equals`・`toDocument`）が評価器の補助を
+   吸収する。(c) design 側の witness は `DesignWitness`（core／model／trace、
+   `remapCore`）になり、形判定は残らない。3 つの型別名は adapter の復号・描画の
+   入口だけに残るか消える。golden はバイト同一。
+3. **プリミティブ台帳（記述子 66 件）は除外ではなく因数分解する。**
+   - 3-1、索引・コレクションの内部表現（33 件）: domain の門の内側の
+     `Map<string, …>`／`Set<string>`／`readonly string[]` は除外しない——因数
+     分解する。キーは DP、値は DP か domain オブジェクト、表には名前
+     （`SmtVerificationPlan.#compiled: CompiledObligations`、`isCompiled(id:
+     ObligationId)`）、その内側は `KeyedIndex<K, V>`／`KeySet<K>`——string キー
+     の Map を唯一持つ kernel の表現プリミティブ 2 つで、DP の唯一の `#value`
+     と同じ理屈で認める。string 配列は DP の配列になる（`FrRefs`・`BrRefs`・
+     `CheckedUnits`、lowered 記録の `frRefs`、unsat core のラベル列 2 件）。
+   - 3-2、分類文字列（9 件）: `FindingKind`（スキーマの閉集合 11 種と順位。
+     `parse` は閉集合、`reconstitute` は逐語で、不適合文書の降格試験が動き
+     続ける。`compareTo`・`isConflict`）、`VerificationMethod`（4 種）、
+     `AttributeKind`（`isBool`／`isInt`／`isEnum`・`label`）は文脈をまたいで
+     共有する kernel の DP——それぞれ単一の published 契約の語彙だから。kind
+     順位表の 5 つの複製は 1 つになる。`Obligation.#ears` は prose（最初の
+     規律）で、規則の対象から外れる。
+   - 3-3、語彙の文字列（20 件）: 既存の DP を当てる——`UnitName`（kernel へ
+     昇格、5 件）、`ArtifactPath`（アンカーの artifact と `ManifestEntry.rel`）、
+     `ElementPath`、`TargetId`（`Skipped.target`）、`ObligationNature` と
+     `TriggerName`（lowered 義務のため kernel へ昇格）、`ContentHash`（digest
+     4 件）——に加え、SMT クエリ id の新 DP `QueryLabel` を 1 つ。`WitnessRef.
+     #value` は人間のために逐語で残す原文トークンなので、語彙ではなく prose。
+   - 3-4、数値メタデータ（3 件）: 3 つの outcome の fence 個数は `FenceCount`
+     （`of`・`asNumber`）。凍結文言はそれを通して描画する。
+   3-1〜3-4 の後、台帳は空になる。
+4. **不変量義務が無くても Quint の機械フェーズを走らせる。** 現状は
+   `hasInvariantComponents` が、背景制約とイベント義務だけのモデルで機械実行を
+   飛ばし、計画は機械対象について finding も skip も出さず、requirements の
+   レポートには `checked` 欄が無い——イベント義務は沈黙し、デッドロックは検出
+   されない。コンパイラは既に `val invAll = true` を出している。裁定: ゲートを
+   外す。既存 golden は変わらず（全 fixture に不変量がある）、背景制約と
+   イベントだけの fixture と golden で新しい挙動を固定する。挙動変更なので
+   単位を分ける。
+5. **#80（最終アーキテクチャゲート）を最後の単位にする。** 台帳が空になったら、
+   `DATA_MODEL_DEBT` と `PRIMITIVE_FIELD_DEBT` を上限定数・陳腐化ガードごと
+   削除し、data-model 規則を「domain でプロパティを持つ公開 interface／object
+   型はすべて data model」に締め（`readonly a: string`＋`judge()` の red
+   example つき）、domain class のフィールドは `#private` という規則を足し、
+   名前ベースの除外リスト 2 つを「パス・理由・利用可能層」の published language
+   表 1 つに置き換えて import を層ごとに検査する。そのうえで #80 を閉じる。
