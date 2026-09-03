@@ -2113,3 +2113,113 @@ With this wave every one of the 22 rulings of 2026-09-02 is implemented,
 and the domain-object taxonomy programme under #71 is complete: the
 domain layer holds entities, value objects, first-class collections and
 domain events, and nothing else.
+
+## Domain-object taxonomy — the residual queue is ruled, and two standing disciplines (2026-09-03)
+
+With the 22 rulings implemented, the owner ruled the residual queue one
+question at a time. Two standing disciplines came out of the session
+first; the eight rulings follow. The implementation runs in five units
+(not waves — the owner ruled on 2026-09-03 that the wave count stops
+growing and that work closes in meaningful units): 0 this record; 1
+ruling 2; 2 rulings 3-1 to 3-4; 3 ruling 4; 4 ruling 5.
+
+**Discipline: external specifications never change.** Everything an LLM
+or a human reads — the requirements IR (contract 1), the design IR
+(contract 3), the refinement map, the findings documents (contract 2),
+the doctor's output — is a published contract. "The tool does not read
+it" is never a reason to drop a document item, nor the domain field that
+carries it: `Obligation.ears` is the EARS-normalized requirement text
+the authoring guide makes the LLM write and later steps make it read,
+so it stays. What may be deleted is an in-memory field or getter that
+corresponds to no document item and has no reader in I/O or in the
+domain. The deletions of waves 22, 24 and 40 were all of that kind: none
+of those commits touched a schema, an authoring guide, a stage or an
+expected document, and the goldens stayed byte-identical.
+
+**Discipline: getters are for I/O readers.** A getter stays when a
+repository, serializer or presenter reads it to persist or render; it
+goes when no reader is left in I/O or in the domain. Domain logic never
+pulls data out through a getter to decide outside the object — that
+decision is the object's own behaviour. An entity keeps its `id()`.
+Removing every getter is the ideal only where nothing outside needs the
+data; a getter an I/O boundary reads is not forced out.
+
+1. **Dead in-memory fields (waves 22 and 24) — confirmed.**
+   `RefinementAttribute.min` / `max` (the refinement vertical's copy of
+   the IR attribute bounds, which no refinement check read; the IR keeps
+   them and `IrAttributeDecl` still uses them), `DesignAssignments.count`
+   and the `RefinementProbe.reqId` accessor stay deleted; whatever needs
+   them later brings them back with that need.
+2. **The published value shapes leak domain logic — they become value
+   objects.** The audit the owner asked for found the semantics of
+   `DesignValue` / `DecodedValue` / `TraceState` computed outside the
+   types: `QuintMachineComponent.evaluate` decides truth (`v === true`),
+   coerces numbers (`typeof v === "number"`) and compares by
+   `JSON.stringify`; `DesignUnit.declaredEnumValuesOf` / `enumValuesOf`
+   walk `#rawEntities` — the design IR's entity declarations held as raw
+   JSON — structurally (`Array.isArray`, `attr.type.kind`, `attr.type.
+   values`), which is not a witness value at all but a data model read
+   from outside, hidden behind the exclusion; `LoweredUnit.remapCore`
+   and `SiblingVerdictFinding.witnessWithCoreRemapped` judge the witness
+   shape (`"core" in witness`) and rebuild it. Ruling: (a) `DesignUnit`
+   answers enum values from its typed declarations and expels
+   `rawEntities`, giving the serializer and the refinement query plan a
+   typed projection; (b) `TraceState` becomes a class (`valueAt`,
+   `toDocument`) over `TraceValue` (`isTrue`, `asNumber`, `equals`,
+   `toDocument`), which absorbs the evaluator's helpers; (c) the design
+   side's witness becomes `DesignWitness` (core / model / trace,
+   `remapCore`), so no shape test remains. The three aliases survive
+   only at the adapters' decode/render doors, or vanish. Goldens stay
+   byte-identical.
+3. **The primitive-field ledger (66 descriptors) is factored, not
+   excused.**
+   - 3-1, index and collection representations (33): a `Map<string, …>`,
+     `Set<string>` or `readonly string[]` behind a domain door is not
+     excluded — it is factored. The key is a domain primitive, the value
+     a domain primitive or domain object, the table a named first-class
+     collection (`SmtVerificationPlan.#compiled: CompiledObligations`,
+     `isCompiled(id: ObligationId)`), and its inside is `KeyedIndex<K, V>`
+     or `KeySet<K>` — two kernel representation primitives that own the
+     one string-keyed map, admitted by the same reasoning as a domain
+     primitive's single `#value`. Arrays of strings become arrays of
+     domain primitives (`FrRefs`, `BrRefs`, `CheckedUnits`, the lowered
+     records' `frRefs`, the two unsat-core label lists).
+   - 3-2, classification strings (9): `FindingKind` (the schema's closed
+     set of 11 with its rank order; `parse` is closed, `reconstitute`
+     verbatim so the conformance degrade test keeps working; `compareTo`,
+     `isConflict`), `VerificationMethod` (4) and `AttributeKind`
+     (`isBool` / `isInt` / `isEnum`, `label`) are kernel domain
+     primitives shared across contexts, because each is the vocabulary
+     of a single published contract; the five copies of the kind rank
+     table collapse to one. `Obligation.#ears` is prose (see the first
+     discipline) and leaves the rule's scope as such.
+   - 3-3, vocabulary strings (20): existing domain primitives are applied
+     — `UnitName` (promoted to the kernel, five fields), `ArtifactPath`
+     (the anchors' artifact and `ManifestEntry.rel`), `ElementPath`,
+     `TargetId` (`Skipped.target`), `ObligationNature` and `TriggerName`
+     (promoted to the kernel for the lowered obligation), `ContentHash`
+     (four digests) — plus one new `QueryLabel` for the SMT query ids.
+     `WitnessRef.#value` is the verbatim raw token kept for humans, so it
+     is prose, not vocabulary.
+   - 3-4, numeric metadata (3): `FenceCount` (`of`, `asNumber`) for the
+     three outcomes' fence counts; the frozen wording renders through it.
+   After 3-1 to 3-4 the ledger is empty.
+4. **The Quint machine phase runs without invariant obligations.** Today
+   `hasInvariantComponents` skips the machine run for a model with only
+   background constraints and event obligations, the plan then emits
+   neither findings nor skips for the machine targets, and the
+   requirements report carries no `checked` list — the event obligations
+   are silent and deadlocks go undetected, although the compiler already
+   emits `val invAll = true`. Ruling: remove the gate. Existing goldens
+   do not change (every fixture has an invariant); a background-and-events
+   fixture with its golden pins the new behaviour. This is a behaviour
+   change and ships in its own unit.
+5. **#80, the final architecture gate, is the closing unit.** Once the
+   ledgers are empty: delete `DATA_MODEL_DEBT` and `PRIMITIVE_FIELD_DEBT`
+   with their ceilings and staleness guards; tighten the data-model rule
+   so that any exported interface or object type with properties in the
+   domain is a data model (with the `readonly a: string` + `judge()` red
+   example); add a rule that domain class fields are `#private`; replace
+   the two name-based exclusion lists with one published-language table
+   of path, reason and allowed layers, enforced on imports. Then #80
+   closes.
