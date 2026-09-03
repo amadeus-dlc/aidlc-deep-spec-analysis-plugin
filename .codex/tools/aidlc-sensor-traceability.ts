@@ -326,6 +326,18 @@ function resolveUpstream(stage: string, projectDir: string, outputPath: string):
     return result;
   }
 
+  // express and other incremental scopes can run Code Generation without a
+  // Unit DAG. Their canonical record path intentionally has no synthetic Unit
+  // segment, so trace directly to Requirements Analysis just as the stage
+  // contract does instead of attempting per-Unit resolution.
+  if (
+    stage === "code-generation" &&
+    normalizePath(outputPath).endsWith("/construction/code-generation/traceability.json")
+  ) {
+    addSource(result, idsFromFile(requirements, [ID_PATTERNS.FR, ID_PATTERNS.NFR], "requirements.md"));
+    return result;
+  }
+
   const resolvedUnit = resolveUnitContext(projectDir, outputPath, docsDir);
   if (!resolvedUnit.context) {
     result.reasons.push(resolvedUnit.reason ?? "cannot resolve construction unit");
