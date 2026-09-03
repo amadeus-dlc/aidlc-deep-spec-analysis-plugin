@@ -473,9 +473,24 @@ export function domainFieldsArePrivate(relPath: string, rawSource: string): Viol
   if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
   const source = stripComments(stripStrings(rawSource));
   const out: Violation[] = [];
-  const classRe = /^export (?:abstract )?class (\w+)[^{]*\{/gm;
+  const classRe = /^export (?:abstract )?class (\w+)/gm;
   for (let m = classRe.exec(source); m !== null; m = classRe.exec(source)) {
     const name = m[1] ?? "";
+    // class 本体の `{` は型引数の外で最初に現れるもの——`class KeySet<K extends
+    // { asString(): string }>` の制約の `{` を本体と誤認しない（レビュー指摘）。
+    // 山括弧の深さを追い、`=>` の `>` は数えない。
+    let angle = 0;
+    let bodyStart = -1;
+    for (let i = m.index + m[0].length; i < source.length; i++) {
+      const c = source[i] ?? "";
+      if (c === "<") angle++;
+      else if (c === ">" && source[i - 1] !== "=") angle--;
+      else if (c === "{" && angle === 0) {
+        bodyStart = i + 1;
+        break;
+      }
+    }
+    if (bodyStart < 0) continue;
     // class 本体を深さつきで行に切る（波括弧の深さ 1 かつ丸括弧の外 = 本体直下の
     // 宣言。複数行の引数リストや無名インライン object 型の行はここに来ない）。
     let depth = 1;
@@ -484,7 +499,7 @@ export function domainFieldsArePrivate(relPath: string, rawSource: string): Viol
     let lineDepth = 1;
     let lineParens = 0;
     const lines: { depth: number; parens: number; text: string }[] = [];
-    for (let i = m.index + m[0].length; i < source.length && depth > 0; i++) {
+    for (let i = bodyStart; i < source.length && depth > 0; i++) {
       const c = source[i] ?? "";
       if (c === "\n") {
         lines.push({ depth: lineDepth, parens: lineParens, text: line });

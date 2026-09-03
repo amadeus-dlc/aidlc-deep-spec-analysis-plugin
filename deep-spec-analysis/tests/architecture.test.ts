@@ -249,6 +249,9 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly #bar: string;\n  static #cache: Foo | null = null;\n  bar(): string {\n    return this.#bar;\n  }\n}")).toHaveLength(0);
     // ドア署名の無名インライン object 型（深さ 2）の行はフィールドではない。
     expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly #id: string;\n  static reconstitute(seed: {\n    readonly id: string;\n    readonly name?: string;\n  }): Foo {\n    return new Foo(seed);\n  }\n  match<T>(handlers: { a: () => T; b: (x: number) => T }): T {\n    const local: { readonly k: string } = { k: \"\" };\n    return handlers.a();\n  }\n}")).toHaveLength(0);
+    // 型引数の制約に `{` を持つ generic class でも本体を見る（レビュー指摘の回帰）。
+    expect(domainFieldsArePrivate("kernel/domain/foo.ts", "export class Idx<K extends { asString(): string }, V> {\n  readonly leak: string;\n  readonly #ok: V;\n}")).toHaveLength(1);
+    expect(domainFieldsArePrivate("kernel/domain/foo.ts", "export class Idx<K extends { asString(): string }, V extends (x: K) => boolean> {\n  readonly #ok: V;\n}")).toHaveLength(0);
     // 複数行の引数リスト（丸括弧の中）の行もフィールドではない。
     expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly #id: string;\n  static versionMismatch(\n    id: string,\n    model: number,\n    method: string,\n  ): Foo {\n    return new Foo(id);\n  }\n}")).toHaveLength(0);
     expect(domainFieldsArePrivate("design/adapter/foo.ts", "export class Foo {\n  readonly bar: string;\n}")).toHaveLength(0);
