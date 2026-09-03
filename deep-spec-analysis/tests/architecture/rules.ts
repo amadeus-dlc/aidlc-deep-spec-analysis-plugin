@@ -403,21 +403,35 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
   return out;
 }
 
-// ルール: domain 層にデータモデルを置かない（主従の裁定・MECE フェンス
-// 2026-09-01、#71）。getter しかない型（property-only interface・object 型
-// エイリアス・record を含む共用体）はデータモデルであり、domain 層の住人では
-// ない——命令できる class へ反転するか、ドア署名の無名インライン引数へ解散
-// する。DATA_MODEL_DEBT は着手時の全数棚卸し（縮小専用——増やす変更は裁定
-// 違反で、波が 1 件返すたびにここから消す。LEGACY_FILES と同じ規律）。
-// Expression は寛容 published language の既裁定で恒久除外。
-// 台帳は波28で空になった（122 → 0）。縮小専用の規律はそのまま——新しい
-// エントリを足す変更は裁定違反。
-export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([]);
+// 公開言語の表（#80 の最終ゲート、2026-09-03）: domain に置かれる「振る舞いを
+// 持たない型」と「表現プリミティブ」はここに載る型だけで、名前ではなく
+// パス・理由・利用可能層を持つ。data-model 規則と primitive フィールド規則は
+// この表だけを免除し、publishedLanguageLayers がその型を利用できる層を検査する。
+// 免除台帳は消えた——免除は表の項目だけで、項目を足すことは裁定である。
+export const PUBLISHED_LANGUAGE: ReadonlyMap<string, { readonly name: string; readonly reason: string; readonly layers: readonly Layer[] }> = new Map([
+  ["kernel/domain/expression.ts", { name: "Expression", reason: "契約1／契約3 の式ツリー——演算子の集合は契約スキーマの published language そのもの（既裁定）", layers: ["domain", "adapter"] }],
+  ["kernel/domain/keyed-index.ts", { name: "KeyedIndex", reason: "DP をキーにする索引の表現プリミティブ——string キーの Map を持つ唯一の場所（裁定 3-1、2026-09-03）", layers: ["domain", "adapter"] }],
+  ["kernel/domain/key-set.ts", { name: "KeySet", reason: "DP の集合の表現プリミティブ——KeyedIndex と同じ理屈（裁定 3-1、2026-09-03）", layers: ["domain", "adapter"] }],
+  ["kernel/domain/error-messages.ts", { name: "ErrorMessages", reason: "凍結 verdict 文言の列（prose——文字列単位の DP 化はしない、#46 の宣言済み除外）", layers: ["domain", "adapter"] }],
+  ["design/domain/attr-paths.ts", { name: "AttrPaths", reason: "設計属性パス集合（state トークン——enum 宣言値への参照と同じ扱い）", layers: ["domain"] }],
+  ["design/domain/declared-values.ts", { name: "DeclaredValues", reason: "enum 宣言値の集合（state トークン——序数符号化と文言順の凍結面）", layers: ["domain", "adapter"] }],
+  ["design/domain/initial-states.ts", { name: "InitialStates", reason: "機械の初期状態集合（state トークン）", layers: ["domain", "adapter"] }],
+  ["requirements/domain/attribute-values.ts", { name: "AttributeValues", reason: "enum 宣言値の集合（state トークン——SMT の序数符号化・Quint の集合リテラル順の凍結面）", layers: ["domain", "adapter"] }],
+  ["requirements/domain/ir-declared-values.ts", { name: "IrDeclaredValues", reason: "enum 属性の宣言値（state トークン——序数対応・文言順の凍結面）", layers: ["domain", "adapter"] }],
+  ["requirements/domain/fr-ref-claim.ts", { name: "FrRefClaim", reason: "frRefs の主張——owner は義務／シナリオ／unformalized の位置が混成する参照トークン", layers: ["domain", "adapter"] }],
+  ["refinement/domain/req-attribute-values.ts", { name: "ReqAttributeValues", reason: "enum 属性の宣言値（state トークン——decode の序数対応の凍結面）", layers: ["domain", "adapter"] }],
+]);
 
+// ルール: domain 層にデータモデルを置かない（主従の裁定・MECE フェンス
+// 2026-09-01、#71。#80 で最終形）。domain の公開 interface／object 型が
+// プロパティを 1 つでも持てばデータモデル——メソッドを添えても免除されない
+//（「メソッドが一つあれば合格」の抜け道は #80 で塞いだ）。命令できる class へ
+// 反転するか、ドア署名の無名インライン引数へ解散する。免除は公開言語の表の
+// 項目だけ。
 export function noDataModelsInDomain(relPath: string, rawSource: string): Violation[] {
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
-  if (DATA_MODEL_DEBT.has(relPath)) return [];
+  const published = PUBLISHED_LANGUAGE.get(relPath)?.name;
   const source = stripStrings(rawSource);
   const out: Violation[] = [];
   // 型引数付き（export interface X<T> {）も拾う——LoadedDocument<Outcome> が
@@ -426,14 +440,20 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
   const typeParams = "(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?";
   for (const m of source.matchAll(new RegExp(`^export interface (\\w+)${typeParams}\\s*(?:extends [\\w<>, ]+)?\\{([\\s\\S]*?)^\\}`, "gm"))) {
     const name = m[1] ?? "";
-    if (name === "Expression") continue;
-    if (!/^\s+\w+\([^)]*\):/m.test(m[2] ?? "")) {
-      out.push({ path: relPath, rule: "no-data-models-in-domain", detail: `getter-only interface ${name} is a data model — make it commandable or dissolve it into a door signature` });
+    if (name === published) continue;
+    // プロパティ宣言（`readonly a: T` / `a?: T` / index signature）が 1 つでもあれば
+    // データモデル。メソッド署名（`judge(): boolean`）とは見分け、コールバック型の
+    // プロパティ（`on: () => void`）は値を持つ面としてプロパティに数える。
+    const members = (m[2] ?? "").split("\n").map((line) => line.trim()).filter((line) => line !== "");
+    const properties = members.filter((line) => /^(?:readonly\s+)?(?:\w+\??|\[\w+:\s*\w+\])\s*:/.test(line));
+    if (properties.length > 0) {
+      out.push({ path: relPath, rule: "no-data-models-in-domain", detail: `interface ${name} exposes ${properties.length} propert${properties.length === 1 ? "y" : "ies"} — a data model; make it commandable or dissolve it into a door signature` });
     }
   }
   // ジェネリック别名（export type Foo<T> = …）と末尾セミコロン省略の両方も
   // 拾う（波3のレビュー指摘——検査回避経路を塞ぐ）。
   for (const m of source.matchAll(/^export type (\w+)(?:<[^>]*>)?\s*=\s*([\s\S]*?);?$/gm)) {
+    if ((m[1] ?? "") === published) continue;
     const rhs = m[2] ?? "";
     if (/^\s*\{/.test(rhs) || (rhs.includes("{") && rhs.includes("|"))) {
       out.push({ path: relPath, rule: "no-data-models-in-domain", detail: `record-shaped type alias ${m[1]} is a data model — make it commandable or dissolve it into a door signature` });
@@ -442,35 +462,83 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
   return out;
 }
 
+// ルール: domain class のフィールドは `#private`（#80 の最終ゲート、2026-09-03）。
+// 公開・protected・TS private のフィールド宣言（初期化子つき・static を含む）は
+// 違反——public mutable state はもちろん、readonly の公開フィールドも「読ませる
+// 面」を作る。読ませる面はメソッド（I/O の読み手のための getter）で出す。
+// class 本体の直下だけを見る（ドア署名の無名インライン object 型の行は深さ 2
+// 以上なので拾わない）。
+export function domainFieldsArePrivate(relPath: string, rawSource: string): Violation[] {
+  const loc = locationOf(relPath);
+  if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
+  const source = stripComments(stripStrings(rawSource));
+  const out: Violation[] = [];
+  const classRe = /^export (?:abstract )?class (\w+)[^{]*\{/gm;
+  for (let m = classRe.exec(source); m !== null; m = classRe.exec(source)) {
+    const name = m[1] ?? "";
+    // class 本体を深さつきで行に切る（波括弧の深さ 1 かつ丸括弧の外 = 本体直下の
+    // 宣言。複数行の引数リストや無名インライン object 型の行はここに来ない）。
+    let depth = 1;
+    let parens = 0;
+    let line = "";
+    let lineDepth = 1;
+    let lineParens = 0;
+    const lines: { depth: number; parens: number; text: string }[] = [];
+    for (let i = m.index + m[0].length; i < source.length && depth > 0; i++) {
+      const c = source[i] ?? "";
+      if (c === "\n") {
+        lines.push({ depth: lineDepth, parens: lineParens, text: line });
+        line = "";
+        lineDepth = depth;
+        lineParens = parens;
+        continue;
+      }
+      if (c === "{") depth++;
+      else if (c === "}") depth--;
+      else if (c === "(") parens++;
+      else if (c === ")") parens--;
+      line += c;
+    }
+    for (const { depth: d, parens: p, text } of lines) {
+      if (d !== 1 || p !== 0) continue;
+      const field = /^\s*(?:(?:public|protected|private)\s+)?(?:static\s+)?(?:readonly\s+)?([A-Za-z_]\w*)\s*[?!]?\s*[:=]/.exec(text);
+      if (field) {
+        out.push({ path: relPath, rule: "domain-fields-are-private", detail: `class ${name} declares a non-private field ${field[1]} — keep state in a #private field and expose behaviour or an I/O reader` });
+      }
+    }
+  }
+  return out;
+}
+
+// ルール: 公開言語の型はその表が許す層だけが利用できる（#80 の最終ゲート、
+// 2026-09-03）。表の型名を識別子として使うファイルが許可層の外にあれば違反
+//（usecase と entry は公開言語を直接扱わない——値は domain の門か adapter の
+// 変換を通る）。
+export function publishedLanguageLayers(relPath: string, rawSource: string): Violation[] {
+  const loc = locationOf(relPath);
+  if (loc === null) return [];
+  const source = stripComments(stripStrings(rawSource));
+  const out: Violation[] = [];
+  for (const [path, entry] of PUBLISHED_LANGUAGE) {
+    if (path === relPath) continue;
+    if (typeof loc !== "string" && entry.layers.includes(loc.layer)) continue;
+    if (new RegExp(`\\b${entry.name}\\b`).test(source)) {
+      out.push({ path: relPath, rule: "published-language-layers", detail: `${entry.name} (${path}) may be used only in ${entry.layers.join(", ")} layers` });
+    }
+  }
+  return out;
+}
+
 // ルール: domain 層に primitive 型のフィールドを置かない（Ruling A「domain
-// primitives everywhere」2026-08-31、#71 波11 で機械化）。bool を除く
-// string / number とその列・集合・map をフィールドに持つ domain の class・
+// primitives everywhere」2026-08-31、#71 波11 で機械化、#80 で最終形）。bool を
+// 除く string / number とその列・集合・map をフィールドに持つ domain の class・
 // 公開 interface／type はドメインプリミティブへ包むかドアの内側へ隠す。
-// 裁定の恒久除外: DP ラッパー自身（唯一の #value）、prose（detail /
-// reason / message 等の説明文とその列）、state トークン（enum 宣言値への
-// 参照: state / from / to とその列）、design の attrPath、Expression
-// published language、FrRefClaim.owner（義務／シナリオ混成の参照トークン）。
-// PRIMITIVE_FIELD_DEBT は着手時の全数棚卸し——ファイルごとの記述子（"name: type"）
-// の集合で、縮小専用（増やす変更は裁定違反で、波が 1 件返すたびにここから消す。
-// DATA_MODEL_DEBT と同じ規律だが粒度はフィールド）。台帳内ファイルへ新しい
-// primitive フィールドを足せば違反、台帳の記述子が消えれば陳腐化ガードが落ちる。
+// 免除は形で決まる: DP ラッパー自身（唯一の #value）、prose（detail / reason /
+// message / ears 等の説明文とその列）、state トークン（enum 宣言値への参照:
+// state / from / to とその列）——名前ベースの除外リストと免除台帳は消え、公開
+// 言語の表（PUBLISHED_LANGUAGE）の項目だけが理由つきで免除される。
 // 既知の限界: 非公開の type 別名（Result のエラー材料）と index signature
 // 型（{ [k: string]: … }）は見ない。
-export const PRIMITIVE_FIELD_EXCLUSIONS: ReadonlySet<string> = new Set([
-  // 索引の表現プリミティブ——string キーの Map を持つ唯一の場所（裁定 3-1、2026-09-03）。
-  "kernel/domain/keyed-index.ts",
-  "kernel/domain/key-set.ts",
-  "kernel/domain/expression.ts",
-  "kernel/domain/error-messages.ts",
-  "design/domain/attr-paths.ts",
-  "design/domain/declared-values.ts",
-  "design/domain/initial-states.ts",
-  "requirements/domain/attribute-values.ts",
-  "requirements/domain/ir-declared-values.ts",
-  "requirements/domain/fr-ref-claim.ts",
-  "refinement/domain/req-attribute-values.ts",
-]);
-
 const PROSE_FIELD_NAMES: ReadonlySet<string> = new Set([
   "detail", "details", "reason", "unavailableReason", "unavailable", "unsupported", "missing", "missingKeys",
   "message", "messages", "error", "outputTail", "label", "fix", "rulesMarkdown", "description", "text",
@@ -525,7 +593,7 @@ function blankNested(body: string): string {
 }
 
 // 検出器: primitive 型フィールドの記述子（"name: type"）を返す。層・除外・
-// 台帳の判断は noPrimitiveFieldsInDomain が担う（台帳の陳腐化検査もこれを使う）。
+// 免除の判断は noPrimitiveFieldsInDomain が担う。
 export function primitiveFieldsOf(rawSource: string): string[] {
   const source = stripStrings(rawSource);
   const out: string[] = [];
@@ -562,21 +630,11 @@ export function primitiveFieldsOf(rawSource: string): string[] {
   return out;
 }
 
-// 台帳の記述子総数の上限。台帳が縮んだら下げる——上げる変更は裁定違反で、
-// 新しい負債を記述子ごと台帳へ足す抜け道を diff 上で可視化する（レビュー指摘）。
-// 台帳は裁定 3-1〜3-4（2026-09-03）で空になった（107 → 0）。縮小専用の規律は
-// そのまま——新しいエントリを足す変更は裁定違反。定数そのものの削除は #80。
-export const PRIMITIVE_FIELD_DEBT_CEILING = 0;
-
-export const PRIMITIVE_FIELD_DEBT: ReadonlyMap<string, ReadonlySet<string>> = new Map<string, ReadonlySet<string>>([]);
-
 export function noPrimitiveFieldsInDomain(relPath: string, rawSource: string): Violation[] {
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
-  if (PRIMITIVE_FIELD_EXCLUSIONS.has(relPath)) return [];
-  // 台帳はフィールド記述子単位——台帳内ファイルへの新規流入も違反になる。
-  const ledgered = PRIMITIVE_FIELD_DEBT.get(relPath) ?? new Set<string>();
-  return primitiveFieldsOf(rawSource).filter((field) => !ledgered.has(field)).map((field) => ({
+  if (PUBLISHED_LANGUAGE.has(relPath)) return [];
+  return primitiveFieldsOf(rawSource).map((field) => ({
     path: relPath,
     rule: "no-primitive-fields-in-domain",
     detail: `primitive-typed field ${field} — wrap it in a domain primitive or keep it behind a DP door`,
@@ -672,6 +730,8 @@ export const ALL_RULES = [
   commandsReturnVoid,
   noDataModelsInDomain,
   noPrimitiveFieldsInDomain,
+  domainFieldsArePrivate,
+  publishedLanguageLayers,
 ] as const;
 
 export function violationsOf(relPath: string, source: string): Violation[] {

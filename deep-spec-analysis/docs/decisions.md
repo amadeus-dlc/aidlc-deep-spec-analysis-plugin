@@ -2303,3 +2303,29 @@ says so — bounded mode; in simulation what the phase newly detects is
 the reachable violation of background constraints and type bounds. The
 existing goldens are unchanged (every fixture carries an invariant); the
 new golden is deterministic under the fixed seed.
+
+Unit 4 (same PR): ruling 5 lands — #80, the final architecture gate,
+closes. The shrink-only ledgers are gone: `DATA_MODEL_DEBT`,
+`PRIMITIVE_FIELD_DEBT` and its ceiling are deleted with their staleness
+guard, and so are the name-based exclusion lists (`PRIMITIVE_FIELD_EXCLUSIONS`
+and, since unit 1, `PUBLISHED_VALUE_SHAPES`). What remains is one table,
+`PUBLISHED_LANGUAGE`: eleven entries, each a path, the exported name, the
+reason it is not a domain object (the published expression tree, the two
+representation primitives `KeyedIndex` / `KeySet`, the prose collection
+`ErrorMessages`, the state-token collections of declared values, initial
+states and attribute paths, and `FrRefClaim` with its mixed owner token)
+and the layers allowed to use it (`domain` and `adapter`; `AttrPaths`
+only `domain`). Three rules make the gate: `no-data-models-in-domain`
+now treats any exported interface or object type with a property as a
+data model — a method beside the property is no alibi (the red example
+`readonly a: string` + `judge()` is pinned) — and exempts only the table
+entry at its own path; `domain-fields-are-private` flags every non-`#`
+field of a domain class (public, protected, TypeScript `private`, static,
+readonly — the scanner tracks brace and parenthesis depth so door
+signatures and multi-line parameter lists are not fields); and
+`published-language-layers` flags any file outside an entry's layers that
+uses its name (use cases and entries never touch the published language
+directly). The real tree passes all three with no exception. Adding a
+table entry is a ruling, not a convenience.
+
+With unit 4 every ruling of 2026-09-03 is implemented and #80 closes.
