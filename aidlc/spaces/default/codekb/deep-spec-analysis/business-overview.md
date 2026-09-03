@@ -1,5 +1,21 @@
 # deep-spec-analysis — ビジネス概要
 
+## Focused scan 更新（intent: `260903-installer-tag-update`）
+
+本 intent は、プラグインの検証機能そのものではなく、利用者が checkout や `aidlc-workflows` submodule を持たずに導入・更新できる配布ライフサイクルを対象とする。現在の `scripts/install.ts` は実行中 checkout と sibling submodule の build／target data／plugin test に依存し、導入来歴を残さず、`--update` も提供しない。tag と release script もまだ存在しない。
+
+目標の利用者体験は、tag（既定は最新 semver tag）または明示した local checkout／branch／tag から source を取得し、**導入先 harness のツールチェーン**で projection を build した後、既存の refresh → tombstone → no-clobber compose → doctor を再利用することにある。成功時には `<harness>/tools/data/deep-spec-analysis-install.json` に version・ref・source・installed_at・payload_sha256 を記録し、`--update` と doctor が更新可否を判断できるようにする。
+
+この配布ライフサイクルは未実装の計画を含む。現行で確認できた事実、決定済みの目標、未確定の契約は次のように区別する。
+
+| 区分 | 内容 |
+|---|---|
+| 現行 | `--project` 必須の installer、checkout 側 `aidlc-workflows/core/tools` への依存、既存 refresh／tombstone／compose、doctor の5ブロック、main push／PR の CI |
+| 目標として確定 | `--from > --ref > --tag > latest` の解決順、導入先 builder の利用、provenance の原子的記録、same-version update の no-op、v0.5.0 以降の tag と manifest version の一致検査 |
+| 未確定 | 競合 flag の扱い、`--from` の path shape、source 種別別 update policy、prerelease／pagination／timeout、payload hash の正準化、doctor の offline skip 表現、release の commit/tag transaction |
+
+以下の既存本文は、形式検証プラグイン本体について前回 store が保持していた知識である。今回の focused scan ではその全域を再検証していないため、現行性は `reverse-engineering-timestamp.md` の `shallow.paths` に従って扱う。
+
 - 対象リポジトリ: `deep-spec-analysis`（ワークスペースルート）。本 codekb が扱うのはルート直下の `deep-spec-analysis/`（AI-DLC プラグイン本体）
 - プラグイン名／版: `deep-spec-analysis` v0.5.0（`.aidlc-plugin/plugin.json`、`core` に依存）
 - 出典: developer link の handoff（`inception/reverse-engineering/developer-scan.md`）、`README.md`、`docs/decisions.ja.md`

@@ -6,5 +6,13 @@
     "scope": "express",
     "repos": [],
     "status": "complete"
+  },
+  {
+    "uuid": "01a06755-f7be-73c1-8dd7-7e848f5bc4b4",
+    "slug": "installer-tag-update",
+    "dirName": "260903-installer-tag-update",
+    "scope": "express",
+    "repos": [],
+    "status": "complete"
   }
 ]

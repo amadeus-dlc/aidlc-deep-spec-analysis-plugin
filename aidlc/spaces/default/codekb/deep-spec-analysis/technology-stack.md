@@ -1,5 +1,18 @@
 # deep-spec-analysis — 技術スタック
 
+## Focused scan 更新: 配布ライフサイクルの技術前提
+
+| 技術・契約 | 現行 | 本 intent での位置づけ |
+|---|---|---|
+| Bun 1.3.13 | installer runtime、workspace、bundle、test | bootstrap の唯一の必須 runtime。archive 展開を外部 `tar`／`unzip` に委ねるとこの契約と衝突する |
+| Node 24 | z3 子プロセス | installer/source resolver の必須 runtime にはしない |
+| GitHub archive／tags API | 現行 installer では未使用 | tag／branch tarball と latest semver tag の取得元。認証なし取得は intent の事前実測だが、pagination／rate limit／timeout は未契約 |
+| Git | 開発 checkout、submodule、release 操作 | build 自体には不要。`scripts/release.ts` の clean-tree／commit／tag／push transaction には必要 |
+| AIDLC destination tools | 現行は source checkout 側を使用 | `<project>/<harness>/tools/aidlc-plugin-build.ts`、target data、plugin test へ切替予定。利用先への本家導入が前提 |
+| JSON filesystem metadata | 未実装 | `<harness>/tools/data/deep-spec-analysis-install.json` の provenance。npm registry／DB は使わない |
+
+`package.json` は private な開発 workspace で、plugin は npm 公開しない。`@informalsystems/quint`、`z3-solver`、TypeScript、`@types/bun` はすべて exact pin だが、bootstrap installer が利用先へ package を追加する契約ではない。以下の形式検証 runtime 全体の情報は前回 store 由来で、今回の focused scan では設定宣言と pin の存在だけを再確認した。
+
 出典: `package.json`、`bun.lock`、`bunfig.toml`、`tsconfig.json`、ワークスペースルートの `mise.toml`・`renovate.json`・`.github/workflows/ci.yml`、developer link の実測。
 
 ## ランタイムと言語

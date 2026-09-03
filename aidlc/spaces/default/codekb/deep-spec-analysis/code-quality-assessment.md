@@ -1,5 +1,43 @@
 # deep-spec-analysis — コード品質評価
 
+## Focused scan 更新: installer／release の品質評価
+
+今回の Developer Scan はコード読解のみで、テストや typecheck を実行していない。したがって以下は構造・既存テスト契約・未実装面の評価であり、前回 store の pass 数や coverage 数値を現行基線として再主張しない。
+
+### 維持すべき回帰ゲート
+
+- `tests/intent-e2e.test.ts` が既に検証する初回 compose、stale schema refresh、file/directory tombstone、再実行時の payload byte 不変。
+- `tests/plugin.test.ts` と framework の `aidlc-plugin-test` が示す `Plugin test: CLEAN`、Changed files 0、Drops 0、second compose idempotent。
+- generated `tools/` は bundle 10本＋`data/` 4本の14-file 形を維持する。
+- byte-frozen golden、architecture rules、doctor の公開 JSON shape を壊さない。
+
+### 追加が必要な検証
+
+| 対象 | 最小の受け入れ証拠 |
+|---|---|
+| local source | `--from` fixture が source checkout 側 submodule なしで導入できる |
+| tag/latest source | archive を一時 `deep-spec-analysis/` へ安全に展開し、manifest/version と選択 ref が一致する |
+| update | same-version で provenance を書き直さず Changed 0、更新版で既存 refresh/tombstone/compose を通る |
+| failure atomicity | fetch／validation／build failure では target bytes と provenance が不変。compose failure の扱いを明示する |
+| provenance | atomic write、schema validation、canonical payload digest、plugin payload/tombstone からの除外 |
+| doctor | current／outdated／offline の advisory を既存 JSON contract 内で安定描画する |
+| release/CI | clean-tree、version commit、`v<version>` tag、tag push trigger、manifest/tag equality |
+| docs | bootstrap、selector、update、offline／失敗時の案内が実装契約と一致する |
+
+### Intent 固有のリスク
+
+1. `scripts/install.ts` に resolver と provenance を直接足すと、346行の transaction がさらに密結合になり、target mutation の開始点が曖昧になる。
+2. `payload_sha256` の対象と正準順が未定義のままだと、archive 再取得や harness 差で false update を起こす。
+3. mutable branch と fixed tag を同じ update 規則で扱うと、記録した source と取得物の意味がずれる。
+4. tags API の prerelease／pagination／rate limit／timeout が未契約で、「latest」が不安定になる。
+5. 外部 `tar`／`unzip` 依存は「bun のみ」という利用前提を崩す。path traversal を含む展開安全性も必要。
+6. doctor に `skip` field を追加すると host contract が変わる。互換表現を先に決める必要がある。
+7. release script が manifest 更新を commit せず tag を打つと、tag/version の不一致を自ら作る。
+8. remote source 導入後も builder／target data／plugin test のいずれかが source checkout 側を向けば submodule 依存が残る。
+9. bootstrap の raw URL を mutable `main` に向けるか fixed tag に向けるかで supply-chain trust が変わる。
+
+以下の全体品質評価と数値は前回 store の `UNVERIFIED` な基線であり、今回の focused scan では再実行・再集計していない。
+
 出典: developer link の実測（`bun test --coverage`、`bunx tsc --noEmit`、import 走査、scratchpad での 2 本のスパイク。HEAD `94d64a3`、2026-09-03）。本ファイルが技術的負債 14 項目と本 intent のリスク 9 項目の所有者で、他の成果物はここを参照する。
 
 ## テスト

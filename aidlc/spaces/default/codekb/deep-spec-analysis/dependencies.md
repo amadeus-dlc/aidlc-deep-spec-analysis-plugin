@@ -1,5 +1,41 @@
 # deep-spec-analysis — 依存関係
 
+## Focused scan 更新: installer の依存グラフ
+
+```mermaid
+flowchart TD
+  I["scripts/install.ts"] --> PR["plugin root = import.meta.dir の親"]
+  I --> WF["../aidlc-workflows/core/tools"]
+  WF --> B["aidlc-plugin-build.ts"]
+  WF --> PT["data/plugin-targets.json"]
+  WF --> TEST["aidlc-plugin-test.ts（dry-run）"]
+  B --> DIST["dist/<harness>/ projection"]
+  DIST --> REF["upgrade refresh / tombstone"]
+  REF --> CMP["compose"]
+  CMP --> DOC["tools/deep-spec-analysis-doctor.ts"]
+```
+
+現行 installer の checkout 依存は builder だけでなく、harness→leaf/kind の target data と dry-run の plugin test にも及ぶ。新しい source resolver だけを足しても、この3依存を導入先 toolchain へまとめて移さない限り submodule 不要にはならない。
+
+### 目標依存と所有境界
+
+| 境界 | 依存先 | 失敗時の契約 |
+|---|---|---|
+| source resolution | local filesystem または GitHub tags API／tarball | 取得・manifest/version 検証・build 完了までは導入先を変更しない |
+| destination toolchain | `<project>/<harness>/tools/aidlc-plugin-build.ts`、target data、必要な plugin test | 不在なら本家 AI-DLC の導入不足を案内して停止 |
+| install transaction | build 済み projection、導入先 filesystem、既存 compose | plugin-owned payload だけを refresh。tombstone は旧層ディレクトリを含め再帰削除し、provenance は除外 |
+| provenance/update | `<harness>/tools/data/deep-spec-analysis-install.json`、source resolver | compose 成功後だけ atomic write。同版なら書き換え前に no-op |
+| doctor version advisory | provenance reader と GitHub latest-tag query | ネット不可は非 blocking。既存 `{checks:[...]}` contract を壊さない表現が必要 |
+| release | git working tree、manifest version、tag、remote | clean tree／commit／tag／push の順と途中失敗時の回復を明示する |
+
+### 開発時と利用時の分離
+
+- `.github/workflows/ci.yml` と `tests/plugin.test.ts` は validate／7 harness build のため `aidlc-workflows` submodule に依存し続けられる。
+- installer runtime と新しい `--from`／`--update` E2E は、source checkout 側 submodule に依存しないことを別に証明する。
+- `scripts/build-tools.ts` が作る bundle 10本＋schema 4本、`z3-solver` external、利用先の任意 solver runtime は既存契約として維持する。
+
+以下の形式検証ランタイム全体の依存表は前回 store 由来で、今回の focused scan では package declaration と配布関連の辺だけを再確認した。
+
 外部依存（npm と実行時の外部プロセス）と、内部の層間・コンテキスト間依存。内部の表は developer link が `.ts` 468 本・1,747 import を機械集計した実測で、ここに 1 回だけ載せる。版と pin の理由は `technology-stack.md`。
 
 ## 外部依存

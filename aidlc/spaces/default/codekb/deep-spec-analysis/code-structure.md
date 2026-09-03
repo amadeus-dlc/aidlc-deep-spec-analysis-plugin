@@ -1,5 +1,19 @@
 # deep-spec-analysis — コード構成
 
+## Focused scan で確認した配布関連の構成
+
+| パス | 現行責務 | intent による変更面 |
+|---|---|---|
+| `scripts/install.ts` | 346行。引数解釈、source/plugin root、framework toolchain、build、refresh、tombstone、compose、verify、doctor を一体化 | CLI/options、source resolver、destination toolchain、transaction、provenance/update の seam が必要 |
+| `scripts/build-tools.ts` | `src/entries/*.ts` を Bun で bundle し、`tools/*.ts` 10本と `tools/data/*.json` 4本を生成 | installer の source 取得後に導入先 builder から間接実行される build 入力。14-file 出荷形は維持対象 |
+| `.aidlc-plugin/plugin.json` | plugin `deep-spec-analysis` v0.5.0。stages／overlays／sensors／knowledge／tools を宣言 | tag の版と一致させる対象。provenance JSON は `contributes.tools` に追加しない |
+| `src/doctor/{domain,usecase,adapter}` と `src/entries/deep-spec-analysis-doctor.ts` | 5ブロックの check を同期順で合成し `{checks:[...]}` を出力 | install provenance と最新 tag の advisory を追加する候補。公開 JSON shape と既存順序を守る必要がある |
+| `tests/intent-e2e.test.ts` | submodule の vanilla dist を使う初回導入、refresh、file/directory tombstone、冪等性 | `--from` と same-version `--update` の Changed 0、取得／offline／失敗境界を追加する回帰網 |
+| `.github/workflows/ci.yml` | main push／PR で typecheck、bundle drift、coverage、validate、7 harness build | tag push と manifest/tag 一致検査は未実装 |
+| `README.ja.md`、`deep-spec-analysis/README.ja.md`、`tests/README.ja.md` | checkout/submodule 前提の導入・開発・テスト説明 | tag bootstrap、source selector、update、provenance と submodule 不要の利用経路を説明する必要がある |
+
+以下の `tools/` 全域に関する数値と構造は前回 store の記録であり、今回の focused scan では再集計していない。現在の source tree は `src/` と bundle 済み `tools/` の分離を前提にしているため、前回記録の「`tools/` に468 `.ts`」等は歴史的基線として読む。
+
 対象は `deep-spec-analysis/`（ワークスペースルート直下）。数値はすべて developer link の実測（HEAD `94d64a3` 時点）。層別の内訳は `component-inventory.md`、依存は `dependencies.md` を参照。
 
 ## tools/ の物理構成
