@@ -414,21 +414,10 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
 // エントリを足す変更は裁定違反。
 export const DATA_MODEL_DEBT: ReadonlySet<string> = new Set([]);
 
-// 裁定（#71 波28）: published language の JSON 値の形は data model ではない。
-// DesignValue / DecodedValue は JSON 値そのものの再帰型、TraceState は
-// witness.trace[i]（属性パス → 復号値）の写像型で、どれも getter を持たず
-// 振る舞いも持ち得ない（findings スキーマが形を決める）。Expression と同じ
-// 恒久除外——DATA_MODEL_DEBT とは違い、縮小の対象ではない。
-export const PUBLISHED_VALUE_SHAPES: ReadonlySet<string> = new Set([
-  "design/domain/design-value.ts",
-  "requirements/domain/decoded-value.ts",
-  "requirements/domain/trace-state.ts",
-]);
-
 export function noDataModelsInDomain(relPath: string, rawSource: string): Violation[] {
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
-  if (DATA_MODEL_DEBT.has(relPath) || PUBLISHED_VALUE_SHAPES.has(relPath)) return [];
+  if (DATA_MODEL_DEBT.has(relPath)) return [];
   const source = stripStrings(rawSource);
   const out: Violation[] = [];
   // 型引数付き（export interface X<T> {）も拾う——LoadedDocument<Outcome> が
@@ -468,6 +457,8 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
 // 既知の限界: 非公開の type 別名（Result のエラー材料）と index signature
 // 型（{ [k: string]: … }）は見ない。
 export const PRIMITIVE_FIELD_EXCLUSIONS: ReadonlySet<string> = new Set([
+  // 索引の表現プリミティブ——string キーの Map を持つ唯一の場所（裁定 3-1、2026-09-03）。
+  "kernel/domain/keyed-index.ts",
   "kernel/domain/expression.ts",
   "kernel/domain/error-messages.ts",
   "design/domain/attr-paths.ts",

@@ -6,9 +6,10 @@
 
 import { type Json, isObject, strArr } from "../../kernel/adapter/index.ts";
 import { FrRefs, IrVersion, type Expression, TriggerName } from "../../kernel/domain/index.ts";
-import { BrRefs, DesignBackgroundId, DesignBackgroundAssumption, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, DesignIgnores, DesignTransitions, DesignUnits, InitialStates, DesignIgnore, AttrPaths, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignMachine, DesignObligation, DesignScenario, DesignTransition, type DesignValue, DesignUnit,
+import { BrRefs, DesignBackgroundId, DesignBackgroundAssumption, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, DesignIgnores, DesignTransitions, DesignUnits, InitialStates, DesignIgnore, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignMachine, DesignObligation, DesignScenario, DesignTransition, DesignUnit,
   DesignModel,
 } from "../domain/index.ts";
+import { parseDesignEntities } from "./design-entities-parser.ts";
 
 
 export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.compose>[0], "id" | "irHash" | "sourceDocument"> | string {
@@ -21,14 +22,7 @@ export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.
   for (const rawUnit of raw.units) {
     if (!isObject(rawUnit) || typeof rawUnit.unit !== "string") continue;
     const schema = isObject(rawUnit.schema) ? rawUnit.schema : {};
-    const rawEntities = Array.isArray(schema.entities) ? schema.entities : [];
-    const attrPaths = new Set<string>();
-    for (const ent of rawEntities) {
-      if (!isObject(ent) || typeof ent.name !== "string") continue;
-      for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
-        if (isObject(attr) && typeof attr.name === "string") attrPaths.add(`${ent.name}.${attr.name}`);
-      }
-    }
+    const entities = parseDesignEntities(schema);
     const obligations: DesignObligation[] = [];
     for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
@@ -106,8 +100,7 @@ export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.
     units.push(
       DesignUnit.reconstitute({
         unit: rawUnit.unit,
-        rawEntities: rawEntities as unknown as DesignValue,
-        attrPaths: AttrPaths.of([...attrPaths]),
+        entities,
         obligations: DesignObligations.of(obligations),
         machines: DesignMachines.of(machines),
         scenarios: DesignScenarios.of(scenarios),

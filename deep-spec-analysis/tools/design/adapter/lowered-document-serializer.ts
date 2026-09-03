@@ -1,10 +1,12 @@
 // 型付き lowering → 契約1 v1 文書（Json）の直列化。配列順（OB-n / SC-n / BG-n
-// の採番順）は子バックエンドの処理順に効く凍結面。schema.entities には設計
-// ユニットのエンティティ断片を逐語で埋め込む。
+// の採番順）は子バックエンドの処理順に効く凍結面。schema.entities は設計
+// ユニットの型付き実体宣言から描画する（裁定 2、2026-09-03——整形済み IR と
+// バイト同一）。
 
 import type { Json } from "../../kernel/adapter/index.ts";
 import { LoweredUnit } from "../domain/index.ts";
 import type { DesignUnit } from "../domain/index.ts";
+import { renderDesignEntities } from "./design-entities-parser.ts";
 
 export function renderLoweredDocument(u: DesignUnit, low: LoweredUnit): Json {
   const obligations: Json[] = low.obligations().toArray().map((ob) => {
@@ -41,7 +43,7 @@ export function renderLoweredDocument(u: DesignUnit, low: LoweredUnit): Json {
   const background: Json[] = low.background().toArray().map((bg) => ({ id: bg.id().asString(), assert: bg.assertion() as unknown as Json }));
   return {
     irVersion: "1.0.0",
-    schema: { entities: u.rawEntities() as unknown as Json },
+    schema: { entities: renderDesignEntities(u.entities()) },
     obligations: obligations as unknown as Json,
     scenarios: scenarios as unknown as Json,
     background: background as unknown as Json,

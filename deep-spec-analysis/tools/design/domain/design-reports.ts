@@ -4,6 +4,7 @@ import { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
 import { DesignFindings } from "./design-findings.ts";
 import { DesignSkips } from "./design-skips.ts";
 import { DesignFinding } from "./design-finding.ts";
+import { DesignWitness } from "./design-witness.ts";
 import type { DesignModel } from "./design-model.ts";
 import type { DesignReportId } from "./design-report-id.ts";
 import { DesignReport } from "./design-report.ts";
@@ -72,7 +73,7 @@ export class DesignReports {
                   kind: "cross-check-disagreement",
                   frRefs: FrRefs.of([...sc.frRefs()]).sortedUnique(),
                   targets: TargetIds.reconstitute([sc.id().asString()]),
-                  witness: { verdicts },
+                  witness: DesignWitness.verdicts(verdicts),
                   unit: u.name(),
                   detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()} of unit ${u.name()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`,
                 }),

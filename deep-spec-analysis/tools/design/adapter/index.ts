@@ -1,6 +1,7 @@
 // design/adapter の公開 facade — 明示列挙のみ（export * 禁止）。
 
 export { parseDesignModel } from "./design-model-parser.ts";
+export { parseDesignEntities, renderDesignEntities } from "./design-entities-parser.ts";
 export { DesignModelRepositoryImpl } from "./design-model-repository-impl.ts";
 export { renderLoweredDocument } from "./lowered-document-serializer.ts";
 export { SiblingBackendClientImpl } from "./sibling-backend-client-impl.ts";

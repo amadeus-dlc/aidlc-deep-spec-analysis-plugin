@@ -54,6 +54,7 @@ import {
   DesignBackgroundAssumptions,
   SiblingVerdictFindings,
   SiblingVerdictSkips,
+  DesignWitness
 } from "../tools/design/domain/index.ts";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
@@ -320,7 +321,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
       kind,
       frRefs: FrRefs.of(["FR-1"]),
       targets: TargetIds.reconstitute(targets),
-      witness: { trace: [{ "T.s": "a" }] },
+      witness: DesignWitness.trace([{ "T.s": "a" }]),
       unit: "u1",
       detail: "overlap",
     });
@@ -330,7 +331,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
     expect(f.kind()).toBe("conflict");
     expect(f.frRefs().toArray()).toEqual(["FR-1"]);
     expect(f.targets().toStrings()).toEqual(["FR-9", "TR-1"]);
-    expect(f.witness()).toEqual({ trace: [{ "T.s": "a" }] });
+    expect(f.witness().toDocument()).toEqual({ trace: [{ "T.s": "a" }] });
     expect(f.unit()).toBe("u1");
     expect(f.detail()).toBe("overlap");
     expect(f.isConflict()).toBe(true);
@@ -342,7 +343,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
     expect(v?.kind()).toBe("refinement-violation");
     expect(v?.targets().toStrings()).toEqual(["FR-9"]);
     expect(v?.frRefs().toArray()).toEqual(["FR-1"]);
-    expect(v?.witness()).toEqual({ trace: [{ "T.s": "a" }] });
+    expect(v?.witness().toDocument()).toEqual({ trace: [{ "T.s": "a" }] });
     expect(v?.unit()).toBe("u1");
     expect(v?.detail()).toBe(
       "The design machine of unit u1 reaches a state that violates requirements obligation FR-9 under the refinement map (step trace attached): the design can execute its way out of the verified requirements.",
@@ -359,7 +360,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
     expect(copy.kind()).toBe("redundancy");
     expect(copy.frRefs().toArray()).toEqual(["FR-1"]);
     expect(copy.targets().toStrings()).toEqual(["TR-1", "TR-2"]);
-    expect(copy.witness()).toEqual({ trace: [{ "T.s": "a" }] });
+    expect(copy.witness().toDocument()).toEqual({ trace: [{ "T.s": "a" }] });
     expect(copy.unit()).toBe("u1");
     expect(copy.detail()).toBe("mutual");
   });
@@ -547,7 +548,7 @@ describe("sibling verdict document and finding (the backend's answer owns its in
     kind: "conflict",
     frRefs: FrRefs.of(["FR-1"]),
     targets: [LoweredId.reconstitute("OB-1")],
-    witness: { core: ["g_OB_1", 7] },
+    witness: DesignWitness.fromDocument({ core: ["g_OB_1", 7] }),
     detail: "x",
   });
   const readable = SiblingVerdictDocument.readable("exhaustive", SiblingVerdictFindings.of([finding]), SiblingVerdictSkips.of([]));
@@ -577,12 +578,19 @@ describe("sibling verdict document and finding (the backend's answer owns its in
     expect(finding.frRefs().toArray()).toEqual(["FR-1"]);
     expect(finding.targets().map((t) => t.asString())).toEqual(["OB-1"]);
     expect(finding.detail()).toBe("x");
-    const upper = (core: unknown): string[] => (Array.isArray(core) ? core.map((c) => String(c).toUpperCase()) : []);
-    expect(finding.witnessWithCoreRemapped(upper)).toEqual({ core: ["G_OB_1", "7"] });
-    const model = SiblingVerdictFinding.reconstitute({ kind: "gap", frRefs: FrRefs.of([]), targets: [], witness: { model: { a: 1 } }, detail: "" });
-    expect(model.witnessWithCoreRemapped(upper)).toEqual({ model: { a: 1 } });
-    const bare = SiblingVerdictFinding.reconstitute({ kind: "gap", frRefs: FrRefs.of([]), targets: [], witness: null, detail: "" });
-    expect(bare.witnessWithCoreRemapped(upper)).toBe(null);
+    // core のラベルだけが書き換わり、文字列でない要素と core 以外の witness は逐語（凍結挙動）。
+    const upper = (label: string): string => label.toUpperCase();
+    expect(finding.witnessRemappedBy(upper).toDocument()).toEqual({ core: ["G_OB_1", 7] });
+    const model = SiblingVerdictFinding.reconstitute({ kind: "gap", frRefs: FrRefs.of([]), targets: [], witness: DesignWitness.model({ a: 1 }), detail: "" });
+    expect(model.witnessRemappedBy(upper).toDocument()).toEqual({ model: { a: 1 } });
+    const bare = SiblingVerdictFinding.reconstitute({ kind: "gap", frRefs: FrRefs.of([]), targets: [], witness: DesignWitness.fromDocument(null), detail: "" });
+    expect(bare.witnessRemappedBy(upper).toDocument()).toBe(null);
+    const emptyCore = DesignWitness.fromDocument({ core: null });
+    expect(emptyCore.remapCore(upper).toDocument()).toEqual({ core: null });
+    expect(DesignWitness.core(["b"]).remapCore(upper).toDocument()).toEqual({ core: ["B"] });
+    expect(DesignWitness.verdicts({ smt: "clean" }).toDocument()).toEqual({ verdicts: { smt: "clean" } });
+    expect(DesignWitness.refs([{ artifact: "a.md", element: "e" }]).toDocument()).toEqual({ refs: [{ artifact: "a.md", element: "e" }] });
+    expect(DesignWitness.fromDocument(undefined).toDocument()).toBe(null);
   });
 });
 

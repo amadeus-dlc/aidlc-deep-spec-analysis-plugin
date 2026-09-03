@@ -10,7 +10,7 @@ import type { ArtifactPath, ContentHash } from "../../kernel/domain/index.ts";
 import type { Result } from "../../kernel/infrastructure/index.ts";
 import { ok } from "../../kernel/infrastructure/index.ts";
 import type { Clock, RepositoryError } from "../../kernel/usecase/index.ts";
-import {
+import { DesignWitness,
   DesignMachines,
   DesignFindings,
   DesignSkips,
@@ -179,7 +179,7 @@ export class VerifyDesignQuintUseCase {
                 kind: "unreachable",
                 frRefs: FrRefs.of([]),
                 targets: TargetIds.reconstitute([sm.id().asString()]),
-                witness: { model: { [attrPath]: state } },
+                witness: DesignWitness.model({ [attrPath]: state }),
                 unit: u.name(),
                 detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state — it may be dead.`,
               }),

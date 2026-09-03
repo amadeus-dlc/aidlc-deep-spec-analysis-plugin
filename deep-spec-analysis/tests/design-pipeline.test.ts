@@ -13,7 +13,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { canonicalStringify } from "../tools/kernel/adapter/index.ts";
+import { canonicalStringify, extractFences } from "../tools/kernel/adapter/index.ts";
 import type { Json } from "../tools/kernel/adapter/index.ts";
 import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression, ExpressionTree} from "../tools/kernel/domain/index.ts";
 
@@ -44,7 +44,6 @@ import {
   DesignReports,
   DesignSkips,
   DesignUnits,
-  AttrPaths,
   DesignBackgroundAssumptions,
   DesignMachines,
   DesignObligations,
@@ -55,7 +54,6 @@ import {
   DesignObligation,
   DesignScenario,
   DesignTransition,
-  type DesignValue,
   BrRefs,
   DesignIgnores,
   DesignTransitions,
@@ -78,13 +76,21 @@ import {
   LoweredScenario,
   LoweredBackground,
   SiblingVerdictSkip,
- LoweredOrigin,} from "../tools/design/domain/index.ts";
+ LoweredOrigin,
+  DesignWitness,
+  DesignEntityDecls,
+  DesignEntityDecl,
+  DesignAttributeDecls,
+  DesignAttributeDecl
+} from "../tools/design/domain/index.ts";
 import {
   DesignModelRepositoryImpl,
   DesignReportRepositoryImpl,
   SiblingBackendClientImpl,
   probeReached,
   reachabilityVariant,
+  parseDesignEntities,
+  renderDesignEntities
 } from "../tools/design/adapter/index.ts";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -206,9 +212,32 @@ type RawDesignScenario = Omit<Parameters<typeof DesignScenario.reconstitute>[0],
   frRefs: string[];
   event?: { trigger: string };
 };
+
+// テスト用: 生の entities JSON と属性座標から型付き実体宣言を組む（裁定 2 で
+// DesignUnit は生 JSON を持たなくなった）。座標だけ与えられた属性は kind "" の
+// 宣言として補う——旧 attrPaths の役目。
+function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDecls {
+  let declared = parseDesignEntities({ entities: raw });
+  const covered = new Set<string>();
+  for (const ent of declared) for (const attr of ent.attributes()) covered.add(`${ent.name().asString()}.${attr.name().asString()}`);
+  const extra = new Map<string, string[]>();
+  for (const path of attrPaths) {
+    if (covered.has(path)) continue;
+    const dot = path.indexOf(".");
+    extra.set(path.slice(0, dot), [...(extra.get(path.slice(0, dot)) ?? []), path.slice(dot + 1)]);
+  }
+  for (const [entity, attrs] of extra) {
+    declared = declared.add(DesignEntityDecl.reconstitute({
+      name: DesignEntityName.reconstitute(entity),
+      attributes: DesignAttributeDecls.of(attrs.map((a) => DesignAttributeDecl.reconstitute({ name: DesignAttributeName.reconstitute(a), kind: "" }))),
+    }));
+  }
+  return declared;
+}
+
 function unit(seed: {
   unit?: string;
-  rawEntities?: DesignValue;
+  rawEntities?: Json[];
   attrPaths?: Set<string>;
   obligations?: RawDesignObligation[];
   machines?: RawDesignMachine[];
@@ -217,8 +246,7 @@ function unit(seed: {
 }): DesignUnit {
   return DesignUnit.reconstitute({
     unit: seed.unit ?? "u1",
-    rawEntities: seed.rawEntities ?? [],
-    attrPaths: AttrPaths.of([...(seed.attrPaths ?? new Set<string>())]),
+    entities: entitiesOf(seed.rawEntities ?? [], seed.attrPaths ?? new Set<string>()),
     obligations: DesignObligations.of(
       (seed.obligations ?? []).map((o) => DesignObligation.reconstitute({
         ...o,
@@ -437,7 +465,7 @@ describe("remap (design vocabulary attribution)", () => {
     SiblingVerdictDocument.readable(
       "exhaustive",
       SiblingVerdictFindings.of(
-        (input.findings ?? []).map((f) => SiblingVerdictFinding.reconstitute({ ...f, frRefs: FrRefs.of(f.frRefs), targets: f.targets.map((t) => LoweredId.reconstitute(t)) })),
+        (input.findings ?? []).map((f) => SiblingVerdictFinding.reconstitute({ ...f, witness: DesignWitness.fromDocument(f.witness), frRefs: FrRefs.of(f.frRefs), targets: f.targets.map((t) => LoweredId.reconstitute(t)) })),
       ),
       SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.reconstitute({ ...k, target: LoweredId.reconstitute(k.target) }))),
     );
@@ -509,7 +537,7 @@ describe("remap (design vocabulary attribution)", () => {
     }));
     expect(out.findings.toArray()[0]?.targets().toStrings()).toEqual(["DSC-1", "TR-1"]);
     expect(out.findings.toArray()[0]?.detail()).toBe("No rule for TR-1 applies");
-    expect(out.findings.toArray()[0]?.witness()).toEqual({ core: ["g_TR_1", "ty_x"] });
+    expect(out.findings.toArray()[0]?.witness().toDocument()).toEqual({ core: ["g_TR_1", "ty_x"] });
     expect(out.skipped.toArray().map((s) => `${s.target().asString()}:${s.reason()}`)).toEqual(["TR-1:timeout", "DSC-1:capability"]);
     expect(out.skipped.toArray()[0]?.detail()).toBe("check for TR-1 timed out");
   });
@@ -521,7 +549,7 @@ describe("report ordering, cross-check, and degradations", () => {
       kind,
       frRefs: FrRefs.of([]),
       targets: TargetIds.reconstitute(targets),
-      witness: { core: [] },
+      witness: DesignWitness.core([]),
       unit: unitName,
       detail,
     });
@@ -636,7 +664,7 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(disagreement?.kind()).toBe("cross-check-disagreement");
     expect(disagreement?.frRefs().toArray()).toEqual(["FR-1", "FR-2"]);
     expect(disagreement?.targets().toStrings()).toEqual(["DSC-1"]);
-    expect(disagreement?.witness()).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
+    expect(disagreement?.witness().toDocument()).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
     expect(disagreement?.unit()).toBe("u1");
     expect(disagreement?.detail()).toBe(
       'Backends "quint" and "smt" disagree on scenario DSC-1 of unit u1. This signals a defect in the formalization or in a backend compiler, not in the design itself.',
@@ -745,7 +773,7 @@ describe("lowered collections and the lowering index (first-class operations)", 
   });
 
   test("sibling verdict collections keep document order under add", () => {
-    const finding = SiblingVerdictFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: [LoweredId.reconstitute("OB-1")], witness: { core: [] }, detail: "x" });
+    const finding = SiblingVerdictFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.of([]), targets: [LoweredId.reconstitute("OB-1")], witness: DesignWitness.core([]), detail: "x" });
     const findings = SiblingVerdictFindings.of([]).add(finding);
     expect([...findings]).toEqual([finding]);
     expect(findings.toArray()).toEqual([finding]);
@@ -757,3 +785,32 @@ describe("lowered collections and the lowering index (first-class operations)", 
   });
 });
 
+describe("the typed entity projection reproduces the IR's schema.entities byte for byte (ruling 2)", () => {
+  const roundTrip = (raw: Json[]): void => {
+    expect(JSON.stringify(renderDesignEntities(parseDesignEntities({ entities: raw })))).toBe(JSON.stringify(raw));
+  };
+
+  test("every design IR fixture", () => {
+    for (const file of [
+      join(pluginRoot, "tests", "fixtures", "design", "record", "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"),
+      join(pluginRoot, "tests", "fixtures", "refinement", "record", "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"),
+    ]) {
+      const fences = extractFences(readFileSync(file, "utf-8"), "json");
+      const raw = JSON.parse(fences[0]?.body ?? "null") as { units: { schema: { entities: Json[] } }[] };
+      expect(raw.units.length).toBeGreaterThan(0);
+      for (const u of raw.units) roundTrip(u.schema.entities);
+    }
+  });
+
+  test("descriptions on entities and attributes, int bounds and enum values survive; nothing is invented", () => {
+    roundTrip([
+      { name: "Order", description: "an order", attributes: [
+        { name: "amount", description: "positive", type: { kind: "int", min: 0, max: 8 } },
+        { name: "status", type: { kind: "enum", values: ["draft", "done"] } },
+        { name: "paid", type: { kind: "bool" } },
+        { name: "open", type: { kind: "int" } },
+      ] },
+      { name: "Bare", attributes: [{ name: "x", type: { kind: "bool" } }] },
+    ]);
+  });
+});

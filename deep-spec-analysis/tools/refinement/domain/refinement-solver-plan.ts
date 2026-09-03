@@ -14,6 +14,7 @@ import type { RefinementRequirements } from "./refinement-requirements.ts";
 
 import type { RefinementProbe } from "./refinement-probe.ts";
 import { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
+import { DesignWitness } from "../../design/domain/index.ts";
 
 // クエリ計画（値オブジェクト、裁定 8——旧 RefinementSolverFacts）：発行順の Pending 索引と、alpha 置換・SMT コンパイル失敗
 // による compile-error skip（構築時に確定）。
@@ -69,7 +70,7 @@ export class RefinementSolverPlan {
                 kind: "refinement-violation",
                 frRefs: frOf(reqId.asString()),
                 targets: TargetIds.reconstitute([reqId.asString()]),
-                witness: { model: r.witnessModel() },
+                witness: DesignWitness.model(r.witnessModel()),
                 unit: unitName,
                 detail: `A design-legal state of unit ${unitName} violates requirements obligation ${reqId.asString()} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`,
               }),
@@ -84,7 +85,7 @@ export class RefinementSolverPlan {
                 kind: "refinement-violation",
                 frRefs: frOf(reqId.asString()),
                 targets: TargetIds.reconstitute([reqId.asString()]),
-                witness: { core: r.sortedCore() },
+                witness: DesignWitness.core(r.sortedCore()),
                 unit: unitName,
                 detail: `Accept scenario ${reqId.asString()} has no design-legal counterpart in unit ${unitName} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
               }),
@@ -96,7 +97,7 @@ export class RefinementSolverPlan {
                 kind: "refinement-violation",
                 frRefs: frOf(reqId.asString()),
                 targets: TargetIds.reconstitute([reqId.asString()]),
-                witness: { model: r.witnessModel() },
+                witness: DesignWitness.model(r.witnessModel()),
                 unit: unitName,
                 detail: `Reject scenario ${reqId.asString()} is still admitted by unit ${unitName} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`,
               }),
@@ -110,7 +111,7 @@ export class RefinementSolverPlan {
                 kind: "completeness-gap",
                 frRefs: frOf(reqId.asString()),
                 targets: TargetIds.reconstitute([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())]).sortedUniqueCanonically(),
-                witness: { model: r.witnessModel() },
+                witness: DesignWitness.model(r.witnessModel()),
                 unit: unitName,
                 detail: `The requirements event ${reqId.asString()} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
               }),
@@ -126,7 +127,7 @@ export class RefinementSolverPlan {
                 // simulation probe の designId は構築時に必須——旧 `?? ""` +空除去は
                 // designId 未設定の防御で、必須化により恒等（挙動保存）。
                 targets: TargetIds.reconstitute([reqId.asString(), designId.asString()].filter((t) => t !== "")).sortedUniqueCanonically(),
-                witness: { trace: r.witnessTrace() },
+                witness: DesignWitness.trace(r.witnessTrace()),
                 unit: unitName,
                 detail: `Design step ${designId.asString()} of unit ${unitName}, taken where requirements event ${reqId.asString()} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,
               }),

@@ -11,21 +11,24 @@ import { type DesignAttributeName } from "./design-attribute-name.ts";
 export class DesignAttributeDecl {
   readonly #name: DesignAttributeName;
   readonly #kind: string;
+  // 執筆者向けの説明文（契約3 の任意項目——ツールは読まず、lowered 文書へ逐語で運ぶ）。
+  readonly #description: string | undefined;
   readonly #values: DeclaredValues | undefined;
   readonly #min: AttributeBound | undefined;
   readonly #max: AttributeBound | undefined;
 
   // ドアの引数は無名のインライン署名で運ぶ——名前付き getter-only 型
   //（データモデル）を domain 層に住まわせない（主従の裁定・補遺）。
-  private constructor(props: { name: DesignAttributeName; kind: string; values?: DeclaredValues; min?: AttributeBound; max?: AttributeBound }) {
+  private constructor(props: { name: DesignAttributeName; kind: string; description?: string; values?: DeclaredValues; min?: AttributeBound; max?: AttributeBound }) {
     this.#name = props.name;
     this.#kind = props.kind;
+    this.#description = props.description;
     this.#values = props.values;
     this.#min = props.min;
     this.#max = props.max;
   }
 
-  static reconstitute(props: { name: DesignAttributeName; kind: string; values?: DeclaredValues; min?: AttributeBound; max?: AttributeBound }): DesignAttributeDecl {
+  static reconstitute(props: { name: DesignAttributeName; kind: string; description?: string; values?: DeclaredValues; min?: AttributeBound; max?: AttributeBound }): DesignAttributeDecl {
     return new DesignAttributeDecl(props);
   }
 
@@ -75,5 +78,18 @@ export class DesignAttributeDecl {
   // 文言材料（binding 不適合文言の "${kind} attribute" 描画点）。
   kindLabel(): string {
     return this.#kind;
+  }
+
+  // 境界: lowered 文書の描画と SMT 文脈（adapter）専用の読み手。
+  description(): string | undefined {
+    return this.#description;
+  }
+
+  minBound(): AttributeBound | undefined {
+    return this.#min;
+  }
+
+  maxBound(): AttributeBound | undefined {
+    return this.#max;
   }
 }

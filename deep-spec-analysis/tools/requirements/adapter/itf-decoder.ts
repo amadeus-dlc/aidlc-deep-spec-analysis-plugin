@@ -4,7 +4,7 @@
 // 旧 decodeItfValue / decodeItfTrace / itfStatus からの逐語移植。
 
 import { type Json, isObject } from "../../kernel/adapter/index.ts";
-import type { DecodedValue, TraceState } from "../domain/index.ts";
+import { AttributePath, TraceState, TraceValue } from "../domain/index.ts";
 
 function decodeItfValue(v: Json): Json {
   if (isObject(v) && typeof v["#bigint"] === "string") return Number.parseInt(v["#bigint"], 10);
@@ -17,13 +17,13 @@ export function decodeItfTrace(itfText: string, varToPath: Map<string, string>):
   const trace: TraceState[] = [];
   for (const state of doc.states) {
     if (!isObject(state)) continue;
-    const decoded: TraceState = {};
+    const entries: (readonly [AttributePath, TraceValue])[] = [];
     for (const key of Object.keys(state).sort()) {
       if (key.startsWith("#")) continue;
       const path = varToPath.get(key) ?? key;
-      decoded[path] = decodeItfValue(state[key] ?? null) as DecodedValue;
+      entries.push([AttributePath.reconstitute(path), TraceValue.of(decodeItfValue(state[key] ?? null))]);
     }
-    trace.push(decoded);
+    trace.push(TraceState.of(entries));
   }
   return trace;
 }

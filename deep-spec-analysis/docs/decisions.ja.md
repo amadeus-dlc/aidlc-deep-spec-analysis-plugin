@@ -1940,7 +1940,8 @@ presenter が永続化や描画のために読む getter は残し、I/O にも 
      #value` は人間のために逐語で残す原文トークンなので、語彙ではなく prose。
    - 3-4、数値メタデータ（3 件）: 3 つの outcome の fence 個数は `FenceCount`
      （`of`・`asNumber`）。凍結文言はそれを通して描画する。
-   3-1〜3-4 の後、台帳は空になる。
+   4 群の小計は 65 件で、66 件目は `Obligation.#ears`——prose として規則の対象を
+   外れる。3-1〜3-4 の後、台帳は空になる。
 4. **不変量義務が無くても Quint の機械フェーズを走らせる。** 現状は
    `hasInvariantComponents` が、背景制約とイベント義務だけのモデルで機械実行を
    飛ばし、計画は機械対象について finding も skip も出さず、requirements の
@@ -1953,6 +1954,28 @@ presenter が永続化や描画のために読む getter は残し、I/O にも 
    `DATA_MODEL_DEBT` と `PRIMITIVE_FIELD_DEBT` を上限定数・陳腐化ガードごと
    削除し、data-model 規則を「domain でプロパティを持つ公開 interface／object
    型はすべて data model」に締め（`readonly a: string`＋`judge()` の red
-   example つき）、domain class のフィールドは `#private` という規則を足し、
+   example つき。唯一の例外は published language 表の項目で、それぞれ理由と
+   利用可能層を持つ——今は `Expression` と、表現プリミティブ `KeyedIndex`／
+   `KeySet`）、domain class のフィールドは `#private` という規則を足し、
    名前ベースの除外リスト 2 つを「パス・理由・利用可能層」の published language
    表 1 つに置き換えて import を層ごとに検査する。そのうえで #80 を閉じる。
+
+単位 1（同 PR）: 裁定 2 が着地——値が自分の意味論を持つ。`TraceValue`
+（`isTrue`・`asNumber`・`equals`・`toDocument`）と `TraceState` class（`valueAt`・
+`toDocument`、キーは `AttributePath`、内側は新設の kernel `KeyedIndex`）が
+`DecodedValue`／`TraceState` の型別名に代わり、`QuintMachineComponent.evaluate`
+は `v === true`・`typeof v === "number"`・`JSON.stringify` を自分で試す代わりに
+値に問う。`DesignWitness`（core／model／verdicts／trace／refs、`fromDocument`／
+`toDocument`、`remapCore`）が `DesignFinding` と `SiblingVerdictFinding` の
+`DesignValue` witness に代わり、lowered unit はラベル書き換え関数を渡すだけで、
+`"core" in witness` の判定は値の内側に住む。`DesignUnit` は `rawEntities` の
+代わりに `DesignEntityDecls` を持ち、属性座標をそこから導き、
+`declaredEnumValuesOf`／`enumValuesOf` を宣言から答える。adapter の
+`parseDesignEntities`／`renderDesignEntities`（model parser と validation
+materials が共有）が lowered 文書と refinement の SMT 文脈に型付き射影を出し、
+`design-pipeline.test.ts` は射影が全 fixture の `schema.entities` を——実体と
+属性の description、int の範囲、enum の値を含めて——バイト同一に再現し、何も
+発明しないことを固定する。`RefinementQueryVerdict` はスカラーの復号モデルを
+運ぶ。`PUBLISHED_VALUE_SHAPES` の除外は 3 つの型別名とともに消え、
+`kernel/domain/keyed-index.ts` が表現プリミティブの除外に加わる。golden は
+バイト同一、プリミティブ台帳は変わらない（上限 66）。

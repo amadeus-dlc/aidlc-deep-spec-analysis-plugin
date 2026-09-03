@@ -30,7 +30,7 @@ import {
   VerificationReportRepositoryImpl,
   renderVerificationReportBytes,
 } from "../tools/requirements/adapter/index.ts";
-import { BackgroundAssumption, Scenario, Obligation, AttributeDeclaration, AttributeDeclarations, AttributeValues, FrRefs, ObligationId, ObligationNature, ScenarioId, Obligations, Scenarios, BackgroundAssumptions, RequirementsModel, QuintMachineComponents, QuintMachinePlan, QuintMachineComponent, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationReportId, VerificationSkips, FormalModelId, ObligationIds, VerificationSkipped, VerificationFinding, VerificationReport} from "../tools/requirements/domain/index.ts";
+import { BackgroundAssumption, Scenario, Obligation, AttributeDeclaration, AttributeDeclarations, AttributeValues, FrRefs, ObligationId, ObligationNature, ScenarioId, Obligations, Scenarios, BackgroundAssumptions, RequirementsModel, QuintMachineComponents, QuintMachinePlan, QuintMachineComponent, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationReportId, VerificationSkips, FormalModelId, ObligationIds, VerificationSkipped, VerificationFinding, VerificationReport, AttributePath, TraceState, TraceValue } from "../tools/requirements/domain/index.ts";
 import {
   type FormalModelRepository,
   type QuintCheckResult,
@@ -38,6 +38,11 @@ import {
   VerifyRequirementsQuintUseCase,
 } from "../tools/requirements/usecase/index.ts";
 import { InMemoryVerificationReportRepository } from "./doubles/in-memory-verification-report-repository.ts";
+
+// テスト用: 平文の状態 → TraceState（裁定 2 で値オブジェクトになった）。
+function st(values: { [path: string]: boolean | number | string }): TraceState {
+  return TraceState.of(Object.entries(values).map(([path, value]) => [AttributePath.reconstitute(path), TraceValue.of(value)] as const));
+}
 
 // 判定レコードは class（#71 波18）——期待値は平文へ射影して比較する（bun の toEqual は #private を見ない）。
 const plainFindings = (findings: Iterable<VerificationFinding>) =>
@@ -246,7 +251,7 @@ describe("quint verdict interpretation", () => {
   });
 
   test("a deadlock is a completeness-gap over the event ids, with a model fallback witness", () => {
-    const withTrace = run({ machine: QuintMachineRunVerdict.deadlock(TraceStates.of([{ "T.ok": true }])) });
+    const withTrace = run({ machine: QuintMachineRunVerdict.deadlock(TraceStates.of([st({ "T.ok": true })])) });
     expect(plainFindings([...withTrace.findings])).toEqual([{
       kind: "completeness-gap",
       frRefs: (["FR-2"]),
@@ -259,7 +264,7 @@ describe("quint verdict interpretation", () => {
   });
 
   test("a violation trace is attributed to the failing components via pure evaluation", () => {
-    const attributed = run({ machine: QuintMachineRunVerdict.violation(TraceStates.of([{ "T.ok": true }, { "T.ok": false }])) });
+    const attributed = run({ machine: QuintMachineRunVerdict.violation(TraceStates.of([st({ "T.ok": true }), st({ "T.ok": false })])) });
     expect(plainFindings([...attributed.findings])).toEqual([{
       kind: "conflict",
       frRefs: (["FR-1", "FR-2"]),
@@ -267,7 +272,7 @@ describe("quint verdict interpretation", () => {
       witness: { trace: [{ "T.ok": true }, { "T.ok": false }] },
       detail: "The event machine can reach a state that violates OB-1 (step trace attached): the event rules do not preserve the obligation.",
     }]);
-    const unattributed = run({ machine: QuintMachineRunVerdict.violation(TraceStates.of([{ "T.ok": true }])) });
+    const unattributed = run({ machine: QuintMachineRunVerdict.violation(TraceStates.of([st({ "T.ok": true })])) });
     expect(unattributed.findings.toArray()[0]?.targets().toStrings()).toEqual(["OB-2"]);
   });
 
@@ -288,7 +293,7 @@ describe("quint verdict interpretation", () => {
     expect(guarded.skipped.toArray().filter((s) => s.target().asString() === "OB-3").length).toBe(1);
     const timeout = run({ temporals: new Map([["OB-3", QuintTemporalVerdict.timeout()]]) }, "bounded");
     expect(timeout.skipped.toArray().find((s) => s.target().asString() === "OB-3")?.detail()).toBe("temporal check exceeded its budget");
-    const violated = run({ temporals: new Map([["OB-3", QuintTemporalVerdict.violation(TraceStates.of([{ "T.ok": false }]))]]) }, "bounded");
+    const violated = run({ temporals: new Map([["OB-3", QuintTemporalVerdict.violation(TraceStates.of([st({ "T.ok": false })]))]]) }, "bounded");
     expect(plainFindings([violated.findings.toArray()[0]])[0]).toEqual({
       kind: "conflict",
       frRefs: (["FR-3"]),
@@ -341,7 +346,7 @@ describe("quint verdict interpretation", () => {
 });
 
 describe("expression evaluation (the invariant component's own attribution, ruling 5)", () => {
-  const state = { "T.n": 3, "T.b": true, "T.s": "on" };
+  const state = st({ "T.n": 3, "T.b": true, "T.s": "on" });
   const ref = (path: string) => ({ op: "ref", path });
   const int = (value: number) => ({ op: "int", value });
   // 成分は「式が true でないとき違反」——holds は評価が true のときだけ真になる。
@@ -391,18 +396,18 @@ describe("quint degradation reports", () => {
 
 describe("quint plan collections (first-class operations)", () => {
   test("TraceStates and QuintMachineComponents own their step/attribution knowledge", () => {
-    const traces = TraceStates.of([{ "T.ok": true }]).add({ "T.ok": false });
+    const traces = TraceStates.of([st({ "T.ok": true })]).add(st({ "T.ok": false }));
     expect([...traces].length).toBe(2);
-    expect(traces.finalState()).toEqual({ "T.ok": false });
-    expect(TraceStates.of([]).finalState()).toEqual({});
-    expect(traces.toArray()).toEqual([{ "T.ok": true }, { "T.ok": false }]);
+    expect(traces.finalState().toDocument()).toEqual({ "T.ok": false });
+    expect(TraceStates.of([]).finalState().toDocument()).toEqual({});
+    expect(traces.toArray().map((t) => t.toDocument())).toEqual([{ "T.ok": true }, { "T.ok": false }]);
 
     const comps = QuintMachineComponents.of([]).add(QuintMachineComponent.reconstitute({ id: ObligationId.reconstitute("OB-1"), expression: { op: "ref", path: "T.ok" } }));
     expect(comps.isEmpty()).toBe(false);
     expect([...comps].length).toBe(1);
     expect(comps.ids().toStrings()).toEqual(["OB-1"]);
-    expect(comps.violatedBy({ "T.ok": false }).ids().toStrings()).toEqual(["OB-1"]);
-    expect(comps.violatedBy({ "T.ok": true }).isEmpty()).toBe(true);
+    expect(comps.violatedBy(st({ "T.ok": false })).ids().toStrings()).toEqual(["OB-1"]);
+    expect(comps.violatedBy(st({ "T.ok": true })).isEmpty()).toBe(true);
     expect(comps.toArray().length).toBe(1);
 
     const plan = QuintMachinePlan.of({ invariantComponents: comps, eventIds: ObligationIds.of([ObligationId.reconstitute("OB-9"), ObligationId.reconstitute("OB-2")]), scenariosWithInit: [] });

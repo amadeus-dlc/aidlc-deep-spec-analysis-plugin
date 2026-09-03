@@ -11,13 +11,13 @@ import { type Schema, validateSchema } from "../../kernel/adapter/index.ts";
 import type { SchemaUnreadable } from "../../kernel/adapter/index.ts";
 import {
   CheckedUnits,
+  DesignWitness,
   DesignCrossCheckedEntries,
   DesignFinding,
   DesignFindings,
   DesignInputAnchors,
   DesignSkips,
   DesignSkipped,
-  type DesignValue,
   DesignReport,
   DesignReportId,
   DesignInputAnchor,
@@ -41,13 +41,13 @@ function orderedDocument(report: DesignReport): { [k: string]: Json } {
   // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
   // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
   // frRefs, targets, witness, unit, detail)、skip は (target, reason, unit,
-  // detail?)。witness は remap 素通し値（DesignValue）で逐語描画。
+  // detail?)。witness は DesignWitness が逐語で降りる。
   ordered.findings = report.findings().toArray().map((f) => {
     const out: { [k: string]: Json } = {
       kind: f.kind(),
       frRefs: f.frRefs().toArray() as unknown as Json,
       targets: f.targets().toStrings() as unknown as Json,
-      witness: f.witness() as unknown as Json,
+      witness: f.witness().toDocument() as unknown as Json,
       unit: f.unit(),
       detail: f.detail(),
     };
@@ -114,7 +114,7 @@ export function parseSiblingDesignReportDocument(
           kind: typeof entry.kind === "string" ? entry.kind : "",
           frRefs: FrRefs.of(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
           targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
-          witness: (entry.witness ?? null) as unknown as DesignValue,
+          witness: DesignWitness.fromDocument(entry.witness ?? null),
           unit: typeof entry.unit === "string" ? entry.unit : "",
           detail: typeof entry.detail === "string" ? entry.detail : "",
         });

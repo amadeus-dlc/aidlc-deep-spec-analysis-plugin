@@ -4,7 +4,7 @@
 // ir-valid の errors[]・契約2 の unavailable.reason として golden バイトに
 // 現れるため、文言は「含む」ではなく完全一致で固定する。
 
-import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName } from "../tools/kernel/domain/index.ts";
+import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName, KeyedIndex } from "../tools/kernel/domain/index.ts";
 import { describe, expect, test } from "bun:test";
 import {
   canonicalStringify,
@@ -338,5 +338,29 @@ describe("attribute-bound — the parse door gates integer sanity (thaw #34 item
     expect(!frac.ok && frac.error).toEqual({ kind: "non-integer-bound", raw: 1.5 });
     const huge = AttributeBound.parse(1e21);
     expect(!huge.ok && huge.error).toEqual({ kind: "unsafe-bound", raw: 1e21 });
+  });
+});
+
+describe("KeyedIndex (the keyed-index representation primitive, ruling 3-1)", () => {
+  const id = (raw: string) => TargetId.reconstitute(raw);
+
+  test("keys are compared by their string form, insertion order is kept, and with() replaces in place", () => {
+    const empty = KeyedIndex.empty<TargetId, number>();
+    expect(empty.isEmpty()).toBe(true);
+    expect(empty.size()).toBe(0);
+    expect(empty.get(id("OB-1"))).toBe(undefined);
+    const index = KeyedIndex.of<TargetId, number>([[id("OB-2"), 2], [id("OB-1"), 1]]);
+    expect(index.has(id("OB-1"))).toBe(true);
+    expect(index.has(id("OB-3"))).toBe(false);
+    expect(index.get(id("OB-2"))).toBe(2);
+    expect(index.size()).toBe(2);
+    expect(index.isEmpty()).toBe(false);
+    const replaced = index.with(id("OB-2"), 20).with(id("OB-3"), 3);
+    expect([...replaced.keys()].map((k) => k.asString())).toEqual(["OB-2", "OB-1", "OB-3"]);
+    expect([...replaced.values()]).toEqual([20, 1, 3]);
+    expect([...replaced].map(([k, v]) => `${k.asString()}=${v}`)).toEqual(["OB-2=20", "OB-1=1", "OB-3=3"]);
+    // the original is untouched
+    expect(index.get(id("OB-2"))).toBe(2);
+    expect(index.has(id("OB-3"))).toBe(false);
   });
 });

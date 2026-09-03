@@ -20,7 +20,6 @@ import { DesignFindings } from "./design-findings.ts";
 import { DesignSkips } from "./design-skips.ts";
 import { DesignFinding } from "./design-finding.ts";
 import { DesignSkipped } from "./design-skipped.ts";
-import type { DesignValue } from "./design-value.ts";
 
 import type { SiblingVerdictDocument } from "./sibling-verdict-document.ts";
 import type { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";
@@ -100,10 +99,7 @@ export class LoweredUnit {
   // 読めた文書の再割り当て本体（旧 remapVerdicts の readable 分岐、逐語）。
   #remapReadable(u: DesignUnit, method: string | null, docFindings: SiblingVerdictFindings, docSkipped: SiblingVerdictSkips): ReturnType<LoweredUnit["remapVerdicts"]> {
     const mapTarget = (t: string): { design: string; entry: LoweredOrigin | null } => this.#index.resolveDesignTarget(t);
-    const remapCore = (core: DesignValue): DesignValue => {
-      if (!Array.isArray(core)) return core;
-      return core.map((label) => (typeof label === "string" ? this.#index.rewriteLoweredIdTokens(label) : label));
-    };
+    const rewriteLabel = (label: string): string => this.#index.rewriteLoweredIdTokens(label);
     const remapDetail = (detail: string): string => this.#index.rewriteLoweredIds(detail);
 
     const findings: DesignFinding[] = [];
@@ -116,7 +112,7 @@ export class LoweredUnit {
       const mapped = f.targets().map((t) => mapTarget(t.asString()));
       const frRefs = f.frRefs();
       const detail = remapDetail(f.detail());
-      const witness = f.witnessWithCoreRemapped(remapCore);
+      const witness = f.witnessRemappedBy(rewriteLabel);
 
       const synth = mapped.find((m) => m.entry?.isSyntheticProbe());
       if (synth?.entry?.isKind("vac-dead") && f.isKind("conflict")) {
