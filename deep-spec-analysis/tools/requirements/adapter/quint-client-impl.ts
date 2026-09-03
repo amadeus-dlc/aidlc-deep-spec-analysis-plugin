@@ -120,7 +120,9 @@ export class QuintClientImpl implements QuintClient {
     bounded: boolean,
     work: string,
   ): QuintMachineRunVerdict | null {
-    if (!machine.plan.hasInvariantComponents()) return null;
+    // 不変量義務が無くても走らせる（裁定 4、2026-09-03）: コンパイラは背景制約と
+    // 型境界を invAll に畳んでいるので、イベントがそれを破る到達可能状態はこの
+    // フェーズでしか捕まらない（CLI が告げるデッドロックも同様）。
     const itfPath = join(work, "machine.itf.json");
     const run = bounded
       ? this.#runQuint(

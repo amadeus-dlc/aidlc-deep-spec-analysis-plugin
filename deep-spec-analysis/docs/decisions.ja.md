@@ -2006,3 +2006,17 @@ lowered 義務、`ContentHash` が digest 4 件、`QueryLabel` が event-pair pr
 `FenceCount` が fence 個数 3 件。`Obligation.ears` と `WitnessRef.value` は
 prose。生文字列の門は `reconstitute`、DP の門は `of`、境界の読み手は
 `toStrings` に揃えた。golden はバイト同一。
+
+単位 3（同 PR）: 裁定 4 が着地——不変量義務が無くても Quint の機械フェーズを
+走らせる。Quint クライアントの `hasInvariantComponents` ゲート（とメソッド）は
+消え、背景制約とイベント義務だけのモデルでもイベント機械がシミュレートされる。
+コンパイラは既に背景制約と型境界を `invAll` に畳んでいるので、イベントが
+それを破る到達可能状態をこのフェーズが捕まえる。新しい適合 fixture
+`conformance/background-events`（イベント 3 件・背景制約 1 件・不変量なし）は
+下限の無い refund イベントを持ち、凍結した golden は 3 つのイベント義務に
+対する conflict と、amount を負に落とす 6 ステップの trace を示す——ゲートの
+あった頃には見えなかった欠陥。正直な限界を 1 つ: Quint 0.32 の `run` は
+デッドロックを報告しない（`step` が無効になると trace を終えて「違反なし」）
+ので、計画のデッドロック分岐は CLI が告げる bounded モードでしか動かない。
+simulation で新たに検出するのは背景制約・型境界の到達可能な違反である。既存の
+golden は不変（全 fixture に不変量がある）、新 golden は固定 seed で決定的。

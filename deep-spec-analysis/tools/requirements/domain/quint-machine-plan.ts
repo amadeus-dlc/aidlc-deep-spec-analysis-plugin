@@ -48,10 +48,6 @@ export class QuintMachinePlan {
     });
   }
 
-  hasInvariantComponents(): boolean {
-    return !this.#invariantComponents.isEmpty();
-  }
-
   // 機械フェーズが検査する対象の全 id（成分 + イベント義務、正準順・一意）。
   machineTargets(): TargetIds {
     return TargetIds.of([...this.#invariantComponents.ids().toTargetIds(), ...this.#eventIds.toTargetIds()]).sortedUniqueCanonically();

@@ -1,0 +1,51 @@
+{
+  "backend": "quint",
+  "irVersion": "1.0.0",
+  "irHash": "e7b51aa035a58fe7d5cc22b32b1533c2ade313399dca4fdfddd1911154fef018",
+  "method": "simulation",
+  "findings": [
+    {
+      "kind": "conflict",
+      "frRefs": [
+        "FR-3",
+        "FR-4",
+        "FR-6"
+      ],
+      "targets": [
+        "OB-1",
+        "OB-2",
+        "OB-3"
+      ],
+      "witness": {
+        "trace": [
+          {
+            "order.amount": 3,
+            "order.status": "submitted"
+          },
+          {
+            "order.amount": 2,
+            "order.status": "submitted"
+          },
+          {
+            "order.amount": 1,
+            "order.status": "submitted"
+          },
+          {
+            "order.amount": 0,
+            "order.status": "submitted"
+          },
+          {
+            "order.amount": 0,
+            "order.status": "shipped"
+          },
+          {
+            "order.amount": -1,
+            "order.status": "shipped"
+          }
+        ]
+      },
+      "detail": "The event machine can reach a state that violates OB-1, OB-2, OB-3 (step trace attached): the event rules do not preserve the obligation."
+    }
+  ],
+  "skipped": []
+}

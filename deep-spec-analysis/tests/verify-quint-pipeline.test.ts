@@ -419,7 +419,6 @@ describe("quint plan collections (first-class operations)", () => {
     expect(comps.toArray().length).toBe(1);
 
     const plan = QuintMachinePlan.of({ invariantComponents: comps, eventIds: ObligationIds.of([ObligationId.reconstitute("OB-9"), ObligationId.reconstitute("OB-2")]), scenariosWithInit: [] });
-    expect(plan.hasInvariantComponents()).toBe(true);
     expect(plan.machineTargets().toStrings()).toEqual(["OB-1", "OB-2", "OB-9"]);
   });
 });
