@@ -67,6 +67,7 @@
 <!-- Populated by practices-discovery affirmation gate. -->
 <!-- Format: ALWAYS [behavior] (affirmed [date]) -->
 <!-- Example: ALWAYS use Result<T,E> for fallible operations in service layer (affirmed 2026-05-17) -->
+- **監査ログ同梱規律（2026-09-03 オーナー指示）**: 変更を PR に出すときは、そのワークフローの監査シャード（`aidlc/spaces/<space>/intents/<intent>/audit/<host>-<clone>.md`）を必ず同じ PR に含める。PR 作成の直前に `git status` で追記の有無を確認し、残っていれば取り込んでから出す。ワークフローのツールは stage の報告やゲートのたびに追記するので、コミット後にも行が増える——PR を出したあとに `main` へ追いコミットする形にしない。監査シャードは「何が起きたか」の唯一の正であり、成果物だけが PR に乗って経緯が別経路で入ると、レビューする側が突き合わせられない。
 
 ## Corrections
 
