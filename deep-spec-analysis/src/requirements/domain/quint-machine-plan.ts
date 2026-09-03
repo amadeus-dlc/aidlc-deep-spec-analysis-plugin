@@ -75,7 +75,21 @@ export class QuintMachinePlan {
     const eventTargets = this.#eventIds.toTargetIds();
 
     // 1) イベント機械下で到達可能な不変量違反・デッドロック。
+    //
+    // 結果そのものが無いときは黙って飛ばさない。飛ばすと「実行できなかった」と
+    // 「違反が無かった」が findings 0 件の同じ姿になり、縮退が pass に化ける。
+    // 判定を出せなかったことは unavailable として言う（run-failed の skip と
+    // 同じ語彙——バックエンドが答えを返さなかった、という同じ事実）。
     const machineRun = runs.machineRun();
+    if (machineRun === null) {
+      for (const target of machineTargets) {
+        skipped.push(VerificationSkipped.reconstitute({
+          target,
+          reason: "unavailable",
+          detail: "quint returned no machine run: the event machine was not decided",
+        }));
+      }
+    }
     if (machineRun !== null) {
       // timeout / run-failed の対象一括 skip は判定が組む（#71 波8）。
       skipped.push(...machineRun.skipsFor(machineTargets, bounded));
@@ -116,7 +130,14 @@ export class QuintMachinePlan {
         continue;
       }
       const r = runs.temporalOf(ob.id());
-      if (!r) continue;
+      if (!r) {
+        skipped.push(VerificationSkipped.reconstitute({
+          target,
+          reason: "unavailable",
+          detail: "quint returned no run for this temporal obligation",
+        }));
+        continue;
+      }
       const skip = r.skipFor(target);
         if (skip !== null) {
         skipped.push(skip);
@@ -147,7 +168,14 @@ export class QuintMachinePlan {
         continue;
       }
       const r = runs.scenarioOf(sc.id());
-      if (!r) continue;
+      if (!r) {
+        skipped.push(VerificationSkipped.reconstitute({
+          target,
+          reason: "unavailable",
+          detail: "quint returned no run for this scenario",
+        }));
+        continue;
+      }
       const skip = r.skipFor(target);
       if (skip !== null) {
         skipped.push(skip);

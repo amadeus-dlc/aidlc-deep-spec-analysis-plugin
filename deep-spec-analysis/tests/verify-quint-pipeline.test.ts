@@ -328,6 +328,42 @@ describe("quint verdict interpretation", () => {
     expect([...run({}).findings]).toEqual([]);
   });
 
+  // 縮退は黙らない。結果が一つも返らなかった実行は「違反が無かった」と同じ姿に
+  // なってはいけない——それでは quint が動かなかった回が pass に化け、golden 比較が
+  // 気まぐれに落ちるだけになる。判定を出せなかった対象は unavailable として言う。
+  test("runs that returned nothing are unavailable per target, never silence", () => {
+    const simulation = run({});
+    expect(simulation.skipped.toArray().map((s) => `${s.target().asString()}:${s.reason()}`)).toEqual([
+      // 機械対象は判定そのものが返らなかった。
+      "OB-1:unavailable",
+      "OB-2:unavailable",
+      // leads-to は simulation では決められない——これは環境ではなく仕様の限界。
+      "OB-3:capability",
+      // 束縛の揃ったシナリオは実行されるはずだった。
+      "SC-1:unavailable",
+      "SC-2:unavailable",
+      // When-event 付きは v1 の対象外。
+      "SC-3:capability",
+    ]);
+    expect(simulation.skipped.toArray().filter((s) => s.reason() === "unavailable").map((s) => s.detail())).toEqual([
+      "quint returned no machine run: the event machine was not decided",
+      "quint returned no machine run: the event machine was not decided",
+      "quint returned no run for this scenario",
+      "quint returned no run for this scenario",
+    ]);
+    // bounded では leads-to も実行されるはずなので、返らなければ同じく unavailable。
+    const bounded = run({}, "bounded");
+    expect(bounded.skipped.toArray().map((s) => `${s.target().asString()}:${s.reason()}`)).toEqual([
+      "OB-1:unavailable",
+      "OB-2:unavailable",
+      "OB-3:unavailable",
+      "SC-1:unavailable",
+      "SC-2:unavailable",
+      "SC-3:capability",
+    ]);
+    expect(bounded.skipped.toArray()[2]?.detail()).toBe("quint returned no run for this temporal obligation");
+  });
+
   test("temporal obligations: capability skip in simulation, verdicts in bounded, guard for skipped", () => {
     const sim = run({});
     expect(sim.skipped.toArray().find((s) => s.target().asString() === "OB-3")?.detail())
