@@ -1,0 +1,6 @@
+# ローカルと CI（.github/workflows/ci.yml の setup-bun / setup-node）で同じ版を使う。
+# Renovate の mise マネージャがここと CI の固定を同時に上げる。
+# node >= 23 は SMT センサーの z3 子プロセスに必要（docs/decisions A1）。
+[tools]
+bun = "1.3.13"
+node = "24"
