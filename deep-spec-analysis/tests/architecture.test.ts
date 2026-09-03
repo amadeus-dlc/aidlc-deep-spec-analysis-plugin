@@ -16,6 +16,7 @@ import {
   ENTRY_FILES,
   layerDirection,
   locationOf,
+  manifestDependencyDirection,
   noCrossPackageRelativeImports,
   noEntryImports,
   noEnums,
@@ -55,6 +56,26 @@ function walkSrcFiles(dir = srcDir): string[] {
     else if (entry.name.endsWith(".ts")) out.push(relative(srcDir, p));
   }
   return out;
+}
+
+interface LayerManifest {
+  readonly rel: string;
+  readonly manifest: { readonly name?: unknown; readonly dependencies?: { [k: string]: unknown } };
+}
+
+// 層パッケージの宣言（src/<ctx>/<layer>/package.json）を集める。entries/ の合成
+// ルートと src/ 直下は層ではないので対象外。
+function walkLayerManifests(): LayerManifest[] {
+  const out: LayerManifest[] = [];
+  for (const context of readdirSync(srcDir, { withFileTypes: true })) {
+    if (!context.isDirectory() || context.name === "entries" || context.name === "node_modules") continue;
+    for (const layer of readdirSync(join(srcDir, context.name), { withFileTypes: true })) {
+      if (!layer.isDirectory() || layer.name === "node_modules" || layer.isSymbolicLink()) continue;
+      const rel = `${context.name}/${layer.name}/package.json`;
+      out.push({ rel, manifest: JSON.parse(readFileSync(join(srcDir, rel), "utf-8")) });
+    }
+  }
+  return out.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
 }
 
 describe("rule red/green examples (detection power proof)", () => {
@@ -328,6 +349,68 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(noCrossPackageRelativeImports("kernel/domain/x.ts", '// import { y } from "../adapter/y.ts";\nconst v = 1;')).toHaveLength(0);
   });
 
+  // 7.2: FR1.2 の穴——isolated linker が張るのは package.json の dependencies なので、
+  // 禁止方向の辺を宣言しただけで（import を一行も書かなくても）構造による強制が
+  // そこだけ開く。宣言側も import と同じ表で検査する。
+  test("manifest-dependency-direction flags declared edges the layer tables forbid", () => {
+    const ws = "workspace:*";
+    // red: 上向きの辺は宣言できない。
+    expect(manifestDependencyDirection("kernel/domain/package.json", {
+      name: "@deep-spec/kernel-domain",
+      dependencies: { "@deep-spec/design-adapter": ws },
+    })).not.toHaveLength(0);
+    expect(manifestDependencyDirection("refcheck/usecase/package.json", {
+      name: "@deep-spec/refcheck-usecase",
+      dependencies: { "@deep-spec/refcheck-adapter": ws },
+    })).not.toHaveLength(0);
+    // red: infrastructure は自分より上を知らない。
+    expect(manifestDependencyDirection("kernel/infrastructure/package.json", {
+      name: "@deep-spec/kernel-infrastructure",
+      dependencies: { "@deep-spec/kernel-domain": ws },
+    })).not.toHaveLength(0);
+    // red: 公認されていないコンテキスト横断。
+    expect(manifestDependencyDirection("requirements/domain/package.json", {
+      name: "@deep-spec/requirements-domain",
+      dependencies: { "@deep-spec/design-domain": ws },
+    })).not.toHaveLength(0);
+    // red: 層パッケージでないものは辿れる依存にしない（合成ルートを含む）。
+    expect(manifestDependencyDirection("doctor/adapter/package.json", {
+      name: "@deep-spec/doctor-adapter",
+      dependencies: { "@deep-spec/entries": ws },
+    })).not.toHaveLength(0);
+    // red: レジストリから引く宣言はワークスペースの辺ではない。
+    expect(manifestDependencyDirection("doctor/usecase/package.json", {
+      name: "@deep-spec/doctor-usecase",
+      dependencies: { "@deep-spec/doctor-domain": "^1.0.0" },
+    })).not.toHaveLength(0);
+    // red: 名前がパスと食い違えば、宣言表はもうそのパッケージの事実ではない。
+    expect(manifestDependencyDirection("doctor/domain/package.json", {
+      name: "@deep-spec/doctor-usecase",
+      dependencies: {},
+    })).not.toHaveLength(0);
+    // red: 自分自身への宣言。
+    expect(manifestDependencyDirection("design/domain/package.json", {
+      name: "@deep-spec/design-domain",
+      dependencies: { "@deep-spec/design-domain": ws },
+    })).not.toHaveLength(0);
+    // green: 下向きの辺・kernel への辺・公認の横断・依存ゼロ。
+    expect(manifestDependencyDirection("design/adapter/package.json", {
+      name: "@deep-spec/design-adapter",
+      dependencies: { "@deep-spec/design-usecase": ws, "@deep-spec/design-domain": ws, "@deep-spec/kernel-adapter": ws },
+    })).toHaveLength(0);
+    expect(manifestDependencyDirection("refcheck/usecase/package.json", {
+      name: "@deep-spec/refcheck-usecase",
+      dependencies: { "@deep-spec/refcheck-domain": ws, "@deep-spec/kernel-infrastructure": ws },
+    })).toHaveLength(0);
+    expect(manifestDependencyDirection("refinement/domain/package.json", {
+      name: "@deep-spec/refinement-domain",
+      dependencies: { "@deep-spec/requirements-domain": ws, "@deep-spec/design-domain": ws },
+    })).toHaveLength(0);
+    expect(manifestDependencyDirection("kernel/infrastructure/package.json", {
+      name: "@deep-spec/kernel-infrastructure",
+    })).toHaveLength(0);
+  });
+
   test("a relative import escaping src/ (unclassified target) is flagged", () => {
     expect(layerDirection("kernel/domain/x.ts", 'import { h } from "../../../tests/helper.ts";')).not.toHaveLength(0);
   });
@@ -396,5 +479,18 @@ describe("the real src/ tree", () => {
     // 増えない(entries/ に足した新規ファイルはこのテストで落ちる)。
     expect(files.filter((rel) => rel.startsWith("entries/")).sort()).toEqual([...ENTRY_FILES].sort());
     expect(ENTRY_FILES.size).toBe(10);
+  });
+
+  // 宣言表と許可表が同じ事実を指すことの固定（FR1.2）。片方だけを変えると落ちる:
+  // 禁止方向の辺を宣言すればこのテストが、許可表を狭めれば宣言側が違反になる。
+  test("every layer manifest declares only edges the layer tables allow", () => {
+    const manifests = walkLayerManifests();
+    // 17 層ちょうど。層を足したり消したりすればここで気づく。
+    expect(manifests.length).toBe(17);
+    const violations = manifests.flatMap(({ rel, manifest }) => manifestDependencyDirection(rel, manifest));
+    expect(violations).toEqual([]);
+    // 走査が空振りしていないことの証明——実ツリーに辺が実在する。
+    const declared = manifests.flatMap(({ manifest }) => Object.keys(manifest.dependencies ?? {}));
+    expect(declared.length).toBeGreaterThan(0);
   });
 });
