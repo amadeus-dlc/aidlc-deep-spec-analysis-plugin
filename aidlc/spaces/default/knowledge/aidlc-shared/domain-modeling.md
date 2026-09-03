@@ -2,9 +2,9 @@
 
 issue #71「MECE フェンス」プログラム（波 1〜40、PR #72〜#119）と、その後の裁定キュー（#120〜#124）で確立した設計の型。規則の本文は `memory/project.md` の `## Mandated`、裁定の経緯は `docs/decisions.ja.md`。ここでは「どう作るか」と「どこで転ぶか」を書く。
 
-## 1. 置いてよいドメインオブジェクトは 4 種だけ
+## 1. domain 層の住人は、4 種のドメインオブジェクトとドメインエラー
 
-domain 層に置くのは、エンティティ（ローカル／集約ルート）・値オブジェクト・ファーストクラスコレクション・ドメインイベントの 4 種。ドメインサービスは人間の裁定が必須。それ以外の種類（facts／materials／context／ledger／plan 型、随伴 static class、自由関数、例外型、generic record）を置きたくなったら、**実測ありの問題と対策を添えて裁定にかけ、裁定の後にだけ実装する**。
+domain 層に置くのは、エンティティ（ローカル／集約ルート）・値オブジェクト・ファーストクラスコレクション・ドメインイベントの 4 種のドメインオブジェクトと、**ドメインエラー**（型とバリアントがユビキタス言語に対応づく抽象データ型。予期された失敗は例外で投げず `Result` の値で返す。例: `RefinementMapDefect` の 4 バリアント）。ドメインサービスは人間の裁定が必須。それ以外の種類（facts／materials／context／ledger／plan 型、随伴 static class、自由関数、例外型、generic record）を置きたくなったら、**実測ありの問題と対策を添えて裁定にかけ、裁定の後にだけ実装する**。
 
 基線監査（2026-09-02）で 22 件の逸脱を洗い出し、全件を裁定した結果の対応表:
 
@@ -13,7 +13,7 @@ domain 層に置くのは、エンティティ（ローカル／集約ルート�
 | static のみの随伴 class | 解体して値オブジェクト／DP の振る舞いへ | `IdOrder` → DP の `compareTo` とコレクションの `sortedCanonically`；`Names` → DP `NormalizedName`；`Expressions` → 値オブジェクト `ExpressionTree` |
 | 検査手順を包んだ自由関数／`*Materials` | 解体して宣言側の不変条件へ。集約が検査コマンドを持つ | `designWellFormednessErrors` → 各 `Design*Decl` の `wellFormednessErrors`；`*CheckMaterials` 786 行 → `Components.check` 等 |
 | 可変累積器（`*Ledger`） | 集約ルートへ吸収。書き込みはコマンド、導出は不変条件 | `CheckFamilyLedger` → `ReferenceCheckReport.open / finding / skip / input` |
-| 例外型 | UL で名づけた抽象データ型を `Result` の値で返す | `AlphaError` → `RefinementMapDefect`（4 バリアント、凍結文言は各バリアントが描画） |
+| 例外型（throw/catch） | UL で名づけたドメインエラーにして `Result` の値で返す | `AlphaError` → `RefinementMapDefect`（4 バリアント、凍結文言は各バリアントが描画、公開語彙 compile-error への対応も型が知る） |
 | 分類文字列の型別名 | 値オブジェクトの内部表現に閉じる（外は `isKind` 等）か、DP にする | `LoweringKind` は内側へ；`CheckSeverity`／`CoverageState`／`FindingKind` は DP |
 | generic record | 集約の内側へ解散 | `LoadedDocument<Outcome>` → `DesignRecord` が文書と検査を持つ |
 | 「事実」を名乗る対応表 | 値オブジェクトと分類し `*Plan` に改名 | `SmtPlanFacts` → `SmtVerificationPlan` |
