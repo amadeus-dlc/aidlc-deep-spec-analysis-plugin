@@ -16,6 +16,7 @@ aidlc-workflows（submodule）とこのリポジトリの `.claude/`（シェル
 - リポジトリ固有のセンサー（`sensors/aidlc-pr-review-clean.md` ＋ `tools/aidlc-sensor-pr-review-clean.ts`）
 - `CLAUDE.md` はルート配置（dist は `.claude/CLAUDE.md` にテンプレートを置く。本文はプロジェクト名行以外同一なので、ルートに移してある分と二重化させない）
 - `settings.local.json` は dist に無いので上書きでは消えない
+- カスタム scope `plugin-dev`（2026-09-05、aidlc-grilling-plugin から取り込み）: `.claude/scopes/aidlc-plugin-dev.md`・`.codex/scopes/aidlc-plugin-dev.md`、11 stage ファイル（initialization 3・intent-capture・reverse-engineering・requirements-analysis・domain-design・units-generation・functional-design・code-generation・build-and-test）の `scopes:` の `- plugin-dev` 行、`aidlc-graph compile` で再生成した `tools/data/{stage-graph,scope-grid}.json`（両シェル）、`scope-table` の表（`.claude/skills/aidlc/SKILL.md`・`.agents/skills/aidlc/SKILL.md`）、runner `.claude/skills/aidlc-plugin-dev/`・`.agents/skills/aidlc-plugin-dev/`（`aidlc-runner-gen scopes` で再生成）。シェルを dist から上書きしたら、この 5 種を戻して compile・scope-table・runner-gen scopes を再実行する
 - 検証: `diff -rq .claude <backup>` の差分が upstream の `dist/claude/.claude` 差分と一致すること、`bun .claude/tools/aidlc-runner-gen.ts check` が in sync、hooks が無変更なら再承認・再起動は不要
 
 ## 3. インストール先の後入れアップグレード（公式手順と実証）

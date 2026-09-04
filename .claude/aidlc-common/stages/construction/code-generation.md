@@ -57,6 +57,7 @@ scopes:
   - classic
   - workshop
   - express
+  - plugin-dev
 inputs: ALL prior design artifacts for this unit
 outputs: application code + code-generation-plan.md, code-generation-questions.md, unit-test-instructions.md, code-summary.md, traceability.json (under this stage's per-unit record dir, engine-resolved)
 ---

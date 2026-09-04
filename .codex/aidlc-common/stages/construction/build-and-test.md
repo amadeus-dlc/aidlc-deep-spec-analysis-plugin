@@ -39,6 +39,7 @@ scopes:
   - classic
   - workshop
   - express
+  - plugin-dev
 inputs: ALL code generation outputs across all units
 outputs: build-instructions.md, integration-test-instructions.md, performance-test-instructions.md, security-test-instructions.md, build-and-test-summary.md, test-results.md, cross-unit-traceability.md (under this stage's record dir, engine-resolved)
 ---
