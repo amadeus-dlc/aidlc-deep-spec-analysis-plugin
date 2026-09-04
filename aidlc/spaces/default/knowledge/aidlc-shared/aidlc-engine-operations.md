@@ -54,3 +54,5 @@ aidlc-workflows（submodule）とこのリポジトリの `.claude/`（シェル
 - Renovate の GitHub App はアカウント／org 単位のインストール。リポジトリを個人から org へ移管すると App は付いてこないので、onboarding PR をマージしても動かない。`gh api orgs/<org>/installations` で確認する
 - `gh pr view` の `headRefOid` が古いまま詰まることがある。`gh api repos/…/pulls/N` を直に読むか、PR の close/reopen で直る
 - レビューボットのレートリミット待ちはマージを止める理由にしない。条件は CI グリーンと、既に付いている指摘の解決
+- `main` の ruleset（2026-09-05 作成、id 22286993、amadeus-ng の ruleset に倣う）: required status checks は `ci`・`coverage`・`CI Success` の 3 つ。`deletion` と `non_fast_forward` も禁止。**merge queue は入れていない**——`ci.yml` に `merge_group` トリガが無く、queue に入れると checks が走らず詰まるため。`strict_required_status_checks_policy` は false（merge queue で直列化しないので、base 追従を全 PR に強制しない）。bypass は RepositoryRole 5（admin）の always ——`scripts/release.ts` が `git push --atomic origin main <tag>` で main へ直接 push するため、これが無いとリリースが通らない。merge queue を入れるなら `ci.yml` に `merge_group: {}` を足してから
+- レビュースレッドのゲート（`CI Review Thread Gate` / `Check unresolved comments`）は `pull_request` イベントでしか走らない。スレッドを resolve したあとは `gh run rerun <run-id> --failed` で再実行しないと緑にならない
