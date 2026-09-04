@@ -117,7 +117,7 @@ describe("strict creation rejects unknown closed-set values (BR3.1)", () => {
     for (const reason of KNOWN_SKIP_REASONS) {
       const ok = SkipReason.parse(reason);
       expect(ok.ok).toBe(true);
-      if (ok.ok) expect(ok.value.value()).toBe(reason);
+      if (ok.ok) expect(ok.value.asString()).toBe(reason);
     }
 
     // 名前付きファクトリはすべて閉集合の中の値を返す——domain／usecase が
@@ -133,8 +133,8 @@ describe("strict creation rejects unknown closed-set values (BR3.1)", () => {
       SkipReason.irVersionMismatch(),
       SkipReason.unrecognizedFormat(),
     ];
-    expect(factories.map((r) => r.value())).toEqual(KNOWN_SKIP_REASONS);
-    for (const reason of factories) expect(SkipReason.parse(reason.value()).ok).toBe(true);
+    expect(factories.map((r) => r.asString())).toEqual(KNOWN_SKIP_REASONS);
+    for (const reason of factories) expect(SkipReason.parse(reason.asString()).ok).toBe(true);
   });
 });
 
@@ -148,7 +148,7 @@ describe("tolerant hydration preserves unknown values verbatim without throwing 
 
   test("SkipReason.reconstitute never throws and keeps an unknown reason verbatim", () => {
     const reason = SkipReason.reconstitute("no-such-reason");
-    expect(reason.value()).toBe("no-such-reason");
+    expect(reason.asString()).toBe("no-such-reason");
     expect(reason.compareTo(SkipReason.reconstitute("no-such-reason"))).toBe(0);
     expect(reason.compareTo(SkipReason.reconstitute("zzz-after"))).toBeLessThan(0);
   });

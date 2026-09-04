@@ -1180,7 +1180,7 @@ class SkipReason {
   static unrecognizedFormat() {
     return new SkipReason("unrecognized-format");
   }
-  value() {
+  asString() {
     return this.#value;
   }
   compareTo(other) {

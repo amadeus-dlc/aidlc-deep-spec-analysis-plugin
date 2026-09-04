@@ -32,7 +32,7 @@ export class DesignSkipped {
   }
 
   reason(): string {
-    return this.#reason.value();
+    return this.#reason.asString();
   }
 
   unit(): string {

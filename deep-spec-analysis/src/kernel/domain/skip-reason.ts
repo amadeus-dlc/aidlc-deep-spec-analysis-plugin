@@ -77,7 +77,7 @@ export class SkipReason {
     return new SkipReason("unrecognized-format");
   }
 
-  value(): string {
+  asString(): string {
     return this.#value;
   }
 

@@ -1221,7 +1221,7 @@ class SkipReason {
   static unrecognizedFormat() {
     return new SkipReason("unrecognized-format");
   }
-  value() {
+  asString() {
     return this.#value;
   }
   compareTo(other) {
@@ -2761,7 +2761,7 @@ class DesignSkipped {
     return this.#target;
   }
   reason() {
-    return this.#reason.value();
+    return this.#reason.asString();
   }
   unit() {
     return this.#unit.asString();
