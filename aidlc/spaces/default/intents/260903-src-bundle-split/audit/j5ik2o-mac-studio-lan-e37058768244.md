@@ -2555,3 +2555,59 @@
 **Session**: 8665e964-c3f0-4589-9f1a-85f50f283547
 
 ---
+
+## Human Turn
+**Timestamp**: 2026-09-03T12:23:23Z
+**Event**: HUMAN_TURN
+**Session**: 8665e964-c3f0-4589-9f1a-85f50f283547
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-03T12:24:19Z
+**Event**: HUMAN_TURN
+**Session**: 8665e964-c3f0-4589-9f1a-85f50f283547
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-03T12:24:19Z
+**Event**: HUMAN_TURN
+**Session**: 8665e964-c3f0-4589-9f1a-85f50f283547
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-03T12:24:57Z
+**Event**: HUMAN_TURN
+**Session**: 8665e964-c3f0-4589-9f1a-85f50f283547
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-03T12:27:18Z
+**Event**: HUMAN_TURN
+**Session**: 8665e964-c3f0-4589-9f1a-85f50f283547
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-03T12:52:25Z
+**Event**: HUMAN_TURN
+**Session**: 8665e964-c3f0-4589-9f1a-85f50f283547
+
+---
+
+## Human Turn
+**Timestamp**: 2026-09-03T12:53:49Z
+**Event**: HUMAN_TURN
+**Session**: 8665e964-c3f0-4589-9f1a-85f50f283547
+
+---
+
+## Session End
+**Timestamp**: 2026-09-03T13:01:41Z
+**Event**: SESSION_ENDED
+**Reason**: clear
+
+---
