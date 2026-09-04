@@ -12,7 +12,7 @@
 // フロー制御——ポートは判定しない。
 
 import type { RefinementMaterialsId } from "@deep-spec/design-domain";
-import type { RefinementMaterials } from "@deep-spec/refinement-domain";
+import type { RefinementMaterials } from "@deep-spec/design-domain";
 
 export interface RefinementMaterialsRepository {
   findById(id: RefinementMaterialsId): RefinementMaterials;

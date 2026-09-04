@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "@deep-spec/kernel-adapter";
-import { RequirementIds, ContentHash, ArtifactPath } from "@deep-spec/kernel-domain";
+import { RequirementIds, ContentHash, ArtifactPath, FindingsSchema, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -26,7 +26,6 @@ function ap(raw: string): ArtifactPath {
 import {
   DesignRecordRepositoryImpl,
   ReferenceCheckReportRepositoryImpl,
-  conformToContract,
   parseComponentCatalog,
   parseDomainEntitiesDocument,
   parseEntitiesDocument,
@@ -43,8 +42,6 @@ import {
   ReferenceCheckReport,
   ReferenceCheckReportId,
   BlockIndex,
-  CheckFamilies,
-  CheckFamily,
   ContractRows,
   LineNumber,
   SpecBlockAssessments,
@@ -64,6 +61,10 @@ import {
   SiblingUnitIndex,
   InputAnchor,
   InputAnchors,
+  Finding,
+  Findings,
+  Skips,
+  WitnessRefs,
 } from "@deep-spec/refcheck-domain";
 import { InMemoryReferenceCheckReportRepository } from "./doubles/in-memory-reference-check-report-repository.ts";
 import type { Result } from "@deep-spec/kernel-infrastructure";
@@ -72,6 +73,7 @@ const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(pluginRoot, "tests", "fixtures", "refcheck");
 const schemaPath = join(pluginRoot, "src", "entries", "data", "deep-spec-findings-schema.json");
 const schema = readContractSchema(schemaPath);
+const findingsSchema = schema.ok ? FindingsSchema.of(schema.value) : FindingsSchema.unreadable(schema.error.cause);
 
 function golden(variant: string, file: string): string {
   return readFileSync(join(fixtures, "expected", variant, file), "utf-8");
@@ -80,7 +82,7 @@ function golden(variant: string, file: string): string {
 function realRepositories() {
   return {
     designRecords: new DesignRecordRepositoryImpl(),
-    reports: new ReferenceCheckReportRepositoryImpl(schemaPath),
+    reports: new ReferenceCheckReportRepositoryImpl(),
   };
 }
 
@@ -93,7 +95,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
         const { designRecords, reports } = realRepositories();
 
         const componentsPath = join(record, "inception", "domain-design", "components.md");
-        const domainOutcome = new CheckDomainComponentsUseCase(designRecords, reports).execute({
+        const domainOutcome = new CheckDomainComponentsUseCase(designRecords, reports, findingsSchema).execute({
           recordId: DesignRecordId.of(ap(componentsPath)),
           reportDirectory: ap(join(dirname(componentsPath), "deep-spec-refcheck")),
           mode: "persist",
@@ -105,7 +107,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
           .toBe(golden(variant, "components.json"));
 
         const contractPath = join(record, "inception", "contract-design", "contract-summary.md");
-        const contractOutcome = new CheckContractSummaryUseCase(designRecords, reports).execute({
+        const contractOutcome = new CheckContractSummaryUseCase(designRecords, reports, findingsSchema).execute({
           recordId: DesignRecordId.of(ap(contractPath)),
           reportDirectory: ap(join(dirname(contractPath), "deep-spec-refcheck")),
           mode: "persist",
@@ -115,7 +117,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
           .toBe(golden(variant, "contract-summary.json"));
 
         const entitiesPath = join(record, "construction", "u1-orders", "functional-design", "entities.md");
-        const functionalOutcome = new CheckFunctionalDesignUseCase(designRecords, reports).execute({
+        const functionalOutcome = new CheckFunctionalDesignUseCase(designRecords, reports, findingsSchema).execute({
           recordId: DesignRecordId.of(ap(entitiesPath)),
           reportDirectory: ap(join(dirname(entitiesPath), "deep-spec-refcheck")),
           mode: "persist",
@@ -131,7 +133,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 
   test("an unreadable target resolves to not-applicable, and report-only writes nothing", () => {
     const { designRecords, reports } = realRepositories();
-    const missing = new CheckDomainComponentsUseCase(designRecords, reports).execute({
+    const missing = new CheckDomainComponentsUseCase(designRecords, reports, findingsSchema).execute({
       recordId: DesignRecordId.of(ap("/nonexistent/components.md")),
       reportDirectory: ap("/nonexistent/deep-spec-refcheck"),
       mode: "persist",
@@ -142,14 +144,14 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
     try {
       cpSync(join(fixtures, "broken"), record, { recursive: true });
       const componentsPath = join(record, "inception", "domain-design", "components.md");
-      const outcome = new CheckDomainComponentsUseCase(designRecords, reports).execute({
+      const outcome = new CheckDomainComponentsUseCase(designRecords, reports, findingsSchema).execute({
         recordId: DesignRecordId.of(ap(componentsPath)),
         reportDirectory: ap(join(dirname(componentsPath), "deep-spec-refcheck")),
         mode: "report-only",
       });
       expect(outcome.kind).toBe("verified");
       expect(outcome.kind === "verified" && outcome.pass).toBe(false);
-      const written = new ReferenceCheckReportRepositoryImpl(schemaPath).findById(
+      const written = new ReferenceCheckReportRepositoryImpl().findById(
         ReferenceCheckReportId.of(ap(join(dirname(componentsPath), "deep-spec-refcheck")), "components"),
       );
       expect(!written.ok && written.error.kind).toBe("not-found");
@@ -162,10 +164,10 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
     const record = mkdtempSync(join(tmpdir(), "refcheck-usecase-"));
     try {
       cpSync(join(fixtures, "clean"), record, { recursive: true });
-      const reports = new InMemoryReferenceCheckReportRepository(schema);
+      const reports = new InMemoryReferenceCheckReportRepository();
       const componentsPath = join(record, "inception", "domain-design", "components.md");
       const reportDirectory = ap(join(dirname(componentsPath), "deep-spec-refcheck"));
-      const outcome = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImpl(), reports).execute({
+      const outcome = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImpl(), reports, findingsSchema).execute({
         recordId: DesignRecordId.of(ap(componentsPath)),
         reportDirectory,
         mode: "persist",
@@ -587,10 +589,25 @@ describe("functional branches the fixtures do not exercise", () => {
   });
 
   test("a degraded conformance still renders a schema-valid unavailable document", () => {
-    const bad = ReferenceCheckReport.open(ReferenceCheckReportId.of(ap("/tmp/r"), "components"), CheckFamilies.reconstitute(["DD-0"]));
-    bad.finding(CheckFamily.reconstitute("DD-0"), "no-such-kind", ["check:DD-0"], [], "x");
-    bad.input(anchor("x.md"));
-    const conformed = conformToContract(bad, schema);
+    // 未知 kind は「書かれた文書」だけが運ぶ——集約の正常生成口は検証済みの
+    // FindingKind しか受け取らないので、寛容な hydration の姿で組む。
+    const bad = ReferenceCheckReport.reconstitute({
+      id: ReferenceCheckReportId.of(ap("/tmp/r"), "components"),
+      inputs: InputAnchors.of([anchor("x.md")]),
+      checked: TargetIds.reconstitute([]),
+      findings: Findings.of([
+        Finding.reconstitute({
+          kind: "no-such-kind",
+          frRefs: FrRefs.reconstitute([]),
+          targets: TargetIds.reconstitute(["check:DD-0"]),
+          witness: { refs: WitnessRefs.of([]) },
+          detail: "DD-0: x",
+        }),
+      ]),
+      skipped: Skips.of([]),
+      unavailableReason: null,
+    });
+    const conformed = bad.conformedTo(findingsSchema);
     expect(conformed.isUnavailable()).toBe(true);
     expect(JSON.parse(renderReportBytes(conformed)).unavailable.reason)
       .toStartWith("self-validation against deep-spec-findings-schema.json failed: ");

@@ -6,7 +6,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
 import { ContentHash } from "@deep-spec/kernel-domain";
-import { type Json, canonicalStringify, extractFences, writeFileAtomically } from "@deep-spec/kernel-adapter";
+import { extractFences, writeFileAtomically } from "@deep-spec/kernel-adapter";
+import { type Json, canonicalStringify } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import { type FormalModelId, RequirementsModel } from "@deep-spec/requirements-domain";
 import type { FormalModelRepository } from "@deep-spec/requirements-usecase";

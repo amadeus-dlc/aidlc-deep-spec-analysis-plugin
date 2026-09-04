@@ -3,7 +3,7 @@
 // ユニットの型付き実体宣言から描画する（裁定 2、2026-09-03——整形済み IR と
 // バイト同一）。
 
-import type { Json } from "@deep-spec/kernel-adapter";
+import type { Json } from "@deep-spec/kernel-infrastructure";
 import { LoweredUnit } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
 import { renderDesignEntities } from "./design-entities-parser.ts";

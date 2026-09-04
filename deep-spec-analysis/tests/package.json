@@ -17,7 +17,6 @@
     "@deep-spec/refcheck-adapter": "workspace:*",
     "@deep-spec/refcheck-domain": "workspace:*",
     "@deep-spec/refcheck-usecase": "workspace:*",
-    "@deep-spec/refinement-domain": "workspace:*",
     "@deep-spec/requirements-adapter": "workspace:*",
     "@deep-spec/requirements-domain": "workspace:*",
     "@deep-spec/requirements-usecase": "workspace:*"

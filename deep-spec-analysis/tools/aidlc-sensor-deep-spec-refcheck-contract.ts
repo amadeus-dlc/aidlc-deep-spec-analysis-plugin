@@ -1,6 +1,6 @@
 // @bun
 // src/entries/aidlc-sensor-deep-spec-refcheck-contract.ts
-import { basename as basename3, dirname as dirname4, join as join5 } from "path";
+import { basename as basename3, dirname as dirname4, join as join6 } from "path";
 import { fileURLToPath } from "url";
 
 // src/kernel/adapter/sensor-flags.ts
@@ -62,30 +62,11 @@ function ok(value) {
 function err(error) {
   return { ok: false, error };
 }
-// src/kernel/adapter/contract-schema.ts
-function readContractSchema(path) {
-  try {
-    return ok(JSON.parse(readFileSync2(path, "utf-8")));
-  } catch (e) {
-    return err({ cause: e instanceof Error ? e.message : String(e) });
-  }
-}
-// src/kernel/adapter/json.ts
+// src/kernel/infrastructure/json.ts
 function isObject(v) {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
-// src/kernel/adapter/canonical-json.ts
-function canonicalStringify(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalStringify).join(",")}]`;
-  }
-  if (isObject(value)) {
-    const keys = Object.keys(value).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(value[k] ?? null)}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-// src/kernel/adapter/schema.ts
+// src/kernel/infrastructure/schema.ts
 function typeMatches(t, v) {
   switch (t) {
     case "object":
@@ -201,6 +182,25 @@ function validateSchema(root, schema, value, path, errors) {
     }
   }
   return errors.length === before;
+}
+// src/kernel/infrastructure/canonical-json.ts
+function canonicalStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalStringify).join(",")}]`;
+  }
+  if (isObject(value)) {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(value[k] ?? null)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+// src/kernel/adapter/contract-schema.ts
+function readContractSchema(path) {
+  try {
+    return ok(JSON.parse(readFileSync2(path, "utf-8")));
+  } catch (e) {
+    return err({ cause: e instanceof Error ? e.message : String(e) });
+  }
 }
 // src/kernel/adapter/yaml.ts
 class YamlError extends Error {
@@ -451,6 +451,164 @@ function writeFileAtomically(path, data) {
       rmSync(tmp, { force: true });
     } catch {}
     throw e;
+  }
+}
+// src/kernel/adapter/directory-finalization-lock.ts
+import { randomBytes } from "crypto";
+import { mkdirSync as mkdirSync2, readFileSync as readFileSync3, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { join as join3 } from "path";
+var DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
+var METADATA_BASENAME = "owner.lockmeta";
+var LEASE_MS = 30000;
+var OWNER_TOKEN_BYTES = 16;
+function causeOf(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+
+class DirectoryFinalizationLock {
+  #clock;
+  #liveness;
+  #lockBasename;
+  #ownerTokens;
+  constructor(clock, liveness, lockBasename = DESIGN_LOCK_BASENAME) {
+    this.#clock = clock;
+    this.#liveness = liveness;
+    this.#lockBasename = lockBasename;
+    this.#ownerTokens = new Map;
+  }
+  canonicalPathOf(directory) {
+    return join3(directory.asString(), this.#lockBasename);
+  }
+  ownerTokenOf(directory) {
+    return this.#ownerTokens.get(this.canonicalPathOf(directory)) ?? null;
+  }
+  acquire(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const token = randomBytes(OWNER_TOKEN_BYTES).toString("hex");
+    const blocked = this.#createOwned(canonical, token);
+    if (blocked === null) {
+      this.#ownerTokens.set(canonical, token);
+      return { kind: "acquired" };
+    }
+    const observed = this.#readMetadata(canonical);
+    if (observed === null) {
+      return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
+    }
+    if (observed.state !== "held") {
+      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.state}"` };
+    }
+    if (this.#clock.now() < observed.leaseExpiresAtMs) {
+      return { kind: "lock-contended", cause: "the lease has not expired" };
+    }
+    const status = this.#liveness.statusOf(observed.pid);
+    if (status !== "absent") {
+      return { kind: "lock-contended", cause: `owner process ${observed.pid} is ${status}` };
+    }
+    const reread = this.#readMetadata(canonical);
+    if (reread === null || reread.token !== observed.token) {
+      return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
+    }
+    const stale = `${canonical}.stale.${observed.token}.${token}`;
+    try {
+      renameSync2(canonical, stale);
+    } catch (e) {
+      return { kind: "lock-recovery-failed", cause: causeOf(e) };
+    }
+    const lost = this.#createOwned(canonical, token);
+    this.#discard(stale);
+    if (lost !== null) {
+      return { kind: "lock-recovery-failed", cause: lost };
+    }
+    this.#ownerTokens.set(canonical, token);
+    return { kind: "recovered", displacedToken: observed.token };
+  }
+  holdsOwnership(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined)
+      return false;
+    const observed = this.#readMetadata(canonical);
+    return observed !== null && observed.state === "held" && observed.token === mine;
+  }
+  release(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined) {
+      return { kind: "lock-release-failed", cause: "this writer does not hold the lock" };
+    }
+    this.#ownerTokens.delete(canonical);
+    const observed = this.#readMetadata(canonical);
+    if (observed === null || observed.token !== mine) {
+      return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
+    }
+    const cleanup = `${canonical}.cleanup.${mine}`;
+    try {
+      renameSync2(canonical, cleanup);
+    } catch (e) {
+      return { kind: "lock-release-failed", cause: causeOf(e) };
+    }
+    const swept = this.#discard(cleanup);
+    if (swept !== null) {
+      return { kind: "cleanup-failed", cause: swept };
+    }
+    return { kind: "released" };
+  }
+  #createOwned(canonical, token) {
+    const acquiredAtMs = this.#clock.now();
+    try {
+      mkdirSync2(canonical);
+    } catch (e) {
+      return causeOf(e);
+    }
+    const metadata = {
+      state: "held",
+      token,
+      pid: this.#liveness.self(),
+      acquiredAtMs,
+      leaseExpiresAtMs: acquiredAtMs + LEASE_MS
+    };
+    try {
+      writeFileSync2(join3(canonical, METADATA_BASENAME), `${JSON.stringify(metadata)}
+`, "utf-8");
+      return null;
+    } catch (e) {
+      const cleanup = `${canonical}.cleanup.${token}`;
+      try {
+        renameSync2(canonical, cleanup);
+        this.#discard(cleanup);
+      } catch {}
+      return causeOf(e);
+    }
+  }
+  #readMetadata(canonical) {
+    let raw;
+    try {
+      raw = JSON.parse(readFileSync3(join3(canonical, METADATA_BASENAME), "utf-8"));
+    } catch {
+      return null;
+    }
+    if (typeof raw !== "object" || raw === null)
+      return null;
+    const doc = raw;
+    if (typeof doc.state !== "string" || typeof doc.token !== "string")
+      return null;
+    if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
+      return null;
+    return {
+      state: doc.state,
+      token: doc.token,
+      pid: doc.pid,
+      acquiredAtMs: doc.acquiredAtMs,
+      leaseExpiresAtMs: doc.leaseExpiresAtMs
+    };
+  }
+  #discard(ownPath) {
+    try {
+      rmSync2(ownPath, { recursive: true, force: true });
+      return null;
+    } catch (e) {
+      return causeOf(e);
+    }
   }
 }
 // src/kernel/domain/expression-tree.ts
@@ -901,6 +1059,35 @@ class ErrorMessages {
     return this.#values;
   }
 }
+// src/kernel/domain/findings-schema.ts
+var CONTRACT_BASENAME = "deep-spec-findings-schema.json";
+
+class FindingsSchema {
+  #schema;
+  #reason;
+  constructor(schema, reason) {
+    this.#schema = schema;
+    this.#reason = reason;
+  }
+  static of(schema) {
+    return new FindingsSchema(schema, null);
+  }
+  static unreadable(cause) {
+    return new FindingsSchema(null, cause);
+  }
+  degradationReasonFor(document) {
+    const schema = this.#schema;
+    if (schema === null) {
+      return `findings schema unreadable: ${this.#reason ?? ""}`;
+    }
+    const errors = [];
+    validateSchema(schema, schema, document, "", errors);
+    const first = errors[0];
+    if (first === undefined)
+      return null;
+    return `self-validation against ${CONTRACT_BASENAME} failed: ${first}`;
+  }
+}
 // src/kernel/domain/trigger-name.ts
 class TriggerName {
   #value;
@@ -1092,6 +1279,39 @@ class FindingKind {
   static reconstitute(raw) {
     return new FindingKind(raw);
   }
+  static conflict() {
+    return new FindingKind("conflict");
+  }
+  static completenessGap() {
+    return new FindingKind("completeness-gap");
+  }
+  static scenarioViolation() {
+    return new FindingKind("scenario-violation");
+  }
+  static unreachable() {
+    return new FindingKind("unreachable");
+  }
+  static redundancy() {
+    return new FindingKind("redundancy");
+  }
+  static refinementViolation() {
+    return new FindingKind("refinement-violation");
+  }
+  static mappingGap() {
+    return new FindingKind("mapping-gap");
+  }
+  static structureInvalid() {
+    return new FindingKind("structure-invalid");
+  }
+  static referenceBroken() {
+    return new FindingKind("reference-broken");
+  }
+  static consistencyMismatch() {
+    return new FindingKind("consistency-mismatch");
+  }
+  static crossCheckDisagreement() {
+    return new FindingKind("cross-check-disagreement");
+  }
   static canonicalOrder() {
     return Object.keys(KIND_RANK);
   }
@@ -1109,10 +1329,17 @@ class FindingKind {
   }
 }
 // src/kernel/domain/verification-method.ts
+var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
+
 class VerificationMethod {
   #value;
   constructor(value) {
     this.#value = value;
+  }
+  static parse(raw) {
+    if (!KNOWN_METHODS.has(raw))
+      return err({ kind: "unknown-verification-method", raw });
+    return ok(new VerificationMethod(raw));
   }
   static reconstitute(raw) {
     return new VerificationMethod(raw);
@@ -1122,6 +1349,66 @@ class VerificationMethod {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/kernel/domain/skip-reason.ts
+var KNOWN_REASONS = new Set([
+  "unavailable",
+  "timeout",
+  "capability",
+  "compile-error",
+  "waived",
+  "absent-input",
+  "stale-input",
+  "ir-version-mismatch",
+  "unrecognized-format"
+]);
+
+class SkipReason {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static parse(raw) {
+    if (!KNOWN_REASONS.has(raw))
+      return err({ kind: "unknown-skip-reason", raw });
+    return ok(new SkipReason(raw));
+  }
+  static reconstitute(raw) {
+    return new SkipReason(raw);
+  }
+  static unavailable() {
+    return new SkipReason("unavailable");
+  }
+  static timeout() {
+    return new SkipReason("timeout");
+  }
+  static capability() {
+    return new SkipReason("capability");
+  }
+  static compileError() {
+    return new SkipReason("compile-error");
+  }
+  static waived() {
+    return new SkipReason("waived");
+  }
+  static absentInput() {
+    return new SkipReason("absent-input");
+  }
+  static staleInput() {
+    return new SkipReason("stale-input");
+  }
+  static irVersionMismatch() {
+    return new SkipReason("ir-version-mismatch");
+  }
+  static unrecognizedFormat() {
+    return new SkipReason("unrecognized-format");
+  }
+  asString() {
+    return this.#value;
+  }
+  compareTo(other) {
+    return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
   }
 }
 // src/kernel/domain/attribute-kind.ts
@@ -1230,15 +1517,18 @@ class Finding {
   #unit;
   #detail;
   constructor(props) {
-    this.#kind = FindingKind.reconstitute(props.kind);
+    this.#kind = props.kind;
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness.refs;
     this.#unit = props.unit === undefined ? undefined : UnitName.reconstitute(props.unit);
     this.#detail = props.detail;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new Finding(props);
+  }
+  static reconstitute(props) {
+    return new Finding({ ...props, kind: FindingKind.reconstitute(props.kind) });
   }
   kind() {
     return this.#kind.asString();
@@ -1432,7 +1722,7 @@ class ReferenceCheckReport {
     return new ReferenceCheckReport(seed.id, seed.inputs, seed.checked, seed.findings, seed.skipped, seed.unavailableReason, undefined);
   }
   finding(family, kind, targets, refs, detail, frRefs = []) {
-    this.#findings = this.#findings.add(Finding.reconstitute({
+    this.#findings = this.#findings.add(Finding.of({
       kind,
       frRefs: FrRefs.reconstitute(frRefs).sortedUnique(),
       targets: TargetIds.reconstitute(targets).sortedUniqueCanonically(),
@@ -1483,6 +1773,55 @@ class ReferenceCheckReport {
   }
   passes() {
     return this.#unavailableReason === null && this.#findings.isEmpty();
+  }
+  toDocument() {
+    const inputs = this.#inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() }));
+    const ordered = {
+      backend: this.#id.backendName().asString(),
+      irVersion: CATALOG_VERSION,
+      irHash: ContentHash.ofText(canonicalStringify(inputs)).asString(),
+      method: "static"
+    };
+    const reason = this.#unavailableReason;
+    if (reason !== null)
+      ordered.unavailable = { reason };
+    ordered.inputs = inputs;
+    ordered.checked = this.#checked.toStrings();
+    ordered.findings = this.#findings.toArray().map((f) => {
+      const refs = f.witnessRefs().toArray().map((r) => {
+        const out2 = { artifact: r.artifact(), element: r.element() };
+        const value = r.value();
+        if (value !== undefined)
+          out2.value = value;
+        return out2;
+      });
+      const out = {
+        kind: f.kind(),
+        frRefs: f.frRefs().toStrings(),
+        targets: f.targets().toStrings(),
+        witness: { refs },
+        detail: f.detail()
+      };
+      const unit = f.unit();
+      if (unit !== undefined)
+        out.unit = unit;
+      return out;
+    });
+    ordered.skipped = this.#skipped.toArray().map((sk) => {
+      const out = { target: sk.target(), reason: sk.reason() };
+      const detail = sk.detail();
+      if (detail !== undefined)
+        out.detail = detail;
+      const unit = sk.unit();
+      if (unit !== undefined)
+        out.unit = unit;
+      return out;
+    });
+    return ordered;
+  }
+  conformedTo(schema) {
+    const reason = schema.degradationReasonFor(this.toDocument());
+    return reason === null ? this : this.degraded(reason);
   }
 }
 // src/refcheck/domain/reference-check-report-id.ts
@@ -1808,30 +2147,30 @@ class Components {
     for (const c of this) {
       if (!c.nameIsPascalCase()) {
         const cName = c.name().asString();
-        report.finding(DD_1, "structure-invalid", [TargetIds.safe("component", cName)], [WitnessRef.at(art, `${c.element().asString()}.name`, cName)], `component name "${cName}" is not PascalCase`);
+        report.finding(DD_1, FindingKind.structureInvalid(), [TargetIds.safe("component", cName)], [WitnessRef.at(art, `${c.element().asString()}.name`, cName)], `component name "${cName}" is not PascalCase`);
       }
     }
     for (const { prior, current } of this.duplicateNamePairs()) {
       const cName = current.name().asString();
-      report.finding(DD_1, "structure-invalid", [TargetIds.safe("component", cName)], [WitnessRef.at(art, `${prior.element().asString()}.name`, cName), WitnessRef.at(art, `${current.element().asString()}.name`, cName)], `component name "${cName}" is declared more than once`);
+      report.finding(DD_1, FindingKind.structureInvalid(), [TargetIds.safe("component", cName)], [WitnessRef.at(art, `${prior.element().asString()}.name`, cName), WitnessRef.at(art, `${current.element().asString()}.name`, cName)], `component name "${cName}" is declared more than once`);
     }
     for (const c of this) {
       for (const r of [...c.dependsOn(), ...c.dependents()]) {
         if (!this.declares(r.component())) {
-          report.finding(DD_2, "reference-broken", [TargetIds.safe("component", r.component().asString())], [WitnessRef.at(art, r.element().asString(), r.component().asString())], `"${c.name().asString()}" references undeclared component "${r.component().asString()}"`);
+          report.finding(DD_2, FindingKind.referenceBroken(), [TargetIds.safe("component", r.component().asString())], [WitnessRef.at(art, r.element().asString(), r.component().asString())], `"${c.name().asString()}" references undeclared component "${r.component().asString()}"`);
         }
       }
       for (const e of c.entities()) {
         for (const r of e.references()) {
           if (!this.declares(r.ownedBy())) {
-            report.finding(DD_2, "reference-broken", [TargetIds.safe("component", r.ownedBy().asString())], [WitnessRef.at(art, `${r.element().asString()}.owned_by`, r.ownedBy().asString())], `entity "${e.name().asString()}" references owner component "${r.ownedBy().asString()}" which is not declared`);
+            report.finding(DD_2, FindingKind.referenceBroken(), [TargetIds.safe("component", r.ownedBy().asString())], [WitnessRef.at(art, `${r.element().asString()}.owned_by`, r.ownedBy().asString())], `entity "${e.name().asString()}" references owner component "${r.ownedBy().asString()}" which is not declared`);
           }
         }
       }
     }
     for (const c of this) {
       for (const r of c.selfReferences()) {
-        report.finding(DD_3, "structure-invalid", [TargetIds.safe("component", c.name().asString())], [WitnessRef.at(art, r.element().asString(), c.name().asString())], `component "${c.name().asString()}" lists itself as a dependency`);
+        report.finding(DD_3, FindingKind.structureInvalid(), [TargetIds.safe("component", c.name().asString())], [WitnessRef.at(art, r.element().asString(), c.name().asString())], `component "${c.name().asString()}" lists itself as a dependency`);
       }
     }
     for (const c of this) {
@@ -1840,7 +2179,7 @@ class Components {
         if (!other || r.pointsAt(c.name()))
           continue;
         if (!other.dependents().listsComponent(c.name())) {
-          report.finding(DD_4, "structure-invalid", [TargetIds.safe("component", c.name().asString()), TargetIds.safe("component", r.component().asString())], [WitnessRef.at(art, r.element().asString(), r.component().asString()), WitnessRef.at(art, `${other.element().asString()}.dependents`, c.name().asString())], `"${c.name().asString()}" depends on "${r.component().asString()}" but "${r.component().asString()}" does not list "${c.name().asString()}" in dependents`);
+          report.finding(DD_4, FindingKind.structureInvalid(), [TargetIds.safe("component", c.name().asString()), TargetIds.safe("component", r.component().asString())], [WitnessRef.at(art, r.element().asString(), r.component().asString()), WitnessRef.at(art, `${other.element().asString()}.dependents`, c.name().asString())], `"${c.name().asString()}" depends on "${r.component().asString()}" but "${r.component().asString()}" does not list "${c.name().asString()}" in dependents`);
         }
       }
       for (const r of c.dependents()) {
@@ -1848,20 +2187,20 @@ class Components {
         if (!other || r.pointsAt(c.name()))
           continue;
         if (!other.dependsOn().listsComponent(c.name())) {
-          report.finding(DD_4, "structure-invalid", [TargetIds.safe("component", c.name().asString()), TargetIds.safe("component", r.component().asString())], [WitnessRef.at(art, r.element().asString(), r.component().asString()), WitnessRef.at(art, `${other.element().asString()}.depends_on`, c.name().asString())], `"${c.name().asString()}" lists "${r.component().asString()}" as a dependent but "${r.component().asString()}" does not depend on "${c.name().asString()}"`);
+          report.finding(DD_4, FindingKind.structureInvalid(), [TargetIds.safe("component", c.name().asString()), TargetIds.safe("component", r.component().asString())], [WitnessRef.at(art, r.element().asString(), r.component().asString()), WitnessRef.at(art, `${other.element().asString()}.depends_on`, c.name().asString())], `"${c.name().asString()}" lists "${r.component().asString()}" as a dependent but "${r.component().asString()}" does not depend on "${c.name().asString()}"`);
         }
       }
     }
     for (const c of this) {
       for (const e of c.entities()) {
         if (!e.hasIdentifier()) {
-          report.finding(DD_5, "structure-invalid", [TargetIds.safe("entity", e.name().asString())], [WitnessRef.at(art, `${e.element().asString()}.identifier`)], `entity "${e.name().asString()}" has no identifier`);
+          report.finding(DD_5, FindingKind.structureInvalid(), [TargetIds.safe("entity", e.name().asString())], [WitnessRef.at(art, `${e.element().asString()}.identifier`)], `entity "${e.name().asString()}" has no identifier`);
         }
       }
     }
     for (const conflict of this.ownershipConflicts()) {
       const name = conflict.name.asString();
-      report.finding(DD_5, "structure-invalid", [TargetIds.safe("entity", name)], conflict.owners.map((o) => WitnessRef.at(art, o.entity.element().asString(), o.component.name().asString())), `entity "${name}" is owned by ${conflict.owners.length} components (${conflict.owners.map((o) => o.component.name().asString()).join(", ")}) \u2014 must be exactly one`);
+      report.finding(DD_5, FindingKind.structureInvalid(), [TargetIds.safe("entity", name)], conflict.owners.map((o) => WitnessRef.at(art, o.entity.element().asString(), o.component.name().asString())), `entity "${name}" is owned by ${conflict.owners.length} components (${conflict.owners.map((o) => o.component.name().asString()).join(", ")}) \u2014 must be exactly one`);
     }
     for (const c of this) {
       for (const e of c.entities()) {
@@ -1870,13 +2209,13 @@ class Components {
           if (!owner)
             continue;
           if (!owner.entities().declaresEntity(r.entity())) {
-            report.finding(DD_6, "reference-broken", [TargetIds.safe("entity", r.entity().asString())], [WitnessRef.at(art, `${r.element().asString()}.entity`, r.entity().asString())], `entity "${e.name().asString()}" references "${r.entity().asString()}" as owned by "${r.ownedBy().asString()}", but "${r.ownedBy().asString()}" declares no such entity`);
+            report.finding(DD_6, FindingKind.referenceBroken(), [TargetIds.safe("entity", r.entity().asString())], [WitnessRef.at(art, `${r.element().asString()}.entity`, r.entity().asString())], `entity "${e.name().asString()}" references "${r.entity().asString()}" as owned by "${r.ownedBy().asString()}", but "${r.ownedBy().asString()}" declares no such entity`);
           }
         }
       }
     }
     for (const cycle of this.dependencyCycles().filter((c) => c.length > 1)) {
-      report.finding(DD_7, "structure-invalid", cycle.map((n) => TargetIds.safe("component", n)), cycle.map((n, i) => WitnessRef.at(art, `${this.byName(ComponentName.reconstitute(n))?.element().asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])), `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
+      report.finding(DD_7, FindingKind.structureInvalid(), cycle.map((n) => TargetIds.safe("component", n)), cycle.map((n, i) => WitnessRef.at(art, `${this.byName(ComponentName.reconstitute(n))?.element().asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])), `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
     }
   }
 }
@@ -1918,16 +2257,16 @@ class ComponentCatalogOutcome {
     const art = artifact.asString();
     const usable = this.match({
       wrongFenceCount: (found) => {
-        report.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [WitnessRef.at(art, "yaml fence")], `components.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
+        report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessRef.at(art, "yaml fence")], `components.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
         return null;
       },
       unparseable: (line, error) => {
-        report.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
+        report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
         return null;
       },
       extracted: (components, shapeErrors) => {
         for (const e of shapeErrors) {
-          report.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [WitnessRef.at(art, e.element().asString())], e.detail());
+          report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessRef.at(art, e.element().asString())], e.detail());
         }
         return shapeErrors.count() > 0 && components.count() === 0 ? null : components;
       }
@@ -2262,13 +2601,13 @@ class ContractRow {
     const depArt = depArtifact.asString();
     const el = this.locationLabel();
     if (!this.#provider.isBlank() && !declared.declares(this.#provider.asString())) {
-      report.finding(CD_1, "reference-broken", [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#provider.asString())], [WitnessRef.at(art, el, this.#provider.asString()), WitnessRef.at(depArt, "units")], `Provider Unit "${this.#provider.asString()}" is not a declared unit`);
+      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#provider.asString())], [WitnessRef.at(art, el, this.#provider.asString()), WitnessRef.at(depArt, "units")], `Provider Unit "${this.#provider.asString()}" is not a declared unit`);
     }
     if (!this.#consumer.isBlank() && !declared.declares(this.#consumer.asString()) && !this.#consumer.declaresExternal()) {
-      report.finding(CD_1, "reference-broken", [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#consumer.asString())], [WitnessRef.at(art, el, this.#consumer.asString()), WitnessRef.at(depArt, "units")], `Consumer "${this.#consumer.asString()}" is neither a declared unit nor \`External: \u2026\``);
+      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#consumer.asString())], [WitnessRef.at(art, el, this.#consumer.asString()), WitnessRef.at(depArt, "units")], `Consumer "${this.#consumer.asString()}" is neither a declared unit nor \`External: \u2026\``);
     }
     if (!this.#owner.isBlank() && !declared.declares(this.#owner.asString())) {
-      report.finding(CD_1, "reference-broken", [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#owner.asString())], [WitnessRef.at(art, el, this.#owner.asString()), WitnessRef.at(depArt, "units")], `Owner "${this.#owner.asString()}" is not a declared unit`);
+      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#owner.asString())], [WitnessRef.at(art, el, this.#owner.asString()), WitnessRef.at(depArt, "units")], `Owner "${this.#owner.asString()}" is not a declared unit`);
     }
   }
 }
@@ -2391,13 +2730,13 @@ class SpecBlockAssessment {
     this.matchIssue({
       sound: () => {},
       unparseable: (error) => {
-        report.finding(CD_2, "structure-invalid", [blockId], [WitnessRef.at(art, el)], `spec block does not parse in the supported YAML subset: ${error}`);
+        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessRef.at(art, el)], `spec block does not parse in the supported YAML subset: ${error}`);
       },
       notAMapping: () => {
-        report.finding(CD_2, "structure-invalid", [blockId], [WitnessRef.at(art, el)], "spec block is not a YAML mapping");
+        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessRef.at(art, el)], "spec block is not a YAML mapping");
       },
       openapiWithoutPaths: () => {
-        report.finding(CD_2, "structure-invalid", [blockId], [WitnessRef.at(art, el, "openapi")], "OpenAPI spec block carries `openapi:` but no `paths:`");
+        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessRef.at(art, el, "openapi")], "OpenAPI spec block carries `openapi:` but no `paths:`");
       }
     });
   }
@@ -2482,7 +2821,7 @@ class UnitDecls {
       for (const dep of u.declaredDependencies(this)) {
         const depName = dep.asString();
         if (!rows.coversEdge(depName, uName)) {
-          report.finding(CD_3, "consistency-mismatch", [TargetIds.safe("unit", depName), TargetIds.safe("unit", uName)], [WitnessRef.at(depArt, `units (${uName} depends_on ${depName})`), WitnessRef.at(art, "contracts table")], `unit dependency edge "${uName}" -> "${depName}" has no contracts-table row in either orientation`);
+          report.finding(CD_3, FindingKind.consistencyMismatch(), [TargetIds.safe("unit", depName), TargetIds.safe("unit", uName)], [WitnessRef.at(depArt, `units (${uName} depends_on ${depName})`), WitnessRef.at(art, "contracts table")], `unit dependency edge "${uName}" -> "${depName}" has no contracts-table row in either orientation`);
         }
       }
     }
@@ -2670,14 +3009,14 @@ class DeclaredEntities {
   check(report, artifact) {
     const art = artifact.asString();
     for (const e of this.shapeErrors()) {
-      report.finding(FD_E1, "structure-invalid", [FD_E1.asCheckTarget()], [WitnessRef.at(art, e.element().asString())], e.detail());
+      report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessRef.at(art, e.element().asString())], e.detail());
     }
     for (const dup of this.entities().duplicatesByName()) {
-      report.finding(FD_E1, "structure-invalid", [TargetIds.safe("entity", dup.name().asString())], [WitnessRef.at(art, `${dup.element().asString()}.name`, dup.name().asString())], `entity "${dup.name().asString()}" is declared more than once`);
+      report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIds.safe("entity", dup.name().asString())], [WitnessRef.at(art, `${dup.element().asString()}.name`, dup.name().asString())], `entity "${dup.name().asString()}" is declared more than once`);
     }
     for (const e of this.entities()) {
       for (const dup of e.attrs().duplicatesByName()) {
-        report.finding(FD_E1, "structure-invalid", [TargetIds.safe("attr", `${e.name().asString()}.${dup.name().asString()}`)], [WitnessRef.at(art, `${dup.element().asString()}.name`, dup.name().asString())], `attribute "${e.name().asString()}.${dup.name().asString()}" is declared more than once`);
+        report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIds.safe("attr", `${e.name().asString()}.${dup.name().asString()}`)], [WitnessRef.at(art, `${dup.element().asString()}.name`, dup.name().asString())], `attribute "${e.name().asString()}.${dup.name().asString()}" is declared more than once`);
       }
     }
     for (const e of this.entities()) {
@@ -2685,43 +3024,43 @@ class DeclaredEntities {
         const attrId = TargetIds.safe("attr", `${e.name().asString()}.${a.name().asString()}`);
         const label = `${e.name().asString()}.${a.name().asString()}`;
         if (a.declaresAllowedValuesOnNonEnumerableType()) {
-          report.finding(FD_E2, "structure-invalid", [attrId], [WitnessRef.at(art, a.element().asString(), a.typeToken())], `"${label}" declares allowed values but its type "${a.typeText()}" is not an enumerable type`);
+          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.typeToken())], `"${label}" declares allowed values but its type "${a.typeText()}" is not an enumerable type`);
         }
         if (a.declaresBoundsOnNonNumericType()) {
-          report.finding(FD_E2, "structure-invalid", [attrId], [WitnessRef.at(art, a.element().asString(), a.typeToken())], `"${label}" declares min/max but its type "${a.typeText()}" is not numeric or date-like`);
+          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.typeToken())], `"${label}" declares min/max but its type "${a.typeText()}" is not numeric or date-like`);
         }
         if (a.declaresUniqueOnCollectionType()) {
-          report.finding(FD_E2, "structure-invalid", [attrId], [WitnessRef.at(art, a.element().asString(), a.typeToken())], `"${label}" declares unique but its type "${a.typeText()}" is not scalar`);
+          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.typeToken())], `"${label}" declares unique but its type "${a.typeText()}" is not scalar`);
         }
         if (a.boundsInverted()) {
-          report.finding(FD_E3, "structure-invalid", [attrId], [WitnessRef.at(art, a.element().asString(), `min ${a.min()?.asNumber()} > max ${a.max()?.asNumber()}`)], `"${label}": min ${a.min()?.asNumber()} exceeds max ${a.max()?.asNumber()}`);
+          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), `min ${a.min()?.asNumber()} > max ${a.max()?.asNumber()}`)], `"${label}": min ${a.min()?.asNumber()} exceeds max ${a.max()?.asNumber()}`);
         }
         if (a.defaultBelowMin()) {
-          report.finding(FD_E3, "structure-invalid", [attrId], [WitnessRef.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default ${a.def()?.render()} is below min ${a.min()?.asNumber()}`);
+          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default ${a.def()?.render()} is below min ${a.min()?.asNumber()}`);
         }
         if (a.defaultAboveMax()) {
-          report.finding(FD_E3, "structure-invalid", [attrId], [WitnessRef.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default ${a.def()?.render()} is above max ${a.max()?.asNumber()}`);
+          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default ${a.def()?.render()} is above max ${a.max()?.asNumber()}`);
         }
         if (a.defaultOutsideAllowed()) {
-          report.finding(FD_E3, "structure-invalid", [attrId], [WitnessRef.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default "${a.def()?.render()}" is not one of the allowed values`);
+          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default "${a.def()?.render()}" is not one of the allowed values`);
         }
         const reference = a.references();
         if (reference !== null && !this.entities().resolvesReference(reference)) {
-          report.finding(FD_E6, "reference-broken", [attrId], [WitnessRef.at(art, a.element().asString(), reference.asString())], `"${label}" references "${reference.asString()}" which is not a declared entity`);
+          report.finding(FD_E6, FindingKind.referenceBroken(), [attrId], [WitnessRef.at(art, a.element().asString(), reference.asString())], `"${label}" references "${reference.asString()}" which is not a declared entity`);
         }
       }
     }
     for (const r of this.allRels()) {
       for (const endpoint of [r.from(), r.to()]) {
         if (endpoint !== null && !this.entities().containsNamed(endpoint)) {
-          report.finding(FD_E4, "reference-broken", [TargetIds.safe("entity", endpoint.asString())], [WitnessRef.at(art, r.element().asString(), endpoint.asString())], `relationship endpoint "${endpoint.asString()}" is not a declared entity`);
+          report.finding(FD_E4, FindingKind.referenceBroken(), [TargetIds.safe("entity", endpoint.asString())], [WitnessRef.at(art, r.element().asString(), endpoint.asString())], `relationship endpoint "${endpoint.asString()}" is not a declared entity`);
         }
       }
       if (r.cardinalityOutsideClosedSet()) {
-        report.finding(FD_E5, "structure-invalid", [FD_E5.asCheckTarget()], [WitnessRef.at(art, r.element().asString(), r.cardinality()?.asString() ?? "")], `cardinality "${r.cardinality()?.asString()}" is not in the closed set 1:1 | 1:N | N:1 | N:M`);
+        report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessRef.at(art, r.element().asString(), r.cardinality()?.asString() ?? "")], `cardinality "${r.cardinality()?.asString()}" is not in the closed set 1:1 | 1:N | N:1 | N:M`);
       }
       if (r.cardinalityWithoutDirection()) {
-        report.finding(FD_E5, "structure-invalid", [FD_E5.asCheckTarget()], [WitnessRef.at(art, r.element().asString())], "relationship declares a cardinality but no direction (from/to or direction key)");
+        report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessRef.at(art, r.element().asString())], "relationship declares a cardinality but no direction (from/to or direction key)");
       }
     }
   }
@@ -2829,19 +3168,19 @@ class DomainEntitySketches {
       const key = de.name().normalized().asString();
       const definers = unitEntities.definersOf(key);
       if (definers.length >= 2) {
-        report.finding(XS_1, "consistency-mismatch", [TargetIds.safe("entity", de.name().asString())], [
+        report.finding(XS_1, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", de.name().asString())], [
           WitnessRef.at(compArt, de.catalogLabel()),
           ...definers.map((u) => WitnessRef.at(`construction/${u}/functional-design/entities.md`, `entity ${de.name().asString()}`))
         ], `domain entity "${de.name().asString()}" is defined in ${definers.length} units (${definers.join(", ")}) \u2014 ownership is duplicated`);
       } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
-        report.finding(XS_2, "consistency-mismatch", [TargetIds.safe("entity", de.name().asString())], [WitnessRef.at(compArt, de.catalogLabel())], `domain entity "${de.name().asString()}" is defined in no unit's entities.md \u2014 it was dropped on the way to functional design`);
+        report.finding(XS_2, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", de.name().asString())], [WitnessRef.at(compArt, de.catalogLabel())], `domain entity "${de.name().asString()}" is defined in no unit's entities.md \u2014 it was dropped on the way to functional design`);
       }
       if (unit !== undefined) {
         const mine = unitEntities.entityDeclaredIn(unit.asString(), key);
         if (mine) {
           const dropped = de.attributesDroppedIn(mine.attrs);
           if (dropped.length > 0) {
-            report.finding(XS_3, "consistency-mismatch", [TargetIds.safe("entity", de.name().asString())], dropped.map((a) => WitnessRef.at(compArt, `entity ${de.name().asString()}.attributes`, a)), `domain-design declares attribute(s) ${dropped.join(", ")} on "${de.name().asString()}" that this unit's entities.md does not carry`);
+            report.finding(XS_3, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", de.name().asString())], dropped.map((a) => WitnessRef.at(compArt, `entity ${de.name().asString()}.attributes`, a)), `domain-design declares attribute(s) ${dropped.join(", ")} on "${de.name().asString()}" that this unit's entities.md does not carry`);
           }
         }
       }
@@ -2898,14 +3237,14 @@ class EntitiesOutcome {
         return null;
       },
       wrongFenceCount: (found) => {
-        report.finding(FD_E1, "structure-invalid", [FD_E1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")], `entities.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
+        report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")], `entities.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
         for (const f of [FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
           report.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
         }
         return null;
       },
       unparseable: (line, error) => {
-        report.finding(FD_E1, "structure-invalid", [FD_E1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
+        report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
         for (const f of [FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
           report.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
         }
@@ -3139,7 +3478,7 @@ class RuleDecls {
     const art = artifact.asString();
     for (const r of this) {
       if (r.missing().length > 0) {
-        report.finding(FD_R1, "structure-invalid", [r.findingTarget("check:FD-R1")], [WitnessRef.at(art, r.element().asString())], `rule is missing required key(s): ${r.missing().join(", ")}`);
+        report.finding(FD_R1, FindingKind.structureInvalid(), [r.findingTarget("check:FD-R1")], [WitnessRef.at(art, r.element().asString())], `rule is missing required key(s): ${r.missing().join(", ")}`);
       }
     }
     const seenIds = new Set;
@@ -3148,11 +3487,11 @@ class RuleDecls {
       if (id === null)
         continue;
       if (!id.matchesShape()) {
-        report.finding(FD_R2, "structure-invalid", [FD_R2.asCheckTarget()], [WitnessRef.at(art, `${r.element().asString()}.id`, id.asString())], `rule id "${id.asString()}" does not match BR{group}.{seq}`);
+        report.finding(FD_R2, FindingKind.structureInvalid(), [FD_R2.asCheckTarget()], [WitnessRef.at(art, `${r.element().asString()}.id`, id.asString())], `rule id "${id.asString()}" does not match BR{group}.{seq}`);
         continue;
       }
       if (seenIds.has(id.asString())) {
-        report.finding(FD_R2, "structure-invalid", [id.asString()], [WitnessRef.at(art, `${r.element().asString()}.id`, id.asString())], `rule id "${id.asString()}" is declared more than once`);
+        report.finding(FD_R2, FindingKind.structureInvalid(), [id.asString()], [WitnessRef.at(art, `${r.element().asString()}.id`, id.asString())], `rule id "${id.asString()}" is declared more than once`);
       }
       seenIds.add(id.asString());
     }
@@ -3162,7 +3501,7 @@ class RuleDecls {
       for (const r of this) {
         const missing = r.sourceIdValuesMissingFrom(requirementIdsKnown);
         if (missing.length > 0) {
-          report.finding(FD_R3, "reference-broken", [r.findingTarget("check:FD-R3")], missing.map((id) => WitnessRef.at(art, `${r.element().asString()}.source`, id)), `source id(s) ${missing.join(", ")} do not exist in requirements.md`, missing);
+          report.finding(FD_R3, FindingKind.referenceBroken(), [r.findingTarget("check:FD-R3")], missing.map((id) => WitnessRef.at(art, `${r.element().asString()}.source`, id)), `source id(s) ${missing.join(", ")} do not exist in requirements.md`, missing);
         }
       }
     }
@@ -3174,13 +3513,13 @@ class RuleDecls {
         if (appliesTo === null)
           continue;
         if (!entities.entities().resolvesAppliesTo(appliesTo)) {
-          report.finding(FD_R4, "reference-broken", [r.findingTarget("check:FD-R4")], [WitnessRef.at(art, r.element().asString(), appliesTo.asString())], `applies-to "${appliesTo.asString()}" does not resolve to a declared entity or entity.attribute`);
+          report.finding(FD_R4, FindingKind.referenceBroken(), [r.findingTarget("check:FD-R4")], [WitnessRef.at(art, r.element().asString(), appliesTo.asString())], `applies-to "${appliesTo.asString()}" does not resolve to a declared entity or entity.attribute`);
         }
       }
     }
     for (const r of this) {
       if (r.categoryOutsideClosedSet()) {
-        report.finding(FD_R5, "structure-invalid", [r.findingTarget("check:FD-R5")], [WitnessRef.at(art, `${r.element().asString()}.category`, r.category()?.asString() ?? "")], `category "${r.category()?.asString()}" is not one of validation | authorization | constraint | calculation | policy`);
+        report.finding(FD_R5, FindingKind.structureInvalid(), [r.findingTarget("check:FD-R5")], [WitnessRef.at(art, `${r.element().asString()}.category`, r.category()?.asString() ?? "")], `category "${r.category()?.asString()}" is not one of validation | authorization | constraint | calculation | policy`);
       }
     }
   }
@@ -3243,15 +3582,15 @@ class RulesOutcome {
         }
       },
       wrongFenceCount: (found) => {
-        report.finding(FD_R1, "structure-invalid", [FD_R1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")], `rules.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
+        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")], `rules.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
         blockRs("blocked by FD-R1: the rules yaml block is unusable");
       },
       unparseable: (line, error) => {
-        report.finding(FD_R1, "structure-invalid", [FD_R1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
+        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
         blockRs("blocked by FD-R1: the rules yaml block is unusable");
       },
       noRulesList: () => {
-        report.finding(FD_R1, "structure-invalid", [FD_R1.asCheckTarget()], [WitnessRef.at(art, "rules")], "top-level `rules:` list is missing");
+        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessRef.at(art, "rules")], "top-level `rules:` list is missing");
         blockRs("blocked by FD-R1: the rules yaml block is unusable");
       },
       extracted: (ruleDecls) => {
@@ -3351,7 +3690,7 @@ class StateMachineSketch {
     }
     const ent = entities.entities().byNormalizedName(entity.normalized());
     if (!ent) {
-      report.finding(FD_S1, "consistency-mismatch", [TargetIds.safe("entity", entName)], [WitnessRef.at(specArt, el, entName)], `state machine names entity "${entName}" which is not declared in entities.md`);
+      report.finding(FD_S1, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", entName)], [WitnessRef.at(specArt, el, entName)], `state machine names entity "${entName}" which is not declared in entities.md`);
       return;
     }
     const attr = attrName !== undefined ? ent.attrNamed(attrName) : ent.lifecycleAttr();
@@ -3363,11 +3702,11 @@ class StateMachineSketch {
     const attrId = TargetIds.safe("attr", `${ent.name().asString()}.${attr.name().asString()}`);
     const rogue = attr.rogueDiagramStates(this.states());
     if (rogue.length > 0) {
-      report.finding(FD_S1, "consistency-mismatch", [attrId], rogue.map((v) => WitnessRef.at(specArt, el, v)), `diagram state(s) ${rogue.join(", ")} are not allowed values of ${ent.name().asString()}.${attr.name().asString()} in entities.md`);
+      report.finding(FD_S1, FindingKind.consistencyMismatch(), [attrId], rogue.map((v) => WitnessRef.at(specArt, el, v)), `diagram state(s) ${rogue.join(", ")} are not allowed values of ${ent.name().asString()}.${attr.name().asString()} in entities.md`);
     }
     const dangling = attr.allowedValuesAbsentFrom(this.states());
     if (dangling.length > 0) {
-      report.finding(FD_S2, "consistency-mismatch", [attrId], dangling.map((v) => WitnessRef.at(entitiesArt, attr.element().asString(), v)), `allowed value(s) ${dangling.join(", ")} of ${ent.name().asString()}.${attr.name().asString()} appear in no diagram state`);
+      report.finding(FD_S2, FindingKind.consistencyMismatch(), [attrId], dangling.map((v) => WitnessRef.at(entitiesArt, attr.element().asString(), v)), `allowed value(s) ${dangling.join(", ")} of ${ent.name().asString()}.${attr.name().asString()} appear in no diagram state`);
     }
   }
 }
@@ -3959,9 +4298,11 @@ class TypeName {
 class CheckDomainComponentsUseCase {
   #designRecordRepository;
   #referenceCheckReportRepository;
-  constructor(designRecordRepository, referenceCheckReportRepository) {
+  #findingsSchema;
+  constructor(designRecordRepository, referenceCheckReportRepository, findingsSchema) {
     this.#designRecordRepository = designRecordRepository;
     this.#referenceCheckReportRepository = referenceCheckReportRepository;
+    this.#findingsSchema = findingsSchema;
   }
   execute(input) {
     const record = this.#designRecordRepository.findById(input.recordId);
@@ -3970,10 +4311,9 @@ class CheckDomainComponentsUseCase {
     const checked = record.value.checkComponents(input.reportDirectory);
     if (!checked.ok)
       return { kind: "not-applicable" };
-    const report = checked.value;
-    const conformed = this.#referenceCheckReportRepository.conformedOf(report);
+    const conformed = checked.value.conformedTo(this.#findingsSchema);
     if (input.mode === "persist") {
-      const stored = this.#referenceCheckReportRepository.store(report);
+      const stored = this.#referenceCheckReportRepository.store(conformed);
       if (!stored.ok)
         return { kind: "save-failed", error: stored.error };
     }
@@ -3989,9 +4329,11 @@ class CheckDomainComponentsUseCase {
 class CheckContractSummaryUseCase {
   #designRecordRepository;
   #referenceCheckReportRepository;
-  constructor(designRecordRepository, referenceCheckReportRepository) {
+  #findingsSchema;
+  constructor(designRecordRepository, referenceCheckReportRepository, findingsSchema) {
     this.#designRecordRepository = designRecordRepository;
     this.#referenceCheckReportRepository = referenceCheckReportRepository;
+    this.#findingsSchema = findingsSchema;
   }
   execute(input) {
     const record = this.#designRecordRepository.findById(input.recordId);
@@ -4000,10 +4342,9 @@ class CheckContractSummaryUseCase {
     const checked = record.value.checkContracts(input.reportDirectory);
     if (!checked.ok)
       return { kind: "not-applicable" };
-    const report = checked.value;
-    const conformed = this.#referenceCheckReportRepository.conformedOf(report);
+    const conformed = checked.value.conformedTo(this.#findingsSchema);
     if (input.mode === "persist") {
-      const stored = this.#referenceCheckReportRepository.store(report);
+      const stored = this.#referenceCheckReportRepository.store(conformed);
       if (!stored.ok)
         return { kind: "save-failed", error: stored.error };
     }
@@ -4019,9 +4360,11 @@ class CheckContractSummaryUseCase {
 class CheckFunctionalDesignUseCase {
   #designRecordRepository;
   #referenceCheckReportRepository;
-  constructor(designRecordRepository, referenceCheckReportRepository) {
+  #findingsSchema;
+  constructor(designRecordRepository, referenceCheckReportRepository, findingsSchema) {
     this.#designRecordRepository = designRecordRepository;
     this.#referenceCheckReportRepository = referenceCheckReportRepository;
+    this.#findingsSchema = findingsSchema;
   }
   execute(input) {
     const record = this.#designRecordRepository.findById(input.recordId);
@@ -4030,10 +4373,9 @@ class CheckFunctionalDesignUseCase {
     const checked = record.value.checkFunctionalDesign(input.reportDirectory);
     if (!checked.ok)
       return { kind: "not-applicable" };
-    const report = checked.value;
-    const conformed = this.#referenceCheckReportRepository.conformedOf(report);
+    const conformed = checked.value.conformedTo(this.#findingsSchema);
     if (input.mode === "persist") {
-      const stored = this.#referenceCheckReportRepository.store(report);
+      const stored = this.#referenceCheckReportRepository.store(conformed);
       if (!stored.ok)
         return { kind: "save-failed", error: stored.error };
     }
@@ -4046,69 +4388,13 @@ class CheckFunctionalDesignUseCase {
   }
 }
 // src/refcheck/adapter/reference-check-report-repository-impl.ts
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "fs";
-import { join as join3 } from "path";
+import { existsSync as existsSync3, readFileSync as readFileSync4 } from "fs";
+import { join as join4 } from "path";
 
 // src/refcheck/adapter/reference-check-report-serializer.ts
-function orderedDocument(report) {
-  const inputs = report.inputs().toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() }));
-  const ordered = {
-    backend: report.id().backendName().asString(),
-    irVersion: CATALOG_VERSION,
-    irHash: ContentHash.ofText(canonicalStringify(inputs)).asString(),
-    method: "static"
-  };
-  const reason = report.unavailableReason();
-  if (reason !== null)
-    ordered.unavailable = { reason };
-  ordered.inputs = inputs;
-  ordered.checked = report.checked().toStrings();
-  ordered.findings = report.findings().toArray().map((f) => {
-    const refs = f.witnessRefs().toArray().map((r) => {
-      const out2 = { artifact: r.artifact(), element: r.element() };
-      const value = r.value();
-      if (value !== undefined)
-        out2.value = value;
-      return out2;
-    });
-    const out = {
-      kind: f.kind(),
-      frRefs: f.frRefs().toStrings(),
-      targets: f.targets().toStrings(),
-      witness: { refs },
-      detail: f.detail()
-    };
-    const unit = f.unit();
-    if (unit !== undefined)
-      out.unit = unit;
-    return out;
-  });
-  ordered.skipped = report.skipped().toArray().map((sk) => {
-    const out = { target: sk.target(), reason: sk.reason() };
-    const detail = sk.detail();
-    if (detail !== undefined)
-      out.detail = detail;
-    const unit = sk.unit();
-    if (unit !== undefined)
-      out.unit = unit;
-    return out;
-  });
-  return ordered;
-}
 function renderReportBytes(report) {
-  return `${JSON.stringify(orderedDocument(report), null, 2)}
+  return `${JSON.stringify(report.toDocument(), null, 2)}
 `;
-}
-function conformToContract(report, findingsSchema) {
-  if (!findingsSchema.ok) {
-    return report.degraded(`findings schema unreadable: ${findingsSchema.error.cause}`);
-  }
-  const errors = [];
-  validateSchema(findingsSchema.value, findingsSchema.value, orderedDocument(report), "", errors);
-  if (errors.length > 0) {
-    return report.degraded(`self-validation against deep-spec-findings-schema.json failed: ${errors[0]}`);
-  }
-  return report;
 }
 function parseReportDocument(id, raw) {
   if (!isObject(raw))
@@ -4167,19 +4453,17 @@ function parseReportDocument(id, raw) {
 }
 
 // src/refcheck/adapter/reference-check-report-repository-impl.ts
+var encoder = new TextEncoder;
+
 class ReferenceCheckReportRepositoryImpl {
-  #findingsSchemaPath;
-  constructor(findingsSchemaPath) {
-    this.#findingsSchemaPath = findingsSchemaPath;
-  }
   findById(aggregateId) {
-    const path = join3(aggregateId.directory().asString(), aggregateId.fileName());
+    const path = join4(aggregateId.directory().asString(), aggregateId.fileName());
     if (!existsSync3(path)) {
       return err({ kind: "not-found", path });
     }
     let raw;
     try {
-      raw = JSON.parse(readFileSync3(path, "utf-8"));
+      raw = JSON.parse(readFileSync4(path, "utf-8"));
     } catch (e) {
       return err({ kind: "corrupt", path, cause: e instanceof Error ? e.message : String(e) });
     }
@@ -4189,15 +4473,10 @@ class ReferenceCheckReportRepositoryImpl {
     }
     return report;
   }
-  conformedOf(report) {
-    return conformToContract(report, readContractSchema(this.#findingsSchemaPath));
-  }
   store(report) {
-    const conformed = this.conformedOf(report);
-    const path = join3(conformed.id().directory().asString(), conformed.id().fileName());
+    const path = join4(report.id().directory().asString(), report.id().fileName());
     try {
-      mkdirSync2(conformed.id().directory().asString(), { recursive: true });
-      writeFileSync2(path, renderReportBytes(conformed), "utf-8");
+      writeFileAtomically(path, encoder.encode(renderReportBytes(report)));
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
@@ -4624,14 +4903,14 @@ function buildSiblingUnitEntities(texts) {
   return SiblingUnitIndex.of(unitEntities);
 }
 // src/refcheck/adapter/design-record-repository-impl.ts
-import { readFileSync as readFileSync4 } from "fs";
-import { basename as basename2, dirname as dirname3, join as join4 } from "path";
+import { readFileSync as readFileSync5 } from "fs";
+import { basename as basename2, dirname as dirname3, join as join5 } from "path";
 class DesignRecordRepositoryImpl {
   findById(id) {
     const artifactPath = id.artifactPath().asString();
     let sourceBytes;
     try {
-      sourceBytes = new Uint8Array(readFileSync4(artifactPath));
+      sourceBytes = new Uint8Array(readFileSync5(artifactPath));
     } catch {
       return err({ kind: "not-found", path: artifactPath });
     }
@@ -4662,7 +4941,7 @@ class DesignRecordRepositoryImpl {
     }
   }
   #declaredUnits(recordRoot) {
-    const depPath = recordRoot === null ? null : join4(recordRoot, "inception", "units-generation", "unit-of-work-dependency.md");
+    const depPath = recordRoot === null ? null : join5(recordRoot, "inception", "units-generation", "unit-of-work-dependency.md");
     const depMd = depPath === null ? null : readIfExists(depPath);
     if (depPath === null || depMd === null) {
       return {
@@ -4688,21 +4967,21 @@ class DesignRecordRepositoryImpl {
     };
     const unitDir = dirname3(fdDir);
     const unit = recordRoot !== null && basename2(unitDir) !== "construction" && unitDir !== recordRoot ? basename2(unitDir) : undefined;
-    const entitiesPath = join4(fdDir, "entities.md");
+    const entitiesPath = join5(fdDir, "entities.md");
     const entities = load(entitiesPath, (t) => parseEntitiesDocument(t));
-    const rulesPath = join4(fdDir, "rules.md");
+    const rulesPath = join5(fdDir, "rules.md");
     const rules = load(rulesPath, (t) => parseRulesDocument(t));
-    const specPath = join4(fdDir, "functional-spec.md");
+    const specPath = join5(fdDir, "functional-spec.md");
     const spec = load(specPath, (t) => parseFunctionalSpecDocument(t));
-    const reqPath = recordRoot === null ? null : join4(recordRoot, "inception", "requirements-analysis", "requirements.md");
+    const reqPath = recordRoot === null ? null : join5(recordRoot, "inception", "requirements-analysis", "requirements.md");
     const requirements = rules !== null && rules.outcome.isExtracted() && reqPath !== null ? load(reqPath, (t) => RequirementIds.extractFrom(t)) : null;
-    const componentsPath = recordRoot === null ? null : join4(recordRoot, "inception", "domain-design", "components.md");
+    const componentsPath = recordRoot === null ? null : join5(recordRoot, "inception", "domain-design", "components.md");
     const components = componentsPath === null ? null : load(componentsPath, (t) => parseDomainEntitiesDocument(t));
     const siblingTexts = [];
     if (components !== null && components.outcome.isExtracted() && recordRoot !== null) {
-      const constructionDir = join4(recordRoot, "construction");
+      const constructionDir = join5(recordRoot, "construction");
       for (const u of listSubdirectories(constructionDir)) {
-        const p = join4(constructionDir, u, "functional-design", "entities.md");
+        const p = join5(constructionDir, u, "functional-design", "entities.md");
         const text = readIfExists(p);
         if (text !== null)
           siblingTexts.push({ unit: u, path: p, text });
@@ -4728,7 +5007,7 @@ class DesignRecordRepositoryImpl {
 function main() {
   const flags = parseFlags(process.argv.slice(2));
   const target = ArtifactPath.parse(flags.outputPath);
-  const reportLocation = ArtifactPath.parse(join5(dirname4(flags.outputPath), "deep-spec-refcheck"));
+  const reportLocation = ArtifactPath.parse(join6(dirname4(flags.outputPath), "deep-spec-refcheck"));
   if (!target.ok || !reportLocation.ok) {
     process.stderr.write(`deep-spec-refcheck-contract: --output-path is required
 `);
@@ -4739,8 +5018,10 @@ function main() {
 `);
     process.exit(0);
   }
-  const reportRepository = new ReferenceCheckReportRepositoryImpl(join5(dirname4(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"));
-  const useCase = new CheckContractSummaryUseCase(new DesignRecordRepositoryImpl, reportRepository);
+  const findingsSchemaFile = readContractSchema(join6(dirname4(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"));
+  const findingsSchema = findingsSchemaFile.ok ? FindingsSchema.of(findingsSchemaFile.value) : FindingsSchema.unreadable(findingsSchemaFile.error.cause);
+  const reportRepository = new ReferenceCheckReportRepositoryImpl;
+  const useCase = new CheckContractSummaryUseCase(new DesignRecordRepositoryImpl, reportRepository, findingsSchema);
   const outcome = useCase.execute({
     recordId: DesignRecordId.of(target.value),
     reportDirectory: reportLocation.value,

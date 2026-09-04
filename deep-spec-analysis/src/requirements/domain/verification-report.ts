@@ -1,10 +1,13 @@
 // VerificationReport 集約 — v1 バックエンド（smt / quint / cross-check）の
 // 検証結果文書（契約2）のドメイン表現。compose が正準ソートを所有し、
-// 以後この集約は不変。直列化（v1 キー順・描画）はアダプタの serializer が持つ。
+// 以後この集約は不変。文書のキー順は契約2 の知識なので集約が `toDocument()` で
+// 所有し、アダプタの serializer が持つのは描画（JSON.stringify）だけ。
 // degraded は契約適合の降格形（findings/skipped/crossChecked を空にして
 // unavailable 理由だけ残す——旧 writeFindingsDoc の自己検証降格と同じ姿）。
 
 import { ContentHash, IrVersion, VerificationMethod } from "@deep-spec/kernel-domain";
+import type { FindingsSchema } from "@deep-spec/kernel-domain";
+import type { Json } from "@deep-spec/kernel-infrastructure";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
 import { VerificationFindings } from "./verification-findings.ts";
@@ -240,5 +243,52 @@ export class VerificationReport {
 
   skippedCount(): number {
     return this.#skipped.count();
+  }
+
+  // 契約2 の文書像。v1 キー順（backend, irVersion, irHash, method,
+  // [unavailable], findings, skipped, [crossChecked]）は契約の知識なので集約が
+  // 所有する——アダプタは JSON.stringify で描画するだけ（golden 凍結）。
+  toDocument(): { [k: string]: Json } {
+    const ordered: { [k: string]: Json } = {
+      backend: this.#id.backendName().asString(),
+      irVersion: this.#irVersion.asString(),
+      irHash: this.#irHash.asString(),
+      method: this.method(),
+    };
+    const reason = this.#unavailableReason;
+    if (reason !== null) ordered.unavailable = { reason };
+    // コレクションは境界（描画）で toArray() へ落とす——中身は契約2 の素の JSON
+    // 形。キー順は旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は
+    // (kind, frRefs, targets, witness, detail)、skip は (target, reason,
+    // detail?)。witness ユニオンの内側は素通し値（材料）で逐語描画。
+    ordered.findings = this.#findings.toArray().map((f) => {
+      const out: { [k: string]: Json } = {
+        kind: f.kind(),
+        frRefs: f.frRefs().toStrings() as unknown as Json,
+        targets: f.targets().toStrings() as unknown as Json,
+        witness: f.witness().toDocument() as unknown as Json,
+        detail: f.detail(),
+      };
+      return out as Json;
+    });
+    ordered.skipped = this.#skipped.toArray().map((sk) => {
+      const out: { [k: string]: Json } = { target: sk.target().asString(), reason: sk.reason() };
+      const detail = sk.detail();
+      if (detail !== undefined) out.detail = detail;
+      return out as Json;
+    });
+    const crossChecked = this.#crossChecked;
+    // crossChecked エントリの凍結キー順は (backend, targets)。
+    if (crossChecked !== null) {
+      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
+    }
+    return ordered;
+  }
+
+  // 契約2 への適合を保証した集約を返す。適合していれば自分自身、していなければ
+  // 降格形（文言は FindingsSchema が凍結で所有する）。
+  conformedTo(schema: FindingsSchema): VerificationReport {
+    const reason = schema.degradationReasonFor(this.toDocument());
+    return reason === null ? this : this.degraded(reason);
   }
 }

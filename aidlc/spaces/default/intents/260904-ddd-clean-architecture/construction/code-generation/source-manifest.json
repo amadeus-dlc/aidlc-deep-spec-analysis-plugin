@@ -1,0 +1,703 @@
+{
+  "stage": "code-generation",
+  "unit": "stage-level",
+  "version": 1,
+  "writes": [
+    {
+      "path": ".codex/tools/aidlc-lib.ts"
+    },
+    {
+      "path": ".codex/tools/aidlc-sensor-traceability.ts"
+    },
+    {
+      "path": "deep-spec-analysis/bun.lock"
+    },
+    {
+      "path": "deep-spec-analysis/docs/decisions.ja.md"
+    },
+    {
+      "path": "deep-spec-analysis/docs/decisions.md"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/design-entities-parser.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/design-ir-validation-materials-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/design-model-parser.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/design-model-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/design-report-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/design-report-serializer.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/design-verify-directory-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/lowered-document-serializer.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/package.json"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/reachability-variant.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/refinement-map-parse.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/refinement-map-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/refinement-materials-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/refinement-query-plan.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/refinement-solver-client-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/sibling-backend-client-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/adapter/sibling-document-parser.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/attribute-mapping.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/attribute-mappings.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-assignments.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-background-assumption.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-event-catalog.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-event.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-finding.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-ignore.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-machine.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-obligation.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-report.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-reports.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-scenario.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-skipped.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-transition.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-unit.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/design-verify-directory.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/effect-assignments.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/event-mapping.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/event-mappings.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/lowered-unit.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/package.json"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-attribute.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-attributes.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-map-acquisition.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-map-defect.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-map-id.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-map.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-materials.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-obligation.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-obligations.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-probe.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-query-verdict.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-query-verdicts.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-quint-invariant.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-quint-invariants.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-requirements.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-scenario.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-scenarios.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-solver-plan.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-status.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-unit-map.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/refinement-unit-maps.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/req-attribute-values.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/sibling-verdict-document.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/sibling-verdict-finding.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/transition-ref.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/transition-refs.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/unit-refinement-plan.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/unmapped-declarations.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/unmapped-target-ref.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/domain/unmapped-target.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/design-acquisition-result.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/design-acquisition-terminal.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/design-report-finalizer.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/design-verification-acquirer.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/package.json"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/design-report-repository.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/design-verify-directory-repository.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/refinement-check.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/refinement-map-repository.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/refinement-materials-repository.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/refinement-solver-client.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/refinement-solver-result.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/verify-design-quint-usecase.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/verify-design-smt-usecase.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/entries/aidlc-sensor-deep-spec-design-verify-quint.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/entries/aidlc-sensor-deep-spec-design-verify-smt.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/entries/aidlc-sensor-deep-spec-refcheck-contract.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/entries/aidlc-sensor-deep-spec-refcheck-domain.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/entries/aidlc-sensor-deep-spec-refcheck-functional.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/entries/aidlc-sensor-deep-spec-verify-quint.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/entries/aidlc-sensor-deep-spec-verify-smt.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/canonical-json.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/contract-schema.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/directory-finalization-lock-outcome.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/directory-finalization-lock.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/json.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/package.json"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/process-liveness.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/schema.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/verdict-line.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/adapter/yaml.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/domain/expression-tree.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/domain/finding-kind.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/domain/findings-schema.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/domain/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/domain/skip-reason.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/domain/verification-method.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/infrastructure/canonical-json.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/infrastructure/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/infrastructure/json.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/infrastructure/schema.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/adapter/component-catalog-parser.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/adapter/contract-summary-parser.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/adapter/functional-design-parser.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/adapter/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/adapter/reference-check-report-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/adapter/reference-check-report-serializer.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/component-catalog-outcome.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/components.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/contract-row.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/declared-entities.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/domain-entity-sketches.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/entities-outcome.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/finding.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/reference-check-report.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/rule-decls.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/rules-outcome.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/spec-block-assessment.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/state-machine-sketch.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/domain/unit-decls.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-contract-summary-usecase.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-domain-components-usecase.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-functional-design-usecase.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/port/reference-check-report-repository.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/attribute-mapping.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/attribute-mappings.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/design-assignments.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/design-event-catalog.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/design-event.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/effect-assignments.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/event-mapping.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/event-mappings.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/package.json"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-attribute.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-attributes.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-map-acquisition.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-map-defect.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-map-id.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-map.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-materials.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-obligation.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-obligations.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-probe.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-query-verdict.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-query-verdicts.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-quint-invariant.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-quint-invariants.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-requirements.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-scenario.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-scenarios.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-solver-plan.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-status.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-unit-map.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/refinement-unit-maps.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/req-attribute-values.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/transition-ref.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/transition-refs.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/unit-refinement-plan.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/unmapped-declarations.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/unmapped-target-ref.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/refinement/domain/unmapped-target.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/adapter/formal-model-parser.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/adapter/formal-model-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/adapter/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/adapter/ir-validation-materials-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/adapter/itf-decoder.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/adapter/verification-directory-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/adapter/verification-report-repository-impl.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/adapter/verification-report-serializer.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/domain/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/domain/quint-machine-plan.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/domain/smt-verification-plan.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/domain/verification-directory.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/domain/verification-finding.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/domain/verification-report.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/domain/verification-reports.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/index.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/verification-directory-repository.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/verification-report-repository.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/verification-report-finalizer.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/verify-requirements-quint-usecase.ts"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/verify-requirements-smt-usecase.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/aggregate-ids.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/architecture.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/architecture/rules.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/design-pipeline.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/design-report-finalization.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/design-usecase-collaboration.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/design-verify.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/domain-primitives.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/doubles/in-memory-reference-check-report-repository.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/doubles/in-memory-verification-directory-repository.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/doubles/in-memory-verification-report-repository.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/kernel-domain.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/package-boundaries.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/package.json"
+    },
+    {
+      "path": "deep-spec-analysis/tests/refcheck-pipeline.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/refcheck-report.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/refcheck.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/refinement-pipeline.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/verification-report-finalization.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/verify-quint-pipeline.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tests/verify-smt-pipeline.test.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tools/aidlc-sensor-deep-spec-design-ir-valid.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tools/aidlc-sensor-deep-spec-design-verify-quint.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tools/aidlc-sensor-deep-spec-design-verify-smt.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tools/aidlc-sensor-deep-spec-ir-valid.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tools/aidlc-sensor-deep-spec-refcheck-contract.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tools/aidlc-sensor-deep-spec-refcheck-domain.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tools/aidlc-sensor-deep-spec-refcheck-functional.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tools/aidlc-sensor-deep-spec-verify-quint.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tools/aidlc-sensor-deep-spec-verify-smt.ts"
+    },
+    {
+      "path": "deep-spec-analysis/tools/deep-spec-analysis-doctor.ts"
+    }
+  ]
+}

@@ -9,12 +9,10 @@ export { solveSmtChild } from "./z3-engine-child.ts";
 export { Z3SolverClientImpl } from "./z3-solver-client-impl.ts";
 export { type Z3SolverClientConfig } from "./z3-solver-client-config.ts";
 export {
-  conformToFindingsContract,
   parseSiblingReportDocument,
-  parseVerificationReportDocument,
   renderVerificationReportBytes,
 } from "./verification-report-serializer.ts";
-export { VerificationReportRepositoryImpl } from "./verification-report-repository-impl.ts";
+export { VERIFICATION_LOCK_BASENAME, VerificationDirectoryRepositoryImpl } from "./verification-directory-repository-impl.ts";
 export { type CompiledQuintMachine } from "./compiled-quint-machine.ts";
 export { type QuintCompilation, compileQuintMachine, qVar } from "./quint-compilation.ts";
 export { decodeItfTrace, itfStatus } from "./itf-decoder.ts";

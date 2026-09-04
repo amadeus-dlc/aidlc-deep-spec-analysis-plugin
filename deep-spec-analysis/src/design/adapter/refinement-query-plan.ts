@@ -1,4 +1,4 @@
-import { TargetId, KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
+import { TargetId, KeyedIndex, QueryLabel, SkipReason } from "@deep-spec/kernel-domain";
 import type { RefinementAttr } from "./refinement-attr.ts";
 // refinement の SMT-LIB コンパイラ — v1（requirements/adapter/smt-plan）と
 // 統一しない**明示的な第 2 コンパイラ**（移行計画のアーキテクチャ判断 Q1 /
@@ -16,7 +16,7 @@ import {
   ObligationId,
   ScenarioId,
   type RefinementMapDefect,
-} from "@deep-spec/refinement-domain";
+} from "@deep-spec/design-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
 import { DesignSkips } from "@deep-spec/design-domain";
@@ -32,7 +32,7 @@ import {
   type UnitRefinementPlan,
   DesignEventCatalog,
   EffectAssignments,
-} from "@deep-spec/refinement-domain";
+} from "@deep-spec/design-domain";
 
 
 
@@ -239,7 +239,12 @@ export function buildRefinementQueries(
   // alpha 置換の欠陥（RefinementMapDefect）と SMT コンパイル失敗（例外）は同じ
   // 凍結文言の compile-error skip に落ちる。
   const alphaFail = (target: string, message: string): void => {
-    compileSkips.push(DesignSkipped.reconstitute({ target: TargetId.reconstitute(target), reason: "compile-error", unit: u.name(), detail: `alpha substitution failed: ${message}` }));
+    compileSkips.push(DesignSkipped.of({
+      target: TargetId.reconstitute(target),
+      reason: SkipReason.compileError(),
+      unit: u.name(),
+      detail: `alpha substitution failed: ${message}`,
+    }));
   };
   const failureMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 

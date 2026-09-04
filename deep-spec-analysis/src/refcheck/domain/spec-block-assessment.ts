@@ -1,6 +1,6 @@
 import type { BlockIndex } from "./block-index.ts";
 import type { LineNumber } from "./line-number.ts";
-import type { ArtifactPath } from "@deep-spec/kernel-domain";
+import { FindingKind, type ArtifactPath } from "@deep-spec/kernel-domain";
 import { CD_2 } from "./contract-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { WitnessRef } from "./witness-ref.ts";
@@ -63,14 +63,14 @@ export class SpecBlockAssessment {
     this.matchIssue({
       sound: () => {},
       unparseable: (error) => {
-        report.finding(CD_2, "structure-invalid", [blockId], [WitnessRef.at(art, el)],
+        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessRef.at(art, el)],
           `spec block does not parse in the supported YAML subset: ${error}`);
       },
       notAMapping: () => {
-        report.finding(CD_2, "structure-invalid", [blockId], [WitnessRef.at(art, el)], "spec block is not a YAML mapping");
+        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessRef.at(art, el)], "spec block is not a YAML mapping");
       },
       openapiWithoutPaths: () => {
-        report.finding(CD_2, "structure-invalid", [blockId], [WitnessRef.at(art, el, "openapi")],
+        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessRef.at(art, el, "openapi")],
           "OpenAPI spec block carries `openapi:` but no `paths:`");
       },
     });

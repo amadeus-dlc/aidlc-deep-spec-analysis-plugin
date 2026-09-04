@@ -3,7 +3,7 @@
 // # 始まりのメタキーは落とし、変数名は varToPath で属性パスへ戻す。
 // 旧 decodeItfValue / decodeItfTrace / itfStatus からの逐語移植。
 
-import { type Json, isObject } from "@deep-spec/kernel-adapter";
+import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
 import { AttributePath, TraceState, TraceValue } from "@deep-spec/requirements-domain";
 
 function decodeItfValue(v: Json): Json {

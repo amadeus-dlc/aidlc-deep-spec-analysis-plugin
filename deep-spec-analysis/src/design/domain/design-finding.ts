@@ -16,14 +16,14 @@ export class DesignFinding {
   readonly #detail: string;
 
   private constructor(props: {
-    kind: string;
+    kind: FindingKind;
     frRefs: FrRefs;
     targets: TargetIds;
     witness: DesignWitness;
     unit: string;
     detail: string;
   }) {
-    this.#kind = FindingKind.reconstitute(props.kind);
+    this.#kind = props.kind;
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
@@ -31,6 +31,21 @@ export class DesignFinding {
     this.#detail = props.detail;
   }
 
+  // 正常生成（strict creation）——検証済みの FindingKind だけを受け取る。
+  // domain／usecase が自ら下す判定はこの口を通る（FR3.2）。
+  static of(props: {
+    kind: FindingKind;
+    frRefs: FrRefs;
+    targets: TargetIds;
+    witness: DesignWitness;
+    unit: string;
+    detail: string;
+  }): DesignFinding {
+    return new DesignFinding(props);
+  }
+
+  // 書かれた文書からの寛容な hydration（tolerant hydration）——未知の kind も
+  // 逐語で運び、既知のどれよりも後ろへ並べて降格試験へ渡す（FR3.3／FR3.4）。
   static reconstitute(props: {
     kind: string;
     frRefs: FrRefs;
@@ -39,7 +54,7 @@ export class DesignFinding {
     unit: string;
     detail: string;
   }): DesignFinding {
-    return new DesignFinding(props);
+    return new DesignFinding({ ...props, kind: FindingKind.reconstitute(props.kind) });
   }
 
   kind(): string {
@@ -79,7 +94,7 @@ export class DesignFinding {
     const reqHits = this.#targets.toArray().filter((t) => reqIds.has(t.asString()));
     if (reqHits.length === 0) return null;
     return new DesignFinding({
-      kind: "refinement-violation",
+      kind: FindingKind.refinementViolation(),
       frRefs: this.#frRefs,
       targets: TargetIds.of(reqHits),
       witness: this.#witness,
@@ -97,7 +112,7 @@ export class DesignFinding {
 
   withDetail(detail: string): DesignFinding {
     return new DesignFinding({
-      kind: this.#kind.asString(),
+      kind: this.#kind,
       frRefs: this.#frRefs,
       targets: this.#targets,
       witness: this.#witness,

@@ -1,6 +1,6 @@
 // @bun
 // src/entries/aidlc-sensor-deep-spec-design-ir-valid.ts
-import { dirname as dirname5, join as join7 } from "path";
+import { dirname as dirname5, join as join8 } from "path";
 import { fileURLToPath } from "url";
 
 // src/kernel/adapter/sensor-flags.ts
@@ -54,31 +54,15 @@ function ok(value) {
 function err(error) {
   return { ok: false, error };
 }
-// src/kernel/adapter/contract-schema.ts
-function readContractSchema(path) {
-  try {
-    return ok(JSON.parse(readFileSync2(path, "utf-8")));
-  } catch (e) {
-    return err({ cause: e instanceof Error ? e.message : String(e) });
-  }
+function unreachable(x) {
+  throw new Error(`defect: unreachable variant ${JSON.stringify(x)}`);
 }
-// src/kernel/adapter/json.ts
+// src/kernel/infrastructure/json.ts
 function isObject(v) {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 var strArr = (v) => Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
-// src/kernel/adapter/canonical-json.ts
-function canonicalStringify(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalStringify).join(",")}]`;
-  }
-  if (isObject(value)) {
-    const keys = Object.keys(value).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(value[k] ?? null)}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-// src/kernel/adapter/schema.ts
+// src/kernel/infrastructure/schema.ts
 function typeMatches(t, v) {
   switch (t) {
     case "object":
@@ -195,6 +179,25 @@ function validateSchema(root, schema, value, path, errors) {
   }
   return errors.length === before;
 }
+// src/kernel/infrastructure/canonical-json.ts
+function canonicalStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalStringify).join(",")}]`;
+  }
+  if (isObject(value)) {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(value[k] ?? null)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+// src/kernel/adapter/contract-schema.ts
+function readContractSchema(path) {
+  try {
+    return ok(JSON.parse(readFileSync2(path, "utf-8")));
+  } catch (e) {
+    return err({ cause: e instanceof Error ? e.message : String(e) });
+  }
+}
 // src/kernel/adapter/fence.ts
 function extractFences(md, lang) {
   const fences = [];
@@ -226,6 +229,12 @@ function extractFences(md, lang) {
   }
   return fences;
 }
+// src/kernel/adapter/system-clock.ts
+class SystemClock {
+  now() {
+    return Date.now();
+  }
+}
 // src/kernel/adapter/atomic-write.ts
 import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
 import { basename, dirname as dirname2, join as join2 } from "path";
@@ -243,6 +252,164 @@ function writeFileAtomically(path, data) {
       rmSync(tmp, { force: true });
     } catch {}
     throw e;
+  }
+}
+// src/kernel/adapter/directory-finalization-lock.ts
+import { randomBytes } from "crypto";
+import { mkdirSync as mkdirSync2, readFileSync as readFileSync3, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { join as join3 } from "path";
+var DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
+var METADATA_BASENAME = "owner.lockmeta";
+var LEASE_MS = 30000;
+var OWNER_TOKEN_BYTES = 16;
+function causeOf(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+
+class DirectoryFinalizationLock {
+  #clock;
+  #liveness;
+  #lockBasename;
+  #ownerTokens;
+  constructor(clock, liveness, lockBasename = DESIGN_LOCK_BASENAME) {
+    this.#clock = clock;
+    this.#liveness = liveness;
+    this.#lockBasename = lockBasename;
+    this.#ownerTokens = new Map;
+  }
+  canonicalPathOf(directory) {
+    return join3(directory.asString(), this.#lockBasename);
+  }
+  ownerTokenOf(directory) {
+    return this.#ownerTokens.get(this.canonicalPathOf(directory)) ?? null;
+  }
+  acquire(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const token = randomBytes(OWNER_TOKEN_BYTES).toString("hex");
+    const blocked = this.#createOwned(canonical, token);
+    if (blocked === null) {
+      this.#ownerTokens.set(canonical, token);
+      return { kind: "acquired" };
+    }
+    const observed = this.#readMetadata(canonical);
+    if (observed === null) {
+      return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
+    }
+    if (observed.state !== "held") {
+      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.state}"` };
+    }
+    if (this.#clock.now() < observed.leaseExpiresAtMs) {
+      return { kind: "lock-contended", cause: "the lease has not expired" };
+    }
+    const status = this.#liveness.statusOf(observed.pid);
+    if (status !== "absent") {
+      return { kind: "lock-contended", cause: `owner process ${observed.pid} is ${status}` };
+    }
+    const reread = this.#readMetadata(canonical);
+    if (reread === null || reread.token !== observed.token) {
+      return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
+    }
+    const stale = `${canonical}.stale.${observed.token}.${token}`;
+    try {
+      renameSync2(canonical, stale);
+    } catch (e) {
+      return { kind: "lock-recovery-failed", cause: causeOf(e) };
+    }
+    const lost = this.#createOwned(canonical, token);
+    this.#discard(stale);
+    if (lost !== null) {
+      return { kind: "lock-recovery-failed", cause: lost };
+    }
+    this.#ownerTokens.set(canonical, token);
+    return { kind: "recovered", displacedToken: observed.token };
+  }
+  holdsOwnership(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined)
+      return false;
+    const observed = this.#readMetadata(canonical);
+    return observed !== null && observed.state === "held" && observed.token === mine;
+  }
+  release(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined) {
+      return { kind: "lock-release-failed", cause: "this writer does not hold the lock" };
+    }
+    this.#ownerTokens.delete(canonical);
+    const observed = this.#readMetadata(canonical);
+    if (observed === null || observed.token !== mine) {
+      return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
+    }
+    const cleanup = `${canonical}.cleanup.${mine}`;
+    try {
+      renameSync2(canonical, cleanup);
+    } catch (e) {
+      return { kind: "lock-release-failed", cause: causeOf(e) };
+    }
+    const swept = this.#discard(cleanup);
+    if (swept !== null) {
+      return { kind: "cleanup-failed", cause: swept };
+    }
+    return { kind: "released" };
+  }
+  #createOwned(canonical, token) {
+    const acquiredAtMs = this.#clock.now();
+    try {
+      mkdirSync2(canonical);
+    } catch (e) {
+      return causeOf(e);
+    }
+    const metadata = {
+      state: "held",
+      token,
+      pid: this.#liveness.self(),
+      acquiredAtMs,
+      leaseExpiresAtMs: acquiredAtMs + LEASE_MS
+    };
+    try {
+      writeFileSync2(join3(canonical, METADATA_BASENAME), `${JSON.stringify(metadata)}
+`, "utf-8");
+      return null;
+    } catch (e) {
+      const cleanup = `${canonical}.cleanup.${token}`;
+      try {
+        renameSync2(canonical, cleanup);
+        this.#discard(cleanup);
+      } catch {}
+      return causeOf(e);
+    }
+  }
+  #readMetadata(canonical) {
+    let raw;
+    try {
+      raw = JSON.parse(readFileSync3(join3(canonical, METADATA_BASENAME), "utf-8"));
+    } catch {
+      return null;
+    }
+    if (typeof raw !== "object" || raw === null)
+      return null;
+    const doc = raw;
+    if (typeof doc.state !== "string" || typeof doc.token !== "string")
+      return null;
+    if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
+      return null;
+    return {
+      state: doc.state,
+      token: doc.token,
+      pid: doc.pid,
+      acquiredAtMs: doc.acquiredAtMs,
+      leaseExpiresAtMs: doc.leaseExpiresAtMs
+    };
+  }
+  #discard(ownPath) {
+    try {
+      rmSync2(ownPath, { recursive: true, force: true });
+      return null;
+    } catch (e) {
+      return causeOf(e);
+    }
   }
 }
 // src/kernel/adapter/smt-symbols.ts
@@ -709,6 +876,35 @@ class ErrorMessages {
     return this.#values;
   }
 }
+// src/kernel/domain/findings-schema.ts
+var CONTRACT_BASENAME = "deep-spec-findings-schema.json";
+
+class FindingsSchema {
+  #schema;
+  #reason;
+  constructor(schema, reason) {
+    this.#schema = schema;
+    this.#reason = reason;
+  }
+  static of(schema) {
+    return new FindingsSchema(schema, null);
+  }
+  static unreadable(cause) {
+    return new FindingsSchema(null, cause);
+  }
+  degradationReasonFor(document) {
+    const schema = this.#schema;
+    if (schema === null) {
+      return `findings schema unreadable: ${this.#reason ?? ""}`;
+    }
+    const errors = [];
+    validateSchema(schema, schema, document, "", errors);
+    const first = errors[0];
+    if (first === undefined)
+      return null;
+    return `self-validation against ${CONTRACT_BASENAME} failed: ${first}`;
+  }
+}
 // src/kernel/domain/trigger-name.ts
 class TriggerName {
   #value;
@@ -900,6 +1096,39 @@ class FindingKind {
   static reconstitute(raw) {
     return new FindingKind(raw);
   }
+  static conflict() {
+    return new FindingKind("conflict");
+  }
+  static completenessGap() {
+    return new FindingKind("completeness-gap");
+  }
+  static scenarioViolation() {
+    return new FindingKind("scenario-violation");
+  }
+  static unreachable() {
+    return new FindingKind("unreachable");
+  }
+  static redundancy() {
+    return new FindingKind("redundancy");
+  }
+  static refinementViolation() {
+    return new FindingKind("refinement-violation");
+  }
+  static mappingGap() {
+    return new FindingKind("mapping-gap");
+  }
+  static structureInvalid() {
+    return new FindingKind("structure-invalid");
+  }
+  static referenceBroken() {
+    return new FindingKind("reference-broken");
+  }
+  static consistencyMismatch() {
+    return new FindingKind("consistency-mismatch");
+  }
+  static crossCheckDisagreement() {
+    return new FindingKind("cross-check-disagreement");
+  }
   static canonicalOrder() {
     return Object.keys(KIND_RANK);
   }
@@ -917,10 +1146,17 @@ class FindingKind {
   }
 }
 // src/kernel/domain/verification-method.ts
+var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
+
 class VerificationMethod {
   #value;
   constructor(value) {
     this.#value = value;
+  }
+  static parse(raw) {
+    if (!KNOWN_METHODS.has(raw))
+      return err({ kind: "unknown-verification-method", raw });
+    return ok(new VerificationMethod(raw));
   }
   static reconstitute(raw) {
     return new VerificationMethod(raw);
@@ -930,6 +1166,66 @@ class VerificationMethod {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/kernel/domain/skip-reason.ts
+var KNOWN_REASONS = new Set([
+  "unavailable",
+  "timeout",
+  "capability",
+  "compile-error",
+  "waived",
+  "absent-input",
+  "stale-input",
+  "ir-version-mismatch",
+  "unrecognized-format"
+]);
+
+class SkipReason {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static parse(raw) {
+    if (!KNOWN_REASONS.has(raw))
+      return err({ kind: "unknown-skip-reason", raw });
+    return ok(new SkipReason(raw));
+  }
+  static reconstitute(raw) {
+    return new SkipReason(raw);
+  }
+  static unavailable() {
+    return new SkipReason("unavailable");
+  }
+  static timeout() {
+    return new SkipReason("timeout");
+  }
+  static capability() {
+    return new SkipReason("capability");
+  }
+  static compileError() {
+    return new SkipReason("compile-error");
+  }
+  static waived() {
+    return new SkipReason("waived");
+  }
+  static absentInput() {
+    return new SkipReason("absent-input");
+  }
+  static staleInput() {
+    return new SkipReason("stale-input");
+  }
+  static irVersionMismatch() {
+    return new SkipReason("ir-version-mismatch");
+  }
+  static unrecognizedFormat() {
+    return new SkipReason("unrecognized-format");
+  }
+  asString() {
+    return this.#value;
+  }
+  compareTo(other) {
+    return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
   }
 }
 // src/kernel/domain/attribute-kind.ts
@@ -994,6 +1290,107 @@ class DesignWitness {
     return this.#document;
   }
 }
+// src/design/domain/lowered-obligation.ts
+class LoweredObligation {
+  #id;
+  #nature;
+  #frRefs;
+  #assert;
+  #trigger;
+  #guard;
+  #effect;
+  #temporal;
+  constructor(props) {
+    this.#id = props.id;
+    this.#nature = ObligationNature.reconstitute(props.nature);
+    this.#frRefs = props.frRefs;
+    this.#assert = props.assert;
+    this.#trigger = props.trigger === undefined ? undefined : TriggerName.reconstitute(props.trigger);
+    this.#guard = props.guard;
+    this.#effect = props.effect;
+    this.#temporal = props.temporal;
+  }
+  static reconstitute(props) {
+    return new LoweredObligation(props);
+  }
+  id() {
+    return this.#id;
+  }
+  nature() {
+    return this.#nature.asString();
+  }
+  frRefs() {
+    return this.#frRefs;
+  }
+  assertion() {
+    return this.#assert;
+  }
+  trigger() {
+    return this.#trigger?.asString();
+  }
+  guard() {
+    return this.#guard;
+  }
+  effect() {
+    return this.#effect;
+  }
+  temporal() {
+    return this.#temporal;
+  }
+  isEvent() {
+    return this.#trigger !== undefined;
+  }
+}
+
+// src/design/domain/lowered-origin.ts
+class LoweredOrigin {
+  #design;
+  #kind;
+  #pair;
+  constructor(props) {
+    this.#design = props.design;
+    this.#kind = props.kind;
+    this.#pair = props.pair;
+  }
+  static reconstitute(props) {
+    return new LoweredOrigin(props);
+  }
+  design() {
+    return this.#design;
+  }
+  isKind(kind) {
+    return this.#kind === kind;
+  }
+  isSyntheticProbe() {
+    return this.#kind === "vac-dead" || this.#kind === "vac-shadow";
+  }
+  pairRefs() {
+    return this.#pair ?? [this.#design, this.#design];
+  }
+}
+
+// src/design/domain/lowered-origin-ref.ts
+class LoweredOriginRef {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static parse(raw) {
+    if (raw === "")
+      return err({ kind: "empty-lowered-token", raw });
+    return ok(new LoweredOriginRef(raw));
+  }
+  static reconstitute(raw) {
+    return new LoweredOriginRef(raw);
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
 // src/design/domain/design-transition.ts
 class DesignTransition {
   #id;
@@ -1046,6 +1443,19 @@ class DesignTransition {
   loweredEffect(attrPath) {
     const base = this.#stateEquality(attrPath, this.#to, true);
     return this.#effect === undefined ? base : { op: "and", args: [base, this.#effect] };
+  }
+  loweredAs(id, attrPath) {
+    return LoweredObligation.reconstitute({
+      id,
+      nature: "event",
+      frRefs: FrRefs.of([]),
+      trigger: this.#trigger.asString(),
+      guard: this.loweredGuard(attrPath),
+      effect: this.loweredEffect(attrPath)
+    });
+  }
+  loweredOrigin() {
+    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "transition" });
   }
   stateAssignment(attrPath) {
     return [attrPath, { op: "enum", value: this.#to }];
@@ -1136,6 +1546,9 @@ class DesignMachine {
   ignores() {
     return this.#ignores;
   }
+  loweredIgnoreOrigin() {
+    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "ignore" });
+  }
   nonInitialCandidates(values) {
     return values.filter((s) => !this.#initial.includes(s)).sort();
   }
@@ -1207,6 +1620,16 @@ class DesignIgnore {
   }
   loweredEffect(attrPath) {
     return { op: "eq", args: [{ op: "ref", path: attrPath, prime: true }, { op: "ref", path: attrPath }] };
+  }
+  loweredAs(id, attrPath) {
+    return LoweredObligation.reconstitute({
+      id,
+      nature: "event",
+      frRefs: FrRefs.of([]),
+      trigger: this.#trigger.asString(),
+      guard: this.loweredGuard(attrPath),
+      effect: this.loweredEffect(attrPath)
+    });
   }
 }
 // src/design/domain/design-ignores.ts
@@ -1363,6 +1786,24 @@ class DesignObligation {
       return null;
     return { trigger: this.#trigger, ...behavior };
   }
+  loweredAs(id) {
+    const lowered = { id, nature: this.#nature.asString(), frRefs: this.#frRefs };
+    const temporal = this.temporal();
+    if (this.#assert !== undefined)
+      lowered.assert = this.#assert;
+    if (this.#trigger !== undefined)
+      lowered.trigger = this.#trigger.asString();
+    if (this.#guard !== undefined)
+      lowered.guard = this.#guard;
+    if (this.#effect !== undefined)
+      lowered.effect = this.#effect;
+    if (temporal !== undefined)
+      lowered.temporal = temporal;
+    return LoweredObligation.reconstitute(lowered);
+  }
+  loweredOrigin() {
+    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "passthrough" });
+  }
   inspectExpressions(visitor) {
     if (this.#assert !== undefined)
       visitor(this.#assert, false);
@@ -1474,6 +1915,48 @@ class DesignObligations {
     return this.#values;
   }
 }
+// src/design/domain/lowered-scenario.ts
+class LoweredScenario {
+  #id;
+  #kind;
+  #frRefs;
+  #bindings;
+  #event;
+  #expect;
+  constructor(props) {
+    this.#id = props.id;
+    this.#kind = props.kind;
+    this.#frRefs = props.frRefs;
+    this.#bindings = { ...props.bindings };
+    this.#event = props.event;
+    this.#expect = props.expect;
+  }
+  static reconstitute(props) {
+    return new LoweredScenario(props);
+  }
+  id() {
+    return this.#id;
+  }
+  kind() {
+    return this.#kind;
+  }
+  frRefs() {
+    return this.#frRefs;
+  }
+  bindings() {
+    return { ...this.#bindings };
+  }
+  event() {
+    return this.#event;
+  }
+  expectation() {
+    return this.#expect;
+  }
+  isAccept() {
+    return this.#kind === "accept";
+  }
+}
+
 // src/design/domain/design-scenario.ts
 class DesignScenario {
   #id;
@@ -1530,6 +2013,16 @@ class DesignScenario {
   }
   bindings() {
     return { ...this.#bindings };
+  }
+  loweredAs(id) {
+    return LoweredScenario.reconstitute({
+      id,
+      kind: this.#kind,
+      frRefs: this.#frRefs,
+      bindings: { ...this.#bindings },
+      ...this.#eventTrigger !== undefined ? { event: { trigger: this.#eventTrigger.asString() } } : {},
+      ...this.#expect !== undefined ? { expect: this.#expect } : {}
+    });
   }
 }
 // src/design/domain/design-scenario-id.ts
@@ -1621,6 +2114,191 @@ class AttrPaths {
   }
 }
 
+// src/design/domain/lowered-backgrounds.ts
+class LoweredBackgrounds {
+  #values;
+  constructor(values) {
+    this.#values = values;
+  }
+  static of(values) {
+    return new LoweredBackgrounds([...values]);
+  }
+  add(value) {
+    return new LoweredBackgrounds([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/design/domain/lowered-id.ts
+class LoweredId {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static parse(raw) {
+    if (raw === "")
+      return err({ kind: "empty-lowered-token", raw });
+    return ok(new LoweredId(raw));
+  }
+  static reconstitute(raw) {
+    return new LoweredId(raw);
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
+// src/design/domain/lowered-obligations.ts
+class LoweredObligations {
+  #values;
+  constructor(values) {
+    this.#values = values;
+  }
+  static of(values) {
+    return new LoweredObligations([...values]);
+  }
+  add(value) {
+    return new LoweredObligations([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/design/domain/lowered-scenarios.ts
+class LoweredScenarios {
+  #values;
+  constructor(values) {
+    this.#values = values;
+  }
+  static of(values) {
+    return new LoweredScenarios([...values]);
+  }
+  add(value) {
+    return new LoweredScenarios([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/design/domain/lowered-unit.ts
+class LoweredUnit {
+  #obligations;
+  #scenarios;
+  #background;
+  #index;
+  constructor(props) {
+    this.#obligations = props.obligations;
+    this.#scenarios = props.scenarios;
+    this.#background = props.background;
+    this.#index = props.index;
+  }
+  static of(props) {
+    return new LoweredUnit(props);
+  }
+  obligations() {
+    return this.#obligations;
+  }
+  scenarios() {
+    return this.#scenarios;
+  }
+  background() {
+    return this.#background;
+  }
+  index() {
+    return this.#index;
+  }
+  extendedWith(obligations, index) {
+    return new LoweredUnit({ obligations, scenarios: this.#scenarios, background: this.#background, index });
+  }
+}
+
+// src/design/domain/lowering-index.ts
+function designToken(id) {
+  return id.replace(/[^A-Za-z0-9_]/g, "_");
+}
+
+class LoweringIndex {
+  #origins;
+  #scenarioDesignIds;
+  #machinesByTransition;
+  #attrPathsByMachine;
+  constructor(props) {
+    this.#origins = props.origins;
+    this.#scenarioDesignIds = props.scenarioDesignIds;
+    this.#machinesByTransition = props.machinesByTransition;
+    this.#attrPathsByMachine = props.attrPathsByMachine;
+  }
+  static of(props) {
+    return new LoweringIndex(props);
+  }
+  originOf(loweredId) {
+    return this.#origins.get(LoweredId.reconstitute(loweredId)) ?? null;
+  }
+  resolveDesignTarget(loweredId) {
+    const entry = this.#origins.get(LoweredId.reconstitute(loweredId)) ?? null;
+    if (entry)
+      return { design: entry.design().asString(), entry };
+    const dsc = this.#scenarioDesignIds.get(LoweredId.reconstitute(loweredId));
+    if (dsc)
+      return { design: dsc.asString(), entry: null };
+    return { design: loweredId, entry: null };
+  }
+  rewriteLoweredIds(text) {
+    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(LoweredId.reconstitute(`OB-${num}`))?.design().asString() ?? m);
+  }
+  rewriteLoweredIdTokens(label) {
+    return label.replace(/OB_([0-9]+)/g, (m, num) => {
+      const entry = this.#origins.get(LoweredId.reconstitute(`OB-${num}`));
+      return entry ? designToken(entry.design().asString()) : m;
+    });
+  }
+  isTransition(designId) {
+    return this.#machinesByTransition.has(DesignTransitionId.reconstitute(designId));
+  }
+  machineOfTransition(designId) {
+    return this.#machinesByTransition.get(DesignTransitionId.reconstitute(designId)) ?? null;
+  }
+  attrPathOfMachine(machineId) {
+    return this.#attrPathsByMachine.get(DesignMachineId.reconstitute(machineId))?.asString() ?? null;
+  }
+  withPassthrough(loweredId, designId) {
+    return new LoweringIndex({
+      origins: this.#origins.with(LoweredId.reconstitute(loweredId), LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(designId), kind: "passthrough" })),
+      scenarioDesignIds: this.#scenarioDesignIds,
+      machinesByTransition: this.#machinesByTransition,
+      attrPathsByMachine: this.#attrPathsByMachine
+    });
+  }
+  toOriginEntries() {
+    return [...this.#origins].map(([id, origin]) => [id.asString(), origin]);
+  }
+}
+
 // src/design/domain/design-unit.ts
 class DesignUnit {
   #unit;
@@ -1674,6 +2352,108 @@ class DesignUnit {
   allTargets() {
     return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()]).sortedUniqueCanonically();
   }
+  lowered(opts) {
+    const obligations = [];
+    const origins = [];
+    const machinesByTransition = [];
+    const attrPathsByMachine = [];
+    const candidates = [];
+    let n = 0;
+    const nextId = () => {
+      n += 1;
+      return LoweredId.reconstitute(`OB-${n}`);
+    };
+    for (const ob of this.#obligations.sortedCanonically()) {
+      const id = nextId();
+      obligations.push(ob.loweredAs(id));
+      origins.push([id, ob.loweredOrigin()]);
+      const event = ob.eventDefinition();
+      if (event !== null) {
+        candidates.push({ design: ob.id().asString(), trigger: event.trigger.asString(), guard: event.guard, effect: event.effect });
+      }
+    }
+    for (const sm of this.#machines.sortedCanonically()) {
+      const attrPath = DesignMachines.attrPathOf(sm);
+      attrPathsByMachine.push([sm.id(), AttributePath.reconstitute(attrPath)]);
+      for (const tr of sm.transitions().sortedCanonically()) {
+        const id = nextId();
+        obligations.push(tr.loweredAs(id, attrPath));
+        origins.push([id, tr.loweredOrigin()]);
+        machinesByTransition.push([tr.id(), sm]);
+        candidates.push({ design: tr.id().asString(), trigger: tr.trigger().asString(), guard: tr.loweredGuard(attrPath), effect: tr.loweredEffect(attrPath) });
+      }
+      for (const ig of sm.ignores().sortedByStateTrigger()) {
+        const id = nextId();
+        obligations.push(ig.loweredAs(id, attrPath));
+        origins.push([id, sm.loweredIgnoreOrigin()]);
+      }
+    }
+    if (opts.synthetics) {
+      for (const c of candidates) {
+        const id = nextId();
+        obligations.push(LoweredObligation.reconstitute({ id, nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
+        origins.push([id, LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(c.design), kind: "vac-dead" })]);
+      }
+      const byTrigger = new Map;
+      for (const c of candidates) {
+        const list = byTrigger.get(c.trigger) ?? [];
+        list.push(c);
+        byTrigger.set(c.trigger, list);
+      }
+      for (const trigger of [...byTrigger.keys()].sort()) {
+        const list = byTrigger.get(trigger) ?? [];
+        for (const a of list) {
+          for (const b of list) {
+            if (a === b)
+              continue;
+            if (!ExpressionTree.of(a.effect).isCanonicallyEqual(ExpressionTree.of(b.effect)))
+              continue;
+            const id = nextId();
+            obligations.push(LoweredObligation.reconstitute({
+              id,
+              nature: "invariant",
+              frRefs: FrRefs.of([]),
+              assert: {
+                op: "implies",
+                args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }]
+              }
+            }));
+            origins.push([id, LoweredOrigin.reconstitute({
+              design: LoweredOriginRef.reconstitute(`${a.design}|${b.design}`),
+              kind: "vac-shadow",
+              pair: [LoweredOriginRef.reconstitute(a.design), LoweredOriginRef.reconstitute(b.design)]
+            })]);
+          }
+        }
+      }
+    }
+    const scenarios = [];
+    const scenarioDesignIds = [];
+    let scN = 0;
+    for (const sc of this.#scenarios.sortedCanonically()) {
+      scN += 1;
+      const id = LoweredId.reconstitute(`SC-${scN}`);
+      scenarios.push(sc.loweredAs(id));
+      scenarioDesignIds.push([id, sc.id()]);
+    }
+    const background = [];
+    let bgN = 0;
+    for (const bg of this.#background.sortedCanonically()) {
+      bgN += 1;
+      background.push(bg.loweredAs(LoweredId.reconstitute(`BG-${bgN}`)));
+    }
+    return LoweredUnit.of({
+      obligations: LoweredObligations.of(obligations),
+      scenarios: LoweredScenarios.of(scenarios),
+      background: LoweredBackgrounds.of(background),
+      index: LoweringIndex.of({
+        origins: KeyedIndex.of(origins),
+        scenarioDesignIds: KeyedIndex.of(scenarioDesignIds),
+        machinesByTransition: KeyedIndex.of(machinesByTransition),
+        attrPathsByMachine: KeyedIndex.of(attrPathsByMachine)
+      })
+    });
+  }
   #attributeAt(attrPath) {
     for (const ent of this.#entities) {
       for (const attr of ent.attributes()) {
@@ -1691,6 +2471,25 @@ class DesignUnit {
     return this.declaredEnumValuesOf(attrPath) ?? [];
   }
 }
+// src/design/domain/lowered-background.ts
+class LoweredBackground {
+  #id;
+  #assert;
+  constructor(props) {
+    this.#id = props.id;
+    this.#assert = props.assert;
+  }
+  static reconstitute(props) {
+    return new LoweredBackground(props);
+  }
+  id() {
+    return this.#id;
+  }
+  assertion() {
+    return this.#assert;
+  }
+}
+
 // src/design/domain/design-background-assumption.ts
 class DesignBackgroundAssumption {
   #id;
@@ -1710,6 +2509,9 @@ class DesignBackgroundAssumption {
   }
   compareTo(other) {
     return this.#id.compareTo(other.#id);
+  }
+  loweredAs(id) {
+    return LoweredBackground.reconstitute({ id, assert: this.#assert });
   }
 }
 // src/design/domain/design-background-assumptions.ts
@@ -1831,15 +2633,18 @@ class DesignFinding {
   #unit;
   #detail;
   constructor(props) {
-    this.#kind = FindingKind.reconstitute(props.kind);
+    this.#kind = props.kind;
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#unit = UnitName.reconstitute(props.unit);
     this.#detail = props.detail;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignFinding(props);
+  }
+  static reconstitute(props) {
+    return new DesignFinding({ ...props, kind: FindingKind.reconstitute(props.kind) });
   }
   kind() {
     return this.#kind.asString();
@@ -1869,7 +2674,7 @@ class DesignFinding {
     if (reqHits.length === 0)
       return null;
     return new DesignFinding({
-      kind: "refinement-violation",
+      kind: FindingKind.refinementViolation(),
       frRefs: this.#frRefs,
       targets: TargetIds.of(reqHits),
       witness: this.#witness,
@@ -1882,7 +2687,7 @@ class DesignFinding {
   }
   withDetail(detail) {
     return new DesignFinding({
-      kind: this.#kind.asString(),
+      kind: this.#kind,
       frRefs: this.#frRefs,
       targets: this.#targets,
       witness: this.#witness,
@@ -1946,14 +2751,17 @@ class DesignSkipped {
     this.#unit = UnitName.reconstitute(props.unit);
     this.#detail = props.detail;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignSkipped(props);
+  }
+  static reconstitute(props) {
+    return new DesignSkipped({ ...props, reason: SkipReason.reconstitute(props.reason) });
   }
   target() {
     return this.#target;
   }
   reason() {
-    return this.#reason;
+    return this.#reason.asString();
   }
   unit() {
     return this.#unit.asString();
@@ -1970,7 +2778,7 @@ class DesignSkipped {
     const c = this.#target.compareTo(other.#target);
     if (c !== 0)
       return c;
-    return this.#reason < other.#reason ? -1 : this.#reason > other.#reason ? 1 : 0;
+    return this.#reason.compareTo(other.#reason);
   }
 }
 // src/design/domain/design-skips.ts
@@ -2005,353 +2813,52 @@ class DesignSkips {
     return this.#values;
   }
 }
-// src/design/domain/lowered-background.ts
-class LoweredBackground {
-  #id;
-  #assert;
-  constructor(props) {
-    this.#id = props.id;
-    this.#assert = props.assert;
-  }
-  static reconstitute(props) {
-    return new LoweredBackground(props);
-  }
-  id() {
-    return this.#id;
-  }
-  assertion() {
-    return this.#assert;
-  }
-}
-// src/design/domain/lowered-backgrounds.ts
-class LoweredBackgrounds {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new LoweredBackgrounds([...values]);
-  }
-  add(value) {
-    return new LoweredBackgrounds([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  count() {
-    return this.#values.length;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/design/domain/lowered-id.ts
-class LoweredId {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-lowered-token", raw });
-    return ok(new LoweredId(raw));
-  }
-  static reconstitute(raw) {
-    return new LoweredId(raw);
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/design/domain/lowered-obligation.ts
-class LoweredObligation {
-  #id;
-  #nature;
-  #frRefs;
-  #assert;
-  #trigger;
-  #guard;
-  #effect;
-  #temporal;
-  constructor(props) {
-    this.#id = props.id;
-    this.#nature = ObligationNature.reconstitute(props.nature);
-    this.#frRefs = props.frRefs;
-    this.#assert = props.assert;
-    this.#trigger = props.trigger === undefined ? undefined : TriggerName.reconstitute(props.trigger);
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal;
-  }
-  static reconstitute(props) {
-    return new LoweredObligation(props);
-  }
-  id() {
-    return this.#id;
-  }
-  nature() {
-    return this.#nature.asString();
-  }
-  frRefs() {
-    return this.#frRefs;
-  }
-  assertion() {
-    return this.#assert;
-  }
-  trigger() {
-    return this.#trigger?.asString();
-  }
-  guard() {
-    return this.#guard;
-  }
-  effect() {
-    return this.#effect;
-  }
-  temporal() {
-    return this.#temporal;
-  }
-  isEvent() {
-    return this.#trigger !== undefined;
-  }
-}
-// src/design/domain/lowered-obligations.ts
-class LoweredObligations {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new LoweredObligations([...values]);
-  }
-  add(value) {
-    return new LoweredObligations([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  count() {
-    return this.#values.length;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/design/domain/lowered-origin-ref.ts
-class LoweredOriginRef {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-lowered-token", raw });
-    return ok(new LoweredOriginRef(raw));
-  }
-  static reconstitute(raw) {
-    return new LoweredOriginRef(raw);
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/design/domain/lowered-origin.ts
-class LoweredOrigin {
-  #design;
+// src/design/domain/sibling-verdict-document.ts
+class SiblingVerdictDocument {
   #kind;
-  #pair;
+  #reason;
+  #method;
+  #findings;
+  #skipped;
   constructor(props) {
-    this.#design = props.design;
     this.#kind = props.kind;
-    this.#pair = props.pair;
+    this.#reason = props.reason;
+    this.#method = props.method === null ? null : VerificationMethod.reconstitute(props.method);
+    this.#findings = props.findings;
+    this.#skipped = props.skipped;
   }
-  static reconstitute(props) {
-    return new LoweredOrigin(props);
+  static unreadable() {
+    return new SiblingVerdictDocument({ kind: "unreadable", reason: null, method: null, findings: null, skipped: null });
   }
-  design() {
-    return this.#design;
+  static unavailable(reason, method) {
+    return new SiblingVerdictDocument({ kind: "unavailable", reason, method, findings: null, skipped: null });
   }
-  isKind(kind) {
-    return this.#kind === kind;
+  static readable(method, findings, skipped) {
+    return new SiblingVerdictDocument({ kind: "readable", reason: null, method, findings, skipped });
   }
-  isSyntheticProbe() {
-    return this.#kind === "vac-dead" || this.#kind === "vac-shadow";
+  unavailableReason() {
+    return this.#kind === "unavailable" ? this.#reason : null;
   }
-  pairRefs() {
-    return this.#pair ?? [this.#design, this.#design];
+  match(handlers) {
+    if (this.#kind === "unreadable")
+      return handlers.unreadable();
+    if (this.#kind === "unavailable")
+      return handlers.unavailable(this.#reason ?? "", this.#method?.asString() ?? null);
+    if (this.#findings === null || this.#skipped === null)
+      throw new Error("defect: a readable sibling document carries no verdicts");
+    return handlers.readable(this.#method?.asString() ?? null, this.#findings, this.#skipped);
   }
-}
-// src/design/domain/lowered-scenario.ts
-class LoweredScenario {
-  #id;
-  #kind;
-  #frRefs;
-  #bindings;
-  #event;
-  #expect;
-  constructor(props) {
-    this.#id = props.id;
-    this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
-    this.#bindings = { ...props.bindings };
-    this.#event = props.event;
-    this.#expect = props.expect;
-  }
-  static reconstitute(props) {
-    return new LoweredScenario(props);
-  }
-  id() {
-    return this.#id;
-  }
-  kind() {
-    return this.#kind;
-  }
-  frRefs() {
-    return this.#frRefs;
-  }
-  bindings() {
-    return { ...this.#bindings };
-  }
-  event() {
-    return this.#event;
-  }
-  expectation() {
-    return this.#expect;
-  }
-  isAccept() {
-    return this.#kind === "accept";
-  }
-}
-// src/design/domain/lowered-scenarios.ts
-class LoweredScenarios {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new LoweredScenarios([...values]);
-  }
-  add(value) {
-    return new LoweredScenarios([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  count() {
-    return this.#values.length;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/design/domain/lowering-index.ts
-function designToken(id) {
-  return id.replace(/[^A-Za-z0-9_]/g, "_");
-}
-
-class LoweringIndex {
-  #origins;
-  #scenarioDesignIds;
-  #machinesByTransition;
-  #attrPathsByMachine;
-  constructor(props) {
-    this.#origins = props.origins;
-    this.#scenarioDesignIds = props.scenarioDesignIds;
-    this.#machinesByTransition = props.machinesByTransition;
-    this.#attrPathsByMachine = props.attrPathsByMachine;
-  }
-  static of(props) {
-    return new LoweringIndex(props);
-  }
-  originOf(loweredId) {
-    return this.#origins.get(LoweredId.reconstitute(loweredId)) ?? null;
-  }
-  resolveDesignTarget(loweredId) {
-    const entry = this.#origins.get(LoweredId.reconstitute(loweredId)) ?? null;
-    if (entry)
-      return { design: entry.design().asString(), entry };
-    const dsc = this.#scenarioDesignIds.get(LoweredId.reconstitute(loweredId));
-    if (dsc)
-      return { design: dsc.asString(), entry: null };
-    return { design: loweredId, entry: null };
-  }
-  rewriteLoweredIds(text) {
-    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(LoweredId.reconstitute(`OB-${num}`))?.design().asString() ?? m);
-  }
-  rewriteLoweredIdTokens(label) {
-    return label.replace(/OB_([0-9]+)/g, (m, num) => {
-      const entry = this.#origins.get(LoweredId.reconstitute(`OB-${num}`));
-      return entry ? designToken(entry.design().asString()) : m;
-    });
-  }
-  isTransition(designId) {
-    return this.#machinesByTransition.has(DesignTransitionId.reconstitute(designId));
-  }
-  machineOfTransition(designId) {
-    return this.#machinesByTransition.get(DesignTransitionId.reconstitute(designId)) ?? null;
-  }
-  attrPathOfMachine(machineId) {
-    return this.#attrPathsByMachine.get(DesignMachineId.reconstitute(machineId))?.asString() ?? null;
-  }
-  withPassthrough(loweredId, designId) {
-    return new LoweringIndex({
-      origins: this.#origins.with(LoweredId.reconstitute(loweredId), LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(designId), kind: "passthrough" })),
-      scenarioDesignIds: this.#scenarioDesignIds,
-      machinesByTransition: this.#machinesByTransition,
-      attrPathsByMachine: this.#attrPathsByMachine
-    });
-  }
-  toOriginEntries() {
-    return [...this.#origins].map(([id, origin]) => [id.asString(), origin]);
-  }
-}
-
-// src/design/domain/lowered-unit.ts
-class LoweredUnit {
-  #obligations;
-  #scenarios;
-  #background;
-  #index;
-  constructor(props) {
-    this.#obligations = props.obligations;
-    this.#scenarios = props.scenarios;
-    this.#background = props.background;
-    this.#index = props.index;
-  }
-  obligations() {
-    return this.#obligations;
-  }
-  scenarios() {
-    return this.#scenarios;
-  }
-  background() {
-    return this.#background;
-  }
-  index() {
-    return this.#index;
-  }
-  extendedWith(obligations, index) {
-    return new LoweredUnit({ obligations, scenarios: this.#scenarios, background: this.#background, index });
-  }
-  static of(u, opts) {
-    return new LoweredUnit(buildLowering(u, opts));
-  }
-  remapVerdicts(u, doc) {
-    return doc.match({
+  remapVerdicts(unit, index) {
+    return this.match({
       unreadable: () => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: "sibling backend produced no findings document", method: null }),
       unavailable: (reason, method) => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: reason, method }),
-      readable: (method, findings, skipped) => this.#remapReadable(u, method, findings, skipped)
+      readable: (method, findings, skipped) => this.#remapReadable(unit, index, method, findings, skipped)
     });
   }
-  #remapReadable(u, method, docFindings, docSkipped) {
-    const mapTarget = (t) => this.#index.resolveDesignTarget(t);
-    const rewriteLabel = (label) => this.#index.rewriteLoweredIdTokens(label);
-    const remapDetail = (detail) => this.#index.rewriteLoweredIds(detail);
+  #remapReadable(u, index, method, docFindings, docSkipped) {
+    const mapTarget = (t) => index.resolveDesignTarget(t);
+    const rewriteLabel = (label) => index.rewriteLoweredIdTokens(label);
+    const remapDetail = (detail) => index.rewriteLoweredIds(detail);
     const findings = [];
     const skipped = [];
     const waived = new Set;
@@ -2365,10 +2872,10 @@ class LoweredUnit {
       const synth = mapped.find((m) => m.entry?.isSyntheticProbe());
       if (synth?.entry?.isKind("vac-dead") && f.isKind("conflict")) {
         const design = synth.entry.design().asString();
-        const isTransition = this.#index.isTransition(design);
+        const isTransition = index.isTransition(design);
         deadDesignIds.add(design);
-        findings.push(DesignFinding.reconstitute({
-          kind: "unreachable",
+        findings.push(DesignFinding.of({
+          kind: FindingKind.unreachable(),
           frRefs,
           targets: TargetIds.reconstitute([design]),
           witness,
@@ -2381,8 +2888,8 @@ class LoweredUnit {
         const pairRefs = synth.entry.pairRefs();
         const pair = [pairRefs[0].asString(), pairRefs[1].asString()];
         shadowFindings.push({
-          finding: DesignFinding.reconstitute({
-            kind: "redundancy",
+          finding: DesignFinding.of({
+            kind: FindingKind.redundancy(),
             frRefs,
             targets: TargetIds.reconstitute([pair[0], pair[1]]).sortedUniqueCanonically(),
             witness,
@@ -2398,15 +2905,15 @@ class LoweredUnit {
         continue;
       const targets = TargetIds.reconstitute(mapped.map((m) => m.design)).sortedUniqueCanonically().toStrings();
       if (f.isKind("conflict") && targets.length > 0) {
-        const machines = targets.map((t) => this.#index.machineOfTransition(t));
+        const machines = targets.map((t) => index.machineOfTransition(t));
         const first = machines[0];
         if (first !== null && first !== undefined && first.waivesOverlapOf(machines)) {
           for (const t of targets) {
             if (!waived.has(t)) {
               waived.add(t);
-              skipped.push(DesignSkipped.reconstitute({
+              skipped.push(DesignSkipped.of({
                 target: TargetId.reconstitute(t),
-                reason: "waived",
+                reason: SkipReason.waived(),
                 unit: u.name(),
                 detail: `machine ${first.id().asString()} declares deterministic: false \u2014 the same-(state,trigger) overlap check is waived by the model`
               }));
@@ -2458,170 +2965,6 @@ class LoweredUnit {
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped), unavailable: null, method };
   }
 }
-function buildLowering(u, opts) {
-  const map = new Map;
-  const scenarioMap = new Map;
-  const machineOfTransition = new Map;
-  const attrPathOfMachine = new Map;
-  const obligations = [];
-  let n = 0;
-  const nextId = () => {
-    n += 1;
-    return LoweredId.reconstitute(`OB-${n}`);
-  };
-  const push = (ob, entry) => {
-    const id = nextId();
-    obligations.push(LoweredObligation.reconstitute({ id, ...ob }));
-    map.set(id.asString(), entry);
-    return id;
-  };
-  const candidates = [];
-  for (const ob of u.obligations().sortedCanonically()) {
-    const lowered = {
-      nature: ob.nature().asString(),
-      frRefs: ob.frRefs()
-    };
-    const assertion = ob.assertion();
-    const trigger = ob.trigger();
-    const guard = ob.guard();
-    const effect = ob.effect();
-    const temporal = ob.temporal();
-    if (assertion !== undefined)
-      lowered.assert = assertion;
-    if (trigger !== undefined)
-      lowered.trigger = trigger.asString();
-    if (guard !== undefined)
-      lowered.guard = guard;
-    if (effect !== undefined)
-      lowered.effect = effect;
-    if (temporal !== undefined)
-      lowered.temporal = temporal;
-    const lowId = push(lowered, LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(ob.id().asString()), kind: "passthrough" }));
-    const event = ob.eventDefinition();
-    if (event !== null) {
-      candidates.push({ lowId, design: ob.id().asString(), trigger: event.trigger.asString(), guard: event.guard, effect: event.effect });
-    }
-  }
-  for (const sm of u.machines().sortedCanonically()) {
-    const attrPath = DesignMachines.attrPathOf(sm);
-    attrPathOfMachine.set(sm.id().asString(), attrPath);
-    for (const tr of sm.transitions().sortedCanonically()) {
-      const guard = tr.loweredGuard(attrPath);
-      const effect = tr.loweredEffect(attrPath);
-      const lowId = push({ nature: "event", frRefs: FrRefs.of([]), trigger: tr.trigger().asString(), guard, effect }, LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(tr.id().asString()), kind: "transition" }));
-      machineOfTransition.set(tr.id().asString(), sm);
-      candidates.push({ lowId, design: tr.id().asString(), trigger: tr.trigger().asString(), guard, effect });
-    }
-    const sortedIgnores = sm.ignores().sortedByStateTrigger();
-    for (const ig of sortedIgnores) {
-      push({ nature: "event", frRefs: FrRefs.of([]), trigger: ig.trigger().asString(), guard: ig.loweredGuard(attrPath), effect: ig.loweredEffect(attrPath) }, LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(sm.id().asString()), kind: "ignore" }));
-    }
-  }
-  if (opts.synthetics) {
-    for (const c of candidates) {
-      push({ nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }, LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(c.design), kind: "vac-dead" }));
-    }
-    const byTrigger = new Map;
-    for (const c of candidates) {
-      const list = byTrigger.get(c.trigger) ?? [];
-      list.push(c);
-      byTrigger.set(c.trigger, list);
-    }
-    for (const trigger of [...byTrigger.keys()].sort()) {
-      const list = byTrigger.get(trigger) ?? [];
-      for (const a of list) {
-        for (const b of list) {
-          if (a === b)
-            continue;
-          if (!ExpressionTree.of(a.effect).isCanonicallyEqual(ExpressionTree.of(b.effect)))
-            continue;
-          push({
-            nature: "invariant",
-            frRefs: FrRefs.of([]),
-            assert: {
-              op: "implies",
-              args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }]
-            }
-          }, LoweredOrigin.reconstitute({
-            design: LoweredOriginRef.reconstitute(`${a.design}|${b.design}`),
-            kind: "vac-shadow",
-            pair: [LoweredOriginRef.reconstitute(a.design), LoweredOriginRef.reconstitute(b.design)]
-          }));
-        }
-      }
-    }
-  }
-  const scenarios = [];
-  let scN = 0;
-  for (const sc of u.scenarios().sortedCanonically()) {
-    scN += 1;
-    const lowId = `SC-${scN}`;
-    scenarioMap.set(lowId, sc.id().asString());
-    const eventTrigger = sc.eventTrigger();
-    const expectation = sc.expectation();
-    scenarios.push(LoweredScenario.reconstitute({
-      id: LoweredId.reconstitute(lowId),
-      kind: sc.kind(),
-      frRefs: sc.frRefs(),
-      bindings: { ...sc.bindings() },
-      ...eventTrigger !== undefined ? { event: { trigger: eventTrigger.asString() } } : {},
-      ...expectation !== undefined ? { expect: expectation } : {}
-    }));
-  }
-  const background = [];
-  let bgN = 0;
-  for (const bg of u.background().sortedCanonically()) {
-    bgN += 1;
-    background.push(LoweredBackground.reconstitute({ id: LoweredId.reconstitute(`BG-${bgN}`), assert: bg.assertion() }));
-  }
-  return {
-    obligations: LoweredObligations.of(obligations),
-    scenarios: LoweredScenarios.of(scenarios),
-    background: LoweredBackgrounds.of(background),
-    index: LoweringIndex.of({
-      origins: KeyedIndex.of([...map].map(([id, origin]) => [LoweredId.reconstitute(id), origin])),
-      scenarioDesignIds: KeyedIndex.of([...scenarioMap].map(([id, dsc]) => [LoweredId.reconstitute(id), DesignScenarioId.reconstitute(dsc)])),
-      machinesByTransition: KeyedIndex.of([...machineOfTransition].map(([id, sm]) => [DesignTransitionId.reconstitute(id), sm])),
-      attrPathsByMachine: KeyedIndex.of([...attrPathOfMachine].map(([id, path]) => [DesignMachineId.reconstitute(id), AttributePath.reconstitute(path)]))
-    })
-  };
-}
-// src/design/domain/sibling-verdict-document.ts
-class SiblingVerdictDocument {
-  #kind;
-  #reason;
-  #method;
-  #findings;
-  #skipped;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#reason = props.reason;
-    this.#method = props.method === null ? null : VerificationMethod.reconstitute(props.method);
-    this.#findings = props.findings;
-    this.#skipped = props.skipped;
-  }
-  static unreadable() {
-    return new SiblingVerdictDocument({ kind: "unreadable", reason: null, method: null, findings: null, skipped: null });
-  }
-  static unavailable(reason, method) {
-    return new SiblingVerdictDocument({ kind: "unavailable", reason, method, findings: null, skipped: null });
-  }
-  static readable(method, findings, skipped) {
-    return new SiblingVerdictDocument({ kind: "readable", reason: null, method, findings, skipped });
-  }
-  unavailableReason() {
-    return this.#kind === "unavailable" ? this.#reason : null;
-  }
-  match(handlers) {
-    if (this.#kind === "unreadable")
-      return handlers.unreadable();
-    if (this.#kind === "unavailable")
-      return handlers.unavailable(this.#reason ?? "", this.#method?.asString() ?? null);
-    if (this.#findings === null || this.#skipped === null)
-      throw new Error("defect: a readable sibling document carries no verdicts");
-    return handlers.readable(this.#method?.asString() ?? null, this.#findings, this.#skipped);
-  }
-}
 // src/design/domain/sibling-verdict-finding.ts
 class SiblingVerdictFinding {
   #kind;
@@ -2643,7 +2986,8 @@ class SiblingVerdictFinding {
     return this.#kind.asString();
   }
   isKind(kind) {
-    return this.#kind.equals(FindingKind.reconstitute(kind));
+    const parsed = FindingKind.parse(kind);
+    return parsed.ok && this.#kind.equals(parsed.value);
   }
   frRefs() {
     return this.#frRefs;
@@ -2787,9 +3131,9 @@ class DesignReport {
       irHash,
       method,
       findings: DesignFindings.of([]),
-      skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.reconstitute({
+      skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.of({
         target: t,
-        reason: "ir-version-mismatch",
+        reason: SkipReason.irVersionMismatch(),
         unit: u.name(),
         detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`
       }))))
@@ -2802,7 +3146,7 @@ class DesignReport {
       irHash,
       method,
       findings: DesignFindings.of([]),
-      skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: skipDetail })))),
+      skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: skipDetail })))),
       unavailableReason: reason
     });
   }
@@ -2878,6 +3222,50 @@ class DesignReport {
   }
   skippedCount() {
     return this.#skipped.count();
+  }
+  toDocument() {
+    const ordered = {
+      backend: this.#id.backendName().asString(),
+      irVersion: this.#irVersion.asString(),
+      irHash: this.#irHash.asString(),
+      method: this.method()
+    };
+    const reason = this.#unavailableReason;
+    if (reason !== null)
+      ordered.unavailable = { reason };
+    const inputs = this.#inputs;
+    if (inputs !== null)
+      ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() }));
+    const checked = this.#checked;
+    if (checked !== null)
+      ordered.checked = checked.toStrings();
+    ordered.findings = this.#findings.toArray().map((f) => {
+      const out = {
+        kind: f.kind(),
+        frRefs: f.frRefs().toStrings(),
+        targets: f.targets().toStrings(),
+        witness: f.witness().toDocument(),
+        unit: f.unit(),
+        detail: f.detail()
+      };
+      return out;
+    });
+    ordered.skipped = this.#skipped.toArray().map((sk) => {
+      const out = { target: sk.target().asString(), reason: sk.reason(), unit: sk.unit() };
+      const detail = sk.detail();
+      if (detail !== undefined)
+        out.detail = detail;
+      return out;
+    });
+    const crossChecked = this.#crossChecked;
+    if (crossChecked !== null) {
+      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
+    }
+    return ordered;
+  }
+  conformedTo(schema) {
+    const reason = schema.degradationReasonFor(this.toDocument());
+    return reason === null ? this : this.degraded(reason);
   }
 }
 // src/design/domain/checked-units.ts
@@ -3041,8 +3429,8 @@ class DesignReports {
               const verdicts = {};
               verdicts[a.backend] = va ? "violated" : "clean";
               verdicts[b.backend] = vb ? "violated" : "clean";
-              findings.push(DesignFinding.reconstitute({
-                kind: "cross-check-disagreement",
+              findings.push(DesignFinding.of({
+                kind: FindingKind.crossCheckDisagreement(),
                 frRefs: FrRefs.of([...sc.frRefs()]).sortedUnique(),
                 targets: TargetIds.reconstitute([sc.id().asString()]),
                 witness: DesignWitness.verdicts(verdicts),
@@ -3064,6 +3452,72 @@ class DesignReports {
       skipped: DesignSkips.of([]),
       crossChecked: DesignCrossCheckedEntries.of(crossChecked)
     });
+  }
+}
+// src/design/domain/design-verify-directory.ts
+var CROSS_CHECK_BACKEND = "cross-check";
+
+class DesignVerifyDirectory {
+  #directory;
+  #reports;
+  #candidate;
+  #crossCheck;
+  constructor(directory, reports, candidate, crossCheck) {
+    this.#directory = directory;
+    this.#reports = reports;
+    this.#candidate = candidate;
+    this.#crossCheck = crossCheck;
+  }
+  static of(directory, reports, crossCheck) {
+    return new DesignVerifyDirectory(directory, reports, null, crossCheck);
+  }
+  finalizing(candidate) {
+    const fileName = candidate.id().fileName();
+    const merged = [];
+    let replaced = false;
+    for (const sibling of this.#reports.toArray()) {
+      if (sibling.id().fileName() === fileName) {
+        merged.push(candidate);
+        replaced = true;
+      } else {
+        merged.push(sibling);
+      }
+    }
+    if (!replaced) {
+      const at = merged.findIndex((s) => s.id().fileName() > fileName);
+      if (at < 0)
+        merged.push(candidate);
+      else
+        merged.splice(at, 0, candidate);
+    }
+    return new DesignVerifyDirectory(this.#directory, DesignReports.of(merged), candidate, null);
+  }
+  crossChecked(model, irHash) {
+    const derived = this.#reports.crossChecked(DesignReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
+    return new DesignVerifyDirectory(this.#directory, this.#reports, this.#candidate, derived);
+  }
+  withoutCrossCheck() {
+    return new DesignVerifyDirectory(this.#directory, this.#reports, this.#candidate, null);
+  }
+  conformedTo(schema) {
+    const candidate = this.#candidate;
+    const crossCheck = this.#crossCheck;
+    const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
+    const conformedCrossCheck = crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const reports = conformedCandidate === null ? this.#reports : DesignReports.of(this.#reports.toArray().map((r) => r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
+    return new DesignVerifyDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
+  }
+  directory() {
+    return this.#directory;
+  }
+  reports() {
+    return this.#reports;
+  }
+  candidate() {
+    return this.#candidate;
+  }
+  crossCheck() {
+    return this.#crossCheck;
   }
 }
 // src/design/domain/binding-pairs.ts
@@ -4018,398 +4472,7 @@ class DesignIrValidationMaterialsId {
     return this.#model;
   }
 }
-// src/design/adapter/design-entities-parser.ts
-function parseDesignEntities(schema) {
-  const entities = [];
-  for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
-    if (!isObject(ent) || typeof ent.name !== "string")
-      continue;
-    const attributes = [];
-    for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
-      if (!isObject(attr) || typeof attr.name !== "string")
-        continue;
-      const t = isObject(attr.type) ? attr.type : {};
-      attributes.push(DesignAttributeDecl.reconstitute({
-        name: DesignAttributeName.reconstitute(attr.name),
-        kind: typeof t.kind === "string" ? t.kind : "",
-        ...typeof attr.description === "string" ? { description: attr.description } : {},
-        ...Array.isArray(t.values) ? { values: DeclaredValues.of(t.values.filter((v) => typeof v === "string")) } : {},
-        ...typeof t.min === "number" ? { min: AttributeBound.reconstitute(t.min) } : {},
-        ...typeof t.max === "number" ? { max: AttributeBound.reconstitute(t.max) } : {}
-      }));
-    }
-    entities.push(DesignEntityDecl.reconstitute({
-      name: DesignEntityName.reconstitute(ent.name),
-      ...typeof ent.description === "string" ? { description: ent.description } : {},
-      attributes: DesignAttributeDecls.of(attributes)
-    }));
-  }
-  return DesignEntityDecls.of(entities);
-}
-function renderDesignEntities(entities) {
-  return entities.toArray().map((ent) => {
-    const out = { name: ent.name().asString() };
-    const description = ent.description();
-    if (description !== undefined)
-      out.description = description;
-    out.attributes = ent.attributes().toArray().map((attr) => {
-      const a = { name: attr.name().asString() };
-      const attrDescription = attr.description();
-      if (attrDescription !== undefined)
-        a.description = attrDescription;
-      const type = { kind: attr.kindLabel() };
-      const min = attr.minBound();
-      if (min !== undefined)
-        type.min = min.asNumber();
-      const max = attr.maxBound();
-      if (max !== undefined)
-        type.max = max.asNumber();
-      const values = attr.enumStates();
-      if (values !== null)
-        type.values = [...values.toArray()];
-      a.type = type;
-      return a;
-    });
-    return out;
-  });
-}
-// src/design/adapter/lowered-document-serializer.ts
-function renderLoweredDocument(u, low) {
-  const obligations = low.obligations().toArray().map((ob) => {
-    const out = {
-      id: ob.id().asString(),
-      nature: ob.nature(),
-      frRefs: ob.frRefs().toStrings()
-    };
-    const assertion = ob.assertion();
-    if (assertion)
-      out.assert = assertion;
-    const trigger = ob.trigger();
-    if (trigger !== undefined)
-      out.trigger = trigger;
-    const guard = ob.guard();
-    if (guard)
-      out.guard = guard;
-    const effect = ob.effect();
-    if (effect)
-      out.effect = effect;
-    const temporal = ob.temporal();
-    if (temporal)
-      out.temporal = temporal;
-    return out;
-  });
-  const scenarios = low.scenarios().toArray().map((sc) => {
-    const out = {
-      id: sc.id().asString(),
-      kind: sc.kind(),
-      frRefs: sc.frRefs().toStrings(),
-      bindings: sc.bindings()
-    };
-    const event = sc.event();
-    if (event)
-      out.event = event;
-    const expectation = sc.expectation();
-    if (expectation)
-      out.expect = expectation;
-    return out;
-  });
-  const background = low.background().toArray().map((bg) => ({ id: bg.id().asString(), assert: bg.assertion() }));
-  return {
-    irVersion: "1.0.0",
-    schema: { entities: renderDesignEntities(u.entities()) },
-    obligations,
-    scenarios,
-    background
-  };
-}
-// src/design/adapter/sibling-backend-client-impl.ts
-import { spawnSync } from "child_process";
-import { mkdtempSync, readFileSync as readFileSync3, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
-import { tmpdir } from "os";
-import { join as join3 } from "path";
-
-// src/design/adapter/sibling-document-parser.ts
-function parseSiblingVerdictDocument(raw) {
-  if (!isObject(raw))
-    return SiblingVerdictDocument.unreadable();
-  if (isObject(raw.unavailable) && typeof raw.unavailable.reason === "string") {
-    return SiblingVerdictDocument.unavailable(raw.unavailable.reason, typeof raw.method === "string" ? raw.method : null);
-  }
-  const findings = [];
-  for (const f of Array.isArray(raw.findings) ? raw.findings : []) {
-    if (!isObject(f) || typeof f.kind !== "string" || !Array.isArray(f.targets))
-      continue;
-    findings.push(SiblingVerdictFinding.reconstitute({
-      kind: f.kind,
-      frRefs: FrRefs.reconstitute(strArr(f.frRefs)),
-      targets: f.targets.filter((t) => typeof t === "string").map((t) => LoweredId.reconstitute(t)),
-      witness: DesignWitness.fromDocument(f.witness ?? null),
-      detail: typeof f.detail === "string" ? f.detail : ""
-    }));
-  }
-  const skipped = [];
-  for (const s of Array.isArray(raw.skipped) ? raw.skipped : []) {
-    if (!isObject(s) || typeof s.target !== "string" || typeof s.reason !== "string")
-      continue;
-    skipped.push(SiblingVerdictSkip.reconstitute({
-      target: LoweredId.reconstitute(s.target),
-      reason: s.reason,
-      ...typeof s.detail === "string" ? { detail: s.detail } : {}
-    }));
-  }
-  return SiblingVerdictDocument.readable(typeof raw.method === "string" ? raw.method : null, SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
-}
-
-// src/design/adapter/reachability-variant.ts
-function reachabilityVariant(base, attrPath, state) {
-  if (!isObject(base))
-    return base;
-  const obligations = Array.isArray(base.obligations) ? base.obligations : [];
-  const events = obligations.filter((ob) => isObject(ob) && ob.nature === "event");
-  const probe = {
-    id: "OB-9999",
-    nature: "invariant",
-    frRefs: [],
-    assert: { op: "ne", args: [{ op: "ref", path: attrPath }, { op: "enum", value: state }] }
-  };
-  return {
-    irVersion: base.irVersion ?? "1.0.0",
-    schema: base.schema ?? { entities: [] },
-    obligations: [...events, probe],
-    scenarios: [],
-    background: Array.isArray(base.background) ? base.background : []
-  };
-}
-function probeReached(doc, attrPath, state) {
-  if (!isObject(doc) || !Array.isArray(doc.findings))
-    return false;
-  for (const f of doc.findings) {
-    if (!isObject(f) || f.kind !== "conflict")
-      continue;
-    const witness = isObject(f.witness) ? f.witness : {};
-    const trace = Array.isArray(witness.trace) ? witness.trace : null;
-    if (trace === null)
-      return true;
-    const last = trace[trace.length - 1];
-    if (isObject(last) && last[attrPath] === state)
-      return true;
-  }
-  return false;
-}
-
-// src/design/adapter/sibling-backend-client-impl.ts
-class SiblingBackendClientImpl {
-  #config;
-  constructor(config) {
-    this.#config = config;
-  }
-  runLowered(backend, unit, lowered, wallTimeoutMs) {
-    const run = this.#spawn(backend, renderLoweredDocument(unit, lowered), wallTimeoutMs);
-    return {
-      exit: run.exit,
-      doc: run.doc === null ? null : parseSiblingVerdictDocument(run.doc),
-      note: run.note
-    };
-  }
-  probeState(unit, lowered, attrPath, state, wallTimeoutMs) {
-    const variant = reachabilityVariant(renderLoweredDocument(unit, lowered), attrPath, state);
-    const run = this.#spawn("quint", variant, wallTimeoutMs);
-    if (run.exit !== 0 || run.doc === null || isObject(run.doc) && isObject(run.doc.unavailable)) {
-      return { kind: "failed" };
-    }
-    return { kind: "probed", reached: probeReached(run.doc, attrPath, state) };
-  }
-  #spawn(backend, loweredDoc, wallTimeoutMs) {
-    const tool = this.#config.siblingToolPaths[backend];
-    const work = mkdtempSync(join3(tmpdir(), "deep-spec-design-lower-"));
-    try {
-      const modelPath = join3(work, "deep-spec-analysis-formal-model.md");
-      writeFileSync2(modelPath, `# Lowered design unit
-
-\`\`\`json
-${JSON.stringify(loweredDoc, null, 2)}
-\`\`\`
-`, "utf-8");
-      const res = spawnSync("bun", [tool, "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath], {
-        encoding: "utf-8",
-        timeout: wallTimeoutMs,
-        cwd: this.#config.workingDirectory,
-        ...this.#config.spawnEnvironment ? { env: this.#config.spawnEnvironment } : {}
-      });
-      const findingsPath = join3(work, "deep-spec-verify", `${backend}.json`);
-      let doc = null;
-      try {
-        doc = JSON.parse(readFileSync3(findingsPath, "utf-8"));
-      } catch {
-        doc = null;
-      }
-      const note = res.error ? String(res.error) : (res.stdout ?? "").trim().split(`
-`).pop() ?? "";
-      return { exit: res.status, doc, note };
-    } finally {
-      rmSync2(work, { recursive: true, force: true });
-    }
-  }
-}
-// src/design/adapter/design-report-serializer.ts
-function orderedDocument(report) {
-  const ordered = {
-    backend: report.id().backendName().asString(),
-    irVersion: report.irVersion().asString(),
-    irHash: report.irHash().asString(),
-    method: report.method()
-  };
-  const reason = report.unavailableReason();
-  if (reason !== null)
-    ordered.unavailable = { reason };
-  const inputs = report.inputs();
-  if (inputs !== null)
-    ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() }));
-  const checked = report.checked();
-  if (checked !== null)
-    ordered.checked = checked.toStrings();
-  ordered.findings = report.findings().toArray().map((f) => {
-    const out = {
-      kind: f.kind(),
-      frRefs: f.frRefs().toStrings(),
-      targets: f.targets().toStrings(),
-      witness: f.witness().toDocument(),
-      unit: f.unit(),
-      detail: f.detail()
-    };
-    return out;
-  });
-  ordered.skipped = report.skipped().toArray().map((sk) => {
-    const out = { target: sk.target().asString(), reason: sk.reason(), unit: sk.unit() };
-    const detail = sk.detail();
-    if (detail !== undefined)
-      out.detail = detail;
-    return out;
-  });
-  const crossChecked = report.crossChecked();
-  if (crossChecked !== null) {
-    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
-  }
-  return ordered;
-}
-function renderDesignReportBytes(report) {
-  return `${JSON.stringify(orderedDocument(report), null, 2)}
-`;
-}
-function conformDesignReport(report, findingsSchema) {
-  if (!findingsSchema.ok) {
-    return report.degraded(`findings schema unreadable: ${findingsSchema.error.cause}`);
-  }
-  const errors = [];
-  validateSchema(findingsSchema.value, findingsSchema.value, orderedDocument(report), "", errors);
-  if (errors.length > 0) {
-    return report.degraded(`self-validation against deep-spec-findings-schema.json failed: ${errors[0]}`);
-  }
-  return report;
-}
-function parseSiblingDesignReportDocument(directory, fileName, raw) {
-  if (!isObject(raw))
-    return null;
-  const backend = typeof raw.backend === "string" ? raw.backend : fileName.replace(/\.json$/, "");
-  const skipped = (Array.isArray(raw.skipped) ? raw.skipped : []).filter((s) => isObject(s) && typeof s.target === "string");
-  return DesignReport.reconstitute({
-    id: DesignReportId.of(directory, backend),
-    irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
-    irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
-    method: typeof raw.method === "string" ? raw.method : "",
-    findings: DesignFindings.of((Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []).map((e) => {
-      const entry = e;
-      return DesignFinding.reconstitute({
-        kind: typeof entry.kind === "string" ? entry.kind : "",
-        frRefs: FrRefs.reconstitute(Array.isArray(entry.frRefs) ? entry.frRefs.filter((x) => typeof x === "string") : []),
-        targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? entry.targets.filter((x) => typeof x === "string") : []),
-        witness: DesignWitness.fromDocument(entry.witness ?? null),
-        unit: typeof entry.unit === "string" ? entry.unit : "",
-        detail: typeof entry.detail === "string" ? entry.detail : ""
-      });
-    })),
-    skipped: DesignSkips.of(skipped.map((entry) => {
-      return DesignSkipped.reconstitute({
-        target: TargetId.reconstitute(typeof entry.target === "string" ? entry.target : ""),
-        reason: typeof entry.reason === "string" ? entry.reason : "",
-        unit: typeof entry.unit === "string" ? entry.unit : "",
-        ...typeof entry.detail === "string" ? { detail: entry.detail } : {}
-      });
-    })),
-    inputs: Array.isArray(raw.inputs) ? DesignInputAnchors.of(raw.inputs.map((e) => {
-      const entry = isObject(e) ? e : {};
-      return DesignInputAnchor.reconstitute({
-        artifact: typeof entry.artifact === "string" ? entry.artifact : "",
-        sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : "")
-      });
-    })) : null,
-    checked: Array.isArray(raw.checked) ? CheckedUnits.reconstitute(raw.checked.filter((c) => typeof c === "string")) : null,
-    crossChecked: Array.isArray(raw.crossChecked) ? DesignCrossCheckedEntries.of(raw.crossChecked.filter(isObject).map((e) => DesignCrossCheckedEntry.reconstitute({
-      backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
-      targets: TargetIds.reconstitute(Array.isArray(e.targets) ? e.targets.filter((t) => typeof t === "string") : [])
-    }))) : null,
-    unavailableReason: isObject(raw.unavailable) ? typeof raw.unavailable.reason === "string" ? raw.unavailable.reason : "" : null
-  });
-}
-// src/design/adapter/design-report-repository-impl.ts
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, writeFileSync as writeFileSync3 } from "fs";
-import { join as join4 } from "path";
-class DesignReportRepositoryImpl {
-  #findingsSchemaPath;
-  constructor(findingsSchemaPath) {
-    this.#findingsSchemaPath = findingsSchemaPath;
-  }
-  findById(aggregateId) {
-    const path = join4(aggregateId.directory().asString(), aggregateId.fileName());
-    if (!existsSync3(path)) {
-      return err({ kind: "not-found", path });
-    }
-    let raw;
-    try {
-      raw = JSON.parse(readFileSync4(path, "utf-8"));
-    } catch (e) {
-      return err({ kind: "corrupt", path, cause: e instanceof Error ? e.message : String(e) });
-    }
-    const report = parseSiblingDesignReportDocument(aggregateId.directory(), aggregateId.fileName(), raw);
-    if (report === null) {
-      return err({ kind: "corrupt", path, cause: "document is not a JSON object" });
-    }
-    return ok(report);
-  }
-  findAllByDirectory(directory) {
-    let entries;
-    try {
-      entries = readdirSync(directory.asString()).filter((f) => f.endsWith(".json") && f !== "cross-check.json").sort();
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: directory.asString(), cause: e instanceof Error ? e.message : String(e) });
-    }
-    const reports = [];
-    for (const file of entries) {
-      try {
-        const raw = JSON.parse(readFileSync4(join4(directory.asString(), file), "utf-8"));
-        const report = parseSiblingDesignReportDocument(directory, file, raw);
-        if (report !== null)
-          reports.push(report);
-      } catch {}
-    }
-    return ok(DesignReports.of(reports));
-  }
-  conformedOf(report) {
-    return conformDesignReport(report, readContractSchema(this.#findingsSchemaPath));
-  }
-  store(report) {
-    const conformed = this.conformedOf(report);
-    const path = join4(conformed.id().directory().asString(), conformed.id().fileName());
-    try {
-      mkdirSync2(conformed.id().directory().asString(), { recursive: true });
-      writeFileSync3(path, renderDesignReportBytes(conformed), "utf-8");
-      return ok(undefined);
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
-    }
-  }
-}
-// src/refinement/domain/refinement-requirements.ts
+// src/design/domain/refinement-requirements.ts
 class RefinementRequirements {
   #id;
   #hash;
@@ -4454,7 +4517,7 @@ class RefinementRequirements {
     return this.#obligations.byId(id)?.frRefs() ?? this.#scenarios.byId(id)?.frRefs() ?? FrRefs.of([]);
   }
 }
-// src/refinement/domain/refinement-attribute.ts
+// src/design/domain/refinement-attribute.ts
 class RefinementAttribute {
   #path;
   #kind;
@@ -4483,7 +4546,7 @@ class RefinementAttribute {
     return this.#values;
   }
 }
-// src/refinement/domain/refinement-attributes.ts
+// src/design/domain/refinement-attributes.ts
 class RefinementAttributes {
   #values;
   constructor(values) {
@@ -4518,7 +4581,7 @@ class RefinementAttributes {
     return this.#values;
   }
 }
-// src/refinement/domain/refinement-obligation.ts
+// src/design/domain/refinement-obligation.ts
 class RefinementObligation {
   #id;
   #nature;
@@ -4575,7 +4638,7 @@ class RefinementObligation {
     return { trigger: this.#trigger, guard: this.#guard, effect: this.#effect };
   }
 }
-// src/refinement/domain/refinement-obligations.ts
+// src/design/domain/refinement-obligations.ts
 class RefinementObligations {
   #values;
   constructor(values) {
@@ -4605,7 +4668,7 @@ class RefinementObligations {
     return this.#values;
   }
 }
-// src/refinement/domain/refinement-scenario.ts
+// src/design/domain/refinement-scenario.ts
 class RefinementScenario {
   #id;
   #kind;
@@ -4650,7 +4713,7 @@ class RefinementScenario {
     return Object.entries(this.#bindings).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
   }
 }
-// src/refinement/domain/refinement-scenarios.ts
+// src/design/domain/refinement-scenarios.ts
 class RefinementScenarios {
   #values;
   constructor(values) {
@@ -4677,7 +4740,7 @@ class RefinementScenarios {
     return this.#values;
   }
 }
-// src/refinement/domain/req-attribute-values.ts
+// src/design/domain/req-attribute-values.ts
 class ReqAttributeValues {
   #values;
   constructor(values) {
@@ -4702,7 +4765,7 @@ class ReqAttributeValues {
     return this.#values;
   }
 }
-// src/refinement/domain/refinement-map.ts
+// src/design/domain/refinement-map.ts
 class RefinementMap {
   #id;
   #requirementsIrHash;
@@ -5243,14 +5306,17 @@ class VerificationFinding {
   #witness;
   #detail;
   constructor(props) {
-    this.#kind = FindingKind.reconstitute(props.kind);
+    this.#kind = props.kind;
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#detail = props.detail;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new VerificationFinding(props);
+  }
+  static reconstitute(props) {
+    return new VerificationFinding({ ...props, kind: FindingKind.reconstitute(props.kind) });
   }
   kind() {
     return this.#kind.asString();
@@ -5268,7 +5334,8 @@ class VerificationFinding {
     return this.#detail;
   }
   isKind(kind) {
-    return this.#kind.equals(FindingKind.reconstitute(kind));
+    const parsed = FindingKind.parse(kind);
+    return parsed.ok && this.#kind.equals(parsed.value);
   }
   implicates(target) {
     return this.#targets.includes(target);
@@ -5577,6 +5644,43 @@ class VerificationReport {
   skippedCount() {
     return this.#skipped.count();
   }
+  toDocument() {
+    const ordered = {
+      backend: this.#id.backendName().asString(),
+      irVersion: this.#irVersion.asString(),
+      irHash: this.#irHash.asString(),
+      method: this.method()
+    };
+    const reason = this.#unavailableReason;
+    if (reason !== null)
+      ordered.unavailable = { reason };
+    ordered.findings = this.#findings.toArray().map((f) => {
+      const out = {
+        kind: f.kind(),
+        frRefs: f.frRefs().toStrings(),
+        targets: f.targets().toStrings(),
+        witness: f.witness().toDocument(),
+        detail: f.detail()
+      };
+      return out;
+    });
+    ordered.skipped = this.#skipped.toArray().map((sk) => {
+      const out = { target: sk.target().asString(), reason: sk.reason() };
+      const detail = sk.detail();
+      if (detail !== undefined)
+        out.detail = detail;
+      return out;
+    });
+    const crossChecked = this.#crossChecked;
+    if (crossChecked !== null) {
+      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
+    }
+    return ordered;
+  }
+  conformedTo(schema) {
+    const reason = schema.degradationReasonFor(this.toDocument());
+    return reason === null ? this : this.degraded(reason);
+  }
 }
 // src/requirements/domain/cross-checked-entries.ts
 class CrossCheckedEntries {
@@ -5664,8 +5768,8 @@ class VerificationReports {
             const verdicts = {};
             verdicts[a.backend] = va ? "violated" : "clean";
             verdicts[b.backend] = vb ? "violated" : "clean";
-            findings.push(VerificationFinding.reconstitute({
-              kind: "cross-check-disagreement",
+            findings.push(VerificationFinding.of({
+              kind: FindingKind.crossCheckDisagreement(),
               frRefs: FrRefs.of([...scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? []]).sortedUnique(),
               targets: TargetIds.of([sc.id().asTargetId()]),
               witness: VerificationWitness.verdicts(verdicts),
@@ -5685,6 +5789,72 @@ class VerificationReports {
       skipped: VerificationSkips.of([]),
       crossChecked: CrossCheckedEntries.of(crossChecked)
     });
+  }
+}
+// src/requirements/domain/verification-directory.ts
+var CROSS_CHECK_BACKEND2 = "cross-check";
+
+class VerificationDirectory {
+  #directory;
+  #reports;
+  #candidate;
+  #crossCheck;
+  constructor(directory, reports, candidate, crossCheck) {
+    this.#directory = directory;
+    this.#reports = reports;
+    this.#candidate = candidate;
+    this.#crossCheck = crossCheck;
+  }
+  static of(directory, reports, crossCheck) {
+    return new VerificationDirectory(directory, reports, null, crossCheck);
+  }
+  finalizing(candidate) {
+    const fileName = candidate.id().fileName();
+    const merged = [];
+    let replaced = false;
+    for (const sibling of this.#reports.toArray()) {
+      if (sibling.id().fileName() === fileName) {
+        merged.push(candidate);
+        replaced = true;
+      } else {
+        merged.push(sibling);
+      }
+    }
+    if (!replaced) {
+      const at = merged.findIndex((s) => s.id().fileName() > fileName);
+      if (at < 0)
+        merged.push(candidate);
+      else
+        merged.splice(at, 0, candidate);
+    }
+    return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, null);
+  }
+  crossChecked(model, irHash) {
+    const derived = this.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND2), model, irHash);
+    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, derived);
+  }
+  withoutCrossCheck() {
+    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, null);
+  }
+  conformedTo(schema) {
+    const candidate = this.#candidate;
+    const crossCheck = this.#crossCheck;
+    const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
+    const conformedCrossCheck = crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const reports = conformedCandidate === null ? this.#reports : VerificationReports.of(this.#reports.toArray().map((r) => r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
+    return new VerificationDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
+  }
+  directory() {
+    return this.#directory;
+  }
+  reports() {
+    return this.#reports;
+  }
+  candidate() {
+    return this.#candidate;
+  }
+  crossCheck() {
+    return this.#crossCheck;
   }
 }
 // src/requirements/domain/smt-query-verdict.ts
@@ -5778,8 +5948,8 @@ class SmtVerificationPlan {
       if (conflictKeys.has(key))
         return;
       conflictKeys.add(key);
-      findings.push(VerificationFinding.reconstitute({
-        kind: "conflict",
+      findings.push(VerificationFinding.of({
+        kind: FindingKind.conflict(),
         frRefs: model.frRefsOf(effective),
         targets: effective,
         witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
@@ -5829,8 +5999,8 @@ class SmtVerificationPlan {
       if (!r)
         continue;
       if (r.isSat()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "completeness-gap",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.completenessGap(),
           frRefs: model.frRefsOf(eventIds),
           targets: eventIds,
           witness: VerificationWitness.model(r.witnessModel()),
@@ -5853,8 +6023,8 @@ class SmtVerificationPlan {
       }
       if (sc.isAccept() && r.isUnsat()) {
         const targets = TargetIds.of([sc.id().asTargetId(), ...coreToTargets([...r.coreLabels()])]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(targets),
           targets,
           witness: VerificationWitness.core(r.sortedCore()),
@@ -5862,8 +6032,8 @@ class SmtVerificationPlan {
         }));
       }
       if (sc.isReject() && r.isSat()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(TargetIds.of([sc.id().asTargetId()])),
           targets: TargetIds.of([sc.id().asTargetId()]),
           witness: VerificationWitness.model(r.witnessModel()),
@@ -6050,8 +6220,8 @@ class QuintMachinePlan {
     if (machineRun !== null) {
       skipped.push(...machineRun.skipsFor(machineTargets, bounded));
       if (machineRun.isDeadlock()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "completeness-gap",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.completenessGap(),
           frRefs: model.frRefsOf(eventTargets),
           targets: this.#eventIds.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
           witness: machineRun.witness(),
@@ -6060,8 +6230,8 @@ class QuintMachinePlan {
       } else if (machineRun.isViolation()) {
         const violatedComponents = this.#invariantComponents.violatedBy(machineRun.finalState());
         const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
-        findings.push(VerificationFinding.reconstitute({
-          kind: "conflict",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.conflict(),
           frRefs: model.frRefsOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
           targets,
           witness: machineRun.witness(),
@@ -6096,8 +6266,8 @@ class QuintMachinePlan {
       if (skip !== null) {
         skipped.push(skip);
       } else if (r.isViolation()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "conflict",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.conflict(),
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: r.witness(),
@@ -6141,8 +6311,8 @@ class QuintMachinePlan {
       if (sc.isAccept() && r.isViolated()) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
         const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(targets),
           targets,
           witness: VerificationWitness.model(boundModel),
@@ -6150,8 +6320,8 @@ class QuintMachinePlan {
         }));
       }
       if (sc.isReject() && !r.isViolated()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: VerificationWitness.model(boundModel),
@@ -7057,7 +7227,7 @@ class RequirementsSource {
     return new Uint8Array(this.#sourceDocument);
   }
 }
-// src/refinement/domain/refinement-map-defect.ts
+// src/design/domain/refinement-map-defect.ts
 class RefinementMapDefect {
   #kind;
   #reqPath;
@@ -7091,11 +7261,11 @@ class RefinementMapDefect {
     }
   }
   asCompileErrorSkip(target, unit) {
-    return DesignSkipped.reconstitute({ target, reason: "compile-error", unit, detail: `alpha substitution failed: ${this.message()}` });
+    return DesignSkipped.of({ target, reason: SkipReason.compileError(), unit, detail: `alpha substitution failed: ${this.message()}` });
   }
 }
 
-// src/refinement/domain/attribute-mapping.ts
+// src/design/domain/attribute-mapping.ts
 function primeAll(e) {
   if (e.op === "ref")
     return { ...e, prime: true };
@@ -7192,7 +7362,7 @@ class AttributeMapping {
     return ExpressionTree.of(variant.expr).referencedPaths();
   }
 }
-// src/refinement/domain/attribute-mappings.ts
+// src/design/domain/attribute-mappings.ts
 class AttributeMappings {
   #values;
   constructor(values) {
@@ -7254,7 +7424,7 @@ class AttributeMappings {
     return this.#values;
   }
 }
-// src/refinement/domain/event-mapping.ts
+// src/design/domain/event-mapping.ts
 class EventMapping {
   #reqTrigger;
   #transitions;
@@ -7277,7 +7447,7 @@ class EventMapping {
     return this.#transitions;
   }
 }
-// src/refinement/domain/event-mappings.ts
+// src/design/domain/event-mappings.ts
 class EventMappings {
   #values;
   constructor(values) {
@@ -7304,7 +7474,7 @@ class EventMappings {
     return this.#values;
   }
 }
-// src/refinement/domain/refinement-unit-map.ts
+// src/design/domain/refinement-unit-map.ts
 class RefinementUnitMap {
   #unit;
   #attrMap;
@@ -7335,7 +7505,7 @@ class RefinementUnitMap {
     return this.#unmapped;
   }
 }
-// src/refinement/domain/refinement-unit-maps.ts
+// src/design/domain/refinement-unit-maps.ts
 class RefinementUnitMaps {
   #values;
   constructor(values) {
@@ -7357,7 +7527,7 @@ class RefinementUnitMaps {
     return this.#values;
   }
 }
-// src/refinement/domain/transition-ref.ts
+// src/design/domain/transition-ref.ts
 class TransitionRef {
   #value;
   constructor(value) {
@@ -7381,7 +7551,7 @@ class TransitionRef {
     return this.#value;
   }
 }
-// src/refinement/domain/transition-refs.ts
+// src/design/domain/transition-refs.ts
 class TransitionRefs {
   #values;
   constructor(values) {
@@ -7409,7 +7579,7 @@ class TransitionRefs {
     return this.#values;
   }
 }
-// src/refinement/domain/unmapped-declarations.ts
+// src/design/domain/unmapped-declarations.ts
 function tokenOf(carrier) {
   return typeof carrier === "string" ? carrier : carrier.asString();
 }
@@ -7448,7 +7618,7 @@ class UnmappedDeclarations {
     return this.#values;
   }
 }
-// src/refinement/domain/unmapped-target-ref.ts
+// src/design/domain/unmapped-target-ref.ts
 class UnmappedTargetRef {
   #value;
   constructor(value) {
@@ -7469,7 +7639,7 @@ class UnmappedTargetRef {
     return this.#value;
   }
 }
-// src/refinement/domain/unmapped-target.ts
+// src/design/domain/unmapped-target.ts
 class UnmappedTarget {
   #target;
   #reason;
@@ -7487,7 +7657,7 @@ class UnmappedTarget {
     return this.#reason;
   }
 }
-// src/refinement/domain/refinement-quint-invariants.ts
+// src/design/domain/refinement-quint-invariants.ts
 class RefinementQuintInvariants {
   #values;
   constructor(values) {
@@ -7513,7 +7683,7 @@ class RefinementQuintInvariants {
   }
 }
 
-// src/refinement/domain/refinement-quint-invariant.ts
+// src/design/domain/refinement-quint-invariant.ts
 class RefinementQuintInvariant {
   #reqId;
   #frRefs;
@@ -7537,7 +7707,7 @@ class RefinementQuintInvariant {
   }
 }
 
-// src/refinement/domain/refinement-status.ts
+// src/design/domain/refinement-status.ts
 class RefinementStatus {
   #kind;
   #text;
@@ -7565,14 +7735,14 @@ class RefinementStatus {
   }
   skipFor(target, unit) {
     if (this.#kind === "waived")
-      return DesignSkipped.reconstitute({ target, reason: "waived", unit, detail: this.#text });
+      return DesignSkipped.of({ target, reason: SkipReason.waived(), unit, detail: this.#text });
     if (this.#kind === "capability")
-      return DesignSkipped.reconstitute({ target, reason: "capability", unit, detail: this.#text });
+      return DesignSkipped.of({ target, reason: SkipReason.capability(), unit, detail: this.#text });
     return null;
   }
 }
 
-// src/refinement/domain/unit-refinement-plan.ts
+// src/design/domain/unit-refinement-plan.ts
 function exprRefs(e, out) {
   if (e.op === "ref" && typeof e.path === "string")
     out.add(e.path);
@@ -7596,8 +7766,8 @@ class UnitRefinementPlan {
   static of(u, unitMap, req, mapArtifact) {
     const gaps = [];
     const gap = (targets, detail, frRefs = FrRefs.of([])) => {
-      gaps.push(DesignFinding.reconstitute({
-        kind: "mapping-gap",
+      gaps.push(DesignFinding.of({
+        kind: FindingKind.mappingGap(),
         frRefs: frRefs.sortedUnique(),
         targets: TargetIds.reconstitute(targets).sortedUniqueCanonically(),
         witness: DesignWitness.refs([{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }]),
@@ -7801,7 +7971,7 @@ class UnitRefinementPlan {
       else if (st.isCheckable()) {
         const ob = req.obligationById(rid);
         if (ob !== undefined && ob.isEvent()) {
-          skipped.push(DesignSkipped.reconstitute({ target: TargetId.reconstitute(rid), reason: "capability", unit: unitName, detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" }));
+          skipped.push(DesignSkipped.of({ target: TargetId.reconstitute(rid), reason: SkipReason.capability(), unit: unitName, detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" }));
         } else if (ob !== undefined && ob.isInvariantLike()) {
           const assertion = ob.assertion();
           if (assertion === undefined)
@@ -7817,7 +7987,7 @@ class UnitRefinementPlan {
       if (s !== null)
         skipped.push(s);
       else if (st.isCheckable()) {
-        skipped.push(DesignSkipped.reconstitute({ target: TargetId.reconstitute(rid), reason: "capability", unit: unitName, detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)" }));
+        skipped.push(DesignSkipped.of({ target: TargetId.reconstitute(rid), reason: SkipReason.capability(), unit: unitName, detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)" }));
       }
     }
     return DesignSkips.of(skipped);
@@ -7837,7 +8007,7 @@ class UnitRefinementPlan {
     return RefinementQuintInvariants.of(out);
   }
 }
-// src/refinement/domain/effect-assignments.ts
+// src/design/domain/effect-assignments.ts
 class EffectAssignments {
   #values;
   constructor(values) {
@@ -7872,7 +8042,7 @@ class EffectAssignments {
     yield* this.#values;
   }
 }
-// src/refinement/domain/design-assignments.ts
+// src/design/domain/design-assignments.ts
 class DesignAssignments {
   #values;
   constructor(values) {
@@ -7886,7 +8056,7 @@ class DesignAssignments {
   }
 }
 
-// src/refinement/domain/design-event.ts
+// src/design/domain/design-event.ts
 class DesignEvent {
   #guard;
   #effectAssign;
@@ -7905,7 +8075,7 @@ class DesignEvent {
   }
 }
 
-// src/refinement/domain/design-event-catalog.ts
+// src/design/domain/design-event-catalog.ts
 function rhsOf(term) {
   const [a, b] = term.args ?? [];
   return a?.op === "ref" && a.prime === true ? b : a;
@@ -7960,7 +8130,7 @@ class DesignEventCatalog {
     return this.#events.get(id) ?? null;
   }
 }
-// src/refinement/domain/refinement-solver-plan.ts
+// src/design/domain/refinement-solver-plan.ts
 class RefinementSolverPlan {
   #pending;
   #compileSkips;
@@ -7984,14 +8154,19 @@ class RefinementSolverPlan {
     for (const [queryId, p] of this.#pending) {
       const r = results.verdictOf(queryId);
       if (!r || r.isUndecided()) {
-        skipped.push(DesignSkipped.reconstitute({ target: p.reqTarget(), reason: "timeout", unit: unitName, detail: `refinement query ${queryId.asString()} exceeded the solver budget or errored` }));
+        skipped.push(DesignSkipped.of({
+          target: p.reqTarget(),
+          reason: SkipReason.timeout(),
+          unit: unitName,
+          detail: `refinement query ${queryId.asString()} exceeded the solver budget or errored`
+        }));
         continue;
       }
       p.match({
         invariant: (reqId) => {
           if (r.isSat()) {
-            findings.push(DesignFinding.reconstitute({
-              kind: "refinement-violation",
+            findings.push(DesignFinding.of({
+              kind: FindingKind.refinementViolation(),
               frRefs: frOf(reqId.asString()),
               targets: TargetIds.reconstitute([reqId.asString()]),
               witness: DesignWitness.model(r.witnessModel()),
@@ -8003,8 +8178,8 @@ class RefinementSolverPlan {
         scenario: (reqId) => {
           const sc = req.scenarioById(reqId.asString());
           if (sc?.isAccept() === true && r.isUnsat()) {
-            findings.push(DesignFinding.reconstitute({
-              kind: "refinement-violation",
+            findings.push(DesignFinding.of({
+              kind: FindingKind.refinementViolation(),
               frRefs: frOf(reqId.asString()),
               targets: TargetIds.reconstitute([reqId.asString()]),
               witness: DesignWitness.core(r.sortedCore()),
@@ -8013,8 +8188,8 @@ class RefinementSolverPlan {
             }));
           }
           if (sc?.isReject() === true && r.isSat()) {
-            findings.push(DesignFinding.reconstitute({
-              kind: "refinement-violation",
+            findings.push(DesignFinding.of({
+              kind: FindingKind.refinementViolation(),
               frRefs: frOf(reqId.asString()),
               targets: TargetIds.reconstitute([reqId.asString()]),
               witness: DesignWitness.model(r.witnessModel()),
@@ -8025,8 +8200,8 @@ class RefinementSolverPlan {
         },
         enabledness: (reqId) => {
           if (r.isSat()) {
-            findings.push(DesignFinding.reconstitute({
-              kind: "completeness-gap",
+            findings.push(DesignFinding.of({
+              kind: FindingKind.completenessGap(),
               frRefs: frOf(reqId.asString()),
               targets: TargetIds.reconstitute([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())]).sortedUniqueCanonically(),
               witness: DesignWitness.model(r.witnessModel()),
@@ -8037,8 +8212,8 @@ class RefinementSolverPlan {
         },
         simulation: (reqId, designId) => {
           if (r.isSat()) {
-            findings.push(DesignFinding.reconstitute({
-              kind: "refinement-violation",
+            findings.push(DesignFinding.of({
+              kind: FindingKind.refinementViolation(),
               frRefs: frOf(reqId.asString()),
               targets: TargetIds.reconstitute([reqId.asString(), designId.asString()].filter((t) => t !== "")).sortedUniqueCanonically(),
               witness: DesignWitness.trace(r.witnessTrace()),
@@ -8052,7 +8227,7 @@ class RefinementSolverPlan {
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped) };
   }
 }
-// src/refinement/domain/refinement-probe.ts
+// src/design/domain/refinement-probe.ts
 class RefinementProbe {
   #kind;
   #reqId;
@@ -8090,7 +8265,7 @@ class RefinementProbe {
     return handlers.simulation(this.#reqId, this.#designId);
   }
 }
-// src/refinement/domain/refinement-query-verdict.ts
+// src/design/domain/refinement-query-verdict.ts
 class RefinementQueryVerdict {
   #status;
   #decodedModel;
@@ -8124,7 +8299,7 @@ class RefinementQueryVerdict {
     return [{ ...this.#decodedModel ?? {} }, { ...this.#decodedPostModel ?? {} }];
   }
 }
-// src/refinement/domain/refinement-query-verdicts.ts
+// src/design/domain/refinement-query-verdicts.ts
 class RefinementQueryVerdicts {
   #values;
   constructor(values) {
@@ -8137,7 +8312,7 @@ class RefinementQueryVerdicts {
     return this.#values.get(queryId);
   }
 }
-// src/refinement/domain/refinement-map-id.ts
+// src/design/domain/refinement-map-id.ts
 class RefinementMapId {
   #path;
   constructor(path) {
@@ -8153,7 +8328,7 @@ class RefinementMapId {
     return this.#path;
   }
 }
-// src/refinement/domain/refinement-materials.ts
+// src/design/domain/refinement-materials.ts
 class RefinementMaterials {
   #id;
   #state;
@@ -8184,7 +8359,7 @@ class RefinementMaterials {
     return this.#state.map;
   }
 }
-// src/refinement/domain/refinement-map-acquisition.ts
+// src/design/domain/refinement-map-acquisition.ts
 class RefinementMapAcquisition {
   #error;
   #map;
@@ -8206,6 +8381,466 @@ class RefinementMapAcquisition {
     if (this.#map === null || this.#mapArtifact === null)
       return handlers.absent(this.#error);
     return handlers.loaded(this.#map, this.#mapArtifact, this.#inputs);
+  }
+}
+// src/design/adapter/design-entities-parser.ts
+function parseDesignEntities(schema) {
+  const entities = [];
+  for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
+    if (!isObject(ent) || typeof ent.name !== "string")
+      continue;
+    const attributes = [];
+    for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
+      if (!isObject(attr) || typeof attr.name !== "string")
+        continue;
+      const t = isObject(attr.type) ? attr.type : {};
+      attributes.push(DesignAttributeDecl.reconstitute({
+        name: DesignAttributeName.reconstitute(attr.name),
+        kind: typeof t.kind === "string" ? t.kind : "",
+        ...typeof attr.description === "string" ? { description: attr.description } : {},
+        ...Array.isArray(t.values) ? { values: DeclaredValues.of(t.values.filter((v) => typeof v === "string")) } : {},
+        ...typeof t.min === "number" ? { min: AttributeBound.reconstitute(t.min) } : {},
+        ...typeof t.max === "number" ? { max: AttributeBound.reconstitute(t.max) } : {}
+      }));
+    }
+    entities.push(DesignEntityDecl.reconstitute({
+      name: DesignEntityName.reconstitute(ent.name),
+      ...typeof ent.description === "string" ? { description: ent.description } : {},
+      attributes: DesignAttributeDecls.of(attributes)
+    }));
+  }
+  return DesignEntityDecls.of(entities);
+}
+function renderDesignEntities(entities) {
+  return entities.toArray().map((ent) => {
+    const out = { name: ent.name().asString() };
+    const description = ent.description();
+    if (description !== undefined)
+      out.description = description;
+    out.attributes = ent.attributes().toArray().map((attr) => {
+      const a = { name: attr.name().asString() };
+      const attrDescription = attr.description();
+      if (attrDescription !== undefined)
+        a.description = attrDescription;
+      const type = { kind: attr.kindLabel() };
+      const min = attr.minBound();
+      if (min !== undefined)
+        type.min = min.asNumber();
+      const max = attr.maxBound();
+      if (max !== undefined)
+        type.max = max.asNumber();
+      const values = attr.enumStates();
+      if (values !== null)
+        type.values = [...values.toArray()];
+      a.type = type;
+      return a;
+    });
+    return out;
+  });
+}
+// src/design/adapter/lowered-document-serializer.ts
+function renderLoweredDocument(u, low) {
+  const obligations = low.obligations().toArray().map((ob) => {
+    const out = {
+      id: ob.id().asString(),
+      nature: ob.nature(),
+      frRefs: ob.frRefs().toStrings()
+    };
+    const assertion = ob.assertion();
+    if (assertion)
+      out.assert = assertion;
+    const trigger = ob.trigger();
+    if (trigger !== undefined)
+      out.trigger = trigger;
+    const guard = ob.guard();
+    if (guard)
+      out.guard = guard;
+    const effect = ob.effect();
+    if (effect)
+      out.effect = effect;
+    const temporal = ob.temporal();
+    if (temporal)
+      out.temporal = temporal;
+    return out;
+  });
+  const scenarios = low.scenarios().toArray().map((sc) => {
+    const out = {
+      id: sc.id().asString(),
+      kind: sc.kind(),
+      frRefs: sc.frRefs().toStrings(),
+      bindings: sc.bindings()
+    };
+    const event = sc.event();
+    if (event)
+      out.event = event;
+    const expectation = sc.expectation();
+    if (expectation)
+      out.expect = expectation;
+    return out;
+  });
+  const background = low.background().toArray().map((bg) => ({ id: bg.id().asString(), assert: bg.assertion() }));
+  return {
+    irVersion: "1.0.0",
+    schema: { entities: renderDesignEntities(u.entities()) },
+    obligations,
+    scenarios,
+    background
+  };
+}
+// src/design/adapter/sibling-backend-client-impl.ts
+import { spawnSync } from "child_process";
+import { mkdtempSync, readFileSync as readFileSync4, rmSync as rmSync3, writeFileSync as writeFileSync3 } from "fs";
+import { tmpdir } from "os";
+import { join as join4 } from "path";
+
+// src/design/adapter/sibling-document-parser.ts
+function parseSiblingVerdictDocument(raw) {
+  if (!isObject(raw))
+    return SiblingVerdictDocument.unreadable();
+  if (isObject(raw.unavailable) && typeof raw.unavailable.reason === "string") {
+    return SiblingVerdictDocument.unavailable(raw.unavailable.reason, typeof raw.method === "string" ? raw.method : null);
+  }
+  const findings = [];
+  for (const f of Array.isArray(raw.findings) ? raw.findings : []) {
+    if (!isObject(f) || typeof f.kind !== "string" || !Array.isArray(f.targets))
+      continue;
+    findings.push(SiblingVerdictFinding.reconstitute({
+      kind: f.kind,
+      frRefs: FrRefs.reconstitute(strArr(f.frRefs)),
+      targets: f.targets.filter((t) => typeof t === "string").map((t) => LoweredId.reconstitute(t)),
+      witness: DesignWitness.fromDocument(f.witness ?? null),
+      detail: typeof f.detail === "string" ? f.detail : ""
+    }));
+  }
+  const skipped = [];
+  for (const s of Array.isArray(raw.skipped) ? raw.skipped : []) {
+    if (!isObject(s) || typeof s.target !== "string" || typeof s.reason !== "string")
+      continue;
+    skipped.push(SiblingVerdictSkip.reconstitute({
+      target: LoweredId.reconstitute(s.target),
+      reason: s.reason,
+      ...typeof s.detail === "string" ? { detail: s.detail } : {}
+    }));
+  }
+  return SiblingVerdictDocument.readable(typeof raw.method === "string" ? raw.method : null, SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
+}
+
+// src/design/adapter/reachability-variant.ts
+function reachabilityVariant(base, attrPath, state) {
+  if (!isObject(base))
+    return base;
+  const obligations = Array.isArray(base.obligations) ? base.obligations : [];
+  const events = obligations.filter((ob) => isObject(ob) && ob.nature === "event");
+  const probe = {
+    id: "OB-9999",
+    nature: "invariant",
+    frRefs: [],
+    assert: { op: "ne", args: [{ op: "ref", path: attrPath }, { op: "enum", value: state }] }
+  };
+  return {
+    irVersion: base.irVersion ?? "1.0.0",
+    schema: base.schema ?? { entities: [] },
+    obligations: [...events, probe],
+    scenarios: [],
+    background: Array.isArray(base.background) ? base.background : []
+  };
+}
+function probeReached(doc, attrPath, state) {
+  if (!isObject(doc) || !Array.isArray(doc.findings))
+    return false;
+  for (const f of doc.findings) {
+    if (!isObject(f) || f.kind !== "conflict")
+      continue;
+    const witness = isObject(f.witness) ? f.witness : {};
+    const trace = Array.isArray(witness.trace) ? witness.trace : null;
+    if (trace === null)
+      return true;
+    const last = trace[trace.length - 1];
+    if (isObject(last) && last[attrPath] === state)
+      return true;
+  }
+  return false;
+}
+
+// src/design/adapter/sibling-backend-client-impl.ts
+class SiblingBackendClientImpl {
+  #config;
+  constructor(config) {
+    this.#config = config;
+  }
+  runLowered(backend, unit, lowered, wallTimeoutMs) {
+    const run = this.#spawn(backend, renderLoweredDocument(unit, lowered), wallTimeoutMs);
+    return {
+      exit: run.exit,
+      doc: run.doc === null ? null : parseSiblingVerdictDocument(run.doc),
+      note: run.note
+    };
+  }
+  probeState(unit, lowered, attrPath, state, wallTimeoutMs) {
+    const variant = reachabilityVariant(renderLoweredDocument(unit, lowered), attrPath, state);
+    const run = this.#spawn("quint", variant, wallTimeoutMs);
+    if (run.exit !== 0 || run.doc === null || isObject(run.doc) && isObject(run.doc.unavailable)) {
+      return { kind: "failed" };
+    }
+    return { kind: "probed", reached: probeReached(run.doc, attrPath, state) };
+  }
+  #spawn(backend, loweredDoc, wallTimeoutMs) {
+    const tool = this.#config.siblingToolPaths[backend];
+    const work = mkdtempSync(join4(tmpdir(), "deep-spec-design-lower-"));
+    try {
+      const modelPath = join4(work, "deep-spec-analysis-formal-model.md");
+      writeFileSync3(modelPath, `# Lowered design unit
+
+\`\`\`json
+${JSON.stringify(loweredDoc, null, 2)}
+\`\`\`
+`, "utf-8");
+      const res = spawnSync("bun", [tool, "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath], {
+        encoding: "utf-8",
+        timeout: wallTimeoutMs,
+        cwd: this.#config.workingDirectory,
+        ...this.#config.spawnEnvironment ? { env: this.#config.spawnEnvironment } : {}
+      });
+      const findingsPath = join4(work, "deep-spec-verify", `${backend}.json`);
+      let doc = null;
+      try {
+        doc = JSON.parse(readFileSync4(findingsPath, "utf-8"));
+      } catch {
+        doc = null;
+      }
+      const note = res.error ? String(res.error) : (res.stdout ?? "").trim().split(`
+`).pop() ?? "";
+      return { exit: res.status, doc, note };
+    } finally {
+      rmSync3(work, { recursive: true, force: true });
+    }
+  }
+}
+// src/design/adapter/design-report-serializer.ts
+function renderDesignReportBytes(report) {
+  return `${JSON.stringify(report.toDocument(), null, 2)}
+`;
+}
+function parseSiblingDesignReportDocument(directory, fileName, raw) {
+  if (!isObject(raw))
+    return null;
+  const backend = typeof raw.backend === "string" ? raw.backend : fileName.replace(/\.json$/, "");
+  const skipped = (Array.isArray(raw.skipped) ? raw.skipped : []).filter((s) => isObject(s) && typeof s.target === "string");
+  return DesignReport.reconstitute({
+    id: DesignReportId.of(directory, backend),
+    irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
+    irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
+    method: typeof raw.method === "string" ? raw.method : "",
+    findings: DesignFindings.of((Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []).map((e) => {
+      const entry = e;
+      return DesignFinding.reconstitute({
+        kind: typeof entry.kind === "string" ? entry.kind : "",
+        frRefs: FrRefs.reconstitute(Array.isArray(entry.frRefs) ? entry.frRefs.filter((x) => typeof x === "string") : []),
+        targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? entry.targets.filter((x) => typeof x === "string") : []),
+        witness: DesignWitness.fromDocument(entry.witness ?? null),
+        unit: typeof entry.unit === "string" ? entry.unit : "",
+        detail: typeof entry.detail === "string" ? entry.detail : ""
+      });
+    })),
+    skipped: DesignSkips.of(skipped.map((entry) => {
+      return DesignSkipped.reconstitute({
+        target: TargetId.reconstitute(typeof entry.target === "string" ? entry.target : ""),
+        reason: typeof entry.reason === "string" ? entry.reason : "",
+        unit: typeof entry.unit === "string" ? entry.unit : "",
+        ...typeof entry.detail === "string" ? { detail: entry.detail } : {}
+      });
+    })),
+    inputs: Array.isArray(raw.inputs) ? DesignInputAnchors.of(raw.inputs.map((e) => {
+      const entry = isObject(e) ? e : {};
+      return DesignInputAnchor.reconstitute({
+        artifact: typeof entry.artifact === "string" ? entry.artifact : "",
+        sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : "")
+      });
+    })) : null,
+    checked: Array.isArray(raw.checked) ? CheckedUnits.reconstitute(raw.checked.filter((c) => typeof c === "string")) : null,
+    crossChecked: Array.isArray(raw.crossChecked) ? DesignCrossCheckedEntries.of(raw.crossChecked.filter(isObject).map((e) => DesignCrossCheckedEntry.reconstitute({
+      backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
+      targets: TargetIds.reconstitute(Array.isArray(e.targets) ? e.targets.filter((t) => typeof t === "string") : [])
+    }))) : null,
+    unavailableReason: isObject(raw.unavailable) ? typeof raw.unavailable.reason === "string" ? raw.unavailable.reason : "" : null
+  });
+}
+// src/design/adapter/design-verify-directory-repository-impl.ts
+import { existsSync as existsSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync5, readdirSync, renameSync as renameSync3, rmSync as rmSync4 } from "fs";
+import { join as join5 } from "path";
+var CROSS_CHECK_BASENAME = "cross-check.json";
+var STALE_CROSS_CHECK_BASENAME = ".cross-check.stale";
+var encoder = new TextEncoder;
+var UNPROBED_LIVENESS = {
+  self: () => 0,
+  statusOf: () => "unknown"
+};
+function causeOf2(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+function lockCauseOf(outcome) {
+  return "cause" in outcome ? `${outcome.kind}: ${outcome.cause}` : outcome.kind;
+}
+function documentsByFileName(reports) {
+  const out = new Map;
+  for (const report of reports)
+    out.set(report.id().fileName(), JSON.stringify(report.toDocument()));
+  return out;
+}
+
+class DesignVerifyDirectoryRepositoryImpl {
+  #lock;
+  constructor(lock = new DirectoryFinalizationLock(new SystemClock, UNPROBED_LIVENESS)) {
+    this.#lock = lock;
+  }
+  findByDirectory(directory) {
+    const siblings = this.#siblingsOf(directory);
+    if (!siblings.ok)
+      return err(siblings.error);
+    const crossPath = join5(directory.asString(), CROSS_CHECK_BASENAME);
+    if (!existsSync3(crossPath)) {
+      return ok(DesignVerifyDirectory.of(directory, DesignReports.of(siblings.value), null));
+    }
+    const crossCheck = this.#readReport(directory, CROSS_CHECK_BASENAME);
+    return ok(DesignVerifyDirectory.of(directory, DesignReports.of(siblings.value), crossCheck.ok ? crossCheck.value : null));
+  }
+  store(aggregate) {
+    const directory = aggregate.directory();
+    const directoryPath = directory.asString();
+    const candidate = aggregate.candidate();
+    if (candidate === null) {
+      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: "no finalization candidate" });
+    }
+    try {
+      mkdirSync3(directoryPath, { recursive: true });
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: causeOf2(e) });
+    }
+    const lockPath = this.#lock.canonicalPathOf(directory);
+    const acquired = this.#lock.acquire(directory);
+    if (acquired.kind !== "acquired" && acquired.kind !== "recovered") {
+      return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(acquired) });
+    }
+    let outcome;
+    try {
+      outcome = this.#publish(aggregate, candidate, directory);
+    } catch (e) {
+      outcome = err({ kind: "io-failed", operation: "write", path: directoryPath, cause: causeOf2(e) });
+    }
+    const released = this.#lock.release(directory);
+    if (released.kind !== "released" && outcome.ok) {
+      return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(released) });
+    }
+    return outcome;
+  }
+  #publish(aggregate, candidate, directory) {
+    const directoryPath = directory.asString();
+    const backendPath = join5(directoryPath, candidate.id().fileName());
+    const crossPath = join5(directoryPath, CROSS_CHECK_BASENAME);
+    const stalePath = join5(directoryPath, STALE_CROSS_CHECK_BASENAME);
+    const unchanged = this.#siblingsUnchanged(aggregate, candidate, directory);
+    if (!unchanged.ok)
+      return err(unchanged.error);
+    const crossCheck = aggregate.crossCheck();
+    let backendBytes;
+    let crossBytes;
+    try {
+      backendBytes = renderDesignReportBytes(candidate);
+      crossBytes = crossCheck === null ? null : renderDesignReportBytes(crossCheck);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
+    }
+    if (!this.#lock.holdsOwnership(directory))
+      return this.#fenced(directory, crossPath);
+    if (existsSync3(crossPath)) {
+      try {
+        renameSync3(crossPath, stalePath);
+      } catch (e) {
+        return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
+      }
+    }
+    if (!this.#lock.holdsOwnership(directory))
+      return this.#fenced(directory, backendPath);
+    try {
+      writeFileAtomically(backendPath, encoder.encode(backendBytes));
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: backendPath, cause: causeOf2(e) });
+    }
+    if (crossBytes !== null) {
+      if (!this.#lock.holdsOwnership(directory))
+        return this.#fenced(directory, crossPath);
+      try {
+        writeFileAtomically(crossPath, encoder.encode(crossBytes));
+      } catch (e) {
+        return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
+      }
+    }
+    try {
+      rmSync4(stalePath, { force: true });
+    } catch {}
+    return ok(undefined);
+  }
+  #siblingsUnchanged(aggregate, candidate, directory) {
+    const observed = this.#siblingsOf(directory);
+    if (!observed.ok)
+      return err(observed.error);
+    const candidateFileName = candidate.id().fileName();
+    const onDisk = documentsByFileName(observed.value.filter((r) => r.id().fileName() !== candidateFileName));
+    const loaded = documentsByFileName(aggregate.reports().toArray().filter((r) => r.id().fileName() !== candidateFileName));
+    let same = onDisk.size === loaded.size;
+    if (same) {
+      for (const [fileName, document] of loaded) {
+        if (onDisk.get(fileName) !== document) {
+          same = false;
+          break;
+        }
+      }
+    }
+    if (same)
+      return ok(undefined);
+    return err({
+      kind: "io-failed",
+      operation: "write",
+      path: directory.asString(),
+      cause: "conflict: sibling set changed since load"
+    });
+  }
+  #siblingsOf(directory) {
+    if (!existsSync3(directory.asString()))
+      return ok([]);
+    let entries;
+    try {
+      entries = readdirSync(directory.asString()).filter((f) => f.endsWith(".json") && f !== CROSS_CHECK_BASENAME).sort();
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "read", path: directory.asString(), cause: causeOf2(e) });
+    }
+    const reports = [];
+    for (const file of entries) {
+      const report = this.#readReport(directory, file);
+      if (!report.ok)
+        return err(report.error);
+      if (report.value !== null)
+        reports.push(report.value);
+    }
+    return ok(reports);
+  }
+  #readReport(directory, fileName) {
+    const path = join5(directory.asString(), fileName);
+    let raw;
+    try {
+      raw = JSON.parse(readFileSync5(path, "utf-8"));
+    } catch (e) {
+      return err({ kind: "corrupt", path, cause: causeOf2(e) });
+    }
+    return ok(parseSiblingDesignReportDocument(directory, fileName, raw));
+  }
+  #fenced(directory, path) {
+    return err({
+      kind: "io-failed",
+      operation: "write",
+      path,
+      cause: `lock-fenced: ${this.#lock.canonicalPathOf(directory)} is no longer held by this writer`
+    });
   }
 }
 // src/design/adapter/refinement-query-plan.ts
@@ -8380,7 +9015,12 @@ function buildRefinementQueries(u, req, plan) {
   const pending = new Map;
   const compileSkips = [];
   const alphaFail = (target, message) => {
-    compileSkips.push(DesignSkipped.reconstitute({ target: TargetId.reconstitute(target), reason: "compile-error", unit: u.name(), detail: `alpha substitution failed: ${message}` }));
+    compileSkips.push(DesignSkipped.of({
+      target: TargetId.reconstitute(target),
+      reason: SkipReason.compileError(),
+      unit: u.name(),
+      detail: `alpha substitution failed: ${message}`
+    }));
   };
   const failureMessage = (err2) => err2 instanceof Error ? err2.message : String(err2);
   const mappings = plan.attributeMappings();
@@ -8512,8 +9152,8 @@ function buildRefinementQueries(u, req, plan) {
   };
 }
 // src/design/adapter/refinement-materials-repository-impl.ts
-import { existsSync as existsSync4, readFileSync as readFileSync5 } from "fs";
-import { dirname as dirname3, join as join5 } from "path";
+import { existsSync as existsSync4, readFileSync as readFileSync6 } from "fs";
+import { dirname as dirname3, join as join6 } from "path";
 var REFINEMENT_MAP_BASENAME = "deep-spec-analysis-refinement-map.md";
 var REQUIREMENTS_MODEL_RELPATH = ["inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md"];
 function extractSingleJsonFence(md) {
@@ -8536,13 +9176,13 @@ class RefinementMaterialsRepositoryImpl {
     return RefinementMaterials.active(id, requirements, this.#loadMap(recordRoot, stageDir, modelPath));
   }
   #loadRequirements(recordRoot) {
-    const path = join5(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
+    const path = join6(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
     const idPath = ArtifactPath.parse(path);
     if (!idPath.ok)
       return null;
     if (!existsSync4(path))
       return null;
-    const fence = extractSingleJsonFence(readFileSync5(path, "utf-8"));
+    const fence = extractSingleJsonFence(readFileSync6(path, "utf-8"));
     if (fence === null)
       return null;
     let raw;
@@ -8613,22 +9253,22 @@ class RefinementMaterialsRepositoryImpl {
     });
   }
   #loadMap(recordRoot, stageDir, modelPath) {
-    const path = join5(stageDir, REFINEMENT_MAP_BASENAME);
+    const path = join6(stageDir, REFINEMENT_MAP_BASENAME);
     if (!existsSync4(path))
       return RefinementMapAcquisition.absent(null);
     const mapPath = ArtifactPath.parse(path);
     if (!mapPath.ok)
       return RefinementMapAcquisition.absent("defect: refinement map path derivation produced an empty path");
-    const parsed = parseRefinementMapDocument(new Uint8Array(readFileSync5(path)), RefinementMapId.of(mapPath.value), this.#mapSchemaPath);
+    const parsed = parseRefinementMapDocument(new Uint8Array(readFileSync6(path)), RefinementMapId.of(mapPath.value), this.#mapSchemaPath);
     if (parsed.kind === "malformed")
       return RefinementMapAcquisition.absent(parsed.error);
     const map = parsed.map;
-    const reqModelPath = join5(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
+    const reqModelPath = join6(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
     const mapArtifact = relArtifact(recordRoot, path);
     const inputs = [
-      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, modelPath), sha256: ContentHash.ofText(readFileSync5(modelPath, "utf-8")) }),
-      DesignInputAnchor.reconstitute({ artifact: mapArtifact, sha256: ContentHash.ofText(readFileSync5(path, "utf-8")) }),
-      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, reqModelPath), sha256: ContentHash.ofText(readFileSync5(reqModelPath, "utf-8")) })
+      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, modelPath), sha256: ContentHash.ofText(readFileSync6(modelPath, "utf-8")) }),
+      DesignInputAnchor.reconstitute({ artifact: mapArtifact, sha256: ContentHash.ofText(readFileSync6(path, "utf-8")) }),
+      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, reqModelPath), sha256: ContentHash.ofText(readFileSync6(reqModelPath, "utf-8")) })
     ];
     return RefinementMapAcquisition.loaded(map, ArtifactPath.reconstitute(mapArtifact), inputs);
   }
@@ -8645,7 +9285,7 @@ function parseRefinementMapDocument(bytes, id, mapSchemaPath) {
     return { kind: "malformed", error: `refinement map fence is not valid JSON: ${err2 instanceof Error ? err2.message : String(err2)}` };
   }
   try {
-    const schemaDoc = JSON.parse(readFileSync5(mapSchemaPath, "utf-8"));
+    const schemaDoc = JSON.parse(readFileSync6(mapSchemaPath, "utf-8"));
     const errors = [];
     validateSchema(schemaDoc, schemaDoc, raw, "", errors);
     if (errors.length > 0)
@@ -8776,8 +9416,8 @@ class RefinementSolverClientImpl {
   }
 }
 // src/design/adapter/design-ir-validation-materials-repository-impl.ts
-import { existsSync as existsSync5, readFileSync as readFileSync6 } from "fs";
-import { basename as basename2, dirname as dirname4, join as join6 } from "path";
+import { existsSync as existsSync5, readFileSync as readFileSync7 } from "fs";
+import { basename as basename2, dirname as dirname4, join as join7 } from "path";
 var DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 function asExpression(v) {
   return isObject(v) ? v : undefined;
@@ -8866,8 +9506,8 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
         unformalizedTargets.push(t);
     }
   }
-  const directoryExists = recordRoot === null ? true : existsSync5(join6(recordRoot, "construction", unitName));
-  const rulesPath = recordRoot === null ? null : join6(recordRoot, "construction", unitName, "functional-design", "rules.md");
+  const directoryExists = recordRoot === null ? true : existsSync5(join7(recordRoot, "construction", unitName));
+  const rulesPath = recordRoot === null ? null : join7(recordRoot, "construction", unitName, "functional-design", "rules.md");
   const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
   return DesignUnitDecl.reconstitute({
     unit: DesignUnitId.of(unitName),
@@ -8895,7 +9535,7 @@ class DesignIrValidationMaterialsRepositoryImpl {
     const corrupt = (cause) => err({ kind: "corrupt", path: outputPath, cause });
     let bytes;
     try {
-      bytes = readFileSync6(outputPath);
+      bytes = readFileSync7(outputPath);
     } catch (e) {
       return err({ kind: "io-failed", operation: "read", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
     }
@@ -8953,7 +9593,7 @@ class DesignIrValidationMaterialsRepositoryImpl {
   }
 }
 // src/design/adapter/refinement-map-repository-impl.ts
-import { existsSync as existsSync6, readFileSync as readFileSync7 } from "fs";
+import { existsSync as existsSync6, readFileSync as readFileSync8 } from "fs";
 class RefinementMapRepositoryImpl {
   #mapSchemaPath;
   constructor(mapSchemaPath) {
@@ -8965,7 +9605,7 @@ class RefinementMapRepositoryImpl {
       return err({ kind: "not-found", path });
     let bytes;
     try {
-      bytes = readFileSync7(path);
+      bytes = readFileSync8(path);
     } catch (e) {
       return err({ kind: "io-failed", operation: "read", path, cause: e instanceof Error ? e.message : String(e) });
     }
@@ -8984,53 +9624,119 @@ class RefinementMapRepositoryImpl {
     }
   }
 }
-// src/design/usecase/verify-design-smt-usecase.ts
-var BACKEND = "smt";
-var CROSS_CHECK_BACKEND = "cross-check";
-var UNIT_WALL_TIMEOUT_MS = 55000;
-var RUN_BUDGET_MS = 60000;
-var REFINEMENT_DEADLINE_MS = 65000;
-
-class VerifyDesignSmtUseCase {
-  #designModelRepository;
-  #designReportRepository;
-  #siblingBackendClient;
-  #refinementMaterialsRepository;
-  #refinementSolverClient;
-  #clock;
-  constructor(designModelRepository, designReportRepository, siblingBackendClient, refinementMaterialsRepository, refinementSolverClient, clock) {
-    this.#designModelRepository = designModelRepository;
-    this.#designReportRepository = designReportRepository;
-    this.#siblingBackendClient = siblingBackendClient;
-    this.#refinementMaterialsRepository = refinementMaterialsRepository;
-    this.#refinementSolverClient = refinementSolverClient;
-    this.#clock = clock;
+// src/design/usecase/design-report-finalizer.ts
+class DesignReportFinalizer {
+  #repository;
+  #findingsSchema;
+  constructor(repository, findingsSchema) {
+    this.#repository = repository;
+    this.#findingsSchema = findingsSchema;
   }
-  execute(input) {
-    const id = DesignReportId.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#designModelRepository.findById(input.modelId);
+  finalize(report, model) {
+    return this.#finalizing(report, (staged) => staged.crossChecked(model, report.irHash()).conformedTo(this.#findingsSchema));
+  }
+  finalizeIrUnreadable(report) {
+    const finalized = this.#finalizing(report, (staged) => staged.withoutCrossCheck());
+    if (!finalized.ok)
+      return err(finalized.error);
+    return ok(undefined);
+  }
+  #finalizing(report, resolveCrossCheck) {
+    const loaded = this.#repository.findByDirectory(report.id().directory());
+    if (!loaded.ok)
+      return err(loaded.error);
+    const staged = loaded.value.finalizing(report).conformedTo(this.#findingsSchema);
+    const aggregate = resolveCrossCheck(staged).conformedTo(this.#findingsSchema);
+    const stored = this.#repository.store(aggregate);
+    if (!stored.ok)
+      return err(stored.error);
+    const published = aggregate.candidate();
+    if (published === null) {
+      return err({ kind: "io-failed", operation: "write", path: report.id().fileName(), cause: "no finalization candidate" });
+    }
+    return ok({
+      kind: "verified",
+      pass: published.passes(),
+      findingsCount: published.findingsCount(),
+      skippedCount: published.skippedCount(),
+      method: published.method()
+    });
+  }
+}
+
+// src/design/usecase/design-verification-acquirer.ts
+class DesignVerificationAcquirer {
+  #designModelRepository;
+  #finalizer;
+  constructor(designModelRepository, finalizer) {
+    this.#designModelRepository = designModelRepository;
+    this.#finalizer = finalizer;
+  }
+  acquire(modelId, reportId, method) {
+    const acquired = this.#designModelRepository.findById(modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found")
-        return { kind: "not-applicable" };
-      if (acquired.error.kind === "io-failed")
-        return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#persist(DesignReport.irUnreadable(id, "exhaustive", acquired.error.cause));
+        return { kind: "terminal", outcome: { kind: "not-applicable" } };
+      if (acquired.error.kind === "io-failed") {
+        return { kind: "terminal", outcome: { kind: "acquisition-failed", error: acquired.error } };
+      }
+      const unreadable = DesignReport.irUnreadable(reportId, method.asString(), acquired.error.cause);
+      const saved = this.#finalizer.finalizeIrUnreadable(unreadable);
       if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "model-unreadable" };
+        return { kind: "terminal", outcome: { kind: "save-failed", error: saved.error } };
+      return { kind: "terminal", outcome: { kind: "model-unreadable" } };
     }
     const model = acquired.value;
     const irHash = model.irHash();
     if (!model.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR)) {
-      const mismatch = DesignReport.versionMismatch(id, model, irHash, "exhaustive");
-      const saved = this.#persist(mismatch);
+      const mismatch = DesignReport.versionMismatch(reportId, model, irHash, method.asString());
+      const skippedCount = mismatch.skippedCount();
+      const saved = this.#finalizer.finalize(mismatch, model);
       if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      const cross2 = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-      if (!cross2.ok)
-        return { kind: "save-failed", error: cross2.error };
-      return { kind: "version-mismatch", skippedCount: mismatch.skippedCount() };
+        return { kind: "terminal", outcome: { kind: "save-failed", error: saved.error } };
+      return { kind: "terminal", outcome: { kind: "version-mismatch", skippedCount } };
     }
+    return { kind: "ready", model, irHash };
+  }
+}
+
+// src/design/usecase/verify-design-smt-usecase.ts
+var BACKEND = "smt";
+var METHOD = "exhaustive";
+var UNIT_WALL_TIMEOUT_MS = 55000;
+var RUN_BUDGET_MS = 60000;
+var REFINEMENT_DEADLINE_MS = 65000;
+function initialMethod() {
+  const parsed = VerificationMethod.parse(METHOD);
+  if (!parsed.ok)
+    throw new Error(`defect: "${METHOD}" is not a verification method`);
+  return parsed.value;
+}
+
+class VerifyDesignSmtUseCase {
+  #siblingBackendClient;
+  #refinementMaterialsRepository;
+  #refinementSolverClient;
+  #clock;
+  #finalizer;
+  #acquirer;
+  constructor(designModelRepository, designVerifyDirectoryRepository, findingsSchema, siblingBackendClient, refinementMaterialsRepository, refinementSolverClient, clock) {
+    this.#siblingBackendClient = siblingBackendClient;
+    this.#refinementMaterialsRepository = refinementMaterialsRepository;
+    this.#refinementSolverClient = refinementSolverClient;
+    this.#clock = clock;
+    this.#finalizer = new DesignReportFinalizer(designVerifyDirectoryRepository, findingsSchema);
+    this.#acquirer = new DesignVerificationAcquirer(designModelRepository, this.#finalizer);
+  }
+  execute(input) {
+    const id = DesignReportId.of(input.verifyDirectory, BACKEND);
+    const acquired = this.#acquirer.acquire(input.modelId, id, initialMethod());
+    if (acquired.kind === "terminal")
+      return acquired.outcome;
+    if (acquired.kind !== "ready")
+      return unreachable(acquired);
+    const model = acquired.model;
+    const irHash = acquired.irHash;
     const findings = [];
     const skipped = [];
     const checkedUnits = [];
@@ -9038,39 +9744,37 @@ class VerifyDesignSmtUseCase {
     for (const u of model.units()) {
       if (this.#clock.now() - started > RUN_BUDGET_MS) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" }));
         }
         continue;
       }
-      const lowered = LoweredUnit.of(u, { synthetics: true });
+      const lowered = u.lowered({ synthetics: true });
       const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
       if (remaining < 3000) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" }));
         }
         continue;
       }
       const run = this.#siblingBackendClient.runLowered("smt", u, lowered, remaining);
       if (run.exit === 127) {
         const reason = run.doc?.unavailableReason() ?? "z3 could not be executed by the lowered v1 backend";
-        const saved = this.#persist(DesignReport.backendUnavailable(id, model, irHash, "exhaustive", reason, "z3 could not be executed"));
+        const unavailable = DesignReport.backendUnavailable(id, model, irHash, METHOD, reason, "z3 could not be executed");
+        const saved = this.#finalizer.finalize(unavailable, model);
         if (!saved.ok)
           return { kind: "save-failed", error: saved.error };
-        const cross2 = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-        if (!cross2.ok)
-          return { kind: "save-failed", error: cross2.error };
         return { kind: "backend-unavailable" };
       }
       if (run.doc === null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
         }
         continue;
       }
-      const remapped = lowered.remapVerdicts(u, run.doc);
+      const remapped = run.doc.remapVerdicts(u, lowered.index());
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: remapped.unavailable }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: remapped.unavailable }));
         }
         continue;
       }
@@ -9087,20 +9791,20 @@ class VerifyDesignSmtUseCase {
       const skipAll = (reason, detail) => {
         for (const u of model.units()) {
           for (const t of reqTargets)
-            skipped.push(DesignSkipped.reconstitute({ target: t, reason, unit: u.name(), detail }));
+            skipped.push(DesignSkipped.of({ target: t, reason, unit: u.name(), detail }));
         }
       };
       acq.match({
         absent: (error) => {
-          skipAll("absent-input", error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
+          skipAll(SkipReason.absentInput(), error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
         },
         loaded: (map, mapArtifact, mapInputs) => {
           if (!map.requirementsIrHash().equals(req.hash())) {
-            skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model \u2014 re-author the map");
+            skipAll(SkipReason.staleInput(), "the refinement map's requirementsIrHash no longer matches the requirements formal model \u2014 re-author the map");
             return;
           }
           if (!map.designIrHash().equals(irHash)) {
-            skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR \u2014 re-author the map");
+            skipAll(SkipReason.staleInput(), "the refinement map's designIrHash no longer matches this design IR \u2014 re-author the map");
             return;
           }
           inputs = mapInputs;
@@ -9108,14 +9812,14 @@ class VerifyDesignSmtUseCase {
             const unitMap = map.unitMapOf(u.id());
             if (!unitMap) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.reconstitute({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
               }
               continue;
             }
             const refRemaining = REFINEMENT_DEADLINE_MS - (this.#clock.now() - started);
             if (refRemaining < 5000) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run solver budget was exhausted before the refinement pass" }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run solver budget was exhausted before the refinement pass" }));
               }
               continue;
             }
@@ -9123,7 +9827,7 @@ class VerifyDesignSmtUseCase {
             const check = this.#refinementSolverClient.check(u, req, plan, Math.min(30000, refRemaining));
             if (check.result.kind === "unavailable") {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: check.result.reason }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: check.result.reason }));
               }
               continue;
             }
@@ -9143,86 +9847,56 @@ class VerifyDesignSmtUseCase {
       id,
       irVersion: model.irVersion(),
       irHash,
-      method: "exhaustive",
+      method: METHOD,
       findings: DesignFindings.of(findings),
       skipped: DesignSkips.of(skipped),
       ...inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {},
       checked: CheckedUnits.reconstitute(checkedUnits)
     });
-    const conformed = this.#designReportRepository.conformedOf(report);
-    const stored = this.#designReportRepository.store(report);
-    if (!stored.ok)
-      return { kind: "save-failed", error: stored.error };
-    const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-    if (!cross.ok)
-      return { kind: "save-failed", error: cross.error };
-    return {
-      kind: "verified",
-      pass: conformed.passes(),
-      findingsCount: conformed.findingsCount(),
-      skippedCount: conformed.skippedCount(),
-      method: "exhaustive"
-    };
-  }
-  #persist(report) {
-    return this.#designReportRepository.store(report);
-  }
-  #recomputeCrossCheck(model, irHash, directory) {
-    const siblings = this.#designReportRepository.findAllByDirectory(directory);
-    if (!siblings.ok)
-      return ok(undefined);
-    const stored = this.#persist(siblings.value.crossChecked(DesignReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
-    return stored.ok ? ok(undefined) : stored;
+    const finalized = this.#finalizer.finalize(report, model);
+    if (!finalized.ok)
+      return { kind: "save-failed", error: finalized.error };
+    return finalized.value;
   }
 }
 // src/design/usecase/verify-design-quint-usecase.ts
 var BACKEND2 = "quint";
-var CROSS_CHECK_BACKEND2 = "cross-check";
+var INITIAL_METHOD_NAME = "simulation";
 var UNIT_WALL_TIMEOUT_MS2 = 50000;
 var RUN_BUDGET_MS2 = 50000;
 var UNREACH_BUDGET_MS = 70000;
 var BOUND_STEPS = 8;
+function initialMethod2() {
+  const parsed = VerificationMethod.parse(INITIAL_METHOD_NAME);
+  if (!parsed.ok)
+    throw new Error(`defect: "${INITIAL_METHOD_NAME}" is not a verification method`);
+  return parsed.value;
+}
 
 class VerifyDesignQuintUseCase {
-  #designModelRepository;
-  #designReportRepository;
   #siblingBackendClient;
   #refinementMaterialsRepository;
   #clock;
   #unreachCap;
-  constructor(designModelRepository, designReportRepository, siblingBackendClient, refinementMaterialsRepository, clock, unreachCap) {
-    this.#designModelRepository = designModelRepository;
-    this.#designReportRepository = designReportRepository;
+  #finalizer;
+  #acquirer;
+  constructor(designModelRepository, designVerifyDirectoryRepository, findingsSchema, siblingBackendClient, refinementMaterialsRepository, clock, unreachCap) {
     this.#siblingBackendClient = siblingBackendClient;
     this.#refinementMaterialsRepository = refinementMaterialsRepository;
     this.#clock = clock;
     this.#unreachCap = unreachCap;
+    this.#finalizer = new DesignReportFinalizer(designVerifyDirectoryRepository, findingsSchema);
+    this.#acquirer = new DesignVerificationAcquirer(designModelRepository, this.#finalizer);
   }
   execute(input) {
     const id = DesignReportId.of(input.verifyDirectory, BACKEND2);
-    const acquired = this.#designModelRepository.findById(input.modelId);
-    if (!acquired.ok) {
-      if (acquired.error.kind === "not-found")
-        return { kind: "not-applicable" };
-      if (acquired.error.kind === "io-failed")
-        return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#persist(DesignReport.irUnreadable(id, "simulation", acquired.error.cause));
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "model-unreadable" };
-    }
-    const model = acquired.value;
-    const irHash = model.irHash();
-    if (!model.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR)) {
-      const mismatch = DesignReport.versionMismatch(id, model, irHash, "simulation");
-      const saved = this.#persist(mismatch);
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      const cross2 = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-      if (!cross2.ok)
-        return { kind: "save-failed", error: cross2.error };
-      return { kind: "version-mismatch", skippedCount: mismatch.skippedCount() };
-    }
+    const acquired = this.#acquirer.acquire(input.modelId, id, initialMethod2());
+    if (acquired.kind === "terminal")
+      return acquired.outcome;
+    if (acquired.kind !== "ready")
+      return unreachable(acquired);
+    const model = acquired.model;
+    const irHash = acquired.irHash;
     const findings = [];
     const skipped = [];
     const checkedUnits = [];
@@ -9232,39 +9906,37 @@ class VerifyDesignQuintUseCase {
     for (const u of model.units()) {
       if (this.#clock.now() - started > RUN_BUDGET_MS2) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
         }
         continue;
       }
-      const lowered = LoweredUnit.of(u, { synthetics: false });
+      const lowered = u.lowered({ synthetics: false });
       const mainRemaining = Math.min(UNIT_WALL_TIMEOUT_MS2, RUN_BUDGET_MS2 - (this.#clock.now() - started));
       if (mainRemaining < 3000) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
         }
         continue;
       }
       const run = this.#siblingBackendClient.runLowered("quint", u, lowered, mainRemaining);
       if (run.exit === 127) {
         const reason = run.doc?.unavailableReason() ?? "quint CLI could not be executed by the lowered v1 backend";
-        const saved = this.#persist(DesignReport.backendUnavailable(id, model, irHash, method ?? "simulation", reason, "quint CLI missing"));
+        const unavailable = DesignReport.backendUnavailable(id, model, irHash, method ?? INITIAL_METHOD_NAME, reason, "quint CLI missing");
+        const saved = this.#finalizer.finalize(unavailable, model);
         if (!saved.ok)
           return { kind: "save-failed", error: saved.error };
-        const cross2 = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-        if (!cross2.ok)
-          return { kind: "save-failed", error: cross2.error };
         return { kind: "backend-unavailable" };
       }
       if (run.doc === null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
         }
         continue;
       }
-      const remapped = lowered.remapVerdicts(u, run.doc);
+      const remapped = run.doc.remapVerdicts(u, lowered.index());
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: remapped.unavailable }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: remapped.unavailable }));
         }
         continue;
       }
@@ -9278,9 +9950,9 @@ class VerifyDesignQuintUseCase {
         if (candidates.length === 0)
           continue;
         if (method !== "bounded") {
-          skipped.push(DesignSkipped.reconstitute({
+          skipped.push(DesignSkipped.of({
             target: sm.id().asTargetId(),
-            reason: "capability",
+            reason: SkipReason.capability(),
             unit: u.name(),
             detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`
           }));
@@ -9300,8 +9972,8 @@ class VerifyDesignQuintUseCase {
             continue;
           }
           if (!probe.reached) {
-            findings.push(DesignFinding.reconstitute({
-              kind: "unreachable",
+            findings.push(DesignFinding.of({
+              kind: FindingKind.unreachable(),
               frRefs: FrRefs.reconstitute([]),
               targets: TargetIds.reconstitute([sm.id().asString()]),
               witness: DesignWitness.model({ [attrPath]: state }),
@@ -9311,9 +9983,9 @@ class VerifyDesignQuintUseCase {
           }
         }
         if (leftover.length > 0) {
-          skipped.push(DesignSkipped.reconstitute({
+          skipped.push(DesignSkipped.of({
             target: sm.id().asTargetId(),
-            reason: probesUsed >= this.#unreachCap ? "timeout" : "unavailable",
+            reason: probesUsed >= this.#unreachCap ? SkipReason.timeout() : SkipReason.unavailable(),
             unit: u.name(),
             detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id().asString()} (per-run cap ${this.#unreachCap} / budget reached, or the probe run failed)`
           }));
@@ -9329,20 +10001,20 @@ class VerifyDesignQuintUseCase {
       const skipAll = (reason, detail) => {
         for (const u of model.units()) {
           for (const t of reqTargets)
-            skipped.push(DesignSkipped.reconstitute({ target: t, reason, unit: u.name(), detail }));
+            skipped.push(DesignSkipped.of({ target: t, reason, unit: u.name(), detail }));
         }
       };
       acq.match({
         absent: (error) => {
-          skipAll("absent-input", error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
+          skipAll(SkipReason.absentInput(), error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
         },
         loaded: (map, mapArtifact, mapInputs) => {
           if (!map.requirementsIrHash().equals(req.hash())) {
-            skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model \u2014 re-author the map");
+            skipAll(SkipReason.staleInput(), "the refinement map's requirementsIrHash no longer matches the requirements formal model \u2014 re-author the map");
             return;
           }
           if (!map.designIrHash().equals(irHash)) {
-            skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR \u2014 re-author the map");
+            skipAll(SkipReason.staleInput(), "the refinement map's designIrHash no longer matches this design IR \u2014 re-author the map");
             return;
           }
           inputs = mapInputs;
@@ -9350,7 +10022,7 @@ class VerifyDesignQuintUseCase {
             const unitMap = map.unitMapOf(u.id());
             if (!unitMap) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.reconstitute({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
               }
               continue;
             }
@@ -9363,11 +10035,11 @@ class VerifyDesignQuintUseCase {
             const remaining = Math.min(UNIT_WALL_TIMEOUT_MS2, RUN_BUDGET_MS2 + UNREACH_BUDGET_MS - (this.#clock.now() - started));
             if (remaining < 3000) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({ target: e.reqTarget(), reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" }));
               }
               continue;
             }
-            const base = LoweredUnit.of(u, { synthetics: false });
+            const base = u.lowered({ synthetics: false });
             let refinementObligations = base.obligations();
             let refinementIndex = base.index();
             let n = refinementObligations.count();
@@ -9381,14 +10053,14 @@ class VerifyDesignQuintUseCase {
             const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
             if (run.exit !== 0 || run.doc === null) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({ target: e.reqTarget(), reason: "unavailable", unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
               }
               continue;
             }
-            const remapped = lowered.remapVerdicts(u, run.doc);
+            const remapped = run.doc.remapVerdicts(u, lowered.index());
             if (remapped.unavailable !== null) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({ target: e.reqTarget(), reason: "unavailable", unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` }));
               }
               continue;
             }
@@ -9408,9 +10080,9 @@ class VerifyDesignQuintUseCase {
             }
             if (!hitExtra && designConflict) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({
+                skipped.push(DesignSkipped.of({
                   target: e.reqTarget(),
-                  reason: "capability",
+                  reason: SkipReason.capability(),
                   unit: u.name(),
                   detail: "the machine reachably violates its own design invariants first (see the design conflict findings) \u2014 refinement reachability is masked until those are resolved"
                 }));
@@ -9420,7 +10092,7 @@ class VerifyDesignQuintUseCase {
         }
       });
     }
-    const finalMethod = method ?? "simulation";
+    const finalMethod = method ?? INITIAL_METHOD_NAME;
     const report = DesignReport.compose({
       id,
       irVersion: model.irVersion(),
@@ -9431,30 +10103,10 @@ class VerifyDesignQuintUseCase {
       ...inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {},
       checked: CheckedUnits.reconstitute(checkedUnits)
     });
-    const conformed = this.#designReportRepository.conformedOf(report);
-    const stored = this.#designReportRepository.store(report);
-    if (!stored.ok)
-      return { kind: "save-failed", error: stored.error };
-    const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-    if (!cross.ok)
-      return { kind: "save-failed", error: cross.error };
-    return {
-      kind: "verified",
-      pass: conformed.passes(),
-      findingsCount: conformed.findingsCount(),
-      skippedCount: conformed.skippedCount(),
-      method: finalMethod
-    };
-  }
-  #persist(report) {
-    return this.#designReportRepository.store(report);
-  }
-  #recomputeCrossCheck(model, irHash, directory) {
-    const siblings = this.#designReportRepository.findAllByDirectory(directory);
-    if (!siblings.ok)
-      return ok(undefined);
-    const stored = this.#persist(siblings.value.crossChecked(DesignReportId.of(directory, CROSS_CHECK_BACKEND2), model, irHash));
-    return stored.ok ? ok(undefined) : stored;
+    const finalized = this.#finalizer.finalize(report, model);
+    if (!finalized.ok)
+      return { kind: "save-failed", error: finalized.error };
+    return finalized.value;
   }
 }
 // src/design/usecase/validate-design-ir-usecase.ts
@@ -9493,7 +10145,7 @@ function main() {
 `);
     process.exit(1);
   }
-  const schemaPath = join7(dirname5(fileURLToPath(import.meta.url)), "data", "deep-spec-design-ir-schema.json");
+  const schemaPath = join8(dirname5(fileURLToPath(import.meta.url)), "data", "deep-spec-design-ir-schema.json");
   const useCase = new ValidateDesignIrUseCase(new DesignIrValidationMaterialsRepositoryImpl({ schemaPath }));
   const outcome = useCase.execute(DesignModelId.of(target.value));
   if (outcome.kind === "not-applicable") {

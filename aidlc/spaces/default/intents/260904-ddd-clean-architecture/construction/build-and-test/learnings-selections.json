@@ -1,0 +1,23 @@
+{
+  "stage_slug": "build-and-test",
+  "space": "default",
+  "intent": "260904-ddd-clean-architecture",
+  "selections": [
+    {
+      "candidate_id": "c4",
+      "kind": "learning",
+      "source_heading": "Deviations",
+      "heading": "Forbidden",
+      "scope": "project",
+      "text": "NEVER `aidlc-workflows/`（AI-DLC エンジンの submodule）を変更しない——core・tests・dist・version・CHANGELOG のいずれも。このリポジトリの開発対象は `deep-spec-analysis/` だけで、本家の不具合は別途本家へ出す（オーナー裁定 2026-09-04、2 度目の指示）。要件が本家の改変を含めていても、この裁定が優先する。"
+    },
+    {
+      "candidate_id": "c3",
+      "kind": "learning",
+      "source_heading": "Deviations",
+      "heading": "Testing Posture",
+      "scope": "project",
+      "text": "Build and Test でコマンド全体が FAIL したら、目標の定義上 Met に読めても失敗の梯子（in-stage fix 2 回 → 分類 → halt-and-ask）を飛ばさない。環境要因の赤は `git check-ignore -v` のように原因を実測で特定してから分類し、判断は人間に返す（2026-09-04）。"
+    }
+  ]
+}

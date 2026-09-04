@@ -1,7 +1,7 @@
 import { type MachineSpec } from "./machine-spec.ts";
 import { type StateNames } from "./state-names.ts";
 import type { LineNumber } from "./line-number.ts";
-import { TargetIds, type ArtifactPath } from "@deep-spec/kernel-domain";
+import { FindingKind, TargetIds, type ArtifactPath } from "@deep-spec/kernel-domain";
 import type { DeclaredEntities } from "./declared-entities.ts";
 import { FD_S1, FD_S2 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
@@ -69,7 +69,7 @@ export class StateMachineSketch {
     }
     const ent = entities.entities().byNormalizedName(entity.normalized());
     if (!ent) {
-      report.finding(FD_S1, "consistency-mismatch", [TargetIds.safe("entity", entName)], [WitnessRef.at(specArt, el, entName)],
+      report.finding(FD_S1, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", entName)], [WitnessRef.at(specArt, el, entName)],
         `state machine names entity "${entName}" which is not declared in entities.md`);
       return;
     }
@@ -85,13 +85,13 @@ export class StateMachineSketch {
     const attrId = TargetIds.safe("attr", `${ent.name().asString()}.${attr.name().asString()}`);
     const rogue = attr.rogueDiagramStates(this.states());
     if (rogue.length > 0) {
-      report.finding(FD_S1, "consistency-mismatch", [attrId],
+      report.finding(FD_S1, FindingKind.consistencyMismatch(), [attrId],
         rogue.map((v) => WitnessRef.at(specArt, el, v)),
         `diagram state(s) ${rogue.join(", ")} are not allowed values of ${ent.name().asString()}.${attr.name().asString()} in entities.md`);
     }
     const dangling = attr.allowedValuesAbsentFrom(this.states());
     if (dangling.length > 0) {
-      report.finding(FD_S2, "consistency-mismatch", [attrId],
+      report.finding(FD_S2, FindingKind.consistencyMismatch(), [attrId],
         dangling.map((v) => WitnessRef.at(entitiesArt, attr.element().asString(), v)),
         `allowed value(s) ${dangling.join(", ")} of ${ent.name().asString()}.${attr.name().asString()} appear in no diagram state`);
     }

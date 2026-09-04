@@ -15,9 +15,9 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Json } from "@deep-spec/kernel-adapter";
-import { SystemClock } from "@deep-spec/kernel-adapter";
-import { TriggerName, FrRefs, ContentHash, ArtifactPath, TargetId, KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
+import type { Json } from "@deep-spec/kernel-infrastructure";
+import { SystemClock, readContractSchema } from "@deep-spec/kernel-adapter";
+import { TriggerName, FrRefs, ContentHash, ArtifactPath, FindingsSchema, TargetId, KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import { AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "@deep-spec/requirements-domain";
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -38,7 +38,7 @@ import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachin
 import { type DesignUnit as DesignUnitType } from "@deep-spec/design-domain";
 import {
   DesignModelRepositoryImpl,
-  DesignReportRepositoryImpl,
+  DesignVerifyDirectoryRepositoryImpl,
   RefinementMaterialsRepositoryImpl,
   RefinementSolverClientImpl,
   SiblingBackendClientImpl,
@@ -83,7 +83,7 @@ import {
   RefinementMapId,
   RefinementStatus,
   RefinementMapAcquisition,
-} from "@deep-spec/refinement-domain";
+} from "@deep-spec/design-domain";
 import { FormalModelRepositoryImpl, buildSmtPlan } from "@deep-spec/requirements-adapter";
 
 // 被覆状態は class（#71 波22）——期待値は公開の面（checkable / gap / skip）から平文へ射影して比較する。
@@ -115,7 +115,9 @@ function golden(file: string): string {
 function wiring(record: string) {
   const modelPath = join(record, ...MODEL_RELPATH);
   const verifyDir = join(dirname(modelPath), "deep-spec-design-verify");
-  const reports = new DesignReportRepositoryImpl(findingsSchemaPath);
+  const reports = new DesignVerifyDirectoryRepositoryImpl();
+  const schema = readContractSchema(findingsSchemaPath);
+  const findingsSchema = schema.ok ? FindingsSchema.of(schema.value) : FindingsSchema.unreadable(schema.error.cause);
   const sibling = new SiblingBackendClientImpl({
     siblingToolPaths: {
       smt: join(toolsDir, "aidlc-sensor-deep-spec-verify-smt.ts"),
@@ -131,7 +133,7 @@ function wiring(record: string) {
     runtimeOverride: undefined,
     workingDirectory: pluginRoot,
   });
-  return { modelPath, verifyDir, reports, sibling, contexts, solver };
+  return { modelPath, verifyDir, reports, findingsSchema, sibling, contexts, solver };
 }
 
 describe("in-process golden equivalence (both interactors, phase 3 included)", () => {
@@ -143,6 +145,7 @@ describe("in-process golden equivalence (both interactors, phase 3 included)", (
       const smt = new VerifyDesignSmtUseCase(
         new DesignModelRepositoryImpl(),
         w.reports,
+        w.findingsSchema,
         w.sibling,
         w.contexts,
         w.solver,
@@ -154,6 +157,7 @@ describe("in-process golden equivalence (both interactors, phase 3 included)", (
       const quint = new VerifyDesignQuintUseCase(
         new DesignModelRepositoryImpl(),
         w.reports,
+        w.findingsSchema,
         w.sibling,
         w.contexts,
         new SystemClock(),

@@ -1,4 +1,4 @@
-import { BackendName, ContentHash, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+import { BackendName, ContentHash, FindingKind, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
 import { CrossCheckedEntries } from "./cross-checked-entries.ts";
 import { CrossCheckedEntry } from "./cross-checked-entry.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
@@ -66,8 +66,8 @@ export class VerificationReports {
             const verdicts: { [backend: string]: "violated" | "clean" } = {};
             verdicts[a.backend] = va ? "violated" : "clean";
             verdicts[b.backend] = vb ? "violated" : "clean";
-            findings.push(VerificationFinding.reconstitute({
-              kind: "cross-check-disagreement",
+            findings.push(VerificationFinding.of({
+              kind: FindingKind.crossCheckDisagreement(),
               frRefs: FrRefs.of([...(scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? [])]).sortedUnique(),
               targets: TargetIds.of([sc.id().asTargetId()]),
               witness: VerificationWitness.verdicts(verdicts),

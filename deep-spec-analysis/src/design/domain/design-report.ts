@@ -6,7 +6,9 @@
 // （findings/skipped/inputs/checked/crossChecked を空にして unavailable 理由
 // だけ残す——旧 writeDesignDoc の自己検証降格と同じ姿）。
 
-import { ContentHash, IrVersion, VerificationMethod } from "@deep-spec/kernel-domain";
+import { ContentHash, IrVersion, SkipReason, VerificationMethod } from "@deep-spec/kernel-domain";
+import type { FindingsSchema } from "@deep-spec/kernel-domain";
+import type { Json } from "@deep-spec/kernel-infrastructure";
 import type { DesignModel } from "./design-model.ts";
 import { DesignFindings } from "./design-findings.ts";
 import { DesignSkipped } from "./design-skipped.ts";
@@ -80,9 +82,9 @@ export class DesignReport {
       method,
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
-        [...u.allTargets()].map((t) => (DesignSkipped.reconstitute({
+        [...u.allTargets()].map((t) => (DesignSkipped.of({
           target: t,
-          reason: "ir-version-mismatch",
+          reason: SkipReason.irVersionMismatch(),
           unit: u.name(),
           detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
         }))),
@@ -108,7 +110,7 @@ export class DesignReport {
       method,
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
-        [...u.allTargets()].map((t) => (DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: skipDetail }))),
+        [...u.allTargets()].map((t) => (DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: skipDetail }))),
       )),
       unavailableReason: reason,
     });
@@ -228,6 +230,59 @@ export class DesignReport {
 
   skippedCount(): number {
     return this.#skipped.count();
+  }
+
+  // 契約2 の文書像。キー順（backend, irVersion, irHash, method, [unavailable],
+  // [inputs], [checked], findings, skipped, [crossChecked]）は契約の知識なので
+  // 集約が所有する——アダプタは JSON.stringify で描画するだけ（golden 凍結）。
+  toDocument(): { [k: string]: Json } {
+    const ordered: { [k: string]: Json } = {
+      backend: this.#id.backendName().asString(),
+      irVersion: this.#irVersion.asString(),
+      irHash: this.#irHash.asString(),
+      method: this.method(),
+    };
+    const reason = this.#unavailableReason;
+    if (reason !== null) ordered.unavailable = { reason };
+    const inputs = this.#inputs;
+    // ContentHash は境界（描画）で asString() へ落とす（キー順は旧挿入順）。
+    if (inputs !== null) ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
+    const checked = this.#checked;
+    if (checked !== null) ordered.checked = checked.toStrings() as unknown as Json;
+    // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
+    // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
+    // frRefs, targets, witness, unit, detail)、skip は (target, reason, unit,
+    // detail?)。witness は DesignWitness が逐語で降りる。
+    ordered.findings = this.#findings.toArray().map((f) => {
+      const out: { [k: string]: Json } = {
+        kind: f.kind(),
+        frRefs: f.frRefs().toStrings() as unknown as Json,
+        targets: f.targets().toStrings() as unknown as Json,
+        witness: f.witness().toDocument() as unknown as Json,
+        unit: f.unit(),
+        detail: f.detail(),
+      };
+      return out as Json;
+    });
+    ordered.skipped = this.#skipped.toArray().map((sk) => {
+      const out: { [k: string]: Json } = { target: sk.target().asString(), reason: sk.reason(), unit: sk.unit() };
+      const detail = sk.detail();
+      if (detail !== undefined) out.detail = detail;
+      return out as Json;
+    });
+    const crossChecked = this.#crossChecked;
+    // crossChecked エントリの凍結キー順は (backend, targets)。
+    if (crossChecked !== null) {
+      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
+    }
+    return ordered;
+  }
+
+  // 契約2 への適合を保証した集約を返す。適合していれば自分自身、していなければ
+  // 降格形（文言は FindingsSchema が凍結で所有する）。
+  conformedTo(schema: FindingsSchema): DesignReport {
+    const reason = schema.degradationReasonFor(this.toDocument());
+    return reason === null ? this : this.degraded(reason);
   }
 }
 

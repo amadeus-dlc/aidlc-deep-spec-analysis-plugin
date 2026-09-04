@@ -7,6 +7,7 @@
     ".": "./index.ts"
   },
   "dependencies": {
+    "@deep-spec/kernel-domain": "workspace:*",
     "@deep-spec/kernel-infrastructure": "workspace:*",
     "@deep-spec/kernel-usecase": "workspace:*"
   }

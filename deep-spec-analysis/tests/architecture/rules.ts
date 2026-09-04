@@ -473,7 +473,7 @@ export const PUBLISHED_LANGUAGE: ReadonlyMap<string, { readonly name: string; re
   ["requirements/domain/attribute-values.ts", { name: "AttributeValues", reason: "enum 宣言値の集合（state トークン——SMT の序数符号化・Quint の集合リテラル順の凍結面）", layers: ["domain", "adapter"] }],
   ["requirements/domain/ir-declared-values.ts", { name: "IrDeclaredValues", reason: "enum 属性の宣言値（state トークン——序数対応・文言順の凍結面）", layers: ["domain", "adapter"] }],
   ["requirements/domain/fr-ref-claim.ts", { name: "FrRefClaim", reason: "frRefs の主張——owner は義務／シナリオ／unformalized の位置が混成する参照トークン", layers: ["domain", "adapter"] }],
-  ["refinement/domain/req-attribute-values.ts", { name: "ReqAttributeValues", reason: "enum 属性の宣言値（state トークン——decode の序数対応の凍結面）", layers: ["domain", "adapter"] }],
+  ["design/domain/req-attribute-values.ts", { name: "ReqAttributeValues", reason: "enum 属性の宣言値（state トークン——decode の序数対応の凍結面）", layers: ["domain", "adapter"] }],
 ]);
 
 // ルール: domain 層にデータモデルを置かない（主従の裁定・MECE フェンス
@@ -732,9 +732,8 @@ export function commandsReturnVoid(relPath: string, rawSource: string): Violatio
 //   domain  → 同一コンテキスト domain・kernel/domain（＋infrastructure）
 //   usecase → 同一コンテキスト {usecase,domain}・kernel/{usecase,domain}（＋infrastructure）
 //   adapter → 同一コンテキスト {adapter,usecase,domain}・kernel 全層
-// 公認のコンテキスト横断エッジは 4 本のみ:
-//   refinement/domain → {requirements,design}/domain
-//   design/{usecase,adapter} → refinement/domain
+// 公認のコンテキスト横断エッジは 1 本のみ（refinement は design/domain へ統合済み）:
+//   design/domain → requirements/domain
 export const ALLOWED_LAYER_TARGETS: { [k in Layer]: readonly Layer[] } = {
   infrastructure: ["infrastructure"],
   domain: ["domain", "infrastructure"],
@@ -743,12 +742,9 @@ export const ALLOWED_LAYER_TARGETS: { [k in Layer]: readonly Layer[] } = {
 };
 
 export const SANCTIONED_CROSS_CONTEXT: readonly { from: string; to: string }[] = [
-  { from: "refinement/domain", to: "requirements/domain" },
-  { from: "refinement/domain", to: "design/domain" },
-  { from: "design/usecase", to: "refinement/domain" },
-  // design のポート Impl（第 2 SMT コンパイラ・refinement 取得系）は
-  // refinement 語彙で通信する——ユースケースが公認消費する語彙の実装面。
-  { from: "design/adapter", to: "refinement/domain" },
+  // refinement/domain は design/domain へ統合された（旧 3 辺は消滅）。design の
+  // 型が requirements の識別子・DP をそのまま再輸出するための唯一の横断辺。
+  { from: "design/domain", to: "requirements/domain" },
 ];
 
 export function layerDirection(relPath: string, source: string): Violation[] {

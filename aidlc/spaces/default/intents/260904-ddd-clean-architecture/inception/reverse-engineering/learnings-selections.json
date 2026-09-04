@@ -1,0 +1,23 @@
+{
+  "stage_slug": "reverse-engineering",
+  "space": "default",
+  "intent": "260904-ddd-clean-architecture",
+  "selections": [
+    {
+      "candidate_id": "c2",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "`conformedOf` と `kernel/infrastructure` は既存裁定として維持し、今 intent では無断で一般的な Clean Architecture の形へ反転しない。まず report finalization の整合性、strict creation と tolerant hydration の分離、具体的な application collaborator による重複削減を優先し、裁定変更が必要な境界は後続段階で明示的に決める。",
+      "source": "orchestrator"
+    },
+    {
+      "candidate_id": "c3",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "Refinement は Design subdomain への統合と独立 bounded context + ACL の二案を残した。独立プロダクト化の根拠がない現状では統合案が小さいが、既存横断エッジを変更するため実装前の人間判断を必須とする。",
+      "source": "orchestrator"
+    }
+  ]
+}

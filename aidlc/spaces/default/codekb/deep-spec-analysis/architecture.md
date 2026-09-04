@@ -1,5 +1,73 @@
 # deep-spec-analysis — アーキテクチャ
 
+## Focused scan 更新: Design／Refinement 検証境界
+
+今回深く確認した範囲は、Design IR を SMT／Quint へ lowering し、Refinement Map を評価し、契約 2 report と cross-check を保存する modular monolith 内部である。物理パッケージは分かれているが、Refinement が Design の出力語彙を直接生成するため、戦略的 DDD の境界と tactical package の境界が一致していない。
+
+```mermaid
+flowchart LR
+  ENTRY["Design sensor entry"] --> UC["design/usecase"]
+  UC --> DD["design/domain"]
+  UC --> RD["refinement/domain"]
+  RD --> RQD["requirements/domain"]
+  RD --> DD
+  DD --> KD["kernel/domain"]
+  RD --> KD
+  DD --> KI["kernel/infrastructure Result"]
+  UC --> PORT["design/usecase ports"]
+  AD["design/adapter"] --> PORT
+  AD --> RD
+  AD --> FS["Schema / filesystem / solvers"]
+```
+
+テキスト代替: sensor entry が Design usecase を組み立て、usecase は Design と Refinement の domain object および ports に依存する。Refinement domain は Requirements と Design の両 domain 語彙を参照する。adapter は ports を実装して Refinement 文書、schema、filesystem、solver を接続する。全 domain/usecase は最内層の `kernel/infrastructure` にある `Result` を利用する。
+
+### Interaction Diagrams — report finalization
+
+```mermaid
+sequenceDiagram
+  participant E as Design entry
+  participant U as SMT or Quint usecase
+  participant B as Sibling backend
+  participant R as Refinement domain
+  participant F as Report finalizer
+  participant P as DesignReportRepository
+  E->>U: execute(design artifact)
+  U->>B: run(lowered unit)
+  B-->>U: sibling verdict document
+  U->>R: assess(map, requirements, design)
+  R-->>U: findings and skips
+  U->>F: finalize(backend report)
+  F->>P: conform against immutable schema snapshot
+  F->>P: lock directory and read sibling reports
+  F->>P: atomic-write backend report and rebuilt cross-check
+  alt finalization failed
+    F-->>U: Err(repository or projection stale)
+    U-->>E: non-verified outcome
+  else finalization succeeded
+    F-->>U: conformed report
+    U-->>E: verified outcome
+  end
+```
+
+テキスト代替: SMT／Quint usecase は backend と refinement の結果を集め、共通 finalizer に渡す。finalizer は一つの schema snapshot で適合させ、directory lock 下で sibling report を読み、backend report と再構築した cross-check を atomic-write する。途中で失敗した場合は成功にせず `Err`／非 verified outcome を返す。
+
+### 主要判断と選択肢
+
+| 判断 | 案 A | 案 B | 推奨 |
+|---|---|---|---|
+| Refinement の境界 | Design の refinement subdomain として統合。変換と公認横断エッジを減らすが独立語彙を弱める | 独立 bounded context を完成し、固有 assessment を Design 側で翻訳。境界は明瞭だが型・変換・byte-frozen 文言の所有点が増える | 独立プロダクト境界の計画がない限り案 A。ただし既存横断エッジの裁定を実装前に人間が更新する |
+| report conformance | Repository instance が schema を一度だけ読み、既存 port/CQS を保つ | prepared report を返す application service へ分離し、3 report 系の裁定を変える | 今回は案 A。案 B は requirements/refcheck を含む横断裁定でのみ行う |
+| report と cross-check の整合性 | cross-check を fingerprint 付き派生 projection とし、stale を明示する | versioned directory + atomic pointer で二ファイルを厳密に同時切替する | 契約 2 の別ファイル配置を守るため前者。directory lock + temp/rename を併用する |
+| usecase 重複 | report finalizer 等の小さな具体的 collaborator を段階抽出 | 一つの template pipeline + 多機能 backend strategy に統合 | 案 A。条件面と generic 型を増やさず、重複した変更理由だけを削る |
+| `kernel/infrastructure` | `foundation` 等へ改名 | 最内層という文書を補強して現状維持 | 今回は案 B。改名の広い churn は独立 intent にする |
+
+`LoweredUnit` の分解では、lowering と remap を domain の意味として維持する。専用 domain service を新設するのではなく、`DesignUnit`／宣言群、`LoweredUnit`、兄弟 verdict document のどの domain object が判断を所有するかを先に決める。domain service が必要なら project rule に従い人間裁定を得る。
+
+セキュリティ／コンプライアンス面では、新規の認証・PII 境界はない。完全性と監査可能性が主要リスクであり、外部文書の adapter 検証、正準順、byte-frozen 文言、atomic write、lock の対象 directory の固定を維持する。古い cross-check を最新の検証証跡として返さないことが必須である。
+
+以下の導入・更新サブシステムとランタイム全体の分析は既存 store の履歴知識として保持する。
+
 ## Focused scan 更新: 導入・更新サブシステム
 
 今回確認した導入経路は、単一の `scripts/install.ts` が CLI 解釈、source checkout の特定、framework toolchain の特定、projection build、既存 payload の refresh／tombstone、compose、doctor を直列に実行する構造である。source root は `import.meta.dir`、builder・`plugin-targets.json`・dry-run の plugin test は sibling `aidlc-workflows/core/tools` から解決されるため、stdin bootstrap や配布 archive と処理本体を分離する port がない。
@@ -26,6 +94,8 @@ flowchart LR
   VERIFY --> PROV["install provenance atomic write（未実装）"]
   PROV --> UPDATE["--update / version advisory（未実装）"]
 ```
+
+テキスト代替: installer CLI が source selector と導入先 toolchain を解決し、local checkout または GitHub archive から得た source を導入先 builder へ渡す。build 後に既存 refresh／tombstone／compose を実行し、plugin test／doctor 成功後だけ provenance を原子的に保存する。`--update` と version advisory はその記録を参照する。
 
 以降の既存分析は形式検証ランタイム全体の前回 store 由来で、今回の focused scan では再検証していない。
 
@@ -188,6 +258,8 @@ sequenceDiagram
   I->>D: 記録版と最新 tag の advisory
   I-->>U: changed / no-op / actionable error
 ```
+
+テキスト代替: 利用者が installer に source selector または update を渡す。installer は既存 provenance を必要に応じて読み、source resolver が local checkout または GitHub から source と version を取得する。導入先 toolchain が projection を build し、成功後だけ refresh／compose を開始する。verify 成功後に provenance を atomic write し、doctor の version advisory と最終結果を利用者へ返す。
 
 ### 1. センサーの発火（ディスパッチャ → entry → usecase → adapter → 子プロセスのソルバー → findings JSON）
 

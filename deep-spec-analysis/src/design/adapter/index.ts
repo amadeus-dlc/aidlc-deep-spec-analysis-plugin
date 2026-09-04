@@ -8,11 +8,10 @@ export { SiblingBackendClientImpl } from "./sibling-backend-client-impl.ts";
 export { type SiblingBackendClientConfig } from "./sibling-backend-client-config.ts";
 export { parseSiblingVerdictDocument } from "./sibling-document-parser.ts";
 export {
-  conformDesignReport,
   parseSiblingDesignReportDocument,
   renderDesignReportBytes,
 } from "./design-report-serializer.ts";
-export { DesignReportRepositoryImpl } from "./design-report-repository-impl.ts";
+export { DesignVerifyDirectoryRepositoryImpl } from "./design-verify-directory-repository-impl.ts";
 export { probeReached, reachabilityVariant } from "./reachability-variant.ts";
 export { type RefinementChildQuery } from "./refinement-child-query.ts";
 export { type RefinementQueryPlan, assembleQuery, buildRefinementQueries, decodeDesignModel, designBase, refinementSmtContext, smtOfExpr } from "./refinement-query-plan.ts";

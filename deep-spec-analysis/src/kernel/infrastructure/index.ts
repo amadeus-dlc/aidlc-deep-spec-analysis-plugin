@@ -7,3 +7,6 @@
 export { type Result, ok, err, unreachable } from "./result.ts";
 export { type Err } from "./err.ts";
 export { type Ok } from "./ok.ts";
+export { type Json, isObject, strArr } from "./json.ts";
+export { type Schema, validateSchema } from "./schema.ts";
+export { canonicalStringify } from "./canonical-json.ts";

@@ -1,8 +1,59 @@
 # deep-spec-analysis — コンポーネント一覧
 
-今回の `analyzed.components` は、次の見出し8件と逐語一致する。以降に残す前回 store の全体 inventory は `UNVERIFIED` な履歴知識であり、今回の verified component list には含めない。
+今回の `analyzed.components` は、次の見出し7件と逐語一致する。以降に残す過去の focused scan と全体 inventory は `UNVERIFIED` な履歴知識であり、今回の verified component list には含めない。
 
-## 今回検証したコンポーネント
+## 今回検証したコンポーネント（DDD／クリーンアーキテクチャ）
+
+### Refinement Domain
+
+- **実体**: `src/refinement/domain/`
+- **責務**: Requirements と Design の refinement map、被覆分類、SMT／Quint の検査計画・判定。
+- **依存**: `requirements/domain`、`design/domain`、`kernel/domain`、`kernel/infrastructure`。
+- **評価**: at-risk。独立 package でありながら Design の finding／skip／lowered obligation を生成する。統合または ACL の人間裁定が必要。
+
+### Design Domain
+
+- **実体**: `src/design/domain/`
+- **責務**: Design IR、lowering、兄弟 verdict の remap、Design report と cross-check の不変条件。
+- **依存**: `kernel/domain`、`kernel/infrastructure`。
+- **評価**: at-risk。`LoweredUnit` に lowered 値、builder、translator の三つの変更理由が同居するが、domain の意味を adapter へ漏らしてはならない。
+
+### Design Verification Use Cases
+
+- **実体**: `src/design/usecase/verify-design-smt-usecase.ts`、`verify-design-quint-usecase.ts`
+- **責務**: 入力取得、lowering、backend 実行、refinement、report／cross-check の finalization。
+- **依存**: Design／Refinement domain と usecase ports。
+- **評価**: degraded。252行と341行の usecase が共通 lifecycle を複製し、finalization の失敗黙殺も二重化している。
+
+### Design Report Repository Adapter
+
+- **実体**: `src/design/usecase/port/design-report-repository.ts`、`src/design/adapter/design-report-repository-impl.ts`、`design-report-serializer.ts`
+- **責務**: 契約 2 conformance、report 検索、filesystem 保存。
+- **依存**: schema reader／validator、filesystem、Design report。
+- **評価**: degraded。同一操作で schema を二度読み、最終パスを直接上書きする。directory writer の直列化と stale cross-check の明示がない。
+
+### Kernel Domain Contracts
+
+- **実体**: `src/kernel/domain/verification-method.ts`、`finding-kind.ts`
+- **責務**: 契約 2 の共有語彙、分類順位、正準化。
+- **依存**: `kernel/infrastructure`。
+- **評価**: at-risk。未知値を読む寛容性は必要だが、正常生成の strict gate と分離されていない。
+
+### Kernel Infrastructure Result Foundation
+
+- **実体**: `src/kernel/infrastructure/`
+- **責務**: `Result`、`Ok`、`Err`、`unreachable` という言語拡張。
+- **依存**: なし。
+- **評価**: healthy but surprising。最内層という人間裁定に適合するが、一般的な infrastructure 用語との摩擦がある。
+
+### Architecture and Pipeline Test Suite
+
+- **実体**: `tests/architecture/rules.ts`、`tests/architecture.test.ts`、`tests/design-pipeline.test.ts`、`tests/refinement-pipeline.test.ts`
+- **責務**: 層・CQS・published language・domain 種別と、lowering／remap／report／cross-check の振る舞いを固定する。
+- **依存**: `bun:test`、workspace packages、golden fixtures。
+- **評価**: healthy but incomplete。focused baseline は84 pass、typecheck も成功したが、schema TOCTOU、partial finalization、並行 writer の失敗系が未固定。
+
+## 過去の focused scan で検証したコンポーネント（今回未再検証）
 
 ### Installer CLI / Transaction
 

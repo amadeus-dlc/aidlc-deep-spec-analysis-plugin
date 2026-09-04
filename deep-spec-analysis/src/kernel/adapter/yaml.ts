@@ -7,7 +7,7 @@
 // as "unsupported YAML feature" — out-of-subset input is an error, never an
 // interpretation guess (NFR: deterministic parsing).
 
-import { type Json } from "./json.ts";
+import { type Json } from "@deep-spec/kernel-infrastructure";
 
 export type Yaml = Json;
 

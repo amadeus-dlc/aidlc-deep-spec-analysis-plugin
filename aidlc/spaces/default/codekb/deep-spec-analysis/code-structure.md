@@ -1,5 +1,22 @@
 # deep-spec-analysis — コード構成
 
+## Focused scan 更新: Design／Refinement の変更境界
+
+| パス | 現行責務 | 構造上の論点 | 推奨する所有境界 |
+|---|---|---|---|
+| `src/refinement/domain/` | 要件 IR と設計 IR の対応、refinement 計画・判定 | Design の finding／skip／lowering 語彙を直接生成し、bounded-context の自立性が曖昧 | Design subdomain へ統合するか、Refinement 固有 assessment を Design 側で翻訳するかを人間裁定する |
+| `src/design/domain/lowered-unit.ts` | lowered 値、build、兄弟 verdict の remap | 384 行に三つの変更理由が同居 | `LoweredUnit` は結果と index の不変条件を所有し、lowering と remap は既存 domain object の振る舞いへ分配する。新規 domain service は裁定なしに作らない |
+| `src/design/usecase/verify-design-{smt,quint}-usecase.ts` | 検証全体の編成 | 同型の取得・refinement・finalization が重複 | まず具体的な report finalizer、次に同型の acquisition／sibling run だけを抽出。条件だらけの generic strategy は避ける |
+| `src/design/usecase/port/design-report-repository.ts` | report conformance、検索、保存 | Repository と schema adapter の境界が混在するが、CQS と stdout/file 一致のために人間裁定済み | 現行 port を維持し、Repository instance が immutable schema snapshot を持つ最小修正を先行する |
+| `src/design/adapter/design-report-repository-impl.ts` | schema 検証と filesystem 永続化 | schema 二重観測、直接上書き、directory writer の競合 | 既存の atomic write helper を再利用し、directory 単位 lock と stale projection 検出を一つの finalization 経路へ集約する |
+| `src/kernel/domain/{verification-method,finding-kind}.ts` | 契約 2 の共有語彙 | 寛容な再構成口が正常生成にも流用される | strict `of`／`parse` と tolerant `reconstitute` を分離し、正常生成は検証済み DP のみ受ける |
+| `src/kernel/infrastructure/` | `Result`、`Ok`、`Err`、`unreachable` | 一般的な infrastructure の意味と逆だが、最内層という裁定がある | 今回は配置を維持し、package README／architecture 文書で言語拡張基盤だと明示する |
+| `tests/architecture/rules.ts` | 層、CQS、domain 種別、published language の構造ゲート | 既存裁定を強く固定しており、局所修正で無断変更できない | 新しい境界を決めた後に red example → 実装 → green example の順で規則を更新する |
+
+production code は最大 395 行で、1,000 行超えはない。分解の目的は行数削減ではなく変更理由の分離である。`tests/refinement-pipeline.test.ts`（1,021 行）と `tests/ir-validation.test.ts`（1,198 行）は、機能追加時に fixture／契約別の分割候補だが、この Reverse Engineering では変更しない。
+
+以下の配布関連と旧 `tools/` 構造の本文は既存 store 由来であり、今回の深い解析対象外は履歴知識として保持する。
+
 ## Focused scan で確認した配布関連の構成
 
 | パス | 現行責務 | intent による変更面 |

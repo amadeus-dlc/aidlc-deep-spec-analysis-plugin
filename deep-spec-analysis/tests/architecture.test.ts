@@ -303,8 +303,10 @@ describe("rule red/green examples (detection power proof)", () => {
   test("layer-direction flags domain→adapter, adapter→foreign-context, passes sanctioned edges", () => {
     expect(layerDirection("kernel/domain/x.ts", 'import { y } from "../adapter/y.ts";')).not.toHaveLength(0);
     expect(layerDirection("refcheck/adapter/x.ts", 'import { y } from "../../design/domain/y.ts";')).not.toHaveLength(0);
-    expect(layerDirection("refinement/domain/x.ts", 'import { y } from "../../requirements/domain/y.ts";')).toHaveLength(0);
-    expect(layerDirection("design/usecase/x.ts", 'import { y } from "../../refinement/domain/y.ts";')).toHaveLength(0);
+    // green: 公認のコンテキスト横断エッジ（design/domain → requirements/domain）は相対 import でも通る。
+    expect(layerDirection("design/domain/x.ts", 'import { y } from "../../requirements/domain/y.ts";')).toHaveLength(0);
+    // red: design/usecase → refinement/domain は旧エッジ（refinement は design/domain へ統合済み）——もう公認されない。
+    expect(layerDirection("design/usecase/x.ts", 'import { y } from "../../refinement/domain/y.ts";')).not.toHaveLength(0);
     expect(layerDirection("design/usecase/x.ts", 'import { y } from "../domain/y.ts";')).toHaveLength(0);
   });
 
@@ -315,10 +317,14 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(layerDirection("requirements/domain/x.ts", 'import { y } from "@deep-spec/kernel-domain";')).toHaveLength(0);
     // red: 同一コンテキストでも層の向きは守る（domain → adapter）。
     expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/kernel-adapter";')).not.toHaveLength(0);
-    // green: 公認のコンテキスト横断エッジは bare でも通る。
-    expect(layerDirection("refinement/domain/x.ts", 'import { y } from "@deep-spec/requirements-domain";')).toHaveLength(0);
-    expect(layerDirection("design/usecase/x.ts", 'import { y } from "@deep-spec/refinement-domain";')).toHaveLength(0);
+    // green: 公認のコンテキスト横断エッジ（design/domain → requirements/domain）は bare でも通る。
+    expect(layerDirection("design/domain/x.ts", 'import { y } from "@deep-spec/requirements-domain";')).toHaveLength(0);
+    expect(layerDirection("design/usecase/x.ts", 'import { y } from "@deep-spec/design-domain";')).toHaveLength(0);
     expect(layerDirection("requirements/usecase/x.ts", 'import { ok } from "@deep-spec/kernel-infrastructure";')).toHaveLength(0);
+    // red: refinement/domain → requirements/domain は旧エッジ——SANCTIONED_CROSS_CONTEXT から削除済みでもう公認されない。
+    expect(layerDirection("refinement/domain/x.ts", 'import { y } from "@deep-spec/requirements-domain";')).not.toHaveLength(0);
+    // red: refinement パッケージ自体が削除済み——旧 refinement package への import を拒否する。
+    expect(layerDirection("design/usecase/x.ts", 'import { y } from "@deep-spec/refinement-domain";')).not.toHaveLength(0);
     // red: 合成ルートのパッケージと、層パッケージでない @deep-spec/* は素通ししない。
     expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/entries";')).not.toHaveLength(0);
     expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/kernel-sneaky";')).not.toHaveLength(0);
@@ -402,9 +408,16 @@ describe("rule red/green examples (detection power proof)", () => {
       name: "@deep-spec/refcheck-usecase",
       dependencies: { "@deep-spec/refcheck-domain": ws, "@deep-spec/kernel-infrastructure": ws },
     })).toHaveLength(0);
+    // red: refinement/domain は削除済み——旧 2 辺（→requirements/domain・→design/domain）は
+    // SANCTIONED_CROSS_CONTEXT から外れ、宣言しても構造による強制は開かない。
     expect(manifestDependencyDirection("refinement/domain/package.json", {
       name: "@deep-spec/refinement-domain",
       dependencies: { "@deep-spec/requirements-domain": ws, "@deep-spec/design-domain": ws },
+    })).not.toHaveLength(0);
+    // green: 新しい公認のコンテキスト横断エッジ（design/domain → requirements/domain）は宣言できる。
+    expect(manifestDependencyDirection("design/domain/package.json", {
+      name: "@deep-spec/design-domain",
+      dependencies: { "@deep-spec/kernel-domain": ws, "@deep-spec/kernel-infrastructure": ws, "@deep-spec/requirements-domain": ws },
     })).toHaveLength(0);
     expect(manifestDependencyDirection("kernel/infrastructure/package.json", {
       name: "@deep-spec/kernel-infrastructure",
@@ -448,6 +461,16 @@ describe("the real src/ tree", () => {
     expect(all).toEqual([]);
   });
 
+  // NFR5 / BR7.6: production ファイルは 1 ファイルあたり 1,000 行未満に収める。
+  const MAX_PRODUCTION_FILE_LINES = 1000;
+
+  test("every production file under src/ stays below the 1,000-line ceiling (NFR5 / BR7.6)", () => {
+    const oversized = files
+      .map((rel) => ({ rel, lines: readFileSync(join(srcDir, rel), "utf-8").split("\n").length }))
+      .filter(({ lines }) => lines >= MAX_PRODUCTION_FILE_LINES);
+    expect(oversized).toEqual([]);
+  });
+
   test("the published-language table is the only exemption: every entry exists, exports its name, and lives in the domain", () => {
     // 表の項目を足すのは裁定であって便宜ではない——件数を凍結しておく。
     expect(PUBLISHED_LANGUAGE.size).toBe(11);
@@ -485,8 +508,9 @@ describe("the real src/ tree", () => {
   // 禁止方向の辺を宣言すればこのテストが、許可表を狭めれば宣言側が違反になる。
   test("every layer manifest declares only edges the layer tables allow", () => {
     const manifests = walkLayerManifests();
-    // 17 層ちょうど。層を足したり消したりすればここで気づく。
-    expect(manifests.length).toBe(17);
+    // 16 層ちょうど（refinement/domain は design/domain へ統合され層が 1 つ減った）。
+    // 層を足したり消したりすればここで気づく。
+    expect(manifests.length).toBe(16);
     const violations = manifests.flatMap(({ rel, manifest }) => manifestDependencyDirection(rel, manifest));
     expect(violations).toEqual([]);
     // 走査が空振りしていないことの証明——実ツリーに辺が実在する。

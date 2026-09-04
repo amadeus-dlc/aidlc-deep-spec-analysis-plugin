@@ -1,9 +1,23 @@
 // 設計 IR の 1 ユニット。rawEntities は契約3 のエンティティスキーマ断片の
 // 素通し（lowering が契約1 文書へそのまま埋め込む）で、enum 値の照会だけを
 // ドメインが行う。allUnitTargets / enumValuesOf は旧自由関数のメソッド化。
+//
+// lowering（設計ユニット＝契約3 を契約1 の要件 IR へ落とす COMPILE-DOWN
+// REUSE の中核）の意味はユニット自身が所有する——OB-n / SC-n / BG-n の採番、
+// event 候補の収集、合成トートロジー不変量、帰属索引の組成。各宣言の降ろし方
+// はその宣言に問う（旧 buildLowering 自由関数からの移管、BR6.2）。遷移は
+// state==from の暗黙ガードと state'=to の効果を持つ event 義務へ、ignores は
+// 明示 no-op event へ（意図された沈黙が gap / deadlock として読まれないように）。
+// 設計だけの 2 検査は合成トートロジー不変量で v1 の前件空虚クエリに相乗りする：
+//   unreachable — implies(guard, true)：前件（ガード）の非充足性が死そのもの
+//   redundancy  — implies(and(guardB, not(guardA)), true)：空虚性が
+//                 guardB => guardA を証明し、効果が正準同一なら B は包摂される
+// 合成不変量はトートロジーなので、大域・gap・シナリオの判定を変えない。
+// OB-n / SC-n / BG-n の採番・整列順は文書バイト（子の処理順）に効く凍結面。
 
 import { DesignUnitId } from "./design-unit-id.ts";
-import { TargetIds, UnitName } from "@deep-spec/kernel-domain";
+import { AttributePath, ExpressionTree, FrRefs, KeyedIndex, TargetIds, UnitName } from "@deep-spec/kernel-domain";
+import type { Expression } from "@deep-spec/kernel-domain";
 import { DesignMachines } from "./design-machines.ts";
 import { DesignObligations } from "./design-obligations.ts";
 import { DesignScenarios } from "./design-scenarios.ts";
@@ -11,12 +25,21 @@ import type { DesignAttributeDecl } from "./design-attribute-decl.ts";
 import type { DesignEntityDecls } from "./design-entity-decls.ts";
 import { AttrPaths } from "./attr-paths.ts";
 import { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
-
-
-
-
-
-
+import type { DesignMachine } from "./design-machine.ts";
+import type { DesignMachineId } from "./design-machine-id.ts";
+import type { DesignScenarioId } from "./design-scenario-id.ts";
+import type { DesignTransitionId } from "./design-transition-id.ts";
+import type { LoweredBackground } from "./lowered-background.ts";
+import { LoweredBackgrounds } from "./lowered-backgrounds.ts";
+import { LoweredId } from "./lowered-id.ts";
+import { LoweredObligation } from "./lowered-obligation.ts";
+import { LoweredObligations } from "./lowered-obligations.ts";
+import { LoweredOrigin } from "./lowered-origin.ts";
+import { LoweredOriginRef } from "./lowered-origin-ref.ts";
+import type { LoweredScenario } from "./lowered-scenario.ts";
+import { LoweredScenarios } from "./lowered-scenarios.ts";
+import { LoweredUnit } from "./lowered-unit.ts";
+import { LoweringIndex } from "./lowering-index.ts";
 
 export class DesignUnit {
   readonly #unit: UnitName;
@@ -100,6 +123,133 @@ export class DesignUnit {
   // このユニットでバックエンドが検査し得る全対象（義務・遷移・シナリオ）。
   allTargets(): TargetIds {
     return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()]).sortedUniqueCanonically();
+  }
+
+  // このユニットの lowering。synthetics は設計だけの 2 検査（到達不能・包摂）を
+  // 前件空虚クエリへ相乗りさせる合成トートロジーの生成可否（SMT のみ true）。
+  lowered(opts: { synthetics: boolean }): LoweredUnit {
+    // 同トリガ・正準同一効果の包摂を測るための event 候補。この 1 手順の内側
+    // だけで生きる門の署名で、ドメインオブジェクトではない（旧 buildLowering
+    // の EventCandidate の逐語移管）。
+    interface EventCandidate {
+      design: string;
+      trigger: string;
+      guard: Expression;
+      effect: Expression;
+    }
+
+    const obligations: LoweredObligation[] = [];
+    const origins: (readonly [LoweredId, LoweredOrigin])[] = [];
+    const machinesByTransition: (readonly [DesignTransitionId, DesignMachine])[] = [];
+    const attrPathsByMachine: (readonly [DesignMachineId, AttributePath])[] = [];
+    const candidates: EventCandidate[] = [];
+    let n = 0;
+    const nextId = (): LoweredId => {
+      n += 1;
+      return LoweredId.reconstitute(`OB-${n}`);
+    };
+
+    // 1) 設計義務は素通し（frRefs は帰属のため保持。空の frRefs は lowered
+    //    文書で適法——v1 バックエンドは frRefs を不透明な帰属文字列として扱う）。
+    for (const ob of this.#obligations.sortedCanonically()) {
+      const id = nextId();
+      obligations.push(ob.loweredAs(id));
+      origins.push([id, ob.loweredOrigin()]);
+      const event = ob.eventDefinition();
+      if (event !== null) {
+        candidates.push({ design: ob.id().asString(), trigger: event.trigger.asString(), guard: event.guard, effect: event.effect });
+      }
+    }
+
+    // 2) 状態機械のコンパイルダウン：遷移 → 暗黙ガード・効果つき event 義務、
+    //    ignores → 明示 no-op event。降ろし方は遷移／ignore 自身が知っている。
+    for (const sm of this.#machines.sortedCanonically()) {
+      const attrPath = DesignMachines.attrPathOf(sm);
+      attrPathsByMachine.push([sm.id(), AttributePath.reconstitute(attrPath)]);
+      for (const tr of sm.transitions().sortedCanonically()) {
+        const id = nextId();
+        obligations.push(tr.loweredAs(id, attrPath));
+        origins.push([id, tr.loweredOrigin()]);
+        machinesByTransition.push([tr.id(), sm]);
+        candidates.push({ design: tr.id().asString(), trigger: tr.trigger().asString(), guard: tr.loweredGuard(attrPath), effect: tr.loweredEffect(attrPath) });
+      }
+      for (const ig of sm.ignores().sortedByStateTrigger()) {
+        const id = nextId();
+        obligations.push(ig.loweredAs(id, attrPath));
+        origins.push([id, sm.loweredIgnoreOrigin()]);
+      }
+    }
+
+    // 3) 合成トートロジー（SMT lowering のみ）：死ガードと包摂が v1 の前件
+    //    空虚検査に相乗りする。
+    if (opts.synthetics) {
+      for (const c of candidates) {
+        const id = nextId();
+        obligations.push(LoweredObligation.reconstitute({ id, nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
+        origins.push([id, LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(c.design), kind: "vac-dead" })]);
+      }
+      const byTrigger = new Map<string, EventCandidate[]>();
+      for (const c of candidates) {
+        const list = byTrigger.get(c.trigger) ?? [];
+        list.push(c);
+        byTrigger.set(c.trigger, list);
+      }
+      for (const trigger of [...byTrigger.keys()].sort()) {
+        const list = byTrigger.get(trigger) ?? [];
+        for (const a of list) {
+          for (const b of list) {
+            if (a === b) continue;
+            if (!ExpressionTree.of(a.effect).isCanonicallyEqual(ExpressionTree.of(b.effect))) continue;
+            // (guardB and not guardA) の空虚性は guardB => guardA を証明する：
+            // b は a に包摂される（同トリガ・証明可能に狭いガード・同一効果）。
+            const id = nextId();
+            obligations.push(LoweredObligation.reconstitute({
+              id,
+              nature: "invariant",
+              frRefs: FrRefs.of([]),
+              assert: {
+                op: "implies",
+                args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }],
+              },
+            }));
+            origins.push([id, LoweredOrigin.reconstitute({
+              design: LoweredOriginRef.reconstitute(`${a.design}|${b.design}`),
+              kind: "vac-shadow",
+              pair: [LoweredOriginRef.reconstitute(a.design), LoweredOriginRef.reconstitute(b.design)],
+            })]);
+          }
+        }
+      }
+    }
+
+    // 4) シナリオと背景。
+    const scenarios: LoweredScenario[] = [];
+    const scenarioDesignIds: (readonly [LoweredId, DesignScenarioId])[] = [];
+    let scN = 0;
+    for (const sc of this.#scenarios.sortedCanonically()) {
+      scN += 1;
+      const id = LoweredId.reconstitute(`SC-${scN}`);
+      scenarios.push(sc.loweredAs(id));
+      scenarioDesignIds.push([id, sc.id()]);
+    }
+    const background: LoweredBackground[] = [];
+    let bgN = 0;
+    for (const bg of this.#background.sortedCanonically()) {
+      bgN += 1;
+      background.push(bg.loweredAs(LoweredId.reconstitute(`BG-${bgN}`)));
+    }
+
+    return LoweredUnit.of({
+      obligations: LoweredObligations.of(obligations),
+      scenarios: LoweredScenarios.of(scenarios),
+      background: LoweredBackgrounds.of(background),
+      index: LoweringIndex.of({
+        origins: KeyedIndex.of(origins),
+        scenarioDesignIds: KeyedIndex.of(scenarioDesignIds),
+        machinesByTransition: KeyedIndex.of(machinesByTransition),
+        attrPathsByMachine: KeyedIndex.of(attrPathsByMachine),
+      }),
+    });
   }
 
   // 属性座標の宣言を引く（最初に一致した宣言——凍結挙動）。

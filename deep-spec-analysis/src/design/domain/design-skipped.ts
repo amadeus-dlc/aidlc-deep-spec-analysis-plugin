@@ -1,23 +1,30 @@
-import { type TargetId, UnitName } from "@deep-spec/kernel-domain";
+import { type TargetId, SkipReason, UnitName } from "@deep-spec/kernel-domain";
 
 // 設計検証の skip（契約2 の設計版）——対象・理由・帰属ユニット・任意の説明。
 // 正準順（unit → target → reason）と「その対象の skip か」の判定は記録自身の
 // 知識（#71 波17）。reason は分類文字列、detail は prose（裁定の恒久除外）。
+// 門は 2 つ：of は検証済み SkipReason だけを受け取る正常生成口、reconstitute は
+// 生文字列を受ける寛容な hydration 口（書かれた文書の降格試験が未知の reason を
+// 運びうるため、内部で SkipReason.reconstitute する）。
 export class DesignSkipped {
   readonly #target: TargetId;
-  readonly #reason: string;
+  readonly #reason: SkipReason;
   readonly #unit: UnitName;
   readonly #detail: string | undefined;
 
-  private constructor(props: { target: TargetId; reason: string; unit: string; detail?: string }) {
+  private constructor(props: { target: TargetId; reason: SkipReason; unit: string; detail?: string }) {
     this.#target = props.target;
     this.#reason = props.reason;
     this.#unit = UnitName.reconstitute(props.unit);
     this.#detail = props.detail;
   }
 
-  static reconstitute(props: { target: TargetId; reason: string; unit: string; detail?: string }): DesignSkipped {
+  static of(props: { target: TargetId; reason: SkipReason; unit: string; detail?: string }): DesignSkipped {
     return new DesignSkipped(props);
+  }
+
+  static reconstitute(props: { target: TargetId; reason: string; unit: string; detail?: string }): DesignSkipped {
+    return new DesignSkipped({ ...props, reason: SkipReason.reconstitute(props.reason) });
   }
 
   target(): TargetId {
@@ -25,7 +32,7 @@ export class DesignSkipped {
   }
 
   reason(): string {
-    return this.#reason;
+    return this.#reason.asString();
   }
 
   unit(): string {
@@ -45,6 +52,6 @@ export class DesignSkipped {
     if (!this.#unit.equals(other.#unit)) return this.#unit.asString() < other.#unit.asString() ? -1 : 1;
     const c = this.#target.compareTo(other.#target);
     if (c !== 0) return c;
-    return this.#reason < other.#reason ? -1 : this.#reason > other.#reason ? 1 : 0;
+    return this.#reason.compareTo(other.#reason);
   }
 }

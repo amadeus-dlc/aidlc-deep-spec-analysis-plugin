@@ -2183,3 +2183,134 @@ skipped 2・exhaustive / Quint 2 findings・skipped 3・bounded（実
 Apalache） / cross-check SC-3・SC-5 で disagreement 0 となり、3
 ファイルとも移行前の基線と byte 同一。golden とパリティスナップ
 ショットは無変更。
+
+## Repository の語彙と verify directory 集約——適合は Repository を離れ、cross-check は集約の Option になり、strict な生成と寛容な hydration が分かれる（2026-09-04）
+
+3 つの report repository（`design`・`requirements`・`refcheck`）には、
+stdout に出す verdict をディスクに落ちるのと同じ姿から導くための照会
+`conformedOf(report)`——「`store` が書くはずの姿」を返す——が育っていた。
+この intent の途中では design の port に、directory lock と cross-check の
+再構築を運ぶための変種 `storeConformed(report, model)` と
+`storeConformedWithoutCrossCheck(report)` まで足された。オーナーはこれを
+すべて退けた：
+
+> リポジトリ責務は集約を I/O することです。保存・検索・取得・削除しか
+> 語彙がないです。リポジトリのインターフェイスはこの語彙にしか依存でき
+> ない。これ以外の語彙のインターフェイスがほしいのなら、集約の設計を
+> 見直せ。集約は一塊なのです。`employeeAggregate.deptIdOpt: Option<DeptId>`
+> みたいにしないとダメです。リポジトリで吸収するな。
+
+これは `conformedOf` を Repository 境界に残した 2026-09-01 の裁定と、
+それを維持した functional-design の判断を覆す。置き換えは次のとおり。
+
+- **Repository の port は `find` と `store(aggregate)` だけ。**
+  `DesignVerifyDirectoryRepository` と `VerificationDirectoryRepository`
+  は `findByDirectory(directory)` と `store(aggregate)`、
+  `ReferenceCheckReportRepository` は `findById(id)` と `store(report)`
+  を持つ。`conformedOf`・`findAllByDirectory`・`storeConformed*` 系・
+  schema path のコンストラクタ引数は 3 つとも消えた。`RepositoryError` は
+  3 変種のまま、保存時の競合は `io-failed` に型のある `cause` を載せて運ぶ。
+- **verify directory が集約である。** `DesignVerifyDirectory` と
+  `VerificationDirectory` は directory で識別され、backend ごとの report
+  （backend 名で引くファーストクラスコレクション）、この実行が置く
+  `candidate`、そして **`crossCheck: Report | null`**——導けないとき
+  （IR が読めなかったとき）は不在、`crossChecked(model, irHash)` が現在の
+  reports から導いたときは在——を持つ。`finalizing(report)` は同じ
+  backend の兄弟をファイル名順を保って置換する（adapter の `withCandidate`
+  を集約へ戻した）。`withoutCrossCheck()` は「cross-check は無い」を
+  Repository のメソッドではなく集約が言う形。
+- **適合は集約自身の振る舞い。** `FindingsSchema` は契約2 の JSON Schema を
+  包む `kernel/domain` の値オブジェクトで、`unreadable(cause)` 変種と、
+  凍結文言（`findings schema unreadable: <cause>`、`self-validation against
+  deep-spec-findings-schema.json failed: <最初の error>`）を返す
+  `degradationReasonFor(document)` を持つ。各 report は `toDocument()`
+  （serializer の `orderedDocument` を逐語で移設。正準順は契約2 の知識で
+  domain の所有）と `conformedTo(schema)` を得た。これを可能にした純粋な
+  部品——`Json`・`isObject`・`validateSchema`・`canonicalStringify`——は
+  `kernel/adapter` から最内層 `kernel/infrastructure` へ移り、adapter には
+  I/O（`readContractSchema`）だけが残る。合成ルートが schema を 1 回だけ読み
+  値オブジェクトを usecase へ注入し、Repository は schema を見ない。降格した
+  候補は旧実装と同じく cross-check を導く**前**に適合させるので、cross-check
+  の byte は変わらない。
+- **`store(aggregate)` が finalization の手順を丸ごと隠す。** adapter の
+  内側、port には見えない：directory lock を取る（owner token・PID・30 秒
+  lease・非待機の単発 exclusive create・lease 期限切れ**かつ**所有者不在の
+  確定時だけ回復・公開 rename ごとの token fencing・owner 固有の stale／
+  cleanup path・canonical path を直接消さない）。lock の中で兄弟を読み直し、
+  candidate 以外の report が load 時と違えば `conflict: sibling set changed
+  since load` で拒む。render する。公開済み `cross-check.json` を `*.json`
+  でない stale 名へ先に退避する。candidate を正準 atomic-write helper で
+  公開する。新しい cross-check を同じく公開するか、無ければ欠落のままにする。
+  `finally` で cleanup する。読む側では、壊れた兄弟は型のある失敗であって
+  黙って除かれることはなく、導出物の `cross-check.json` だけを寛容に読む。
+  `DirectoryFinalizationLock` は `kernel/adapter` に置いて共有し、context
+  ごとに lock のファイル名を注入する。
+- **沈黙の成功は消えた。** design の 2 usecase と requirements の 2 usecase
+  は `if (!siblings.ok) return ok(undefined);` を持ち、読めない兄弟
+  directory があると cross-check の更新が「成功」していた。
+  `DesignReportFinalizer`／`VerificationReportFinalizer` が
+  `find → finalizing → conformedTo → crossChecked | withoutCrossCheck →
+  conformedTo → store` を 1 か所で持ち、`store` が成功したときだけ、保存
+  した集約から pass と件数を導いて `verified` を返す。
+  `DesignVerificationAcquirer` は model 取得・3 つの失敗分類・IR version
+  検査を、閉じた `ready | terminal` 結果と compile-time の `never` 検査で
+  所有する。
+- **strict な生成と寛容な hydration は別の門。** `VerificationMethod.parse`、
+  新設の `SkipReason`（契約2 の 9 値。`DesignSkipped` の素の `string` を
+  置き換える共有ドメインプリミティブ）、`FindingKind.parse` が strict な門。
+  各閉集合は名前つき static ファクトリを持ち、呼出点に文字列リテラルを
+  残さない。`reconstitute` は adapter の hydration 専用に残り、未知 kind は
+  従来どおり既知の後ろに並んで適合で降格する。`DesignFinding`・
+  `VerificationFinding`・refcheck の `Finding` は検証済み `FindingKind` を
+  受ける `of(...)` を得て、refcheck 集約の `finding(...)` コマンドも同じ型で
+  締めた。
+- **Refinement は Design の subdomain、flat に。** `@deep-spec/refinement-domain`
+  の 36 クラスは `src/design/domain/` 直下へ移り（`refinement/` 階層は作ら
+  ない）、パッケージと公認横断 4 辺は shim なしで消え、公認辺は
+  `design/domain → requirements/domain` の 1 本だけになった。architecture
+  規則の `CONTEXTS` に `refinement` を残したのは意図的で、外すと復活した
+  `@deep-spec/refinement-domain` の import が層規律の対象外として素通り
+  してしまう。
+- **lowering と verdict の解釈は所有者へ。** 161 行のモジュールスコープ
+  関数 `buildLowering` は `DesignUnit.lowered()` と宣言オブジェクトの
+  `loweredAs` に、119 行の `#remapReadable` は
+  `SiblingVerdictDocument.remapVerdicts(unit, index)` になり、`LoweredUnit`
+  は collections・`LoweringIndex`・`extendedWith` だけを持つ。
+
+退けた代替案：適合専用の別 port（それも集約が持つべき語彙）。snapshot で
+二重観測だけ直して `conformedOf` を残す（裁定は cache ではなく port の
+語彙について）。cross-check の「あり」「なし」を Repository のメソッド変種
+にする（可変部は集約が持つ）。Repository の中で cross-check を再構築する
+（Repository は何も計算しない）。lock の中でだけ兄弟を読んで競合検査を
+持たない（lock の外で load した集約には検査が要り、それは永続化の関心事）。
+
+名指ししておく帰結：IR unreadable の経路も directory を load するので、
+壊れた兄弟があれば無視されずに失敗する。導けない cross-check は stale では
+なく欠落になる。要件文書で範囲外としていた requirements と refcheck の
+context も、オーナーの指示で同じ intent で揃えた。共有 lock が
+`ArtifactPath` を使うため `kernel/adapter` は `kernel-domain` に（下向きに）
+依存する。
+
+証拠：`bunx tsc --noEmit` exit 0。`bun test --coverage` 577 pass / 1 skip /
+0 fail（3,218 assertions、32 ファイル。基線 527 pass から増加）、カバレッジ
+関数 99.83%／行 99.94% で床 0.9 を維持。`bun scripts/build-tools.ts --check`
+は 14 ファイル同期済み、最大 bundle 321,855 バイト。`aidlc-plugin-validate`
+0 エラー（警告 1 件は従来からの compose hook 不在）。7 harness の投影ビルド
+すべて成功。`tests/fixtures/` の golden は byte 不変。実 Apalache（quint
+`bounded`）を使ったサンドボックス検証では、HEAD の worktree から build した
+変更前プラグインをサンドボックス A に、変更後を B に導入し、同じ feature
+intent を作って導入済みディスパッチャから 10 entry を発火——requirements と
+design の `smt.json`／`quint.json`／`cross-check.json`、refcheck の 3 report、
+ir-valid、doctor の 41 checks——の verdict 行・exit code・出力ファイルは、
+A・B・`--update` で in-place 更新した A（299→299 ファイル、bundle 11 本が
+変更、契約スキーマは不変）の 3 者で byte 一致。2 回目の SMT→Quint 発火は
+byte 同一に収束し、lock・temp・stale の残留なし。`aidlc-plugin-test` は
+CLEAN（`Changed files (0)` / `Drops: 0` / `Idempotent second compose:
+true`）。兄弟の `quint.json` を壊すと SMT センサーは stderr に兄弟名を出して
+exit 1 し何も公開せず、design IR を読めなくすると凍結の降格 `smt.json` を
+出して stale な `cross-check.json` を取り除き、IR を戻して再発火すると
+3 ファイルとも byte 単位で復元された。要件はこの intent に AI-DLC エンジン
+（`aidlc-workflows/`）のゼロ Unit 修正も含めていたが、Build and Test の
+途中でオーナーが「`aidlc-workflows/` はこのリポジトリの開発対象ではなく、
+変更してはならない」と裁定したため、その作業はエンジンの HEAD へ戻し、
+本記録には含めない。

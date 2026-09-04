@@ -1,6 +1,6 @@
 import type { UnitDecl } from "./unit-decl.ts";
 import { UnitNames } from "./unit-names.ts";
-import { TargetIds, type ArtifactPath } from "@deep-spec/kernel-domain";
+import { FindingKind, TargetIds, type ArtifactPath } from "@deep-spec/kernel-domain";
 import { CD_3 } from "./contract-check-families.ts";
 import type { ContractRows } from "./contract-rows.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
@@ -55,7 +55,7 @@ export class UnitDecls {
       for (const dep of u.declaredDependencies(this)) {
         const depName = dep.asString();
         if (!rows.coversEdge(depName, uName)) {
-          report.finding(CD_3, "consistency-mismatch", [TargetIds.safe("unit", depName), TargetIds.safe("unit", uName)],
+          report.finding(CD_3, FindingKind.consistencyMismatch(), [TargetIds.safe("unit", depName), TargetIds.safe("unit", uName)],
             [WitnessRef.at(depArt, `units (${uName} depends_on ${depName})`), WitnessRef.at(art, "contracts table")],
             `unit dependency edge "${uName}" -> "${depName}" has no contracts-table row in either orientation`);
         }

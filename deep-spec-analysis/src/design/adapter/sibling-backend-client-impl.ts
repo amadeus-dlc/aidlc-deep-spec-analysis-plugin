@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Json, isObject } from "@deep-spec/kernel-adapter";
+import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
 import { LoweredUnit } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
 import type { ReachabilityProbe, SiblingBackendClient, SiblingLoweredRun } from "@deep-spec/design-usecase";

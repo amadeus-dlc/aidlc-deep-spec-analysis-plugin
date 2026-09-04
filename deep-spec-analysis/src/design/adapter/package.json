@@ -12,7 +12,6 @@
     "@deep-spec/kernel-adapter": "workspace:*",
     "@deep-spec/kernel-domain": "workspace:*",
     "@deep-spec/kernel-infrastructure": "workspace:*",
-    "@deep-spec/kernel-usecase": "workspace:*",
-    "@deep-spec/refinement-domain": "workspace:*"
+    "@deep-spec/kernel-usecase": "workspace:*"
   }
 }

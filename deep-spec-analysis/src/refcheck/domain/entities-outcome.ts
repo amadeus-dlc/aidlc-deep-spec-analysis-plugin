@@ -1,6 +1,6 @@
 import type { DeclaredEntities } from "./declared-entities.ts";
 import type { LineNumber } from "./line-number.ts";
-import type { ArtifactPath } from "@deep-spec/kernel-domain";
+import { FindingKind, type ArtifactPath } from "@deep-spec/kernel-domain";
 import { FD_E1, FD_E2, FD_E3, FD_E4, FD_E5, FD_E6 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { WitnessRef } from "./witness-ref.ts";
@@ -67,7 +67,7 @@ export class EntitiesOutcome {
         return null;
       },
       wrongFenceCount: (found) => {
-        report.finding(FD_E1, "structure-invalid", [FD_E1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")],
+        report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")],
           `entities.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
         for (const f of [FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
           report.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
@@ -75,7 +75,7 @@ export class EntitiesOutcome {
         return null;
       },
       unparseable: (line, error) => {
-        report.finding(FD_E1, "structure-invalid", [FD_E1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)],
+        report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)],
           `yaml block does not parse in the supported subset: ${error}`);
         for (const f of [FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
           report.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");

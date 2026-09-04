@@ -1,5 +1,23 @@
 # deep-spec-analysis — ビジネス概要
 
+## Focused scan 更新（intent: `260904-ddd-clean-architecture`）
+
+今回の intent は、形式検証結果の外部仕様を変えずに、`deep-spec-analysis/` 内の Design／Refinement 検証経路を DDD とクリーンアーキテクチャの観点で整える。主要な価値は、同じ入力から byte 同一の findings を返す契約を保ちながら、境界の所有者、不正状態を防ぐ生成口、backend report と `cross-check.json` の整合性を明示することにある。
+
+現状は層方向と package manifest をアーキテクチャテストで強く制約している一方、次の変更理由が一つの実行経路に重なっている。
+
+- Refinement は独立 package だが Design の finding／skip／lowering 語彙を直接生成する。
+- SMT／Quint の usecase は取得、lowering、refinement、report finalization を重複して編成する。
+- Repository は契約 2 への適合と保存を担い、同一実行中に schema を二度観測する。
+- backend report 保存後の cross-check 再構築失敗が成功扱いになり、監査対象の verdict と保存証跡がずれ得る。
+- 文書再構成用の寛容な `reconstitute` が正常な新規生成にも使われ、不正な分類文字列を domain 内へ持ち込める。
+
+推奨する進め方は、まず report finalization の失敗を値として返し、schema snapshot と lock + temp/rename で単一ファイルの完全性と並行 writer の直列化を保証すること、次に strict creation／tolerant hydration を分けること、その後に重複した application orchestration を小さな具体的 collaborator へ抽出することである。Refinement を Design の subdomain に統合するか独立 bounded context として完成させるかは既存の公認横断エッジを反転する裁定なので、実装前に人間が二案から選ぶ。`kernel/infrastructure` は意図された最内層という既存裁定を維持し、改名は別 intent に分ける。
+
+セキュリティ上の新しい認証・個人情報境界はない。主な影響は完全性、再現性、監査可能性であり、外部 JSON／Markdown は引き続き adapter で未信頼入力として検証する。契約 1〜4、findings 文言、正準順、solver pin、stdout verdict は互換性境界として維持する。
+
+以下の配布ライフサイクルと形式検証全体の本文は既存 store の履歴知識である。今回の深い解析範囲外の現行性は `reverse-engineering-timestamp.md` の `shallow.paths` に従う。
+
 ## Focused scan 更新（intent: `260903-installer-tag-update`）
 
 本 intent は、プラグインの検証機能そのものではなく、利用者が checkout や `aidlc-workflows` submodule を持たずに導入・更新できる配布ライフサイクルを対象とする。現在の `scripts/install.ts` は実行中 checkout と sibling submodule の build／target data／plugin test に依存し、導入来歴を残さず、`--update` も提供しない。tag と release script もまだ存在しない。

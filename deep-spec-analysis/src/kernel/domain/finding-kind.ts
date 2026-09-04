@@ -45,6 +45,53 @@ export class FindingKind {
     return new FindingKind(raw);
   }
 
+  // 閉集合 11 種の名前付きファクトリ（値オブジェクト自身の生成口）。domain／
+  // usecase が自ら選ぶ kind は文字列を経由せずこの口から得る——正常生成経路に
+  // 任意の string が入る余地を型で断つ（FR3.2、種別規律 3-2）。
+  static conflict(): FindingKind {
+    return new FindingKind("conflict");
+  }
+
+  static completenessGap(): FindingKind {
+    return new FindingKind("completeness-gap");
+  }
+
+  static scenarioViolation(): FindingKind {
+    return new FindingKind("scenario-violation");
+  }
+
+  static unreachable(): FindingKind {
+    return new FindingKind("unreachable");
+  }
+
+  static redundancy(): FindingKind {
+    return new FindingKind("redundancy");
+  }
+
+  static refinementViolation(): FindingKind {
+    return new FindingKind("refinement-violation");
+  }
+
+  static mappingGap(): FindingKind {
+    return new FindingKind("mapping-gap");
+  }
+
+  static structureInvalid(): FindingKind {
+    return new FindingKind("structure-invalid");
+  }
+
+  static referenceBroken(): FindingKind {
+    return new FindingKind("reference-broken");
+  }
+
+  static consistencyMismatch(): FindingKind {
+    return new FindingKind("consistency-mismatch");
+  }
+
+  static crossCheckDisagreement(): FindingKind {
+    return new FindingKind("cross-check-disagreement");
+  }
+
   // 文書の正準順位（kind 順位表）。
   static canonicalOrder(): readonly string[] {
     return Object.keys(KIND_RANK);

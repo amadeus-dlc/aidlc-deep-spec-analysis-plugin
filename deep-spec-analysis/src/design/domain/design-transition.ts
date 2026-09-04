@@ -3,9 +3,13 @@
 // ∧ 明示効果、代入表の state 遷移代入）は遷移自身が所有する——lowering と
 // イベントカタログの2箇所に重複していた知識をここに戻す（#71 波5b）。
 
-import { type Expression, type TriggerName } from "@deep-spec/kernel-domain";
+import { type Expression, FrRefs, type TriggerName } from "@deep-spec/kernel-domain";
 import { type BrRefs } from "./br-refs.ts";
 import { DesignTransitionId } from "./design-transition-id.ts";
+import type { LoweredId } from "./lowered-id.ts";
+import { LoweredObligation } from "./lowered-obligation.ts";
+import { LoweredOrigin } from "./lowered-origin.ts";
+import { LoweredOriginRef } from "./lowered-origin-ref.ts";
 
 export class DesignTransition {
   readonly #id: DesignTransitionId;
@@ -54,6 +58,23 @@ export class DesignTransition {
   loweredEffect(attrPath: string): Expression {
     const base = this.#stateEquality(attrPath, this.#to, true);
     return this.#effect === undefined ? base : { op: "and", args: [base, this.#effect] };
+  }
+
+  // compile-down された event 義務そのもの（暗黙ガード・効果つき）。
+  loweredAs(id: LoweredId, attrPath: string): LoweredObligation {
+    return LoweredObligation.reconstitute({
+      id,
+      nature: "event",
+      frRefs: FrRefs.of([]),
+      trigger: this.#trigger.asString(),
+      guard: this.loweredGuard(attrPath),
+      effect: this.loweredEffect(attrPath),
+    });
+  }
+
+  // 降ろし方の帰属：遷移。
+  loweredOrigin(): LoweredOrigin {
+    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "transition" });
   }
 
   // 代入表（DesignEventCatalog）用の state 遷移代入: attrPath ← enum(to)。

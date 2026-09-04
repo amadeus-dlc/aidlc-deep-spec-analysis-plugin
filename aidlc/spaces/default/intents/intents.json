@@ -14,5 +14,13 @@
     "scope": "express",
     "repos": [],
     "status": "complete"
+  },
+  {
+    "uuid": "01a069e8-3ef9-7731-bde4-c858d3253455",
+    "slug": "ddd-clean-architecture",
+    "dirName": "260904-ddd-clean-architecture",
+    "scope": "refactor",
+    "repos": [],
+    "status": "complete"
   }
 ]

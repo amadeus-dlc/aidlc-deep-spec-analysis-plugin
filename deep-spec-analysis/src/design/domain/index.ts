@@ -54,6 +54,7 @@ export { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
 export { DesignInputAnchor } from "./design-input-anchor.ts";
 export { DesignInputAnchors } from "./design-input-anchors.ts";
 export { DesignReports } from "./design-reports.ts";
+export { DesignVerifyDirectory } from "./design-verify-directory.ts";
 export { BindingPairs } from "./binding-pairs.ts";
 export { BrRef } from "./br-ref.ts";
 export { BrRefs } from "./br-refs.ts";
@@ -84,3 +85,51 @@ export { DesignUnitId } from "./design-unit-id.ts";
 export { RefinementMaterialsId } from "./refinement-materials-id.ts";
 export { DesignIrValidationMaterials } from "./design-ir-validation-materials.ts";
 export { DesignIrValidationMaterialsId } from "./design-ir-validation-materials-id.ts";
+
+// refinement（旧 src/refinement/domain/）から統合された公開 symbol。
+// このコンテキストは adapter を持たない：design のユースケースが消費する
+// ドメインサービス群で、I/O・SMT-LIB という形式は design の ports / adapters が担う。
+export { RefinementRequirements } from "./refinement-requirements.ts";
+export { RefinementAttribute } from "./refinement-attribute.ts";
+export { RefinementAttributes } from "./refinement-attributes.ts";
+export { RefinementObligation } from "./refinement-obligation.ts";
+export { RefinementObligations } from "./refinement-obligations.ts";
+export { RefinementScenario } from "./refinement-scenario.ts";
+export { RefinementScenarios } from "./refinement-scenarios.ts";
+export { ReqAttributeValues } from "./req-attribute-values.ts";
+export { RefinementMap } from "./refinement-map.ts";
+export { AttributeMapping } from "./attribute-mapping.ts";
+export { AttributeMappings } from "./attribute-mappings.ts";
+export { EventMapping } from "./event-mapping.ts";
+export { EventMappings } from "./event-mappings.ts";
+export { RefinementUnitMap } from "./refinement-unit-map.ts";
+export { RefinementUnitMaps } from "./refinement-unit-maps.ts";
+export { TransitionRef } from "./transition-ref.ts";
+export { TransitionRefs } from "./transition-refs.ts";
+export { UnmappedDeclarations } from "./unmapped-declarations.ts";
+export { UnmappedTargetRef } from "./unmapped-target-ref.ts";
+export { UnmappedTarget } from "./unmapped-target.ts";
+export { RefinementMapDefect } from "./refinement-map-defect.ts";
+export { UnitRefinementPlan } from "./unit-refinement-plan.ts";
+export { RefinementStatus } from "./refinement-status.ts";
+export { EffectAssignments } from "./effect-assignments.ts";
+export { DesignEventCatalog } from "./design-event-catalog.ts";
+export { DesignAssignments } from "./design-assignments.ts";
+export { DesignEvent } from "./design-event.ts";
+export { RefinementSolverPlan } from "./refinement-solver-plan.ts";
+export { RefinementProbe } from "./refinement-probe.ts";
+export { RefinementQueryVerdict } from "./refinement-query-verdict.ts";
+export { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
+export { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
+export { RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
+export { RefinementMapId } from "./refinement-map-id.ts";
+export { RefinementMaterials } from "./refinement-materials.ts";
+export { RefinementMapAcquisition } from "./refinement-map-acquisition.ts";
+
+// RefinementRequirements の恒等 — 契約1 集約の識別子そのもの（プロファイルは
+// 恒等を変えない）。所有は requirements/domain。design はこの facade 経由で
+// そのまま再輸出する。
+export { FormalModelId } from "@deep-spec/requirements-domain";
+
+// refinement の要件語彙は requirements の DP を再利用する。
+export { AttributeBound, AttributePath, ObligationId, ObligationNature, ScenarioId } from "@deep-spec/requirements-domain";

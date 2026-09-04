@@ -1,5 +1,35 @@
 # deep-spec-analysis — 依存関係
 
+## Focused scan 更新: Design／Refinement の依存グラフ
+
+```mermaid
+flowchart TD
+  RI["refinement/domain"] --> RQ["requirements/domain"]
+  RI --> DD["design/domain"]
+  DU["design/usecase"] --> DD
+  DU --> RI
+  DA["design/adapter"] --> DU
+  DA --> DD
+  DA --> RI
+  DD --> KD["kernel/domain"]
+  RI --> KD
+  KD --> KI["kernel/infrastructure"]
+  DD --> KI
+  DU --> KI
+```
+
+テキスト代替: Refinement domain は Requirements domain と Design domain に依存し、Design usecase は Refinement domain と Design domain に依存する。Design adapter は三者を接続する。Design と Refinement は共有語彙を `kernel/domain`、予期された失敗を最内層 `kernel/infrastructure` の `Result` に依存する。TypeScript import の循環はないが、Design と Refinement の変更理由にはコンテキスト循環がある。
+
+このうち `refinement/domain → requirements/domain`、`refinement/domain → design/domain`、`design/usecase → refinement/domain`、`design/adapter → refinement/domain` は `SANCTIONED_CROSS_CONTEXT` に登録された人間裁定済みの4辺である。単なるアーキテクチャ違反として削除してはならない。
+
+- Design subdomain 統合案は `refinement/domain → design/domain` を同一境界内の依存へ変え、package と翻訳を減らせる。一方、Requirements との橋渡し責務と独立テスト領域の再配置が必要になる。
+- 独立 bounded context 案は Refinement 固有の assessment と ACL を追加して Design 依存を切れる。一方、契約 2 への翻訳、未知値の降格、凍結文言の所有点が増える。
+- 推奨は、独立プロダクトとして進化する根拠がない限り subdomain 統合。ただし後続の Domain Design で既存裁定を明示的に更新してから package graph を変える。
+
+`kernel/infrastructure` は一般的な Onion の外殻ではなく、`Result` を置く言語拡張基盤として最内層にある。今回の依存整理では移動せず、誤読防止の文書化だけを行う。report finalization の共通化は Design usecase 内へ置き、adapter の filesystem/schema details を port 越しに保つ。
+
+以下の installer と形式検証ランタイム全体の依存表は既存 store の履歴知識である。
+
 ## Focused scan 更新: installer の依存グラフ
 
 ```mermaid

@@ -5,7 +5,7 @@ import { FrRefs } from "@deep-spec/kernel-domain";
 // のエントリのみ、frRefs は文字列選別、detail は文字列でなければ ""、witness
 // は素通し。skipped は {target:string, reason:string} のみ。
 
-import { type Json, isObject, strArr } from "@deep-spec/kernel-adapter";
+import { type Json, isObject, strArr } from "@deep-spec/kernel-infrastructure";
 import { LoweredId, SiblingVerdictFindings, SiblingVerdictSkips, SiblingVerdictSkip, SiblingVerdictDocument, SiblingVerdictFinding } from "@deep-spec/design-domain";
 import { DesignWitness } from "@deep-spec/design-domain";
 

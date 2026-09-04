@@ -8,7 +8,7 @@
 // ソートは VerificationReport.compose の不変条件）は plan 自身の振る舞い
 // （OOUI 裁定）。
 
-import { TargetIds, KeySet, KeyedIndex, QueryLabel, TargetId, TriggerName } from "@deep-spec/kernel-domain";
+import { FindingKind, TargetIds, KeySet, KeyedIndex, QueryLabel, TargetId, TriggerName } from "@deep-spec/kernel-domain";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { type SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 import { VerificationFinding } from "./verification-finding.ts";
@@ -98,8 +98,8 @@ export class SmtVerificationPlan {
       const key = effective.joined(",");
       if (conflictKeys.has(key)) return;
       conflictKeys.add(key);
-      findings.push(VerificationFinding.reconstitute({
-        kind: "conflict",
+      findings.push(VerificationFinding.of({
+        kind: FindingKind.conflict(),
         frRefs: model.frRefsOf(effective),
         targets: effective,
         witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
@@ -170,8 +170,8 @@ export class SmtVerificationPlan {
       const r = results.verdictOf(QueryLabel.reconstitute(`gap:${trigger}`));
       if (!r) continue;
       if (r.isSat()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "completeness-gap",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.completenessGap(),
           frRefs: model.frRefsOf(eventIds),
           targets: eventIds,
           witness: VerificationWitness.model(r.witnessModel()),
@@ -194,8 +194,8 @@ export class SmtVerificationPlan {
       }
       if (sc.isAccept() && r.isUnsat()) {
         const targets = TargetIds.of([sc.id().asTargetId(), ...coreToTargets([...r.coreLabels()])]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(targets),
           targets,
           witness: VerificationWitness.core(r.sortedCore()),
@@ -203,8 +203,8 @@ export class SmtVerificationPlan {
         }));
       }
       if (sc.isReject() && r.isSat()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(TargetIds.of([sc.id().asTargetId()])),
           targets: TargetIds.of([sc.id().asTargetId()]),
           witness: VerificationWitness.model(r.witnessModel()),

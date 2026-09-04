@@ -1,5 +1,15 @@
 # deep-spec-analysis — 技術スタック
 
+## Focused scan 更新: DDD 改善で維持する技術前提
+
+今回の改善に新しい runtime、framework、database は不要である。Bun workspace と isolated linker、TypeScript strict/noEmit、`bun:test`、既存 JSON Schema validator、filesystem atomic-write helper を使う。新規ライブラリで transaction framework や DI container を導入するより、現在の具体的 port と小さな collaborator を保つ方がコード量・配布面・solver 再現性のすべてで有利である。
+
+深い解析で再確認した版は Bun 1.3.13、TypeScript 7.0.2、`@informalsystems/quint` 0.32.0、`z3-solver` 5.2.0。solver 2 本の exact pin と golden の byte 同一性は裁定事項であり、この refactor で更新しない。domain 層の line/function 90% floor、architecture red/green examples、isolated package resolution を受け入れゲートとして使う。
+
+lock／temp file を追加する場合も OS 固有の外部依存は増やさず、既存 filesystem 境界内で実装する。外部 JSON/Markdown の schema 検証、path traversal を増やさない `DesignReportId` 由来の保存先、失敗時の `Result` を維持する。
+
+以下の配布ライフサイクルとランタイム全体の本文は既存 store 由来である。
+
 ## Focused scan 更新: 配布ライフサイクルの技術前提
 
 | 技術・契約 | 現行 | 本 intent での位置づけ |

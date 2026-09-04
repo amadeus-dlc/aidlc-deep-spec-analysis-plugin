@@ -3,7 +3,7 @@
 // extractComponents の逐語移動。
 
 import { extractFences } from "@deep-spec/kernel-adapter";
-import { type Json, isObject } from "@deep-spec/kernel-adapter";
+import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
 import { parseYamlSubset } from "@deep-spec/kernel-adapter";
 import {
   AttributeName,

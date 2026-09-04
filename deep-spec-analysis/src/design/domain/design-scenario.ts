@@ -3,6 +3,8 @@
 import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
 import { type BrRefs } from "./br-refs.ts";
 import { DesignScenarioId } from "./design-scenario-id.ts";
+import type { LoweredId } from "./lowered-id.ts";
+import { LoweredScenario } from "./lowered-scenario.ts";
 
 export class DesignScenario {
   readonly #id: DesignScenarioId;
@@ -62,4 +64,16 @@ export class DesignScenario {
   }
 
   bindings(): Readonly<Record<string, boolean | number | string>> { return { ...this.#bindings }; }
+
+  // 契約1 への lowering——任意部（イベント・期待式）の有無はシナリオ自身の知識。
+  loweredAs(id: LoweredId): LoweredScenario {
+    return LoweredScenario.reconstitute({
+      id,
+      kind: this.#kind,
+      frRefs: this.#frRefs,
+      bindings: { ...this.#bindings },
+      ...(this.#eventTrigger !== undefined ? { event: { trigger: this.#eventTrigger.asString() } } : {}),
+      ...(this.#expect !== undefined ? { expect: this.#expect } : {}),
+    });
+  }
 }

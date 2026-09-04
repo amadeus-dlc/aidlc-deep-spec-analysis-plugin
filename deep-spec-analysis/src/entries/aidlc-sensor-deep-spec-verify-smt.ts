@@ -20,13 +20,14 @@
 
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseFlags } from "@deep-spec/kernel-adapter";
-import { ArtifactPath } from "@deep-spec/kernel-domain";
+import { DirectoryFinalizationLock, SystemClock, parseFlags, readContractSchema } from "@deep-spec/kernel-adapter";
+import { ArtifactPath, FindingsSchema } from "@deep-spec/kernel-domain";
 import { FormalModelId } from "@deep-spec/requirements-domain";
 import { VerifyRequirementsSmtUseCase } from "@deep-spec/requirements-usecase";
 import {
   FormalModelRepositoryImpl,
-  VerificationReportRepositoryImpl,
+  VERIFICATION_LOCK_BASENAME,
+  VerificationDirectoryRepositoryImpl,
   Z3SolverClientImpl,
   solveSmtChild,
 } from "@deep-spec/requirements-adapter";
@@ -48,9 +49,34 @@ function parentMain(): void {
   }
 
   const selfPath = fileURLToPath(import.meta.url);
+  // 契約2 のスキーマは合成ルートが一度だけ読む。読めなければ「読めなかった」
+  // 変種として値に載せ、以後の適合判定はこの 1 つの値からだけ導く。
+  const findingsSchemaFile = readContractSchema(join(dirname(selfPath), "data", "deep-spec-findings-schema.json"));
+  const findingsSchema = findingsSchemaFile.ok
+    ? FindingsSchema.of(findingsSchemaFile.value)
+    : FindingsSchema.unreadable(findingsSchemaFile.error.cause);
   const useCase = new VerifyRequirementsSmtUseCase(
     new FormalModelRepositoryImpl(),
-    new VerificationReportRepositoryImpl(join(dirname(selfPath), "data", "deep-spec-findings-schema.json")),
+    new VerificationDirectoryRepositoryImpl(
+      // finalization の directory lock は「実時計」と「実 PID／OS liveness
+      // probe」を要る。process.* は合成ルートだけが触れてよいので、ここで
+      // 組み立てて注入する（ESRCH=不在確定、EPERM=存在確定、他は不明）。
+      new DirectoryFinalizationLock(new SystemClock(), {
+        self: () => process.pid,
+        statusOf: (pid: number) => {
+          try {
+            process.kill(pid, 0);
+            return "alive";
+          } catch (e) {
+            const code = (e as { code?: string }).code;
+            if (code === "ESRCH") return "absent";
+            if (code === "EPERM") return "alive";
+            return "unknown";
+          }
+        },
+      }, VERIFICATION_LOCK_BASENAME),
+    ),
+    findingsSchema,
     new Z3SolverClientImpl({
       selfPath,
       perQueryTimeoutMs: Number(process.env.AIDLC_DEEP_SPEC_SMT_TIMEOUT_MS) || 2000,

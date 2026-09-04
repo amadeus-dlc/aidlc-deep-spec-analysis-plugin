@@ -9,16 +9,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import {
-  type Json,
-  extractFences,
-  findRecordRoot,
-  isObject,
-  readContractSchema,
-  writeFileAtomically,
-  readIfExists,
-  validateSchema,
-} from "@deep-spec/kernel-adapter";
+import { extractFences, findRecordRoot, readContractSchema, writeFileAtomically, readIfExists } from "@deep-spec/kernel-adapter";
+import { type Json, isObject, validateSchema } from "@deep-spec/kernel-infrastructure";
 import { ErrorMessages, IrVersion, TriggerName } from "@deep-spec/kernel-domain";
 import { type Result, ok } from "@deep-spec/kernel-infrastructure";
 import { err as repoErr } from "@deep-spec/kernel-infrastructure";

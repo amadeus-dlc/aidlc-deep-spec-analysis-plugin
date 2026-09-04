@@ -5,6 +5,10 @@ import { type BrRefs } from "./br-refs.ts";
 import { DesignObligationId } from "./design-obligation-id.ts";
 import { DesignObligationNature } from "./design-obligation-nature.ts";
 import { DesignObligationOrigin } from "./design-obligation-origin.ts";
+import type { LoweredId } from "./lowered-id.ts";
+import { LoweredObligation } from "./lowered-obligation.ts";
+import { LoweredOrigin } from "./lowered-origin.ts";
+import { LoweredOriginRef } from "./lowered-origin-ref.ts";
 
 type DesignTemporalExpressions = {
   readonly pattern: string;
@@ -86,6 +90,24 @@ export class DesignObligation {
     const behavior = this.guardedEffect();
     if (behavior === null || this.#trigger === undefined || this.#trigger.isEmpty()) return null;
     return { trigger: this.#trigger, ...behavior };
+  }
+
+  // 契約1 への素通し lowering——どの任意部を lowered 文書へ運ぶかは義務自身の
+  // 知識（空の frRefs も帰属として運ぶ：v1 は不透明な文字列として扱う）。
+  loweredAs(id: LoweredId): LoweredObligation {
+    const lowered: Parameters<typeof LoweredObligation.reconstitute>[0] = { id, nature: this.#nature.asString(), frRefs: this.#frRefs };
+    const temporal = this.temporal();
+    if (this.#assert !== undefined) lowered.assert = this.#assert;
+    if (this.#trigger !== undefined) lowered.trigger = this.#trigger.asString();
+    if (this.#guard !== undefined) lowered.guard = this.#guard;
+    if (this.#effect !== undefined) lowered.effect = this.#effect;
+    if (temporal !== undefined) lowered.temporal = temporal;
+    return LoweredObligation.reconstitute(lowered);
+  }
+
+  // 降ろし方の帰属：設計義務は素通し。
+  loweredOrigin(): LoweredOrigin {
+    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "passthrough" });
   }
 
   inspectExpressions(visitor: (expression: Expression, primesAllowed: boolean) => void): void {
