@@ -8,6 +8,7 @@
 
 ## Deviations
 <!-- example: 2026-05-29T10:14:32Z — skipped the optional caching layer the stage prose suggested; the dataset is small enough that it adds risk -->
+- 2026-09-04T14:45:40Z — Bugbot の指摘（SkipReason の accessor が asString でない）を直すコミットで、`sed -i ''` が GNU sed に解釈されて置換が空振りし、記録ファイルだけのコミット 52e7a2a に改名の件名が付いた; force-push はしない方針なので、正しい改名を 3d8feeb として積み、スレッド返信と PR で明示した。この環境の sed は GNU なので in-place 置換は perl -pi を使う。
 - 2026-09-04T14:39:41Z — 上流の環境インベントリ（environment-provisioning）は scope で SKIP; 対象環境は cd-config の昇格段階（PR → main → タグ → 利用側）から採り、捏造していない。
 
 ## Tradeoffs
