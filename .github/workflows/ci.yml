@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
 
+# 最小権限: CI は読取だけで足りる。review-thread-resolution だけがジョブ単位で
+# checks / statuses の書込みを持つ (amadeus-dlc/amadeus-ng の ci.yml に倣う)。
+permissions:
+  contents: read
+
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -18,6 +23,10 @@ jobs:
         with:
           # aidlc-workflows supplies the validate/build toolchain
           submodules: true
+          # このジョブは PR のコード (bun install の postinstall、テスト、生成器) を
+          # 実行するので、GITHUB_TOKEN を .git/config に残さない。submodule は
+          # 公開 HTTPS URL (.gitmodules) なので後続の git 操作に認証は要らない。
+          persist-credentials: false
 
       # node >= 23 so the SMT sensor's z3 child process can run
       # (z3-solver's pthread WASM build aborts in-process under bun)
@@ -55,3 +64,98 @@ jobs:
           for h in claude codex copilot cursor kiro kiro-ide opencode; do
             bun ../aidlc-workflows/core/tools/aidlc-plugin-build.ts . "$h"
           done
+
+  # line coverage ゲート (amadeus-dlc/amadeus-ng の coverage ジョブを Bun に移植)。
+  # scripts/coverage.ts が `bun test --coverage` の lcov から line coverage を出し、
+  # 絶対ゲート (90% 床) と、pull_request では base ref に対する相対ゲート
+  # (下回ったら fail) を判定する。計測対象・除外は bunfig.toml が正本。
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: deep-spec-analysis
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # 相対ゲートは base ref を一時 worktree にチェックアウトするので、
+          # shallow clone (既定) では足りない。submodule は base 側の worktree でも
+          # 展開する (tests/intent-e2e.test.ts が dist/claude を要求する)。
+          fetch-depth: 0
+          submodules: true
+          # scripts/coverage.ts は PR のコードであり、base worktree でも
+          # bun install と bun test を走らせる。GITHUB_TOKEN を .git/config に
+          # 残さない。submodule は公開 HTTPS URL なので認証は要らない。
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+
+      - name: Install pinned dev dependencies (solvers, types, tsc)
+        run: bun install --frozen-lockfile
+
+      - name: Run coverage gate (pull_request — absolute + relative)
+        if: github.event_name == 'pull_request'
+        run: bun scripts/coverage.ts --base "origin/${{ github.base_ref }}"
+
+      # push (main / tag) は比較対象の base ref を持たないため絶対ゲートのみ。
+      # 相対ゲートは同じ変更が pull_request 側で通過済み。
+      - name: Run coverage gate (push — absolute only)
+        if: github.event_name != 'pull_request'
+        run: bun scripts/coverage.ts
+
+  # レビュースレッドのゲート (amadeus-dlc/amadeus-ng の ci.yml に倣う):
+  # 未解決のレビュースレッド (CodeRabbit 等のボットコメントを含む) が残る PR は
+  # 「CI Success」を通さない。ボットの「使用量上限で未実行」報告のような定型文は除外。
+  # PR でのみ評価し、push では スキップ (CI Success 側で skipped を許容)。
+  review-thread-resolution:
+    name: CI Review Thread Gate
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      checks: write
+      issues: read
+      pull-requests: read
+      statuses: write
+    uses: j5ik2o/ci/.github/workflows/review-thread-resolution.yml@9cf0e9a8cd74c72de704763025003ed3b7608c65
+    with:
+      wait_for_other_checks: "false"
+      base_branch: main
+      required_context: Check unresolved comments
+      extra_ignored_auto_report_author_patterns: "cursor\tBugbot couldn't run - usage limit reached"
+      ci_ref: 9cf0e9a8cd74c72de704763025003ed3b7608c65
+
+  # 集約ジョブ。branch protection / ruleset の required check には「CI Success」を要求する。
+  # pull_request では review-thread-resolution の成功も要求し、push では skipped を許容する。
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs:
+      - ci
+      - coverage
+      - review-thread-resolution
+    if: ${{ always() }}
+    steps:
+      - name: All required checks passed
+        run: |
+          require_result() {
+            local name="$1" actual="$2"
+            if [[ "${actual}" != "success" ]]; then
+              echo "${name} was ${actual}; expected success"
+              exit 1
+            fi
+          }
+          require_result "ci" "${{ needs.ci.result }}"
+          require_result "coverage" "${{ needs.coverage.result }}"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            require_result "review-thread-resolution" "${{ needs['review-thread-resolution'].result }}"
+          elif [[ "${{ needs['review-thread-resolution'].result }}" != "skipped" ]]; then
+            echo "review-thread-resolution was ${{ needs['review-thread-resolution'].result }}; expected skipped"
+            exit 1
+          fi
