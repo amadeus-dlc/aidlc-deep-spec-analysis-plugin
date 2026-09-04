@@ -122,7 +122,7 @@
 
 **なぜ**: 「何を作るか」を毎回考えると、貧血なデータ構造と手続きの山に戻る。種別を先に決めておくと、設計の議論が「この概念はどれか」に収束する。
 
-**実例（実測分布）**: `design/domain` は 121 クラス（DP 15・FCC 48・エンティティ 33・その他 VO 15）。`requirements/domain` 65 クラス、`refcheck/domain` 79 クラス、`doctor/domain` 11 クラス。**static だけのクラスは 4 文脈とも 0 件。**
+**実例（実測）**: domain 層の `export class` は design 121・requirements 65・refcheck 79・doctor 11・kernel 25 の**計 301**。大半は値オブジェクトとファーストクラスコレクションで、集約ルートは Repository port を持つものに限られる（design は 5 つ）。**static メソッドだけのクラスは 5 文脈とも 0 件、ドメインイベントも 0 件**（§8）。
 
 **検査**: `no-data-models-in-domain`（後述 D5）が最も効く。種別そのものの検査は無い（レビュー）。
 

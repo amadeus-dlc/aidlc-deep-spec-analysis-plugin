@@ -122,7 +122,7 @@ These three things — **frozen output contracts**, **untrustworthy external pro
 
 **Why**: If "what to build" is decided fresh each time, the design regresses back into anemic data structures plus a pile of procedures. Deciding the kinds up front converges design discussion onto "which of these is this concept."
 
-**In this repository (measured distribution)**: `design/domain` has 121 classes (DP 15, FCC 48, entities 33, other VO 15). `requirements/domain` 65 classes, `refcheck/domain` 79 classes, `doctor/domain` 11 classes. **Static-only classes: zero, in all 4 contexts.**
+**In this repository (measured)**: `export class` in the domain layer: design 121, requirements 65, refcheck 79, doctor 11, kernel 25 — **301 in total**. Most are value objects and first-class collections; aggregate roots are limited to those with a Repository port (design has 5). **Classes with only static methods: zero, in all 5 contexts; domain events: zero as well** (§8).
 
 **Check**: `no-data-models-in-domain` (see D5 below) is the most effective. There is no check for the kind classification itself (review).
 
