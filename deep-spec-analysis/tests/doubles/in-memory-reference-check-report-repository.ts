@@ -1,23 +1,16 @@
 // ReferenceCheckReportRepository の InMemory ダブル（production グレード：
 // ポート契約に完全準拠し、契約テストで実 Impl と同一の約束を検証される）。
-// 契約適合は実 serializer を使う——「不適合を書かない」という Repository の
-// 不変条件はダブルでも本物でなければならない。
+// 責務は集約の I/O だけ（オーナー裁定 2026-09-04）——渡された集約をそのまま
+// 持つ。契約適合は usecase が保存前に一度だけ済ませるので、ダブルは schema を
+// 持たない。
 
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Schema } from "@deep-spec/kernel-adapter";
-import type { SchemaUnreadable } from "@deep-spec/kernel-adapter";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import { conformToContract } from "@deep-spec/refcheck-adapter";
 import type { ReferenceCheckReport, ReferenceCheckReportId } from "@deep-spec/refcheck-domain";
 import type { ReferenceCheckReportRepository } from "@deep-spec/refcheck-usecase";
 
 export class InMemoryReferenceCheckReportRepository implements ReferenceCheckReportRepository {
-  readonly #findingsSchema: Result<Schema, SchemaUnreadable>;
   readonly #store = new Map<string, ReferenceCheckReport>();
-
-  constructor(findingsSchema: Result<Schema, SchemaUnreadable>) {
-    this.#findingsSchema = findingsSchema;
-  }
 
   #keyOf(id: ReferenceCheckReportId): string {
     return `${id.directory().asString()}/${id.fileName()}`;
@@ -31,12 +24,8 @@ export class InMemoryReferenceCheckReportRepository implements ReferenceCheckRep
     return ok(found);
   }
 
-  conformedOf(report: ReferenceCheckReport): ReferenceCheckReport {
-    return conformToContract(report, this.#findingsSchema);
-  }
-
   store(report: ReferenceCheckReport): Result<void, RepositoryError> {
-    this.#store.set(this.#keyOf(report.id()), this.conformedOf(report));
+    this.#store.set(this.#keyOf(report.id()), report);
     return ok(undefined);
   }
 }

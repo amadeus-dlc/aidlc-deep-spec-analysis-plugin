@@ -1,5 +1,5 @@
 import { DomainEntitySketch } from "./domain-entity-sketch.ts";
-import { TargetIds, type ArtifactPath } from "@deep-spec/kernel-domain";
+import { FindingKind, TargetIds, type ArtifactPath } from "@deep-spec/kernel-domain";
 import { XS_1, XS_2, XS_3 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
@@ -58,12 +58,12 @@ export class DomainEntitySketches {
       const key = de.name().normalized().asString();
       const definers = unitEntities.definersOf(key);
       if (definers.length >= 2) {
-        report.finding(XS_1, "consistency-mismatch", [TargetIds.safe("entity", de.name().asString())],
+        report.finding(XS_1, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", de.name().asString())],
           [WitnessRef.at(compArt, de.catalogLabel()),
             ...definers.map((u) => WitnessRef.at(`construction/${u}/functional-design/entities.md`, `entity ${de.name().asString()}`))],
           `domain entity "${de.name().asString()}" is defined in ${definers.length} units (${definers.join(", ")}) — ownership is duplicated`);
       } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
-        report.finding(XS_2, "consistency-mismatch", [TargetIds.safe("entity", de.name().asString())],
+        report.finding(XS_2, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", de.name().asString())],
           [WitnessRef.at(compArt, de.catalogLabel())],
           `domain entity "${de.name().asString()}" is defined in no unit's entities.md — it was dropped on the way to functional design`);
       }
@@ -73,7 +73,7 @@ export class DomainEntitySketches {
         if (mine) {
           const dropped = de.attributesDroppedIn(mine.attrs);
           if (dropped.length > 0) {
-            report.finding(XS_3, "consistency-mismatch", [TargetIds.safe("entity", de.name().asString())],
+            report.finding(XS_3, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", de.name().asString())],
               dropped.map((a) => WitnessRef.at(compArt, `entity ${de.name().asString()}.attributes`, a)),
               `domain-design declares attribute(s) ${dropped.join(", ")} on "${de.name().asString()}" that this unit's entities.md does not carry`);
           }

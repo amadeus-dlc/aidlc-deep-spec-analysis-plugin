@@ -1,0 +1,39 @@
+{
+  "stage_slug": "code-generation",
+  "space": "default",
+  "intent": "260904-ddd-clean-architecture",
+  "selections": [
+    {
+      "candidate_id": "c1",
+      "kind": "learning",
+      "source_heading": "Interpretations",
+      "heading": "Corrections",
+      "scope": "project",
+      "text": "FR8.1 の「解決された Unit 集合がゼロ件」は `resolveBoltDag` の `state === \"none\"` と同値と読んだ。`parseBoltDag` が空の `units:` ブロックを `malformed` として弾くため `{ state: \"ok\", units: [] }` は到達不能で、`malformed` は誤りとして表面化させるべきだから、ゼロ件扱いに含めない。"
+    },
+    {
+      "candidate_id": "c5",
+      "kind": "learning",
+      "source_heading": "Interpretations",
+      "heading": "Testing Posture",
+      "scope": "project",
+      "text": "aidlc-workflows の全体スイートを基線（HEAD の一時 worktree、6 ファイル／18 assertion が環境要因で赤）と突き合わせ、作業ツリーで新たに赤の 10 ファイル／25 assertion を分類した。「`resolveBoltDag` が `none` ならゼロ Unit」は粗すぎ、DAG 成果物が無くてもレシート・audit・Unit Progress から観測された Unit で per-Unit 継続性を保つ既存の仕組み（t328 no-DAG continuity）と、team 経路の fail-closed（t324）を潰す。FR8.1 の「解決された Unit 集合」は観測された Unit を含めて解釈し、判定を「DAG ∪ 観測 Unit が空のときだけゼロ Unit」に締め直す（分類 C）。プレースホルダ経路を主張する残りは B として、assertion を消さず fixture に DAG を足すか期待をステージレベルへ改める。"
+    },
+    {
+      "candidate_id": "c9",
+      "kind": "learning",
+      "source_heading": "Deviations",
+      "heading": "Corrections",
+      "scope": "project",
+      "text": "初回承認版の Wave 4／5（Repository port に `conformedOf`・`storeConformed(report, model)`・`storeConformedWithoutCrossCheck` を置く設計）をオーナー裁定で撤回した。裁定: Repository の語彙は保存・検索・取得・削除だけで、interface はこの語彙にしか依存できない。他の語彙が要るなら集約の設計を見直す。集約は一塊で、可変部（cross-check の有無）は `Option` として集約自身が持ち、Repository のメソッド変種で吸収しない。functional-spec の Decisions 表「Schema conformance owner: Repository の `conformedOf` を維持」と project.md の「`conformedOf` を既存裁定として維持」は本裁定で覆る。置き換えは集約ルート `DesignVerifyDirectory`（`crossCheck: DesignReport | null` を持つ）＋ `FindingsSchema` 値オブジェクト＋ `DesignReport.conformedTo(schema)`、port は `findByDirectory` と `store(aggregate)` のみ。Wave 4／5 で書いた実装は作り直しになる（実装済みの `DirectoryFinalizationLock`・typed failure・Acquirer は流用）。"
+    },
+    {
+      "candidate_id": "c13",
+      "kind": "learning",
+      "source_heading": "Tradeoffs",
+      "heading": "Corrections",
+      "scope": "project",
+      "text": "作業ツリーに既にあったゼロ Unit 修正を破棄せず土台として採用した（Q1=A）。7 harness の配布物まで生成済みで、いま動いているこのステージ自体がその修正の上に乗っているため、破棄の損失が作り直しの利得を上回る。"
+    }
+  ]
+}

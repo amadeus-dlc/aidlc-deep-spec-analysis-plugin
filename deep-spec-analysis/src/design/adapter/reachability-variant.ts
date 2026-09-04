@@ -9,7 +9,7 @@
 // 「到達した」と判定する（conflict 単体は証拠でない——ベルトとサスペンダー）。
 // 旧 aidlc-sensor-deep-spec-design-verify-quint.ts からの逐語移植。
 
-import { type Json, isObject } from "@deep-spec/kernel-adapter";
+import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
 
 export function reachabilityVariant(base: Json, attrPath: string, state: string): Json {
   if (!isObject(base)) return base;

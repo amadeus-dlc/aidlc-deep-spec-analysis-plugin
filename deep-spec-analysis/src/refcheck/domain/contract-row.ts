@@ -1,7 +1,7 @@
 import type { ContractId } from "./contract-id.ts";
 import type { ContractParty } from "./contract-party.ts";
 import type { LineNumber } from "./line-number.ts";
-import { TargetIds, type ArtifactPath } from "@deep-spec/kernel-domain";
+import { FindingKind, TargetIds, type ArtifactPath } from "@deep-spec/kernel-domain";
 import { CD_1 } from "./contract-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { UnitDecls } from "./unit-decls.ts";
@@ -53,17 +53,17 @@ export class ContractRow {
     const depArt = depArtifact.asString();
     const el = this.locationLabel();
     if (!this.#provider.isBlank() && !declared.declares(this.#provider.asString())) {
-      report.finding(CD_1, "reference-broken", [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#provider.asString())],
+      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#provider.asString())],
         [WitnessRef.at(art, el, this.#provider.asString()), WitnessRef.at(depArt, "units")],
         `Provider Unit "${this.#provider.asString()}" is not a declared unit`);
     }
     if (!this.#consumer.isBlank() && !declared.declares(this.#consumer.asString()) && !this.#consumer.declaresExternal()) {
-      report.finding(CD_1, "reference-broken", [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#consumer.asString())],
+      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#consumer.asString())],
         [WitnessRef.at(art, el, this.#consumer.asString()), WitnessRef.at(depArt, "units")],
         `Consumer "${this.#consumer.asString()}" is neither a declared unit nor \`External: …\``);
     }
     if (!this.#owner.isBlank() && !declared.declares(this.#owner.asString())) {
-      report.finding(CD_1, "reference-broken", [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#owner.asString())],
+      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#owner.asString())],
         [WitnessRef.at(art, el, this.#owner.asString()), WitnessRef.at(depArt, "units")],
         `Owner "${this.#owner.asString()}" is not a declared unit`);
     }

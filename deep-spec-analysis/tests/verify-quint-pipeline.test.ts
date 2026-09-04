@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "@deep-spec/kernel-adapter";
-import { TriggerName, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression, KeyedIndex } from "@deep-spec/kernel-domain";
+import { TriggerName, TargetId, TargetIds, ContentHash, FindingsSchema, IrVersion, ArtifactPath, type Expression, KeyedIndex } from "@deep-spec/kernel-domain";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 
@@ -27,7 +27,7 @@ function ap(raw: string): ArtifactPath {
 import {
   FormalModelRepositoryImpl,
   QuintClientImpl,
-  VerificationReportRepositoryImpl,
+  VerificationDirectoryRepositoryImpl,
   renderVerificationReportBytes,
 } from "@deep-spec/requirements-adapter";
 import { BackgroundAssumption, Scenario, Obligation, AttributeDeclaration, AttributeDeclarations, AttributeValues, FrRefs, ObligationId, ObligationNature, ScenarioId, Obligations, Scenarios, BackgroundAssumptions, RequirementsModel, QuintMachineComponents, QuintMachinePlan, QuintMachineComponent, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationReportId, VerificationSkips, FormalModelId, ObligationIds, VerificationSkipped, VerificationFinding, VerificationReport, AttributePath, TraceState, TraceValue } from "@deep-spec/requirements-domain";
@@ -37,7 +37,7 @@ import {
   type QuintClient,
   VerifyRequirementsQuintUseCase,
 } from "@deep-spec/requirements-usecase";
-import { InMemoryVerificationReportRepository } from "./doubles/in-memory-verification-report-repository.ts";
+import { InMemoryVerificationDirectoryRepository } from "./doubles/in-memory-verification-directory-repository.ts";
 
 // テスト用: 平文の状態 → TraceState（裁定 2 で値オブジェクトになった）。
 function st(values: { [path: string]: boolean | number | string }): TraceState {
@@ -52,7 +52,9 @@ const plainFindings = (findings: Iterable<VerificationFinding>) =>
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(pluginRoot, "tests", "fixtures", "conformance");
 const schemaPath = join(pluginRoot, "src", "entries", "data", "deep-spec-findings-schema.json");
-const schema = readContractSchema(schemaPath);
+const schemaFile = readContractSchema(schemaPath);
+// 合成ルート相当：契約2 のスキーマを一度だけ読んで値にする（entry と同じ形）。
+const schema = schemaFile.ok ? FindingsSchema.of(schemaFile.value) : FindingsSchema.unreadable(schemaFile.error.cause);
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
 type RawAttributeDeclaration = Omit<Parameters<typeof AttributeDeclaration.reconstitute>[0], "values"> & { values?: string[] };
@@ -93,7 +95,8 @@ describe("in-process golden equivalence (interactor over real Impls, real quint 
 
       const outcome = new VerifyRequirementsQuintUseCase(
         new FormalModelRepositoryImpl(),
-        new VerificationReportRepositoryImpl(schemaPath),
+        new VerificationDirectoryRepositoryImpl(),
+        schema,
         new QuintClientImpl({
           quintBin: join(pluginRoot, "node_modules", ".bin", "quint"),
           methodOverride: "simulation",
@@ -243,10 +246,11 @@ describe("the verify-quint interactor over the InMemory double", () => {
   const DIR = "/tmp/verify-quint";
 
   test("a corrupt model writes the simulation-method ir-unreadable degradation", () => {
-    const reports = new InMemoryVerificationReportRepository(schema);
+    const reports = new InMemoryVerificationDirectoryRepository();
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(err({ kind: "corrupt", path: "/x", cause: "IR is not a JSON object" })),
       reports,
+      schema,
       quint({ kind: "cli-unavailable" }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("model-unreadable");
@@ -258,7 +262,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
   });
 
   test("a missing quint CLI writes the frozen unavailable document and the caller exits 127", () => {
-    const reports = new InMemoryVerificationReportRepository(schema);
+    const reports = new InMemoryVerificationDirectoryRepository();
     const m = model({
       obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: [] }],
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
@@ -266,6 +270,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok(m)),
       reports,
+      schema,
       quint({ kind: "cli-unavailable" }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("backend-unavailable");
@@ -279,7 +284,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
   });
 
   test("an uncompilable machine records every target as compile-error under the detected method", () => {
-    const reports = new InMemoryVerificationReportRepository(schema);
+    const reports = new InMemoryVerificationDirectoryRepository();
     const m = model({
       obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: [] }],
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
@@ -287,6 +292,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok(m)),
       reports,
+      schema,
       quint({ kind: "machine-uncompilable", method: "bounded", error: 'state variable name collision: "a_b"' }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("machine-uncompilable");
@@ -299,7 +305,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
   });
 
   test("a checked run interprets, persists the conformed report, and reports the detected method", () => {
-    const reports = new InMemoryVerificationReportRepository(schema);
+    const reports = new InMemoryVerificationDirectoryRepository();
     const m = model({
       obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-1"], assert: { op: "bool", value: true } }],
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: { "T.x": 1 } }],
@@ -317,6 +323,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok(m)),
       reports,
+      schema,
       quint({ kind: "checked", method: "bounded", plan, compileSkips: VerificationSkips.of([]), runs }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("verified");

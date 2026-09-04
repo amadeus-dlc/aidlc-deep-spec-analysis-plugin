@@ -1,6 +1,6 @@
 import type { LineNumber } from "./line-number.ts";
 import type { RuleDecls } from "./rule-decls.ts";
-import type { ArtifactPath, RequirementIds } from "@deep-spec/kernel-domain";
+import { FindingKind, type ArtifactPath, type RequirementIds } from "@deep-spec/kernel-domain";
 import type { DeclaredEntities } from "./declared-entities.ts";
 import { FD_R1, FD_R2, FD_R3, FD_R4, FD_R5 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
@@ -82,17 +82,17 @@ export class RulesOutcome {
         }
       },
       wrongFenceCount: (found) => {
-        report.finding(FD_R1, "structure-invalid", [FD_R1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")],
+        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")],
           `rules.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
         blockRs("blocked by FD-R1: the rules yaml block is unusable");
       },
       unparseable: (line, error) => {
-        report.finding(FD_R1, "structure-invalid", [FD_R1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)],
+        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)],
           `yaml block does not parse in the supported subset: ${error}`);
         blockRs("blocked by FD-R1: the rules yaml block is unusable");
       },
       noRulesList: () => {
-        report.finding(FD_R1, "structure-invalid", [FD_R1.asCheckTarget()], [WitnessRef.at(art, "rules")],
+        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessRef.at(art, "rules")],
           "top-level `rules:` list is missing");
         blockRs("blocked by FD-R1: the rules yaml block is unusable");
       },

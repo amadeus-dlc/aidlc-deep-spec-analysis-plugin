@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { writeFileAtomically } from "@deep-spec/kernel-adapter";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { RefinementMap, RefinementMapId } from "@deep-spec/refinement-domain";
+import type { RefinementMap, RefinementMapId } from "@deep-spec/design-domain";
 import type { RefinementMapRepository } from "@deep-spec/design-usecase";
 import { parseRefinementMapDocument } from "./refinement-materials-repository-impl.ts";
 

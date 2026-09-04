@@ -10,6 +10,8 @@ import { DesignAttributeName } from "./design-attribute-name.ts";
 import { DesignEntityName } from "./design-entity-name.ts";
 import { DesignIgnores } from "./design-ignores.ts";
 import { DesignMachineId } from "./design-machine-id.ts";
+import { LoweredOrigin } from "./lowered-origin.ts";
+import { LoweredOriginRef } from "./lowered-origin-ref.ts";
 
 export class DesignMachine {
   readonly #id: DesignMachineId;
@@ -68,6 +70,11 @@ export class DesignMachine {
 
   ignores(): DesignIgnores {
     return this.#ignores;
+  }
+
+  // 降ろし方の帰属：ignore の no-op event は宣言元の機械に帰属する。
+  loweredIgnoreOrigin(): LoweredOrigin {
+    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "ignore" });
   }
 
   // 到達不能プローブの候補：enum 宣言値のうち初期状態でないもの（昇順——

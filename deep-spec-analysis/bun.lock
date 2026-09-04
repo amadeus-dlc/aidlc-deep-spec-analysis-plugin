@@ -21,7 +21,6 @@
         "@deep-spec/kernel-domain": "workspace:*",
         "@deep-spec/kernel-infrastructure": "workspace:*",
         "@deep-spec/kernel-usecase": "workspace:*",
-        "@deep-spec/refinement-domain": "workspace:*",
       },
     },
     "src/design/domain": {
@@ -30,6 +29,7 @@
       "dependencies": {
         "@deep-spec/kernel-domain": "workspace:*",
         "@deep-spec/kernel-infrastructure": "workspace:*",
+        "@deep-spec/requirements-domain": "workspace:*",
       },
     },
     "src/design/usecase": {
@@ -40,7 +40,6 @@
         "@deep-spec/kernel-domain": "workspace:*",
         "@deep-spec/kernel-infrastructure": "workspace:*",
         "@deep-spec/kernel-usecase": "workspace:*",
-        "@deep-spec/refinement-domain": "workspace:*",
       },
     },
     "src/doctor/adapter": {
@@ -90,6 +89,7 @@
       "name": "@deep-spec/kernel-adapter",
       "version": "0.0.0",
       "dependencies": {
+        "@deep-spec/kernel-domain": "workspace:*",
         "@deep-spec/kernel-infrastructure": "workspace:*",
         "@deep-spec/kernel-usecase": "workspace:*",
       },
@@ -139,16 +139,6 @@
         "@deep-spec/refcheck-domain": "workspace:*",
       },
     },
-    "src/refinement/domain": {
-      "name": "@deep-spec/refinement-domain",
-      "version": "0.0.0",
-      "dependencies": {
-        "@deep-spec/design-domain": "workspace:*",
-        "@deep-spec/kernel-domain": "workspace:*",
-        "@deep-spec/kernel-infrastructure": "workspace:*",
-        "@deep-spec/requirements-domain": "workspace:*",
-      },
-    },
     "src/requirements/adapter": {
       "name": "@deep-spec/requirements-adapter",
       "version": "0.0.0",
@@ -196,7 +186,6 @@
         "@deep-spec/refcheck-adapter": "workspace:*",
         "@deep-spec/refcheck-domain": "workspace:*",
         "@deep-spec/refcheck-usecase": "workspace:*",
-        "@deep-spec/refinement-domain": "workspace:*",
         "@deep-spec/requirements-adapter": "workspace:*",
         "@deep-spec/requirements-domain": "workspace:*",
         "@deep-spec/requirements-usecase": "workspace:*",
@@ -231,8 +220,6 @@
     "@deep-spec/refcheck-domain": ["@deep-spec/refcheck-domain@workspace:src/refcheck/domain"],
 
     "@deep-spec/refcheck-usecase": ["@deep-spec/refcheck-usecase@workspace:src/refcheck/usecase"],
-
-    "@deep-spec/refinement-domain": ["@deep-spec/refinement-domain@workspace:src/refinement/domain"],
 
     "@deep-spec/requirements-adapter": ["@deep-spec/requirements-adapter@workspace:src/requirements/adapter"],
 

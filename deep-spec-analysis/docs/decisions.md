@@ -2497,3 +2497,162 @@ back ir-valid pass / SMT 5 findings, 2 skipped, exhaustive / Quint 2
 findings, 3 skipped, bounded (real Apalache) / cross-check SC-3, SC-5
 with 0 disagreement — all three output files byte-identical to the
 pre-migration baseline. Golden and parity snapshots are unchanged.
+
+## Repository vocabulary and the verify-directory aggregate — conformance leaves the repository, the cross-check becomes an Option on the aggregate, and strict creation splits from tolerant hydration (2026-09-04)
+
+Three report repositories (`design`, `requirements`, `refcheck`) had
+grown a query, `conformedOf(report)`, that returned "the shape `store`
+would write" so that the verdict printed to stdout could be derived
+from the same object that landed on disk. During this intent the design
+port briefly gained two more variants — `storeConformed(report, model)`
+and `storeConformedWithoutCrossCheck(report)` — to carry the directory
+lock and the cross-check rebuild. The owner ruled all of it out:
+
+> A repository's responsibility is I/O of an aggregate. Its only
+> vocabulary is store, find, get and delete, and its interface may
+> depend on nothing but that vocabulary. If you want an interface with
+> any other vocabulary, redesign the aggregate. An aggregate is one
+> piece; a variable part is modelled on the aggregate itself, like
+> `employeeAggregate.deptIdOpt: Option<DeptId>` — the repository does
+> not absorb it.
+
+This reverses the 2026-09-01 ruling that kept `conformedOf` on the
+repository boundary, and the functional-design decision that
+preserved it. What replaced it:
+
+- **The repository port is `find` + `store(aggregate)` and nothing
+  else.** `DesignVerifyDirectoryRepository` and
+  `VerificationDirectoryRepository` expose
+  `findByDirectory(directory)` and `store(aggregate)`;
+  `ReferenceCheckReportRepository` exposes `findById(id)` and
+  `store(report)`. `conformedOf`, `findAllByDirectory`, the
+  `storeConformed*` variants and the schema-path constructor
+  argument are gone from all three. `RepositoryError` keeps its three
+  variants; a store-time conflict is carried as `io-failed` with a
+  typed `cause`.
+- **The verify directory is the aggregate.** `DesignVerifyDirectory`
+  and `VerificationDirectory` are identified by the directory and hold
+  the backend reports (a first-class collection keyed by backend), the
+  `candidate` this run places, and **`crossCheck: Report | null`** —
+  absent when it cannot be derived (the IR was unreadable), present
+  when `crossChecked(model, irHash)` derived it from the current
+  reports. `finalizing(report)` replaces the same-backend sibling in
+  canonical filename order (the adapter's `withCandidate` moved into
+  the aggregate). `withoutCrossCheck()` is the aggregate saying "no
+  cross-check", not a repository method saying it.
+- **Conformance is the aggregate's own behaviour.** `FindingsSchema`
+  is a value object in `kernel/domain` wrapping contract 2's JSON
+  Schema, with an `unreadable(cause)` variant and
+  `degradationReasonFor(document)` returning the frozen texts
+  (`findings schema unreadable: <cause>`, `self-validation against
+  deep-spec-findings-schema.json failed: <first error>`). Each report
+  gained `toDocument()` (the serializer's `orderedDocument`, moved
+  verbatim — canonical order is contract-2 knowledge and belongs to
+  the domain) and `conformedTo(schema)`. The pure pieces that made
+  this possible — `Json`, `isObject`, `validateSchema`,
+  `canonicalStringify` — moved from `kernel/adapter` to the innermost
+  `kernel/infrastructure`; the adapter keeps only the I/O
+  (`readContractSchema`). The composition root reads the schema once
+  and injects the value object into the use case; the repository never
+  sees it. A degraded candidate is conformed *before* the cross-check
+  is derived, exactly as the old flow did, so the cross-check bytes
+  are unchanged.
+- **`store(aggregate)` hides the whole finalization protocol.** Inside
+  the adapter, and invisible to the port: take the directory lock
+  (owner token, PID, 30-second lease, single non-waiting exclusive
+  create, recovery only after lease expiry *and* definite owner
+  absence, token fencing before every public rename, owner-specific
+  stale/cleanup paths, never a canonical-path delete); re-read the
+  siblings under the lock and refuse with `conflict: sibling set
+  changed since load` if any non-candidate report differs from what
+  the aggregate was loaded from; render; move the public
+  `cross-check.json` to a non-`*.json` stale name first; publish the
+  candidate with the canonical atomic-write helper; publish the new
+  cross-check the same way or leave it absent; clean up in `finally`.
+  Read-side, a broken sibling is a typed failure, never silently
+  dropped; the derived `cross-check.json` alone is read tolerantly.
+  `DirectoryFinalizationLock` lives in `kernel/adapter` and is shared;
+  each context injects its own lock basename.
+- **The silent success is gone.** Both design use cases and both
+  requirements use cases carried `if (!siblings.ok) return
+  ok(undefined);` — a sibling directory that could not be read made
+  the cross-check update "succeed". A `DesignReportFinalizer` /
+  `VerificationReportFinalizer` now owns `find → finalizing →
+  conformedTo → crossChecked | withoutCrossCheck → conformedTo →
+  store` in one place and returns `verified` only after `store`
+  succeeds, deriving pass and counts from the aggregate it stored.
+  `DesignVerificationAcquirer` owns model acquisition, the three
+  failure classifications and the IR version check with a closed
+  `ready | terminal` result and a compile-time `never` check.
+- **Strict creation and tolerant hydration are separate doors.**
+  `VerificationMethod.parse`, the new `SkipReason` (contract 2's nine
+  values, a shared domain primitive replacing a bare `string` on
+  `DesignSkipped`), and `FindingKind.parse` are the strict doors; each
+  closed set exposes named static factories so no call site carries a
+  string literal; `reconstitute` remains for adapter hydration only,
+  and unknown kinds still sort after known ones and degrade through
+  conformance. `DesignFinding`, `VerificationFinding` and the refcheck
+  `Finding` gained `of(...)` taking a validated `FindingKind`; the
+  refcheck aggregate's `finding(...)` command is typed the same way.
+- **Refinement is a Design subdomain, flat.** The 36 classes of
+  `@deep-spec/refinement-domain` moved to `src/design/domain/` (no
+  `refinement/` subdirectory), the package and its four sanctioned
+  cross-context edges were deleted with no shim, and
+  `design/domain → requirements/domain` is the one edge that remains
+  sanctioned. `refinement` stays in the architecture rules' `CONTEXTS`
+  list on purpose: removing it would make a resurrected
+  `@deep-spec/refinement-domain` import fall outside layer discipline
+  instead of being rejected.
+- **Lowering and verdict interpretation moved to their owners.**
+  `buildLowering`, a 161-line module-scope function, became
+  `DesignUnit.lowered()` plus `loweredAs` on the declaration objects;
+  the 119-line `#remapReadable` became
+  `SiblingVerdictDocument.remapVerdicts(unit, index)`; `LoweredUnit`
+  keeps only the collections, the `LoweringIndex` and `extendedWith`.
+
+Alternatives rejected: a separate conformance port (still vocabulary
+the aggregate should own); keeping `conformedOf` because the
+double-observation could be fixed with a snapshot alone (the ruling
+is about the port's vocabulary, not the cache); repository method
+variants for "with" and "without" a cross-check (the variable part
+belongs on the aggregate); rebuilding the cross-check inside the
+repository (a repository computes nothing); reading the siblings only
+inside the lock with no conflict check (an aggregate loaded outside
+the lock needs the check, and the check is a persistence concern).
+
+Consequences worth naming: the IR-unreadable path now loads the
+directory too, so a corrupt sibling fails it instead of being ignored;
+a cross-check that cannot be derived is absent, never stale; the
+requirements and refcheck contexts, which the requirements document
+had placed out of scope, were aligned in the same intent at the
+owner's direction; `kernel/adapter` now depends on `kernel-domain`
+(downward) for `ArtifactPath` in the shared lock.
+
+Evidence: `bunx tsc --noEmit` exit 0; `bun test --coverage` 577 pass /
+1 skip / 0 fail (3,218 assertions, 32 files, up from the 527-pass
+baseline) with 99.83% function / 99.94% line coverage and the 0.9 floor
+held; `bun scripts/build-tools.ts --check` 14 files up to date, largest
+bundle 321,855 bytes; `aidlc-plugin-validate` 0 errors (the one warning,
+the absent vendored compose hook, predates this change); all 7 harness
+projection builds succeed; the golden fixtures under `tests/fixtures/`
+are byte-unchanged. A live sandbox exercise with real Apalache (quint
+`bounded`) installed the pre-change plugin from a HEAD worktree into
+sandbox A and the post-change plugin into sandbox B, minted the same
+feature intent, and fired all ten entries from the installed dispatcher:
+every verdict line, exit code and output file — requirements and design
+`smt.json` / `quint.json` / `cross-check.json`, the three refcheck
+reports, ir-valid, doctor's 41 checks — was byte-identical across A, B
+and A upgraded in place with `--update` (299 → 299 files, 11 bundles
+changed, contract schemas untouched). A second SMT→Quint firing
+converged byte-identically and left no lock, temp or stale file;
+`aidlc-plugin-test` reported CLEAN (`Changed files (0)` / `Drops: 0` /
+`Idempotent second compose: true`). Breaking a sibling `quint.json`
+made the SMT sensor exit 1 with the sibling named on stderr and
+published nothing; an unreadable design IR produced the frozen degraded
+`smt.json`, removed the stale `cross-check.json`, and a re-fire after
+restoring the IR reproduced all three files byte for byte. The
+requirements had also folded a zero-Unit fix for the AI-DLC engine
+(`aidlc-workflows/`) into this intent; the owner ruled during Build and
+Test that `aidlc-workflows/` is not a development target of this
+repository and must not be modified, so that work was reverted to the
+engine's HEAD and is not part of this record.

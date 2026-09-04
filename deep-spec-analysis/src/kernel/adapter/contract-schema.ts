@@ -6,7 +6,7 @@ import type { SchemaUnreadable } from "./schema-unreadable.ts";
 
 import { readFileSync } from "node:fs";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import { type Schema } from "./schema.ts";
+import { type Schema } from "@deep-spec/kernel-infrastructure";
 
 
 export function readContractSchema(path: string): Result<Schema, SchemaUnreadable> {

@@ -4,7 +4,7 @@
 // 返す。ユニットのソートは DesignModel.compose の不変条件。
 // 旧 deep-spec-design-lib.ts の parseDesignIr からの逐語移植。
 
-import { type Json, isObject, strArr } from "@deep-spec/kernel-adapter";
+import { type Json, isObject, strArr } from "@deep-spec/kernel-infrastructure";
 import { FrRefs, IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
 import { BrRefs, DesignBackgroundId, DesignBackgroundAssumption, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, DesignIgnores, DesignTransitions, DesignUnits, InitialStates, DesignIgnore, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignMachine, DesignObligation, DesignScenario, DesignTransition, DesignUnit,
   DesignModel,

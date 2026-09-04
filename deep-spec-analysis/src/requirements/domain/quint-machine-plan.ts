@@ -9,7 +9,7 @@
 // 済みの義務は走らせない」ガードも逐語）は plan 自身の振る舞い（OOUI 裁定）。
 // 対象 id は TargetId / TargetIds で運ぶ（#71 波10——生 string の列ではない）。
 
-import { TargetIds, KeySet } from "@deep-spec/kernel-domain";
+import { FindingKind, TargetIds, KeySet } from "@deep-spec/kernel-domain";
 import { type QuintRuns } from "./quint-runs.ts";
 import { type ObligationIds } from "./obligation-ids.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
@@ -94,8 +94,8 @@ export class QuintMachinePlan {
       // timeout / run-failed の対象一括 skip は判定が組む（#71 波8）。
       skipped.push(...machineRun.skipsFor(machineTargets, bounded));
       if (machineRun.isDeadlock()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "completeness-gap",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.completenessGap(),
           frRefs: model.frRefsOf(eventTargets),
           targets: this.#eventIds.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
           witness: machineRun.witness(),
@@ -106,8 +106,8 @@ export class QuintMachinePlan {
         const targets = violatedComponents.isEmpty()
           ? eventTargets.sortedCanonically()
           : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
-        findings.push(VerificationFinding.reconstitute({
-          kind: "conflict",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.conflict(),
           frRefs: model.frRefsOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
           targets,
           witness: machineRun.witness(),
@@ -142,8 +142,8 @@ export class QuintMachinePlan {
         if (skip !== null) {
         skipped.push(skip);
       } else if (r.isViolation()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "conflict",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.conflict(),
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: r.witness(),
@@ -188,8 +188,8 @@ export class QuintMachinePlan {
       if (sc.isAccept() && r.isViolated()) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
         const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(targets),
           targets,
           witness: VerificationWitness.model(boundModel),
@@ -197,8 +197,8 @@ export class QuintMachinePlan {
         }));
       }
       if (sc.isReject() && !r.isViolated()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: VerificationWitness.model(boundModel),

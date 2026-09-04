@@ -1,25 +1,23 @@
 // ReferenceCheckReportRepository の実 Gateway 実装。
 // 保存先／読出元は集約識別子（directory + fileName）から導出する。
-// 契約適合は serializer の知識で実装し、store は常に conformed な姿を書いて
-// 適合済み集約を返す——「不適合ファイルを決して出さない」の実装点。
+// 責務は集約の I/O だけ（オーナー裁定 2026-09-04）——store は渡された集約を
+// そのまま公開し、契約適合済みかどうかは問わない。適合は usecase が保存前に
+// 一度だけ済ませる（ReferenceCheckReport.conformedTo）ので、ここは schema を
+// 読まない。
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import { type Json } from "@deep-spec/kernel-adapter";
-import { readContractSchema } from "@deep-spec/kernel-adapter";
+import { type Json } from "@deep-spec/kernel-infrastructure";
+import { writeFileAtomically } from "@deep-spec/kernel-adapter";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import type { ReferenceCheckReport, ReferenceCheckReportId } from "@deep-spec/refcheck-domain";
 import type { ReferenceCheckReportRepository } from "@deep-spec/refcheck-usecase";
-import { conformToContract, parseReportDocument, renderReportBytes } from "./reference-check-report-serializer.ts";
+import { parseReportDocument, renderReportBytes } from "./reference-check-report-serializer.ts";
+
+const encoder = new TextEncoder();
 
 export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportRepository {
-  readonly #findingsSchemaPath: string;
-
-  constructor(findingsSchemaPath: string) {
-    this.#findingsSchemaPath = findingsSchemaPath;
-  }
-
   findById(aggregateId: ReferenceCheckReportId): Result<ReferenceCheckReport, RepositoryError> {
     const path = join(aggregateId.directory().asString(), aggregateId.fileName());
     if (!existsSync(path)) {
@@ -38,16 +36,12 @@ export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportR
     return report;
   }
 
-  conformedOf(report: ReferenceCheckReport): ReferenceCheckReport {
-    return conformToContract(report, readContractSchema(this.#findingsSchemaPath));
-  }
-
+  // 往復則: 渡された集約をそのまま（再適合せず）バイトへ描画し、同一ディレク
+  // トリの一時ファイルへ書いてから rename で公開する（部分書き込み防止）。
   store(report: ReferenceCheckReport): Result<void, RepositoryError> {
-    const conformed = this.conformedOf(report);
-    const path = join(conformed.id().directory().asString(), conformed.id().fileName());
+    const path = join(report.id().directory().asString(), report.id().fileName());
     try {
-      mkdirSync(conformed.id().directory().asString(), { recursive: true });
-      writeFileSync(path, renderReportBytes(conformed), "utf-8");
+      writeFileAtomically(path, encoder.encode(renderReportBytes(report)));
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });

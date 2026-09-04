@@ -1,0 +1,15 @@
+{
+  "stage_slug": "requirements-analysis",
+  "space": "default",
+  "intent": "260904-ddd-clean-architecture",
+  "selections": [
+    {
+      "candidate_id": "c1",
+      "type": "learning",
+      "scope": "project",
+      "heading": "Corrections",
+      "text": "外部仕様は本家互換を必須とし、契約1〜4、golden bytes、findings JSON、stdout verdict、文言、正準順、solver pinを原則変更しない。避けられない変更は一括承認ではなく、変更項目ごとに実装前の人間裁定を得る。",
+      "source": "orchestrator"
+    }
+  ]
+}

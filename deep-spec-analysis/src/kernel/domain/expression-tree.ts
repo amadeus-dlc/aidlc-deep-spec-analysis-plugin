@@ -7,8 +7,8 @@ import type { Expression } from "./expression.ts";
 // 境界（JSON・コンパイラ）へは `asExpression` で戻す。
 type CanonicalNode = null | boolean | number | string | readonly CanonicalNode[] | { readonly [k: string]: CanonicalNode };
 
-// kernel/adapter の canonicalStringify（正準 JSON）と同一バイト——同値性は
-// tests が canonicalStringify との突き合わせで機械証明する。
+// kernel/infrastructure の canonicalStringify（正準 JSON）と同一バイト——
+// 同値性は tests が canonicalStringify との突き合わせで機械証明する。
 function canonicalKeyOf(value: CanonicalNode): string {
   if (Array.isArray(value)) {
     return `[${value.map(canonicalKeyOf).join(",")}]`;

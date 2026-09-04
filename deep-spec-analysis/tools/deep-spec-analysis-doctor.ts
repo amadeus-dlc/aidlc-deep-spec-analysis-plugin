@@ -147,6 +147,127 @@ function ok(value) {
 function err(error) {
   return { ok: false, error };
 }
+// src/kernel/infrastructure/json.ts
+function isObject(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+// src/kernel/infrastructure/schema.ts
+function typeMatches(t, v) {
+  switch (t) {
+    case "object":
+      return isObject(v);
+    case "array":
+      return Array.isArray(v);
+    case "string":
+      return typeof v === "string";
+    case "boolean":
+      return typeof v === "boolean";
+    case "integer":
+      return typeof v === "number" && Number.isInteger(v);
+    case "number":
+      return typeof v === "number";
+    case "null":
+      return v === null;
+    default:
+      return false;
+  }
+}
+function resolveRef(root, ref) {
+  const m = ref.match(/^#\/definitions\/([A-Za-z0-9_-]+)$/);
+  if (!m)
+    throw new Error(`unsupported $ref: ${ref}`);
+  const defs = root.definitions;
+  if (!isObject(defs) || !isObject(defs[m[1] ?? ""])) {
+    throw new Error(`unresolvable $ref: ${ref}`);
+  }
+  return defs[m[1] ?? ""];
+}
+function validateSchema(root, schema, value, path, errors) {
+  const before = errors.length;
+  if (typeof schema.$ref === "string") {
+    return validateSchema(root, resolveRef(root, schema.$ref), value, path, errors);
+  }
+  if (Array.isArray(schema.oneOf)) {
+    let matched = 0;
+    for (const branch of schema.oneOf) {
+      if (!isObject(branch))
+        continue;
+      const probe = [];
+      if (validateSchema(root, branch, value, path, probe))
+        matched++;
+    }
+    if (matched !== 1) {
+      errors.push(`${path}: matches ${matched} oneOf branches (must match exactly 1)`);
+    }
+    return errors.length === before;
+  }
+  if (typeof schema.type === "string" && !typeMatches(schema.type, value)) {
+    errors.push(`${path}: expected type ${schema.type}`);
+    return false;
+  }
+  if ("const" in schema && JSON.stringify(schema.const) !== JSON.stringify(value)) {
+    errors.push(`${path}: expected const ${JSON.stringify(schema.const)}`);
+    return false;
+  }
+  if (Array.isArray(schema.enum)) {
+    const hit = schema.enum.some((e) => JSON.stringify(e) === JSON.stringify(value));
+    if (!hit) {
+      errors.push(`${path}: not one of ${JSON.stringify(schema.enum)}`);
+      return false;
+    }
+  }
+  if (typeof value === "string" && typeof schema.pattern === "string") {
+    if (!new RegExp(schema.pattern).test(value)) {
+      errors.push(`${path}: does not match pattern ${schema.pattern}`);
+    }
+  }
+  if (Array.isArray(value)) {
+    if (typeof schema.minItems === "number" && value.length < schema.minItems) {
+      errors.push(`${path}: fewer than ${schema.minItems} items`);
+    }
+    if (typeof schema.maxItems === "number" && value.length > schema.maxItems) {
+      errors.push(`${path}: more than ${schema.maxItems} items`);
+    }
+    if (schema.uniqueItems === true) {
+      const seen = new Set(value.map((v) => JSON.stringify(v)));
+      if (seen.size !== value.length)
+        errors.push(`${path}: items are not unique`);
+    }
+    if (isObject(schema.items)) {
+      value.forEach((item, i) => {
+        validateSchema(root, schema.items, item, `${path}/${i}`, errors);
+      });
+    }
+  }
+  if (isObject(value)) {
+    const props = isObject(schema.properties) ? schema.properties : {};
+    if (Array.isArray(schema.required)) {
+      for (const key of schema.required) {
+        if (typeof key === "string" && !(key in value)) {
+          errors.push(`${path}: missing required property "${key}"`);
+        }
+      }
+    }
+    if (typeof schema.minProperties === "number" && Object.keys(value).length < schema.minProperties) {
+      errors.push(`${path}: fewer than ${schema.minProperties} properties`);
+    }
+    for (const [key, val] of Object.entries(value)) {
+      if (key in props && isObject(props[key])) {
+        validateSchema(root, props[key], val, `${path}/${key}`, errors);
+      } else if (schema.additionalProperties === false) {
+        errors.push(`${path}: unexpected property "${key}"`);
+      } else if (isObject(schema.additionalProperties)) {
+        validateSchema(root, schema.additionalProperties, val, `${path}/${key}`, errors);
+      }
+      if (isObject(schema.propertyNames) && typeof schema.propertyNames.pattern === "string") {
+        if (!new RegExp(schema.propertyNames.pattern).test(key)) {
+          errors.push(`${path}: property name "${key}" does not match required pattern`);
+        }
+      }
+    }
+  }
+  return errors.length === before;
+}
 // src/kernel/domain/content-hash.ts
 class ContentHash {
   #value;
@@ -534,6 +655,35 @@ class ErrorMessages {
     return this.#values;
   }
 }
+// src/kernel/domain/findings-schema.ts
+var CONTRACT_BASENAME = "deep-spec-findings-schema.json";
+
+class FindingsSchema {
+  #schema;
+  #reason;
+  constructor(schema, reason) {
+    this.#schema = schema;
+    this.#reason = reason;
+  }
+  static of(schema) {
+    return new FindingsSchema(schema, null);
+  }
+  static unreadable(cause) {
+    return new FindingsSchema(null, cause);
+  }
+  degradationReasonFor(document) {
+    const schema = this.#schema;
+    if (schema === null) {
+      return `findings schema unreadable: ${this.#reason ?? ""}`;
+    }
+    const errors = [];
+    validateSchema(schema, schema, document, "", errors);
+    const first = errors[0];
+    if (first === undefined)
+      return null;
+    return `self-validation against ${CONTRACT_BASENAME} failed: ${first}`;
+  }
+}
 // src/kernel/domain/trigger-name.ts
 class TriggerName {
   #value;
@@ -725,6 +875,39 @@ class FindingKind {
   static reconstitute(raw) {
     return new FindingKind(raw);
   }
+  static conflict() {
+    return new FindingKind("conflict");
+  }
+  static completenessGap() {
+    return new FindingKind("completeness-gap");
+  }
+  static scenarioViolation() {
+    return new FindingKind("scenario-violation");
+  }
+  static unreachable() {
+    return new FindingKind("unreachable");
+  }
+  static redundancy() {
+    return new FindingKind("redundancy");
+  }
+  static refinementViolation() {
+    return new FindingKind("refinement-violation");
+  }
+  static mappingGap() {
+    return new FindingKind("mapping-gap");
+  }
+  static structureInvalid() {
+    return new FindingKind("structure-invalid");
+  }
+  static referenceBroken() {
+    return new FindingKind("reference-broken");
+  }
+  static consistencyMismatch() {
+    return new FindingKind("consistency-mismatch");
+  }
+  static crossCheckDisagreement() {
+    return new FindingKind("cross-check-disagreement");
+  }
   static canonicalOrder() {
     return Object.keys(KIND_RANK);
   }
@@ -742,10 +925,17 @@ class FindingKind {
   }
 }
 // src/kernel/domain/verification-method.ts
+var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
+
 class VerificationMethod {
   #value;
   constructor(value) {
     this.#value = value;
+  }
+  static parse(raw) {
+    if (!KNOWN_METHODS.has(raw))
+      return err({ kind: "unknown-verification-method", raw });
+    return ok(new VerificationMethod(raw));
   }
   static reconstitute(raw) {
     return new VerificationMethod(raw);
@@ -755,6 +945,66 @@ class VerificationMethod {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/kernel/domain/skip-reason.ts
+var KNOWN_REASONS = new Set([
+  "unavailable",
+  "timeout",
+  "capability",
+  "compile-error",
+  "waived",
+  "absent-input",
+  "stale-input",
+  "ir-version-mismatch",
+  "unrecognized-format"
+]);
+
+class SkipReason {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static parse(raw) {
+    if (!KNOWN_REASONS.has(raw))
+      return err({ kind: "unknown-skip-reason", raw });
+    return ok(new SkipReason(raw));
+  }
+  static reconstitute(raw) {
+    return new SkipReason(raw);
+  }
+  static unavailable() {
+    return new SkipReason("unavailable");
+  }
+  static timeout() {
+    return new SkipReason("timeout");
+  }
+  static capability() {
+    return new SkipReason("capability");
+  }
+  static compileError() {
+    return new SkipReason("compile-error");
+  }
+  static waived() {
+    return new SkipReason("waived");
+  }
+  static absentInput() {
+    return new SkipReason("absent-input");
+  }
+  static staleInput() {
+    return new SkipReason("stale-input");
+  }
+  static irVersionMismatch() {
+    return new SkipReason("ir-version-mismatch");
+  }
+  static unrecognizedFormat() {
+    return new SkipReason("unrecognized-format");
+  }
+  value() {
+    return this.#value;
+  }
+  compareTo(other) {
+    return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
   }
 }
 // src/kernel/domain/attribute-kind.ts

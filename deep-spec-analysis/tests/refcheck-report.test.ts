@@ -19,13 +19,11 @@ function ap(raw: string): ArtifactPath {
   return parsed.value;
 }
 
-import { err } from "@deep-spec/kernel-infrastructure";
 import {
   ReferenceCheckReportRepositoryImpl,
-  conformToContract,
   renderReportBytes,
 } from "@deep-spec/refcheck-adapter";
-import { FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+import { FindingKind, FindingsSchema, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
 import {
   CheckFamilies,
   CheckFamily,
@@ -44,7 +42,8 @@ import {
 const schemaPath = join(
   dirname(fileURLToPath(import.meta.url)), "..", "src", "entries", "data", "deep-spec-findings-schema.json",
 );
-const schema = readContractSchema(schemaPath);
+const schemaFile = readContractSchema(schemaPath);
+const findingsSchema = schemaFile.ok ? FindingsSchema.of(schemaFile.value) : FindingsSchema.unreadable(schemaFile.error.cause);
 
 // 書かれた真実の形で組む（serializer／Repository の契約はこの面を検証する）。
 function seed(
@@ -102,7 +101,7 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
       CheckFamilies.reconstitute(["A-1", "A-2", "A-3"]),
       UnitName.reconstitute("u9"),
     );
-    report.finding(CheckFamily.reconstitute("A-1"), "structure-invalid", ["check:A-1"], [], "boom");
+    report.finding(CheckFamily.reconstitute("A-1"), FindingKind.structureInvalid(), ["check:A-1"], [], "boom");
     report.skip(CheckFamily.reconstitute("A-2"), "absent-input", "gone");
     expect(report.findings().toArray()[0]?.detail()).toBe("A-1: boom");
     expect(report.findings().toArray()[0]?.unit()).toBe("u9");
@@ -121,9 +120,9 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
       ReferenceCheckReportId.of(ap("/tmp/r"), "components"),
       CheckFamilies.reconstitute(["DD-0", "DD-1", "DD-2"]),
     );
-    report.finding(CheckFamily.reconstitute("DD-1"), "reference-broken", ["check:DD-1"], [], "second kind");
-    report.finding(CheckFamily.reconstitute("DD-1"), "structure-invalid", ["check:DD-1"], [], "first kind");
-    report.finding(CheckFamily.reconstitute("DD-1"), "structure-invalid", ["check:DD-1"], [], "a earlier detail", ["FR-2", "FR-1", "FR-2"]);
+    report.finding(CheckFamily.reconstitute("DD-1"), FindingKind.referenceBroken(), ["check:DD-1"], [], "second kind");
+    report.finding(CheckFamily.reconstitute("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "first kind");
+    report.finding(CheckFamily.reconstitute("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "a earlier detail", ["FR-2", "FR-1", "FR-2"]);
     report.skip(CheckFamily.reconstitute("DD-2"), "unrecognized-format", "later");
     report.skip(CheckFamily.reconstitute("DD-0"), "absent-input", "earlier");
     expect(report.findings().toArray().map((f) => f.detail())).toEqual(["DD-1: a earlier detail", "DD-1: first kind", "DD-1: second kind"]);
@@ -147,7 +146,7 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
 describe("serializer (adapter owns the format knowledge)", () => {
   test("a conforming report renders the canonical document and survives conformance untouched", () => {
     const report = seed("/tmp/r");
-    expect(conformToContract(report, schema)).toBe(report);
+    expect(report.conformedTo(findingsSchema)).toBe(report);
     const doc = JSON.parse(renderReportBytes(report));
     expect(Object.keys(doc)).toEqual(["backend", "irVersion", "irHash", "method", "inputs", "checked", "findings", "skipped"]);
     expect(doc.method).toBe("static");
@@ -156,14 +155,14 @@ describe("serializer (adapter owns the format knowledge)", () => {
 
   test("a non-conforming document degrades with the frozen wording", () => {
     const badFinding: Finding = Finding.reconstitute({ kind: "no-such-kind", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["check:DD-0"]), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
-    const conformed = conformToContract(seed("/tmp/r", { findings: [badFinding] }), schema);
+    const conformed = seed("/tmp/r", { findings: [badFinding] }).conformedTo(findingsSchema);
     expect(conformed.isUnavailable()).toBe(true);
     expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
     expect(JSON.parse(renderReportBytes(conformed)).unavailable.reason).toStartWith("self-validation against ");
   });
 
   test("an unreadable schema degrades with the frozen wording carrying the cause", () => {
-    const conformed = conformToContract(seed("/tmp/r"), err({ cause: "boom" }));
+    const conformed = seed("/tmp/r").conformedTo(FindingsSchema.unreadable("boom"));
     expect(conformed.unavailableReason()).toBe("findings schema unreadable: boom");
   });
 });
@@ -172,7 +171,7 @@ describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", ()
   test("store then findById reconstitutes the written truth byte-for-byte", () => {
     const dir = mkdtempSync(join(tmpdir(), "refcheck-repo-"));
     try {
-      const repository = new ReferenceCheckReportRepositoryImpl(schemaPath);
+      const repository = new ReferenceCheckReportRepositoryImpl();
       const report = seed(dir);
       expect(repository.store(report).ok).toBe(true);
       const found = repository.findById(report.id());
@@ -187,7 +186,7 @@ describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", ()
   test("findById on an absent id is a not-found error, and corrupt bytes are a corrupt error", () => {
     const dir = mkdtempSync(join(tmpdir(), "refcheck-repo-"));
     try {
-      const repository = new ReferenceCheckReportRepositoryImpl(schemaPath);
+      const repository = new ReferenceCheckReportRepositoryImpl();
       const absent = repository.findById(ReferenceCheckReportId.of(ap(dir), "components"));
       expect(!absent.ok && absent.error.kind).toBe("not-found");
       writeFileSync(join(dir, "components.json"), "not json at all");

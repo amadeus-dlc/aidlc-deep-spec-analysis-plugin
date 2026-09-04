@@ -3,7 +3,7 @@ import type { DesignWitness } from "./design-witness.ts";
 import type { LoweredId } from "./lowered-id.ts";
 
 // 兄弟バックエンドが返した finding 1 件——lowering 側の id で書かれている。
-// 判定の再割り当て（LoweredUnit.remapVerdicts）は種類を問い、対象を写像し、
+// 判定の再割り当て（SiblingVerdictDocument.remapVerdicts）は種類を問い、対象を写像し、
 // witness の core 形を finding 自身に書き換えさせる（#71 波23）。
 export class SiblingVerdictFinding {
   readonly #kind: FindingKind;
@@ -28,8 +28,13 @@ export class SiblingVerdictFinding {
     return this.#kind.asString();
   }
 
+  // 呼び手はすべてこのファイルの外の domain 判定ロジックが持つ既知の閉集合
+  // リテラル（"conflict" 等）——parse の閉集合の門を通す（種別規律の裁定
+  // 3-2、2026-09-04）。未知の literal は defect であって finding の #kind とは
+  // 決して一致しない。
   isKind(kind: string): boolean {
-    return this.#kind.equals(FindingKind.reconstitute(kind));
+    const parsed = FindingKind.parse(kind);
+    return parsed.ok && this.#kind.equals(parsed.value);
   }
 
   frRefs(): FrRefs {

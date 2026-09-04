@@ -1,5 +1,24 @@
 # deep-spec-analysis — API ドキュメント
 
+## Focused scan 更新: Design 検証の内部契約
+
+今回確認した公開面は HTTP／GraphQL／gRPC ではなく、Bun workspace package 間の TypeScript port と、契約 2 JSON の filesystem API である。
+
+| 契約 | 所有層 | 現行の意味 | 互換性上の扱い |
+|---|---|---|---|
+| `DesignReportRepository.conformedOf(report)` | `design/usecase/port` | 契約 2 schema に適合した `DesignReport` を返す query | CQS と stdout/file 一致のため Repository に置く裁定を維持する。instance 内で schema を一度だけ観測する |
+| `DesignReportRepository.store(report)` | `design/usecase/port` | 不適合 report を書かず `Result<void, RepositoryError>` を返す command | 戻り値を report に変えない。conformance 済み bytes の保存と directory commit の失敗を明示する |
+| `findAllByDirectory(directory)` | `design/usecase/port` | SMT／Quint sibling report を読み cross-check の材料を返す query | 失敗を `ok(undefined)` へ潰さず、cross-check が stale であることを outcome に反映する |
+| `SiblingBackendClient` | `design/usecase/port` | Design IR を契約 1 相当へ lowering し sibling backend を実行する | solver／stdout／findings の既存契約を維持する |
+| `RefinementMaterialsRepository`／`RefinementMapRepository` | `design/usecase/port` | 契約 3・4 と requirements 文書を読み refinement 入力を供給する | JSON／Markdown は adapter で未信頼入力として検証する |
+| `RefinementSolverClient` | `design/usecase/port` | refinement query を外部 solver へ渡す | `Result` による予期された失敗と既存 timeout／unavailable 語彙を維持する |
+
+型境界では、正常生成用の `VerificationMethod`、`FindingKind`、`SkipReason` を閉集合の DP とし、`DesignFinding.of`／`DesignSkipped.of`／`DesignReport.compose` は検証済み値だけを受ける案を推奨する。既存文書の読取と将来版の未知値を運ぶ adapter は `reconstitute` を維持する。この二口化により、外部互換性を壊さず domain 内の不正状態を防げる。
+
+別 application service に conformance を移す案は責務が明瞭になる一方、3 report 系の CQS 裁定を再定義し、新しい型または port を増やす。今回は Repository 構築時の schema snapshot を推奨し、report 3 系を横断して再裁定するときだけ conformance 分離を検討する。
+
+以下の installer／センサー／doctor API は既存 store の履歴知識として保持する。
+
 ## Focused scan 更新: installer／update／release 契約
 
 ### 現行 installer CLI

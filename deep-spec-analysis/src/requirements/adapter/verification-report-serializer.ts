@@ -1,15 +1,11 @@
-// VerificationReport の直列化・契約適合・解体 — 形式（JSON）の知識はすべて
-// ここに封じる。v1 キー順（backend, irVersion, irHash, method, [unavailable],
-// findings, skipped, [crossChecked]）・`JSON.stringify(・, null, 2) + "\n"` の
-// 描画・findings スキーマ自己検証・降格文言（golden 凍結）は本モジュールの
-// 責務。conformToFindingsContract が「書き手は不適合ファイルを決して出さない」
-// の実装（refcheck と同じ規律・同じ凍結文言）。
+// VerificationReport の描画と解体 — 形式（JSON）の走査はここに封じる。文書の
+// キー順は契約2 の知識なので集約が `toDocument()` で所有し、本モジュールが持つ
+// のは `JSON.stringify(・, null, 2) + "\n"` の描画（golden 凍結）と、書かれた
+// 文書を集約へ戻す寛容な解体だけ。契約適合（自己検証と降格文言）は値オブジェ
+// クト FindingsSchema と集約の `conformedTo` が持つ。
 
 import { BackendName, ContentHash, FrRefs, IrVersion, TargetId, TargetIds, type ArtifactPath } from "@deep-spec/kernel-domain";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-import { type Json, isObject } from "@deep-spec/kernel-adapter";
-import { type Schema, validateSchema } from "@deep-spec/kernel-adapter";
-import type { SchemaUnreadable } from "@deep-spec/kernel-adapter";
+import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
 import {
   CrossCheckedEntries,
   VerificationFindings,
@@ -22,79 +18,9 @@ import {
   CrossCheckedEntry,
 } from "@deep-spec/requirements-domain";
 
-function orderedDocument(report: VerificationReport): { [k: string]: Json } {
-  const ordered: { [k: string]: Json } = {
-    backend: report.id().backendName().asString(),
-    irVersion: report.irVersion().asString(),
-    irHash: report.irHash().asString(),
-    method: report.method(),
-  };
-  const reason = report.unavailableReason();
-  if (reason !== null) ordered.unavailable = { reason };
-  // コレクションは境界（描画）で toArray() へ落とす——中身は契約2 の素の JSON 形。
-  // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
-  // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
-  // frRefs, targets, witness, detail)、skip は (target, reason, detail?)。
-  // witness ユニオンの内側は素通し値（材料）で逐語描画。
-  ordered.findings = report.findings().toArray().map((f) => {
-    const out: { [k: string]: Json } = {
-      kind: f.kind(),
-      frRefs: f.frRefs().toStrings() as unknown as Json,
-      targets: f.targets().toStrings() as unknown as Json,
-      witness: f.witness().toDocument() as unknown as Json,
-      detail: f.detail(),
-    };
-    return out as Json;
-  });
-  ordered.skipped = report.skipped().toArray().map((sk) => {
-    const out: { [k: string]: Json } = { target: sk.target().asString(), reason: sk.reason() };
-    const detail = sk.detail();
-    if (detail !== undefined) out.detail = detail;
-    return out as Json;
-  });
-  const crossChecked = report.crossChecked();
-  // crossChecked エントリの凍結キー順は (backend, targets)。
-  if (crossChecked !== null) {
-    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
-  }
-  return ordered;
-}
-
 // 境界: 永続化される正確なバイト列（golden 凍結の描画形式）。
 export function renderVerificationReportBytes(report: VerificationReport): string {
-  return `${JSON.stringify(orderedDocument(report), null, 2)}\n`;
-}
-
-// 契約2 への適合を保証した集約を返す。スキーマ不可読・自己検証不適合は
-// 降格（文言は凍結）。適合していれば元の集約をそのまま返す。
-export function conformToFindingsContract(
-  report: VerificationReport,
-  findingsSchema: Result<Schema, SchemaUnreadable>,
-): VerificationReport {
-  if (!findingsSchema.ok) {
-    return report.degraded(`findings schema unreadable: ${findingsSchema.error.cause}`);
-  }
-  const errors: string[] = [];
-  validateSchema(findingsSchema.value, findingsSchema.value, orderedDocument(report) as Json, "", errors);
-  if (errors.length > 0) {
-    return report.degraded(`self-validation against deep-spec-findings-schema.json failed: ${errors[0]}`);
-  }
-  return report;
-}
-
-// 書かれた Json を型付き状態へ解いて集約を再構成する（findById 用の厳密形）。
-export function parseVerificationReportDocument(
-  id: VerificationReportId,
-  raw: Json,
-): Result<VerificationReport, { cause: string }> {
-  if (!isObject(raw)) return { ok: false, error: { cause: "document is not a JSON object" } };
-  if (raw.backend !== id.backendName().asString()) {
-    return { ok: false, error: { cause: `document backend "${String(raw.backend)}" does not match the id backend "${id.backendName().asString()}"` } };
-  }
-  if (!Array.isArray(raw.findings) || !Array.isArray(raw.skipped)) {
-    return { ok: false, error: { cause: "document lacks findings/skipped arrays" } };
-  }
-  return { ok: true, value: reconstituteFromRaw(id, raw) };
+  return `${JSON.stringify(report.toDocument(), null, 2)}\n`;
 }
 
 // クロスチェックの取得規則で使う寛容形——backend フィールドが欠けた文書は

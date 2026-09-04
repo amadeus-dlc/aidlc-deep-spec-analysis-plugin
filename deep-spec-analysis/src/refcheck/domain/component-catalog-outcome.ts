@@ -1,7 +1,7 @@
 import type { ComponentShapeErrors } from "./component-shape-errors.ts";
 import type { Components } from "./components.ts";
 import type { LineNumber } from "./line-number.ts";
-import type { ArtifactPath } from "@deep-spec/kernel-domain";
+import { FindingKind, type ArtifactPath } from "@deep-spec/kernel-domain";
 import { DD_0, DD_1, DD_2, DD_3, DD_4, DD_5, DD_6, DD_7 } from "./component-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { WitnessRef } from "./witness-ref.ts";
@@ -65,18 +65,18 @@ export class ComponentCatalogOutcome {
     const art = artifact.asString();
     const usable = this.match<Components | null>({
       wrongFenceCount: (found) => {
-        report.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [WitnessRef.at(art, "yaml fence")],
+        report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessRef.at(art, "yaml fence")],
           `components.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
         return null;
       },
       unparseable: (line, error) => {
-        report.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)],
+        report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)],
           `yaml block does not parse in the supported subset: ${error}`);
         return null;
       },
       extracted: (components, shapeErrors) => {
         for (const e of shapeErrors) {
-          report.finding(DD_0, "structure-invalid", [DD_0.asCheckTarget()], [WitnessRef.at(art, e.element().asString())], e.detail());
+          report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessRef.at(art, e.element().asString())], e.detail());
         }
         return shapeErrors.count() > 0 && components.count() === 0 ? null : components;
       },

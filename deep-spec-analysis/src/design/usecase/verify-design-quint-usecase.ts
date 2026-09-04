@@ -1,15 +1,17 @@
-import { FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+import { FindingKind, FrRefs, SkipReason, TargetIds, VerificationMethod } from "@deep-spec/kernel-domain";
+import type { FindingsSchema } from "@deep-spec/kernel-domain";
 // deep-spec-design-verify-quint の interactor。Phase 1-2（lowering → v1 quint
 // 兄弟 → remap）＋到達性プローブ（bounded のみ・RUN ごとの上限つき）＋
 // Phase 3（refinement の動的パス：alpha(P) が機械の不変量面に合流し、違反
 // トレースは到達可能な refinement 破れ。シナリオ再生・イベントシミュレーション・
 // enabledness は v1 では SMT 専用の capability skip）を編成する。
 // mapping-gap は map と両 IR の純関数なので両バックエンド文書が同一に運ぶ。
+// モデル取得・取得失敗の分類・IR version の適合判定は DesignVerificationAcquirer
+// が、適合と両文書の公開は DesignReportFinalizer が一か所で持つ——ここに残るのは
+// Quint 固有の method 更新・到達性プローブ・上限・refinement extras（BR5.1／BR5.2）。
 
-import type { ArtifactPath, ContentHash } from "@deep-spec/kernel-domain";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-import { ok } from "@deep-spec/kernel-infrastructure";
-import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
+import { unreachable } from "@deep-spec/kernel-infrastructure";
+import type { Clock } from "@deep-spec/kernel-usecase";
 import { DesignWitness,
   DesignMachines,
   DesignFindings,
@@ -21,76 +23,70 @@ import { DesignWitness,
   DesignSkipped,
   DesignReport,
   DesignReportId,
-  type DesignModel,
-  SUPPORTED_DESIGN_IR_MAJOR,
-  LoweredUnit,
   RefinementMaterialsId,
   LoweredId,
 } from "@deep-spec/design-domain";
 
 import {
   UnitRefinementPlan,
-} from "@deep-spec/refinement-domain";
+} from "@deep-spec/design-domain";
 import type { DesignModelRepository } from "./port/design-model-repository.ts";
-import type { DesignReportRepository } from "./port/design-report-repository.ts";
+import type { DesignVerifyDirectoryRepository } from "./port/design-verify-directory-repository.ts";
 import { type RefinementMaterialsRepository } from "./port/refinement-materials-repository.ts";
 import type { SiblingBackendClient } from "./port/sibling-backend-client.ts";
 import { type VerifyDesignInput } from "./verify-design-input.ts";
 import type { VerifyDesignOutcome } from "./verify-design-outcome.ts";
+import { DesignReportFinalizer } from "./design-report-finalizer.ts";
+import { DesignVerificationAcquirer } from "./design-verification-acquirer.ts";
 
 const BACKEND = "quint";
-const CROSS_CHECK_BACKEND = "cross-check";
+const INITIAL_METHOD_NAME = "simulation";
 const UNIT_WALL_TIMEOUT_MS = 50_000;
 const RUN_BUDGET_MS = 50_000;
 const UNREACH_BUDGET_MS = 70_000;
 const BOUND_STEPS = 8; // v1 バックエンドの MAX_STEPS を写す
 
+// 初期 method は契約2の閉集合の値——strict な門から作る（Workflow 2）。閉集合を
+// 外れるのはこのモジュールの定数が壊れたときだけで、予期される失敗ではない。
+function initialMethod(): VerificationMethod {
+  const parsed = VerificationMethod.parse(INITIAL_METHOD_NAME);
+  if (!parsed.ok) throw new Error(`defect: "${INITIAL_METHOD_NAME}" is not a verification method`);
+  return parsed.value;
+}
+
 export class VerifyDesignQuintUseCase {
-  readonly #designModelRepository: DesignModelRepository;
-  readonly #designReportRepository: DesignReportRepository;
   readonly #siblingBackendClient: SiblingBackendClient;
   readonly #refinementMaterialsRepository: RefinementMaterialsRepository;
   readonly #clock: Clock;
   readonly #unreachCap: number;
+  readonly #finalizer: DesignReportFinalizer;
+  readonly #acquirer: DesignVerificationAcquirer;
 
   constructor(
     designModelRepository: DesignModelRepository,
-    designReportRepository: DesignReportRepository,
+    designVerifyDirectoryRepository: DesignVerifyDirectoryRepository,
+    findingsSchema: FindingsSchema,
     siblingBackendClient: SiblingBackendClient,
     refinementMaterialsRepository: RefinementMaterialsRepository,
     clock: Clock,
     unreachCap: number,
   ) {
-    this.#designModelRepository = designModelRepository;
-    this.#designReportRepository = designReportRepository;
     this.#siblingBackendClient = siblingBackendClient;
     this.#refinementMaterialsRepository = refinementMaterialsRepository;
     this.#clock = clock;
     this.#unreachCap = unreachCap;
+    this.#finalizer = new DesignReportFinalizer(designVerifyDirectoryRepository, findingsSchema);
+    this.#acquirer = new DesignVerificationAcquirer(designModelRepository, this.#finalizer);
   }
 
   execute(input: VerifyDesignInput): VerifyDesignOutcome {
     const id = DesignReportId.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#designModelRepository.findById(input.modelId);
-    if (!acquired.ok) {
-      if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
-      if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#persist(DesignReport.irUnreadable(id, "simulation", acquired.error.cause));
-      if (!saved.ok) return { kind: "save-failed", error: saved.error };
-      return { kind: "model-unreadable" };
-    }
-    const model = acquired.value;
-    const irHash = model.irHash();
-
-    if (!model.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR)) {
-      // 旧実装は conform 前の skip 数を verdict 行に載せていた——凍結挙動。
-      const mismatch = DesignReport.versionMismatch(id, model, irHash, "simulation");
-      const saved = this.#persist(mismatch);
-      if (!saved.ok) return { kind: "save-failed", error: saved.error };
-      const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-      if (!cross.ok) return { kind: "save-failed", error: cross.error };
-      return { kind: "version-mismatch", skippedCount: mismatch.skippedCount() };
-    }
+    const acquired = this.#acquirer.acquire(input.modelId, id, initialMethod());
+    if (acquired.kind === "terminal") return acquired.outcome;
+    // 取得境界の結果は ready と terminal に閉じる——増えた瞬間にここが壊れる。
+    if (acquired.kind !== "ready") return unreachable(acquired);
+    const model = acquired.model;
+    const irHash = acquired.irHash;
 
     const findings: DesignFinding[] = [];
     const skipped: DesignSkipped[] = [];
@@ -104,16 +100,16 @@ export class VerifyDesignQuintUseCase {
     for (const u of model.units()) {
       if (this.#clock.now() - started > RUN_BUDGET_MS) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
         }
         continue;
       }
-      const lowered = LoweredUnit.of(u, { synthetics: false });
+      const lowered = u.lowered({ synthetics: false });
       // 子に run budget を超えて生き延びさせない。
       const mainRemaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
       if (mainRemaining < 3_000) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -121,22 +117,21 @@ export class VerifyDesignQuintUseCase {
       if (run.exit === 127) {
         const reason =
           run.doc?.unavailableReason() ?? "quint CLI could not be executed by the lowered v1 backend";
-        const saved = this.#persist(DesignReport.backendUnavailable(id, model, irHash, method ?? "simulation", reason, "quint CLI missing"));
+        const unavailable = DesignReport.backendUnavailable(id, model, irHash, method ?? INITIAL_METHOD_NAME, reason, "quint CLI missing");
+        const saved = this.#finalizer.finalize(unavailable, model);
         if (!saved.ok) return { kind: "save-failed", error: saved.error };
-        const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-        if (!cross.ok) return { kind: "save-failed", error: cross.error };
         return { kind: "backend-unavailable" };
       }
       if (run.doc === null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
         }
         continue;
       }
-      const remapped = lowered.remapVerdicts(u, run.doc);
+      const remapped = run.doc.remapVerdicts(u, lowered.index());
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.reconstitute({ target: t, reason: "unavailable", unit: u.name(), detail: remapped.unavailable }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: remapped.unavailable }));
         }
         continue;
       }
@@ -152,9 +147,9 @@ export class VerifyDesignQuintUseCase {
         const candidates = sm.nonInitialCandidates(u.enumValuesOf(attrPath));
         if (candidates.length === 0) continue;
         if (method !== "bounded") {
-          skipped.push(DesignSkipped.reconstitute({
+          skipped.push(DesignSkipped.of({
             target: sm.id().asTargetId(),
-            reason: "capability",
+            reason: SkipReason.capability(),
             unit: u.name(),
             detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
           }));
@@ -175,8 +170,8 @@ export class VerifyDesignQuintUseCase {
           }
           if (!probe.reached) {
             findings.push(
-              DesignFinding.reconstitute({
-                kind: "unreachable",
+              DesignFinding.of({
+                kind: FindingKind.unreachable(),
                 frRefs: FrRefs.reconstitute([]),
                 targets: TargetIds.reconstitute([sm.id().asString()]),
                 witness: DesignWitness.model({ [attrPath]: state }),
@@ -187,9 +182,9 @@ export class VerifyDesignQuintUseCase {
           }
         }
         if (leftover.length > 0) {
-          skipped.push(DesignSkipped.reconstitute({
+          skipped.push(DesignSkipped.of({
             target: sm.id().asTargetId(),
-            reason: probesUsed >= this.#unreachCap ? "timeout" : "unavailable",
+            reason: probesUsed >= this.#unreachCap ? SkipReason.timeout() : SkipReason.unavailable(),
             unit: u.name(),
             detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id().asString()} (per-run cap ${this.#unreachCap} / budget reached, or the probe run failed)`,
           }));
@@ -204,22 +199,22 @@ export class VerifyDesignQuintUseCase {
       const req = context.requirements();
       const acq = context.mapAcquisition();
       const reqTargets = req.allTargetIds();
-      const skipAll = (reason: string, detail: string): void => {
+      const skipAll = (reason: SkipReason, detail: string): void => {
         for (const u of model.units()) {
-          for (const t of reqTargets) skipped.push(DesignSkipped.reconstitute({ target: t, reason, unit: u.name(), detail }));
+          for (const t of reqTargets) skipped.push(DesignSkipped.of({ target: t, reason, unit: u.name(), detail }));
         }
       };
       acq.match({
         absent: (error) => {
-          skipAll("absent-input", error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
+          skipAll(SkipReason.absentInput(), error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
         },
         loaded: (map, mapArtifact, mapInputs) => {
           if (!map.requirementsIrHash().equals(req.hash())) {
-            skipAll("stale-input", "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
+            skipAll(SkipReason.staleInput(), "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
             return;
           }
           if (!map.designIrHash().equals(irHash)) {
-            skipAll("stale-input", "the refinement map's designIrHash no longer matches this design IR — re-author the map");
+            skipAll(SkipReason.staleInput(), "the refinement map's designIrHash no longer matches this design IR — re-author the map");
             return;
           }
           inputs = mapInputs;
@@ -227,7 +222,7 @@ export class VerifyDesignQuintUseCase {
             const unitMap = map.unitMapOf(u.id());
             if (!unitMap) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.reconstitute({ target: t, reason: "absent-input", unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
               }
               continue;
             }
@@ -239,11 +234,11 @@ export class VerifyDesignQuintUseCase {
             const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (this.#clock.now() - started));
             if (remaining < 3_000) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({ target: e.reqTarget(), reason: "timeout", unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" }));
               }
               continue;
             }
-            const base = LoweredUnit.of(u, { synthetics: false });
+            const base = u.lowered({ synthetics: false });
             let refinementObligations = base.obligations();
             let refinementIndex = base.index();
             let n = refinementObligations.count();
@@ -257,14 +252,14 @@ export class VerifyDesignQuintUseCase {
             const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
             if (run.exit !== 0 || run.doc === null) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({ target: e.reqTarget(), reason: "unavailable", unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
               }
               continue;
             }
-            const remapped = lowered.remapVerdicts(u, run.doc);
+            const remapped = run.doc.remapVerdicts(u, lowered.index());
             if (remapped.unavailable !== null) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({ target: e.reqTarget(), reason: "unavailable", unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` }));
               }
               continue;
             }
@@ -285,9 +280,9 @@ export class VerifyDesignQuintUseCase {
             }
             if (!hitExtra && designConflict) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.reconstitute({
+                skipped.push(DesignSkipped.of({
                   target: e.reqTarget(),
-                  reason: "capability",
+                  reason: SkipReason.capability(),
                   unit: u.name(),
                   detail: "the machine reachably violates its own design invariants first (see the design conflict findings) — refinement reachability is masked until those are resolved",
                 }));
@@ -298,7 +293,7 @@ export class VerifyDesignQuintUseCase {
       });
     }
 
-    const finalMethod = method ?? "simulation";
+    const finalMethod = method ?? INITIAL_METHOD_NAME;
     const report = DesignReport.compose({
       id,
       irVersion: model.irVersion(),
@@ -309,33 +304,10 @@ export class VerifyDesignQuintUseCase {
       ...(inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {}),
       checked: CheckedUnits.reconstitute(checkedUnits),
     });
-    // CQS: verdict は conformedOf（照会）から導き、store は書くだけ（void）。
-    const conformed = this.#designReportRepository.conformedOf(report);
-    const stored = this.#designReportRepository.store(report);
-    if (!stored.ok) return { kind: "save-failed", error: stored.error };
-    const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-    if (!cross.ok) return { kind: "save-failed", error: cross.error };
-    return {
-      kind: "verified",
-      pass: conformed.passes(),
-      findingsCount: conformed.findingsCount(),
-      skippedCount: conformed.skippedCount(),
-      method: finalMethod,
-    };
-  }
-
-  #persist(report: DesignReport): Result<void, RepositoryError> {
-    return this.#designReportRepository.store(report);
-  }
-
-  // 自文書を書いた後に、同一ディレクトリの全バックエンド文書からクロス
-  // チェックを再計算する（最後の書き手が勝ち、全書き手が同一バイトへ収束）。
-  #recomputeCrossCheck(model: DesignModel, irHash: ContentHash, directory: ArtifactPath): Result<void, RepositoryError> {
-    const siblings = this.#designReportRepository.findAllByDirectory(directory);
-    // 旧挙動: ディレクトリが読めないときは黙って諦める（自文書は書けている）。
-    if (!siblings.ok) return ok(undefined);
-    const stored = this.#persist(siblings.value.crossChecked(DesignReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
-    return stored.ok ? ok(undefined) : stored;
-
+    // 適合・両文書の公開・cleanup は Finalizer が一か所で持つ。兄弟が読めない・
+    // クロスチェックが書けないときは verified を返さず失敗を運ぶ（BR1.2）。
+    const finalized = this.#finalizer.finalize(report, model);
+    if (!finalized.ok) return { kind: "save-failed", error: finalized.error };
+    return finalized.value;
   }
 }

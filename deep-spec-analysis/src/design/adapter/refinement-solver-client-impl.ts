@@ -7,11 +7,11 @@
 // 旧 runRefinementChild からの逐語移植。
 
 import { spawnSync } from "node:child_process";
-import { RefinementQueryVerdict, RefinementQueryVerdicts } from "@deep-spec/refinement-domain";
+import { RefinementQueryVerdict, RefinementQueryVerdicts } from "@deep-spec/design-domain";
 import type {
   RefinementRequirements,
   UnitRefinementPlan,
-} from "@deep-spec/refinement-domain";
+} from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
 import type { RefinementCheck, RefinementSolverClient } from "@deep-spec/design-usecase";
 import { type RefinementChildQuery } from "./refinement-child-query.ts";

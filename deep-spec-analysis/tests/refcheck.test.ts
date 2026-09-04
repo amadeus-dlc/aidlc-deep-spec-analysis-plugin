@@ -18,7 +18,7 @@ import { cpSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } 
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateSchema } from "@deep-spec/kernel-adapter";
+import { validateSchema } from "@deep-spec/kernel-infrastructure";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const toolsDir = join(pluginRoot, "tools");

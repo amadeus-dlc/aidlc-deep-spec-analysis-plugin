@@ -2,7 +2,7 @@
 // 型付きの outcome へ解く。抽出ロジックは旧センサーの逐語移動。
 
 import { extractFences } from "@deep-spec/kernel-adapter";
-import { type Json, isObject } from "@deep-spec/kernel-adapter";
+import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
 import { parseMarkdownTables } from "@deep-spec/kernel-adapter";
 import { parseYamlSubset } from "@deep-spec/kernel-adapter";
 import {

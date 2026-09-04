@@ -3,7 +3,7 @@
 // 厳密検査を担う）。集約として成立しない形は凍結文言の文字列で返す。
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
 
-import { type Json, isObject, strArr } from "@deep-spec/kernel-adapter";
+import { type Json, isObject, strArr } from "@deep-spec/kernel-infrastructure";
 import { IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
 import {
   AttributeBound,

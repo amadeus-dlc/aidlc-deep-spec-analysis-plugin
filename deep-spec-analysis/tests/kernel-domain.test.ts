@@ -6,15 +6,8 @@
 
 import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName, KeyedIndex, KeySet, RequirementId, QueryLabel, AttributeKind, VerificationMethod, FindingKind } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
-import {
-  canonicalStringify,
-  extractFences,
-  isObject,
-  parseMarkdownTables,
-  parseYamlSubset,
-  type Json,
-  validateSchema,
-} from "@deep-spec/kernel-adapter";
+import { extractFences, parseMarkdownTables, parseYamlSubset } from "@deep-spec/kernel-adapter";
+import { isObject, type Json, validateSchema, canonicalStringify } from "@deep-spec/kernel-infrastructure";
 import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
 import { type Result, err, ok, unreachable } from "@deep-spec/kernel-infrastructure";
 

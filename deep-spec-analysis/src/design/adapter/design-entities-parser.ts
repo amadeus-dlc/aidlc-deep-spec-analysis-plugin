@@ -4,8 +4,8 @@
 // を組む——キー順は執筆ガイドの順（name / description / attributes、type は
 // kind / min / max / values）で、整形された IR とはバイト同一（tests が固定）。
 
-import type { Json } from "@deep-spec/kernel-adapter";
-import { isObject } from "@deep-spec/kernel-adapter";
+import type { Json } from "@deep-spec/kernel-infrastructure";
+import { isObject } from "@deep-spec/kernel-infrastructure";
 import { AttributeBound } from "@deep-spec/kernel-domain";
 import {
   DeclaredValues,

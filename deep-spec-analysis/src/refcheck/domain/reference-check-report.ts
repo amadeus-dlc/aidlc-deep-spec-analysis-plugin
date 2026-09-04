@@ -1,8 +1,10 @@
 // ReferenceCheckReport 集約 — 契約2 の refcheck 文書のドメイン表現。
 //
 // ドメインは型付きの語彙（findings / skipped / inputs / checked / 降格理由）
-// だけを話す。JSON・正準直列化・スキーマ適合検証は**形式の知識**であり
-// アダプタ層の責務（オーナー裁定 2026-08-30：Json はユビキタス言語ではない）。
+// だけを話す。JSON への描画点は `toDocument()`（契約2 のキー順を所有）に
+// 封じ、アダプタは `JSON.stringify` で描画するだけ（design 集約と同じ分担、
+// PR2b 改訂）。契約適合の判定も `conformedTo(FindingsSchema)` としてここに
+// 持つ——文言は値オブジェクト FindingsSchema が凍結で所有する。
 //
 // 検査の書き込み側は本集約ルートが所有する（種別規律の裁定 14、2026-09-02）。
 // `open` が検査ファミリー面で空の文書を開き、`finding`／`skip`／`input` は
@@ -19,7 +21,10 @@
 //                    アダプタが組んで渡す。inputs は保持、内容は空になる——凍結挙動）
 //   - reconstitute … 書かれた真実（アダプタが型付きに解いた状態）からの再構成
 
-import { FrRefs, TargetId, TargetIds } from "@deep-spec/kernel-domain";
+import { ContentHash, FindingKind, FrRefs, TargetId, TargetIds } from "@deep-spec/kernel-domain";
+import type { FindingsSchema } from "@deep-spec/kernel-domain";
+import { type Json, canonicalStringify } from "@deep-spec/kernel-infrastructure";
+import { CATALOG_VERSION } from "./catalog-version.ts";
 import type { CheckFamilies } from "./check-families.ts";
 import type { CheckFamily } from "./check-family.ts";
 import { Finding } from "./finding.ts";
@@ -32,7 +37,6 @@ import { Skips } from "./skips.ts";
 import type { UnitName } from "@deep-spec/kernel-domain";
 import type { WitnessRef } from "./witness-ref.ts";
 import { WitnessRefs } from "./witness-refs.ts";
-
 
 export class ReferenceCheckReport {
   readonly #id: ReferenceCheckReportId;
@@ -103,8 +107,11 @@ export class ReferenceCheckReport {
 
     // family の finding を記録する。detail は family prefix 付きで描画され、
     // その family は checked から外れる。findings はカタログ順を保つ。
-    finding(family: CheckFamily, kind: string, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
-      this.#findings = this.#findings.add(Finding.reconstitute({
+    // kind は検証済みの FindingKind——検査が自ら下す判定は正常生成経路であり、
+    // 任意の string を受け取らない（FR3.2）。書かれた文書の未知 kind は
+    // Finding.reconstitute（adapter の hydration）だけが運ぶ。
+    finding(family: CheckFamily, kind: FindingKind, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
+      this.#findings = this.#findings.add(Finding.of({
         kind,
         frRefs: FrRefs.reconstitute(frRefs).sortedUnique(),
         targets: TargetIds.reconstitute(targets).sortedUniqueCanonically(),
@@ -172,5 +179,61 @@ export class ReferenceCheckReport {
     // センサー verdict の述語：降格しておらず finding が 0 なら pass。
     passes(): boolean {
       return this.#unavailableReason === null && this.#findings.isEmpty();
+    }
+
+    // 契約2 の文書像。キー順（backend, irVersion, irHash, method, [unavailable],
+    // inputs, checked, findings, skipped）は契約の知識なので集約が所有する——
+    // アダプタは JSON.stringify で描画するだけ（旧 serializer の orderedDocument
+    // を逐語で移設、golden 凍結）。irHash は inputs の正準 JSON の sha256。
+    toDocument(): { [k: string]: Json } {
+      const inputs = this.#inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
+      const ordered: { [k: string]: Json } = {
+        backend: this.#id.backendName().asString(),
+        irVersion: CATALOG_VERSION,
+        irHash: ContentHash.ofText(canonicalStringify(inputs)).asString(),
+        method: "static",
+      };
+      const reason = this.#unavailableReason;
+      if (reason !== null) ordered.unavailable = { reason };
+      ordered.inputs = inputs;
+      ordered.checked = this.#checked.toStrings() as unknown as Json;
+      // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
+      // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
+      // frRefs, targets, witness, detail, unit?)、witness ref は (artifact,
+      // element, value?)、skip は (target, reason, detail?, unit?)。
+      ordered.findings = this.#findings.toArray().map((f) => {
+        const refs = f.witnessRefs().toArray().map((r) => {
+          const out: { [k: string]: Json } = { artifact: r.artifact(), element: r.element() };
+          const value = r.value();
+          if (value !== undefined) out.value = value;
+          return out as Json;
+        });
+        const out: { [k: string]: Json } = {
+          kind: f.kind(),
+          frRefs: f.frRefs().toStrings() as unknown as Json,
+          targets: f.targets().toStrings() as unknown as Json,
+          witness: { refs },
+          detail: f.detail(),
+        };
+        const unit = f.unit();
+        if (unit !== undefined) out.unit = unit;
+        return out as Json;
+      });
+      ordered.skipped = this.#skipped.toArray().map((sk) => {
+        const out: { [k: string]: Json } = { target: sk.target(), reason: sk.reason() };
+        const detail = sk.detail();
+        if (detail !== undefined) out.detail = detail;
+        const unit = sk.unit();
+        if (unit !== undefined) out.unit = unit;
+        return out as Json;
+      });
+      return ordered;
+    }
+
+    // 契約2 への適合を保証した集約を返す。適合していれば自分自身、していなければ
+    // 降格形（文言は FindingsSchema が凍結で所有する）。
+    conformedTo(schema: FindingsSchema): ReferenceCheckReport {
+      const reason = schema.degradationReasonFor(this.toDocument());
+      return reason === null ? this : this.degraded(reason);
     }
   }

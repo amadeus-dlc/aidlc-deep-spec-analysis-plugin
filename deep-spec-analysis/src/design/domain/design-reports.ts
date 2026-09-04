@@ -1,4 +1,4 @@
-import { BackendName, ContentHash, FrRefs, TargetId, TargetIds } from "@deep-spec/kernel-domain";
+import { BackendName, ContentHash, FindingKind, FrRefs, TargetId, TargetIds } from "@deep-spec/kernel-domain";
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
 import { DesignFindings } from "./design-findings.ts";
@@ -69,8 +69,8 @@ export class DesignReports {
               verdicts[a.backend] = va ? "violated" : "clean";
               verdicts[b.backend] = vb ? "violated" : "clean";
               findings.push(
-                DesignFinding.reconstitute({
-                  kind: "cross-check-disagreement",
+                DesignFinding.of({
+                  kind: FindingKind.crossCheckDisagreement(),
                   frRefs: FrRefs.of([...sc.frRefs()]).sortedUnique(),
                   targets: TargetIds.reconstitute([sc.id().asString()]),
                   witness: DesignWitness.verdicts(verdicts),

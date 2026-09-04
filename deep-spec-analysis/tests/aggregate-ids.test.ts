@@ -38,7 +38,7 @@ import { ObligationIds,
   VerificationFinding,
   CrossCheckedEntry,
  VerificationWitness,} from "@deep-spec/requirements-domain";
-import { RefinementMapId } from "@deep-spec/refinement-domain";
+import { RefinementMapId } from "@deep-spec/design-domain";
 import { DesignRecordId } from "@deep-spec/refcheck-domain";
 import { FormalModelId } from "@deep-spec/requirements-domain";
 

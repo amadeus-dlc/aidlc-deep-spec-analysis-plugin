@@ -16,7 +16,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "@deep-spec/kernel-adapter";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import { TriggerName, TargetId, TargetIds, ArtifactPath, ContentHash, IrVersion, ExpressionTree, KeyedIndex, KeySet, QueryLabel } from "@deep-spec/kernel-domain";
+import { TriggerName, TargetId, TargetIds, ArtifactPath, ContentHash, FindingsSchema, IrVersion, ExpressionTree, KeyedIndex, KeySet, QueryLabel } from "@deep-spec/kernel-domain";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
@@ -27,7 +27,7 @@ function ap(raw: string): ArtifactPath {
 }
 import {
   FormalModelRepositoryImpl,
-  VerificationReportRepositoryImpl,
+  VerificationDirectoryRepositoryImpl,
   Z3SolverClientImpl,
   parseSiblingReportDocument,
   renderVerificationReportBytes,
@@ -70,7 +70,7 @@ import {
   VerifyRequirementsSmtUseCase,
   type Z3SolverClient,
 } from "@deep-spec/requirements-usecase";
-import { InMemoryVerificationReportRepository } from "./doubles/in-memory-verification-report-repository.ts";
+import { InMemoryVerificationDirectoryRepository } from "./doubles/in-memory-verification-directory-repository.ts";
 
 // 判定レコードは class（#71 波18）——期待値は平文へ射影して比較する（bun の toEqual は #private を見ない）。
 const plainFindings = (findings: Iterable<VerificationFinding>) =>
@@ -80,7 +80,9 @@ const plainFindings = (findings: Iterable<VerificationFinding>) =>
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(pluginRoot, "tests", "fixtures", "conformance");
 const schemaPath = join(pluginRoot, "src", "entries", "data", "deep-spec-findings-schema.json");
-const schema = readContractSchema(schemaPath);
+const schemaFile = readContractSchema(schemaPath);
+// 合成ルート相当：契約2 のスキーマを一度だけ読んで値にする（entry と同じ形）。
+const schema = schemaFile.ok ? FindingsSchema.of(schemaFile.value) : FindingsSchema.unreadable(schemaFile.error.cause);
 const sensorPath = join(pluginRoot, "tools", "aidlc-sensor-deep-spec-verify-smt.ts");
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
@@ -122,7 +124,8 @@ describe("in-process golden equivalence (interactor over real Impls, real z3 chi
 
       const outcome = new VerifyRequirementsSmtUseCase(
         new FormalModelRepositoryImpl(),
-        new VerificationReportRepositoryImpl(schemaPath),
+        new VerificationDirectoryRepositoryImpl(),
+        schema,
         new Z3SolverClientImpl({
           selfPath: sensorPath,
           perQueryTimeoutMs: 2000,
@@ -182,10 +185,11 @@ describe("the verify-smt interactor over the InMemory double", () => {
   const DIR = "/tmp/verify";
 
   test("a missing model resolves to not-applicable and writes nothing", () => {
-    const reports = new InMemoryVerificationReportRepository(schema);
+    const reports = new InMemoryVerificationDirectoryRepository();
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(err({ kind: "not-found", path: "/x" })),
       reports,
+      schema,
       solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: verdictsOf([]) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("not-applicable");
@@ -195,10 +199,11 @@ describe("the verify-smt interactor over the InMemory double", () => {
   });
 
   test("a corrupt model writes the frozen ir-unreadable degradation without cross-check", () => {
-    const reports = new InMemoryVerificationReportRepository(schema);
+    const reports = new InMemoryVerificationDirectoryRepository();
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(err({ kind: "corrupt", path: "/x", cause: "IR lacks a semver irVersion" })),
       reports,
+      schema,
       solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: verdictsOf([]) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("model-unreadable");
@@ -211,7 +216,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
   });
 
   test("an unsupported IR major writes all-targets skips and recomputes cross-check", () => {
-    const reports = new InMemoryVerificationReportRepository(schema);
+    const reports = new InMemoryVerificationDirectoryRepository();
     const m = model({
       irVersion: IrVersion.reconstitute("2.0.0"),
       obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-1"] }],
@@ -220,6 +225,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
       reports,
+      schema,
       solver({ plan: SmtVerificationPlan.of(EMPTY_PLAN), result: { kind: "solved", verdicts: verdictsOf([]) } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("version-mismatch");
@@ -232,7 +238,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
   });
 
   test("an unavailable solver writes the degradation with plan skips and the caller exits 127", () => {
-    const reports = new InMemoryVerificationReportRepository(schema);
+    const reports = new InMemoryVerificationDirectoryRepository();
     const m = model({
       obligations: [
         { id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: [] },
@@ -246,6 +252,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
       reports,
+      schema,
       solver({ plan, result: { kind: "unavailable", reason: "no runtime could execute the z3 child process (node: not on PATH)" } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("solver-unavailable");
@@ -258,7 +265,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
   });
 
   test("a solved run interprets, persists the conformed report, and converges cross-check", () => {
-    const reports = new InMemoryVerificationReportRepository(schema);
+    const reports = new InMemoryVerificationDirectoryRepository();
     const m = model({
       obligations: [{ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: ["FR-1"] }],
       scenarios: [{ id: ScenarioId.reconstitute("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: {} }],
@@ -276,6 +283,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
       reports,
+      schema,
       solver({ plan, result: { kind: "solved", verdicts } }),
     ).execute({ modelId: FormalModelId.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("verified");

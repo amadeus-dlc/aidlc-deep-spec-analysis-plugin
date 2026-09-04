@@ -1,5 +1,27 @@
 # deep-spec-analysis — コード品質評価
 
+## Focused scan 更新: DDD／クリーンアーキテクチャ評価
+
+focused baseline は `bun test tests/architecture.test.ts tests/design-pipeline.test.ts tests/refinement-pipeline.test.ts` が **84 pass / 0 fail**、`bunx tsc --noEmit` が exit 0。現状のアーキテクチャ規則に対する違反はないが、規則そのものが許している境界と、失敗時の整合性に改善余地がある。
+
+| 優先度 | 問題 | 構造的な改善 | 追加すべき検証 |
+|---|---|---|---|
+| Blocker | backend report 保存後の sibling 読込／cross-check 保存失敗を成功扱いする | report finalization を一箇所へ集約し、失敗を non-verified outcome として返す。cross-check は source fingerprint 付き派生 projection とする | backend 成功後の読込失敗、cross-check 書込失敗、古い cross-check を返さないこと |
+| Blocker | 同じ report を `conformedOf` と `store` で別々に schema 適合し、schema を二度観測する | Repository instance が immutable schema snapshot を保持する。port/CQS は維持する | 途中で schema source が変化／読込失敗しても verdict bytes と保存 bytes が一致すること |
+| High | 正常生成が任意文字列の `reconstitute` を通る | strict creation と tolerant hydration を分離し、閉集合 DP を正常生成に要求する | 未知値の adapter 降格は維持し、domain の正常生成では不正値を拒否すること |
+| High | SMT／Quint usecase の共通 lifecycle が重複する | まず具体的 report finalizer、次に実際に同型な acquisition／sibling run を抽出する | 両 backend の golden と失敗分岐が同じ共通契約を通ること |
+| High | Refinement package の境界が Design 語彙に従属する | Design subdomain 統合または独立 assessment + ACL のどちらかに揃える | 公認横断エッジと package manifest の red/green example を裁定後に更新すること |
+| Medium | `LoweredUnit` が三役を持つ | Tell-Don't-Ask を保ち、既存 domain object に lowering/remap の所有を分配する | byte-frozen 文言・順序、dedupe、synthetic probe、waiver の回帰 |
+| Medium | `kernel/infrastructure` が一般用語と逆 | 今回は改名せず最内層の説明を補強する | `kernel/infrastructure` が上位層を import しない既存規則を維持 |
+
+コード・ジュードの中心は「巨大な generic pipeline を作る」ことではなく、report finalization という一つの整合性単位を切り出すことにある。これにより失敗黙殺、schema 二重観測、backend 間の修正漏れを同時に減らせる。次に strict DP を入れると正常系の文字列分岐も減る。
+
+production code の最大は395行で1,000行超えはない。`LoweredUnit` 384行と Quint usecase 341行は分解候補だが、行数だけで別ファイルへ移すと複雑性を移動するだけになる。テストでは `tests/refinement-pipeline.test.ts` が1,021行、`tests/ir-validation.test.ts` が1,198行であり、今後の追加時は契約／fixture 単位へ分割する。
+
+セキュリティ／コンプライアンス上は外部 JSON／Markdown を未信頼入力として adapter で検証し続け、path derivation を広げない。atomic write／lock の失敗は `Result` へ閉じ、監査対象の verdict と保存証跡が一致しない状態を成功にしない。solver pin、golden、正準順、公開 JSON shape は変更しない。
+
+以下の installer／release と全体品質の本文は既存 store の履歴知識である。
+
 ## Focused scan 更新: installer／release の品質評価
 
 今回の Developer Scan はコード読解のみで、テストや typecheck を実行していない。したがって以下は構造・既存テスト契約・未実装面の評価であり、前回 store の pass 数や coverage 数値を現行基線として再主張しない。

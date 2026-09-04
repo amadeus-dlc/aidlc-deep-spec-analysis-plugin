@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@deep-spec/kernel-domain": "workspace:*",
-    "@deep-spec/kernel-infrastructure": "workspace:*"
+    "@deep-spec/kernel-infrastructure": "workspace:*",
+    "@deep-spec/requirements-domain": "workspace:*"
   }
 }

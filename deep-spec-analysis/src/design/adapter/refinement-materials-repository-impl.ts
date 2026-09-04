@@ -9,18 +9,10 @@ import type { RefinementMaterialsId } from "@deep-spec/design-domain";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ArtifactPath, ContentHash, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
-import { AttributePath, ObligationId, ObligationNature, ScenarioId } from "@deep-spec/refinement-domain";
+import { AttributePath, ObligationId, ObligationNature, ScenarioId } from "@deep-spec/design-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
-import {
-  type Json,
-  canonicalStringify,
-  extractFences,
-  findRecordRoot,
-  isObject,
-  relArtifact,
-  validateSchema,
-  strArr,
-} from "@deep-spec/kernel-adapter";
+import { extractFences, findRecordRoot, relArtifact } from "@deep-spec/kernel-adapter";
+import { type Json, isObject, validateSchema, strArr, canonicalStringify } from "@deep-spec/kernel-infrastructure";
 import {
   AttributeMappings,
   EventMappings,
@@ -46,7 +38,7 @@ import {
   UnmappedTargetRef,
   TransitionRef,
   RefinementMapAcquisition,
-} from "@deep-spec/refinement-domain";
+} from "@deep-spec/design-domain";
 import { DesignUnitId,
   DesignInputAnchor,
 } from "@deep-spec/design-domain";

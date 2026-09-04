@@ -2,7 +2,7 @@
 var __require = import.meta.require;
 
 // src/entries/aidlc-sensor-deep-spec-verify-smt.ts
-import { basename as basename3, dirname as dirname3, join as join4 } from "path";
+import { basename as basename3, dirname as dirname3, join as join5 } from "path";
 import { fileURLToPath } from "url";
 
 // src/kernel/adapter/sensor-flags.ts
@@ -30,31 +30,12 @@ function ok(value) {
 function err(error) {
   return { ok: false, error };
 }
-// src/kernel/adapter/contract-schema.ts
-function readContractSchema(path) {
-  try {
-    return ok(JSON.parse(readFileSync(path, "utf-8")));
-  } catch (e) {
-    return err({ cause: e instanceof Error ? e.message : String(e) });
-  }
-}
-// src/kernel/adapter/json.ts
+// src/kernel/infrastructure/json.ts
 function isObject(v) {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 var strArr = (v) => Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
-// src/kernel/adapter/canonical-json.ts
-function canonicalStringify(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalStringify).join(",")}]`;
-  }
-  if (isObject(value)) {
-    const keys = Object.keys(value).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(value[k] ?? null)}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-// src/kernel/adapter/schema.ts
+// src/kernel/infrastructure/schema.ts
 function typeMatches(t, v) {
   switch (t) {
     case "object":
@@ -171,6 +152,25 @@ function validateSchema(root, schema, value, path, errors) {
   }
   return errors.length === before;
 }
+// src/kernel/infrastructure/canonical-json.ts
+function canonicalStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalStringify).join(",")}]`;
+  }
+  if (isObject(value)) {
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(value[k] ?? null)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+// src/kernel/adapter/contract-schema.ts
+function readContractSchema(path) {
+  try {
+    return ok(JSON.parse(readFileSync(path, "utf-8")));
+  } catch (e) {
+    return err({ cause: e instanceof Error ? e.message : String(e) });
+  }
+}
 // src/kernel/adapter/fence.ts
 function extractFences(md, lang) {
   const fences = [];
@@ -202,6 +202,12 @@ function extractFences(md, lang) {
   }
   return fences;
 }
+// src/kernel/adapter/system-clock.ts
+class SystemClock {
+  now() {
+    return Date.now();
+  }
+}
 // src/kernel/adapter/atomic-write.ts
 import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
 import { basename, dirname, join } from "path";
@@ -219,6 +225,164 @@ function writeFileAtomically(path, data) {
       rmSync(tmp, { force: true });
     } catch {}
     throw e;
+  }
+}
+// src/kernel/adapter/directory-finalization-lock.ts
+import { randomBytes } from "crypto";
+import { mkdirSync as mkdirSync2, readFileSync as readFileSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { join as join2 } from "path";
+var DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
+var METADATA_BASENAME = "owner.lockmeta";
+var LEASE_MS = 30000;
+var OWNER_TOKEN_BYTES = 16;
+function causeOf(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+
+class DirectoryFinalizationLock {
+  #clock;
+  #liveness;
+  #lockBasename;
+  #ownerTokens;
+  constructor(clock, liveness, lockBasename = DESIGN_LOCK_BASENAME) {
+    this.#clock = clock;
+    this.#liveness = liveness;
+    this.#lockBasename = lockBasename;
+    this.#ownerTokens = new Map;
+  }
+  canonicalPathOf(directory) {
+    return join2(directory.asString(), this.#lockBasename);
+  }
+  ownerTokenOf(directory) {
+    return this.#ownerTokens.get(this.canonicalPathOf(directory)) ?? null;
+  }
+  acquire(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const token = randomBytes(OWNER_TOKEN_BYTES).toString("hex");
+    const blocked = this.#createOwned(canonical, token);
+    if (blocked === null) {
+      this.#ownerTokens.set(canonical, token);
+      return { kind: "acquired" };
+    }
+    const observed = this.#readMetadata(canonical);
+    if (observed === null) {
+      return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
+    }
+    if (observed.state !== "held") {
+      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.state}"` };
+    }
+    if (this.#clock.now() < observed.leaseExpiresAtMs) {
+      return { kind: "lock-contended", cause: "the lease has not expired" };
+    }
+    const status = this.#liveness.statusOf(observed.pid);
+    if (status !== "absent") {
+      return { kind: "lock-contended", cause: `owner process ${observed.pid} is ${status}` };
+    }
+    const reread = this.#readMetadata(canonical);
+    if (reread === null || reread.token !== observed.token) {
+      return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
+    }
+    const stale = `${canonical}.stale.${observed.token}.${token}`;
+    try {
+      renameSync2(canonical, stale);
+    } catch (e) {
+      return { kind: "lock-recovery-failed", cause: causeOf(e) };
+    }
+    const lost = this.#createOwned(canonical, token);
+    this.#discard(stale);
+    if (lost !== null) {
+      return { kind: "lock-recovery-failed", cause: lost };
+    }
+    this.#ownerTokens.set(canonical, token);
+    return { kind: "recovered", displacedToken: observed.token };
+  }
+  holdsOwnership(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined)
+      return false;
+    const observed = this.#readMetadata(canonical);
+    return observed !== null && observed.state === "held" && observed.token === mine;
+  }
+  release(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined) {
+      return { kind: "lock-release-failed", cause: "this writer does not hold the lock" };
+    }
+    this.#ownerTokens.delete(canonical);
+    const observed = this.#readMetadata(canonical);
+    if (observed === null || observed.token !== mine) {
+      return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
+    }
+    const cleanup = `${canonical}.cleanup.${mine}`;
+    try {
+      renameSync2(canonical, cleanup);
+    } catch (e) {
+      return { kind: "lock-release-failed", cause: causeOf(e) };
+    }
+    const swept = this.#discard(cleanup);
+    if (swept !== null) {
+      return { kind: "cleanup-failed", cause: swept };
+    }
+    return { kind: "released" };
+  }
+  #createOwned(canonical, token) {
+    const acquiredAtMs = this.#clock.now();
+    try {
+      mkdirSync2(canonical);
+    } catch (e) {
+      return causeOf(e);
+    }
+    const metadata = {
+      state: "held",
+      token,
+      pid: this.#liveness.self(),
+      acquiredAtMs,
+      leaseExpiresAtMs: acquiredAtMs + LEASE_MS
+    };
+    try {
+      writeFileSync2(join2(canonical, METADATA_BASENAME), `${JSON.stringify(metadata)}
+`, "utf-8");
+      return null;
+    } catch (e) {
+      const cleanup = `${canonical}.cleanup.${token}`;
+      try {
+        renameSync2(canonical, cleanup);
+        this.#discard(cleanup);
+      } catch {}
+      return causeOf(e);
+    }
+  }
+  #readMetadata(canonical) {
+    let raw;
+    try {
+      raw = JSON.parse(readFileSync2(join2(canonical, METADATA_BASENAME), "utf-8"));
+    } catch {
+      return null;
+    }
+    if (typeof raw !== "object" || raw === null)
+      return null;
+    const doc = raw;
+    if (typeof doc.state !== "string" || typeof doc.token !== "string")
+      return null;
+    if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
+      return null;
+    return {
+      state: doc.state,
+      token: doc.token,
+      pid: doc.pid,
+      acquiredAtMs: doc.acquiredAtMs,
+      leaseExpiresAtMs: doc.leaseExpiresAtMs
+    };
+  }
+  #discard(ownPath) {
+    try {
+      rmSync2(ownPath, { recursive: true, force: true });
+      return null;
+    } catch (e) {
+      return causeOf(e);
+    }
   }
 }
 // src/kernel/adapter/smt-symbols.ts
@@ -685,6 +849,35 @@ class ErrorMessages {
     return this.#values;
   }
 }
+// src/kernel/domain/findings-schema.ts
+var CONTRACT_BASENAME = "deep-spec-findings-schema.json";
+
+class FindingsSchema {
+  #schema;
+  #reason;
+  constructor(schema, reason) {
+    this.#schema = schema;
+    this.#reason = reason;
+  }
+  static of(schema) {
+    return new FindingsSchema(schema, null);
+  }
+  static unreadable(cause) {
+    return new FindingsSchema(null, cause);
+  }
+  degradationReasonFor(document) {
+    const schema = this.#schema;
+    if (schema === null) {
+      return `findings schema unreadable: ${this.#reason ?? ""}`;
+    }
+    const errors = [];
+    validateSchema(schema, schema, document, "", errors);
+    const first = errors[0];
+    if (first === undefined)
+      return null;
+    return `self-validation against ${CONTRACT_BASENAME} failed: ${first}`;
+  }
+}
 // src/kernel/domain/trigger-name.ts
 class TriggerName {
   #value;
@@ -876,6 +1069,39 @@ class FindingKind {
   static reconstitute(raw) {
     return new FindingKind(raw);
   }
+  static conflict() {
+    return new FindingKind("conflict");
+  }
+  static completenessGap() {
+    return new FindingKind("completeness-gap");
+  }
+  static scenarioViolation() {
+    return new FindingKind("scenario-violation");
+  }
+  static unreachable() {
+    return new FindingKind("unreachable");
+  }
+  static redundancy() {
+    return new FindingKind("redundancy");
+  }
+  static refinementViolation() {
+    return new FindingKind("refinement-violation");
+  }
+  static mappingGap() {
+    return new FindingKind("mapping-gap");
+  }
+  static structureInvalid() {
+    return new FindingKind("structure-invalid");
+  }
+  static referenceBroken() {
+    return new FindingKind("reference-broken");
+  }
+  static consistencyMismatch() {
+    return new FindingKind("consistency-mismatch");
+  }
+  static crossCheckDisagreement() {
+    return new FindingKind("cross-check-disagreement");
+  }
   static canonicalOrder() {
     return Object.keys(KIND_RANK);
   }
@@ -893,10 +1119,17 @@ class FindingKind {
   }
 }
 // src/kernel/domain/verification-method.ts
+var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
+
 class VerificationMethod {
   #value;
   constructor(value) {
     this.#value = value;
+  }
+  static parse(raw) {
+    if (!KNOWN_METHODS.has(raw))
+      return err({ kind: "unknown-verification-method", raw });
+    return ok(new VerificationMethod(raw));
   }
   static reconstitute(raw) {
     return new VerificationMethod(raw);
@@ -906,6 +1139,66 @@ class VerificationMethod {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/kernel/domain/skip-reason.ts
+var KNOWN_REASONS = new Set([
+  "unavailable",
+  "timeout",
+  "capability",
+  "compile-error",
+  "waived",
+  "absent-input",
+  "stale-input",
+  "ir-version-mismatch",
+  "unrecognized-format"
+]);
+
+class SkipReason {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static parse(raw) {
+    if (!KNOWN_REASONS.has(raw))
+      return err({ kind: "unknown-skip-reason", raw });
+    return ok(new SkipReason(raw));
+  }
+  static reconstitute(raw) {
+    return new SkipReason(raw);
+  }
+  static unavailable() {
+    return new SkipReason("unavailable");
+  }
+  static timeout() {
+    return new SkipReason("timeout");
+  }
+  static capability() {
+    return new SkipReason("capability");
+  }
+  static compileError() {
+    return new SkipReason("compile-error");
+  }
+  static waived() {
+    return new SkipReason("waived");
+  }
+  static absentInput() {
+    return new SkipReason("absent-input");
+  }
+  static staleInput() {
+    return new SkipReason("stale-input");
+  }
+  static irVersionMismatch() {
+    return new SkipReason("ir-version-mismatch");
+  }
+  static unrecognizedFormat() {
+    return new SkipReason("unrecognized-format");
+  }
+  value() {
+    return this.#value;
+  }
+  compareTo(other) {
+    return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
   }
 }
 // src/kernel/domain/attribute-kind.ts
@@ -1438,14 +1731,17 @@ class VerificationFinding {
   #witness;
   #detail;
   constructor(props) {
-    this.#kind = FindingKind.reconstitute(props.kind);
+    this.#kind = props.kind;
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#detail = props.detail;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new VerificationFinding(props);
+  }
+  static reconstitute(props) {
+    return new VerificationFinding({ ...props, kind: FindingKind.reconstitute(props.kind) });
   }
   kind() {
     return this.#kind.asString();
@@ -1463,7 +1759,8 @@ class VerificationFinding {
     return this.#detail;
   }
   isKind(kind) {
-    return this.#kind.equals(FindingKind.reconstitute(kind));
+    const parsed = FindingKind.parse(kind);
+    return parsed.ok && this.#kind.equals(parsed.value);
   }
   implicates(target) {
     return this.#targets.includes(target);
@@ -1772,6 +2069,43 @@ class VerificationReport {
   skippedCount() {
     return this.#skipped.count();
   }
+  toDocument() {
+    const ordered = {
+      backend: this.#id.backendName().asString(),
+      irVersion: this.#irVersion.asString(),
+      irHash: this.#irHash.asString(),
+      method: this.method()
+    };
+    const reason = this.#unavailableReason;
+    if (reason !== null)
+      ordered.unavailable = { reason };
+    ordered.findings = this.#findings.toArray().map((f) => {
+      const out = {
+        kind: f.kind(),
+        frRefs: f.frRefs().toStrings(),
+        targets: f.targets().toStrings(),
+        witness: f.witness().toDocument(),
+        detail: f.detail()
+      };
+      return out;
+    });
+    ordered.skipped = this.#skipped.toArray().map((sk) => {
+      const out = { target: sk.target().asString(), reason: sk.reason() };
+      const detail = sk.detail();
+      if (detail !== undefined)
+        out.detail = detail;
+      return out;
+    });
+    const crossChecked = this.#crossChecked;
+    if (crossChecked !== null) {
+      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
+    }
+    return ordered;
+  }
+  conformedTo(schema) {
+    const reason = schema.degradationReasonFor(this.toDocument());
+    return reason === null ? this : this.degraded(reason);
+  }
 }
 // src/requirements/domain/cross-checked-entries.ts
 class CrossCheckedEntries {
@@ -1859,8 +2193,8 @@ class VerificationReports {
             const verdicts = {};
             verdicts[a.backend] = va ? "violated" : "clean";
             verdicts[b.backend] = vb ? "violated" : "clean";
-            findings.push(VerificationFinding.reconstitute({
-              kind: "cross-check-disagreement",
+            findings.push(VerificationFinding.of({
+              kind: FindingKind.crossCheckDisagreement(),
               frRefs: FrRefs.of([...scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? []]).sortedUnique(),
               targets: TargetIds.of([sc.id().asTargetId()]),
               witness: VerificationWitness.verdicts(verdicts),
@@ -1880,6 +2214,72 @@ class VerificationReports {
       skipped: VerificationSkips.of([]),
       crossChecked: CrossCheckedEntries.of(crossChecked)
     });
+  }
+}
+// src/requirements/domain/verification-directory.ts
+var CROSS_CHECK_BACKEND = "cross-check";
+
+class VerificationDirectory {
+  #directory;
+  #reports;
+  #candidate;
+  #crossCheck;
+  constructor(directory, reports, candidate, crossCheck) {
+    this.#directory = directory;
+    this.#reports = reports;
+    this.#candidate = candidate;
+    this.#crossCheck = crossCheck;
+  }
+  static of(directory, reports, crossCheck) {
+    return new VerificationDirectory(directory, reports, null, crossCheck);
+  }
+  finalizing(candidate) {
+    const fileName = candidate.id().fileName();
+    const merged = [];
+    let replaced = false;
+    for (const sibling of this.#reports.toArray()) {
+      if (sibling.id().fileName() === fileName) {
+        merged.push(candidate);
+        replaced = true;
+      } else {
+        merged.push(sibling);
+      }
+    }
+    if (!replaced) {
+      const at = merged.findIndex((s) => s.id().fileName() > fileName);
+      if (at < 0)
+        merged.push(candidate);
+      else
+        merged.splice(at, 0, candidate);
+    }
+    return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, null);
+  }
+  crossChecked(model, irHash) {
+    const derived = this.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
+    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, derived);
+  }
+  withoutCrossCheck() {
+    return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, null);
+  }
+  conformedTo(schema) {
+    const candidate = this.#candidate;
+    const crossCheck = this.#crossCheck;
+    const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
+    const conformedCrossCheck = crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const reports = conformedCandidate === null ? this.#reports : VerificationReports.of(this.#reports.toArray().map((r) => r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
+    return new VerificationDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
+  }
+  directory() {
+    return this.#directory;
+  }
+  reports() {
+    return this.#reports;
+  }
+  candidate() {
+    return this.#candidate;
+  }
+  crossCheck() {
+    return this.#crossCheck;
   }
 }
 // src/requirements/domain/smt-query-verdict.ts
@@ -1973,8 +2373,8 @@ class SmtVerificationPlan {
       if (conflictKeys.has(key))
         return;
       conflictKeys.add(key);
-      findings.push(VerificationFinding.reconstitute({
-        kind: "conflict",
+      findings.push(VerificationFinding.of({
+        kind: FindingKind.conflict(),
         frRefs: model.frRefsOf(effective),
         targets: effective,
         witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
@@ -2024,8 +2424,8 @@ class SmtVerificationPlan {
       if (!r)
         continue;
       if (r.isSat()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "completeness-gap",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.completenessGap(),
           frRefs: model.frRefsOf(eventIds),
           targets: eventIds,
           witness: VerificationWitness.model(r.witnessModel()),
@@ -2048,8 +2448,8 @@ class SmtVerificationPlan {
       }
       if (sc.isAccept() && r.isUnsat()) {
         const targets = TargetIds.of([sc.id().asTargetId(), ...coreToTargets([...r.coreLabels()])]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(targets),
           targets,
           witness: VerificationWitness.core(r.sortedCore()),
@@ -2057,8 +2457,8 @@ class SmtVerificationPlan {
         }));
       }
       if (sc.isReject() && r.isSat()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(TargetIds.of([sc.id().asTargetId()])),
           targets: TargetIds.of([sc.id().asTargetId()]),
           witness: VerificationWitness.model(r.witnessModel()),
@@ -2245,8 +2645,8 @@ class QuintMachinePlan {
     if (machineRun !== null) {
       skipped.push(...machineRun.skipsFor(machineTargets, bounded));
       if (machineRun.isDeadlock()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "completeness-gap",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.completenessGap(),
           frRefs: model.frRefsOf(eventTargets),
           targets: this.#eventIds.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
           witness: machineRun.witness(),
@@ -2255,8 +2655,8 @@ class QuintMachinePlan {
       } else if (machineRun.isViolation()) {
         const violatedComponents = this.#invariantComponents.violatedBy(machineRun.finalState());
         const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
-        findings.push(VerificationFinding.reconstitute({
-          kind: "conflict",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.conflict(),
           frRefs: model.frRefsOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
           targets,
           witness: machineRun.witness(),
@@ -2291,8 +2691,8 @@ class QuintMachinePlan {
       if (skip !== null) {
         skipped.push(skip);
       } else if (r.isViolation()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "conflict",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.conflict(),
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: r.witness(),
@@ -2336,8 +2736,8 @@ class QuintMachinePlan {
       if (sc.isAccept() && r.isViolated()) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
         const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(targets),
           targets,
           witness: VerificationWitness.model(boundModel),
@@ -2345,8 +2745,8 @@ class QuintMachinePlan {
         }));
       }
       if (sc.isReject() && !r.isViolated()) {
-        findings.push(VerificationFinding.reconstitute({
-          kind: "scenario-violation",
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
           frRefs: model.frRefsOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: VerificationWitness.model(boundModel),
@@ -3252,18 +3652,50 @@ class RequirementsSource {
     return new Uint8Array(this.#sourceDocument);
   }
 }
+// src/requirements/usecase/verification-report-finalizer.ts
+class VerificationReportFinalizer {
+  #repository;
+  #findingsSchema;
+  constructor(repository, findingsSchema) {
+    this.#repository = repository;
+    this.#findingsSchema = findingsSchema;
+  }
+  finalize(report, model) {
+    return this.#finalizing(report, (staged) => staged.crossChecked(model, report.irHash()).conformedTo(this.#findingsSchema));
+  }
+  finalizeIrUnreadable(report) {
+    const finalized = this.#finalizing(report, (staged) => staged.withoutCrossCheck());
+    if (!finalized.ok)
+      return err(finalized.error);
+    return ok(undefined);
+  }
+  #finalizing(report, resolveCrossCheck) {
+    const loaded = this.#repository.findByDirectory(report.id().directory());
+    if (!loaded.ok)
+      return err(loaded.error);
+    const staged = loaded.value.finalizing(report).conformedTo(this.#findingsSchema);
+    const aggregate = resolveCrossCheck(staged).conformedTo(this.#findingsSchema);
+    const stored = this.#repository.store(aggregate);
+    if (!stored.ok)
+      return err(stored.error);
+    const published = aggregate.candidate();
+    if (published === null) {
+      return err({ kind: "io-failed", operation: "write", path: report.id().fileName(), cause: "no finalization candidate" });
+    }
+    return ok(published);
+  }
+}
 // src/requirements/usecase/verify-requirements-smt-usecase.ts
 var BACKEND = "smt";
-var CROSS_CHECK_BACKEND = "cross-check";
 
 class VerifyRequirementsSmtUseCase {
   #formalModelRepository;
-  #verificationReportRepository;
   #z3SolverClient;
-  constructor(formalModelRepository, verificationReportRepository, z3SolverClient) {
+  #finalizer;
+  constructor(formalModelRepository, verificationDirectoryRepository, findingsSchema, z3SolverClient) {
     this.#formalModelRepository = formalModelRepository;
-    this.#verificationReportRepository = verificationReportRepository;
     this.#z3SolverClient = z3SolverClient;
+    this.#finalizer = new VerificationReportFinalizer(verificationDirectoryRepository, findingsSchema);
   }
   execute(input) {
     const id = VerificationReportId.of(input.verifyDirectory, BACKEND);
@@ -3273,7 +3705,7 @@ class VerifyRequirementsSmtUseCase {
         return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed")
         return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#persist(VerificationReport.irUnreadable(id, "exhaustive", acquired.error.cause));
+      const saved = this.#finalizer.finalizeIrUnreadable(VerificationReport.irUnreadable(id, "exhaustive", acquired.error.cause));
       if (!saved.ok)
         return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
@@ -3281,22 +3713,17 @@ class VerifyRequirementsSmtUseCase {
     const model = acquired.value;
     const irHash = model.irHash();
     if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
-      const saved = this.#persist(VerificationReport.versionMismatch(id, model, irHash, "exhaustive"));
+      const saved = this.#finalizer.finalize(VerificationReport.versionMismatch(id, model, irHash, "exhaustive"), model);
       if (!saved.ok)
         return { kind: "save-failed", error: saved.error };
-      const cross2 = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-      if (!cross2.ok)
-        return { kind: "save-failed", error: cross2.error };
       return { kind: "version-mismatch" };
     }
     const run = this.#z3SolverClient.check(model);
     if (run.result.kind === "unavailable") {
-      const saved = this.#persist(VerificationReport.solverUnavailable(id, model, irHash, run.plan.planSkipped(), run.result.reason));
+      const unavailable = VerificationReport.solverUnavailable(id, model, irHash, run.plan.planSkipped(), run.result.reason);
+      const saved = this.#finalizer.finalize(unavailable, model);
       if (!saved.ok)
         return { kind: "save-failed", error: saved.error };
-      const cross2 = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-      if (!cross2.ok)
-        return { kind: "save-failed", error: cross2.error };
       return { kind: "solver-unavailable" };
     }
     const interpreted = run.plan.interpret(model, run.result.verdicts);
@@ -3308,43 +3735,29 @@ class VerifyRequirementsSmtUseCase {
       findings: interpreted.findings,
       skipped: interpreted.skipped
     });
-    const conformed = this.#verificationReportRepository.conformedOf(report);
-    const stored = this.#verificationReportRepository.store(report);
-    if (!stored.ok)
-      return { kind: "save-failed", error: stored.error };
-    const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-    if (!cross.ok)
-      return { kind: "save-failed", error: cross.error };
+    const finalized = this.#finalizer.finalize(report, model);
+    if (!finalized.ok)
+      return { kind: "save-failed", error: finalized.error };
+    const published = finalized.value;
     return {
       kind: "verified",
-      pass: conformed.passes(),
-      findingsCount: conformed.findingsCount(),
-      skippedCount: conformed.skippedCount()
+      pass: published.passes(),
+      findingsCount: published.findingsCount(),
+      skippedCount: published.skippedCount()
     };
-  }
-  #persist(report) {
-    return this.#verificationReportRepository.store(report);
-  }
-  #recomputeCrossCheck(model, irHash, directory) {
-    const siblings = this.#verificationReportRepository.findAllByDirectory(directory);
-    if (!siblings.ok)
-      return ok(undefined);
-    const stored = this.#persist(siblings.value.crossChecked(VerificationReportId.of(directory, CROSS_CHECK_BACKEND), model, irHash));
-    return stored.ok ? ok(undefined) : stored;
   }
 }
 // src/requirements/usecase/verify-requirements-quint-usecase.ts
 var BACKEND2 = "quint";
-var CROSS_CHECK_BACKEND2 = "cross-check";
 
 class VerifyRequirementsQuintUseCase {
   #formalModelRepository;
-  #verificationReportRepository;
   #quintClient;
-  constructor(formalModelRepository, verificationReportRepository, quintClient) {
+  #finalizer;
+  constructor(formalModelRepository, verificationDirectoryRepository, findingsSchema, quintClient) {
     this.#formalModelRepository = formalModelRepository;
-    this.#verificationReportRepository = verificationReportRepository;
     this.#quintClient = quintClient;
+    this.#finalizer = new VerificationReportFinalizer(verificationDirectoryRepository, findingsSchema);
   }
   execute(input) {
     const id = VerificationReportId.of(input.verifyDirectory, BACKEND2);
@@ -3354,7 +3767,7 @@ class VerifyRequirementsQuintUseCase {
         return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed")
         return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#persist(VerificationReport.irUnreadable(id, "simulation", acquired.error.cause));
+      const saved = this.#finalizer.finalizeIrUnreadable(VerificationReport.irUnreadable(id, "simulation", acquired.error.cause));
       if (!saved.ok)
         return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
@@ -3362,31 +3775,23 @@ class VerifyRequirementsQuintUseCase {
     const model = acquired.value;
     const irHash = model.irHash();
     if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
-      const saved = this.#persist(VerificationReport.versionMismatch(id, model, irHash, "simulation"));
+      const saved = this.#finalizer.finalize(VerificationReport.versionMismatch(id, model, irHash, "simulation"), model);
       if (!saved.ok)
         return { kind: "save-failed", error: saved.error };
-      const cross2 = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-      if (!cross2.ok)
-        return { kind: "save-failed", error: cross2.error };
       return { kind: "version-mismatch" };
     }
     const checked = this.#quintClient.check(model);
     if (checked.kind === "cli-unavailable") {
-      const saved = this.#persist(VerificationReport.quintUnavailable(id, model, irHash));
+      const saved = this.#finalizer.finalize(VerificationReport.quintUnavailable(id, model, irHash), model);
       if (!saved.ok)
         return { kind: "save-failed", error: saved.error };
-      const cross2 = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-      if (!cross2.ok)
-        return { kind: "save-failed", error: cross2.error };
       return { kind: "backend-unavailable" };
     }
     if (checked.kind === "machine-uncompilable") {
-      const saved = this.#persist(VerificationReport.machineUncompilable(id, model, irHash, checked.method, checked.error));
+      const uncompilable = VerificationReport.machineUncompilable(id, model, irHash, checked.method, checked.error);
+      const saved = this.#finalizer.finalize(uncompilable, model);
       if (!saved.ok)
         return { kind: "save-failed", error: saved.error };
-      const cross2 = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-      if (!cross2.ok)
-        return { kind: "save-failed", error: cross2.error };
       return { kind: "machine-uncompilable" };
     }
     const interpreted = checked.plan.interpret(model, checked.compileSkips, checked.method, checked.runs);
@@ -3398,30 +3803,17 @@ class VerifyRequirementsQuintUseCase {
       findings: interpreted.findings,
       skipped: interpreted.skipped
     });
-    const conformed = this.#verificationReportRepository.conformedOf(report);
-    const stored = this.#verificationReportRepository.store(report);
-    if (!stored.ok)
-      return { kind: "save-failed", error: stored.error };
-    const cross = this.#recomputeCrossCheck(model, irHash, input.verifyDirectory);
-    if (!cross.ok)
-      return { kind: "save-failed", error: cross.error };
+    const finalized = this.#finalizer.finalize(report, model);
+    if (!finalized.ok)
+      return { kind: "save-failed", error: finalized.error };
+    const published = finalized.value;
     return {
       kind: "verified",
-      pass: conformed.passes(),
-      findingsCount: conformed.findingsCount(),
-      skippedCount: conformed.skippedCount(),
+      pass: published.passes(),
+      findingsCount: published.findingsCount(),
+      skippedCount: published.skippedCount(),
       method: checked.method
     };
-  }
-  #persist(report) {
-    return this.#verificationReportRepository.store(report);
-  }
-  #recomputeCrossCheck(model, irHash, directory) {
-    const siblings = this.#verificationReportRepository.findAllByDirectory(directory);
-    if (!siblings.ok)
-      return ok(undefined);
-    const stored = this.#persist(siblings.value.crossChecked(VerificationReportId.of(directory, CROSS_CHECK_BACKEND2), model, irHash));
-    return stored.ok ? ok(undefined) : stored;
   }
 }
 // src/requirements/usecase/validate-ir-usecase.ts
@@ -3540,13 +3932,13 @@ function parseFormalModel(raw) {
   };
 }
 // src/requirements/adapter/formal-model-repository-impl.ts
-import { existsSync, readFileSync as readFileSync2 } from "fs";
+import { existsSync, readFileSync as readFileSync3 } from "fs";
 class FormalModelRepositoryImpl {
   findById(id) {
     const modelPath = id.artifactPath().asString();
     let bytes;
     try {
-      bytes = readFileSync2(modelPath);
+      bytes = readFileSync3(modelPath);
     } catch (e) {
       if (e.code === "ENOENT" || !existsSync(modelPath)) {
         return err({ kind: "not-found", path: modelPath });
@@ -3916,11 +4308,11 @@ function buildSmtPlan(model) {
   };
 }
 // src/requirements/adapter/z3-engine-child.ts
-import { readFileSync as readFileSync3 } from "fs";
+import { readFileSync as readFileSync4 } from "fs";
 async function solveSmtChild() {
   let payload;
   try {
-    payload = JSON.parse(readFileSync3(0, "utf-8"));
+    payload = JSON.parse(readFileSync4(0, "utf-8"));
   } catch (err2) {
     return `${JSON.stringify({ unavailable: `child payload unreadable: ${err2 instanceof Error ? err2.message : String(err2)}` })}
 `;
@@ -4054,64 +4446,9 @@ class Z3SolverClientImpl {
   }
 }
 // src/requirements/adapter/verification-report-serializer.ts
-function orderedDocument(report) {
-  const ordered = {
-    backend: report.id().backendName().asString(),
-    irVersion: report.irVersion().asString(),
-    irHash: report.irHash().asString(),
-    method: report.method()
-  };
-  const reason = report.unavailableReason();
-  if (reason !== null)
-    ordered.unavailable = { reason };
-  ordered.findings = report.findings().toArray().map((f) => {
-    const out = {
-      kind: f.kind(),
-      frRefs: f.frRefs().toStrings(),
-      targets: f.targets().toStrings(),
-      witness: f.witness().toDocument(),
-      detail: f.detail()
-    };
-    return out;
-  });
-  ordered.skipped = report.skipped().toArray().map((sk) => {
-    const out = { target: sk.target().asString(), reason: sk.reason() };
-    const detail = sk.detail();
-    if (detail !== undefined)
-      out.detail = detail;
-    return out;
-  });
-  const crossChecked = report.crossChecked();
-  if (crossChecked !== null) {
-    ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
-  }
-  return ordered;
-}
 function renderVerificationReportBytes(report) {
-  return `${JSON.stringify(orderedDocument(report), null, 2)}
+  return `${JSON.stringify(report.toDocument(), null, 2)}
 `;
-}
-function conformToFindingsContract(report, findingsSchema) {
-  if (!findingsSchema.ok) {
-    return report.degraded(`findings schema unreadable: ${findingsSchema.error.cause}`);
-  }
-  const errors = [];
-  validateSchema(findingsSchema.value, findingsSchema.value, orderedDocument(report), "", errors);
-  if (errors.length > 0) {
-    return report.degraded(`self-validation against deep-spec-findings-schema.json failed: ${errors[0]}`);
-  }
-  return report;
-}
-function parseVerificationReportDocument(id, raw) {
-  if (!isObject(raw))
-    return { ok: false, error: { cause: "document is not a JSON object" } };
-  if (raw.backend !== id.backendName().asString()) {
-    return { ok: false, error: { cause: `document backend "${String(raw.backend)}" does not match the id backend "${id.backendName().asString()}"` } };
-  }
-  if (!Array.isArray(raw.findings) || !Array.isArray(raw.skipped)) {
-    return { ok: false, error: { cause: "document lacks findings/skipped arrays" } };
-  }
-  return { ok: true, value: reconstituteFromRaw(id, raw) };
 }
 function parseSiblingReportDocument(directory, fileName, raw) {
   if (!isObject(raw))
@@ -4150,62 +4487,183 @@ function reconstituteFromRaw(id, raw) {
     unavailableReason: isObject(raw.unavailable) ? typeof raw.unavailable.reason === "string" ? raw.unavailable.reason : "" : null
   });
 }
-// src/requirements/adapter/verification-report-repository-impl.ts
-import { existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync4, readdirSync, writeFileSync as writeFileSync2 } from "fs";
-import { join as join2 } from "path";
-class VerificationReportRepositoryImpl {
-  #findingsSchemaPath;
-  constructor(findingsSchemaPath) {
-    this.#findingsSchemaPath = findingsSchemaPath;
+// src/requirements/adapter/verification-directory-repository-impl.ts
+import { existsSync as existsSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync5, readdirSync, renameSync as renameSync3, rmSync as rmSync3 } from "fs";
+import { join as join3 } from "path";
+var CROSS_CHECK_BASENAME = "cross-check.json";
+var STALE_CROSS_CHECK_BASENAME = ".cross-check.stale";
+var VERIFICATION_LOCK_BASENAME = ".deep-spec-finalization.lock";
+var encoder = new TextEncoder;
+var UNPROBED_LIVENESS = {
+  self: () => 0,
+  statusOf: () => "unknown"
+};
+function causeOf2(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+function lockCauseOf(outcome) {
+  return "cause" in outcome ? `${outcome.kind}: ${outcome.cause}` : outcome.kind;
+}
+function documentsByFileName(reports) {
+  const out = new Map;
+  for (const report of reports)
+    out.set(report.id().fileName(), JSON.stringify(report.toDocument()));
+  return out;
+}
+
+class VerificationDirectoryRepositoryImpl {
+  #lock;
+  constructor(lock = new DirectoryFinalizationLock(new SystemClock, UNPROBED_LIVENESS, VERIFICATION_LOCK_BASENAME)) {
+    this.#lock = lock;
   }
-  findById(aggregateId) {
-    const path = join2(aggregateId.directory().asString(), aggregateId.fileName());
-    if (!existsSync2(path)) {
-      return err({ kind: "not-found", path });
+  findByDirectory(directory) {
+    const siblings = this.#siblingsOf(directory);
+    if (!siblings.ok)
+      return err(siblings.error);
+    const crossPath = join3(directory.asString(), CROSS_CHECK_BASENAME);
+    if (!existsSync2(crossPath)) {
+      return ok(VerificationDirectory.of(directory, VerificationReports.of(siblings.value), null));
     }
-    let raw;
+    const crossCheck = this.#readReport(directory, CROSS_CHECK_BASENAME);
+    return ok(VerificationDirectory.of(directory, VerificationReports.of(siblings.value), crossCheck.ok ? crossCheck.value : null));
+  }
+  store(aggregate) {
+    const directory = aggregate.directory();
+    const directoryPath = directory.asString();
+    const candidate = aggregate.candidate();
+    if (candidate === null) {
+      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: "no finalization candidate" });
+    }
     try {
-      raw = JSON.parse(readFileSync4(path, "utf-8"));
+      mkdirSync3(directoryPath, { recursive: true });
     } catch (e) {
-      return err({ kind: "corrupt", path, cause: e instanceof Error ? e.message : String(e) });
+      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: causeOf2(e) });
     }
-    const report = parseVerificationReportDocument(aggregateId, raw);
-    if (!report.ok) {
-      return err({ kind: "corrupt", path, cause: report.error.cause });
+    const lockPath = this.#lock.canonicalPathOf(directory);
+    const acquired = this.#lock.acquire(directory);
+    if (acquired.kind !== "acquired" && acquired.kind !== "recovered") {
+      return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(acquired) });
     }
-    return report;
+    let outcome;
+    try {
+      outcome = this.#publish(aggregate, candidate, directory);
+    } catch (e) {
+      outcome = err({ kind: "io-failed", operation: "write", path: directoryPath, cause: causeOf2(e) });
+    }
+    const released = this.#lock.release(directory);
+    if (released.kind !== "released" && outcome.ok) {
+      return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(released) });
+    }
+    return outcome;
   }
-  findAllByDirectory(directory) {
+  #publish(aggregate, candidate, directory) {
+    const directoryPath = directory.asString();
+    const backendPath = join3(directoryPath, candidate.id().fileName());
+    const crossPath = join3(directoryPath, CROSS_CHECK_BASENAME);
+    const stalePath = join3(directoryPath, STALE_CROSS_CHECK_BASENAME);
+    const unchanged = this.#siblingsUnchanged(aggregate, candidate, directory);
+    if (!unchanged.ok)
+      return err(unchanged.error);
+    const crossCheck = aggregate.crossCheck();
+    let backendBytes;
+    let crossBytes;
+    try {
+      backendBytes = renderVerificationReportBytes(candidate);
+      crossBytes = crossCheck === null ? null : renderVerificationReportBytes(crossCheck);
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
+    }
+    if (!this.#lock.holdsOwnership(directory))
+      return this.#fenced(directory, crossPath);
+    if (existsSync2(crossPath)) {
+      try {
+        renameSync3(crossPath, stalePath);
+      } catch (e) {
+        return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
+      }
+    }
+    if (!this.#lock.holdsOwnership(directory))
+      return this.#fenced(directory, backendPath);
+    try {
+      writeFileAtomically(backendPath, encoder.encode(backendBytes));
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: backendPath, cause: causeOf2(e) });
+    }
+    if (crossBytes !== null) {
+      if (!this.#lock.holdsOwnership(directory))
+        return this.#fenced(directory, crossPath);
+      try {
+        writeFileAtomically(crossPath, encoder.encode(crossBytes));
+      } catch (e) {
+        return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
+      }
+    }
+    try {
+      rmSync3(stalePath, { force: true });
+    } catch {}
+    return ok(undefined);
+  }
+  #siblingsUnchanged(aggregate, candidate, directory) {
+    const observed = this.#siblingsOf(directory);
+    if (!observed.ok)
+      return err(observed.error);
+    const candidateFileName = candidate.id().fileName();
+    const onDisk = documentsByFileName(observed.value.filter((r) => r.id().fileName() !== candidateFileName));
+    const loaded = documentsByFileName(aggregate.reports().toArray().filter((r) => r.id().fileName() !== candidateFileName));
+    let same = onDisk.size === loaded.size;
+    if (same) {
+      for (const [fileName, document] of loaded) {
+        if (onDisk.get(fileName) !== document) {
+          same = false;
+          break;
+        }
+      }
+    }
+    if (same)
+      return ok(undefined);
+    return err({
+      kind: "io-failed",
+      operation: "write",
+      path: directory.asString(),
+      cause: "conflict: sibling set changed since load"
+    });
+  }
+  #siblingsOf(directory) {
+    if (!existsSync2(directory.asString()))
+      return ok([]);
     let entries;
     try {
-      entries = readdirSync(directory.asString()).filter((f) => f.endsWith(".json") && f !== "cross-check.json").sort();
+      entries = readdirSync(directory.asString()).filter((f) => f.endsWith(".json") && f !== CROSS_CHECK_BASENAME).sort();
     } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: directory.asString(), cause: e instanceof Error ? e.message : String(e) });
+      return err({ kind: "io-failed", operation: "read", path: directory.asString(), cause: causeOf2(e) });
     }
     const reports = [];
     for (const file of entries) {
-      try {
-        const raw = JSON.parse(readFileSync4(join2(directory.asString(), file), "utf-8"));
-        const report = parseSiblingReportDocument(directory, file, raw);
-        if (report !== null)
-          reports.push(report);
-      } catch {}
+      const report = this.#readReport(directory, file);
+      if (!report.ok)
+        return err(report.error);
+      if (report.value !== null)
+        reports.push(report.value);
     }
-    return ok(VerificationReports.of(reports));
+    return ok(reports);
   }
-  conformedOf(report) {
-    return conformToFindingsContract(report, readContractSchema(this.#findingsSchemaPath));
-  }
-  store(report) {
-    const conformed = this.conformedOf(report);
-    const path = join2(conformed.id().directory().asString(), conformed.id().fileName());
+  #readReport(directory, fileName) {
+    const path = join3(directory.asString(), fileName);
+    let raw;
     try {
-      mkdirSync2(conformed.id().directory().asString(), { recursive: true });
-      writeFileSync2(path, renderVerificationReportBytes(conformed), "utf-8");
-      return ok(undefined);
+      raw = JSON.parse(readFileSync5(path, "utf-8"));
     } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
+      return err({ kind: "corrupt", path, cause: causeOf2(e) });
     }
+    return ok(parseSiblingReportDocument(directory, fileName, raw));
+  }
+  #fenced(directory, path) {
+    return err({
+      kind: "io-failed",
+      operation: "write",
+      path,
+      cause: `lock-fenced: ${this.#lock.canonicalPathOf(directory)} is no longer held by this writer`
+    });
   }
 }
 // src/requirements/adapter/quint-compilation.ts
@@ -4558,9 +5016,9 @@ function itfStatus(itfText) {
 }
 // src/requirements/adapter/quint-client-impl.ts
 import { spawnSync as spawnSync2 } from "child_process";
-import { existsSync as existsSync3, mkdtempSync, readFileSync as readFileSync5, readdirSync as readdirSync2, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "fs";
+import { existsSync as existsSync3, mkdtempSync, readFileSync as readFileSync6, readdirSync as readdirSync2, rmSync as rmSync4, writeFileSync as writeFileSync3 } from "fs";
 import { tmpdir } from "os";
-import { join as join3 } from "path";
+import { join as join4 } from "path";
 var SEED = "0x2a";
 var MAX_STEPS = 8;
 var MAX_SAMPLES = 200;
@@ -4585,8 +5043,8 @@ class QuintClientImpl {
       return { kind: "machine-uncompilable", method, error: compiled.error };
     }
     const machine = compiled.machine;
-    const work = mkdtempSync(join3(tmpdir(), "deep-spec-quint-"));
-    const modulePath = join3(work, "main.qnt");
+    const work = mkdtempSync(join4(tmpdir(), "deep-spec-quint-"));
+    const modulePath = join4(work, "main.qnt");
     writeFileSync3(modulePath, machine.moduleText, "utf-8");
     try {
       const machineRun = this.#runMachinePhase(machine, modulePath, bounded, work);
@@ -4605,7 +5063,7 @@ class QuintClientImpl {
       });
       return { kind: "checked", method, plan: machine.plan, compileSkips: VerificationSkips.of(machine.compileSkips), runs };
     } finally {
-      rmSync2(work, { recursive: true, force: true });
+      rmSync4(work, { recursive: true, force: true });
     }
   }
   #detectBoundedMode() {
@@ -4620,7 +5078,7 @@ class QuintClientImpl {
     if (this.#config.apalacheDistSet)
       return true;
     try {
-      return readdirSync2(join3(this.#config.homeDirectory, ".quint")).some((f) => f.startsWith("apalache-dist-"));
+      return readdirSync2(join4(this.#config.homeDirectory, ".quint")).some((f) => f.startsWith("apalache-dist-"));
     } catch {
       return false;
     }
@@ -4634,7 +5092,7 @@ class QuintClientImpl {
     let itf = null;
     if (itfPath && existsSync3(itfPath)) {
       try {
-        itf = readFileSync5(itfPath, "utf-8");
+        itf = readFileSync6(itfPath, "utf-8");
       } catch {
         itf = null;
       }
@@ -4650,7 +5108,7 @@ class QuintClientImpl {
 ${run.stderr}`.toLowerCase().includes("error");
   }
   #runMachinePhase(machine, modulePath, bounded, work) {
-    const itfPath = join3(work, "machine.itf.json");
+    const itfPath = join4(work, "machine.itf.json");
     const run = bounded ? this.#runQuint(["verify", modulePath, "--main=main", "--invariant=invAll", `--max-steps=${MAX_STEPS}`, `--out-itf=${itfPath}`], itfPath, VERIFY_TIMEOUT_MS, work) : this.#runQuint([
       "run",
       modulePath,
@@ -4681,7 +5139,7 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
     for (const [obId, temporalName] of machine.temporalNames) {
       if (skipTargets.has(obId))
         continue;
-      const itfPath = join3(work, `${temporalName}.itf.json`);
+      const itfPath = join4(work, `${temporalName}.itf.json`);
       const run = this.#runQuint(["verify", modulePath, "--main=main", `--temporal=${temporalName}`, `--max-steps=${MAX_STEPS}`, `--out-itf=${itfPath}`], itfPath, VERIFY_TIMEOUT_MS, work);
       if (run.timedOut) {
         out.set(obId, QuintTemporalVerdict.timeout());
@@ -4698,7 +5156,7 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
   #runScenarioPhase(machine, modulePath, work) {
     const out = new Map;
     for (const [scId, initAction] of machine.scenarioInitActions) {
-      const itfPath = join3(work, `${initAction.replace(/^scInit/, "sc")}.itf.json`);
+      const itfPath = join4(work, `${initAction.replace(/^scInit/, "sc")}.itf.json`);
       const run = this.#runQuint([
         "run",
         modulePath,
@@ -4723,7 +5181,7 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
   }
 }
 // src/requirements/adapter/ir-validation-materials-repository-impl.ts
-import { existsSync as existsSync4, readFileSync as readFileSync6 } from "fs";
+import { existsSync as existsSync4, readFileSync as readFileSync7 } from "fs";
 import { basename as basename2, dirname as dirname2 } from "path";
 var FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";
 function asExpression(v) {
@@ -4822,7 +5280,7 @@ class IrValidationMaterialsRepositoryImpl {
     const corrupt = (cause) => err({ kind: "corrupt", path: outputPath, cause });
     let bytes;
     try {
-      bytes = readFileSync6(outputPath);
+      bytes = readFileSync7(outputPath);
     } catch (e) {
       return err({ kind: "io-failed", operation: "read", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
     }
@@ -4880,7 +5338,7 @@ var VERIFY_DIRNAME = "deep-spec-verify";
 function parentMain() {
   const flags = parseFlags(process.argv.slice(2));
   const target = ArtifactPath.parse(flags.outputPath);
-  const reportLocation = ArtifactPath.parse(join4(dirname3(flags.outputPath), VERIFY_DIRNAME));
+  const reportLocation = ArtifactPath.parse(join5(dirname3(flags.outputPath), VERIFY_DIRNAME));
   if (!target.ok || !reportLocation.ok) {
     process.stderr.write(`deep-spec-verify-smt: --output-path is required
 `);
@@ -4892,7 +5350,24 @@ function parentMain() {
     process.exit(0);
   }
   const selfPath = fileURLToPath(import.meta.url);
-  const useCase = new VerifyRequirementsSmtUseCase(new FormalModelRepositoryImpl, new VerificationReportRepositoryImpl(join4(dirname3(selfPath), "data", "deep-spec-findings-schema.json")), new Z3SolverClientImpl({
+  const findingsSchemaFile = readContractSchema(join5(dirname3(selfPath), "data", "deep-spec-findings-schema.json"));
+  const findingsSchema = findingsSchemaFile.ok ? FindingsSchema.of(findingsSchemaFile.value) : FindingsSchema.unreadable(findingsSchemaFile.error.cause);
+  const useCase = new VerifyRequirementsSmtUseCase(new FormalModelRepositoryImpl, new VerificationDirectoryRepositoryImpl(new DirectoryFinalizationLock(new SystemClock, {
+    self: () => process.pid,
+    statusOf: (pid) => {
+      try {
+        process.kill(pid, 0);
+        return "alive";
+      } catch (e) {
+        const code = e.code;
+        if (code === "ESRCH")
+          return "absent";
+        if (code === "EPERM")
+          return "alive";
+        return "unknown";
+      }
+    }
+  }, VERIFICATION_LOCK_BASENAME)), findingsSchema, new Z3SolverClientImpl({
     selfPath,
     perQueryTimeoutMs: Number(process.env.AIDLC_DEEP_SPEC_SMT_TIMEOUT_MS) || 2000,
     runtimeOverride: process.env.AIDLC_DEEP_SPEC_SMT_RUNTIME,

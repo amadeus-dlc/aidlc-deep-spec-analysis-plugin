@@ -8,14 +8,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
-import {
-  type Json,
-  extractFences,
-  isObject,
-  readContractSchema,
-  validateSchema,
-  writeFileAtomically,
-} from "@deep-spec/kernel-adapter";
+import { extractFences, readContractSchema, writeFileAtomically } from "@deep-spec/kernel-adapter";
+import { type Json, isObject, validateSchema } from "@deep-spec/kernel-infrastructure";
 import { ArtifactPath, AttributeBound, ErrorMessages, IrVersion, type Expression } from "@deep-spec/kernel-domain";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";

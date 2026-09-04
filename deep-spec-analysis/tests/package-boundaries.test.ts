@@ -1,6 +1,6 @@
 // パッケージ境界の検出時点を固定する（FR1.3 / NFR5）。
 //
-// src/<ctx>/<layer>/ の 17 層はそれぞれ独立した workspace パッケージで、
+// src/<ctx>/<layer>/ の 16 層はそれぞれ独立した workspace パッケージで、
 // bunfig.toml の `linker = "isolated"` により node_modules には
 // package.json の dependencies に宣言した層だけが張られる。したがって
 //   - 宣言した層への bare import は解決できる

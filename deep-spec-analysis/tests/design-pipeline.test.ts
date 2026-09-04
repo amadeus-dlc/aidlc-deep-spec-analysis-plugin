@@ -1,21 +1,23 @@
 // レイヤード design パイプラインの in-process 検証（PR5、#18）。
 //
-// 1) golden 同値：design fixture を tmp へ複製し、entry と同じ編成
-//    （lowering → 実 v1 兄弟 spawn → remap → 組成 → 適合保存 → クロスチェック）
-//    を domain/adapter 直で駆動して、書かれた smt.json / quint.json /
-//    cross-check.json を期待 golden とバイト比較する。CLI spawn の
-//    design-verify スイートと合わせ、同一バイトへの独立経路が 2 本になる。
+// 1) golden 同値：design fixture を tmp へ複製し、lowering → 実 v1 兄弟 spawn →
+//    remap → 組成 → 単一文書の適合保存 → クロスチェック再計算を domain/adapter
+//    直で駆動して、書かれた smt.json / quint.json / cross-check.json を期待
+//    golden とバイト比較する。本番の編成（Finalizer 経由の storeConformed）は
+//    通らない別経路なので、CLI spawn の design-verify スイート・usecase 経路の
+//    refinement-pipeline と合わせて同一バイトへの独立経路が保たれる。
 // 2) ドメイン検査の分岐固定：lowering・remap・順序・クロスチェック・降格の
 //    各純関数を直接駆動する（domain 90% 床）。
 
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { canonicalStringify, extractFences } from "@deep-spec/kernel-adapter";
-import type { Json } from "@deep-spec/kernel-adapter";
-import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, IrVersion, ArtifactPath, type Expression, ExpressionTree} from "@deep-spec/kernel-domain";
+import { extractFences, readContractSchema } from "@deep-spec/kernel-adapter";
+import { type Json, canonicalStringify } from "@deep-spec/kernel-infrastructure";
+import { TriggerName, FrRefs, TargetId, TargetIds, ContentHash, FindingsSchema, IrVersion, ArtifactPath, type Expression, ExpressionTree} from "@deep-spec/kernel-domain";
 
 // 降ろし方は帰属の内部表現（裁定 17）——テストは公開の isKind で射影する。
 const ORIGIN_KINDS = ["passthrough", "transition", "ignore", "vac-dead", "vac-shadow"] as const;
@@ -85,12 +87,13 @@ import {
 } from "@deep-spec/design-domain";
 import {
   DesignModelRepositoryImpl,
-  DesignReportRepositoryImpl,
+  DesignVerifyDirectoryRepositoryImpl,
   SiblingBackendClientImpl,
   probeReached,
   reachabilityVariant,
   parseDesignEntities,
-  renderDesignEntities
+  renderDesignEntities,
+  renderLoweredDocument
 } from "@deep-spec/design-adapter";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -100,6 +103,9 @@ const toolsDir = join(pluginRoot, "tools");
 const dataDir = join(pluginRoot, "src", "entries", "data");
 const fixtures = join(pluginRoot, "tests", "fixtures", "design");
 const schemaPath = join(dataDir, "deep-spec-findings-schema.json");
+// 契約2 のスキーマは合成ルート相当のここで一度だけ読む（entry と同じ形）。
+const schemaFile = readContractSchema(schemaPath);
+const findingsSchema = schemaFile.ok ? FindingsSchema.of(schemaFile.value) : FindingsSchema.unreadable(schemaFile.error.cause);
 const quintBin = join(pluginRoot, "node_modules", ".bin", "quint");
 
 function golden(file: string): string {
@@ -118,7 +124,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
       if (!acquired.ok) return;
       const model = acquired.value;
       const irHash = model.irHash();
-      const reports = new DesignReportRepositoryImpl(schemaPath);
+      const reports = new DesignVerifyDirectoryRepositoryImpl();
       // 兄弟 v1 spawn の決定論条件（E2E スイートと同じ seeded simulation）を
       // 明示注入する（bun の spawnSync は実行時の process.env 変異を継がない）。
       const sibling = new SiblingBackendClientImpl({
@@ -136,10 +142,10 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
         const checkedUnits: string[] = [];
         let method: string | null = null;
         for (const u of model.units()) {
-          const lowered = LoweredUnit.of(u, { synthetics: backend === "smt" });
+          const lowered = u.lowered({ synthetics: backend === "smt" });
           const run = sibling.runLowered(backend, u, lowered, 55_000);
           expect(run.exit).toBe(0);
-          const remapped = lowered.remapVerdicts(u, run.doc ?? SiblingVerdictDocument.unreadable());
+          const remapped = (run.doc ?? SiblingVerdictDocument.unreadable()).remapVerdicts(u, lowered.index());
           expect(remapped.unavailable).toBe(null);
           method = method ?? remapped.method;
           findings.push(...remapped.findings);
@@ -161,25 +167,22 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
             }
           }
         }
-        const stored = reports.store(
-          DesignReport.compose({
-            id: DesignReportId.of(ap(verifyDir), backend),
-            irVersion: model.irVersion(),
-            irHash,
-            method: backend === "smt" ? "exhaustive" : (method ?? "simulation"),
-            findings: DesignFindings.of(findings),
-            skipped: DesignSkips.of(skipped),
-            checked: CheckedUnits.reconstitute(checkedUnits),
-          }),
-        );
-        expect(stored.ok).toBe(true);
-        const siblings = reports.findAllByDirectory(ap(verifyDir));
-        expect(siblings.ok).toBe(true);
-        if (siblings.ok) {
-          expect(
-            reports.store(siblings.value.crossChecked(DesignReportId.of(ap(verifyDir), "cross-check"), model, irHash)).ok,
-          ).toBe(true);
-        }
+        const report = DesignReport.compose({
+          id: DesignReportId.of(ap(verifyDir), backend),
+          irVersion: model.irVersion(),
+          irHash,
+          method: backend === "smt" ? "exhaustive" : (method ?? "simulation"),
+          findings: DesignFindings.of(findings),
+          skipped: DesignSkips.of(skipped),
+          checked: CheckedUnits.reconstitute(checkedUnits),
+        });
+        // 公開は集約ひとつぶん：候補を置き、適合させ、いまの兄弟集合から
+        // クロスチェックを導いてから、Repository が一塊で書く。
+        const loaded = reports.findByDirectory(ap(verifyDir));
+        expect(loaded.ok).toBe(true);
+        if (!loaded.ok) return;
+        const staged = loaded.value.finalizing(report).conformedTo(findingsSchema);
+        expect(reports.store(staged.crossChecked(model, irHash).conformedTo(findingsSchema)).ok).toBe(true);
         expect(readFileSync(join(verifyDir, `${backend}.json`), "utf-8")).toBe(golden(`${backend}.json`));
       }
       expect(readFileSync(join(verifyDir, "cross-check.json"), "utf-8")).toBe(golden("cross-check.json"));
@@ -342,7 +345,7 @@ describe("lowering (typed compile-down)", () => {
   });
 
   test("numbering, maps, and the implicit machine encoding are stable", () => {
-    const low = LoweredUnit.of(machineUnit, { synthetics: false });
+    const low = machineUnit.lowered({ synthetics: false });
     // 義務は id の正準順（DOB-1 が DOB-2 の前）→ OB-1=DOB-1(event)、
     // OB-2=DOB-2(invariant)、以後 TR-1/TR-2/ignore。
     expect(low.obligations().toArray().map((o) => `${o.id().asString()}:${o.nature()}`)).toEqual([
@@ -367,7 +370,7 @@ describe("lowering (typed compile-down)", () => {
   });
 
   test("synthetics add one vac-dead per candidate and shadow pairs for canonically equal effects", () => {
-    const low = LoweredUnit.of(machineUnit, { synthetics: true });
+    const low = machineUnit.lowered({ synthetics: true });
     const kinds = low.index().toOriginEntries().map(([, e]) => kindOf(e));
     expect(kinds.filter((k) => k === "vac-dead").length).toBe(3); // DOB-1, TR-1, TR-2
     const shadows = low.index().toOriginEntries().map(([, e]) => e).filter((e) => e.isKind("vac-shadow"));
@@ -409,7 +412,7 @@ describe("lowering (typed compile-down)", () => {
         { id: "BG-A", assert: { op: "bool", value: false } },
       ],
     });
-    const low = LoweredUnit.of(multi, { synthetics: false });
+    const low = multi.lowered({ synthetics: false });
     // ignores は state/trigger 文字列順（x が y の前）、機械は id 順。
     expect(["SM-1", "SM-2"].map((id) => low.index().attrPathOfMachine(id))).toEqual(["T.a", "T.b"]);
     expect(low.index().resolveDesignTarget("SC-1").design).toBe("DSC-1");
@@ -463,7 +466,7 @@ describe("remap (design vocabulary attribution)", () => {
     ],
     scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} }],
   });
-  const low = LoweredUnit.of(u, { synthetics: true });
+  const low = u.lowered({ synthetics: true });
   const doc = (input: {
     findings?: { kind: string; frRefs: string[]; targets: string[]; witness: Json; detail: string }[];
     skipped?: { target: string; reason: string; detail?: string }[];
@@ -477,8 +480,8 @@ describe("remap (design vocabulary attribution)", () => {
     );
 
   test("unavailable and unreadable sibling documents pass straight through", () => {
-    expect(low.remapVerdicts(u, SiblingVerdictDocument.unreadable()).unavailable).toBe("sibling backend produced no findings document");
-    const out = low.remapVerdicts(u, SiblingVerdictDocument.unavailable("boom", "simulation"));
+    expect(SiblingVerdictDocument.unreadable().remapVerdicts(u, low.index()).unavailable).toBe("sibling backend produced no findings document");
+    const out = SiblingVerdictDocument.unavailable("boom", "simulation").remapVerdicts(u, low.index());
     expect(out.findings.toArray()).toEqual([]);
     expect(out.skipped.toArray()).toEqual([]);
     expect(out.unavailable).toBe("boom");
@@ -487,9 +490,9 @@ describe("remap (design vocabulary attribution)", () => {
 
   test("a vac-dead conflict becomes unreachable with the transition/rule wording", () => {
     const deadId = low.index().toOriginEntries().find(([, e]) => e.isKind("vac-dead") && e.design().asString() === "TR-1")?.[0] as string;
-    const out = low.remapVerdicts(u, doc({
+    const out = doc({
       findings: [{ kind: "conflict", frRefs: ["FR-1"], targets: [deadId], witness: { core: [`ant_${deadId.replace("-", "_")}`] }, detail: "x" }],
-    }));
+    }).remapVerdicts(u, low.index());
     expect(out.findings.toArray()[0]?.kind()).toBe("unreachable");
     expect(out.findings.toArray()[0]?.detail()).toBe(
       "The guard of TR-1 can never hold under the entity constraints and invariants (witness core attached): the transition is dead.",
@@ -498,26 +501,26 @@ describe("remap (design vocabulary attribution)", () => {
 
   test("mutual shadow pairs collapse into one equivalence finding; one-way stays subsumption", () => {
     const ids = low.index().toOriginEntries().filter(([, e]) => e.isKind("vac-shadow"));
-    const oneWay = low.remapVerdicts(u, doc({
+    const oneWay = doc({
       findings: [{ kind: "conflict", frRefs: [], targets: [ids[0]?.[0] as string], witness: { core: [] }, detail: "x" }],
-    }));
+    }).remapVerdicts(u, low.index());
     expect(oneWay.findings.toArray()[0]?.kind()).toBe("redundancy");
     expect(oneWay.findings.toArray()[0]?.detail()).toContain("is subsumed by");
-    const mutual = low.remapVerdicts(u, doc({
+    const mutual = doc({
       findings: ids.map(([id]) => ({ kind: "conflict", frRefs: [], targets: [id], witness: { core: [] }, detail: "x" })),
-    }));
+    }).remapVerdicts(u, low.index());
     expect(mutual.findings.count()).toBe(1);
     expect(mutual.findings.toArray()[0]?.detail()).toContain("are mutually redundant");
   });
 
   test("a same-machine conflict under deterministic:false is waived once per target", () => {
     const trIds = low.index().toOriginEntries().filter(([, e]) => e.isKind("transition")).map(([id]) => id);
-    const out = low.remapVerdicts(u, doc({
+    const out = doc({
       findings: [
         { kind: "conflict", frRefs: [], targets: trIds, witness: { core: [] }, detail: "overlap" },
         { kind: "conflict", frRefs: [], targets: trIds, witness: { core: [] }, detail: "overlap again" },
       ],
-    }));
+    }).remapVerdicts(u, low.index());
     expect(out.findings.toArray()).toEqual([]);
     expect(out.skipped.toArray().map((s) => `${s.target().asString()}:${s.reason()}`)).toEqual(["TR-1:waived", "TR-2:waived"]);
     expect(out.skipped.toArray()[0]?.detail()).toBe(
@@ -527,7 +530,7 @@ describe("remap (design vocabulary attribution)", () => {
 
   test("details and witness cores are rewritten into design ids, and skips are deduped per (target, reason)", () => {
     const trLow = low.index().toOriginEntries().find(([, e]) => e.isKind("transition") && e.design().asString() === "TR-1")?.[0] as string;
-    const out = low.remapVerdicts(u, doc({
+    const out = doc({
       findings: [{
         kind: "completeness-gap",
         frRefs: ["FR-9"],
@@ -540,7 +543,7 @@ describe("remap (design vocabulary attribution)", () => {
         { target: trLow, reason: "timeout", detail: "duplicate" },
         { target: "SC-1", reason: "capability" },
       ],
-    }));
+    }).remapVerdicts(u, low.index());
     expect(out.findings.toArray()[0]?.targets().toStrings()).toEqual(["DSC-1", "TR-1"]);
     expect(out.findings.toArray()[0]?.detail()).toBe("No rule for TR-1 applies");
     expect(out.findings.toArray()[0]?.witness().toDocument()).toEqual({ core: ["g_TR_1", "ty_x"] });
@@ -746,7 +749,7 @@ describe("report ordering, cross-check, and degradations", () => {
 
 describe("lowered collections and the lowering index (first-class operations)", () => {
   const u = unit({});
-  const base = LoweredUnit.of(u, { synthetics: false });
+  const base = u.lowered({ synthetics: false });
 
   test("of/add/iterator/count/toArray hold OB/SC/BG numbering order", () => {
     const obs = base.obligations().add(LoweredObligation.reconstitute({ id: LoweredId.reconstitute("OB-99"), nature: "invariant", frRefs: FrRefs.of([]) }));
@@ -818,5 +821,178 @@ describe("the typed entity projection reproduces the IR's schema.entities byte f
       ] },
       { name: "Bare", attributes: [{ name: "x", type: { kind: "bool" } }] },
     ]);
+  });
+});
+
+// 移管前の実装（`LoweredUnit.of` / `LoweredUnit.remapVerdicts`）が実際に出した
+// バイト（凍結面）。FR6 の移管は所有者の付け替えであって新しい判定ではないので、
+// この面はどれも 1 バイトも動いてはならない。
+const FR6_PLAIN_SHAPE = ["OB-1:event:close", "OB-2:invariant:-", "OB-3:temporal:-", "OB-4:event:", "OB-5:event:close", "OB-6:event:close", "OB-7:event:close", "OB-8:event:close", "OB-9:event:ship", "OB-10:event:ship", "OB-11:event:ship"];
+const FR6_SYNTH_SHAPE = [...FR6_PLAIN_SHAPE, "OB-12:invariant:-", "OB-13:invariant:-", "OB-14:invariant:-", "OB-15:invariant:-", "OB-16:invariant:-", "OB-17:invariant:-", "OB-18:invariant:-", "OB-19:invariant:-", "OB-20:invariant:-"];
+const FR6_PLAIN_DOC = { bytes: 3243, sha256: "94cbbd8009aaf9adfab814a575b5b2c7c261970b8a8398fe389a4d6c8eed0828" };
+const FR6_SYNTH_DOC = { bytes: 5528, sha256: "6e742af610fc48749c8803aec6219e9881b30d3a7f949121c35df771ace5ad62" };
+const FR6_PLAIN_ORIGINS = "[{\"design\":\"DOB-1\",\"id\":\"OB-1\",\"kind\":\"passthrough\",\"pair\":[\"DOB-1\",\"DOB-1\"]},{\"design\":\"DOB-2\",\"id\":\"OB-2\",\"kind\":\"passthrough\",\"pair\":[\"DOB-2\",\"DOB-2\"]},{\"design\":\"DOB-3\",\"id\":\"OB-3\",\"kind\":\"passthrough\",\"pair\":[\"DOB-3\",\"DOB-3\"]},{\"design\":\"DOB-4\",\"id\":\"OB-4\",\"kind\":\"passthrough\",\"pair\":[\"DOB-4\",\"DOB-4\"]},{\"design\":\"TR-1\",\"id\":\"OB-5\",\"kind\":\"transition\",\"pair\":[\"TR-1\",\"TR-1\"]},{\"design\":\"TR-2\",\"id\":\"OB-6\",\"kind\":\"transition\",\"pair\":[\"TR-2\",\"TR-2\"]},{\"design\":\"SM-1\",\"id\":\"OB-7\",\"kind\":\"ignore\",\"pair\":[\"SM-1\",\"SM-1\"]},{\"design\":\"SM-1\",\"id\":\"OB-8\",\"kind\":\"ignore\",\"pair\":[\"SM-1\",\"SM-1\"]},{\"design\":\"TR-3\",\"id\":\"OB-9\",\"kind\":\"transition\",\"pair\":[\"TR-3\",\"TR-3\"]},{\"design\":\"TR-4\",\"id\":\"OB-10\",\"kind\":\"transition\",\"pair\":[\"TR-4\",\"TR-4\"]},{\"design\":\"SM-2\",\"id\":\"OB-11\",\"kind\":\"ignore\",\"pair\":[\"SM-2\",\"SM-2\"]}]";
+const FR6_SYNTH_ORIGINS = "[{\"design\":\"DOB-1\",\"id\":\"OB-1\",\"kind\":\"passthrough\",\"pair\":[\"DOB-1\",\"DOB-1\"]},{\"design\":\"DOB-2\",\"id\":\"OB-2\",\"kind\":\"passthrough\",\"pair\":[\"DOB-2\",\"DOB-2\"]},{\"design\":\"DOB-3\",\"id\":\"OB-3\",\"kind\":\"passthrough\",\"pair\":[\"DOB-3\",\"DOB-3\"]},{\"design\":\"DOB-4\",\"id\":\"OB-4\",\"kind\":\"passthrough\",\"pair\":[\"DOB-4\",\"DOB-4\"]},{\"design\":\"TR-1\",\"id\":\"OB-5\",\"kind\":\"transition\",\"pair\":[\"TR-1\",\"TR-1\"]},{\"design\":\"TR-2\",\"id\":\"OB-6\",\"kind\":\"transition\",\"pair\":[\"TR-2\",\"TR-2\"]},{\"design\":\"SM-1\",\"id\":\"OB-7\",\"kind\":\"ignore\",\"pair\":[\"SM-1\",\"SM-1\"]},{\"design\":\"SM-1\",\"id\":\"OB-8\",\"kind\":\"ignore\",\"pair\":[\"SM-1\",\"SM-1\"]},{\"design\":\"TR-3\",\"id\":\"OB-9\",\"kind\":\"transition\",\"pair\":[\"TR-3\",\"TR-3\"]},{\"design\":\"TR-4\",\"id\":\"OB-10\",\"kind\":\"transition\",\"pair\":[\"TR-4\",\"TR-4\"]},{\"design\":\"SM-2\",\"id\":\"OB-11\",\"kind\":\"ignore\",\"pair\":[\"SM-2\",\"SM-2\"]},{\"design\":\"DOB-1\",\"id\":\"OB-12\",\"kind\":\"vac-dead\",\"pair\":[\"DOB-1\",\"DOB-1\"]},{\"design\":\"TR-1\",\"id\":\"OB-13\",\"kind\":\"vac-dead\",\"pair\":[\"TR-1\",\"TR-1\"]},{\"design\":\"TR-2\",\"id\":\"OB-14\",\"kind\":\"vac-dead\",\"pair\":[\"TR-2\",\"TR-2\"]},{\"design\":\"TR-3\",\"id\":\"OB-15\",\"kind\":\"vac-dead\",\"pair\":[\"TR-3\",\"TR-3\"]},{\"design\":\"TR-4\",\"id\":\"OB-16\",\"kind\":\"vac-dead\",\"pair\":[\"TR-4\",\"TR-4\"]},{\"design\":\"DOB-1|TR-1\",\"id\":\"OB-17\",\"kind\":\"vac-shadow\",\"pair\":[\"DOB-1\",\"TR-1\"]},{\"design\":\"TR-1|DOB-1\",\"id\":\"OB-18\",\"kind\":\"vac-shadow\",\"pair\":[\"TR-1\",\"DOB-1\"]},{\"design\":\"TR-3|TR-4\",\"id\":\"OB-19\",\"kind\":\"vac-shadow\",\"pair\":[\"TR-3\",\"TR-4\"]},{\"design\":\"TR-4|TR-3\",\"id\":\"OB-20\",\"kind\":\"vac-shadow\",\"pair\":[\"TR-4\",\"TR-3\"]}]";
+const FR6_REMAPPED = "{\"findings\":[{\"detail\":\"The guard of TR-1 can never hold under the entity constraints and invariants (witness core attached): the transition is dead.\",\"frRefs\":[\"FR-1\"],\"kind\":\"unreachable\",\"targets\":[\"TR-1\"],\"unit\":\"u-fr6\",\"witness\":{\"core\":[\"ant_TR_1\"]}},{\"detail\":\"No rule for TR-3 applies\",\"frRefs\":[\"FR-9\"],\"kind\":\"completeness-gap\",\"targets\":[\"DSC-1\",\"TR-3\"],\"unit\":\"u-fr6\",\"witness\":{\"core\":[\"g_TR_3\",\"ty_x\"]}},{\"detail\":\"No rule for DOB-1 applies\",\"frRefs\":[],\"kind\":\"nonsense-kind\",\"targets\":[\"DOB-1\",\"OB-42\"],\"unit\":\"u-fr6\",\"witness\":{\"core\":[\"g_DOB_1\"]}},{\"detail\":\"TR-3 and TR-4 are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect \u2014 one of them can be removed.\",\"frRefs\":[],\"kind\":\"redundancy\",\"targets\":[\"TR-3\",\"TR-4\"],\"unit\":\"u-fr6\",\"witness\":{\"core\":[]}}],\"method\":\"exhaustive\",\"skipped\":[{\"detail\":\"machine SM-2 declares deterministic: false \u2014 the same-(state,trigger) overlap check is waived by the model\",\"reason\":\"waived\",\"target\":\"TR-3\",\"unit\":\"u-fr6\"},{\"detail\":\"machine SM-2 declares deterministic: false \u2014 the same-(state,trigger) overlap check is waived by the model\",\"reason\":\"waived\",\"target\":\"TR-4\",\"unit\":\"u-fr6\"},{\"detail\":\"check for DOB-1 timed out\",\"reason\":\"timeout\",\"target\":\"DOB-1\",\"unit\":\"u-fr6\"},{\"detail\":null,\"reason\":\"capability\",\"target\":\"DSC-2\",\"unit\":\"u-fr6\"}],\"unavailable\":null}";
+const FR6_UNREADABLE = "{\"findings\":[],\"method\":null,\"skipped\":[],\"unavailable\":\"sibling backend produced no findings document\"}";
+const FR6_UNAVAILABLE = "{\"findings\":[],\"method\":\"simulation\",\"skipped\":[],\"unavailable\":\"boom\"}";
+
+// 新規テスト #15（FR6.1／FR6.2、BR6.1〜BR6.3）——lowering の所有者が
+// `DesignUnit` へ、兄弟判定の解釈が `SiblingVerdictDocument` へ移ったあとも、
+// 生成物が移管前と byte 同一であることの凍結。
+describe("lowering and remap stay byte-identical after the ownership move (FR6)", () => {
+  const fr6 = unit({
+    unit: "u-fr6",
+    rawEntities: [
+      { name: "Ticket", attributes: [{ name: "status", type: { kind: "enum", values: ["open", "held", "closed"] } }] },
+      { name: "Order", attributes: [{ name: "phase", type: { kind: "enum", values: ["new", "done"] } }, { name: "amount", type: { kind: "int", min: 0, max: 9 } }] },
+    ],
+    obligations: [
+      { id: "DOB-2", nature: "invariant", origin: "rules", brRefs: ["BR-1"], frRefs: ["FR-2"], assert: { op: "bool", value: true } },
+      {
+        id: "DOB-1",
+        nature: "event",
+        origin: "",
+        brRefs: [],
+        frRefs: ["FR-1"],
+        trigger: "close",
+        guard: { op: "bool", value: true },
+        effect: { op: "eq", args: [{ op: "ref", path: "Ticket.status", prime: true }, { op: "enum", value: "closed" }] },
+      },
+      { id: "DOB-3", nature: "temporal", origin: "", brRefs: [], frRefs: [], temporal: { pattern: "leads-to", from: { op: "bool", value: true }, to: { op: "bool", value: false } } },
+      // 空トリガの event 宣言は候補にならない（eventDefinition が null）——素通しの
+      // lowered 義務にはなるが、合成プローブは生えない。
+      { id: "DOB-4", nature: "event", origin: "", brRefs: [], frRefs: [], trigger: "", guard: { op: "bool", value: false }, effect: { op: "bool", value: true } },
+    ],
+    machines: [
+      {
+        id: "SM-2",
+        entity: "Order",
+        attribute: "phase",
+        initial: ["new"],
+        deterministic: false,
+        ignores: [{ state: "done", trigger: "ship", reason: "terminal" }],
+        transitions: [
+          { id: "TR-3", from: "new", to: "done", trigger: "ship", brRefs: [] },
+          { id: "TR-4", from: "new", to: "done", trigger: "ship", brRefs: [], guard: { op: "bool", value: true } },
+        ],
+      },
+      {
+        id: "SM-1",
+        entity: "Ticket",
+        attribute: "status",
+        initial: ["open"],
+        deterministic: true,
+        ignores: [
+          { state: "held", trigger: "close", reason: "held" },
+          { state: "closed", trigger: "close", reason: "already closed" },
+        ],
+        transitions: [
+          { id: "TR-1", from: "open", to: "closed", trigger: "close", brRefs: [] },
+          { id: "TR-2", from: "held", to: "closed", trigger: "close", brRefs: [], guard: { op: "bool", value: true }, effect: { op: "bool", value: true } },
+        ],
+      },
+    ],
+    scenarios: [
+      { id: "DSC-2", kind: "reject", brRefs: [], frRefs: ["FR-3"], bindings: { "Order.amount": 3, "Order.phase": "new" }, event: { trigger: "ship" }, expect: { op: "bool", value: false } },
+      { id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} },
+    ],
+    background: [
+      { id: "BG-B", assert: { op: "bool", value: false } },
+      { id: "BG-A", assert: { op: "bool", value: true } },
+    ],
+  });
+
+  const plain = fr6.lowered({ synthetics: false });
+  const synth = fr6.lowered({ synthetics: true });
+
+  const siblingDoc = (input: {
+    findings?: { kind: string; frRefs: string[]; targets: string[]; witness: Json; detail: string }[];
+    skipped?: { target: string; reason: string; detail?: string }[];
+  }): SiblingVerdictDocument =>
+    SiblingVerdictDocument.readable(
+      "exhaustive",
+      SiblingVerdictFindings.of(
+        (input.findings ?? []).map((f) => SiblingVerdictFinding.reconstitute({ ...f, witness: DesignWitness.fromDocument(f.witness), frRefs: FrRefs.reconstitute(f.frRefs), targets: f.targets.map((t) => LoweredId.reconstitute(t)) })),
+      ),
+      SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.reconstitute({ ...k, target: LoweredId.reconstitute(k.target) }))),
+    );
+
+  const originsOf = (l: LoweredUnit): string =>
+    canonicalStringify(l.index().toOriginEntries().map(([id, o]) => ({
+      id,
+      design: o.design().asString(),
+      kind: ORIGIN_KINDS.find((k) => o.isKind(k)) ?? "",
+      pair: o.pairRefs().map((r) => r.asString()),
+    })) as unknown as Json);
+
+  const projectRemap = (out: { findings: DesignFindings; skipped: DesignSkips; unavailable: string | null; method: string | null }): string =>
+    canonicalStringify({
+      unavailable: out.unavailable,
+      method: out.method,
+      findings: out.findings.toArray().map((f) => ({
+        kind: f.kind(),
+        frRefs: f.frRefs().toStrings() as unknown as Json,
+        targets: f.targets().toStrings() as unknown as Json,
+        unit: f.unit(),
+        detail: f.detail(),
+        witness: f.witness().toDocument(),
+      })) as unknown as Json,
+      skipped: out.skipped.toArray().map((s) => ({
+        target: s.target().asString(),
+        reason: s.reason(),
+        unit: s.unit(),
+        detail: s.detail() ?? null,
+      })) as unknown as Json,
+    });
+
+  const shapeOf = (l: LoweredUnit): string[] =>
+    l.obligations().toArray().map((o) => `${o.id().asString()}:${o.nature()}:${o.trigger() ?? "-"}`);
+
+  const digest = (text: string): { bytes: number; sha256: string } => ({
+    bytes: Buffer.byteLength(text, "utf-8"),
+    sha256: createHash("sha256").update(text, "utf-8").digest("hex"),
+  });
+
+  test("the lowered v1 document is frozen, with and without synthetics", () => {
+    // 全文は数 KB ある。採番・分類の読める射影と、正準 JSON のバイト数＋ダイジェスト
+    // で凍結する（差分が出たら canonicalStringify(renderLoweredDocument(...)) を出して比べる）。
+    expect(shapeOf(plain)).toEqual(FR6_PLAIN_SHAPE);
+    expect(shapeOf(synth)).toEqual(FR6_SYNTH_SHAPE);
+    expect(digest(canonicalStringify(renderLoweredDocument(fr6, plain)))).toEqual(FR6_PLAIN_DOC);
+    expect(digest(canonicalStringify(renderLoweredDocument(fr6, synth)))).toEqual(FR6_SYNTH_DOC);
+    expect(plain.scenarios().toArray().map((s) => s.id().asString())).toEqual(["SC-1", "SC-2"]);
+    expect(plain.background().toArray().map((b) => b.id().asString())).toEqual(["BG-1", "BG-2"]);
+  });
+
+  test("the attribution index is frozen (numbering, lowering kinds, shadow pairs)", () => {
+    expect(originsOf(plain)).toBe(FR6_PLAIN_ORIGINS);
+    expect(originsOf(synth)).toBe(FR6_SYNTH_ORIGINS);
+  });
+
+  test("the remapped design verdicts are frozen (unreachable, mutual redundancy, waiver, dedupe, unknown kind)", () => {
+    const deadTr1 = synth.index().toOriginEntries().find(([, e]) => e.isKind("vac-dead") && e.design().asString() === "TR-1")?.[0] as string;
+    const shadows = synth.index().toOriginEntries().filter(([, e]) => e.isKind("vac-shadow")).map(([id]) => id);
+    const tr3 = synth.index().toOriginEntries().find(([, e]) => e.isKind("transition") && e.design().asString() === "TR-3")?.[0] as string;
+    const tr4 = synth.index().toOriginEntries().find(([, e]) => e.isKind("transition") && e.design().asString() === "TR-4")?.[0] as string;
+    const remapped = siblingDoc({
+      findings: [
+        { kind: "conflict", frRefs: ["FR-1"], targets: [deadTr1], witness: { core: [`ant_${deadTr1.replace("-", "_")}`] }, detail: `dead ${deadTr1}` },
+        ...shadows.map((id) => ({ kind: "conflict", frRefs: [], targets: [id], witness: { core: [] }, detail: "shadow" })),
+        { kind: "conflict", frRefs: [], targets: [tr3, tr4], witness: { core: [] }, detail: "overlap" },
+        { kind: "conflict", frRefs: [], targets: [tr3, tr4], witness: { core: [] }, detail: "overlap again" },
+        { kind: "completeness-gap", frRefs: ["FR-9"], targets: [tr3, "SC-1"], witness: { core: [`g_${tr3.replace("-", "_")}`, "ty_x"] }, detail: `No rule for ${tr3} applies` },
+        { kind: "nonsense-kind", frRefs: [], targets: ["OB-1", "OB-42"], witness: { core: ["g_OB_1"] }, detail: "No rule for OB-1 applies" },
+      ],
+      skipped: [
+        { target: "OB-1", reason: "timeout", detail: "check for OB-1 timed out" },
+        { target: "OB-1", reason: "timeout", detail: "duplicate" },
+        { target: "SC-2", reason: "capability" },
+        { target: deadTr1, reason: "timeout", detail: "synthetic noise" },
+      ],
+    }).remapVerdicts(fr6, synth.index());
+    expect(projectRemap(remapped)).toBe(FR6_REMAPPED);
+    expect(projectRemap(SiblingVerdictDocument.unreadable().remapVerdicts(fr6, synth.index()))).toBe(FR6_UNREADABLE);
+    expect(projectRemap(SiblingVerdictDocument.unavailable("boom", "simulation").remapVerdicts(fr6, synth.index()))).toBe(FR6_UNAVAILABLE);
   });
 });
