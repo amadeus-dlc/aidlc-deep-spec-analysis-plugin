@@ -142,3 +142,9 @@ import each other and cross-check reads sibling files generically.
 See `docs/decisions.md` for spike results (z3-under-bun, quint determinism),
 resolved open questions, and deviations from the original requirements
 draft.
+
+See [`docs/architecture/`](docs/architecture/README.md) for the DDD and Clean
+Architecture design rules the source follows — the 35 rules, the decision
+procedure for introducing a new type, the inventory of which rules are checked
+mechanically, and the deviations that remain. Written to be portable to other
+AI-DLC plugins.
