@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   ABSOLUTE_THRESHOLD,
   TOLERANCE,
@@ -6,6 +9,7 @@ import {
   geWithTolerance,
   parseArgs,
   parseLcovLinePercent,
+  pinCoverageConfig,
   runGate,
 } from "../scripts/coverage";
 
@@ -110,5 +114,52 @@ describe("coverage gate — decisions", () => {
     expect(parseArgs(["-h"]).help).toBe(true);
     expect(() => parseArgs(["--base"])).toThrow("--base には git-ref");
     expect(() => parseArgs(["--nope"])).toThrow("未知の引数");
+  });
+});
+
+describe("coverage gate — one coverage config for head and base", () => {
+  const sandboxes: string[] = [];
+
+  afterEach(() => {
+    for (const dir of sandboxes.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  function pair(headConfig: string, baseConfig: string | null): { repoRoot: string; worktree: string; basePath: string } {
+    const repoRoot = mkdtempSync(join(tmpdir(), "deep-spec-pin-head-"));
+    const worktree = mkdtempSync(join(tmpdir(), "deep-spec-pin-base-"));
+    sandboxes.push(repoRoot, worktree);
+    mkdirSync(join(repoRoot, "deep-spec-analysis"), { recursive: true });
+    writeFileSync(join(repoRoot, "deep-spec-analysis", "bunfig.toml"), headConfig);
+    mkdirSync(join(worktree, "deep-spec-analysis"), { recursive: true });
+    const basePath = join(worktree, "deep-spec-analysis", "bunfig.toml");
+    if (baseConfig !== null) writeFileSync(basePath, baseConfig);
+    return { repoRoot, worktree, basePath };
+  }
+
+  test("head's bunfig replaces the base worktree's, so both sides share one denominator", () => {
+    const head = '[test]\ncoverageThreshold = 0.9\ncoveragePathIgnorePatterns = ["tests/**"]\n';
+    const { repoRoot, worktree, basePath } = pair(head, '[test]\ncoveragePathIgnorePatterns = ["src/**"]\n');
+    pinCoverageConfig(repoRoot, worktree);
+    expect(readFileSync(basePath, "utf-8")).toBe(head);
+  });
+
+  test("a base worktree without its own bunfig still receives head's", () => {
+    const head = '[test]\ncoverageThreshold = 0.9\n';
+    const { repoRoot, worktree, basePath } = pair(head, null);
+    pinCoverageConfig(repoRoot, worktree);
+    expect(readFileSync(basePath, "utf-8")).toBe(head);
+  });
+
+  test("a missing head bunfig or an unrecognisable worktree is an error, never a silent skip", () => {
+    const missingHead = mkdtempSync(join(tmpdir(), "deep-spec-pin-nohead-"));
+    const worktree = mkdtempSync(join(tmpdir(), "deep-spec-pin-base-"));
+    sandboxes.push(missingHead, worktree);
+    mkdirSync(join(worktree, "deep-spec-analysis"), { recursive: true });
+    expect(() => pinCoverageConfig(missingHead, worktree)).toThrow("head の bunfig.toml が見つかりません");
+
+    const { repoRoot } = pair("[test]\n", null);
+    const emptyWorktree = mkdtempSync(join(tmpdir(), "deep-spec-pin-empty-"));
+    sandboxes.push(emptyWorktree);
+    expect(() => pinCoverageConfig(repoRoot, emptyWorktree)).toThrow("base worktree に deep-spec-analysis/ がありません");
   });
 });

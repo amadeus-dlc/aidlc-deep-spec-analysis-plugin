@@ -18,8 +18,12 @@
 // 計測対象・除外方針:
 //   - 計測対象と除外は bunfig.toml ([test] coveragePathIgnorePatterns) が正本。この
 //     スクリプトは除外を持たず、`bun test --coverage --coverage-reporter=lcov` が書く
-//     lcov.info の LF/LH を全ファイルで合算して line coverage % を得る。head と base は
-//     それぞれ自分の bunfig.toml で計測されるので、除外条件は各 ref の内容に従う。
+//     lcov.info の LF/LH を全ファイルで合算して line coverage % を得る。
+//   - 除外は head 側の bunfig.toml を base worktree へ写して両方に効かせる
+//     (pinCoverageConfig)。Bun は cwd の bunfig.toml を読むので、写さないと head と
+//     base が別の分母で計測され、head だけで除外を広げれば相対ゲートを通せてしまう。
+//     参考実装が --ignore-filename-regex をスクリプト側に持ち、head と base の両方へ
+//     同じ値を渡しているのと同じ意図。除外の変更自体は diff に出るので人間が判断する。
 //
 // 計測の決定化:
 //   - PBT の RNG シードに相当するものは無い。quint は固定 seed で走り、ITF の #meta は
@@ -30,7 +34,7 @@
 // (tests/intent-e2e.test.ts が dist/claude を要求するため)。
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -148,6 +152,21 @@ export function measureWithBun(repoRoot: string, run: CommandRunner = defaultRun
   }
 }
 
+/** head の bunfig.toml を base worktree へ写す。Bun は cwd の bunfig.toml から
+ *  [test] の設定 (coveragePathIgnorePatterns ほか) を読むため、これをしないと
+ *  head と base が別の除外条件で計測され、head 側だけで除外を広げた PR が相対
+ *  ゲートを通過できてしまう。写せば両側が同じ分母になり、除外の変更は head/base
+ *  を一緒に動かすので比較は成立したままになる。 */
+export function pinCoverageConfig(repoRoot: string, worktreeDir: string): void {
+  const source = join(repoRoot, PACKAGE_DIR, "bunfig.toml");
+  const target = join(worktreeDir, PACKAGE_DIR, "bunfig.toml");
+  if (!existsSync(source)) throw new Error(`head の bunfig.toml が見つかりません (${source})`);
+  if (!existsSync(join(worktreeDir, PACKAGE_DIR))) {
+    throw new Error(`base worktree に ${PACKAGE_DIR}/ がありません (${worktreeDir})`);
+  }
+  copyFileSync(source, target);
+}
+
 function requireOk(result: CommandResult, what: string): void {
   if (result.error || result.status !== 0) throw new Error(`${what}: ${describeFailure(result)}`);
 }
@@ -160,6 +179,9 @@ export function checkoutBaseWorktree(repoRoot: string, baseRef: string, run: Com
   requireOk(run("git", ["worktree", "add", "--detach", worktreeDir, baseRef], repoRoot), `git worktree add (${baseRef})`);
   try {
     requireOk(run("git", ["submodule", "update", "--init", "--", "aidlc-workflows"], worktreeDir), "git submodule update (base worktree)");
+    // install より前に写す。bunfig.toml は [install] linker も持つので、依存の
+    // 配置も head と同じ条件にする。
+    pinCoverageConfig(repoRoot, worktreeDir);
     requireOk(run("bun", ["install", "--frozen-lockfile"], join(worktreeDir, PACKAGE_DIR)), "bun install (base worktree)");
   } catch (error) {
     removeWorktree(repoRoot, worktreeDir, run);

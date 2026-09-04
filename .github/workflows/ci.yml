@@ -23,6 +23,10 @@ jobs:
         with:
           # aidlc-workflows supplies the validate/build toolchain
           submodules: true
+          # このジョブは PR のコード (bun install の postinstall、テスト、生成器) を
+          # 実行するので、GITHUB_TOKEN を .git/config に残さない。submodule は
+          # 公開 HTTPS URL (.gitmodules) なので後続の git 操作に認証は要らない。
+          persist-credentials: false
 
       # node >= 23 so the SMT sensor's z3 child process can run
       # (z3-solver's pthread WASM build aborts in-process under bun)
@@ -80,6 +84,10 @@ jobs:
           # 展開する (tests/intent-e2e.test.ts が dist/claude を要求する)。
           fetch-depth: 0
           submodules: true
+          # scripts/coverage.ts は PR のコードであり、base worktree でも
+          # bun install と bun test を走らせる。GITHUB_TOKEN を .git/config に
+          # 残さない。submodule は公開 HTTPS URL なので認証は要らない。
+          persist-credentials: false
 
       - uses: actions/setup-node@v5
         with:
