@@ -29,12 +29,19 @@
 
 `bun test` に含まれる `tests/intent-e2e.test.ts` は、バニラ導入した一時 sandbox で installer・センサー発火・doctor・`--single` 実行を実走するので、上のサンドボックス導入と合わせて「導入 → compose → 発火」の経路が PR ブランチで通っている。実 Apalache bounded を使った A／B／A→update の byte 比較は Code Generation で実施済み（[`code-summary.md`](../../construction/code-generation/code-summary.md) Sandbox Verification、10 entry すべて byte 一致）。
 
-## マージ後の再実行（オーナーのマージ後に行う）
+## マージ後の再実行（2026-09-04T14:57Z、squash-merge `d22606d` 後）
 
 ```bash
 git switch main && git pull --ff-only
-bun deep-spec-analysis/scripts/install.ts --project <sandbox> --from "$PWD" --update
+bun deep-spec-analysis/scripts/install.ts --project <sandbox> --update   # --update は導入記録の同じ source（この checkout）を再取得する。--from／--ref／--tag とは併用できない
 bun aidlc-workflows/core/tools/aidlc-plugin-test.ts deep-spec-analysis --install <sandbox> --harness claude   # CLEAN を期待
 ```
 
-期待値は上の表と同じ（`CLEAN`、`Changed files (0)`、`Drops: 0`、`Idempotent second compose: true`）。squash-merge は内容を変えないので、結果が変わったらマージの取り違えを疑い、[`rollback-runbook.md`](../deployment-pipeline/rollback-runbook.md) R2 を見る。
+| 検査 | 結果 |
+|---|---|
+| `install.ts --update` | exit 0、`Changed 1 — recorded 0.5.0 from local <checkout>` |
+| `aidlc-plugin-test` | **`Plugin test: CLEAN`**、`Changed files (0): none`、`Drops: 0`、`Idempotent second compose: true` |
+
+期待値どおり。squash-merge は内容を変えないので、結果が変わったらマージの取り違えを疑い、[`rollback-runbook.md`](../deployment-pipeline/rollback-runbook.md) R2 を見る。
+
+補足: `--update` を `--from` と併用した最初の試行は installer が拒否し（`--update cannot be combined with --from, --ref, or --tag`）、その直後に導入し直さずに `aidlc-plugin-test` を走らせると、前回のテスト compose が残した同名 tools との衝突で `test-compose-drop` 10 件と `test-idempotency` の FAILED が出る。テスト側の手順の問題で、`--update` で導入し直してから走らせれば CLEAN になる。

@@ -21,6 +21,15 @@
 | 14:46:30 | 4 | `3d8feeb` のチェック | `ci` SUCCESS（67 秒）、Devin Review SUCCESS、CodeRabbit SUCCESS（レビュー未実施のまま）。Bugbot の再レビューは 14:47Z 時点で未発火 |
 | 14:47 | 4 | `pr-review-clean` の再実行 | `pass: true`、`unresolved_threads: 0`、`pending_reviews: []`。GitHub は `MERGEABLE` / `CLEAN`（詳細は [`health-check-report.md`](./health-check-report.md)） |
 
+## マージとその後（ワークフロー完了後、オーナーの指示「マージして」による）
+
+| 時刻 (UTC) | 段 | 操作 | 結果 |
+|---|---|---|---|
+| 14:5x | 追い | 承認と完了の監査行を `eb9f873` として PR ブランチへ push、PR コメントで通知 | Q2=A のとおり |
+| 14:56:10 | 5 | `gh pr merge 139 --squash`（オーナーの指示により私が実行。Q3=A の「オーナーが手動」を指示で上書き） | `main` に `d22606d`「refactor: the verify directory is the aggregate the repositories store (#139)」 |
+| 14:57 | 6 | `main` を pull し、sandbox を `install.ts --update` で導入し直して `aidlc-plugin-test` | **CLEAN**、`Changed files (0)`、`Drops: 0`、冪等（[`smoke-test-results.md`](./smoke-test-results.md)） |
+| 14:57 | 追い | マージ後に監査シャードへ増えた行（`HUMAN_TURN` 1 行）と、この記録の更新を `audit-rows-after-139` ブランチで chore PR にする | 既存パターン（#135、#137）。この後もセッションの hook 行は増えるが、ワークフローの行はここまで |
+
 ## コミットに含めたもの
 
 - `deep-spec-analysis/`: `src/`（集約・値オブジェクト・lock・port・adapter・Refinement 統合）、`tests/`（新規 5 ファイルと更新）、`tools/`（再生成、最大 321,855 バイト）、`docs/decisions.md`／`.ja.md`、`bun.lock`
