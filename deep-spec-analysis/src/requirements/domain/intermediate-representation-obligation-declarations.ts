@@ -7,7 +7,9 @@ export class IntermediateRepresentationObligationDeclarations {
     this.#values = Object.freeze([...values]);
   }
 
-  static of(values: readonly IntermediateRepresentationObligationDeclaration[]): IntermediateRepresentationObligationDeclarations {
+  static of(
+    values: readonly IntermediateRepresentationObligationDeclaration[],
+  ): IntermediateRepresentationObligationDeclarations {
     return new IntermediateRepresentationObligationDeclarations(values);
   }
 

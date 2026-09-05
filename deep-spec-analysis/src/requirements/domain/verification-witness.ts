@@ -1,5 +1,10 @@
+import {
+  boundedValueSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
 import type { TraceState } from "./trace-state.ts";
-import { boundedValueSnapshot, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 
 // 検証結果の証拠。生成済みの型付き文書を保持し、
 // 入力と出力を複製して外側の変更が保存済みの証拠へ伝わるのを防ぐ。

@@ -1,10 +1,16 @@
+import { decodeScenarioBindings, extractFences, findRecordRoot, relArtifact } from "@deep-spec/kernel-adapter";
+import {
+  ArtifactPath,
+  ContentHash,
+  EnumerationMember,
+  EnumerationMembers,
+  type Expression,
+  FunctionalRequirementReferences,
+  RequirementIdentifier,
+  TriggerName,
+} from "@deep-spec/kernel-domain";
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { flatMapResult } from "@deep-spec/kernel-infrastructure";
-import { EnumerationMembers } from "@deep-spec/kernel-domain";
-import { EnumerationMember } from "@deep-spec/kernel-domain";
-import { decodeScenarioBindings } from "@deep-spec/kernel-adapter";
-import { extractFences, findRecordRoot, relArtifact } from "@deep-spec/kernel-adapter";
-import { RequirementIdentifier, ArtifactPath, ContentHash, FunctionalRequirementReferences, TriggerName, type Expression } from "@deep-spec/kernel-domain";
 
 // RefinementMaterialsRepository の実 Gateway 実装。レコードルート歩行・要件形式
 // モデルの取得（不在のみ inactive、取得失敗・不正入力は Result）・refinement map の fence/JSON/
@@ -13,45 +19,62 @@ import { RequirementIdentifier, ArtifactPath, ContentHash, FunctionalRequirement
 // 旧 refinement-lib の loadRequirementsIr / loadRefinementMap と旧 entry の
 // inputs 組成からの逐語移植。
 
-import { type Result, combineResults, traverseResult, err, ok } from "@deep-spec/kernel-infrastructure";
-import { type Json, isObject, validateSchema, strArr, canonicalStringify } from "@deep-spec/kernel-infrastructure";
-import { RepositoryError } from "@deep-spec/kernel-usecase";
-import { RefinementMaterialsIdentifier } from "@deep-spec/design-domain";
-import { AttributePath, ObligationIdentifier, ObligationNature, ScenarioIdentifier } from "@deep-spec/design-domain";
-import {
-  AttributeMappings,
-  EventMappings,
-  FormalModelIdentifier,
-  RefinementAttributes,
-  RefinementMapIdentifier,
-  RefinementObligations,
-  RefinementScenarios,
-  RefinementUnitMaps,
-  TransitionReferences,
-  UnmappedDeclarations,
-  AttributeMapping,
-  EventMapping,
-  RefinementAttribute,
-  RefinementObligation,
-  RefinementScenario,
-  RefinementUnitMap,
-  UnmappedTarget,
-  RefinementMap,
-  RefinementMaterials,
-  RefinementRequirements,
-  UnmappedTargetReference,
-  TransitionReference,
-  RefinementMapAcquisition,
-} from "@deep-spec/design-domain";
-import { DesignUnitIdentifier, DesignInputAnchor } from "@deep-spec/design-domain";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-
-import { RefinementMapParse } from "./refinement-map-parse.ts";
-import { RefinementMaterialsRepository } from "@deep-spec/design-usecase";
+import {
+  AttributeMapping,
+  AttributeMappings,
+  AttributePath,
+  DesignInputAnchor,
+  DesignUnitIdentifier,
+  EventMapping,
+  EventMappings,
+  FormalModelIdentifier,
+  ObligationIdentifier,
+  ObligationNature,
+  RefinementAttribute,
+  RefinementAttributes,
+  RefinementMap,
+  RefinementMapAcquisition,
+  RefinementMapIdentifier,
+  RefinementMaterials,
+  type RefinementMaterialsIdentifier,
+  RefinementObligation,
+  RefinementObligations,
+  RefinementRequirements,
+  RefinementScenario,
+  RefinementScenarios,
+  RefinementUnitMap,
+  RefinementUnitMaps,
+  ScenarioIdentifier,
+  TransitionReference,
+  TransitionReferences,
+  UnmappedDeclarations,
+  UnmappedTarget,
+  UnmappedTargetReference,
+} from "@deep-spec/design-domain";
+import type { RefinementMaterialsRepository } from "@deep-spec/design-usecase";
+import {
+  canonicalStringify,
+  combineResults,
+  err,
+  isObject,
+  type Json,
+  ok,
+  type Result,
+  strArr,
+  traverseResult,
+  validateSchema,
+} from "@deep-spec/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
+import type { RefinementMapParse } from "./refinement-map-parse.ts";
 
 export const REFINEMENT_MAP_BASENAME = "deep-spec-analysis-refinement-map.md";
-export const REQUIREMENTS_MODEL_RELPATH = ["inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md"];
+export const REQUIREMENTS_MODEL_RELPATH = [
+  "inception",
+  "deep-spec-analysis-verify",
+  "deep-spec-analysis-formal-model.md",
+];
 
 // 旧 design-lib 系の extractSingleJsonFence と同値（唯一の json fence のみ採用）。
 function extractSingleJsonFence(md: string): string | null {
@@ -93,16 +116,27 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
     const bytes = this.#read(path);
     if (!bytes.ok) return err(bytes.error);
     const fence = extractSingleJsonFence(Buffer.from(bytes.value).toString("utf-8"));
-    if (fence === null) return err({ kind: "corrupt", path, cause: "requirements model must contain exactly one JSON fence" });
+    if (fence === null)
+      return err({ kind: "corrupt", path, cause: "requirements model must contain exactly one JSON fence" });
     let raw: Json;
     try {
       raw = JSON.parse(fence) as Json;
     } catch (e) {
       return err({ kind: "corrupt", path, cause: e instanceof Error ? e.message : String(e) });
     }
-    if (!isObject(raw) || typeof raw.irVersion !== "string" || !isObject(raw.schema) ||
-      !Array.isArray(raw.schema.entities) || !Array.isArray(raw.obligations) || !Array.isArray(raw.scenarios)) {
-      return err({ kind: "corrupt", path, cause: "requirements model lacks its version, schema, obligations or scenarios" });
+    if (
+      !isObject(raw) ||
+      typeof raw.irVersion !== "string" ||
+      !isObject(raw.schema) ||
+      !Array.isArray(raw.schema.entities) ||
+      !Array.isArray(raw.obligations) ||
+      !Array.isArray(raw.scenarios)
+    ) {
+      return err({
+        kind: "corrupt",
+        path,
+        cause: "requirements model lacks its version, schema, obligations or scenarios",
+      });
     }
     const attributes: RefinementAttribute[] = [];
     const schema = isObject(raw.schema) ? raw.schema : {};
@@ -114,14 +148,18 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
         if (t.kind !== "bool" && t.kind !== "int" && t.kind !== "enum") continue;
         const parsed = combineResults({
           path: AttributePath.parse(`${ent.name}.${attr.name}`),
-        values: Array.isArray(t.values) ? flatMapResult(traverseResult(strArr(t.values), EnumerationMember.parse), EnumerationMembers.parse) : ok(undefined),
+          values: Array.isArray(t.values)
+            ? flatMapResult(traverseResult(strArr(t.values), EnumerationMember.parse), EnumerationMembers.parse)
+            : ok(undefined),
         });
         if (!parsed.ok) return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
-        attributes.push(RefinementAttribute.of({
-          path: parsed.value.path,
-          kind: t.kind,
-          values: parsed.value.values === undefined ? undefined : parsed.value.values,
-        }));
+        attributes.push(
+          RefinementAttribute.of({
+            path: parsed.value.path,
+            kind: t.kind,
+            values: parsed.value.values === undefined ? undefined : parsed.value.values,
+          }),
+        );
       }
     }
     const obligations: RefinementObligation[] = [];
@@ -130,7 +168,10 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
       const parsed = combineResults({
         id: ObligationIdentifier.parse(ob.id),
         nature: ObligationNature.parse(ob.nature),
-        frRefs: flatMapResult(traverseResult(strArr(ob.frRefs), RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
+        frRefs: flatMapResult(
+          traverseResult(strArr(ob.frRefs), RequirementIdentifier.parse),
+          FunctionalRequirementReferences.parse,
+        ),
         trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined),
       });
       if (!parsed.ok) return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
@@ -152,18 +193,26 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
       if (sc.kind !== "accept" && sc.kind !== "reject") continue;
       const parsed = combineResults({
         id: ScenarioIdentifier.parse(sc.id),
-      bindings: decodeScenarioBindings(sc.bindings),
-        frRefs: flatMapResult(traverseResult(strArr(sc.frRefs), RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
-        trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined),
+        bindings: decodeScenarioBindings(sc.bindings),
+        frRefs: flatMapResult(
+          traverseResult(strArr(sc.frRefs), RequirementIdentifier.parse),
+          FunctionalRequirementReferences.parse,
+        ),
+        trigger:
+          isObject(sc.event) && typeof sc.event.trigger === "string"
+            ? TriggerName.parse(sc.event.trigger)
+            : ok(undefined),
       });
       if (!parsed.ok) return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
-      scenarios.push(RefinementScenario.of({
-        id: parsed.value.id,
-        kind: sc.kind,
-        functionalRequirementReferences: parsed.value.frRefs,
-        bindings: parsed.value.bindings,
-        event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },
-      }));
+      scenarios.push(
+        RefinementScenario.of({
+          id: parsed.value.id,
+          kind: sc.kind,
+          functionalRequirementReferences: parsed.value.frRefs,
+          bindings: parsed.value.bindings,
+          event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },
+        }),
+      );
     }
     const model = RefinementRequirements.of({
       id: FormalModelIdentifier.of(ArtifactPath.of(path)),
@@ -175,29 +224,50 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
     return ok({ model, bytes: bytes.value });
   }
 
-  #loadMap(recordRoot: string, stageDir: string, modelPath: string, requirementsBytes: Uint8Array): Result<RefinementMapAcquisition, RepositoryError> {
+  #loadMap(
+    recordRoot: string,
+    stageDir: string,
+    modelPath: string,
+    requirementsBytes: Uint8Array,
+  ): Result<RefinementMapAcquisition, RepositoryError> {
     const path = join(stageDir, REFINEMENT_MAP_BASENAME);
     const bytes = this.#read(path);
     if (!bytes.ok) {
       return bytes.error.kind === "not-found" ? ok(RefinementMapAcquisition.absent(null)) : err(bytes.error);
     }
-    const parsed = parseRefinementMapDocument(bytes.value, RefinementMapIdentifier.of(ArtifactPath.of(path)), this.#mapSchemaPath);
+    const parsed = parseRefinementMapDocument(
+      bytes.value,
+      RefinementMapIdentifier.of(ArtifactPath.of(path)),
+      this.#mapSchemaPath,
+    );
     if (parsed.kind === "malformed") return ok(RefinementMapAcquisition.absent(parsed.error));
     const modelBytes = this.#read(modelPath);
     if (!modelBytes.ok) return err(modelBytes.error);
     const reqModelPath = join(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
     const mapArtifact = relArtifact(recordRoot, path);
     const inputs = [
-      DesignInputAnchor.of({ artifact: relArtifact(recordRoot, modelPath), sha256: ContentHash.ofText(Buffer.from(modelBytes.value).toString("utf-8")) }),
-      DesignInputAnchor.of({ artifact: mapArtifact, sha256: ContentHash.ofText(Buffer.from(bytes.value).toString("utf-8")) }),
-      DesignInputAnchor.of({ artifact: relArtifact(recordRoot, reqModelPath), sha256: ContentHash.ofText(Buffer.from(requirementsBytes).toString("utf-8")) }),
+      DesignInputAnchor.of({
+        artifact: relArtifact(recordRoot, modelPath),
+        sha256: ContentHash.ofText(Buffer.from(modelBytes.value).toString("utf-8")),
+      }),
+      DesignInputAnchor.of({
+        artifact: mapArtifact,
+        sha256: ContentHash.ofText(Buffer.from(bytes.value).toString("utf-8")),
+      }),
+      DesignInputAnchor.of({
+        artifact: relArtifact(recordRoot, reqModelPath),
+        sha256: ContentHash.ofText(Buffer.from(requirementsBytes).toString("utf-8")),
+      }),
     ];
     return ok(RefinementMapAcquisition.loaded(parsed.map, ArtifactPath.of(mapArtifact), inputs));
   }
-
 }
 
-export function parseRefinementMapDocument(bytes: Uint8Array, id: RefinementMapIdentifier, mapSchemaPath: string): RefinementMapParse {
+export function parseRefinementMapDocument(
+  bytes: Uint8Array,
+  id: RefinementMapIdentifier,
+  mapSchemaPath: string,
+): RefinementMapParse {
   const md = Buffer.from(bytes).toString("utf-8");
   const fence = extractSingleJsonFence(md);
   if (fence === null) return { kind: "malformed", error: "refinement map does not contain exactly one ```json fence" };
@@ -205,15 +275,22 @@ export function parseRefinementMapDocument(bytes: Uint8Array, id: RefinementMapI
   try {
     raw = JSON.parse(fence) as Json;
   } catch (err) {
-    return { kind: "malformed", error: `refinement map fence is not valid JSON: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      kind: "malformed",
+      error: `refinement map fence is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
   try {
     const schemaDoc = JSON.parse(readFileSync(mapSchemaPath, "utf-8"));
     const errors: string[] = [];
     validateSchema(schemaDoc as never, schemaDoc as never, raw as never, "", errors);
-    if (errors.length > 0) return { kind: "malformed", error: `refinement map does not conform to contract 4: ${errors[0]}` };
+    if (errors.length > 0)
+      return { kind: "malformed", error: `refinement map does not conform to contract 4: ${errors[0]}` };
   } catch (err) {
-    return { kind: "malformed", error: `refinement map schema unreadable: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      kind: "malformed",
+      error: `refinement map schema unreadable: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
   const doc = raw as { [k: string]: Json };
   const units: RefinementUnitMap[] = [];
@@ -229,7 +306,11 @@ export function parseRefinementMapDocument(bytes: Uint8Array, id: RefinementMapI
       if (isObject(m.enumMap) && typeof m.enumMap.from === "string" && isObject(m.enumMap.cases)) {
         const from = AttributePath.parse(m.enumMap.from);
         if (!from.ok) return { kind: "malformed", error: JSON.stringify(from.error) };
-        mapping = AttributeMapping.parse(req.value, { kind: "enum-cases", from: from.value, cases: m.enumMap.cases as { readonly [value: string]: string } });
+        mapping = AttributeMapping.parse(req.value, {
+          kind: "enum-cases",
+          from: from.value,
+          cases: m.enumMap.cases as { readonly [value: string]: string },
+        });
       } else if (isObject(m.expr)) {
         mapping = AttributeMapping.parse(req.value, { kind: "expression", expr: m.expr as unknown as Expression });
       } else {
@@ -246,28 +327,34 @@ export function parseRefinementMapDocument(bytes: Uint8Array, id: RefinementMapI
         transitions: traverseResult(strArr(e.transitions), TransitionReference.parse),
       });
       if (!parsed.ok) return { kind: "malformed", error: JSON.stringify(parsed.error) };
-      eventMap.push(EventMapping.of({
-        reqTrigger: parsed.value.reqTrigger,
-        transitions: TransitionReferences.of(parsed.value.transitions),
-        waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
-      }));
+      eventMap.push(
+        EventMapping.of({
+          reqTrigger: parsed.value.reqTrigger,
+          transitions: TransitionReferences.of(parsed.value.transitions),
+          waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
+        }),
+      );
     }
     const unmapped: UnmappedTarget[] = [];
     for (const un of Array.isArray(u.unmapped) ? u.unmapped : []) {
       if (isObject(un) && typeof un.target === "string") {
         const target = UnmappedTargetReference.parse(un.target);
         if (!target.ok) return { kind: "malformed", error: JSON.stringify(target.error) };
-        unmapped.push(UnmappedTarget.of({ target: target.value, reason: typeof un.reason === "string" ? un.reason : "" }));
+        unmapped.push(
+          UnmappedTarget.of({ target: target.value, reason: typeof un.reason === "string" ? un.reason : "" }),
+        );
       }
     }
     const unit = DesignUnitIdentifier.parse(u.unit);
     if (!unit.ok) return { kind: "malformed", error: JSON.stringify(unit.error) };
-    units.push(RefinementUnitMap.of({
-      unit: unit.value,
-      attrMap: AttributeMappings.of(attrMap),
-      eventMap: EventMappings.of(eventMap),
-      unmapped: UnmappedDeclarations.of(unmapped),
-    }));
+    units.push(
+      RefinementUnitMap.of({
+        unit: unit.value,
+        attrMap: AttributeMappings.of(attrMap),
+        eventMap: EventMappings.of(eventMap),
+        unmapped: UnmappedDeclarations.of(unmapped),
+      }),
+    );
   }
   const hashes = combineResults({
     requirements: ContentHash.parse(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),

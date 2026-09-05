@@ -1,5 +1,5 @@
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
-import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // QueryLabel — ソルバへ発行するクエリの id と、unsat core の表明ラベルの
 // ドメインプリミティブ（種別規律の裁定 3-1／3-3、2026-09-03）。並びは文書の
 // 凍結挙動どおり単純な文字列順。

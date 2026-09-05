@@ -1,4 +1,4 @@
-import { UnitName, SkipReason, VerificationMethod, type FindingsSchema } from "@deep-spec/kernel-domain";
+import { type FindingsSchema, SkipReason, UnitName, VerificationMethod } from "@deep-spec/kernel-domain";
 
 // deep-spec-design-verify-smt の interactor。Repository / Client / Clock を
 // 保持し、execute は設計形式モデルのパス（識別）から集約を解決して、
@@ -11,33 +11,30 @@ import { UnitName, SkipReason, VerificationMethod, type FindingsSchema } from "@
 // 予算・skip の凍結文言はフロー制御の一部としてここが逐語所有する
 // （文書系の detail はドメインのファクトリ／解釈が所有——分担は PR5 と同じ）。
 
-import { unreachable } from "@deep-spec/kernel-infrastructure";
-import type { Clock } from "@deep-spec/kernel-usecase";
 import {
-  DesignFindings,
-  DesignSkips,
-  DesignInputAnchors,
   CheckedUnits,
   type DesignFinding,
+  DesignFindings,
   type DesignInputAnchor,
-  DesignSkipped,
+  DesignInputAnchors,
   DesignReport,
   DesignReportIdentifier,
+  DesignSkipped,
+  DesignSkips,
   RefinementMaterialsIdentifier,
-} from "@deep-spec/design-domain";
-import {
   UnitRefinementPlan,
 } from "@deep-spec/design-domain";
-
-import type { DesignModelRepository } from "./port/design-model-repository.ts";
-import type { DesignVerifyDirectoryRepository } from "./port/design-verify-directory-repository.ts";
-import { type RefinementMaterialsRepository } from "./port/refinement-materials-repository.ts";
-import type { RefinementSolverClient } from "./port/refinement-solver-client.ts";
-import type { SiblingBackendClient } from "./port/sibling-backend-client.ts";
-import type { VerifyDesignOutcome } from "./verify-design-outcome.ts";
-import type { VerifyDesignInput } from "./verify-design-input.ts";
+import { unreachable } from "@deep-spec/kernel-infrastructure";
+import type { Clock } from "@deep-spec/kernel-usecase";
 import { DesignReportFinalizer } from "./design-report-finalizer.ts";
 import { DesignVerificationAcquirer } from "./design-verification-acquirer.ts";
+import type { DesignModelRepository } from "./port/design-model-repository.ts";
+import type { DesignVerifyDirectoryRepository } from "./port/design-verify-directory-repository.ts";
+import type { RefinementMaterialsRepository } from "./port/refinement-materials-repository.ts";
+import type { RefinementSolverClient } from "./port/refinement-solver-client.ts";
+import type { SiblingBackendClient } from "./port/sibling-backend-client.ts";
+import type { VerifyDesignInput } from "./verify-design-input.ts";
+import type { VerifyDesignOutcome } from "./verify-design-outcome.ts";
 
 const BACKEND = "smt";
 const METHOD = "exhaustive";
@@ -99,7 +96,14 @@ export class VerifyDesignSatisfiabilityModuloTheoriesUseCase {
     for (const u of model.units()) {
       if (this.#clock.now() - started > RUN_BUDGET_MS) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run solver budget was exhausted before this unit" }));
+          skipped.push(
+            DesignSkipped.of({
+              target: t,
+              reason: SkipReason.timeout(),
+              unit: UnitName.of(u.name()),
+              detail: "the per-run solver budget was exhausted before this unit",
+            }),
+          );
         }
         continue;
       }
@@ -109,29 +113,56 @@ export class VerifyDesignSatisfiabilityModuloTheoriesUseCase {
       const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
       if (remaining < 3_000) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run solver budget was exhausted before this unit" }));
+          skipped.push(
+            DesignSkipped.of({
+              target: t,
+              reason: SkipReason.timeout(),
+              unit: UnitName.of(u.name()),
+              detail: "the per-run solver budget was exhausted before this unit",
+            }),
+          );
         }
         continue;
       }
       const run = this.#siblingBackendClient.runLowered("smt", u, lowered, remaining);
       if (run.exit === 127) {
-        const reason =
-          run.doc?.unavailableReason() ?? "z3 could not be executed by the lowered v1 backend";
-        const unavailable = DesignReport.backendUnavailable(id, model, irHash, METHOD, reason, "z3 could not be executed");
+        const reason = run.doc?.unavailableReason() ?? "z3 could not be executed by the lowered v1 backend";
+        const unavailable = DesignReport.backendUnavailable(
+          id,
+          model,
+          irHash,
+          METHOD,
+          reason,
+          "z3 could not be executed",
+        );
         const saved = this.#finalizer.finalize(unavailable, model);
         if (!saved.ok) return { kind: "save-failed", error: saved.error };
         return { kind: "backend-unavailable" };
       }
       if (run.doc === null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
+          skipped.push(
+            DesignSkipped.of({
+              target: t,
+              reason: SkipReason.unavailable(),
+              unit: UnitName.of(u.name()),
+              detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})`,
+            }),
+          );
         }
         continue;
       }
       const remapped = run.doc.remapVerdicts(u, lowered.index());
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: remapped.unavailable }));
+          skipped.push(
+            DesignSkipped.of({
+              target: t,
+              reason: SkipReason.unavailable(),
+              unit: UnitName.of(u.name()),
+              detail: remapped.unavailable,
+            }),
+          );
         }
         continue;
       }
@@ -152,20 +183,30 @@ export class VerifyDesignSatisfiabilityModuloTheoriesUseCase {
       const reqTargets = req.allTargetIds();
       const skipAll = (reason: SkipReason, detail: string): void => {
         for (const u of model.units()) {
-          for (const t of reqTargets) skipped.push(DesignSkipped.of({ target: t, reason, unit: UnitName.of(u.name()), detail }));
+          for (const t of reqTargets)
+            skipped.push(DesignSkipped.of({ target: t, reason, unit: UnitName.of(u.name()), detail }));
         }
       };
       acq.match({
         absent: (error) => {
-          skipAll(SkipReason.absentInput(), error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
+          skipAll(
+            SkipReason.absentInput(),
+            error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record",
+          );
         },
         loaded: (map, mapArtifact, mapInputs) => {
           if (!map.requirementsIrHash().equals(req.hash())) {
-            skipAll(SkipReason.staleInput(), "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map");
+            skipAll(
+              SkipReason.staleInput(),
+              "the refinement map's requirementsIrHash no longer matches the requirements formal model — re-author the map",
+            );
             return;
           }
           if (!map.designIrHash().equals(irHash)) {
-            skipAll(SkipReason.staleInput(), "the refinement map's designIrHash no longer matches this design IR — re-author the map");
+            skipAll(
+              SkipReason.staleInput(),
+              "the refinement map's designIrHash no longer matches this design IR — re-author the map",
+            );
             return;
           }
           inputs = mapInputs;
@@ -173,14 +214,28 @@ export class VerifyDesignSatisfiabilityModuloTheoriesUseCase {
             const unitMap = map.unitMapOf(u.id());
             if (!unitMap) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: UnitName.of(u.name()), detail: `the refinement map has no entry for unit ${u.name()}` }));
+                skipped.push(
+                  DesignSkipped.of({
+                    target: t,
+                    reason: SkipReason.absentInput(),
+                    unit: UnitName.of(u.name()),
+                    detail: `the refinement map has no entry for unit ${u.name()}`,
+                  }),
+                );
               }
               continue;
             }
             const refRemaining = REFINEMENT_DEADLINE_MS - (this.#clock.now() - started);
             if (refRemaining < 5_000) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run solver budget was exhausted before the refinement pass" }));
+                skipped.push(
+                  DesignSkipped.of({
+                    target: t,
+                    reason: SkipReason.timeout(),
+                    unit: UnitName.of(u.name()),
+                    detail: "the per-run solver budget was exhausted before the refinement pass",
+                  }),
+                );
               }
               continue;
             }
@@ -190,7 +245,14 @@ export class VerifyDesignSatisfiabilityModuloTheoriesUseCase {
               // 旧挙動：unavailable のユニットは gap / status / compile skip を
               // 捨て、全要件対象を一括 unavailable として記録する。
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: check.result.reason }));
+                skipped.push(
+                  DesignSkipped.of({
+                    target: t,
+                    reason: SkipReason.unavailable(),
+                    unit: UnitName.of(u.name()),
+                    detail: check.result.reason,
+                  }),
+                );
               }
               continue;
             }
@@ -216,7 +278,11 @@ export class VerifyDesignSatisfiabilityModuloTheoriesUseCase {
       skipped: DesignSkips.of(skipped),
       ...(inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {}),
       checked: CheckedUnits.of(Array.from(checkedUnits, (raw) => UnitName.of(raw))),
-      ...(!materials.ok ? { unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})` } : {}),
+      ...(!materials.ok
+        ? {
+            unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})`,
+          }
+        : {}),
     });
     // 適合・両文書の公開・cleanup は Finalizer が一か所で持つ。兄弟が読めない・
     // クロスチェックが書けないときは verified を返さず失敗を運ぶ（BR1.2）。

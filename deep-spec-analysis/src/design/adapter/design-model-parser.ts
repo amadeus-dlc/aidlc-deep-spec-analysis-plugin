@@ -1,54 +1,65 @@
-import { flatMapResult } from "@deep-spec/kernel-infrastructure";
-import { InitialState } from "@deep-spec/design-domain";
-import { decodeScenarioBindings } from "@deep-spec/kernel-adapter";
-import {
-  UnitName,
-  RequirementIdentifier,
-  FunctionalRequirementReferences,
-  IntermediateRepresentationVersion,
-  type Expression,
-  TriggerName,
-} from "@deep-spec/kernel-domain";
 import {
   BusinessRuleReference,
   BusinessRuleReferences,
-  DesignBackgroundIdentifier,
-  DesignBackgroundAssumption,
   DesignAttributeName,
+  DesignBackgroundAssumption,
+  DesignBackgroundAssumptions,
+  DesignBackgroundIdentifier,
   DesignEntityName,
+  DesignIgnore,
+  DesignIgnores,
+  DesignMachine,
   DesignMachineIdentifier,
+  DesignMachines,
+  type DesignModel,
+  DesignObligation,
   DesignObligationIdentifier,
   DesignObligationNature,
   DesignObligationOrigin,
-  DesignScenarioIdentifier,
-  DesignTransitionIdentifier,
-  DesignIgnores,
-  DesignTransitions,
-  DesignUnits,
-  InitialStates,
-  DesignIgnore,
-  DesignBackgroundAssumptions,
-  DesignMachines,
   DesignObligations,
-  DesignScenarios,
-  DesignMachine,
-  DesignObligation,
   DesignScenario,
+  DesignScenarioIdentifier,
+  DesignScenarios,
   DesignTransition,
+  DesignTransitionIdentifier,
+  DesignTransitions,
   DesignUnit,
-  DesignModel,
+  DesignUnits,
+  InitialState,
+  InitialStates,
 } from "@deep-spec/design-domain";
+import { decodeScenarioBindings } from "@deep-spec/kernel-adapter";
+import {
+  type Expression,
+  FunctionalRequirementReferences,
+  IntermediateRepresentationVersion,
+  RequirementIdentifier,
+  TriggerName,
+  UnitName,
+} from "@deep-spec/kernel-domain";
+import { flatMapResult } from "@deep-spec/kernel-infrastructure";
 
 // 契約3 設計 IR（生 Json）→ Parameters<typeof DesignModel.compose>[0] の寛容パース。欠損・型不一致
 // のエントリは黙って落とす（旧 parseDesignIr の凍結挙動——design-ir-valid
 // センサーが別途厳密検査を担う）。集約として成立しない形はResultのエラーで返す。ユニットのソートは DesignModel.compose の不変条件。
 // 旧 deep-spec-design-lib.ts の parseDesignIr からの逐語移植。
 
-import { type Json, type Result, err, combineResults, traverseResult, ok, isObject, strArr } from "@deep-spec/kernel-infrastructure";
+import {
+  combineResults,
+  err,
+  isObject,
+  type Json,
+  ok,
+  type Result,
+  strArr,
+  traverseResult,
+} from "@deep-spec/kernel-infrastructure";
 
 import { parseDesignEntities } from "./design-entities-parser.ts";
 
-export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof DesignModel.compose>[0], "id" | "irHash" | "sourceDocument">, string> {
+export function parseDesignModel(
+  raw: Json,
+): Result<Omit<Parameters<typeof DesignModel.compose>[0], "id" | "irHash" | "sourceDocument">, string> {
   if (!isObject(raw)) return err("design IR is not a JSON object");
   if (raw.irKind !== "design") return err('document is not a design IR (missing `"irKind": "design"`)');
   const irVersion = IntermediateRepresentationVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
@@ -69,8 +80,14 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
         id: DesignObligationIdentifier.parse(ob.id),
         origin: DesignObligationOrigin.parse(typeof ob.origin === "string" ? ob.origin : ""),
         nature: DesignObligationNature.parse(ob.nature),
-        brRefs: flatMapResult(traverseResult(strArr(ob.brRefs), BusinessRuleReference.parse), BusinessRuleReferences.parse),
-        frRefs: flatMapResult(traverseResult(strArr(ob.frRefs), RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
+        brRefs: flatMapResult(
+          traverseResult(strArr(ob.brRefs), BusinessRuleReference.parse),
+          BusinessRuleReferences.parse,
+        ),
+        frRefs: flatMapResult(
+          traverseResult(strArr(ob.frRefs), RequirementIdentifier.parse),
+          FunctionalRequirementReferences.parse,
+        ),
         trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined),
       });
       if (!parsed.ok) return err(JSON.stringify(parsed.error));
@@ -84,14 +101,22 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
         trigger: parsed.value.trigger,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
         effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
-        temporal: isObject(ob.temporal) ? (ob.temporal as unknown as { pattern: string; assert?: Expression; from?: Expression; to?: Expression }) : undefined,
+        temporal: isObject(ob.temporal)
+          ? (ob.temporal as unknown as { pattern: string; assert?: Expression; from?: Expression; to?: Expression })
+          : undefined,
       });
       if (!constructed.ok) return err(JSON.stringify(constructed.error));
       obligations.push(constructed.value);
     }
     const machines: DesignMachine[] = [];
     for (const sm of Array.isArray(rawUnit.stateMachines) ? rawUnit.stateMachines : []) {
-      if (!isObject(sm) || typeof sm.id !== "string" || typeof sm.entity !== "string" || typeof sm.attribute !== "string") continue;
+      if (
+        !isObject(sm) ||
+        typeof sm.id !== "string" ||
+        typeof sm.entity !== "string" ||
+        typeof sm.attribute !== "string"
+      )
+        continue;
       const transitions: DesignTransition[] = [];
       for (const tr of Array.isArray(sm.transitions) ? sm.transitions : []) {
         if (!isObject(tr) || typeof tr.id !== "string") continue;
@@ -99,7 +124,10 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
         const parsed = combineResults({
           id: DesignTransitionIdentifier.parse(tr.id),
           trigger: TriggerName.parse(tr.trigger),
-          brRefs: flatMapResult(traverseResult(strArr(tr.brRefs), BusinessRuleReference.parse), BusinessRuleReferences.parse),
+          brRefs: flatMapResult(
+            traverseResult(strArr(tr.brRefs), BusinessRuleReference.parse),
+            BusinessRuleReferences.parse,
+          ),
         });
         if (!parsed.ok) return err(JSON.stringify(parsed.error));
         const constructed = DesignTransition.parse({
@@ -147,10 +175,19 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
       if (kind === null || !isObject(sc.bindings)) continue;
       const parsed = combineResults({
         id: DesignScenarioIdentifier.parse(sc.id),
-      bindings: decodeScenarioBindings(sc.bindings),
-        brRefs: flatMapResult(traverseResult(strArr(sc.brRefs), BusinessRuleReference.parse), BusinessRuleReferences.parse),
-        frRefs: flatMapResult(traverseResult(strArr(sc.frRefs), RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
-        trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined),
+        bindings: decodeScenarioBindings(sc.bindings),
+        brRefs: flatMapResult(
+          traverseResult(strArr(sc.brRefs), BusinessRuleReference.parse),
+          BusinessRuleReferences.parse,
+        ),
+        frRefs: flatMapResult(
+          traverseResult(strArr(sc.frRefs), RequirementIdentifier.parse),
+          FunctionalRequirementReferences.parse,
+        ),
+        trigger:
+          isObject(sc.event) && typeof sc.event.trigger === "string"
+            ? TriggerName.parse(sc.event.trigger)
+            : ok(undefined),
       });
       if (!parsed.ok) return err(JSON.stringify(parsed.error));
       const constructed = DesignScenario.parse({
@@ -170,7 +207,10 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
       if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
       const id = DesignBackgroundIdentifier.parse(bg.id);
       if (!id.ok) return err(JSON.stringify(id.error));
-      const constructed = DesignBackgroundAssumption.parse({ id: id.value, assert: bg.assert as unknown as Expression });
+      const constructed = DesignBackgroundAssumption.parse({
+        id: id.value,
+        assert: bg.assert as unknown as Expression,
+      });
       if (!constructed.ok) return err(JSON.stringify(constructed.error));
       background.push(constructed.value);
     }

@@ -14,8 +14,14 @@ export class NumericBound {
   static parse(raw: number): Result<NumericBound, ParseError> {
     return parseConstruction(() => new NumericBound(raw));
   }
-  equals(other: NumericBound): boolean { return this.#value === other.#value; }
-  asNumber(): number { return this.#value; }
+  equals(other: NumericBound): boolean {
+    return this.#value === other.#value;
+  }
+  asNumber(): number {
+    return this.#value;
+  }
   // FD-E3: 範囲逆転（min > max）の判定は境界自身の知識。
-  exceeds(other: NumericBound): boolean { return this.#value > other.#value; }
+  exceeds(other: NumericBound): boolean {
+    return this.#value > other.#value;
+  }
 }

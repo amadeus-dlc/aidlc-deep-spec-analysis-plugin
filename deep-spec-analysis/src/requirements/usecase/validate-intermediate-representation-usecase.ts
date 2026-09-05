@@ -9,24 +9,29 @@
 import {
   type FormalModelIdentifier,
   IntermediateRepresentationValidationMaterialsIdentifier,
-  SUPPORTED_IR_MAJOR,
   SourceAnchor,
+  SUPPORTED_IR_MAJOR,
 } from "@deep-spec/requirements-domain";
 import type { IntermediateRepresentationValidationMaterialsRepository } from "./port/intermediate-representation-validation-materials-repository.ts";
-import { type RequirementsSourceRepository } from "./port/requirements-source-repository.ts";
+import type { RequirementsSourceRepository } from "./port/requirements-source-repository.ts";
 import type { ValidateIntermediateRepresentationOutcome } from "./validate-intermediate-representation-outcome.ts";
 
 export class ValidateIntermediateRepresentationUseCase {
   readonly #irValidationMaterialsRepository: IntermediateRepresentationValidationMaterialsRepository;
   readonly #requirementsSourceRepository: RequirementsSourceRepository;
 
-  constructor(irValidationMaterialsRepository: IntermediateRepresentationValidationMaterialsRepository, requirementsSourceRepository: RequirementsSourceRepository) {
+  constructor(
+    irValidationMaterialsRepository: IntermediateRepresentationValidationMaterialsRepository,
+    requirementsSourceRepository: RequirementsSourceRepository,
+  ) {
     this.#irValidationMaterialsRepository = irValidationMaterialsRepository;
     this.#requirementsSourceRepository = requirementsSourceRepository;
   }
 
   execute(modelId: FormalModelIdentifier): ValidateIntermediateRepresentationOutcome {
-    const found = this.#irValidationMaterialsRepository.findById(IntermediateRepresentationValidationMaterialsIdentifier.of(modelId));
+    const found = this.#irValidationMaterialsRepository.findById(
+      IntermediateRepresentationValidationMaterialsIdentifier.of(modelId),
+    );
     if (!found.ok) {
       // not-found = 機能形式モデル以外・不在（旧 not-applicable の pass-through）。
       if (found.error.kind === "not-found") return { kind: "not-applicable" };
@@ -42,7 +47,12 @@ export class ValidateIntermediateRepresentationUseCase {
         `irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`,
       );
     }
-    errors.push(...materials.schemaErrors().toArray().map((message) => message.asString()));
+    errors.push(
+      ...materials
+        .schemaErrors()
+        .toArray()
+        .map((message) => message.asString()),
+    );
 
     // 意味検査とトレーサビリティはスキーマ妥当な IR にのみ意味がある。
     if (errors.length === 0) {

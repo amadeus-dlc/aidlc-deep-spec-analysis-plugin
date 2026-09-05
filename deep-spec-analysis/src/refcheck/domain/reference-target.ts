@@ -1,7 +1,7 @@
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-import { EntityName } from "./entity-name.ts";
+import type { EntityName } from "./entity-name.ts";
 
 // FD-E6 の参照先トークン（"Entity" / "Entity.attribute" / 自由文）。
 export class ReferenceTarget {
@@ -19,8 +19,12 @@ export class ReferenceTarget {
   static parse(raw: string): Result<ReferenceTarget, ParseError> {
     return parseConstruction(() => new ReferenceTarget(raw));
   }
-  equals(other: ReferenceTarget): boolean { return this.#value === other.#value; }
-  asString(): string { return this.#value; }
+  equals(other: ReferenceTarget): boolean {
+    return this.#value === other.#value;
+  }
+  asString(): string {
+    return this.#value;
+  }
   // FD-E6: Entity / Entity.attr 形の構文知識は参照自身が所有（凍結正規表現・属性部は非捕捉）。
   entityToken(): string | null {
     const token = this.#value.match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.[A-Za-z][A-Za-z0-9_]*)?$/);

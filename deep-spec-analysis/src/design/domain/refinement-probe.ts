@@ -11,7 +11,11 @@ export class RefinementProbe {
   readonly #reqId: ObligationIdentifier | ScenarioIdentifier;
   readonly #designId: TransitionReference | null;
 
-  private constructor(props: { kind: "invariant" | "enabledness" | "simulation" | "scenario"; reqId: ObligationIdentifier | ScenarioIdentifier; designId: TransitionReference | null }) {
+  private constructor(props: {
+    kind: "invariant" | "enabledness" | "simulation" | "scenario";
+    reqId: ObligationIdentifier | ScenarioIdentifier;
+    designId: TransitionReference | null;
+  }) {
     this.#kind = props.kind;
     this.#reqId = props.reqId;
     this.#designId = props.designId;

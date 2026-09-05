@@ -10,12 +10,12 @@
 // この値は読み終えた材料だけを受け取る。
 
 import {
-  type Json,
-  type Schema,
-  type ParseError,
-  type Result,
   boundedValueSnapshot,
+  type Json,
+  type ParseError,
   parseConstruction,
+  type Result,
+  type Schema,
   validateSchema,
 } from "@deep-spec/kernel-infrastructure";
 
@@ -26,7 +26,10 @@ export class FindingsSchema {
   readonly #reason: string | null;
 
   private constructor(schema: Schema | null, reason: string | null) {
-    this.#schema = schema === null ? null : boundedValueSnapshot(schema, { string: 65_536, nodes: 100_000, depth: 128, total: 16_777_216 });
+    this.#schema =
+      schema === null
+        ? null
+        : boundedValueSnapshot(schema, { string: 65_536, nodes: 100_000, depth: 128, total: 16_777_216 });
     this.#reason = reason;
   }
 

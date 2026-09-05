@@ -7,7 +7,9 @@ export class IntermediateRepresentationBackgroundDeclarations {
     this.#values = Object.freeze([...values]);
   }
 
-  static of(values: readonly IntermediateRepresentationBackgroundDeclaration[]): IntermediateRepresentationBackgroundDeclarations {
+  static of(
+    values: readonly IntermediateRepresentationBackgroundDeclaration[],
+  ): IntermediateRepresentationBackgroundDeclarations {
     return new IntermediateRepresentationBackgroundDeclarations(values);
   }
 

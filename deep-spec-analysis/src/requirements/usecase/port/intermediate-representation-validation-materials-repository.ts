@@ -15,7 +15,8 @@ import type {
 } from "@deep-spec/requirements-domain";
 
 export interface IntermediateRepresentationValidationMaterialsRepository {
-  findById(id: IntermediateRepresentationValidationMaterialsIdentifier): Result<IntermediateRepresentationValidationMaterials, RepositoryError>;
+  findById(
+    id: IntermediateRepresentationValidationMaterialsIdentifier,
+  ): Result<IntermediateRepresentationValidationMaterials, RepositoryError>;
   store(materials: IntermediateRepresentationValidationMaterials): Result<void, RepositoryError>;
 }
-

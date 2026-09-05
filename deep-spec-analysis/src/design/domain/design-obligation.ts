@@ -1,12 +1,12 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
+import { ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // 設計義務。分類、rules 起源の参照要件、event 完全性、式の役割を所有する。
 
-import { type BusinessRuleReferences } from "./business-rule-references.ts";
-import { DesignObligationIdentifier } from "./design-obligation-identifier.ts";
-import { DesignObligationNature } from "./design-obligation-nature.ts";
-import { DesignObligationOrigin } from "./design-obligation-origin.ts";
+import type { BusinessRuleReferences } from "./business-rule-references.ts";
+import type { DesignObligationIdentifier } from "./design-obligation-identifier.ts";
+import type { DesignObligationNature } from "./design-obligation-nature.ts";
+import type { DesignObligationOrigin } from "./design-obligation-origin.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
@@ -55,12 +55,19 @@ export class DesignObligation {
     this.#trigger = props.trigger;
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
-    this.#temporal = props.temporal === undefined ? undefined : {
-      ...props.temporal,
-      ...(props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {}),
-      ...(props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {}),
-      ...(props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}),
-    };
+    this.#temporal =
+      props.temporal === undefined
+        ? undefined
+        : {
+            ...props.temporal,
+            ...(props.temporal.assert !== undefined
+              ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() }
+              : {}),
+            ...(props.temporal.from !== undefined
+              ? { from: ExpressionTree.of(props.temporal.from).asExpression() }
+              : {}),
+            ...(props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}),
+          };
   }
 
   static parse(props: DesignObligationParam): Result<DesignObligation, ParseError> {
@@ -71,18 +78,42 @@ export class DesignObligation {
     return new DesignObligation(props);
   }
 
-  id(): DesignObligationIdentifier { return this.#id; }
-  nature(): DesignObligationNature { return this.#nature; }
-  origin(): DesignObligationOrigin { return this.#origin; }
-  businessRuleReferences(): BusinessRuleReferences { return this.#businessRuleReferences; }
-  functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
-  assertion(): Expression | undefined { return this.#assert; }
-  trigger(): TriggerName | undefined { return this.#trigger; }
-  guard(): Expression | undefined { return this.#guard; }
-  effect(): Expression | undefined { return this.#effect; }
-  temporal(): DesignTemporalExpressions | undefined { return this.#temporal === undefined ? undefined : { ...this.#temporal }; }
-  isInvariantLike(): boolean { return this.#nature.isInvariant() || this.#nature.isNumeric(); }
-  isEvent(): boolean { return this.#nature.isEvent(); }
+  id(): DesignObligationIdentifier {
+    return this.#id;
+  }
+  nature(): DesignObligationNature {
+    return this.#nature;
+  }
+  origin(): DesignObligationOrigin {
+    return this.#origin;
+  }
+  businessRuleReferences(): BusinessRuleReferences {
+    return this.#businessRuleReferences;
+  }
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
+  }
+  assertion(): Expression | undefined {
+    return this.#assert;
+  }
+  trigger(): TriggerName | undefined {
+    return this.#trigger;
+  }
+  guard(): Expression | undefined {
+    return this.#guard;
+  }
+  effect(): Expression | undefined {
+    return this.#effect;
+  }
+  temporal(): DesignTemporalExpressions | undefined {
+    return this.#temporal === undefined ? undefined : { ...this.#temporal };
+  }
+  isInvariantLike(): boolean {
+    return this.#nature.isInvariant() || this.#nature.isNumeric();
+  }
+  isEvent(): boolean {
+    return this.#nature.isEvent();
+  }
 
   guardedEffect(): { readonly guard: Expression; readonly effect: Expression } | null {
     if (!this.isEvent() || this.#guard === undefined || this.#effect === undefined) return null;
@@ -98,7 +129,11 @@ export class DesignObligation {
   // 契約1 への素通し lowering——どの任意部を lowered 文書へ運ぶかは義務自身の
   // 知識（空の frRefs も帰属として運ぶ：v1 は不透明な文字列として扱う）。
   loweredAs(id: LoweredIdentifier): LoweredObligation {
-    const lowered: Parameters<typeof LoweredObligation.of>[0] = { id, nature: this.#nature.asString(), functionalRequirementReferences: this.#functionalRequirementReferences };
+    const lowered: Parameters<typeof LoweredObligation.of>[0] = {
+      id,
+      nature: this.#nature.asString(),
+      functionalRequirementReferences: this.#functionalRequirementReferences,
+    };
     const temporal = this.temporal();
     if (this.#assert !== undefined) lowered.assert = this.#assert;
     if (this.#trigger !== undefined) lowered.trigger = this.#trigger.asString();

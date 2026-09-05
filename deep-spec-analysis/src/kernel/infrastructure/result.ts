@@ -1,7 +1,6 @@
 import type { ResultFailure } from "./result-failure.ts";
 import type { ResultSuccess } from "./result-success.ts";
 
-
 export type Result<T, E> = ResultSuccess<T> | ResultFailure<E>;
 
 export function ok<T>(value: T): ResultSuccess<T> {

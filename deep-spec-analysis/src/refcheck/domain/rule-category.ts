@@ -18,8 +18,16 @@ export class RuleCategory {
   static parse(raw: string): Result<RuleCategory, ParseError> {
     return parseConstruction(() => new RuleCategory(raw));
   }
-  equals(other: RuleCategory): boolean { return this.#value === other.#value; }
-  asString(): string { return this.#value; }
-  normalized(): string { return this.#value.toLowerCase(); }
-  isKnownCategory(): boolean { return CATEGORIES.has(this.normalized()); }
+  equals(other: RuleCategory): boolean {
+    return this.#value === other.#value;
+  }
+  asString(): string {
+    return this.#value;
+  }
+  normalized(): string {
+    return this.#value.toLowerCase();
+  }
+  isKnownCategory(): boolean {
+    return CATEGORIES.has(this.normalized());
+  }
 }

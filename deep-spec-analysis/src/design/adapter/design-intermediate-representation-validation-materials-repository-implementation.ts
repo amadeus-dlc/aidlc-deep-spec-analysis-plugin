@@ -1,45 +1,51 @@
-import { flatMapResult } from "@deep-spec/kernel-infrastructure";
-import { InitialState } from "@deep-spec/design-domain";
-import { ErrorMessage } from "@deep-spec/kernel-domain";
-import { decodeDeclaredBindings } from "@deep-spec/kernel-adapter";
 import {
+  BusinessRuleReference,
+  BusinessRuleReferences,
+  DesignBackgroundDeclaration,
+  DesignBackgroundDeclarations,
+  DesignBackgroundIdentifier,
+  DesignIgnoreDeclaration,
+  DesignIgnoreDeclarations,
+  DesignIntermediateRepresentationValidationMaterials,
+  type DesignIntermediateRepresentationValidationMaterialsIdentifier,
+  DesignMachineDeclaration,
+  DesignMachineDeclarations,
+  DesignMachineIdentifier,
+  DesignObligationDeclaration,
+  DesignObligationDeclarations,
+  DesignObligationIdentifier,
+  DesignObligationOrigin,
+  DesignScenarioDeclaration,
+  DesignScenarioDeclarations,
+  DesignScenarioIdentifier,
+  DesignTransitionDeclaration,
+  DesignTransitionDeclarations,
+  DesignTransitionIdentifier,
+  DesignUnitDeclaration,
+  DesignUnitDeclarations,
+  DesignUnitIdentifier,
+  InitialState,
+  InitialStates,
+  SUPPORTED_DESIGN_IR_MAJOR,
+  UnformalizedTargets,
+} from "@deep-spec/design-domain";
+import {
+  decodeDeclaredBindings,
   extractFences,
   findRecordRoot,
   readContractSchema,
-  writeFileAtomically,
   readIfExists,
+  writeFileAtomically,
 } from "@deep-spec/kernel-adapter";
-import { TargetIdentifier, ErrorMessages, IntermediateRepresentationVersion, TriggerName, type Expression } from "@deep-spec/kernel-domain";
 import {
-  BusinessRuleReference,
-  DesignBackgroundDeclaration,
-  DesignIgnoreDeclaration,
-  DesignMachineDeclaration,
-  DesignUnitDeclaration,
-  DesignBackgroundIdentifier,
-  DesignMachineIdentifier,
-  DesignObligationIdentifier,
-  DesignObligationDeclaration,
-  DesignObligationOrigin,
-  DesignScenarioIdentifier,
-  DesignScenarioDeclaration,
-  DesignTransitionIdentifier,
-  DesignTransitionDeclaration,
-  DesignUnitIdentifier,
-  BusinessRuleReferences,
-  DesignBackgroundDeclarations,
-  DesignIgnoreDeclarations,
-  DesignMachineDeclarations,
-  DesignObligationDeclarations,
-  DesignScenarioDeclarations,
-  DesignTransitionDeclarations,
-  DesignUnitDeclarations,
-  InitialStates,
-  UnformalizedTargets,
-  DesignIntermediateRepresentationValidationMaterials,
-  DesignIntermediateRepresentationValidationMaterialsIdentifier,
-  SUPPORTED_DESIGN_IR_MAJOR,
-} from "@deep-spec/design-domain";
+  ErrorMessage,
+  ErrorMessages,
+  type Expression,
+  IntermediateRepresentationVersion,
+  TargetIdentifier,
+  TriggerName,
+} from "@deep-spec/kernel-domain";
+import { flatMapResult } from "@deep-spec/kernel-infrastructure";
 
 // 契約3 設計 IR の検査材料ゲートウェイ。markdown フェンスの抽出、JSON 解釈、
 // 契約スキーマの適用、生 Json の寛容な解体、そしてユニットごとの BR 材料
@@ -52,16 +58,21 @@ import {
 
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-
-import { type Json, isObject, validateSchema } from "@deep-spec/kernel-infrastructure";
-import { type Result, combineResults, traverseResult, err, ok } from "@deep-spec/kernel-infrastructure";
-import { err as repoErr } from "@deep-spec/kernel-infrastructure";
-
-import type { RepositoryError } from "@deep-spec/kernel-usecase";
-
 import type { DesignIntermediateRepresentationValidationMaterialsRepository } from "@deep-spec/design-usecase";
-import type { DesignIntermediateRepresentationValidationMaterialsConfiguration } from "./design-intermediate-representation-validation-materials-configuration.ts";
+import {
+  combineResults,
+  err,
+  isObject,
+  type Json,
+  ok,
+  type Result,
+  err as repoErr,
+  traverseResult,
+  validateSchema,
+} from "@deep-spec/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import { parseDesignEntities } from "./design-entities-parser.ts";
+import type { DesignIntermediateRepresentationValidationMaterialsConfiguration } from "./design-intermediate-representation-validation-materials-configuration.ts";
 
 const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 
@@ -83,7 +94,11 @@ function businessRuleReferencesOrUndefined(v: Json) {
   return parsed.ok ? ok(parsed.value) : parsed;
 }
 
-function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordRoot: string | null): Result<DesignUnitDeclaration, string> {
+function buildUnitView(
+  rawUnit: { [k: string]: Json },
+  unitName: string,
+  recordRoot: string | null,
+): Result<DesignUnitDeclaration, string> {
   const unit = DesignUnitIdentifier.parse(unitName);
   if (!unit.ok) return err(JSON.stringify(unit.error));
   const entities = parseDesignEntities(isObject(rawUnit.schema) ? rawUnit.schema : {});
@@ -156,7 +171,15 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     if (!states.ok) return err(JSON.stringify(states.error));
     const id = DesignMachineIdentifier.parse(sm.id);
     if (!id.ok) return err(JSON.stringify(id.error));
-    stateMachines.push(DesignMachineDeclaration.of({ id: id.value, attrPath, initial: states.value, transitions: DesignTransitionDeclarations.of(transitions), ignores: DesignIgnoreDeclarations.of(ignores) }));
+    stateMachines.push(
+      DesignMachineDeclaration.of({
+        id: id.value,
+        attrPath,
+        initial: states.value,
+        transitions: DesignTransitionDeclarations.of(transitions),
+        ignores: DesignIgnoreDeclarations.of(ignores),
+      }),
+    );
   }
 
   const scenarios: DesignScenarioDeclaration[] = [];
@@ -199,32 +222,39 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
   }
 
   const directoryExists = recordRoot === null ? true : existsSync(join(recordRoot, "construction", unitName));
-  const rulesPath = recordRoot === null ? null : join(recordRoot, "construction", unitName, "functional-design", "rules.md");
+  const rulesPath =
+    recordRoot === null ? null : join(recordRoot, "construction", unitName, "functional-design", "rules.md");
   const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
 
   const targets = traverseResult(unformalizedTargets, TargetIdentifier.parse);
   if (!targets.ok) return err(JSON.stringify(targets.error));
-  return ok(DesignUnitDeclaration.of({
-    unit: unit.value,
-    entities: entities.value,
-    obligations: DesignObligationDeclarations.of(obligations),
-    stateMachines: DesignMachineDeclarations.of(stateMachines),
-    scenarios: DesignScenarioDeclarations.of(scenarios),
-    background: DesignBackgroundDeclarations.of(background),
-    unformalizedTargets: UnformalizedTargets.of(targets.value),
-    directoryExists,
-    rulesMarkdown,
-  }));
+  return ok(
+    DesignUnitDeclaration.of({
+      unit: unit.value,
+      entities: entities.value,
+      obligations: DesignObligationDeclarations.of(obligations),
+      stateMachines: DesignMachineDeclarations.of(stateMachines),
+      scenarios: DesignScenarioDeclarations.of(scenarios),
+      background: DesignBackgroundDeclarations.of(background),
+      unformalizedTargets: UnformalizedTargets.of(targets.value),
+      directoryExists,
+      rulesMarkdown,
+    }),
+  );
 }
 
-export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation implements DesignIntermediateRepresentationValidationMaterialsRepository {
+export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation
+  implements DesignIntermediateRepresentationValidationMaterialsRepository
+{
   readonly #schemaPath: string;
 
   constructor(config: DesignIntermediateRepresentationValidationMaterialsConfiguration) {
     this.#schemaPath = config.schemaPath;
   }
 
-  findById(id: DesignIntermediateRepresentationValidationMaterialsIdentifier): Result<DesignIntermediateRepresentationValidationMaterials, RepositoryError> {
+  findById(
+    id: DesignIntermediateRepresentationValidationMaterialsIdentifier,
+  ): Result<DesignIntermediateRepresentationValidationMaterials, RepositoryError> {
     const outputPath = id.modelId().artifactPath().asString();
     // 機能形式モデル以外・不在はこの Repository の収蔵外（not-found——use case
     // が pass-through へ写像する旧 not-applicable の凍結挙動）。
@@ -241,7 +271,12 @@ export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplem
     try {
       bytes = readFileSync(outputPath);
     } catch (e) {
-      return repoErr({ kind: "io-failed", operation: "read", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
+      return repoErr({
+        kind: "io-failed",
+        operation: "read",
+        path: outputPath,
+        cause: e instanceof Error ? e.message : String(e),
+      });
     }
     const md = bytes.toString("utf-8");
     const fences = extractFences(md, "json");
@@ -282,7 +317,8 @@ export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplem
     // 可能性があり、生の名前を join へ渡さない（レガシーの I/O プロファイルと
     // 経路制限の保存）。use case 側も errors 非空なら units を読まない。
     const major = irVersion.value.majorVersion();
-    const semanticGateOpen = schemaErrors.length === 0 && !(Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR);
+    const semanticGateOpen =
+      schemaErrors.length === 0 && !(Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR);
 
     const units: DesignUnitDeclaration[] = [];
     if (semanticGateOpen) {
@@ -314,7 +350,12 @@ export class DesignIntermediateRepresentationValidationMaterialsRepositoryImplem
       writeFileAtomically(outputPath, bytes);
       return ok(undefined);
     } catch (e) {
-      return repoErr({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
+      return repoErr({
+        kind: "io-failed",
+        operation: "write",
+        path: outputPath,
+        cause: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 }

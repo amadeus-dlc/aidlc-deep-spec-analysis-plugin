@@ -9,54 +9,79 @@
 //      属さないファイルは未分類として違反になる。
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { abbreviatedTypeNames, missingConstructionParsers } from "./architecture/construction-contracts.ts";
 import {
+  commandsReturnVoid,
+  constructionParsingInDomain,
+  domainFieldsArePrivate,
   ENTRY_FILES,
   layerDirection,
   locationOf,
   manifestDependencyDirection,
   noCrossPackageRelativeImports,
+  noDataModelsInDomain,
   noEntryImports,
   noEnums,
   noExportStar,
   noGetAccessors,
   noIoInPureLayers,
   noNonNullAssertions,
-  onePublicTypePerFile,
-  portsLiveInPortDir,
-  commandsReturnVoid,
-  noDataModelsInDomain,
   noPrimitiveFieldsInDomain,
-  primitiveFieldsOf,
-  PUBLISHED_LANGUAGE,
-  domainFieldsArePrivate,
-  publishedLanguageLayers,
-  noTestPayloads,
-  onlySanctionedImports,
-  privateConstructorInDomain,
   noReconstitutionBypass,
-  constructionParsingInDomain,
+  noTestPayloads,
+  onePublicTypePerFile,
+  onlySanctionedImports,
+  PUBLISHED_LANGUAGE,
+  portsLiveInPortDir,
+  primitiveFieldsOf,
+  privateConstructorInDomain,
   processOnlyInEntries,
+  publishedLanguageLayers,
   violationsOf,
 } from "./architecture/rules.ts";
 
 const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
 
 test("restoration uses of instead of a separate reconstitute gate", () => {
-  expect(noReconstitutionBypass("kernel/domain/x.ts", "export class X { static reconstitute(value: string) {} }")).toHaveLength(1);
-  expect(noReconstitutionBypass("kernel/domain/x.ts", "export class X { static of(value: string) {} static parse(value: string) {} }")).toHaveLength(0);
-  expect(noReconstitutionBypass("kernel/domain/x.ts", "// static reconstitute(value: string) {}\nexport class X {}")).toHaveLength(0);
-  expect(noReconstitutionBypass("kernel/domain/x.ts", 'const example = "static reconstitute(value: string) {}";')).toHaveLength(0);
+  expect(
+    noReconstitutionBypass("kernel/domain/x.ts", "export class X { static reconstitute(value: string) {} }"),
+  ).toHaveLength(1);
+  expect(
+    noReconstitutionBypass(
+      "kernel/domain/x.ts",
+      "export class X { static of(value: string) {} static parse(value: string) {} }",
+    ),
+  ).toHaveLength(0);
+  expect(
+    noReconstitutionBypass("kernel/domain/x.ts", "// static reconstitute(value: string) {}\nexport class X {}"),
+  ).toHaveLength(0);
+  expect(
+    noReconstitutionBypass("kernel/domain/x.ts", 'const example = "static reconstitute(value: string) {}";'),
+  ).toHaveLength(0);
 });
 
 test("adapters consume parse Results instead of catching constructor panics", () => {
-  expect(constructionParsingInDomain("kernel/adapter/decoder.ts", "parseConstruction(() => Foo.of(raw))")).toHaveLength(1);
-  expect(constructionParsingInDomain("kernel/adapter/decoder.ts", "const parsed = Foo.parse(raw); if (!parsed.ok) return parsed;")).toHaveLength(0);
-  expect(constructionParsingInDomain("kernel/domain/foo.ts", "static parse(raw: string) { return parseConstruction(() => new Foo(raw)); }")).toHaveLength(0);
-  expect(constructionParsingInDomain("kernel/adapter/decoder.ts", "// parseConstruction is prohibited")).toHaveLength(0);
+  expect(constructionParsingInDomain("kernel/adapter/decoder.ts", "parseConstruction(() => Foo.of(raw))")).toHaveLength(
+    1,
+  );
+  expect(
+    constructionParsingInDomain(
+      "kernel/adapter/decoder.ts",
+      "const parsed = Foo.parse(raw); if (!parsed.ok) return parsed;",
+    ),
+  ).toHaveLength(0);
+  expect(
+    constructionParsingInDomain(
+      "kernel/domain/foo.ts",
+      "static parse(raw: string) { return parseConstruction(() => new Foo(raw)); }",
+    ),
+  ).toHaveLength(0);
+  expect(constructionParsingInDomain("kernel/adapter/decoder.ts", "// parseConstruction is prohibited")).toHaveLength(
+    0,
+  );
 });
 
 // isolated linker は各パッケージ直下に node_modules/ を作り、その中身は他
@@ -113,7 +138,9 @@ describe("rule red/green examples (detection power proof)", () => {
   });
 
   test("a string literal containing the word from is not mistaken for an import", () => {
-    expect(onlySanctionedImports("kernel/domain/x.ts", 'const detail = `enum mapping from "${src}" is not total`;')).toHaveLength(0);
+    expect(
+      onlySanctionedImports("kernel/domain/x.ts", `const detail = \`enum mapping from "\${src}" is not total\`;`),
+    ).toHaveLength(0);
   });
 
   test("a dynamic import with a non-literal argument is flagged (template literal and concatenation)", () => {
@@ -123,13 +150,17 @@ describe("rule red/green examples (detection power proof)", () => {
   });
 
   test("no-entry-imports flags an import of a composition root", () => {
-    expect(noEntryImports("kernel/adapter/x.ts", 'import { m } from "../../entries/aidlc-sensor-deep-spec-ir-valid.ts";')).not.toHaveLength(0);
+    expect(
+      noEntryImports("kernel/adapter/x.ts", 'import { m } from "../../entries/aidlc-sensor-deep-spec-ir-valid.ts";'),
+    ).not.toHaveLength(0);
     expect(noEntryImports("kernel/adapter/x.ts", 'import { m } from "./y.ts";')).toHaveLength(0);
   });
 
   test("no-io-in-pure-layers flags node:fs in domain and child_process in usecase, allows node:crypto in domain", () => {
     expect(noIoInPureLayers("kernel/domain/x.ts", 'import { readFileSync } from "node:fs";')).not.toHaveLength(0);
-    expect(noIoInPureLayers("design/usecase/x.ts", 'import { spawnSync } from "node:child_process";')).not.toHaveLength(0);
+    expect(noIoInPureLayers("design/usecase/x.ts", 'import { spawnSync } from "node:child_process";')).not.toHaveLength(
+      0,
+    );
     expect(noIoInPureLayers("kernel/domain/digest.ts", 'import { createHash } from "node:crypto";')).toHaveLength(0);
     expect(noIoInPureLayers("kernel/adapter/x.ts", 'import { readFileSync } from "node:fs";')).toHaveLength(0);
   });
@@ -140,8 +171,12 @@ describe("rule red/green examples (detection power proof)", () => {
   });
 
   test("infrastructure is a pure language extension: every node import is flagged, even node:crypto", () => {
-    expect(noIoInPureLayers("kernel/infrastructure/x.ts", 'import { createHash } from "node:crypto";')).not.toHaveLength(0);
-    expect(noIoInPureLayers("kernel/infrastructure/x.ts", 'import { readFileSync } from "node:fs";')).not.toHaveLength(0);
+    expect(
+      noIoInPureLayers("kernel/infrastructure/x.ts", 'import { createHash } from "node:crypto";'),
+    ).not.toHaveLength(0);
+    expect(noIoInPureLayers("kernel/infrastructure/x.ts", 'import { readFileSync } from "node:fs";')).not.toHaveLength(
+      0,
+    );
     expect(noIoInPureLayers("kernel/infrastructure/result.ts", "export const ok = 1;")).toHaveLength(0);
   });
 
@@ -160,29 +195,55 @@ describe("rule red/green examples (detection power proof)", () => {
 
   test("a // inside a string literal does not hide the rest of the line from the rules", () => {
     expect(processOnlyInEntries("kernel/adapter/x.ts", 'const s = "x//y"; process.env.X;')).not.toHaveLength(0);
-    expect(processOnlyInEntries("kernel/adapter/x.ts", "const s = `a//b`; const p = import.meta.url;")).not.toHaveLength(0);
+    expect(
+      processOnlyInEntries("kernel/adapter/x.ts", "const s = `a//b`; const p = import.meta.url;"),
+    ).not.toHaveLength(0);
     expect(processOnlyInEntries("kernel/adapter/x.ts", 'const url = "https://example.com";')).toHaveLength(0);
-    expect(processOnlyInEntries("kernel/adapter/x.ts", 'const esc = "quote:\\" // still string"; process.exit(1);')).not.toHaveLength(0);
+    expect(
+      processOnlyInEntries("kernel/adapter/x.ts", 'const esc = "quote:\\" // still string"; process.exit(1);'),
+    ).not.toHaveLength(0);
   });
 
   test("a comment mentioning process or import.meta or export * is not a violation", () => {
-    expect(processOnlyInEntries("kernel/adapter/x.ts", "// process.argv は entry の責務\nconst v = 1;")).toHaveLength(0);
+    expect(processOnlyInEntries("kernel/adapter/x.ts", "// process.argv は entry の責務\nconst v = 1;")).toHaveLength(
+      0,
+    );
     expect(processOnlyInEntries("kernel/adapter/x.ts", "/* import.meta を触らない */\nconst v = 1;")).toHaveLength(0);
     expect(noExportStar("kernel/domain/index.ts", '// export * は禁止\nexport { X } from "./x.ts";')).toHaveLength(0);
-    expect(onlySanctionedImports("kernel/domain/x.ts", '// import { z } from "zod"; と書いてはならない\nconst v = 1;')).toHaveLength(0);
+    expect(
+      onlySanctionedImports("kernel/domain/x.ts", '// import { z } from "zod"; と書いてはならない\nconst v = 1;'),
+    ).toHaveLength(0);
   });
 
   test("private-constructor-in-domain flags a public-ctor domain class, passes factories and Error types", () => {
-    expect(privateConstructorInDomain("kernel/domain/x.ts", "export class Token {\n  constructor(v: string) {}\n}")).not.toHaveLength(0);
-    expect(privateConstructorInDomain("kernel/domain/x.ts", "export class Token {\n  private constructor(v: string) {}\n  static of(v: string): Token { return new Token(v); }\n}")).toHaveLength(0);
-    expect(privateConstructorInDomain("kernel/domain/x.ts", "export class Boom extends Error {\n  constructor(m: string) { super(m); }\n}")).toHaveLength(0);
+    expect(
+      privateConstructorInDomain("kernel/domain/x.ts", "export class Token {\n  constructor(v: string) {}\n}"),
+    ).not.toHaveLength(0);
+    expect(
+      privateConstructorInDomain(
+        "kernel/domain/x.ts",
+        "export class Token {\n  private constructor(v: string) {}\n  static of(v: string): Token { return new Token(v); }\n}",
+      ),
+    ).toHaveLength(0);
+    expect(
+      privateConstructorInDomain(
+        "kernel/domain/x.ts",
+        "export class Boom extends Error {\n  constructor(m: string) { super(m); }\n}",
+      ),
+    ).toHaveLength(0);
     // adapter のクラスは対象外(Impl は合成ルートが new で配線する)。
-    expect(privateConstructorInDomain("kernel/adapter/x.ts", "export class Impl {\n  constructor() {}\n}")).toHaveLength(0);
+    expect(
+      privateConstructorInDomain("kernel/adapter/x.ts", "export class Impl {\n  constructor() {}\n}"),
+    ).toHaveLength(0);
   });
 
   test("no-get-accessors flags a getter, passes a method and a string mentioning get", () => {
-    expect(noGetAccessors("kernel/domain/x.ts", "export class A {\n  get value(): string { return this.#v; }\n}")).not.toHaveLength(0);
-    expect(noGetAccessors("kernel/domain/x.ts", "export class A {\n  value(): string { return this.#v; }\n}")).toHaveLength(0);
+    expect(
+      noGetAccessors("kernel/domain/x.ts", "export class A {\n  get value(): string { return this.#v; }\n}"),
+    ).not.toHaveLength(0);
+    expect(
+      noGetAccessors("kernel/domain/x.ts", "export class A {\n  value(): string { return this.#v; }\n}"),
+    ).toHaveLength(0);
     expect(noGetAccessors("kernel/domain/x.ts", 'const s = "  get thing (";\nconst v = 1;')).toHaveLength(0);
   });
 
@@ -202,113 +263,306 @@ describe("rule red/green examples (detection power proof)", () => {
   });
 
   test("one-public-type-per-file flags multi-type files, name mismatches, facade/entry declarations", () => {
-    expect(onePublicTypePerFile("kernel/domain/token.ts", "export class Token {}\nexport class TokenError {}")).not.toHaveLength(0);
-    expect(onePublicTypePerFile("kernel/domain/token.ts", "export class Token {}\ntype TokenError = { raw: string };")).toHaveLength(0);
+    expect(
+      onePublicTypePerFile("kernel/domain/token.ts", "export class Token {}\nexport class TokenError {}"),
+    ).not.toHaveLength(0);
+    expect(
+      onePublicTypePerFile("kernel/domain/token.ts", "export class Token {}\ntype TokenError = { raw: string };"),
+    ).toHaveLength(0);
     expect(onePublicTypePerFile("kernel/domain/wrong-name.ts", "export class Token {}")).not.toHaveLength(0);
     expect(onePublicTypePerFile("kernel/domain/trigger-name.ts", "export class TriggerName {}")).toHaveLength(0);
     expect(onePublicTypePerFile("kernel/usecase/verify-usecase.ts", "export class VerifyUseCase {}")).toHaveLength(0);
     expect(onePublicTypePerFile("kernel/domain/index.ts", "export class Sneaky {}")).not.toHaveLength(0);
     expect(onePublicTypePerFile("kernel/domain/index.ts", 'export { Token } from "./token.ts";')).toHaveLength(0);
-    expect(onePublicTypePerFile("entries/aidlc-sensor-deep-spec-ir-valid.ts", "export type Verdict = { pass: boolean };")).not.toHaveLength(0);
-    expect(onePublicTypePerFile("kernel/domain/token.ts", 'const s = "export class Fake {}";\nexport class Token {}')).toHaveLength(0);
+    expect(
+      onePublicTypePerFile("entries/aidlc-sensor-deep-spec-ir-valid.ts", "export type Verdict = { pass: boolean };"),
+    ).not.toHaveLength(0);
+    expect(
+      onePublicTypePerFile("kernel/domain/token.ts", 'const s = "export class Fake {}";\nexport class Token {}'),
+    ).toHaveLength(0);
   });
 
   test("ports-live-in-port-dir flags a stray port contract and an interactor inside port/", () => {
-    expect(portsLiveInPortDir("design/usecase/foo-repository.ts", "export interface FooRepository { x(): void }")).not.toHaveLength(0);
-    expect(portsLiveInPortDir("design/usecase/foo-client.ts", "export interface FooClient { x(): void }")).not.toHaveLength(0);
-    expect(portsLiveInPortDir("design/usecase/port/foo-repository.ts", "export interface FooRepository { x(): void }")).toHaveLength(0);
+    expect(
+      portsLiveInPortDir("design/usecase/foo-repository.ts", "export interface FooRepository { x(): void }"),
+    ).not.toHaveLength(0);
+    expect(
+      portsLiveInPortDir("design/usecase/foo-client.ts", "export interface FooClient { x(): void }"),
+    ).not.toHaveLength(0);
+    expect(
+      portsLiveInPortDir("design/usecase/port/foo-repository.ts", "export interface FooRepository { x(): void }"),
+    ).toHaveLength(0);
     expect(portsLiveInPortDir("design/usecase/port/sneaky.ts", "export class Sneaky {}")).not.toHaveLength(0);
     expect(portsLiveInPortDir("design/usecase/verify-usecase.ts", "export class VerifyUseCase {}")).toHaveLength(0);
-    expect(portsLiveInPortDir("design/adapter/foo-client-config.ts", "export interface FooClientConfig { y: string }")).toHaveLength(0);
+    expect(
+      portsLiveInPortDir("design/adapter/foo-client-config.ts", "export interface FooClientConfig { y: string }"),
+    ).toHaveLength(0);
   });
 
   test("commands-return-void flags a store that returns the aggregate", () => {
-    expect(commandsReturnVoid("design/usecase/port/foo-repository.ts", "export interface FooRepository {\n  store(x: Foo): Result<Foo, RepositoryError>;\n}")).not.toHaveLength(0);
-    expect(commandsReturnVoid("design/usecase/port/foo-repository.ts", "export interface FooRepository {\n  store(x: Foo): Result<void, RepositoryError>;\n}")).toHaveLength(0);
-    expect(commandsReturnVoid("design/usecase/foo-usecase.ts", "store(x: Foo): Result<Foo, RepositoryError>;")).toHaveLength(0);
+    expect(
+      commandsReturnVoid(
+        "design/usecase/port/foo-repository.ts",
+        "export interface FooRepository {\n  store(x: Foo): Result<Foo, RepositoryError>;\n}",
+      ),
+    ).not.toHaveLength(0);
+    expect(
+      commandsReturnVoid(
+        "design/usecase/port/foo-repository.ts",
+        "export interface FooRepository {\n  store(x: Foo): Result<void, RepositoryError>;\n}",
+      ),
+    ).toHaveLength(0);
+    expect(
+      commandsReturnVoid("design/usecase/foo-usecase.ts", "store(x: Foo): Result<Foo, RepositoryError>;"),
+    ).toHaveLength(0);
   });
 
   test("no-data-models-in-domain flags getter-only shapes outside the debt set", () => {
-    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  readonly a: string;\n}")).not.toHaveLength(0);
-    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n}")).toHaveLength(0);
+    expect(
+      noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  readonly a: string;\n}"),
+    ).not.toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n}")).toHaveLength(
+      0,
+    );
     // #80: メソッドを添えてもプロパティが 1 つでもあればデータモデル（「メソッドが一つあれば合格」の抜け道を塞ぐ）。
-    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  readonly a: string;\n  judge(): boolean;\n}")).toHaveLength(1);
-    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n  on: () => void;\n}")).toHaveLength(1);
-    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n  readonly [k: string]: string;\n}")).toHaveLength(1);
+    expect(
+      noDataModelsInDomain(
+        "design/domain/foo.ts",
+        "export interface Foo {\n  readonly a: string;\n  judge(): boolean;\n}",
+      ),
+    ).toHaveLength(1);
+    expect(
+      noDataModelsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n  on: () => void;\n}"),
+    ).toHaveLength(1);
+    expect(
+      noDataModelsInDomain(
+        "design/domain/foo.ts",
+        "export interface Foo {\n  judge(): boolean;\n  readonly [k: string]: string;\n}",
+      ),
+    ).toHaveLength(1);
     // 公開言語の表の項目だけが免除——表のパスにある表の名前で、別名は免除されない。
-    expect(noDataModelsInDomain("kernel/domain/expression.ts", "export interface Expression {\n  readonly op: string;\n}")).toHaveLength(0);
-    expect(noDataModelsInDomain("kernel/domain/expression.ts", "export interface Sneak {\n  readonly op: string;\n}")).toHaveLength(1);
-    expect(noDataModelsInDomain("design/domain/expression.ts", "export interface Expression {\n  readonly op: string;\n}")).toHaveLength(1);
+    expect(
+      noDataModelsInDomain("kernel/domain/expression.ts", "export interface Expression {\n  readonly op: string;\n}"),
+    ).toHaveLength(0);
+    expect(
+      noDataModelsInDomain("kernel/domain/expression.ts", "export interface Sneak {\n  readonly op: string;\n}"),
+    ).toHaveLength(1);
+    expect(
+      noDataModelsInDomain("design/domain/expression.ts", "export interface Expression {\n  readonly op: string;\n}"),
+    ).toHaveLength(1);
     // 型引数付き interface も data model（波39 で塞いだ穴）——ネストした型引数と
     // extends 節を経由しても回避できない。
-    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T> {\n  readonly t: T;\n}")).not.toHaveLength(0);
-    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T extends Promise<string>> {\n  readonly t: T;\n}")).not.toHaveLength(0);
-    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T extends Map<string, Set<number>>> {\n  readonly t: T;\n}")).not.toHaveLength(0);
-    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T extends Promise<string>> extends Bar<T> {\n  readonly t: T;\n}")).not.toHaveLength(0);
-    expect(noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T extends Promise<string>> {\n  judge(t: T): boolean;\n}")).toHaveLength(0);
-    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { a: string };\n')).not.toHaveLength(0);
-    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { kind: "a" } | { kind: "b" };\n')).not.toHaveLength(0);
+    expect(
+      noDataModelsInDomain("design/domain/foo.ts", "export interface Foo<T> {\n  readonly t: T;\n}"),
+    ).not.toHaveLength(0);
+    expect(
+      noDataModelsInDomain(
+        "design/domain/foo.ts",
+        "export interface Foo<T extends Promise<string>> {\n  readonly t: T;\n}",
+      ),
+    ).not.toHaveLength(0);
+    expect(
+      noDataModelsInDomain(
+        "design/domain/foo.ts",
+        "export interface Foo<T extends Map<string, Set<number>>> {\n  readonly t: T;\n}",
+      ),
+    ).not.toHaveLength(0);
+    expect(
+      noDataModelsInDomain(
+        "design/domain/foo.ts",
+        "export interface Foo<T extends Promise<string>> extends Bar<T> {\n  readonly t: T;\n}",
+      ),
+    ).not.toHaveLength(0);
+    expect(
+      noDataModelsInDomain(
+        "design/domain/foo.ts",
+        "export interface Foo<T extends Promise<string>> {\n  judge(t: T): boolean;\n}",
+      ),
+    ).toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export type Foo = { a: string };\n")).not.toHaveLength(0);
+    expect(
+      noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { kind: "a" } | { kind: "b" };\n'),
+    ).not.toHaveLength(0);
     expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = "a" | "b";\n')).toHaveLength(0);
     // ジェネリック别名と末尾セミコロン省略も検出する（波3レビュー指摘の回帰）。
-    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo<T> = { t: T };\n')).not.toHaveLength(0);
-    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { a: string }\n')).not.toHaveLength(0);
-    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { kind: "a" } | { kind: "b" }\n')).not.toHaveLength(0);
-    expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo<T> = T | T[];\n')).toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export type Foo<T> = { t: T };\n")).not.toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export type Foo = { a: string }\n")).not.toHaveLength(0);
+    expect(
+      noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = { kind: "a" } | { kind: "b" }\n'),
+    ).not.toHaveLength(0);
+    expect(noDataModelsInDomain("design/domain/foo.ts", "export type Foo<T> = T | T[];\n")).toHaveLength(0);
     expect(noDataModelsInDomain("design/domain/foo.ts", 'export type Foo = "a" | "b"\n')).toHaveLength(0);
-    expect(noDataModelsInDomain("design/adapter/foo.ts", "export interface Foo {\n  readonly a: string;\n}")).toHaveLength(0);
+    expect(
+      noDataModelsInDomain("design/adapter/foo.ts", "export interface Foo {\n  readonly a: string;\n}"),
+    ).toHaveLength(0);
   });
 
   test("no-primitive-fields-in-domain flags string/number fields outside the debt set", () => {
-    expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export class Foo {\n  readonly #name: string;\n  readonly #ok: boolean;\n}")).toHaveLength(1);
+    expect(
+      noPrimitiveFieldsInDomain(
+        "design/domain/foo.ts",
+        "export class Foo {\n  readonly #name: string;\n  readonly #ok: boolean;\n}",
+      ),
+    ).toHaveLength(1);
     // 初期化子つき（型注釈あり／なし）、definite assignment `!`、無インデントでも検出する（レビュー指摘の回帰）。
-    expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", 'export class Foo {\n  readonly #name: string = "x";\n  #count = 0;\n  #code = "";\n  #set = new Set<string>();\n}').map((v) => v.detail)).toEqual([
+    expect(
+      noPrimitiveFieldsInDomain(
+        "design/domain/foo.ts",
+        'export class Foo {\n  readonly #name: string = "x";\n  #count = 0;\n  #code = "";\n  #set = new Set<string>();\n}',
+      ).map((v) => v.detail),
+    ).toEqual([
       "primitive-typed field #name: string — wrap it in a domain primitive or keep it behind a DP door",
       "primitive-typed field #count: number — wrap it in a domain primitive or keep it behind a DP door",
       "primitive-typed field #code: string — wrap it in a domain primitive or keep it behind a DP door",
     ]);
-    expect(primitiveFieldsOf("export class Foo {\n#name: string;\n  #count!: number;\n  static #n: number;\n}")).toEqual(["#name: string", "#count: number", "#n: number"]);
-    expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export class Foo {\n  readonly #ids: ReadonlySet<string>;\n  readonly #count: number;\n  readonly #byId: ReadonlyMap<string, Foo>;\n}")).toHaveLength(3);
-    expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export interface Foo {\n  readonly count: number;\n  readonly flag: boolean;\n  readonly names?: readonly string[];\n}")).toHaveLength(2);
-    expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", 'export type Foo =\n  | { readonly kind: "a"; readonly core: string[] }\n  | { readonly kind: "b" };\n')).toHaveLength(1);
+    expect(
+      primitiveFieldsOf("export class Foo {\n#name: string;\n  #count!: number;\n  static #n: number;\n}"),
+    ).toEqual(["#name: string", "#count: number", "#n: number"]);
+    expect(
+      noPrimitiveFieldsInDomain(
+        "design/domain/foo.ts",
+        "export class Foo {\n  readonly #ids: ReadonlySet<string>;\n  readonly #count: number;\n  readonly #byId: ReadonlyMap<string, Foo>;\n}",
+      ),
+    ).toHaveLength(3);
+    expect(
+      noPrimitiveFieldsInDomain(
+        "design/domain/foo.ts",
+        "export interface Foo {\n  readonly count: number;\n  readonly flag: boolean;\n  readonly names?: readonly string[];\n}",
+      ),
+    ).toHaveLength(2);
+    expect(
+      noPrimitiveFieldsInDomain(
+        "design/domain/foo.ts",
+        'export type Foo =\n  | { readonly kind: "a"; readonly core: string[] }\n  | { readonly kind: "b" };\n',
+      ),
+    ).toHaveLength(1);
     // 裁定の除外: DP ラッパー(唯一の #value)、bool、prose、state トークン、
     // literal union、index signature、メソッド署名、除外ファイル、台帳、domain 以外。
-    expect(noPrimitiveFieldsInDomain("design/domain/foo-id.ts", "export class FooId {\n  readonly #value: string;\n}")).toHaveLength(0);
-    expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", 'export class Foo {\n  readonly #detail: string;\n  readonly #from: string;\n  readonly #kind: "a" | "b";\n}')).toHaveLength(0);
-    expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n  readonly reason?: string;\n  readonly [k: string]: string;\n  readonly on: () => void;\n}")).toHaveLength(0);
-    expect(noPrimitiveFieldsInDomain("kernel/domain/expression.ts", "export interface Expression {\n  readonly op: string;\n}")).toHaveLength(0);
+    expect(
+      noPrimitiveFieldsInDomain("design/domain/foo-id.ts", "export class FooId {\n  readonly #value: string;\n}"),
+    ).toHaveLength(0);
+    expect(
+      noPrimitiveFieldsInDomain(
+        "design/domain/foo.ts",
+        'export class Foo {\n  readonly #detail: string;\n  readonly #from: string;\n  readonly #kind: "a" | "b";\n}',
+      ),
+    ).toHaveLength(0);
+    expect(
+      noPrimitiveFieldsInDomain(
+        "design/domain/foo.ts",
+        "export interface Foo {\n  judge(): boolean;\n  readonly reason?: string;\n  readonly [k: string]: string;\n  readonly on: () => void;\n}",
+      ),
+    ).toHaveLength(0);
+    expect(
+      noPrimitiveFieldsInDomain(
+        "kernel/domain/expression.ts",
+        "export interface Expression {\n  readonly op: string;\n}",
+      ),
+    ).toHaveLength(0);
     // 台帳は空（裁定 3-1〜3-4）: コレクション形の primitive も台帳の陰に隠れず違反になる。
-    expect(noPrimitiveFieldsInDomain("kernel/domain/functional-requirement-references.ts", "export class FunctionalRequirementReferences {\n  readonly #values: readonly string[];\n}")).toHaveLength(1);
-    expect(noPrimitiveFieldsInDomain("kernel/domain/functional-requirement-references.ts", "export class FunctionalRequirementReferences {\n  readonly #values: readonly string[];\n  readonly #newcomer: string;\n}")).toHaveLength(2);
+    expect(
+      noPrimitiveFieldsInDomain(
+        "kernel/domain/functional-requirement-references.ts",
+        "export class FunctionalRequirementReferences {\n  readonly #values: readonly string[];\n}",
+      ),
+    ).toHaveLength(1);
+    expect(
+      noPrimitiveFieldsInDomain(
+        "kernel/domain/functional-requirement-references.ts",
+        "export class FunctionalRequirementReferences {\n  readonly #values: readonly string[];\n  readonly #newcomer: string;\n}",
+      ),
+    ).toHaveLength(2);
     // prose の除外（裁定 3-2／3-3）: EARS 文と witness の原文トークン。
-    expect(noPrimitiveFieldsInDomain("requirements/domain/foo.ts", "export class Foo {\n  readonly #ears: string | undefined;\n  readonly #value: string | undefined;\n  readonly #x: number;\n}")).toHaveLength(1);
-    expect(noPrimitiveFieldsInDomain("design/adapter/foo.ts", "export class Foo {\n  readonly #name: string;\n}")).toHaveLength(0);
+    expect(
+      noPrimitiveFieldsInDomain(
+        "requirements/domain/foo.ts",
+        "export class Foo {\n  readonly #ears: string | undefined;\n  readonly #value: string | undefined;\n  readonly #x: number;\n}",
+      ),
+    ).toHaveLength(1);
+    expect(
+      noPrimitiveFieldsInDomain("design/adapter/foo.ts", "export class Foo {\n  readonly #name: string;\n}"),
+    ).toHaveLength(0);
     // 検出器はコメント・文字列内の型らしき記述に反応しない。
-    expect(primitiveFieldsOf("export class Foo {\n  // readonly #ghost: string;\n  readonly #label: string;\n  readonly #real: number;\n}")).toEqual(["#real: number"]);
+    expect(
+      primitiveFieldsOf(
+        "export class Foo {\n  // readonly #ghost: string;\n  readonly #label: string;\n  readonly #real: number;\n}",
+      ),
+    ).toEqual(["#real: number"]);
   });
 
   test("domain-fields-are-private flags every non-# field of a domain class and ignores door signatures", () => {
-    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly bar: string;\n  #ok: string;\n}")).toHaveLength(1);
-    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  public count = 0;\n  private secret: number;\n  static readonly EMPTY = new Foo();\n  protected x?: string;\n}")).toHaveLength(4);
-    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly #bar: string;\n  static #cache: Foo | null = null;\n  bar(): string {\n    return this.#bar;\n  }\n}")).toHaveLength(0);
+    expect(
+      domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly bar: string;\n  #ok: string;\n}"),
+    ).toHaveLength(1);
+    expect(
+      domainFieldsArePrivate(
+        "design/domain/foo.ts",
+        "export class Foo {\n  public count = 0;\n  private secret: number;\n  static readonly EMPTY = new Foo();\n  protected x?: string;\n}",
+      ),
+    ).toHaveLength(4);
+    expect(
+      domainFieldsArePrivate(
+        "design/domain/foo.ts",
+        "export class Foo {\n  readonly #bar: string;\n  static #cache: Foo | null = null;\n  bar(): string {\n    return this.#bar;\n  }\n}",
+      ),
+    ).toHaveLength(0);
     // ドア署名の無名インライン object 型（深さ 2）の行はフィールドではない。
-    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly #id: string;\n  static reconstitute(seed: {\n    readonly id: string;\n    readonly name?: string;\n  }): Foo {\n    return new Foo(seed);\n  }\n  match<T>(handlers: { a: () => T; b: (x: number) => T }): T {\n    const local: { readonly k: string } = { k: \"\" };\n    return handlers.a();\n  }\n}")).toHaveLength(0);
+    expect(
+      domainFieldsArePrivate(
+        "design/domain/foo.ts",
+        'export class Foo {\n  readonly #id: string;\n  static reconstitute(seed: {\n    readonly id: string;\n    readonly name?: string;\n  }): Foo {\n    return new Foo(seed);\n  }\n  match<T>(handlers: { a: () => T; b: (x: number) => T }): T {\n    const local: { readonly k: string } = { k: "" };\n    return handlers.a();\n  }\n}',
+      ),
+    ).toHaveLength(0);
     // 型引数の制約に `{` を持つ generic class でも本体を見る（レビュー指摘の回帰）。
-    expect(domainFieldsArePrivate("kernel/domain/foo.ts", "export class Idx<K extends { asString(): string }, V> {\n  readonly leak: string;\n  readonly #ok: V;\n}")).toHaveLength(1);
-    expect(domainFieldsArePrivate("kernel/domain/foo.ts", "export class Idx<K extends { asString(): string }, V extends (x: K) => boolean> {\n  readonly #ok: V;\n}")).toHaveLength(0);
+    expect(
+      domainFieldsArePrivate(
+        "kernel/domain/foo.ts",
+        "export class Idx<K extends { asString(): string }, V> {\n  readonly leak: string;\n  readonly #ok: V;\n}",
+      ),
+    ).toHaveLength(1);
+    expect(
+      domainFieldsArePrivate(
+        "kernel/domain/foo.ts",
+        "export class Idx<K extends { asString(): string }, V extends (x: K) => boolean> {\n  readonly #ok: V;\n}",
+      ),
+    ).toHaveLength(0);
     // 複数行の引数リスト（丸括弧の中）の行もフィールドではない。
-    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Foo {\n  readonly #id: string;\n  static versionMismatch(\n    id: string,\n    model: number,\n    method: string,\n  ): Foo {\n    return new Foo(id);\n  }\n}")).toHaveLength(0);
-    expect(domainFieldsArePrivate("design/adapter/foo.ts", "export class Foo {\n  readonly bar: string;\n}")).toHaveLength(0);
-    expect(domainFieldsArePrivate("design/domain/foo.ts", "export class Boom extends Error {\n  readonly code: number;\n}")).toHaveLength(1);
+    expect(
+      domainFieldsArePrivate(
+        "design/domain/foo.ts",
+        "export class Foo {\n  readonly #id: string;\n  static versionMismatch(\n    id: string,\n    model: number,\n    method: string,\n  ): Foo {\n    return new Foo(id);\n  }\n}",
+      ),
+    ).toHaveLength(0);
+    expect(
+      domainFieldsArePrivate("design/adapter/foo.ts", "export class Foo {\n  readonly bar: string;\n}"),
+    ).toHaveLength(0);
+    expect(
+      domainFieldsArePrivate("design/domain/foo.ts", "export class Boom extends Error {\n  readonly code: number;\n}"),
+    ).toHaveLength(1);
   });
 
   test("published-language-layers confines every table entry to its layers", () => {
-    expect(publishedLanguageLayers("design/usecase/foo.ts", 'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}')).toHaveLength(1);
-    expect(publishedLanguageLayers("design/domain/foo.ts", 'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}')).toHaveLength(0);
+    expect(
+      publishedLanguageLayers(
+        "design/usecase/foo.ts",
+        'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}',
+      ),
+    ).toHaveLength(1);
+    expect(
+      publishedLanguageLayers(
+        "design/domain/foo.ts",
+        'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}',
+      ),
+    ).toHaveLength(0);
     expect(publishedLanguageLayers("design/adapter/foo.ts", "const x: AttributePaths = y;")).toHaveLength(0);
     expect(publishedLanguageLayers("design/domain/foo.ts", "const x: AttributePaths = y;")).toHaveLength(0);
-    expect(publishedLanguageLayers("entries/aidlc-sensor-deep-spec-verify-smt.ts", "const k = KeyedIndex.empty();")).toHaveLength(1);
+    expect(
+      publishedLanguageLayers("entries/aidlc-sensor-deep-spec-verify-smt.ts", "const k = KeyedIndex.empty();"),
+    ).toHaveLength(1);
     // 文字列・コメントの中の名前には反応しない。
-    expect(publishedLanguageLayers("design/usecase/foo.ts", '// Expression is documented here\nconst s = "Expression";')).toHaveLength(0);
+    expect(
+      publishedLanguageLayers("design/usecase/foo.ts", '// Expression is documented here\nconst s = "Expression";'),
+    ).toHaveLength(0);
     expect(publishedLanguageLayers("design/usecase/foo.ts", "const expressionCount = 1;")).toHaveLength(0);
   });
 
@@ -319,17 +573,23 @@ describe("rule red/green examples (detection power proof)", () => {
 
   test("layer-direction flags domain→adapter, adapter→foreign-context, passes sanctioned edges", () => {
     expect(layerDirection("kernel/domain/x.ts", 'import { y } from "../adapter/y.ts";')).not.toHaveLength(0);
-    expect(layerDirection("refcheck/adapter/x.ts", 'import { y } from "../../design/domain/y.ts";')).not.toHaveLength(0);
+    expect(layerDirection("refcheck/adapter/x.ts", 'import { y } from "../../design/domain/y.ts";')).not.toHaveLength(
+      0,
+    );
     // green: 公認のコンテキスト横断エッジ（design/domain → requirements/domain）は相対 import でも通る。
     expect(layerDirection("design/domain/x.ts", 'import { y } from "../../requirements/domain/y.ts";')).toHaveLength(0);
     // red: design/usecase → refinement/domain は旧エッジ（refinement は design/domain へ統合済み）——もう公認されない。
-    expect(layerDirection("design/usecase/x.ts", 'import { y } from "../../refinement/domain/y.ts";')).not.toHaveLength(0);
+    expect(layerDirection("design/usecase/x.ts", 'import { y } from "../../refinement/domain/y.ts";')).not.toHaveLength(
+      0,
+    );
     expect(layerDirection("design/usecase/x.ts", 'import { y } from "../domain/y.ts";')).toHaveLength(0);
   });
 
   test("layer-direction reads the context and layer from a bare package specifier", () => {
     // red: 方向違反（kernel/domain → requirements/domain は同一でも kernel でもない）。
-    expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/requirements-domain";')).not.toHaveLength(0);
+    expect(
+      layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/requirements-domain";'),
+    ).not.toHaveLength(0);
     // green: どの層も kernel の同層以下へは降りられる。
     expect(layerDirection("requirements/domain/x.ts", 'import { y } from "@deep-spec/kernel-domain";')).toHaveLength(0);
     // red: 同一コンテキストでも層の向きは守る（domain → adapter）。
@@ -337,11 +597,17 @@ describe("rule red/green examples (detection power proof)", () => {
     // green: 公認のコンテキスト横断エッジ（design/domain → requirements/domain）は bare でも通る。
     expect(layerDirection("design/domain/x.ts", 'import { y } from "@deep-spec/requirements-domain";')).toHaveLength(0);
     expect(layerDirection("design/usecase/x.ts", 'import { y } from "@deep-spec/design-domain";')).toHaveLength(0);
-    expect(layerDirection("requirements/usecase/x.ts", 'import { ok } from "@deep-spec/kernel-infrastructure";')).toHaveLength(0);
+    expect(
+      layerDirection("requirements/usecase/x.ts", 'import { ok } from "@deep-spec/kernel-infrastructure";'),
+    ).toHaveLength(0);
     // red: refinement/domain → requirements/domain は旧エッジ——SANCTIONED_CROSS_CONTEXT から削除済みでもう公認されない。
-    expect(layerDirection("refinement/domain/x.ts", 'import { y } from "@deep-spec/requirements-domain";')).not.toHaveLength(0);
+    expect(
+      layerDirection("refinement/domain/x.ts", 'import { y } from "@deep-spec/requirements-domain";'),
+    ).not.toHaveLength(0);
     // red: refinement パッケージ自体が削除済み——旧 refinement package への import を拒否する。
-    expect(layerDirection("design/usecase/x.ts", 'import { y } from "@deep-spec/refinement-domain";')).not.toHaveLength(0);
+    expect(layerDirection("design/usecase/x.ts", 'import { y } from "@deep-spec/refinement-domain";')).not.toHaveLength(
+      0,
+    );
     // red: 合成ルートのパッケージと、層パッケージでない @deep-spec/* は素通ししない。
     expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/entries";')).not.toHaveLength(0);
     expect(layerDirection("kernel/domain/x.ts", 'import { y } from "@deep-spec/kernel-sneaky";')).not.toHaveLength(0);
@@ -355,21 +621,45 @@ describe("rule red/green examples (detection power proof)", () => {
   // 迂回できる。パッケージ境界を越える相対 import はそれ自体が違反。
   test("no-cross-package-relative-imports flags relatives leaving the package, passes those inside it", () => {
     // red: 隣のコンテキストへ出る／同一コンテキストの別の層へ出る。
-    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "../../requirements/domain/index.ts";')).not.toHaveLength(0);
-    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "../adapter/y.ts";')).not.toHaveLength(0);
+    expect(
+      noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "../../requirements/domain/index.ts";'),
+    ).not.toHaveLength(0);
+    expect(
+      noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "../adapter/y.ts";'),
+    ).not.toHaveLength(0);
     // red: 合成ルートも自分のパッケージ（entries/）から出られない。
-    expect(noCrossPackageRelativeImports("entries/deep-spec-analysis-doctor.ts", 'import { y } from "../doctor/adapter/index.ts";')).not.toHaveLength(0);
+    expect(
+      noCrossPackageRelativeImports(
+        "entries/deep-spec-analysis-doctor.ts",
+        'import { y } from "../doctor/adapter/index.ts";',
+      ),
+    ).not.toHaveLength(0);
     // red: src/ の外へ脱出する相対も同じ違反。
-    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { h } from "../../../tests/helper.ts";')).not.toHaveLength(0);
+    expect(
+      noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { h } from "../../../tests/helper.ts";'),
+    ).not.toHaveLength(0);
     // green: パッケージ内なら兄弟も入れ子も親ディレクトリも通る。
     expect(noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "./y.ts";')).toHaveLength(0);
-    expect(noCrossPackageRelativeImports("design/usecase/verify-usecase.ts", 'import { y } from "./port/foo-repository.ts";')).toHaveLength(0);
-    expect(noCrossPackageRelativeImports("design/usecase/port/foo-repository.ts", 'import { y } from "../y.ts";')).toHaveLength(0);
-    expect(noCrossPackageRelativeImports("entries/deep-spec-analysis-doctor.ts", 'import { y } from "./y.ts";')).toHaveLength(0);
+    expect(
+      noCrossPackageRelativeImports(
+        "design/usecase/verify-usecase.ts",
+        'import { y } from "./port/foo-repository.ts";',
+      ),
+    ).toHaveLength(0);
+    expect(
+      noCrossPackageRelativeImports("design/usecase/port/foo-repository.ts", 'import { y } from "../y.ts";'),
+    ).toHaveLength(0);
+    expect(
+      noCrossPackageRelativeImports("entries/deep-spec-analysis-doctor.ts", 'import { y } from "./y.ts";'),
+    ).toHaveLength(0);
     // green: 層をまたぐ正規の書き方（bare specifier）はこの規則の対象外。
-    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "@deep-spec/kernel-adapter";')).toHaveLength(0);
+    expect(
+      noCrossPackageRelativeImports("kernel/domain/x.ts", 'import { y } from "@deep-spec/kernel-adapter";'),
+    ).toHaveLength(0);
     // コメント中の相対 import には反応しない（他の規則と同じ前処理を通る証明）。
-    expect(noCrossPackageRelativeImports("kernel/domain/x.ts", '// import { y } from "../adapter/y.ts";\nconst v = 1;')).toHaveLength(0);
+    expect(
+      noCrossPackageRelativeImports("kernel/domain/x.ts", '// import { y } from "../adapter/y.ts";\nconst v = 1;'),
+    ).toHaveLength(0);
   });
 
   // 7.2: FR1.2 の穴——isolated linker が張るのは package.json の dependencies なので、
@@ -378,67 +668,101 @@ describe("rule red/green examples (detection power proof)", () => {
   test("manifest-dependency-direction flags declared edges the layer tables forbid", () => {
     const ws = "workspace:*";
     // red: 上向きの辺は宣言できない。
-    expect(manifestDependencyDirection("kernel/domain/package.json", {
-      name: "@deep-spec/kernel-domain",
-      dependencies: { "@deep-spec/design-adapter": ws },
-    })).not.toHaveLength(0);
-    expect(manifestDependencyDirection("refcheck/usecase/package.json", {
-      name: "@deep-spec/refcheck-usecase",
-      dependencies: { "@deep-spec/refcheck-adapter": ws },
-    })).not.toHaveLength(0);
+    expect(
+      manifestDependencyDirection("kernel/domain/package.json", {
+        name: "@deep-spec/kernel-domain",
+        dependencies: { "@deep-spec/design-adapter": ws },
+      }),
+    ).not.toHaveLength(0);
+    expect(
+      manifestDependencyDirection("refcheck/usecase/package.json", {
+        name: "@deep-spec/refcheck-usecase",
+        dependencies: { "@deep-spec/refcheck-adapter": ws },
+      }),
+    ).not.toHaveLength(0);
     // red: infrastructure は自分より上を知らない。
-    expect(manifestDependencyDirection("kernel/infrastructure/package.json", {
-      name: "@deep-spec/kernel-infrastructure",
-      dependencies: { "@deep-spec/kernel-domain": ws },
-    })).not.toHaveLength(0);
+    expect(
+      manifestDependencyDirection("kernel/infrastructure/package.json", {
+        name: "@deep-spec/kernel-infrastructure",
+        dependencies: { "@deep-spec/kernel-domain": ws },
+      }),
+    ).not.toHaveLength(0);
     // red: 公認されていないコンテキスト横断。
-    expect(manifestDependencyDirection("requirements/domain/package.json", {
-      name: "@deep-spec/requirements-domain",
-      dependencies: { "@deep-spec/design-domain": ws },
-    })).not.toHaveLength(0);
+    expect(
+      manifestDependencyDirection("requirements/domain/package.json", {
+        name: "@deep-spec/requirements-domain",
+        dependencies: { "@deep-spec/design-domain": ws },
+      }),
+    ).not.toHaveLength(0);
     // red: 層パッケージでないものは辿れる依存にしない（合成ルートを含む）。
-    expect(manifestDependencyDirection("doctor/adapter/package.json", {
-      name: "@deep-spec/doctor-adapter",
-      dependencies: { "@deep-spec/entries": ws },
-    })).not.toHaveLength(0);
+    expect(
+      manifestDependencyDirection("doctor/adapter/package.json", {
+        name: "@deep-spec/doctor-adapter",
+        dependencies: { "@deep-spec/entries": ws },
+      }),
+    ).not.toHaveLength(0);
     // red: レジストリから引く宣言はワークスペースの辺ではない。
-    expect(manifestDependencyDirection("doctor/usecase/package.json", {
-      name: "@deep-spec/doctor-usecase",
-      dependencies: { "@deep-spec/doctor-domain": "^1.0.0" },
-    })).not.toHaveLength(0);
+    expect(
+      manifestDependencyDirection("doctor/usecase/package.json", {
+        name: "@deep-spec/doctor-usecase",
+        dependencies: { "@deep-spec/doctor-domain": "^1.0.0" },
+      }),
+    ).not.toHaveLength(0);
     // red: 名前がパスと食い違えば、宣言表はもうそのパッケージの事実ではない。
-    expect(manifestDependencyDirection("doctor/domain/package.json", {
-      name: "@deep-spec/doctor-usecase",
-      dependencies: {},
-    })).not.toHaveLength(0);
+    expect(
+      manifestDependencyDirection("doctor/domain/package.json", {
+        name: "@deep-spec/doctor-usecase",
+        dependencies: {},
+      }),
+    ).not.toHaveLength(0);
     // red: 自分自身への宣言。
-    expect(manifestDependencyDirection("design/domain/package.json", {
-      name: "@deep-spec/design-domain",
-      dependencies: { "@deep-spec/design-domain": ws },
-    })).not.toHaveLength(0);
+    expect(
+      manifestDependencyDirection("design/domain/package.json", {
+        name: "@deep-spec/design-domain",
+        dependencies: { "@deep-spec/design-domain": ws },
+      }),
+    ).not.toHaveLength(0);
     // green: 下向きの辺・kernel への辺・公認の横断・依存ゼロ。
-    expect(manifestDependencyDirection("design/adapter/package.json", {
-      name: "@deep-spec/design-adapter",
-      dependencies: { "@deep-spec/design-usecase": ws, "@deep-spec/design-domain": ws, "@deep-spec/kernel-adapter": ws },
-    })).toHaveLength(0);
-    expect(manifestDependencyDirection("refcheck/usecase/package.json", {
-      name: "@deep-spec/refcheck-usecase",
-      dependencies: { "@deep-spec/refcheck-domain": ws, "@deep-spec/kernel-infrastructure": ws },
-    })).toHaveLength(0);
+    expect(
+      manifestDependencyDirection("design/adapter/package.json", {
+        name: "@deep-spec/design-adapter",
+        dependencies: {
+          "@deep-spec/design-usecase": ws,
+          "@deep-spec/design-domain": ws,
+          "@deep-spec/kernel-adapter": ws,
+        },
+      }),
+    ).toHaveLength(0);
+    expect(
+      manifestDependencyDirection("refcheck/usecase/package.json", {
+        name: "@deep-spec/refcheck-usecase",
+        dependencies: { "@deep-spec/refcheck-domain": ws, "@deep-spec/kernel-infrastructure": ws },
+      }),
+    ).toHaveLength(0);
     // red: refinement/domain は削除済み——旧 2 辺（→requirements/domain・→design/domain）は
     // SANCTIONED_CROSS_CONTEXT から外れ、宣言しても構造による強制は開かない。
-    expect(manifestDependencyDirection("refinement/domain/package.json", {
-      name: "@deep-spec/refinement-domain",
-      dependencies: { "@deep-spec/requirements-domain": ws, "@deep-spec/design-domain": ws },
-    })).not.toHaveLength(0);
+    expect(
+      manifestDependencyDirection("refinement/domain/package.json", {
+        name: "@deep-spec/refinement-domain",
+        dependencies: { "@deep-spec/requirements-domain": ws, "@deep-spec/design-domain": ws },
+      }),
+    ).not.toHaveLength(0);
     // green: 新しい公認のコンテキスト横断エッジ（design/domain → requirements/domain）は宣言できる。
-    expect(manifestDependencyDirection("design/domain/package.json", {
-      name: "@deep-spec/design-domain",
-      dependencies: { "@deep-spec/kernel-domain": ws, "@deep-spec/kernel-infrastructure": ws, "@deep-spec/requirements-domain": ws },
-    })).toHaveLength(0);
-    expect(manifestDependencyDirection("kernel/infrastructure/package.json", {
-      name: "@deep-spec/kernel-infrastructure",
-    })).toHaveLength(0);
+    expect(
+      manifestDependencyDirection("design/domain/package.json", {
+        name: "@deep-spec/design-domain",
+        dependencies: {
+          "@deep-spec/kernel-domain": ws,
+          "@deep-spec/kernel-infrastructure": ws,
+          "@deep-spec/requirements-domain": ws,
+        },
+      }),
+    ).toHaveLength(0);
+    expect(
+      manifestDependencyDirection("kernel/infrastructure/package.json", {
+        name: "@deep-spec/kernel-infrastructure",
+      }),
+    ).toHaveLength(0);
   });
 
   test("a relative import escaping src/ (unclassified target) is flagged", () => {
@@ -449,8 +773,12 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(layerDirection("kernel/infrastructure/x.ts", 'import { y } from "../domain/y.ts";')).not.toHaveLength(0);
     expect(layerDirection("kernel/infrastructure/x.ts", 'import { y } from "../adapter/y.ts";')).not.toHaveLength(0);
     expect(layerDirection("kernel/domain/x.ts", 'import { ok } from "../infrastructure/result.ts";')).toHaveLength(0);
-    expect(layerDirection("requirements/usecase/x.ts", 'import { ok } from "../../kernel/infrastructure/index.ts";')).toHaveLength(0);
-    expect(layerDirection("refcheck/adapter/x.ts", 'import { ok } from "../../kernel/infrastructure/index.ts";')).toHaveLength(0);
+    expect(
+      layerDirection("requirements/usecase/x.ts", 'import { ok } from "../../kernel/infrastructure/index.ts";'),
+    ).toHaveLength(0);
+    expect(
+      layerDirection("refcheck/adapter/x.ts", 'import { ok } from "../../kernel/infrastructure/index.ts";'),
+    ).toHaveLength(0);
   });
 
   test("locationOf classifies entries, data, and layered paths — everything else is unclassified", () => {
@@ -484,7 +812,9 @@ describe("the real src/ tree", () => {
   });
 
   test("domain and boundary type names use complete terms", () => {
-    const abbreviated = files.flatMap((path) => abbreviatedTypeNames(readFileSync(join(srcDir, path), "utf-8")).map((name) => `${path}: ${name}`));
+    const abbreviated = files.flatMap((path) =>
+      abbreviatedTypeNames(readFileSync(join(srcDir, path), "utf-8")).map((name) => `${path}: ${name}`),
+    );
     expect(abbreviated).toEqual([]);
   });
 
@@ -513,8 +843,15 @@ describe("the real src/ tree", () => {
     }
     // domain の公開 interface は表の項目だけ（データモデルの再流入は規則が止める）。
     const interfaces = files
-      .filter((rel) => { const loc = locationOf(rel); return typeof loc !== "string" && loc?.layer === "domain"; })
-      .flatMap((rel) => [...readFileSync(join(srcDir, rel), "utf-8").matchAll(/^export interface (\w+)/gm)].map((m) => `${rel}:${m[1]}`));
+      .filter((rel) => {
+        const loc = locationOf(rel);
+        return typeof loc !== "string" && loc?.layer === "domain";
+      })
+      .flatMap((rel) =>
+        [...readFileSync(join(srcDir, rel), "utf-8").matchAll(/^export interface (\w+)/gm)].map(
+          (m) => `${rel}:${m[1]}`,
+        ),
+      );
     expect(interfaces).toEqual(["kernel/domain/expression.ts:Expression"]);
   });
 
@@ -553,13 +890,22 @@ describe("construction audit detection examples", () => {
     static parse(value: number) { return parseConstruction(() => new Guarded(value)); }
   }`;
   test("detects direct and delegated constructor failures", () => {
-    const childWithoutParse = guarded.replace(/    static parse[^\n]+\n/, "");
-    expect(missingConstructionParsers(new Map([["kernel/domain/guarded.ts", childWithoutParse]]))).toEqual(["kernel/domain/guarded.ts"]);
+    const childWithoutParse = guarded.replace(/ {4}static parse[^\n]+\n/, "");
+    expect(missingConstructionParsers(new Map([["kernel/domain/guarded.ts", childWithoutParse]]))).toEqual([
+      "kernel/domain/guarded.ts",
+    ]);
     const parent = `export class Parent {
       private constructor(value: number) { this.value = Guarded.of(value); }
       static of(value: number) { return new Parent(value); }
     }`;
-    expect(missingConstructionParsers(new Map([["kernel/domain/guarded.ts", guarded], ["kernel/domain/parent.ts", parent]]))).toEqual(["kernel/domain/parent.ts"]);
+    expect(
+      missingConstructionParsers(
+        new Map([
+          ["kernel/domain/guarded.ts", guarded],
+          ["kernel/domain/parent.ts", parent],
+        ]),
+      ),
+    ).toEqual(["kernel/domain/parent.ts"]);
     expect(missingConstructionParsers(new Map([["kernel/domain/guarded.ts", guarded]]))).toEqual([]);
   });
   test("comments and strings do not create exception paths or parser methods", () => {
@@ -567,18 +913,36 @@ describe("construction audit detection examples", () => {
       private constructor() { this.value = "throw new Error"; /* throw */ }
     }`;
     expect(missingConstructionParsers(new Map([["kernel/domain/pure.ts", source]]))).toEqual([]);
-    expect(missingConstructionParsers(new Map([["kernel/domain/guarded.ts", guarded.replace("static parse", "private static parse")]]))).toEqual(["kernel/domain/guarded.ts"]);
+    expect(
+      missingConstructionParsers(
+        new Map([["kernel/domain/guarded.ts", guarded.replace("static parse", "private static parse")]]),
+      ),
+    ).toEqual(["kernel/domain/guarded.ts"]);
   });
   test("quote characters in regular expressions do not hide the constructor body", () => {
-    const source = 'export class Quoted { private constructor(value: string) { if (!/^[`*]+$/.test(value)) throw new Error("invalid"); } }';
-    expect(missingConstructionParsers(new Map([["kernel/domain/quoted.ts", source]]))).toEqual(["kernel/domain/quoted.ts"]);
+    const source =
+      'export class Quoted { private constructor(value: string) { if (!/^[`*]+$/.test(value)) throw new Error("invalid"); } }';
+    expect(missingConstructionParsers(new Map([["kernel/domain/quoted.ts", source]]))).toEqual([
+      "kernel/domain/quoted.ts",
+    ]);
   });
   test("bounds delegated to the shared snapshot builder also require parse", () => {
-    const source = 'export class Snapshot { private constructor(value: Json) { this.value = boundedValueSnapshot(value, limits); } }';
-    expect(missingConstructionParsers(new Map([["kernel/domain/snapshot.ts", source]]))).toEqual(["kernel/domain/snapshot.ts"]);
+    const source =
+      "export class Snapshot { private constructor(value: Json) { this.value = boundedValueSnapshot(value, limits); } }";
+    expect(missingConstructionParsers(new Map([["kernel/domain/snapshot.ts", source]]))).toEqual([
+      "kernel/domain/snapshot.ts",
+    ]);
   });
   test("type-name checks distinguish shortened words from complete terms and proper names", () => {
-    expect(abbreviatedTypeNames("export class IrModelDecl {}\nexport class BrRef {}\nexport interface SmtConfig {}\ntype AttrDecls = never;")).toEqual(["IrModelDecl", "BrRef", "SmtConfig", "AttrDecls"]);
-    expect(abbreviatedTypeNames("export class IntermediateRepresentationVersion {}\nexport class BusinessRuleReference {}\nexport class Z3SolverClientImplementation {}\ntype DeclarationParam = Json;")).toEqual([]);
+    expect(
+      abbreviatedTypeNames(
+        "export class IrModelDecl {}\nexport class BrRef {}\nexport interface SmtConfig {}\ntype AttrDecls = never;",
+      ),
+    ).toEqual(["IrModelDecl", "BrRef", "SmtConfig", "AttrDecls"]);
+    expect(
+      abbreviatedTypeNames(
+        "export class IntermediateRepresentationVersion {}\nexport class BusinessRuleReference {}\nexport class Z3SolverClientImplementation {}\ntype DeclarationParam = Json;",
+      ),
+    ).toEqual([]);
   });
 });

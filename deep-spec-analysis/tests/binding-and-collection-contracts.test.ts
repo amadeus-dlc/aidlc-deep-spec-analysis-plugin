@@ -1,11 +1,24 @@
-import { Declaration } from "@deep-spec/kernel-domain";
-import { EnumerationMembers } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
-import { AttributeKind, AttributePath, BindingDeclaration, BindingValue, DeclaredBindings, DeclaredBindingValue, EnumerationMember, ErrorMessage, ErrorMessages, ScenarioBinding, ScenarioBindings, FunctionalRequirementReferences, RequirementIdentifier } from "@deep-spec/kernel-domain";
+import { AttributePaths, InitialState, InitialStates } from "@deep-spec/design-domain";
 import { decodeDeclaredBindings, decodeScenarioBindings } from "@deep-spec/kernel-adapter";
-import { IllegalArgumentException, boundedValueSnapshot } from "@deep-spec/kernel-infrastructure";
-
-import { InitialState, InitialStates, AttributePaths } from "@deep-spec/design-domain";
+import {
+  AttributeKind,
+  AttributePath,
+  BindingDeclaration,
+  BindingValue,
+  Declaration,
+  DeclaredBindings,
+  DeclaredBindingValue,
+  EnumerationMember,
+  EnumerationMembers,
+  ErrorMessage,
+  ErrorMessages,
+  FunctionalRequirementReferences,
+  RequirementIdentifier,
+  ScenarioBinding,
+  ScenarioBindings,
+} from "@deep-spec/kernel-domain";
+import { boundedValueSnapshot, IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
 
 describe("domain collection element contracts", () => {
   test("ErrorMessages retains diagnostic occurrences and owns its array", () => {
@@ -51,7 +64,9 @@ describe("domain collection element contracts", () => {
   test("primitive elements and raw binding tuples are excluded by TypeScript", () => {
     const acceptsText: string extends Parameters<typeof ErrorMessages.of>[0][number] ? true : false = false;
     const acceptsLiteral: string extends Parameters<typeof EnumerationMembers.of>[0][number] ? true : false = false;
-    const acceptsTuple: readonly [string, boolean] extends Parameters<typeof ScenarioBindings.of>[0][number] ? true : false = false;
+    const acceptsTuple: readonly [string, boolean] extends Parameters<typeof ScenarioBindings.of>[0][number]
+      ? true
+      : false = false;
     expect([acceptsText, acceptsLiteral, acceptsTuple]).toEqual([false, false, false]);
     expect(ErrorMessages.parse([]).ok).toBe(true);
     expect(ScenarioBindings.parse([]).ok).toBe(true);
@@ -90,7 +105,11 @@ describe("scenario binding contracts", () => {
   });
 
   test("logical values own their integer and literal constraints and expression meaning", () => {
-    for (const [primitive, op] of [[true, "bool"], [12, "int"], ["open", "enum"]] as const) {
+    for (const [primitive, op] of [
+      [true, "bool"],
+      [12, "int"],
+      ["open", "enum"],
+    ] as const) {
       const value = BindingValue.of(primitive);
       expect(value.equals(BindingValue.of(primitive))).toBe(true);
       expect(value.asExpression()).toEqual({ op, value: primitive });
@@ -128,7 +147,13 @@ describe("scenario binding contracts", () => {
 
   test("input decoding reports invalid values and oversized paths as Results", () => {
     expect(decodeScenarioBindings({ "ticket.state": "open", "ticket.active": true }).ok).toBe(true);
-    const invalid: Parameters<typeof decodeScenarioBindings>[0][] = [{ "": true }, { ["x".repeat(258)]: true }, { "ticket.state": null }, { "ticket.state": 1.5 }, { "ticket.state": "x".repeat(4097) }];
+    const invalid: Parameters<typeof decodeScenarioBindings>[0][] = [
+      { "": true },
+      { ["x".repeat(258)]: true },
+      { "ticket.state": null },
+      { "ticket.state": 1.5 },
+      { "ticket.state": "x".repeat(4097) },
+    ];
     for (const input of invalid) {
       expect(decodeScenarioBindings(input).ok).toBe(false);
     }
@@ -139,7 +164,14 @@ describe("scenario binding contracts", () => {
 test("recursive value size budgets reject before copying", () => {
   const limits = { string: 4, nodes: 8, depth: 2, total: 8 };
   expect(() => boundedValueSnapshot({ a: [1, null, "x"] }, limits)).not.toThrow();
-  const oversized: Parameters<typeof boundedValueSnapshot>[0][] = ["xxxxx", { xxxxx: 1 }, Array(9).fill(0), { a: { b: { c: 1 } } }, ["abcd", "abcd", "a"], { abcd: "abcd", x: 1 }];
+  const oversized: Parameters<typeof boundedValueSnapshot>[0][] = [
+    "xxxxx",
+    { xxxxx: 1 },
+    Array(9).fill(0),
+    { a: { b: { c: 1 } } },
+    ["abcd", "abcd", "a"],
+    { abcd: "abcd", x: 1 },
+  ];
   for (const value of oversized) {
     expect(() => boundedValueSnapshot(value, limits)).toThrow(IllegalArgumentException);
   }

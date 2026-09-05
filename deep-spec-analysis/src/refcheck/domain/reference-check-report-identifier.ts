@@ -1,8 +1,8 @@
 // ReferenceCheckReport 集約の識別子 — 配置ディレクトリ＋backend 名。
 // Repository はこの識別子だけから保存先／読出元を導出する。
 
-import { BackendName } from "@deep-spec/kernel-domain";
 import type { ArtifactPath } from "@deep-spec/kernel-domain";
+import { BackendName } from "@deep-spec/kernel-domain";
 
 export class ReferenceCheckReportIdentifier {
   readonly #directory: ArtifactPath;

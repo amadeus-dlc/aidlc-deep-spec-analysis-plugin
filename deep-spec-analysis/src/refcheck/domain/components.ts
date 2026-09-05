@@ -4,12 +4,12 @@
 // 運ぶ。DD-1 の重複検出・DD-5 の所有競合・DD-7 の閉路検出は集まり＝
 // Components の知識。
 
-import { ComponentName } from "./component-name.ts";
+import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec/kernel-domain";
 import type { Component } from "./component.ts";
-import { type ComponentEntity } from "./component-entity.ts";
-import { EntityName } from "./entity-name.ts";
-import { FindingKind, TargetIdentifiers, type ArtifactPath } from "@deep-spec/kernel-domain";
 import { DD_1, DD_2, DD_3, DD_4, DD_5, DD_6, DD_7 } from "./component-check-families.ts";
+import type { ComponentEntity } from "./component-entity.ts";
+import { ComponentName } from "./component-name.ts";
+import { EntityName } from "./entity-name.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { WitnessReference } from "./witness-reference.ts";
 
@@ -89,7 +89,12 @@ export class Components {
     const declared = new Set(this.#values.map((c) => c.name().asString()));
     const adj = new Map<string, string[]>();
     for (const c of [...this.#values].sort((a, b) => (a.name().asString() < b.name().asString() ? -1 : 1))) {
-      const deps = c.dependsOn().toArray().map((d) => d.component()).filter((n) => declared.has(n.asString())).sort((a, b) => a.compareTo(b));
+      const deps = c
+        .dependsOn()
+        .toArray()
+        .map((d) => d.component())
+        .filter((n) => declared.has(n.asString()))
+        .sort((a, b) => a.compareTo(b));
       const names: string[] = [];
       for (const n of deps) if (!names.includes(n.asString())) names.push(n.asString());
       adj.set(c.name().asString(), names);
@@ -138,30 +143,52 @@ export class Components {
     for (const c of this) {
       if (!c.nameIsPascalCase()) {
         const cName = c.name().asString();
-        report.finding(DD_1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", cName)], [WitnessReference.at(art, `${c.element().asString()}.name`, cName)],
-          `component name "${cName}" is not PascalCase`);
+        report.finding(
+          DD_1,
+          FindingKind.structureInvalid(),
+          [TargetIdentifiers.safe("component", cName)],
+          [WitnessReference.at(art, `${c.element().asString()}.name`, cName)],
+          `component name "${cName}" is not PascalCase`,
+        );
       }
     }
     for (const { prior, current } of this.duplicateNamePairs()) {
       const cName = current.name().asString();
-      report.finding(DD_1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", cName)],
-        [WitnessReference.at(art, `${prior.element().asString()}.name`, cName), WitnessReference.at(art, `${current.element().asString()}.name`, cName)],
-        `component name "${cName}" is declared more than once`);
+      report.finding(
+        DD_1,
+        FindingKind.structureInvalid(),
+        [TargetIdentifiers.safe("component", cName)],
+        [
+          WitnessReference.at(art, `${prior.element().asString()}.name`, cName),
+          WitnessReference.at(art, `${current.element().asString()}.name`, cName),
+        ],
+        `component name "${cName}" is declared more than once`,
+      );
     }
 
     // --- DD-2: referenced components declared -----------------------------
     for (const c of this) {
       for (const r of [...c.dependsOn(), ...c.dependents()]) {
         if (!this.declares(r.component())) {
-          report.finding(DD_2, FindingKind.referenceBroken(), [TargetIdentifiers.safe("component", r.component().asString())], [WitnessReference.at(art, r.element().asString(), r.component().asString())],
-            `"${c.name().asString()}" references undeclared component "${r.component().asString()}"`);
+          report.finding(
+            DD_2,
+            FindingKind.referenceBroken(),
+            [TargetIdentifiers.safe("component", r.component().asString())],
+            [WitnessReference.at(art, r.element().asString(), r.component().asString())],
+            `"${c.name().asString()}" references undeclared component "${r.component().asString()}"`,
+          );
         }
       }
       for (const e of c.entities()) {
         for (const r of e.references()) {
           if (!this.declares(r.ownedBy())) {
-            report.finding(DD_2, FindingKind.referenceBroken(), [TargetIdentifiers.safe("component", r.ownedBy().asString())], [WitnessReference.at(art, `${r.element().asString()}.owned_by`, r.ownedBy().asString())],
-              `entity "${e.name().asString()}" references owner component "${r.ownedBy().asString()}" which is not declared`);
+            report.finding(
+              DD_2,
+              FindingKind.referenceBroken(),
+              [TargetIdentifiers.safe("component", r.ownedBy().asString())],
+              [WitnessReference.at(art, `${r.element().asString()}.owned_by`, r.ownedBy().asString())],
+              `entity "${e.name().asString()}" references owner component "${r.ownedBy().asString()}" which is not declared`,
+            );
           }
         }
       }
@@ -170,8 +197,13 @@ export class Components {
     // --- DD-3: no self-dependency ------------------------------------------
     for (const c of this) {
       for (const r of c.selfReferences()) {
-        report.finding(DD_3, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", c.name().asString())], [WitnessReference.at(art, r.element().asString(), c.name().asString())],
-          `component "${c.name().asString()}" lists itself as a dependency`);
+        report.finding(
+          DD_3,
+          FindingKind.structureInvalid(),
+          [TargetIdentifiers.safe("component", c.name().asString())],
+          [WitnessReference.at(art, r.element().asString(), c.name().asString())],
+          `component "${c.name().asString()}" lists itself as a dependency`,
+        );
       }
     }
 
@@ -181,18 +213,38 @@ export class Components {
         const other = this.byName(r.component());
         if (!other || r.pointsAt(c.name())) continue;
         if (!other.dependents().listsComponent(c.name())) {
-          report.finding(DD_4, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", c.name().asString()), TargetIdentifiers.safe("component", r.component().asString())],
-            [WitnessReference.at(art, r.element().asString(), r.component().asString()), WitnessReference.at(art, `${other.element().asString()}.dependents`, c.name().asString())],
-            `"${c.name().asString()}" depends on "${r.component().asString()}" but "${r.component().asString()}" does not list "${c.name().asString()}" in dependents`);
+          report.finding(
+            DD_4,
+            FindingKind.structureInvalid(),
+            [
+              TargetIdentifiers.safe("component", c.name().asString()),
+              TargetIdentifiers.safe("component", r.component().asString()),
+            ],
+            [
+              WitnessReference.at(art, r.element().asString(), r.component().asString()),
+              WitnessReference.at(art, `${other.element().asString()}.dependents`, c.name().asString()),
+            ],
+            `"${c.name().asString()}" depends on "${r.component().asString()}" but "${r.component().asString()}" does not list "${c.name().asString()}" in dependents`,
+          );
         }
       }
       for (const r of c.dependents()) {
         const other = this.byName(r.component());
         if (!other || r.pointsAt(c.name())) continue;
         if (!other.dependsOn().listsComponent(c.name())) {
-          report.finding(DD_4, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", c.name().asString()), TargetIdentifiers.safe("component", r.component().asString())],
-            [WitnessReference.at(art, r.element().asString(), r.component().asString()), WitnessReference.at(art, `${other.element().asString()}.depends_on`, c.name().asString())],
-            `"${c.name().asString()}" lists "${r.component().asString()}" as a dependent but "${r.component().asString()}" does not depend on "${c.name().asString()}"`);
+          report.finding(
+            DD_4,
+            FindingKind.structureInvalid(),
+            [
+              TargetIdentifiers.safe("component", c.name().asString()),
+              TargetIdentifiers.safe("component", r.component().asString()),
+            ],
+            [
+              WitnessReference.at(art, r.element().asString(), r.component().asString()),
+              WitnessReference.at(art, `${other.element().asString()}.depends_on`, c.name().asString()),
+            ],
+            `"${c.name().asString()}" lists "${r.component().asString()}" as a dependent but "${r.component().asString()}" does not depend on "${c.name().asString()}"`,
+          );
         }
       }
     }
@@ -201,16 +253,27 @@ export class Components {
     for (const c of this) {
       for (const e of c.entities()) {
         if (!e.hasIdentifier()) {
-          report.finding(DD_5, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", e.name().asString())], [WitnessReference.at(art, `${e.element().asString()}.identifier`)],
-            `entity "${e.name().asString()}" has no identifier`);
+          report.finding(
+            DD_5,
+            FindingKind.structureInvalid(),
+            [TargetIdentifiers.safe("entity", e.name().asString())],
+            [WitnessReference.at(art, `${e.element().asString()}.identifier`)],
+            `entity "${e.name().asString()}" has no identifier`,
+          );
         }
       }
     }
     for (const conflict of this.ownershipConflicts()) {
       const name = conflict.name.asString();
-      report.finding(DD_5, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", name)],
-        conflict.owners.map((o) => WitnessReference.at(art, o.entity.element().asString(), o.component.name().asString())),
-        `entity "${name}" is owned by ${conflict.owners.length} components (${conflict.owners.map((o) => o.component.name().asString()).join(", ")}) — must be exactly one`);
+      report.finding(
+        DD_5,
+        FindingKind.structureInvalid(),
+        [TargetIdentifiers.safe("entity", name)],
+        conflict.owners.map((o) =>
+          WitnessReference.at(art, o.entity.element().asString(), o.component.name().asString()),
+        ),
+        `entity "${name}" is owned by ${conflict.owners.length} components (${conflict.owners.map((o) => o.component.name().asString()).join(", ")}) — must be exactly one`,
+      );
     }
 
     // --- DD-6: references.entity declared under its owned_by ---------------
@@ -220,8 +283,13 @@ export class Components {
           const owner = this.byName(r.ownedBy());
           if (!owner) continue; // DD-2 already reported the undeclared owner
           if (!owner.entities().declaresEntity(r.entity())) {
-            report.finding(DD_6, FindingKind.referenceBroken(), [TargetIdentifiers.safe("entity", r.entity().asString())], [WitnessReference.at(art, `${r.element().asString()}.entity`, r.entity().asString())],
-              `entity "${e.name().asString()}" references "${r.entity().asString()}" as owned by "${r.ownedBy().asString()}", but "${r.ownedBy().asString()}" declares no such entity`);
+            report.finding(
+              DD_6,
+              FindingKind.referenceBroken(),
+              [TargetIdentifiers.safe("entity", r.entity().asString())],
+              [WitnessReference.at(art, `${r.element().asString()}.entity`, r.entity().asString())],
+              `entity "${e.name().asString()}" references "${r.entity().asString()}" as owned by "${r.ownedBy().asString()}", but "${r.ownedBy().asString()}" declares no such entity`,
+            );
           }
         }
       }
@@ -230,9 +298,19 @@ export class Components {
     // --- DD-7: acyclic depends_on graph -------------------------------------
     // Self-loops are DD-3's finding; DD-7 reports only genuine multi-node cycles.
     for (const cycle of this.dependencyCycles().filter((c) => c.length > 1)) {
-      report.finding(DD_7, FindingKind.structureInvalid(), cycle.map((n) => TargetIdentifiers.safe("component", n)),
-        cycle.map((n, i) => WitnessReference.at(art, `${this.byName(ComponentName.of(n))?.element().asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])),
-        `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
+      report.finding(
+        DD_7,
+        FindingKind.structureInvalid(),
+        cycle.map((n) => TargetIdentifiers.safe("component", n)),
+        cycle.map((n, i) =>
+          WitnessReference.at(
+            art,
+            `${this.byName(ComponentName.of(n))?.element().asString() ?? "components"}.depends_on`,
+            cycle[(i + 1) % cycle.length],
+          ),
+        ),
+        `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`,
+      );
     }
   }
 }

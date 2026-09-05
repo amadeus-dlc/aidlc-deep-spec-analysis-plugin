@@ -1,4 +1,4 @@
-import { TransitionReference } from "./transition-reference.ts";
+import type { TransitionReference } from "./transition-reference.ts";
 
 // eventMap の transitions（写像先の設計 遷移/義務 id）のコレクション。
 export class TransitionReferences {
@@ -26,7 +26,10 @@ export class TransitionReferences {
 
   // 宣言に無い設計 id（gap 文言用の辞書順——旧 .sort() の凍結挙動）。
   unknownAmong(declared: ReadonlySet<string>): string[] {
-    return this.#values.map((t) => t.asString()).filter((t) => !declared.has(t)).sort();
+    return this.#values
+      .map((t) => t.asString())
+      .filter((t) => !declared.has(t))
+      .sort();
   }
 
   // eventTransitions 索引が持つ正準順（TransitionReference.compareTo）。

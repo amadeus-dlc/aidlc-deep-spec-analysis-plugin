@@ -1,5 +1,5 @@
-import { AttributeDeclaration } from "./attribute-declaration.ts";
-import { type AttributeName } from "./attribute-name.ts";
+import type { AttributeDeclaration } from "./attribute-declaration.ts";
+import type { AttributeName } from "./attribute-name.ts";
 
 // 属性宣言のコレクション。重複検出・ライフサイクル属性の選定・名前解決という
 // 集合の知識を所有する。

@@ -3,14 +3,14 @@
 // KeyedIndex（裁定 3-1、2026-09-03）。lowered id の書き換え（文言中の `OB-n`、
 // SMT ラベル中の `OB_n`）は索引自身の知識。
 
-import { AttributePath, KeyedIndex } from "@deep-spec/kernel-domain";
+import type { AttributePath, KeyedIndex } from "@deep-spec/kernel-domain";
 import type { DesignMachine } from "./design-machine.ts";
 import { DesignMachineIdentifier } from "./design-machine-identifier.ts";
-import { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
+import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 import { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
 import { LoweredIdentifier } from "./lowered-identifier.ts";
-import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
+import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 
 function designToken(id: string): string {
   return id.replace(/[^A-Za-z0-9_]/g, "_");
@@ -54,7 +54,14 @@ export class LoweringIndex {
   }
 
   rewriteLoweredIds(text: string): string {
-    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(LoweredIdentifier.of(`OB-${num}`))?.design().asString() ?? m);
+    return text.replace(
+      /\bOB-([0-9]+)\b/g,
+      (m, num) =>
+        this.#origins
+          .get(LoweredIdentifier.of(`OB-${num}`))
+          ?.design()
+          .asString() ?? m,
+    );
   }
 
   rewriteLoweredIdTokens(label: string): string {
@@ -71,17 +78,20 @@ export class LoweringIndex {
 
   machineOfTransition(designId: string): DesignMachine | null {
     const parsed = DesignTransitionIdentifier.parse(designId);
-    return parsed.ok ? this.#machinesByTransition.get(parsed.value) ?? null : null;
+    return parsed.ok ? (this.#machinesByTransition.get(parsed.value) ?? null) : null;
   }
 
   attrPathOfMachine(machineId: string): string | null {
     const parsed = DesignMachineIdentifier.parse(machineId);
-    return parsed.ok ? this.#attrPathsByMachine.get(parsed.value)?.asString() ?? null : null;
+    return parsed.ok ? (this.#attrPathsByMachine.get(parsed.value)?.asString() ?? null) : null;
   }
 
   withPassthrough(loweredId: string, designId: string): LoweringIndex {
     return new LoweringIndex({
-      origins: this.#origins.with(LoweredIdentifier.of(loweredId), LoweredOrigin.of({ design: LoweredOriginReference.of(designId), kind: "passthrough" })),
+      origins: this.#origins.with(
+        LoweredIdentifier.of(loweredId),
+        LoweredOrigin.of({ design: LoweredOriginReference.of(designId), kind: "passthrough" }),
+      ),
       scenarioDesignIds: this.#scenarioDesignIds,
       machinesByTransition: this.#machinesByTransition,
       attrPathsByMachine: this.#attrPathsByMachine,

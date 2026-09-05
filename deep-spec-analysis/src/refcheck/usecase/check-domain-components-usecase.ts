@@ -5,11 +5,10 @@
 // する。verdict は保存したのと同じ conformed（＝書かれる姿）から導出。
 
 import type { FindingsSchema } from "@deep-spec/kernel-domain";
+import type { CheckDomainComponentsInput } from "./check-domain-components-input.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./port/design-record-repository.ts";
 import type { ReferenceCheckReportRepository } from "./port/reference-check-report-repository.ts";
-import type { CheckDomainComponentsInput } from "./check-domain-components-input.ts";
-
 
 export class CheckDomainComponentsUseCase {
   readonly #designRecordRepository: DesignRecordRepository;

@@ -7,10 +7,10 @@
 // OB-n / SC-n / BG-n の採番順は文書バイト（子の処理順）に効く凍結面で、
 // コレクション自身が順序を保って運ぶ。
 
-import { LoweredBackgrounds } from "./lowered-backgrounds.ts";
-import { LoweredObligations } from "./lowered-obligations.ts";
-import { LoweredScenarios } from "./lowered-scenarios.ts";
-import { LoweringIndex } from "./lowering-index.ts";
+import type { LoweredBackgrounds } from "./lowered-backgrounds.ts";
+import type { LoweredObligations } from "./lowered-obligations.ts";
+import type { LoweredScenarios } from "./lowered-scenarios.ts";
+import type { LoweringIndex } from "./lowering-index.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type LoweredUnitParam = {

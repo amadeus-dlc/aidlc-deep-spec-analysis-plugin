@@ -7,7 +7,9 @@ export class IntermediateRepresentationScenarioDeclarations {
     this.#values = Object.freeze([...values]);
   }
 
-  static of(values: readonly IntermediateRepresentationScenarioDeclaration[]): IntermediateRepresentationScenarioDeclarations {
+  static of(
+    values: readonly IntermediateRepresentationScenarioDeclaration[],
+  ): IntermediateRepresentationScenarioDeclarations {
     return new IntermediateRepresentationScenarioDeclarations(values);
   }
 

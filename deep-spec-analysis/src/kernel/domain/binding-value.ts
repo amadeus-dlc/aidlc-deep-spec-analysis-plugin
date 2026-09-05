@@ -1,13 +1,20 @@
-import { IllegalArgumentException, parseConstruction, err, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import type { Expression } from "./expression.ts";
+import {
+  err,
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
 import type { DeclaredBindingValue } from "./declared-binding-value.ts";
+import type { Expression } from "./expression.ts";
 
 // シナリオで属性へ束縛できる論理値。整数は全バックエンドで正確に運べる範囲に限る。
 export class BindingValue {
   readonly #value: boolean | number | string;
 
   private constructor(value: boolean | number | string) {
-    if (typeof value === "string" && value.length > 4096) throw new IllegalArgumentException({ kind: "binding-literal-too-long", raw: value.length });
+    if (typeof value === "string" && value.length > 4096)
+      throw new IllegalArgumentException({ kind: "binding-literal-too-long", raw: value.length });
     if (typeof value === "number" && !Number.isSafeInteger(value)) {
       throw new IllegalArgumentException({ kind: "invalid-binding-integer", raw: value });
     }
@@ -37,7 +44,9 @@ export class BindingValue {
     return this.#value;
   }
 
-  equals(other: BindingValue): boolean { return this.#value === other.#value; }
+  equals(other: BindingValue): boolean {
+    return this.#value === other.#value;
+  }
 
   match<T>(cases: { bool: (value: boolean) => T; int: (value: number) => T; enum: (value: string) => T }): T {
     if (typeof this.#value === "boolean") return cases.bool(this.#value);

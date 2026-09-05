@@ -3,8 +3,8 @@
 // 読出元を導出する。requirements の VerificationReportIdentifier と同形だが、境界
 // づけられたコンテキストは自分の識別語彙を所有する（横断 import はしない）。
 
-import { BackendName } from "@deep-spec/kernel-domain";
 import type { ArtifactPath } from "@deep-spec/kernel-domain";
+import { BackendName } from "@deep-spec/kernel-domain";
 
 export class DesignReportIdentifier {
   readonly #directory: ArtifactPath;

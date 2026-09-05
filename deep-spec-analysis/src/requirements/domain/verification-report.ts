@@ -1,4 +1,10 @@
-import { SkipReason, ContentHash, IntermediateRepresentationVersion, VerificationMethod, type FindingsSchema } from "@deep-spec/kernel-domain";
+import {
+  ContentHash,
+  type FindingsSchema,
+  IntermediateRepresentationVersion,
+  SkipReason,
+  VerificationMethod,
+} from "@deep-spec/kernel-domain";
 
 // VerificationReport 集約 — v1 バックエンド（smt / quint / cross-check）の
 // 検証結果文書（契約2）のドメイン表現。compose が正準ソートを所有し、
@@ -8,12 +14,12 @@ import { SkipReason, ContentHash, IntermediateRepresentationVersion, Verificatio
 // unavailable 理由だけ残す——旧 writeFindingsDoc の自己検証降格と同じ姿）。
 
 import type { Json } from "@deep-spec/kernel-infrastructure";
+import type { CrossCheckedEntries } from "./cross-checked-entries.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
-import type { VerificationReportIdentifier } from "./verification-report-identifier.ts";
 import { VerificationFindings } from "./verification-findings.ts";
+import type { VerificationReportIdentifier } from "./verification-report-identifier.ts";
 import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationSkips } from "./verification-skips.ts";
-import { CrossCheckedEntries } from "./cross-checked-entries.ts";
 
 export const SUPPORTED_IR_MAJOR = 1;
 
@@ -79,11 +85,15 @@ export class VerificationReport {
       irHash,
       method,
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => (VerificationSkipped.of({
-        target: t,
-        reason: SkipReason.of("ir-version-mismatch"),
-        detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`,
-      })))),
+      skipped: VerificationSkips.of(
+        [...model.allTargets()].map((t) =>
+          VerificationSkipped.of({
+            target: t,
+            reason: SkipReason.of("ir-version-mismatch"),
+            detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`,
+          }),
+        ),
+      ),
     });
   }
 
@@ -106,21 +116,35 @@ export class VerificationReport {
         ...planSkipped.toArray(),
         ...[...model.allTargets()]
           .filter((t) => !planSkipped.toArray().some((s) => s.isFor(t)))
-          .map((t) => (VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "z3 could not be executed" }))),
+          .map((t) =>
+            VerificationSkipped.of({
+              target: t,
+              reason: SkipReason.of("unavailable"),
+              detail: "z3 could not be executed",
+            }),
+          ),
       ]),
       unavailableReason: reason,
     });
   }
 
   // Quint バックエンド固有：CLI 不在（method "simulation" 固定）。
-  static quintUnavailable(id: VerificationReportIdentifier, model: RequirementsModel, irHash: ContentHash): VerificationReport {
+  static quintUnavailable(
+    id: VerificationReportIdentifier,
+    model: RequirementsModel,
+    irHash: ContentHash,
+  ): VerificationReport {
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
       irHash,
       method: "simulation",
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => (VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "quint CLI missing" })))),
+      skipped: VerificationSkips.of(
+        [...model.allTargets()].map((t) =>
+          VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "quint CLI missing" }),
+        ),
+      ),
       unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)",
     });
   }
@@ -140,8 +164,26 @@ export class VerificationReport {
       method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
-        ...model.obligations().toArray().map((ob) => (VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: machineError }))),
-        ...model.scenarios().toArray().map((sc) => (VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: machineError }))),
+        ...model
+          .obligations()
+          .toArray()
+          .map((ob) =>
+            VerificationSkipped.of({
+              target: ob.id().asTargetId(),
+              reason: SkipReason.of("compile-error"),
+              detail: machineError,
+            }),
+          ),
+        ...model
+          .scenarios()
+          .toArray()
+          .map((sc) =>
+            VerificationSkipped.of({
+              target: sc.id().asTargetId(),
+              reason: SkipReason.of("compile-error"),
+              detail: machineError,
+            }),
+          ),
       ]),
     });
   }
@@ -273,7 +315,9 @@ export class VerificationReport {
     const crossChecked = this.#crossChecked;
     // crossChecked エントリの凍結キー順は (backend, targets)。
     if (crossChecked !== null) {
-      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
+      ordered.crossChecked = crossChecked
+        .toArray()
+        .map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
     }
     return ordered;
   }

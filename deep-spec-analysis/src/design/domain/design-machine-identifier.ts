@@ -1,7 +1,6 @@
+import { TargetIdentifier } from "@deep-spec/kernel-domain";
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
-
-import { TargetIdentifier } from "@deep-spec/kernel-domain";
 
 export class DesignMachineIdentifier {
   readonly #value: string;

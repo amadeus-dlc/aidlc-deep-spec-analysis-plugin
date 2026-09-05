@@ -1,10 +1,16 @@
-import { IllegalArgumentException, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { InitialState } from "./initial-state.ts";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
+import type { InitialState } from "./initial-state.ts";
 export class InitialStates {
   readonly #values: readonly InitialState[];
 
   private constructor(values: readonly InitialState[]) {
-    if (values.length > 10_000) throw new IllegalArgumentException({ kind: "too-many-initial-states", raw: values.length });
+    if (values.length > 10_000)
+      throw new IllegalArgumentException({ kind: "too-many-initial-states", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
 

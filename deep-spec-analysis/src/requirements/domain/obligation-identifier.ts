@@ -1,7 +1,11 @@
-import type { ParseError } from "@deep-spec/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, compareCanonically, type Result } from "@deep-spec/kernel-infrastructure";
-
 import { TargetIdentifier } from "@deep-spec/kernel-domain";
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
+import {
+  compareCanonically,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
 
 export class ObligationIdentifier {
   readonly #value: string;

@@ -1,18 +1,45 @@
-import { Declaration } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
+import {
+  BusinessRuleReference,
+  DesignBackgroundIdentifier,
+  DesignMachineIdentifier,
+  DesignObligationIdentifier,
+  DesignScenarioIdentifier,
+  DesignTransitionIdentifier,
+} from "@deep-spec/design-domain";
+import { PluginVersion } from "@deep-spec/doctor-domain";
+import {
+  AttributeBound,
+  AttributeKind,
+  BindingValue,
+  ContentHash,
+  Declaration,
+  DeclaredBindingValue,
+  DeclaredBound,
+  DeclaredDigest,
+  FindingKind,
+  IntermediateRepresentationVersion,
+  RequirementIdentifier,
+  SkipReason,
+  TargetIdentifier,
+  VerificationMethod,
+} from "@deep-spec/kernel-domain";
 import { IllegalArgumentException, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import {
-  AttributeBound, AttributeKind, BindingValue, ContentHash, DeclaredBindingValue, DeclaredBound, DeclaredDigest,
-  FindingKind, IntermediateRepresentationVersion, RequirementIdentifier, SkipReason, TargetIdentifier, VerificationMethod,
-} from "@deep-spec/kernel-domain";
+  BlockIndex,
+  BusinessRuleIdentifier,
+  CardinalityNotation,
+  ContractParty,
+  FenceCount,
+  LineNumber,
+  NumericBound,
+} from "@deep-spec/refcheck-domain";
 import {
-  BackgroundAssumptionIdentifier, ObligationIdentifier, ScenarioIdentifier, SourceAnchor,
+  BackgroundAssumptionIdentifier,
+  ObligationIdentifier,
+  ScenarioIdentifier,
+  SourceAnchor,
 } from "@deep-spec/requirements-domain";
-import {
-  BusinessRuleReference, DesignBackgroundIdentifier, DesignMachineIdentifier, DesignObligationIdentifier, DesignScenarioIdentifier, DesignTransitionIdentifier,
-} from "@deep-spec/design-domain";
-import { BlockIndex, BusinessRuleIdentifier, CardinalityNotation, ContractParty, FenceCount, LineNumber, NumericBound } from "@deep-spec/refcheck-domain";
-import { PluginVersion } from "@deep-spec/doctor-domain";
 
 // 型違反を偽造せず、同じ型の契約違反値を通常生成と再構成の両方へ渡す。
 function rejects<R>(factory: { of(value: R): object; parse(value: R): Result<object, ParseError> }, value: R): void {
@@ -47,7 +74,10 @@ describe("サイズ: 字句・構文の検査に先行する", () => {
   test("長大かつ字句不正のIDは、まずサイズ違反になる", () => {
     const raw = "\u0000".repeat(129);
     rejects(RequirementIdentifier, raw);
-    expect(RequirementIdentifier.parse(raw)).toEqual({ ok: false, error: { kind: "requirement-id-too-long", raw: 129 } });
+    expect(RequirementIdentifier.parse(raw)).toEqual({
+      ok: false,
+      error: { kind: "requirement-id-too-long", raw: 129 },
+    });
   });
 
   test("ハッシュは63・64・65コード単位の境界を守る", () => {
@@ -58,10 +88,13 @@ describe("サイズ: 字句・構文の検査に先行する", () => {
 });
 
 const numberedIds = [
-  ["ObligationIdentifier", ObligationIdentifier, "OB"], ["ScenarioIdentifier", ScenarioIdentifier, "SC"],
+  ["ObligationIdentifier", ObligationIdentifier, "OB"],
+  ["ScenarioIdentifier", ScenarioIdentifier, "SC"],
   ["BackgroundAssumptionIdentifier", BackgroundAssumptionIdentifier, "BG"],
-  ["DesignObligationIdentifier", DesignObligationIdentifier, "DOB"], ["DesignScenarioIdentifier", DesignScenarioIdentifier, "DSC"],
-  ["DesignBackgroundIdentifier", DesignBackgroundIdentifier, "DBG"], ["DesignMachineIdentifier", DesignMachineIdentifier, "SM"],
+  ["DesignObligationIdentifier", DesignObligationIdentifier, "DOB"],
+  ["DesignScenarioIdentifier", DesignScenarioIdentifier, "DSC"],
+  ["DesignBackgroundIdentifier", DesignBackgroundIdentifier, "DBG"],
+  ["DesignMachineIdentifier", DesignMachineIdentifier, "SM"],
   ["DesignTransitionIdentifier", DesignTransitionIdentifier, "TR"],
 ] as const;
 
@@ -94,7 +127,8 @@ describe("構文: 正当な文字だけでも組み合わせが不正なら拒�
   }
   test("要件参照と業務規則参照の構造を区別する", () => {
     for (const raw of ["FR--1", "FR-1..2", "FR-.1", "FR-1."]) rejects(RequirementIdentifier, raw);
-    for (const factory of [BusinessRuleReference, BusinessRuleIdentifier]) for (const raw of ["BR-1.1", "BR1", "BR1..1", "BR1.1.1"]) rejects(factory, raw);
+    for (const factory of [BusinessRuleReference, BusinessRuleIdentifier])
+      for (const raw of ["BR-1.1", "BR1", "BR1..1", "BR1.1.1"]) rejects(factory, raw);
     rejects(TargetIdentifier, "component:");
     rejects(TargetIdentifier, "OB_1");
   });
@@ -120,7 +154,15 @@ describe("意味: 値域・所属・値同士の関係", () => {
     expect(SkipReason.parse("waived").ok).toBe(true);
   });
   test("安全な整数境界と実数境界の意味を混同しない", () => {
-    for (const value of [Number.NaN, Infinity, -Infinity, 0.5, Number.MAX_SAFE_INTEGER + 1, Number.MIN_SAFE_INTEGER - 1]) rejects(AttributeBound, value);
+    for (const value of [
+      Number.NaN,
+      Infinity,
+      -Infinity,
+      0.5,
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.MIN_SAFE_INTEGER - 1,
+    ])
+      rejects(AttributeBound, value);
     expect(AttributeBound.parse(Number.MAX_SAFE_INTEGER).ok).toBe(true);
     expect(AttributeBound.parse(Number.MIN_SAFE_INTEGER).ok).toBe(true);
     expect(NumericBound.parse(0.5).ok).toBe(true);
@@ -162,8 +204,12 @@ describe("意味: 値域・所属・値同士の関係", () => {
     const member = Declaration.parse("closed");
     expect(member.ok).toBe(true);
     if (member.ok) {
-      expect(DeclaredBindingValue.of(member.value).fits(AttributeKind.of("enum"), (value) => value === "open")).toBe(false);
-      expect(DeclaredBindingValue.of(member.value).fits(AttributeKind.of("enum"), (value) => value === "closed")).toBe(true);
+      expect(DeclaredBindingValue.of(member.value).fits(AttributeKind.of("enum"), (value) => value === "open")).toBe(
+        false,
+      );
+      expect(DeclaredBindingValue.of(member.value).fits(AttributeKind.of("enum"), (value) => value === "closed")).toBe(
+        true,
+      );
     }
   });
   test("多重度の宣言と契約当事者は意味のある照合を持つ", () => {

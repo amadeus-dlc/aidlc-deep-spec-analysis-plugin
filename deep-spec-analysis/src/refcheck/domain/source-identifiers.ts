@@ -1,5 +1,5 @@
 import { RequirementIdentifier, type RequirementIdentifiers } from "@deep-spec/kernel-domain";
-import { SourceIdentifier } from "./source-identifier.ts";
+import type { SourceIdentifier } from "./source-identifier.ts";
 
 export class SourceIdentifiers {
   readonly #values: readonly SourceIdentifier[];
@@ -22,10 +22,13 @@ export class SourceIdentifiers {
 
   // FD-R3: requirements.md に存在しない source id（値の昇順——凍結順）。
   valuesMissingFrom(known: RequirementIdentifiers): string[] {
-    return this.#values.map((id) => id.asString()).filter((id) => {
-      const parsed = RequirementIdentifier.parse(id);
-      return !parsed.ok || !known.has(parsed.value);
-    }).sort();
+    return this.#values
+      .map((id) => id.asString())
+      .filter((id) => {
+        const parsed = RequirementIdentifier.parse(id);
+        return !parsed.ok || !known.has(parsed.value);
+      })
+      .sort();
   }
 
   toArray(): readonly SourceIdentifier[] {

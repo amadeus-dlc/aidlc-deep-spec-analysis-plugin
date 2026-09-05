@@ -1,6 +1,12 @@
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
+import {
+  boundedValueSnapshot,
+  canonicalStringify,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
 import type { Expression } from "./expression.ts";
-import { IllegalArgumentException, parseConstruction, boundedValueSnapshot, canonicalStringify, type Result } from "@deep-spec/kernel-infrastructure";
 
 // 式の木——published language の `Expression`（JSON の形、恒久除外）を包む
 // kernel の値オブジェクト。木の走査・prime 参照の検出・参照パスの列挙・正準
@@ -19,7 +25,11 @@ export class ExpressionTree {
       if (++nodes > 10_000 || depth > 128 || (node.args?.length ?? 0) > 10_000 - nodes) {
         throw new IllegalArgumentException({ kind: "expression-too-large" });
       }
-      if ((node.op?.length ?? 0) > 128 || (node.path?.length ?? 0) > 257 || (typeof node.value === "string" && node.value.length > 4096)) {
+      if (
+        (node.op?.length ?? 0) > 128 ||
+        (node.path?.length ?? 0) > 257 ||
+        (typeof node.value === "string" && node.value.length > 4096)
+      ) {
         throw new IllegalArgumentException({ kind: "expression-token-too-long" });
       }
       for (const child of node.args ?? []) measure(child, depth + 1);

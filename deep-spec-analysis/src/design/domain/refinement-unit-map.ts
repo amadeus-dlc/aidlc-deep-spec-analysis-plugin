@@ -1,5 +1,5 @@
-import type { TriggerName } from "@deep-spec/kernel-domain";
 import type { DesignUnitIdentifier } from "@deep-spec/design-domain";
+import type { TriggerName } from "@deep-spec/kernel-domain";
 import type { AttributeMappings } from "./attribute-mappings.ts";
 import type { EventMapping } from "./event-mapping.ts";
 import type { EventMappings } from "./event-mappings.ts";
@@ -8,7 +8,12 @@ import type { UnmappedDeclarations } from "./unmapped-declarations.ts";
 // refinement map の 1 ユニット分——属性写像・イベント写像・unmapped 宣言。
 // 計画はユニットの一致を問い、トリガのイベント写像を引く（#71 波24）。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type RefinementUnitMapParam = { unit: DesignUnitIdentifier; attrMap: AttributeMappings; eventMap: EventMappings; unmapped: UnmappedDeclarations };
+type RefinementUnitMapParam = {
+  unit: DesignUnitIdentifier;
+  attrMap: AttributeMappings;
+  eventMap: EventMappings;
+  unmapped: UnmappedDeclarations;
+};
 
 export class RefinementUnitMap {
   readonly #unit: DesignUnitIdentifier;

@@ -1,4 +1,4 @@
-import { ContentHash, DeclaredDigest } from "@deep-spec/kernel-domain";
+import type { ContentHash, DeclaredDigest } from "@deep-spec/kernel-domain";
 // SourceAnchor — IR が形式化の根拠とした requirements.md のバイト列に対する
 // 錨（sha256）。編集の検出を mtime ではなく内容で行うための語彙。
 // ダイジェストの算出そのものはバイト列を読むアダプタの責務で、ここは宣言値と

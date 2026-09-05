@@ -4,12 +4,12 @@
 // 到達不能プローブの候補選別（初期状態でない宣言値）と deterministic:false
 // waiver の判定は機械自身が所有する（#71 波7）。
 
-import { type DesignTransitions } from "./design-transitions.ts";
-import { type InitialStates } from "./initial-states.ts";
-import { DesignAttributeName } from "./design-attribute-name.ts";
-import { DesignEntityName } from "./design-entity-name.ts";
-import { DesignIgnores } from "./design-ignores.ts";
-import { DesignMachineIdentifier } from "./design-machine-identifier.ts";
+import type { DesignAttributeName } from "./design-attribute-name.ts";
+import type { DesignEntityName } from "./design-entity-name.ts";
+import type { DesignIgnores } from "./design-ignores.ts";
+import type { DesignMachineIdentifier } from "./design-machine-identifier.ts";
+import type { DesignTransitions } from "./design-transitions.ts";
+import type { InitialStates } from "./initial-states.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
 import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 

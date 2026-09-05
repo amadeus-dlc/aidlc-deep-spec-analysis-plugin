@@ -13,9 +13,9 @@
 // 文書だけを原子的に公開する。CQS（オーナー裁定 2026-09-01）：コマンドは書く
 // だけ——正常時は void。
 
+import type { ArtifactPath } from "@deep-spec/kernel-domain";
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { ArtifactPath } from "@deep-spec/kernel-domain";
 import type { VerificationDirectory } from "@deep-spec/requirements-domain";
 
 export interface VerificationDirectoryRepository {

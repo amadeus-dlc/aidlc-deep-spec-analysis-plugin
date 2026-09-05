@@ -1,11 +1,11 @@
 import {
-  Declaration,
-  BindingValue,
-  BindingDeclaration,
-  ScenarioBinding,
   AttributePath,
+  BindingDeclaration,
+  BindingValue,
+  Declaration,
   DeclaredBindings,
   DeclaredBindingValue,
+  ScenarioBinding,
   ScenarioBindings,
 } from "@deep-spec/kernel-domain";
 import { err, type Json, type Result } from "@deep-spec/kernel-infrastructure";

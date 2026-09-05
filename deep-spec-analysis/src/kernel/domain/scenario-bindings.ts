@@ -1,4 +1,9 @@
-import { IllegalArgumentException, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
 import type { AttributePath } from "./attribute-path.ts";
 import type { BindingValue } from "./binding-value.ts";
 import type { ScenarioBinding } from "./scenario-binding.ts";
@@ -9,7 +14,8 @@ export class ScenarioBindings {
 
   /** 1シナリオの束縛数の処理予算は10,000件。 */
   private constructor(values: readonly ScenarioBinding[]) {
-    if (values.length > 10_000) throw new IllegalArgumentException({ kind: "too-many-scenario-bindings", raw: values.length });
+    if (values.length > 10_000)
+      throw new IllegalArgumentException({ kind: "too-many-scenario-bindings", raw: values.length });
     const paths = new Set<string>();
     for (const binding of values) {
       const path = binding.path().asString();
@@ -26,16 +32,28 @@ export class ScenarioBindings {
   static of(values: readonly ScenarioBinding[]): ScenarioBindings {
     return new ScenarioBindings(values);
   }
-  add(value: ScenarioBinding): ScenarioBindings { return new ScenarioBindings([...this.#values, value]); }
-  has(path: AttributePath): boolean { return this.#values.some((binding) => binding.isFor(path)); }
-  valueAt(path: AttributePath): BindingValue | null { return this.#values.find((binding) => binding.isFor(path))?.value() ?? null; }
-  covers(paths: readonly AttributePath[]): boolean { return paths.every((path) => this.has(path)); }
+  add(value: ScenarioBinding): ScenarioBindings {
+    return new ScenarioBindings([...this.#values, value]);
+  }
+  has(path: AttributePath): boolean {
+    return this.#values.some((binding) => binding.isFor(path));
+  }
+  valueAt(path: AttributePath): BindingValue | null {
+    return this.#values.find((binding) => binding.isFor(path))?.value() ?? null;
+  }
+  covers(paths: readonly AttributePath[]): boolean {
+    return paths.every((path) => this.has(path));
+  }
 
   entriesCanonically(): readonly ScenarioBinding[] {
-    return [...this.#values].sort((a, b) => a.path().asString() < b.path().asString() ? -1 : a.path().asString() > b.path().asString() ? 1 : 0);
+    return [...this.#values].sort((a, b) =>
+      a.path().asString() < b.path().asString() ? -1 : a.path().asString() > b.path().asString() ? 1 : 0,
+    );
   }
 
   toDocument(): Record<string, boolean | number | string> {
-    return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
+    return Object.fromEntries(
+      this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]),
+    );
   }
 }

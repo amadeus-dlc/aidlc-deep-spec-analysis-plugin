@@ -12,7 +12,13 @@ export class ScenarioBinding {
   static of(path: AttributePath, value: BindingValue): ScenarioBinding {
     return new ScenarioBinding(path, value);
   }
-  path(): AttributePath { return this.#path; }
-  value(): BindingValue { return this.#value; }
-  isFor(path: AttributePath): boolean { return this.#path.equals(path); }
+  path(): AttributePath {
+    return this.#path;
+  }
+  value(): BindingValue {
+    return this.#value;
+  }
+  isFor(path: AttributePath): boolean {
+    return this.#path.equals(path);
+  }
 }

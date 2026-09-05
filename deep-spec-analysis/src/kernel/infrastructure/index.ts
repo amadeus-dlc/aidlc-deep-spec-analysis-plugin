@@ -4,16 +4,16 @@
 // RPC クライアント・永続化はここに置かない——それらはインターフェイス
 // アダプタ層のゲートウェイ責務である。node への依存も持たない。
 
-export { type Result, ok, err, unreachable } from "./result.ts";
-export { type ResultFailure } from "./result-failure.ts";
-export { type ResultSuccess } from "./result-success.ts";
-export { type Json, isObject, strArr } from "./json.ts";
-export { type Schema, validateSchema } from "./schema.ts";
-export { canonicalStringify } from "./canonical-json.ts";
-export { IllegalArgumentException } from "./illegal-argument-exception.ts";
-export { parseConstruction } from "./parse-construction.ts";
-export { type ParseError } from "./parse-error.ts";
-export { compareCanonically, sortedUniqueCanonically } from "./canonical-order.ts";
-export { combineResults, traverseResult, flatMapResult } from "./result-composition.ts";
 export { boundedValueSnapshot } from "./bounded-value-snapshot.ts";
-export { type ValueSnapshotParam } from "./value-snapshot-param.ts";
+export { canonicalStringify } from "./canonical-json.ts";
+export { compareCanonically, sortedUniqueCanonically } from "./canonical-order.ts";
+export { IllegalArgumentException } from "./illegal-argument-exception.ts";
+export { isObject, type Json, strArr } from "./json.ts";
+export { parseConstruction } from "./parse-construction.ts";
+export type { ParseError } from "./parse-error.ts";
+export { err, ok, type Result, unreachable } from "./result.ts";
+export { combineResults, flatMapResult, traverseResult } from "./result-composition.ts";
+export type { ResultFailure } from "./result-failure.ts";
+export type { ResultSuccess } from "./result-success.ts";
+export { type Schema, validateSchema } from "./schema.ts";
+export type { ValueSnapshotParam } from "./value-snapshot-param.ts";

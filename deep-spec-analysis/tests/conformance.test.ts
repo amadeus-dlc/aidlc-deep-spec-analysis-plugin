@@ -39,11 +39,15 @@ interface SensorRun {
 }
 
 function fireSensor(tool: string, modelPath: string, env: { [k: string]: string } = {}): SensorRun {
-  const res = spawnSync("bun", [join(toolsDir, tool), "--stage", "deep-spec-analysis-verify", "--output-path", modelPath], {
-    encoding: "utf-8",
-    timeout: 120_000,
-    env: { ...process.env, ...env },
-  });
+  const res = spawnSync(
+    "bun",
+    [join(toolsDir, tool), "--stage", "deep-spec-analysis-verify", "--output-path", modelPath],
+    {
+      encoding: "utf-8",
+      timeout: 120_000,
+      env: { ...process.env, ...env },
+    },
+  );
   return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
 }
 
@@ -51,7 +55,10 @@ function makeRecord(modelFixture: string): { record: string; modelPath: string; 
   const record = join(tmpdir(), `deep-spec-conformance-${Math.random().toString(36).slice(2)}`);
   mkdirSync(join(record, "inception", "requirements-analysis"), { recursive: true });
   mkdirSync(join(record, "inception", "deep-spec-analysis-verify"), { recursive: true });
-  cpSync(join(fixtures, "conformance", "requirements.md"), join(record, "inception", "requirements-analysis", "requirements.md"));
+  cpSync(
+    join(fixtures, "conformance", "requirements.md"),
+    join(record, "inception", "requirements-analysis", "requirements.md"),
+  );
   const modelPath = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
   cpSync(modelFixture, modelPath);
   return { record, modelPath, verifyDir: join(record, "inception", "deep-spec-analysis-verify", "deep-spec-verify") };
@@ -91,7 +98,9 @@ describe("deep-spec-ir-valid", () => {
     expect(run.status).toBe(0);
     const verdict = JSON.parse(run.stdout);
     expect(verdict.pass).toBe(false);
-    expect(verdict.errors.join("\n")).toMatch(/sourceDigest [0-9a-f]{64} does not match requirements\.md \(sha256 [0-9a-f]{64}\)/);
+    expect(verdict.errors.join("\n")).toMatch(
+      /sourceDigest [0-9a-f]{64} does not match requirements\.md \(sha256 [0-9a-f]{64}\)/,
+    );
   });
 
   test("rejects a model without sourceDigest and hands back the value to add", () => {
@@ -123,13 +132,17 @@ describe("a background-and-events model runs the quint machine phase (ruling 4, 
   //（quint 0.32 の run はデッドロックを報告しないので、simulation で新たに
   // 捕まるのはこの種の違反。デッドロックは CLI が告げる bounded 側の分岐）。
   test("quint backend (simulation) reports the reachable background violation over the event obligations", () => {
-    const { modelPath, verifyDir } = makeRecord(join(fixtures, "conformance", "background-events", "deep-spec-analysis-formal-model.md"));
+    const { modelPath, verifyDir } = makeRecord(
+      join(fixtures, "conformance", "background-events", "deep-spec-analysis-formal-model.md"),
+    );
     const run = fireSensor("aidlc-sensor-deep-spec-verify-quint.ts", modelPath, quintEnv);
     expect(run.status).toBe(0);
     expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, findings_count: 1, method: "simulation" });
     const written = readFileSync(join(verifyDir, "quint.json"), "utf-8");
     expect(written).toBe(readFileSync(join(expected, "background-events", "quint.json"), "utf-8"));
-    const doc = JSON.parse(written) as { findings: { kind: string; targets: string[]; witness: { trace?: { "order.amount": number }[] } }[] };
+    const doc = JSON.parse(written) as {
+      findings: { kind: string; targets: string[]; witness: { trace?: { "order.amount": number }[] } }[];
+    };
     expect(doc.findings.map((f) => f.kind)).toEqual(["conflict"]);
     expect(doc.findings[0]?.targets).toEqual(["OB-1", "OB-2", "OB-3"]);
     expect(doc.findings[0]?.witness.trace?.at(-1)?.["order.amount"]).toBeLessThan(0);
@@ -160,7 +173,9 @@ describe("backend conformance (expected findings, byte-for-byte)", () => {
     const run = fireSensor("aidlc-sensor-deep-spec-verify-quint.ts", modelPath, quintEnv);
     expect(run.status).toBe(0);
     expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, findings_count: 2, method: "simulation" });
-    expect(readFileSync(join(verifyDir, "quint.json"), "utf-8")).toBe(readFileSync(join(expected, "quint.json"), "utf-8"));
+    expect(readFileSync(join(verifyDir, "quint.json"), "utf-8")).toBe(
+      readFileSync(join(expected, "quint.json"), "utf-8"),
+    );
     // 遅い CI ランナーで quint シミュレーションが 5s を超えることがある——
     // 設計側の双子（design-verify）と同じ余裕を持つ（bun 既定 5s はフレーク源）。
   }, 240_000);

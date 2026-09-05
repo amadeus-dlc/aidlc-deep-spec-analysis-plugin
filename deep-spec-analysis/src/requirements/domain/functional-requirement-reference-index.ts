@@ -16,7 +16,13 @@ export class FunctionalRequirementReferenceIndex {
   static of(claims: readonly FunctionalRequirementReferenceClaim[]): FunctionalRequirementReferenceIndex {
     const ownersByRef = new Map<string, FunctionalRequirementReferenceClaim[]>();
     for (const claim of claims) claim.claimInto(ownersByRef);
-    return new FunctionalRequirementReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementIdentifier.of(ref), FunctionalRequirementReferenceClaims.of(owners)] as const)));
+    return new FunctionalRequirementReferenceIndex(
+      KeyedIndex.of(
+        [...ownersByRef].map(
+          ([ref, owners]) => [RequirementIdentifier.of(ref), FunctionalRequirementReferenceClaims.of(owners)] as const,
+        ),
+      ),
+    );
   }
 
   // 境界: 参照された要件 id（描画順は索引の挿入順）。
@@ -26,9 +32,14 @@ export class FunctionalRequirementReferenceIndex {
 
   // requirements.md に存在しない参照の凍結文言（id 昇順、所有者昇順）。
   missingErrors(known: RequirementIdentifiers): string[] {
-    const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
+    const missing = [...this.#ownersByRef.keys()]
+      .filter((ref) => !known.has(ref))
+      .map((ref) => ref.asString())
+      .sort();
     return missing.map((id) => {
-      const owners = [...(this.#ownersByRef.get(RequirementIdentifier.of(id))?.ownerDescriptions() ?? [])].sort().join(", ");
+      const owners = [...(this.#ownersByRef.get(RequirementIdentifier.of(id))?.ownerDescriptions() ?? [])]
+        .sort()
+        .join(", ");
       return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
     });
   }

@@ -1,9 +1,9 @@
-import { EntityDeclarations } from "./entity-declarations.ts";
-import { RelationshipDeclarations } from "./relationship-declarations.ts";
-import { ShapeErrors } from "./shape-errors.ts";
-import { FindingKind, TargetIdentifiers, type ArtifactPath } from "@deep-spec/kernel-domain";
+import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec/kernel-domain";
+import type { EntityDeclarations } from "./entity-declarations.ts";
 import { FD_E1, FD_E2, FD_E3, FD_E4, FD_E5, FD_E6 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
+import type { RelationshipDeclarations } from "./relationship-declarations.ts";
+import type { ShapeErrors } from "./shape-errors.ts";
 import { WitnessReference } from "./witness-reference.ts";
 
 // entities.md の宣言集合。参照解決・applies-to 解決・ライフサイクル対象の
@@ -53,16 +53,32 @@ export class DeclaredEntities {
   check(report: ReferenceCheckReport, artifact: ArtifactPath): void {
     const art = artifact.asString();
     for (const e of this.shapeErrors()) {
-      report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessReference.at(art, e.element().asString())], e.detail());
+      report.finding(
+        FD_E1,
+        FindingKind.structureInvalid(),
+        [FD_E1.asCheckTarget()],
+        [WitnessReference.at(art, e.element().asString())],
+        e.detail(),
+      );
     }
     for (const dup of this.entities().duplicatesByName()) {
-      report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", dup.name().asString())], [WitnessReference.at(art, `${dup.element().asString()}.name`, dup.name().asString())],
-        `entity "${dup.name().asString()}" is declared more than once`);
+      report.finding(
+        FD_E1,
+        FindingKind.structureInvalid(),
+        [TargetIdentifiers.safe("entity", dup.name().asString())],
+        [WitnessReference.at(art, `${dup.element().asString()}.name`, dup.name().asString())],
+        `entity "${dup.name().asString()}" is declared more than once`,
+      );
     }
     for (const e of this.entities()) {
       for (const dup of e.attrs().duplicatesByName()) {
-        report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("attr", `${e.name().asString()}.${dup.name().asString()}`)], [WitnessReference.at(art, `${dup.element().asString()}.name`, dup.name().asString())],
-          `attribute "${e.name().asString()}.${dup.name().asString()}" is declared more than once`);
+        report.finding(
+          FD_E1,
+          FindingKind.structureInvalid(),
+          [TargetIdentifiers.safe("attr", `${e.name().asString()}.${dup.name().asString()}`)],
+          [WitnessReference.at(art, `${dup.element().asString()}.name`, dup.name().asString())],
+          `attribute "${e.name().asString()}.${dup.name().asString()}" is declared more than once`,
+        );
       }
     }
 
@@ -72,39 +88,85 @@ export class DeclaredEntities {
         const label = `${e.name().asString()}.${a.name().asString()}`;
         // FD-E2: 型区分整合は属性宣言が自分で判定する。
         if (a.declaresAllowedValuesOnNonEnumerableType()) {
-          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.typeToken())],
-            `"${label}" declares allowed values but its type "${a.typeText()}" is not an enumerable type`);
+          report.finding(
+            FD_E2,
+            FindingKind.structureInvalid(),
+            [attrId],
+            [WitnessReference.at(art, a.element().asString(), a.typeToken())],
+            `"${label}" declares allowed values but its type "${a.typeText()}" is not an enumerable type`,
+          );
         }
         if (a.declaresBoundsOnNonNumericType()) {
-          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.typeToken())],
-            `"${label}" declares min/max but its type "${a.typeText()}" is not numeric or date-like`);
+          report.finding(
+            FD_E2,
+            FindingKind.structureInvalid(),
+            [attrId],
+            [WitnessReference.at(art, a.element().asString(), a.typeToken())],
+            `"${label}" declares min/max but its type "${a.typeText()}" is not numeric or date-like`,
+          );
         }
         if (a.declaresUniqueOnCollectionType()) {
-          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.typeToken())],
-            `"${label}" declares unique but its type "${a.typeText()}" is not scalar`);
+          report.finding(
+            FD_E2,
+            FindingKind.structureInvalid(),
+            [attrId],
+            [WitnessReference.at(art, a.element().asString(), a.typeToken())],
+            `"${label}" declares unique but its type "${a.typeText()}" is not scalar`,
+          );
         }
         // FD-E3: 範囲・既定値の整合も属性宣言が告げる。
         if (a.boundsInverted()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), `min ${a.min()?.asNumber()} > max ${a.max()?.asNumber()}`)],
-            `"${label}": min ${a.min()?.asNumber()} exceeds max ${a.max()?.asNumber()}`);
+          report.finding(
+            FD_E3,
+            FindingKind.structureInvalid(),
+            [attrId],
+            [
+              WitnessReference.at(
+                art,
+                a.element().asString(),
+                `min ${a.min()?.asNumber()} > max ${a.max()?.asNumber()}`,
+              ),
+            ],
+            `"${label}": min ${a.min()?.asNumber()} exceeds max ${a.max()?.asNumber()}`,
+          );
         }
         if (a.defaultBelowMin()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")],
-            `"${label}": default ${a.def()?.render()} is below min ${a.min()?.asNumber()}`);
+          report.finding(
+            FD_E3,
+            FindingKind.structureInvalid(),
+            [attrId],
+            [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")],
+            `"${label}": default ${a.def()?.render()} is below min ${a.min()?.asNumber()}`,
+          );
         }
         if (a.defaultAboveMax()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")],
-            `"${label}": default ${a.def()?.render()} is above max ${a.max()?.asNumber()}`);
+          report.finding(
+            FD_E3,
+            FindingKind.structureInvalid(),
+            [attrId],
+            [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")],
+            `"${label}": default ${a.def()?.render()} is above max ${a.max()?.asNumber()}`,
+          );
         }
         if (a.defaultOutsideAllowed()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")],
-            `"${label}": default "${a.def()?.render()}" is not one of the allowed values`);
+          report.finding(
+            FD_E3,
+            FindingKind.structureInvalid(),
+            [attrId],
+            [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")],
+            `"${label}": default "${a.def()?.render()}" is not one of the allowed values`,
+          );
         }
         // FD-E6: 参照の解決は宣言集合が告げる。
         const reference = a.references();
         if (reference !== null && !this.entities().resolvesReference(reference)) {
-          report.finding(FD_E6, FindingKind.referenceBroken(), [attrId], [WitnessReference.at(art, a.element().asString(), reference.asString())],
-            `"${label}" references "${reference.asString()}" which is not a declared entity`);
+          report.finding(
+            FD_E6,
+            FindingKind.referenceBroken(),
+            [attrId],
+            [WitnessReference.at(art, a.element().asString(), reference.asString())],
+            `"${label}" references "${reference.asString()}" which is not a declared entity`,
+          );
         }
       }
     }
@@ -112,17 +174,32 @@ export class DeclaredEntities {
     for (const r of this.allRels()) {
       for (const endpoint of [r.from(), r.to()]) {
         if (endpoint !== null && !this.entities().containsNamed(endpoint)) {
-          report.finding(FD_E4, FindingKind.referenceBroken(), [TargetIdentifiers.safe("entity", endpoint.asString())], [WitnessReference.at(art, r.element().asString(), endpoint.asString())],
-            `relationship endpoint "${endpoint.asString()}" is not a declared entity`);
+          report.finding(
+            FD_E4,
+            FindingKind.referenceBroken(),
+            [TargetIdentifiers.safe("entity", endpoint.asString())],
+            [WitnessReference.at(art, r.element().asString(), endpoint.asString())],
+            `relationship endpoint "${endpoint.asString()}" is not a declared entity`,
+          );
         }
       }
       if (r.cardinalityOutsideClosedSet()) {
-        report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessReference.at(art, r.element().asString(), r.cardinality()?.asString() ?? "")],
-          `cardinality "${r.cardinality()?.asString()}" is not in the closed set 1:1 | 1:N | N:1 | N:M`);
+        report.finding(
+          FD_E5,
+          FindingKind.structureInvalid(),
+          [FD_E5.asCheckTarget()],
+          [WitnessReference.at(art, r.element().asString(), r.cardinality()?.asString() ?? "")],
+          `cardinality "${r.cardinality()?.asString()}" is not in the closed set 1:1 | 1:N | N:1 | N:M`,
+        );
       }
       if (r.cardinalityWithoutDirection()) {
-        report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessReference.at(art, r.element().asString())],
-          "relationship declares a cardinality but no direction (from/to or direction key)");
+        report.finding(
+          FD_E5,
+          FindingKind.structureInvalid(),
+          [FD_E5.asCheckTarget()],
+          [WitnessReference.at(art, r.element().asString())],
+          "relationship declares a cardinality but no direction (from/to or direction key)",
+        );
       }
     }
   }

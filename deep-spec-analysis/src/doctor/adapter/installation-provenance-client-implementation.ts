@@ -25,10 +25,14 @@ export class InstallationProvenanceClientImplementation implements InstallationP
     const row = value as Record<string, unknown>;
     if (
       typeof row.version !== "string" ||
-      typeof row.ref !== "string" || row.ref.length === 0 ||
-      typeof row.source !== "string" || !SOURCE_KINDS.has(row.source) ||
-      typeof row.installed_at !== "string" || row.installed_at.length === 0 ||
-      typeof row.payload_sha256 !== "string" || !/^sha256:[0-9a-f]{64}$/.test(row.payload_sha256)
+      typeof row.ref !== "string" ||
+      row.ref.length === 0 ||
+      typeof row.source !== "string" ||
+      !SOURCE_KINDS.has(row.source) ||
+      typeof row.installed_at !== "string" ||
+      row.installed_at.length === 0 ||
+      typeof row.payload_sha256 !== "string" ||
+      !/^sha256:[0-9a-f]{64}$/.test(row.payload_sha256)
     ) {
       return { kind: "malformed", reason: "required provenance fields are invalid" };
     }

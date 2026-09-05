@@ -1,6 +1,6 @@
-import type { ContractRows } from "./contract-rows.ts";
 import type { ArtifactPath, ErrorMessage } from "@deep-spec/kernel-domain";
 import { CD_1, CD_3 } from "./contract-check-families.ts";
+import type { ContractRows } from "./contract-rows.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { UnitDeclarations } from "./unit-declarations.ts";
 
@@ -23,17 +23,23 @@ export class ContractsTableOutcome {
     return new ContractsTableOutcome(rows, null);
   }
 
-  static unparseable(error: ErrorMessage): ContractsTableOutcome { return new ContractsTableOutcome(null, error); }
+  static unparseable(error: ErrorMessage): ContractsTableOutcome {
+    return new ContractsTableOutcome(null, error);
+  }
 
   match<T>(handlers: { absent: () => T; rows: (rows: ContractRows) => T; unparseable: (error: ErrorMessage) => T }): T {
     if (this.#error !== null) return handlers.unparseable(this.#error);
     return this.#rows === null ? handlers.absent() : handlers.rows(this.#rows);
   }
 
-
   // CD-1 の門（種別規律の裁定 12）: 表が無ければ skip、あれば各行の当事者が
   // 宣言済みかを行に判定させる（宣言が使えるときだけ）。CD-3 のために行を返す。
-  check(report: ReferenceCheckReport, units: UnitDeclarations | null, artifact: ArtifactPath, depArtifact: ArtifactPath): ContractRows | null {
+  check(
+    report: ReferenceCheckReport,
+    units: UnitDeclarations | null,
+    artifact: ArtifactPath,
+    depArtifact: ArtifactPath,
+  ): ContractRows | null {
     return this.match<ContractRows | null>({
       unparseable: (error) => {
         report.skip(CD_1, "unrecognized-format", error.asString());

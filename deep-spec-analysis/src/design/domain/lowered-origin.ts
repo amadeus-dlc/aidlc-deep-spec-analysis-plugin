@@ -7,7 +7,11 @@ type LoweringKind = "passthrough" | "transition" | "ignore" | "vac-dead" | "vac-
 // / ignore / 到達不能プローブ / 影プローブ）、影プローブなら対。プローブか
 // どうかと対の参照は帰属自身の知識（#71 波20）。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type LoweredOriginParam = { design: LoweredOriginReference; kind: LoweringKind; pair?: readonly [LoweredOriginReference, LoweredOriginReference] };
+type LoweredOriginParam = {
+  design: LoweredOriginReference;
+  kind: LoweringKind;
+  pair?: readonly [LoweredOriginReference, LoweredOriginReference];
+};
 
 export class LoweredOrigin {
   readonly #design: LoweredOriginReference;

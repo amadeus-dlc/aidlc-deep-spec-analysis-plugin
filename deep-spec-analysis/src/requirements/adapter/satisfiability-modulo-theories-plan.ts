@@ -1,13 +1,13 @@
 import {
-  SkipReason,
   type Expression,
   ExpressionTree,
-  TriggerName,
   KeyedIndex,
   KeySet,
   QueryLabel,
+  SkipReason,
   TargetIdentifier,
   TargetIdentifiers,
+  TriggerName,
 } from "@deep-spec/kernel-domain";
 
 // IR → SMT-LIB の検証計画ビルダ。SMT-LIB という形式の知識（変数名符号化・
@@ -18,27 +18,25 @@ import {
 // 描画語彙（smtVar/smtName/smtLit/smtIntOf）は移行 PR8 で kernel 共有へ。
 
 import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
-import type { SatisfiabilityModuloTheoriesChildQuery } from "./satisfiability-modulo-theories-child-query.ts";
-import { ObligationIdentifier, ScenarioIdentifier,
+import {
+  type Obligation,
+  ObligationIdentifier,
+  type RequirementsModel,
+  SatisfiabilityModuloTheoriesEventPairProbe,
   SatisfiabilityModuloTheoriesEventPairProbes,
   SatisfiabilityModuloTheoriesVerificationPlan,
-  VerificationSkips,
-  type Obligation,
-  type RequirementsModel,
+  ScenarioIdentifier,
   VerificationSkipped,
-  SatisfiabilityModuloTheoriesEventPairProbe,
+  VerificationSkips,
 } from "@deep-spec/requirements-domain";
+import type { SatisfiabilityModuloTheoriesChildQuery } from "./satisfiability-modulo-theories-child-query.ts";
 
 export interface SatisfiabilityModuloTheoriesPlan {
   queries: SatisfiabilityModuloTheoriesChildQuery[];
   plan: SatisfiabilityModuloTheoriesVerificationPlan;
 }
 
-class CompileError extends Error {
-  constructor(message: string) {
-    super(message);
-  }
-}
+class CompileError extends Error {}
 
 interface NamedConstraint {
   name: string;
@@ -48,7 +46,7 @@ interface NamedConstraint {
 function enumCode(model: RequirementsModel, attrPath: string, value: string): number {
   const attr = model.attributeAt(attrPath);
   const values = attr?.declaredValues();
-  if (!attr || !attr.isEnum() || !values) {
+  if (!attr?.isEnum() || !values) {
     throw new CompileError(`"${attrPath}" is not an enum attribute`);
   }
   const idx = values.indexOf(value);
@@ -139,7 +137,8 @@ export function decodeSolverModel(
         //（凍結解除 #34 項 4。読めない生値はそのまま生値）。
         const m = raw.match(/^\(-\s*(\d+)\)$/);
         out[attr.path().asString()] = m ? `-${m[1]}` : raw;
-      } else if (attr.isEnum() && attr.declaredValues()) out[attr.path().asString()] = attr.declaredValues()?.valueAt(n)?.asString() ?? n;
+      } else if (attr.isEnum() && attr.declaredValues())
+        out[attr.path().asString()] = attr.declaredValues()?.valueAt(n)?.asString() ?? n;
       else out[attr.path().asString()] = n;
     }
   }
@@ -202,7 +201,13 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
     if (ob.isInvariantLike()) {
       const assertion = ob.assertion();
       if (assertion === undefined) {
-        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "invariant obligation lacks an assert expression" }));
+        skipped.push(
+          VerificationSkipped.of({
+            target: ob.id().asTargetId(),
+            reason: SkipReason.of("compile-error"),
+            detail: "invariant obligation lacks an assert expression",
+          }),
+        );
         compiled.set(ob.id().asString(), false);
         continue;
       }
@@ -213,13 +218,25 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
         compiled.set(ob.id().asString(), true);
       } catch (err) {
         if (!(err instanceof CompileError)) throw err;
-        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
+        skipped.push(
+          VerificationSkipped.of({
+            target: ob.id().asTargetId(),
+            reason: SkipReason.of("compile-error"),
+            detail: err instanceof Error ? err.message : String(err),
+          }),
+        );
         compiled.set(ob.id().asString(), false);
       }
     } else if (ob.isEvent()) {
       const event = ob.eventDefinition();
       if (event === null) {
-        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "event obligation lacks trigger/guard/effect" }));
+        skipped.push(
+          VerificationSkipped.of({
+            target: ob.id().asTargetId(),
+            reason: SkipReason.of("compile-error"),
+            detail: "event obligation lacks trigger/guard/effect",
+          }),
+        );
         compiled.set(ob.id().asString(), false);
         continue;
       }
@@ -231,12 +248,24 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
         compiled.set(ob.id().asString(), true);
       } catch (err) {
         if (!(err instanceof CompileError)) throw err;
-        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
+        skipped.push(
+          VerificationSkipped.of({
+            target: ob.id().asTargetId(),
+            reason: SkipReason.of("compile-error"),
+            detail: err instanceof Error ? err.message : String(err),
+          }),
+        );
         compiled.set(ob.id().asString(), false);
       }
     } else {
       // state-temporal — このバックエンドの nature 範囲外（FR6.2）。
-      skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("capability"), detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend` }));
+      skipped.push(
+        VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("capability"),
+          detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend`,
+        }),
+      );
       compiled.set(ob.id().asString(), false);
     }
   }
@@ -249,10 +278,13 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
     ]),
   ].join("\n");
   const baseAssumptions = [...typeBounds, ...bg, ...invariants].map((c) => c.name);
-  const modelVars = model.attributes().toArray().map((a) => ({
-    name: smtVar(a.path().asString(), false),
-    sort: (a.isBool() ? "Bool" : "Int") as "Int" | "Bool",
-  }));
+  const modelVars = model
+    .attributes()
+    .toArray()
+    .map((a) => ({
+      name: smtVar(a.path().asString(), false),
+      sort: (a.isBool() ? "Bool" : "Int") as "Int" | "Bool",
+    }));
 
   const queries: SatisfiabilityModuloTheoriesChildQuery[] = [];
 
@@ -266,7 +298,9 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
     if (!ant) continue;
     try {
       const name = smtName("ant", ob.id().asString());
-      const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${smtOf(model, ant)}))`].join("\n");
+      const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${smtOf(model, ant)}))`].join(
+        "\n",
+      );
       queries.push({ id: `vac:${ob.id().asString()}`, script, assumptions: [...baseAssumptions, name], model: [] });
       vacuityQueries.push([ob.id(), QueryLabel.of(`vac:${ob.id().asString()}`)]);
     } catch (error) {
@@ -318,14 +352,27 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
         ].join("\n");
         const qOverlap = `evo:${a.id().asString()}:${b.id().asString()}`;
         const qJoint = `evj:${a.id().asString()}:${b.id().asString()}`;
-        queries.push({ id: qOverlap, script: overlapScript, assumptions: [...baseAssumptions, ga.name, gb.name], model: [] });
+        queries.push({
+          id: qOverlap,
+          script: overlapScript,
+          assumptions: [...baseAssumptions, ga.name, gb.name],
+          model: [],
+        });
         queries.push({
           id: qJoint,
           script: jointScript,
           assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
           model: [],
         });
-        eventPairs.push(SatisfiabilityModuloTheoriesEventPairProbe.of({ qOverlap: QueryLabel.of(qOverlap), qJoint: QueryLabel.of(qJoint), a: a.id(), b: b.id(), trigger: TriggerName.of(trigger) }));
+        eventPairs.push(
+          SatisfiabilityModuloTheoriesEventPairProbe.of({
+            qOverlap: QueryLabel.of(qOverlap),
+            qJoint: QueryLabel.of(qJoint),
+            a: a.id(),
+            b: b.id(),
+            trigger: TriggerName.of(trigger),
+          }),
+        );
       }
     }
   }
@@ -344,7 +391,10 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
     queries.push({ id: `gap:${trigger}`, script, assumptions: [...baseAssumptions, name], model: modelVars });
     gapTriggers.set(
       trigger,
-      list.map((ev) => ev.id()).sort((a, b) => a.compareTo(b)).map((id) => id.asString()),
+      list
+        .map((ev) => ev.id())
+        .sort((a, b) => a.compareTo(b))
+        .map((id) => id.asString()),
     );
   }
 
@@ -352,7 +402,13 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
   const scenarioQueries = new Map<string, string>();
   for (const sc of model.scenarios()) {
     if (sc.hasEvent()) {
-      skipped.push(VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("capability"), detail: "scenarios with a When-event are not checked by the SMT backend in v1" }));
+      skipped.push(
+        VerificationSkipped.of({
+          target: sc.id().asTargetId(),
+          reason: SkipReason.of("capability"),
+          detail: "scenarios with a When-event are not checked by the SMT backend in v1",
+        }),
+      );
       continue;
     }
     try {
@@ -387,7 +443,13 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
       scenarioQueries.set(sc.id().asString(), qid);
     } catch (err) {
       if (!(err instanceof CompileError)) throw err;
-      skipped.push(VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
+      skipped.push(
+        VerificationSkipped.of({
+          target: sc.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: err instanceof Error ? err.message : String(err),
+        }),
+      );
     }
   }
 
@@ -397,10 +459,24 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
       vacuityQueries: KeyedIndex.of(vacuityQueries),
       compiled: KeySet.of([...compiled].filter(([, ok]) => ok).map(([id]) => ObligationIdentifier.of(id))),
       skipped: VerificationSkips.of(skipped),
-      labelToTarget: KeyedIndex.of([...labelToTarget].filter(([, target]) => target.startsWith("OB-")).map(([label, target]) => [QueryLabel.of(label), TargetIdentifier.of(target)] as const)),
+      labelToTarget: KeyedIndex.of(
+        [...labelToTarget]
+          .filter(([, target]) => target.startsWith("OB-"))
+          .map(([label, target]) => [QueryLabel.of(label), TargetIdentifier.of(target)] as const),
+      ),
       eventPairs: SatisfiabilityModuloTheoriesEventPairProbes.of(eventPairs),
-      gapTriggers: KeyedIndex.of([...gapTriggers].map(([trigger, ids]) => [TriggerName.of(trigger), TargetIdentifiers.of(Array.from(ids, (raw) => TargetIdentifier.of(raw)))] as const)),
-      scenarioQueries: KeyedIndex.of([...scenarioQueries].map(([sc, qid]) => [ScenarioIdentifier.of(sc), QueryLabel.of(qid)] as const)),
+      gapTriggers: KeyedIndex.of(
+        [...gapTriggers].map(
+          ([trigger, ids]) =>
+            [
+              TriggerName.of(trigger),
+              TargetIdentifiers.of(Array.from(ids, (raw) => TargetIdentifier.of(raw))),
+            ] as const,
+        ),
+      ),
+      scenarioQueries: KeyedIndex.of(
+        [...scenarioQueries].map(([sc, qid]) => [ScenarioIdentifier.of(sc), QueryLabel.of(qid)] as const),
+      ),
     }),
   };
 }

@@ -1,11 +1,14 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import type { ScenarioBindings } from "@deep-spec/kernel-domain";
+import type {
+  Expression,
+  FunctionalRequirementReferences,
+  ScenarioBindings,
+  TriggerName,
+} from "@deep-spec/kernel-domain";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
-import type { Expression } from "@deep-spec/kernel-domain";
-import type { FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // 受け入れ／拒否シナリオ。期待する充足可能性と binding の正準列挙を所有する。
 
-import { ScenarioIdentifier } from "./scenario-identifier.ts";
+import type { ScenarioIdentifier } from "./scenario-identifier.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type ScenarioParam = {
@@ -42,19 +45,34 @@ export class Scenario {
     return new Scenario(props);
   }
 
-  id(): ScenarioIdentifier { return this.#id; }
-  kind(): "accept" | "reject" { return this.#kind; }
-  functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
-  eventTrigger(): TriggerName | undefined { return this.#eventTrigger; }
-  expectation(): Expression | undefined { return this.#expect; }
-  isAccept(): boolean { return this.#kind === "accept"; }
-  isReject(): boolean { return this.#kind === "reject"; }
-  hasEvent(): boolean { return this.#eventTrigger !== undefined; }
+  id(): ScenarioIdentifier {
+    return this.#id;
+  }
+  kind(): "accept" | "reject" {
+    return this.#kind;
+  }
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
+  }
+  eventTrigger(): TriggerName | undefined {
+    return this.#eventTrigger;
+  }
+  expectation(): Expression | undefined {
+    return this.#expect;
+  }
+  isAccept(): boolean {
+    return this.#kind === "accept";
+  }
+  isReject(): boolean {
+    return this.#kind === "reject";
+  }
+  hasEvent(): boolean {
+    return this.#eventTrigger !== undefined;
+  }
 
   isViolatedBySatisfiability(satisfiable: boolean): boolean {
     return (this.isAccept() && !satisfiable) || (this.isReject() && satisfiable);
   }
-
 
   bindings(): ScenarioBindings {
     return this.#bindings;

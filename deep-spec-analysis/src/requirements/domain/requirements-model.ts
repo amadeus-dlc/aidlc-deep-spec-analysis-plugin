@@ -1,11 +1,11 @@
 import {
-  TargetIdentifier,
-  type IntermediateRepresentationVersion,
-  FunctionalRequirementReferences,
-  TargetIdentifiers,
-  RequirementIdentifier,
   AttributePath,
   type ContentHash,
+  FunctionalRequirementReferences,
+  type IntermediateRepresentationVersion,
+  type RequirementIdentifier,
+  TargetIdentifier,
+  TargetIdentifiers,
 } from "@deep-spec/kernel-domain";
 
 // RequirementsModel 集約 — 検証済み要件の形式モデル（契約1）のドメイン表現。
@@ -14,13 +14,12 @@ import {
 // supportsMajor）は旧センサーの自由関数群を集約メソッドへ移したもの。
 // 配列を生で運ばない：部品はファーストクラスコレクションで受け取り・返す。
 
-import { type RequirementAttributeDeclaration } from "./requirement-attribute-declaration.ts";
-import { RequirementAttributeDeclarations } from "./requirement-attribute-declarations.ts";
-
+import type { BackgroundAssumptions } from "./background-assumptions.ts";
 import type { FormalModelIdentifier } from "./formal-model-identifier.ts";
-import { Obligations } from "./obligations.ts";
-import { Scenarios } from "./scenarios.ts";
-import { BackgroundAssumptions } from "./background-assumptions.ts";
+import type { Obligations } from "./obligations.ts";
+import type { RequirementAttributeDeclaration } from "./requirement-attribute-declaration.ts";
+import type { RequirementAttributeDeclarations } from "./requirement-attribute-declarations.ts";
+import type { Scenarios } from "./scenarios.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type RequirementsModelParam = {
@@ -112,7 +111,9 @@ export class RequirementsModel {
 
   // 境界: 縮退文書の skip 対象列（義務 id ＋シナリオ id の昇順——凍結順）。
   allTargets(): TargetIdentifiers {
-    return TargetIdentifiers.of(Array.from([...this.#obligations.ids(), ...this.#scenarios.ids()], (raw) => TargetIdentifier.of(raw))).sortedCanonically();
+    return TargetIdentifiers.of(
+      Array.from([...this.#obligations.ids(), ...this.#scenarios.ids()], (raw) => TargetIdentifier.of(raw)),
+    ).sortedCanonically();
   }
 
   // 対象 id 列が指す義務・シナリオの FR 参照（一意・正準順）。

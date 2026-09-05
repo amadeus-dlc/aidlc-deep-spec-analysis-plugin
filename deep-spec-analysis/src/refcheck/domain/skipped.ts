@@ -1,4 +1,4 @@
-import { SkipReason, TargetIdentifier, UnitName } from "@deep-spec/kernel-domain";
+import type { SkipReason, TargetIdentifier, UnitName } from "@deep-spec/kernel-domain";
 
 // refcheck skip 記録（無沈黙台帳の 1 行）——対象・理由・任意の帰属ユニットと
 // 説明。正準順（target → reason）は記録自身の知識（#71 波17）。target は

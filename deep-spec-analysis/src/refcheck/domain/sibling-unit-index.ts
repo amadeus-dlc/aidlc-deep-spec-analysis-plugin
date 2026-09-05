@@ -1,5 +1,5 @@
-import { type AttributeNames } from "./attribute-names.ts";
-import { type EntityName } from "./entity-name.ts";
+import type { AttributeNames } from "./attribute-names.ts";
+import type { EntityName } from "./entity-name.ts";
 
 // 兄弟ユニットの entities.md 索引。ユニット横断の定義元探索と、ユニット内の
 // 正規化名解決という集合の知識を所有する（XS 検査の凍結挙動）。
@@ -10,7 +10,9 @@ export class SiblingUnitIndex {
     this.#units = units;
   }
 
-  static of(units: ReadonlyMap<string, ReadonlyMap<string, { name: EntityName; attrs: AttributeNames }>>): SiblingUnitIndex {
+  static of(
+    units: ReadonlyMap<string, ReadonlyMap<string, { name: EntityName; attrs: AttributeNames }>>,
+  ): SiblingUnitIndex {
     return new SiblingUnitIndex(new Map(units));
   }
 

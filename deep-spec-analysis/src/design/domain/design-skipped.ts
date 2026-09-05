@@ -1,4 +1,4 @@
-import { type TargetIdentifier, SkipReason, UnitName } from "@deep-spec/kernel-domain";
+import type { SkipReason, TargetIdentifier, UnitName } from "@deep-spec/kernel-domain";
 
 // 設計検証の skip。対象・理由・ユニットはそれぞれ型付きの値で受け取る。
 // 正準順（unit → target → reason）は記録自身の知識。

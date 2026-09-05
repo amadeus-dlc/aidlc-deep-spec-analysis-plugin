@@ -1,22 +1,22 @@
 import {
-  UnitName,
   BackendName,
-  ContentHash,
+  type ContentHash,
   FindingKind,
   FunctionalRequirementReferences,
   TargetIdentifier,
   TargetIdentifiers,
+  UnitName,
 } from "@deep-spec/kernel-domain";
 
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
-import { DesignFindings } from "./design-findings.ts";
-import { DesignSkips } from "./design-skips.ts";
 import { DesignFinding } from "./design-finding.ts";
-import { DesignWitness } from "./design-witness.ts";
+import { DesignFindings } from "./design-findings.ts";
 import type { DesignModel } from "./design-model.ts";
-import type { DesignReportIdentifier } from "./design-report-identifier.ts";
 import { DesignReport } from "./design-report.ts";
+import type { DesignReportIdentifier } from "./design-report-identifier.ts";
+import { DesignSkips } from "./design-skips.ts";
+import { DesignWitness } from "./design-witness.ts";
 
 // 兄弟文書のファーストクラスコレクション（設計クロスチェックの入力）。
 export class DesignReports {
@@ -53,7 +53,12 @@ export class DesignReports {
       .map((s) => ({
         backend: s.id().backendName().asString(),
         findings: s.findings().toArray(),
-        skipped: new Set(s.skipped().toArray().map((e) => `${e.unit()}|${e.target().asString()}`)),
+        skipped: new Set(
+          s
+            .skipped()
+            .toArray()
+            .map((e) => `${e.unit()}|${e.target().asString()}`),
+        ),
       }));
 
     const findings: DesignFinding[] = [];
@@ -68,11 +73,20 @@ export class DesignReports {
             const key = `${u.name()}|${sc.id().asString()}`;
             if (a.skipped.has(key) || b.skipped.has(key)) continue;
             const verdictOf = (d: (typeof docs)[number]): boolean =>
-              d.findings.some((f) => f.kind() === "scenario-violation" && f.unit() === u.name() && f.targets().includes(TargetIdentifier.of(sc.id().asString())));
+              d.findings.some(
+                (f) =>
+                  f.kind() === "scenario-violation" &&
+                  f.unit() === u.name() &&
+                  f.targets().includes(TargetIdentifier.of(sc.id().asString())),
+              );
             const va = verdictOf(a);
             const vb = verdictOf(b);
-            (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id().asString());
-            (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(sc.id().asString());
+            (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(
+              sc.id().asString(),
+            );
+            (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set()).get(b.backend))?.add(
+              sc.id().asString(),
+            );
             if (va !== vb) {
               const verdicts: { [backend: string]: "violated" | "clean" } = {};
               verdicts[a.backend] = va ? "violated" : "clean";
@@ -80,7 +94,9 @@ export class DesignReports {
               findings.push(
                 DesignFinding.of({
                   kind: FindingKind.crossCheckDisagreement(),
-                  functionalRequirementReferences: FunctionalRequirementReferences.of([...sc.functionalRequirementReferences()]).sortedUnique(),
+                  functionalRequirementReferences: FunctionalRequirementReferences.of([
+                    ...sc.functionalRequirementReferences(),
+                  ]).sortedUnique(),
                   targets: TargetIdentifiers.of(Array.from([sc.id().asString()], (raw) => TargetIdentifier.of(raw))),
                   witness: DesignWitness.verdicts(verdicts),
                   unit: UnitName.of(u.name()),
@@ -93,7 +109,14 @@ export class DesignReports {
       }
     }
     const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => DesignCrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIdentifiers.of(Array.from([...targets], (raw) => TargetIdentifier.of(raw))).sortedCanonically() }))
+      .map(([backend, targets]) =>
+        DesignCrossCheckedEntry.of({
+          backend: BackendName.of(backend),
+          targets: TargetIdentifiers.of(
+            Array.from([...targets], (raw) => TargetIdentifier.of(raw)),
+          ).sortedCanonically(),
+        }),
+      )
       .sort((x, y) => x.compareByBackend(y));
 
     return DesignReport.compose({
@@ -106,5 +129,4 @@ export class DesignReports {
       crossChecked: DesignCrossCheckedEntries.of(crossChecked),
     });
   }
-
 }

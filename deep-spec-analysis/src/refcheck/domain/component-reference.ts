@@ -1,5 +1,5 @@
-import { type ComponentName } from "./component-name.ts";
-import { type ElementPath } from "./element-path.ts";
+import type { ComponentName } from "./component-name.ts";
+import type { ElementPath } from "./element-path.ts";
 
 // 依存参照（depends_on / dependents の 1 エントリ）。誰を指すかは参照自身が
 // 答える——DD-3 の自己依存検出はコンポーネント側に移設済み（#71 波6）。

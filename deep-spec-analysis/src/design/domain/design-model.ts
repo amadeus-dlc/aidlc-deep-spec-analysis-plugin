@@ -2,9 +2,9 @@
 // ユニットのユニット名昇順は集約の不変条件として compose が一度だけ適用する
 // （旧 parseDesignIr 末尾のソートの移設）。
 
-import type { DesignModelIdentifier } from "./design-model-identifier.ts";
 import type { ContentHash, IntermediateRepresentationVersion } from "@deep-spec/kernel-domain";
-import { DesignUnits } from "./design-units.ts";
+import type { DesignModelIdentifier } from "./design-model-identifier.ts";
+import type { DesignUnits } from "./design-units.ts";
 
 export class DesignModel {
   readonly #id: DesignModelIdentifier;
@@ -13,15 +13,18 @@ export class DesignModel {
   readonly #irVersion: IntermediateRepresentationVersion;
   readonly #units: DesignUnits;
 
-  private constructor(input: {
-    readonly id: DesignModelIdentifier;
-    // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
-    readonly irHash: ContentHash;
-    // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。
-    readonly sourceDocument: Uint8Array;
-    readonly irVersion: IntermediateRepresentationVersion;
-    readonly units: DesignUnits;
-  }, units: DesignUnits) {
+  private constructor(
+    input: {
+      readonly id: DesignModelIdentifier;
+      // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
+      readonly irHash: ContentHash;
+      // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。
+      readonly sourceDocument: Uint8Array;
+      readonly irVersion: IntermediateRepresentationVersion;
+      readonly units: DesignUnits;
+    },
+    units: DesignUnits,
+  ) {
     this.#id = input.id;
     this.#irHash = input.irHash;
     this.#sourceDocument = new Uint8Array(input.sourceDocument);

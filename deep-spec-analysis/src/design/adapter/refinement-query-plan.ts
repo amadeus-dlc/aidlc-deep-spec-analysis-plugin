@@ -1,6 +1,14 @@
-import { UnitName, TargetIdentifier, KeyedIndex, QueryLabel, SkipReason, type Expression } from "@deep-spec/kernel-domain";
+import {
+  type Expression,
+  KeyedIndex,
+  QueryLabel,
+  SkipReason,
+  TargetIdentifier,
+  UnitName,
+} from "@deep-spec/kernel-domain";
 
 import type { RefinementAttributeParam } from "./refinement-attribute-param.ts";
+
 // refinement の SMT-LIB コンパイラ — v1（requirements/adapter/smt-plan）と
 // 統一しない**明示的な第 2 コンパイラ**（移行計画のアーキテクチャ判断 Q1 /
 // 移行 PR8 で確定——描画語彙は kernel 共有、式コンパイラは ref の解決表と
@@ -13,22 +21,20 @@ import type { RefinementAttributeParam } from "./refinement-attribute-param.ts";
 // 旧 refinement-lib の designSmtCtx / smtOfExpr / designBase / assembleQuery /
 // decodeDesignModel とクエリ構築部からの逐語移植。
 
-import {
-  ObligationIdentifier,
-  ScenarioIdentifier,
-  RefinementMapDefect,
-} from "@deep-spec/design-domain";
-import { DesignSkips } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
-import { DesignSkipped } from "@deep-spec/design-domain";
 import {
   type DesignEvent,
+  DesignEventCatalog,
+  DesignSkipped,
+  DesignSkips,
+  EffectAssignments,
+  ObligationIdentifier,
+  RefinementMapDefect,
   RefinementProbe,
   type RefinementRequirements,
   RefinementSolverPlan,
+  ScenarioIdentifier,
   type UnitRefinementPlan,
-  DesignEventCatalog,
-  EffectAssignments,
 } from "@deep-spec/design-domain";
 
 import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
@@ -36,11 +42,7 @@ import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
 import type { RefinementChildQuery } from "./refinement-child-query.ts";
 import type { RefinementSatisfiabilityModuloTheoriesContext } from "./refinement-satisfiability-modulo-theories-context.ts";
 
-class SatisfiabilityModuloTheoriesCompileError extends Error {
-  constructor(message: string) {
-    super(message);
-  }
-}
+class SatisfiabilityModuloTheoriesCompileError extends Error {}
 
 export function refinementSmtContext(u: DesignUnit): RefinementSatisfiabilityModuloTheoriesContext {
   const attrs: RefinementAttributeParam[] = [];
@@ -65,9 +67,11 @@ export function refinementSmtContext(u: DesignUnit): RefinementSatisfiabilityMod
 
 function enumCode(ctx: RefinementSatisfiabilityModuloTheoriesContext, attrPath: string, value: string): number {
   const attr = ctx.byPath.get(attrPath);
-  if (!attr || attr.kind !== "enum" || !attr.values) throw new SatisfiabilityModuloTheoriesCompileError(`"${attrPath}" is not an enum attribute`);
+  if (attr?.kind !== "enum" || !attr.values)
+    throw new SatisfiabilityModuloTheoriesCompileError(`"${attrPath}" is not an enum attribute`);
   const idx = attr.values.indexOf(value);
-  if (idx < 0) throw new SatisfiabilityModuloTheoriesCompileError(`enum value "${value}" is not declared on "${attrPath}"`);
+  if (idx < 0)
+    throw new SatisfiabilityModuloTheoriesCompileError(`enum value "${value}" is not declared on "${attrPath}"`);
   return idx;
 }
 
@@ -83,7 +87,10 @@ export function smtOfExpr(ctx: RefinementSatisfiabilityModuloTheoriesContext, e:
       const right = b === enumArg ? code : smtOfExpr(ctx, b);
       return `(${op} ${left} ${right})`;
     }
-    if (enumArg) throw new SatisfiabilityModuloTheoriesCompileError("enum literal without a ref sibling has no resolvable encoding");
+    if (enumArg)
+      throw new SatisfiabilityModuloTheoriesCompileError(
+        "enum literal without a ref sibling has no resolvable encoding",
+      );
     return `(${op} ${smtOfExpr(ctx, a)} ${smtOfExpr(ctx, b)})`;
   };
   switch (e.op) {
@@ -114,7 +121,8 @@ export function smtOfExpr(ctx: RefinementSatisfiabilityModuloTheoriesContext, e:
     case "mul":
       return bin("*");
     case "ref": {
-      if (typeof e.path !== "string" || !ctx.byPath.has(e.path)) throw new SatisfiabilityModuloTheoriesCompileError(`unresolvable reference "${e.path ?? ""}"`);
+      if (typeof e.path !== "string" || !ctx.byPath.has(e.path))
+        throw new SatisfiabilityModuloTheoriesCompileError(`unresolvable reference "${e.path ?? ""}"`);
       return smtVar(e.path, e.prime === true);
     }
     case "bool":
@@ -146,12 +154,18 @@ export function designBase(
     decls.push(`(declare-const ${smtVar(attr.path, primed)} ${sort})`);
     const v = smtVar(attr.path, primed);
     if (attr.kind === "enum" && attr.values) {
-      constraints.push({ name: `${primed ? "typ" : "ty"}_${attr.path.replace(/\./g, "_")}`, smt: `(and (>= ${v} 0) (<= ${v} ${attr.values.length - 1}))` });
+      constraints.push({
+        name: `${primed ? "typ" : "ty"}_${attr.path.replace(/\./g, "_")}`,
+        smt: `(and (>= ${v} 0) (<= ${v} ${attr.values.length - 1}))`,
+      });
     } else if (attr.kind === "int" && (attr.min !== undefined || attr.max !== undefined)) {
       const parts: string[] = [];
       if (attr.min !== undefined) parts.push(`(>= ${v} ${smtLit(attr.min)})`);
       if (attr.max !== undefined) parts.push(`(<= ${v} ${smtLit(attr.max)})`);
-      constraints.push({ name: `${primed ? "typ" : "ty"}_${attr.path.replace(/\./g, "_")}`, smt: parts.length === 1 ? (parts[0] as string) : `(and ${parts.join(" ")})` });
+      constraints.push({
+        name: `${primed ? "typ" : "ty"}_${attr.path.replace(/\./g, "_")}`,
+        smt: parts.length === 1 ? (parts[0] as string) : `(and ${parts.join(" ")})`,
+      });
     }
   }
   if (!primed) {
@@ -231,8 +245,17 @@ export function buildRefinementQueries(
   const ctx = refinementSmtContext(u);
   const pre = designBase(ctx, u, false);
   const post = designBase(ctx, u, true);
-  const modelVars = ctx.attrs.map((a) => ({ name: smtVar(a.path, false), sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool" }));
-  const modelVarsBoth = [...modelVars, ...ctx.attrs.map((a) => ({ name: smtVar(a.path, true), sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool" }))];
+  const modelVars = ctx.attrs.map((a) => ({
+    name: smtVar(a.path, false),
+    sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool",
+  }));
+  const modelVarsBoth = [
+    ...modelVars,
+    ...ctx.attrs.map((a) => ({
+      name: smtVar(a.path, true),
+      sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool",
+    })),
+  ];
   const catalog = DesignEventCatalog.of(u);
   const queries: RefinementChildQuery[] = [];
   const pending = new Map<string, RefinementProbe>();
@@ -240,12 +263,14 @@ export function buildRefinementQueries(
   // alpha 置換の欠陥（RefinementMapDefect）と SMT コンパイル失敗（例外）は同じ
   // 凍結文言の compile-error skip に落ちる。
   const alphaFail = (target: string, message: string): void => {
-    compileSkips.push(DesignSkipped.of({
-      target: TargetIdentifier.of(target),
-      reason: SkipReason.compileError(),
-      unit: UnitName.of(u.name()),
-      detail: `alpha substitution failed: ${message}`,
-    }));
+    compileSkips.push(
+      DesignSkipped.of({
+        target: TargetIdentifier.of(target),
+        reason: SkipReason.compileError(),
+        unit: UnitName.of(u.name()),
+        detail: `alpha substitution failed: ${message}`,
+      }),
+    );
   };
   const failureMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -262,7 +287,12 @@ export function buildRefinementQueries(
         continue;
       }
       try {
-        const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP.value)})` }], modelVars);
+        const q = assembleQuery(
+          `rv:${obId}`,
+          pre.decls,
+          [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP.value)})` }],
+          modelVars,
+        );
         queries.push(q);
         pending.set(q.id, RefinementProbe.invariant(ObligationIdentifier.of(obId)));
       } catch (err) {
@@ -306,9 +336,12 @@ export function buildRefinementQueries(
         // 検査不能なので省く）に反する。
         const decomposed = EffectAssignments.parse(event.effect);
         if (!decomposed.ok) {
-          alphaFail(obId, decomposed.error.kind === "effect-not-assignment-conjunction"
-            ? RefinementMapDefect.effectNotAssignmentConjunction().message()
-            : JSON.stringify(decomposed.error));
+          alphaFail(
+            obId,
+            decomposed.error.kind === "effect-not-assignment-conjunction"
+              ? RefinementMapDefect.effectNotAssignmentConjunction().message()
+              : JSON.stringify(decomposed.error),
+          );
           continue;
         }
         const assigned = decomposed.value;
@@ -333,9 +366,10 @@ export function buildRefinementQueries(
             const rhs = ev.assignedRhsOf(attr.path);
             const target = smtVar(attr.path, true);
             if (rhs) {
-              const rhsSmt = rhs.op === "enum" && typeof rhs.value === "string"
-                ? String(enumCode(ctx, attr.path, rhs.value))
-                : smtOfExpr(ctx, rhs);
+              const rhsSmt =
+                rhs.op === "enum" && typeof rhs.value === "string"
+                  ? String(enumCode(ctx, attr.path, rhs.value))
+                  : smtOfExpr(ctx, rhs);
               stepParts.push(`(= ${target} ${rhsSmt})`);
             } else {
               stepParts.push(`(= ${target} ${smtVar(attr.path, false)})`);
@@ -388,7 +422,10 @@ export function buildRefinementQueries(
       const q = assembleQuery(
         `rs:${scId}`,
         pre.decls,
-        [...pre.constraints, { name: smtName("sc", scId), smt: parts.length === 1 ? (parts[0] as string) : `(and ${parts.join(" ")})` }],
+        [
+          ...pre.constraints,
+          { name: smtName("sc", scId), smt: parts.length === 1 ? (parts[0] as string) : `(and ${parts.join(" ")})` },
+        ],
         modelVars,
       );
       queries.push(q);
@@ -401,7 +438,10 @@ export function buildRefinementQueries(
 
   return {
     queries,
-    plan: RefinementSolverPlan.of({ pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.of(id), probe] as const)), compileSkips: DesignSkips.of(compileSkips) }),
+    plan: RefinementSolverPlan.of({
+      pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.of(id), probe] as const)),
+      compileSkips: DesignSkips.of(compileSkips),
+    }),
     context: ctx,
   };
 }

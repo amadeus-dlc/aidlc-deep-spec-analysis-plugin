@@ -15,15 +15,14 @@
 // 適合と両文書の公開は VerificationReportFinalizer が一か所で持つ——ここに残る
 // のは Quint 固有の method 検出とコンパイル判断だけ。
 
-import { VerificationReport, VerificationReportIdentifier } from "@deep-spec/requirements-domain";
-import { SUPPORTED_IR_MAJOR } from "@deep-spec/requirements-domain";
 import type { FindingsSchema } from "@deep-spec/kernel-domain";
+import { SUPPORTED_IR_MAJOR, VerificationReport, VerificationReportIdentifier } from "@deep-spec/requirements-domain";
 import type { FormalModelRepository } from "./port/formal-model-repository.ts";
 import type { QuintClient } from "./port/quint-client.ts";
 import type { VerificationDirectoryRepository } from "./port/verification-directory-repository.ts";
+import { VerificationReportFinalizer } from "./verification-report-finalizer.ts";
 import type { VerifyQuintOutcome } from "./verify-quint-outcome.ts";
 import type { VerifyRequirementsQuintInput } from "./verify-requirements-quint-input.ts";
-import { VerificationReportFinalizer } from "./verification-report-finalizer.ts";
 
 const BACKEND = "quint";
 
@@ -49,7 +48,9 @@ export class VerifyRequirementsQuintUseCase {
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#finalizer.finalizeIrUnreadable(VerificationReport.irUnreadable(id, "simulation", acquired.error.cause));
+      const saved = this.#finalizer.finalizeIrUnreadable(
+        VerificationReport.irUnreadable(id, "simulation", acquired.error.cause),
+      );
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
     }
@@ -57,7 +58,10 @@ export class VerifyRequirementsQuintUseCase {
     const irHash = model.irHash();
 
     if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
-      const saved = this.#finalizer.finalize(VerificationReport.versionMismatch(id, model, irHash, "simulation"), model);
+      const saved = this.#finalizer.finalize(
+        VerificationReport.versionMismatch(id, model, irHash, "simulation"),
+        model,
+      );
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "version-mismatch" };
     }

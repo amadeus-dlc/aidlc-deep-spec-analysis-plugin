@@ -5,11 +5,8 @@ import type { SchemaUnreadable } from "./schema-unreadable.ts";
 // Error.message をそのまま運ぶ。
 
 import { readFileSync } from "node:fs";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import { type Schema } from "@deep-spec/kernel-infrastructure";
-import { isObject } from "@deep-spec/kernel-infrastructure";
 import { FindingsSchema } from "@deep-spec/kernel-domain";
-
+import { err, isObject, ok, type Result, type Schema } from "@deep-spec/kernel-infrastructure";
 
 export function readContractSchema(path: string): Result<Schema, SchemaUnreadable> {
   try {

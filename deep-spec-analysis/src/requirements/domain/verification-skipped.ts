@@ -1,4 +1,4 @@
-import { SkipReason, type TargetIdentifier } from "@deep-spec/kernel-domain";
+import type { SkipReason, TargetIdentifier } from "@deep-spec/kernel-domain";
 
 // v1 検証 skip（契約2）——対象・理由・任意の説明。正準順（target → reason）と
 // 「その対象の skip か」の判定は記録自身の知識（#71 波17）。reason は分類

@@ -3,10 +3,14 @@
 // （Pending・コンパイル時 skip）と型付き判定だけを返す。クエリゼロは子を
 // 起動しない（旧挙動の凍結——no-queries）。
 
-import type { RefinementRequirements, UnitRefinementPlan } from "@deep-spec/design-domain";
-import type { DesignUnit } from "@deep-spec/design-domain";
+import type { DesignUnit, RefinementRequirements, UnitRefinementPlan } from "@deep-spec/design-domain";
 import type { RefinementCheck } from "./refinement-check.ts";
 
 export interface RefinementSolverClient {
-  check(unit: DesignUnit, requirements: RefinementRequirements, plan: UnitRefinementPlan, budgetMs: number): RefinementCheck;
+  check(
+    unit: DesignUnit,
+    requirements: RefinementRequirements,
+    plan: UnitRefinementPlan,
+    budgetMs: number,
+  ): RefinementCheck;
 }

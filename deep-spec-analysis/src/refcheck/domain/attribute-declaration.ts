@@ -1,10 +1,10 @@
-import { type AttributeDefault } from "./attribute-default.ts";
-import { type AttributeName } from "./attribute-name.ts";
-import { type ElementPath } from "./element-path.ts";
-import { type NumericBound } from "./numeric-bound.ts";
-import { type ReferenceTarget } from "./reference-target.ts";
-import { type StateNames } from "./state-names.ts";
 import type { AllowedValues } from "./allowed-values.ts";
+import type { AttributeDefault } from "./attribute-default.ts";
+import type { AttributeName } from "./attribute-name.ts";
+import type { ElementPath } from "./element-path.ts";
+import type { NumericBound } from "./numeric-bound.ts";
+import type { ReferenceTarget } from "./reference-target.ts";
+import type { StateNames } from "./state-names.ts";
 import type { TypeName } from "./type-name.ts";
 
 // 属性宣言。型区分との整合・範囲と既定値の整合・ライフサイクル候補性という
@@ -110,7 +110,7 @@ export class AttributeDeclaration {
 
   // FD-E2: コレクション型に unique を宣言。
   declaresUniqueOnCollectionType(): boolean {
-    return this.#uniqueIsTrue && this.#type !== null && this.#type.classifiesCollection();
+    return this.#uniqueIsTrue && (this.#type?.classifiesCollection() ?? false);
   }
 
   // FD-E3: min > max の範囲逆転。

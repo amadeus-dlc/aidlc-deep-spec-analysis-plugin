@@ -1,10 +1,10 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+import { ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 import type { DesignBackgroundIdentifier } from "./design-background-identifier.ts";
-import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredBackground } from "./lowered-background.ts";
+import type { LoweredIdentifier } from "./lowered-identifier.ts";
 
 // 設計ユニットの背景仮定 1 件——id と表明。lowering は正準順（id の compareTo）で
 // 並べ、表明を BG-n へ載せる（#71 波25）。

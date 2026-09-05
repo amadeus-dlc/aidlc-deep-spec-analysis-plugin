@@ -1,6 +1,11 @@
 import {
-  boundedValueSnapshot, canonicalStringify, IllegalArgumentException, parseConstruction,
-  type Json, type ParseError, type Result,
+  boundedValueSnapshot,
+  canonicalStringify,
+  IllegalArgumentException,
+  type Json,
+  type ParseError,
+  parseConstruction,
+  type Result,
 } from "@deep-spec/kernel-infrastructure";
 
 // 未検証の入力表現。Declarationクラスと区別し、他のドメイン型の構築引数にはしない。
@@ -36,10 +41,15 @@ export class Declaration {
   }
 
   match<T>(cases: { literal: (value: boolean | number | string) => T; nonLiteral: () => T }): T {
-    if (typeof this.#value === "boolean" || typeof this.#value === "number" || typeof this.#value === "string") return cases.literal(this.#value);
+    if (typeof this.#value === "boolean" || typeof this.#value === "number" || typeof this.#value === "string")
+      return cases.literal(this.#value);
     return cases.nonLiteral();
   }
 
-  equals(other: Declaration): boolean { return canonicalStringify(this.#value) === canonicalStringify(other.#value); }
-  describe(): string { return JSON.stringify(this.#value); }
+  equals(other: Declaration): boolean {
+    return canonicalStringify(this.#value) === canonicalStringify(other.#value);
+  }
+  describe(): string {
+    return JSON.stringify(this.#value);
+  }
 }

@@ -6,8 +6,10 @@ export class BackgroundAssumptionIdentifier {
 
   /** 識別名・ID・バージョンの処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
-    if (raw.length > 128) throw new IllegalArgumentException({ kind: "background-assumption-id-too-long", raw: raw.length });
-    if (!/^BG-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-background-assumption-id", raw });
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "background-assumption-id-too-long", raw: raw.length });
+    if (!/^BG-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-background-assumption-id", raw });
     this.#value = raw;
   }
 

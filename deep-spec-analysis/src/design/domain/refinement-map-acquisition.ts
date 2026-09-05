@@ -1,5 +1,5 @@
-import type { ArtifactPath } from "@deep-spec/kernel-domain";
 import type { DesignInputAnchor } from "@deep-spec/design-domain";
+import type { ArtifactPath } from "@deep-spec/kernel-domain";
 import type { RefinementMap } from "./refinement-map.ts";
 
 // refinement map の取得結果——無い（absent：読めなかった理由つき）か、
@@ -11,7 +11,12 @@ export class RefinementMapAcquisition {
   readonly #mapArtifact: ArtifactPath | null;
   readonly #inputs: readonly DesignInputAnchor[];
 
-  private constructor(props: { error: string | null; map: RefinementMap | null; mapArtifact: ArtifactPath | null; inputs: readonly DesignInputAnchor[] }) {
+  private constructor(props: {
+    error: string | null;
+    map: RefinementMap | null;
+    mapArtifact: ArtifactPath | null;
+    inputs: readonly DesignInputAnchor[];
+  }) {
     this.#error = props.error;
     this.#map = props.map;
     this.#mapArtifact = props.mapArtifact;
@@ -22,7 +27,11 @@ export class RefinementMapAcquisition {
     return new RefinementMapAcquisition({ error, map: null, mapArtifact: null, inputs: [] });
   }
 
-  static loaded(map: RefinementMap, mapArtifact: ArtifactPath, inputs: readonly DesignInputAnchor[]): RefinementMapAcquisition {
+  static loaded(
+    map: RefinementMap,
+    mapArtifact: ArtifactPath,
+    inputs: readonly DesignInputAnchor[],
+  ): RefinementMapAcquisition {
     return new RefinementMapAcquisition({ error: null, map, mapArtifact, inputs });
   }
 

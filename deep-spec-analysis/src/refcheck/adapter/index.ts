@@ -1,9 +1,8 @@
 // refcheck/adapter の公開 facade — 明示列挙のみ（export * 禁止）。
 
-export { ReferenceCheckReportRepositoryImplementation } from "./reference-check-report-repository-implementation.ts";
-export { renderReportBytes } from "./reference-check-report-serializer.ts";
 export { parseComponentCatalog } from "./component-catalog-parser.ts";
 export { assessSpecBlocks, parseContractsTable, parseDeclaredUnits } from "./contract-summary-parser.ts";
+export { DesignRecordRepositoryImplementation } from "./design-record-repository-implementation.ts";
 export {
   buildSiblingUnitEntities,
   parseDomainEntitiesDocument,
@@ -11,4 +10,5 @@ export {
   parseFunctionalSpecDocument,
   parseRulesDocument,
 } from "./functional-design-parser.ts";
-export { DesignRecordRepositoryImplementation } from "./design-record-repository-implementation.ts";
+export { ReferenceCheckReportRepositoryImplementation } from "./reference-check-report-repository-implementation.ts";
+export { renderReportBytes } from "./reference-check-report-serializer.ts";

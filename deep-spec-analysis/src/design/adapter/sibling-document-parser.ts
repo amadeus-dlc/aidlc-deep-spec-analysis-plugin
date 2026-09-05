@@ -1,9 +1,14 @@
-import { parseFindingsValues } from "@deep-spec/kernel-adapter";
-import { combineResults, traverseResult, type Json } from "@deep-spec/kernel-infrastructure";
 import {
-  LoweredIdentifier, SiblingVerdictFindings, SiblingVerdictSkips, SiblingVerdictSkip,
-  SiblingVerdictDocument, SiblingVerdictFinding, DesignWitness,
+  DesignWitness,
+  LoweredIdentifier,
+  SiblingVerdictDocument,
+  SiblingVerdictFinding,
+  SiblingVerdictFindings,
+  SiblingVerdictSkip,
+  SiblingVerdictSkips,
 } from "@deep-spec/design-domain";
+import { parseFindingsValues } from "@deep-spec/kernel-adapter";
+import { combineResults, type Json, traverseResult } from "@deep-spec/kernel-infrastructure";
 
 export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
   const decoded = parseFindingsValues(raw);
@@ -25,5 +30,9 @@ export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
     if (!target.ok) return SiblingVerdictDocument.unreadable(JSON.stringify(target.error));
     skipped.push(SiblingVerdictSkip.of({ ...skip, target: target.value }));
   }
-  return SiblingVerdictDocument.readable(doc.method, SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
+  return SiblingVerdictDocument.readable(
+    doc.method,
+    SiblingVerdictFindings.of(findings),
+    SiblingVerdictSkips.of(skipped),
+  );
 }

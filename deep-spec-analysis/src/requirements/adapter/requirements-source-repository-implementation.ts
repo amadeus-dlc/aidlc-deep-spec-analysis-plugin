@@ -8,11 +8,11 @@
 // 旧 aidlc-sensor-deep-spec-ir-valid.ts の findRequirementsFile ＋ source
 // anchoring 節からの逐語移植（記録ルートの導出は材料ゲートウェイ側へ移動）。
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeFileAtomically } from "@deep-spec/kernel-adapter";
 import { ArtifactPath, ContentHash, RequirementIdentifiers } from "@deep-spec/kernel-domain";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import { err, ok, type Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import { RequirementsSource, type RequirementsSourceIdentifier } from "@deep-spec/requirements-domain";
 import type { RequirementsSourceRepository } from "@deep-spec/requirements-usecase";
@@ -51,15 +51,22 @@ export class RequirementsSourceRepositoryImplementation implements RequirementsS
     try {
       bytes = readFileSync(search.path);
     } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: search.path, cause: e instanceof Error ? e.message : String(e) });
+      return err({
+        kind: "io-failed",
+        operation: "read",
+        path: search.path,
+        cause: e instanceof Error ? e.message : String(e),
+      });
     }
-    return ok(RequirementsSource.of({
-      id,
-      sourcePath: ArtifactPath.of(search.path),
-      knownIds: RequirementIdentifiers.extractFrom(bytes.toString("utf-8")),
-      digest: ContentHash.ofBytes(bytes),
-      sourceDocument: new Uint8Array(bytes),
-    }));
+    return ok(
+      RequirementsSource.of({
+        id,
+        sourcePath: ArtifactPath.of(search.path),
+        knownIds: RequirementIdentifiers.extractFrom(bytes.toString("utf-8")),
+        digest: ContentHash.ofBytes(bytes),
+        sourceDocument: new Uint8Array(bytes),
+      }),
+    );
   }
 
   // 往復則: findById が読んだ原文バイト列を解決済みの所在へ逐語で書き戻す。

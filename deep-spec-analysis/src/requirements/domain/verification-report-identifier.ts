@@ -2,8 +2,8 @@
 // backend 名（smt / quint / cross-check）。Repository はここから保存先／
 // 読出元を導出する。
 
-import { BackendName } from "@deep-spec/kernel-domain";
 import type { ArtifactPath } from "@deep-spec/kernel-domain";
+import { BackendName } from "@deep-spec/kernel-domain";
 
 export class VerificationReportIdentifier {
   readonly #directory: ArtifactPath;

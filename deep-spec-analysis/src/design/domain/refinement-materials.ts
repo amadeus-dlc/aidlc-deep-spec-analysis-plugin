@@ -4,8 +4,8 @@
 // Repository port の Result で運び、この集約の正当な状態に混ぜない。
 
 import type { RefinementMaterialsIdentifier } from "@deep-spec/design-domain";
-import type { RefinementRequirements } from "./refinement-requirements.ts";
 import type { RefinementMapAcquisition } from "./refinement-map-acquisition.ts";
+import type { RefinementRequirements } from "./refinement-requirements.ts";
 
 type RefinementMaterialsState =
   | { readonly kind: "inactive" }
@@ -24,7 +24,11 @@ export class RefinementMaterials {
     return new RefinementMaterials(id, { kind: "inactive" });
   }
 
-  static active(id: RefinementMaterialsIdentifier, requirements: RefinementRequirements, map: RefinementMapAcquisition): RefinementMaterials {
+  static active(
+    id: RefinementMaterialsIdentifier,
+    requirements: RefinementRequirements,
+    map: RefinementMapAcquisition,
+  ): RefinementMaterials {
     return new RefinementMaterials(id, { kind: "active", requirements, map });
   }
 
@@ -38,12 +42,14 @@ export class RefinementMaterials {
 
   // active のときだけ意味を持つ（inactive で呼ぶのは defect——黙殺しない）。
   requirements(): RefinementRequirements {
-    if (this.#state.kind !== "active") throw new Error("defect: RefinementMaterials.requirements() on inactive materials");
+    if (this.#state.kind !== "active")
+      throw new Error("defect: RefinementMaterials.requirements() on inactive materials");
     return this.#state.requirements;
   }
 
   mapAcquisition(): RefinementMapAcquisition {
-    if (this.#state.kind !== "active") throw new Error("defect: RefinementMaterials.mapAcquisition() on inactive materials");
+    if (this.#state.kind !== "active")
+      throw new Error("defect: RefinementMaterials.mapAcquisition() on inactive materials");
     return this.#state.map;
   }
 }

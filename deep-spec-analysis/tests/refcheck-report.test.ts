@@ -1,4 +1,12 @@
-import { TargetIdentifier, ContentHash, ArtifactPath, FindingKind, FindingsSchema, FunctionalRequirementReferences, TargetIdentifiers } from "@deep-spec/kernel-domain";
+import {
+  ArtifactPath,
+  ContentHash,
+  FindingKind,
+  FindingsSchema,
+  FunctionalRequirementReferences,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec/kernel-domain";
 
 // ReferenceCheckReport 集約・serializer・Repository の契約テスト（PR2b、#15）。
 //
@@ -22,38 +30,58 @@ function ap(raw: string): ArtifactPath {
 }
 
 import {
+  parseContractsTable,
   ReferenceCheckReportRepositoryImplementation,
   renderReportBytes,
-  parseContractsTable,
 } from "@deep-spec/refcheck-adapter";
 
 import {
   CheckFamilies,
   CheckFamily,
   Finding,
-  InputAnchor,
-  type Skipped,
   Findings,
+  InputAnchor,
   InputAnchors,
   ReferenceCheckReport,
   ReferenceCheckReportIdentifier,
+  type Skipped,
   Skips,
   UnitName,
   WitnessReferences,
 } from "@deep-spec/refcheck-domain";
 
 const schemaPath = join(
-  dirname(fileURLToPath(import.meta.url)), "..", "src", "entries", "data", "deep-spec-findings-schema.json",
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "src",
+  "entries",
+  "data",
+  "deep-spec-findings-schema.json",
 );
 const schemaFile = readContractSchema(schemaPath);
-const findingsSchema = schemaFile.ok ? FindingsSchema.of(schemaFile.value) : FindingsSchema.unreadable(schemaFile.error.cause);
+const findingsSchema = schemaFile.ok
+  ? FindingsSchema.of(schemaFile.value)
+  : FindingsSchema.unreadable(schemaFile.error.cause);
 
 test("oversized contract parties produce explicit parse-failure skips", () => {
   const table = parseContractsTable(`| ID | Provider |\n| --- | --- |\n| 1 | ${"x".repeat(4097)} |`);
-  const report = ReferenceCheckReport.open(ReferenceCheckReportIdentifier.of(ap("/verification"), "contract"), CheckFamilies.of([]));
+  const report = ReferenceCheckReport.open(
+    ReferenceCheckReportIdentifier.of(ap("/verification"), "contract"),
+    CheckFamilies.of([]),
+  );
   expect(table.check(report, null, ap("contract-summary.md"), ap("units.md"))).toBeNull();
-  expect(report.skipped().toArray().map((skip) => skip.target())).toEqual(["check:CD-1", "check:CD-3"]);
-  expect(report.skipped().toArray().every((skip) => skip.detail()?.includes("contract-party-too-long"))).toBe(true);
+  expect(
+    report
+      .skipped()
+      .toArray()
+      .map((skip) => skip.target()),
+  ).toEqual(["check:CD-1", "check:CD-3"]);
+  expect(
+    report
+      .skipped()
+      .toArray()
+      .every((skip) => skip.detail()?.includes("contract-party-too-long")),
+  ).toBe(true);
 });
 
 // 書かれた真実の形で組む（serializer／Repository の契約はこの面を検証する）。
@@ -64,7 +92,9 @@ function seed(
   return ReferenceCheckReport.of({
     id: ReferenceCheckReportIdentifier.of(ap(directory), "components"),
     inputs: InputAnchors.of(
-      overrides.inputs ?? [InputAnchor.of({ artifact: "inception/domain-design/components.md", sha256: ContentHash.of("a".repeat(64)) })],
+      overrides.inputs ?? [
+        InputAnchor.of({ artifact: "inception/domain-design/components.md", sha256: ContentHash.of("a".repeat(64)) }),
+      ],
     ),
     checked: TargetIdentifiers.of(Array.from(overrides.checked ?? ["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
     findings: Findings.of(overrides.findings ?? []),
@@ -101,7 +131,12 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     expect(report.findingsCount()).toBe(0);
     expect(report.skippedCount()).toBe(0);
     expect(report.checked().toStrings()).toEqual(["check:DD-0", "check:DD-1"]);
-    expect(report.inputs().toArray().map((i) => i.artifact())).toEqual(["a.md", "b.md"]);
+    expect(
+      report
+        .inputs()
+        .toArray()
+        .map((i) => i.artifact()),
+    ).toEqual(["a.md", "b.md"]);
     expect(report.unavailableReason()).toBe(null);
     expect(report.id().backendName().asString()).toBe("components");
   });
@@ -133,13 +168,27 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     );
     report.finding(CheckFamily.of("DD-1"), FindingKind.referenceBroken(), ["check:DD-1"], [], "second kind");
     report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "first kind");
-    report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "a earlier detail", ["FR-2", "FR-1", "FR-2"]);
+    report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "a earlier detail", [
+      "FR-2",
+      "FR-1",
+      "FR-2",
+    ]);
     report.skip(CheckFamily.of("DD-2"), "unrecognized-format", "later");
     report.skip(CheckFamily.of("DD-0"), "absent-input", "earlier");
-    expect(report.findings().toArray().map((f) => f.detail())).toEqual(["DD-1: a earlier detail", "DD-1: first kind", "DD-1: second kind"]);
+    expect(
+      report
+        .findings()
+        .toArray()
+        .map((f) => f.detail()),
+    ).toEqual(["DD-1: a earlier detail", "DD-1: first kind", "DD-1: second kind"]);
     expect(report.findings().toArray()[0]?.functionalRequirementReferences().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(report.findings().toArray()[0]?.unit()).toBe(undefined);
-    expect(report.skipped().toArray().map((s) => s.target())).toEqual(["check:DD-0", "check:DD-2"]);
+    expect(
+      report
+        .skipped()
+        .toArray()
+        .map((s) => s.target()),
+    ).toEqual(["check:DD-0", "check:DD-2"]);
     expect(report.checked().toStrings()).toEqual([]);
   });
 
@@ -159,16 +208,35 @@ describe("serializer (adapter owns the format knowledge)", () => {
     const report = seed("/tmp/r");
     expect(report.conformedTo(findingsSchema)).toBe(report);
     const doc = JSON.parse(renderReportBytes(report));
-    expect(Object.keys(doc)).toEqual(["backend", "irVersion", "irHash", "method", "inputs", "checked", "findings", "skipped"]);
+    expect(Object.keys(doc)).toEqual([
+      "backend",
+      "irVersion",
+      "irHash",
+      "method",
+      "inputs",
+      "checked",
+      "findings",
+      "skipped",
+    ]);
     expect(doc.method).toBe("static");
     expect(doc.irHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   test("a non-conforming document degrades with the frozen wording", () => {
-    const badFinding: Finding = Finding.of({ kind: FindingKind.conflict(), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))), witness: { refs: WitnessReferences.of([]) }, detail: "DD-0: x" });
-    const conformed = seed("/tmp/r", { findings: [badFinding] }).conformedTo(FindingsSchema.of({ type: "object", properties: { findings: { maxItems: 0 } } }));
+    const badFinding: Finding = Finding.of({
+      kind: FindingKind.conflict(),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+      witness: { refs: WitnessReferences.of([]) },
+      detail: "DD-0: x",
+    });
+    const conformed = seed("/tmp/r", { findings: [badFinding] }).conformedTo(
+      FindingsSchema.of({ type: "object", properties: { findings: { maxItems: 0 } } }),
+    );
     expect(conformed.isUnavailable()).toBe(true);
-    expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
+    expect(conformed.unavailableReason()).toStartWith(
+      "self-validation against deep-spec-findings-schema.json failed: ",
+    );
     expect(JSON.parse(renderReportBytes(conformed)).unavailable.reason).toStartWith("self-validation against ");
   });
 
@@ -203,7 +271,10 @@ describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", ()
       writeFileSync(join(dir, "components.json"), "not json at all");
       const corrupt = repository.findById(ReferenceCheckReportIdentifier.of(ap(dir), "components"));
       expect(!corrupt.ok && corrupt.error.kind).toBe("corrupt");
-      writeFileSync(join(dir, "components.json"), JSON.stringify({ backend: "other", inputs: [], checked: [], findings: [], skipped: [] }));
+      writeFileSync(
+        join(dir, "components.json"),
+        JSON.stringify({ backend: "other", inputs: [], checked: [], findings: [], skipped: [] }),
+      );
       const mismatched = repository.findById(ReferenceCheckReportIdentifier.of(ap(dir), "components"));
       expect(!mismatched.ok && mismatched.error.kind).toBe("corrupt");
     } finally {

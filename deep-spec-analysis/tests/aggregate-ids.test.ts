@@ -1,24 +1,102 @@
-import { EnumerationMembers } from "@deep-spec/kernel-domain";
 import { InitialState } from "@deep-spec/design-domain";
-import { EnumerationMember } from "@deep-spec/kernel-domain";
+import {
+  ArtifactPath,
+  BackendName,
+  ContentHash,
+  EnumerationMember,
+  EnumerationMembers,
+  FindingKind,
+  IntermediateRepresentationVersion,
+  RequirementIdentifier,
+  RequirementIdentifiers,
+  SkipReason,
+  TargetIdentifier,
+  TargetIdentifiers,
+  TriggerName,
+  UnitName,
+} from "@deep-spec/kernel-domain";
 import { scenarioBindings } from "./binding-fixtures.ts";
-import { SkipReason, FindingKind, TriggerName, ArtifactPath, BackendName, ContentHash, IntermediateRepresentationVersion, TargetIdentifier, TargetIdentifiers, RequirementIdentifier, UnitName, RequirementIdentifiers } from "@deep-spec/kernel-domain";
 
 // 集約 ID と ArtifactPath の DP 検査（Repository 裁定・補遺の証人）。
 // 通常の生成はparse、再構成はofに揃え、
 // equals は値による恒等比較。domain 90% 床のための分岐網羅。
 
 import { describe, expect, test } from "bun:test";
+import {
+  AttributePaths,
+  BusinessRuleReferences,
+  CheckedUnits,
+  DesignAttributeName,
+  DesignBackgroundAssumption,
+  DesignBackgroundAssumptions,
+  DesignBackgroundIdentifier,
+  DesignCrossCheckedEntries,
+  DesignCrossCheckedEntry,
+  DesignEntityDeclarations,
+  DesignEntityName,
+  DesignFinding,
+  DesignFindings,
+  DesignIgnore,
+  DesignIgnores,
+  DesignInputAnchor,
+  DesignInputAnchors,
+  DesignMachine,
+  DesignMachineIdentifier,
+  DesignMachines,
+  DesignModelIdentifier,
+  DesignObligation,
+  DesignObligationIdentifier,
+  DesignObligationNature,
+  DesignObligationOrigin,
+  DesignObligations,
+  DesignReports,
+  DesignScenario,
+  DesignScenarioIdentifier,
+  DesignScenarios,
+  DesignSkipped,
+  DesignSkips,
+  DesignTransition,
+  DesignTransitionIdentifier,
+  DesignTransitions,
+  DesignUnit,
+  DesignUnitIdentifier,
+  DesignUnits,
+  DesignWitness,
+  InitialStates,
+  LoweredIdentifier,
+  LoweredOriginReference,
+  RefinementMapIdentifier,
+  RefinementMaterialsIdentifier,
+} from "@deep-spec/design-domain";
 import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
-
-import { DesignAttributeName, DesignBackgroundIdentifier, DesignEntityName, DesignFinding, DesignMachine, DesignMachineIdentifier, DesignObligationIdentifier, DesignObligationNature, DesignObligationOrigin, DesignScenarioIdentifier, DesignTransitionIdentifier, BusinessRuleReferences, DesignIgnores, DesignModelIdentifier, DesignIgnore, DesignTransition, DesignTransitions, DesignUnitIdentifier, InitialStates, RefinementMaterialsIdentifier, LoweredOriginReference, LoweredIdentifier, DesignSkipped, DesignInputAnchor, DesignCrossCheckedEntry, DesignWitness, DesignEntityDeclarations } from "@deep-spec/design-domain";
-import { RefinementMapIdentifier } from "@deep-spec/design-domain";
-import { AttributePaths, CheckedUnits, DesignBackgroundAssumptions, DesignBackgroundAssumption, DesignCrossCheckedEntries, DesignFindings, DesignInputAnchors, DesignMachines, DesignObligations, DesignObligation, DesignReports, DesignScenarios, DesignScenario, DesignSkips, DesignUnit, DesignUnits } from "@deep-spec/design-domain";
-import { ObligationIdentifiers, VerificationSkipped, VerificationFinding, CrossCheckedEntry, VerificationWitness } from "@deep-spec/requirements-domain";
-import { FormalModelIdentifier } from "@deep-spec/requirements-domain";
-import { AttributeBound, RequirementAttributeDeclarations, RequirementAttributeDeclaration, AttributePath, BackgroundAssumptionIdentifier, FunctionalRequirementReferences, ObligationIdentifier, ObligationNature, ScenarioIdentifier, BackgroundAssumptions, BackgroundAssumption, CrossCheckedEntries, Obligations, Obligation, Scenarios, Scenario, VerificationFindings, VerificationReports, VerificationSkips } from "@deep-spec/requirements-domain";
-
 import { DesignRecordIdentifier } from "@deep-spec/refcheck-domain";
+import {
+  AttributeBound,
+  AttributePath,
+  BackgroundAssumption,
+  BackgroundAssumptionIdentifier,
+  BackgroundAssumptions,
+  CrossCheckedEntries,
+  CrossCheckedEntry,
+  FormalModelIdentifier,
+  FunctionalRequirementReferences,
+  Obligation,
+  ObligationIdentifier,
+  ObligationIdentifiers,
+  ObligationNature,
+  Obligations,
+  RequirementAttributeDeclaration,
+  RequirementAttributeDeclarations,
+  Scenario,
+  ScenarioIdentifier,
+  Scenarios,
+  VerificationFinding,
+  VerificationFindings,
+  VerificationReports,
+  VerificationSkipped,
+  VerificationSkips,
+  VerificationWitness,
+} from "@deep-spec/requirements-domain";
 
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -96,7 +174,17 @@ describe("ContentHash", () => {
   test("parse accepts exactly 64 lowercase hex chars", () => {
     const ok = ContentHash.parse("a".repeat(64));
     expect(ok.ok).toBe(true);
-    for (const bad of ["", "A".repeat(64), "a".repeat(63), "a".repeat(65), "a".repeat(1_000_000), "g".repeat(64), "ａ".repeat(64), "a".repeat(63) + "\n", "a".repeat(64) + "\n"]) {
+    for (const bad of [
+      "",
+      "A".repeat(64),
+      "a".repeat(63),
+      "a".repeat(65),
+      "a".repeat(1_000_000),
+      "g".repeat(64),
+      "ａ".repeat(64),
+      `${"a".repeat(63)}\n`,
+      `${"a".repeat(64)}\n`,
+    ]) {
       const parsed = ContentHash.parse(bad);
       expect(parsed.ok).toBe(false);
       if (!parsed.ok) expect(parsed.error).toEqual({ kind: "not-a-sha256-hex", raw: bad });
@@ -164,41 +252,99 @@ describe("IntermediateRepresentationVersion", () => {
 
 describe("requirements first-class collections", () => {
   test("immutable add and boundary escape across the cluster", () => {
-    expect(RequirementIdentifiers.of([]).add(RequirementIdentifier.of("FR-1")).has(RequirementIdentifier.of("FR-1"))).toBe(true);
-    expect([...RequirementIdentifiers.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)))].map((id) => id.asString())).toEqual(["FR-1"]);
-    expect([...RequirementIdentifiers.extractFrom("- FR-1 と NFR-2.1").toStrings()].sort()).toEqual(["FR-1", "NFR-2.1"]);
+    expect(
+      RequirementIdentifiers.of([]).add(RequirementIdentifier.of("FR-1")).has(RequirementIdentifier.of("FR-1")),
+    ).toBe(true);
+    expect(
+      [...RequirementIdentifiers.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)))].map((id) =>
+        id.asString(),
+      ),
+    ).toEqual(["FR-1"]);
+    expect([...RequirementIdentifiers.extractFrom("- FR-1 と NFR-2.1").toStrings()].sort()).toEqual([
+      "FR-1",
+      "NFR-2.1",
+    ]);
 
-    const attrs = RequirementAttributeDeclarations.of([]).add(RequirementAttributeDeclaration.of({ path: AttributePath.of("o.qty"), kind: "int", min: AttributeBound.of(0), max: AttributeBound.of(5) }));
+    const attrs = RequirementAttributeDeclarations.of([]).add(
+      RequirementAttributeDeclaration.of({
+        path: AttributePath.of("o.qty"),
+        kind: "int",
+        min: AttributeBound.of(0),
+        max: AttributeBound.of(5),
+      }),
+    );
     expect(attrs.byPath(AttributePath.of("o.qty"))?.isInt()).toBe(true);
-    expect(attrs.byPath(AttributePath.of("o.qty"))?.match({ bool: () => "b", int: (min, max) => `${min?.asNumber()}..${max?.asNumber()}`, enum: () => "e" })).toBe("0..5");
+    expect(
+      attrs
+        .byPath(AttributePath.of("o.qty"))
+        ?.match({ bool: () => "b", int: (min, max) => `${min?.asNumber()}..${max?.asNumber()}`, enum: () => "e" }),
+    ).toBe("0..5");
     expect(attrs.toArray().length).toBe(1);
 
-    const obs = Obligations.of([]).add(Obligation.of({ id: ObligationIdentifier.of("OB-1"), nature: ObligationNature.of("invariant"), functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw))) }));
+    const obs = Obligations.of([]).add(
+      Obligation.of({
+        id: ObligationIdentifier.of("OB-1"),
+        nature: ObligationNature.of("invariant"),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(
+          Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
+        ),
+      }),
+    );
     expect(obs.byId("OB-1")?.nature().asString()).toBe("invariant");
     expect(obs.ids()).toEqual(["OB-1"]);
     expect([...obs].length).toBe(1);
 
-    const scs = Scenarios.of([]).add(Scenario.of({ id: ScenarioIdentifier.of("SC-1"), kind: "accept", functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: scenarioBindings({}) }));
+    const scs = Scenarios.of([]).add(
+      Scenario.of({
+        id: ScenarioIdentifier.of("SC-1"),
+        kind: "accept",
+        functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+        bindings: scenarioBindings({}),
+      }),
+    );
     expect(scs.byId("SC-1")?.kind()).toBe("accept");
     expect(scs.ids()).toEqual(["SC-1"]);
 
-    const bgs = BackgroundAssumptions.of([]).add(BackgroundAssumption.of({ id: BackgroundAssumptionIdentifier.of("BG-1"), assert: { op: "bool", value: true } }));
+    const bgs = BackgroundAssumptions.of([]).add(
+      BackgroundAssumption.of({ id: BackgroundAssumptionIdentifier.of("BG-1"), assert: { op: "bool", value: true } }),
+    );
     expect([...bgs].length).toBe(1);
     expect(bgs.toArray()[0]?.id().asString()).toBe("BG-1");
     expect(bgs.toArray()[0]?.assertion()).toEqual({ op: "bool", value: true });
 
-    const finding = VerificationFinding.of({ kind: FindingKind.of("conflict"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))), witness: VerificationWitness.core([]), detail: "d" });
+    const finding = VerificationFinding.of({
+      kind: FindingKind.of("conflict"),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))),
+      witness: VerificationWitness.core([]),
+      detail: "d",
+    });
     const fs = VerificationFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
     expect([...fs.sortedCanonically()]).toEqual([finding]);
 
-    const sk = VerificationSkips.of([]).add(VerificationSkipped.of({ target: TargetIdentifier.of("OB-2"), reason: SkipReason.of("timeout")}))
-      .concat(VerificationSkips.of([VerificationSkipped.of({ target: TargetIdentifier.of("OB-1"), reason: SkipReason.of("capability")})]));
+    const sk = VerificationSkips.of([])
+      .add(VerificationSkipped.of({ target: TargetIdentifier.of("OB-2"), reason: SkipReason.of("timeout") }))
+      .concat(
+        VerificationSkips.of([
+          VerificationSkipped.of({ target: TargetIdentifier.of("OB-1"), reason: SkipReason.of("capability") }),
+        ]),
+      );
     expect(sk.count()).toBe(2);
-    expect(sk.sortedCanonically().toArray().map((s) => s.target().asString())).toEqual(["OB-1", "OB-2"]);
+    expect(
+      sk
+        .sortedCanonically()
+        .toArray()
+        .map((s) => s.target().asString()),
+    ).toEqual(["OB-1", "OB-2"]);
 
-    const cc = CrossCheckedEntries.of([]).add(CrossCheckedEntry.of({ backend: BackendName.of("smt"), targets: TargetIdentifiers.of(Array.from(["SC-1"], (raw) => TargetIdentifier.of(raw))) }));
+    const cc = CrossCheckedEntries.of([]).add(
+      CrossCheckedEntry.of({
+        backend: BackendName.of("smt"),
+        targets: TargetIdentifiers.of(Array.from(["SC-1"], (raw) => TargetIdentifier.of(raw))),
+      }),
+    );
     expect([...cc].length).toBe(1);
     expect(cc.toArray()[0]?.backend().asString()).toBe("smt");
 
@@ -209,14 +355,29 @@ describe("requirements first-class collections", () => {
 // design 側ファーストクラスコレクション — 不変 add・境界脱出口・集合知識。
 
 describe("design first-class collections", () => {
-  const ob = DesignObligation.of({ id: DesignObligationIdentifier.of("DOB-1"), nature: DesignObligationNature.of("invariant"), origin: DesignObligationOrigin.of(""), businessRuleReferences: BusinessRuleReferences.of([]), functionalRequirementReferences: FunctionalRequirementReferences.of([]), assert: { op: "bool", value: true } });
+  const ob = DesignObligation.of({
+    id: DesignObligationIdentifier.of("DOB-1"),
+    nature: DesignObligationNature.of("invariant"),
+    origin: DesignObligationOrigin.of(""),
+    businessRuleReferences: BusinessRuleReferences.of([]),
+    functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+    assert: { op: "bool", value: true },
+  });
   const machine = DesignMachine.of({
     id: DesignMachineIdentifier.of("SM-1"),
     entity: DesignEntityName.of("T"),
     attribute: DesignAttributeName.of("s"),
-    initial: InitialStates.of((["a"]).map((value) => InitialState.of(value))),
+    initial: InitialStates.of(["a"].map((value) => InitialState.of(value))),
     deterministic: true,
-    transitions: DesignTransitions.of([DesignTransition.of({ id: DesignTransitionIdentifier.of("TR-1"), from: "a", to: "b", trigger: TriggerName.of("t"), businessRuleReferences: BusinessRuleReferences.of([]) })]),
+    transitions: DesignTransitions.of([
+      DesignTransition.of({
+        id: DesignTransitionIdentifier.of("TR-1"),
+        from: "a",
+        to: "b",
+        trigger: TriggerName.of("t"),
+        businessRuleReferences: BusinessRuleReferences.of([]),
+      }),
+    ]),
     ignores: DesignIgnores.of([]),
   });
 
@@ -227,18 +388,50 @@ describe("design first-class collections", () => {
     expect([...DesignMachines.of([machine])].length).toBe(1);
     expect(DesignMachines.of([machine]).toArray().length).toBe(1);
     expect(DesignObligations.of([ob]).toArray().length).toBe(1);
-    expect(DesignScenarios.of([DesignScenario.of({ id: DesignScenarioIdentifier.of("DSC-9"), kind: "reject", businessRuleReferences: BusinessRuleReferences.of([]), functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: scenarioBindings({}) })]).toArray().length).toBe(1);
-    expect(DesignScenarios.of([]).add(DesignScenario.of({ id: DesignScenarioIdentifier.of("DSC-1"), kind: "accept", businessRuleReferences: BusinessRuleReferences.of([]), functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: scenarioBindings({}) })).ids()).toEqual(["DSC-1"]);
+    expect(
+      DesignScenarios.of([
+        DesignScenario.of({
+          id: DesignScenarioIdentifier.of("DSC-9"),
+          kind: "reject",
+          businessRuleReferences: BusinessRuleReferences.of([]),
+          functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+          bindings: scenarioBindings({}),
+        }),
+      ]).toArray().length,
+    ).toBe(1);
+    expect(
+      DesignScenarios.of([])
+        .add(
+          DesignScenario.of({
+            id: DesignScenarioIdentifier.of("DSC-1"),
+            kind: "accept",
+            businessRuleReferences: BusinessRuleReferences.of([]),
+            functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+            bindings: scenarioBindings({}),
+          }),
+        )
+        .ids(),
+    ).toEqual(["DSC-1"]);
     expect([...DesignScenarios.of([])].length).toBe(0);
-    expect(DesignBackgroundAssumptions.of([]).add(DesignBackgroundAssumption.of({ id: DesignBackgroundIdentifier.of("DBG-1"), assert: { op: "bool", value: true } })).toArray().length).toBe(1);
+    expect(
+      DesignBackgroundAssumptions.of([])
+        .add(
+          DesignBackgroundAssumption.of({
+            id: DesignBackgroundIdentifier.of("DBG-1"),
+            assert: { op: "bool", value: true },
+          }),
+        )
+        .toArray().length,
+    ).toBe(1);
     expect([...DesignBackgroundAssumptions.of([])].length).toBe(0);
-    const paths = AttributePaths.of((["T.s"]).map((value) => AttributePath.of(value))).add(AttributePath.of("T.x"));
+    const paths = AttributePaths.of(["T.s"].map((value) => AttributePath.of(value))).add(AttributePath.of("T.x"));
     expect(paths.has(AttributePath.of("T.x"))).toBe(true);
     expect([...paths].map((value) => value.asString()).sort()).toEqual(["T.s", "T.x"]);
     expect([...AttributePaths.of([]).toArray()]).toEqual([]);
 
     const u = DesignUnit.of({
-      unit: "u2", entities: DesignEntityDeclarations.of([]),
+      unit: "u2",
+      entities: DesignEntityDeclarations.of([]),
       obligations: DesignObligations.of([ob]),
       machines: DesignMachines.of([machine]),
       scenarios: DesignScenarios.of([]),
@@ -249,27 +442,62 @@ describe("design first-class collections", () => {
     expect(units.sortedByName().toArray()[0]?.name()).toBe("u2");
     expect([...units].length).toBe(1);
 
-    const finding = DesignFinding.of({ kind: FindingKind.of("conflict"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIdentifiers.of(Array.from(["DOB-1"], (raw) => TargetIdentifier.of(raw))), witness: DesignWitness.refs([]), unit: UnitName.of("u2"), detail: "d" });
+    const finding = DesignFinding.of({
+      kind: FindingKind.of("conflict"),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      targets: TargetIdentifiers.of(Array.from(["DOB-1"], (raw) => TargetIdentifier.of(raw))),
+      witness: DesignWitness.refs([]),
+      unit: UnitName.of("u2"),
+      detail: "d",
+    });
     const fs = DesignFindings.of([]).add(finding);
     expect(fs.isEmpty()).toBe(false);
     expect(fs.count()).toBe(1);
     expect([...fs.sortedCanonically()].length).toBe(1);
-    const sk = DesignSkips.of([]).add(DesignSkipped.of({ target: TargetIdentifier.of("DOB-1"), reason: SkipReason.of("timeout"), unit: UnitName.of("u2")}))
-      .concat(DesignSkips.of([DesignSkipped.of({ target: TargetIdentifier.of("DOB-0"), reason: SkipReason.of("capability"), unit: UnitName.of("u2")})]));
+    const sk = DesignSkips.of([])
+      .add(
+        DesignSkipped.of({
+          target: TargetIdentifier.of("DOB-1"),
+          reason: SkipReason.of("timeout"),
+          unit: UnitName.of("u2"),
+        }),
+      )
+      .concat(
+        DesignSkips.of([
+          DesignSkipped.of({
+            target: TargetIdentifier.of("DOB-0"),
+            reason: SkipReason.of("capability"),
+            unit: UnitName.of("u2"),
+          }),
+        ]),
+      );
     expect(sk.count()).toBe(2);
     expect(sk.sortedCanonically().toArray()[0]?.target().asString()).toBe("DOB-0");
     expect([...sk].length).toBe(2);
 
-    const anchors = DesignInputAnchors.of([]).add(DesignInputAnchor.of({ artifact: "b.md", sha256: ContentHash.of("2".repeat(64)) }))
+    const anchors = DesignInputAnchors.of([])
+      .add(DesignInputAnchor.of({ artifact: "b.md", sha256: ContentHash.of("2".repeat(64)) }))
       .add(DesignInputAnchor.of({ artifact: "a.md", sha256: ContentHash.of("1".repeat(64)) }));
-    expect(anchors.sortedByArtifact().toArray().map((a) => a.artifact())).toEqual(["a.md", "b.md"]);
+    expect(
+      anchors
+        .sortedByArtifact()
+        .toArray()
+        .map((a) => a.artifact()),
+    ).toEqual(["a.md", "b.md"]);
     expect([...anchors].length).toBe(2);
 
-    const checked = CheckedUnits.of(Array.from(["unit:u2", "unit:u1", "unit:u1"], (raw) => UnitName.of(raw))).add(UnitName.of("unit:u3"));
+    const checked = CheckedUnits.of(Array.from(["unit:u2", "unit:u1", "unit:u1"], (raw) => UnitName.of(raw))).add(
+      UnitName.of("unit:u3"),
+    );
     expect(checked.sortedUniqueCanonically().toStrings()).toEqual(["unit:u1", "unit:u2", "unit:u3"]);
     expect([...checked].length).toBe(4);
 
-    const cc = DesignCrossCheckedEntries.of([]).add(DesignCrossCheckedEntry.of({ backend: BackendName.of("smt"), targets: TargetIdentifiers.of(Array.from(["DSC-1"], (raw) => TargetIdentifier.of(raw))) }));
+    const cc = DesignCrossCheckedEntries.of([]).add(
+      DesignCrossCheckedEntry.of({
+        backend: BackendName.of("smt"),
+        targets: TargetIdentifiers.of(Array.from(["DSC-1"], (raw) => TargetIdentifier.of(raw))),
+      }),
+    );
     expect(cc.toArray()[0]?.backend().asString()).toBe("smt");
     expect([...cc].length).toBe(1);
     expect([...DesignReports.of([])].length).toBe(0);
@@ -279,11 +507,15 @@ describe("design first-class collections", () => {
 
 describe("requirements value collections (first-class operations)", () => {
   test("FunctionalRequirementReferences and EnumerationMembers hold declaration order and ordinal knowledge", () => {
-    const refs = FunctionalRequirementReferences.of(Array.from(["FR-2"], (raw) => RequirementIdentifier.of(raw))).add(RequirementIdentifier.of("FR-1"));
+    const refs = FunctionalRequirementReferences.of(Array.from(["FR-2"], (raw) => RequirementIdentifier.of(raw))).add(
+      RequirementIdentifier.of("FR-1"),
+    );
     expect([...refs].map((r) => r.asString())).toEqual(["FR-2", "FR-1"]);
     expect(refs.toStrings()).toEqual(["FR-2", "FR-1"]);
 
-    const values = EnumerationMembers.of((["open"]).map((value) => EnumerationMember.of(value))).add(EnumerationMember.of("closed"));
+    const values = EnumerationMembers.of(["open"].map((value) => EnumerationMember.of(value))).add(
+      EnumerationMember.of("closed"),
+    );
     expect([...values].map((value) => value.asString())).toEqual(["open", "closed"]);
     expect(values.indexOf("closed")).toBe(1);
     expect(values.indexOf("ghost")).toBe(-1);
@@ -296,16 +528,40 @@ describe("requirements value collections (first-class operations)", () => {
 
 describe("design part collections (first-class operations)", () => {
   test("DesignTransitions and DesignIgnores own their frozen orders under add", () => {
-    const t1 = DesignTransition.of({ id: DesignTransitionIdentifier.of("TR-2"), from: "a", to: "b", trigger: TriggerName.of("t"), businessRuleReferences: BusinessRuleReferences.of([]) });
-    const t2 = DesignTransition.of({ id: DesignTransitionIdentifier.of("TR-10"), from: "a", to: "b", trigger: TriggerName.of("t"), businessRuleReferences: BusinessRuleReferences.of([]) });
+    const t1 = DesignTransition.of({
+      id: DesignTransitionIdentifier.of("TR-2"),
+      from: "a",
+      to: "b",
+      trigger: TriggerName.of("t"),
+      businessRuleReferences: BusinessRuleReferences.of([]),
+    });
+    const t2 = DesignTransition.of({
+      id: DesignTransitionIdentifier.of("TR-10"),
+      from: "a",
+      to: "b",
+      trigger: TriggerName.of("t"),
+      businessRuleReferences: BusinessRuleReferences.of([]),
+    });
     const trs = DesignTransitions.of([t2]).add(t1);
     expect([...trs].length).toBe(2);
     expect(trs.ids()).toEqual(["TR-10", "TR-2"]);
-    expect(trs.sortedCanonically().toArray().map((t) => t.id().asString())).toEqual(["TR-2", "TR-10"]);
+    expect(
+      trs
+        .sortedCanonically()
+        .toArray()
+        .map((t) => t.id().asString()),
+    ).toEqual(["TR-2", "TR-10"]);
 
-    const igs = DesignIgnores.of([DesignIgnore.of({ state: "y", trigger: TriggerName.of("go") })]).add(DesignIgnore.of({ state: "x", trigger: TriggerName.of("go") }));
+    const igs = DesignIgnores.of([DesignIgnore.of({ state: "y", trigger: TriggerName.of("go") })]).add(
+      DesignIgnore.of({ state: "x", trigger: TriggerName.of("go") }),
+    );
     expect([...igs].length).toBe(2);
-    expect(igs.sortedByStateTrigger().toArray().map((i) => i.state())).toEqual(["x", "y"]);
+    expect(
+      igs
+        .sortedByStateTrigger()
+        .toArray()
+        .map((i) => i.state()),
+    ).toEqual(["x", "y"]);
     expect(igs.toArray().length).toBe(2);
   });
 });
@@ -432,7 +688,7 @@ describe("DesignMachines frozen probe order (PR#55 review)", () => {
         id: DesignMachineIdentifier.of(id),
         entity: DesignEntityName.of("Ticket"),
         attribute: DesignAttributeName.of("status"),
-        initial: InitialStates.of((["open"]).map((value) => InitialState.of(value))),
+        initial: InitialStates.of(["open"].map((value) => InitialState.of(value))),
         deterministic: true,
         transitions: DesignTransitions.of([]),
         ignores: DesignIgnores.of([]),

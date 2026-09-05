@@ -1,6 +1,6 @@
-import type { UnitDeclarations } from "./unit-declarations.ts";
 import type { UnitName } from "@deep-spec/kernel-domain";
-import { UnitNames } from "./unit-names.ts";
+import type { UnitDeclarations } from "./unit-declarations.ts";
+import type { UnitNames } from "./unit-names.ts";
 
 // units エッジブロックの 1 宣言（unit 名と depends_on）。CD-3 が走査する
 // 「宣言済みの依存先を値順に」は宣言自身の知識——宙に浮いた辺（未宣言の

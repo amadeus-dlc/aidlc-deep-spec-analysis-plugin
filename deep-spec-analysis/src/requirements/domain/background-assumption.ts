@@ -1,6 +1,6 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+import { ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 import type { BackgroundAssumptionIdentifier } from "./background-assumption-identifier.ts";
 

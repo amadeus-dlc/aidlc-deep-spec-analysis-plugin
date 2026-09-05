@@ -6,7 +6,8 @@ export class DesignAttributeName {
 
   /** 識別名・ID・バージョンの処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
-    if (raw.length > 128) throw new IllegalArgumentException({ kind: "design-attribute-name-too-long", raw: raw.length });
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "design-attribute-name-too-long", raw: raw.length });
     if (raw === "") throw new IllegalArgumentException({ kind: "empty-machine-token", raw });
     this.#value = raw;
   }

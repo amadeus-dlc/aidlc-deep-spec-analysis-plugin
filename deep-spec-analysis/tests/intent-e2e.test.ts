@@ -114,59 +114,64 @@ function stateOfNewestIntent(): string {
   return readFileSync(join(intentsDir, active, "aidlc-state.md"), "utf-8");
 }
 
-beforeAll(() => {
-  if (!existsSync(aidlcDist)) {
-    throw new Error(
-      `vanilla AI-DLC dist not found at ${aidlcDist} — init the aidlc-workflows submodule`,
+beforeAll(
+  () => {
+    if (!existsSync(aidlcDist)) {
+      throw new Error(`vanilla AI-DLC dist not found at ${aidlcDist} — init the aidlc-workflows submodule`);
+    }
+    sandbox = mkdtempSync(join(tmpdir(), "deep-spec-intent-e2e-"));
+    cpSync(aidlcDist, sandbox, { recursive: true });
+    // Solver resolution: the installed sensors resolve z3-solver/quint from the
+    // project root, so borrow this repository's exact-pinned node_modules.
+    symlinkSync(join(pluginRoot, "node_modules"), join(sandbox, "node_modules"));
+
+    // Late-adoption setup: mint one intent BEFORE the plugin exists, so the
+    // suite can prove a project that adopted AI-DLC first and this plugin later
+    // can still verify that intent's requirements.
+    const legacy = spawnSync(
+      "bun",
+      [
+        join(sandbox, ".claude", "tools", "aidlc-utility.ts"),
+        "intent-create",
+        "--scope",
+        "feature",
+        "--arguments",
+        "プラグイン導入前から進行中のintent（後入れ検証用）",
+        "--label",
+        "intent-e2e legacy",
+      ],
+      { encoding: "utf-8", timeout: 180_000, cwd: sandbox },
     );
-  }
-  sandbox = mkdtempSync(join(tmpdir(), "deep-spec-intent-e2e-"));
-  cpSync(aidlcDist, sandbox, { recursive: true });
-  // Solver resolution: the installed sensors resolve z3-solver/quint from the
-  // project root, so borrow this repository's exact-pinned node_modules.
-  symlinkSync(join(pluginRoot, "node_modules"), join(sandbox, "node_modules"));
+    if (legacy.status !== 0) {
+      throw new Error(`pre-install intent-create failed: ${legacy.stderr || legacy.stdout}`);
+    }
+    // The legacy intent already has requirements when the plugin arrives — the
+    // exact state whose verification debt the installer must surface.
+    const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
+    const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
+    mkdirSync(join(intentsDir, active, "inception", "requirements-analysis"), { recursive: true });
+    cpSync(
+      join(fixtures, "requirements.md"),
+      join(intentsDir, active, "inception", "requirements-analysis", "requirements.md"),
+    );
 
-  // Late-adoption setup: mint one intent BEFORE the plugin exists, so the
-  // suite can prove a project that adopted AI-DLC first and this plugin later
-  // can still verify that intent's requirements.
-  const legacy = spawnSync(
-    "bun",
-    [
-      join(sandbox, ".claude", "tools", "aidlc-utility.ts"), "intent-create",
-      "--scope", "feature",
-      "--arguments", "プラグイン導入前から進行中のintent（後入れ検証用）",
-      "--label", "intent-e2e legacy",
-    ],
-    { encoding: "utf-8", timeout: 180_000, cwd: sandbox },
-  );
-  if (legacy.status !== 0) {
-    throw new Error(`pre-install intent-create failed: ${legacy.stderr || legacy.stdout}`);
-  }
-  // The legacy intent already has requirements when the plugin arrives — the
-  // exact state whose verification debt the installer must surface.
-  const intentsDir = join(sandbox, "aidlc", "spaces", "default", "intents");
-  const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
-  mkdirSync(join(intentsDir, active, "inception", "requirements-analysis"), { recursive: true });
-  cpSync(
-    join(fixtures, "requirements.md"),
-    join(intentsDir, active, "inception", "requirements-analysis", "requirements.md"),
-  );
-
-  const res = spawnSync("bun", [installer, "--project", sandbox, "--from", workspaceRoot], {
-    encoding: "utf-8",
-    timeout: 300_000,
-  });
-  installOk = res.status === 0;
-  installOut = res.stdout ?? "";
-  if (!installOk) {
-    throw new Error(`installer failed (${res.status}): ${res.stderr || res.stdout}`);
-  }
-  // This hook spawns two engine processes (intent-create, then the installer
-  // with its build and compose). bun's default 5 s hook budget is enough on a
-  // developer machine (~0.6 s) but a loaded CI runner crossed it once and the
-  // killed installer surfaced as `installer failed (null)`, so the hook gets
-  // its own explicit budget, matching the spawn timeouts above.
-}, { timeout: 300_000 });
+    const res = spawnSync("bun", [installer, "--project", sandbox, "--from", workspaceRoot], {
+      encoding: "utf-8",
+      timeout: 300_000,
+    });
+    installOk = res.status === 0;
+    installOut = res.stdout ?? "";
+    if (!installOk) {
+      throw new Error(`installer failed (${res.status}): ${res.stderr || res.stdout}`);
+    }
+    // This hook spawns two engine processes (intent-create, then the installer
+    // with its build and compose). bun's default 5 s hook budget is enough on a
+    // developer machine (~0.6 s) but a loaded CI runner crossed it once and the
+    // killed installer surfaced as `installer failed (null)`, so the hook gets
+    // its own explicit budget, matching the spawn timeouts above.
+  },
+  { timeout: 300_000 },
+);
 
 afterAll(() => {
   if (sandbox) rmSync(sandbox, { recursive: true, force: true });
@@ -228,8 +233,12 @@ describe("late adoption — the plugin verifies an intent that predates it", () 
 
   test("after the late install, the single-stage engine run accepts that intent", () => {
     const run = inSandbox([
-      "bun", join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
-      "next", "--stage", "deep-spec-analysis-verify", "--single",
+      "bun",
+      join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
+      "next",
+      "--stage",
+      "deep-spec-analysis-verify",
+      "--single",
     ]);
     expect(run.status).toBe(0);
     const directive = JSON.parse(run.stdout.trim().split("\n")[0]);
@@ -247,20 +256,18 @@ describe("late adoption — the plugin verifies an intent that predates it", () 
     const model = join(verify, "deep-spec-analysis-formal-model.md");
     cpSync(join(fixtures, "deep-spec-analysis-formal-model.md"), model);
     const run = inSandbox([
-      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-verify-smt.ts"),
-      "--stage", "deep-spec-analysis-verify", "--output-path", model,
+      "bun",
+      join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-verify-smt.ts"),
+      "--stage",
+      "deep-spec-analysis-verify",
+      "--output-path",
+      model,
     ]);
     expect(run.status).toBe(0);
     expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, findings_count: 5 });
     const smt = JSON.parse(readFileSync(join(verify, "deep-spec-verify", "smt.json"), "utf-8"));
     const kinds = smt.findings.map((f: { kind: string }) => f.kind).sort();
-    expect(kinds).toEqual([
-      "completeness-gap",
-      "conflict",
-      "conflict",
-      "conflict",
-      "scenario-violation",
-    ]);
+    expect(kinds).toEqual(["completeness-gap", "conflict", "conflict", "conflict", "scenario-violation"]);
   });
 
   test("the doctor's coverage row flips to verified once the sensors have run", () => {
@@ -268,10 +275,10 @@ describe("late adoption — the plugin verifies an intent that predates it", () 
       console.warn("node runtime missing — the coverage flip depends on the SMT run above");
       return;
     }
-    const run = inSandbox(
-      ["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")],
-      { AIDLC_PROJECT_DIR: sandbox, AIDLC_HARNESS_DIR: ".claude" },
-    );
+    const run = inSandbox(["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")], {
+      AIDLC_PROJECT_DIR: sandbox,
+      AIDLC_HARNESS_DIR: ".claude",
+    });
     expect(run.status).toBe(0);
     const rows: { pass: boolean; label: string }[] = JSON.parse(run.stdout).checks;
     const summary = rows.find((c) => c.label.includes("verification coverage"));
@@ -306,7 +313,10 @@ describe("sourceDigest anchoring — requirements drift is caught by content, no
     mkdirSync(verifyDir, { recursive: true });
     if (!existsSync(model)) cpSync(join(fixtures, "deep-spec-analysis-formal-model.md"), model);
     if (!readdirSync(verifyDir).some((f) => f.endsWith(".json"))) {
-      cpSync(join(pluginRoot, "tests", "fixtures", "conformance", "expected", "quint.json"), join(verifyDir, "quint.json"));
+      cpSync(
+        join(pluginRoot, "tests", "fixtures", "conformance", "expected", "quint.json"),
+        join(verifyDir, "quint.json"),
+      );
     }
     // Drift the source, then make the mtime heuristic lie about it.
     writeFileSync(requirements, `${original}\n- FR-9: 監査ログを5年間保持しなければならない。\n`);
@@ -321,8 +331,14 @@ describe("sourceDigest anchoring — requirements drift is caught by content, no
 
   test("the real dispatcher refuses the model against the drifted requirements", () => {
     const run = inSandbox([
-      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
-      "fire", "deep-spec-ir-valid", "--stage", "deep-spec-analysis-verify", "--output-path", model,
+      "bun",
+      join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
+      "fire",
+      "deep-spec-ir-valid",
+      "--stage",
+      "deep-spec-analysis-verify",
+      "--output-path",
+      model,
     ]);
     expect(run.status).toBe(0);
     const lines = run.stdout.trim().split("\n");
@@ -331,8 +347,12 @@ describe("sourceDigest anchoring — requirements drift is caught by content, no
 
   test("the sensor names the drift and hands back the expected digest", () => {
     const run = inSandbox([
-      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-ir-valid.ts"),
-      "--stage", "deep-spec-analysis-verify", "--output-path", model,
+      "bun",
+      join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-ir-valid.ts"),
+      "--stage",
+      "deep-spec-analysis-verify",
+      "--output-path",
+      model,
     ]);
     expect(run.status).toBe(0);
     const verdict = JSON.parse(run.stdout) as { pass: boolean; errors: string[] };
@@ -343,34 +363,43 @@ describe("sourceDigest anchoring — requirements drift is caught by content, no
   });
 
   test("the doctor flags the intent stale even though the model mtime is fresher", () => {
-    const run = inSandbox(
-      ["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")],
-      { AIDLC_PROJECT_DIR: sandbox, AIDLC_HARNESS_DIR: ".claude" },
-    );
+    const run = inSandbox(["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")], {
+      AIDLC_PROJECT_DIR: sandbox,
+      AIDLC_HARNESS_DIR: ".claude",
+    });
     expect(run.status).toBe(0);
     const rows: { pass: boolean; label: string }[] = JSON.parse(run.stdout).checks;
-    expect(rows.some((c) => c.label.includes("changed its requirements after the last deep-spec verification"))).toBe(true);
+    expect(rows.some((c) => c.label.includes("changed its requirements after the last deep-spec verification"))).toBe(
+      true,
+    );
   });
 
   test("restoring the exact source text clears the staleness without re-running", () => {
     writeFileSync(requirements, original);
-    const run = inSandbox(
-      ["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")],
-      { AIDLC_PROJECT_DIR: sandbox, AIDLC_HARNESS_DIR: ".claude" },
-    );
+    const run = inSandbox(["bun", join(sandbox, ".claude", "tools", "deep-spec-analysis-doctor.ts")], {
+      AIDLC_PROJECT_DIR: sandbox,
+      AIDLC_HARNESS_DIR: ".claude",
+    });
     expect(run.status).toBe(0);
     const rows: { pass: boolean; label: string }[] = JSON.parse(run.stdout).checks;
-    expect(rows.some((c) => c.label.includes("changed its requirements after the last deep-spec verification"))).toBe(false);
+    expect(rows.some((c) => c.label.includes("changed its requirements after the last deep-spec verification"))).toBe(
+      false,
+    );
   });
 });
 
 describe("intent minting and scope routing", () => {
   test("a classic-scope intent skips the stage", () => {
     const res = inSandbox([
-      "bun", join(sandbox, ".claude", "tools", "aidlc-utility.ts"), "intent-create",
-      "--scope", "classic",
-      "--arguments", "在庫引当サービスのintent-e2e検証（classic）",
-      "--label", "intent-e2e classic",
+      "bun",
+      join(sandbox, ".claude", "tools", "aidlc-utility.ts"),
+      "intent-create",
+      "--scope",
+      "classic",
+      "--arguments",
+      "在庫引当サービスのintent-e2e検証（classic）",
+      "--label",
+      "intent-e2e classic",
     ]);
     expect(res.status).toBe(0);
     expect(stateOfNewestIntent()).toContain("deep-spec-analysis-verify — SKIP");
@@ -378,10 +407,15 @@ describe("intent minting and scope routing", () => {
 
   test("a feature-scope intent puts the stage on-path", () => {
     const res = inSandbox([
-      "bun", join(sandbox, ".claude", "tools", "aidlc-utility.ts"), "intent-create",
-      "--scope", "feature",
-      "--arguments", "在庫引当サービスのintent-e2e検証（feature）",
-      "--label", "intent-e2e feature",
+      "bun",
+      join(sandbox, ".claude", "tools", "aidlc-utility.ts"),
+      "intent-create",
+      "--scope",
+      "feature",
+      "--arguments",
+      "在庫引当サービスのintent-e2e検証（feature）",
+      "--label",
+      "intent-e2e feature",
     ]);
     expect(res.status).toBe(0);
     expect(stateOfNewestIntent()).toContain("deep-spec-analysis-verify — EXECUTE");
@@ -407,7 +441,14 @@ describe("sensors against the real intent record", () => {
 
   function fireInstalledSensor(tool: string, env: { [k: string]: string } = {}) {
     return inSandbox(
-      ["bun", join(sandbox, ".claude", "tools", tool), "--stage", "deep-spec-analysis-verify", "--output-path", modelPath],
+      [
+        "bun",
+        join(sandbox, ".claude", "tools", tool),
+        "--stage",
+        "deep-spec-analysis-verify",
+        "--output-path",
+        modelPath,
+      ],
       env,
     );
   }
@@ -598,7 +639,11 @@ describe("phase-1 refcheck scenario — a defective design record through the re
   const FIRES: [string, string, string[]][] = [
     ["deep-spec-refcheck-domain", "domain-design", ["inception", "domain-design", "components.md"]],
     ["deep-spec-refcheck-contract", "contract-design", ["inception", "contract-design", "contract-summary.md"]],
-    ["deep-spec-refcheck-functional", "functional-design", ["construction", "u1-orders", "functional-design", "entities.md"]],
+    [
+      "deep-spec-refcheck-functional",
+      "functional-design",
+      ["construction", "u1-orders", "functional-design", "entities.md"],
+    ],
   ];
 
   function copyDesignRecord(variant: "broken" | "clean"): void {
@@ -611,8 +656,14 @@ describe("phase-1 refcheck scenario — a defective design record through the re
 
   function dispatcherFire(sensorId: string, stage: string, outputPath: string): { result: string } {
     const run = inSandbox([
-      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
-      "fire", sensorId, "--stage", stage, "--output-path", outputPath,
+      "bun",
+      join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
+      "fire",
+      sensorId,
+      "--stage",
+      stage,
+      "--output-path",
+      outputPath,
     ]);
     expect(run.status).toBe(0); // sensor outcomes are advisory — only dispatch errors exit non-zero
     const lines = run.stdout.trim().split("\n");
@@ -658,7 +709,13 @@ describe("phase-1 refcheck scenario — a defective design record through the re
     expect(details(contract)).toContain("ghost-unit");
     expect(details(contract)).toContain('"u3-ui" -> "u1-orders"');
 
-    const functional = readFindings(["construction", "u1-orders", "functional-design", "deep-spec-refcheck", "functional-design.json"]);
+    const functional = readFindings([
+      "construction",
+      "u1-orders",
+      "functional-design",
+      "deep-spec-refcheck",
+      "functional-design.json",
+    ]);
     expect(functional.unavailable).toBeUndefined();
     expect(details(functional)).toContain("FR-99");
     expect(details(functional)).toContain("cancelled");
@@ -688,7 +745,13 @@ describe("phase-1 refcheck scenario — a defective design record through the re
     const domain = readFindings(["inception", "domain-design", "deep-spec-refcheck", "components.json"]);
     expect(domain.findings).toHaveLength(0);
     expect(domain.checked).toHaveLength(8);
-    const functional = readFindings(["construction", "u1-orders", "functional-design", "deep-spec-refcheck", "functional-design.json"]);
+    const functional = readFindings([
+      "construction",
+      "u1-orders",
+      "functional-design",
+      "deep-spec-refcheck",
+      "functional-design.json",
+    ]);
     expect(functional.findings).toHaveLength(0);
     expect(functional.checked).toHaveLength(16);
 
@@ -724,8 +787,12 @@ describe("upgrade path — re-running the installer refreshes stale plugin files
     const active = readFileSync(join(intentsDir, "active-intent"), "utf-8").trim();
     const record = join(intentsDir, active);
     const run = inSandbox([
-      "bun", join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-refcheck-domain.ts"),
-      "--stage", "domain-design", "--output-path", join(record, "inception", "domain-design", "components.md"),
+      "bun",
+      join(sandbox, ".claude", "tools", "aidlc-sensor-deep-spec-refcheck-domain.ts"),
+      "--stage",
+      "domain-design",
+      "--output-path",
+      join(record, "inception", "domain-design", "components.md"),
     ]);
     expect(run.status).toBe(0);
     const doc = JSON.parse(
@@ -827,7 +894,10 @@ describe("phase-2 design verification — routing, single-run, dispatcher fire, 
     // ir-valid BR coverage check and the doctor eligibility scan).
     const fd = join(record, "construction", "u1-tickets", "functional-design");
     mkdirSync(fd, { recursive: true });
-    cpSync(join(designFixtures, "record", "construction", "u1-tickets", "functional-design", "rules.md"), join(fd, "rules.md"));
+    cpSync(
+      join(designFixtures, "record", "construction", "u1-tickets", "functional-design", "rules.md"),
+      join(fd, "rules.md"),
+    );
   });
 
   test("the functional-verify stage is in the compiled graph and routes by scope", () => {
@@ -851,7 +921,11 @@ describe("phase-2 design verification — routing, single-run, dispatcher fire, 
 
   test("the doctor reports every unit as unverified before any design verification", () => {
     const checks = doctorChecksP2();
-    expect(checks.some((c) => c.label.includes("/u1-tickets has functional-design artifacts with no deep-spec design verification"))).toBe(true);
+    expect(
+      checks.some((c) =>
+        c.label.includes("/u1-tickets has functional-design artifacts with no deep-spec design verification"),
+      ),
+    ).toBe(true);
     const summary = checks.find((c) => c.label.includes("design verification coverage"));
     expect(summary?.pass).toBe(false);
     expect(summary?.label).toContain("0/3 eligible units verified");
@@ -859,8 +933,12 @@ describe("phase-2 design verification — routing, single-run, dispatcher fire, 
 
   test("the engine accepts a single-stage run for the functional verify stage", () => {
     const run = inSandbox([
-      "bun", join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
-      "next", "--stage", "deep-spec-analysis-functional-verify", "--single",
+      "bun",
+      join(sandbox, ".claude", "tools", "aidlc-orchestrate.ts"),
+      "next",
+      "--stage",
+      "deep-spec-analysis-functional-verify",
+      "--single",
     ]);
     expect(run.status).toBe(0);
     const directive = JSON.parse(run.stdout.trim().split("\n")[0]);
@@ -875,24 +953,41 @@ describe("phase-2 design verification — routing, single-run, dispatcher fire, 
     }
     mkdirSync(stageDir, { recursive: true });
     cpSync(
-      join(designFixtures, "record", "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"),
+      join(
+        designFixtures,
+        "record",
+        "construction",
+        "deep-spec-analysis-functional-verify",
+        "deep-spec-analysis-functional-formal-model.md",
+      ),
       modelPath,
     );
     const fireP2 = (id: string, env: { [k: string]: string } = {}): { result: string } => {
-      const run = inSandbox([
-        "bun", join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
-        "fire", id, "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath,
-      ], env);
+      const run = inSandbox(
+        [
+          "bun",
+          join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
+          "fire",
+          id,
+          "--stage",
+          "deep-spec-analysis-functional-verify",
+          "--output-path",
+          modelPath,
+        ],
+        env,
+      );
       expect(run.status).toBe(0);
       const lines = run.stdout.trim().split("\n");
       return JSON.parse(lines[lines.length - 1] ?? "{}") as { result: string };
     };
     expect(fireP2("deep-spec-design-ir-valid").result).toBe("passed");
     expect(fireP2("deep-spec-design-verify-smt").result).toBe("failed");
-    expect(fireP2("deep-spec-design-verify-quint", {
-      AIDLC_DEEP_SPEC_QUINT_METHOD: "simulation",
-      AIDLC_DEEP_SPEC_QUINT_BIN: join(sandbox, "node_modules", ".bin", "quint"),
-    }).result).toBe("failed");
+    expect(
+      fireP2("deep-spec-design-verify-quint", {
+        AIDLC_DEEP_SPEC_QUINT_METHOD: "simulation",
+        AIDLC_DEEP_SPEC_QUINT_BIN: join(sandbox, "node_modules", ".bin", "quint"),
+      }).result,
+    ).toBe("failed");
     const smt = JSON.parse(readFileSync(join(stageDir, "deep-spec-design-verify", "smt.json"), "utf-8"));
     const kinds = new Set(smt.findings.map((f: { kind: string }) => f.kind));
     expect(kinds.has("conflict")).toBe(true);
@@ -917,7 +1012,11 @@ describe("phase-2 design verification — routing, single-run, dispatcher fire, 
     const rules = join(record, "construction", "u1-tickets", "functional-design", "rules.md");
     writeFileSync(rules, `${readFileSync(rules, "utf-8")}\n<!-- touched -->\n`);
     checks = doctorChecksP2();
-    expect(checks.some((c) => c.label.includes("/u1-tickets changed its functional-design artifacts after the last design verification"))).toBe(true);
+    expect(
+      checks.some((c) =>
+        c.label.includes("/u1-tickets changed its functional-design artifacts after the last design verification"),
+      ),
+    ).toBe(true);
     summary = checks.find((c) => c.label.includes("design verification coverage"));
     expect(summary?.label).toContain("0/3 eligible units verified");
   });
@@ -942,14 +1041,29 @@ describe("phase-3 refinement — dispatcher fire and refinement-stale coverage",
     modelPath = join(stageDir, "deep-spec-analysis-functional-formal-model.md");
     reqModelPath = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
     mkdirSync(join(record, "construction", "u1-orders", "functional-design"), { recursive: true });
-    cpSync(join(refFixtures, "construction", "u1-orders", "functional-design", "rules.md"),
-      join(record, "construction", "u1-orders", "functional-design", "rules.md"));
+    cpSync(
+      join(refFixtures, "construction", "u1-orders", "functional-design", "rules.md"),
+      join(record, "construction", "u1-orders", "functional-design", "rules.md"),
+    );
     mkdirSync(dirname(reqModelPath), { recursive: true });
-    cpSync(join(refFixtures, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md"), reqModelPath);
+    cpSync(
+      join(refFixtures, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md"),
+      reqModelPath,
+    );
     mkdirSync(stageDir, { recursive: true });
-    cpSync(join(refFixtures, "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"), modelPath);
-    cpSync(join(refFixtures, "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-refinement-map.md"),
-      join(stageDir, "deep-spec-analysis-refinement-map.md"));
+    cpSync(
+      join(
+        refFixtures,
+        "construction",
+        "deep-spec-analysis-functional-verify",
+        "deep-spec-analysis-functional-formal-model.md",
+      ),
+      modelPath,
+    );
+    cpSync(
+      join(refFixtures, "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-refinement-map.md"),
+      join(stageDir, "deep-spec-analysis-refinement-map.md"),
+    );
   });
 
   test("the composed backends run the refinement checks through the dispatcher", () => {
@@ -959,8 +1073,14 @@ describe("phase-3 refinement — dispatcher fire and refinement-stale coverage",
     }
     const fireP3 = (id: string): { result: string } => {
       const run = inSandbox([
-        "bun", join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
-        "fire", id, "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath,
+        "bun",
+        join(sandbox, ".claude", "tools", "aidlc-sensor.ts"),
+        "fire",
+        id,
+        "--stage",
+        "deep-spec-analysis-functional-verify",
+        "--output-path",
+        modelPath,
       ]);
       expect(run.status).toBe(0);
       const lines = run.stdout.trim().split("\n");
@@ -976,7 +1096,9 @@ describe("phase-3 refinement — dispatcher fire and refinement-stale coverage",
     expect(rv.targets).toContain("OB-1");
     expect(rv.frRefs).toContain("FR-1");
     expect((smt.inputs ?? []).length).toBe(3);
-    expect(smt.skipped.some((s: { target: string; reason: string }) => s.target === "OB-3" && s.reason === "waived")).toBe(true);
+    expect(
+      smt.skipped.some((s: { target: string; reason: string }) => s.target === "OB-3" && s.reason === "waived"),
+    ).toBe(true);
   });
 
   test("the doctor flags refinement-stale evidence after the requirements are re-verified", () => {

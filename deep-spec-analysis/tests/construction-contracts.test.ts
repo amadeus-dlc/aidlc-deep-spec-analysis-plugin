@@ -1,78 +1,80 @@
-import type { ParseError } from "@deep-spec/kernel-infrastructure";
-import { ErrorMessage } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
-import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
 import {
-  DesignUnitIdentifier,
   BusinessRuleReference,
   DesignAttributeName,
-  UnmappedTargetReference,
+  DesignBackgroundIdentifier,
   DesignEntityName,
-  DesignTransitionIdentifier,
-  LoweredOriginReference,
+  DesignMachineIdentifier,
   DesignObligationIdentifier,
   DesignScenarioIdentifier,
-  DesignMachineIdentifier,
-  DesignBackgroundIdentifier,
-  TransitionReference,
+  DesignTransitionIdentifier,
+  DesignUnitIdentifier,
   LoweredIdentifier,
+  LoweredOriginReference,
+  TransitionReference,
+  UnmappedTargetReference,
 } from "@deep-spec/design-domain";
+import { PluginVersion } from "@deep-spec/doctor-domain";
 import {
-  ObligationIdentifier,
-  IntermediateRepresentationAttributeName,
-  ScenarioIdentifier,
-  BackgroundAssumptionIdentifier,
-  IntermediateRepresentationEntityName,
-} from "@deep-spec/requirements-domain";
-import {
-  CardinalityNotation,
-  CheckFamily,
-  ContractIdentifier,
-  MachineSpecification,
-  FenceCount,
-  NumericBound,
-  LineNumber,
-  RuleCategory,
-  BusinessRuleIdentifier,
-  SourceIdentifier,
-  AttributeName,
-  ElementPath,
-  BlockIndex,
-  StateName,
-  TypeName,
-  EntityName,
-  ComponentName,
-  AppliesTo,
-  ReferenceTarget,
-  AllowedValue,
-} from "@deep-spec/refcheck-domain";
-import {
+  ArtifactPath,
+  AttributeBound,
+  AttributePath,
+  BackendName,
+  ContentHash,
+  ErrorMessage,
+  ErrorMessages,
+  FindingKind,
+  IntermediateRepresentationVersion,
   QueryLabel,
   RequirementIdentifier,
   SkipReason,
-  UnitName,
-  ArtifactPath,
-  FindingKind,
-  ContentHash,
-  IntermediateRepresentationVersion,
-  BackendName,
-  AttributePath,
-  AttributeBound,
-  VerificationMethod,
   TargetIdentifier,
   TriggerName,
-  ErrorMessages,
+  UnitName,
+  VerificationMethod,
 } from "@deep-spec/kernel-domain";
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 import {
-  PluginVersion,
-} from "@deep-spec/doctor-domain";
+  AllowedValue,
+  AppliesTo,
+  AttributeName,
+  BlockIndex,
+  BusinessRuleIdentifier,
+  CardinalityNotation,
+  CheckFamily,
+  ComponentName,
+  ContractIdentifier,
+  ElementPath,
+  EntityName,
+  FenceCount,
+  LineNumber,
+  MachineSpecification,
+  NumericBound,
+  ReferenceTarget,
+  RuleCategory,
+  SourceIdentifier,
+  StateName,
+  TypeName,
+} from "@deep-spec/refcheck-domain";
+import {
+  BackgroundAssumptionIdentifier,
+  IntermediateRepresentationAttributeName,
+  IntermediateRepresentationEntityName,
+  ObligationIdentifier,
+  ScenarioIdentifier,
+} from "@deep-spec/requirements-domain";
 
 // 同じ型の有効値・契約違反値を両方の生成口に渡す。型違反を作るキャストは使わない。
-function contract<R extends string | number, V>(factory: {
-  readonly name: string;
-  of(raw: R): V;
-  parse(raw: R): Result<V, ParseError>;
-}, valid: R, invalid: R): void {
+function contract<R extends string | number, V>(
+  factory: {
+    readonly name: string;
+    of(raw: R): V;
+    parse(raw: R): Result<V, ParseError>;
+  },
+  valid: R,
+  invalid: R,
+): void {
   test(`${factory.name}: of panics, parse returns a non-exception ParseError`, () => {
     expect(factory.parse(valid).ok).toBe(true);
     expect(() => factory.of(valid)).not.toThrow();
@@ -141,12 +143,17 @@ describe("domain construction contracts", () => {
 
   test("a derived fence count cannot be negative, fractional, or unsafe", () => {
     expect(FenceCount.of(0).asNumber()).toBe(0);
-    for (const count of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) expect(() => FenceCount.of(count)).toThrow(IllegalArgumentException);
+    for (const count of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1])
+      expect(() => FenceCount.of(count)).toThrow(IllegalArgumentException);
   });
 
   test("parse does not swallow implementation defects", () => {
     for (const failure of [new Error("bug"), new TypeError("bug")]) {
-      expect(() => parseConstruction(() => { throw failure; })).toThrow(failure);
+      expect(() =>
+        parseConstruction(() => {
+          throw failure;
+        }),
+      ).toThrow(failure);
     }
   });
 
@@ -154,23 +161,32 @@ describe("domain construction contracts", () => {
     const empty = ErrorMessages.of([]);
     expect(empty.isEmpty()).toBe(true);
     const source = ["first"];
-    const messages = ErrorMessages.of((source).map((value) => ErrorMessage.of(value)));
+    const messages = ErrorMessages.of(source.map((value) => ErrorMessage.of(value)));
     source.push("outside");
     expect(messages.toArray().map((value) => value.asString())).toEqual(["first"]);
-    expect(messages.add(ErrorMessage.of("second")).toArray().map((value) => value.asString())).toEqual(["first", "second"]);
+    expect(
+      messages
+        .add(ErrorMessage.of("second"))
+        .toArray()
+        .map((value) => value.asString()),
+    ).toEqual(["first", "second"]);
     expect(messages.toArray().map((value) => value.asString())).toEqual(["first"]);
   });
 
   test("parse returns an independent ParseError value instead of an exception payload", () => {
     const exception = new IllegalArgumentException({ kind: "example", raw: "invalid" });
-    const result = parseConstruction(() => { throw exception; });
+    const result = parseConstruction(() => {
+      throw exception;
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error).toEqual({ kind: "example", raw: "invalid" });
       expect(result.error).not.toBe(exception);
       expect(result.error).not.toBeInstanceOf(Error);
     }
-    const absent = parseConstruction(() => { throw new IllegalArgumentException({ kind: "empty" }); });
+    const absent = parseConstruction(() => {
+      throw new IllegalArgumentException({ kind: "empty" });
+    });
     expect(absent).toEqual({ ok: false, error: { kind: "empty" } });
   });
 });

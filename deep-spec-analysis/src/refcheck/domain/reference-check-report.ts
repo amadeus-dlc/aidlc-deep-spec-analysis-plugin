@@ -1,12 +1,12 @@
 import {
-  SkipReason,
-  RequirementIdentifier,
   ContentHash,
-  FindingKind,
+  type FindingKind,
+  type FindingsSchema,
   FunctionalRequirementReferences,
+  RequirementIdentifier,
+  SkipReason,
   TargetIdentifier,
   TargetIdentifiers,
-  type FindingsSchema,
   type UnitName,
 } from "@deep-spec/kernel-domain";
 
@@ -33,7 +33,7 @@ import {
 //                    アダプタが組んで渡す。inputs は保持、内容は空になる——凍結挙動）
 //   - of … 書かれた真実（アダプタが型付きに解いた状態）からの再構成
 
-import { type Json, canonicalStringify } from "@deep-spec/kernel-infrastructure";
+import { canonicalStringify, type Json } from "@deep-spec/kernel-infrastructure";
 import { CATALOG_VERSION } from "./catalog-version.ts";
 import type { CheckFamilies } from "./check-families.ts";
 import type { CheckFamily } from "./check-family.ts";
@@ -41,7 +41,7 @@ import { Finding } from "./finding.ts";
 import { Findings } from "./findings.ts";
 import type { InputAnchor } from "./input-anchor.ts";
 import { InputAnchors } from "./input-anchors.ts";
-import { ReferenceCheckReportIdentifier } from "./reference-check-report-identifier.ts";
+import type { ReferenceCheckReportIdentifier } from "./reference-check-report-identifier.ts";
 import { Skipped } from "./skipped.ts";
 import { Skips } from "./skips.ts";
 
@@ -92,157 +92,191 @@ export class ReferenceCheckReport {
   // 契約不適合時の降格形。inputs は保持し内容を空にする（凍結挙動）。
   // 理由文言は emitter（アダプタ）が組んで渡す——ドメインは値として保持する。
   degraded(reason: string): ReferenceCheckReport {
-    return new ReferenceCheckReport(this.#id, this.#inputs, TargetIdentifiers.of([]), Findings.of([]), Skips.of([]), reason, undefined);
+    return new ReferenceCheckReport(
+      this.#id,
+      this.#inputs,
+      TargetIdentifiers.of([]),
+      Findings.of([]),
+      Skips.of([]),
+      reason,
+      undefined,
+    );
   }
 
   // 書かれた真実からの再構成（Repository の読出側だけが使う）。書込時に
   // 契約適合が保証されているため、並びも含め「書かれたまま」を保持する。
-  static of(seed: {
-    readonly id: ReferenceCheckReportIdentifier;
-    readonly inputs: InputAnchors;
-    readonly checked: TargetIdentifiers;
-    readonly findings: Findings;
-    readonly skipped: Skips;
-    } & { readonly unavailableReason: string | null }): ReferenceCheckReport {
-      return new ReferenceCheckReport(
-        seed.id,
-        seed.inputs,
-        seed.checked,
-        seed.findings,
-        seed.skipped,
-        seed.unavailableReason,
-        undefined,
-      );
-    }
+  static of(
+    seed: {
+      readonly id: ReferenceCheckReportIdentifier;
+      readonly inputs: InputAnchors;
+      readonly checked: TargetIdentifiers;
+      readonly findings: Findings;
+      readonly skipped: Skips;
+    } & { readonly unavailableReason: string | null },
+  ): ReferenceCheckReport {
+    return new ReferenceCheckReport(
+      seed.id,
+      seed.inputs,
+      seed.checked,
+      seed.findings,
+      seed.skipped,
+      seed.unavailableReason,
+      undefined,
+    );
+  }
 
-    // family の finding を記録する。detail は family prefix 付きで描画され、
-    // その family は checked から外れる。findings はカタログ順を保つ。
-    // kind は検証済みの FindingKind——検査が自ら下す判定は正常生成経路であり、
-    // 任意の string を受け取らない（FR3.2）。復元時も同じ契約が成立する。
-    finding(family: CheckFamily, kind: FindingKind, targets: string[], refs: WitnessReference[], detail: string, functionalRequirementReferences: string[] = []): void {
-      this.#findings = this.#findings.add(Finding.of({
-        kind,
-        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(functionalRequirementReferences, (raw) => RequirementIdentifier.of(raw))).sortedUnique(),
-        targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
-        witness: { refs: WitnessReferences.of(refs) },
-        detail: family.prefixedDetail(detail),
-        ...(this.#unit !== undefined ? { unit: this.#unit} : {}),
-      })).sortedCanonically();
-      this.#checked = this.#checked.excluding(TargetIdentifier.of(family.asCheckTarget()));
-    }
+  // family の finding を記録する。detail は family prefix 付きで描画され、
+  // その family は checked から外れる。findings はカタログ順を保つ。
+  // kind は検証済みの FindingKind——検査が自ら下す判定は正常生成経路であり、
+  // 任意の string を受け取らない（FR3.2）。復元時も同じ契約が成立する。
+  finding(
+    family: CheckFamily,
+    kind: FindingKind,
+    targets: string[],
+    refs: WitnessReference[],
+    detail: string,
+    functionalRequirementReferences: string[] = [],
+  ): void {
+    this.#findings = this.#findings
+      .add(
+        Finding.of({
+          kind,
+          functionalRequirementReferences: FunctionalRequirementReferences.of(
+            Array.from(functionalRequirementReferences, (raw) => RequirementIdentifier.of(raw)),
+          ).sortedUnique(),
+          targets: TargetIdentifiers.of(
+            Array.from(targets, (raw) => TargetIdentifier.of(raw)),
+          ).sortedUniqueCanonically(),
+          witness: { refs: WitnessReferences.of(refs) },
+          detail: family.prefixedDetail(detail),
+          ...(this.#unit !== undefined ? { unit: this.#unit } : {}),
+        }),
+      )
+      .sortedCanonically();
+    this.#checked = this.#checked.excluding(TargetIdentifier.of(family.asCheckTarget()));
+  }
 
-    // family の skip を記録する。その family は checked から外れる。
-    // skipped は target → reason の正準順を保つ。
-    skip(family: CheckFamily, reason: string, detail: string): void {
-      this.#skipped = this.#skipped.add(Skipped.of({
-        target: TargetIdentifier.of(family.asCheckTarget()),
-        reason: SkipReason.of(reason),
-        detail,
-        ...(this.#unit !== undefined ? { unit: this.#unit} : {}),
-      })).sortedCanonically();
-      this.#checked = this.#checked.excluding(TargetIdentifier.of(family.asCheckTarget()));
-    }
+  // family の skip を記録する。その family は checked から外れる。
+  // skipped は target → reason の正準順を保つ。
+  skip(family: CheckFamily, reason: string, detail: string): void {
+    this.#skipped = this.#skipped
+      .add(
+        Skipped.of({
+          target: TargetIdentifier.of(family.asCheckTarget()),
+          reason: SkipReason.of(reason),
+          detail,
+          ...(this.#unit !== undefined ? { unit: this.#unit } : {}),
+        }),
+      )
+      .sortedCanonically();
+    this.#checked = this.#checked.excluding(TargetIdentifier.of(family.asCheckTarget()));
+  }
 
-    // 検査が読んだ文書をアンカーとして記録する。inputs は artifact 順を保つ
-    // （irHash の材料になる凍結正準形）。
-    input(anchor: InputAnchor): void {
-      this.#inputs = this.#inputs.add(anchor).sortedByArtifact();
-    }
+  // 検査が読んだ文書をアンカーとして記録する。inputs は artifact 順を保つ
+  // （irHash の材料になる凍結正準形）。
+  input(anchor: InputAnchor): void {
+    this.#inputs = this.#inputs.add(anchor).sortedByArtifact();
+  }
 
-    id(): ReferenceCheckReportIdentifier {
-      return this.#id;
-    }
+  id(): ReferenceCheckReportIdentifier {
+    return this.#id;
+  }
 
-    inputs(): InputAnchors {
-      return this.#inputs;
-    }
+  inputs(): InputAnchors {
+    return this.#inputs;
+  }
 
-    checked(): TargetIdentifiers {
-      return this.#checked;
-    }
+  checked(): TargetIdentifiers {
+    return this.#checked;
+  }
 
-    findings(): Findings {
-      return this.#findings;
-    }
+  findings(): Findings {
+    return this.#findings;
+  }
 
-    skipped(): Skips {
-      return this.#skipped;
-    }
+  skipped(): Skips {
+    return this.#skipped;
+  }
 
-    unavailableReason(): string | null {
-      return this.#unavailableReason;
-    }
+  unavailableReason(): string | null {
+    return this.#unavailableReason;
+  }
 
-    isUnavailable(): boolean {
-      return this.#unavailableReason !== null;
-    }
+  isUnavailable(): boolean {
+    return this.#unavailableReason !== null;
+  }
 
-    findingsCount(): number {
-      return this.#findings.count();
-    }
+  findingsCount(): number {
+    return this.#findings.count();
+  }
 
-    skippedCount(): number {
-      return this.#skipped.count();
-    }
+  skippedCount(): number {
+    return this.#skipped.count();
+  }
 
-    // センサー verdict の述語：降格しておらず finding が 0 なら pass。
-    passes(): boolean {
-      return this.#unavailableReason === null && this.#findings.isEmpty();
-    }
+  // センサー verdict の述語：降格しておらず finding が 0 なら pass。
+  passes(): boolean {
+    return this.#unavailableReason === null && this.#findings.isEmpty();
+  }
 
-    // 契約2 の文書像。キー順（backend, irVersion, irHash, method, [unavailable],
-    // inputs, checked, findings, skipped）は契約の知識なので集約が所有する——
-    // アダプタは JSON.stringify で描画するだけ（旧 serializer の orderedDocument
-    // を逐語で移設、golden 凍結）。irHash は inputs の正準 JSON の sha256。
-    toDocument(): { [k: string]: Json } {
-      const inputs = this.#inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
-      const ordered: { [k: string]: Json } = {
-        backend: this.#id.backendName().asString(),
-        irVersion: CATALOG_VERSION,
-        irHash: ContentHash.ofText(canonicalStringify(inputs)).asString(),
-        method: "static",
-      };
-      const reason = this.#unavailableReason;
-      if (reason !== null) ordered.unavailable = { reason };
-      ordered.inputs = inputs;
-      ordered.checked = this.#checked.toStrings() as unknown as Json;
-      // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
-      // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
-      // frRefs, targets, witness, detail, unit?)、witness ref は (artifact,
-      // element, value?)、skip は (target, reason, detail?, unit?)。
-      ordered.findings = this.#findings.toArray().map((f) => {
-        const refs = f.witnessRefs().toArray().map((r) => {
+  // 契約2 の文書像。キー順（backend, irVersion, irHash, method, [unavailable],
+  // inputs, checked, findings, skipped）は契約の知識なので集約が所有する——
+  // アダプタは JSON.stringify で描画するだけ（旧 serializer の orderedDocument
+  // を逐語で移設、golden 凍結）。irHash は inputs の正準 JSON の sha256。
+  toDocument(): { [k: string]: Json } {
+    const inputs = this.#inputs
+      .toArray()
+      .map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
+    const ordered: { [k: string]: Json } = {
+      backend: this.#id.backendName().asString(),
+      irVersion: CATALOG_VERSION,
+      irHash: ContentHash.ofText(canonicalStringify(inputs)).asString(),
+      method: "static",
+    };
+    const reason = this.#unavailableReason;
+    if (reason !== null) ordered.unavailable = { reason };
+    ordered.inputs = inputs;
+    ordered.checked = this.#checked.toStrings() as unknown as Json;
+    // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
+    // 旧構築サイトの挿入順そのもの（golden バイト凍結）：finding は (kind,
+    // frRefs, targets, witness, detail, unit?)、witness ref は (artifact,
+    // element, value?)、skip は (target, reason, detail?, unit?)。
+    ordered.findings = this.#findings.toArray().map((f) => {
+      const refs = f
+        .witnessRefs()
+        .toArray()
+        .map((r) => {
           const out: { [k: string]: Json } = { artifact: r.artifact(), element: r.element() };
           const value = r.value();
           if (value !== undefined) out.value = value;
           return out as Json;
         });
-        const out: { [k: string]: Json } = {
-          kind: f.kind(),
-          frRefs: f.functionalRequirementReferences().toStrings() as unknown as Json,
-          targets: f.targets().toStrings() as unknown as Json,
-          witness: { refs },
-          detail: f.detail(),
-        };
-        const unit = f.unit();
-        if (unit !== undefined) out.unit = unit;
-        return out as Json;
-      });
-      ordered.skipped = this.#skipped.toArray().map((sk) => {
-        const out: { [k: string]: Json } = { target: sk.target(), reason: sk.reason() };
-        const detail = sk.detail();
-        if (detail !== undefined) out.detail = detail;
-        const unit = sk.unit();
-        if (unit !== undefined) out.unit = unit;
-        return out as Json;
-      });
-      return ordered;
-    }
-
-    // 契約2 への適合を保証した集約を返す。適合していれば自分自身、していなければ
-    // 降格形（文言は FindingsSchema が凍結で所有する）。
-    conformedTo(schema: FindingsSchema): ReferenceCheckReport {
-      const reason = schema.degradationReasonFor(this.toDocument());
-      return reason === null ? this : this.degraded(reason);
-    }
+      const out: { [k: string]: Json } = {
+        kind: f.kind(),
+        frRefs: f.functionalRequirementReferences().toStrings() as unknown as Json,
+        targets: f.targets().toStrings() as unknown as Json,
+        witness: { refs },
+        detail: f.detail(),
+      };
+      const unit = f.unit();
+      if (unit !== undefined) out.unit = unit;
+      return out as Json;
+    });
+    ordered.skipped = this.#skipped.toArray().map((sk) => {
+      const out: { [k: string]: Json } = { target: sk.target(), reason: sk.reason() };
+      const detail = sk.detail();
+      if (detail !== undefined) out.detail = detail;
+      const unit = sk.unit();
+      if (unit !== undefined) out.unit = unit;
+      return out as Json;
+    });
+    return ordered;
   }
+
+  // 契約2 への適合を保証した集約を返す。適合していれば自分自身、していなければ
+  // 降格形（文言は FindingsSchema が凍結で所有する）。
+  conformedTo(schema: FindingsSchema): ReferenceCheckReport {
+    const reason = schema.degradationReasonFor(this.toDocument());
+    return reason === null ? this : this.degraded(reason);
+  }
+}

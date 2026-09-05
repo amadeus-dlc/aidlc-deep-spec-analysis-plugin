@@ -1,4 +1,11 @@
-import { UnitName, ContentHash, IntermediateRepresentationVersion, SkipReason, VerificationMethod, type FindingsSchema } from "@deep-spec/kernel-domain";
+import {
+  ContentHash,
+  type FindingsSchema,
+  IntermediateRepresentationVersion,
+  SkipReason,
+  UnitName,
+  VerificationMethod,
+} from "@deep-spec/kernel-domain";
 
 // DesignReport 集約 — 設計バックエンド（smt / quint / cross-check）の検証結果
 // 文書（契約2 拡張：unit 帰属つき finding・inputs/checked 任意）のドメイン表現。
@@ -9,14 +16,14 @@ import { UnitName, ContentHash, IntermediateRepresentationVersion, SkipReason, V
 // だけ残す——旧 writeDesignDoc の自己検証降格と同じ姿）。
 
 import type { Json } from "@deep-spec/kernel-infrastructure";
-import type { DesignModel } from "./design-model.ts";
+import type { CheckedUnits } from "./checked-units.ts";
+import type { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignFindings } from "./design-findings.ts";
+import type { DesignInputAnchors } from "./design-input-anchors.ts";
+import type { DesignModel } from "./design-model.ts";
+import type { DesignReportIdentifier } from "./design-report-identifier.ts";
 import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
-import type { DesignReportIdentifier } from "./design-report-identifier.ts";
-import { CheckedUnits } from "./checked-units.ts";
-import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
-import { DesignInputAnchors } from "./design-input-anchors.ts";
 
 export const SUPPORTED_DESIGN_IR_MAJOR = 1;
 
@@ -75,21 +82,33 @@ export class DesignReport {
   }
 
   // 設計 IR の major がこのバックエンドの対応外——全ユニットの全対象を skip。
-  static versionMismatch(id: DesignReportIdentifier, model: DesignModel, irHash: ContentHash, method: string): DesignReport {
+  static versionMismatch(
+    id: DesignReportIdentifier,
+    model: DesignModel,
+    irHash: ContentHash,
+    method: string,
+  ): DesignReport {
     return DesignReport.compose({
       id,
       irVersion: model.irVersion(),
       irHash,
       method,
       findings: DesignFindings.of([]),
-      skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
-        [...u.allTargets()].map((t) => (DesignSkipped.of({
-          target: t,
-          reason: SkipReason.irVersionMismatch(),
-          unit: UnitName.of(u.name()),
-          detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
-        }))),
-      )),
+      skipped: DesignSkips.of(
+        model
+          .units()
+          .toArray()
+          .flatMap((u) =>
+            [...u.allTargets()].map((t) =>
+              DesignSkipped.of({
+                target: t,
+                reason: SkipReason.irVersionMismatch(),
+                unit: UnitName.of(u.name()),
+                detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
+              }),
+            ),
+          ),
+      ),
     });
   }
 
@@ -110,9 +129,21 @@ export class DesignReport {
       irHash,
       method,
       findings: DesignFindings.of([]),
-      skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
-        [...u.allTargets()].map((t) => (DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: skipDetail }))),
-      )),
+      skipped: DesignSkips.of(
+        model
+          .units()
+          .toArray()
+          .flatMap((u) =>
+            [...u.allTargets()].map((t) =>
+              DesignSkipped.of({
+                target: t,
+                reason: SkipReason.unavailable(),
+                unit: UnitName.of(u.name()),
+                detail: skipDetail,
+              }),
+            ),
+          ),
+      ),
       unavailableReason: reason,
     });
   }
@@ -237,7 +268,10 @@ export class DesignReport {
     if (reason !== null) ordered.unavailable = { reason };
     const inputs = this.#inputs;
     // ContentHash は境界（描画）で asString() へ落とす（キー順は旧挿入順）。
-    if (inputs !== null) ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
+    if (inputs !== null)
+      ordered.inputs = inputs
+        .toArray()
+        .map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() })) as unknown as Json;
     const checked = this.#checked;
     if (checked !== null) ordered.checked = checked.toStrings() as unknown as Json;
     // ペイロードのコレクションはこの描画点でだけ toArray() に降りる。キー順は
@@ -264,7 +298,9 @@ export class DesignReport {
     const crossChecked = this.#crossChecked;
     // crossChecked エントリの凍結キー順は (backend, targets)。
     if (crossChecked !== null) {
-      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
+      ordered.crossChecked = crossChecked
+        .toArray()
+        .map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }) as unknown as Json);
     }
     return ordered;
   }
@@ -276,4 +312,3 @@ export class DesignReport {
     return reason === null ? this : this.degraded(reason);
   }
 }
-

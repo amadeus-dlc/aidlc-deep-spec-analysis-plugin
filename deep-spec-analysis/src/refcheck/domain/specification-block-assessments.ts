@@ -1,6 +1,6 @@
-import type { SpecificationBlockAssessment } from "./specification-block-assessment.ts";
 import type { ArtifactPath } from "@deep-spec/kernel-domain";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
+import type { SpecificationBlockAssessment } from "./specification-block-assessment.ts";
 
 export class SpecificationBlockAssessments {
   readonly #values: readonly SpecificationBlockAssessment[];
@@ -24,7 +24,6 @@ export class SpecificationBlockAssessments {
   toArray(): readonly SpecificationBlockAssessment[] {
     return this.#values;
   }
-
 
   // CD-2: 各ブロックに自分の健全性を判定させる（発生順はブロック順、凍結）。
   check(report: ReferenceCheckReport, artifact: ArtifactPath): void {

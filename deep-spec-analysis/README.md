@@ -102,9 +102,20 @@ output (fixed seeds, canonical sorting, no timestamps).
 ## Tests
 
 ```bash
-bun install   # pins z3-solver + @informalsystems/quint for conformance
-bun test
+bun install --frozen-lockfile
+bun run check        # Biome: format, lint, import order (read-only)
+bun run typecheck    # TypeScript
+bun test --coverage
 ```
+
+Biome は Bun の開発依存としてバージョンを固定しています。`bun run check:fix` で
+フォーマット・import 整理・安全な lint 修正をまとめて適用できます。
+整形だけなら `bun run format`、lint の確認だけなら `bun run lint` を使います。
+CI も `bun run check` を実行し、警告を含む未解決の指摘があれば失敗します。
+
+対象は保守する `src/`・`scripts/`・`tests/` と開発用 JSON 設定です。
+配布用の `tools/` は原本から再生成し、公開契約スキーマと期待値 fixture は
+Biome の書換対象から除きます。整形規約は 2 スペース・120 桁・ダブルクォートです。
 
 `tests/conformance.test.ts` drives both backends over the canonical fixture
 (`tests/fixtures/conformance/`) and compares against expected findings

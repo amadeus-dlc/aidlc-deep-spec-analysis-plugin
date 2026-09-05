@@ -1,7 +1,7 @@
-import { DebtRow } from "./read-model/debt-row.ts";
-import { StructuralDebt } from "./read-model/structural-debt.ts";
 import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 import type { ReferenceCheckBackendClient } from "./port/reference-check-backend-client.ts";
+import { DebtRow } from "./read-model/debt-row.ts";
+import { StructuralDebt } from "./read-model/structural-debt.ts";
 
 // 構造負債の走査（checks 配列の第 4 ブロック、report-only）。実在する設計
 // 成果物ごとに refcheck バックエンドを打診し、数えられたものだけを走査済み

@@ -1,6 +1,6 @@
+import { NormalizedName } from "@deep-spec/kernel-domain";
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
-import { NormalizedName } from "@deep-spec/kernel-domain";
 
 export class AllowedValue {
   readonly #value: string;
@@ -17,7 +17,13 @@ export class AllowedValue {
   static parse(raw: string): Result<AllowedValue, ParseError> {
     return parseConstruction(() => new AllowedValue(raw));
   }
-  equals(other: AllowedValue): boolean { return this.#value === other.#value; }
-  asString(): string { return this.#value; }
-  normalized(): NormalizedName { return NormalizedName.of(this.#value); }
+  equals(other: AllowedValue): boolean {
+    return this.#value === other.#value;
+  }
+  asString(): string {
+    return this.#value;
+  }
+  normalized(): NormalizedName {
+    return NormalizedName.of(this.#value);
+  }
 }

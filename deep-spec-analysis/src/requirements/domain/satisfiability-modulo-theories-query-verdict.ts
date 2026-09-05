@@ -1,7 +1,7 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
+import { QueryLabel, SkipReason, type TargetIdentifiers } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationSkips } from "./verification-skips.ts";
-import { QueryLabel, type TargetIdentifiers, SkipReason } from "@deep-spec/kernel-domain";
 
 // SMT クエリ 1 件の判定。主従の裁定（#71 波2）: 判定は命令できる抽象データ型
 // ——interpret が吸い出していた status 分類（未決状態は #34 項 3 の
@@ -11,7 +11,11 @@ import { QueryLabel, type TargetIdentifiers, SkipReason } from "@deep-spec/kerne
 type SatisfiabilityModuloTheoriesQueryStatus = "sat" | "unsat" | "unknown" | "budget" | "error" | "missing";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type SatisfiabilityModuloTheoriesQueryVerdictParam = { status: SatisfiabilityModuloTheoriesQueryStatus; decodedModel?: { [path: string]: boolean | number | string }; core?: string[] };
+type SatisfiabilityModuloTheoriesQueryVerdictParam = {
+  status: SatisfiabilityModuloTheoriesQueryStatus;
+  decodedModel?: { [path: string]: boolean | number | string };
+  core?: string[];
+};
 
 export class SatisfiabilityModuloTheoriesQueryVerdict {
   readonly #status: SatisfiabilityModuloTheoriesQueryStatus;
@@ -26,7 +30,9 @@ export class SatisfiabilityModuloTheoriesQueryVerdict {
     this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
   }
 
-  static parse(props: SatisfiabilityModuloTheoriesQueryVerdictParam): Result<SatisfiabilityModuloTheoriesQueryVerdict, ParseError> {
+  static parse(
+    props: SatisfiabilityModuloTheoriesQueryVerdictParam,
+  ): Result<SatisfiabilityModuloTheoriesQueryVerdict, ParseError> {
     return parseConstruction(() => new SatisfiabilityModuloTheoriesQueryVerdict(props));
   }
 

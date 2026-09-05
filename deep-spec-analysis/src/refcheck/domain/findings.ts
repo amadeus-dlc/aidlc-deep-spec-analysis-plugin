@@ -30,9 +30,7 @@ export class Findings {
   }
 
   sortedCanonically(): Findings {
-    return new Findings(
-      [...this.#values].sort((a, b) => a.compareTo(b)),
-    );
+    return new Findings([...this.#values].sort((a, b) => a.compareTo(b)));
   }
 
   toArray(): readonly Finding[] {

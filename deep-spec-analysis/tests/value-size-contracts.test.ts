@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
-import * as Kernel from "@deep-spec/kernel-domain";
 import * as Design from "@deep-spec/design-domain";
-import * as Requirements from "@deep-spec/requirements-domain";
-import * as Refcheck from "@deep-spec/refcheck-domain";
 import * as Doctor from "@deep-spec/doctor-domain";
+import * as Kernel from "@deep-spec/kernel-domain";
+import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
+import * as Refcheck from "@deep-spec/refcheck-domain";
+import * as Requirements from "@deep-spec/requirements-domain";
 
 // 全文字列VOのサイズ契約。字句的に不正な長大入力も、サイズで先に拒否する。
 const cases = [
@@ -93,13 +93,13 @@ describe("value size contracts", () => {
     for (const [factory, raw] of [
       [Kernel.ContentHash, "f".repeat(64)],
       [Kernel.TriggerName, "a".repeat(128)],
-      [Kernel.AttributePath, "a".repeat(128) + "." + "b".repeat(128)],
-      [Kernel.ArtifactPath, "/" + "a".repeat(4095)],
+      [Kernel.AttributePath, `${"a".repeat(128)}.${"b".repeat(128)}`],
+      [Kernel.ArtifactPath, `/${"a".repeat(4095)}`],
       [Kernel.EnumerationMember, "a".repeat(4096)],
       [Kernel.ErrorMessage, "a".repeat(65_536)],
     ] as const) {
       expect(factory.of(raw).asString()).toBe(raw);
-      expect(() => factory.of(raw + "a")).toThrow(IllegalArgumentException);
+      expect(() => factory.of(`${raw}a`)).toThrow(IllegalArgumentException);
     }
   });
 
@@ -109,9 +109,9 @@ describe("value size contracts", () => {
   });
 
   test("a version at its size limit still round-trips through a Git tag", () => {
-    const version = Doctor.PluginVersion.of("1".repeat(124) + ".0.0");
+    const version = Doctor.PluginVersion.of(`${"1".repeat(124)}.0.0`);
     const parsed = Doctor.PluginVersion.parse(version.asTag());
     expect(parsed.ok && parsed.value.equals(version)).toBe(true);
-    expect(Doctor.PluginVersion.parse("v" + "1".repeat(125) + ".0.0").ok).toBe(false);
+    expect(Doctor.PluginVersion.parse(`v${"1".repeat(125)}.0.0`).ok).toBe(false);
   });
 });

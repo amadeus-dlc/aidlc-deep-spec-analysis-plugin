@@ -7,29 +7,26 @@
 // 旧 main の CLI 編成部からの逐語移植。
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { KeyedIndex } from "@deep-spec/kernel-domain";
+import type { RequirementsModel } from "@deep-spec/requirements-domain";
 import {
-  ScenarioIdentifier,
   ObligationIdentifier,
   QuintMachineRunVerdict,
   QuintRuns,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
+  ScenarioIdentifier,
   TraceStates,
   VerificationSkips,
 } from "@deep-spec/requirements-domain";
-import type {
-  RequirementsModel,
-} from "@deep-spec/requirements-domain";
-
 import type { QuintCheckResult, QuintClient } from "@deep-spec/requirements-usecase";
+import type { CompiledQuintMachine } from "./compiled-quint-machine.ts";
 import { decodeItfTrace, itfStatus } from "./itf-decoder.ts";
-import { type CompiledQuintMachine } from "./compiled-quint-machine.ts";
-import { compileQuintMachine } from "./quint-compilation.ts";
 import type { QuintClientConfiguration } from "./quint-client-configuration.ts";
-import { KeyedIndex } from "@deep-spec/kernel-domain";
+import { compileQuintMachine } from "./quint-compilation.ts";
 
 const SEED = "0x2a";
 const MAX_STEPS = 8;
@@ -79,19 +76,27 @@ export class QuintClientImplementation implements QuintClient {
       // phase 2 の「既に skip 済みの義務は走らせない」凍結ガード：コンパイル時
       // skip と、機械フェーズの判定が命じる対象一括 skip（timeout / run-failed）。
       const skipTargets = new Set(machine.compileSkips.map((s) => s.target().asString()));
-      if (machineRun !== null && machineRun.abortsMachineTargets()) {
+      if (machineRun?.abortsMachineTargets()) {
         for (const t of machine.plan.machineTargets()) {
           skipTargets.add(t.asString());
         }
       }
-      const temporals = bounded ? this.#runTemporalPhase(machine, modulePath, skipTargets, work) : new Map<string, QuintTemporalVerdict>();
+      const temporals = bounded
+        ? this.#runTemporalPhase(machine, modulePath, skipTargets, work)
+        : new Map<string, QuintTemporalVerdict>();
       const scenarios = this.#runScenarioPhase(machine, modulePath, work);
       const runs = QuintRuns.of({
         machine: machineRun,
         temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationIdentifier.of(id), v] as const)),
         scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioIdentifier.of(id), v] as const)),
       });
-      return { kind: "checked", method, plan: machine.plan, compileSkips: VerificationSkips.of(machine.compileSkips), runs };
+      return {
+        kind: "checked",
+        method,
+        plan: machine.plan,
+        compileSkips: VerificationSkips.of(machine.compileSkips),
+        runs,
+      };
     } finally {
       rmSync(work, { recursive: true, force: true });
     }
@@ -124,9 +129,15 @@ export class QuintClientImplementation implements QuintClient {
   // null になりうる（bun でも node でも実測）。signal 判定は退避経路。
   #runQuint(args: string[], itfPath: string | null, timeoutMs: number, cwd: string): QuintRun {
     const budget = this.#config.timeoutOverrideMs ?? timeoutMs;
-    const res = spawnSync(this.#config.quintBin, args, { encoding: "utf-8", timeout: budget, cwd, killSignal: "SIGINT" });
+    const res = spawnSync(this.#config.quintBin, args, {
+      encoding: "utf-8",
+      timeout: budget,
+      cwd,
+      killSignal: "SIGINT",
+    });
     const errorCode = (res.error as { code?: unknown } | undefined)?.code;
-    const timedOut = errorCode === "ETIMEDOUT" || res.signal === "SIGINT" || res.signal === "SIGTERM" || res.signal === "SIGKILL";
+    const timedOut =
+      errorCode === "ETIMEDOUT" || res.signal === "SIGINT" || res.signal === "SIGTERM" || res.signal === "SIGKILL";
     // status は正常終了でだけ数値になる。シグナル死（SIGSEGV 等）は null なので
     // 「0 でない」に含まれる。
     const failed = !timedOut && (res.error !== undefined || res.status !== 0);
@@ -167,7 +178,14 @@ export class QuintClientImplementation implements QuintClient {
     const itfPath = join(work, "machine.itf.json");
     const run = bounded
       ? this.#runQuint(
-          ["verify", modulePath, "--main=main", "--invariant=invAll", `--max-steps=${MAX_STEPS}`, `--out-itf=${itfPath}`],
+          [
+            "verify",
+            modulePath,
+            "--main=main",
+            "--invariant=invAll",
+            `--max-steps=${MAX_STEPS}`,
+            `--out-itf=${itfPath}`,
+          ],
           itfPath,
           VERIFY_TIMEOUT_MS,
           work,
@@ -191,12 +209,16 @@ export class QuintClientImplementation implements QuintClient {
     if (`${run.stdout}\n${run.stderr}`.toLowerCase().includes("deadlock")) {
       if (!run.itf) return QuintMachineRunVerdict.deadlock(null);
       const trace = decodeItfTrace(run.itf, machine.varToPath);
-      return trace.ok ? QuintMachineRunVerdict.deadlock(TraceStates.of(trace.value)) : QuintMachineRunVerdict.runFailed(trace.error);
+      return trace.ok
+        ? QuintMachineRunVerdict.deadlock(TraceStates.of(trace.value))
+        : QuintMachineRunVerdict.runFailed(trace.error);
     }
     const violated = run.itf !== null && (itfStatus(run.itf) === "violation" || (bounded && !!run.itf));
     if (violated && run.itf) {
       const trace = decodeItfTrace(run.itf, machine.varToPath);
-      return trace.ok ? QuintMachineRunVerdict.violation(TraceStates.of(trace.value)) : QuintMachineRunVerdict.runFailed(trace.error);
+      return trace.ok
+        ? QuintMachineRunVerdict.violation(TraceStates.of(trace.value))
+        : QuintMachineRunVerdict.runFailed(trace.error);
     }
     if (!violated && run.itf === null && this.#didNotAnswer(run)) {
       return QuintMachineRunVerdict.runFailed(this.#outputTail(run));
@@ -217,7 +239,14 @@ export class QuintClientImplementation implements QuintClient {
       if (skipTargets.has(obId)) continue;
       const itfPath = join(work, `${temporalName}.itf.json`);
       const run = this.#runQuint(
-        ["verify", modulePath, "--main=main", `--temporal=${temporalName}`, `--max-steps=${MAX_STEPS}`, `--out-itf=${itfPath}`],
+        [
+          "verify",
+          modulePath,
+          "--main=main",
+          `--temporal=${temporalName}`,
+          `--max-steps=${MAX_STEPS}`,
+          `--out-itf=${itfPath}`,
+        ],
         itfPath,
         VERIFY_TIMEOUT_MS,
         work,
@@ -226,7 +255,12 @@ export class QuintClientImplementation implements QuintClient {
         out.set(obId, QuintTemporalVerdict.timeout());
       } else if (run.itf) {
         const trace = decodeItfTrace(run.itf, machine.varToPath);
-        out.set(obId, trace.ok ? QuintTemporalVerdict.violation(TraceStates.of(trace.value)) : QuintTemporalVerdict.runFailed(trace.error));
+        out.set(
+          obId,
+          trace.ok
+            ? QuintTemporalVerdict.violation(TraceStates.of(trace.value))
+            : QuintTemporalVerdict.runFailed(trace.error),
+        );
       } else if (this.#didNotAnswer(run)) {
         // verify は違反時にだけ ITF を書くので、ITF 無しは clean か失敗かの二択。
         // プロセスの事実で見分ける——以前は無条件に clean だった。

@@ -14,24 +14,24 @@
 // 各ファミリーの判定は宣言・コレクション・解析結果の不変条件（裁定 11〜13）
 // で、門はそれらを凍結の順に呼び、読んだ文書を inputs に記録するだけ。
 
-import { ArtifactPath, type RequirementIdentifiers } from "@deep-spec/kernel-domain";
 import type { UnitName } from "@deep-spec/kernel-domain";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import { ArtifactPath, type RequirementIdentifiers } from "@deep-spec/kernel-domain";
+import { err, ok, type Result } from "@deep-spec/kernel-infrastructure";
+import type { ComponentCatalogOutcome } from "./component-catalog-outcome.ts";
 import { COMPONENT_FAMILIES } from "./component-check-families.ts";
 import { CONTRACT_FAMILIES } from "./contract-check-families.ts";
-import { FUNCTIONAL_FAMILIES } from "./functional-check-families.ts";
+import type { ContractsTableOutcome } from "./contracts-table-outcome.ts";
 import { DeclaredUnitsOutcome } from "./declared-units-outcome.ts";
+import type { DesignRecordIdentifier } from "./design-record-identifier.ts";
 import { DomainEntitiesOutcome } from "./domain-entities-outcome.ts";
 import { EntitiesOutcome } from "./entities-outcome.ts";
+import { FUNCTIONAL_FAMILIES } from "./functional-check-families.ts";
 import { FunctionalSpecificationOutcome } from "./functional-specification-outcome.ts";
-import { RulesOutcome } from "./rules-outcome.ts";
-import { ReferenceCheckReport } from "./reference-check-report.ts";
-import { ReferenceCheckReportIdentifier } from "./reference-check-report-identifier.ts";
-import type { ComponentCatalogOutcome } from "./component-catalog-outcome.ts";
-import type { ContractsTableOutcome } from "./contracts-table-outcome.ts";
-import type { DesignRecordIdentifier } from "./design-record-identifier.ts";
 import type { InputAnchor } from "./input-anchor.ts";
 import type { InputAnchors } from "./input-anchors.ts";
+import { ReferenceCheckReport } from "./reference-check-report.ts";
+import { ReferenceCheckReportIdentifier } from "./reference-check-report-identifier.ts";
+import { RulesOutcome } from "./rules-outcome.ts";
 import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
 import type { SpecificationBlockAssessments } from "./specification-block-assessments.ts";
 
@@ -110,7 +110,10 @@ export class DesignRecord {
   checkComponents(reportDirectory: ArtifactPath): Result<ReferenceCheckReport, CheckNotApplicable> {
     const catalog = this.#componentCatalog;
     if (catalog === null) return err({ kind: "not-applicable" });
-    const report = ReferenceCheckReport.open(ReferenceCheckReportIdentifier.of(reportDirectory, "components"), COMPONENT_FAMILIES);
+    const report = ReferenceCheckReport.open(
+      ReferenceCheckReportIdentifier.of(reportDirectory, "components"),
+      COMPONENT_FAMILIES,
+    );
     catalog.check(report, ArtifactPath.of(this.#target.artifact()));
     report.input(this.#target);
     return ok(report);
@@ -121,10 +124,15 @@ export class DesignRecord {
   checkContracts(reportDirectory: ArtifactPath): Result<ReferenceCheckReport, CheckNotApplicable> {
     const summary = this.#contractSummary;
     if (summary === null) return err({ kind: "not-applicable" });
-    const report = ReferenceCheckReport.open(ReferenceCheckReportIdentifier.of(reportDirectory, "contract-summary"), CONTRACT_FAMILIES);
+    const report = ReferenceCheckReport.open(
+      ReferenceCheckReportIdentifier.of(reportDirectory, "contract-summary"),
+      CONTRACT_FAMILIES,
+    );
     const artifact = ArtifactPath.of(this.#target.artifact());
     const depArtifact = summary.declaredUnits.artifactName;
-    const units = (summary.declaredUnits.document === null ? DeclaredUnitsOutcome.absent() : summary.declaredUnits.document.outcome).check(report);
+    const units = (
+      summary.declaredUnits.document === null ? DeclaredUnitsOutcome.absent() : summary.declaredUnits.document.outcome
+    ).check(report);
     const rows = summary.contractsTable.check(report, units, artifact, depArtifact);
     summary.specBlocks.check(report, artifact);
     if (units !== null && rows !== null) units.checkEdgesCovered(rows, report, artifact, depArtifact);
@@ -138,14 +146,33 @@ export class DesignRecord {
   checkFunctionalDesign(reportDirectory: ArtifactPath): Result<ReferenceCheckReport, CheckNotApplicable> {
     const fd = this.#functional;
     if (fd === null) return err({ kind: "not-applicable" });
-    const report = ReferenceCheckReport.open(ReferenceCheckReportIdentifier.of(reportDirectory, "functional-design"), FUNCTIONAL_FAMILIES, fd.unit);
-    const entities = (fd.entities === null ? EntitiesOutcome.absent() : fd.entities.outcome).check(report, fd.entitiesArtifact);
-    (fd.rules === null ? RulesOutcome.absent() : fd.rules.outcome)
-      .check(report, fd.rulesArtifact, fd.requirements === null ? null : fd.requirements.outcome, entities);
-    (fd.spec === null ? FunctionalSpecificationOutcome.absent() : fd.spec.outcome)
-      .check(report, fd.specArtifact, fd.entitiesArtifact, entities);
-    (fd.components === null ? DomainEntitiesOutcome.absent() : fd.components.outcome)
-      .check(report, fd.componentsArtifact, fd.siblingUnits, fd.unit);
+    const report = ReferenceCheckReport.open(
+      ReferenceCheckReportIdentifier.of(reportDirectory, "functional-design"),
+      FUNCTIONAL_FAMILIES,
+      fd.unit,
+    );
+    const entities = (fd.entities === null ? EntitiesOutcome.absent() : fd.entities.outcome).check(
+      report,
+      fd.entitiesArtifact,
+    );
+    (fd.rules === null ? RulesOutcome.absent() : fd.rules.outcome).check(
+      report,
+      fd.rulesArtifact,
+      fd.requirements === null ? null : fd.requirements.outcome,
+      entities,
+    );
+    (fd.spec === null ? FunctionalSpecificationOutcome.absent() : fd.spec.outcome).check(
+      report,
+      fd.specArtifact,
+      fd.entitiesArtifact,
+      entities,
+    );
+    (fd.components === null ? DomainEntitiesOutcome.absent() : fd.components.outcome).check(
+      report,
+      fd.componentsArtifact,
+      fd.siblingUnits,
+      fd.unit,
+    );
     if (fd.entities !== null) report.input(fd.entities.input);
     if (fd.rules !== null) report.input(fd.rules.input);
     if (fd.requirements !== null) report.input(fd.requirements.input);

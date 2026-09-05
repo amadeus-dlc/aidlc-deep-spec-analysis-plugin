@@ -1,7 +1,7 @@
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-import { EntityName } from "./entity-name.ts";
+import type { EntityName } from "./entity-name.ts";
 
 export class AppliesTo {
   readonly #value: string;
@@ -18,8 +18,12 @@ export class AppliesTo {
   static parse(raw: string): Result<AppliesTo, ParseError> {
     return parseConstruction(() => new AppliesTo(raw));
   }
-  equals(other: AppliesTo): boolean { return this.#value === other.#value; }
-  asString(): string { return this.#value; }
+  equals(other: AppliesTo): boolean {
+    return this.#value === other.#value;
+  }
+  asString(): string {
+    return this.#value;
+  }
   // FD-R4: Entity / Entity.attribute 形の構文知識は参照自身が所有（凍結正規表現）。
   entityToken(): string | null {
     const token = this.#value.match(/^([A-Za-z][A-Za-z0-9_]*)(?:\.([A-Za-z][A-Za-z0-9_]*))?$/);

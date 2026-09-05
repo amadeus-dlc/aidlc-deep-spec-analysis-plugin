@@ -1,6 +1,6 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+import { ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 // 契約1 要件 IR の時相宣言（well-formedness 検査材料）: always の assert、
 // leads-to の from / to。式の巡回（いずれも prime 禁止）は宣言自身の知識
@@ -19,7 +19,9 @@ export class IntermediateRepresentationTemporalDeclaration {
     this.#to = props.to === undefined ? undefined : ExpressionTree.of(props.to).asExpression();
   }
 
-  static parse(props: IntermediateRepresentationTemporalDeclarationParam): Result<IntermediateRepresentationTemporalDeclaration, ParseError> {
+  static parse(
+    props: IntermediateRepresentationTemporalDeclarationParam,
+  ): Result<IntermediateRepresentationTemporalDeclaration, ParseError> {
     return parseConstruction(() => new IntermediateRepresentationTemporalDeclaration(props));
   }
 

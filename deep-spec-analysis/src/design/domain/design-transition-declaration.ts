@@ -1,10 +1,18 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree, type Expression, type TriggerName } from "@deep-spec/kernel-domain";
-import { BusinessRuleReferences } from "./business-rule-references.ts";
-import { type DesignTransitionIdentifier } from "./design-transition-identifier.ts";
+import { type Expression, ExpressionTree, type TriggerName } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
+import type { BusinessRuleReferences } from "./business-rule-references.ts";
+import type { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type DesignTransitionDeclarationParam = { id: DesignTransitionIdentifier; from?: string; to?: string; trigger?: TriggerName; businessRuleReferences?: BusinessRuleReferences; guard?: Expression; effect?: Expression };
+type DesignTransitionDeclarationParam = {
+  id: DesignTransitionIdentifier;
+  from?: string;
+  to?: string;
+  trigger?: TriggerName;
+  businessRuleReferences?: BusinessRuleReferences;
+  guard?: Expression;
+  effect?: Expression;
+};
 
 export class DesignTransitionDeclaration {
   readonly #id: DesignTransitionIdentifier;
@@ -33,16 +41,33 @@ export class DesignTransitionDeclaration {
     return new DesignTransitionDeclaration(props);
   }
 
-  id(): DesignTransitionIdentifier { return this.#id; }
-  fromState(): string | undefined { return this.#from; }
-  toState(): string | undefined { return this.#to; }
-  trigger(): TriggerName | undefined { return this.#trigger; }
-  businessRuleReferences(): BusinessRuleReferences | undefined { return this.#businessRuleReferences; }
-  guard(): Expression | undefined { return this.#guard; }
-  effect(): Expression | undefined { return this.#effect; }
+  id(): DesignTransitionIdentifier {
+    return this.#id;
+  }
+  fromState(): string | undefined {
+    return this.#from;
+  }
+  toState(): string | undefined {
+    return this.#to;
+  }
+  trigger(): TriggerName | undefined {
+    return this.#trigger;
+  }
+  businessRuleReferences(): BusinessRuleReferences | undefined {
+    return this.#businessRuleReferences;
+  }
+  guard(): Expression | undefined {
+    return this.#guard;
+  }
+  effect(): Expression | undefined {
+    return this.#effect;
+  }
 
   stateEntries(): readonly (readonly ["from" | "to", string | undefined])[] {
-    return [["from", this.#from], ["to", this.#to]];
+    return [
+      ["from", this.#from],
+      ["to", this.#to],
+    ];
   }
 
   cellKey(): string | null {

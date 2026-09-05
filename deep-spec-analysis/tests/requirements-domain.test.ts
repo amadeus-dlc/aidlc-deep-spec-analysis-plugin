@@ -1,38 +1,48 @@
-import { AttributeKind } from "@deep-spec/kernel-domain";
+import {
+  AttributeKind,
+  type Expression,
+  FunctionalRequirementReferences,
+  RequirementIdentifier,
+  TargetIdentifier,
+  TargetIdentifiers,
+  TriggerName,
+} from "@deep-spec/kernel-domain";
 import { scenarioBindings } from "./binding-fixtures.ts";
-import { RequirementIdentifier, FunctionalRequirementReferences, TargetIdentifier, TargetIdentifiers, TriggerName, type Expression } from "@deep-spec/kernel-domain";
 
 // requirements/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
 
 import { describe, expect, test } from "bun:test";
 
 import {
+  AttributePath,
   BackgroundAssumptionIdentifier,
+  IntermediateRepresentationAttributeDeclaration,
+  IntermediateRepresentationAttributeDeclarations,
+  IntermediateRepresentationAttributeName,
   IntermediateRepresentationBackgroundDeclaration,
+  IntermediateRepresentationEntityDeclaration,
+  IntermediateRepresentationEntityName,
+  IntermediateRepresentationTemporalDeclaration,
   Obligation,
   ObligationIdentifier,
   ObligationNature,
   QuintMachineRunVerdict,
-  Scenario,
-  ScenarioIdentifier,
-  TraceStates,
-  IntermediateRepresentationAttributeDeclaration,
-  IntermediateRepresentationAttributeDeclarations,
-  IntermediateRepresentationAttributeName,
-  IntermediateRepresentationEntityDeclaration,
-  IntermediateRepresentationEntityName,
-  IntermediateRepresentationTemporalDeclaration,
-  VerificationSkipped,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
- VerificationWitness, AttributePath,
+  Scenario,
+  ScenarioIdentifier,
   TraceState,
-  TraceValue
+  TraceStates,
+  TraceValue,
+  type VerificationSkipped,
+  VerificationWitness,
 } from "@deep-spec/requirements-domain";
 
 // テスト用: 平文の状態 → TraceState（裁定 2 で値オブジェクトになった）。
 function st(values: { [path: string]: boolean | number | string }): TraceState {
-  return TraceState.of(Object.entries(values).map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)] as const));
+  return TraceState.of(
+    Object.entries(values).map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)] as const),
+  );
 }
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
@@ -42,7 +52,9 @@ describe("obligation", () => {
     Obligation.of({
       id: ObligationIdentifier.of("OB-1"),
       nature: ObligationNature.of("event"),
-      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(
+        Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
+      ),
       trigger: TriggerName.of("submit"),
       guard: lit(true),
       effect: lit(false),
@@ -113,7 +125,9 @@ describe("obligation", () => {
     const obligation = Obligation.of({
       id: ObligationIdentifier.of("OB-6"),
       nature: ObligationNature.of("numeric"),
-      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-9"], (raw) => RequirementIdentifier.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(
+        Array.from(["FR-9"], (raw) => RequirementIdentifier.of(raw)),
+      ),
       ears: "the system shall ...",
       assert: lit(true),
       trigger: TriggerName.of("tick"),
@@ -143,7 +157,9 @@ describe("scenario", () => {
     Scenario.of({
       id: ScenarioIdentifier.of("SC-1"),
       kind,
-      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(
+        Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
+      ),
       bindings: scenarioBindings({ b: 2, a: 1 }),
     });
 
@@ -151,7 +167,9 @@ describe("scenario", () => {
     const withEvent = Scenario.of({
       id: ScenarioIdentifier.of("SC-2"),
       kind: "accept",
-      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1", "FR-2"], (raw) => RequirementIdentifier.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(
+        Array.from(["FR-1", "FR-2"], (raw) => RequirementIdentifier.of(raw)),
+      ),
       bindings: scenarioBindings({ a: 1 }),
       event: { trigger: TriggerName.of("submit") },
       expect: lit(true),
@@ -179,7 +197,12 @@ describe("scenario", () => {
   });
 
   test("bindingEntriesCanonically sorts by key and bindings() hands out a copy", () => {
-    expect(scenario("accept").bindings().entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()])).toEqual([
+    expect(
+      scenario("accept")
+        .bindings()
+        .entriesCanonically()
+        .map((binding) => [binding.path().asString(), binding.value().toDocument()]),
+    ).toEqual([
       ["a", 1],
       ["b", 2],
     ]);
@@ -227,7 +250,9 @@ describe("quint machine run verdict", () => {
       "quint run failed unexpectedly: boom",
       "quint run failed unexpectedly: boom",
     ]);
-    expect(flat(failed.skipsFor(TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))), true))).toEqual(["OB-1:unavailable:quint verify failed unexpectedly: boom"]);
+    expect(
+      flat(failed.skipsFor(TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))), true)),
+    ).toEqual(["OB-1:unavailable:quint verify failed unexpectedly: boom"]);
     expect([timeout, failed].some((v) => v.isDeadlock() || v.isViolation())).toBe(false);
   });
 
@@ -261,20 +286,41 @@ describe("quint machine run verdict", () => {
 
 describe("ir entity and temporal decls (well-formedness materials own their judgements)", () => {
   test("entity decl visits attributes with their coordinate and flags a repeated name from its second occurrence", () => {
-    const attr = (name: string) => IntermediateRepresentationAttributeDeclaration.of({ name: IntermediateRepresentationAttributeName.of(name), kind: AttributeKind.of("bool") });
-    const entity = IntermediateRepresentationEntityDeclaration.of({ name: IntermediateRepresentationEntityName.of("order"), attributes: IntermediateRepresentationAttributeDeclarations.of([attr("qty"), attr("qty"), attr("paid")]) });
+    const attr = (name: string) =>
+      IntermediateRepresentationAttributeDeclaration.of({
+        name: IntermediateRepresentationAttributeName.of(name),
+        kind: AttributeKind.of("bool"),
+      });
+    const entity = IntermediateRepresentationEntityDeclaration.of({
+      name: IntermediateRepresentationEntityName.of("order"),
+      attributes: IntermediateRepresentationAttributeDeclarations.of([attr("qty"), attr("qty"), attr("paid")]),
+    });
     const seen: [string, boolean][] = [];
-    entity.inspectAttributes((coordinate, attribute, duplicated) => seen.push([`${coordinate}=${attribute.name().asString()}`, duplicated]));
-    expect(seen).toEqual([["order.qty=qty", false], ["order.qty=qty", true], ["order.paid=paid", false]]);
+    entity.inspectAttributes((coordinate, attribute, duplicated) =>
+      seen.push([`${coordinate}=${attribute.name().asString()}`, duplicated]),
+    );
+    expect(seen).toEqual([
+      ["order.qty=qty", false],
+      ["order.qty=qty", true],
+      ["order.paid=paid", false],
+    ]);
     expect(entity.name().asString()).toBe("order");
     expect(entity.attributes().toArray().length).toBe(3);
   });
 
   test("temporal decl visits assert, from and to in that order with primes forbidden, and silence when absent", () => {
-    const full = IntermediateRepresentationTemporalDeclaration.of({ assert: lit(true), from: { op: "ref", path: "a" }, to: { op: "ref", path: "b" } });
+    const full = IntermediateRepresentationTemporalDeclaration.of({
+      assert: lit(true),
+      from: { op: "ref", path: "a" },
+      to: { op: "ref", path: "b" },
+    });
     const seen: [string, boolean][] = [];
     full.inspectExpressions((expression, primesAllowed) => seen.push([expression.op, primesAllowed]));
-    expect(seen).toEqual([["lit", false], ["ref", false], ["ref", false]]);
+    expect(seen).toEqual([
+      ["lit", false],
+      ["ref", false],
+      ["ref", false],
+    ]);
     const none: unknown[] = [];
     IntermediateRepresentationTemporalDeclaration.of({}).inspectExpressions((expression) => none.push(expression));
     expect(none).toEqual([]);
@@ -313,9 +359,15 @@ describe("quint temporal and scenario verdicts", () => {
 describe("verification witness (the contract-2 witness owns its document face)", () => {
   test("each face serializes verbatim and the document round-trips through the frozen blind cast", () => {
     expect(VerificationWitness.core(["b", "a"]).toDocument()).toEqual({ core: ["b", "a"] });
-    expect(VerificationWitness.model({ "T.ok": true, "T.n": 2 }).toDocument()).toEqual({ model: { "T.ok": true, "T.n": 2 } });
-    expect(VerificationWitness.verdicts({ quint: "violated", smt: "clean" }).toDocument()).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
-    expect(VerificationWitness.trace([st({ "T.ok": true }), st({ "T.ok": false })]).toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
+    expect(VerificationWitness.model({ "T.ok": true, "T.n": 2 }).toDocument()).toEqual({
+      model: { "T.ok": true, "T.n": 2 },
+    });
+    expect(VerificationWitness.verdicts({ quint: "violated", smt: "clean" }).toDocument()).toEqual({
+      verdicts: { quint: "violated", smt: "clean" },
+    });
+    expect(VerificationWitness.trace([st({ "T.ok": true }), st({ "T.ok": false })]).toDocument()).toEqual({
+      trace: [{ "T.ok": true }, { "T.ok": false }],
+    });
     expect(VerificationWitness.of({ model: { x: 1 } }).toDocument()).toEqual({ model: { x: 1 } });
   });
 });

@@ -1,8 +1,8 @@
-import { ComponentEntities } from "./component-entities.ts";
-import { ComponentReferences } from "./component-references.ts";
-import { type ComponentReference } from "./component-reference.ts";
-import { type ComponentName } from "./component-name.ts";
-import { type ElementPath } from "./element-path.ts";
+import type { ComponentEntities } from "./component-entities.ts";
+import type { ComponentName } from "./component-name.ts";
+import type { ComponentReference } from "./component-reference.ts";
+import type { ComponentReferences } from "./component-references.ts";
+import type { ElementPath } from "./element-path.ts";
 
 // components.md のコンポーネント宣言。名の形（DD-1 の PascalCase）と自己依存
 // の検出（DD-3）は宣言自身が所有する（#71 波6）。

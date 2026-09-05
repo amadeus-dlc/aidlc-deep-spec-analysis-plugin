@@ -6,9 +6,20 @@
 // ラベル書き換え（lowered id → design id）は witness 自身の知識で、形の判定
 // （`core` を持つか、ラベルが文字列か）は値の内側にだけある。
 
-import { boundedValueSnapshot, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
+import {
+  boundedValueSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
 
-type WitnessDocument = null | boolean | number | string | readonly WitnessDocument[] | { readonly [k: string]: WitnessDocument };
+type WitnessDocument =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly WitnessDocument[]
+  | { readonly [k: string]: WitnessDocument };
 
 export class DesignWitness {
   readonly #document: WitnessDocument;
@@ -53,7 +64,9 @@ export class DesignWitness {
     const document = this.#document;
     if (document !== null && typeof document === "object" && !Array.isArray(document) && "core" in document) {
       const core = document.core ?? null;
-      const remapped = Array.isArray(core) ? core.map((label) => (typeof label === "string" ? rewrite(label) : label)) : core;
+      const remapped = Array.isArray(core)
+        ? core.map((label) => (typeof label === "string" ? rewrite(label) : label))
+        : core;
       return new DesignWitness({ core: remapped });
     }
     return this;

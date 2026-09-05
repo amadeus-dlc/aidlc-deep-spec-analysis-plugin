@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 
+import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
 
 const PLUGIN_NAME = "deep-spec-analysis";
 const STABLE_SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -44,7 +44,9 @@ function readManifest(manifestPath: string): PluginManifest {
   try {
     manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as PluginManifest;
   } catch (error) {
-    throw new Error(`cannot read plugin manifest ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `cannot read plugin manifest ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
   if (manifest.name !== PLUGIN_NAME) {
     throw new Error(`plugin manifest name must be ${PLUGIN_NAME}`);
@@ -99,7 +101,9 @@ export function release(version: string, options: ReleaseOptions = {}): void {
   }
 
   const repoRoot = resolve(options.repoRoot ?? resolve(import.meta.dir, "../.."));
-  const manifestPath = resolve(options.manifestPath ?? resolve(repoRoot, "deep-spec-analysis/.aidlc-plugin/plugin.json"));
+  const manifestPath = resolve(
+    options.manifestPath ?? resolve(repoRoot, "deep-spec-analysis/.aidlc-plugin/plugin.json"),
+  );
   const runGit = options.runGit ?? defaultGitRunner;
   const tag = `v${version}`;
 

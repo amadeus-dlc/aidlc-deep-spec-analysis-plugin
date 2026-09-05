@@ -1,5 +1,5 @@
-import { SkipReason } from "@deep-spec/kernel-domain";
-import { type LoweredIdentifier } from "./lowered-identifier.ts";
+import type { SkipReason } from "@deep-spec/kernel-domain";
+import type { LoweredIdentifier } from "./lowered-identifier.ts";
 
 // 兄弟バックエンドの v1 文書が運ぶ skip（lowered 語彙）。remap が設計語彙へ
 // 写す材料——対象は lowered id、reason は分類文字列、detail は prose。

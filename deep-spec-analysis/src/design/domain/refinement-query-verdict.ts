@@ -1,5 +1,5 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import { QueryLabel } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 // refinement クエリ 1 件の判定。主従の裁定（#71 波2）: interpret が吸い出して
 // いた status 分類と witness 材料面（pre/post の 2 状態トレース込み）を判定
@@ -11,7 +11,12 @@ import { QueryLabel } from "@deep-spec/kernel-domain";
 type RefinementQueryStatus = "sat" | "unsat" | "unknown" | "budget" | "error";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type RefinementQueryVerdictParam = { status: RefinementQueryStatus; decodedModel?: { [path: string]: boolean | number | string }; decodedPostModel?: { [path: string]: boolean | number | string }; core?: string[] };
+type RefinementQueryVerdictParam = {
+  status: RefinementQueryStatus;
+  decodedModel?: { [path: string]: boolean | number | string };
+  decodedPostModel?: { [path: string]: boolean | number | string };
+  core?: string[];
+};
 
 export class RefinementQueryVerdict {
   readonly #status: RefinementQueryStatus;

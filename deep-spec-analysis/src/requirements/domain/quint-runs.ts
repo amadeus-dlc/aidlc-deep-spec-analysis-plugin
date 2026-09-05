@@ -3,12 +3,12 @@
 // 逐語で載る。フェーズ横断の判定面（機械・時相・シナリオ）は QuintRuns が
 // クラスとして持ち、露出 Map は死んだ。
 
+import type { KeyedIndex } from "@deep-spec/kernel-domain";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 import type { QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";
-import type { ScenarioIdentifier } from "./scenario-identifier.ts";
 import type { QuintScenarioVerdict } from "./quint-scenario-verdict.ts";
 import type { QuintTemporalVerdict } from "./quint-temporal-verdict.ts";
-import { KeyedIndex } from "@deep-spec/kernel-domain";
+import type { ScenarioIdentifier } from "./scenario-identifier.ts";
 
 export class QuintRuns {
   readonly #machine: QuintMachineRunVerdict | null;

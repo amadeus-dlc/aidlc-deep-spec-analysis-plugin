@@ -5,8 +5,8 @@
 // 成果物の原文（原文材料——store の往復則 findById∘store がバイト恒等）。
 
 import type { ErrorMessages, IntermediateRepresentationVersion } from "@deep-spec/kernel-domain";
-import { type DesignUnitDeclarations } from "./design-unit-declarations.ts";
-import { DesignIntermediateRepresentationValidationMaterialsIdentifier } from "./design-intermediate-representation-validation-materials-identifier.ts";
+import type { DesignIntermediateRepresentationValidationMaterialsIdentifier } from "./design-intermediate-representation-validation-materials-identifier.ts";
+import type { DesignUnitDeclarations } from "./design-unit-declarations.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignIntermediateRepresentationValidationMaterialsParam = {
@@ -33,7 +33,9 @@ export class DesignIntermediateRepresentationValidationMaterials {
   }
 
   // アダプタの寛容パースからの唯一の構築口。
-  static of(seed: DesignIntermediateRepresentationValidationMaterialsParam): DesignIntermediateRepresentationValidationMaterials {
+  static of(
+    seed: DesignIntermediateRepresentationValidationMaterialsParam,
+  ): DesignIntermediateRepresentationValidationMaterials {
     return new DesignIntermediateRepresentationValidationMaterials(seed);
   }
 

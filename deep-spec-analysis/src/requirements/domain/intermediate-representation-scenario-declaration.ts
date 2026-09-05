@@ -1,12 +1,15 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
-
-import { DeclaredBindings } from "@deep-spec/kernel-domain";
-import { type ScenarioIdentifier } from "./scenario-identifier.ts";
+import { type DeclaredBindings, ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
+import type { ScenarioIdentifier } from "./scenario-identifier.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type IntermediateRepresentationScenarioDeclarationParam = { id: ScenarioIdentifier; bindings: DeclaredBindings; hasEvent: boolean; expect?: Expression };
+type IntermediateRepresentationScenarioDeclarationParam = {
+  id: ScenarioIdentifier;
+  bindings: DeclaredBindings;
+  hasEvent: boolean;
+  expect?: Expression;
+};
 
 export class IntermediateRepresentationScenarioDeclaration {
   readonly #id: ScenarioIdentifier;
@@ -21,7 +24,9 @@ export class IntermediateRepresentationScenarioDeclaration {
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
-  static parse(props: IntermediateRepresentationScenarioDeclarationParam): Result<IntermediateRepresentationScenarioDeclaration, ParseError> {
+  static parse(
+    props: IntermediateRepresentationScenarioDeclarationParam,
+  ): Result<IntermediateRepresentationScenarioDeclaration, ParseError> {
     return parseConstruction(() => new IntermediateRepresentationScenarioDeclaration(props));
   }
 
@@ -29,8 +34,12 @@ export class IntermediateRepresentationScenarioDeclaration {
     return new IntermediateRepresentationScenarioDeclaration(props);
   }
 
-  id(): ScenarioIdentifier { return this.#id; }
-  bindings(): DeclaredBindings { return this.#bindings; }
+  id(): ScenarioIdentifier {
+    return this.#id;
+  }
+  bindings(): DeclaredBindings {
+    return this.#bindings;
+  }
 
   inspectExpectation(visitor: (expression: Expression, primesAllowed: boolean) => void): void {
     if (this.#expect !== undefined) visitor(this.#expect, this.#hasEvent);

@@ -4,10 +4,9 @@
 // corrupt.cause の文言は降格文書（golden 凍結）に逐語で載る。
 
 import { existsSync, readFileSync } from "node:fs";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import { type Json, canonicalStringify } from "@deep-spec/kernel-infrastructure";
-import { ContentHash } from "@deep-spec/kernel-domain";
 import { extractFences, writeFileAtomically } from "@deep-spec/kernel-adapter";
+import { ContentHash } from "@deep-spec/kernel-domain";
+import { canonicalStringify, err, type Json, ok, type Result } from "@deep-spec/kernel-infrastructure";
 
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import { type FormalModelIdentifier, RequirementsModel } from "@deep-spec/requirements-domain";
@@ -30,7 +29,12 @@ export class FormalModelRepositoryImplementation implements FormalModelRepositor
       if ((e as NodeJS.ErrnoException).code === "ENOENT" || !existsSync(modelPath)) {
         return err({ kind: "not-found", path: modelPath });
       }
-      return err({ kind: "io-failed", operation: "read", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
+      return err({
+        kind: "io-failed",
+        operation: "read",
+        path: modelPath,
+        cause: e instanceof Error ? e.message : String(e),
+      });
     }
     const md = bytes.toString("utf-8");
     const fences = extractFences(md, "json");
@@ -42,13 +46,24 @@ export class FormalModelRepositoryImplementation implements FormalModelRepositor
       rawIr = null;
     }
     if (rawIr === null) {
-      return err({ kind: "corrupt", path: modelPath, cause: "formal model does not contain exactly one readable ```json fence" });
+      return err({
+        kind: "corrupt",
+        path: modelPath,
+        cause: "formal model does not contain exactly one readable ```json fence",
+      });
     }
     const seed = parseFormalModel(rawIr);
     if (!seed.ok) {
       return err({ kind: "corrupt", path: modelPath, cause: seed.error });
     }
-    return ok(RequirementsModel.of({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), sourceDocument: new Uint8Array(bytes), ...seed.value }));
+    return ok(
+      RequirementsModel.of({
+        id,
+        irHash: ContentHash.ofText(canonicalStringify(rawIr)),
+        sourceDocument: new Uint8Array(bytes),
+        ...seed.value,
+      }),
+    );
   }
 
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
@@ -59,7 +74,12 @@ export class FormalModelRepositoryImplementation implements FormalModelRepositor
       writeFileAtomically(modelPath, bytes);
       return ok(undefined);
     } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
+      return err({
+        kind: "io-failed",
+        operation: "write",
+        path: modelPath,
+        cause: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 }

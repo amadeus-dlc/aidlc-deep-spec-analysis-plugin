@@ -1,7 +1,7 @@
-import { EntityReferences } from "./entity-references.ts";
-import { type AttributeName } from "./attribute-name.ts";
-import { type ElementPath } from "./element-path.ts";
-import { type EntityName } from "./entity-name.ts";
+import type { AttributeName } from "./attribute-name.ts";
+import type { ElementPath } from "./element-path.ts";
+import type { EntityName } from "./entity-name.ts";
+import type { EntityReferences } from "./entity-references.ts";
 
 // コンポーネントが所有するエンティティ宣言。所有の要件たる識別子の有無
 // （DD-5）はエンティティ自身が判定する（#71 波6）。

@@ -1,12 +1,18 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+import { ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 import type { IntermediateRepresentationTemporalDeclaration } from "./intermediate-representation-temporal-declaration.ts";
-import { type ObligationIdentifier } from "./obligation-identifier.ts";
+import type { ObligationIdentifier } from "./obligation-identifier.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type IntermediateRepresentationObligationDeclarationParam = { id: ObligationIdentifier; assert?: Expression; guard?: Expression; effect?: Expression; temporal?: IntermediateRepresentationTemporalDeclaration };
+type IntermediateRepresentationObligationDeclarationParam = {
+  id: ObligationIdentifier;
+  assert?: Expression;
+  guard?: Expression;
+  effect?: Expression;
+  temporal?: IntermediateRepresentationTemporalDeclaration;
+};
 
 export class IntermediateRepresentationObligationDeclaration {
   readonly #id: ObligationIdentifier;
@@ -23,15 +29,21 @@ export class IntermediateRepresentationObligationDeclaration {
     this.#temporal = props.temporal;
   }
 
-  static parse(props: IntermediateRepresentationObligationDeclarationParam): Result<IntermediateRepresentationObligationDeclaration, ParseError> {
+  static parse(
+    props: IntermediateRepresentationObligationDeclarationParam,
+  ): Result<IntermediateRepresentationObligationDeclaration, ParseError> {
     return parseConstruction(() => new IntermediateRepresentationObligationDeclaration(props));
   }
 
-  static of(props: IntermediateRepresentationObligationDeclarationParam): IntermediateRepresentationObligationDeclaration {
+  static of(
+    props: IntermediateRepresentationObligationDeclarationParam,
+  ): IntermediateRepresentationObligationDeclaration {
     return new IntermediateRepresentationObligationDeclaration(props);
   }
 
-  id(): ObligationIdentifier { return this.#id; }
+  id(): ObligationIdentifier {
+    return this.#id;
+  }
 
   inspectExpressions(visitor: (expression: Expression, primesAllowed: boolean) => void): void {
     if (this.#assert !== undefined) visitor(this.#assert, false);

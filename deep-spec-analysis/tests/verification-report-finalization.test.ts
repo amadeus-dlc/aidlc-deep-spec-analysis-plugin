@@ -11,30 +11,40 @@
 // 同一プロセス内で interleave させる（実プロセスは起動しない）。
 
 import { describe, expect, test } from "bun:test";
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ProcessLiveness } from "@deep-spec/kernel-adapter";
 import { DirectoryFinalizationLock, readContractSchema } from "@deep-spec/kernel-adapter";
 import { ArtifactPath, FindingsSchema } from "@deep-spec/kernel-domain";
-import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
 import type { Result } from "@deep-spec/kernel-infrastructure";
+import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
+import {
+  FormalModelRepositoryImplementation,
+  renderVerificationReportBytes,
+  VERIFICATION_LOCK_BASENAME,
+  VerificationDirectoryRepositoryImplementation,
+} from "@deep-spec/requirements-adapter";
 import {
   FormalModelIdentifier,
   type RequirementsModel,
-  VerificationDirectory,
+  type VerificationDirectory,
   VerificationFindings,
   VerificationReport,
   VerificationReportIdentifier,
   VerificationSkips,
 } from "@deep-spec/requirements-domain";
-import {
-  FormalModelRepositoryImplementation,
-  VERIFICATION_LOCK_BASENAME,
-  VerificationDirectoryRepositoryImplementation,
-  renderVerificationReportBytes,
-} from "@deep-spec/requirements-adapter";
 import { VerificationReportFinalizer } from "@deep-spec/requirements-usecase";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -146,7 +156,12 @@ function makeWorkspace(): Workspace {
   return { record, verifyDir, model: acquired.value };
 }
 
-function candidate(verifyDir: string, backend: string, model: RequirementsModel, method = "exhaustive"): VerificationReport {
+function candidate(
+  verifyDir: string,
+  backend: string,
+  model: RequirementsModel,
+  method = "exhaustive",
+): VerificationReport {
   return VerificationReport.compose({
     id: VerificationReportIdentifier.of(ap(verifyDir), backend),
     irVersion: model.irVersion(),
@@ -190,7 +205,9 @@ describe("契約2 の適合は finalization ごとに 1 つの値が運ぶ", () 
       expect(finalized.ok).toBe(true);
       if (!finalized.ok) throw new Error("the finalization must succeed");
       expect(finalized.value.isUnavailable()).toBe(false);
-      expect(readFileSync(join(ws.verifyDir, "smt.json"), "utf-8")).toBe(renderVerificationReportBytes(finalized.value));
+      expect(readFileSync(join(ws.verifyDir, "smt.json"), "utf-8")).toBe(
+        renderVerificationReportBytes(finalized.value),
+      );
 
       const published = repository.findByDirectory(ap(ws.verifyDir));
       expect(published.ok).toBe(true);
@@ -200,7 +217,9 @@ describe("契約2 の適合は finalization ごとに 1 つの値が運ぶ", () 
       const degraded = new VerificationReportFinalizer(repository, schemaOf(schemaCopy)).finalize(report, ws.model);
       expect(degraded.ok && degraded.value.unavailableReason()).toStartWith("findings schema unreadable: ");
       const reloaded = repository.findByDirectory(ap(ws.verifyDir));
-      expect(reloaded.ok && reloaded.value.crossCheck()?.unavailableReason()).toStartWith("findings schema unreadable: ");
+      expect(reloaded.ok && reloaded.value.crossCheck()?.unavailableReason()).toStartWith(
+        "findings schema unreadable: ",
+      );
     } finally {
       rmSync(ws.record, { recursive: true, force: true });
     }
@@ -224,8 +243,10 @@ describe("finalization の失敗は成功に化けない", () => {
 
       chmodSync(quintPath, 0o000);
       // 読めない兄弟を黙って除かない：finalization は型のある失敗として終わる。
-      const finalized = new VerificationReportFinalizer(repository, schema)
-        .finalize(candidate(ws.verifyDir, "smt", ws.model), ws.model);
+      const finalized = new VerificationReportFinalizer(repository, schema).finalize(
+        candidate(ws.verifyDir, "smt", ws.model),
+        ws.model,
+      );
       chmodSync(quintPath, 0o644);
 
       expect(finalized.ok).toBe(false);
@@ -254,8 +275,11 @@ describe("finalization の失敗は成功に化けない", () => {
 
       expect(finalizer.finalize(report, ws.model)).toEqual({ ok: false, error: failure });
       // IR 不成立の経路（cross-check を導けない側）も同じ継ぎ目で失敗する。
-      expect(finalizer.finalizeIrUnreadable(VerificationReport.irUnreadable(report.id(), "exhaustive", "IR is not a JSON object")))
-        .toEqual({ ok: false, error: failure });
+      expect(
+        finalizer.finalizeIrUnreadable(
+          VerificationReport.irUnreadable(report.id(), "exhaustive", "IR is not a JSON object"),
+        ),
+      ).toEqual({ ok: false, error: failure });
       expect(readdirSync(ws.verifyDir)).toEqual([]);
     } finally {
       rmSync(ws.record, { recursive: true, force: true });
@@ -296,7 +320,9 @@ describe("ディレクトリ lock は writer を待機なしで直列化する",
         .conformedTo(schema)
         .crossChecked(ws.model, ws.model.irHash())
         .conformedTo(schema);
-      const blocked = new VerificationDirectoryRepositoryImplementation(lockOf(new StubClock(1_000), new StubLiveness(4243))).store(aggregate);
+      const blocked = new VerificationDirectoryRepositoryImplementation(
+        lockOf(new StubClock(1_000), new StubLiveness(4243)),
+      ).store(aggregate);
       expect(blocked.ok).toBe(false);
       if (!blocked.ok) {
         expect(blocked.error.kind).toBe("io-failed");
@@ -335,9 +361,17 @@ describe("load 後に兄弟が変わったら公開しない", () => {
           .conformedTo(schema);
         // その後で別 writer が兄弟を差し替える／増やす。
         if (scenario === "changed") {
-          writeFileSync(join(ws.verifyDir, "quint.json"), renderVerificationReportBytes(candidate(ws.verifyDir, "quint", ws.model, "simulation")), "utf-8");
+          writeFileSync(
+            join(ws.verifyDir, "quint.json"),
+            renderVerificationReportBytes(candidate(ws.verifyDir, "quint", ws.model, "simulation")),
+            "utf-8",
+          );
         } else {
-          writeFileSync(join(ws.verifyDir, "alt.json"), renderVerificationReportBytes(candidate(ws.verifyDir, "alt", ws.model)), "utf-8");
+          writeFileSync(
+            join(ws.verifyDir, "alt.json"),
+            renderVerificationReportBytes(candidate(ws.verifyDir, "alt", ws.model)),
+            "utf-8",
+          );
         }
         const stored = repository.store(aggregate);
 
@@ -369,8 +403,10 @@ describe("古い cross-check を最新として扱わない", () => {
       const crossPath = join(ws.verifyDir, "cross-check.json");
       writeFileSync(crossPath, '{ "backend": "cross-check", "irHash": "stale-and-wrong" }\n', "utf-8");
 
-      const finalized = new VerificationReportFinalizer(repository, schema)
-        .finalize(candidate(ws.verifyDir, "smt", ws.model), ws.model);
+      const finalized = new VerificationReportFinalizer(repository, schema).finalize(
+        candidate(ws.verifyDir, "smt", ws.model),
+        ws.model,
+      );
       expect(finalized.ok).toBe(true);
 
       const published = JSON.parse(readFileSync(crossPath, "utf-8")) as { [k: string]: unknown };
@@ -409,7 +445,12 @@ describe("古い cross-check を最新として扱わない", () => {
       const reloaded = repository.findByDirectory(ap(ws.verifyDir));
       expect(reloaded.ok).toBe(true);
       if (reloaded.ok) {
-        expect(reloaded.value.reports().toArray().map((r) => r.id().fileName())).toEqual(["smt.json"]);
+        expect(
+          reloaded.value
+            .reports()
+            .toArray()
+            .map((r) => r.id().fileName()),
+        ).toEqual(["smt.json"]);
         expect(reloaded.value.crossCheck()).toBe(null);
       }
     } finally {

@@ -1,5 +1,5 @@
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
-import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // DesignModel内のユニット識別子。非空の名前を保持し、
 // 生値からの入力失敗はparse、内部の生成契約違反はofのpanicで扱う。
 

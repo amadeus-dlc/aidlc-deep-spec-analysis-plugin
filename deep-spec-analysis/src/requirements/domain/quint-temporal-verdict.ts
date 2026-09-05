@@ -13,7 +13,11 @@ export class QuintTemporalVerdict {
   readonly #trace: TraceStates | null;
   readonly #outputTail: string;
 
-  private constructor(props: { kind: "timeout" | "run-failed" | "violation" | "clean"; trace: TraceStates | null; outputTail: string }) {
+  private constructor(props: {
+    kind: "timeout" | "run-failed" | "violation" | "clean";
+    trace: TraceStates | null;
+    outputTail: string;
+  }) {
     this.#kind = props.kind;
     this.#trace = props.trace;
     this.#outputTail = props.outputTail;
@@ -42,8 +46,18 @@ export class QuintTemporalVerdict {
   // 予算超過・実行失敗の skip（凍結文言）。violation / clean は skip しない。
   skipFor(target: TargetIdentifier): VerificationSkipped | null {
     const kind = this.#kind;
-    if (kind === "timeout") return VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "temporal check exceeded its budget" });
-    if (kind === "run-failed") return VerificationSkipped.of({ target, reason: SkipReason.of("unavailable"), detail: `quint verify failed unexpectedly: ${this.#outputTail}` });
+    if (kind === "timeout")
+      return VerificationSkipped.of({
+        target,
+        reason: SkipReason.of("timeout"),
+        detail: "temporal check exceeded its budget",
+      });
+    if (kind === "run-failed")
+      return VerificationSkipped.of({
+        target,
+        reason: SkipReason.of("unavailable"),
+        detail: `quint verify failed unexpectedly: ${this.#outputTail}`,
+      });
     return null;
   }
 

@@ -11,11 +11,16 @@ export class FunctionalRequirementReferenceClaim {
     this.#functionalRequirementReferences = functionalRequirementReferences;
   }
 
-  static of(owner: string, functionalRequirementReferences: FunctionalRequirementReferences): FunctionalRequirementReferenceClaim {
+  static of(
+    owner: string,
+    functionalRequirementReferences: FunctionalRequirementReferences,
+  ): FunctionalRequirementReferenceClaim {
     return new FunctionalRequirementReferenceClaim(owner, functionalRequirementReferences);
   }
 
-  ownerDescription(): string { return this.#owner; }
+  ownerDescription(): string {
+    return this.#owner;
+  }
 
   // 参照する FR ごとに owner を積む（主張の宣言順）。
   claimInto(ownersByRef: Map<string, FunctionalRequirementReferenceClaim[]>): void {

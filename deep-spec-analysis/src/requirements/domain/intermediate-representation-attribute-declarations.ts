@@ -7,7 +7,9 @@ export class IntermediateRepresentationAttributeDeclarations {
     this.#values = Object.freeze([...values]);
   }
 
-  static of(values: readonly IntermediateRepresentationAttributeDeclaration[]): IntermediateRepresentationAttributeDeclarations {
+  static of(
+    values: readonly IntermediateRepresentationAttributeDeclaration[],
+  ): IntermediateRepresentationAttributeDeclarations {
     return new IntermediateRepresentationAttributeDeclarations(values);
   }
 

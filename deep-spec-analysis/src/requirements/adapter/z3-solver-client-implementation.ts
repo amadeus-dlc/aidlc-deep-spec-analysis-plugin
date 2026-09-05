@@ -1,5 +1,5 @@
+import { combineResults, isObject, type Json, ok, traverseResult } from "@deep-spec/kernel-infrastructure";
 import { parseSmtChildResults } from "./smt-child-results-parser.ts";
-import { type Json, isObject, combineResults, traverseResult, ok } from "@deep-spec/kernel-infrastructure";
 // Z3SolverClient の実 Gateway 実装。計画を組み、自分自身のエントリ
 // （--smt-child）を node 優先・bun フォールバックで spawn して解かせ、
 // 生のテキストモデルを decode した型付き判定を返す。selfPath・タイムアウト・
@@ -9,16 +9,17 @@ import { type Json, isObject, combineResults, traverseResult, ok } from "@deep-s
 // 旧 runChild からの逐語移植。
 
 import { spawnSync } from "node:child_process";
-import { SatisfiabilityModuloTheoriesQueryVerdicts } from "@deep-spec/requirements-domain";
-import { SatisfiabilityModuloTheoriesQueryVerdict } from "@deep-spec/requirements-domain";
-import type { RequirementsModel } from "@deep-spec/requirements-domain";
-
-import type { SatisfiabilityModuloTheoriesCheck, Z3SolverClient } from "@deep-spec/requirements-usecase";
-import { type SatisfiabilityModuloTheoriesChildQuery } from "./satisfiability-modulo-theories-child-query.ts";
-import { buildSmtPlan, decodeSolverModel } from "./satisfiability-modulo-theories-plan.ts";
-import type { SatisfiabilityModuloTheoriesChildResult } from "./satisfiability-modulo-theories-child-result.ts";
-import type { Z3SolverClientConfiguration } from "./z3-solver-client-configuration.ts";
 import { KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
+import type { RequirementsModel } from "@deep-spec/requirements-domain";
+import {
+  SatisfiabilityModuloTheoriesQueryVerdict,
+  SatisfiabilityModuloTheoriesQueryVerdicts,
+} from "@deep-spec/requirements-domain";
+import type { SatisfiabilityModuloTheoriesCheck, Z3SolverClient } from "@deep-spec/requirements-usecase";
+import type { SatisfiabilityModuloTheoriesChildQuery } from "./satisfiability-modulo-theories-child-query.ts";
+import type { SatisfiabilityModuloTheoriesChildResult } from "./satisfiability-modulo-theories-child-result.ts";
+import { buildSmtPlan, decodeSolverModel } from "./satisfiability-modulo-theories-plan.ts";
+import type { Z3SolverClientConfiguration } from "./z3-solver-client-configuration.ts";
 
 const CHILD_BUDGET_MS = 45_000;
 const CHILD_WALL_TIMEOUT_MS = 55_000;
@@ -45,17 +46,30 @@ export class Z3SolverClientImplementation implements Z3SolverClient {
         label: QueryLabel.parse(id),
         core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse),
       });
-      if (!parsed.ok) return { plan: plan.plan, result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` } };
-      verdicts.push([parsed.value.label, SatisfiabilityModuloTheoriesQueryVerdict.of({
-        status: r.status,
-        decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
-        core: parsed.value.core?.map((label) => label.asString()),
-      })]);
+      if (!parsed.ok)
+        return {
+          plan: plan.plan,
+          result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` },
+        };
+      verdicts.push([
+        parsed.value.label,
+        SatisfiabilityModuloTheoriesQueryVerdict.of({
+          status: r.status,
+          decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
+          core: parsed.value.core?.map((label) => label.asString()),
+        }),
+      ]);
     }
-    return { plan: plan.plan, result: { kind: "solved", verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.of(verdicts)) } };
+    return {
+      plan: plan.plan,
+      result: { kind: "solved", verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.of(verdicts)) },
+    };
   }
 
-  #runChild(queries: SatisfiabilityModuloTheoriesChildQuery[]): { results?: Map<string, SatisfiabilityModuloTheoriesChildResult>; unavailable?: string } {
+  #runChild(queries: SatisfiabilityModuloTheoriesChildQuery[]): {
+    results?: Map<string, SatisfiabilityModuloTheoriesChildResult>;
+    unavailable?: string;
+  } {
     const payload = JSON.stringify({ queries, timeoutMs: this.#config.perQueryTimeoutMs, budgetMs: CHILD_BUDGET_MS });
     const runtimes = this.#config.runtimeOverride ? [this.#config.runtimeOverride] : ["node", "bun"];
     const attempts: string[] = [];
@@ -72,7 +86,9 @@ export class Z3SolverClientImplementation implements Z3SolverClient {
       }
       if (res.error || res.status !== 0) {
         const stderrTail = (res.stderr ?? "").trim().split("\n").slice(-2).join(" ").slice(0, 200);
-        attempts.push(`${runtime}: ${res.error ? String(res.error) : `exit ${res.status}`}${stderrTail ? ` (${stderrTail})` : ""}`);
+        attempts.push(
+          `${runtime}: ${res.error ? String(res.error) : `exit ${res.status}`}${stderrTail ? ` (${stderrTail})` : ""}`,
+        );
         continue;
       }
       let raw: Json;
@@ -83,7 +99,10 @@ export class Z3SolverClientImplementation implements Z3SolverClient {
         continue;
       }
       if (isObject(raw) && typeof raw.unavailable === "string") return { unavailable: raw.unavailable };
-      const parsed = parseSmtChildResults(raw, queries.map((query) => query.id));
+      const parsed = parseSmtChildResults(
+        raw,
+        queries.map((query) => query.id),
+      );
       if (!parsed.ok) {
         attempts.push(`${runtime}: ${parsed.error}`);
         continue;

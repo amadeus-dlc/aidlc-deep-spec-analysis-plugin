@@ -1,7 +1,6 @@
-import { DigestAnchor } from "@deep-spec/doctor-domain";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { ContentHash } from "@deep-spec/kernel-domain";
+import { DigestAnchor } from "@deep-spec/doctor-domain";
 import type {
   DesignArtifactReference,
   DoctorWorkspaceClient,
@@ -9,6 +8,7 @@ import type {
   FunctionalUnitScan,
   VerificationTarget,
 } from "@deep-spec/doctor-usecase";
+import { ContentHash } from "@deep-spec/kernel-domain";
 import type { DoctorWorkspaceClientConfiguration } from "./doctor-workspace-client-configuration.ts";
 
 // aidlc ワークスペース走査の実 Gateway。旧 doctor の scopesOfStage /
@@ -137,10 +137,16 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
           if (!existsSync(artifactPath)) return;
           out.push({ space, intent, tool, artifactPath, label });
         };
-        ref(this.#refcheckToolNames.domain, join(record, "inception", "domain-design", "components.md"),
-          "inception/domain-design/components.md");
-        ref(this.#refcheckToolNames.contract, join(record, "inception", "contract-design", "contract-summary.md"),
-          "inception/contract-design/contract-summary.md");
+        ref(
+          this.#refcheckToolNames.domain,
+          join(record, "inception", "domain-design", "components.md"),
+          "inception/domain-design/components.md",
+        );
+        ref(
+          this.#refcheckToolNames.contract,
+          join(record, "inception", "contract-design", "contract-summary.md"),
+          "inception/contract-design/contract-summary.md",
+        );
         const constructionDir = join(record, "construction");
         let units: string[] = [];
         try {

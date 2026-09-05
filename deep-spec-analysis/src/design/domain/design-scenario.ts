@@ -1,11 +1,15 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import type { ScenarioBindings } from "@deep-spec/kernel-domain";
+import type {
+  Expression,
+  FunctionalRequirementReferences,
+  ScenarioBindings,
+  TriggerName,
+} from "@deep-spec/kernel-domain";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
-import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // 設計シナリオ。accept/reject の意味、binding の正準列挙、BR/FR 帰属を所有する。
 
-import { type BusinessRuleReferences } from "./business-rule-references.ts";
-import { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
+import type { BusinessRuleReferences } from "./business-rule-references.ts";
+import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredScenario } from "./lowered-scenario.ts";
 
@@ -47,22 +51,41 @@ export class DesignScenario {
     return new DesignScenario(props);
   }
 
-  id(): DesignScenarioIdentifier { return this.#id; }
-  kind(): "accept" | "reject" { return this.#kind; }
-  businessRuleReferences(): BusinessRuleReferences { return this.#businessRuleReferences; }
-  functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
-  eventTrigger(): TriggerName | undefined { return this.#eventTrigger; }
-  expectation(): Expression | undefined { return this.#expect; }
-  isAccept(): boolean { return this.#kind === "accept"; }
-  isReject(): boolean { return this.#kind === "reject"; }
-  hasEvent(): boolean { return this.#eventTrigger !== undefined; }
+  id(): DesignScenarioIdentifier {
+    return this.#id;
+  }
+  kind(): "accept" | "reject" {
+    return this.#kind;
+  }
+  businessRuleReferences(): BusinessRuleReferences {
+    return this.#businessRuleReferences;
+  }
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
+  }
+  eventTrigger(): TriggerName | undefined {
+    return this.#eventTrigger;
+  }
+  expectation(): Expression | undefined {
+    return this.#expect;
+  }
+  isAccept(): boolean {
+    return this.#kind === "accept";
+  }
+  isReject(): boolean {
+    return this.#kind === "reject";
+  }
+  hasEvent(): boolean {
+    return this.#eventTrigger !== undefined;
+  }
 
   isViolatedBySatisfiability(satisfiable: boolean): boolean {
     return (this.isAccept() && !satisfiable) || (this.isReject() && satisfiable);
   }
 
-
-  bindings(): ScenarioBindings { return this.#bindings; }
+  bindings(): ScenarioBindings {
+    return this.#bindings;
+  }
 
   // 契約1 への lowering——任意部（イベント・期待式）の有無はシナリオ自身の知識。
   loweredAs(id: LoweredIdentifier): LoweredScenario {

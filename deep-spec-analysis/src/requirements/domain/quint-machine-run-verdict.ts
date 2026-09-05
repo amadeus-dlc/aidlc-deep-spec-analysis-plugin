@@ -64,15 +64,23 @@ export class QuintMachineRunVerdict {
   skipsFor(targets: TargetIdentifiers, bounded: boolean): VerificationSkipped[] {
     const kind = this.#kind;
     if (kind === "timeout") {
-      return [...targets].map((target) => (VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "machine invariant check exceeded its budget" })));
+      return [...targets].map((target) =>
+        VerificationSkipped.of({
+          target,
+          reason: SkipReason.of("timeout"),
+          detail: "machine invariant check exceeded its budget",
+        }),
+      );
     }
     if (kind === "run-failed") {
       const outputTail = this.#outputTail;
-      return [...targets].map((target) => (VerificationSkipped.of({
-        target,
-        reason: SkipReason.of("unavailable"),
-        detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`,
-      })));
+      return [...targets].map((target) =>
+        VerificationSkipped.of({
+          target,
+          reason: SkipReason.of("unavailable"),
+          detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`,
+        }),
+      );
     }
     return [];
   }

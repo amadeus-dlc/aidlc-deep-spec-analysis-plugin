@@ -5,9 +5,15 @@ import type { ParseError } from "@deep-spec/kernel-infrastructure";
 // 値自身の知識で、評価器（QuintMachineComponent）はこれを問うだけ。中身の形
 // は ITF が決める JSON 値で、文書へは `toDocument` で逐語に降りる。
 
-import { boundedValueSnapshot, parseConstruction, type Result, } from "@deep-spec/kernel-infrastructure";
+import { boundedValueSnapshot, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-type TraceValueParam = null | boolean | number | string | readonly TraceValueParam[] | { readonly [k: string]: TraceValueParam };
+type TraceValueParam =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly TraceValueParam[]
+  | { readonly [k: string]: TraceValueParam };
 
 export class TraceValue {
   readonly #value: TraceValueParam;

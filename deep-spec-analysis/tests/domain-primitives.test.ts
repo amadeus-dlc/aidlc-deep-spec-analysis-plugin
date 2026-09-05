@@ -1,14 +1,14 @@
 import {
-  UnitName,
   ArtifactPath,
+  ContentHash,
   FindingKind,
   FindingsSchema,
   FunctionalRequirementReferences,
   IntermediateRepresentationVersion,
-  ContentHash,
   SkipReason,
   TargetIdentifier,
   TargetIdentifiers,
+  UnitName,
   VerificationMethod,
 } from "@deep-spec/kernel-domain";
 
@@ -19,7 +19,6 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readContractSchema } from "@deep-spec/kernel-adapter";
 import {
   DesignFinding,
   DesignFindings,
@@ -31,7 +30,17 @@ import {
   DesignVerifyDirectory,
   DesignWitness,
 } from "@deep-spec/design-domain";
-
+import { readContractSchema } from "@deep-spec/kernel-adapter";
+import { ReferenceCheckReportRepositoryImplementation } from "@deep-spec/refcheck-adapter";
+import {
+  Finding,
+  Findings,
+  InputAnchors,
+  ReferenceCheckReport,
+  ReferenceCheckReportIdentifier,
+  Skips,
+  WitnessReferences,
+} from "@deep-spec/refcheck-domain";
 import {
   VerificationDirectory,
   VerificationFinding,
@@ -42,11 +51,14 @@ import {
   VerificationSkips,
   VerificationWitness,
 } from "@deep-spec/requirements-domain";
-import { Finding, Findings, InputAnchors, ReferenceCheckReport, ReferenceCheckReportIdentifier, Skips, WitnessReferences } from "@deep-spec/refcheck-domain";
-import { ReferenceCheckReportRepositoryImplementation } from "@deep-spec/refcheck-adapter";
 
 const findingsSchemaPath = join(
-  dirname(fileURLToPath(import.meta.url)), "..", "src", "entries", "data", "deep-spec-findings-schema.json",
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "src",
+  "entries",
+  "data",
+  "deep-spec-findings-schema.json",
 );
 
 // テスト用: 検証済みパス VO の短縮構築（tmpdir パスは常に非空）。
@@ -194,13 +206,31 @@ describe("finding kind の strict creation は未知 kind を受け付けない 
     for (const kind of factories) expect(FindingKind.parse(kind.asString()).ok).toBe(true);
 
     // 生の string は 3 クラスのどの正常生成口にも渡らない（型で弾かれる）。
-    const designProps = { functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))), witness: DesignWitness.core([]), unit: UnitName.of("u1"), detail: "d" };
+    const designProps = {
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))),
+      witness: DesignWitness.core([]),
+      unit: UnitName.of("u1"),
+      detail: "d",
+    };
     // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
     DesignFinding.of({ kind: "no-such-kind", ...designProps });
-    // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
-    VerificationFinding.of({ kind: "no-such-kind", functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))), witness: VerificationWitness.core([]), detail: "d" });
-    // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
-    Finding.of({ kind: "no-such-kind", functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))), witness: { refs: WitnessReferences.of([]) }, detail: "DD-0: x" });
+    VerificationFinding.of({
+      // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
+      kind: "no-such-kind",
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))),
+      witness: VerificationWitness.core([]),
+      detail: "d",
+    });
+    Finding.of({
+      // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
+      kind: "no-such-kind",
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+      witness: { refs: WitnessReferences.of([]) },
+      detail: "DD-0: x",
+    });
 
     // 検証済み kind を渡した正常生成は、その kind をそのまま持つ。
     expect(DesignFinding.of({ kind: FindingKind.conflict(), ...designProps }).kind()).toBe("conflict");
@@ -223,8 +253,20 @@ describe("未知 kind は既存文書からも生成できず、診断に原文�
           inputs: [],
           checked: [],
           findings: [
-            { kind: "no-such-kind", frRefs: [], targets: ["check:DD-9"], witness: { refs: [] }, detail: "DD-9: from the future" },
-            { kind: "structure-invalid", frRefs: [], targets: ["check:DD-0"], witness: { refs: [] }, detail: "DD-0: known" },
+            {
+              kind: "no-such-kind",
+              frRefs: [],
+              targets: ["check:DD-9"],
+              witness: { refs: [] },
+              detail: "DD-9: from the future",
+            },
+            {
+              kind: "structure-invalid",
+              frRefs: [],
+              targets: ["check:DD-0"],
+              witness: { refs: [] },
+              detail: "DD-0: known",
+            },
           ],
           skipped: [],
         }),
@@ -256,8 +298,9 @@ describe("未知 kind は既存文書からも生成できず、診断に原文�
 describe("FindingsSchema は契約2 の適合判定を値として持つ", () => {
   test("読めなかったスキーマは、どの文書にも凍結文言の降格理由を与える", () => {
     const unreadable = FindingsSchema.unreadable("ENOENT: no such file or directory");
-    expect(unreadable.degradationReasonFor({ backend: "smt" }))
-      .toBe("findings schema unreadable: ENOENT: no such file or directory");
+    expect(unreadable.degradationReasonFor({ backend: "smt" })).toBe(
+      "findings schema unreadable: ENOENT: no such file or directory",
+    );
     // 中身に関わらず降格する——空の文書でも同じ理由。
     expect(unreadable.degradationReasonFor({})).toBe("findings schema unreadable: ENOENT: no such file or directory");
   });
@@ -279,15 +322,17 @@ describe("FindingsSchema は契約2 の適合判定を値として持つ", () =>
         detail: "from the future",
       }),
     ]);
-    expect(schema.degradationReasonFor(violating.toDocument()))
-      .toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
+    expect(schema.degradationReasonFor(violating.toDocument())).toStartWith(
+      "self-validation against deep-spec-findings-schema.json failed: ",
+    );
 
     // 適合する文書は降格しない（不在で表す）。
     expect(schema.degradationReasonFor(designReportOf([]).toDocument())).toBe(null);
     // 集約の conformedTo も同じ判定に従う。
     expect(designReportOf([]).conformedTo(schema).isUnavailable()).toBe(false);
-    expect(violating.conformedTo(schema).unavailableReason())
-      .toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
+    expect(violating.conformedTo(schema).unavailableReason()).toStartWith(
+      "self-validation against deep-spec-findings-schema.json failed: ",
+    );
   });
 });
 
@@ -324,8 +369,9 @@ describe("ReferenceCheckReport.conformedTo は契約2 の適合判定を集約�
       skipped: Skips.of([]),
       unavailableReason: null,
     });
-    expect(violating.conformedTo(schema).unavailableReason())
-      .toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
+    expect(violating.conformedTo(schema).unavailableReason()).toStartWith(
+      "self-validation against deep-spec-findings-schema.json failed: ",
+    );
   });
 });
 
@@ -345,15 +391,35 @@ describe("DesignVerifyDirectory は backend ごとに 1 report という不変�
 
     // 既存 backend は置換される——件数は増えない。
     const replaced = loaded.finalizing(reportOf(directory, "smt", "simulation"));
-    expect(replaced.reports().toArray().map((r) => r.id().fileName())).toEqual(["quint.json", "smt.json"]);
-    expect(replaced.reports().toArray().map((r) => r.method())).toEqual(["exhaustive", "simulation"]);
+    expect(
+      replaced
+        .reports()
+        .toArray()
+        .map((r) => r.id().fileName()),
+    ).toEqual(["quint.json", "smt.json"]);
+    expect(
+      replaced
+        .reports()
+        .toArray()
+        .map((r) => r.method()),
+    ).toEqual(["exhaustive", "simulation"]);
     expect(replaced.candidate()?.id().fileName()).toBe("smt.json");
 
     // 新しい backend はファイル名順の位置へ挿す（読み出しの全順序を崩さない）。
     const inserted = loaded.finalizing(reportOf(directory, "apalache"));
-    expect(inserted.reports().toArray().map((r) => r.id().fileName())).toEqual(["apalache.json", "quint.json", "smt.json"]);
+    expect(
+      inserted
+        .reports()
+        .toArray()
+        .map((r) => r.id().fileName()),
+    ).toEqual(["apalache.json", "quint.json", "smt.json"]);
     const appended = loaded.finalizing(reportOf(directory, "z3"));
-    expect(appended.reports().toArray().map((r) => r.id().fileName())).toEqual(["quint.json", "smt.json", "z3.json"]);
+    expect(
+      appended
+        .reports()
+        .toArray()
+        .map((r) => r.id().fileName()),
+    ).toEqual(["quint.json", "smt.json", "z3.json"]);
   });
 
   test("候補を置くと古い cross-check は落ち、withoutCrossCheck も不在のまま", () => {
@@ -403,15 +469,35 @@ describe("VerificationDirectory は backend ごとに 1 report という不変�
 
     // 既存 backend は置換される——件数は増えない。
     const replaced = loaded.finalizing(verificationReportOf(directory, "smt", "simulation"));
-    expect(replaced.reports().toArray().map((r) => r.id().fileName())).toEqual(["quint.json", "smt.json"]);
-    expect(replaced.reports().toArray().map((r) => r.method())).toEqual(["exhaustive", "simulation"]);
+    expect(
+      replaced
+        .reports()
+        .toArray()
+        .map((r) => r.id().fileName()),
+    ).toEqual(["quint.json", "smt.json"]);
+    expect(
+      replaced
+        .reports()
+        .toArray()
+        .map((r) => r.method()),
+    ).toEqual(["exhaustive", "simulation"]);
     expect(replaced.candidate()?.id().fileName()).toBe("smt.json");
 
     // 新しい backend はファイル名順の位置へ挿す（読み出しの全順序を崩さない）。
     const inserted = loaded.finalizing(verificationReportOf(directory, "apalache"));
-    expect(inserted.reports().toArray().map((r) => r.id().fileName())).toEqual(["apalache.json", "quint.json", "smt.json"]);
+    expect(
+      inserted
+        .reports()
+        .toArray()
+        .map((r) => r.id().fileName()),
+    ).toEqual(["apalache.json", "quint.json", "smt.json"]);
     const appended = loaded.finalizing(verificationReportOf(directory, "z3"));
-    expect(appended.reports().toArray().map((r) => r.id().fileName())).toEqual(["quint.json", "smt.json", "z3.json"]);
+    expect(
+      appended
+        .reports()
+        .toArray()
+        .map((r) => r.id().fileName()),
+    ).toEqual(["quint.json", "smt.json", "z3.json"]);
   });
 
   test("候補を置くと古い cross-check は落ち、conformedTo は候補と cross-check の両方に効く", () => {
@@ -437,7 +523,12 @@ describe("VerificationDirectory は backend ごとに 1 report という不変�
     const conformedCandidate = staged.conformedTo(unreadable);
     expect(conformedCandidate.candidate()?.unavailableReason()).toBe(reason);
     // 適合済みの候補は reports 側にも反映される（公開する 1 つの観測）。
-    expect(conformedCandidate.reports().toArray().map((r) => r.isUnavailable())).toEqual([true]);
+    expect(
+      conformedCandidate
+        .reports()
+        .toArray()
+        .map((r) => r.isUnavailable()),
+    ).toEqual([true]);
     expect(loaded.conformedTo(unreadable).crossCheck()?.unavailableReason()).toBe(reason);
   });
 });

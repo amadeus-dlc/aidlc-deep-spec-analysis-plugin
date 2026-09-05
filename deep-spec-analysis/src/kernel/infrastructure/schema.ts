@@ -4,7 +4,7 @@
 // 一切持たない純関数なので最内層に置く——契約2 の自己検証は FindingsSchema
 //（kernel/domain）の内側の検査で、schema ファイルの読込は adapter に残る。
 
-import { type Json, isObject } from "./json.ts";
+import { isObject, type Json } from "./json.ts";
 
 export type Schema = { [k: string]: Json };
 

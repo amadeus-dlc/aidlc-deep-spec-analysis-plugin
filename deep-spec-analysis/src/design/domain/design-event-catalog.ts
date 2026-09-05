@@ -3,13 +3,12 @@
 // 混成）、内側は KeyedIndex（裁定 3-1、2026-09-03）。効果は属性パス → 右辺式に
 // 解いて持つ（明示効果が代入の連言でなければその項を落とす——凍結挙動）。
 
-import { AttributePath, KeyedIndex, TargetIdentifier, type Expression } from "@deep-spec/kernel-domain";
-import { DesignMachines } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
-
-import { EffectAssignments } from "./effect-assignments.ts";
+import { DesignMachines } from "@deep-spec/design-domain";
+import { AttributePath, type Expression, KeyedIndex, TargetIdentifier } from "@deep-spec/kernel-domain";
 import { DesignAssignments } from "./design-assignments.ts";
 import { DesignEvent } from "./design-event.ts";
+import { EffectAssignments } from "./effect-assignments.ts";
 
 function rhsOf(term: Expression): Expression | undefined {
   const [a, b] = term.args ?? [];
@@ -42,7 +41,10 @@ export class DesignEventCatalog {
             }
           }
         }
-        out.push([TargetIdentifier.of(tr.id().asString()), DesignEvent.of(guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))]);
+        out.push([
+          TargetIdentifier.of(tr.id().asString()),
+          DesignEvent.of(guard, DesignAssignments.of(KeyedIndex.of(effectAssign))),
+        ]);
       }
     }
     for (const ob of u.obligations()) {
@@ -55,7 +57,10 @@ export class DesignEventCatalog {
         const rhs = rhsOf(term);
         if (rhs) effectAssign.push([path, rhs]);
       }
-      out.push([TargetIdentifier.of(ob.id().asString()), DesignEvent.of(event.guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))]);
+      out.push([
+        TargetIdentifier.of(ob.id().asString()),
+        DesignEvent.of(event.guard, DesignAssignments.of(KeyedIndex.of(effectAssign))),
+      ]);
     }
     return new DesignEventCatalog(KeyedIndex.of(out));
   }

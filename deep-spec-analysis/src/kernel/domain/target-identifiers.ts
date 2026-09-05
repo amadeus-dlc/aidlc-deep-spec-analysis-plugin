@@ -59,7 +59,9 @@ export class TargetIdentifiers {
 
   // finding の targets 面の凍結正準形（一意化 + id 順）。
   sortedUniqueCanonically(): TargetIdentifiers {
-    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
+    return TargetIdentifiers.of(
+      Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)),
+    );
   }
 
   joined(separator: string): string {

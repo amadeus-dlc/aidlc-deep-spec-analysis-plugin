@@ -1,9 +1,12 @@
-import { type Json, type Result, err, isObject, ok } from "@deep-spec/kernel-infrastructure";
+import { err, isObject, type Json, ok, type Result } from "@deep-spec/kernel-infrastructure";
 import type { SatisfiabilityModuloTheoriesChildResult } from "./satisfiability-modulo-theories-child-result.ts";
 
 // 子プロセスの応答を、発行済みクエリと一対一に対応する結果集合へ復号する。
 // ドメイン生成のpanicは捕捉せず、外部プロトコルの不正をResultで返す。
-export function parseSmtChildResults(raw: Json, expectedIds: readonly string[]): Result<Map<string, SatisfiabilityModuloTheoriesChildResult>, string> {
+export function parseSmtChildResults(
+  raw: Json,
+  expectedIds: readonly string[],
+): Result<Map<string, SatisfiabilityModuloTheoriesChildResult>, string> {
   if (!isObject(raw) || !Array.isArray(raw.results)) return err("solver child response lacks a results array");
   const expected = new Set(expectedIds);
   const results = new Map<string, SatisfiabilityModuloTheoriesChildResult>();
@@ -15,15 +18,23 @@ export function parseSmtChildResults(raw: Json, expectedIds: readonly string[]):
     if (status !== "sat" && status !== "unsat" && status !== "unknown" && status !== "budget" && status !== "error") {
       return err(`solver child returned an invalid status for query ${item.id}`);
     }
-    if (item.model !== undefined && (!isObject(item.model) || !Object.values(item.model).every((value) => typeof value === "string"))) {
+    if (
+      item.model !== undefined &&
+      (!isObject(item.model) || !Object.values(item.model).every((value) => typeof value === "string"))
+    ) {
       return err(`solver child returned an invalid model for query ${item.id}`);
     }
-    if (item.core !== undefined && (!Array.isArray(item.core) || !item.core.every((value) => typeof value === "string"))) {
+    if (
+      item.core !== undefined &&
+      (!Array.isArray(item.core) || !item.core.every((value) => typeof value === "string"))
+    ) {
       return err(`solver child returned an invalid core for query ${item.id}`);
     }
-    if (item.error !== undefined && typeof item.error !== "string") return err(`solver child returned an invalid error for query ${item.id}`);
+    if (item.error !== undefined && typeof item.error !== "string")
+      return err(`solver child returned an invalid error for query ${item.id}`);
     results.set(item.id, {
-      id: item.id, status,
+      id: item.id,
+      status,
       ...(item.model !== undefined ? { model: item.model as Record<string, string> } : {}),
       ...(item.core !== undefined ? { core: item.core as string[] } : {}),
       ...(item.error !== undefined ? { error: item.error } : {}),

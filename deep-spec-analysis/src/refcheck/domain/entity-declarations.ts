@@ -1,10 +1,9 @@
 import type { NormalizedName } from "@deep-spec/kernel-domain";
 import { KeySet } from "@deep-spec/kernel-domain";
-import { EntityDeclaration } from "./entity-declaration.ts";
-import { type AppliesTo } from "./applies-to.ts";
-import { type ReferenceTarget } from "./reference-target.ts";
-
+import type { AppliesTo } from "./applies-to.ts";
+import type { EntityDeclaration } from "./entity-declaration.ts";
 import { EntityName } from "./entity-name.ts";
+import type { ReferenceTarget } from "./reference-target.ts";
 
 // エンティティ宣言のコレクション。重複・所属・正規化名解決・ライフサイクル
 // 対象の選定・あいまい照合という集合の知識を所有する。

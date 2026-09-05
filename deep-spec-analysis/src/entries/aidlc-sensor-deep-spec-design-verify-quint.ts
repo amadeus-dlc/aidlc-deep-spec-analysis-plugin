@@ -14,17 +14,16 @@
 
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DirectoryFinalizationLock, parseFlags, readFindingsSchema } from "@deep-spec/kernel-adapter";
-import { ArtifactPath, } from "@deep-spec/kernel-domain";
-import { DesignModelIdentifier } from "@deep-spec/design-domain";
-import { SystemClock } from "@deep-spec/kernel-adapter";
-import { VerifyDesignQuintUseCase } from "@deep-spec/design-usecase";
 import {
   DesignModelRepositoryImplementation,
   DesignVerifyDirectoryRepositoryImplementation,
   RefinementMaterialsRepositoryImplementation,
   SiblingBackendClientImplementation,
 } from "@deep-spec/design-adapter";
+import { DesignModelIdentifier } from "@deep-spec/design-domain";
+import { VerifyDesignQuintUseCase } from "@deep-spec/design-usecase";
+import { DirectoryFinalizationLock, parseFlags, readFindingsSchema, SystemClock } from "@deep-spec/kernel-adapter";
+import { ArtifactPath } from "@deep-spec/kernel-domain";
 
 const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 const DESIGN_VERIFY_DIRNAME = "deep-spec-design-verify";
@@ -38,7 +37,9 @@ function main(): void {
     process.exit(1);
   }
   if (basename(flags.outputPath) !== DESIGN_MODEL_BASENAME) {
-    process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`,
+    );
     process.exit(0);
   }
   const toolsDir = dirname(fileURLToPath(import.meta.url));
@@ -85,15 +86,21 @@ function main(): void {
 
   switch (outcome.kind) {
     case "not-applicable":
-      process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`);
+      process.stdout.write(
+        `${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`,
+      );
       process.exit(0);
       break;
     case "model-unreadable":
-      process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "ir-unreadable" })}\n`);
+      process.stdout.write(
+        `${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "ir-unreadable" })}\n`,
+      );
       process.exit(0);
       break;
     case "version-mismatch":
-      process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: outcome.skippedCount, note: "ir-version-mismatch" })}\n`);
+      process.stdout.write(
+        `${JSON.stringify({ pass: true, findings_count: 0, skipped_count: outcome.skippedCount, note: "ir-version-mismatch" })}\n`,
+      );
       process.exit(0);
       break;
     case "backend-unavailable":
@@ -103,7 +110,9 @@ function main(): void {
       break;
     case "acquisition-failed":
     case "save-failed":
-      process.stderr.write(`deep-spec-design-verify-quint: ${outcome.error.path}: ${outcome.error.kind}${"cause" in outcome.error ? ` (${outcome.error.cause})` : ""}\n`);
+      process.stderr.write(
+        `deep-spec-design-verify-quint: ${outcome.error.path}: ${outcome.error.kind}${"cause" in outcome.error ? ` (${outcome.error.cause})` : ""}\n`,
+      );
       process.exit(1);
       break;
     case "verified":

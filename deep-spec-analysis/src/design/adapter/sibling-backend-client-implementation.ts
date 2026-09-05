@@ -10,15 +10,14 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Json } from "@deep-spec/kernel-infrastructure";
-import { LoweredUnit, ReachabilityVerdict } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
+import { type LoweredUnit, ReachabilityVerdict } from "@deep-spec/design-domain";
 import type { SiblingBackendClient, SiblingLoweredRun } from "@deep-spec/design-usecase";
+import type { Json } from "@deep-spec/kernel-infrastructure";
 import { renderLoweredDocument } from "./lowered-document-serializer.ts";
-import { parseSiblingVerdictDocument } from "./sibling-document-parser.ts";
 import { reachabilityVariant } from "./reachability-variant.ts";
 import type { SiblingBackendClientConfiguration } from "./sibling-backend-client-configuration.ts";
-
+import { parseSiblingVerdictDocument } from "./sibling-document-parser.ts";
 
 export class SiblingBackendClientImplementation implements SiblingBackendClient {
   readonly #config: SiblingBackendClientConfiguration;
@@ -27,7 +26,12 @@ export class SiblingBackendClientImplementation implements SiblingBackendClient 
     this.#config = config;
   }
 
-  runLowered(backend: "smt" | "quint", unit: DesignUnit, lowered: LoweredUnit, wallTimeoutMs: number): SiblingLoweredRun {
+  runLowered(
+    backend: "smt" | "quint",
+    unit: DesignUnit,
+    lowered: LoweredUnit,
+    wallTimeoutMs: number,
+  ): SiblingLoweredRun {
     const run = this.#spawn(backend, renderLoweredDocument(unit, lowered), wallTimeoutMs);
     return {
       exit: run.exit,
@@ -36,7 +40,13 @@ export class SiblingBackendClientImplementation implements SiblingBackendClient 
     };
   }
 
-  probeState(unit: DesignUnit, lowered: LoweredUnit, attrPath: string, state: string, wallTimeoutMs: number): ReachabilityVerdict {
+  probeState(
+    unit: DesignUnit,
+    lowered: LoweredUnit,
+    attrPath: string,
+    state: string,
+    wallTimeoutMs: number,
+  ): ReachabilityVerdict {
     const variant = reachabilityVariant(renderLoweredDocument(unit, lowered), attrPath, state);
     const run = this.#spawn("quint", variant, wallTimeoutMs);
     if (run.exit !== 0 || run.doc === null) {
@@ -45,18 +55,30 @@ export class SiblingBackendClientImplementation implements SiblingBackendClient 
     return parseSiblingVerdictDocument(run.doc).reachabilityOf(attrPath, state);
   }
 
-  #spawn(backend: "smt" | "quint", loweredDoc: Json, wallTimeoutMs: number): { exit: number | null; doc: Json | null; note: string } {
+  #spawn(
+    backend: "smt" | "quint",
+    loweredDoc: Json,
+    wallTimeoutMs: number,
+  ): { exit: number | null; doc: Json | null; note: string } {
     const tool = this.#config.siblingToolPaths[backend];
     const work = mkdtempSync(join(tmpdir(), "deep-spec-design-lower-"));
     try {
       const modelPath = join(work, "deep-spec-analysis-formal-model.md");
-      writeFileSync(modelPath, `# Lowered design unit\n\n\`\`\`json\n${JSON.stringify(loweredDoc, null, 2)}\n\`\`\`\n`, "utf-8");
-      const res = spawnSync("bun", [tool, "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath], {
-        encoding: "utf-8",
-        timeout: wallTimeoutMs,
-        cwd: this.#config.workingDirectory,
-        ...(this.#config.spawnEnvironment ? { env: this.#config.spawnEnvironment as NodeJS.ProcessEnv } : {}),
-      });
+      writeFileSync(
+        modelPath,
+        `# Lowered design unit\n\n\`\`\`json\n${JSON.stringify(loweredDoc, null, 2)}\n\`\`\`\n`,
+        "utf-8",
+      );
+      const res = spawnSync(
+        "bun",
+        [tool, "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath],
+        {
+          encoding: "utf-8",
+          timeout: wallTimeoutMs,
+          cwd: this.#config.workingDirectory,
+          ...(this.#config.spawnEnvironment ? { env: this.#config.spawnEnvironment as NodeJS.ProcessEnv } : {}),
+        },
+      );
       const findingsPath = join(work, "deep-spec-verify", `${backend}.json`);
       let doc: Json | null = null;
       try {
@@ -64,7 +86,7 @@ export class SiblingBackendClientImplementation implements SiblingBackendClient 
       } catch {
         doc = null;
       }
-      const note = res.error ? String(res.error) : (res.stdout ?? "").trim().split("\n").pop() ?? "";
+      const note = res.error ? String(res.error) : ((res.stdout ?? "").trim().split("\n").pop() ?? "");
       return { exit: res.status, doc, note };
     } finally {
       rmSync(work, { recursive: true, force: true });

@@ -1,4 +1,4 @@
-import { DesignUnitIdentifier } from "@deep-spec/design-domain";
+import type { DesignUnitIdentifier } from "@deep-spec/design-domain";
 import type { RefinementUnitMap } from "./refinement-unit-map.ts";
 
 // ユニット写像のファーストクラスコレクション。重複ユニットは最初の宣言が

@@ -1,5 +1,5 @@
 import { TargetIdentifiers } from "@deep-spec/kernel-domain";
-import { ObligationIdentifier } from "./obligation-identifier.ts";
+import type { ObligationIdentifier } from "./obligation-identifier.ts";
 
 // 義務のファーストクラスコレクション。id 検索と id 列の導出を所有する。
 // 義務 id のファーストクラスコレクション(plan のイベント義務面など、

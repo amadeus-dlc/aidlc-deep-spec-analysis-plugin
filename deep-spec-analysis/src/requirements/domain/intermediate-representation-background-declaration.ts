@@ -1,10 +1,10 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+import { ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // 契約1 IR の背景仮定宣言。抱える式の列挙と prime 禁止（背景仮定は常に
 // 無prime）は宣言自身が所有する——波3の義務／シナリオと同じ裁定（#71 波4）。
 
-import { BackgroundAssumptionIdentifier } from "./background-assumption-identifier.ts";
+import type { BackgroundAssumptionIdentifier } from "./background-assumption-identifier.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type IntermediateRepresentationBackgroundDeclarationParam = { id: BackgroundAssumptionIdentifier; assert?: Expression };
@@ -18,11 +18,15 @@ export class IntermediateRepresentationBackgroundDeclaration {
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
   }
 
-  static parse(props: IntermediateRepresentationBackgroundDeclarationParam): Result<IntermediateRepresentationBackgroundDeclaration, ParseError> {
+  static parse(
+    props: IntermediateRepresentationBackgroundDeclarationParam,
+  ): Result<IntermediateRepresentationBackgroundDeclaration, ParseError> {
     return parseConstruction(() => new IntermediateRepresentationBackgroundDeclaration(props));
   }
 
-  static of(props: IntermediateRepresentationBackgroundDeclarationParam): IntermediateRepresentationBackgroundDeclaration {
+  static of(
+    props: IntermediateRepresentationBackgroundDeclarationParam,
+  ): IntermediateRepresentationBackgroundDeclaration {
     return new IntermediateRepresentationBackgroundDeclaration(props);
   }
 

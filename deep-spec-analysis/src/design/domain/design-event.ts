@@ -1,7 +1,6 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
-import { AttributePath } from "@deep-spec/kernel-domain";
+import { AttributePath, ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 import type { DesignAssignments } from "./design-assignments.ts";
 

@@ -1,4 +1,4 @@
-import { TargetIdentifiers, type TriggerName, QueryLabel } from "@deep-spec/kernel-domain";
+import { type QueryLabel, TargetIdentifiers, type TriggerName } from "@deep-spec/kernel-domain";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 import type { SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability-modulo-theories-query-verdicts.ts";
 
@@ -6,7 +6,13 @@ import type { SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability
 // 効果の両立（joint）。計画の解釈は対自身に判定を引かせ、対象を問う
 // （#71 波25）。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type SatisfiabilityModuloTheoriesEventPairProbeParam = { qOverlap: QueryLabel; qJoint: QueryLabel; a: ObligationIdentifier; b: ObligationIdentifier; trigger: TriggerName };
+type SatisfiabilityModuloTheoriesEventPairProbeParam = {
+  qOverlap: QueryLabel;
+  qJoint: QueryLabel;
+  a: ObligationIdentifier;
+  b: ObligationIdentifier;
+  trigger: TriggerName;
+};
 
 export class SatisfiabilityModuloTheoriesEventPairProbe {
   readonly #qOverlap: QueryLabel;
@@ -44,11 +50,15 @@ export class SatisfiabilityModuloTheoriesEventPairProbe {
     return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
   }
 
-  overlapVerdictIn(results: SatisfiabilityModuloTheoriesQueryVerdicts): ReturnType<SatisfiabilityModuloTheoriesQueryVerdicts["verdictOf"]> {
+  overlapVerdictIn(
+    results: SatisfiabilityModuloTheoriesQueryVerdicts,
+  ): ReturnType<SatisfiabilityModuloTheoriesQueryVerdicts["verdictOf"]> {
     return results.verdictOf(this.#qOverlap);
   }
 
-  jointVerdictIn(results: SatisfiabilityModuloTheoriesQueryVerdicts): ReturnType<SatisfiabilityModuloTheoriesQueryVerdicts["verdictOf"]> {
+  jointVerdictIn(
+    results: SatisfiabilityModuloTheoriesQueryVerdicts,
+  ): ReturnType<SatisfiabilityModuloTheoriesQueryVerdicts["verdictOf"]> {
     return results.verdictOf(this.#qJoint);
   }
 }

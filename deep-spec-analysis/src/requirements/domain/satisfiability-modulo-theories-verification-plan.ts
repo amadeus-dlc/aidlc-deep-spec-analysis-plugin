@@ -1,4 +1,13 @@
-import { FindingKind, TargetIdentifiers, KeySet, KeyedIndex, QueryLabel, TargetIdentifier, TriggerName } from "@deep-spec/kernel-domain";
+import {
+  FindingKind,
+  type KeyedIndex,
+  type KeySet,
+  QueryLabel,
+  type TargetIdentifier,
+  TargetIdentifiers,
+  type TriggerName,
+} from "@deep-spec/kernel-domain";
+
 // SMT 検証計画——コンパイラが要件モデルを SMT クエリに変換したときの対応表
 // （形式 SMT-LIB を含まない面）。計画は値オブジェクト（種別規律の裁定 7、
 // 2026-09-02——「事実」の名はドメインイベントに取っておく）。
@@ -9,17 +18,16 @@ import { FindingKind, TargetIdentifiers, KeySet, KeyedIndex, QueryLabel, TargetI
 // ソートは VerificationReport.compose の不変条件）は plan 自身の振る舞い
 // （OOUI 裁定）。
 
-import type { RequirementsModel } from "./requirements-model.ts";
-import { type SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability-modulo-theories-query-verdicts.ts";
-import { VerificationFinding } from "./verification-finding.ts";
-import { VerificationSkipped } from "./verification-skipped.ts";
-import { VerificationFindings } from "./verification-findings.ts";
-import { VerificationSkips } from "./verification-skips.ts";
-
-import { SatisfiabilityModuloTheoriesEventPairProbes } from "./satisfiability-modulo-theories-event-pair-probes.ts";
-import { VerificationWitness } from "./verification-witness.ts";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
+import type { RequirementsModel } from "./requirements-model.ts";
+import type { SatisfiabilityModuloTheoriesEventPairProbes } from "./satisfiability-modulo-theories-event-pair-probes.ts";
+import type { SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability-modulo-theories-query-verdicts.ts";
 import type { ScenarioIdentifier } from "./scenario-identifier.ts";
+import { VerificationFinding } from "./verification-finding.ts";
+import { VerificationFindings } from "./verification-findings.ts";
+import type { VerificationSkipped } from "./verification-skipped.ts";
+import { VerificationSkips } from "./verification-skips.ts";
+import { VerificationWitness } from "./verification-witness.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type SatisfiabilityModuloTheoriesVerificationPlanParam = {
@@ -61,7 +69,10 @@ export class SatisfiabilityModuloTheoriesVerificationPlan {
   }
 
   // 旧 interpretSmtVerdicts の逐語移植。
-  interpret(model: RequirementsModel, results: SatisfiabilityModuloTheoriesQueryVerdicts): {
+  interpret(
+    model: RequirementsModel,
+    results: SatisfiabilityModuloTheoriesQueryVerdicts,
+  ): {
     findings: VerificationFindings;
     skipped: VerificationSkips;
   } {
@@ -80,7 +91,7 @@ export class SatisfiabilityModuloTheoriesVerificationPlan {
     const coreToTargets = (core: readonly QueryLabel[]): TargetIdentifiers => {
       const targets = core
         .map((label) => this.#labelToTarget.get(label))
-        .filter((t): t is TargetIdentifier => t !== undefined && t.asString().startsWith("OB-"));
+        .filter((t): t is TargetIdentifier => t?.asString().startsWith("OB-") ?? false);
       return TargetIdentifiers.of(targets).sortedUniqueCanonically();
     };
 
@@ -90,13 +101,15 @@ export class SatisfiabilityModuloTheoriesVerificationPlan {
       const key = effective.joined(",");
       if (conflictKeys.has(key)) return;
       conflictKeys.add(key);
-      findings.push(VerificationFinding.of({
-        kind: FindingKind.conflict(),
-        functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
-        targets: effective,
-        witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
-        detail,
-      }));
+      findings.push(
+        VerificationFinding.of({
+          kind: FindingKind.conflict(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
+          targets: effective,
+          witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
+          detail,
+        }),
+      );
     };
 
     // (a) 大域一貫性。
@@ -118,14 +131,22 @@ export class SatisfiabilityModuloTheoriesVerificationPlan {
       for (const [obligationId, queryId] of this.#vacuityQueries) {
         const r = results.verdictOf(queryId);
         if (r.isUnsat()) {
-          const targets = TargetIdentifiers.of([...coreToTargets([...r.coreLabels()]), obligationId.asTargetId()]).sortedUniqueCanonically();
+          const targets = TargetIdentifiers.of([
+            ...coreToTargets([...r.coreLabels()]),
+            obligationId.asTargetId(),
+          ]).sortedUniqueCanonically();
           addConflict(
             targets,
             [...r.coreLabels()],
             `The condition of obligation ${obligationId.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
           );
         } else if (r.isUndecided()) {
-          skipped.push(...r.skipsFor(TargetIdentifiers.of([obligationId.asTargetId()]), `vacuity check for ${obligationId.asString()}`));
+          skipped.push(
+            ...r.skipsFor(
+              TargetIdentifiers.of([obligationId.asTargetId()]),
+              `vacuity check for ${obligationId.asString()}`,
+            ),
+          );
         }
       }
     }
@@ -145,22 +166,28 @@ export class SatisfiabilityModuloTheoriesVerificationPlan {
         // 散在していたのが #34 項 3 の土壌で、判定面 isUndecided() に収束した
         //（主従の裁定 #71 波2）。
         const pending = [overlap, joint].find((v) => v.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
-        skipped.push(...pending.skipsFor(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`));
+        skipped.push(
+          ...pending.skipsFor(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`),
+        );
       }
     }
 
     // (b) 完全性ギャップ。
-    for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => (a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0))) {
+    for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) =>
+      a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0,
+    )) {
       const trigger = triggerName.asString();
       const r = results.verdictOf(QueryLabel.of(`gap:${trigger}`));
       if (r.isSat()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.completenessGap(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventIds),
-          targets: eventIds,
-          witness: VerificationWitness.model(r.witnessModel()),
-          detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
-        }));
+        findings.push(
+          VerificationFinding.of({
+            kind: FindingKind.completenessGap(),
+            functionalRequirementReferences: model.functionalRequirementReferencesOf(eventIds),
+            targets: eventIds,
+            witness: VerificationWitness.model(r.witnessModel()),
+            detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
+          }),
+        );
       } else if (r.isUndecided()) {
         skipped.push(...r.skipsFor(eventIds, `completeness check for trigger "${trigger}"`));
       }
@@ -172,27 +199,38 @@ export class SatisfiabilityModuloTheoriesVerificationPlan {
       if (!qid) continue;
       const r = results.verdictOf(qid);
       if (r.isUndecided()) {
-        skipped.push(...r.skipsFor(TargetIdentifiers.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`));
+        skipped.push(
+          ...r.skipsFor(TargetIdentifiers.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`),
+        );
         continue;
       }
       if (sc.isAccept() && r.isUnsat()) {
-        const targets = TargetIdentifiers.of([sc.id().asTargetId(), ...coreToTargets([...r.coreLabels()])]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
-          targets,
-          witness: VerificationWitness.core(r.sortedCore()),
-          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
-        }));
+        const targets = TargetIdentifiers.of([
+          sc.id().asTargetId(),
+          ...coreToTargets([...r.coreLabels()]),
+        ]).sortedUniqueCanonically();
+        findings.push(
+          VerificationFinding.of({
+            kind: FindingKind.scenarioViolation(),
+            functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+            targets,
+            witness: VerificationWitness.core(r.sortedCore()),
+            detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
+          }),
+        );
       }
       if (sc.isReject() && r.isSat()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([sc.id().asTargetId()])),
-          targets: TargetIdentifiers.of([sc.id().asTargetId()]),
-          witness: VerificationWitness.model(r.witnessModel()),
-          detail: `Reject scenario ${sc.id().asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
-        }));
+        findings.push(
+          VerificationFinding.of({
+            kind: FindingKind.scenarioViolation(),
+            functionalRequirementReferences: model.functionalRequirementReferencesOf(
+              TargetIdentifiers.of([sc.id().asTargetId()]),
+            ),
+            targets: TargetIdentifiers.of([sc.id().asTargetId()]),
+            witness: VerificationWitness.model(r.witnessModel()),
+            detail: `Reject scenario ${sc.id().asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
+          }),
+        );
       }
     }
 

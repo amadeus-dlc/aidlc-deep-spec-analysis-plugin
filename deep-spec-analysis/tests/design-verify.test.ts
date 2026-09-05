@@ -49,11 +49,15 @@ interface SensorRun {
 }
 
 function fire(tool: string, modelPath: string, env: { [k: string]: string } = {}): SensorRun {
-  const res = spawnSync("bun", [join(toolsDir, tool), "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath], {
-    encoding: "utf-8",
-    timeout: 240_000,
-    env: { ...process.env, ...env },
-  });
+  const res = spawnSync(
+    "bun",
+    [join(toolsDir, tool), "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath],
+    {
+      encoding: "utf-8",
+      timeout: 240_000,
+      env: { ...process.env, ...env },
+    },
+  );
   return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
 }
 
@@ -127,8 +131,12 @@ describe("design backend conformance (expected findings, byte-for-byte)", () => 
     const run = fire("aidlc-sensor-deep-spec-design-verify-quint.ts", modelPath, quintEnv);
     expect(run.status).toBe(0);
     expect(JSON.parse(run.stdout)).toMatchObject({ pass: false, findings_count: 1, method: "simulation" });
-    expect(readFileSync(join(verifyDir, "quint.json"), "utf-8")).toBe(readFileSync(join(expected, "quint.json"), "utf-8"));
-    expect(readFileSync(join(verifyDir, "cross-check.json"), "utf-8")).toBe(readFileSync(join(expected, "cross-check.json"), "utf-8"));
+    expect(readFileSync(join(verifyDir, "quint.json"), "utf-8")).toBe(
+      readFileSync(join(expected, "quint.json"), "utf-8"),
+    );
+    expect(readFileSync(join(verifyDir, "cross-check.json"), "utf-8")).toBe(
+      readFileSync(join(expected, "cross-check.json"), "utf-8"),
+    );
 
     // Second run of every backend is byte-identical (NFR1 determinism).
     const before = ["smt.json", "quint.json", "cross-check.json"].map((f) => readFileSync(join(verifyDir, f), "utf-8"));
@@ -157,13 +165,22 @@ describe("design backend conformance (expected findings, byte-for-byte)", () => 
       return;
     }
     const { modelPath, verifyDir } = makeRecord();
-    writeFileSync(modelPath, readFileSync(modelPath, "utf-8").replace('"deterministic": true', '"deterministic": false'));
+    writeFileSync(
+      modelPath,
+      readFileSync(modelPath, "utf-8").replace('"deterministic": true', '"deterministic": false'),
+    );
     const run = fire("aidlc-sensor-deep-spec-design-verify-smt.ts", modelPath);
     expect(run.status).toBe(0);
     const doc = JSON.parse(readFileSync(join(verifyDir, "smt.json"), "utf-8"));
-    expect(doc.findings.some((f: { kind: string; targets: string[] }) => f.kind === "conflict" && f.targets.includes("TR-1"))).toBe(false);
+    expect(
+      doc.findings.some(
+        (f: { kind: string; targets: string[] }) => f.kind === "conflict" && f.targets.includes("TR-1"),
+      ),
+    ).toBe(false);
     for (const t of ["TR-1", "TR-2"]) {
-      expect(doc.skipped.some((s: { target: string; reason: string }) => s.target === t && s.reason === "waived")).toBe(true);
+      expect(doc.skipped.some((s: { target: string; reason: string }) => s.target === t && s.reason === "waived")).toBe(
+        true,
+      );
     }
   });
 });
@@ -172,13 +189,25 @@ describe("contract separation (design vs requirements)", () => {
   test("the shared schema definitions are byte-identical to contract 1 (FR15.4)", () => {
     const c1 = JSON.parse(readFileSync(join(dataDir, "deep-spec-ir-schema.json"), "utf-8"));
     const c3 = JSON.parse(readFileSync(join(dataDir, "deep-spec-design-ir-schema.json"), "utf-8"));
-    for (const key of ["identifier", "attrPath", "frRef", "frRefs", "entity", "attribute", "attrType", "temporalSpec"]) {
+    for (const key of [
+      "identifier",
+      "attrPath",
+      "frRef",
+      "frRefs",
+      "entity",
+      "attribute",
+      "attrType",
+      "temporalSpec",
+    ]) {
       expect(canonicalStringify(c3.definitions[key])).toBe(canonicalStringify(c1.definitions[key]));
     }
     // expr differs only in one documentation string (prime legality mentions
     // transitions); the structural grammar must be identical.
-    const stripDesc = (v: unknown): unknown => JSON.parse(JSON.stringify(v, (k, val) => (k === "description" ? undefined : val)));
-    expect(canonicalStringify(stripDesc(c3.definitions.expr) as never)).toBe(canonicalStringify(stripDesc(c1.definitions.expr) as never));
+    const stripDesc = (v: unknown): unknown =>
+      JSON.parse(JSON.stringify(v, (k, val) => (k === "description" ? undefined : val)));
+    expect(canonicalStringify(stripDesc(c3.definitions.expr) as never)).toBe(
+      canonicalStringify(stripDesc(c1.definitions.expr) as never),
+    );
   });
 
   test("a v1 requirements model never fires the design sensors, and vice versa", () => {
@@ -222,7 +251,9 @@ describe("degradation (NFR — no failure blocks the stage)", () => {
     const doc = JSON.parse(readFileSync(join(verifyDir, "quint.json"), "utf-8"));
     expect(doc.unavailable.reason.toLowerCase()).toContain("quint");
     expect(doc.skipped.length).toBeGreaterThan(0);
-    expect(doc.skipped.every((s: { reason: string; unit: string }) => s.reason === "unavailable" && s.unit === "u1-tickets")).toBe(true);
+    expect(
+      doc.skipped.every((s: { reason: string; unit: string }) => s.reason === "unavailable" && s.unit === "u1-tickets"),
+    ).toBe(true);
   });
 
   test("a design-IR major version mismatch skips every target with the reason", () => {

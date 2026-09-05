@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ABSOLUTE_THRESHOLD,
-  TOLERANCE,
   failedTestCount,
   geWithTolerance,
   parseArgs,
   parseLcovLinePercent,
   pinCoverageConfig,
   runGate,
+  TOLERANCE,
 } from "../scripts/coverage";
 
 const LCOV = [
@@ -69,7 +69,11 @@ describe("coverage gate — decisions", () => {
   }
 
   test("absolute gate alone passes at the threshold and fails below it", () => {
-    expect(gate(ABSOLUTE_THRESHOLD).report).toEqual({ exitCode: 0, headPercent: ABSOLUTE_THRESHOLD, basePercent: null });
+    expect(gate(ABSOLUTE_THRESHOLD).report).toEqual({
+      exitCode: 0,
+      headPercent: ABSOLUTE_THRESHOLD,
+      basePercent: null,
+    });
     const failing = gate(ABSOLUTE_THRESHOLD - 0.01);
     expect(failing.report.exitCode).toBe(1);
     expect(failing.log.some((line) => line.startsWith("[FAIL] absolute gate"))).toBe(true);
@@ -124,7 +128,10 @@ describe("coverage gate — one coverage config for head and base", () => {
     for (const dir of sandboxes.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
-  function pair(headConfig: string, baseConfig: string | null): { repoRoot: string; worktree: string; basePath: string } {
+  function pair(
+    headConfig: string,
+    baseConfig: string | null,
+  ): { repoRoot: string; worktree: string; basePath: string } {
     const repoRoot = mkdtempSync(join(tmpdir(), "deep-spec-pin-head-"));
     const worktree = mkdtempSync(join(tmpdir(), "deep-spec-pin-base-"));
     sandboxes.push(repoRoot, worktree);
@@ -144,7 +151,7 @@ describe("coverage gate — one coverage config for head and base", () => {
   });
 
   test("a base worktree without its own bunfig still receives head's", () => {
-    const head = '[test]\ncoverageThreshold = 0.9\n';
+    const head = "[test]\ncoverageThreshold = 0.9\n";
     const { repoRoot, worktree, basePath } = pair(head, null);
     pinCoverageConfig(repoRoot, worktree);
     expect(readFileSync(basePath, "utf-8")).toBe(head);
@@ -160,6 +167,8 @@ describe("coverage gate — one coverage config for head and base", () => {
     const { repoRoot } = pair("[test]\n", null);
     const emptyWorktree = mkdtempSync(join(tmpdir(), "deep-spec-pin-empty-"));
     sandboxes.push(emptyWorktree);
-    expect(() => pinCoverageConfig(repoRoot, emptyWorktree)).toThrow("base worktree に deep-spec-analysis/ がありません");
+    expect(() => pinCoverageConfig(repoRoot, emptyWorktree)).toThrow(
+      "base worktree に deep-spec-analysis/ がありません",
+    );
   });
 });

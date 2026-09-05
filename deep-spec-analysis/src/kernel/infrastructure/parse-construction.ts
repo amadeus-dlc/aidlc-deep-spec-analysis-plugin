@@ -1,6 +1,6 @@
-import {IllegalArgumentException} from "./illegal-argument-exception.ts";
-import {type Result, err, ok} from "./result.ts";
+import { IllegalArgumentException } from "./illegal-argument-exception.ts";
 import type { ParseError } from "./parse-error.ts";
+import { err, ok, type Result } from "./result.ts";
 
 // parse 専用のエラー境界。入力契約違反だけを値に変え、TypeError 等の
 // 想定外の例外は送出し続ける。検証規則そのものは各コンストラクタが所有する。

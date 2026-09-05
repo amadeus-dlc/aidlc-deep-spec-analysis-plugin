@@ -7,9 +7,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import { type Json } from "@deep-spec/kernel-infrastructure";
 import { writeFileAtomically } from "@deep-spec/kernel-adapter";
+import { err, type Json, ok, type Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import type { ReferenceCheckReport, ReferenceCheckReportIdentifier } from "@deep-spec/refcheck-domain";
 import type { ReferenceCheckReportRepository } from "@deep-spec/refcheck-usecase";

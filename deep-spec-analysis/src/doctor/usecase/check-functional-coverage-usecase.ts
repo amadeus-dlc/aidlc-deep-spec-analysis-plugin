@@ -1,8 +1,8 @@
 import { CoverageState } from "@deep-spec/doctor-domain";
+import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 import { RefinementStaleRow } from "./read-model/refinement-stale-row.ts";
 import { UnitCoverage } from "./read-model/unit-coverage.ts";
 import { UnitCoverageRow } from "./read-model/unit-coverage-row.ts";
-import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 
 // 設計検証カバレッジの査定（checks 配列の第 5 ブロック、unit 粒度）＋
 // refinement 失効（phase 3）。unit はモデルの units[] に載り、実 backend 文書の
@@ -27,14 +27,28 @@ export class CheckFunctionalCoverageUseCase {
       for (const unit of t.units) {
         eligible += 1;
         if (!modelUnits.has(unit.name) || !t.hasFindings || !completed.has(unit.name)) {
-          problems.push(UnitCoverageRow.of({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.unverified() }));
+          problems.push(
+            UnitCoverageRow.of({
+              space: t.space,
+              intent: t.intent,
+              unit: unit.name,
+              state: CoverageState.unverified(),
+            }),
+          );
           continue;
         }
         if (unit.newestArtifactMtime > t.modelMtime) {
-          problems.push(UnitCoverageRow.of({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.stale() }));
+          problems.push(
+            UnitCoverageRow.of({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.stale() }),
+          );
         }
       }
-      if (t.modelMtime > 0 && t.hasFindings && t.requirementsModelMtime !== null && t.requirementsModelMtime > t.modelMtime) {
+      if (
+        t.modelMtime > 0 &&
+        t.hasFindings &&
+        t.requirementsModelMtime !== null &&
+        t.requirementsModelMtime > t.modelMtime
+      ) {
         refinementStale.push(RefinementStaleRow.of({ space: t.space, intent: t.intent }));
       }
     }

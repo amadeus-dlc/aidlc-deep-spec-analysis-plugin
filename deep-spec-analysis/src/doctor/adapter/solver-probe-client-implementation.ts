@@ -67,12 +67,16 @@ export class SolverProbeClientImplementation implements SolverProbeClient {
     try {
       const spec = join(work, "probe.qnt");
       writeFileSync(spec, PROBE_MODULE, "utf-8");
-      const res = spawnSync(this.#config.quintBin, ["verify", spec, "--main=probe", "--invariant=inv", "--max-steps=1"], {
-        encoding: "utf-8",
-        timeout: 30_000,
-        cwd: work,
-        killSignal: "SIGINT",
-      });
+      const res = spawnSync(
+        this.#config.quintBin,
+        ["verify", spec, "--main=probe", "--invariant=inv", "--max-steps=1"],
+        {
+          encoding: "utf-8",
+          timeout: 30_000,
+          cwd: work,
+          killSignal: "SIGINT",
+        },
+      );
       return Boolean(res.error) || res.status !== 0;
     } finally {
       rmSync(work, { recursive: true, force: true });

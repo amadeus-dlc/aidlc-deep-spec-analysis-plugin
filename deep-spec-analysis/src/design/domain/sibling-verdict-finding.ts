@@ -1,4 +1,4 @@
-import { type FunctionalRequirementReferences, FindingKind } from "@deep-spec/kernel-domain";
+import { FindingKind, type FunctionalRequirementReferences } from "@deep-spec/kernel-domain";
 import type { DesignWitness } from "./design-witness.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 
@@ -6,7 +6,13 @@ import type { LoweredIdentifier } from "./lowered-identifier.ts";
 // 判定の再割り当て（SiblingVerdictDocument.remapVerdicts）は種類を問い、対象を写像し、
 // witness の core 形を finding 自身に書き換えさせる（#71 波23）。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type SiblingVerdictFindingParam = { kind: FindingKind; functionalRequirementReferences: FunctionalRequirementReferences; targets: readonly LoweredIdentifier[]; witness: DesignWitness; detail: string };
+type SiblingVerdictFindingParam = {
+  kind: FindingKind;
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  targets: readonly LoweredIdentifier[];
+  witness: DesignWitness;
+  detail: string;
+};
 
 export class SiblingVerdictFinding {
   readonly #kind: FindingKind;

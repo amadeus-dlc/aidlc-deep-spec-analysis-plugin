@@ -1,6 +1,6 @@
-import { type CardinalityNotation } from "./cardinality-notation.ts";
-import { type ElementPath } from "./element-path.ts";
-import { type EntityName } from "./entity-name.ts";
+import type { CardinalityNotation } from "./cardinality-notation.ts";
+import type { ElementPath } from "./element-path.ts";
+import type { EntityName } from "./entity-name.ts";
 
 // 関係宣言。基数の閉集合整合と方向の宣言義務を自分で判定する（旧 FD-E5）。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。

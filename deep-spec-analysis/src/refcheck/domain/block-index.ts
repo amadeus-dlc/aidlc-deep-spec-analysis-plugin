@@ -5,7 +5,8 @@ export class BlockIndex {
   readonly #value: number;
 
   private constructor(raw: number) {
-    if (!Number.isSafeInteger(raw) || raw < 1) throw new IllegalArgumentException({ kind: "non-positive-location", raw });
+    if (!Number.isSafeInteger(raw) || raw < 1)
+      throw new IllegalArgumentException({ kind: "non-positive-location", raw });
     this.#value = raw;
   }
 

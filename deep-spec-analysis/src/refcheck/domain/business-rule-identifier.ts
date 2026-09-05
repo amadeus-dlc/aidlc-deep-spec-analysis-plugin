@@ -16,8 +16,14 @@ export class BusinessRuleIdentifier {
   static parse(raw: string): Result<BusinessRuleIdentifier, ParseError> {
     return parseConstruction(() => new BusinessRuleIdentifier(raw));
   }
-  equals(other: BusinessRuleIdentifier): boolean { return this.#value === other.#value; }
-  asString(): string { return this.#value; }
+  equals(other: BusinessRuleIdentifier): boolean {
+    return this.#value === other.#value;
+  }
+  asString(): string {
+    return this.#value;
+  }
   // BR{group}.{seq} 形か（FD-R2 の判定と finding target の選別に使う）。
-  matchesShape(): boolean { return /^BR[0-9]+\.[0-9]+$/.test(this.#value); }
+  matchesShape(): boolean {
+    return /^BR[0-9]+\.[0-9]+$/.test(this.#value);
+  }
 }

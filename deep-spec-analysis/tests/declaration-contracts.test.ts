@@ -1,12 +1,27 @@
 import { describe, expect, test } from "bun:test";
 import {
-  Declaration, DeclaredBindingValue, AttributeKind, AttributePath, ExpressionTree, FindingsSchema,
-  FunctionalRequirementReferences, ScenarioBindings, TriggerName, FindingKind,
+  AttributeMapping,
+  DesignWitness,
+  LoweredIdentifier,
+  LoweredScenario,
+  RefinementMapDefect,
+  SiblingVerdictFinding,
+} from "@deep-spec/design-domain";
+import {
+  AttributeKind,
+  AttributePath,
+  Declaration,
+  DeclaredBindingValue,
+  ExpressionTree,
+  FindingKind,
+  FindingsSchema,
+  FunctionalRequirementReferences,
+  ScenarioBindings,
+  TargetIdentifier,
+  TriggerName,
 } from "@deep-spec/kernel-domain";
+import { err, flatMapResult, IllegalArgumentException, type Json, ok } from "@deep-spec/kernel-infrastructure";
 import { TraceValue, VerificationWitness } from "@deep-spec/requirements-domain";
-import { AttributeMapping, DesignWitness, LoweredScenario, LoweredIdentifier, SiblingVerdictFinding, RefinementMapDefect } from "@deep-spec/design-domain";
-import { TargetIdentifier } from "@deep-spec/kernel-domain";
-import { IllegalArgumentException, type Json, err, ok, flatMapResult } from "@deep-spec/kernel-infrastructure";
 
 function rejects(value: Json): void {
   expect(() => Declaration.of(value)).toThrow(IllegalArgumentException);
@@ -40,7 +55,8 @@ describe("Declaration is a protected value, not a parameter alias", () => {
     expect([rawAccepted, shapeAccepted]).toEqual([false, false]);
     const declaration = Declaration.parse(7);
     expect(declaration.ok).toBe(true);
-    if (declaration.ok) expect(DeclaredBindingValue.of(declaration.value).fits(AttributeKind.of("int"), () => false)).toBe(true);
+    if (declaration.ok)
+      expect(DeclaredBindingValue.of(declaration.value).fits(AttributeKind.of("int"), () => false)).toBe(true);
   });
 
   test("size, node count, total text and depth have explicit boundaries", () => {
@@ -82,7 +98,11 @@ describe("Declaration is a protected value, not a parameter alias", () => {
 
   test("the value that passes the size check is the value retained", () => {
     expect(Declaration.of(changingValue()).describe()).toBe('{"value":"checked"}');
-    const defect = { get value(): string { throw new TypeError("input read failed"); } };
+    const defect = {
+      get value(): string {
+        throw new TypeError("input read failed");
+      },
+    };
     expect(() => Declaration.parse(defect)).toThrow(TypeError);
   });
 });
@@ -100,7 +120,14 @@ describe("bounded snapshots apply to every owner of raw structured input", () =>
 
   test("expressions validate the snapshot they retain", () => {
     let first = true;
-    const source = { get op(): string { const op = first ? "bool" : "x".repeat(129); first = false; return op; }, value: true };
+    const source = {
+      get op(): string {
+        const op = first ? "bool" : "x".repeat(129);
+        first = false;
+        return op;
+      },
+      value: true,
+    };
     const tree = ExpressionTree.parse(source);
     expect(tree.ok).toBe(true);
     if (tree.ok) expect(tree.value.asExpression()).toEqual({ op: "bool", value: true });
@@ -135,14 +162,25 @@ describe("bounded snapshots apply to every owner of raw structured input", () =>
 test("Result composition propagates a non-exception failure without running the next constructor", () => {
   const failure = { kind: "input-invalid" };
   let called = false;
-  expect(flatMapResult(err(failure), () => { called = true; return ok(1); })).toEqual({ ok: false, error: failure });
+  expect(
+    flatMapResult(err(failure), () => {
+      called = true;
+      return ok(1);
+    }),
+  ).toEqual({ ok: false, error: failure });
   expect(called).toBe(false);
   expect(flatMapResult(ok(1), (value) => ok(value + 1))).toEqual({ ok: true, value: 2 });
 });
 
 test("lowered event data and sibling targets do not retain mutable argument containers", () => {
   const event = { trigger: TriggerName.of("go") };
-  const lowered = LoweredScenario.of({ id: LoweredIdentifier.of("SC-1"), kind: "accept", functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: ScenarioBindings.of([]), event });
+  const lowered = LoweredScenario.of({
+    id: LoweredIdentifier.of("SC-1"),
+    kind: "accept",
+    functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+    bindings: ScenarioBindings.of([]),
+    event,
+  });
   event.trigger = TriggerName.of("changed");
   expect(lowered.event()?.trigger).toBe("go");
   const output = lowered.event();
@@ -150,7 +188,13 @@ test("lowered event data and sibling targets do not retain mutable argument cont
   expect(lowered.event()?.trigger).toBe("go");
 
   const targets = [LoweredIdentifier.of("OB-1")];
-  const finding = SiblingVerdictFinding.of({ kind: FindingKind.conflict(), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets, witness: DesignWitness.core([]), detail: "fixture" });
+  const finding = SiblingVerdictFinding.of({
+    kind: FindingKind.conflict(),
+    functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+    targets,
+    witness: DesignWitness.core([]),
+    detail: "fixture",
+  });
   targets.push(LoweredIdentifier.of("OB-2"));
   expect(finding.targets().map((target) => target.asString())).toEqual(["OB-1"]);
 });
@@ -161,5 +205,7 @@ test("an unsupported effect is reported as a domain compile-error skip", () => {
   const skip = defect.asCompileErrorSkip(TargetIdentifier.of("OB-1"), "unit-one");
   expect(skip.target().asString()).toBe("OB-1");
   expect(skip.reason()).toBe("compile-error");
-  expect(skip.detail()).toBe("alpha substitution failed: requirements effect is not a conjunction of primed assignments");
+  expect(skip.detail()).toBe(
+    "alpha substitution failed: requirements effect is not a conjunction of primed assignments",
+  );
 });

@@ -1,4 +1,4 @@
-import { AttributeName } from "./attribute-name.ts";
+import type { AttributeName } from "./attribute-name.ts";
 
 // ---- ファーストクラスコレクション（語彙） -----------------------------------
 // ドメイン層は配列を生で扱わない。集合の知識（正規化照合・差分・所属）は

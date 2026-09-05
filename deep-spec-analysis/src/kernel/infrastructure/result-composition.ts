@@ -1,4 +1,4 @@
-import { type Result, err, ok } from "./result.ts";
+import { err, ok, type Result } from "./result.ts";
 
 export function flatMapResult<T, U, E>(result: Result<T, E>, next: (value: T) => Result<U, E>): Result<U, E> {
   return result.ok ? next(result.value) : result;

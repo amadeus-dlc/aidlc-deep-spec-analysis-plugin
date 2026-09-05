@@ -26,9 +26,7 @@ export class Skips {
   }
 
   sortedCanonically(): Skips {
-    return new Skips(
-      [...this.#values].sort((a, b) => a.compareTo(b)),
-    );
+    return new Skips([...this.#values].sort((a, b) => a.compareTo(b)));
   }
 
   toArray(): readonly Skipped[] {

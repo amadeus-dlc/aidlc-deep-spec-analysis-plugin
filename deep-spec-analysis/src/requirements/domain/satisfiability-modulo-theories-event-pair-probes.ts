@@ -8,7 +8,9 @@ export class SatisfiabilityModuloTheoriesEventPairProbes {
     this.#values = Object.freeze([...values]);
   }
 
-  static of(values: readonly SatisfiabilityModuloTheoriesEventPairProbe[]): SatisfiabilityModuloTheoriesEventPairProbes {
+  static of(
+    values: readonly SatisfiabilityModuloTheoriesEventPairProbe[],
+  ): SatisfiabilityModuloTheoriesEventPairProbes {
     return new SatisfiabilityModuloTheoriesEventPairProbes(values);
   }
 

@@ -1,12 +1,18 @@
-import { IllegalArgumentException, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { EnumerationMember } from "./enumeration-member.ts";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
+import type { EnumerationMember } from "./enumeration-member.ts";
 // enum 宣言値のファーストクラスコレクション。宣言順＝SMT の序数符号化・
 // Quint の集合リテラル順という凍結面なので順序を所有する。
 export class EnumerationMembers {
   readonly #values: readonly EnumerationMember[];
 
   private constructor(values: readonly EnumerationMember[]) {
-    if (values.length > 10_000) throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
+    if (values.length > 10_000)
+      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
 

@@ -1,4 +1,9 @@
-import { type FunctionalRequirementReferences, type TargetIdentifier, type TargetIdentifiers, FindingKind } from "@deep-spec/kernel-domain";
+import {
+  FindingKind,
+  type FunctionalRequirementReferences,
+  type TargetIdentifier,
+  type TargetIdentifiers,
+} from "@deep-spec/kernel-domain";
 import type { VerificationWitness } from "./verification-witness.ts";
 
 // v1 検証 finding（契約2）——kind・要件参照・対象・witness・説明。契約2 の
@@ -8,7 +13,13 @@ import type { VerificationWitness } from "./verification-witness.ts";
 // witness は型付きユニオン——unsat core のラベル列・decode 済み状態モデル・
 // クロスチェック判定表・状態機械のステップトレース。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type VerificationFindingParam = { kind: FindingKind; functionalRequirementReferences: FunctionalRequirementReferences; targets: TargetIdentifiers; witness: VerificationWitness; detail: string };
+type VerificationFindingParam = {
+  kind: FindingKind;
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  targets: TargetIdentifiers;
+  witness: VerificationWitness;
+  detail: string;
+};
 
 export class VerificationFinding {
   readonly #kind: FindingKind;

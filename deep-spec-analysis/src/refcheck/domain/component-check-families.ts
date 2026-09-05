@@ -2,8 +2,8 @@
 // （COMPONENT_FAMILIES）と、各判定が finding／skip を書くときの family。
 // 値は CheckFamily で、描画（`DD-1: …`／`check:DD-1`）は family の知識。
 
-import { CheckFamily } from "./check-family.ts";
 import { CheckFamilies } from "./check-families.ts";
+import { CheckFamily } from "./check-family.ts";
 
 export const DD_0 = CheckFamily.of("DD-0");
 export const DD_1 = CheckFamily.of("DD-1");

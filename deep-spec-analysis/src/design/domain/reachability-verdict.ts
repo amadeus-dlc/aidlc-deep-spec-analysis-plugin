@@ -27,9 +27,12 @@ export class ReachabilityVerdict {
 
   match<T>(handlers: { reached: () => T; notReachedWithinBound: () => T; unverified: () => T }): T {
     switch (this.#kind) {
-      case "reached": return handlers.reached();
-      case "not-reached-within-bound": return handlers.notReachedWithinBound();
-      case "unverified": return handlers.unverified();
+      case "reached":
+        return handlers.reached();
+      case "not-reached-within-bound":
+        return handlers.notReachedWithinBound();
+      case "unverified":
+        return handlers.unverified();
     }
   }
 }

@@ -1,8 +1,20 @@
 // doctor presenter のための version 照会結果。表示用の投影なので domain では
 // なく query/usecase 層に置く（リードモデル規律）。
 type VersionAdvisoryVariant =
-  | { readonly kind: "current" | "update-available"; readonly installedVersion: string; readonly latestVersion: string; readonly source: string; readonly ref: string }
-  | { readonly kind: "skipped"; readonly installedVersion: string; readonly source: string; readonly ref: string; readonly reason: string }
+  | {
+      readonly kind: "current" | "update-available";
+      readonly installedVersion: string;
+      readonly latestVersion: string;
+      readonly source: string;
+      readonly ref: string;
+    }
+  | {
+      readonly kind: "skipped";
+      readonly installedVersion: string;
+      readonly source: string;
+      readonly ref: string;
+      readonly reason: string;
+    }
   | { readonly kind: "provenance-missing" }
   | { readonly kind: "provenance-malformed"; readonly reason: string };
 
@@ -13,11 +25,21 @@ export class VersionAdvisory {
     this.#variant = variant;
   }
 
-  static current(props: { installedVersion: string; latestVersion: string; source: string; ref: string }): VersionAdvisory {
+  static current(props: {
+    installedVersion: string;
+    latestVersion: string;
+    source: string;
+    ref: string;
+  }): VersionAdvisory {
     return new VersionAdvisory({ kind: "current", ...props });
   }
 
-  static updateAvailable(props: { installedVersion: string; latestVersion: string; source: string; ref: string }): VersionAdvisory {
+  static updateAvailable(props: {
+    installedVersion: string;
+    latestVersion: string;
+    source: string;
+    ref: string;
+  }): VersionAdvisory {
     return new VersionAdvisory({ kind: "update-available", ...props });
   }
 

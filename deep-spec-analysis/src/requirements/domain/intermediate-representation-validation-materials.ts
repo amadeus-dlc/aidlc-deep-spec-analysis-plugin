@@ -5,12 +5,12 @@
 // （RefinementMaterialsIdentifier と同じ規律）。sourceDocument は成果物の原文
 // （原文材料——store の往復則 findById∘store がバイト恒等になる永続化面）。
 
-import { type ErrorMessages, type IntermediateRepresentationVersion, DeclaredDigest } from "@deep-spec/kernel-domain";
+import type { DeclaredDigest, ErrorMessages, IntermediateRepresentationVersion } from "@deep-spec/kernel-domain";
+import type { FunctionalRequirementReferenceClaims } from "./functional-requirement-reference-claims.ts";
 import { FunctionalRequirementReferenceIndex } from "./functional-requirement-reference-index.ts";
-import { FunctionalRequirementReferenceClaims } from "./functional-requirement-reference-claims.ts";
 import type { IntermediateRepresentationModelDeclaration } from "./intermediate-representation-model-declaration.ts";
+import type { IntermediateRepresentationValidationMaterialsIdentifier } from "./intermediate-representation-validation-materials-identifier.ts";
 import type { RequirementsSourceIdentifier } from "./requirements-source-identifier.ts";
-import { IntermediateRepresentationValidationMaterialsIdentifier } from "./intermediate-representation-validation-materials-identifier.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type IntermediateRepresentationValidationMaterialsParam = {

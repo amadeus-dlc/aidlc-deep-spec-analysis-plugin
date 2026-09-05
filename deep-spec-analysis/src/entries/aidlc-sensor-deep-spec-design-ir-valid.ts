@@ -26,11 +26,11 @@
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseFlags } from "@deep-spec/kernel-adapter";
-import { ArtifactPath } from "@deep-spec/kernel-domain";
 import { DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation } from "@deep-spec/design-adapter";
 import { DesignModelIdentifier } from "@deep-spec/design-domain";
 import { ValidateDesignIntermediateRepresentationUseCase } from "@deep-spec/design-usecase";
+import { parseFlags } from "@deep-spec/kernel-adapter";
+import { ArtifactPath } from "@deep-spec/kernel-domain";
 
 const MAX_REPORTED_ERRORS = 25;
 
@@ -43,7 +43,9 @@ function main(): void {
   }
 
   const schemaPath = join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-design-ir-schema.json");
-  const useCase = new ValidateDesignIntermediateRepresentationUseCase(new DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath }));
+  const useCase = new ValidateDesignIntermediateRepresentationUseCase(
+    new DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath }),
+  );
 
   const outcome = useCase.execute(DesignModelIdentifier.of(target.value));
   if (outcome.kind === "not-applicable") {

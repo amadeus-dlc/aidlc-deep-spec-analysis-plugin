@@ -1,13 +1,13 @@
 import {
+  canonicalStringify,
   compareCanonically,
+  err,
   isObject,
   type Json,
-  validateSchema,
-  canonicalStringify,
-  type Result,
-  err,
   ok,
+  type Result,
   unreachable,
+  validateSchema,
 } from "@deep-spec/kernel-infrastructure";
 
 // kernel/domain の単体テスト（DDD 移行 PR1、issue #14）。
@@ -16,10 +16,32 @@ import {
 // ir-valid の errors[]・契約2 の unavailable.reason として golden バイトに
 // 現れるため、文言は「含む」ではなく完全一致で固定する。
 
-import { AttributeBound, ContentHash, RequirementIdentifiers, TargetIdentifier, TargetIdentifiers, FunctionalRequirementReferences, NormalizedName, KeyedIndex, KeySet, RequirementIdentifier, QueryLabel, AttributeKind, VerificationMethod, FindingKind } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
-import { extractFences, parseMarkdownTables, parseYamlSubset } from "@deep-spec/kernel-adapter";
-import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
+import {
+  extractFences,
+  parseMarkdownTables,
+  parseYamlSubset,
+  smtIntOf,
+  smtLit,
+  smtName,
+  smtVar,
+} from "@deep-spec/kernel-adapter";
+import {
+  AttributeBound,
+  AttributeKind,
+  ContentHash,
+  FindingKind,
+  FunctionalRequirementReferences,
+  KeyedIndex,
+  KeySet,
+  NormalizedName,
+  QueryLabel,
+  RequirementIdentifier,
+  RequirementIdentifiers,
+  TargetIdentifier,
+  TargetIdentifiers,
+  VerificationMethod,
+} from "@deep-spec/kernel-domain";
 
 describe("result", () => {
   test("ok and err narrow through the ok discriminant", () => {
@@ -87,8 +109,16 @@ describe("canonical id order (owned by the id value object, ruling 1)", () => {
   });
 
   test("the collections deduplicate then sort canonically", () => {
-    expect(TargetIdentifiers.of(Array.from(["OB-10", "OB-2", "OB-2"], (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10"]);
-    expect(FunctionalRequirementReferences.of(Array.from(["FR-10", "FR-2", "FR-2"], (raw) => RequirementIdentifier.of(raw))).sortedUnique().toStrings()).toEqual(["FR-2", "FR-10"]);
+    expect(
+      TargetIdentifiers.of(Array.from(["OB-10", "OB-2", "OB-2"], (raw) => TargetIdentifier.of(raw)))
+        .sortedUniqueCanonically()
+        .toStrings(),
+    ).toEqual(["OB-2", "OB-10"]);
+    expect(
+      FunctionalRequirementReferences.of(Array.from(["FR-10", "FR-2", "FR-2"], (raw) => RequirementIdentifier.of(raw)))
+        .sortedUnique()
+        .toStrings(),
+    ).toEqual(["FR-2", "FR-10"]);
   });
 });
 
@@ -116,7 +146,9 @@ describe("yaml — accepted shapes", () => {
   });
 
   test("block sequence, nested mapping, inline sequence, quoted scalars", () => {
-    const r = parseYamlSubset('items:\n  - a\n  - b\nmeta:\n  tags: [x, y]\n  label: "hello: world"\n  single: \'q\'\n');
+    const r = parseYamlSubset(
+      "items:\n  - a\n  - b\nmeta:\n  tags: [x, y]\n  label: \"hello: world\"\n  single: 'q'\n",
+    );
     expect(r.value).toEqual({ items: ["a", "b"], meta: { tags: ["x", "y"], label: "hello: world", single: "q" } });
   });
 
@@ -151,7 +183,9 @@ describe("yaml — rejections with exact error strings", () => {
   test("anchor, alias, and tag scalars", () => {
     expect(parseYamlSubset("a: &x 1\n").error).toBe('line 1: unsupported YAML feature (anchor/alias/tag): "&x 1"');
     expect(parseYamlSubset("a: *x\n").error).toBe('line 1: unsupported YAML feature (anchor/alias/tag): "*x"');
-    expect(parseYamlSubset("a: !!str x\n").error).toBe('line 1: unsupported YAML feature (anchor/alias/tag): "!!str x"');
+    expect(parseYamlSubset("a: !!str x\n").error).toBe(
+      'line 1: unsupported YAML feature (anchor/alias/tag): "!!str x"',
+    );
   });
 
   test("flow mapping", () => {
@@ -177,7 +211,14 @@ describe("md-table", () => {
     const md = "prose\n| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\nafter\n";
     const tables = parseMarkdownTables(md);
     expect(tables).toEqual([
-      { header: ["A", "B"], line: 2, rows: [{ cells: ["1", "2"], line: 4 }, { cells: ["3", "4"], line: 5 }] },
+      {
+        header: ["A", "B"],
+        line: 2,
+        rows: [
+          { cells: ["1", "2"], line: 4 },
+          { cells: ["3", "4"], line: 5 },
+        ],
+      },
     ]);
   });
 
@@ -212,11 +253,15 @@ describe("schema — per-keyword exact messages", () => {
   test("object keywords: required / minProperties / additionalProperties / propertyNames", () => {
     expect(check({ type: "object", required: ["x"] }, {})).toEqual([': missing required property "x"']);
     expect(check({ type: "object", minProperties: 1 }, {})).toEqual([": fewer than 1 properties"]);
-    expect(check({ type: "object", properties: {}, additionalProperties: false }, { y: 1 })).toEqual([': unexpected property "y"']);
-    expect(check({ type: "object", additionalProperties: { type: "string" } }, { y: 1 })).toEqual(["/y: expected type string"]);
-    expect(check({ type: "object", propertyNames: { pattern: "^[a-z]+$" }, additionalProperties: {} }, { UP: 1 })).toEqual([
-      ': property name "UP" does not match required pattern',
+    expect(check({ type: "object", properties: {}, additionalProperties: false }, { y: 1 })).toEqual([
+      ': unexpected property "y"',
     ]);
+    expect(check({ type: "object", additionalProperties: { type: "string" } }, { y: 1 })).toEqual([
+      "/y: expected type string",
+    ]);
+    expect(
+      check({ type: "object", propertyNames: { pattern: "^[a-z]+$" }, additionalProperties: {} }, { UP: 1 }),
+    ).toEqual([': property name "UP" does not match required pattern']);
   });
 
   test("oneOf counts matching branches exactly", () => {
@@ -247,7 +292,19 @@ describe("schema — per-keyword exact messages", () => {
 
 describe("target id (the target vocabulary's primitive)", () => {
   test("parse admits the findings-schema shapes and rejects the rest", () => {
-    for (const raw of ["OB-1", "SC-12", "BR1.2", "DOB-3", "DSC-1", "DBG-2", "SM-1", "TR-10", "component:Order", "unit:u1-orders", "check:DD-1"]) {
+    for (const raw of [
+      "OB-1",
+      "SC-12",
+      "BR1.2",
+      "DOB-3",
+      "DSC-1",
+      "DBG-2",
+      "SM-1",
+      "TR-10",
+      "component:Order",
+      "unit:u1-orders",
+      "check:DD-1",
+    ]) {
       const r = TargetIdentifier.parse(raw);
       expect(r.ok && r.value.asString()).toBe(raw);
     }
@@ -266,7 +323,9 @@ describe("target id (the target vocabulary's primitive)", () => {
   });
 
   test("target ids collect primitives, collect typed ids, and escape through toStrings", () => {
-    const ids = TargetIdentifiers.of([TargetIdentifier.of("OB-10")]).add(TargetIdentifier.of("OB-2")).add(TargetIdentifier.of("OB-2"));
+    const ids = TargetIdentifiers.of([TargetIdentifier.of("OB-10")])
+      .add(TargetIdentifier.of("OB-2"))
+      .add(TargetIdentifier.of("OB-2"));
     expect(ids.toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect(ids.count()).toBe(3);
     expect(ids.toArray().length).toBe(3);
@@ -275,9 +334,13 @@ describe("target id (the target vocabulary's primitive)", () => {
     expect(ids.excluding(TargetIdentifier.of("OB-2")).toStrings()).toEqual(["OB-10"]);
     expect(ids.excluding(TargetIdentifier.of("OB-3")).toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect([...ids].map((t) => t.asString())).toEqual(["OB-10", "OB-2", "OB-2"]);
-    expect(TargetIdentifiers.of(Array.from(["SC-1", "OB-1"], (raw) => TargetIdentifier.of(raw))).joined(",")).toBe("SC-1,OB-1");
+    expect(TargetIdentifiers.of(Array.from(["SC-1", "OB-1"], (raw) => TargetIdentifier.of(raw))).joined(",")).toBe(
+      "SC-1,OB-1",
+    );
     // sortedCanonically keeps duplicates; sortedUniqueCanonically folds them.
-    const mixed = TargetIdentifiers.of(Array.from(["OB-10", "OB-2", "OB-2", "SC-1"], (raw) => TargetIdentifier.of(raw)));
+    const mixed = TargetIdentifiers.of(
+      Array.from(["OB-10", "OB-2", "OB-2", "SC-1"], (raw) => TargetIdentifier.of(raw)),
+    );
     expect(mixed.sortedCanonically().toStrings()).toEqual(["OB-2", "OB-2", "OB-10", "SC-1"]);
     expect(mixed.sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10", "SC-1"]);
   });
@@ -293,7 +356,11 @@ describe("target-ids / requirement-ids / names", () => {
   });
 
   test("requirementIds finds FR/NFR ids with optional dash and dotted segments", () => {
-    expect([...RequirementIdentifiers.extractFrom("FR-1 covers NFR2.1 but FRX-9 does not; FR-1 repeats")].map((id) => id.asString()).sort()).toEqual(["FR-1", "NFR2.1"]);
+    expect(
+      [...RequirementIdentifiers.extractFrom("FR-1 covers NFR2.1 but FRX-9 does not; FR-1 repeats")]
+        .map((id) => id.asString())
+        .sort(),
+    ).toEqual(["FR-1", "NFR2.1"]);
   });
 
   test("normalizeName casefolds and strips non-alphanumerics", () => {
@@ -349,7 +416,10 @@ describe("KeyedIndex (the keyed-index representation primitive, ruling 3-1)", ()
     expect(empty.isEmpty()).toBe(true);
     expect(empty.size()).toBe(0);
     expect(empty.get(id("OB-1"))).toBe(undefined);
-    const index = KeyedIndex.of<TargetIdentifier, number>([[id("OB-2"), 2], [id("OB-1"), 1]]);
+    const index = KeyedIndex.of<TargetIdentifier, number>([
+      [id("OB-2"), 2],
+      [id("OB-1"), 1],
+    ]);
     expect(index.has(id("OB-1"))).toBe(true);
     expect(index.has(id("OB-3"))).toBe(false);
     expect(index.get(id("OB-2"))).toBe(2);

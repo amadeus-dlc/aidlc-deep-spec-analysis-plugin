@@ -1,15 +1,15 @@
 import { type Expression, ExpressionTree, TargetIdentifier } from "@deep-spec/kernel-domain";
-import { BusinessRuleReferenceIndex } from "./business-rule-reference-index.ts";
-import { type BusinessRuleReferences } from "./business-rule-references.ts";
-import { type DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
-import { type DesignBackgroundDeclarations } from "./design-background-declarations.ts";
-import { type DesignEntityDeclarations } from "./design-entity-declarations.ts";
-import { type DesignMachineDeclarations } from "./design-machine-declarations.ts";
-import { type DesignObligationDeclarations } from "./design-obligation-declarations.ts";
-import { type DesignScenarioDeclarations } from "./design-scenario-declarations.ts";
-import { type DesignUnitIdentifier } from "./design-unit-identifier.ts";
-import { type UnformalizedTargets } from "./unformalized-targets.ts";
 import { BusinessRuleReference } from "./business-rule-reference.ts";
+import { BusinessRuleReferenceIndex } from "./business-rule-reference-index.ts";
+import type { BusinessRuleReferences } from "./business-rule-references.ts";
+import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
+import type { DesignBackgroundDeclarations } from "./design-background-declarations.ts";
+import type { DesignEntityDeclarations } from "./design-entity-declarations.ts";
+import type { DesignMachineDeclarations } from "./design-machine-declarations.ts";
+import type { DesignObligationDeclarations } from "./design-obligation-declarations.ts";
+import type { DesignScenarioDeclarations } from "./design-scenario-declarations.ts";
+import type { DesignUnitIdentifier } from "./design-unit-identifier.ts";
+import type { UnformalizedTargets } from "./unformalized-targets.ts";
 
 // 契約3 設計 IR の well-formedness 検査材料。スキーマ検証を通過した設計 IR を、
 // アダプタの寛容パースが型付きに解体したもの。ユニットごとの BR 材料
@@ -118,9 +118,7 @@ export class DesignUnitDeclaration {
       ent.inspectAttributes((coord, attr, duplicated) => {
         if (duplicated) errors.push(where(`duplicate attribute "${coord}"`));
         if (attr.lacksIntBounds()) {
-          errors.push(
-            where(`${coord}: int attributes require min and max — the Quint backend needs bounded domains`),
-          );
+          errors.push(where(`${coord}: int attributes require min and max — the Quint backend needs bounded domains`));
         }
         if (attr.boundsInverted()) {
           errors.push(where(`${coord}: min > max`));
@@ -139,7 +137,11 @@ export class DesignUnitDeclaration {
       const key = path.replace(/\./g, "_");
       const prior = encoded.get(key);
       if (prior !== undefined) {
-        errors.push(where(`attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`));
+        errors.push(
+          where(
+            `attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`,
+          ),
+        );
       } else {
         encoded.set(key, path);
       }
@@ -164,7 +166,9 @@ export class DesignUnitDeclaration {
         if (node.op === "ref" && typeof node.path === "string") {
           if (!attrTypes.has(node.path)) errors.push(where(`${ctx}: unresolvable reference "${node.path}"`));
           if (node.prime === true && !primesAllowed) {
-            errors.push(where(`${ctx}: primed reference "${node.path}" is only legal in effects and event-scenario expectations`));
+            errors.push(
+              where(`${ctx}: primed reference "${node.path}" is only legal in effects and event-scenario expectations`),
+            );
           }
         }
         if (node.op === "enum" && typeof node.value === "string") {
@@ -172,13 +176,16 @@ export class DesignUnitDeclaration {
           const siblingType = sibling === undefined ? undefined : attrTypes.get(sibling);
           if (siblingType !== undefined) {
             if (!siblingType.isEnum()) {
-              errors.push(where(`${ctx}: enum literal "${node.value}" is compared against non-enum attribute "${sibling}"`));
+              errors.push(
+                where(`${ctx}: enum literal "${node.value}" is compared against non-enum attribute "${sibling}"`),
+              );
             } else if (!siblingType.admitsEnumLiteral(node.value)) {
               errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of "${sibling}"`));
             }
           } else if (sibling === undefined) {
             const known = [...attrTypes.values()].some((t) => t.admitsEnumLiteral(node.value as string));
-            if (!known) errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of any declared enum attribute`));
+            if (!known)
+              errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of any declared enum attribute`));
           }
           // An unresolvable sibling ref is already reported by the ref check.
         }
@@ -237,7 +244,9 @@ export class DesignUnitDeclaration {
         if (cellKey !== null) transitionCells.add(cellKey);
         tr.inspectExpressions((expression, primesAllowed) => checkExpr(expression, tctx, primesAllowed));
         if (tr.assignsPrimedReferenceTo(attrPath)) {
-          errors.push(where(`${tctx}: the effect assigns the machine's own attribute "${attrPath}" — state' = to is implicit`));
+          errors.push(
+            where(`${tctx}: the effect assigns the machine's own attribute "${attrPath}" — state' = to is implicit`),
+          );
         }
       }
       for (const ig of sm.ignores()) {
@@ -246,7 +255,9 @@ export class DesignUnitDeclaration {
         }
         if (transitionCells.has(ig.cellKey())) {
           errors.push(
-            where(`${ctx}: ignores (${ig.state()}, ${ig.trigger().asString()}) collides with a declared transition for the same (state, trigger)`),
+            where(
+              `${ctx}: ignores (${ig.state()}, ${ig.trigger().asString()}) collides with a declared transition for the same (state, trigger)`,
+            ),
           );
         }
       }
@@ -265,7 +276,12 @@ export class DesignUnitDeclaration {
           continue;
         }
         const ok = t.fitsBinding(val);
-        if (!ok) errors.push(where(`${ctx}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`));
+        if (!ok)
+          errors.push(
+            where(
+              `${ctx}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`,
+            ),
+          );
       }
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
     }
@@ -282,14 +298,18 @@ export class DesignUnitDeclaration {
     // check silently ("Silence is a contract violation").
     if (this.lacksConstructionDirectory()) {
       errors.push(
-        where(`no construction/${unitName}/ directory exists under this record — the unit name matches no unit-of-work, so BR coverage cannot be verified`),
+        where(
+          `no construction/${unitName}/ directory exists under this record — the unit name matches no unit-of-work, so BR coverage cannot be verified`,
+        ),
       );
     }
     const rulesMd = this.#rulesMarkdown;
     if (rulesMd === null) {
       if (businessRuleReferencesUsed.size > 0) {
         errors.push(
-          where(`brRefs are used but construction/${unitName}/functional-design/rules.md was not found — they cannot be reverse-verified`),
+          where(
+            `brRefs are used but construction/${unitName}/functional-design/rules.md was not found — they cannot be reverse-verified`,
+          ),
         );
       }
     } else {
@@ -301,7 +321,9 @@ export class DesignUnitDeclaration {
       for (const br of known.sortedIds()) {
         if (!businessRuleReferencesUsed.has(br) && !unformalizedTargets.covers(TargetIdentifier.of(br))) {
           errors.push(
-            where(`BR coverage: rule ${br} in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] — silence is a contract violation`),
+            where(
+              `BR coverage: rule ${br} in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] — silence is a contract violation`,
+            ),
           );
         }
       }

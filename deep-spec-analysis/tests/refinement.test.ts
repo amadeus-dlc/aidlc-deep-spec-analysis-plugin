@@ -34,12 +34,20 @@ const quintEnv = {
   AIDLC_DEEP_SPEC_QUINT_BIN: quintBin,
 };
 
-function fire(tool: string, modelPath: string, env: { [k: string]: string } = {}): { status: number | null; stdout: string } {
-  const res = spawnSync("bun", [join(toolsDir, tool), "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath], {
-    encoding: "utf-8",
-    timeout: 240_000,
-    env: { ...process.env, ...env },
-  });
+function fire(
+  tool: string,
+  modelPath: string,
+  env: { [k: string]: string } = {},
+): { status: number | null; stdout: string } {
+  const res = spawnSync(
+    "bun",
+    [join(toolsDir, tool), "--stage", "deep-spec-analysis-functional-verify", "--output-path", modelPath],
+    {
+      encoding: "utf-8",
+      timeout: 240_000,
+      env: { ...process.env, ...env },
+    },
+  );
   return { status: res.status, stdout: res.stdout ?? "" };
 }
 
@@ -71,8 +79,12 @@ describe("refinement conformance (expected findings, byte-for-byte)", () => {
     const quintRun = fire("aidlc-sensor-deep-spec-design-verify-quint.ts", modelPath, quintEnv);
     expect(quintRun.status).toBe(0);
     expect(JSON.parse(quintRun.stdout)).toMatchObject({ pass: false, findings_count: 2, method: "simulation" });
-    expect(readFileSync(join(verifyDir, "quint.json"), "utf-8")).toBe(readFileSync(join(expected, "quint.json"), "utf-8"));
-    expect(readFileSync(join(verifyDir, "cross-check.json"), "utf-8")).toBe(readFileSync(join(expected, "cross-check.json"), "utf-8"));
+    expect(readFileSync(join(verifyDir, "quint.json"), "utf-8")).toBe(
+      readFileSync(join(expected, "quint.json"), "utf-8"),
+    );
+    expect(readFileSync(join(verifyDir, "cross-check.json"), "utf-8")).toBe(
+      readFileSync(join(expected, "cross-check.json"), "utf-8"),
+    );
 
     const before = ["smt.json", "quint.json", "cross-check.json"].map((f) => readFileSync(join(verifyDir, f), "utf-8"));
     expect(fire("aidlc-sensor-deep-spec-design-verify-smt.ts", modelPath).status).toBe(0);
@@ -84,16 +96,21 @@ describe("refinement conformance (expected findings, byte-for-byte)", () => {
 
   test("the planted refinement defects surface with requirements-side targets and provenance", () => {
     const smt = JSON.parse(readFileSync(join(expected, "smt.json"), "utf-8"));
-    const byKind = (k: string): { targets: string[]; frRefs: string[] }[] => smt.findings.filter((f: { kind: string }) => f.kind === k);
+    const byKind = (k: string): { targets: string[]; frRefs: string[] }[] =>
+      smt.findings.filter((f: { kind: string }) => f.kind === k);
     const rv = byKind("refinement-violation");
     expect(rv.map((f) => f.targets.join(","))).toEqual(["OB-1", "SC-2"]);
     expect(rv[0]?.frRefs).toEqual(["FR-1"]);
     expect(byKind("mapping-gap")[0]?.targets).toEqual(["attr:order.note"]);
     // Enabledness: the requirements event's gap names both the requirement and
     // its mapped transition.
-    const enable = smt.findings.find((f: { kind: string; targets: string[] }) => f.kind === "completeness-gap" && f.targets.includes("OB-2"));
+    const enable = smt.findings.find(
+      (f: { kind: string; targets: string[] }) => f.kind === "completeness-gap" && f.targets.includes("OB-2"),
+    );
     expect(enable?.targets).toEqual(["OB-2", "TR-2"]);
-    expect(smt.skipped).toEqual([{ target: "OB-3", reason: "waived", unit: "u1-orders", detail: "depends on the unmapped audit flag" }]);
+    expect(smt.skipped).toEqual([
+      { target: "OB-3", reason: "waived", unit: "u1-orders", detail: "depends on the unmapped audit flag" },
+    ]);
     expect((smt.inputs ?? []).map((i: { artifact: string }) => i.artifact)).toHaveLength(3);
 
     const quint = JSON.parse(readFileSync(join(expected, "quint.json"), "utf-8"));
@@ -127,7 +144,10 @@ describe("refinement degradation (never silence)", () => {
       return;
     }
     const { modelPath, mapPath, verifyDir } = makeRecord();
-    writeFileSync(mapPath, readFileSync(mapPath, "utf-8").replace(/"designIrHash": "[0-9a-f]{64}"/, `"designIrHash": "${"0".repeat(64)}"`));
+    writeFileSync(
+      mapPath,
+      readFileSync(mapPath, "utf-8").replace(/"designIrHash": "[0-9a-f]{64}"/, `"designIrHash": "${"0".repeat(64)}"`),
+    );
     expect(fire("aidlc-sensor-deep-spec-design-verify-smt.ts", modelPath).status).toBe(0);
     const doc = JSON.parse(readFileSync(join(verifyDir, "smt.json"), "utf-8"));
     const refSkips = doc.skipped.filter((s: { reason: string }) => s.reason === "stale-input");
@@ -144,7 +164,9 @@ describe("refinement degradation (never silence)", () => {
     writeFileSync(mapPath, readFileSync(mapPath, "utf-8").replace('"unit": "u1-orders"', '"unit": "u2-other"'));
     expect(fire("aidlc-sensor-deep-spec-design-verify-smt.ts", modelPath).status).toBe(0);
     const doc = JSON.parse(readFileSync(join(verifyDir, "smt.json"), "utf-8"));
-    const refSkips = doc.skipped.filter((s: { detail?: string }) => (s.detail ?? "").includes("no entry for unit u1-orders"));
+    const refSkips = doc.skipped.filter((s: { detail?: string }) =>
+      (s.detail ?? "").includes("no entry for unit u1-orders"),
+    );
     expect(refSkips.length).toBe(5);
   }, 120_000);
 });

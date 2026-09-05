@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, compareCanonically, type Result } from "@deep-spec/kernel-infrastructure";
+import {
+  compareCanonically,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
 
 export class ComponentName {
   readonly #value: string;
@@ -16,8 +21,14 @@ export class ComponentName {
   static parse(raw: string): Result<ComponentName, ParseError> {
     return parseConstruction(() => new ComponentName(raw));
   }
-  equals(other: ComponentName): boolean { return this.#value === other.#value; }
+  equals(other: ComponentName): boolean {
+    return this.#value === other.#value;
+  }
   // 正準順（裁定 1）——kernel の TargetIdentifier が所有する順序に従う。
-  compareTo(other: ComponentName): number { return compareCanonically(this.#value, other.#value); }
-  asString(): string { return this.#value; }
+  compareTo(other: ComponentName): number {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString(): string {
+    return this.#value;
+  }
 }

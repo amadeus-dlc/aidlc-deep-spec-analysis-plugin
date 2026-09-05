@@ -1,4 +1,4 @@
-import { combineResults, traverseResult, ok } from "@deep-spec/kernel-infrastructure";
+import { combineResults, ok, traverseResult } from "@deep-spec/kernel-infrastructure";
 // RefinementSolverClient の実 Gateway 実装。第 2 コンパイラでクエリ計画を組み、
 // PROVEN v1 z3 子（verify-smt entry の --smt-child）へ実行させ、生のテキスト
 // モデルを decode した型付き判定を返す。クエリゼロは子を起動しない（凍結）。
@@ -8,18 +8,14 @@ import { combineResults, traverseResult, ok } from "@deep-spec/kernel-infrastruc
 // 旧 runRefinementChild からの逐語移植。
 
 import { spawnSync } from "node:child_process";
+import type { DesignUnit, RefinementRequirements, UnitRefinementPlan } from "@deep-spec/design-domain";
 import { RefinementQueryVerdict, RefinementQueryVerdicts } from "@deep-spec/design-domain";
-import type {
-  RefinementRequirements,
-  UnitRefinementPlan,
-} from "@deep-spec/design-domain";
-import type { DesignUnit } from "@deep-spec/design-domain";
 
 import type { RefinementCheck, RefinementSolverClient } from "@deep-spec/design-usecase";
-import { type RefinementChildQuery } from "./refinement-child-query.ts";
+import { KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
+import type { RefinementChildQuery } from "./refinement-child-query.ts";
 import { buildRefinementQueries, decodeDesignModel } from "./refinement-query-plan.ts";
 import type { RefinementSolverClientConfiguration } from "./refinement-solver-client-configuration.ts";
-import { KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
 
 interface RefinementChildResult {
   id: string;
@@ -36,7 +32,12 @@ export class RefinementSolverClientImplementation implements RefinementSolverCli
     this.#config = config;
   }
 
-  check(unit: DesignUnit, requirements: RefinementRequirements, plan: UnitRefinementPlan, budgetMs: number): RefinementCheck {
+  check(
+    unit: DesignUnit,
+    requirements: RefinementRequirements,
+    plan: UnitRefinementPlan,
+    budgetMs: number,
+  ): RefinementCheck {
     const built = buildRefinementQueries(unit, requirements, plan);
     if (built.queries.length === 0) {
       return { plan: built.plan, result: { kind: "no-queries" } };
@@ -51,18 +52,31 @@ export class RefinementSolverClientImplementation implements RefinementSolverCli
         label: QueryLabel.parse(queryId),
         core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse),
       });
-      if (!parsed.ok) return { plan: built.plan, result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` } };
-      verdicts.push([parsed.value.label, RefinementQueryVerdict.of({
-        status: r.status,
-        decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
-        decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
-        core: parsed.value.core?.map((label) => label.asString()),
-      })]);
+      if (!parsed.ok)
+        return {
+          plan: built.plan,
+          result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` },
+        };
+      verdicts.push([
+        parsed.value.label,
+        RefinementQueryVerdict.of({
+          status: r.status,
+          decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
+          decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
+          core: parsed.value.core?.map((label) => label.asString()),
+        }),
+      ]);
     }
-    return { plan: built.plan, result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)) } };
+    return {
+      plan: built.plan,
+      result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)) },
+    };
   }
 
-  #runChild(queries: RefinementChildQuery[], budgetMs: number): { results: Map<string, RefinementChildResult> | null; unavailable: string | null } {
+  #runChild(
+    queries: RefinementChildQuery[],
+    budgetMs: number,
+  ): { results: Map<string, RefinementChildResult> | null; unavailable: string | null } {
     const payload = JSON.stringify({ queries, timeoutMs: this.#config.perQueryTimeoutMs, budgetMs });
     const runtimes = this.#config.runtimeOverride ? [this.#config.runtimeOverride] : ["node", "bun"];
     const attempts: string[] = [];

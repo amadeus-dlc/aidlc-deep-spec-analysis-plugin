@@ -23,6 +23,9 @@ export class BusinessRuleReferenceIndex {
 
   // 境界: 凍結文言の列挙順（文字列順）。
   sortedIds(): string[] {
-    return this.#ids.toArray().map((id) => id.asString()).sort();
+    return this.#ids
+      .toArray()
+      .map((id) => id.asString())
+      .sort();
   }
 }

@@ -1,8 +1,8 @@
 import type { RequirementIdentifiers } from "@deep-spec/kernel-domain";
-import { type AppliesTo } from "./applies-to.ts";
-import { type DeclaredRuleIdentifier } from "./declared-rule-identifier.ts";
-import { type ElementPath } from "./element-path.ts";
-import { type RuleCategory } from "./rule-category.ts";
+import type { AppliesTo } from "./applies-to.ts";
+import type { DeclaredRuleIdentifier } from "./declared-rule-identifier.ts";
+import type { ElementPath } from "./element-path.ts";
+import type { RuleCategory } from "./rule-category.ts";
 import type { SourceIdentifiers } from "./source-identifiers.ts";
 
 // 規則宣言。finding target の選定（BR 形なら自分の id、でなければ族の
@@ -61,7 +61,7 @@ export class RuleDeclaration {
 
   // 旧 `r.id !== null && /^BR…$/.test(r.id) ? r.id : fallback` の移設。
   findingTarget(fallback: string): string {
-    return this.#id !== null && this.#id.matchesShape() ? this.#id.asString() : fallback;
+    return this.#id?.matchesShape() ? this.#id.asString() : fallback;
   }
 
   // FD-R3: requirements.md に存在しない source id（値の昇順——凍結順）。

@@ -1,12 +1,12 @@
 import {
-  UnitName,
-  TargetIdentifier,
   FindingKind,
-  FunctionalRequirementReferences,
-  TargetIdentifiers,
-  KeyedIndex,
-  QueryLabel,
+  type FunctionalRequirementReferences,
+  type KeyedIndex,
+  type QueryLabel,
   SkipReason,
+  TargetIdentifier,
+  TargetIdentifiers,
+  UnitName,
 } from "@deep-spec/kernel-domain";
 
 // refinement ソルバ実行の型付き判定と計画（対応表）。SMT-LIB スクリプト・z3 の生
@@ -17,15 +17,11 @@ import {
 // detail 文言は golden 凍結）は plan 自身の振る舞い（OOUI 裁定——旧
 // interpretRefinementVerdicts の逐語移植）。
 
-import { DesignFinding, DesignFindings, DesignSkips } from "@deep-spec/design-domain";
-import { DesignSkipped } from "@deep-spec/design-domain";
-import { DesignWitness } from "@deep-spec/design-domain";
-
-import { type UnitRefinementPlan } from "./unit-refinement-plan.ts";
-import type { RefinementRequirements } from "./refinement-requirements.ts";
-
+import { DesignFinding, DesignFindings, DesignSkipped, DesignSkips, DesignWitness } from "@deep-spec/design-domain";
 import type { RefinementProbe } from "./refinement-probe.ts";
-import { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
+import type { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
+import type { RefinementRequirements } from "./refinement-requirements.ts";
+import type { UnitRefinementPlan } from "./unit-refinement-plan.ts";
 
 // クエリ計画（値オブジェクト、裁定 8——旧 RefinementSolverFacts）：発行順の Pending 索引と、alpha 置換・SMT コンパイル失敗
 // による compile-error skip（構築時に確定）。
@@ -38,7 +34,10 @@ export class RefinementSolverPlan {
     this.#compileSkips = props.compileSkips;
   }
 
-  static of(props: { pending: KeyedIndex<QueryLabel, RefinementProbe>; compileSkips: DesignSkips }): RefinementSolverPlan {
+  static of(props: {
+    pending: KeyedIndex<QueryLabel, RefinementProbe>;
+    compileSkips: DesignSkips;
+  }): RefinementSolverPlan {
     return new RefinementSolverPlan({ pending: props.pending, compileSkips: props.compileSkips });
   }
 
@@ -64,17 +63,20 @@ export class RefinementSolverPlan {
   } {
     const findings: DesignFinding[] = [];
     const skipped: DesignSkipped[] = [];
-    const functionalRequirementReferencesOf = (reqId: string): FunctionalRequirementReferences => req.functionalRequirementReferencesOf(reqId).sortedUnique();
+    const functionalRequirementReferencesOf = (reqId: string): FunctionalRequirementReferences =>
+      req.functionalRequirementReferencesOf(reqId).sortedUnique();
 
     for (const [queryId, p] of this.#pending) {
       const r = results.verdictOf(queryId);
       if (!r || r.isUndecided()) {
-        skipped.push(DesignSkipped.of({
-          target: p.reqTarget(),
-          reason: SkipReason.timeout(),
-          unit: UnitName.of(unitName),
-          detail: `refinement query ${queryId.asString()} exceeded the solver budget or errored`,
-        }));
+        skipped.push(
+          DesignSkipped.of({
+            target: p.reqTarget(),
+            reason: SkipReason.timeout(),
+            unit: UnitName.of(unitName),
+            detail: `refinement query ${queryId.asString()} exceeded the solver budget or errored`,
+          }),
+        );
         continue;
       }
       // 種類ごとの解釈は問いへ命じる（#71 波22）。
@@ -126,7 +128,12 @@ export class RefinementSolverPlan {
               DesignFinding.of({
                 kind: FindingKind.completenessGap(),
                 functionalRequirementReferences: functionalRequirementReferencesOf(reqId.asString()),
-                targets: TargetIdentifiers.of(Array.from([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())], (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
+                targets: TargetIdentifiers.of(
+                  Array.from(
+                    [reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())],
+                    (raw) => TargetIdentifier.of(raw),
+                  ),
+                ).sortedUniqueCanonically(),
                 witness: DesignWitness.model(r.witnessModel()),
                 unit: UnitName.of(unitName),
                 detail: `The requirements event ${reqId.asString()} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
@@ -142,7 +149,12 @@ export class RefinementSolverPlan {
                 functionalRequirementReferences: functionalRequirementReferencesOf(reqId.asString()),
                 // simulation probe の designId は構築時に必須——旧 `?? ""` +空除去は
                 // designId 未設定の防御で、必須化により恒等（挙動保存）。
-                targets: TargetIdentifiers.of(Array.from([reqId.asString(), designId.asString()].filter((t) => t !== ""), (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
+                targets: TargetIdentifiers.of(
+                  Array.from(
+                    [reqId.asString(), designId.asString()].filter((t) => t !== ""),
+                    (raw) => TargetIdentifier.of(raw),
+                  ),
+                ).sortedUniqueCanonically(),
                 witness: DesignWitness.trace(r.witnessTrace()),
                 unit: UnitName.of(unitName),
                 detail: `Design step ${designId.asString()} of unit ${unitName}, taken where requirements event ${reqId.asString()} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,

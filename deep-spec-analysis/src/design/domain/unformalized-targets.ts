@@ -1,7 +1,7 @@
 // UnformalizedTargets — 設計 IR の unformalized[]（形式化しないと宣言した
 // 対象 id）の集合。要素は TargetIdentifier、内側は KeySet（裁定 3-1、2026-09-03）。
 
-import { KeySet, TargetIdentifier } from "@deep-spec/kernel-domain";
+import { KeySet, type TargetIdentifier } from "@deep-spec/kernel-domain";
 
 export class UnformalizedTargets {
   readonly #values: KeySet<TargetIdentifier>;

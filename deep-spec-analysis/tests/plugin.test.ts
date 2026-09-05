@@ -13,10 +13,7 @@ import { fileURLToPath } from "node:url";
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 function checkoutDir(): string | null {
-  const candidates = [
-    process.env.AIDLC_WORKFLOWS_CHECKOUT,
-    join(pluginRoot, "..", "aidlc-workflows"),
-  ];
+  const candidates = [process.env.AIDLC_WORKFLOWS_CHECKOUT, join(pluginRoot, "..", "aidlc-workflows")];
   for (const c of candidates) {
     if (c && existsSync(join(c, "core", "tools", "aidlc-plugin-validate.ts"))) return c;
   }

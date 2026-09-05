@@ -17,6 +17,10 @@ export class SourceIdentifier {
   static parse(raw: string): Result<SourceIdentifier, ParseError> {
     return parseConstruction(() => new SourceIdentifier(raw));
   }
-  equals(other: SourceIdentifier): boolean { return this.#value === other.#value; }
-  asString(): string { return this.#value; }
+  equals(other: SourceIdentifier): boolean {
+    return this.#value === other.#value;
+  }
+  asString(): string {
+    return this.#value;
+  }
 }

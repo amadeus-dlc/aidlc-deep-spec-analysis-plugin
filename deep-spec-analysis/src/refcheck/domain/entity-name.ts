@@ -19,10 +19,15 @@ export class EntityName {
   static parse(raw: string): Result<EntityName, ParseError> {
     return parseConstruction(() => new EntityName(raw));
   }
-  equals(other: EntityName): boolean { return this.#value === other.#value; }
+  equals(other: EntityName): boolean {
+    return this.#value === other.#value;
+  }
   // 境界: 文言・witness 位置に逐語で載る宣言名。
-  asString(): string { return this.#value; }
+  asString(): string {
+    return this.#value;
+  }
   // 照合はケース・区切りを畳んだ正規化名で行う（XS/FD-S の凍結挙動）。
-  normalized(): NormalizedName { return NormalizedName.of(this.#value); }
+  normalized(): NormalizedName {
+    return NormalizedName.of(this.#value);
+  }
 }
-

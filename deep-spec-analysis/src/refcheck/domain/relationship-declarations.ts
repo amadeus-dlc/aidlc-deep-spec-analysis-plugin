@@ -1,4 +1,4 @@
-import { RelationshipDeclaration } from "./relationship-declaration.ts";
+import type { RelationshipDeclaration } from "./relationship-declaration.ts";
 
 export class RelationshipDeclarations {
   readonly #values: readonly RelationshipDeclaration[];

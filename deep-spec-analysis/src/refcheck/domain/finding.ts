@@ -1,12 +1,24 @@
-import { type FunctionalRequirementReferences, type TargetIdentifiers, FindingKind, UnitName } from "@deep-spec/kernel-domain";
-import { type WitnessReferences } from "./witness-references.ts";
+import type {
+  FindingKind,
+  FunctionalRequirementReferences,
+  TargetIdentifiers,
+  UnitName,
+} from "@deep-spec/kernel-domain";
+import type { WitnessReferences } from "./witness-references.ts";
 
 // refcheck finding（無沈黙台帳の 1 行）——kind・要件参照・対象・witness ref
 // 列・任意の帰属ユニット・説明。契約2 の正準順の材料面（kind 順位表は
 // Findings が所有する）は記録自身の知識（#71 波18）。kind は分類文字列、
 // detail は prose（裁定の恒久除外）。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type FindingParam = { kind: FindingKind; functionalRequirementReferences: FunctionalRequirementReferences; targets: TargetIdentifiers; witness: { refs: WitnessReferences }; unit?: UnitName; detail: string };
+type FindingParam = {
+  kind: FindingKind;
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  targets: TargetIdentifiers;
+  witness: { refs: WitnessReferences };
+  unit?: UnitName;
+  detail: string;
+};
 
 export class Finding {
   readonly #kind: FindingKind;

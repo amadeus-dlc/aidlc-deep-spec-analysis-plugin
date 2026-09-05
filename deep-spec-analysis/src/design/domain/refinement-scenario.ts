@@ -1,9 +1,14 @@
-import type { ScenarioBindings } from "@deep-spec/kernel-domain";
-import type { FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
+import type { FunctionalRequirementReferences, ScenarioBindings, TriggerName } from "@deep-spec/kernel-domain";
 import type { ScenarioIdentifier } from "@deep-spec/requirements-domain";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type RefinementScenarioParam = { id: ScenarioIdentifier; kind: "accept" | "reject"; functionalRequirementReferences: FunctionalRequirementReferences; bindings: ScenarioBindings; event?: { readonly trigger: TriggerName } };
+type RefinementScenarioParam = {
+  id: ScenarioIdentifier;
+  kind: "accept" | "reject";
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  bindings: ScenarioBindings;
+  event?: { readonly trigger: TriggerName };
+};
 
 export class RefinementScenario {
   readonly #id: ScenarioIdentifier;
@@ -24,12 +29,28 @@ export class RefinementScenario {
     return new RefinementScenario(props);
   }
 
-  id(): ScenarioIdentifier { return this.#id; }
-  kind(): "accept" | "reject" { return this.#kind; }
-  functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
-  eventTrigger(): TriggerName | undefined { return this.#eventTrigger; }
-  isAccept(): boolean { return this.#kind === "accept"; }
-  isReject(): boolean { return this.#kind === "reject"; }
-  hasEvent(): boolean { return this.#eventTrigger !== undefined; }
-  bindings(): ScenarioBindings { return this.#bindings; }
+  id(): ScenarioIdentifier {
+    return this.#id;
+  }
+  kind(): "accept" | "reject" {
+    return this.#kind;
+  }
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
+  }
+  eventTrigger(): TriggerName | undefined {
+    return this.#eventTrigger;
+  }
+  isAccept(): boolean {
+    return this.#kind === "accept";
+  }
+  isReject(): boolean {
+    return this.#kind === "reject";
+  }
+  hasEvent(): boolean {
+    return this.#eventTrigger !== undefined;
+  }
+  bindings(): ScenarioBindings {
+    return this.#bindings;
+  }
 }

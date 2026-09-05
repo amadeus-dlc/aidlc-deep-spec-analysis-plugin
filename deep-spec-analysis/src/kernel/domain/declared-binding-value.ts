@@ -15,7 +15,8 @@ export class DeclaredBindingValue {
 
   fits(kind: AttributeKind, admitsEnum: (value: string) => boolean): boolean {
     return this.#value.match({
-      literal: (value) => (kind.isBool() && typeof value === "boolean") ||
+      literal: (value) =>
+        (kind.isBool() && typeof value === "boolean") ||
         (kind.isInt() && typeof value === "number" && Number.isSafeInteger(value)) ||
         (kind.isEnum() && typeof value === "string" && admitsEnum(value)),
       nonLiteral: () => false,
@@ -26,5 +27,7 @@ export class DeclaredBindingValue {
     return this.#value.match(cases);
   }
 
-  describe(): string { return this.#value.describe(); }
+  describe(): string {
+    return this.#value.describe();
+  }
 }

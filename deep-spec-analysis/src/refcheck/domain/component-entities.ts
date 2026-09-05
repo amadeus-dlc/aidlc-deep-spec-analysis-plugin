@@ -1,5 +1,5 @@
 import type { ComponentEntity } from "./component-entity.ts";
-import { type EntityName } from "./entity-name.ts";
+import type { EntityName } from "./entity-name.ts";
 
 export class ComponentEntities {
   readonly #values: readonly ComponentEntity[];

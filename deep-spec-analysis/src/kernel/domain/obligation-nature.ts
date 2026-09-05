@@ -5,7 +5,8 @@ export class ObligationNature {
 
   /** 128 UTF-16コード単位までの宣言を保持する。空宣言は診断対象として有効。 */
   private constructor(value: string) {
-    if (value.length > 128) throw new IllegalArgumentException({ kind: "obligation-nature-too-long", raw: value.length });
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "obligation-nature-too-long", raw: value.length });
 
     this.#value = value;
   }

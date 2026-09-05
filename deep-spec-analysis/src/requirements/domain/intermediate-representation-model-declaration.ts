@@ -11,11 +11,11 @@
 // 時点で型は確定している。
 
 import { type Expression, ExpressionTree } from "@deep-spec/kernel-domain";
-import { type IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
-import { IntermediateRepresentationBackgroundDeclarations } from "./intermediate-representation-background-declarations.ts";
-import { IntermediateRepresentationEntityDeclarations } from "./intermediate-representation-entity-declarations.ts";
-import { IntermediateRepresentationObligationDeclarations } from "./intermediate-representation-obligation-declarations.ts";
-import { IntermediateRepresentationScenarioDeclarations } from "./intermediate-representation-scenario-declarations.ts";
+import type { IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
+import type { IntermediateRepresentationBackgroundDeclarations } from "./intermediate-representation-background-declarations.ts";
+import type { IntermediateRepresentationEntityDeclarations } from "./intermediate-representation-entity-declarations.ts";
+import type { IntermediateRepresentationObligationDeclarations } from "./intermediate-representation-obligation-declarations.ts";
+import type { IntermediateRepresentationScenarioDeclarations } from "./intermediate-representation-scenario-declarations.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type IntermediateRepresentationModelDeclarationParam = {
@@ -80,7 +80,9 @@ export class IntermediateRepresentationModelDeclaration {
       const key = path.replace(/\./g, "_");
       const prior = encoded.get(key);
       if (prior !== undefined) {
-        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
+        errors.push(
+          `schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`,
+        );
       } else {
         encoded.set(key, path);
       }
@@ -93,7 +95,9 @@ export class IntermediateRepresentationModelDeclaration {
             errors.push(`${where}: unresolvable reference "${node.path}"`);
           }
           if (node.prime === true && !primesAllowed) {
-            errors.push(`${where}: primed reference "${node.path}" is only legal in event effects and event-scenario expectations`);
+            errors.push(
+              `${where}: primed reference "${node.path}" is only legal in event effects and event-scenario expectations`,
+            );
           }
         }
         if (node.op === "enum" && typeof node.value === "string") {
@@ -129,7 +133,9 @@ export class IntermediateRepresentationModelDeclaration {
           continue;
         }
         if (!t.fitsBinding(val)) {
-          errors.push(`${where}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`);
+          errors.push(
+            `${where}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`,
+          );
         }
       }
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));

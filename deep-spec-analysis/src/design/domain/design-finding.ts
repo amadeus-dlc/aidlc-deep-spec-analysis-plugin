@@ -4,7 +4,12 @@
 // 要件 id に届く conflict は refinement-violation へ昇格する——文言は凍結）
 // は finding 自身が所有する（#71 波7）。
 
-import { TargetIdentifiers, type FunctionalRequirementReferences, FindingKind, UnitName } from "@deep-spec/kernel-domain";
+import {
+  FindingKind,
+  type FunctionalRequirementReferences,
+  TargetIdentifiers,
+  type UnitName,
+} from "@deep-spec/kernel-domain";
 import type { DesignWitness } from "./design-witness.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。

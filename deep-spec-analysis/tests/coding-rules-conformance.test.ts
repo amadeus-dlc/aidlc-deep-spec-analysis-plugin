@@ -2,33 +2,77 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ArtifactPath, ContentHash, KeyedIndex, QueryLabel, TargetIdentifiers } from "@deep-spec/kernel-domain";
-import { type Json, IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
 import {
-  FormalModelIdentifier, RequirementsModel, ObligationIdentifier, ScenarioIdentifier, BackgroundAssumptionIdentifier,
-  SatisfiabilityModuloTheoriesQueryVerdict, SatisfiabilityModuloTheoriesQueryVerdicts,
-} from "@deep-spec/requirements-domain";
-import {
-  LoweringIndex, DesignObligationIdentifier, DesignScenarioIdentifier, DesignBackgroundIdentifier, DesignMachineIdentifier, DesignTransitionIdentifier,
+  DesignBackgroundIdentifier,
+  DesignMachineIdentifier,
+  DesignObligationIdentifier,
+  DesignScenarioIdentifier,
+  DesignTransitionIdentifier,
+  LoweringIndex,
 } from "@deep-spec/design-domain";
-import { parseFormalModel, buildSmtPlan, parseSmtChildResults, Z3SolverClientImplementation } from "@deep-spec/requirements-adapter";
+import { ArtifactPath, ContentHash, KeyedIndex, QueryLabel, TargetIdentifiers } from "@deep-spec/kernel-domain";
+import { IllegalArgumentException, type Json } from "@deep-spec/kernel-infrastructure";
 import {
-  AttributeDeclaration, AttributeName, ElementPath, TypeName, AttributeDefault, NumericBound,
-  RuleDeclaration, DeclaredRuleIdentifier, RuleCategory, SourceIdentifiers, EntityDeclaration, EntityName, AttributeDeclarations,
-  RelationshipDeclaration, RelationshipDeclarations, CardinalityNotation, StateMachineSketch, MachineSpecification, StateNames, LineNumber,
-  DomainEntitySketch, ComponentName, AttributeNames, DeclaredEntities, EntityDeclarations, ShapeErrors,
+  AttributeDeclaration,
+  AttributeDeclarations,
+  AttributeDefault,
+  AttributeName,
+  AttributeNames,
+  CardinalityNotation,
+  ComponentName,
+  DeclaredEntities,
+  DeclaredRuleIdentifier,
+  DomainEntitySketch,
+  ElementPath,
+  EntityDeclaration,
+  EntityDeclarations,
+  EntityName,
+  LineNumber,
+  MachineSpecification,
+  NumericBound,
+  RelationshipDeclaration,
+  RelationshipDeclarations,
+  RuleCategory,
+  RuleDeclaration,
+  ShapeErrors,
+  SourceIdentifiers,
+  StateMachineSketch,
+  StateNames,
+  TypeName,
 } from "@deep-spec/refcheck-domain";
+import {
+  buildSmtPlan,
+  parseFormalModel,
+  parseSmtChildResults,
+  Z3SolverClientImplementation,
+} from "@deep-spec/requirements-adapter";
+import {
+  BackgroundAssumptionIdentifier,
+  FormalModelIdentifier,
+  ObligationIdentifier,
+  RequirementsModel,
+  SatisfiabilityModuloTheoriesQueryVerdict,
+  SatisfiabilityModuloTheoriesQueryVerdicts,
+  ScenarioIdentifier,
+} from "@deep-spec/requirements-domain";
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 function model(assertion: Json = { op: "bool", value: false }): RequirementsModel {
   const parsed = parseFormalModel({
-    irVersion: "1.0.0", schema: { entities: [] },
+    irVersion: "1.0.0",
+    schema: { entities: [] },
     obligations: [{ id: "OB-1", nature: "invariant", frRefs: ["FR-1"], assert: assertion }],
-    scenarios: [], background: [],
+    scenarios: [],
+    background: [],
   });
   if (!parsed.ok) throw new Error(parsed.error);
-  return RequirementsModel.of({ ...parsed.value, id: FormalModelIdentifier.of(ArtifactPath.of("model.md")), irHash: ContentHash.ofText("fixture"), sourceDocument: new Uint8Array() });
+  return RequirementsModel.of({
+    ...parsed.value,
+    id: FormalModelIdentifier.of(ArtifactPath.of("model.md")),
+    irHash: ContentHash.ofText("fixture"),
+    sourceDocument: new Uint8Array(),
+  });
 }
 
 describe("SMT response completeness", () => {
@@ -38,7 +82,15 @@ describe("SMT response completeness", () => {
     { raw: { results: null }, cause: "lacks a results array" },
     { raw: { results: [] }, cause: "omitted query results" },
     { raw: { results: [{ id: "global", status: "sat" }] }, cause: "omitted query results: vac:OB-1" },
-    { raw: { results: [{ id: "global", status: "sat" }, { id: "global", status: "unsat" }] }, cause: "duplicate query global" },
+    {
+      raw: {
+        results: [
+          { id: "global", status: "sat" },
+          { id: "global", status: "unsat" },
+        ],
+      },
+      cause: "duplicate query global",
+    },
     { raw: { results: [{ id: "other", status: "sat" }, other] }, cause: "unexpected query other" },
     { raw: { results: [{ status: "sat" }, other] }, cause: "lacks a query id" },
     { raw: { results: [{ id: "global", status: "invalid" }, other] }, cause: "invalid status" },
@@ -53,13 +105,26 @@ describe("SMT response completeness", () => {
   });
 
   test.each(["sat", "unsat", "unknown", "budget", "error"])("accepts a complete %s response", (status) => {
-    const result = parseSmtChildResults({ results: [{ id: "q", status, model: { x: "1" }, core: ["ob_OB_1"], error: "detail" }] }, ["q"]);
+    const result = parseSmtChildResults(
+      { results: [{ id: "q", status, model: { x: "1" }, core: ["ob_OB_1"], error: "detail" }] },
+      ["q"],
+    );
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.get("q")?.status).toBe(status);
   });
 
   test("matches query identity independently of response order", () => {
-    expect(parseSmtChildResults({ results: [{ id: "b", status: "sat" }, { id: "a", status: "unsat" }] }, ["a", "b"]).ok).toBe(true);
+    expect(
+      parseSmtChildResults(
+        {
+          results: [
+            { id: "b", status: "sat" },
+            { id: "a", status: "unsat" },
+          ],
+        },
+        ["a", "b"],
+      ).ok,
+    ).toBe(true);
     expect(parseSmtChildResults({ results: [] }, []).ok).toBe(true);
     expect(parseSmtChildResults({ results: [{ id: "a", status: "sat" }] }, ["a", "a"]).ok).toBe(false);
   });
@@ -67,9 +132,14 @@ describe("SMT response completeness", () => {
   test("a successful child exit with no query result becomes unavailable", () => {
     const dir = mkdtempSync(join(tmpdir(), "incomplete-smt-"));
     const path = join(dir, "child.mjs");
-    writeFileSync(path, 'process.stdout.write(JSON.stringify({ results: [] }));');
+    writeFileSync(path, "process.stdout.write(JSON.stringify({ results: [] }));");
     try {
-      const result = new Z3SolverClientImplementation({ selfPath: path, perQueryTimeoutMs: 100, runtimeOverride: "node", workingDirectory: dir }).check(model());
+      const result = new Z3SolverClientImplementation({
+        selfPath: path,
+        perQueryTimeoutMs: 100,
+        runtimeOverride: "node",
+        workingDirectory: dir,
+      }).check(model());
       expect(result.result.kind).toBe("unavailable");
       if (result.result.kind === "unavailable") expect(result.result.reason).toContain("omitted query results: global");
     } finally {
@@ -83,25 +153,48 @@ describe("SMT response completeness", () => {
     expect(plan.queries.map((q) => q.id)).toEqual(["global"]);
     const result = plan.plan.interpret(input, SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.empty()));
     expect(result.findings.toArray()).toHaveLength(0);
-    expect(result.skipped.toArray().map((s) => ({ target: s.target().asString(), reason: s.reason() })))
-      .toEqual([{ target: "OB-1", reason: "unrecognized-format" }]);
+    expect(result.skipped.toArray().map((s) => ({ target: s.target().asString(), reason: s.reason() }))).toEqual([
+      { target: "OB-1", reason: "unrecognized-format" },
+    ]);
   });
 
   test("only issued vacuity queries can have missing responses", () => {
-    const input = model({ op: "implies", args: [{ op: "bool", value: true }, { op: "bool", value: false }] });
+    const input = model({
+      op: "implies",
+      args: [
+        { op: "bool", value: true },
+        { op: "bool", value: false },
+      ],
+    });
     const plan = buildSmtPlan(input);
     expect(plan.queries.map((q) => q.id)).toEqual(["global", "vac:OB-1"]);
-    const result = plan.plan.interpret(input, SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.of([[QueryLabel.of("global"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })]])));
-    expect(result.skipped.toArray().map((s) => s.detail())).toEqual(["vacuity check for OB-1 returned no solver result"]);
-    expect(SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" }).skipsFor(TargetIdentifiers.of([]), "completed").toArray()).toHaveLength(0);
+    const result = plan.plan.interpret(
+      input,
+      SatisfiabilityModuloTheoriesQueryVerdicts.of(
+        KeyedIndex.of([[QueryLabel.of("global"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })]]),
+      ),
+    );
+    expect(result.skipped.toArray().map((s) => s.detail())).toEqual([
+      "vacuity check for OB-1 returned no solver result",
+    ]);
+    expect(
+      SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })
+        .skipsFor(TargetIdentifiers.of([]), "completed")
+        .toArray(),
+    ).toHaveLength(0);
   });
 });
 
 describe("ID construction contracts match their schema", () => {
   const ids = [
-    [ObligationIdentifier, "OB"], [ScenarioIdentifier, "SC"], [BackgroundAssumptionIdentifier, "BG"],
-    [DesignObligationIdentifier, "DOB"], [DesignScenarioIdentifier, "DSC"], [DesignBackgroundIdentifier, "DBG"],
-    [DesignMachineIdentifier, "SM"], [DesignTransitionIdentifier, "TR"],
+    [ObligationIdentifier, "OB"],
+    [ScenarioIdentifier, "SC"],
+    [BackgroundAssumptionIdentifier, "BG"],
+    [DesignObligationIdentifier, "DOB"],
+    [DesignScenarioIdentifier, "DSC"],
+    [DesignBackgroundIdentifier, "DBG"],
+    [DesignMachineIdentifier, "SM"],
+    [DesignTransitionIdentifier, "TR"],
   ] as const;
   for (const [factory, prefix] of ids) {
     test(`${factory.name} rejects invalid values in parse and panics in of`, () => {
@@ -117,7 +210,12 @@ describe("ID construction contracts match their schema", () => {
   }
 
   test("mixed design targets are queried through parse instead of forging a transition ID", () => {
-    const index = LoweringIndex.of({ origins: KeyedIndex.empty(), scenarioDesignIds: KeyedIndex.empty(), machinesByTransition: KeyedIndex.empty(), attrPathsByMachine: KeyedIndex.empty() });
+    const index = LoweringIndex.of({
+      origins: KeyedIndex.empty(),
+      scenarioDesignIds: KeyedIndex.empty(),
+      machinesByTransition: KeyedIndex.empty(),
+      attrPathsByMachine: KeyedIndex.empty(),
+    });
     expect(index.isTransition("DOB-1")).toBe(false);
     expect(index.machineOfTransition("DOB-1")).toBeNull();
     expect(index.attrPathOfMachine("TR-1")).toBeNull();
@@ -135,15 +233,28 @@ describe("ID construction contracts match their schema", () => {
 describe("declarations own their state", () => {
   test("attribute and relationship judgments cannot change through their input records", () => {
     const seed: Mutable<Parameters<typeof AttributeDeclaration.of>[0]> = {
-      name: AttributeName.of("count"), element: ElementPath.of("attributes[0]"), type: TypeName.of("integer"), uniqueIsTrue: false,
-      references: null, allowed: null, def: AttributeDefault.of(5), minDeclared: true, maxDeclared: true, min: NumericBound.of(0), max: NumericBound.of(10),
+      name: AttributeName.of("count"),
+      element: ElementPath.of("attributes[0]"),
+      type: TypeName.of("integer"),
+      uniqueIsTrue: false,
+      references: null,
+      allowed: null,
+      def: AttributeDefault.of(5),
+      minDeclared: true,
+      maxDeclared: true,
+      min: NumericBound.of(0),
+      max: NumericBound.of(10),
     };
     const attribute = AttributeDeclaration.of(seed);
     seed.min = NumericBound.of(20);
     expect(attribute.boundsInverted()).toBe(false);
     expect(attribute.defaultBelowMin()).toBe(false);
     const relationSeed: Mutable<Parameters<typeof RelationshipDeclaration.of>[0]> = {
-      element: ElementPath.of("relationships[0]"), from: EntityName.of("Order"), to: EntityName.of("Line"), cardinality: CardinalityNotation.of("1:N"), hasDirection: true,
+      element: ElementPath.of("relationships[0]"),
+      from: EntityName.of("Order"),
+      to: EntityName.of("Line"),
+      cardinality: CardinalityNotation.of("1:N"),
+      hasDirection: true,
     };
     const relation = RelationshipDeclaration.of(relationSeed);
     relationSeed.hasDirection = false;
@@ -153,7 +264,12 @@ describe("declarations own their state", () => {
   test("rule missing fields are a snapshot", () => {
     const missing: string[] = [];
     const seed: Mutable<Parameters<typeof RuleDeclaration.of>[0]> = {
-      id: DeclaredRuleIdentifier.of("BR1.1"), element: ElementPath.of("rules[0]"), category: RuleCategory.of("constraint"), appliesTo: null, sourceIds: SourceIdentifiers.of([]), missing,
+      id: DeclaredRuleIdentifier.of("BR1.1"),
+      element: ElementPath.of("rules[0]"),
+      category: RuleCategory.of("constraint"),
+      appliesTo: null,
+      sourceIds: SourceIdentifiers.of([]),
+      missing,
     };
     const rule = RuleDeclaration.of(seed);
     missing.push("statement");
@@ -163,24 +279,49 @@ describe("declarations own their state", () => {
   });
 
   test("entity declarations and sketches keep their captured identities", () => {
-    const seed = { name: EntityName.of("Order"), element: ElementPath.of("entities[0]"), attrs: AttributeDeclarations.of([]), rels: RelationshipDeclarations.of([]) };
+    const seed = {
+      name: EntityName.of("Order"),
+      element: ElementPath.of("entities[0]"),
+      attrs: AttributeDeclarations.of([]),
+      rels: RelationshipDeclarations.of([]),
+    };
     const entity = EntityDeclaration.of(seed);
     seed.name = EntityName.of("Customer");
     expect(entity.name().asString()).toBe("Order");
-    const sketchSeed = { name: EntityName.of("Order"), component: ComponentName.of("Sales"), attributes: AttributeNames.of([]) };
+    const sketchSeed = {
+      name: EntityName.of("Order"),
+      component: ComponentName.of("Sales"),
+      attributes: AttributeNames.of([]),
+    };
     const sketch = DomainEntitySketch.of(sketchSeed);
     sketchSeed.component = ComponentName.of("Shipping");
     expect(sketch.catalogLabel()).toBe("entity Order (component Sales)");
   });
 
   test("machine and declaration collections do not keep their input record", () => {
-    const seed: Mutable<Parameters<typeof StateMachineSketch.of>[0]> = { spec: MachineSpecification.of("Order"), states: StateNames.of([]), fenceLine: LineNumber.of(1), unsupported: null };
+    const seed: Mutable<Parameters<typeof StateMachineSketch.of>[0]> = {
+      spec: MachineSpecification.of("Order"),
+      states: StateNames.of([]),
+      fenceLine: LineNumber.of(1),
+      unsupported: null,
+    };
     const machine = StateMachineSketch.of(seed);
     seed.unsupported = "changed";
     expect(machine.unsupported()).toBeNull();
-    const declaredSeed = { entities: EntityDeclarations.of([]), rels: RelationshipDeclarations.of([]), shapeErrors: ShapeErrors.of([]) };
+    const declaredSeed = {
+      entities: EntityDeclarations.of([]),
+      rels: RelationshipDeclarations.of([]),
+      shapeErrors: ShapeErrors.of([]),
+    };
     const declared = DeclaredEntities.of(declaredSeed);
-    declaredSeed.entities = EntityDeclarations.of([EntityDeclaration.of({ name: EntityName.of("Order"), element: ElementPath.of("entities[0]"), attrs: AttributeDeclarations.of([]), rels: RelationshipDeclarations.of([]) })]);
+    declaredSeed.entities = EntityDeclarations.of([
+      EntityDeclaration.of({
+        name: EntityName.of("Order"),
+        element: ElementPath.of("entities[0]"),
+        attrs: AttributeDeclarations.of([]),
+        rels: RelationshipDeclarations.of([]),
+      }),
+    ]);
     expect(declared.entities().toArray()).toEqual([]);
   });
 });

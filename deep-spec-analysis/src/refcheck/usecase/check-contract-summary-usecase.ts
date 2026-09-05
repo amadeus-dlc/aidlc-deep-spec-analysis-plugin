@@ -7,11 +7,10 @@
 // 適合は usecase が保存前に一度だけ済ませる）。
 
 import type { FindingsSchema } from "@deep-spec/kernel-domain";
+import type { CheckContractSummaryInput } from "./check-contract-summary-input.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./port/design-record-repository.ts";
 import type { ReferenceCheckReportRepository } from "./port/reference-check-report-repository.ts";
-import type { CheckContractSummaryInput } from "./check-contract-summary-input.ts";
-
 
 export class CheckContractSummaryUseCase {
   readonly #designRecordRepository: DesignRecordRepository;

@@ -1,23 +1,33 @@
-import { UnitName, FindingKind, SkipReason, TargetIdentifier, TargetIdentifiers, VerificationMethod } from "@deep-spec/kernel-domain";
-
-import type { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";
-import type { SiblingVerdictSkips } from "./sibling-verdict-skips.ts";
-
-import type { DesignUnit } from "./design-unit.ts";
+import {
+  FindingKind,
+  SkipReason,
+  TargetIdentifier,
+  TargetIdentifiers,
+  UnitName,
+  type VerificationMethod,
+} from "@deep-spec/kernel-domain";
 import { DesignFinding } from "./design-finding.ts";
 import { DesignFindings } from "./design-findings.ts";
 import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
+import type { DesignUnit } from "./design-unit.ts";
 import type { LoweredOrigin } from "./lowered-origin.ts";
 import type { LoweringIndex } from "./lowering-index.ts";
 import { ReachabilityVerdict } from "./reachability-verdict.ts";
+import type { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";
+import type { SiblingVerdictSkips } from "./sibling-verdict-skips.ts";
 
 // 各変種が必要な材料だけを持つ。読めた文書の method は必須であり、
 // 無関係な変種のためにフィールドを nullable にしない。
 type SiblingVerdictState =
   | { readonly kind: "unreadable"; readonly reason: string }
   | { readonly kind: "unavailable"; readonly reason: string; readonly method: VerificationMethod }
-  | { readonly kind: "readable"; readonly method: VerificationMethod; readonly findings: SiblingVerdictFindings; readonly skipped: SiblingVerdictSkips };
+  | {
+      readonly kind: "readable";
+      readonly method: VerificationMethod;
+      readonly findings: SiblingVerdictFindings;
+      readonly skipped: SiblingVerdictSkips;
+    };
 
 // v1 兄弟バックエンドの findings 文書の型付き判定面——読めなかった
 // （unreadable）、バックエンドが不能を申告した（unavailable）、読めた
@@ -41,7 +51,11 @@ export class SiblingVerdictDocument {
     return new SiblingVerdictDocument({ kind: "unavailable", reason, method });
   }
 
-  static readable(method: VerificationMethod, findings: SiblingVerdictFindings, skipped: SiblingVerdictSkips): SiblingVerdictDocument {
+  static readable(
+    method: VerificationMethod,
+    findings: SiblingVerdictFindings,
+    skipped: SiblingVerdictSkips,
+  ): SiblingVerdictDocument {
     return new SiblingVerdictDocument({ kind: "readable", method, findings, skipped });
   }
 
@@ -73,15 +87,21 @@ export class SiblingVerdictDocument {
   }): T {
     const state = this.#state;
     switch (state.kind) {
-      case "unreadable": return handlers.unreadable(state.reason);
-      case "unavailable": return handlers.unavailable(state.reason, state.method.asString());
-      case "readable": return handlers.readable(state.method.asString(), state.findings, state.skipped);
+      case "unreadable":
+        return handlers.unreadable(state.reason);
+      case "unavailable":
+        return handlers.unavailable(state.reason, state.method.asString());
+      case "readable":
+        return handlers.readable(state.method.asString(), state.findings, state.skipped);
     }
   }
 
   // remap — lowered v1 判定を設計語彙（DOB/TR/SM/DSC id・unit 帰属）へ写す。
   // 旧 remapUnitDocument の逐語移植。
-  remapVerdicts(unit: DesignUnit, index: LoweringIndex): {
+  remapVerdicts(
+    unit: DesignUnit,
+    index: LoweringIndex,
+  ): {
     readonly findings: DesignFindings;
     readonly skipped: DesignSkips;
   } & (
@@ -89,14 +109,30 @@ export class SiblingVerdictDocument {
     | { readonly unavailable: string; readonly method: string | null }
   ) {
     return this.match<ReturnType<SiblingVerdictDocument["remapVerdicts"]>>({
-      unreadable: (reason) => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: reason, method: null }),
-      unavailable: (reason, method) => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: reason, method }),
+      unreadable: (reason) => ({
+        findings: DesignFindings.of([]),
+        skipped: DesignSkips.of([]),
+        unavailable: reason,
+        method: null,
+      }),
+      unavailable: (reason, method) => ({
+        findings: DesignFindings.of([]),
+        skipped: DesignSkips.of([]),
+        unavailable: reason,
+        method,
+      }),
       readable: (method, findings, skipped) => this.#remapReadable(unit, index, method, findings, skipped),
     });
   }
 
   // 読めた文書の再割り当て本体（旧 remapVerdicts の readable 分岐、逐語）。
-  #remapReadable(u: DesignUnit, index: LoweringIndex, method: string, docFindings: SiblingVerdictFindings, docSkipped: SiblingVerdictSkips): Extract<ReturnType<SiblingVerdictDocument["remapVerdicts"]>, { unavailable: null }> {
+  #remapReadable(
+    u: DesignUnit,
+    index: LoweringIndex,
+    method: string,
+    docFindings: SiblingVerdictFindings,
+    docSkipped: SiblingVerdictSkips,
+  ): Extract<ReturnType<SiblingVerdictDocument["remapVerdicts"]>, { unavailable: null }> {
     const mapTarget = (t: string): { design: string; entry: LoweredOrigin | null } => index.resolveDesignTarget(t);
     const rewriteLabel = (label: string): string => index.rewriteLoweredIdTokens(label);
     const remapDetail = (detail: string): string => index.rewriteLoweredIds(detail);
@@ -137,7 +173,9 @@ export class SiblingVerdictDocument {
           finding: DesignFinding.of({
             kind: FindingKind.redundancy(),
             functionalRequirementReferences: functionalRequirementReferences,
-            targets: TargetIdentifiers.of(Array.from([pair[0], pair[1]], (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
+            targets: TargetIdentifiers.of(
+              Array.from([pair[0], pair[1]], (raw) => TargetIdentifier.of(raw)),
+            ).sortedUniqueCanonically(),
             witness,
             unit: UnitName.of(u.name()),
             detail: `${pair[1]} is subsumed by ${pair[0]}: same trigger, a provably narrower guard, and an identical effect — it can never apply where ${pair[0]} does not.`,
@@ -149,29 +187,47 @@ export class SiblingVerdictDocument {
       }
       if (synth) continue; // 合成に触れる他の判定はノイズ
 
-      const targets = TargetIdentifiers.of(Array.from(mapped.map((m) => m.design), (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically().toStrings();
+      const targets = TargetIdentifiers.of(
+        Array.from(
+          mapped.map((m) => m.design),
+          (raw) => TargetIdentifier.of(raw),
+        ),
+      )
+        .sortedUniqueCanonically()
+        .toStrings();
       // deterministic:false waiver：同トリガ conflict の対象がすべて、非決定を
       // 宣言した 1 機械の遷移であるとき（判定は機械自身へ命じる——波7）。
       if (f.isKind("conflict") && targets.length > 0) {
         const machines = targets.map((t) => index.machineOfTransition(t));
         const first = machines[0];
-        if (first !== null && first !== undefined && first.waivesOverlapOf(machines)) {
+        if (first?.waivesOverlapOf(machines)) {
           for (const t of targets) {
             if (!waived.has(t)) {
               waived.add(t);
-              skipped.push(DesignSkipped.of({
-                target: TargetIdentifier.of(t),
-                reason: SkipReason.waived(),
-                unit: UnitName.of(u.name()),
-                detail: `machine ${first.id().asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
-              }));
+              skipped.push(
+                DesignSkipped.of({
+                  target: TargetIdentifier.of(t),
+                  reason: SkipReason.waived(),
+                  unit: UnitName.of(u.name()),
+                  detail: `machine ${first.id().asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
+                }),
+              );
             }
           }
           continue;
         }
       }
       // 兄弟バックエンドの検証済み判定を設計側の座標へ写す。
-      findings.push(DesignFinding.of({ kind: FindingKind.of(f.kind()), functionalRequirementReferences: functionalRequirementReferences, targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))), witness, unit: UnitName.of(u.name()), detail }));
+      findings.push(
+        DesignFinding.of({
+          kind: FindingKind.of(f.kind()),
+          functionalRequirementReferences: functionalRequirementReferences,
+          targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
+          witness,
+          unit: UnitName.of(u.name()),
+          detail,
+        }),
+      );
     }
 
     // shadow の後段：死んだルール/遷移は既に unreachable——その空虚な包摂は何も
@@ -192,7 +248,9 @@ export class SiblingVerdictDocument {
       if (list.length >= 2 && directions.size >= 2) {
         const [a, b] = first.finding.targets().toStrings();
         findings.push(
-          first.finding.withDetail(`${a} and ${b} are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect — one of them can be removed.`),
+          first.finding.withDetail(
+            `${a} and ${b} are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect — one of them can be removed.`,
+          ),
         );
       } else {
         findings.push(first.finding);
@@ -207,12 +265,14 @@ export class SiblingVerdictDocument {
       const key = `${design}|${s.reason()}`;
       if (seenSkip.has(key)) continue;
       seenSkip.add(key);
-      skipped.push(DesignSkipped.of({
-        target: TargetIdentifier.of(design),
-        reason: SkipReason.of(s.reason()),
-        unit: UnitName.of(u.name()),
-        ...(detail !== undefined ? { detail: remapDetail(detail) } : {}),
-      }));
+      skipped.push(
+        DesignSkipped.of({
+          target: TargetIdentifier.of(design),
+          reason: SkipReason.of(s.reason()),
+          unit: UnitName.of(u.name()),
+          ...(detail !== undefined ? { detail: remapDetail(detail) } : {}),
+        }),
+      );
     }
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped), unavailable: null, method };
   }

@@ -20,17 +20,17 @@
 
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DirectoryFinalizationLock, SystemClock, parseFlags, readFindingsSchema } from "@deep-spec/kernel-adapter";
-import { ArtifactPath, } from "@deep-spec/kernel-domain";
-import { FormalModelIdentifier } from "@deep-spec/requirements-domain";
-import { VerifyRequirementsSatisfiabilityModuloTheoriesUseCase } from "@deep-spec/requirements-usecase";
+import { DirectoryFinalizationLock, parseFlags, readFindingsSchema, SystemClock } from "@deep-spec/kernel-adapter";
+import { ArtifactPath } from "@deep-spec/kernel-domain";
 import {
   FormalModelRepositoryImplementation,
+  solveSmtChild,
   VERIFICATION_LOCK_BASENAME,
   VerificationDirectoryRepositoryImplementation,
   Z3SolverClientImplementation,
-  solveSmtChild,
 } from "@deep-spec/requirements-adapter";
+import { FormalModelIdentifier } from "@deep-spec/requirements-domain";
+import { VerifyRequirementsSatisfiabilityModuloTheoriesUseCase } from "@deep-spec/requirements-usecase";
 
 const FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";
 const VERIFY_DIRNAME = "deep-spec-verify";
@@ -58,20 +58,24 @@ function parentMain(): void {
       // finalization の directory lock は「実時計」と「実 PID／OS liveness
       // probe」を要る。process.* は合成ルートだけが触れてよいので、ここで
       // 組み立てて注入する（ESRCH=不在確定、EPERM=存在確定、他は不明）。
-      new DirectoryFinalizationLock(new SystemClock(), {
-        self: () => process.pid,
-        statusOf: (pid: number) => {
-          try {
-            process.kill(pid, 0);
-            return "alive";
-          } catch (e) {
-            const code = (e as { code?: string }).code;
-            if (code === "ESRCH") return "absent";
-            if (code === "EPERM") return "alive";
-            return "unknown";
-          }
+      new DirectoryFinalizationLock(
+        new SystemClock(),
+        {
+          self: () => process.pid,
+          statusOf: (pid: number) => {
+            try {
+              process.kill(pid, 0);
+              return "alive";
+            } catch (e) {
+              const code = (e as { code?: string }).code;
+              if (code === "ESRCH") return "absent";
+              if (code === "EPERM") return "alive";
+              return "unknown";
+            }
+          },
         },
-      }, VERIFICATION_LOCK_BASENAME),
+        VERIFICATION_LOCK_BASENAME,
+      ),
     ),
     findingsSchema,
     new Z3SolverClientImplementation({
@@ -106,7 +110,9 @@ function parentMain(): void {
       break;
     case "acquisition-failed":
     case "save-failed":
-      process.stderr.write(`deep-spec-verify-smt: ${outcome.error.kind === "not-found" ? outcome.error.path : `${outcome.error.path}: ${outcome.error.kind}`}${"cause" in outcome.error ? ` (${outcome.error.cause})` : ""}\n`);
+      process.stderr.write(
+        `deep-spec-verify-smt: ${outcome.error.kind === "not-found" ? outcome.error.path : `${outcome.error.path}: ${outcome.error.kind}`}${"cause" in outcome.error ? ` (${outcome.error.cause})` : ""}\n`,
+      );
       process.exit(1);
       break;
     case "verified":

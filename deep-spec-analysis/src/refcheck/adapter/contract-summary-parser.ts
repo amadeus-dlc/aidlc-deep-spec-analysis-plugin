@@ -1,27 +1,25 @@
 // contract-summary.md と units エッジブロックの解析 — 形式知識をここに封じ、
 // 型付きの outcome へ解く。抽出ロジックは旧センサーの逐語移動。
 
-import { extractFences } from "@deep-spec/kernel-adapter";
-import { parseMarkdownTables } from "@deep-spec/kernel-adapter";
-import { parseYamlSubset } from "@deep-spec/kernel-adapter";
+import { extractFences, parseMarkdownTables, parseYamlSubset } from "@deep-spec/kernel-adapter";
 import { ErrorMessage } from "@deep-spec/kernel-domain";
-import { type Json, combineResults, traverseResult, isObject } from "@deep-spec/kernel-infrastructure";
+import { combineResults, isObject, type Json, traverseResult } from "@deep-spec/kernel-infrastructure";
 
 import {
   BlockIndex,
   ContractIdentifier,
   ContractParty,
+  ContractRow,
   ContractRows,
+  ContractsTableOutcome,
+  DeclaredUnitsOutcome,
   LineNumber,
+  SpecificationBlockAssessment,
   SpecificationBlockAssessments,
+  UnitDeclaration,
   UnitDeclarations,
   UnitName,
   UnitNames,
-  UnitDeclaration,
-  ContractRow,
-  ContractsTableOutcome,
-  DeclaredUnitsOutcome,
-  SpecificationBlockAssessment,
 } from "@deep-spec/refcheck-domain";
 
 export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
@@ -38,7 +36,10 @@ export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
       const dependsOn = Array.isArray(raw.depends_on)
         ? (raw.depends_on as Json[]).filter((d): d is string => typeof d === "string")
         : [];
-      const fields = combineResults({ name: UnitName.parse(raw.name), dependsOn: traverseResult(dependsOn, UnitName.parse) });
+      const fields = combineResults({
+        name: UnitName.parse(raw.name),
+        dependsOn: traverseResult(dependsOn, UnitName.parse),
+      });
       if (!fields.ok) return DeclaredUnitsOutcome.unrecognized(JSON.stringify(fields.error));
       units.push(UnitDeclaration.of({ name: fields.value.name, dependsOn: UnitNames.of(fields.value.dependsOn) }));
     }
@@ -67,15 +68,17 @@ export function parseContractsTable(md: string): ContractsTableOutcome {
     const token = cleanCell(first.value.asString());
     const fields = combineResults({
       provider: ContractParty.parse(row.cells[pCol] ?? ""),
-      consumer: ContractParty.parse(cCol >= 0 ? row.cells[cCol] ?? "" : ""),
-      owner: ContractParty.parse(oCol >= 0 ? row.cells[oCol] ?? "" : ""),
+      consumer: ContractParty.parse(cCol >= 0 ? (row.cells[cCol] ?? "") : ""),
+      owner: ContractParty.parse(oCol >= 0 ? (row.cells[oCol] ?? "") : ""),
     });
     if (!fields.ok) return ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(fields.error)));
-    rows.push(ContractRow.of({
-      id: ContractIdentifier.of(/^[0-9]+$/.test(token) ? token : String(i + 1)),
-      ...fields.value,
-      line: LineNumber.of(row.line),
-    }));
+    rows.push(
+      ContractRow.of({
+        id: ContractIdentifier.of(/^[0-9]+$/.test(token) ? token : String(i + 1)),
+        ...fields.value,
+        line: LineNumber.of(row.line),
+      }),
+    );
   }
   return ContractsTableOutcome.rows(ContractRows.of(rows));
 }

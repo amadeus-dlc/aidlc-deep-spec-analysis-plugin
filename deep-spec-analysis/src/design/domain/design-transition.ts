@@ -1,20 +1,32 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
-import { type Expression, FunctionalRequirementReferences, type TriggerName } from "@deep-spec/kernel-domain";
+import {
+  type Expression,
+  ExpressionTree,
+  FunctionalRequirementReferences,
+  type TriggerName,
+} from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // 状態機械の遷移（契約3）。id はドメインプリミティブで運ぶ。
 // compile-down の暗黙部（ガード = state==from ∧ 明示ガード、効果 = state'=to
 // ∧ 明示効果、代入表の state 遷移代入）は遷移自身が所有する——lowering と
 // イベントカタログの2箇所に重複していた知識をここに戻す（#71 波5b）。
 
-import { type BusinessRuleReferences } from "./business-rule-references.ts";
-import { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
+import type { BusinessRuleReferences } from "./business-rule-references.ts";
+import type { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
 import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type DesignTransitionParam = { id: DesignTransitionIdentifier; from: string; to: string; trigger: TriggerName; guard?: Expression; effect?: Expression; businessRuleReferences: BusinessRuleReferences };
+type DesignTransitionParam = {
+  id: DesignTransitionIdentifier;
+  from: string;
+  to: string;
+  trigger: TriggerName;
+  guard?: Expression;
+  effect?: Expression;
+  businessRuleReferences: BusinessRuleReferences;
+};
 
 export class DesignTransition {
   readonly #id: DesignTransitionIdentifier;
@@ -43,18 +55,38 @@ export class DesignTransition {
     return new DesignTransition(props);
   }
 
-  id(): DesignTransitionIdentifier { return this.#id; }
-  fromState(): string { return this.#from; }
-  toState(): string { return this.#to; }
-  trigger(): TriggerName { return this.#trigger; }
-  guard(): Expression | undefined { return this.#guard; }
-  effect(): Expression | undefined { return this.#effect; }
-  businessRuleReferences(): BusinessRuleReferences { return this.#businessRuleReferences; }
+  id(): DesignTransitionIdentifier {
+    return this.#id;
+  }
+  fromState(): string {
+    return this.#from;
+  }
+  toState(): string {
+    return this.#to;
+  }
+  trigger(): TriggerName {
+    return this.#trigger;
+  }
+  guard(): Expression | undefined {
+    return this.#guard;
+  }
+  effect(): Expression | undefined {
+    return this.#effect;
+  }
+  businessRuleReferences(): BusinessRuleReferences {
+    return this.#businessRuleReferences;
+  }
 
   // `attrPath == enum(state)`（prime なら `attrPath' == enum(state)`）——状態機械の
   // 暗黙ガード／効果の符号。ignore の no-op 等式と同じ形（裁定 2）。
   #stateEquality(attrPath: string, state: string, prime: boolean): Expression {
-    return { op: "eq", args: [prime ? { op: "ref", path: attrPath, prime: true } : { op: "ref", path: attrPath }, { op: "enum", value: state }] };
+    return {
+      op: "eq",
+      args: [
+        prime ? { op: "ref", path: attrPath, prime: true } : { op: "ref", path: attrPath },
+        { op: "enum", value: state },
+      ],
+    };
   }
 
   // compile-down の暗黙ガード: 遷移は出自状態に居るときだけ発火する。

@@ -1,39 +1,63 @@
-import {
-  VerificationMethod,
-  SkipReason,
-  ArtifactPath,
-  ExpressionTree,
-  FindingsSchema,
-  FunctionalRequirementReferences,
-  ObligationNature,
-} from "@deep-spec/kernel-domain";
-
 // 2026-09-05 の監査6件を、公開境界と保存結果で検証する回帰テスト。
 import { afterEach, describe, expect, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type Json, type Result, ok } from "@deep-spec/kernel-infrastructure";
-
 import {
-  FormalModelIdentifier, Obligation, ObligationIdentifier, VerificationDirectory, VerificationFindings,
-  VerificationReport, VerificationReportIdentifier, VerificationReports, VerificationSkips,
-} from "@deep-spec/requirements-domain";
-import { FormalModelRepositoryImplementation, VerificationDirectoryRepositoryImplementation } from "@deep-spec/requirements-adapter";
-import {
-  DesignFindings, DesignModelIdentifier, DesignReport, DesignReportIdentifier, DesignReports, DesignSkips,
-  DesignVerifyDirectory, ReachabilityVerdict, RefinementMaterials, RefinementMaterialsIdentifier,
-  SiblingVerdictDocument, SiblingVerdictFindings, SiblingVerdictSkip, SiblingVerdictSkips,
-} from "@deep-spec/design-domain";
-import {
-  DesignModelRepositoryImplementation, DesignVerifyDirectoryRepositoryImplementation, RefinementMaterialsRepositoryImplementation,
-  SiblingBackendClientImplementation, parseSiblingVerdictDocument,
+  DesignModelRepositoryImplementation,
+  DesignVerifyDirectoryRepositoryImplementation,
+  parseSiblingVerdictDocument,
+  RefinementMaterialsRepositoryImplementation,
+  SiblingBackendClientImplementation,
 } from "@deep-spec/design-adapter";
 import {
-  VerifyDesignQuintUseCase, VerifyDesignSatisfiabilityModuloTheoriesUseCase,
-  type DesignVerifyDirectoryRepository, type SiblingBackendClient,
+  DesignFindings,
+  DesignModelIdentifier,
+  DesignReport,
+  DesignReportIdentifier,
+  DesignReports,
+  DesignSkips,
+  DesignVerifyDirectory,
+  ReachabilityVerdict,
+  RefinementMaterials,
+  RefinementMaterialsIdentifier,
+  SiblingVerdictDocument,
+  SiblingVerdictFindings,
+  SiblingVerdictSkip,
+  SiblingVerdictSkips,
+} from "@deep-spec/design-domain";
+import {
+  type DesignVerifyDirectoryRepository,
+  type SiblingBackendClient,
+  VerifyDesignQuintUseCase,
+  VerifyDesignSatisfiabilityModuloTheoriesUseCase,
 } from "@deep-spec/design-usecase";
+import {
+  ArtifactPath,
+  ExpressionTree,
+  FindingsSchema,
+  FunctionalRequirementReferences,
+  ObligationNature,
+  SkipReason,
+  VerificationMethod,
+} from "@deep-spec/kernel-domain";
+import { type Json, ok, type Result } from "@deep-spec/kernel-infrastructure";
+import {
+  FormalModelRepositoryImplementation,
+  VerificationDirectoryRepositoryImplementation,
+} from "@deep-spec/requirements-adapter";
+import {
+  FormalModelIdentifier,
+  Obligation,
+  ObligationIdentifier,
+  VerificationDirectory,
+  VerificationFindings,
+  VerificationReport,
+  VerificationReportIdentifier,
+  VerificationReports,
+  VerificationSkips,
+} from "@deep-spec/requirements-domain";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const data = join(pluginRoot, "src/entries/data");
@@ -53,14 +77,19 @@ afterEach(() => {
   for (const path of directories.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 function requirementsModel() {
-  return value(new FormalModelRepositoryImplementation().findById(FormalModelIdentifier.of(ap(
-    join(pluginRoot, "tests/fixtures/conformance/deep-spec-analysis-formal-model.md"),
-  ))));
+  return value(
+    new FormalModelRepositoryImplementation().findById(
+      FormalModelIdentifier.of(ap(join(pluginRoot, "tests/fixtures/conformance/deep-spec-analysis-formal-model.md"))),
+    ),
+  );
 }
 function designWorkspace() {
   const record = temporaryDirectory();
   cpSync(join(pluginRoot, "tests/fixtures/refinement/record"), record, { recursive: true });
-  const modelPath = join(record, "construction/deep-spec-analysis-functional-verify/deep-spec-analysis-functional-formal-model.md");
+  const modelPath = join(
+    record,
+    "construction/deep-spec-analysis-functional-verify/deep-spec-analysis-functional-formal-model.md",
+  );
   const modelId = DesignModelIdentifier.of(ap(modelPath));
   const models = new DesignModelRepositoryImplementation();
   const model = value(models.findById(modelId));
@@ -68,7 +97,15 @@ function designWorkspace() {
   return { record, modelId, models, model, materials, input: { modelId, verifyDirectory: ap(join(record, "verify")) } };
 }
 function reportDocument(overrides: { [k: string]: Json } = {}): Json {
-  return { backend: "quint", irVersion: "1.0.0", irHash: "a".repeat(64), method: "bounded", findings: [], skipped: [], ...overrides };
+  return {
+    backend: "quint",
+    irVersion: "1.0.0",
+    irHash: "a".repeat(64),
+    method: "bounded",
+    findings: [],
+    skipped: [],
+    ...overrides,
+  };
 }
 class CapturedReports implements DesignVerifyDirectoryRepository {
   readonly saved: DesignVerifyDirectory[] = [];
@@ -86,7 +123,15 @@ class CapturedReports implements DesignVerifyDirectoryRepository {
   }
 }
 const cleanSibling: SiblingBackendClient = {
-  runLowered: () => ({ exit: 0, note: "", doc: SiblingVerdictDocument.readable( VerificationMethod.of("bounded"), SiblingVerdictFindings.of([]), SiblingVerdictSkips.of([])) }),
+  runLowered: () => ({
+    exit: 0,
+    note: "",
+    doc: SiblingVerdictDocument.readable(
+      VerificationMethod.of("bounded"),
+      SiblingVerdictFindings.of([]),
+      SiblingVerdictSkips.of([]),
+    ),
+  }),
   probeState: () => ReachabilityVerdict.unverified(),
 };
 
@@ -100,15 +145,26 @@ describe("到達性は完了した検査または到達の証跡からだけ判�
     const ws = designWorkspace();
     const reports = new CapturedReports();
     const sibling: SiblingBackendClient = { ...cleanSibling, probeState: () => verdict };
-    const outcome = new VerifyDesignQuintUseCase(ws.models, reports, schema, sibling,
-      { findById: (id) => ok(RefinementMaterials.inactive(id)) }, { now: () => 0 }, 2).execute(ws.input);
+    const outcome = new VerifyDesignQuintUseCase(
+      ws.models,
+      reports,
+      schema,
+      sibling,
+      { findById: (id) => ok(RefinementMaterials.inactive(id)) },
+      { now: () => 0 },
+      2,
+    ).execute(ws.input);
     expect(outcome.kind).toBe("verified");
     expect(reports.document().findings).toHaveLength(findings);
     expect(reports.document().skipped).toHaveLength(skipped);
   });
 
   test("到達性の値は生成したインスタンスによらず、三つの判定を区別する", () => {
-    const copies = [ReachabilityVerdict.reached(), ReachabilityVerdict.notReachedWithinBound(), ReachabilityVerdict.unverified()];
+    const copies = [
+      ReachabilityVerdict.reached(),
+      ReachabilityVerdict.notReachedWithinBound(),
+      ReachabilityVerdict.unverified(),
+    ];
     for (const [i, { verdict }] of verdictCases.entries()) {
       for (const [j, copy] of copies.entries()) expect(verdict.equals(copy)).toBe(i === j);
     }
@@ -117,16 +173,31 @@ describe("到達性は完了した検査または到達の証跡からだけ判�
   test("読めた文書はmethodが必須で、matchとremapの成功先でも省略されない", () => {
     // 型契約の検査。門が nullable / optional に戻ると、この代入がコンパイルで落ちる。
     const acceptsNull: null extends Parameters<typeof SiblingVerdictDocument.readable>[0] ? true : false = false;
-    const acceptsUndefined: undefined extends Parameters<typeof SiblingVerdictDocument.readable>[0] ? true : false = false;
+    const acceptsUndefined: undefined extends Parameters<typeof SiblingVerdictDocument.readable>[0] ? true : false =
+      false;
     expect(acceptsNull || acceptsUndefined).toBe(false);
     const ws = designWorkspace();
-    const readable = SiblingVerdictDocument.readable( VerificationMethod.of("bounded"), SiblingVerdictFindings.of([]), SiblingVerdictSkips.of([]));
-    expect(readable.match({ unreadable: () => "unreadable", unavailable: (_reason, method) => method.toUpperCase(), readable: (method) => method.toUpperCase() })).toBe("BOUNDED");
+    const readable = SiblingVerdictDocument.readable(
+      VerificationMethod.of("bounded"),
+      SiblingVerdictFindings.of([]),
+      SiblingVerdictSkips.of([]),
+    );
+    expect(
+      readable.match({
+        unreadable: () => "unreadable",
+        unavailable: (_reason, method) => method.toUpperCase(),
+        readable: (method) => method.toUpperCase(),
+      }),
+    ).toBe("BOUNDED");
     const unit = ws.model.units().toArray()[0];
     const remapped = readable.remapVerdicts(unit, unit.lowered({ synthetics: false }).index());
     expect(remapped.unavailable).toBeNull();
     if (remapped.unavailable === null) expect(remapped.method.toUpperCase()).toBe("BOUNDED");
-    expect(SiblingVerdictDocument.unavailable("timeout", VerificationMethod.of("bounded")).reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.unverified())).toBe(true);
+    expect(
+      SiblingVerdictDocument.unavailable("timeout", VerificationMethod.of("bounded"))
+        .reachabilityOf("ticket.phase", "closed")
+        .equals(ReachabilityVerdict.unverified()),
+    ).toBe(true);
   });
 
   test.each(["timeout", "compile-error", "capability", "unavailable"])("%s を非到達へ変換しない", (reason) => {
@@ -135,31 +206,78 @@ describe("到達性は完了した検査または到達の証跡からだけ判�
   });
 
   test("不正文書・simulation・証跡のないconflictから非到達を導かない", () => {
-    for (const raw of [[], reportDocument({ skipped: null }), reportDocument({ findings: [false] }), reportDocument({ method: "simulation" }),
-      reportDocument({ findings: [{ kind: "conflict", targets: ["OB-9999"], frRefs: [], detail: "no trace", witness: {} }] })]) {
-      expect(parseSiblingVerdictDocument(raw).reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.unverified())).toBe(true);
+    for (const raw of [
+      [],
+      reportDocument({ skipped: null }),
+      reportDocument({ findings: [false] }),
+      reportDocument({ method: "simulation" }),
+      reportDocument({
+        findings: [{ kind: "conflict", targets: ["OB-9999"], frRefs: [], detail: "no trace", witness: {} }],
+      }),
+    ]) {
+      expect(
+        parseSiblingVerdictDocument(raw)
+          .reachabilityOf("ticket.phase", "closed")
+          .equals(ReachabilityVerdict.unverified()),
+      ).toBe(true);
     }
-    expect(parseSiblingVerdictDocument(reportDocument()).reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.notReachedWithinBound())).toBe(true);
-    const proof = reportDocument({ method: "simulation", findings: [{ kind: "conflict", targets: ["OB-9999"], frRefs: [], detail: "trace", witness: { trace: [{ "ticket.phase": "closed" }] } }] });
-    expect(parseSiblingVerdictDocument(proof).reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.reached())).toBe(true);
+    expect(
+      parseSiblingVerdictDocument(reportDocument())
+        .reachabilityOf("ticket.phase", "closed")
+        .equals(ReachabilityVerdict.notReachedWithinBound()),
+    ).toBe(true);
+    const proof = reportDocument({
+      method: "simulation",
+      findings: [
+        {
+          kind: "conflict",
+          targets: ["OB-9999"],
+          frRefs: [],
+          detail: "trace",
+          witness: { trace: [{ "ticket.phase": "closed" }] },
+        },
+      ],
+    });
+    expect(
+      parseSiblingVerdictDocument(proof).reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.reached()),
+    ).toBe(true);
   });
 
   test("実adapterがtimeout文書を読んでも、usecaseは到達不能findingを保存しない", () => {
     const ws = designWorkspace();
     const tool = join(ws.record, "probe.ts");
-    writeFileSync(tool, `import { mkdirSync, writeFileSync } from 'node:fs';
+    writeFileSync(
+      tool,
+      `import { mkdirSync, writeFileSync } from 'node:fs';
 import {dirname, join} from 'node:path';
 const model = process.argv[process.argv.indexOf('--output-path') + 1];
 const dir = join(dirname(model), 'deep-spec-verify');
 mkdirSync(dir, { recursive: true });
 writeFileSync(join(dir, 'quint.json'), ${JSON.stringify(JSON.stringify(reportDocument({ skipped: [{ target: "OB-9999", reason: "timeout" }] })))});
-`);
-    const adapter = new SiblingBackendClientImplementation({ siblingToolPaths: { smt: tool, quint: tool }, workingDirectory: pluginRoot });
+`,
+    );
+    const adapter = new SiblingBackendClientImplementation({
+      siblingToolPaths: { smt: tool, quint: tool },
+      workingDirectory: pluginRoot,
+    });
     let probes = 0;
-    const sibling: SiblingBackendClient = { ...cleanSibling, probeState: (...args) => { probes++; return adapter.probeState(...args); } };
+    const sibling: SiblingBackendClient = {
+      ...cleanSibling,
+      probeState: (...args) => {
+        probes++;
+        return adapter.probeState(...args);
+      },
+    };
     const reports = new CapturedReports();
-    const outcome = new VerifyDesignQuintUseCase(ws.models, reports, schema, sibling,
-      { findById: (id) => ok(RefinementMaterials.inactive(id)) }, { now: () => 0 }, 2).execute(ws.input);
+    const outcome = new VerifyDesignQuintUseCase(
+      ws.models,
+      reports,
+      schema,
+      sibling,
+      { findById: (id) => ok(RefinementMaterials.inactive(id)) },
+      { now: () => 0 },
+      2,
+    ).execute(ws.input);
     expect(outcome.kind).toBe("verified");
     expect(probes).toBe(2);
     expect(reports.document().findings).toEqual([]);
@@ -175,13 +293,33 @@ describe("refinementの対象はfindingとskipの両方に写す", () => {
       ...cleanSibling,
       runLowered: (_backend, _unit, lowered) => {
         calls++;
-        const skips = calls === 1 ? [] : [...lowered.obligations()].map((o) =>
-          SiblingVerdictSkip.of({ target: o.id(), reason: SkipReason.of(reason), detail: "regression" }));
-        return { exit: 0, note: "", doc: SiblingVerdictDocument.readable( VerificationMethod.of("simulation"), SiblingVerdictFindings.of([]), SiblingVerdictSkips.of(skips)) };
+        const skips =
+          calls === 1
+            ? []
+            : [...lowered.obligations()].map((o) =>
+                SiblingVerdictSkip.of({ target: o.id(), reason: SkipReason.of(reason), detail: "regression" }),
+              );
+        return {
+          exit: 0,
+          note: "",
+          doc: SiblingVerdictDocument.readable(
+            VerificationMethod.of("simulation"),
+            SiblingVerdictFindings.of([]),
+            SiblingVerdictSkips.of(skips),
+          ),
+        };
       },
     };
     const reports = new CapturedReports();
-    const outcome = new VerifyDesignQuintUseCase(ws.models, reports, schema, sibling, ws.materials, { now: () => 0 }, 0).execute(ws.input);
+    const outcome = new VerifyDesignQuintUseCase(
+      ws.models,
+      reports,
+      schema,
+      sibling,
+      ws.materials,
+      { now: () => 0 },
+      0,
+    ).execute(ws.input);
     expect(outcome.kind).toBe("verified");
     expect(calls).toBe(2);
     const skipped = reports.document().skipped;
@@ -191,15 +329,27 @@ describe("refinementの対象はfindingとskipの両方に写す", () => {
 });
 
 describe("不正な兄弟文書を正常な集約へ復元しない", () => {
-  const malformed: Json[] = [[], null, reportDocument({ findings: null }), reportDocument({ skipped: null }),
-    reportDocument({ findings: [7] }), reportDocument({ skipped: [{ target: "OB-1" }] }),
+  const malformed: Json[] = [
+    [],
+    null,
+    reportDocument({ findings: null }),
+    reportDocument({ skipped: null }),
+    reportDocument({ findings: [7] }),
+    reportDocument({ skipped: [{ target: "OB-1" }] }),
     reportDocument({ crossChecked: [{ backend: "smt", targets: "SC-1" }] }),
-    reportDocument({ inputs: [{ artifact: "x" }] }), reportDocument({ checked: [3] }),
-    reportDocument({ unavailable: {} }), reportDocument({ method: null }), reportDocument({ backend: "smt" })];
+    reportDocument({ inputs: [{ artifact: "x" }] }),
+    reportDocument({ checked: [3] }),
+    reportDocument({ unavailable: {} }),
+    reportDocument({ method: null }),
+    reportDocument({ backend: "smt" }),
+  ];
   for (const context of ["requirements", "design"] as const) {
     test(`${context}: 不正な形を全件corruptとして返す`, () => {
       const directory = temporaryDirectory();
-      const repository = context === "requirements" ? new VerificationDirectoryRepositoryImplementation() : new DesignVerifyDirectoryRepositoryImplementation();
+      const repository =
+        context === "requirements"
+          ? new VerificationDirectoryRepositoryImplementation()
+          : new DesignVerifyDirectoryRepositoryImplementation();
       for (const document of malformed) {
         writeFileSync(join(directory, "quint.json"), JSON.stringify(document));
         const result = repository.findByDirectory(ap(directory));
@@ -222,20 +372,34 @@ describe("式の所有権を集約の内側に閉じる", () => {
     const expression = { op: "eq", args: [leaf, { op: "enum", value: "done" }] };
     const expected = structuredClone(expression);
     const tree = ExpressionTree.of(expression);
-    const obligation = Obligation.of({ id: ObligationIdentifier.of("OB-1"), nature: ObligationNature.of("invariant"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), assert: expression });
+    const obligation = Obligation.of({
+      id: ObligationIdentifier.of("OB-1"),
+      nature: ObligationNature.of("invariant"),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      assert: expression,
+    });
     leaf.path = "changed";
     expect(tree.referencedPaths()).toEqual(["order.state"]);
     expect(obligation.assertion()?.args?.[0].path).toBe("order.state");
     Reflect.set(tree.asExpression(), "op", "broken");
-    tree.walk((node) => { Reflect.set(node, "op", "broken"); });
-    obligation.inspectExpressions((node) => { Reflect.set(node, "op", "broken"); });
+    tree.walk((node) => {
+      Reflect.set(node, "op", "broken");
+    });
+    obligation.inspectExpressions((node) => {
+      Reflect.set(node, "op", "broken");
+    });
     expect(tree.asExpression()).toEqual(expected);
     expect(obligation.assertion()).toEqual(expected);
   });
 
   test("実Repositoryのモデルを経由しても、内容とハッシュと原文の対応を壊せない", () => {
     const model = requirementsModel();
-    const before = structuredClone(model.obligations().toArray().map((o) => o.assertion()));
+    const before = structuredClone(
+      model
+        .obligations()
+        .toArray()
+        .map((o) => o.assertion()),
+    );
     const hash = model.irHash();
     const bytes = model.sourceDocument();
     for (const ob of model.obligations()) {
@@ -244,7 +408,12 @@ describe("式の所有権を集約の内側に閉じる", () => {
         if (expression.args) Reflect.set(expression.args, "0", { op: "bool", value: false });
       });
     }
-    expect(model.obligations().toArray().map((o) => o.assertion())).toEqual(before);
+    expect(
+      model
+        .obligations()
+        .toArray()
+        .map((o) => o.assertion()),
+    ).toEqual(before);
     expect(model.irHash().equals(hash)).toBe(true);
     expect(model.sourceDocument()).toEqual(bytes);
   });
@@ -261,10 +430,22 @@ describe("refinement入力の取得失敗を適用外と混同しない", () => 
       expect(materials.ok).toBe(false);
       if (!materials.ok) expect(materials.error.kind).toBe("io-failed");
       const reports = new CapturedReports();
-      const useCase = backend === "quint"
-        ? new VerifyDesignQuintUseCase(ws.models, reports, schema, cleanSibling, ws.materials, { now: () => 0 }, 0)
-        : new VerifyDesignSatisfiabilityModuloTheoriesUseCase(ws.models, reports, schema, cleanSibling, ws.materials,
-          { check: () => { throw new Error("solver must not run with unreadable inputs"); } }, { now: () => 0 });
+      const useCase =
+        backend === "quint"
+          ? new VerifyDesignQuintUseCase(ws.models, reports, schema, cleanSibling, ws.materials, { now: () => 0 }, 0)
+          : new VerifyDesignSatisfiabilityModuloTheoriesUseCase(
+              ws.models,
+              reports,
+              schema,
+              cleanSibling,
+              ws.materials,
+              {
+                check: () => {
+                  throw new Error("solver must not run with unreadable inputs");
+                },
+              },
+              { now: () => 0 },
+            );
       expect(useCase.execute(ws.input).kind).toBe("acquisition-failed");
       expect(reports.saved.length).toBe(1);
       expect(reports.document().checked).toEqual(["unit:u1-orders"]);
@@ -289,7 +470,15 @@ describe("cross-checkの不変条件は呼び順に依存しない", () => {
   test("requirements: 候補の降格で古い導出物を捨て、一操作でも正しく準備できる", () => {
     const model = requirementsModel();
     const directory = ap(temporaryDirectory());
-    const report = (backend: string, method: string) => VerificationReport.compose({ id: VerificationReportIdentifier.of(directory, backend), irVersion: model.irVersion(), irHash: model.irHash(), method, findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
+    const report = (backend: string, method: string) =>
+      VerificationReport.compose({
+        id: VerificationReportIdentifier.of(directory, backend),
+        irVersion: model.irVersion(),
+        irHash: model.irHash(),
+        method,
+        findings: VerificationFindings.of([]),
+        skipped: VerificationSkips.of([]),
+      });
     const initial = VerificationDirectory.of(directory, VerificationReports.of([report("smt", "exhaustive")]), null);
     const candidate = report("quint", "simulation");
     const limitedSchema = FindingsSchema.of({ type: "object", properties: { method: { const: "exhaustive" } } });
@@ -304,11 +493,22 @@ describe("cross-checkの不変条件は呼び順に依存しない", () => {
   test("design: 候補の降格で古い導出物を捨て、一操作でも正しく準備できる", () => {
     const ws = designWorkspace();
     const directory = ws.input.verifyDirectory;
-    const report = (backend: string, method: string) => DesignReport.compose({ id: DesignReportIdentifier.of(directory, backend), irVersion: ws.model.irVersion(), irHash: ws.model.irHash(), method, findings: DesignFindings.of([]), skipped: DesignSkips.of([]) });
+    const report = (backend: string, method: string) =>
+      DesignReport.compose({
+        id: DesignReportIdentifier.of(directory, backend),
+        irVersion: ws.model.irVersion(),
+        irHash: ws.model.irHash(),
+        method,
+        findings: DesignFindings.of([]),
+        skipped: DesignSkips.of([]),
+      });
     const initial = DesignVerifyDirectory.of(directory, DesignReports.of([report("smt", "exhaustive")]), null);
     const candidate = report("quint", "simulation");
     const limitedSchema = FindingsSchema.of({ type: "object", properties: { method: { const: "exhaustive" } } });
-    const wrongOrder = initial.finalizing(candidate).crossChecked(ws.model, ws.model.irHash()).conformedTo(limitedSchema);
+    const wrongOrder = initial
+      .finalizing(candidate)
+      .crossChecked(ws.model, ws.model.irHash())
+      .conformedTo(limitedSchema);
     expect(wrongOrder.candidate()?.isUnavailable()).toBe(true);
     expect(wrongOrder.crossCheck()).toBeNull();
     const prepared = initial.finalizedWith(candidate, ws.model, limitedSchema);

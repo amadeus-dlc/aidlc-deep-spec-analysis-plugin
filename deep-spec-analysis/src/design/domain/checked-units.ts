@@ -24,7 +24,14 @@ export class CheckedUnits {
   }
 
   sortedUniqueCanonically(): CheckedUnits {
-    return CheckedUnits.of(Array.from(TargetIdentifiers.of(Array.from(this.toStrings(), (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically().toStrings(), (raw) => UnitName.of(raw)));
+    return CheckedUnits.of(
+      Array.from(
+        TargetIdentifiers.of(Array.from(this.toStrings(), (raw) => TargetIdentifier.of(raw)))
+          .sortedUniqueCanonically()
+          .toStrings(),
+        (raw) => UnitName.of(raw),
+      ),
+    );
   }
 
   toArray(): readonly UnitName[] {

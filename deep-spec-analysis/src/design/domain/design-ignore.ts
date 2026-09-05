@@ -23,17 +23,33 @@ export class DesignIgnore {
     return new DesignIgnore(props);
   }
 
-  state(): string { return this.#state; }
-  trigger(): TriggerName { return this.#trigger; }
+  state(): string {
+    return this.#state;
+  }
+  trigger(): TriggerName {
+    return this.#trigger;
+  }
 
   // compile-down のガード: その状態に居るときだけ no-op が発火する。
   loweredGuard(attrPath: string): Expression {
-    return { op: "eq", args: [{ op: "ref", path: attrPath }, { op: "enum", value: this.#state }] };
+    return {
+      op: "eq",
+      args: [
+        { op: "ref", path: attrPath },
+        { op: "enum", value: this.#state },
+      ],
+    };
   }
 
   // compile-down の効果: 状態は動かない（state' == state の明示 no-op）。
   loweredEffect(attrPath: string): Expression {
-    return { op: "eq", args: [{ op: "ref", path: attrPath, prime: true }, { op: "ref", path: attrPath }] };
+    return {
+      op: "eq",
+      args: [
+        { op: "ref", path: attrPath, prime: true },
+        { op: "ref", path: attrPath },
+      ],
+    };
   }
 
   // compile-down された明示 no-op event 義務（帰属は宣言元の機械が答える）。

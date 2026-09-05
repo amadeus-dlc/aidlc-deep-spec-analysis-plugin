@@ -1,8 +1,8 @@
-import { AttributeDeclaration } from "./attribute-declaration.ts";
-import { AttributeDeclarations } from "./attribute-declarations.ts";
-import { type ElementPath } from "./element-path.ts";
-import { type EntityName } from "./entity-name.ts";
-import { RelationshipDeclarations } from "./relationship-declarations.ts";
+import type { AttributeDeclaration } from "./attribute-declaration.ts";
+import type { AttributeDeclarations } from "./attribute-declarations.ts";
+import type { ElementPath } from "./element-path.ts";
+import type { EntityName } from "./entity-name.ts";
+import type { RelationshipDeclarations } from "./relationship-declarations.ts";
 
 // エンティティ宣言。属性の重複・選定・解決は属性コレクションに委ねる。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。

@@ -19,10 +19,18 @@ export class MachineSpecification {
   static parse(raw: string): Result<MachineSpecification, ParseError> {
     return parseConstruction(() => new MachineSpecification(raw));
   }
-  equals(other: MachineSpecification): boolean { return this.#value === other.#value; }
-  asString(): string { return this.#value; }
+  equals(other: MachineSpecification): boolean {
+    return this.#value === other.#value;
+  }
+  asString(): string {
+    return this.#value;
+  }
   // "Entity.attribute" の分解は spec 語彙そのもの（旧 split(".") の凍結挙動）。
   // `Entity.attribute` の実体側——名前 DP として返す（裁定 3）。
-  entityToken(): EntityName { return EntityName.of(this.#value.split(".")[0] ?? ""); }
-  attributeToken(): string | undefined { return this.#value.split(".")[1]; }
+  entityToken(): EntityName {
+    return EntityName.of(this.#value.split(".")[0] ?? "");
+  }
+  attributeToken(): string | undefined {
+    return this.#value.split(".")[1];
+  }
 }

@@ -1,19 +1,23 @@
-import { flatMapResult } from "@deep-spec/kernel-infrastructure";
-import { EnumerationMembers } from "@deep-spec/kernel-domain";
-import { AttributeKind } from "@deep-spec/kernel-domain";
-import { EnumerationMember } from "@deep-spec/kernel-domain";
-import { ErrorMessage } from "@deep-spec/kernel-domain";
-import { decodeDeclaredBindings } from "@deep-spec/kernel-adapter";
 import {
-  DeclaredDigest,
-  RequirementIdentifier,
+  decodeDeclaredBindings,
+  extractFences,
+  readContractSchema,
+  writeFileAtomically,
+} from "@deep-spec/kernel-adapter";
+import {
   ArtifactPath,
+  AttributeKind,
   DeclaredBound,
+  DeclaredDigest,
+  EnumerationMember,
+  EnumerationMembers,
+  ErrorMessage,
   ErrorMessages,
-  IntermediateRepresentationVersion,
   type Expression,
+  IntermediateRepresentationVersion,
+  RequirementIdentifier,
 } from "@deep-spec/kernel-domain";
-import { extractFences, readContractSchema, writeFileAtomically } from "@deep-spec/kernel-adapter";
+import { flatMapResult } from "@deep-spec/kernel-infrastructure";
 
 // 契約1 IR の検査材料ゲートウェイ。markdown フェンスの抽出、JSON 解釈、
 // 契約スキーマの適用、そして「生 Json をどう寛容に読むか」をここに閉じ込め、
@@ -25,38 +29,45 @@ import { extractFences, readContractSchema, writeFileAtomically } from "@deep-sp
 
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
-
-import { type Json, isObject, validateSchema } from "@deep-spec/kernel-infrastructure";
-import { type Result, combineResults, traverseResult, err, ok } from "@deep-spec/kernel-infrastructure";
-
-import { RepositoryError } from "@deep-spec/kernel-usecase";
 import {
+  combineResults,
+  err,
+  isObject,
+  type Json,
+  ok,
+  type Result,
+  traverseResult,
+  validateSchema,
+} from "@deep-spec/kernel-infrastructure";
+
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
+import {
+  BackgroundAssumptionIdentifier,
   FunctionalRequirementReferenceClaim,
-  IntermediateRepresentationAttributeDeclaration,
-  IntermediateRepresentationBackgroundDeclaration,
-  IntermediateRepresentationEntityDeclaration,
-  FunctionalRequirementReferences,
-  IntermediateRepresentationAttributeDeclarations,
-  IntermediateRepresentationBackgroundDeclarations,
-  IntermediateRepresentationEntityDeclarations,
-  IntermediateRepresentationModelDeclaration,
-  IntermediateRepresentationObligationDeclarations,
-  IntermediateRepresentationScenarioDeclarations,
-  IntermediateRepresentationObligationDeclaration,
-  IntermediateRepresentationScenarioDeclaration,
   FunctionalRequirementReferenceClaims,
+  FunctionalRequirementReferences,
+  IntermediateRepresentationAttributeDeclaration,
+  IntermediateRepresentationAttributeDeclarations,
+  IntermediateRepresentationAttributeName,
+  IntermediateRepresentationBackgroundDeclaration,
+  IntermediateRepresentationBackgroundDeclarations,
+  IntermediateRepresentationEntityDeclaration,
+  IntermediateRepresentationEntityDeclarations,
+  IntermediateRepresentationEntityName,
+  IntermediateRepresentationModelDeclaration,
+  IntermediateRepresentationObligationDeclaration,
+  IntermediateRepresentationObligationDeclarations,
+  IntermediateRepresentationScenarioDeclaration,
+  IntermediateRepresentationScenarioDeclarations,
+  IntermediateRepresentationTemporalDeclaration,
   IntermediateRepresentationValidationMaterials,
-  IntermediateRepresentationValidationMaterialsIdentifier,
+  type IntermediateRepresentationValidationMaterialsIdentifier,
+  ObligationIdentifier,
   RequirementsSourceIdentifier,
   ScenarioIdentifier,
-  ObligationIdentifier,
-  IntermediateRepresentationEntityName,
-  IntermediateRepresentationAttributeName,
-  BackgroundAssumptionIdentifier,
-  IntermediateRepresentationTemporalDeclaration,
 } from "@deep-spec/requirements-domain";
-import { IntermediateRepresentationValidationMaterialsRepository } from "@deep-spec/requirements-usecase";
-import { IntermediateRepresentationValidationMaterialsConfiguration } from "./intermediate-representation-validation-materials-configuration.ts";
+import type { IntermediateRepresentationValidationMaterialsRepository } from "@deep-spec/requirements-usecase";
+import type { IntermediateRepresentationValidationMaterialsConfiguration } from "./intermediate-representation-validation-materials-configuration.ts";
 
 const FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";
 
@@ -79,17 +90,30 @@ function buildView(ir: { [k: string]: Json }): Result<IntermediateRepresentation
       if (!kind.ok) return err(JSON.stringify(kind.error));
       const name = IntermediateRepresentationAttributeName.parse(attr.name);
       if (!name.ok) return err(JSON.stringify(name.error));
-      const members = flatMapResult(traverseResult(Array.isArray(t.values) ? t.values.filter((v): v is string => typeof v === "string") : [], EnumerationMember.parse), EnumerationMembers.parse);
+      const members = flatMapResult(
+        traverseResult(
+          Array.isArray(t.values) ? t.values.filter((v): v is string => typeof v === "string") : [],
+          EnumerationMember.parse,
+        ),
+        EnumerationMembers.parse,
+      );
       if (!members.ok) return err(JSON.stringify(members.error));
-      attributes.push(IntermediateRepresentationAttributeDeclaration.of({
-        name: name.value,
-        kind: kind.value,
-        values: Array.isArray(t.values) ? members.value : undefined,
-        min: typeof t.min === "number" ? DeclaredBound.of(t.min) : undefined,
-        max: typeof t.max === "number" ? DeclaredBound.of(t.max) : undefined,
-      }));
+      attributes.push(
+        IntermediateRepresentationAttributeDeclaration.of({
+          name: name.value,
+          kind: kind.value,
+          values: Array.isArray(t.values) ? members.value : undefined,
+          min: typeof t.min === "number" ? DeclaredBound.of(t.min) : undefined,
+          max: typeof t.max === "number" ? DeclaredBound.of(t.max) : undefined,
+        }),
+      );
     }
-    entities.push(IntermediateRepresentationEntityDeclaration.of({ name: name.value, attributes: IntermediateRepresentationAttributeDeclarations.of(attributes) }));
+    entities.push(
+      IntermediateRepresentationEntityDeclaration.of({
+        name: name.value,
+        attributes: IntermediateRepresentationAttributeDeclarations.of(attributes),
+      }),
+    );
   }
 
   const obligations: IntermediateRepresentationObligationDeclaration[] = [];
@@ -138,21 +162,28 @@ function buildView(ir: { [k: string]: Json }): Result<IntermediateRepresentation
     if (!isObject(bg) || typeof bg.id !== "string") continue;
     const id = BackgroundAssumptionIdentifier.parse(bg.id);
     if (!id.ok) return err(JSON.stringify(id.error));
-    const constructed = IntermediateRepresentationBackgroundDeclaration.parse({ id: id.value, assert: asExpression(bg.assert ?? null) });
+    const constructed = IntermediateRepresentationBackgroundDeclaration.parse({
+      id: id.value,
+      assert: asExpression(bg.assert ?? null),
+    });
     if (!constructed.ok) return err(JSON.stringify(constructed.error));
     background.push(constructed.value);
   }
 
-  return ok(IntermediateRepresentationModelDeclaration.of({
-    entities: IntermediateRepresentationEntityDeclarations.of(entities),
-    obligations: IntermediateRepresentationObligationDeclarations.of(obligations),
-    scenarios: IntermediateRepresentationScenarioDeclarations.of(scenarios),
-    background: IntermediateRepresentationBackgroundDeclarations.of(background),
-  }));
+  return ok(
+    IntermediateRepresentationModelDeclaration.of({
+      entities: IntermediateRepresentationEntityDeclarations.of(entities),
+      obligations: IntermediateRepresentationObligationDeclarations.of(obligations),
+      scenarios: IntermediateRepresentationScenarioDeclarations.of(scenarios),
+      background: IntermediateRepresentationBackgroundDeclarations.of(background),
+    }),
+  );
 }
 
 // owner は id、無ければ `<section>[<index>]`（旧 collectFrRefs の逐語）。
-function collectFunctionalRequirementReferenceClaims(ir: { [k: string]: Json }): Result<FunctionalRequirementReferenceClaim[], string> {
+function collectFunctionalRequirementReferenceClaims(ir: {
+  [k: string]: Json;
+}): Result<FunctionalRequirementReferenceClaim[], string> {
   const claims: FunctionalRequirementReferenceClaim[] = [];
   for (const section of ["obligations", "scenarios", "unformalized"] as const) {
     const arr = Array.isArray(ir[section]) ? (ir[section] as Json[]) : [];
@@ -161,7 +192,13 @@ function collectFunctionalRequirementReferenceClaims(ir: { [k: string]: Json }):
       const owner = typeof entry.id === "string" ? entry.id : `${section}[${i}]`;
       const refs = entry.frRefs ?? null;
       if (!Array.isArray(refs)) continue;
-      const parsed = flatMapResult(traverseResult(refs.filter((r): r is string => typeof r === "string"), RequirementIdentifier.parse), FunctionalRequirementReferences.parse);
+      const parsed = flatMapResult(
+        traverseResult(
+          refs.filter((r): r is string => typeof r === "string"),
+          RequirementIdentifier.parse,
+        ),
+        FunctionalRequirementReferences.parse,
+      );
       if (!parsed.ok) return err(JSON.stringify(parsed.error));
       claims.push(FunctionalRequirementReferenceClaim.of(owner, parsed.value));
     }
@@ -169,14 +206,18 @@ function collectFunctionalRequirementReferenceClaims(ir: { [k: string]: Json }):
   return ok(claims);
 }
 
-export class IntermediateRepresentationValidationMaterialsRepositoryImplementation implements IntermediateRepresentationValidationMaterialsRepository {
+export class IntermediateRepresentationValidationMaterialsRepositoryImplementation
+  implements IntermediateRepresentationValidationMaterialsRepository
+{
   readonly #schemaPath: string;
 
   constructor(config: IntermediateRepresentationValidationMaterialsConfiguration) {
     this.#schemaPath = config.schemaPath;
   }
 
-  findById(id: IntermediateRepresentationValidationMaterialsIdentifier): Result<IntermediateRepresentationValidationMaterials, RepositoryError> {
+  findById(
+    id: IntermediateRepresentationValidationMaterialsIdentifier,
+  ): Result<IntermediateRepresentationValidationMaterials, RepositoryError> {
     const outputPath = id.modelId().artifactPath().asString();
     // 機能形式モデル以外・不在はこの Repository の収蔵外（not-found——use case
     // が pass-through へ写像する旧 not-applicable の凍結挙動）。
@@ -193,7 +234,12 @@ export class IntermediateRepresentationValidationMaterialsRepositoryImplementati
     try {
       bytes = readFileSync(outputPath);
     } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
+      return err({
+        kind: "io-failed",
+        operation: "read",
+        path: outputPath,
+        cause: e instanceof Error ? e.message : String(e),
+      });
     }
     const md = bytes.toString("utf-8");
     const fences = extractFences(md, "json").map((f) => f.body);
@@ -258,7 +304,12 @@ export class IntermediateRepresentationValidationMaterialsRepositoryImplementati
       writeFileAtomically(outputPath, bytes);
       return ok(undefined);
     } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
+      return err({
+        kind: "io-failed",
+        operation: "write",
+        path: outputPath,
+        cause: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 }

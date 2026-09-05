@@ -1,14 +1,14 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import {
-  TargetIdentifier,
   AttributePath,
+  type Expression,
   ExpressionTree,
   FunctionalRequirementReferences,
   KeyedIndex,
+  TargetIdentifier,
   TargetIdentifiers,
   UnitName,
-  type Expression,
 } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 // 設計 IR の 1 ユニット。rawEntities は契約3 のエンティティスキーマ断片の
 // 素通し（lowering が契約1 文書へそのまま埋め込む）で、enum 値の照会だけを
@@ -27,19 +27,18 @@ import {
 // 合成不変量はトートロジーなので、大域・gap・シナリオの判定を変えない。
 // OB-n / SC-n / BG-n の採番・整列順は文書バイト（子の処理順）に効く凍結面。
 
-import { DesignUnitIdentifier } from "./design-unit-identifier.ts";
-
-import { DesignMachines } from "./design-machines.ts";
-import { DesignObligations } from "./design-obligations.ts";
-import { DesignScenarios } from "./design-scenarios.ts";
-import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
-import type { DesignEntityDeclarations } from "./design-entity-declarations.ts";
 import { AttributePaths } from "./attribute-paths.ts";
-import { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
+import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
+import type { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
+import type { DesignEntityDeclarations } from "./design-entity-declarations.ts";
 import type { DesignMachine } from "./design-machine.ts";
 import type { DesignMachineIdentifier } from "./design-machine-identifier.ts";
+import { DesignMachines } from "./design-machines.ts";
+import type { DesignObligations } from "./design-obligations.ts";
 import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
+import type { DesignScenarios } from "./design-scenarios.ts";
 import type { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
+import { DesignUnitIdentifier } from "./design-unit-identifier.ts";
 import type { LoweredBackground } from "./lowered-background.ts";
 import { LoweredBackgrounds } from "./lowered-backgrounds.ts";
 import { LoweredIdentifier } from "./lowered-identifier.ts";
@@ -133,7 +132,11 @@ export class DesignUnit {
 
   // このユニットでバックエンドが検査し得る全対象（義務・遷移・シナリオ）。
   allTargets(): TargetIdentifiers {
-    return TargetIdentifiers.of(Array.from([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()], (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically();
+    return TargetIdentifiers.of(
+      Array.from([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()], (raw) =>
+        TargetIdentifier.of(raw),
+      ),
+    ).sortedUniqueCanonically();
   }
 
   // このユニットの lowering。synthetics は設計だけの 2 検査（到達不能・包摂）を
@@ -168,7 +171,12 @@ export class DesignUnit {
       origins.push([id, ob.loweredOrigin()]);
       const event = ob.eventDefinition();
       if (event !== null) {
-        candidates.push({ design: ob.id().asString(), trigger: event.trigger.asString(), guard: event.guard, effect: event.effect });
+        candidates.push({
+          design: ob.id().asString(),
+          trigger: event.trigger.asString(),
+          guard: event.guard,
+          effect: event.effect,
+        });
       }
     }
 
@@ -182,7 +190,12 @@ export class DesignUnit {
         obligations.push(tr.loweredAs(id, attrPath));
         origins.push([id, tr.loweredOrigin()]);
         machinesByTransition.push([tr.id(), sm]);
-        candidates.push({ design: tr.id().asString(), trigger: tr.trigger().asString(), guard: tr.loweredGuard(attrPath), effect: tr.loweredEffect(attrPath) });
+        candidates.push({
+          design: tr.id().asString(),
+          trigger: tr.trigger().asString(),
+          guard: tr.loweredGuard(attrPath),
+          effect: tr.loweredEffect(attrPath),
+        });
       }
       for (const ig of sm.ignores().sortedByStateTrigger()) {
         const id = nextId();
@@ -196,7 +209,14 @@ export class DesignUnit {
     if (opts.synthetics) {
       for (const c of candidates) {
         const id = nextId();
-        obligations.push(LoweredObligation.of({ id, nature: "invariant", functionalRequirementReferences: FunctionalRequirementReferences.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
+        obligations.push(
+          LoweredObligation.of({
+            id,
+            nature: "invariant",
+            functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+            assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] },
+          }),
+        );
         origins.push([id, LoweredOrigin.of({ design: LoweredOriginReference.of(c.design), kind: "vac-dead" })]);
       }
       const byTrigger = new Map<string, EventCandidate[]>();
@@ -214,20 +234,28 @@ export class DesignUnit {
             // (guardB and not guardA) の空虚性は guardB => guardA を証明する：
             // b は a に包摂される（同トリガ・証明可能に狭いガード・同一効果）。
             const id = nextId();
-            obligations.push(LoweredObligation.of({
+            obligations.push(
+              LoweredObligation.of({
+                id,
+                nature: "invariant",
+                functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+                assert: {
+                  op: "implies",
+                  args: [
+                    { op: "and", args: [b.guard, { op: "not", args: [a.guard] }] },
+                    { op: "bool", value: true },
+                  ],
+                },
+              }),
+            );
+            origins.push([
               id,
-              nature: "invariant",
-              functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-              assert: {
-                op: "implies",
-                args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }],
-              },
-            }));
-            origins.push([id, LoweredOrigin.of({
-              design: LoweredOriginReference.of(`${a.design}|${b.design}`),
-              kind: "vac-shadow",
-              pair: [LoweredOriginReference.of(a.design), LoweredOriginReference.of(b.design)],
-            })]);
+              LoweredOrigin.of({
+                design: LoweredOriginReference.of(`${a.design}|${b.design}`),
+                kind: "vac-shadow",
+                pair: [LoweredOriginReference.of(a.design), LoweredOriginReference.of(b.design)],
+              }),
+            ]);
           }
         }
       }

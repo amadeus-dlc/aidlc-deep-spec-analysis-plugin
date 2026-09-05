@@ -3,7 +3,7 @@
 // ofはモデル識別子を受け取り、この1:1の関係を型で表す。
 
 import type { ArtifactPath } from "@deep-spec/kernel-domain";
-import { DesignModelIdentifier } from "./design-model-identifier.ts";
+import type { DesignModelIdentifier } from "./design-model-identifier.ts";
 
 export class RefinementMaterialsIdentifier {
   readonly #model: DesignModelIdentifier;

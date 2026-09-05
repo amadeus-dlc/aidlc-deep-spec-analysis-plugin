@@ -20,7 +20,9 @@ export class FunctionalRequirementReferenceClaims {
     yield* this.#values;
   }
 
-  ownerDescriptions(): string[] { return this.#values.map((claim) => claim.ownerDescription()); }
+  ownerDescriptions(): string[] {
+    return this.#values.map((claim) => claim.ownerDescription());
+  }
 
   toArray(): readonly FunctionalRequirementReferenceClaim[] {
     return this.#values;

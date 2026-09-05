@@ -51,8 +51,6 @@ export class CheckVersionAdvisoryUseCase {
       source: provenance.source,
       ref: provenance.ref,
     };
-    return installed.isOlderThan(latest)
-      ? VersionAdvisory.updateAvailable(values)
-      : VersionAdvisory.current(values);
+    return installed.isOlderThan(latest) ? VersionAdvisory.updateAvailable(values) : VersionAdvisory.current(values);
   }
 }

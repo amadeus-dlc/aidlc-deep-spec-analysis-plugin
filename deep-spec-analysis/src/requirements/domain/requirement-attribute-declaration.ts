@@ -1,15 +1,20 @@
-import { EnumerationMembers } from "@deep-spec/kernel-domain";
+import type { EnumerationMembers } from "@deep-spec/kernel-domain";
+
 export { AttributeBound } from "@deep-spec/kernel-domain";
-import { AttributeBound } from "@deep-spec/kernel-domain";
-import { AttributePath } from "@deep-spec/kernel-domain";
 
-
+import type { AttributeBound, AttributePath } from "@deep-spec/kernel-domain";
 
 // 要件 IR の属性宣言——パス・種類（bool／int／enum）・int の上下限・enum の
 // 宣言値。コンパイラは種類で分岐する代わりに `match` で種類ごとの材料を
 // 受け取る（#71 波25）。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type RequirementAttributeDeclarationParam = { path: AttributePath; kind: "bool" | "int" | "enum"; min?: AttributeBound; max?: AttributeBound; values?: EnumerationMembers };
+type RequirementAttributeDeclarationParam = {
+  path: AttributePath;
+  kind: "bool" | "int" | "enum";
+  min?: AttributeBound;
+  max?: AttributeBound;
+  values?: EnumerationMembers;
+};
 
 export class RequirementAttributeDeclaration {
   readonly #path: AttributePath;

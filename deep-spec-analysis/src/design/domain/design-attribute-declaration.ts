@@ -1,8 +1,6 @@
-import { EnumerationMembers } from "@deep-spec/kernel-domain";
-import { DeclaredBindingValue } from "@deep-spec/kernel-domain";
-import { type DeclaredBound, AttributeKind } from "@deep-spec/kernel-domain";
+import type { AttributeKind, DeclaredBindingValue, DeclaredBound, EnumerationMembers } from "@deep-spec/kernel-domain";
 
-import { type DesignAttributeName } from "./design-attribute-name.ts";
+import type { DesignAttributeName } from "./design-attribute-name.ts";
 
 // 属性宣言（bool / 有界 int / enum）。型宣言が欠けた属性は kind: "" で届く
 //（旧実装はカタログへ登録した——参照解決の可否が変わるため保存）。
@@ -11,7 +9,14 @@ import { type DesignAttributeName } from "./design-attribute-name.ts";
 // enum リテラル所属・machine 状態面）を宣言自身が所有し、プロパティ読みは
 // 構築ドア（I/O 文脈）だけに残る。文言と発生順は判事側の凍結面のまま。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type DesignAttributeDeclarationParam = { name: DesignAttributeName; kind: AttributeKind; description?: string; values?: EnumerationMembers; min?: DeclaredBound; max?: DeclaredBound };
+type DesignAttributeDeclarationParam = {
+  name: DesignAttributeName;
+  kind: AttributeKind;
+  description?: string;
+  values?: EnumerationMembers;
+  min?: DeclaredBound;
+  max?: DeclaredBound;
+};
 
 export class DesignAttributeDeclaration {
   readonly #name: DesignAttributeName;
@@ -52,8 +57,7 @@ export class DesignAttributeDeclaration {
 
   boundsOutsideSafeRange(): boolean {
     return (
-      (this.#min !== undefined && !this.#min.isSafeInteger()) ||
-      (this.#max !== undefined && !this.#max.isSafeInteger())
+      (this.#min !== undefined && !this.#min.isSafeInteger()) || (this.#max !== undefined && !this.#max.isSafeInteger())
     );
   }
 

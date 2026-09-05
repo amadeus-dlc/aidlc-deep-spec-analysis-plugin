@@ -15,7 +15,8 @@ export function boundedValueSnapshot<T extends ValueSnapshotParam>(
     if (total > limits.total) throw new IllegalArgumentException({ kind: "value-text-too-large" });
   };
   const copy = (current: ValueSnapshotParam, depth: number): ValueSnapshotParam => {
-    if (++nodes > limits.nodes || depth > limits.depth) throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+    if (++nodes > limits.nodes || depth > limits.depth)
+      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
     if (typeof current === "string") {
       chargeText(current, "value-string-too-long");
       return current;

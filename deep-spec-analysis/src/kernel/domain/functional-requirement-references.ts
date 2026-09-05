@@ -3,15 +3,21 @@
 // ではない）。of は型付きの要素を受け取る。
 // 正準一意化（`sortedUnique`）は finding の frRefs 面の凍結正準形。
 
-import { IllegalArgumentException, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { RequirementIdentifier } from "./requirement-identifier.ts";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
+import type { RequirementIdentifier } from "./requirement-identifier.ts";
 
 export class FunctionalRequirementReferences {
   readonly #values: readonly RequirementIdentifier[];
 
   private constructor(values: readonly RequirementIdentifier[]) {
     // 1要素が持つ要件参照の処理予算は10,000件。コピーの前に確認する。
-    if (values.length > 10_000) throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
+    if (values.length > 10_000)
+      throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
 

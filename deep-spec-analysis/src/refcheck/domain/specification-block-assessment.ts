@@ -1,7 +1,7 @@
+import { type ArtifactPath, FindingKind } from "@deep-spec/kernel-domain";
 import type { BlockIndex } from "./block-index.ts";
-import type { LineNumber } from "./line-number.ts";
-import { FindingKind, type ArtifactPath } from "@deep-spec/kernel-domain";
 import { CD_2 } from "./contract-check-families.ts";
+import type { LineNumber } from "./line-number.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { WitnessReference } from "./witness-reference.ts";
 
@@ -15,7 +15,12 @@ export class SpecificationBlockAssessment {
   readonly #issue: "sound" | "unparseable" | "not-a-mapping" | "openapi-without-paths";
   readonly #error: string | null;
 
-  private constructor(index: BlockIndex, line: LineNumber, issue: "sound" | "unparseable" | "not-a-mapping" | "openapi-without-paths", error: string | null) {
+  private constructor(
+    index: BlockIndex,
+    line: LineNumber,
+    issue: "sound" | "unparseable" | "not-a-mapping" | "openapi-without-paths",
+    error: string | null,
+  ) {
     this.#index = index;
     this.#line = line;
     this.#issue = issue;
@@ -46,13 +51,17 @@ export class SpecificationBlockAssessment {
     return `yaml fence #${this.#index.asNumber()} (line ${this.#line.asNumber()})`;
   }
 
-  matchIssue<T>(handlers: { sound: () => T; unparseable: (error: string) => T; notAMapping: () => T; openapiWithoutPaths: () => T }): T {
+  matchIssue<T>(handlers: {
+    sound: () => T;
+    unparseable: (error: string) => T;
+    notAMapping: () => T;
+    openapiWithoutPaths: () => T;
+  }): T {
     if (this.#issue === "sound") return handlers.sound();
     if (this.#issue === "unparseable") return handlers.unparseable(this.#error ?? "");
     if (this.#issue === "not-a-mapping") return handlers.notAMapping();
     return handlers.openapiWithoutPaths();
   }
-
 
   // CD-2 の不変条件（種別規律の裁定 12）: spec ブロックは解析できる YAML
   // マッピングで、openapi なら paths を持つ。文言は golden 凍結。
@@ -63,15 +72,31 @@ export class SpecificationBlockAssessment {
     this.matchIssue({
       sound: () => {},
       unparseable: (error) => {
-        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessReference.at(art, el)],
-          `spec block does not parse in the supported YAML subset: ${error}`);
+        report.finding(
+          CD_2,
+          FindingKind.structureInvalid(),
+          [blockId],
+          [WitnessReference.at(art, el)],
+          `spec block does not parse in the supported YAML subset: ${error}`,
+        );
       },
       notAMapping: () => {
-        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessReference.at(art, el)], "spec block is not a YAML mapping");
+        report.finding(
+          CD_2,
+          FindingKind.structureInvalid(),
+          [blockId],
+          [WitnessReference.at(art, el)],
+          "spec block is not a YAML mapping",
+        );
       },
       openapiWithoutPaths: () => {
-        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessReference.at(art, el, "openapi")],
-          "OpenAPI spec block carries `openapi:` but no `paths:`");
+        report.finding(
+          CD_2,
+          FindingKind.structureInvalid(),
+          [blockId],
+          [WitnessReference.at(art, el, "openapi")],
+          "OpenAPI spec block carries `openapi:` but no `paths:`",
+        );
       },
     });
   }

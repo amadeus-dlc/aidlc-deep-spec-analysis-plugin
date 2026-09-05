@@ -11,4 +11,5 @@ export function isObject(v: Json): v is { [k: string]: Json } {
 
 // JSON 配列から string 要素だけを選別する寛容パースの定型(5 アダプタで
 // 重複していた一行を単一定義へ——PR10 重複監査)。
-export const strArr = (v: Json): string[] => (Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : []);
+export const strArr = (v: Json): string[] =>
+  Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : [];

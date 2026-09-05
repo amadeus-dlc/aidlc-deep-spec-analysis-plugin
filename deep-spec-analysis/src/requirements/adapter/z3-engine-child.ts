@@ -11,8 +11,7 @@ import type { SatisfiabilityModuloTheoriesChildResult } from "./satisfiability-m
 // （node 優先・bun フォールバック）で行われる。
 
 import { readFileSync } from "node:fs";
-import { type SatisfiabilityModuloTheoriesChildQuery } from "./satisfiability-modulo-theories-child-query.ts";
-
+import type { SatisfiabilityModuloTheoriesChildQuery } from "./satisfiability-modulo-theories-child-query.ts";
 
 export async function solveSmtChild(): Promise<string> {
   let payload: { queries: SatisfiabilityModuloTheoriesChildQuery[]; timeoutMs: number; budgetMs: number };

@@ -1,6 +1,5 @@
-import { UnitName, type TargetIdentifier, SkipReason } from "@deep-spec/kernel-domain";
-
 import { DesignSkipped } from "@deep-spec/design-domain";
+import { SkipReason, type TargetIdentifier, UnitName } from "@deep-spec/kernel-domain";
 import { AttributePath } from "@deep-spec/requirements-domain";
 
 // refinement map の欠陥——alpha 置換（要件の式を設計の式へ書き換える処理）が
@@ -9,10 +8,21 @@ import { AttributePath } from "@deep-spec/requirements-domain";
 // 旧例外 `AlphaError` を吸収）。凍結文言は各バリアントが描画し、公開語彙
 // （skip 理由 `compile-error`）への対応もこの型が知る。
 export class RefinementMapDefect {
-  readonly #kind: "uncovered-attribute" | "enum-mapping-outside-equality" | "unspecified-mapping" | "effect-not-assignment-conjunction";
+  readonly #kind:
+    | "uncovered-attribute"
+    | "enum-mapping-outside-equality"
+    | "unspecified-mapping"
+    | "effect-not-assignment-conjunction";
   readonly #reqPath: AttributePath | null;
 
-  private constructor(kind: "uncovered-attribute" | "enum-mapping-outside-equality" | "unspecified-mapping" | "effect-not-assignment-conjunction", reqPath: AttributePath | null) {
+  private constructor(
+    kind:
+      | "uncovered-attribute"
+      | "enum-mapping-outside-equality"
+      | "unspecified-mapping"
+      | "effect-not-assignment-conjunction",
+    reqPath: AttributePath | null,
+  ) {
     this.#kind = kind;
     this.#reqPath = reqPath;
   }
@@ -54,6 +64,11 @@ export class RefinementMapDefect {
 
   // 公開語彙への対応：compile-error skip（文言は golden 凍結）。
   asCompileErrorSkip(target: TargetIdentifier, unit: string): DesignSkipped {
-    return DesignSkipped.of({ target, reason: SkipReason.compileError(), unit: UnitName.of(unit), detail: `alpha substitution failed: ${this.message()}` });
+    return DesignSkipped.of({
+      target,
+      reason: SkipReason.compileError(),
+      unit: UnitName.of(unit),
+      detail: `alpha substitution failed: ${this.message()}`,
+    });
   }
 }

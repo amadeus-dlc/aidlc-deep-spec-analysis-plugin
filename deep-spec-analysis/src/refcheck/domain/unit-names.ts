@@ -1,4 +1,4 @@
-import { UnitName } from "@deep-spec/kernel-domain";
+import type { UnitName } from "@deep-spec/kernel-domain";
 
 // unit 名のファーストクラスコレクション（depends_on の並びなど宣言順を保持）。
 export class UnitNames {

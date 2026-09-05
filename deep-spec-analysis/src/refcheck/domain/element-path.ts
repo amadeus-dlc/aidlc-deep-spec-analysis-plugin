@@ -17,6 +17,10 @@ export class ElementPath {
   static parse(raw: string): Result<ElementPath, ParseError> {
     return parseConstruction(() => new ElementPath(raw));
   }
-  equals(other: ElementPath): boolean { return this.#value === other.#value; }
-  asString(): string { return this.#value; }
+  equals(other: ElementPath): boolean {
+    return this.#value === other.#value;
+  }
+  asString(): string {
+    return this.#value;
+  }
 }

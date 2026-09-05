@@ -12,15 +12,14 @@
 // 適合と両文書の公開は VerificationReportFinalizer が一か所で持つ——ここに残る
 // のは SMT 固有の solver 判断だけ。
 
-import { VerificationReport, VerificationReportIdentifier } from "@deep-spec/requirements-domain";
-import { SUPPORTED_IR_MAJOR } from "@deep-spec/requirements-domain";
 import type { FindingsSchema } from "@deep-spec/kernel-domain";
+import { SUPPORTED_IR_MAJOR, VerificationReport, VerificationReportIdentifier } from "@deep-spec/requirements-domain";
 import type { FormalModelRepository } from "./port/formal-model-repository.ts";
 import type { VerificationDirectoryRepository } from "./port/verification-directory-repository.ts";
-import type { VerifySatisfiabilityModuloTheoriesOutcome } from "./verify-satisfiability-modulo-theories-outcome.ts";
 import type { Z3SolverClient } from "./port/z3-solver-client.ts";
-import type { VerifyRequirementsSatisfiabilityModuloTheoriesInput } from "./verify-requirements-satisfiability-modulo-theories-input.ts";
 import { VerificationReportFinalizer } from "./verification-report-finalizer.ts";
+import type { VerifyRequirementsSatisfiabilityModuloTheoriesInput } from "./verify-requirements-satisfiability-modulo-theories-input.ts";
+import type { VerifySatisfiabilityModuloTheoriesOutcome } from "./verify-satisfiability-modulo-theories-outcome.ts";
 
 const BACKEND = "smt";
 
@@ -46,7 +45,9 @@ export class VerifyRequirementsSatisfiabilityModuloTheoriesUseCase {
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };
       if (acquired.error.kind === "io-failed") return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#finalizer.finalizeIrUnreadable(VerificationReport.irUnreadable(id, "exhaustive", acquired.error.cause));
+      const saved = this.#finalizer.finalizeIrUnreadable(
+        VerificationReport.irUnreadable(id, "exhaustive", acquired.error.cause),
+      );
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "model-unreadable" };
     }
@@ -54,14 +55,23 @@ export class VerifyRequirementsSatisfiabilityModuloTheoriesUseCase {
     const irHash = model.irHash();
 
     if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
-      const saved = this.#finalizer.finalize(VerificationReport.versionMismatch(id, model, irHash, "exhaustive"), model);
+      const saved = this.#finalizer.finalize(
+        VerificationReport.versionMismatch(id, model, irHash, "exhaustive"),
+        model,
+      );
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "version-mismatch" };
     }
 
     const run = this.#z3SolverClient.check(model);
     if (run.result.kind === "unavailable") {
-      const unavailable = VerificationReport.solverUnavailable(id, model, irHash, run.plan.planSkipped(), run.result.reason);
+      const unavailable = VerificationReport.solverUnavailable(
+        id,
+        model,
+        irHash,
+        run.plan.planSkipped(),
+        run.result.reason,
+      );
       const saved = this.#finalizer.finalize(unavailable, model);
       if (!saved.ok) return { kind: "save-failed", error: saved.error };
       return { kind: "solver-unavailable" };

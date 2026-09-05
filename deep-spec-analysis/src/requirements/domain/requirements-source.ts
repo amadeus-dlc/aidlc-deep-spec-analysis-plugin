@@ -4,7 +4,7 @@
 // 解決された所在（sourcePath）は store の書き先として集約が保持する。
 // digest と原文の整合を守るため、バイト列は構築・照会の両方で防御コピー。
 
-import { type ArtifactPath, type RequirementIdentifiers, ContentHash } from "@deep-spec/kernel-domain";
+import type { ArtifactPath, ContentHash, RequirementIdentifiers } from "@deep-spec/kernel-domain";
 import type { RequirementsSourceIdentifier } from "./requirements-source-identifier.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。

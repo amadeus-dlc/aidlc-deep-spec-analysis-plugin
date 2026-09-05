@@ -6,7 +6,11 @@
 // irVersion チェックより前に verdict へ落ちる。意味検査はスキーマ検証まで
 // 無傷の IR にのみ走る。
 
-import { type DesignModelIdentifier, DesignIntermediateRepresentationValidationMaterialsIdentifier, SUPPORTED_DESIGN_IR_MAJOR } from "@deep-spec/design-domain";
+import {
+  DesignIntermediateRepresentationValidationMaterialsIdentifier,
+  type DesignModelIdentifier,
+  SUPPORTED_DESIGN_IR_MAJOR,
+} from "@deep-spec/design-domain";
 import type { DesignIntermediateRepresentationValidationMaterialsRepository } from "./port/design-intermediate-representation-validation-materials-repository.ts";
 import type { ValidateDesignIntermediateRepresentationOutcome } from "./validate-design-intermediate-representation-outcome.ts";
 
@@ -18,7 +22,9 @@ export class ValidateDesignIntermediateRepresentationUseCase {
   }
 
   execute(modelId: DesignModelIdentifier): ValidateDesignIntermediateRepresentationOutcome {
-    const found = this.#designIrValidationMaterialsRepository.findById(DesignIntermediateRepresentationValidationMaterialsIdentifier.of(modelId));
+    const found = this.#designIrValidationMaterialsRepository.findById(
+      DesignIntermediateRepresentationValidationMaterialsIdentifier.of(modelId),
+    );
     if (!found.ok) {
       // not-found = 機能形式モデル以外・不在（旧 not-applicable の pass-through）。
       if (found.error.kind === "not-found") return { kind: "not-applicable" };
@@ -34,7 +40,12 @@ export class ValidateDesignIntermediateRepresentationUseCase {
         `irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
       );
     }
-    errors.push(...materials.schemaErrors().toArray().map((message) => message.asString()));
+    errors.push(
+      ...materials
+        .schemaErrors()
+        .toArray()
+        .map((message) => message.asString()),
+    );
 
     if (errors.length === 0) {
       errors.push(...materials.units().wellFormednessErrors());

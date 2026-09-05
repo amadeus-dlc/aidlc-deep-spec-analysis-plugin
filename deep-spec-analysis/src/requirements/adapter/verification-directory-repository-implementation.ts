@@ -13,21 +13,18 @@
 // 候補の公開・クロスチェックの公開を、それぞれの直前の token fencing つきで
 // 行う。非公開の temp／stale name は `*.json` にせず兄弟列挙へ混ぜない。
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Json } from "@deep-spec/kernel-infrastructure";
 import type { DirectoryFinalizationLockOutcome, ProcessLiveness } from "@deep-spec/kernel-adapter";
-import type { ArtifactPath } from "@deep-spec/kernel-domain";
 import { DirectoryFinalizationLock, SystemClock, writeFileAtomically } from "@deep-spec/kernel-adapter";
+import type { ArtifactPath } from "@deep-spec/kernel-domain";
+import type { Json } from "@deep-spec/kernel-infrastructure";
+import { err, ok, type Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import type { VerificationReport } from "@deep-spec/requirements-domain";
 import { VerificationDirectory, VerificationReports } from "@deep-spec/requirements-domain";
 import type { VerificationDirectoryRepository } from "@deep-spec/requirements-usecase";
-import {
-  parseSiblingReportDocument,
-  renderVerificationReportBytes,
-} from "./verification-report-serializer.ts";
+import { parseSiblingReportDocument, renderVerificationReportBytes } from "./verification-report-serializer.ts";
 
 const CROSS_CHECK_BASENAME = "cross-check.json";
 // 非公開の stale name（`*.json` ではないので兄弟列挙にも doctor の走査にも
@@ -65,7 +62,13 @@ function documentsByFileName(reports: readonly VerificationReport[]): Map<string
 export class VerificationDirectoryRepositoryImplementation implements VerificationDirectoryRepository {
   readonly #lock: DirectoryFinalizationLock;
 
-  constructor(lock: DirectoryFinalizationLock = new DirectoryFinalizationLock(new SystemClock(), UNPROBED_LIVENESS, VERIFICATION_LOCK_BASENAME)) {
+  constructor(
+    lock: DirectoryFinalizationLock = new DirectoryFinalizationLock(
+      new SystemClock(),
+      UNPROBED_LIVENESS,
+      VERIFICATION_LOCK_BASENAME,
+    ),
+  ) {
     this.#lock = lock;
   }
 
@@ -80,7 +83,13 @@ export class VerificationDirectoryRepositoryImplementation implements Verificati
     // して扱い、次の成功実行に組み直させる。型のある失敗にするのは比較へ参加
     // する兄弟 backend 文書だけ。
     const crossCheck = this.#readReport(directory, CROSS_CHECK_BASENAME);
-    return ok(VerificationDirectory.of(directory, VerificationReports.of(siblings.value), crossCheck.ok ? crossCheck.value : null));
+    return ok(
+      VerificationDirectory.of(
+        directory,
+        VerificationReports.of(siblings.value),
+        crossCheck.ok ? crossCheck.value : null,
+      ),
+    );
   }
 
   store(aggregate: VerificationDirectory): Result<void, RepositoryError> {
@@ -179,7 +188,12 @@ export class VerificationDirectoryRepositoryImplementation implements Verificati
     if (!observed.ok) return err(observed.error);
     const candidateFileName = candidate.id().fileName();
     const onDisk = documentsByFileName(observed.value.filter((r) => r.id().fileName() !== candidateFileName));
-    const loaded = documentsByFileName(aggregate.reports().toArray().filter((r) => r.id().fileName() !== candidateFileName));
+    const loaded = documentsByFileName(
+      aggregate
+        .reports()
+        .toArray()
+        .filter((r) => r.id().fileName() !== candidateFileName),
+    );
     let same = onDisk.size === loaded.size;
     if (same) {
       for (const [fileName, document] of loaded) {

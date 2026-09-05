@@ -53,7 +53,11 @@ export function locationOf(relPath: string): Location | "entry" | "data" | null 
   if (ENTRY_FILES.has(relPath)) return "entry";
   const segments = relPath.split("/");
   if (segments[0] === "entries" && segments[1] === "data") return "data";
-  if (segments.length >= 3 && (CONTEXTS as readonly string[]).includes(segments[0]) && (LAYERS as readonly string[]).includes(segments[1])) {
+  if (
+    segments.length >= 3 &&
+    (CONTEXTS as readonly string[]).includes(segments[0]) &&
+    (LAYERS as readonly string[]).includes(segments[1])
+  ) {
     return { context: segments[0], layer: segments[1] as Layer };
   }
   return null;
@@ -84,7 +88,11 @@ export function stripStrings(rawSource: string): string {
         i++;
         continue;
       }
-      if ((state === "single" && c === "'") || (state === "double" && c === '"') || (state === "template" && c === "`")) {
+      if (
+        (state === "single" && c === "'") ||
+        (state === "double" && c === '"') ||
+        (state === "template" && c === "`")
+      ) {
         state = "code";
         out += c;
       } else if (c === "\n") {
@@ -134,7 +142,11 @@ export function stripComments(source: string): string {
         i++;
         continue;
       }
-      if ((state === "single" && c === "'") || (state === "double" && c === '"') || (state === "template" && c === "`")) {
+      if (
+        (state === "single" && c === "'") ||
+        (state === "double" && c === '"') ||
+        (state === "template" && c === "`")
+      ) {
         state = "code";
       }
       out += c;
@@ -220,7 +232,11 @@ export function onlySanctionedImports(relPath: string, source: string): Violatio
   const out: Violation[] = [];
   for (const spec of importSpecifiers(source)) {
     const sanctioned =
-      spec.startsWith("node:") || spec.startsWith("./") || spec.startsWith("../") || spec.startsWith(PACKAGE_SCOPE) || ALLOWED_NPM.has(spec);
+      spec.startsWith("node:") ||
+      spec.startsWith("./") ||
+      spec.startsWith("../") ||
+      spec.startsWith(PACKAGE_SCOPE) ||
+      ALLOWED_NPM.has(spec);
     if (!sanctioned) out.push({ path: relPath, rule: "only-sanctioned-imports", detail: `import "${spec}"` });
   }
   // 動的 import の引数が引用符リテラルでないもの（テンプレートリテラル・
@@ -283,7 +299,16 @@ function isModuleOrSubpath(spec: string, module: string): boolean {
 // bare の組み込みは onlySanctionedImports でも弾かれるが、I/O 規律の検査自体が
 // すり抜けるのは規則単体の検出力の穴なので、二重に塞ぐ。
 const NODE_BUILTINS: ReadonlySet<string> = new Set([
-  "fs", "crypto", "child_process", "os", "path", "url", "process", "util", "stream", "buffer",
+  "fs",
+  "crypto",
+  "child_process",
+  "os",
+  "path",
+  "url",
+  "process",
+  "util",
+  "stream",
+  "buffer",
 ]);
 
 function normalizeNodeSpecifier(spec: string): string | null {
@@ -307,7 +332,10 @@ export function noIoInPureLayers(relPath: string, source: string): Violation[] {
       out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `domain imports "${rawSpec}"` });
     }
     // サブパス（node:fs/promises 等）も同一モジュールとして拒否する。
-    if (loc.layer === "usecase" && ["node:fs", "node:child_process", "node:os"].some((m) => isModuleOrSubpath(spec, m))) {
+    if (
+      loc.layer === "usecase" &&
+      ["node:fs", "node:child_process", "node:os"].some((m) => isModuleOrSubpath(spec, m))
+    ) {
       out.push({ path: relPath, rule: "no-io-in-pure-layers", detail: `usecase imports "${rawSpec}"` });
     }
   }
@@ -353,7 +381,11 @@ export function privateConstructorInDomain(relPath: string, rawSource: string): 
     const next = source.indexOf("\nexport ", start + 1);
     const body = source.slice(start, next > 0 ? next : source.length);
     if (!body.includes("private constructor")) {
-      out.push({ path: relPath, rule: "private-constructor-in-domain", detail: `class ${name} lacks a private constructor` });
+      out.push({
+        path: relPath,
+        rule: "private-constructor-in-domain",
+        detail: `class ${name} lacks a private constructor`,
+      });
     }
   }
   return out;
@@ -364,7 +396,13 @@ export function noReconstitutionBypass(relPath: string, rawSource: string): Viol
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
   if (/\bstatic\s+reconstitute\s*\(/.test(stripStrings(rawSource))) {
-    return [{ path: relPath, rule: "no-reconstitution-bypass", detail: "restoration must use the same constructor contract as of" }];
+    return [
+      {
+        path: relPath,
+        rule: "no-reconstitution-bypass",
+        detail: "restoration must use the same constructor contract as of",
+      },
+    ];
   }
   return [];
 }
@@ -375,7 +413,13 @@ export function constructionParsingInDomain(relPath: string, rawSource: string):
   const loc = locationOf(relPath);
   if (loc === null || typeof loc === "string" || loc.layer === "domain" || loc.layer === "infrastructure") return [];
   if (/\bparseConstruction\b/.test(stripStrings(rawSource))) {
-    return [{ path: relPath, rule: "construction-parsing-in-domain", detail: "consume domain parse Results; do not catch construction panics" }];
+    return [
+      {
+        path: relPath,
+        rule: "construction-parsing-in-domain",
+        detail: "consume domain parse Results; do not catch construction panics",
+      },
+    ];
   }
   return [];
 }
@@ -404,7 +448,7 @@ export function noEnums(relPath: string, rawSource: string): Violation[] {
 // (!= / !== は後続の = で除外)。
 export function noNonNullAssertions(relPath: string, rawSource: string): Violation[] {
   const source = stripStrings(rawSource);
-  if (/[\w\)\]]!(?![=])/.test(source)) {
+  if (/[\w)\]]!(?![=])/.test(source)) {
     return [{ path: relPath, rule: "no-non-null-assertions", detail: "non-null assertion found — branch explicitly" }];
   }
   return [];
@@ -436,21 +480,39 @@ export function onePublicTypePerFile(relPath: string, rawSource: string): Violat
   const base = relPath.split("/").pop() ?? "";
   if (base === "index.ts") {
     return decls.length > 0
-      ? [{ path: relPath, rule: "one-public-type-per-file", detail: `facade declares ${decls.join(", ")} — facades re-export only` }]
+      ? [
+          {
+            path: relPath,
+            rule: "one-public-type-per-file",
+            detail: `facade declares ${decls.join(", ")} — facades re-export only`,
+          },
+        ]
       : [];
   }
   const out: Violation[] = [];
   if (decls.length > 1) {
-    out.push({ path: relPath, rule: "one-public-type-per-file", detail: `${decls.length} public types in one file: ${decls.join(", ")}` });
+    out.push({
+      path: relPath,
+      rule: "one-public-type-per-file",
+      detail: `${decls.length} public types in one file: ${decls.join(", ")}`,
+    });
   }
   if (decls.length === 1 && typeof loc !== "string") {
     const expected = `${kebabOf(decls[0] ?? "")}.ts`;
     if (base !== expected) {
-      out.push({ path: relPath, rule: "one-public-type-per-file", detail: `public type ${decls[0]} belongs in ${expected}, not ${base}` });
+      out.push({
+        path: relPath,
+        rule: "one-public-type-per-file",
+        detail: `public type ${decls[0]} belongs in ${expected}, not ${base}`,
+      });
     }
   }
   if (typeof loc === "string" && decls.length > 0) {
-    out.push({ path: relPath, rule: "one-public-type-per-file", detail: `entry declares public type(s) ${decls.join(", ")} — entries carry wiring only` });
+    out.push({
+      path: relPath,
+      rule: "one-public-type-per-file",
+      detail: `entry declares public type(s) ${decls.join(", ")} — entries carry wiring only`,
+    });
   }
   return out;
 }
@@ -467,12 +529,20 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
   if (relPath.includes("/usecase/port/")) {
     const re = /^export (?:abstract )?class (\w+)/gm;
     for (let m = re.exec(source); m !== null; m = re.exec(source)) {
-      out.push({ path: relPath, rule: "ports-live-in-port-dir", detail: `usecase/port/ carries contracts only — class ${m[1]} belongs beside the interactors` });
+      out.push({
+        path: relPath,
+        rule: "ports-live-in-port-dir",
+        detail: `usecase/port/ carries contracts only — class ${m[1]} belongs beside the interactors`,
+      });
     }
   } else {
     const re = /^export interface (\w+(?:Repository|Client))\b/gm;
     for (let m = re.exec(source); m !== null; m = re.exec(source)) {
-      out.push({ path: relPath, rule: "ports-live-in-port-dir", detail: `port contract ${m[1]} belongs under usecase/port/` });
+      out.push({
+        path: relPath,
+        rule: "ports-live-in-port-dir",
+        detail: `port contract ${m[1]} belongs under usecase/port/`,
+      });
     }
   }
   return out;
@@ -483,11 +553,42 @@ export function portsLiveInPortDir(relPath: string, rawSource: string): Violatio
 // パス・理由・利用可能層を持つ。data-model 規則と primitive フィールド規則は
 // この表だけを免除し、publishedLanguageLayers がその型を利用できる層を検査する。
 // 免除台帳は消えた——免除は表の項目だけで、項目を足すことは裁定である。
-export const PUBLISHED_LANGUAGE: ReadonlyMap<string, { readonly name: string; readonly reason: string; readonly layers: readonly Layer[] }> = new Map([
-  ["kernel/domain/expression.ts", { name: "Expression", reason: "契約1／契約3 の式ツリー——演算子の集合は契約スキーマの published language そのもの（既裁定）", layers: ["domain", "adapter"] }],
-  ["kernel/domain/keyed-index.ts", { name: "KeyedIndex", reason: "DP をキーにする索引の表現プリミティブ——string キーの Map を持つ唯一の場所（裁定 3-1、2026-09-03）", layers: ["domain", "adapter"] }],
-  ["kernel/domain/key-set.ts", { name: "KeySet", reason: "DP の集合の表現プリミティブ——KeyedIndex と同じ理屈（裁定 3-1、2026-09-03）", layers: ["domain", "adapter"] }],
-  ["requirements/domain/functional-requirement-reference-claim.ts", { name: "FunctionalRequirementReferenceClaim", reason: "frRefs の主張——owner は義務／シナリオ／unformalized の位置が混成する参照トークン", layers: ["domain", "adapter"] }],
+export const PUBLISHED_LANGUAGE: ReadonlyMap<
+  string,
+  { readonly name: string; readonly reason: string; readonly layers: readonly Layer[] }
+> = new Map([
+  [
+    "kernel/domain/expression.ts",
+    {
+      name: "Expression",
+      reason: "契約1／契約3 の式ツリー——演算子の集合は契約スキーマの published language そのもの（既裁定）",
+      layers: ["domain", "adapter"],
+    },
+  ],
+  [
+    "kernel/domain/keyed-index.ts",
+    {
+      name: "KeyedIndex",
+      reason: "DP をキーにする索引の表現プリミティブ——string キーの Map を持つ唯一の場所（裁定 3-1、2026-09-03）",
+      layers: ["domain", "adapter"],
+    },
+  ],
+  [
+    "kernel/domain/key-set.ts",
+    {
+      name: "KeySet",
+      reason: "DP の集合の表現プリミティブ——KeyedIndex と同じ理屈（裁定 3-1、2026-09-03）",
+      layers: ["domain", "adapter"],
+    },
+  ],
+  [
+    "requirements/domain/functional-requirement-reference-claim.ts",
+    {
+      name: "FunctionalRequirementReferenceClaim",
+      reason: "frRefs の主張——owner は義務／シナリオ／unformalized の位置が混成する参照トークン",
+      layers: ["domain", "adapter"],
+    },
+  ],
 ]);
 
 // ルール: domain 層にデータモデルを置かない（主従の裁定・MECE フェンス
@@ -506,16 +607,25 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
   // 抜けていた穴（種別規律の裁定 16、#71 波39）。型引数の角括弧は 2 段まで
   // ネストを追う（X<T extends Promise<string>>——レビュー指摘の回避経路）。
   const typeParams = "(?:<(?:[^<>]|<(?:[^<>]|<[^<>]*>)*>)*>)?";
-  for (const m of source.matchAll(new RegExp(`^export interface (\\w+)${typeParams}\\s*(?:extends [\\w<>, ]+)?\\{([\\s\\S]*?)^\\}`, "gm"))) {
+  for (const m of source.matchAll(
+    new RegExp(`^export interface (\\w+)${typeParams}\\s*(?:extends [\\w<>, ]+)?\\{([\\s\\S]*?)^\\}`, "gm"),
+  )) {
     const name = m[1] ?? "";
     if (name === published) continue;
     // プロパティ宣言（`readonly a: T` / `a?: T` / index signature）が 1 つでもあれば
     // データモデル。メソッド署名（`judge(): boolean`）とは見分け、コールバック型の
     // プロパティ（`on: () => void`）は値を持つ面としてプロパティに数える。
-    const members = (m[2] ?? "").split("\n").map((line) => line.trim()).filter((line) => line !== "");
+    const members = (m[2] ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== "");
     const properties = members.filter((line) => /^(?:readonly\s+)?(?:\w+\??|\[\w+:\s*\w+\])\s*:/.test(line));
     if (properties.length > 0) {
-      out.push({ path: relPath, rule: "no-data-models-in-domain", detail: `interface ${name} exposes ${properties.length} propert${properties.length === 1 ? "y" : "ies"} — a data model; make it commandable or dissolve it into a door signature` });
+      out.push({
+        path: relPath,
+        rule: "no-data-models-in-domain",
+        detail: `interface ${name} exposes ${properties.length} propert${properties.length === 1 ? "y" : "ies"} — a data model; make it commandable or dissolve it into a door signature`,
+      });
     }
   }
   // ジェネリック别名（export type Foo<T> = …）と末尾セミコロン省略の両方も
@@ -524,7 +634,11 @@ export function noDataModelsInDomain(relPath: string, rawSource: string): Violat
     if ((m[1] ?? "") === published) continue;
     const rhs = m[2] ?? "";
     if (/^\s*\{/.test(rhs) || (rhs.includes("{") && rhs.includes("|"))) {
-      out.push({ path: relPath, rule: "no-data-models-in-domain", detail: `record-shaped type alias ${m[1]} is a data model — make it commandable or dissolve it into a door signature` });
+      out.push({
+        path: relPath,
+        rule: "no-data-models-in-domain",
+        detail: `record-shaped type alias ${m[1]} is a data model — make it commandable or dissolve it into a door signature`,
+      });
     }
   }
   return out;
@@ -584,9 +698,16 @@ export function domainFieldsArePrivate(relPath: string, rawSource: string): Viol
     }
     for (const { depth: d, parens: p, text } of lines) {
       if (d !== 1 || p !== 0) continue;
-      const field = /^\s*(?:(?:public|protected|private)\s+)?(?:static\s+)?(?:readonly\s+)?([A-Za-z_]\w*)\s*[?!]?\s*[:=]/.exec(text);
+      const field =
+        /^\s*(?:(?:public|protected|private)\s+)?(?:static\s+)?(?:readonly\s+)?([A-Za-z_]\w*)\s*[?!]?\s*[:=]/.exec(
+          text,
+        );
       if (field) {
-        out.push({ path: relPath, rule: "domain-fields-are-private", detail: `class ${name} declares a non-private field ${field[1]} — keep state in a #private field and expose behaviour or an I/O reader` });
+        out.push({
+          path: relPath,
+          rule: "domain-fields-are-private",
+          detail: `class ${name} declares a non-private field ${field[1]} — keep state in a #private field and expose behaviour or an I/O reader`,
+        });
       }
     }
   }
@@ -606,7 +727,11 @@ export function publishedLanguageLayers(relPath: string, rawSource: string): Vio
     if (path === relPath) continue;
     if (typeof loc !== "string" && entry.layers.includes(loc.layer)) continue;
     if (new RegExp(`\\b${entry.name}\\b`).test(source)) {
-      out.push({ path: relPath, rule: "published-language-layers", detail: `${entry.name} (${path}) may be used only in ${entry.layers.join(", ")} layers` });
+      out.push({
+        path: relPath,
+        rule: "published-language-layers",
+        detail: `${entry.name} (${path}) may be used only in ${entry.layers.join(", ")} layers`,
+      });
     }
   }
   return out;
@@ -623,11 +748,27 @@ export function publishedLanguageLayers(relPath: string, rawSource: string): Vio
 // 既知の限界: 非公開の type 別名（Result のエラー材料）と index signature
 // 型（{ [k: string]: … }）は見ない。
 const PROSE_FIELD_NAMES: ReadonlySet<string> = new Set([
-  "detail", "details", "reason", "unavailableReason", "unavailable", "unsupported", "missing", "missingKeys",
-  "message", "messages", "error", "outputTail", "label", "fix", "rulesMarkdown", "description", "text",
+  "detail",
+  "details",
+  "reason",
+  "unavailableReason",
+  "unavailable",
+  "unsupported",
+  "missing",
+  "missingKeys",
+  "message",
+  "messages",
+  "error",
+  "outputTail",
+  "label",
+  "fix",
+  "rulesMarkdown",
+  "description",
+  "text",
   // 裁定 3-2／3-3（2026-09-03）: EARS 正規化文（契約1 の項目、LLM が読む）と
   // witness ref の原文トークン（サニタイズ前の値を人間のために逐語で残す欄）。
-  "ears", "value",
+  "ears",
+  "value",
 ]);
 
 const STATE_TOKEN_FIELD_NAMES: ReadonlySet<string> = new Set(["state", "from", "to", "attrPath"]);
@@ -683,8 +824,9 @@ export function primitiveFieldsOf(rawSource: string): string[] {
   // private フィールド: 型注釈つき（初期化子・definite assignment `!`・無インデントも
   // 含む）と、型注釈なしの初期化子（リテラルから string / number を推定——文字列は
   // stripStrings で空リテラルになっている）。レビュー指摘の死角をすべて塞ぐ。
-  const typedFields = [...source.matchAll(/^\s*(?:static\s+)?(?:readonly\s+)?(#\w+)[?!]?:\s*([^;=]+?)(?:\s*=\s*[^;]*)?;?$/gm)]
-    .map((m) => ({ name: (m[1] ?? "").slice(1), type: (m[2] ?? "").trim() }));
+  const typedFields = [
+    ...source.matchAll(/^\s*(?:static\s+)?(?:readonly\s+)?(#\w+)[?!]?:\s*([^;=]+?)(?:\s*=\s*[^;]*)?;?$/gm),
+  ].map((m) => ({ name: (m[1] ?? "").slice(1), type: (m[2] ?? "").trim() }));
   const inferredFields = [...source.matchAll(/^\s*(?:static\s+)?(?:readonly\s+)?(#\w+)\s*=\s*([^;]+?);?$/gm)]
     .map((m) => ({ name: (m[1] ?? "").slice(1), initializer: (m[2] ?? "").trim() }))
     .filter((f) => /^-?[0-9][0-9_.]*$/.test(f.initializer) || /^(?:""|''|``)$/.test(f.initializer))
@@ -698,7 +840,9 @@ export function primitiveFieldsOf(rawSource: string): string[] {
     }
   }
   // 宣言本文は次のトップレベル宣言（export / type / class / const …）の直前まで。
-  for (const decl of source.matchAll(/^export (?:interface|type) (\w+)[\s\S]*?(?=\n(?:export|type|interface|class|const|function|let)\s|$(?![\s\S]))/gm)) {
+  for (const decl of source.matchAll(
+    /^export (?:interface|type) (\w+)[\s\S]*?(?=\n(?:export|type|interface|class|const|function|let)\s|$(?![\s\S]))/gm,
+  )) {
     for (const group of braceGroups(decl[0])) {
       for (const member of blankNested(group).split(/[;\n]/)) {
         const prop = /^\s*(?:readonly\s+)?(\w+)\??:\s*(.+?)\s*$/.exec(member);
@@ -735,7 +879,11 @@ export function commandsReturnVoid(relPath: string, rawSource: string): Violatio
   const re = /^\s*store\([^)]*\):\s*Result<(\w+)/gm;
   for (let m = re.exec(source); m !== null; m = re.exec(source)) {
     if (m[1] !== "void") {
-      out.push({ path: relPath, rule: "commands-return-void", detail: `store returns Result<${m[1]}, …> — commands return void (CQS)` });
+      out.push({
+        path: relPath,
+        rule: "commands-return-void",
+        detail: `store returns Result<${m[1]}, …> — commands return void (CQS)`,
+      });
     }
   }
   return out;
@@ -819,14 +967,22 @@ export function manifestDependencyDirection(
   const context = segments[0] ?? "";
   const layer = segments[1] ?? "";
   if (
-    segments.length !== 3 || segments[2] !== "package.json" ||
-    !(CONTEXTS as readonly string[]).includes(context) || !(LAYERS as readonly string[]).includes(layer)
+    segments.length !== 3 ||
+    segments[2] !== "package.json" ||
+    !(CONTEXTS as readonly string[]).includes(context) ||
+    !(LAYERS as readonly string[]).includes(layer)
   ) {
-    return [{ path: relPath, rule, detail: `not a layer package manifest (expected "<context>/<layer>/package.json")` }];
+    return [
+      { path: relPath, rule, detail: `not a layer package manifest (expected "<context>/<layer>/package.json")` },
+    ];
   }
   const expectedName = `@deep-spec/${context}-${layer}`;
   if (manifest.name !== expectedName) {
-    out.push({ path: relPath, rule, detail: `name is ${JSON.stringify(manifest.name)} — a layer package is named "${expectedName}"` });
+    out.push({
+      path: relPath,
+      rule,
+      detail: `name is ${JSON.stringify(manifest.name)} — a layer package is named "${expectedName}"`,
+    });
   }
   const declared = manifest.dependencies;
   if (declared !== undefined && (typeof declared !== "object" || declared === null || Array.isArray(declared))) {
@@ -838,7 +994,8 @@ export function manifestDependencyDirection(
     const targetContext = match?.[1] ?? "";
     const targetLayer = match?.[2] ?? "";
     if (
-      match === null || !(CONTEXTS as readonly string[]).includes(targetContext) ||
+      match === null ||
+      !(CONTEXTS as readonly string[]).includes(targetContext) ||
       !(LAYERS as readonly string[]).includes(targetLayer)
     ) {
       // 層パッケージ以外を宣言する経路は塞ぐ——合成ルート（@deep-spec/entries）も
@@ -847,7 +1004,11 @@ export function manifestDependencyDirection(
       continue;
     }
     if (version !== "workspace:*") {
-      out.push({ path: relPath, rule, detail: `"${spec}" is declared as ${JSON.stringify(version)} — layer edges are "workspace:*"` });
+      out.push({
+        path: relPath,
+        rule,
+        detail: `"${spec}" is declared as ${JSON.stringify(version)} — layer edges are "workspace:*"`,
+      });
     }
     const edge = `${context}/${layer}→${targetContext}/${targetLayer}`;
     if (targetContext === context && targetLayer === layer) {

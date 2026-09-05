@@ -24,8 +24,9 @@ export class GitHubReleaseTagsClientImplementation implements ReleaseTagsClient 
           },
         );
         if (!response.ok) return { kind: "unavailable", reason: `GitHub tags API returned HTTP ${response.status}` };
-        const body = await response.json() as unknown;
-        if (!Array.isArray(body)) return { kind: "unavailable", reason: "GitHub tags API returned an invalid document" };
+        const body = (await response.json()) as unknown;
+        if (!Array.isArray(body))
+          return { kind: "unavailable", reason: "GitHub tags API returned an invalid document" };
         for (const entry of body) {
           if (entry && typeof entry === "object" && typeof (entry as { name?: unknown }).name === "string") {
             tags.push((entry as { name: string }).name);

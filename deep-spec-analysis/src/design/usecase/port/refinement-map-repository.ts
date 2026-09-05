@@ -9,9 +9,9 @@
 // Phase 3 の合成取得（RefinementMaterialsRepository）は読みの凍結規則を持つ
 // ビューであり、map 文書の書き込み面はこのポートが担う。
 
+import type { RefinementMap, RefinementMapIdentifier } from "@deep-spec/design-domain";
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { RefinementMap, RefinementMapIdentifier } from "@deep-spec/design-domain";
 
 export interface RefinementMapRepository {
   findById(id: RefinementMapIdentifier): Result<RefinementMap, RepositoryError>;

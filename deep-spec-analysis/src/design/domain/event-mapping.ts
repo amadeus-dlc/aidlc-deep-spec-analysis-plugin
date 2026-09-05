@@ -15,8 +15,16 @@ export class EventMapping {
     this.#reason = props.reason;
   }
 
-  static of(props: { reqTrigger: TriggerName; transitions: TransitionReferences; waived?: { reason: string } }): EventMapping {
-    return new EventMapping({ reqTrigger: props.reqTrigger, transitions: props.transitions, reason: props.waived?.reason ?? null });
+  static of(props: {
+    reqTrigger: TriggerName;
+    transitions: TransitionReferences;
+    waived?: { reason: string };
+  }): EventMapping {
+    return new EventMapping({
+      reqTrigger: props.reqTrigger,
+      transitions: props.transitions,
+      reason: props.waived?.reason ?? null,
+    });
   }
 
   isForTrigger(reqTrigger: TriggerName): boolean {

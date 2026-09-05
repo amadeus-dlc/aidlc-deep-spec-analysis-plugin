@@ -1,5 +1,5 @@
+import type { ComponentName } from "./component-name.ts";
 import type { ComponentReference } from "./component-reference.ts";
-import { type ComponentName } from "./component-name.ts";
 
 // 依存参照（depends_on / dependents）のファーストクラスコレクション。
 export class ComponentReferences {

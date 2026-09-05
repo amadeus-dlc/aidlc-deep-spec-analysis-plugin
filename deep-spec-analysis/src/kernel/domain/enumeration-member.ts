@@ -1,5 +1,10 @@
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, compareCanonically, type Result } from "@deep-spec/kernel-infrastructure";
+import {
+  compareCanonically,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
 
 // 列挙宣言のメンバー。所属する列挙内ではリテラルで同定する。
 export class EnumerationMember {
@@ -17,8 +22,16 @@ export class EnumerationMember {
   static parse(value: string): Result<EnumerationMember, ParseError> {
     return parseConstruction(() => new EnumerationMember(value));
   }
-  matchesLiteral(value: string): boolean { return this.#value === value; }
-  equals(other: EnumerationMember): boolean { return this.#value === other.#value; }
-  compareTo(other: EnumerationMember): number { return compareCanonically(this.#value, other.#value); }
-  asString(): string { return this.#value; }
+  matchesLiteral(value: string): boolean {
+    return this.#value === value;
+  }
+  equals(other: EnumerationMember): boolean {
+    return this.#value === other.#value;
+  }
+  compareTo(other: EnumerationMember): number {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString(): string {
+    return this.#value;
+  }
 }

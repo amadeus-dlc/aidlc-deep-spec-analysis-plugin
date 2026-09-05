@@ -1,7 +1,6 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
-import { type Expression, ObligationNature, TriggerName } from "@deep-spec/kernel-domain";
 import type { FunctionalRequirementReferences } from "@deep-spec/kernel-domain";
+import { type Expression, ExpressionTree, ObligationNature, TriggerName } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 
@@ -18,7 +17,12 @@ type LoweredObligationParam = {
   trigger?: string;
   guard?: Expression;
   effect?: Expression;
-  temporal?: { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression };
+  temporal?: {
+    readonly pattern: string;
+    readonly assert?: Expression;
+    readonly from?: Expression;
+    readonly to?: Expression;
+  };
 };
 
 export class LoweredObligation {
@@ -29,7 +33,9 @@ export class LoweredObligation {
   readonly #trigger: TriggerName | undefined;
   readonly #guard: Expression | undefined;
   readonly #effect: Expression | undefined;
-  readonly #temporal: { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression } | undefined;
+  readonly #temporal:
+    | { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression }
+    | undefined;
 
   private constructor(props: LoweredObligationParam) {
     this.#id = props.id;
@@ -39,12 +45,19 @@ export class LoweredObligation {
     this.#trigger = props.trigger === undefined ? undefined : TriggerName.of(props.trigger);
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
-    this.#temporal = props.temporal === undefined ? undefined : {
-      ...props.temporal,
-      ...(props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {}),
-      ...(props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {}),
-      ...(props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}),
-    };
+    this.#temporal =
+      props.temporal === undefined
+        ? undefined
+        : {
+            ...props.temporal,
+            ...(props.temporal.assert !== undefined
+              ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() }
+              : {}),
+            ...(props.temporal.from !== undefined
+              ? { from: ExpressionTree.of(props.temporal.from).asExpression() }
+              : {}),
+            ...(props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}),
+          };
   }
 
   static parse(props: LoweredObligationParam): Result<LoweredObligation, ParseError> {
@@ -83,7 +96,9 @@ export class LoweredObligation {
     return this.#effect;
   }
 
-  temporal(): { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression } | undefined {
+  temporal():
+    | { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression }
+    | undefined {
     return this.#temporal === undefined ? undefined : { ...this.#temporal };
   }
 

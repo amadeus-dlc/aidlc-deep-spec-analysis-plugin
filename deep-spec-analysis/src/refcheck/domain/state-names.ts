@@ -1,4 +1,4 @@
-import { StateName } from "./state-name.ts";
+import type { StateName } from "./state-name.ts";
 
 export class StateNames {
   readonly #values: readonly StateName[];

@@ -12,15 +12,6 @@
 // installation ブロック直後へ挿入し、既存行同士の順序は変えない。
 
 import { join } from "node:path";
-import { HealthVerdict } from "@deep-spec/doctor-domain";
-import {
-  CheckFunctionalCoverageUseCase,
-  CheckInstallationUseCase,
-  CheckVersionAdvisoryUseCase,
-  CheckSolversUseCase,
-  CheckStructuralDebtUseCase,
-  CheckVerificationCoverageUseCase,
-} from "@deep-spec/doctor-usecase";
 import {
   DoctorPresenter,
   DoctorWorkspaceClientImplementation,
@@ -30,6 +21,15 @@ import {
   ReferenceCheckBackendClientImplementation,
   SolverProbeClientImplementation,
 } from "@deep-spec/doctor-adapter";
+import { HealthVerdict } from "@deep-spec/doctor-domain";
+import {
+  CheckFunctionalCoverageUseCase,
+  CheckInstallationUseCase,
+  CheckSolversUseCase,
+  CheckStructuralDebtUseCase,
+  CheckVerificationCoverageUseCase,
+  CheckVersionAdvisoryUseCase,
+} from "@deep-spec/doctor-usecase";
 
 async function main(): Promise<void> {
   const projectDir = process.env.AIDLC_PROJECT_DIR || process.cwd();
@@ -48,10 +48,12 @@ async function main(): Promise<void> {
   });
   const verdict = HealthVerdict.of([
     ...presenter.installation(new CheckInstallationUseCase(new HarnessFileClientImplementation({ root })).execute()),
-    presenter.version(await new CheckVersionAdvisoryUseCase(
-      new InstallationProvenanceClientImplementation({ harnessRoot: root }),
-      new GitHubReleaseTagsClientImplementation({ repository: "j5ik2o/deep-spec-analysis" }),
-    ).execute()),
+    presenter.version(
+      await new CheckVersionAdvisoryUseCase(
+        new InstallationProvenanceClientImplementation({ harnessRoot: root }),
+        new GitHubReleaseTagsClientImplementation({ repository: "j5ik2o/deep-spec-analysis" }),
+      ).execute(),
+    ),
     ...presenter.solvers(
       new CheckSolversUseCase(
         new SolverProbeClientImplementation({
@@ -67,7 +69,9 @@ async function main(): Promise<void> {
       ).execute(),
     ),
     ...presenter.verificationCoverage(new CheckVerificationCoverageUseCase(workspace).execute()),
-    ...presenter.structuralDebt(new CheckStructuralDebtUseCase(workspace, new ReferenceCheckBackendClientImplementation({ root })).execute()),
+    ...presenter.structuralDebt(
+      new CheckStructuralDebtUseCase(workspace, new ReferenceCheckBackendClientImplementation({ root })).execute(),
+    ),
     ...presenter.functionalCoverage(new CheckFunctionalCoverageUseCase(workspace).execute()),
   ]);
   process.stdout.write(`${JSON.stringify(verdict.document())}\n`);

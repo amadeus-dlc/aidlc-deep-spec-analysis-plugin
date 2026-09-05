@@ -1,12 +1,18 @@
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
-import { IllegalArgumentException, parseConstruction, compareCanonically, type Result } from "@deep-spec/kernel-infrastructure";
+import {
+  compareCanonically,
+  IllegalArgumentException,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
 
 export class DesignBackgroundIdentifier {
   readonly #value: string;
 
   /** 識別名・ID・バージョンの処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
-    if (raw.length > 128) throw new IllegalArgumentException({ kind: "design-background-id-too-long", raw: raw.length });
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "design-background-id-too-long", raw: raw.length });
     if (!/^DBG-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-design-background-id", raw });
     this.#value = raw;
   }

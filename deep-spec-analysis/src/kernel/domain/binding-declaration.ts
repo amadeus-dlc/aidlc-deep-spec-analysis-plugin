@@ -12,6 +12,10 @@ export class BindingDeclaration {
   static of(path: AttributePath, value: DeclaredBindingValue): BindingDeclaration {
     return new BindingDeclaration(path, value);
   }
-  path(): AttributePath { return this.#path; }
-  value(): DeclaredBindingValue { return this.#value; }
+  path(): AttributePath {
+    return this.#path;
+  }
+  value(): DeclaredBindingValue {
+    return this.#value;
+  }
 }

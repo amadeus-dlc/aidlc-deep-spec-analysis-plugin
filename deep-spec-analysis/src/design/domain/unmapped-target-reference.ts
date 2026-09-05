@@ -8,7 +8,8 @@ export class UnmappedTargetReference {
 
   /** 属性パスまたは対象IDを収める宣言参照の上限。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
-    if (raw.length > 1024) throw new IllegalArgumentException({ kind: "unmapped-target-ref-too-long", raw: raw.length });
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "unmapped-target-ref-too-long", raw: raw.length });
     if (raw === "") throw new IllegalArgumentException({ kind: "empty-refinement-map-token", raw });
     this.#value = raw;
   }

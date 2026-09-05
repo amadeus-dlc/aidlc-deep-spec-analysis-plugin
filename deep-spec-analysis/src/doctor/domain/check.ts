@@ -1,4 +1,4 @@
-import { CheckSeverity } from "./check-severity.ts";
+import type { CheckSeverity } from "./check-severity.ts";
 
 // doctor 検査行 1 件——合否・label・fix・深刻度。判定書はこの行に自分の
 // 直列化面（プロパティ順 pass, label, fix, severity は凍結バイト）を作らせる
@@ -41,6 +41,11 @@ export class Check {
 
   // 判定書の 1 行（凍結のプロパティ順）。
   toDocument(): { pass: boolean; label: string; fix?: string; severity: "error" | "advisory" } {
-    return { pass: this.#pass, label: this.#label, ...(this.#fix !== undefined ? { fix: this.#fix } : {}), severity: this.#severity.asString() };
+    return {
+      pass: this.#pass,
+      label: this.#label,
+      ...(this.#fix !== undefined ? { fix: this.#fix } : {}),
+      severity: this.#severity.asString(),
+    };
   }
 }

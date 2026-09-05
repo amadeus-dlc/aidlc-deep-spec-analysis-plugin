@@ -41,4 +41,3 @@ export class CheckFamily {
     return `check:${this.#value}`;
   }
 }
-

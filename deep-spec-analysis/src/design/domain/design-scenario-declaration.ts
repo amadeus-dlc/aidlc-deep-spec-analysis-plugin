@@ -1,13 +1,17 @@
-import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
-
-import { DeclaredBindings } from "@deep-spec/kernel-domain";
-import { BusinessRuleReferences } from "./business-rule-references.ts";
-import { type DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
+import { type DeclaredBindings, ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
+import type { BusinessRuleReferences } from "./business-rule-references.ts";
+import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type DesignScenarioDeclarationParam = { id: DesignScenarioIdentifier; bindings: DeclaredBindings; hasEvent: boolean; expect?: Expression; businessRuleReferences?: BusinessRuleReferences };
+type DesignScenarioDeclarationParam = {
+  id: DesignScenarioIdentifier;
+  bindings: DeclaredBindings;
+  hasEvent: boolean;
+  expect?: Expression;
+  businessRuleReferences?: BusinessRuleReferences;
+};
 
 export class DesignScenarioDeclaration {
   readonly #id: DesignScenarioIdentifier;
@@ -32,9 +36,15 @@ export class DesignScenarioDeclaration {
     return new DesignScenarioDeclaration(props);
   }
 
-  id(): DesignScenarioIdentifier { return this.#id; }
-  bindings(): DeclaredBindings { return this.#bindings; }
-  businessRuleReferences(): BusinessRuleReferences | undefined { return this.#businessRuleReferences; }
+  id(): DesignScenarioIdentifier {
+    return this.#id;
+  }
+  bindings(): DeclaredBindings {
+    return this.#bindings;
+  }
+  businessRuleReferences(): BusinessRuleReferences | undefined {
+    return this.#businessRuleReferences;
+  }
 
   inspectExpectation(visitor: (expression: Expression, primesAllowed: boolean) => void): void {
     if (this.#expect !== undefined) visitor(this.#expect, this.#hasEvent);

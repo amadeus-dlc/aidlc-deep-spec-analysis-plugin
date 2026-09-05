@@ -17,6 +17,10 @@ export class InitialState {
   static parse(value: string): Result<InitialState, ParseError> {
     return parseConstruction(() => new InitialState(value));
   }
-  matchesName(value: string): boolean { return this.#value === value; }
-  asString(): string { return this.#value; }
+  matchesName(value: string): boolean {
+    return this.#value === value;
+  }
+  asString(): string {
+    return this.#value;
+  }
 }

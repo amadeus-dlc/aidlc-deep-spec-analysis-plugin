@@ -6,11 +6,11 @@
 // alpha 到達時は RefinementMapDefect）。ユニットの帰属は DesignUnitIdentifier（集約 ID）で運び、
 // 集まりはファーストクラスコレクションで運ぶ。
 
-import { DesignUnitIdentifier } from "@deep-spec/design-domain";
-import type { RefinementMapIdentifier } from "./refinement-map-identifier.ts";
+import type { DesignUnitIdentifier } from "@deep-spec/design-domain";
 import type { ContentHash } from "@deep-spec/kernel-domain";
+import type { RefinementMapIdentifier } from "./refinement-map-identifier.ts";
 import type { RefinementUnitMap } from "./refinement-unit-map.ts";
-import { RefinementUnitMaps } from "./refinement-unit-maps.ts";
+import type { RefinementUnitMaps } from "./refinement-unit-maps.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type RefinementMapParam = {

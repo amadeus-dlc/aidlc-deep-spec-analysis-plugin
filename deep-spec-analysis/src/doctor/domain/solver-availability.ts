@@ -7,7 +7,13 @@
 // 必ず落ちる。stale をもう 1 つの面として持ち、hasApalache() は「在る かつ
 // 陳腐化していない」を答える。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
-type SolverAvailabilityParam = { z3Package: boolean; nodeRuntime: boolean; quintCli: boolean; apalache: boolean; apalacheServerStale: boolean };
+type SolverAvailabilityParam = {
+  z3Package: boolean;
+  nodeRuntime: boolean;
+  quintCli: boolean;
+  apalache: boolean;
+  apalacheServerStale: boolean;
+};
 
 export class SolverAvailability {
   readonly #z3Package: boolean;

@@ -1,6 +1,6 @@
-import { type AttributeNames } from "./attribute-names.ts";
-import { type EntityName } from "./entity-name.ts";
+import type { AttributeNames } from "./attribute-names.ts";
 import type { ComponentName } from "./component-name.ts";
+import type { EntityName } from "./entity-name.ts";
 
 // domain-design 側エンティティの素描。functional-design 側との被覆差分と
 // カタログ位置ラベル（凍結書式）を所有する。
