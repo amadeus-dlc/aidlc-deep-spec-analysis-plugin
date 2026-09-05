@@ -9,13 +9,14 @@ import { parseSmtChildResults } from "./smt-child-results-parser.ts";
 // 旧 runChild からの逐語移植。
 
 import { spawnSync } from "node:child_process";
-import { KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
+import { ErrorMessage, KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
 import type { RequirementsModel } from "@deep-spec/requirements-domain";
 import {
+  SatisfiabilityModuloTheoriesCheck,
   SatisfiabilityModuloTheoriesQueryVerdict,
   SatisfiabilityModuloTheoriesQueryVerdicts,
 } from "@deep-spec/requirements-domain";
-import type { SatisfiabilityModuloTheoriesCheck, Z3SolverClient } from "@deep-spec/requirements-usecase";
+import type { Z3SolverClient } from "@deep-spec/requirements-usecase";
 import type { SatisfiabilityModuloTheoriesChildQuery } from "./satisfiability-modulo-theories-child-query.ts";
 import type { SatisfiabilityModuloTheoriesChildResult } from "./satisfiability-modulo-theories-child-result.ts";
 import { buildSmtPlan, decodeSolverModel } from "./satisfiability-modulo-theories-plan.ts";
@@ -35,10 +36,14 @@ export class Z3SolverClientImplementation implements Z3SolverClient {
     const plan = buildSmtPlan(model);
     const outcome = this.#runChild(plan.queries);
     if (outcome.unavailable !== undefined || !outcome.results) {
-      return {
+      const reason = ErrorMessage.parse(outcome.unavailable ?? "solver child produced no results");
+      return SatisfiabilityModuloTheoriesCheck.of({
         plan: plan.plan,
-        result: { kind: "unavailable", reason: outcome.unavailable ?? "solver child produced no results" },
-      };
+        result: {
+          kind: "unavailable",
+          reason: reason.ok ? reason.value : ErrorMessage.of("solver child reported an invalid unavailable reason"),
+        },
+      });
     }
     const verdicts: (readonly [QueryLabel, SatisfiabilityModuloTheoriesQueryVerdict])[] = [];
     for (const [id, r] of outcome.results) {
@@ -47,10 +52,13 @@ export class Z3SolverClientImplementation implements Z3SolverClient {
         core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse),
       });
       if (!parsed.ok)
-        return {
+        return SatisfiabilityModuloTheoriesCheck.of({
           plan: plan.plan,
-          result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` },
-        };
+          result: {
+            kind: "unavailable",
+            reason: ErrorMessage.of(`invalid solver query label: ${JSON.stringify(parsed.error)}`),
+          },
+        });
       verdicts.push([
         parsed.value.label,
         SatisfiabilityModuloTheoriesQueryVerdict.of({
@@ -60,10 +68,10 @@ export class Z3SolverClientImplementation implements Z3SolverClient {
         }),
       ]);
     }
-    return {
+    return SatisfiabilityModuloTheoriesCheck.of({
       plan: plan.plan,
       result: { kind: "solved", verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.of(verdicts)) },
-    };
+    });
   }
 
   #runChild(queries: SatisfiabilityModuloTheoriesChildQuery[]): {

@@ -2,11 +2,8 @@
 
 export type { FormalModelRepository } from "./port/formal-model-repository.ts";
 export type { IntermediateRepresentationValidationMaterialsRepository } from "./port/intermediate-representation-validation-materials-repository.ts";
-export type { QuintCheckResult } from "./port/quint-check-result.ts";
 export type { QuintClient } from "./port/quint-client.ts";
 export type { RequirementsSourceRepository } from "./port/requirements-source-repository.ts";
-export type { SatisfiabilityModuloTheoriesCheck } from "./port/satisfiability-modulo-theories-check.ts";
-export type { SatisfiabilityModuloTheoriesSolverResult } from "./port/satisfiability-modulo-theories-solver-result.ts";
 export type { VerificationDirectoryRepository } from "./port/verification-directory-repository.ts";
 export type { Z3SolverClient } from "./port/z3-solver-client.ts";
 export type { ValidateIntermediateRepresentationOutcome } from "./validate-intermediate-representation-outcome.ts";

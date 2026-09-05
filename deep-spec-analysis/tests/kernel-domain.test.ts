@@ -30,6 +30,8 @@ import {
   AttributeBound,
   AttributeKind,
   ContentHash,
+  ErrorMessage,
+  ErrorMessages,
   FindingKind,
   FunctionalRequirementReferences,
   KeyedIndex,
@@ -40,8 +42,61 @@ import {
   RequirementIdentifiers,
   TargetIdentifier,
   TargetIdentifiers,
+  ValidationAssessment,
   VerificationMethod,
 } from "@deep-spec/kernel-domain";
+
+describe("ValidationAssessment", () => {
+  test("the diagnostics determine the verdict and retain their order", () => {
+    const clean = ValidationAssessment.of(ErrorMessages.of([]));
+    expect(clean.passes()).toBe(true);
+    expect(clean.errors().isEmpty()).toBe(true);
+    const invalid = ValidationAssessment.of(
+      ErrorMessages.of([ErrorMessage.of("first failure"), ErrorMessage.of("second failure")]),
+    );
+    expect(invalid.passes()).toBe(false);
+    expect([...invalid.errors()].map((message) => message.asString())).toEqual(["first failure", "second failure"]);
+  });
+
+  test("diagnostic parsing failures become explicit invalid assessments", () => {
+    const assessment = ValidationAssessment.of(
+      ErrorMessages.collect([
+        ErrorMessage.parse("first"),
+        ErrorMessage.parse("x".repeat(65_537)),
+        ErrorMessage.parse(""),
+        ErrorMessage.parse("last"),
+      ]),
+    );
+    expect(assessment.passes()).toBe(false);
+    expect([...assessment.errors()].map((message) => message.asString())).toEqual([
+      "first",
+      "validation diagnostic could not be represented within its text budget",
+      "validation diagnostic could not be represented within its text budget",
+      "last",
+    ]);
+  });
+
+  test("collection stops at its budget and explicitly marks omitted diagnostics", () => {
+    const message = ErrorMessage.parse("failure");
+    const within = ErrorMessages.collect(Array(65_536).fill(message));
+    expect(within.toArray()).toHaveLength(65_536);
+    expect(within.toArray().at(-1)?.asString()).toBe("failure");
+    let produced = 0;
+    function* excessive() {
+      for (let index = 0; index < 100_000; index++) {
+        produced++;
+        yield message;
+      }
+    }
+    const collected = ErrorMessages.collect(excessive());
+    expect(collected.toArray()).toHaveLength(65_536);
+    expect(collected.toArray().at(-1)?.asString()).toBe(
+      "validation diagnostic limit reached (65536 messages); additional diagnostics omitted",
+    );
+    expect(produced).toBe(65_537);
+    expect(ErrorMessages.collect([]).isEmpty()).toBe(true);
+  });
+});
 
 describe("result", () => {
   test("ok and err narrow through the ok discriminant", () => {

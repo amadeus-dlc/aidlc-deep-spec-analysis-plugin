@@ -1,6 +1,7 @@
-// design-ir-valid ユースケースの結果 — entry はこの閉じたユニオンで verdict 行を
-// 描く。not-applicable は pass:true の pass-through 行。
+import type { ValidationAssessment } from "@deep-spec/kernel-domain";
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
 
 export type ValidateDesignIntermediateRepresentationOutcome =
   | { readonly kind: "not-applicable" }
-  | { readonly kind: "verdict"; readonly pass: boolean; readonly errors: readonly string[] };
+  | { readonly kind: "acquisition-failed"; readonly error: Exclude<RepositoryError, { readonly kind: "not-found" }> }
+  | { readonly kind: "verdict"; readonly assessment: ValidationAssessment };

@@ -76,9 +76,9 @@ function main(): void {
   }
   process.stdout.write(
     renderVerdictLine(
-      outcome.pass,
-      outcome.findingsCount,
-      outcome.skippedCount,
+      outcome.report.passes(),
+      outcome.report.findingsCount(),
+      outcome.report.skippedCount(),
       flags.reportOnly ? "report-only" : undefined,
     ),
   );

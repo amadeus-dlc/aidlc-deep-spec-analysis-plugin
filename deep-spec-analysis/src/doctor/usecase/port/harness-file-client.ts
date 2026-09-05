@@ -1,4 +1,5 @@
-// harness ツリー上のファイル実在検査ポート。実装は adapter（existsSync）。
+import type { ManifestEntry } from "@deep-spec/doctor-domain";
+
 export interface HarnessFileClient {
-  isInstalled(rel: string): boolean;
+  isInstalled(entry: ManifestEntry): boolean;
 }

@@ -31,7 +31,6 @@ import {
   ObligationIdentifier,
   RefinementMapDefect,
   RefinementProbe,
-  type RefinementRequirements,
   RefinementSolverPlan,
   ScenarioIdentifier,
   type UnitRefinementPlan,
@@ -237,11 +236,9 @@ export interface RefinementQueryPlan {
 
 // クエリ計画の構築 — 旧 runUnitRefinementSmt のクエリ構築部（867-999 行）。
 // alpha / SMT コンパイル失敗は凍結文言の compile-error skip として plan に載る。
-export function buildRefinementQueries(
-  u: DesignUnit,
-  req: RefinementRequirements,
-  plan: UnitRefinementPlan,
-): RefinementQueryPlan {
+export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQueryPlan {
+  const u = plan.unit();
+  const req = plan.requirements();
   const ctx = refinementSmtContext(u);
   const pre = designBase(ctx, u, false);
   const post = designBase(ctx, u, true);
@@ -439,6 +436,7 @@ export function buildRefinementQueries(
   return {
     queries,
     plan: RefinementSolverPlan.of({
+      preparation: plan,
       pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.of(id), probe] as const)),
       compileSkips: DesignSkips.of(compileSkips),
     }),

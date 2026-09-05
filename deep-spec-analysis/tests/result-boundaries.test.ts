@@ -16,6 +16,7 @@ import {
   err,
   IllegalArgumentException,
   type Json,
+  matchResult,
   ok,
   traverseResult,
 } from "@deep-spec/kernel-infrastructure";
@@ -49,6 +50,32 @@ function document() {
 }
 
 describe("recoverable input uses parse; construction panics propagate", () => {
+  test("Result dispatch invokes only the selected task and propagates a task panic", () => {
+    const tasks: string[] = [];
+    const cases = {
+      ok: (value: number) => {
+        tasks.push("ok");
+        return value + 1;
+      },
+      err: (error: string) => {
+        tasks.push("err");
+        return error.length;
+      },
+    };
+    expect(matchResult(ok(2), cases)).toBe(3);
+    expect(matchResult(err("failure"), cases)).toBe(7);
+    expect(tasks).toEqual(["ok", "err"]);
+    const panic = new IllegalArgumentException({ kind: "task-contract-defect" });
+    expect(() =>
+      matchResult(ok(1), {
+        ok: () => {
+          throw panic;
+        },
+        err: () => 0,
+      }),
+    ).toThrow(panic);
+  });
+
   test("document fields return parse failures without invoking of for raw vocabulary", () => {
     const construction = spyOn(SkipReason, "of").mockImplementation(() => {
       throw new Error("raw input must use parse");

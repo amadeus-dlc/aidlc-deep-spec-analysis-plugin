@@ -136,6 +136,9 @@ function parseConstruction(construct) {
   }
 }
 // src/kernel/infrastructure/result-composition.ts
+function matchResult(result, cases) {
+  return result.ok ? cases.ok(result.value) : cases.err(result.error);
+}
 function flatMapResult(result, next) {
   return result.ok ? next(result.value) : result;
 }
@@ -715,10 +718,12 @@ class ErrorMessage {
   }
 }
 // src/kernel/domain/error-messages.ts
+var MAX_MESSAGES = 65536;
+
 class ErrorMessages {
   #values;
   constructor(values) {
-    if (values.length > 65536)
+    if (values.length > MAX_MESSAGES)
       throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
@@ -726,6 +731,17 @@ class ErrorMessages {
     return parseConstruction(() => new ErrorMessages(values));
   }
   static of(values) {
+    return new ErrorMessages(values);
+  }
+  static collect(diagnostics) {
+    const values = [];
+    for (const diagnostic of diagnostics) {
+      if (values.length === MAX_MESSAGES) {
+        values[values.length - 1] = ErrorMessage.of("validation diagnostic limit reached (65536 messages); additional diagnostics omitted");
+        break;
+      }
+      values.push(diagnostic.ok ? diagnostic.value : ErrorMessage.of("validation diagnostic could not be represented within its text budget"));
+    }
     return new ErrorMessages(values);
   }
   add(value) {
@@ -1456,6 +1472,22 @@ class UnitName {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/kernel/domain/validation-assessment.ts
+class ValidationAssessment {
+  #errors;
+  constructor(errors) {
+    this.#errors = errors;
+  }
+  static of(errors) {
+    return new ValidationAssessment(errors);
+  }
+  passes() {
+    return this.#errors.isEmpty();
+  }
+  errors() {
+    return this.#errors;
   }
 }
 // src/kernel/domain/verification-method.ts
@@ -2448,6 +2480,360 @@ class IntermediateRepresentationTemporalDeclaration {
       visitor(this.#to, false);
   }
 }
+// src/requirements/domain/source-anchor.ts
+class SourceAnchor {
+  #declared;
+  #actual;
+  constructor(declared, actual) {
+    this.#declared = declared;
+    this.#actual = actual;
+  }
+  static of(declared, actual) {
+    return new SourceAnchor(declared, actual);
+  }
+  errors() {
+    if (this.#declared === null) {
+      return [
+        `IR has no sourceDigest \u2014 requirements drift would be undetectable; add "sourceDigest": "${this.#actual.asString()}" (sha256 of requirements.md) to the IR`
+      ];
+    }
+    if (!this.#declared.matches(this.#actual)) {
+      return [
+        `sourceDigest ${this.#declared.asString()} does not match requirements.md (sha256 ${this.#actual.asString()}) \u2014 the requirements changed since formalization; re-formalize against the current text and restamp the digest`
+      ];
+    }
+    return [];
+  }
+}
+
+// src/requirements/domain/requirements-source-validation.ts
+class RequirementsSourceValidation {
+  #view;
+  #references;
+  #declaredDigest;
+  constructor(view, references, declaredDigest) {
+    this.#view = view;
+    this.#references = references;
+    this.#declaredDigest = declaredDigest;
+  }
+  static of(view, references, declaredDigest) {
+    return new RequirementsSourceValidation(view, references, declaredDigest);
+  }
+  assess(source) {
+    return ValidationAssessment.of(ErrorMessages.collect(this.#diagnostics(source)));
+  }
+  *#diagnostics(source) {
+    for (const message of this.#view.wellFormednessErrors())
+      yield ErrorMessage.parse(message);
+    if (source === null) {
+      yield ErrorMessage.parse("requirements.md not found under this intent record \u2014 frRefs cannot be reverse-verified");
+    } else {
+      for (const message of this.#references.missingErrors(source.knownIds()))
+        yield ErrorMessage.parse(message);
+      for (const message of SourceAnchor.of(this.#declaredDigest, source.digest()).errors())
+        yield ErrorMessage.parse(message);
+    }
+  }
+}
+
+// src/requirements/domain/verification-findings.ts
+function sortVerificationFindings(findings) {
+  return [...findings].sort((a, b) => a.compareTo(b));
+}
+
+class VerificationFindings {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new VerificationFindings(values);
+  }
+  add(value) {
+    return new VerificationFindings([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  sortedCanonically() {
+    return new VerificationFindings(sortVerificationFindings(this.#values));
+  }
+  count() {
+    return this.#values.length;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/requirements/domain/verification-skipped.ts
+class VerificationSkipped {
+  #target;
+  #reason;
+  #detail;
+  constructor(props) {
+    this.#target = props.target;
+    this.#reason = props.reason;
+    this.#detail = props.detail;
+  }
+  static of(props) {
+    return new VerificationSkipped(props);
+  }
+  target() {
+    return this.#target;
+  }
+  reason() {
+    return this.#reason.asString();
+  }
+  detail() {
+    return this.#detail;
+  }
+  isFor(target) {
+    return this.#target.equals(target);
+  }
+  compareTo(other) {
+    const c = this.#target.compareTo(other.#target);
+    if (c !== 0)
+      return c;
+    return this.#reason.compareTo(other.#reason);
+  }
+}
+
+// src/requirements/domain/verification-skips.ts
+function sortVerificationSkipped(skipped) {
+  return [...skipped].sort((a, b) => a.compareTo(b));
+}
+
+class VerificationSkips {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new VerificationSkips(values);
+  }
+  add(value) {
+    return new VerificationSkips([...this.#values, value]);
+  }
+  concat(other) {
+    return new VerificationSkips([...this.#values, ...other.#values]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  sortedCanonically() {
+    return new VerificationSkips(sortVerificationSkipped(this.#values));
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/requirements/domain/verification-report.ts
+var SUPPORTED_IR_MAJOR = 1;
+
+class VerificationReport {
+  #id;
+  #irVersion;
+  #irHash;
+  #method;
+  #findings;
+  #skipped;
+  #crossChecked;
+  #unavailableReason;
+  constructor(seed) {
+    this.#id = seed.id;
+    this.#irVersion = seed.irVersion;
+    this.#irHash = seed.irHash;
+    this.#method = seed.method;
+    this.#findings = seed.findings;
+    this.#skipped = seed.skipped;
+    this.#crossChecked = seed.crossChecked;
+    this.#unavailableReason = seed.unavailableReason;
+  }
+  static irUnreadable(id, method, cause) {
+    return VerificationReport.compose({
+      id,
+      irVersion: IntermediateRepresentationVersion.of("0.0.0"),
+      irHash: ContentHash.ofText(""),
+      method,
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([]),
+      unavailableReason: `IR unreadable: ${cause} \u2014 see the deep-spec-ir-valid sensor for details`
+    });
+  }
+  static versionMismatch(id, model, method) {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method,
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({
+        target: t,
+        reason: SkipReason.of("ir-version-mismatch"),
+        detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`
+      })))
+    });
+  }
+  static solverUnavailable(id, model, planSkipped, reason) {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: "exhaustive",
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([
+        ...planSkipped.toArray(),
+        ...[...model.allTargets()].filter((t) => !planSkipped.toArray().some((s) => s.isFor(t))).map((t) => VerificationSkipped.of({
+          target: t,
+          reason: SkipReason.of("unavailable"),
+          detail: "z3 could not be executed"
+        }))
+      ]),
+      unavailableReason: reason
+    });
+  }
+  static quintUnavailable(id, model) {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: "simulation",
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "quint CLI missing" }))),
+      unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)"
+    });
+  }
+  static machineUncompilable(id, model, method, machineError) {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method,
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([
+        ...model.obligations().toArray().map((ob) => VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: machineError
+        })),
+        ...model.scenarios().toArray().map((sc) => VerificationSkipped.of({
+          target: sc.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: machineError
+        }))
+      ])
+    });
+  }
+  static compose(input) {
+    return VerificationReport.of({
+      id: input.id,
+      irVersion: input.irVersion,
+      irHash: input.irHash,
+      method: VerificationMethod.of(input.method),
+      findings: input.findings.sortedCanonically(),
+      skipped: input.skipped.sortedCanonically(),
+      crossChecked: input.crossChecked ?? null,
+      unavailableReason: input.unavailableReason ?? null
+    });
+  }
+  static of(seed) {
+    return new VerificationReport(seed);
+  }
+  degraded(reason) {
+    return new VerificationReport({
+      id: this.#id,
+      irVersion: this.#irVersion,
+      irHash: this.#irHash,
+      method: this.#method,
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([]),
+      crossChecked: null,
+      unavailableReason: reason
+    });
+  }
+  id() {
+    return this.#id;
+  }
+  irVersion() {
+    return this.#irVersion;
+  }
+  irHash() {
+    return this.#irHash;
+  }
+  method() {
+    return this.#method.asString();
+  }
+  findings() {
+    return this.#findings;
+  }
+  skipped() {
+    return this.#skipped;
+  }
+  crossChecked() {
+    return this.#crossChecked;
+  }
+  unavailableReason() {
+    return this.#unavailableReason;
+  }
+  isUnavailable() {
+    return this.#unavailableReason !== null;
+  }
+  passes() {
+    return this.#findings.isEmpty();
+  }
+  findingsCount() {
+    return this.#findings.count();
+  }
+  skippedCount() {
+    return this.#skipped.count();
+  }
+  toDocument() {
+    const ordered = {
+      backend: this.#id.backendName().asString(),
+      irVersion: this.#irVersion.asString(),
+      irHash: this.#irHash.asString(),
+      method: this.method()
+    };
+    const reason = this.#unavailableReason;
+    if (reason !== null)
+      ordered.unavailable = { reason };
+    ordered.findings = this.#findings.toArray().map((f) => {
+      const out = {
+        kind: f.kind(),
+        frRefs: f.functionalRequirementReferences().toStrings(),
+        targets: f.targets().toStrings(),
+        witness: f.witness().toDocument(),
+        detail: f.detail()
+      };
+      return out;
+    });
+    ordered.skipped = this.#skipped.toArray().map((sk) => {
+      const out = { target: sk.target().asString(), reason: sk.reason() };
+      const detail = sk.detail();
+      if (detail !== undefined)
+        out.detail = detail;
+      return out;
+    });
+    const crossChecked = this.#crossChecked;
+    if (crossChecked !== null) {
+      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
+    }
+    return ordered;
+  }
+  conformedTo(schema) {
+    const reason = schema.degradationReasonFor(this.toDocument());
+    return reason === null ? this : this.degraded(reason);
+  }
+}
+
 // src/requirements/domain/intermediate-representation-validation-materials.ts
 class IntermediateRepresentationValidationMaterials {
   #id;
@@ -2471,26 +2857,21 @@ class IntermediateRepresentationValidationMaterials {
   static of(seed) {
     return new IntermediateRepresentationValidationMaterials(seed);
   }
+  validate(cases) {
+    const errors = ErrorMessages.collect(this.#initialDiagnostics());
+    if (!errors.isEmpty())
+      return cases.complete(ValidationAssessment.of(errors));
+    return cases.sourceRequired(this.#sourceId, RequirementsSourceValidation.of(this.#view, FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray()), this.#declaredDigest));
+  }
+  *#initialDiagnostics() {
+    if (!this.#irVersion.supportsMajor(SUPPORTED_IR_MAJOR)) {
+      yield ErrorMessage.parse(`irVersion ${this.#irVersion.asString()}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`);
+    }
+    for (const error of this.#schemaErrors)
+      yield ok(error);
+  }
   id() {
     return this.#id;
-  }
-  irVersion() {
-    return this.#irVersion;
-  }
-  schemaErrors() {
-    return this.#schemaErrors;
-  }
-  view() {
-    return this.#view;
-  }
-  functionalRequirementReferenceIndex() {
-    return FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray());
-  }
-  declaredDigest() {
-    return this.#declaredDigest;
-  }
-  sourceId() {
-    return this.#sourceId;
   }
   sourceDocument() {
     return new Uint8Array(this.#sourceDocument);
@@ -2681,6 +3062,46 @@ class Obligations {
   }
   toArray() {
     return this.#values;
+  }
+}
+// src/requirements/domain/quint-check-result.ts
+class QuintCheckResult {
+  #result;
+  constructor(result) {
+    this.#result = { ...result };
+  }
+  static of(result) {
+    return new QuintCheckResult(result);
+  }
+  reportFor(model, id) {
+    const result = this.#result;
+    switch (result.kind) {
+      case "cli-unavailable":
+        return VerificationReport.quintUnavailable(id, model);
+      case "machine-uncompilable":
+        return VerificationReport.machineUncompilable(id, model, result.method.asString(), result.error.asString());
+      case "checked": {
+        const interpreted = result.plan.interpret(model, result.compileSkips, result.method.asString(), result.runs);
+        return VerificationReport.compose({
+          id,
+          irVersion: model.irVersion(),
+          irHash: model.irHash(),
+          method: result.method.asString(),
+          findings: interpreted.findings,
+          skipped: interpreted.skipped
+        });
+      }
+    }
+  }
+  match(cases) {
+    switch (this.#result.kind) {
+      case "cli-unavailable":
+        return cases.unavailable();
+      case "machine-uncompilable":
+        return cases.uncompilable();
+      case "checked":
+        return cases.checked();
+    }
   }
 }
 // src/requirements/domain/trace-value.ts
@@ -2874,105 +3295,6 @@ class VerificationFinding {
     if (ta !== tb)
       return ta < tb ? -1 : 1;
     return this.#detail < other.#detail ? -1 : this.#detail > other.#detail ? 1 : 0;
-  }
-}
-
-// src/requirements/domain/verification-findings.ts
-function sortVerificationFindings(findings) {
-  return [...findings].sort((a, b) => a.compareTo(b));
-}
-
-class VerificationFindings {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new VerificationFindings(values);
-  }
-  add(value) {
-    return new VerificationFindings([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  sortedCanonically() {
-    return new VerificationFindings(sortVerificationFindings(this.#values));
-  }
-  count() {
-    return this.#values.length;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-
-// src/requirements/domain/verification-skipped.ts
-class VerificationSkipped {
-  #target;
-  #reason;
-  #detail;
-  constructor(props) {
-    this.#target = props.target;
-    this.#reason = props.reason;
-    this.#detail = props.detail;
-  }
-  static of(props) {
-    return new VerificationSkipped(props);
-  }
-  target() {
-    return this.#target;
-  }
-  reason() {
-    return this.#reason.asString();
-  }
-  detail() {
-    return this.#detail;
-  }
-  isFor(target) {
-    return this.#target.equals(target);
-  }
-  compareTo(other) {
-    const c = this.#target.compareTo(other.#target);
-    if (c !== 0)
-      return c;
-    return this.#reason.compareTo(other.#reason);
-  }
-}
-
-// src/requirements/domain/verification-skips.ts
-function sortVerificationSkipped(skipped) {
-  return [...skipped].sort((a, b) => a.compareTo(b));
-}
-
-class VerificationSkips {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new VerificationSkips(values);
-  }
-  add(value) {
-    return new VerificationSkips([...this.#values, value]);
-  }
-  concat(other) {
-    return new VerificationSkips([...this.#values, ...other.#values]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  sortedCanonically() {
-    return new VerificationSkips(sortVerificationSkipped(this.#values));
-  }
-  count() {
-    return this.#values.length;
-  }
-  toArray() {
-    return this.#values;
   }
 }
 
@@ -3439,6 +3761,9 @@ class RequirementsModel {
   static of(seed) {
     return new RequirementsModel(seed);
   }
+  prepareVerification(id, method) {
+    return this.#irVersion.supportsMajor(SUPPORTED_IR_MAJOR) ? ok(this) : err(VerificationReport.versionMismatch(id, this, method.asString()));
+  }
   id() {
     return this.#id;
   }
@@ -3535,6 +3860,35 @@ class RequirementsSourceIdentifier {
   }
   recordRoot() {
     return this.#recordRoot;
+  }
+}
+// src/requirements/domain/satisfiability-modulo-theories-check.ts
+class SatisfiabilityModuloTheoriesCheck {
+  #plan;
+  #result;
+  constructor(input) {
+    this.#plan = input.plan;
+    this.#result = { ...input.result };
+  }
+  static of(input) {
+    return new SatisfiabilityModuloTheoriesCheck(input);
+  }
+  reportFor(model, id) {
+    if (this.#result.kind === "unavailable") {
+      return VerificationReport.solverUnavailable(id, model, this.#plan.planSkipped(), this.#result.reason.asString());
+    }
+    const interpreted = this.#plan.interpret(model, this.#result.verdicts);
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: "exhaustive",
+      findings: interpreted.findings,
+      skipped: interpreted.skipped
+    });
+  }
+  match(cases) {
+    return this.#result.kind === "unavailable" ? cases.unavailable() : cases.solved();
   }
 }
 // src/requirements/domain/satisfiability-modulo-theories-event-pair-probe.ts
@@ -3888,31 +4242,6 @@ class Scenarios {
     return this.#values;
   }
 }
-// src/requirements/domain/source-anchor.ts
-class SourceAnchor {
-  #declared;
-  #actual;
-  constructor(declared, actual) {
-    this.#declared = declared;
-    this.#actual = actual;
-  }
-  static of(declared, actual) {
-    return new SourceAnchor(declared, actual);
-  }
-  errors() {
-    if (this.#declared === null) {
-      return [
-        `IR has no sourceDigest \u2014 requirements drift would be undetectable; add "sourceDigest": "${this.#actual.asString()}" (sha256 of requirements.md) to the IR`
-      ];
-    }
-    if (!this.#declared.matches(this.#actual)) {
-      return [
-        `sourceDigest ${this.#declared.asString()} does not match requirements.md (sha256 ${this.#actual.asString()}) \u2014 the requirements changed since formalization; re-formalize against the current text and restamp the digest`
-      ];
-    }
-    return [];
-  }
-}
 // src/requirements/domain/trace-states.ts
 class TraceStates {
   #values;
@@ -3957,205 +4286,6 @@ class VerificationReportIdentifier {
   }
   fileName() {
     return `${this.#backend.asString()}.json`;
-  }
-}
-
-// src/requirements/domain/verification-report.ts
-var SUPPORTED_IR_MAJOR = 1;
-
-class VerificationReport {
-  #id;
-  #irVersion;
-  #irHash;
-  #method;
-  #findings;
-  #skipped;
-  #crossChecked;
-  #unavailableReason;
-  constructor(seed) {
-    this.#id = seed.id;
-    this.#irVersion = seed.irVersion;
-    this.#irHash = seed.irHash;
-    this.#method = seed.method;
-    this.#findings = seed.findings;
-    this.#skipped = seed.skipped;
-    this.#crossChecked = seed.crossChecked;
-    this.#unavailableReason = seed.unavailableReason;
-  }
-  static irUnreadable(id, method, cause) {
-    return VerificationReport.compose({
-      id,
-      irVersion: IntermediateRepresentationVersion.of("0.0.0"),
-      irHash: ContentHash.ofText(""),
-      method,
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([]),
-      unavailableReason: `IR unreadable: ${cause} \u2014 see the deep-spec-ir-valid sensor for details`
-    });
-  }
-  static versionMismatch(id, model, irHash, method) {
-    return VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method,
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({
-        target: t,
-        reason: SkipReason.of("ir-version-mismatch"),
-        detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`
-      })))
-    });
-  }
-  static solverUnavailable(id, model, irHash, planSkipped, reason) {
-    return VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: "exhaustive",
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([
-        ...planSkipped.toArray(),
-        ...[...model.allTargets()].filter((t) => !planSkipped.toArray().some((s) => s.isFor(t))).map((t) => VerificationSkipped.of({
-          target: t,
-          reason: SkipReason.of("unavailable"),
-          detail: "z3 could not be executed"
-        }))
-      ]),
-      unavailableReason: reason
-    });
-  }
-  static quintUnavailable(id, model, irHash) {
-    return VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: "simulation",
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "quint CLI missing" }))),
-      unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)"
-    });
-  }
-  static machineUncompilable(id, model, irHash, method, machineError) {
-    return VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method,
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([
-        ...model.obligations().toArray().map((ob) => VerificationSkipped.of({
-          target: ob.id().asTargetId(),
-          reason: SkipReason.of("compile-error"),
-          detail: machineError
-        })),
-        ...model.scenarios().toArray().map((sc) => VerificationSkipped.of({
-          target: sc.id().asTargetId(),
-          reason: SkipReason.of("compile-error"),
-          detail: machineError
-        }))
-      ])
-    });
-  }
-  static compose(input) {
-    return VerificationReport.of({
-      id: input.id,
-      irVersion: input.irVersion,
-      irHash: input.irHash,
-      method: VerificationMethod.of(input.method),
-      findings: input.findings.sortedCanonically(),
-      skipped: input.skipped.sortedCanonically(),
-      crossChecked: input.crossChecked ?? null,
-      unavailableReason: input.unavailableReason ?? null
-    });
-  }
-  static of(seed) {
-    return new VerificationReport(seed);
-  }
-  degraded(reason) {
-    return new VerificationReport({
-      id: this.#id,
-      irVersion: this.#irVersion,
-      irHash: this.#irHash,
-      method: this.#method,
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([]),
-      crossChecked: null,
-      unavailableReason: reason
-    });
-  }
-  id() {
-    return this.#id;
-  }
-  irVersion() {
-    return this.#irVersion;
-  }
-  irHash() {
-    return this.#irHash;
-  }
-  method() {
-    return this.#method.asString();
-  }
-  findings() {
-    return this.#findings;
-  }
-  skipped() {
-    return this.#skipped;
-  }
-  crossChecked() {
-    return this.#crossChecked;
-  }
-  unavailableReason() {
-    return this.#unavailableReason;
-  }
-  isUnavailable() {
-    return this.#unavailableReason !== null;
-  }
-  passes() {
-    return this.#findings.isEmpty();
-  }
-  findingsCount() {
-    return this.#findings.count();
-  }
-  skippedCount() {
-    return this.#skipped.count();
-  }
-  toDocument() {
-    const ordered = {
-      backend: this.#id.backendName().asString(),
-      irVersion: this.#irVersion.asString(),
-      irHash: this.#irHash.asString(),
-      method: this.method()
-    };
-    const reason = this.#unavailableReason;
-    if (reason !== null)
-      ordered.unavailable = { reason };
-    ordered.findings = this.#findings.toArray().map((f) => {
-      const out = {
-        kind: f.kind(),
-        frRefs: f.functionalRequirementReferences().toStrings(),
-        targets: f.targets().toStrings(),
-        witness: f.witness().toDocument(),
-        detail: f.detail()
-      };
-      return out;
-    });
-    ordered.skipped = this.#skipped.toArray().map((sk) => {
-      const out = { target: sk.target().asString(), reason: sk.reason() };
-      const detail = sk.detail();
-      if (detail !== undefined)
-        out.detail = detail;
-      return out;
-    });
-    const crossChecked = this.#crossChecked;
-    if (crossChecked !== null) {
-      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
-    }
-    return ordered;
-  }
-  conformedTo(schema) {
-    const reason = schema.degradationReasonFor(this.toDocument());
-    return reason === null ? this : this.degraded(reason);
   }
 }
 
@@ -4250,6 +4380,9 @@ class VerificationDirectory {
     return new VerificationDirectory(directory, reports, null, crossCheck);
   }
   finalizing(candidate) {
+    if (!candidate.id().directory().equals(this.#directory)) {
+      throw new IllegalArgumentException({ kind: "verification-report-directory-mismatch" });
+    }
     const fileName = candidate.id().fileName();
     const merged = [];
     let replaced = false;
@@ -4299,6 +4432,12 @@ class VerificationDirectory {
     return this.#reports;
   }
   candidate() {
+    return this.#candidate;
+  }
+  publishedReport() {
+    if (this.#candidate === null) {
+      throw new IllegalArgumentException({ kind: "verification-directory-not-finalized" });
+    }
     return this.#candidate;
   }
   crossCheck() {
@@ -5093,13 +5232,17 @@ class QuintClientImplementation {
   check(model) {
     const probe = spawnSync(this.#config.quintBin, ["--version"], { encoding: "utf-8", timeout: 15000 });
     if (probe.error || probe.status !== 0) {
-      return { kind: "cli-unavailable" };
+      return QuintCheckResult.of({ kind: "cli-unavailable" });
     }
     const bounded = this.#detectBoundedMode();
     const method = bounded ? "bounded" : "simulation";
     const compiled = compileQuintMachine(model);
     if (compiled.kind === "uncompilable") {
-      return { kind: "machine-uncompilable", method, error: compiled.error };
+      return QuintCheckResult.of({
+        kind: "machine-uncompilable",
+        method: VerificationMethod.of(method),
+        error: ErrorMessage.of(compiled.error)
+      });
     }
     const machine = compiled.machine;
     const work = mkdtempSync(join3(tmpdir(), "deep-spec-quint-"));
@@ -5120,13 +5263,13 @@ class QuintClientImplementation {
         temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationIdentifier.of(id), v])),
         scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioIdentifier.of(id), v]))
       });
-      return {
+      return QuintCheckResult.of({
         kind: "checked",
-        method,
+        method: VerificationMethod.of(method),
         plan: machine.plan,
         compileSkips: VerificationSkips.of(machine.compileSkips),
         runs
-      };
+      });
     } finally {
       rmSync3(work, { recursive: true, force: true });
     }
@@ -5790,10 +5933,7 @@ class VerificationDirectoryRepositoryImplementation {
   store(aggregate) {
     const directory = aggregate.directory();
     const directoryPath = directory.asString();
-    const candidate = aggregate.candidate();
-    if (candidate === null) {
-      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: "no finalization candidate" });
-    }
+    const candidate = aggregate.publishedReport();
     try {
       mkdirSync3(directoryPath, { recursive: true });
     } catch (e) {
@@ -5934,10 +6074,14 @@ class Z3SolverClientImplementation {
     const plan = buildSmtPlan(model);
     const outcome = this.#runChild(plan.queries);
     if (outcome.unavailable !== undefined || !outcome.results) {
-      return {
+      const reason = ErrorMessage.parse(outcome.unavailable ?? "solver child produced no results");
+      return SatisfiabilityModuloTheoriesCheck.of({
         plan: plan.plan,
-        result: { kind: "unavailable", reason: outcome.unavailable ?? "solver child produced no results" }
-      };
+        result: {
+          kind: "unavailable",
+          reason: reason.ok ? reason.value : ErrorMessage.of("solver child reported an invalid unavailable reason")
+        }
+      });
     }
     const verdicts = [];
     for (const [id, r] of outcome.results) {
@@ -5946,10 +6090,13 @@ class Z3SolverClientImplementation {
         core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse)
       });
       if (!parsed.ok)
-        return {
+        return SatisfiabilityModuloTheoriesCheck.of({
           plan: plan.plan,
-          result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` }
-        };
+          result: {
+            kind: "unavailable",
+            reason: ErrorMessage.of(`invalid solver query label: ${JSON.stringify(parsed.error)}`)
+          }
+        });
       verdicts.push([
         parsed.value.label,
         SatisfiabilityModuloTheoriesQueryVerdict.of({
@@ -5959,10 +6106,10 @@ class Z3SolverClientImplementation {
         })
       ]);
     }
-    return {
+    return SatisfiabilityModuloTheoriesCheck.of({
       plan: plan.plan,
       result: { kind: "solved", verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.of(verdicts)) }
-    };
+    });
   }
   #runChild(queries) {
     const payload = JSON.stringify({ queries, timeoutMs: this.#config.perQueryTimeoutMs, budgetMs: CHILD_BUDGET_MS });
@@ -6007,206 +6154,123 @@ class Z3SolverClientImplementation {
 }
 // src/requirements/usecase/validate-intermediate-representation-usecase.ts
 class ValidateIntermediateRepresentationUseCase {
-  #irValidationMaterialsRepository;
-  #requirementsSourceRepository;
-  constructor(irValidationMaterialsRepository, requirementsSourceRepository) {
-    this.#irValidationMaterialsRepository = irValidationMaterialsRepository;
-    this.#requirementsSourceRepository = requirementsSourceRepository;
+  #materialsRepository;
+  #sourceRepository;
+  constructor(materialsRepository, sourceRepository) {
+    this.#materialsRepository = materialsRepository;
+    this.#sourceRepository = sourceRepository;
   }
   execute(modelId) {
-    const found = this.#irValidationMaterialsRepository.findById(IntermediateRepresentationValidationMaterialsIdentifier.of(modelId));
-    if (!found.ok) {
-      if (found.error.kind === "not-found")
-        return { kind: "not-applicable" };
-      return { kind: "verdict", pass: false, errors: [found.error.cause] };
-    }
-    const materials = found.value;
-    const errors = [];
-    const major = materials.irVersion().majorVersion();
-    if (Number.isInteger(major) && major !== SUPPORTED_IR_MAJOR) {
-      errors.push(`irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`);
-    }
-    errors.push(...materials.schemaErrors().toArray().map((message) => message.asString()));
-    if (errors.length === 0) {
-      errors.push(...materials.view().wellFormednessErrors());
-      const index = materials.functionalRequirementReferenceIndex();
-      const source = this.#requirementsSourceRepository.findById(materials.sourceId());
-      if (!source.ok) {
-        errors.push("requirements.md not found under this intent record \u2014 frRefs cannot be reverse-verified");
-      } else {
-        errors.push(...index.missingErrors(source.value.knownIds()));
-        errors.push(...SourceAnchor.of(materials.declaredDigest(), source.value.digest()).errors());
-      }
-    }
-    return { kind: "verdict", pass: errors.length === 0, errors };
+    return matchResult(this.#materialsRepository.findById(IntermediateRepresentationValidationMaterialsIdentifier.of(modelId)), {
+      err: (error) => error.kind === "not-found" ? { kind: "not-applicable" } : { kind: "acquisition-failed", error },
+      ok: (materials) => materials.validate({
+        complete: (assessment) => ({ kind: "verdict", assessment }),
+        sourceRequired: (sourceId, validation) => matchResult(this.#sourceRepository.findById(sourceId), {
+          ok: (source) => ({ kind: "verdict", assessment: validation.assess(source) }),
+          err: () => ({ kind: "verdict", assessment: validation.assess(null) })
+        })
+      })
+    });
   }
 }
 // src/requirements/usecase/verification-report-finalizer.ts
 class VerificationReportFinalizer {
   #repository;
-  #findingsSchema;
-  constructor(repository, findingsSchema) {
+  #schema;
+  constructor(repository, schema) {
     this.#repository = repository;
-    this.#findingsSchema = findingsSchema;
+    this.#schema = schema;
   }
-  finalize(report, model) {
-    return this.#finalizing(report, model);
-  }
-  finalizeIrUnreadable(report) {
-    const finalized = this.#finalizing(report, null);
-    if (!finalized.ok)
-      return err(finalized.error);
-    return ok(undefined);
-  }
-  #finalizing(report, model) {
-    const loaded = this.#repository.findByDirectory(report.id().directory());
-    if (!loaded.ok)
-      return err(loaded.error);
-    const aggregate = loaded.value.finalizedWith(report, model, this.#findingsSchema);
-    const stored = this.#repository.store(aggregate);
-    if (!stored.ok)
-      return err(stored.error);
-    const published = aggregate.candidate();
-    if (published === null) {
-      return err({
-        kind: "io-failed",
-        operation: "write",
-        path: report.id().fileName(),
-        cause: "no finalization candidate"
-      });
-    }
-    return ok(published);
+  finalize(directory, report, model) {
+    return flatMapResult(this.#repository.findByDirectory(directory), (loaded) => {
+      const finalized = loaded.finalizedWith(report, model, this.#schema);
+      return flatMapResult(this.#repository.store(finalized), () => ok(finalized));
+    });
   }
 }
 // src/requirements/usecase/verify-requirements-quint-usecase.ts
-var BACKEND = "quint";
-
 class VerifyRequirementsQuintUseCase {
   #formalModelRepository;
-  #quintClient;
+  #client;
   #finalizer;
-  constructor(formalModelRepository, verificationDirectoryRepository, findingsSchema, quintClient) {
+  constructor(formalModelRepository, verificationDirectoryRepository, findingsSchema, client) {
     this.#formalModelRepository = formalModelRepository;
-    this.#quintClient = quintClient;
+    this.#client = client;
     this.#finalizer = new VerificationReportFinalizer(verificationDirectoryRepository, findingsSchema);
   }
   execute(input) {
-    const id = VerificationReportIdentifier.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#formalModelRepository.findById(input.modelId);
-    if (!acquired.ok) {
-      if (acquired.error.kind === "not-found")
-        return { kind: "not-applicable" };
-      if (acquired.error.kind === "io-failed")
-        return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#finalizer.finalizeIrUnreadable(VerificationReport.irUnreadable(id, "simulation", acquired.error.cause));
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "model-unreadable" };
-    }
-    const model = acquired.value;
-    const irHash = model.irHash();
-    if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
-      const saved = this.#finalizer.finalize(VerificationReport.versionMismatch(id, model, irHash, "simulation"), model);
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "version-mismatch" };
-    }
-    const checked = this.#quintClient.check(model);
-    if (checked.kind === "cli-unavailable") {
-      const saved = this.#finalizer.finalize(VerificationReport.quintUnavailable(id, model, irHash), model);
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "backend-unavailable" };
-    }
-    if (checked.kind === "machine-uncompilable") {
-      const uncompilable = VerificationReport.machineUncompilable(id, model, irHash, checked.method, checked.error);
-      const saved = this.#finalizer.finalize(uncompilable, model);
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "machine-uncompilable" };
-    }
-    const interpreted = checked.plan.interpret(model, checked.compileSkips, checked.method, checked.runs);
-    const report = VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: checked.method,
-      findings: interpreted.findings,
-      skipped: interpreted.skipped
+    const id = VerificationReportIdentifier.of(input.verifyDirectory, "quint");
+    return matchResult(this.#formalModelRepository.findById(input.modelId), {
+      err: (error) => {
+        if (error.kind === "not-found")
+          return { kind: "not-applicable" };
+        if (error.kind === "io-failed")
+          return { kind: "acquisition-failed", error };
+        return matchResult(this.#finalizer.finalize(input.verifyDirectory, VerificationReport.irUnreadable(id, "simulation", error.cause), null), {
+          err: (error2) => ({ kind: "save-failed", error: error2 }),
+          ok: () => ({ kind: "model-unreadable" })
+        });
+      },
+      ok: (model) => matchResult(model.prepareVerification(id, VerificationMethod.of("simulation")), {
+        err: (report) => matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
+          err: (error) => ({ kind: "save-failed", error }),
+          ok: () => ({ kind: "version-mismatch" })
+        }),
+        ok: (prepared) => {
+          const checked = this.#client.check(prepared);
+          return matchResult(this.#finalizer.finalize(input.verifyDirectory, checked.reportFor(prepared, id), prepared), {
+            err: (error) => ({ kind: "save-failed", error }),
+            ok: (directory) => checked.match({
+              unavailable: () => ({ kind: "backend-unavailable" }),
+              uncompilable: () => ({ kind: "machine-uncompilable" }),
+              checked: () => ({ kind: "verified", directory })
+            })
+          });
+        }
+      })
     });
-    const finalized = this.#finalizer.finalize(report, model);
-    if (!finalized.ok)
-      return { kind: "save-failed", error: finalized.error };
-    const published = finalized.value;
-    return {
-      kind: "verified",
-      pass: published.passes(),
-      findingsCount: published.findingsCount(),
-      skippedCount: published.skippedCount(),
-      method: checked.method
-    };
   }
 }
 // src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts
-var BACKEND2 = "smt";
-
 class VerifyRequirementsSatisfiabilityModuloTheoriesUseCase {
   #formalModelRepository;
-  #z3SolverClient;
+  #client;
   #finalizer;
-  constructor(formalModelRepository, verificationDirectoryRepository, findingsSchema, z3SolverClient) {
+  constructor(formalModelRepository, verificationDirectoryRepository, findingsSchema, client) {
     this.#formalModelRepository = formalModelRepository;
-    this.#z3SolverClient = z3SolverClient;
+    this.#client = client;
     this.#finalizer = new VerificationReportFinalizer(verificationDirectoryRepository, findingsSchema);
   }
   execute(input) {
-    const id = VerificationReportIdentifier.of(input.verifyDirectory, BACKEND2);
-    const acquired = this.#formalModelRepository.findById(input.modelId);
-    if (!acquired.ok) {
-      if (acquired.error.kind === "not-found")
-        return { kind: "not-applicable" };
-      if (acquired.error.kind === "io-failed")
-        return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#finalizer.finalizeIrUnreadable(VerificationReport.irUnreadable(id, "exhaustive", acquired.error.cause));
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "model-unreadable" };
-    }
-    const model = acquired.value;
-    const irHash = model.irHash();
-    if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
-      const saved = this.#finalizer.finalize(VerificationReport.versionMismatch(id, model, irHash, "exhaustive"), model);
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "version-mismatch" };
-    }
-    const run = this.#z3SolverClient.check(model);
-    if (run.result.kind === "unavailable") {
-      const unavailable = VerificationReport.solverUnavailable(id, model, irHash, run.plan.planSkipped(), run.result.reason);
-      const saved = this.#finalizer.finalize(unavailable, model);
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "solver-unavailable" };
-    }
-    const interpreted = run.plan.interpret(model, run.result.verdicts);
-    const report = VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: "exhaustive",
-      findings: interpreted.findings,
-      skipped: interpreted.skipped
+    const id = VerificationReportIdentifier.of(input.verifyDirectory, "smt");
+    return matchResult(this.#formalModelRepository.findById(input.modelId), {
+      err: (error) => {
+        if (error.kind === "not-found")
+          return { kind: "not-applicable" };
+        if (error.kind === "io-failed")
+          return { kind: "acquisition-failed", error };
+        return matchResult(this.#finalizer.finalize(input.verifyDirectory, VerificationReport.irUnreadable(id, "exhaustive", error.cause), null), {
+          err: (error2) => ({ kind: "save-failed", error: error2 }),
+          ok: () => ({ kind: "model-unreadable" })
+        });
+      },
+      ok: (model) => matchResult(model.prepareVerification(id, VerificationMethod.of("exhaustive")), {
+        err: (report) => matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
+          err: (error) => ({ kind: "save-failed", error }),
+          ok: () => ({ kind: "version-mismatch" })
+        }),
+        ok: (prepared) => {
+          const checked = this.#client.check(prepared);
+          return matchResult(this.#finalizer.finalize(input.verifyDirectory, checked.reportFor(prepared, id), prepared), {
+            err: (error) => ({ kind: "save-failed", error }),
+            ok: (directory) => checked.match({
+              unavailable: () => ({ kind: "solver-unavailable" }),
+              solved: () => ({ kind: "verified", directory })
+            })
+          });
+        }
+      })
     });
-    const finalized = this.#finalizer.finalize(report, model);
-    if (!finalized.ok)
-      return { kind: "save-failed", error: finalized.error };
-    const published = finalized.value;
-    return {
-      kind: "verified",
-      pass: published.passes(),
-      findingsCount: published.findingsCount(),
-      skippedCount: published.skippedCount()
-    };
   }
 }
 // src/entries/aidlc-sensor-deep-spec-verify-quint.ts
@@ -6282,11 +6346,13 @@ function main() {
 `);
       process.exit(1);
       break;
-    case "verified":
-      process.stdout.write(`${JSON.stringify({ pass: outcome.pass, findings_count: outcome.findingsCount, skipped_count: outcome.skippedCount, method: outcome.method })}
+    case "verified": {
+      const report = outcome.directory.publishedReport();
+      process.stdout.write(`${JSON.stringify({ pass: report.passes(), findings_count: report.findingsCount(), skipped_count: report.skippedCount(), method: report.method() })}
 `);
       process.exit(0);
       break;
+    }
   }
 }
 main();

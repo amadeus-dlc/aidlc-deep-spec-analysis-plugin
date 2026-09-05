@@ -8,9 +8,11 @@
 // コレクション自身が順序を保って運ぶ。
 
 import type { LoweredBackgrounds } from "./lowered-backgrounds.ts";
+import { LoweredIdentifier } from "./lowered-identifier.ts";
 import type { LoweredObligations } from "./lowered-obligations.ts";
 import type { LoweredScenarios } from "./lowered-scenarios.ts";
 import type { LoweringIndex } from "./lowering-index.ts";
+import type { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type LoweredUnitParam = {
@@ -33,8 +35,7 @@ export class LoweredUnit {
     this.#index = props.index;
   }
 
-  // 検証済み生成口——採番済みの lowered コレクションと、その採番に対応する
-  // 帰属索引だけを受け取る（門を通るのは `DesignUnit.lowered` と `extendedWith`）。
+  // 再構成口。生成時の採番はDesignUnit.lowered、追加時の採番はextendedWithが所有する。
   static of(props: LoweredUnitParam): LoweredUnit {
     return new LoweredUnit(props);
   }
@@ -55,9 +56,17 @@ export class LoweredUnit {
     return this.#index;
   }
 
-  // refinement 追加パス：追加不変量つき義務列と拡張済み索引での組み直し。
-  // シナリオと背景は追加パスで変わらないので、そのまま引き継ぐ。
-  extendedWith(obligations: LoweredObligations, index: LoweringIndex): LoweredUnit {
+  // 追加不変量を採番し、帰属索引と同時に拡張する。呼び手が二つを組み直さない。
+  extendedWith(invariants: RefinementQuintInvariants): LoweredUnit {
+    let obligations = this.#obligations;
+    let index = this.#index;
+    let sequence = obligations.count();
+    for (const invariant of invariants) {
+      sequence += 1;
+      const identifier = LoweredIdentifier.of(`OB-${sequence}`);
+      obligations = obligations.add(invariant.loweredAs(identifier));
+      index = index.withPassthrough(identifier.asString(), invariant.reqId().asString());
+    }
     return new LoweredUnit({ obligations, scenarios: this.#scenarios, background: this.#background, index });
   }
 }

@@ -1,15 +1,8 @@
-import type { DesignArtifactReference } from "./design-artifact-reference.ts";
-import type { FunctionalTarget } from "./functional-target.ts";
-import type { VerificationTarget } from "./verification-target.ts";
+import type { CoverageAssessment, DesignArtifacts, UnitCoverage } from "@deep-spec/doctor-domain";
 
-// aidlc ワークスペース（spaces/intents レコード）走査の読取ゲートウェイポート
-//（集約を持たないため Repository ではなく Client——裁定 D）。実装は adapter
-// のゲートウェイ責務——stage frontmatter の scopes 読取、レコード歩行、
-// digest/mtime の材料読取。走査順（readdir の自然順・unit の昇順）は凍結。
+// 取得adapterが保存状態を観測型へ再構成する。査定は返したドメインが所有する。
 export interface DoctorWorkspaceClient {
-  verificationScopes(): readonly string[];
-  functionalScopes(): readonly string[];
-  verificationTargets(scopes: readonly string[]): readonly VerificationTarget[];
-  designArtifacts(): readonly DesignArtifactReference[];
-  functionalTargets(scopes: readonly string[]): readonly FunctionalTarget[];
+  verificationCoverage(): CoverageAssessment;
+  functionalCoverage(): UnitCoverage;
+  designArtifacts(): DesignArtifacts;
 }

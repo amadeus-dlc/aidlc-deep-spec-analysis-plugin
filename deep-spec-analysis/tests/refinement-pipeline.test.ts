@@ -13,6 +13,7 @@ import {
   type DesignEntityDeclarations,
   DesignEntityName,
   DesignEventCatalog,
+  DesignFindings,
   DesignIgnore,
   DesignIgnores,
   DesignMachine,
@@ -24,6 +25,8 @@ import {
   DesignObligationNature,
   DesignObligationOrigin,
   DesignObligations,
+  DesignReport,
+  DesignReportIdentifier,
   DesignScenario,
   DesignScenarioIdentifier,
   DesignScenarios,
@@ -77,6 +80,7 @@ import {
   type Expression,
   FindingsSchema,
   FunctionalRequirementReferences,
+  IntermediateRepresentationVersion,
   KeyedIndex,
   QueryLabel,
   RequirementIdentifier,
@@ -277,7 +281,7 @@ describe("SMT script characterization (the PR8 safety net)", () => {
           const unitMap = map.unitMapOf(u.id());
           if (!unitMap) continue;
           const plan = UnitRefinementPlan.of(u, unitMap, req, mapArtifact);
-          queries.push(...(buildRefinementQueries(u, req, plan).queries as unknown as Json[]));
+          queries.push(...(buildRefinementQueries(plan).queries as unknown as Json[]));
         }
       },
     });
@@ -1044,6 +1048,7 @@ describe("refinement verdict interpretation", () => {
     attributes: [{ path: "R.flag", kind: "bool" }],
     obligations: [
       { id: "OB-1", nature: "invariant", frRefs: ["FR-2", "FR-1"], assert: { op: "bool", value: true } },
+      { id: "OB-9", nature: "invariant", frRefs: [], assert: { op: "bool", value: true } },
       {
         id: "OB-2",
         nature: "event",
@@ -1094,6 +1099,7 @@ describe("refinement verdict interpretation", () => {
   );
   const solverPlan = (entries: [string, RefinementProbe][]): RefinementSolverPlan =>
     RefinementSolverPlan.of({
+      preparation: plan,
       pending: KeyedIndex.of(entries.map(([id, p]) => [QueryLabel.of(id), p] as const)),
       compileSkips: DesignSkips.of([]),
     });
@@ -1102,9 +1108,6 @@ describe("refinement verdict interpretation", () => {
       RefinementQueryVerdicts.of(
         KeyedIndex.of(results.map(([id, v]) => [QueryLabel.of(id), RefinementQueryVerdict.of(v)] as const)),
       ),
-      req,
-      plan,
-      "u1",
     );
 
   test("each probe kind emits its frozen finding on the deciding verdict", () => {
@@ -1365,7 +1368,7 @@ describe("catalog misses in the enabledness path (frozen null-drop)", () => {
       ArtifactPath.of("m.md"),
     );
     expect(plainStatus(plan.statusOfObligation("OB-2"))).toEqual({ kind: "checkable" });
-    const built = buildRefinementQueries(u, req, plan);
+    const built = buildRefinementQueries(plan);
     const enabledness = built.queries.find((q) => q.id === "re:OB-2");
     expect(enabledness).toBeDefined();
     // 発火可能な設計ガードなし → notEnabled は "true"（黙った除外の凍結面）。
@@ -1432,7 +1435,16 @@ describe("RefinementMapRepository (owner ruling: writable where writing is defin
 
 describe("split-file coverage pins (one-public-type refactor)", () => {
   test("solver plan expose compile skips and issue-order iteration; unmapped target parses", () => {
+    const preparation = UnitRefinementPlan.of(
+      unit({}),
+      refUnitMap({}),
+      requirements({
+        obligations: [{ id: "OB-9", nature: "invariant", frRefs: [], assert: { op: "bool", value: true } }],
+      }),
+      ArtifactPath.of("m.md"),
+    );
     const f = RefinementSolverPlan.of({
+      preparation,
       pending: KeyedIndex.of([
         [QueryLabel.of("rv:OB-9"), RefinementProbe.invariant(ObligationIdentifier.of("OB-9"))] as const,
       ]),
@@ -1479,7 +1491,7 @@ describe("thaw pins — quint alpha skips, timeout break, exact decode (#34/#38)
       },
     ]);
     // SMT 側の compileSkips と逐語で対（凍結解除 #38 項 1 の対称性）。
-    expect(buildRefinementQueries(u, req, plan).plan.compileSkips().toArray()).toEqual(quint);
+    expect(buildRefinementQueries(plan).plan.compileSkips().toArray()).toEqual(quint);
   });
 
   test("a timed-out runtime is not retried on the fallback runtime (thaw #38 item 2)", () => {
@@ -1500,9 +1512,19 @@ describe("thaw pins — quint alpha skips, timeout break, exact decode (#34/#38)
       perQueryTimeoutMs: 100,
       runtimeOverride: undefined,
       workingDirectory: process.cwd(),
-    }).check(u, req, plan, -14_800);
-    expect(out.result.kind).toBe("unavailable");
-    const reason = out.result.kind === "unavailable" ? out.result.reason : "";
+    }).check(plan, -14_800);
+    const report = out.recordedIn(
+      DesignReport.compose({
+        id: DesignReportIdentifier.of(ArtifactPath.of("/verify"), "smt"),
+        irVersion: IntermediateRepresentationVersion.of("1.0.0"),
+        irHash: ContentHash.ofText("fixture"),
+        method: "exhaustive",
+        findings: DesignFindings.of([]),
+        skipped: DesignSkips.of([]),
+      }),
+    );
+    expect([...report.skipped()].every((skip) => skip.reason() === "unavailable")).toBe(true);
+    const reason = report.skipped().toArray()[0]?.detail() ?? "";
     expect(reason).toContain("node:");
     expect(reason).toContain("ETIMEDOUT");
     expect(reason).not.toContain("bun:");

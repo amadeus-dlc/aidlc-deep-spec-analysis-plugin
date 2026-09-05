@@ -41,4 +41,5 @@ export { TargetIdentifier } from "./target-identifier.ts";
 export { TargetIdentifiers } from "./target-identifiers.ts";
 export { TriggerName } from "./trigger-name.ts";
 export { UnitName } from "./unit-name.ts";
+export { ValidationAssessment } from "./validation-assessment.ts";
 export { VerificationMethod } from "./verification-method.ts";

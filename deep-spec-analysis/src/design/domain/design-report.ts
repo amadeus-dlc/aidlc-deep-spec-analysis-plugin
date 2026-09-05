@@ -16,7 +16,7 @@ import {
 // だけ残す——旧 writeDesignDoc の自己検証降格と同じ姿）。
 
 import type { Json } from "@deep-spec/kernel-infrastructure";
-import type { CheckedUnits } from "./checked-units.ts";
+import { CheckedUnits } from "./checked-units.ts";
 import type { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignFindings } from "./design-findings.ts";
 import type { DesignInputAnchors } from "./design-input-anchors.ts";
@@ -24,6 +24,9 @@ import type { DesignModel } from "./design-model.ts";
 import type { DesignReportIdentifier } from "./design-report-identifier.ts";
 import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
+import type { DesignUnit } from "./design-unit.ts";
+import type { LoweredUnit } from "./lowered-unit.ts";
+import { ReachabilityPlan } from "./reachability-plan.ts";
 
 export const SUPPORTED_DESIGN_IR_MAJOR = 1;
 
@@ -66,15 +69,99 @@ export class DesignReport {
     this.#unavailableReason = seed.unavailableReason;
   }
 
+  static started(id: DesignReportIdentifier, model: DesignModel, method: VerificationMethod): DesignReport {
+    return DesignReport.of({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method,
+      findings: DesignFindings.of([]),
+      skipped: DesignSkips.of([]),
+      checked: CheckedUnits.of([]),
+      inputs: null,
+      crossChecked: null,
+      unavailableReason: null,
+    });
+  }
+
+  #revised(changes: Partial<DesignReportParam>): DesignReport {
+    return new DesignReport({
+      id: this.#id,
+      irVersion: this.#irVersion,
+      irHash: this.#irHash,
+      method: this.#method,
+      findings: this.#findings,
+      skipped: this.#skipped,
+      checked: this.#checked,
+      inputs: this.#inputs,
+      crossChecked: this.#crossChecked,
+      unavailableReason: this.#unavailableReason,
+      ...changes,
+    });
+  }
+
+  withEvidence(findings: DesignFindings, skipped: DesignSkips): DesignReport {
+    return this.#revised({
+      findings: DesignFindings.of([...this.#findings, ...findings]).sortedCanonically(),
+      skipped: this.#skipped.concat(skipped).sortedCanonically(),
+    });
+  }
+
+  withInputs(inputs: DesignInputAnchors): DesignReport {
+    return this.#revised({ inputs: inputs.sortedByArtifact() });
+  }
+
+  unitTimedOut(unit: DesignUnit): DesignReport {
+    const backend = this.#id.backendName().asString() === "smt" ? "solver" : "backend";
+    return this.unitUnverified(
+      unit,
+      SkipReason.timeout(),
+      `the per-run ${backend} budget was exhausted before this unit`,
+    );
+  }
+
+  unitUnverified(unit: DesignUnit, reason: SkipReason, detail: string): DesignReport {
+    return this.withEvidence(
+      DesignFindings.of([]),
+      DesignSkips.of(
+        [...unit.allTargets()].map((target) =>
+          DesignSkipped.of({ target, reason, detail, unit: UnitName.of(unit.name()) }),
+        ),
+      ),
+    );
+  }
+
+  unitVerified(unit: DesignUnit, findings: DesignFindings, skipped: DesignSkips, method: string): DesignReport {
+    const checked = this.#checked ?? CheckedUnits.of([]);
+    const firstQuintUnit = this.#id.backendName().asString() === "quint" && checked.isEmpty();
+    return this.withEvidence(findings, skipped).#revised({
+      method: firstQuintUnit ? VerificationMethod.of(method) : this.#method,
+      checked: checked.add(UnitName.of(`unit:${unit.name()}`)).sortedUniqueCanonically(),
+    });
+  }
+
+  backendFailed(model: DesignModel, reason: string): DesignReport {
+    const detail = this.#id.backendName().asString() === "smt" ? "z3 could not be executed" : "quint CLI missing";
+    return DesignReport.backendUnavailable(this.#id, model, this.#irHash, this.#method.asString(), reason, detail);
+  }
+
+  planReachability(unit: DesignUnit, lowered: LoweredUnit): ReachabilityPlan {
+    return ReachabilityPlan.forUnit(unit, lowered, this.#method);
+  }
+
+  refinementUnavailable(path: string, kind: string): DesignReport {
+    return this.#revised({ unavailableReason: `refinement input could not be acquired: ${path} (${kind})` });
+  }
+
   // ---- 降格レポートの static ファクトリ（OOUI 裁定・文言は golden 凍結） ----
 
   // 設計 IR が読めない（fence 不正・JSON 不正・構造不正）。
-  static irUnreadable(id: DesignReportIdentifier, method: string, cause: string): DesignReport {
+  static irUnreadable(id: DesignReportIdentifier, method: VerificationMethod, cause: string): DesignReport {
     return DesignReport.compose({
       id,
       irVersion: IntermediateRepresentationVersion.of("0.0.0"),
       irHash: ContentHash.ofText(""),
-      method,
+      method: method.asString(),
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of([]),
       unavailableReason: `design IR unreadable: ${cause} — see the deep-spec-design-ir-valid sensor for details`,

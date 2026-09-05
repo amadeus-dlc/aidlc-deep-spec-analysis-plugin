@@ -1,5 +1,16 @@
 import { err, ok, type Result } from "./result.ts";
 
+// 成否のフローを選ぶ。コールバックの仕事は呼び手が決め、ここでは捕捉・業務判断をしない。
+export function matchResult<T, E, U>(
+  result: Result<T, E>,
+  cases: {
+    readonly ok: (value: T) => U;
+    readonly err: (error: E) => U;
+  },
+): U {
+  return result.ok ? cases.ok(result.value) : cases.err(result.error);
+}
+
 export function flatMapResult<T, U, E>(result: Result<T, E>, next: (value: T) => Result<U, E>): Result<U, E> {
   return result.ok ? next(result.value) : result;
 }

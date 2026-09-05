@@ -1,6 +1,6 @@
 // 2026-09-05 の監査6件を、公開境界と保存結果で検証する回帰テスト。
 import { afterEach, describe, expect, test } from "bun:test";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,19 +13,32 @@ import {
 } from "@deep-spec/design-adapter";
 import {
   DesignFindings,
+  DesignIntermediateRepresentationValidationMaterials,
+  DesignIntermediateRepresentationValidationMaterialsIdentifier,
   DesignModelIdentifier,
   DesignReport,
   DesignReportIdentifier,
   DesignReports,
+  DesignSkipped,
   DesignSkips,
+  DesignUnitDeclarations,
   DesignVerifyDirectory,
+  MachineReachability,
+  ReachabilityPlan,
+  ReachabilityProbe,
   ReachabilityVerdict,
+  RefinementCheck,
   RefinementMaterials,
   RefinementMaterialsIdentifier,
+  RefinementPreparation,
+  RefinementProbe,
+  RefinementSolverPlan,
   SiblingVerdictDocument,
   SiblingVerdictFindings,
   SiblingVerdictSkip,
   SiblingVerdictSkips,
+  SiblingVerificationResult,
+  type UnitRefinementPlan,
 } from "@deep-spec/design-domain";
 import {
   type DesignVerifyDirectoryRepository,
@@ -35,14 +48,23 @@ import {
 } from "@deep-spec/design-usecase";
 import {
   ArtifactPath,
+  AttributePath,
+  EnumerationMember,
+  ErrorMessage,
+  ErrorMessages,
   ExpressionTree,
   FindingsSchema,
   FunctionalRequirementReferences,
+  IntermediateRepresentationVersion,
+  KeyedIndex,
   ObligationNature,
+  QueryLabel,
   SkipReason,
+  TargetIdentifier,
+  UnitName,
   VerificationMethod,
 } from "@deep-spec/kernel-domain";
-import { type Json, ok, type Result } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, type Json, ok, type Result } from "@deep-spec/kernel-infrastructure";
 import {
   FormalModelRepositoryImplementation,
   VerificationDirectoryRepositoryImplementation,
@@ -123,15 +145,18 @@ class CapturedReports implements DesignVerifyDirectoryRepository {
   }
 }
 const cleanSibling: SiblingBackendClient = {
-  runLowered: () => ({
-    exit: 0,
-    note: "",
-    doc: SiblingVerdictDocument.readable(
-      VerificationMethod.of("bounded"),
-      SiblingVerdictFindings.of([]),
-      SiblingVerdictSkips.of([]),
+  runLowered: () =>
+    SiblingVerificationResult.completed(
+      SiblingVerdictDocument.readable(
+        VerificationMethod.of("bounded"),
+        SiblingVerdictFindings.of([]),
+        SiblingVerdictSkips.of([]),
+      ),
+      null,
     ),
-  }),
+  runRefinement(plan, timeout) {
+    return this.runLowered("quint", plan.unit(), plan.loweredForQuint(), timeout);
+  },
   probeState: () => ReachabilityVerdict.unverified(),
 };
 
@@ -299,15 +324,14 @@ describe("refinementの対象はfindingとskipの両方に写す", () => {
             : [...lowered.obligations()].map((o) =>
                 SiblingVerdictSkip.of({ target: o.id(), reason: SkipReason.of(reason), detail: "regression" }),
               );
-        return {
-          exit: 0,
-          note: "",
-          doc: SiblingVerdictDocument.readable(
+        return SiblingVerificationResult.completed(
+          SiblingVerdictDocument.readable(
             VerificationMethod.of("simulation"),
             SiblingVerdictFindings.of([]),
             SiblingVerdictSkips.of(skips),
           ),
-        };
+          null,
+        );
       },
     };
     const reports = new CapturedReports();
@@ -514,5 +538,434 @@ describe("cross-checkの不変条件は呼び順に依存しない", () => {
     const prepared = initial.finalizedWith(candidate, ws.model, limitedSchema);
     expect(prepared.crossCheck()?.toDocument().crossChecked).toEqual([]);
     expect(initial.finalizedWith(candidate, null, limitedSchema).crossCheck()).toBeNull();
+  });
+});
+
+describe("設計検証の判断は取得した材料と判定値が所有する", () => {
+  test.each(["absent", "requirements-stale", "design-stale", "unit-absent"])(
+    "%s を両バックエンド共通の準備診断にする",
+    (variant) => {
+      const ws = designWorkspace();
+      const path = join(
+        ws.record,
+        "construction/deep-spec-analysis-functional-verify/deep-spec-analysis-refinement-map.md",
+      );
+      if (variant === "absent") rmSync(path);
+      else {
+        const source = readFileSync(path, "utf-8");
+        const match = /```json\s*([\s\S]*?)```/.exec(source);
+        if (!match?.[1]) throw new Error("fixture has no map");
+        const map = JSON.parse(match[1]);
+        if (variant === "requirements-stale") map.requirementsIrHash = "a".repeat(64);
+        if (variant === "design-stale") map.designIrHash = "b".repeat(64);
+        if (variant === "unit-absent") map.units[0].unit = "unrelated-unit";
+        writeFileSync(path, source.replace(match[1], `${JSON.stringify(map)}\n`));
+      }
+      const materials = value(ws.materials.findById(RefinementMaterialsIdentifier.of(ws.modelId)));
+      const prepared = materials.prepare(ws.model);
+      expect([...prepared]).toHaveLength(0);
+      const report = prepared.recordedIn(
+        DesignReport.started(
+          DesignReportIdentifier.of(ws.input.verifyDirectory, "smt"),
+          ws.model,
+          VerificationMethod.of("exhaustive"),
+        ),
+      );
+      const expected = variant.includes("stale") ? "stale-input" : "absent-input";
+      expect(report.skippedCount()).toBe(materials.requirements().allTargetIds().toArray().length);
+      expect([...report.skipped()].every((skip) => skip.reason() === expected)).toBe(true);
+      expect(report.inputs() !== null).toBe(variant === "unit-absent");
+    },
+  );
+
+  test("SMTの実行不能はgap/status/compile診断を捨てるが、クエリなしは保持する", () => {
+    const ws = designWorkspace();
+    const materials = value(ws.materials.findById(RefinementMaterialsIdentifier.of(ws.modelId)));
+    const plan = [...materials.prepare(ws.model)][0];
+    if (plan === undefined) throw new Error("fixture has no plan");
+    const base = DesignReport.started(
+      DesignReportIdentifier.of(ws.input.verifyDirectory, "smt"),
+      ws.model,
+      VerificationMethod.of("exhaustive"),
+    );
+    const solver = RefinementSolverPlan.of({
+      preparation: plan,
+      pending: KeyedIndex.of([]),
+      compileSkips: DesignSkips.of([
+        DesignSkipped.of({
+          target: TargetIdentifier.of("OB-1"),
+          reason: SkipReason.compileError(),
+          unit: UnitName.of("u1-orders"),
+          detail: "cannot compile",
+        }),
+      ]),
+    });
+    const noQueries = RefinementCheck.noQueries(solver).recordedIn(base);
+    expect(noQueries.findingsCount()).toBeGreaterThan(0);
+    expect([...noQueries.skipped()].some((skip) => skip.reason() === "compile-error")).toBe(true);
+    const unavailable = RefinementCheck.unavailable(solver, ErrorMessage.of("solver unavailable")).recordedIn(base);
+    expect(unavailable.findingsCount()).toBe(0);
+    expect(unavailable.skippedCount()).toBe(plan.requirements().allTargetIds().toArray().length);
+    expect(
+      [...unavailable.skipped()].every(
+        (skip) => skip.reason() === "unavailable" && skip.detail() === "solver unavailable",
+      ),
+    ).toBe(true);
+    expect(base.findingsCount()).toBe(0);
+    expect(base.skippedCount()).toBe(0);
+  });
+
+  test.each(["backend-unavailable", "incomplete", "unreadable", "nonzero"])(
+    "%s のバックエンド判定を主検証とrefinementで解釈する",
+    (kind) => {
+      const ws = designWorkspace();
+      const plan = [...value(ws.materials.findById(RefinementMaterialsIdentifier.of(ws.modelId))).prepare(ws.model)][0];
+      if (plan === undefined) throw new Error("fixture has no plan");
+      const base = DesignReport.started(
+        DesignReportIdentifier.of(ws.input.verifyDirectory, "quint"),
+        ws.model,
+        VerificationMethod.of("simulation"),
+      );
+      const reason = ErrorMessage.of("quint unavailable");
+      const failure = ErrorMessage.of("refinement pass could not run (failed)");
+      const result =
+        kind === "backend-unavailable"
+          ? SiblingVerificationResult.backendUnavailable(reason, failure)
+          : kind === "incomplete"
+            ? SiblingVerificationResult.incomplete(reason, failure)
+            : kind === "unreadable"
+              ? SiblingVerificationResult.completed(SiblingVerdictDocument.unreadable("bad document"), null)
+              : SiblingVerificationResult.completed(
+                  SiblingVerdictDocument.readable(
+                    VerificationMethod.of("simulation"),
+                    SiblingVerdictFindings.of([]),
+                    SiblingVerdictSkips.of([]),
+                  ),
+                  failure,
+                );
+      const report = result.recordedIn(base, ws.model, plan.unit(), plan.unit().lowered({ synthetics: false }));
+      expect(report.isUnavailable()).toBe(kind === "backend-unavailable");
+      expect(result.canInspectReachability()).toBe(kind === "nonzero");
+      if (kind !== "nonzero") expect(report.skippedCount()).toBeGreaterThan(0);
+      const refinement = plan.quintRecordedIn(base, result);
+      expect(refinement.skippedCount()).toBeGreaterThan(0);
+      expect([...refinement.skipped()].every((skip) => skip.reason() === "unavailable")).toBe(true);
+      expect(
+        [...refinement.skipped()].every((skip) =>
+          skip.detail()?.includes(kind === "unreadable" ? "degraded" : "could not run"),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test("未実施の対象とtimeout理由を各検査計画が決める", () => {
+    const ws = designWorkspace();
+    const plan = [...value(ws.materials.findById(RefinementMaterialsIdentifier.of(ws.modelId))).prepare(ws.model)][0];
+    if (plan === undefined) throw new Error("fixture has no plan");
+    for (const backend of ["smt", "quint"] as const) {
+      const base = DesignReport.started(
+        DesignReportIdentifier.of(ws.input.verifyDirectory, backend),
+        ws.model,
+        VerificationMethod.of(backend === "smt" ? "exhaustive" : "simulation"),
+      );
+      const unitReport = base.unitTimedOut(plan.unit());
+      expect(unitReport.skippedCount()).toBe(plan.unit().allTargets().toArray().length);
+      expect([...unitReport.skipped()].every((skip) => skip.reason() === "timeout")).toBe(true);
+      const refinement = backend === "smt" ? plan.smtTimedOut(base) : plan.quintTimedOut(base);
+      expect(refinement.skippedCount()).toBeGreaterThan(0);
+      expect(
+        [...refinement.skipped()].every(
+          (skip) => skip.reason() === "timeout" && skip.detail()?.includes("before the refinement pass"),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("最終化前の公開候補取得は業務上の保存失敗でなくpanicとして扱う", () => {
+    const directory = DesignVerifyDirectory.of(ap("/verify"), DesignReports.of([]), null);
+    expect(() => directory.publishedReport()).toThrow("no finalized design report candidate");
+  });
+});
+
+describe("設計usecaseは処理予算に従ってI/Oの起動だけを制御する", () => {
+  test.each([
+    { backend: "quint", elapsed: 47_000, runs: 1 },
+    { backend: "quint", elapsed: 47_001, runs: 0 },
+    { backend: "smt", elapsed: 57_000, runs: 1 },
+    { backend: "smt", elapsed: 57_001, runs: 0 },
+  ] as const)("$backend 主検証の経過$elapsed ms", ({ backend, elapsed, runs }) => {
+    const ws = designWorkspace();
+    let calls = 0;
+    let clockCalls = 0;
+    const sibling: SiblingBackendClient = {
+      ...cleanSibling,
+      runLowered: () => {
+        calls += 1;
+        return SiblingVerificationResult.incomplete(
+          ErrorMessage.of("no document"),
+          ErrorMessage.of("refinement could not run"),
+        );
+      },
+    };
+    const reports = new CapturedReports();
+    const clock = { now: () => (clockCalls++ === 0 ? 0 : elapsed) };
+    const materials = { findById: (id: RefinementMaterialsIdentifier) => ok(RefinementMaterials.inactive(id)) };
+    const usecase =
+      backend === "quint"
+        ? new VerifyDesignQuintUseCase(ws.models, reports, schema, sibling, materials, clock, 0)
+        : new VerifyDesignSatisfiabilityModuloTheoriesUseCase(
+            ws.models,
+            reports,
+            schema,
+            sibling,
+            materials,
+            {
+              check: () => {
+                throw new Error("inactive refinement must not execute");
+              },
+            },
+            clock,
+          );
+    expect(usecase.execute(ws.input).kind).toBe("verified");
+    expect(calls).toBe(runs);
+    expect(reports.document().skipped).toEqual(
+      expect.arrayContaining([expect.objectContaining({ reason: runs === 0 ? "timeout" : "unavailable" })]),
+    );
+  });
+
+  test.each([
+    { backend: "quint", elapsed: 117_000, runs: 1 },
+    { backend: "quint", elapsed: 117_001, runs: 0 },
+    { backend: "smt", elapsed: 60_000, runs: 1 },
+    { backend: "smt", elapsed: 60_001, runs: 0 },
+  ] as const)("$backend refinementの経過$elapsed ms", ({ backend, elapsed, runs }) => {
+    const ws = designWorkspace();
+    let calls = 0;
+    let clockCalls = 0;
+    const incomplete = SiblingVerificationResult.incomplete(
+      ErrorMessage.of("no document"),
+      ErrorMessage.of("refinement could not run"),
+    );
+    const sibling: SiblingBackendClient = {
+      ...cleanSibling,
+      runLowered: () => incomplete,
+      runRefinement: () => {
+        calls += 1;
+        return incomplete;
+      },
+    };
+    const reports = new CapturedReports();
+    const clock = { now: () => (clockCalls++ < 3 ? 0 : elapsed) };
+    const solver = {
+      check: (preparation: UnitRefinementPlan) => {
+        calls += 1;
+        return RefinementCheck.noQueries(
+          RefinementSolverPlan.of({ preparation, pending: KeyedIndex.of([]), compileSkips: DesignSkips.of([]) }),
+        );
+      },
+    };
+    const usecase =
+      backend === "quint"
+        ? new VerifyDesignQuintUseCase(ws.models, reports, schema, sibling, ws.materials, clock, 0)
+        : new VerifyDesignSatisfiabilityModuloTheoriesUseCase(
+            ws.models,
+            reports,
+            schema,
+            sibling,
+            ws.materials,
+            solver,
+            clock,
+          );
+    expect(usecase.execute(ws.input).kind).toBe("verified");
+    expect(calls).toBe(runs);
+    if (runs === 0)
+      expect(reports.document().skipped).toEqual(
+        expect.arrayContaining([expect.objectContaining({ reason: "timeout", target: "OB-1" })]),
+      );
+  });
+});
+
+describe("設計検証の構築契約と診断予算", () => {
+  test("異なる保存先のreportは集約で拒否し、候補なしのstoreもpanicにする", () => {
+    const ws = designWorkspace();
+    const directoryPath = join(ws.record, "not-created");
+    const directory = DesignVerifyDirectory.of(ap(directoryPath), DesignReports.of([]), null);
+    const wrong = DesignReport.started(
+      DesignReportIdentifier.of(ap(join(ws.record, "other")), "quint"),
+      ws.model,
+      VerificationMethod.of("simulation"),
+    );
+    expect(() => directory.finalizing(wrong)).toThrow(IllegalArgumentException);
+    expect(() => directory.finalizedWith(wrong, ws.model, schema)).toThrow(IllegalArgumentException);
+    expect(() => new DesignVerifyDirectoryRepositoryImplementation().store(directory)).toThrow(
+      "no finalized design report candidate",
+    );
+    expect(existsSync(directoryPath)).toBe(false);
+    const correct = DesignReport.started(
+      DesignReportIdentifier.of(ap(directoryPath), "quint"),
+      ws.model,
+      VerificationMethod.of("simulation"),
+    );
+    expect(directory.finalizing(correct).publishedReport().id().directory().equals(ap(directoryPath))).toBe(true);
+  });
+
+  test("対応外versionと上限件数のschema診断を、明示マーカー付きの上限内診断に合成する", () => {
+    const id = DesignIntermediateRepresentationValidationMaterialsIdentifier.of(
+      DesignModelIdentifier.of(ap("/design/model.md")),
+    );
+    const materials = DesignIntermediateRepresentationValidationMaterials.of({
+      id,
+      irVersion: IntermediateRepresentationVersion.of("2.0.0"),
+      schemaErrors: ErrorMessages.of(Array.from({ length: 65_536 }, () => ErrorMessage.of("invalid schema value"))),
+      units: DesignUnitDeclarations.of([]),
+      sourceDocument: new Uint8Array(),
+    });
+    const assessment = materials.assess();
+    expect(assessment.passes()).toBe(false);
+    const errors = Array.from(assessment.errors(), (message) => message.asString());
+    expect(errors).toHaveLength(65_536);
+    expect(errors[0]).toContain("unsupported major version");
+    expect(errors.at(-1)).toBe("validation diagnostic limit reached (65536 messages); additional diagnostics omitted");
+  });
+
+  test("機械・到達性計画・refinement台帳は上限で構築でき、超過はof panic/parse非例外に分かれる", () => {
+    const ws = designWorkspace();
+    const plan = [...value(ws.materials.findById(RefinementMaterialsIdentifier.of(ws.modelId))).prepare(ws.model)][0];
+    if (plan === undefined) throw new Error("fixture has no plan");
+    const unit = plan.unit();
+    const machine = unit.machines().toArray()[0];
+    if (machine === undefined) throw new Error("fixture has no machine");
+    const probe = ReachabilityProbe.of(
+      unit,
+      unit.lowered({ synthetics: false }),
+      machine,
+      AttributePath.of("ticket.phase"),
+      EnumerationMember.of("closed"),
+    );
+    const input = {
+      unit,
+      machine,
+      probes: Array.from({ length: 65_536 }, () => probe),
+      bounded: true,
+      observations: new Map<ReachabilityProbe, ReachabilityVerdict>(),
+    };
+    const maximumMachine = MachineReachability.of(input);
+    expect(maximumMachine.probeCount()).toBe(65_536);
+    expect(MachineReachability.parse(input).ok).toBe(true);
+    const tooMany = { ...input, probes: [...input.probes, probe] };
+    expect(() => MachineReachability.of(tooMany)).toThrow(IllegalArgumentException);
+    const rejectedMachine = MachineReachability.parse(tooMany);
+    expect(rejectedMachine.ok).toBe(false);
+    if (!rejectedMachine.ok) expect(rejectedMachine.error).not.toBeInstanceOf(Error);
+    const emptyMachine = MachineReachability.of({ ...input, probes: [] });
+    expect([...ReachabilityPlan.of(Array.from({ length: 65_536 }, () => emptyMachine))]).toHaveLength(65_536);
+    expect(ReachabilityPlan.parse([maximumMachine]).ok).toBe(true);
+    expect(() => ReachabilityPlan.of([maximumMachine, maximumMachine])).toThrow(IllegalArgumentException);
+    const tooManyProbes = ReachabilityPlan.parse([maximumMachine, maximumMachine]);
+    expect(tooManyProbes.ok).toBe(false);
+    if (!tooManyProbes.ok) expect(tooManyProbes.error).not.toBeInstanceOf(Error);
+    const tooManyMachines = Array.from({ length: 65_537 }, () => emptyMachine);
+    expect(() => ReachabilityPlan.of(tooManyMachines)).toThrow(IllegalArgumentException);
+    expect(ReachabilityPlan.parse(tooManyMachines).ok).toBe(false);
+    const plans = Array.from({ length: 65_536 }, () => plan);
+    const skips = DesignSkips.of([]);
+    expect([...RefinementPreparation.of(plans, skips, null)]).toHaveLength(65_536);
+    expect(RefinementPreparation.parse(plans, skips, null).ok).toBe(true);
+    plans.push(plan);
+    expect(() => RefinementPreparation.of(plans, skips, null)).toThrow(IllegalArgumentException);
+    const rejectedPreparation = RefinementPreparation.parse(plans, skips, null);
+    expect(rejectedPreparation.ok).toBe(false);
+    if (!rejectedPreparation.ok) expect(rejectedPreparation.error).not.toBeInstanceOf(Error);
+    input.probes.length = 0;
+    expect(maximumMachine.probeCount()).toBe(65_536);
+  });
+
+  test("観測は生成元の機械計画に属し、結果の反映で別の準備を差し込めない", () => {
+    const ws = designWorkspace();
+    const preparation = [
+      ...value(ws.materials.findById(RefinementMaterialsIdentifier.of(ws.modelId))).prepare(ws.model),
+    ][0];
+    if (preparation === undefined) throw new Error("fixture has no plan");
+    const unit = preparation.unit();
+    const machine = unit.machines().toArray()[0];
+    if (machine === undefined) throw new Error("fixture has no machine");
+    const lowered = unit.lowered({ synthetics: false });
+    const probe = ReachabilityProbe.of(
+      unit,
+      lowered,
+      machine,
+      AttributePath.of("ticket.phase"),
+      EnumerationMember.of("closed"),
+    );
+    const input = {
+      unit,
+      machine,
+      probes: [],
+      bounded: true,
+      observations: new Map([[probe, ReachabilityVerdict.reached()]]),
+    };
+    expect(() => MachineReachability.of(input)).toThrow(IllegalArgumentException);
+    const result = MachineReachability.parse(input);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe("reachability-observation-outside-plan");
+    const pending = KeyedIndex.of([
+      [QueryLabel.of("rv:OB-1"), RefinementProbe.invariant(ObligationIdentifier.of("OB-1"))] as const,
+    ]);
+    const wrongSkips = DesignSkips.of([
+      DesignSkipped.of({
+        target: TargetIdentifier.of("OB-1"),
+        unit: UnitName.of("different-unit"),
+        reason: SkipReason.compileError(),
+      }),
+    ]);
+    const invalid = { preparation, pending, compileSkips: wrongSkips };
+    expect(() => RefinementSolverPlan.of(invalid)).toThrow(IllegalArgumentException);
+    const parsed = RefinementSolverPlan.parse(invalid);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.error.kind).toBe("refinement-solver-unit-mismatch");
+      expect(parsed.error).not.toBeInstanceOf(Error);
+    }
+    const unknown = {
+      preparation,
+      pending: KeyedIndex.of([
+        [QueryLabel.of("rv:OB-999"), RefinementProbe.invariant(ObligationIdentifier.of("OB-999"))] as const,
+      ]),
+      compileSkips: DesignSkips.of([]),
+    };
+    expect(() => RefinementSolverPlan.of(unknown)).toThrow(IllegalArgumentException);
+    expect(RefinementSolverPlan.parse(unknown).ok).toBe(false);
+    const solver = value(RefinementSolverPlan.parse({ preparation, pending, compileSkips: DesignSkips.of([]) }));
+    const base = DesignReport.started(
+      DesignReportIdentifier.of(ws.input.verifyDirectory, "smt"),
+      ws.model,
+      VerificationMethod.of("exhaustive"),
+    );
+    const unavailable = RefinementCheck.unavailable(solver, ErrorMessage.of("failed")).recordedIn(base);
+    expect([...unavailable.skipped()].every((skip) => skip.unit() === unit.name())).toBe(true);
+    const onlyReport: Parameters<RefinementCheck["recordedIn"]>["length"] = 1;
+    expect(onlyReport).toBe(1);
+  });
+
+  test("ソルバ計画の件数は検査前に制限し、超過をResultでも扱える", () => {
+    const ws = designWorkspace();
+    const preparation = [
+      ...value(ws.materials.findById(RefinementMaterialsIdentifier.of(ws.modelId))).prepare(ws.model),
+    ][0];
+    if (preparation === undefined) throw new Error("fixture has no plan");
+    const probe = RefinementProbe.invariant(ObligationIdentifier.of("OB-1"));
+    const entries = Array.from({ length: 65_536 }, (_, index) => [QueryLabel.of(`rv:OB-1:${index}`), probe] as const);
+    const maximum = { preparation, pending: KeyedIndex.of(entries), compileSkips: DesignSkips.of([]) };
+    expect([...RefinementSolverPlan.of(maximum)]).toHaveLength(65_536);
+    expect(RefinementSolverPlan.parse(maximum).ok).toBe(true);
+    entries.push([QueryLabel.of("rv:OB-1:overflow"), probe]);
+    const oversized = { ...maximum, pending: KeyedIndex.of(entries) };
+    expect(() => RefinementSolverPlan.of(oversized)).toThrow(IllegalArgumentException);
+    const result = RefinementSolverPlan.parse(oversized);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe("refinement-solver-plan-too-large");
+      expect(result.error).not.toBeInstanceOf(Error);
+    }
   });
 });

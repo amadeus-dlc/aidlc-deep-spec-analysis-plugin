@@ -1,9 +1,7 @@
 // z3 ソルバ実行ポート。check は計画（SMT-LIB 生成を含む）の構築と子プロセス
-// 実行を実装に委ね、計画と型付き判定だけを返す。実行不能でも plan は
-// 返る——コンパイル時 skip は unavailable 文書にも載るため。
+// 実行を実装に委ねる。返す結果は実行不能時も計画時skipを保持し、unavailable文書を形成する。
 
-import type { RequirementsModel } from "@deep-spec/requirements-domain";
-import type { SatisfiabilityModuloTheoriesCheck } from "./satisfiability-modulo-theories-check.ts";
+import type { RequirementsModel, SatisfiabilityModuloTheoriesCheck } from "@deep-spec/requirements-domain";
 
 export interface Z3SolverClient {
   check(model: RequirementsModel): SatisfiabilityModuloTheoriesCheck;

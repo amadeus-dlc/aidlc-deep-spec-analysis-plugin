@@ -26,8 +26,10 @@ import {
   DesignReports,
   DesignVerifyDirectory,
   ReachabilityVerdict,
+  type RefinementCheck,
   RefinementMaterials,
   type RefinementMaterialsIdentifier,
+  SiblingVerificationResult,
 } from "@deep-spec/design-domain";
 import {
   type DesignAcquisitionTerminal,
@@ -35,17 +37,15 @@ import {
   DesignReportFinalizer,
   DesignVerificationAcquirer,
   type DesignVerifyDirectoryRepository,
-  type RefinementCheck,
   type RefinementMaterialsRepository,
   type RefinementSolverClient,
   type SiblingBackendClient,
-  type SiblingLoweredRun,
   type VerifyDesignOutcome,
   VerifyDesignQuintUseCase,
   VerifyDesignSatisfiabilityModuloTheoriesUseCase,
 } from "@deep-spec/design-usecase";
 import { readContractSchema } from "@deep-spec/kernel-adapter";
-import { ArtifactPath, FindingsSchema, VerificationMethod } from "@deep-spec/kernel-domain";
+import { ArtifactPath, ErrorMessage, FindingsSchema, VerificationMethod } from "@deep-spec/kernel-domain";
 import { err, ok, type Result } from "@deep-spec/kernel-infrastructure";
 import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
 
@@ -118,8 +118,15 @@ class FixedClock implements Clock {
 // findings 文書を返さない兄弟——全対象が unavailable skip になり、実ソルバーを
 // 起動しないまま組成〜finalization まで到達する。
 class StubSiblingBackendClient implements SiblingBackendClient {
-  runLowered(): SiblingLoweredRun {
-    return { exit: 0, doc: null, note: "stub sibling produced no findings document" };
+  runLowered(): SiblingVerificationResult {
+    return SiblingVerificationResult.incomplete(
+      ErrorMessage.of("lowered v1 backend produced no findings document (stub sibling produced no findings document)"),
+      ErrorMessage.of("refinement pass could not run (stub sibling produced no findings document)"),
+    );
+  }
+
+  runRefinement(): SiblingVerificationResult {
+    throw new Error("inactive refinement must not execute");
   }
 
   probeState(): ReachabilityVerdict {
@@ -284,7 +291,13 @@ describe("#14 report finalization は 1 実装——1 か所の変更が両 back
       verifyDir,
       FindingsSchema.unreadable("contract 2 schema is unreadable"),
     );
-    expect(outcome).toEqual({ kind: "verified", pass: false, findingsCount: 0, skippedCount: 0, method: "exhaustive" });
+    expect(outcome.kind).toBe("verified");
+    if (outcome.kind !== "verified") throw new Error("expected saved report");
+    const report = outcome.directory.publishedReport();
+    expect(report.passes()).toBe(false);
+    expect(report.findingsCount()).toBe(0);
+    expect(report.skippedCount()).toBe(0);
+    expect(report.method()).toBe("exhaustive");
   });
 });
 
@@ -393,23 +406,24 @@ describe("DesignVerificationAcquirer は取得専用の 5 変種へ結果を閉�
           DesignModelIdentifier.of(ap("/records/model.md")),
           reportIdOf(verifyDir),
           strictMethod(method),
+          verifyDir,
         );
-        expect(`${row.name}: ${acquired.kind}`).toBe(`${row.name}: terminal`);
-        if (acquired.kind !== "terminal") continue;
-        expect(`${row.name}: ${acquired.outcome.kind}`).toBe(`${row.name}: ${row.expected}`);
-        if (acquired.outcome.kind === "version-mismatch") {
+        expect(`${row.name}: ${acquired.ok}`).toBe(`${row.name}: false`);
+        if (acquired.ok) continue;
+        expect(`${row.name}: ${acquired.error.kind}`).toBe(`${row.name}: ${row.expected}`);
+        if (acquired.error.kind === "version-mismatch") {
           // 適合前の skip 数が verdict 行に載る（凍結挙動）。
-          expect(acquired.outcome.skippedCount).toBe(targetCount(mismatched));
-          expect(acquired.outcome.skippedCount).toBeGreaterThan(0);
+          expect(acquired.error.report.skippedCount()).toBe(targetCount(mismatched));
+          expect(acquired.error.report.skippedCount()).toBeGreaterThan(0);
         }
-        if (acquired.outcome.kind === "model-unreadable") {
+        if (acquired.error.kind === "model-unreadable") {
           // IR が読めない経路は cross-check を書けない——集約は cross-check を
           // 持たないまま保存される。
           expect(reports.withoutCrossCheck().length).toBe(1);
           expect(reports.withCrossCheck()).toEqual([]);
           expect(reports.withoutCrossCheck()[0]?.candidate()?.method()).toBe(method);
         }
-        if (acquired.outcome.kind === "version-mismatch") {
+        if (acquired.error.kind === "version-mismatch") {
           expect(reports.withCrossCheck().length).toBe(1);
           expect(reports.withoutCrossCheck()).toEqual([]);
         }
@@ -419,7 +433,7 @@ describe("DesignVerificationAcquirer は取得専用の 5 変種へ結果を閉�
     }
   });
 
-  test("対応 version なら同じ model と IR hash を ready として返す", () => {
+  test("対応versionならモデルをResultの成功で返し、何も保存しない", () => {
     const model = fixtureModel();
     const reports = new SeamRepository();
     const acquirer = new DesignVerificationAcquirer(
@@ -430,11 +444,12 @@ describe("DesignVerificationAcquirer は取得専用の 5 変種へ結果を閉�
       model.id(),
       reportIdOf(ap("/records/deep-spec-design-verify")),
       strictMethod("exhaustive"),
+      ap("/records/deep-spec-design-verify"),
     );
-    expect(acquired.kind).toBe("ready");
-    if (acquired.kind !== "ready") return;
-    expect(acquired.model).toBe(model);
-    expect(acquired.irHash.equals(model.irHash())).toBe(true);
+    expect(acquired.ok).toBe(true);
+    if (!acquired.ok) return;
+    expect(acquired.value.id().equals(model.id())).toBe(true);
+    expect(acquired.value.irHash().equals(model.irHash())).toBe(true);
     // ready は何も書かない。
     expect(reports.storedAggregates).toEqual([]);
   });

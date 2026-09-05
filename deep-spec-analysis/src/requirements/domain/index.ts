@@ -31,6 +31,7 @@ export { Obligation } from "./obligation.ts";
 export { ObligationIdentifier } from "./obligation-identifier.ts";
 export { ObligationIdentifiers } from "./obligation-identifiers.ts";
 export { Obligations } from "./obligations.ts";
+export { QuintCheckResult } from "./quint-check-result.ts";
 export { QuintMachineComponent } from "./quint-machine-component.ts";
 export { QuintMachineComponents } from "./quint-machine-components.ts";
 export { QuintMachinePlan } from "./quint-machine-plan.ts";
@@ -43,6 +44,8 @@ export { RequirementAttributeDeclarations } from "./requirement-attribute-declar
 export { RequirementsModel } from "./requirements-model.ts";
 export { RequirementsSource } from "./requirements-source.ts";
 export { RequirementsSourceIdentifier } from "./requirements-source-identifier.ts";
+export { RequirementsSourceValidation } from "./requirements-source-validation.ts";
+export { SatisfiabilityModuloTheoriesCheck } from "./satisfiability-modulo-theories-check.ts";
 export { SatisfiabilityModuloTheoriesEventPairProbe } from "./satisfiability-modulo-theories-event-pair-probe.ts";
 export { SatisfiabilityModuloTheoriesEventPairProbes } from "./satisfiability-modulo-theories-event-pair-probes.ts";
 export { SatisfiabilityModuloTheoriesQueryVerdict } from "./satisfiability-modulo-theories-query-verdict.ts";

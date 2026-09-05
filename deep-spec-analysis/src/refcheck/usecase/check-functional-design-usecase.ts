@@ -5,6 +5,7 @@
 // inputs[] は集約が凍結取得規則で解決済みの文書から自分で記録する。
 
 import type { FindingsSchema } from "@deep-spec/kernel-domain";
+import { matchResult } from "@deep-spec/kernel-infrastructure";
 import type { CheckFunctionalDesignInput } from "./check-functional-design-input.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./port/design-record-repository.ts";
@@ -26,22 +27,20 @@ export class CheckFunctionalDesignUseCase {
   }
 
   execute(input: CheckFunctionalDesignInput): CheckOutcome {
-    const record = this.#designRecordRepository.findById(input.recordId);
-    if (!record.ok) return { kind: "not-applicable" };
-    const checked = record.value.checkFunctionalDesign(input.reportDirectory);
-    if (!checked.ok) return { kind: "not-applicable" };
-    // 保存前に一度だけ適合させる——verdict はモードによらずこの conformed
-    // から導く（凍結挙動）。
-    const conformed = checked.value.conformedTo(this.#findingsSchema);
-    if (input.mode === "persist") {
-      const stored = this.#referenceCheckReportRepository.store(conformed);
-      if (!stored.ok) return { kind: "save-failed", error: stored.error };
-    }
-    return {
-      kind: "verified",
-      pass: conformed.passes(),
-      findingsCount: conformed.findingsCount(),
-      skippedCount: conformed.skippedCount(),
-    };
+    return matchResult(this.#designRecordRepository.findById(input.recordId), {
+      err: (): CheckOutcome => ({ kind: "not-applicable" }),
+      ok: (record): CheckOutcome =>
+        matchResult(record.checkFunctionalDesign(input.reportDirectory), {
+          err: (): CheckOutcome => ({ kind: "not-applicable" }),
+          ok: (report): CheckOutcome => {
+            const conformed = report.conformedTo(this.#findingsSchema);
+            if (input.mode === "report-only") return { kind: "verified", report: conformed };
+            return matchResult(this.#referenceCheckReportRepository.store(conformed), {
+              err: (error): CheckOutcome => ({ kind: "save-failed", error }),
+              ok: (): CheckOutcome => ({ kind: "verified", report: conformed }),
+            });
+          },
+        }),
+    });
   }
 }

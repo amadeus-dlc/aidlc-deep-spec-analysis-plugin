@@ -1,0 +1,695 @@
+{
+  "baseline": "e743b4e36777b38ecc3e1133673d21182e5b241c",
+  "sourceMatchesBaseline": true,
+  "scope": "全5コンテキストのusecase配下。関連domain/adapterと規律も参照。",
+  "files": [
+    {
+      "path": "deep-spec-analysis/src/kernel/usecase/index.ts",
+      "context": "kernel",
+      "role": "facade",
+      "className": null,
+      "lines": 7,
+      "sha256": "4c14ad61d5ec84af3c91e332998309041478fa2719672a0e99c4db0317a6dfde"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/usecase/package.json",
+      "context": "kernel",
+      "role": "package",
+      "className": null,
+      "lines": 9,
+      "sha256": "ef08fdac02aefc7c17264a171e5fb48d63d27cf0708b8a4c54717104ab894321"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/usecase/port/clock.ts",
+      "context": "kernel",
+      "role": "port-contract",
+      "className": null,
+      "lines": 8,
+      "sha256": "2fc38f10292b9d3e5c14f04b21d9772ee39b046b5bdcc091d720aa103c5378db"
+    },
+    {
+      "path": "deep-spec-analysis/src/kernel/usecase/port/repository-error.ts",
+      "context": "kernel",
+      "role": "port-contract",
+      "className": null,
+      "lines": 12,
+      "sha256": "f8401cc205e781f3e36c88b53c487be3cbd593eaa695041e38ba2ac0e3fa40f3"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/index.ts",
+      "context": "requirements",
+      "role": "facade",
+      "className": null,
+      "lines": 20,
+      "sha256": "70a17a756b957e16307c544855ece132c2c4c12323ae247a1c760c37f2f9eae4"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/package.json",
+      "context": "requirements",
+      "role": "package",
+      "className": null,
+      "lines": 15,
+      "sha256": "01f3f680a298877453cffa6c0d5d8765f9624dbefb665ee5a6eb183d9c45c188"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/formal-model-repository.ts",
+      "context": "requirements",
+      "role": "port-contract",
+      "className": null,
+      "lines": 16,
+      "sha256": "2a1ff1278d4d974623a8434f501ccc638bdac9e7272ad87748a0c640ed9e1a1d"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/intermediate-representation-validation-materials-repository.ts",
+      "context": "requirements",
+      "role": "port-contract",
+      "className": null,
+      "lines": 22,
+      "sha256": "3a52f160b279919bc6e4f0b1d747c9ade9eabba3efa69070147acdd6cd48f6b9"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/quint-check-result.ts",
+      "context": "requirements",
+      "role": "port-contract",
+      "className": null,
+      "lines": 12,
+      "sha256": "3d3e5c01216cf723856cdd49a30b7d25ee0bf1e04adcb5280fb930f6e8d8490e"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/quint-client.ts",
+      "context": "requirements",
+      "role": "port-contract",
+      "className": null,
+      "lines": 12,
+      "sha256": "36272ea89f94885b08fee1ea53382253fb954346e06aa21f6f13ab90c1e98d69"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/requirements-source-repository.ts",
+      "context": "requirements",
+      "role": "port-contract",
+      "className": null,
+      "lines": 10,
+      "sha256": "4dabb2290da35d07d45ef6b2c7bd77f2039a16794d7df7b54373fc2a165c44b5"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/satisfiability-modulo-theories-check.ts",
+      "context": "requirements",
+      "role": "port-contract",
+      "className": null,
+      "lines": 7,
+      "sha256": "c49f74d6ee4eba8864cc427107442e0d5c3634a05830513f5eb6e9ba1dd6aad7"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/satisfiability-modulo-theories-solver-result.ts",
+      "context": "requirements",
+      "role": "port-contract",
+      "className": null,
+      "lines": 5,
+      "sha256": "758eb877fc21146a4514a0885621b1b51da3d8d4d44bb37dc6e0596f535b3b41"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/verification-directory-repository.ts",
+      "context": "requirements",
+      "role": "port-contract",
+      "className": null,
+      "lines": 24,
+      "sha256": "abab2d01c57955ef00af45c83a940f61998c3759acb75c1fc49f68106f9d5f54"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/port/z3-solver-client.ts",
+      "context": "requirements",
+      "role": "port-contract",
+      "className": null,
+      "lines": 10,
+      "sha256": "be1d5a348046e8d2ac6e22936b3a29bbafa284af4b9669d5afd837b18241f814"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/validate-intermediate-representation-outcome.ts",
+      "context": "requirements",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 7,
+      "sha256": "d7e56dd32645707d2ea4d633c34fed4bd3dcf57b21d33aaeb415ef86c764eaeb"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "context": "requirements",
+      "role": "usecase",
+      "className": "ValidateIntermediateRepresentationUseCase",
+      "lines": 73,
+      "sha256": "b3293662d08ea2226f7e847871837e78f9461a2e9fc89b52a2b97736ff5d482f"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/verification-report-finalizer.ts",
+      "context": "requirements",
+      "role": "application-collaborator",
+      "className": "VerificationReportFinalizer",
+      "lines": 66,
+      "sha256": "49850325ef3c150d34dee2c49ef36f4d421f89419df33be529c00f22f448040d"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/verify-quint-outcome.ts",
+      "context": "requirements",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 22,
+      "sha256": "2746592c32170276c6d91abc1599641d39db8c491b637d84c94ea2a65e633df2"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/verify-requirements-quint-input.ts",
+      "context": "requirements",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 7,
+      "sha256": "2dda2b62b488984d44b0e5225e8cac6b08d9dfe783644cba18505fdfe6b33be5"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/verify-requirements-quint-usecase.ts",
+      "context": "requirements",
+      "role": "usecase",
+      "className": "VerifyRequirementsQuintUseCase",
+      "lines": 104,
+      "sha256": "2ffc49f7f36fd37ef5ae7a30bd46dffb4501a0cc0bbda9b811f07c44d54a1681"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-input.ts",
+      "context": "requirements",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 7,
+      "sha256": "72cffbc8a74ff7ce9028ba8936de19a836eddbd71abd846e84a2cae506cf9087"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts",
+      "context": "requirements",
+      "role": "usecase",
+      "className": "VerifyRequirementsSatisfiabilityModuloTheoriesUseCase",
+      "lines": 101,
+      "sha256": "152954284e504c93a290e28bf171471ff537202020db93eec39c841808f04474"
+    },
+    {
+      "path": "deep-spec-analysis/src/requirements/usecase/verify-satisfiability-modulo-theories-outcome.ts",
+      "context": "requirements",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 18,
+      "sha256": "07795b78c3d047e37543014b82d84e9e135754db222cf5697300defb21121990"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/design-acquisition-result.ts",
+      "context": "design",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 11,
+      "sha256": "a69d42d68b45e700cd4c46ddeeb8830723442ca90202402407d70b047f520b88"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/design-acquisition-terminal.ts",
+      "context": "design",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 11,
+      "sha256": "239ad5b9d0220d2040961def313d807bf3a70ca886c6ab1f98f824f5f6bf4800"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/design-report-finalizer.ts",
+      "context": "design",
+      "role": "application-collaborator",
+      "className": "DesignReportFinalizer",
+      "lines": 70,
+      "sha256": "b87c3b87a3d3cac93d1dbcd3481a140eda339ad0eabc931cc876c01d21df946a"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/design-verification-acquirer.ts",
+      "context": "design",
+      "role": "application-collaborator",
+      "className": "DesignVerificationAcquirer",
+      "lines": 62,
+      "sha256": "b6af50a6c3ea95f89ea3b2a81c0e4a2eb5fc6e234d37840704b6063744afa4d6"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/index.ts",
+      "context": "design",
+      "role": "facade",
+      "className": null,
+      "lines": 22,
+      "sha256": "d5104f0d395e270cce003cedebc62d984767657abf36da2e363d05a67c6dce20"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/package.json",
+      "context": "design",
+      "role": "package",
+      "className": null,
+      "lines": 15,
+      "sha256": "2a8824dfdfe17e31811ca160faec026bf9573f5d03c14e212ae5c4499734d213"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/design-intermediate-representation-validation-materials-repository.ts",
+      "context": "design",
+      "role": "port-contract",
+      "className": null,
+      "lines": 22,
+      "sha256": "7dd2a1c17e3308e176b316aa10dd674884480c92123e430be0beb0e8b437845a"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/design-model-repository.ts",
+      "context": "design",
+      "role": "port-contract",
+      "className": null,
+      "lines": 16,
+      "sha256": "6890ed9907add6cfd2ec9ac66d82f72f0cdbaa03475599ac8004d03c49e15e31"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/design-verify-directory-repository.ts",
+      "context": "design",
+      "role": "port-contract",
+      "className": null,
+      "lines": 24,
+      "sha256": "4ec3238cb865cb5f226ea3df095d6e95a95754c0e8f75b77578030d618b1f8ac"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/refinement-check.ts",
+      "context": "design",
+      "role": "port-contract",
+      "className": null,
+      "lines": 7,
+      "sha256": "ca31e55d6360d6ad04b56cb2d196079ea4ed6d09933d2a8f043e41ed18f14fd0"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/refinement-map-repository.ts",
+      "context": "design",
+      "role": "port-contract",
+      "className": null,
+      "lines": 19,
+      "sha256": "c37c2d7b1abe60a1001ead5f3ecad7a9ea0ec35e01f8c0d84ddfc5e9351c4aeb"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/refinement-materials-repository.ts",
+      "context": "design",
+      "role": "port-contract",
+      "className": null,
+      "lines": 20,
+      "sha256": "86630a7dd33011904c502863c63add7532946738cb8ff795fb49b61b0b5e88b8"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/refinement-solver-client.ts",
+      "context": "design",
+      "role": "port-contract",
+      "className": null,
+      "lines": 16,
+      "sha256": "11600120075ce5413d4501b8b2bdf40a2f4b790a1684605668defbdbe7fa6285"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/refinement-solver-result.ts",
+      "context": "design",
+      "role": "port-contract",
+      "className": null,
+      "lines": 6,
+      "sha256": "1a001482e9f55bfb217bbc001400fea5e9dbbda89086afe3728cf32136d3bb75"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/sibling-backend-client.ts",
+      "context": "design",
+      "role": "port-contract",
+      "className": null,
+      "lines": 25,
+      "sha256": "12e5adef4ff4aa37a57f34890badd2e86c415cec26bc69c4f75a1d6310880588"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/port/sibling-lowered-run.ts",
+      "context": "design",
+      "role": "port-contract",
+      "className": null,
+      "lines": 7,
+      "sha256": "d09c846ef35acab0d215ce5f7963f761ac8d511d230e6d54b881adde8bf3af9c"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/validate-design-intermediate-representation-outcome.ts",
+      "context": "design",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 6,
+      "sha256": "e930ddf04102e2169ca6f0d14593bbb5a2013b22ab5187c0c9638c4e77082f43"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "context": "design",
+      "role": "usecase",
+      "className": "ValidateDesignIntermediateRepresentationUseCase",
+      "lines": 56,
+      "sha256": "f15acf9684a7cf73e8aba93321fb65fc265aa13f9d2aab058766ef2a9e12399d"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/verify-design-input.ts",
+      "context": "design",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 7,
+      "sha256": "25a73917fee7c5df647cb9714a627fa48a5295731f7715981ff83f2f7e5d1d18"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/verify-design-outcome.ts",
+      "context": "design",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 20,
+      "sha256": "4f3d6308dfc7b9d75437e9fc14417b947da06a0a9ea6ff535262b7b24bf75655"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/verify-design-quint-usecase.ts",
+      "context": "design",
+      "role": "usecase",
+      "className": "VerifyDesignQuintUseCase",
+      "lines": 386,
+      "sha256": "120a6590e0629506d99544f9546fcd8995278bccc49383e05edf525e236742dc"
+    },
+    {
+      "path": "deep-spec-analysis/src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "context": "design",
+      "role": "usecase",
+      "className": "VerifyDesignSatisfiabilityModuloTheoriesUseCase",
+      "lines": 294,
+      "sha256": "fca3d45b034ff12378134c977f321b77e7dc86886ba5cb56d858df36972dcc52"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/check-functional-coverage-usecase.ts",
+      "context": "doctor",
+      "role": "usecase",
+      "className": "CheckFunctionalCoverageUseCase",
+      "lines": 57,
+      "sha256": "2160da2dd55c5a767691e2146a813d3d7138f86e0901674d6374f78975e92f31"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/check-installation-usecase.ts",
+      "context": "doctor",
+      "role": "usecase",
+      "className": "CheckInstallationUseCase",
+      "lines": 19,
+      "sha256": "f7823140c512aa7014a20b721472689921d9ff960fedea2129d9dbeb236891dc"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/check-solvers-usecase.ts",
+      "context": "doctor",
+      "role": "usecase",
+      "className": "CheckSolversUseCase",
+      "lines": 15,
+      "sha256": "86074c6eb7b2940c4dac19fc1860019405533441934b9e37a494c607db0e24b1"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/check-structural-debt-usecase.ts",
+      "context": "doctor",
+      "role": "usecase",
+      "className": "CheckStructuralDebtUseCase",
+      "lines": 29,
+      "sha256": "b098bbf424bc305d75c1637d1cf3adeb90c855f44d2a5b94212905c2fa9af26f"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/check-verification-coverage-usecase.ts",
+      "context": "doctor",
+      "role": "usecase",
+      "className": "CheckVerificationCoverageUseCase",
+      "lines": 30,
+      "sha256": "da0c1ea9fa87caa6444a6ec1e6ae8947bd00e5565dabbb1edcff180275bd2a85"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/check-version-advisory-usecase.ts",
+      "context": "doctor",
+      "role": "usecase",
+      "className": "CheckVersionAdvisoryUseCase",
+      "lines": 56,
+      "sha256": "9a478e068ff4e4f6429c3f7a7148a8e6feaedf16ff01e0513f0fb5b349c10ac3"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/index.ts",
+      "context": "doctor",
+      "role": "facade",
+      "className": null,
+      "lines": 29,
+      "sha256": "9ca196c7d58a422abb0969caba33c47e0d05b62321fee392d93d2ea70334abf2"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/package.json",
+      "context": "doctor",
+      "role": "package",
+      "className": null,
+      "lines": 12,
+      "sha256": "56b4805021931e75145fb5861fa3a4af75ab1de10f577e2a41bed8c9960abd09"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/design-artifact-reference.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 9,
+      "sha256": "d8ffbc100ca42e1277a801fae27011e612101a45122730389aad3e1829e76ac5"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/doctor-workspace-client.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 15,
+      "sha256": "8162bc302e6161a119e293979fc027ea7c11be08d34e58516a0ddb8ede5ad8e4"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/functional-target.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 15,
+      "sha256": "67dc3fbc49981ad144d19c9fa306bc06884033c35bcfbc74ac147e1e43b93ba6"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/functional-unit-scan.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 5,
+      "sha256": "aea024ecfefd0f70edbadd365d49e2ef94d9939304f4255c4f71c310ddfd465c"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/harness-file-client.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 4,
+      "sha256": "5f148c8f3dae9f66bc8ba6727dccf2e5a52991af98003b9eca4ea24f8279d424"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/installation-provenance-client.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 7,
+      "sha256": "f1965ac9606b5d5279f186483a6c8de158861721c17cd778d17dac7d813ad21a"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/installation-provenance-read.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 4,
+      "sha256": "3602365026fca90bd54fb71d62b4d09ead7211d14578ad02206d6d17af108690"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/reference-check-backend-client.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 7,
+      "sha256": "ed5c02c5efab7ffb03d2ffda54b04ab482cd0d5978eed0e5b9ba7242afc5ba7f"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/release-tags-client.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 7,
+      "sha256": "1e55eacc9bca24b529d66a1649cdea11a0fe84826f0d640edcd53ca7a307687d"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/release-tags-read.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 3,
+      "sha256": "005f9fcb4e730ee75522a2fb4b9fc12b949cfea014b408b419073ae6a148d5f4"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/solver-probe-client.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 7,
+      "sha256": "49caec67c2ea6b5d99ebfed97faec3e5af7121c8d06554629c0703e2c8bf1805"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/port/verification-target.ts",
+      "context": "doctor",
+      "role": "port-contract",
+      "className": null,
+      "lines": 12,
+      "sha256": "c3ce5933bf47f2824e527d0d1df1a0216e00f730fd4bce3f499b28149992bbfd"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/read-model/coverage-assessment.ts",
+      "context": "doctor",
+      "role": "read-model",
+      "className": "CoverageAssessment",
+      "lines": 50,
+      "sha256": "ce10fd1d9e0c69c7615da1a65e2f94199a9c04eb0cb61ec7252fbccd8e03c953"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/read-model/coverage-row.ts",
+      "context": "doctor",
+      "role": "read-model",
+      "className": "CoverageRow",
+      "lines": 31,
+      "sha256": "85e7ba2982cab673edb5b43497d85ca593701e2f8f2c481a79b42e18ca0bf5e2"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/read-model/debt-row.ts",
+      "context": "doctor",
+      "role": "read-model",
+      "className": "DebtRow",
+      "lines": 28,
+      "sha256": "e6244b602ce6ac312189db1653e3306b657348071cb5b662cf66c75a601989df"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/read-model/refinement-stale-row.ts",
+      "context": "doctor",
+      "role": "read-model",
+      "className": "RefinementStaleRow",
+      "lines": 23,
+      "sha256": "4207e497068157b250552ce8cb68a00a3aed602c2247834d0ec055d56335316b"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/read-model/structural-debt.ts",
+      "context": "doctor",
+      "role": "read-model",
+      "className": "StructuralDebt",
+      "lines": 35,
+      "sha256": "812b03fa4cd20b15e798f35a6fb3fd940bd991cec6705a254440aeee67bc027a"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/read-model/unit-coverage-row.ts",
+      "context": "doctor",
+      "role": "read-model",
+      "className": "UnitCoverageRow",
+      "lines": 34,
+      "sha256": "5cb68553f1142ecd911264fa46fe587cdfb37fc67e8679ac533afab458c7e557"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/read-model/unit-coverage.ts",
+      "context": "doctor",
+      "role": "read-model",
+      "className": "UnitCoverage",
+      "lines": 66,
+      "sha256": "a13067876bfb33d3128ed1e616d682911719cdd22aad48c8e5c86a80956460d9"
+    },
+    {
+      "path": "deep-spec-analysis/src/doctor/usecase/read-model/version-advisory.ts",
+      "context": "doctor",
+      "role": "read-model",
+      "className": "VersionAdvisory",
+      "lines": 71,
+      "sha256": "501e545fffbae14d714c69b5bc7f427e0726e1a4165a0488ebbb33889b261332"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-contract-summary-input.ts",
+      "context": "refcheck",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 9,
+      "sha256": "1630f155faf4e2b2d1867cd680caa39bf9640368e82cb7ca045b38ee66a54d6d"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-contract-summary-usecase.ts",
+      "context": "refcheck",
+      "role": "usecase",
+      "className": "CheckContractSummaryUseCase",
+      "lines": 49,
+      "sha256": "818f32bda4bc01a6815073d1979b79c51184c2bcf8b4f1df30f5fd69a845d98e"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-domain-components-input.ts",
+      "context": "refcheck",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 9,
+      "sha256": "3177284a850a33ac3e25fca4cd62a990c99ea39d188d9365558e32a5f90ccb92"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-domain-components-usecase.ts",
+      "context": "refcheck",
+      "role": "usecase",
+      "className": "CheckDomainComponentsUseCase",
+      "lines": 47,
+      "sha256": "e0ea8df2b48a3d2c62f6baf42758077deb3d81d1850df55b03a34d781a436c99"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-execution-mode.ts",
+      "context": "refcheck",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 5,
+      "sha256": "f29a08132ee02ef0a14b1688e43d1e49f55bf111891d62e656f758487bd8c3c5"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-functional-design-input.ts",
+      "context": "refcheck",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 9,
+      "sha256": "cdb23c077d4da3479cb282117552d018c5a00845d70ca0946af57c729e1ae7a2"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-functional-design-usecase.ts",
+      "context": "refcheck",
+      "role": "usecase",
+      "className": "CheckFunctionalDesignUseCase",
+      "lines": 47,
+      "sha256": "de98c86f95aae413d70412aedac9cace963d512bde7418b238a6f15074cc4fb6"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/check-outcome.ts",
+      "context": "refcheck",
+      "role": "input-or-outcome",
+      "className": null,
+      "lines": 13,
+      "sha256": "e19e53868de8ef46295b710d6f182c9869546a9207e2b1bef63c056aee7aa7ef"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/index.ts",
+      "context": "refcheck",
+      "role": "facade",
+      "className": null,
+      "lines": 12,
+      "sha256": "02fc0eed6c2b750f36a93d605aa1e137dde4e5bd314197960c54793c2aea4cdc"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/package.json",
+      "context": "refcheck",
+      "role": "package",
+      "className": null,
+      "lines": 15,
+      "sha256": "2bb8b8c74c1dcc9d6cc863d065aa34851c73baaf838d9d06cf81c7b1a79a3848"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/port/design-record-repository.ts",
+      "context": "refcheck",
+      "role": "port-contract",
+      "className": null,
+      "lines": 17,
+      "sha256": "b0cf5ae83544ef5d57a28349912b85d39f3ffe3ca2fd3a99d53b98b3fe130bdc"
+    },
+    {
+      "path": "deep-spec-analysis/src/refcheck/usecase/port/reference-check-report-repository.ts",
+      "context": "refcheck",
+      "role": "port-contract",
+      "className": null,
+      "lines": 20,
+      "sha256": "157097b0cdebf8bccf1e28a458c676da8486047164a49ac78699010bc251b8d2"
+    }
+  ]
+}

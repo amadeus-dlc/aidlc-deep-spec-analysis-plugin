@@ -12,7 +12,7 @@ export class CheckInstallationUseCase {
   execute(): readonly InstalledStatus[] {
     const out: InstalledStatus[] = [];
     for (const entry of InstallationManifest.standard()) {
-      out.push(InstalledStatus.of(entry, this.#files.isInstalled(entry.rel())));
+      out.push(InstalledStatus.of(entry, this.#files.isInstalled(entry)));
     }
     return out;
   }

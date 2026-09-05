@@ -1,14 +1,21 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { DigestAnchor } from "@deep-spec/doctor-domain";
-import type {
+import {
+  ArtifactModifiedAt,
+  CoverageAssessment,
   DesignArtifactReference,
-  DoctorWorkspaceClient,
-  FunctionalTarget,
-  FunctionalUnitScan,
-  VerificationTarget,
-} from "@deep-spec/doctor-usecase";
-import { ContentHash } from "@deep-spec/kernel-domain";
+  DesignArtifacts,
+  DigestAnchor,
+  FunctionalObservation,
+  FunctionalUnitObservation,
+  IntentLocation,
+  StageScope,
+  StageScopes,
+  UnitCoverage,
+  VerificationObservation,
+} from "@deep-spec/doctor-domain";
+import type { DoctorWorkspaceClient } from "@deep-spec/doctor-usecase";
+import { ArtifactPath, ContentHash, UnitName } from "@deep-spec/kernel-domain";
 import type { DoctorWorkspaceClientConfiguration } from "./doctor-workspace-client-configuration.ts";
 
 // aidlc ワークスペース走査の実 Gateway。旧 doctor の scopesOfStage /
@@ -27,26 +34,34 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
     this.#refcheckToolNames = config.refcheckToolNames;
   }
 
-  static readonly #FALLBACK_STAGE_SCOPES = ["enterprise", "feature"];
+  static readonly #FALLBACK_STAGE_SCOPES = StageScopes.of([StageScope.of("enterprise"), StageScope.of("feature")]);
 
-  #scopesOfStage(...stagePath: string[]): string[] {
+  #scopesOfStage(...stagePath: string[]): StageScopes {
     const stageFile = join(this.#root, "aidlc-common", "stages", ...stagePath);
+    let items: readonly string[] | null = null;
     try {
       const frontmatter = readFileSync(stageFile, "utf-8").split("\n---")[0];
       const m = frontmatter.match(/^scopes:\n((?:\s+- .+\n)+)/m);
-      const items = m?.[1]?.match(/- (\S+)/g) ?? null;
-      if (items) return items.map((s) => s.slice(2));
+      items = m?.[1]?.match(/- (\S+)/g)?.map((item) => item.slice(2)) ?? null;
     } catch {
       // fall through to the authored default
     }
-    return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
+    if (items === null) return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
+    const scopes: StageScope[] = [];
+    for (const item of items) {
+      const parsed = StageScope.parse(item);
+      if (!parsed.ok) return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
+      scopes.push(parsed.value);
+    }
+    const parsed = StageScopes.parse(scopes);
+    return parsed.ok ? parsed.value : DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
   }
 
-  verificationScopes(): readonly string[] {
+  #verificationScopes(): StageScopes {
     return this.#scopesOfStage("inception", "deep-spec-analysis-verify.md");
   }
 
-  functionalScopes(): readonly string[] {
+  #functionalScopes(): StageScopes {
     return this.#scopesOfStage("construction", "deep-spec-analysis-functional-verify.md");
   }
 
@@ -84,14 +99,16 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
     return state.match(/^- \*\*Scope\*\*: (\S+)/m)?.[1] ?? null;
   }
 
-  verificationTargets(scopes: readonly string[]): readonly VerificationTarget[] {
-    const out: VerificationTarget[] = [];
-    const inScope = new Set(scopes);
+  verificationCoverage(): CoverageAssessment {
+    const scopes = this.#verificationScopes();
+    const out: VerificationObservation[] = [];
     for (const space of this.#spaces()) {
       for (const intent of this.#intents(space)) {
         const record = this.#record(space, intent);
         const scope = this.#scopeOf(record);
-        if (!scope || !inScope.has(scope)) continue;
+        if (!scope) continue;
+        const parsedScope = StageScope.parse(scope);
+        if (!parsedScope.ok || !scopes.includes(parsedScope.value)) continue;
         const requirements = join(record, "inception", "requirements-analysis", "requirements.md");
         if (!existsSync(requirements)) continue;
         const model = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
@@ -104,7 +121,14 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
         }
         const hasModel = existsSync(model);
         if (!hasModel || !hasFindings) {
-          out.push({ space, intent, hasModel, hasFindings, anchor: null });
+          out.push(
+            VerificationObservation.of({
+              location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
+              hasModel,
+              hasFindings,
+              anchor: null,
+            }),
+          );
           continue;
         }
         // Content-based staleness の材料: モデルが sourceDigest を刻んでいれば
@@ -114,28 +138,36 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
         const anchored = readFileSync(model, "utf-8")
           .match(/```json\n([\s\S]*?)```/)?.[1]
           ?.match(/"sourceDigest"\s*:\s*"([0-9a-f]{64})"/)?.[1];
-        out.push({
-          space,
-          intent,
-          hasModel,
-          hasFindings,
-          anchor: anchored
-            ? DigestAnchor.of(ContentHash.of(anchored), ContentHash.ofBytes(readFileSync(requirements)))
-            : null,
-        });
+        out.push(
+          VerificationObservation.of({
+            location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
+            hasModel,
+            hasFindings,
+            anchor: anchored
+              ? DigestAnchor.of(ContentHash.of(anchored), ContentHash.ofBytes(readFileSync(requirements)))
+              : null,
+          }),
+        );
       }
     }
-    return out;
+    return CoverageAssessment.of(out, scopes);
   }
 
-  designArtifacts(): readonly DesignArtifactReference[] {
+  designArtifacts(): DesignArtifacts {
     const out: DesignArtifactReference[] = [];
     for (const space of this.#spaces()) {
       for (const intent of this.#intents(space)) {
         const record = this.#record(space, intent);
         const ref = (tool: string, artifactPath: string, label: string): void => {
           if (!existsSync(artifactPath)) return;
-          out.push({ space, intent, tool, artifactPath, label });
+          out.push(
+            DesignArtifactReference.of({
+              location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
+              tool: ArtifactPath.of(tool),
+              artifactPath: ArtifactPath.of(artifactPath),
+              relativePath: ArtifactPath.of(label),
+            }),
+          );
         };
         ref(
           this.#refcheckToolNames.domain,
@@ -168,17 +200,19 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
         }
       }
     }
-    return out;
+    return DesignArtifacts.of(out);
   }
 
-  functionalTargets(scopes: readonly string[]): readonly FunctionalTarget[] {
-    const out: FunctionalTarget[] = [];
-    const inScope = new Set(scopes);
+  functionalCoverage(): UnitCoverage {
+    const scopes = this.#functionalScopes();
+    const out: FunctionalObservation[] = [];
     for (const space of this.#spaces()) {
       for (const intent of this.#intents(space)) {
         const record = this.#record(space, intent);
         const scope = this.#scopeOf(record);
-        if (!scope || !inScope.has(scope)) continue;
+        if (!scope) continue;
+        const parsedScope = StageScope.parse(scope);
+        if (!parsedScope.ok || !scopes.includes(parsedScope.value)) continue;
         const constructionDir = join(record, "construction");
         let unitDirs: string[] = [];
         try {
@@ -193,7 +227,7 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
         const stageDir = join(constructionDir, "deep-spec-analysis-functional-verify");
         const modelPath = join(stageDir, "deep-spec-analysis-functional-formal-model.md");
         let modelUnits: string[] = [];
-        let modelMtime = 0;
+        let modelMtime: number | null = null;
         // Per-unit completion evidence: 実 backend 文書（cross-check でも
         // unavailable でもない）の checked[] に載った unit だけが完了。
         const completedUnits = new Set<string>();
@@ -229,28 +263,37 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
             hasFindings = false;
           }
         }
-        const units: FunctionalUnitScan[] = unitDirs.map((unit) => {
+        const units: FunctionalUnitObservation[] = unitDirs.map((unit) => {
           const fdDir = join(constructionDir, unit, "functional-design");
           let newest = 0;
           for (const f of ["entities.md", "rules.md", "functional-spec.md"]) {
             const p = join(fdDir, f);
             if (existsSync(p)) newest = Math.max(newest, statSync(p).mtimeMs);
           }
-          return { name: unit, newestArtifactMtime: newest };
+          return FunctionalUnitObservation.of(UnitName.of(unit), ArtifactModifiedAt.of(newest));
         });
         const reqModel = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
-        out.push({
-          space,
-          intent,
-          units,
-          modelMtime,
-          modelUnits,
-          completedUnits: [...completedUnits],
-          hasFindings,
-          requirementsModelMtime: existsSync(reqModel) ? statSync(reqModel).mtimeMs : null,
-        });
+        out.push(
+          FunctionalObservation.of({
+            location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
+            units,
+            modelModifiedAt: modelMtime === null ? null : ArtifactModifiedAt.of(modelMtime),
+            modelUnits: modelUnits.flatMap((name) => {
+              const parsed = UnitName.parse(name);
+              return parsed.ok ? [parsed.value] : [];
+            }),
+            completedUnits: [...completedUnits].flatMap((name) => {
+              const parsed = UnitName.parse(name);
+              return parsed.ok ? [parsed.value] : [];
+            }),
+            hasFindings,
+            requirementsModelModifiedAt: existsSync(reqModel)
+              ? ArtifactModifiedAt.of(statSync(reqModel).mtimeMs)
+              : null,
+          }),
+        );
       }
     }
-    return out;
+    return UnitCoverage.of(out, scopes);
   }
 }

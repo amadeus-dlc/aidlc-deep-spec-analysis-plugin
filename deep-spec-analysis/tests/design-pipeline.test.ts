@@ -171,49 +171,21 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
       });
 
       for (const backend of ["smt", "quint"] as const) {
-        const findings: DesignFinding[] = [];
-        const skipped: DesignSkipped[] = [];
-        const checkedUnits: string[] = [];
-        let method: string | null = null;
-        for (const u of model.units()) {
-          const lowered = u.lowered({ synthetics: backend === "smt" });
-          const run = sibling.runLowered(backend, u, lowered, 55_000);
-          expect(run.exit).toBe(0);
-          const remapped = (run.doc ?? SiblingVerdictDocument.unreadable()).remapVerdicts(u, lowered.index());
-          expect(remapped.unavailable).toBe(null);
-          method = method ?? remapped.method;
-          findings.push(...remapped.findings);
-          skipped.push(...remapped.skipped);
-          checkedUnits.push(`unit:${u.name()}`);
+        let report = DesignReport.started(
+          DesignReportIdentifier.of(ap(verifyDir), backend),
+          model,
+          VerificationMethod.of(backend === "smt" ? "exhaustive" : "simulation"),
+        );
+        for (const unit of model) {
+          const lowered = unit.lowered({ synthetics: backend === "smt" });
+          const run = sibling.runLowered(backend, unit, lowered, 55_000);
+          expect(run.isBackendUnavailable()).toBe(false);
+          expect(run.canInspectReachability()).toBe(true);
+          report = run.recordedIn(report, model, unit, lowered);
           if (backend === "quint") {
-            // entry と同じ到達性検出フェーズ：simulation では capability skip。
-            for (const sm of u.machines().sortedById()) {
-              const attrPath =
-                lowered.index().attrPathOfMachine(sm.id().asString()) ??
-                `${sm.entity().asString()}.${sm.attribute().asString()}`;
-              const candidates = sm.nonInitialCandidates(u.enumValuesOf(attrPath));
-              if (candidates.length === 0) continue;
-              expect(method).not.toBe("bounded");
-              skipped.push(
-                DesignSkipped.of({
-                  target: sm.id().asTargetId(),
-                  reason: SkipReason.of("capability"),
-                  unit: UnitName.of(u.name()),
-                  detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
-                }),
-              );
-            }
+            for (const machine of report.planReachability(unit, lowered)) report = machine.recordedIn(report, false, 2);
           }
         }
-        const report = DesignReport.compose({
-          id: DesignReportIdentifier.of(ap(verifyDir), backend),
-          irVersion: model.irVersion(),
-          irHash,
-          method: backend === "smt" ? "exhaustive" : (method ?? "simulation"),
-          findings: DesignFindings.of(findings),
-          skipped: DesignSkips.of(skipped),
-          checked: CheckedUnits.of(Array.from(checkedUnits, (raw) => UnitName.of(raw))),
-        });
         // 公開は集約ひとつぶん：候補を置き、適合させ、いまの兄弟集合から
         // クロスチェックを導いてから、Repository が一塊で書く。
         const loaded = reports.findByDirectory(ap(verifyDir));
@@ -971,7 +943,7 @@ describe("report ordering, cross-check, and degradations", () => {
 
     const unread = DesignReport.irUnreadable(
       DesignReportIdentifier.of(ap("/v"), "smt"),
-      "exhaustive",
+      VerificationMethod.of("exhaustive"),
       "design IR carries no units[]",
     );
     expect(unread.unavailableReason()).toBe(

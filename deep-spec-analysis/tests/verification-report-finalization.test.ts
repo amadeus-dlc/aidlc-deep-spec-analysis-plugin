@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 import type { ProcessLiveness } from "@deep-spec/kernel-adapter";
 import { DirectoryFinalizationLock, readContractSchema } from "@deep-spec/kernel-adapter";
 import { ArtifactPath, FindingsSchema } from "@deep-spec/kernel-domain";
-import type { Result } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, type Result } from "@deep-spec/kernel-infrastructure";
 import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
 import {
   FormalModelRepositoryImplementation,
@@ -39,10 +39,11 @@ import {
 import {
   FormalModelIdentifier,
   type RequirementsModel,
-  type VerificationDirectory,
+  VerificationDirectory,
   VerificationFindings,
   VerificationReport,
   VerificationReportIdentifier,
+  VerificationReports,
   VerificationSkips,
 } from "@deep-spec/requirements-domain";
 import { VerificationReportFinalizer } from "@deep-spec/requirements-usecase";
@@ -182,8 +183,8 @@ function seed(
   repository: VerificationDirectoryRepositoryImplementation,
   report: VerificationReport,
   schema: FindingsSchema,
-): Result<void, RepositoryError> {
-  return new VerificationReportFinalizer(repository, schema).finalizeIrUnreadable(report);
+): Result<VerificationDirectory, RepositoryError> {
+  return new VerificationReportFinalizer(repository, schema).finalize(report.id().directory(), report, null);
 }
 
 // --- #1 schema は合成ルートで一度だけ読まれる ------------------------------
@@ -201,12 +202,16 @@ describe("契約2 の適合は finalization ごとに 1 つの値が運ぶ", () 
 
       // 値を作ったあとに schema が消えても、保存文書はその値から導かれる。
       rmSync(schemaCopy);
-      const finalized = new VerificationReportFinalizer(repository, schema).finalize(report, ws.model);
+      const finalized = new VerificationReportFinalizer(repository, schema).finalize(
+        ap(ws.verifyDir),
+        report,
+        ws.model,
+      );
       expect(finalized.ok).toBe(true);
       if (!finalized.ok) throw new Error("the finalization must succeed");
-      expect(finalized.value.isUnavailable()).toBe(false);
+      expect(finalized.value.publishedReport().isUnavailable()).toBe(false);
       expect(readFileSync(join(ws.verifyDir, "smt.json"), "utf-8")).toBe(
-        renderVerificationReportBytes(finalized.value),
+        renderVerificationReportBytes(finalized.value.publishedReport()),
       );
 
       const published = repository.findByDirectory(ap(ws.verifyDir));
@@ -214,8 +219,14 @@ describe("契約2 の適合は finalization ごとに 1 つの値が運ぶ", () 
       if (published.ok) expect(published.value.crossCheck()?.isUnavailable()).toBe(false);
 
       // 対照：同じ path をいま読む値は「読めない」変種になり、両文書を降格させる。
-      const degraded = new VerificationReportFinalizer(repository, schemaOf(schemaCopy)).finalize(report, ws.model);
-      expect(degraded.ok && degraded.value.unavailableReason()).toStartWith("findings schema unreadable: ");
+      const degraded = new VerificationReportFinalizer(repository, schemaOf(schemaCopy)).finalize(
+        ap(ws.verifyDir),
+        report,
+        ws.model,
+      );
+      expect(degraded.ok && degraded.value.publishedReport().unavailableReason()).toStartWith(
+        "findings schema unreadable: ",
+      );
       const reloaded = repository.findByDirectory(ap(ws.verifyDir));
       expect(reloaded.ok && reloaded.value.crossCheck()?.unavailableReason()).toStartWith(
         "findings schema unreadable: ",
@@ -229,6 +240,24 @@ describe("契約2 の適合は finalization ごとに 1 つの値が運ぶ", () 
 // --- #2/#3 失敗は verified にならない --------------------------------------
 
 describe("finalization の失敗は成功に化けない", () => {
+  test("未最終化の公開要求と別ディレクトリへの候補混入は契約違反として伝播する", () => {
+    const ws = makeWorkspace();
+    try {
+      const directory = VerificationDirectory.of(ap(ws.verifyDir), VerificationReports.of([]), null);
+      expect(() => directory.publishedReport()).toThrow(IllegalArgumentException);
+      const repository = new VerificationDirectoryRepositoryImplementation();
+      expect(() => repository.store(directory)).toThrow(IllegalArgumentException);
+      expect(readdirSync(ws.verifyDir)).toEqual([]);
+      expect(() => directory.finalizing(candidate(join(ws.record, "other"), "smt", ws.model))).toThrow(
+        IllegalArgumentException,
+      );
+      expect(directory.candidate()).toBeNull();
+      expect(directory.reports().toArray()).toEqual([]);
+    } finally {
+      rmSync(ws.record, { recursive: true, force: true });
+    }
+  });
+
   test("読めない兄弟は集約の解決そのものを型のある失敗にし、公開ファイルを変えない", () => {
     const ws = makeWorkspace();
     const quintPath = join(ws.verifyDir, "quint.json");
@@ -244,6 +273,7 @@ describe("finalization の失敗は成功に化けない", () => {
       chmodSync(quintPath, 0o000);
       // 読めない兄弟を黙って除かない：finalization は型のある失敗として終わる。
       const finalized = new VerificationReportFinalizer(repository, schema).finalize(
+        ap(ws.verifyDir),
         candidate(ws.verifyDir, "smt", ws.model),
         ws.model,
       );
@@ -273,11 +303,13 @@ describe("finalization の失敗は成功に化けない", () => {
       const finalizer = new VerificationReportFinalizer(new FailingStore(failure), schemaOf(schemaPath));
       const report = candidate(ws.verifyDir, "smt", ws.model);
 
-      expect(finalizer.finalize(report, ws.model)).toEqual({ ok: false, error: failure });
+      expect(finalizer.finalize(ap(ws.verifyDir), report, ws.model)).toEqual({ ok: false, error: failure });
       // IR 不成立の経路（cross-check を導けない側）も同じ継ぎ目で失敗する。
       expect(
-        finalizer.finalizeIrUnreadable(
+        finalizer.finalize(
+          ap(ws.verifyDir),
           VerificationReport.irUnreadable(report.id(), "exhaustive", "IR is not a JSON object"),
+          null,
         ),
       ).toEqual({ ok: false, error: failure });
       expect(readdirSync(ws.verifyDir)).toEqual([]);
@@ -404,6 +436,7 @@ describe("古い cross-check を最新として扱わない", () => {
       writeFileSync(crossPath, '{ "backend": "cross-check", "irHash": "stale-and-wrong" }\n', "utf-8");
 
       const finalized = new VerificationReportFinalizer(repository, schema).finalize(
+        ap(ws.verifyDir),
         candidate(ws.verifyDir, "smt", ws.model),
         ws.model,
       );
@@ -429,7 +462,7 @@ describe("古い cross-check を最新として扱わない", () => {
       const repository = new VerificationDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       const finalizer = new VerificationReportFinalizer(repository, schema);
-      expect(finalizer.finalize(candidate(ws.verifyDir, "smt", ws.model), ws.model).ok).toBe(true);
+      expect(finalizer.finalize(ap(ws.verifyDir), candidate(ws.verifyDir, "smt", ws.model), ws.model).ok).toBe(true);
       const crossPath = join(ws.verifyDir, "cross-check.json");
       expect(existsSync(crossPath)).toBe(true);
 
@@ -439,7 +472,7 @@ describe("古い cross-check を最新として扱わない", () => {
         "exhaustive",
         "IR is not a JSON object",
       );
-      expect(finalizer.finalizeIrUnreadable(unreadable).ok).toBe(true);
+      expect(finalizer.finalize(ap(ws.verifyDir), unreadable, null).ok).toBe(true);
       expect(existsSync(crossPath)).toBe(false);
       expect(existsSync(join(ws.verifyDir, STALE_CROSS_CHECK))).toBe(false);
       const reloaded = repository.findByDirectory(ap(ws.verifyDir));

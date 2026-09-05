@@ -123,12 +123,14 @@ function main(): void {
       );
       process.exit(1);
       break;
-    case "verified":
+    case "verified": {
+      const report = outcome.directory.publishedReport();
       process.stdout.write(
-        `${JSON.stringify({ pass: outcome.pass, findings_count: outcome.findingsCount, skipped_count: outcome.skippedCount, method: outcome.method })}\n`,
+        `${JSON.stringify({ pass: report.passes(), findings_count: report.findingsCount(), skipped_count: report.skippedCount(), method: report.method() })}\n`,
       );
       process.exit(0);
       break;
+    }
   }
 }
 

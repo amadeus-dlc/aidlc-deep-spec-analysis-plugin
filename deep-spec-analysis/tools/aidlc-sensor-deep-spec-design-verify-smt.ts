@@ -100,9 +100,6 @@ function ok(value) {
 function err(error) {
   return { ok: false, error };
 }
-function unreachable(x) {
-  throw new Error(`defect: unreachable variant ${JSON.stringify(x)}`);
-}
 
 // src/kernel/infrastructure/parse-construction.ts
 function parseConstruction(construct) {
@@ -120,6 +117,9 @@ function parseConstruction(construct) {
   }
 }
 // src/kernel/infrastructure/result-composition.ts
+function matchResult(result, cases) {
+  return result.ok ? cases.ok(result.value) : cases.err(result.error);
+}
 function flatMapResult(result, next) {
   return result.ok ? next(result.value) : result;
 }
@@ -699,10 +699,12 @@ class ErrorMessage {
   }
 }
 // src/kernel/domain/error-messages.ts
+var MAX_MESSAGES = 65536;
+
 class ErrorMessages {
   #values;
   constructor(values) {
-    if (values.length > 65536)
+    if (values.length > MAX_MESSAGES)
       throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
@@ -710,6 +712,17 @@ class ErrorMessages {
     return parseConstruction(() => new ErrorMessages(values));
   }
   static of(values) {
+    return new ErrorMessages(values);
+  }
+  static collect(diagnostics) {
+    const values = [];
+    for (const diagnostic of diagnostics) {
+      if (values.length === MAX_MESSAGES) {
+        values[values.length - 1] = ErrorMessage.of("validation diagnostic limit reached (65536 messages); additional diagnostics omitted");
+        break;
+      }
+      values.push(diagnostic.ok ? diagnostic.value : ErrorMessage.of("validation diagnostic could not be represented within its text budget"));
+    }
     return new ErrorMessages(values);
   }
   add(value) {
@@ -1442,6 +1455,22 @@ class UnitName {
     return this.#value;
   }
 }
+// src/kernel/domain/validation-assessment.ts
+class ValidationAssessment {
+  #errors;
+  constructor(errors) {
+    this.#errors = errors;
+  }
+  static of(errors) {
+    return new ValidationAssessment(errors);
+  }
+  passes() {
+    return this.#errors.isEmpty();
+  }
+  errors() {
+    return this.#errors;
+  }
+}
 // src/kernel/domain/verification-method.ts
 var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
 
@@ -2071,6 +2100,360 @@ class IntermediateRepresentationTemporalDeclaration {
       visitor(this.#to, false);
   }
 }
+// src/requirements/domain/source-anchor.ts
+class SourceAnchor {
+  #declared;
+  #actual;
+  constructor(declared, actual) {
+    this.#declared = declared;
+    this.#actual = actual;
+  }
+  static of(declared, actual) {
+    return new SourceAnchor(declared, actual);
+  }
+  errors() {
+    if (this.#declared === null) {
+      return [
+        `IR has no sourceDigest \u2014 requirements drift would be undetectable; add "sourceDigest": "${this.#actual.asString()}" (sha256 of requirements.md) to the IR`
+      ];
+    }
+    if (!this.#declared.matches(this.#actual)) {
+      return [
+        `sourceDigest ${this.#declared.asString()} does not match requirements.md (sha256 ${this.#actual.asString()}) \u2014 the requirements changed since formalization; re-formalize against the current text and restamp the digest`
+      ];
+    }
+    return [];
+  }
+}
+
+// src/requirements/domain/requirements-source-validation.ts
+class RequirementsSourceValidation {
+  #view;
+  #references;
+  #declaredDigest;
+  constructor(view, references, declaredDigest) {
+    this.#view = view;
+    this.#references = references;
+    this.#declaredDigest = declaredDigest;
+  }
+  static of(view, references, declaredDigest) {
+    return new RequirementsSourceValidation(view, references, declaredDigest);
+  }
+  assess(source) {
+    return ValidationAssessment.of(ErrorMessages.collect(this.#diagnostics(source)));
+  }
+  *#diagnostics(source) {
+    for (const message of this.#view.wellFormednessErrors())
+      yield ErrorMessage.parse(message);
+    if (source === null) {
+      yield ErrorMessage.parse("requirements.md not found under this intent record \u2014 frRefs cannot be reverse-verified");
+    } else {
+      for (const message of this.#references.missingErrors(source.knownIds()))
+        yield ErrorMessage.parse(message);
+      for (const message of SourceAnchor.of(this.#declaredDigest, source.digest()).errors())
+        yield ErrorMessage.parse(message);
+    }
+  }
+}
+
+// src/requirements/domain/verification-findings.ts
+function sortVerificationFindings(findings) {
+  return [...findings].sort((a, b) => a.compareTo(b));
+}
+
+class VerificationFindings {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new VerificationFindings(values);
+  }
+  add(value) {
+    return new VerificationFindings([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  sortedCanonically() {
+    return new VerificationFindings(sortVerificationFindings(this.#values));
+  }
+  count() {
+    return this.#values.length;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/requirements/domain/verification-skipped.ts
+class VerificationSkipped {
+  #target;
+  #reason;
+  #detail;
+  constructor(props) {
+    this.#target = props.target;
+    this.#reason = props.reason;
+    this.#detail = props.detail;
+  }
+  static of(props) {
+    return new VerificationSkipped(props);
+  }
+  target() {
+    return this.#target;
+  }
+  reason() {
+    return this.#reason.asString();
+  }
+  detail() {
+    return this.#detail;
+  }
+  isFor(target) {
+    return this.#target.equals(target);
+  }
+  compareTo(other) {
+    const c = this.#target.compareTo(other.#target);
+    if (c !== 0)
+      return c;
+    return this.#reason.compareTo(other.#reason);
+  }
+}
+
+// src/requirements/domain/verification-skips.ts
+function sortVerificationSkipped(skipped) {
+  return [...skipped].sort((a, b) => a.compareTo(b));
+}
+
+class VerificationSkips {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new VerificationSkips(values);
+  }
+  add(value) {
+    return new VerificationSkips([...this.#values, value]);
+  }
+  concat(other) {
+    return new VerificationSkips([...this.#values, ...other.#values]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  sortedCanonically() {
+    return new VerificationSkips(sortVerificationSkipped(this.#values));
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/requirements/domain/verification-report.ts
+var SUPPORTED_IR_MAJOR = 1;
+
+class VerificationReport {
+  #id;
+  #irVersion;
+  #irHash;
+  #method;
+  #findings;
+  #skipped;
+  #crossChecked;
+  #unavailableReason;
+  constructor(seed) {
+    this.#id = seed.id;
+    this.#irVersion = seed.irVersion;
+    this.#irHash = seed.irHash;
+    this.#method = seed.method;
+    this.#findings = seed.findings;
+    this.#skipped = seed.skipped;
+    this.#crossChecked = seed.crossChecked;
+    this.#unavailableReason = seed.unavailableReason;
+  }
+  static irUnreadable(id, method, cause) {
+    return VerificationReport.compose({
+      id,
+      irVersion: IntermediateRepresentationVersion.of("0.0.0"),
+      irHash: ContentHash.ofText(""),
+      method,
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([]),
+      unavailableReason: `IR unreadable: ${cause} \u2014 see the deep-spec-ir-valid sensor for details`
+    });
+  }
+  static versionMismatch(id, model, method) {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method,
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({
+        target: t,
+        reason: SkipReason.of("ir-version-mismatch"),
+        detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`
+      })))
+    });
+  }
+  static solverUnavailable(id, model, planSkipped, reason) {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: "exhaustive",
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([
+        ...planSkipped.toArray(),
+        ...[...model.allTargets()].filter((t) => !planSkipped.toArray().some((s) => s.isFor(t))).map((t) => VerificationSkipped.of({
+          target: t,
+          reason: SkipReason.of("unavailable"),
+          detail: "z3 could not be executed"
+        }))
+      ]),
+      unavailableReason: reason
+    });
+  }
+  static quintUnavailable(id, model) {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: "simulation",
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "quint CLI missing" }))),
+      unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)"
+    });
+  }
+  static machineUncompilable(id, model, method, machineError) {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method,
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([
+        ...model.obligations().toArray().map((ob) => VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: machineError
+        })),
+        ...model.scenarios().toArray().map((sc) => VerificationSkipped.of({
+          target: sc.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: machineError
+        }))
+      ])
+    });
+  }
+  static compose(input) {
+    return VerificationReport.of({
+      id: input.id,
+      irVersion: input.irVersion,
+      irHash: input.irHash,
+      method: VerificationMethod.of(input.method),
+      findings: input.findings.sortedCanonically(),
+      skipped: input.skipped.sortedCanonically(),
+      crossChecked: input.crossChecked ?? null,
+      unavailableReason: input.unavailableReason ?? null
+    });
+  }
+  static of(seed) {
+    return new VerificationReport(seed);
+  }
+  degraded(reason) {
+    return new VerificationReport({
+      id: this.#id,
+      irVersion: this.#irVersion,
+      irHash: this.#irHash,
+      method: this.#method,
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([]),
+      crossChecked: null,
+      unavailableReason: reason
+    });
+  }
+  id() {
+    return this.#id;
+  }
+  irVersion() {
+    return this.#irVersion;
+  }
+  irHash() {
+    return this.#irHash;
+  }
+  method() {
+    return this.#method.asString();
+  }
+  findings() {
+    return this.#findings;
+  }
+  skipped() {
+    return this.#skipped;
+  }
+  crossChecked() {
+    return this.#crossChecked;
+  }
+  unavailableReason() {
+    return this.#unavailableReason;
+  }
+  isUnavailable() {
+    return this.#unavailableReason !== null;
+  }
+  passes() {
+    return this.#findings.isEmpty();
+  }
+  findingsCount() {
+    return this.#findings.count();
+  }
+  skippedCount() {
+    return this.#skipped.count();
+  }
+  toDocument() {
+    const ordered = {
+      backend: this.#id.backendName().asString(),
+      irVersion: this.#irVersion.asString(),
+      irHash: this.#irHash.asString(),
+      method: this.method()
+    };
+    const reason = this.#unavailableReason;
+    if (reason !== null)
+      ordered.unavailable = { reason };
+    ordered.findings = this.#findings.toArray().map((f) => {
+      const out = {
+        kind: f.kind(),
+        frRefs: f.functionalRequirementReferences().toStrings(),
+        targets: f.targets().toStrings(),
+        witness: f.witness().toDocument(),
+        detail: f.detail()
+      };
+      return out;
+    });
+    ordered.skipped = this.#skipped.toArray().map((sk) => {
+      const out = { target: sk.target().asString(), reason: sk.reason() };
+      const detail = sk.detail();
+      if (detail !== undefined)
+        out.detail = detail;
+      return out;
+    });
+    const crossChecked = this.#crossChecked;
+    if (crossChecked !== null) {
+      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
+    }
+    return ordered;
+  }
+  conformedTo(schema) {
+    const reason = schema.degradationReasonFor(this.toDocument());
+    return reason === null ? this : this.degraded(reason);
+  }
+}
+
 // src/requirements/domain/intermediate-representation-validation-materials.ts
 class IntermediateRepresentationValidationMaterials {
   #id;
@@ -2094,26 +2477,21 @@ class IntermediateRepresentationValidationMaterials {
   static of(seed) {
     return new IntermediateRepresentationValidationMaterials(seed);
   }
+  validate(cases) {
+    const errors = ErrorMessages.collect(this.#initialDiagnostics());
+    if (!errors.isEmpty())
+      return cases.complete(ValidationAssessment.of(errors));
+    return cases.sourceRequired(this.#sourceId, RequirementsSourceValidation.of(this.#view, FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray()), this.#declaredDigest));
+  }
+  *#initialDiagnostics() {
+    if (!this.#irVersion.supportsMajor(SUPPORTED_IR_MAJOR)) {
+      yield ErrorMessage.parse(`irVersion ${this.#irVersion.asString()}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`);
+    }
+    for (const error of this.#schemaErrors)
+      yield ok(error);
+  }
   id() {
     return this.#id;
-  }
-  irVersion() {
-    return this.#irVersion;
-  }
-  schemaErrors() {
-    return this.#schemaErrors;
-  }
-  view() {
-    return this.#view;
-  }
-  functionalRequirementReferenceIndex() {
-    return FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray());
-  }
-  declaredDigest() {
-    return this.#declaredDigest;
-  }
-  sourceId() {
-    return this.#sourceId;
   }
   sourceDocument() {
     return new Uint8Array(this.#sourceDocument);
@@ -2304,6 +2682,46 @@ class Obligations {
   }
   toArray() {
     return this.#values;
+  }
+}
+// src/requirements/domain/quint-check-result.ts
+class QuintCheckResult {
+  #result;
+  constructor(result) {
+    this.#result = { ...result };
+  }
+  static of(result) {
+    return new QuintCheckResult(result);
+  }
+  reportFor(model, id) {
+    const result = this.#result;
+    switch (result.kind) {
+      case "cli-unavailable":
+        return VerificationReport.quintUnavailable(id, model);
+      case "machine-uncompilable":
+        return VerificationReport.machineUncompilable(id, model, result.method.asString(), result.error.asString());
+      case "checked": {
+        const interpreted = result.plan.interpret(model, result.compileSkips, result.method.asString(), result.runs);
+        return VerificationReport.compose({
+          id,
+          irVersion: model.irVersion(),
+          irHash: model.irHash(),
+          method: result.method.asString(),
+          findings: interpreted.findings,
+          skipped: interpreted.skipped
+        });
+      }
+    }
+  }
+  match(cases) {
+    switch (this.#result.kind) {
+      case "cli-unavailable":
+        return cases.unavailable();
+      case "machine-uncompilable":
+        return cases.uncompilable();
+      case "checked":
+        return cases.checked();
+    }
   }
 }
 // src/requirements/domain/trace-value.ts
@@ -2497,105 +2915,6 @@ class VerificationFinding {
     if (ta !== tb)
       return ta < tb ? -1 : 1;
     return this.#detail < other.#detail ? -1 : this.#detail > other.#detail ? 1 : 0;
-  }
-}
-
-// src/requirements/domain/verification-findings.ts
-function sortVerificationFindings(findings) {
-  return [...findings].sort((a, b) => a.compareTo(b));
-}
-
-class VerificationFindings {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new VerificationFindings(values);
-  }
-  add(value) {
-    return new VerificationFindings([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  sortedCanonically() {
-    return new VerificationFindings(sortVerificationFindings(this.#values));
-  }
-  count() {
-    return this.#values.length;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-
-// src/requirements/domain/verification-skipped.ts
-class VerificationSkipped {
-  #target;
-  #reason;
-  #detail;
-  constructor(props) {
-    this.#target = props.target;
-    this.#reason = props.reason;
-    this.#detail = props.detail;
-  }
-  static of(props) {
-    return new VerificationSkipped(props);
-  }
-  target() {
-    return this.#target;
-  }
-  reason() {
-    return this.#reason.asString();
-  }
-  detail() {
-    return this.#detail;
-  }
-  isFor(target) {
-    return this.#target.equals(target);
-  }
-  compareTo(other) {
-    const c = this.#target.compareTo(other.#target);
-    if (c !== 0)
-      return c;
-    return this.#reason.compareTo(other.#reason);
-  }
-}
-
-// src/requirements/domain/verification-skips.ts
-function sortVerificationSkipped(skipped) {
-  return [...skipped].sort((a, b) => a.compareTo(b));
-}
-
-class VerificationSkips {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new VerificationSkips(values);
-  }
-  add(value) {
-    return new VerificationSkips([...this.#values, value]);
-  }
-  concat(other) {
-    return new VerificationSkips([...this.#values, ...other.#values]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  sortedCanonically() {
-    return new VerificationSkips(sortVerificationSkipped(this.#values));
-  }
-  count() {
-    return this.#values.length;
-  }
-  toArray() {
-    return this.#values;
   }
 }
 
@@ -3062,6 +3381,9 @@ class RequirementsModel {
   static of(seed) {
     return new RequirementsModel(seed);
   }
+  prepareVerification(id, method) {
+    return this.#irVersion.supportsMajor(SUPPORTED_IR_MAJOR) ? ok(this) : err(VerificationReport.versionMismatch(id, this, method.asString()));
+  }
   id() {
     return this.#id;
   }
@@ -3158,6 +3480,35 @@ class RequirementsSourceIdentifier {
   }
   recordRoot() {
     return this.#recordRoot;
+  }
+}
+// src/requirements/domain/satisfiability-modulo-theories-check.ts
+class SatisfiabilityModuloTheoriesCheck {
+  #plan;
+  #result;
+  constructor(input) {
+    this.#plan = input.plan;
+    this.#result = { ...input.result };
+  }
+  static of(input) {
+    return new SatisfiabilityModuloTheoriesCheck(input);
+  }
+  reportFor(model, id) {
+    if (this.#result.kind === "unavailable") {
+      return VerificationReport.solverUnavailable(id, model, this.#plan.planSkipped(), this.#result.reason.asString());
+    }
+    const interpreted = this.#plan.interpret(model, this.#result.verdicts);
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: "exhaustive",
+      findings: interpreted.findings,
+      skipped: interpreted.skipped
+    });
+  }
+  match(cases) {
+    return this.#result.kind === "unavailable" ? cases.unavailable() : cases.solved();
   }
 }
 // src/requirements/domain/satisfiability-modulo-theories-event-pair-probe.ts
@@ -3511,31 +3862,6 @@ class Scenarios {
     return this.#values;
   }
 }
-// src/requirements/domain/source-anchor.ts
-class SourceAnchor {
-  #declared;
-  #actual;
-  constructor(declared, actual) {
-    this.#declared = declared;
-    this.#actual = actual;
-  }
-  static of(declared, actual) {
-    return new SourceAnchor(declared, actual);
-  }
-  errors() {
-    if (this.#declared === null) {
-      return [
-        `IR has no sourceDigest \u2014 requirements drift would be undetectable; add "sourceDigest": "${this.#actual.asString()}" (sha256 of requirements.md) to the IR`
-      ];
-    }
-    if (!this.#declared.matches(this.#actual)) {
-      return [
-        `sourceDigest ${this.#declared.asString()} does not match requirements.md (sha256 ${this.#actual.asString()}) \u2014 the requirements changed since formalization; re-formalize against the current text and restamp the digest`
-      ];
-    }
-    return [];
-  }
-}
 // src/requirements/domain/trace-states.ts
 class TraceStates {
   #values;
@@ -3580,205 +3906,6 @@ class VerificationReportIdentifier {
   }
   fileName() {
     return `${this.#backend.asString()}.json`;
-  }
-}
-
-// src/requirements/domain/verification-report.ts
-var SUPPORTED_IR_MAJOR = 1;
-
-class VerificationReport {
-  #id;
-  #irVersion;
-  #irHash;
-  #method;
-  #findings;
-  #skipped;
-  #crossChecked;
-  #unavailableReason;
-  constructor(seed) {
-    this.#id = seed.id;
-    this.#irVersion = seed.irVersion;
-    this.#irHash = seed.irHash;
-    this.#method = seed.method;
-    this.#findings = seed.findings;
-    this.#skipped = seed.skipped;
-    this.#crossChecked = seed.crossChecked;
-    this.#unavailableReason = seed.unavailableReason;
-  }
-  static irUnreadable(id, method, cause) {
-    return VerificationReport.compose({
-      id,
-      irVersion: IntermediateRepresentationVersion.of("0.0.0"),
-      irHash: ContentHash.ofText(""),
-      method,
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([]),
-      unavailableReason: `IR unreadable: ${cause} \u2014 see the deep-spec-ir-valid sensor for details`
-    });
-  }
-  static versionMismatch(id, model, irHash, method) {
-    return VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method,
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({
-        target: t,
-        reason: SkipReason.of("ir-version-mismatch"),
-        detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`
-      })))
-    });
-  }
-  static solverUnavailable(id, model, irHash, planSkipped, reason) {
-    return VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: "exhaustive",
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([
-        ...planSkipped.toArray(),
-        ...[...model.allTargets()].filter((t) => !planSkipped.toArray().some((s) => s.isFor(t))).map((t) => VerificationSkipped.of({
-          target: t,
-          reason: SkipReason.of("unavailable"),
-          detail: "z3 could not be executed"
-        }))
-      ]),
-      unavailableReason: reason
-    });
-  }
-  static quintUnavailable(id, model, irHash) {
-    return VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: "simulation",
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "quint CLI missing" }))),
-      unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)"
-    });
-  }
-  static machineUncompilable(id, model, irHash, method, machineError) {
-    return VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method,
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([
-        ...model.obligations().toArray().map((ob) => VerificationSkipped.of({
-          target: ob.id().asTargetId(),
-          reason: SkipReason.of("compile-error"),
-          detail: machineError
-        })),
-        ...model.scenarios().toArray().map((sc) => VerificationSkipped.of({
-          target: sc.id().asTargetId(),
-          reason: SkipReason.of("compile-error"),
-          detail: machineError
-        }))
-      ])
-    });
-  }
-  static compose(input) {
-    return VerificationReport.of({
-      id: input.id,
-      irVersion: input.irVersion,
-      irHash: input.irHash,
-      method: VerificationMethod.of(input.method),
-      findings: input.findings.sortedCanonically(),
-      skipped: input.skipped.sortedCanonically(),
-      crossChecked: input.crossChecked ?? null,
-      unavailableReason: input.unavailableReason ?? null
-    });
-  }
-  static of(seed) {
-    return new VerificationReport(seed);
-  }
-  degraded(reason) {
-    return new VerificationReport({
-      id: this.#id,
-      irVersion: this.#irVersion,
-      irHash: this.#irHash,
-      method: this.#method,
-      findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([]),
-      crossChecked: null,
-      unavailableReason: reason
-    });
-  }
-  id() {
-    return this.#id;
-  }
-  irVersion() {
-    return this.#irVersion;
-  }
-  irHash() {
-    return this.#irHash;
-  }
-  method() {
-    return this.#method.asString();
-  }
-  findings() {
-    return this.#findings;
-  }
-  skipped() {
-    return this.#skipped;
-  }
-  crossChecked() {
-    return this.#crossChecked;
-  }
-  unavailableReason() {
-    return this.#unavailableReason;
-  }
-  isUnavailable() {
-    return this.#unavailableReason !== null;
-  }
-  passes() {
-    return this.#findings.isEmpty();
-  }
-  findingsCount() {
-    return this.#findings.count();
-  }
-  skippedCount() {
-    return this.#skipped.count();
-  }
-  toDocument() {
-    const ordered = {
-      backend: this.#id.backendName().asString(),
-      irVersion: this.#irVersion.asString(),
-      irHash: this.#irHash.asString(),
-      method: this.method()
-    };
-    const reason = this.#unavailableReason;
-    if (reason !== null)
-      ordered.unavailable = { reason };
-    ordered.findings = this.#findings.toArray().map((f) => {
-      const out = {
-        kind: f.kind(),
-        frRefs: f.functionalRequirementReferences().toStrings(),
-        targets: f.targets().toStrings(),
-        witness: f.witness().toDocument(),
-        detail: f.detail()
-      };
-      return out;
-    });
-    ordered.skipped = this.#skipped.toArray().map((sk) => {
-      const out = { target: sk.target().asString(), reason: sk.reason() };
-      const detail = sk.detail();
-      if (detail !== undefined)
-        out.detail = detail;
-      return out;
-    });
-    const crossChecked = this.#crossChecked;
-    if (crossChecked !== null) {
-      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
-    }
-    return ordered;
-  }
-  conformedTo(schema) {
-    const reason = schema.degradationReasonFor(this.toDocument());
-    return reason === null ? this : this.degraded(reason);
   }
 }
 
@@ -3873,6 +4000,9 @@ class VerificationDirectory {
     return new VerificationDirectory(directory, reports, null, crossCheck);
   }
   finalizing(candidate) {
+    if (!candidate.id().directory().equals(this.#directory)) {
+      throw new IllegalArgumentException({ kind: "verification-report-directory-mismatch" });
+    }
     const fileName = candidate.id().fileName();
     const merged = [];
     let replaced = false;
@@ -3922,6 +4052,12 @@ class VerificationDirectory {
     return this.#reports;
   }
   candidate() {
+    return this.#candidate;
+  }
+  publishedReport() {
+    if (this.#candidate === null) {
+      throw new IllegalArgumentException({ kind: "verification-directory-not-finalized" });
+    }
     return this.#candidate;
   }
   crossCheck() {
@@ -4245,6 +4381,9 @@ class CheckedUnits {
   }
   sortedUniqueCanonically() {
     return CheckedUnits.of(Array.from(TargetIdentifiers.of(Array.from(this.toStrings(), (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically().toStrings(), (raw) => UnitName.of(raw)));
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
   toArray() {
     return this.#values;
@@ -5076,6 +5215,586 @@ class DesignInputAnchors {
     return this.#values;
   }
 }
+// src/design/domain/design-skipped.ts
+class DesignSkipped {
+  #target;
+  #reason;
+  #unit;
+  #detail;
+  constructor(props) {
+    this.#target = props.target;
+    this.#reason = props.reason;
+    this.#unit = props.unit;
+    this.#detail = props.detail;
+  }
+  static of(props) {
+    return new DesignSkipped(props);
+  }
+  target() {
+    return this.#target;
+  }
+  reason() {
+    return this.#reason.asString();
+  }
+  unit() {
+    return this.#unit.asString();
+  }
+  detail() {
+    return this.#detail;
+  }
+  isFor(target) {
+    return this.#target.equals(target);
+  }
+  compareTo(other) {
+    if (!this.#unit.equals(other.#unit))
+      return this.#unit.asString() < other.#unit.asString() ? -1 : 1;
+    const c = this.#target.compareTo(other.#target);
+    if (c !== 0)
+      return c;
+    return this.#reason.compareTo(other.#reason);
+  }
+}
+
+// src/design/domain/design-skips.ts
+function sortDesignSkipped(skipped) {
+  return [...skipped].sort((a, b) => a.compareTo(b));
+}
+
+class DesignSkips {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new DesignSkips(values);
+  }
+  add(value) {
+    return new DesignSkips([...this.#values, value]);
+  }
+  concat(other) {
+    return new DesignSkips([...this.#values, ...other.#values]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  sortedCanonically() {
+    return new DesignSkips(sortDesignSkipped(this.#values));
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/design/domain/design-machines.ts
+class DesignMachines {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new DesignMachines(values);
+  }
+  add(value) {
+    return new DesignMachines([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  transitionIds() {
+    return this.#values.flatMap((m) => [...m.transitions().ids()]);
+  }
+  sortedById() {
+    return new DesignMachines([...this.#values].sort((a, b) => a.id().asString() < b.id().asString() ? -1 : 1));
+  }
+  sortedCanonically() {
+    return new DesignMachines([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
+  }
+  static attrPathOf(sm) {
+    return `${sm.entity().asString()}.${sm.attribute().asString()}`;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/design/domain/machine-reachability.ts
+class MachineReachability {
+  #unit;
+  #machine;
+  #probes;
+  #bounded;
+  #observations;
+  constructor(input) {
+    if (input.probes.length > 65536 || input.observations.size > 65536) {
+      throw new IllegalArgumentException({ kind: "too-many-reachability-probes" });
+    }
+    const probes = [...input.probes];
+    const observations = new Map(input.observations);
+    const included = new Set(probes);
+    for (const probe of observations.keys()) {
+      if (!included.has(probe))
+        throw new IllegalArgumentException({ kind: "reachability-observation-outside-plan" });
+    }
+    this.#unit = input.unit;
+    this.#machine = input.machine;
+    this.#probes = probes;
+    this.#bounded = input.bounded;
+    this.#observations = observations;
+  }
+  static of(input) {
+    return new MachineReachability(input);
+  }
+  static parse(input) {
+    return parseConstruction(() => new MachineReachability(input));
+  }
+  probeCount() {
+    return this.#probes.length;
+  }
+  *[Symbol.iterator]() {
+    if (this.#bounded)
+      yield* this.#probes;
+  }
+  withVerdict(probe, verdict) {
+    if (!this.#probes.includes(probe))
+      throw new Error("defect: reachability observation belongs to another machine plan");
+    return new MachineReachability({
+      unit: this.#unit,
+      machine: this.#machine,
+      probes: this.#probes,
+      bounded: this.#bounded,
+      observations: new Map(this.#observations).set(probe, verdict)
+    });
+  }
+  recordedIn(report, capReached, cap) {
+    if (this.#probes.length === 0)
+      return report;
+    let findings = DesignFindings.of([]);
+    let skips = DesignSkips.of([]);
+    const machine = this.#machine.id().asString();
+    const unit = UnitName.of(this.#unit.name());
+    if (!this.#bounded) {
+      skips = skips.add(DesignSkipped.of({
+        target: this.#machine.id().asTargetId(),
+        reason: SkipReason.capability(),
+        unit,
+        detail: `unreachable-state detection for ${machine} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${this.#probes.map((probe) => probe.state()).join(", ")})`
+      }));
+    } else {
+      const leftover = [];
+      for (const probe of this.#probes) {
+        const observation = this.#observations.get(probe);
+        if (observation === undefined) {
+          leftover.push(probe);
+          continue;
+        }
+        observation.match({
+          reached: () => {},
+          unverified: () => {
+            leftover.push(probe);
+          },
+          notReachedWithinBound: () => {
+            findings = findings.add(probe.unreachableFinding());
+          }
+        });
+      }
+      if (leftover.length > 0)
+        skips = skips.add(DesignSkipped.of({
+          target: this.#machine.id().asTargetId(),
+          reason: capReached ? SkipReason.timeout() : SkipReason.unavailable(),
+          unit,
+          detail: `unreachable-state detection skipped for state(s) ${leftover.map((probe) => probe.state()).join(", ")} of ${machine} (per-run cap ${cap} / budget reached, or the probe run failed)`
+        }));
+    }
+    return report.withEvidence(findings, skips);
+  }
+}
+
+// src/design/domain/design-witness.ts
+class DesignWitness {
+  #document;
+  constructor(document) {
+    this.#document = boundedValueSnapshot(document, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
+  }
+  static core(labels) {
+    return new DesignWitness({ core: labels });
+  }
+  static model(values) {
+    return new DesignWitness({ model: values });
+  }
+  static verdicts(byBackend) {
+    return new DesignWitness({ verdicts: byBackend });
+  }
+  static trace(states) {
+    return new DesignWitness({ trace: states });
+  }
+  static refs(entries) {
+    return new DesignWitness({ refs: entries });
+  }
+  static parse(value) {
+    return parseConstruction(() => new DesignWitness(value));
+  }
+  static of(raw) {
+    return new DesignWitness(raw);
+  }
+  remapCore(rewrite) {
+    const document = this.#document;
+    if (document !== null && typeof document === "object" && !Array.isArray(document) && "core" in document) {
+      const core = document.core ?? null;
+      const remapped = Array.isArray(core) ? core.map((label) => typeof label === "string" ? rewrite(label) : label) : core;
+      return new DesignWitness({ core: remapped });
+    }
+    return this;
+  }
+  reachesState(attrPath, state) {
+    const document = this.#document;
+    if (document === null || typeof document !== "object" || !("trace" in document))
+      return false;
+    const trace = document.trace;
+    if (!Array.isArray(trace))
+      return false;
+    const last = trace[trace.length - 1];
+    return last !== null && typeof last === "object" && !Array.isArray(last) && last[attrPath] === state;
+  }
+  toDocument() {
+    return structuredClone(this.#document);
+  }
+}
+
+// src/design/domain/reachability-probe.ts
+class ReachabilityProbe {
+  #unit;
+  #lowered;
+  #machine;
+  #path;
+  #state;
+  constructor(unit, lowered, machine, path, state) {
+    this.#unit = unit;
+    this.#lowered = lowered;
+    this.#machine = machine;
+    this.#path = path;
+    this.#state = state;
+  }
+  static of(unit, lowered, machine, path, state) {
+    return new ReachabilityProbe(unit, lowered, machine, path, state);
+  }
+  unit() {
+    return this.#unit;
+  }
+  lowered() {
+    return this.#lowered;
+  }
+  attributePath() {
+    return this.#path.asString();
+  }
+  state() {
+    return this.#state.asString();
+  }
+  unreachableFinding() {
+    return DesignFinding.of({
+      kind: FindingKind.unreachable(),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      targets: TargetIdentifiers.of([this.#machine.id().asTargetId()]),
+      witness: DesignWitness.model({ [this.#path.asString()]: this.#state.asString() }),
+      unit: UnitName.of(this.#unit.name()),
+      detail: `State "${this.#state.asString()}" of ${this.#machine.id().asString()} (${this.#path.asString()}) is not reached by any execution within 8 steps from any legal state \u2014 it may be dead.`
+    });
+  }
+}
+
+// src/design/domain/reachability-plan.ts
+class ReachabilityPlan {
+  #machines;
+  constructor(machines) {
+    if (machines.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-reachability-machines", raw: machines.length });
+    const owned = [...machines];
+    let probes = 0;
+    for (const machine of owned) {
+      probes += machine.probeCount();
+      if (probes > 65536)
+        throw new IllegalArgumentException({ kind: "too-many-reachability-probes", raw: probes });
+    }
+    this.#machines = owned;
+  }
+  static of(machines) {
+    return new ReachabilityPlan(machines);
+  }
+  static parse(machines) {
+    return parseConstruction(() => new ReachabilityPlan(machines));
+  }
+  static forUnit(unit, lowered, method) {
+    const machines = [];
+    for (const machine of unit.machines().sortedById()) {
+      const path = lowered.index().attrPathOfMachine(machine.id().asString()) ?? DesignMachines.attrPathOf(machine);
+      const probes = machine.nonInitialCandidates(unit.enumValuesOf(path)).map((state) => ReachabilityProbe.of(unit, lowered, machine, AttributePath.of(path), EnumerationMember.of(state)));
+      machines.push(MachineReachability.of({
+        unit,
+        machine,
+        probes,
+        bounded: method.asString() === "bounded",
+        observations: new Map
+      }));
+    }
+    return new ReachabilityPlan(machines);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#machines;
+  }
+}
+
+// src/design/domain/design-report.ts
+var SUPPORTED_DESIGN_IR_MAJOR = 1;
+
+class DesignReport {
+  #id;
+  #irVersion;
+  #irHash;
+  #method;
+  #findings;
+  #skipped;
+  #inputs;
+  #checked;
+  #crossChecked;
+  #unavailableReason;
+  constructor(seed) {
+    this.#id = seed.id;
+    this.#irVersion = seed.irVersion;
+    this.#irHash = seed.irHash;
+    this.#method = seed.method;
+    this.#findings = seed.findings;
+    this.#skipped = seed.skipped;
+    this.#inputs = seed.inputs;
+    this.#checked = seed.checked;
+    this.#crossChecked = seed.crossChecked;
+    this.#unavailableReason = seed.unavailableReason;
+  }
+  static started(id, model, method) {
+    return DesignReport.of({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method,
+      findings: DesignFindings.of([]),
+      skipped: DesignSkips.of([]),
+      checked: CheckedUnits.of([]),
+      inputs: null,
+      crossChecked: null,
+      unavailableReason: null
+    });
+  }
+  #revised(changes) {
+    return new DesignReport({
+      id: this.#id,
+      irVersion: this.#irVersion,
+      irHash: this.#irHash,
+      method: this.#method,
+      findings: this.#findings,
+      skipped: this.#skipped,
+      checked: this.#checked,
+      inputs: this.#inputs,
+      crossChecked: this.#crossChecked,
+      unavailableReason: this.#unavailableReason,
+      ...changes
+    });
+  }
+  withEvidence(findings, skipped) {
+    return this.#revised({
+      findings: DesignFindings.of([...this.#findings, ...findings]).sortedCanonically(),
+      skipped: this.#skipped.concat(skipped).sortedCanonically()
+    });
+  }
+  withInputs(inputs) {
+    return this.#revised({ inputs: inputs.sortedByArtifact() });
+  }
+  unitTimedOut(unit) {
+    const backend = this.#id.backendName().asString() === "smt" ? "solver" : "backend";
+    return this.unitUnverified(unit, SkipReason.timeout(), `the per-run ${backend} budget was exhausted before this unit`);
+  }
+  unitUnverified(unit, reason, detail) {
+    return this.withEvidence(DesignFindings.of([]), DesignSkips.of([...unit.allTargets()].map((target) => DesignSkipped.of({ target, reason, detail, unit: UnitName.of(unit.name()) }))));
+  }
+  unitVerified(unit, findings, skipped, method) {
+    const checked = this.#checked ?? CheckedUnits.of([]);
+    const firstQuintUnit = this.#id.backendName().asString() === "quint" && checked.isEmpty();
+    return this.withEvidence(findings, skipped).#revised({
+      method: firstQuintUnit ? VerificationMethod.of(method) : this.#method,
+      checked: checked.add(UnitName.of(`unit:${unit.name()}`)).sortedUniqueCanonically()
+    });
+  }
+  backendFailed(model, reason) {
+    const detail = this.#id.backendName().asString() === "smt" ? "z3 could not be executed" : "quint CLI missing";
+    return DesignReport.backendUnavailable(this.#id, model, this.#irHash, this.#method.asString(), reason, detail);
+  }
+  planReachability(unit, lowered) {
+    return ReachabilityPlan.forUnit(unit, lowered, this.#method);
+  }
+  refinementUnavailable(path, kind) {
+    return this.#revised({ unavailableReason: `refinement input could not be acquired: ${path} (${kind})` });
+  }
+  static irUnreadable(id, method, cause) {
+    return DesignReport.compose({
+      id,
+      irVersion: IntermediateRepresentationVersion.of("0.0.0"),
+      irHash: ContentHash.ofText(""),
+      method: method.asString(),
+      findings: DesignFindings.of([]),
+      skipped: DesignSkips.of([]),
+      unavailableReason: `design IR unreadable: ${cause} \u2014 see the deep-spec-design-ir-valid sensor for details`
+    });
+  }
+  static versionMismatch(id, model, irHash, method) {
+    return DesignReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash,
+      method,
+      findings: DesignFindings.of([]),
+      skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.of({
+        target: t,
+        reason: SkipReason.irVersionMismatch(),
+        unit: UnitName.of(u.name()),
+        detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`
+      }))))
+    });
+  }
+  static backendUnavailable(id, model, irHash, method, reason, skipDetail) {
+    return DesignReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash,
+      method,
+      findings: DesignFindings.of([]),
+      skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.of({
+        target: t,
+        reason: SkipReason.unavailable(),
+        unit: UnitName.of(u.name()),
+        detail: skipDetail
+      })))),
+      unavailableReason: reason
+    });
+  }
+  static compose(input) {
+    return DesignReport.of({
+      id: input.id,
+      irVersion: input.irVersion,
+      irHash: input.irHash,
+      method: VerificationMethod.of(input.method),
+      findings: input.findings.sortedCanonically(),
+      skipped: input.skipped.sortedCanonically(),
+      inputs: input.inputs === undefined ? null : input.inputs.sortedByArtifact(),
+      checked: input.checked === undefined ? null : input.checked.sortedUniqueCanonically(),
+      crossChecked: input.crossChecked ?? null,
+      unavailableReason: input.unavailableReason ?? null
+    });
+  }
+  static of(seed) {
+    return new DesignReport(seed);
+  }
+  degraded(reason) {
+    return new DesignReport({
+      id: this.#id,
+      irVersion: this.#irVersion,
+      irHash: this.#irHash,
+      method: this.#method,
+      findings: DesignFindings.of([]),
+      skipped: DesignSkips.of([]),
+      inputs: null,
+      checked: null,
+      crossChecked: null,
+      unavailableReason: reason
+    });
+  }
+  id() {
+    return this.#id;
+  }
+  irVersion() {
+    return this.#irVersion;
+  }
+  irHash() {
+    return this.#irHash;
+  }
+  method() {
+    return this.#method.asString();
+  }
+  findings() {
+    return this.#findings;
+  }
+  skipped() {
+    return this.#skipped;
+  }
+  inputs() {
+    return this.#inputs;
+  }
+  checked() {
+    return this.#checked;
+  }
+  crossChecked() {
+    return this.#crossChecked;
+  }
+  unavailableReason() {
+    return this.#unavailableReason;
+  }
+  isUnavailable() {
+    return this.#unavailableReason !== null;
+  }
+  passes() {
+    return this.#unavailableReason === null && this.#findings.isEmpty();
+  }
+  findingsCount() {
+    return this.#findings.count();
+  }
+  skippedCount() {
+    return this.#skipped.count();
+  }
+  toDocument() {
+    const ordered = {
+      backend: this.#id.backendName().asString(),
+      irVersion: this.#irVersion.asString(),
+      irHash: this.#irHash.asString(),
+      method: this.method()
+    };
+    const reason = this.#unavailableReason;
+    if (reason !== null)
+      ordered.unavailable = { reason };
+    const inputs = this.#inputs;
+    if (inputs !== null)
+      ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() }));
+    const checked = this.#checked;
+    if (checked !== null)
+      ordered.checked = checked.toStrings();
+    ordered.findings = this.#findings.toArray().map((f) => {
+      const out = {
+        kind: f.kind(),
+        frRefs: f.functionalRequirementReferences().toStrings(),
+        targets: f.targets().toStrings(),
+        witness: f.witness().toDocument(),
+        unit: f.unit(),
+        detail: f.detail()
+      };
+      return out;
+    });
+    ordered.skipped = this.#skipped.toArray().map((sk) => {
+      const out = { target: sk.target().asString(), reason: sk.reason(), unit: sk.unit() };
+      const detail = sk.detail();
+      if (detail !== undefined)
+        out.detail = detail;
+      return out;
+    });
+    const crossChecked = this.#crossChecked;
+    if (crossChecked !== null) {
+      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
+    }
+    return ordered;
+  }
+  conformedTo(schema) {
+    const reason = schema.degradationReasonFor(this.toDocument());
+    return reason === null ? this : this.degraded(reason);
+  }
+}
+
 // src/design/domain/design-intermediate-representation-validation-materials.ts
 class DesignIntermediateRepresentationValidationMaterials {
   #id;
@@ -5096,14 +5815,20 @@ class DesignIntermediateRepresentationValidationMaterials {
   id() {
     return this.#id;
   }
-  irVersion() {
-    return this.#irVersion;
+  assess() {
+    return ValidationAssessment.of(ErrorMessages.collect(this.#diagnostics()));
   }
-  schemaErrors() {
-    return this.#schemaErrors;
-  }
-  units() {
-    return this.#units;
+  *#diagnostics() {
+    const supported = this.#irVersion.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR);
+    if (!supported) {
+      yield ErrorMessage.parse(`irVersion ${this.#irVersion.asString()}: unsupported major version (this validator supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`);
+    }
+    for (const error of this.#schemaErrors)
+      yield ok(error);
+    if (supported && this.#schemaErrors.isEmpty()) {
+      for (const error of this.#units.wellFormednessErrors())
+        yield ErrorMessage.parse(error);
+    }
   }
   sourceDocument() {
     return new Uint8Array(this.#sourceDocument);
@@ -5306,37 +6031,6 @@ class DesignMachineIdentifier {
     return TargetIdentifier.of(this.#value);
   }
 }
-// src/design/domain/design-machines.ts
-class DesignMachines {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new DesignMachines(values);
-  }
-  add(value) {
-    return new DesignMachines([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  transitionIds() {
-    return this.#values.flatMap((m) => [...m.transitions().ids()]);
-  }
-  sortedById() {
-    return new DesignMachines([...this.#values].sort((a, b) => a.id().asString() < b.id().asString() ? -1 : 1));
-  }
-  sortedCanonically() {
-    return new DesignMachines([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
-  }
-  static attrPathOf(sm) {
-    return `${sm.entity().asString()}.${sm.attribute().asString()}`;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
 // src/design/domain/design-model.ts
 class DesignModel {
   #id;
@@ -5374,6 +6068,12 @@ class DesignModel {
   }
   units() {
     return this.#units;
+  }
+  *[Symbol.iterator]() {
+    yield* this.#units;
+  }
+  prepareVerification(id, method) {
+    return this.#irVersion.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR) ? ok(this) : err(DesignReport.versionMismatch(id, this, this.#irHash, method.asString()));
   }
 }
 // src/design/domain/design-model-identifier.ts
@@ -5691,265 +6391,6 @@ class DesignObligations {
     return this.#values;
   }
 }
-// src/design/domain/design-skipped.ts
-class DesignSkipped {
-  #target;
-  #reason;
-  #unit;
-  #detail;
-  constructor(props) {
-    this.#target = props.target;
-    this.#reason = props.reason;
-    this.#unit = props.unit;
-    this.#detail = props.detail;
-  }
-  static of(props) {
-    return new DesignSkipped(props);
-  }
-  target() {
-    return this.#target;
-  }
-  reason() {
-    return this.#reason.asString();
-  }
-  unit() {
-    return this.#unit.asString();
-  }
-  detail() {
-    return this.#detail;
-  }
-  isFor(target) {
-    return this.#target.equals(target);
-  }
-  compareTo(other) {
-    if (!this.#unit.equals(other.#unit))
-      return this.#unit.asString() < other.#unit.asString() ? -1 : 1;
-    const c = this.#target.compareTo(other.#target);
-    if (c !== 0)
-      return c;
-    return this.#reason.compareTo(other.#reason);
-  }
-}
-
-// src/design/domain/design-skips.ts
-function sortDesignSkipped(skipped) {
-  return [...skipped].sort((a, b) => a.compareTo(b));
-}
-
-class DesignSkips {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new DesignSkips(values);
-  }
-  add(value) {
-    return new DesignSkips([...this.#values, value]);
-  }
-  concat(other) {
-    return new DesignSkips([...this.#values, ...other.#values]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  sortedCanonically() {
-    return new DesignSkips(sortDesignSkipped(this.#values));
-  }
-  count() {
-    return this.#values.length;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-
-// src/design/domain/design-report.ts
-var SUPPORTED_DESIGN_IR_MAJOR = 1;
-
-class DesignReport {
-  #id;
-  #irVersion;
-  #irHash;
-  #method;
-  #findings;
-  #skipped;
-  #inputs;
-  #checked;
-  #crossChecked;
-  #unavailableReason;
-  constructor(seed) {
-    this.#id = seed.id;
-    this.#irVersion = seed.irVersion;
-    this.#irHash = seed.irHash;
-    this.#method = seed.method;
-    this.#findings = seed.findings;
-    this.#skipped = seed.skipped;
-    this.#inputs = seed.inputs;
-    this.#checked = seed.checked;
-    this.#crossChecked = seed.crossChecked;
-    this.#unavailableReason = seed.unavailableReason;
-  }
-  static irUnreadable(id, method, cause) {
-    return DesignReport.compose({
-      id,
-      irVersion: IntermediateRepresentationVersion.of("0.0.0"),
-      irHash: ContentHash.ofText(""),
-      method,
-      findings: DesignFindings.of([]),
-      skipped: DesignSkips.of([]),
-      unavailableReason: `design IR unreadable: ${cause} \u2014 see the deep-spec-design-ir-valid sensor for details`
-    });
-  }
-  static versionMismatch(id, model, irHash, method) {
-    return DesignReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method,
-      findings: DesignFindings.of([]),
-      skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.of({
-        target: t,
-        reason: SkipReason.irVersionMismatch(),
-        unit: UnitName.of(u.name()),
-        detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`
-      }))))
-    });
-  }
-  static backendUnavailable(id, model, irHash, method, reason, skipDetail) {
-    return DesignReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method,
-      findings: DesignFindings.of([]),
-      skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.of({
-        target: t,
-        reason: SkipReason.unavailable(),
-        unit: UnitName.of(u.name()),
-        detail: skipDetail
-      })))),
-      unavailableReason: reason
-    });
-  }
-  static compose(input) {
-    return DesignReport.of({
-      id: input.id,
-      irVersion: input.irVersion,
-      irHash: input.irHash,
-      method: VerificationMethod.of(input.method),
-      findings: input.findings.sortedCanonically(),
-      skipped: input.skipped.sortedCanonically(),
-      inputs: input.inputs === undefined ? null : input.inputs.sortedByArtifact(),
-      checked: input.checked === undefined ? null : input.checked.sortedUniqueCanonically(),
-      crossChecked: input.crossChecked ?? null,
-      unavailableReason: input.unavailableReason ?? null
-    });
-  }
-  static of(seed) {
-    return new DesignReport(seed);
-  }
-  degraded(reason) {
-    return new DesignReport({
-      id: this.#id,
-      irVersion: this.#irVersion,
-      irHash: this.#irHash,
-      method: this.#method,
-      findings: DesignFindings.of([]),
-      skipped: DesignSkips.of([]),
-      inputs: null,
-      checked: null,
-      crossChecked: null,
-      unavailableReason: reason
-    });
-  }
-  id() {
-    return this.#id;
-  }
-  irVersion() {
-    return this.#irVersion;
-  }
-  irHash() {
-    return this.#irHash;
-  }
-  method() {
-    return this.#method.asString();
-  }
-  findings() {
-    return this.#findings;
-  }
-  skipped() {
-    return this.#skipped;
-  }
-  inputs() {
-    return this.#inputs;
-  }
-  checked() {
-    return this.#checked;
-  }
-  crossChecked() {
-    return this.#crossChecked;
-  }
-  unavailableReason() {
-    return this.#unavailableReason;
-  }
-  isUnavailable() {
-    return this.#unavailableReason !== null;
-  }
-  passes() {
-    return this.#unavailableReason === null && this.#findings.isEmpty();
-  }
-  findingsCount() {
-    return this.#findings.count();
-  }
-  skippedCount() {
-    return this.#skipped.count();
-  }
-  toDocument() {
-    const ordered = {
-      backend: this.#id.backendName().asString(),
-      irVersion: this.#irVersion.asString(),
-      irHash: this.#irHash.asString(),
-      method: this.method()
-    };
-    const reason = this.#unavailableReason;
-    if (reason !== null)
-      ordered.unavailable = { reason };
-    const inputs = this.#inputs;
-    if (inputs !== null)
-      ordered.inputs = inputs.toArray().map((i) => ({ artifact: i.artifact(), sha256: i.sha256().asString() }));
-    const checked = this.#checked;
-    if (checked !== null)
-      ordered.checked = checked.toStrings();
-    ordered.findings = this.#findings.toArray().map((f) => {
-      const out = {
-        kind: f.kind(),
-        frRefs: f.functionalRequirementReferences().toStrings(),
-        targets: f.targets().toStrings(),
-        witness: f.witness().toDocument(),
-        unit: f.unit(),
-        detail: f.detail()
-      };
-      return out;
-    });
-    ordered.skipped = this.#skipped.toArray().map((sk) => {
-      const out = { target: sk.target().asString(), reason: sk.reason(), unit: sk.unit() };
-      const detail = sk.detail();
-      if (detail !== undefined)
-        out.detail = detail;
-      return out;
-    });
-    const crossChecked = this.#crossChecked;
-    if (crossChecked !== null) {
-      ordered.crossChecked = crossChecked.toArray().map((e) => ({ backend: e.backend().asString(), targets: e.targets().toStrings() }));
-    }
-    return ordered;
-  }
-  conformedTo(schema) {
-    const reason = schema.degradationReasonFor(this.toDocument());
-    return reason === null ? this : this.degraded(reason);
-  }
-}
 // src/design/domain/design-report-identifier.ts
 class DesignReportIdentifier {
   #directory;
@@ -5974,57 +6415,6 @@ class DesignReportIdentifier {
     return `${this.#backend.asString()}.json`;
   }
 }
-// src/design/domain/design-witness.ts
-class DesignWitness {
-  #document;
-  constructor(document) {
-    this.#document = boundedValueSnapshot(document, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
-  }
-  static core(labels) {
-    return new DesignWitness({ core: labels });
-  }
-  static model(values) {
-    return new DesignWitness({ model: values });
-  }
-  static verdicts(byBackend) {
-    return new DesignWitness({ verdicts: byBackend });
-  }
-  static trace(states) {
-    return new DesignWitness({ trace: states });
-  }
-  static refs(entries) {
-    return new DesignWitness({ refs: entries });
-  }
-  static parse(value) {
-    return parseConstruction(() => new DesignWitness(value));
-  }
-  static of(raw) {
-    return new DesignWitness(raw);
-  }
-  remapCore(rewrite) {
-    const document = this.#document;
-    if (document !== null && typeof document === "object" && !Array.isArray(document) && "core" in document) {
-      const core = document.core ?? null;
-      const remapped = Array.isArray(core) ? core.map((label) => typeof label === "string" ? rewrite(label) : label) : core;
-      return new DesignWitness({ core: remapped });
-    }
-    return this;
-  }
-  reachesState(attrPath, state) {
-    const document = this.#document;
-    if (document === null || typeof document !== "object" || !("trace" in document))
-      return false;
-    const trace = document.trace;
-    if (!Array.isArray(trace))
-      return false;
-    const last = trace[trace.length - 1];
-    return last !== null && typeof last === "object" && !Array.isArray(last) && last[attrPath] === state;
-  }
-  toDocument() {
-    return structuredClone(this.#document);
-  }
-}
-
 // src/design/domain/design-reports.ts
 class DesignReports {
   #values;
@@ -6675,7 +7065,16 @@ class LoweredUnit {
   index() {
     return this.#index;
   }
-  extendedWith(obligations, index) {
+  extendedWith(invariants) {
+    let obligations = this.#obligations;
+    let index = this.#index;
+    let sequence = obligations.count();
+    for (const invariant of invariants) {
+      sequence += 1;
+      const identifier = LoweredIdentifier.of(`OB-${sequence}`);
+      obligations = obligations.add(invariant.loweredAs(identifier));
+      index = index.withPassthrough(identifier.asString(), invariant.reqId().asString());
+    }
     return new LoweredUnit({ obligations, scenarios: this.#scenarios, background: this.#background, index });
   }
 }
@@ -7248,6 +7647,9 @@ class DesignVerifyDirectory {
     return new DesignVerifyDirectory(directory, reports, null, crossCheck);
   }
   finalizing(candidate) {
+    if (!candidate.id().directory().equals(this.#directory)) {
+      throw new IllegalArgumentException({ kind: "design-report-directory-mismatch" });
+    }
     const fileName = candidate.id().fileName();
     const merged = [];
     let replaced = false;
@@ -7295,6 +7697,11 @@ class DesignVerifyDirectory {
   }
   reports() {
     return this.#reports;
+  }
+  publishedReport() {
+    if (this.#candidate === null)
+      throw new Error("defect: no finalized design report candidate");
+    return this.#candidate;
   }
   candidate() {
     return this.#candidate;
@@ -7498,6 +7905,38 @@ class RefinementAttributes {
     return this.#values;
   }
 }
+// src/design/domain/refinement-check.ts
+class RefinementCheck {
+  #plan;
+  #preparation;
+  #state;
+  constructor(plan, state) {
+    this.#plan = plan;
+    this.#preparation = plan.preparation();
+    this.#state = state;
+  }
+  static noQueries(plan) {
+    return new RefinementCheck(plan, { kind: "no-queries" });
+  }
+  static unavailable(plan, reason) {
+    return new RefinementCheck(plan, { kind: "unavailable", reason });
+  }
+  static solved(plan, verdicts) {
+    return new RefinementCheck(plan, { kind: "solved", verdicts });
+  }
+  recordedIn(report) {
+    const preparation = this.#preparation;
+    if (this.#state.kind === "unavailable")
+      return preparation.unverifiedIn(report, SkipReason.unavailable(), this.#state.reason.asString());
+    const unit = preparation.unit();
+    let result = report.withEvidence(preparation.gaps(), preparation.smtStatusSkips(unit.name()).concat(this.#plan.compileSkips()));
+    if (this.#state.kind === "solved") {
+      const interpreted = this.#plan.interpret(this.#state.verdicts);
+      result = result.withEvidence(interpreted.findings, interpreted.skipped);
+    }
+    return result;
+  }
+}
 // src/design/domain/refinement-map.ts
 class RefinementMap {
   #id;
@@ -7574,6 +8013,474 @@ class RefinementMapIdentifier {
     return this.#path;
   }
 }
+// src/design/domain/refinement-preparation.ts
+class RefinementPreparation {
+  #plans;
+  #skipped;
+  #inputs;
+  constructor(plans, skipped, inputs) {
+    if (plans.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-refinement-plans", raw: plans.length });
+    this.#plans = [...plans];
+    this.#skipped = skipped;
+    this.#inputs = inputs;
+  }
+  static of(plans, skipped, inputs) {
+    return new RefinementPreparation(plans, skipped, inputs);
+  }
+  static parse(plans, skipped, inputs) {
+    return parseConstruction(() => new RefinementPreparation(plans, skipped, inputs));
+  }
+  *[Symbol.iterator]() {
+    yield* this.#plans;
+  }
+  recordedIn(report) {
+    const withSkips = report.withEvidence(DesignFindings.of([]), this.#skipped);
+    return this.#inputs === null ? withSkips : withSkips.withInputs(this.#inputs);
+  }
+}
+
+// src/design/domain/refinement-quint-invariant.ts
+class RefinementQuintInvariant {
+  #reqId;
+  #functionalRequirementReferences;
+  #expr;
+  constructor(reqId, functionalRequirementReferences, expr) {
+    this.#reqId = reqId;
+    this.#functionalRequirementReferences = functionalRequirementReferences;
+    this.#expr = ExpressionTree.of(expr).asExpression();
+  }
+  static parse(reqId, functionalRequirementReferences, expr) {
+    return parseConstruction(() => new RefinementQuintInvariant(reqId, functionalRequirementReferences, expr));
+  }
+  static of(reqId, functionalRequirementReferences, expr) {
+    return new RefinementQuintInvariant(reqId, functionalRequirementReferences, expr);
+  }
+  reqId() {
+    return this.#reqId;
+  }
+  reqTarget() {
+    return this.#reqId.asTargetId();
+  }
+  loweredAs(id) {
+    return LoweredObligation.of({
+      id,
+      nature: "invariant",
+      functionalRequirementReferences: this.#functionalRequirementReferences,
+      assert: this.#expr
+    });
+  }
+}
+
+// src/design/domain/refinement-quint-invariants.ts
+class RefinementQuintInvariants {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new RefinementQuintInvariants(values);
+  }
+  add(value) {
+    return new RefinementQuintInvariants([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+  reqIds() {
+    return new Set(this.#values.map((e) => e.reqId().asString()));
+  }
+  interpret(findings, skipped, unit) {
+    const reqIds = this.reqIds();
+    let violations = DesignFindings.of([]);
+    let pending = DesignSkips.of([...skipped].filter((s) => reqIds.has(s.target().asString())));
+    let designConflict = false;
+    for (const finding of findings) {
+      if (!finding.isConflict())
+        continue;
+      const violation = finding.asRefinementViolation(reqIds, UnitName.of(unit));
+      if (violation !== null)
+        violations = violations.add(violation);
+      else
+        designConflict = true;
+    }
+    if (violations.isEmpty() && designConflict) {
+      for (const invariant of this.#values) {
+        if ([...pending].some((s) => s.isFor(invariant.reqTarget())))
+          continue;
+        pending = pending.add(DesignSkipped.of({
+          target: invariant.reqTarget(),
+          reason: SkipReason.capability(),
+          unit: UnitName.of(unit),
+          detail: "the machine reachably violates its own design invariants first (see the design conflict findings) \u2014 refinement reachability is masked until those are resolved"
+        }));
+      }
+    }
+    return { findings: violations, skipped: pending };
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/design/domain/refinement-status.ts
+class RefinementStatus {
+  #kind;
+  #text;
+  constructor(props) {
+    this.#kind = props.kind;
+    this.#text = props.text;
+  }
+  static checkable() {
+    return new RefinementStatus({ kind: "checkable", text: "" });
+  }
+  static waived(reason) {
+    return new RefinementStatus({ kind: "waived", text: reason });
+  }
+  static gap(detail) {
+    return new RefinementStatus({ kind: "gap", text: detail });
+  }
+  static capability(detail) {
+    return new RefinementStatus({ kind: "capability", text: detail });
+  }
+  isCheckable() {
+    return this.#kind === "checkable";
+  }
+  gapDetail() {
+    return this.#kind === "gap" ? this.#text : null;
+  }
+  skipFor(target, unit) {
+    if (this.#kind === "waived")
+      return DesignSkipped.of({ target, reason: SkipReason.waived(), unit: UnitName.of(unit), detail: this.#text });
+    if (this.#kind === "capability")
+      return DesignSkipped.of({ target, reason: SkipReason.capability(), unit: UnitName.of(unit), detail: this.#text });
+    return null;
+  }
+}
+
+// src/design/domain/unit-refinement-plan.ts
+function exprRefs(e, out) {
+  if (e.op === "ref" && typeof e.path === "string")
+    out.add(e.path);
+  for (const a of e.args ?? [])
+    exprRefs(a, out);
+}
+
+class UnitRefinementPlan {
+  #unit;
+  #requirements;
+  #mappings;
+  #obligationStatus;
+  #scenarioStatus;
+  #eventTransitions;
+  #gaps;
+  constructor(props) {
+    this.#unit = props.unit;
+    this.#requirements = props.requirements;
+    this.#mappings = props.mappings;
+    this.#obligationStatus = props.obligationStatus;
+    this.#scenarioStatus = props.scenarioStatus;
+    this.#eventTransitions = props.eventTransitions;
+    this.#gaps = props.gaps;
+  }
+  static of(u, unitMap, req, mapArtifact) {
+    const gaps = [];
+    const gap = (targets, detail, functionalRequirementReferences = FunctionalRequirementReferences.of([])) => {
+      gaps.push(DesignFinding.of({
+        kind: FindingKind.mappingGap(),
+        functionalRequirementReferences: functionalRequirementReferences.sortedUnique(),
+        targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
+        witness: DesignWitness.refs([
+          { artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }
+        ]),
+        unit: UnitName.of(u.name()),
+        detail
+      }));
+    };
+    const byReq = new Map;
+    const unmapped = unitMap.unmapped();
+    for (const m of unitMap.attrMap()) {
+      const reqPath = m.req().asString();
+      const gapTarget = [`attr:${reqPath.replace(/[^A-Za-z0-9_./-]/g, "-")}`];
+      if (byReq.has(reqPath))
+        gap(gapTarget, `attrMap maps "${reqPath}" more than once`);
+      byReq.set(reqPath, m);
+      const reqAttr = req.attributes().byPath(AttributePath.of(reqPath));
+      if (!reqAttr) {
+        gap(gapTarget, `attrMap entry "${reqPath}" names no attribute of the requirements IR`);
+        continue;
+      }
+      if (m.isEnumCases()) {
+        const from = m.enumFrom() ?? "";
+        if (!reqAttr.isEnum()) {
+          gap(gapTarget, `attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind()}`);
+        }
+        if (!u.attrPaths().has(AttributePath.of(from))) {
+          gap(gapTarget, `enumMap.from "${from}" is not a design attribute of unit ${u.name()}`);
+          continue;
+        }
+        const fromValues = u.declaredEnumValuesOf(from);
+        if (fromValues === null) {
+          gap(gapTarget, `enumMap.from "${from}" is not an enum design attribute`);
+          continue;
+        }
+        const missing = m.missingCasesOver(fromValues);
+        if (missing.length > 0) {
+          gap(gapTarget, `enumMap for "${reqPath}" is not total over "${from}": missing case(s) ${missing.join(", ")}`);
+        }
+        const badResults = m.producedValuesOutside(reqAttr.declaredValues());
+        if (badResults.length > 0) {
+          gap(gapTarget, `enumMap for "${reqPath}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`);
+        }
+      } else if (m.isExpression()) {
+        for (const r of m.referencedPaths()) {
+          if (!u.attrPaths().has(AttributePath.of(r))) {
+            gap(gapTarget, `attrMap expression for "${reqPath}" references "${r}", which is not a design attribute of unit ${u.name()}`);
+          }
+        }
+      }
+    }
+    for (const a of req.attributes().sortedByPath()) {
+      if (!byReq.has(a.path().asString()) && !unmapped.covers(a.path())) {
+        gap([
+          `attr:${a.path().asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`
+        ], `requirements attribute "${a.path().asString()}" is neither mapped by attrMap nor listed in unmapped[] \u2014 silence is a contract violation`);
+      }
+    }
+    const designIds = new Set([...u.obligations().ids(), ...u.machines().transitionIds()]);
+    const attrsCovered = (e) => {
+      if (!e)
+        return { ok: true, missing: [] };
+      const refs = new Set;
+      exprRefs(e, refs);
+      const missing = [...refs].filter((r) => !byReq.has(r)).sort();
+      return { ok: missing.length === 0, missing };
+    };
+    const obligationStatus = new Map;
+    const eventTransitions = new Map;
+    for (const ob of req.obligations()) {
+      if (unmapped.covers(ob.id())) {
+        obligationStatus.set(ob.id().asString(), RefinementStatus.waived(unmapped.reasonOf(ob.id()) ?? "listed in unmapped[]"));
+        continue;
+      }
+      if (ob.isStateTemporal()) {
+        obligationStatus.set(ob.id().asString(), RefinementStatus.capability("temporal refinement is outside v1 scope"));
+        continue;
+      }
+      if (ob.isInvariantLike()) {
+        const cov = attrsCovered(ob.assertion());
+        if (cov.ok)
+          obligationStatus.set(ob.id().asString(), RefinementStatus.checkable());
+        else if (unmapped.coversAll(cov.missing)) {
+          obligationStatus.set(ob.id().asString(), RefinementStatus.waived(`depends on unmapped attribute(s) ${cov.missing.join(", ")}`));
+        } else {
+          obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`depends on attribute(s) ${cov.missing.join(", ")} that are neither mapped nor in unmapped[]`));
+        }
+        continue;
+      }
+      if (ob.isEvent()) {
+        const trigger = ob.trigger();
+        const entry = trigger === undefined ? undefined : unitMap.eventMappingOf(trigger);
+        const waiver = entry?.waiverReason() ?? null;
+        if (waiver !== null) {
+          obligationStatus.set(ob.id().asString(), RefinementStatus.waived(waiver));
+          continue;
+        }
+        const covG = attrsCovered(ob.guard());
+        const covE = attrsCovered(ob.effect());
+        const missing = [...new Set([...covG.missing, ...covE.missing])].sort((a, b) => AttributePath.of(a).compareTo(AttributePath.of(b)));
+        if (!entry || entry.transitions().isEmpty()) {
+          obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`requirements event trigger "${trigger === undefined ? "?" : trigger.asString()}" has no eventMap entry (map it to design transitions or waive it)`));
+          continue;
+        }
+        const badIds = entry.transitions().unknownAmong(designIds);
+        if (badIds.length > 0) {
+          obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`eventMap for "${trigger?.asString()}" names unknown design id(s) ${badIds.join(", ")}`));
+          continue;
+        }
+        if (missing.length > 0) {
+          if (unmapped.coversAll(missing)) {
+            obligationStatus.set(ob.id().asString(), RefinementStatus.waived(`depends on unmapped attribute(s) ${missing.join(", ")}`));
+          } else {
+            obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`depends on attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]`));
+          }
+          continue;
+        }
+        obligationStatus.set(ob.id().asString(), RefinementStatus.checkable());
+        eventTransitions.set(ob.id().asString(), entry.transitions().sortedCanonically());
+        continue;
+      }
+      obligationStatus.set(ob.id().asString(), RefinementStatus.capability(`nature "${ob.nature().asString()}" has no refinement check`));
+    }
+    const scenarioStatus = new Map;
+    for (const sc of req.scenarios()) {
+      if (unmapped.covers(sc.id())) {
+        scenarioStatus.set(sc.id().asString(), RefinementStatus.waived(unmapped.reasonOf(sc.id()) ?? "listed in unmapped[]"));
+        continue;
+      }
+      if (sc.hasEvent()) {
+        scenarioStatus.set(sc.id().asString(), RefinementStatus.capability("event scenarios are not replayed in v1"));
+        continue;
+      }
+      const missing = sc.bindings().entriesCanonically().map((binding) => binding.path().asString()).filter((p) => !byReq.has(p)).sort();
+      if (missing.length === 0)
+        scenarioStatus.set(sc.id().asString(), RefinementStatus.checkable());
+      else if (unmapped.coversAll(missing)) {
+        scenarioStatus.set(sc.id().asString(), RefinementStatus.waived(`binds unmapped attribute(s) ${missing.join(", ")}`));
+      } else {
+        scenarioStatus.set(sc.id().asString(), RefinementStatus.gap(`binds attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]`));
+      }
+    }
+    for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])))) {
+      const gapDetail = st.gapDetail();
+      if (gapDetail !== null) {
+        gap([id], `${id}: ${gapDetail}`, req.obligationById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
+      }
+    }
+    for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])))) {
+      const gapDetail = st.gapDetail();
+      if (gapDetail !== null) {
+        gap([id], `${id}: ${gapDetail}`, req.scenarioById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
+      }
+    }
+    return new UnitRefinementPlan({
+      unit: u,
+      requirements: req,
+      mappings: unitMap.attrMap(),
+      obligationStatus: KeyedIndex.of([...obligationStatus].map(([id, st]) => [ObligationIdentifier.of(id), st])),
+      scenarioStatus: KeyedIndex.of([...scenarioStatus].map(([id, st]) => [ScenarioIdentifier.of(id), st])),
+      eventTransitions: KeyedIndex.of([...eventTransitions].map(([id, trs]) => [ObligationIdentifier.of(id), trs])),
+      gaps: DesignFindings.of(gaps)
+    });
+  }
+  unit() {
+    return this.#unit;
+  }
+  requirements() {
+    return this.#requirements;
+  }
+  hasQuintInvariants() {
+    return !this.quintInvariants(this.#requirements).isEmpty();
+  }
+  loweredForQuint() {
+    return this.#unit.lowered({ synthetics: false }).extendedWith(this.quintInvariants(this.#requirements));
+  }
+  quintPreparedIn(report) {
+    return report.withEvidence(this.#gaps, this.quintStatusSkips(this.#requirements, this.#unit.name()));
+  }
+  quintRecordedIn(report, result) {
+    const interpreted = result.interpretRefinement(this.#unit, this.loweredForQuint(), this.quintInvariants(this.#requirements));
+    return report.withEvidence(interpreted.findings, interpreted.skipped);
+  }
+  quintTimedOut(report) {
+    const skipped = DesignSkips.of([...this.quintInvariants(this.#requirements)].map((invariant) => DesignSkipped.of({
+      target: invariant.reqTarget(),
+      reason: SkipReason.timeout(),
+      unit: UnitName.of(this.#unit.name()),
+      detail: "the per-run backend budget was exhausted before the refinement pass"
+    })));
+    return report.withEvidence(DesignFindings.of([]), skipped);
+  }
+  smtTimedOut(report) {
+    return this.unverifiedIn(report, SkipReason.timeout(), "the per-run solver budget was exhausted before the refinement pass");
+  }
+  unverifiedIn(report, reason, detail) {
+    return report.withEvidence(DesignFindings.of([]), DesignSkips.of([...this.#requirements.allTargetIds()].map((target) => DesignSkipped.of({ target, reason, detail, unit: UnitName.of(this.#unit.name()) }))));
+  }
+  attributeMappings() {
+    return this.#mappings;
+  }
+  gaps() {
+    return this.#gaps;
+  }
+  sortedObligationStatuses() {
+    return [...this.#obligationStatus].map(([id, st]) => [id.asString(), st]).sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])));
+  }
+  sortedScenarioStatuses() {
+    return [...this.#scenarioStatus].map(([id, st]) => [id.asString(), st]).sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])));
+  }
+  statusOfObligation(id) {
+    return this.#obligationStatus.get(ObligationIdentifier.of(id));
+  }
+  statusOfScenario(id) {
+    return this.#scenarioStatus.get(ScenarioIdentifier.of(id));
+  }
+  mappedTransitionsOf(reqId) {
+    return this.#eventTransitions.get(ObligationIdentifier.of(reqId)) ?? [];
+  }
+  smtStatusSkips(unitName) {
+    const skipped = [];
+    for (const [id, st] of this.sortedObligationStatuses()) {
+      const s = st.skipFor(TargetIdentifier.of(id), unitName);
+      if (s !== null)
+        skipped.push(s);
+    }
+    for (const [id, st] of this.sortedScenarioStatuses()) {
+      const s = st.skipFor(TargetIdentifier.of(id), unitName);
+      if (s !== null)
+        skipped.push(s);
+    }
+    return DesignSkips.of(skipped);
+  }
+  quintStatusSkips(req, unitName) {
+    const skipped = [];
+    for (const [rid, st] of [...this.#obligationStatus].map(([id, status]) => [id.asString(), status]).sort((a, b) => a[0] < b[0] ? -1 : 1)) {
+      const s = st.skipFor(TargetIdentifier.of(rid), unitName);
+      if (s !== null)
+        skipped.push(s);
+      else if (st.isCheckable()) {
+        const ob = req.obligationById(rid);
+        if (ob?.isEvent()) {
+          skipped.push(DesignSkipped.of({
+            target: TargetIdentifier.of(rid),
+            reason: SkipReason.capability(),
+            unit: UnitName.of(unitName),
+            detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1"
+          }));
+        } else if (ob?.isInvariantLike()) {
+          const assertion = ob.assertion();
+          if (assertion === undefined)
+            continue;
+          const substituted = this.#mappings.substitute(assertion, false);
+          if (!substituted.ok)
+            skipped.push(substituted.error.asCompileErrorSkip(TargetIdentifier.of(rid), unitName));
+        }
+      }
+    }
+    for (const [rid, st] of [...this.#scenarioStatus].map(([id, status]) => [id.asString(), status]).sort((a, b) => a[0] < b[0] ? -1 : 1)) {
+      const s = st.skipFor(TargetIdentifier.of(rid), unitName);
+      if (s !== null)
+        skipped.push(s);
+      else if (st.isCheckable()) {
+        skipped.push(DesignSkipped.of({
+          target: TargetIdentifier.of(rid),
+          reason: SkipReason.capability(),
+          unit: UnitName.of(unitName),
+          detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)"
+        }));
+      }
+    }
+    return DesignSkips.of(skipped);
+  }
+  quintInvariants(req) {
+    const out = [];
+    for (const ob of req.obligations().sortedCanonically()) {
+      if (!this.#obligationStatus.get(ob.id())?.isCheckable())
+        continue;
+      const assertion = ob.assertion();
+      if (!ob.isInvariantLike() || assertion === undefined)
+        continue;
+      const substituted = this.#mappings.substitute(assertion, false);
+      if (substituted.ok)
+        out.push(RefinementQuintInvariant.of(ob.id(), ob.functionalRequirementReferences(), substituted.value));
+    }
+    return RefinementQuintInvariants.of(out);
+  }
+}
+
 // src/design/domain/refinement-materials.ts
 class RefinementMaterials {
   #id;
@@ -7587,6 +8494,38 @@ class RefinementMaterials {
   }
   static active(id, requirements, map) {
     return new RefinementMaterials(id, { kind: "active", requirements, map });
+  }
+  prepare(model) {
+    if (this.#state.kind === "inactive")
+      return RefinementPreparation.of([], DesignSkips.of([]), null);
+    const requirements = this.#state.requirements;
+    const skipAll = (reason, detail) => RefinementPreparation.of([], DesignSkips.of([...model].flatMap((unit) => [...requirements.allTargetIds()].map((target) => DesignSkipped.of({ target, reason, detail, unit: UnitName.of(unit.name()) })))), null);
+    return this.#state.map.match({
+      absent: (error) => skipAll(SkipReason.absentInput(), error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record"),
+      loaded: (map, artifact, inputs) => {
+        if (!map.requirementsIrHash().equals(requirements.hash()))
+          return skipAll(SkipReason.staleInput(), "the refinement map's requirementsIrHash no longer matches the requirements formal model \u2014 re-author the map");
+        if (!map.designIrHash().equals(model.irHash()))
+          return skipAll(SkipReason.staleInput(), "the refinement map's designIrHash no longer matches this design IR \u2014 re-author the map");
+        const plans = [];
+        let skipped = DesignSkips.of([]);
+        for (const unit of model) {
+          const unitMap = map.unitMapOf(unit.id());
+          if (unitMap !== undefined && unitMap !== null) {
+            plans.push(UnitRefinementPlan.of(unit, unitMap, requirements, artifact));
+            continue;
+          }
+          for (const target of requirements.allTargetIds())
+            skipped = skipped.add(DesignSkipped.of({
+              target,
+              reason: SkipReason.absentInput(),
+              unit: UnitName.of(unit.name()),
+              detail: `the refinement map has no entry for unit ${unit.name()}`
+            }));
+        }
+        return RefinementPreparation.of(plans, skipped, DesignInputAnchors.of(inputs));
+      }
+    });
   }
   id() {
     return this.#id;
@@ -7799,90 +8738,6 @@ class RefinementQueryVerdicts {
     return this.#values.get(queryId);
   }
 }
-// src/design/domain/refinement-quint-invariant.ts
-class RefinementQuintInvariant {
-  #reqId;
-  #functionalRequirementReferences;
-  #expr;
-  constructor(reqId, functionalRequirementReferences, expr) {
-    this.#reqId = reqId;
-    this.#functionalRequirementReferences = functionalRequirementReferences;
-    this.#expr = ExpressionTree.of(expr).asExpression();
-  }
-  static parse(reqId, functionalRequirementReferences, expr) {
-    return parseConstruction(() => new RefinementQuintInvariant(reqId, functionalRequirementReferences, expr));
-  }
-  static of(reqId, functionalRequirementReferences, expr) {
-    return new RefinementQuintInvariant(reqId, functionalRequirementReferences, expr);
-  }
-  reqId() {
-    return this.#reqId;
-  }
-  reqTarget() {
-    return this.#reqId.asTargetId();
-  }
-  loweredAs(id) {
-    return LoweredObligation.of({
-      id,
-      nature: "invariant",
-      functionalRequirementReferences: this.#functionalRequirementReferences,
-      assert: this.#expr
-    });
-  }
-}
-// src/design/domain/refinement-quint-invariants.ts
-class RefinementQuintInvariants {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new RefinementQuintInvariants(values);
-  }
-  add(value) {
-    return new RefinementQuintInvariants([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
-  reqIds() {
-    return new Set(this.#values.map((e) => e.reqId().asString()));
-  }
-  interpret(findings, skipped, unit) {
-    const reqIds = this.reqIds();
-    let violations = DesignFindings.of([]);
-    let pending = DesignSkips.of([...skipped].filter((s) => reqIds.has(s.target().asString())));
-    let designConflict = false;
-    for (const finding of findings) {
-      if (!finding.isConflict())
-        continue;
-      const violation = finding.asRefinementViolation(reqIds, UnitName.of(unit));
-      if (violation !== null)
-        violations = violations.add(violation);
-      else
-        designConflict = true;
-    }
-    if (violations.isEmpty() && designConflict) {
-      for (const invariant of this.#values) {
-        if ([...pending].some((s) => s.isFor(invariant.reqTarget())))
-          continue;
-        pending = pending.add(DesignSkipped.of({
-          target: invariant.reqTarget(),
-          reason: SkipReason.capability(),
-          unit: UnitName.of(unit),
-          detail: "the machine reachably violates its own design invariants first (see the design conflict findings) \u2014 refinement reachability is masked until those are resolved"
-        }));
-      }
-    }
-    return { findings: violations, skipped: pending };
-  }
-  toArray() {
-    return this.#values;
-  }
-}
 // src/design/domain/refinement-requirements.ts
 class RefinementRequirements {
   #id;
@@ -8002,14 +8857,35 @@ class RefinementScenarios {
 }
 // src/design/domain/refinement-solver-plan.ts
 class RefinementSolverPlan {
+  #preparation;
   #pending;
   #compileSkips;
   constructor(props) {
+    if (props.pending.size() > 65536 || props.compileSkips.count() > 65536) {
+      throw new IllegalArgumentException({ kind: "refinement-solver-plan-too-large" });
+    }
+    const targets = new Set(props.preparation.requirements().allTargetIds().toStrings());
+    const unit = props.preparation.unit().name();
+    for (const [, probe] of props.pending) {
+      if (!targets.has(probe.reqTarget().asString()))
+        throw new IllegalArgumentException({ kind: "refinement-probe-outside-preparation" });
+    }
+    for (const skipped of props.compileSkips) {
+      if (skipped.unit() !== unit)
+        throw new IllegalArgumentException({ kind: "refinement-solver-unit-mismatch" });
+    }
+    this.#preparation = props.preparation;
     this.#pending = props.pending;
     this.#compileSkips = props.compileSkips;
   }
   static of(props) {
-    return new RefinementSolverPlan({ pending: props.pending, compileSkips: props.compileSkips });
+    return new RefinementSolverPlan(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new RefinementSolverPlan(props));
+  }
+  preparation() {
+    return this.#preparation;
   }
   compileSkips() {
     return this.#compileSkips;
@@ -8017,7 +8893,10 @@ class RefinementSolverPlan {
   *[Symbol.iterator]() {
     yield* this.#pending;
   }
-  interpret(results, req, plan, unitName) {
+  interpret(results) {
+    const plan = this.#preparation;
+    const req = plan.requirements();
+    const unitName = plan.unit().name();
     const findings = [];
     const skipped = [];
     const functionalRequirementReferencesOf = (reqId) => req.functionalRequirementReferencesOf(reqId).sortedUnique();
@@ -8097,40 +8976,6 @@ class RefinementSolverPlan {
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped) };
   }
 }
-// src/design/domain/refinement-status.ts
-class RefinementStatus {
-  #kind;
-  #text;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#text = props.text;
-  }
-  static checkable() {
-    return new RefinementStatus({ kind: "checkable", text: "" });
-  }
-  static waived(reason) {
-    return new RefinementStatus({ kind: "waived", text: reason });
-  }
-  static gap(detail) {
-    return new RefinementStatus({ kind: "gap", text: detail });
-  }
-  static capability(detail) {
-    return new RefinementStatus({ kind: "capability", text: detail });
-  }
-  isCheckable() {
-    return this.#kind === "checkable";
-  }
-  gapDetail() {
-    return this.#kind === "gap" ? this.#text : null;
-  }
-  skipFor(target, unit) {
-    if (this.#kind === "waived")
-      return DesignSkipped.of({ target, reason: SkipReason.waived(), unit: UnitName.of(unit), detail: this.#text });
-    if (this.#kind === "capability")
-      return DesignSkipped.of({ target, reason: SkipReason.capability(), unit: UnitName.of(unit), detail: this.#text });
-    return null;
-  }
-}
 // src/design/domain/refinement-unit-map.ts
 class RefinementUnitMap {
   #unit;
@@ -8198,6 +9043,9 @@ class SiblingVerdictDocument {
   }
   static readable(method, findings, skipped) {
     return new SiblingVerdictDocument({ kind: "readable", method, findings, skipped });
+  }
+  isReadable() {
+    return this.#state.kind === "readable";
   }
   unavailableReason() {
     return this.#state.kind === "unavailable" ? this.#state.reason : null;
@@ -8469,6 +9317,56 @@ class SiblingVerdictSkips {
     return this.#values;
   }
 }
+// src/design/domain/sibling-verification-result.ts
+class SiblingVerificationResult {
+  #state;
+  constructor(state) {
+    this.#state = state;
+  }
+  static backendUnavailable(reason, refinementFailure) {
+    return new SiblingVerificationResult({ kind: "backend-unavailable", reason, refinementFailure });
+  }
+  static incomplete(reason, refinementFailure) {
+    return new SiblingVerificationResult({ kind: "incomplete", reason, refinementFailure });
+  }
+  static completed(document, refinementFailure) {
+    return new SiblingVerificationResult({ kind: "completed", document, refinementFailure });
+  }
+  isBackendUnavailable() {
+    return this.#state.kind === "backend-unavailable";
+  }
+  canInspectReachability() {
+    return this.#state.kind === "completed" && this.#state.document.isReadable();
+  }
+  recordedIn(report, model, unit, lowered) {
+    const state = this.#state;
+    if (state.kind === "backend-unavailable")
+      return report.backendFailed(model, state.reason.asString());
+    if (state.kind === "incomplete")
+      return report.unitUnverified(unit, SkipReason.unavailable(), state.reason.asString());
+    const mapped = state.document.remapVerdicts(unit, lowered.index());
+    return mapped.unavailable === null ? report.unitVerified(unit, mapped.findings, mapped.skipped, mapped.method) : report.unitUnverified(unit, SkipReason.unavailable(), mapped.unavailable);
+  }
+  interpretRefinement(unit, lowered, invariants) {
+    const state = this.#state;
+    let failure = state.refinementFailure?.asString() ?? null;
+    if (state.kind === "completed" && failure === null) {
+      const mapped = state.document.remapVerdicts(unit, lowered.index());
+      if (mapped.unavailable === null)
+        return invariants.interpret(mapped.findings, mapped.skipped, unit.name());
+      failure = `refinement pass degraded: ${mapped.unavailable}`;
+    }
+    return {
+      findings: DesignFindings.of([]),
+      skipped: DesignSkips.of([...invariants].map((invariant) => DesignSkipped.of({
+        target: invariant.reqTarget(),
+        unit: UnitName.of(unit.name()),
+        reason: SkipReason.unavailable(),
+        detail: failure ?? undefined
+      })))
+    };
+  }
+}
 // src/design/domain/transition-reference.ts
 class TransitionReference {
   #value;
@@ -8546,285 +9444,6 @@ class UnformalizedTargets {
   }
   toStrings() {
     return this.#values.toArray().map((v) => v.asString());
-  }
-}
-// src/design/domain/unit-refinement-plan.ts
-function exprRefs(e, out) {
-  if (e.op === "ref" && typeof e.path === "string")
-    out.add(e.path);
-  for (const a of e.args ?? [])
-    exprRefs(a, out);
-}
-
-class UnitRefinementPlan {
-  #mappings;
-  #obligationStatus;
-  #scenarioStatus;
-  #eventTransitions;
-  #gaps;
-  constructor(props) {
-    this.#mappings = props.mappings;
-    this.#obligationStatus = props.obligationStatus;
-    this.#scenarioStatus = props.scenarioStatus;
-    this.#eventTransitions = props.eventTransitions;
-    this.#gaps = props.gaps;
-  }
-  static of(u, unitMap, req, mapArtifact) {
-    const gaps = [];
-    const gap = (targets, detail, functionalRequirementReferences = FunctionalRequirementReferences.of([])) => {
-      gaps.push(DesignFinding.of({
-        kind: FindingKind.mappingGap(),
-        functionalRequirementReferences: functionalRequirementReferences.sortedUnique(),
-        targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
-        witness: DesignWitness.refs([
-          { artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }
-        ]),
-        unit: UnitName.of(u.name()),
-        detail
-      }));
-    };
-    const byReq = new Map;
-    const unmapped = unitMap.unmapped();
-    for (const m of unitMap.attrMap()) {
-      const reqPath = m.req().asString();
-      const gapTarget = [`attr:${reqPath.replace(/[^A-Za-z0-9_./-]/g, "-")}`];
-      if (byReq.has(reqPath))
-        gap(gapTarget, `attrMap maps "${reqPath}" more than once`);
-      byReq.set(reqPath, m);
-      const reqAttr = req.attributes().byPath(AttributePath.of(reqPath));
-      if (!reqAttr) {
-        gap(gapTarget, `attrMap entry "${reqPath}" names no attribute of the requirements IR`);
-        continue;
-      }
-      if (m.isEnumCases()) {
-        const from = m.enumFrom() ?? "";
-        if (!reqAttr.isEnum()) {
-          gap(gapTarget, `attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind()}`);
-        }
-        if (!u.attrPaths().has(AttributePath.of(from))) {
-          gap(gapTarget, `enumMap.from "${from}" is not a design attribute of unit ${u.name()}`);
-          continue;
-        }
-        const fromValues = u.declaredEnumValuesOf(from);
-        if (fromValues === null) {
-          gap(gapTarget, `enumMap.from "${from}" is not an enum design attribute`);
-          continue;
-        }
-        const missing = m.missingCasesOver(fromValues);
-        if (missing.length > 0) {
-          gap(gapTarget, `enumMap for "${reqPath}" is not total over "${from}": missing case(s) ${missing.join(", ")}`);
-        }
-        const badResults = m.producedValuesOutside(reqAttr.declaredValues());
-        if (badResults.length > 0) {
-          gap(gapTarget, `enumMap for "${reqPath}" produces value(s) ${badResults.join(", ")} outside the requirements attribute's values`);
-        }
-      } else if (m.isExpression()) {
-        for (const r of m.referencedPaths()) {
-          if (!u.attrPaths().has(AttributePath.of(r))) {
-            gap(gapTarget, `attrMap expression for "${reqPath}" references "${r}", which is not a design attribute of unit ${u.name()}`);
-          }
-        }
-      }
-    }
-    for (const a of req.attributes().sortedByPath()) {
-      if (!byReq.has(a.path().asString()) && !unmapped.covers(a.path())) {
-        gap([
-          `attr:${a.path().asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`
-        ], `requirements attribute "${a.path().asString()}" is neither mapped by attrMap nor listed in unmapped[] \u2014 silence is a contract violation`);
-      }
-    }
-    const designIds = new Set([...u.obligations().ids(), ...u.machines().transitionIds()]);
-    const attrsCovered = (e) => {
-      if (!e)
-        return { ok: true, missing: [] };
-      const refs = new Set;
-      exprRefs(e, refs);
-      const missing = [...refs].filter((r) => !byReq.has(r)).sort();
-      return { ok: missing.length === 0, missing };
-    };
-    const obligationStatus = new Map;
-    const eventTransitions = new Map;
-    for (const ob of req.obligations()) {
-      if (unmapped.covers(ob.id())) {
-        obligationStatus.set(ob.id().asString(), RefinementStatus.waived(unmapped.reasonOf(ob.id()) ?? "listed in unmapped[]"));
-        continue;
-      }
-      if (ob.isStateTemporal()) {
-        obligationStatus.set(ob.id().asString(), RefinementStatus.capability("temporal refinement is outside v1 scope"));
-        continue;
-      }
-      if (ob.isInvariantLike()) {
-        const cov = attrsCovered(ob.assertion());
-        if (cov.ok)
-          obligationStatus.set(ob.id().asString(), RefinementStatus.checkable());
-        else if (unmapped.coversAll(cov.missing)) {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.waived(`depends on unmapped attribute(s) ${cov.missing.join(", ")}`));
-        } else {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`depends on attribute(s) ${cov.missing.join(", ")} that are neither mapped nor in unmapped[]`));
-        }
-        continue;
-      }
-      if (ob.isEvent()) {
-        const trigger = ob.trigger();
-        const entry = trigger === undefined ? undefined : unitMap.eventMappingOf(trigger);
-        const waiver = entry?.waiverReason() ?? null;
-        if (waiver !== null) {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.waived(waiver));
-          continue;
-        }
-        const covG = attrsCovered(ob.guard());
-        const covE = attrsCovered(ob.effect());
-        const missing = [...new Set([...covG.missing, ...covE.missing])].sort((a, b) => AttributePath.of(a).compareTo(AttributePath.of(b)));
-        if (!entry || entry.transitions().isEmpty()) {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`requirements event trigger "${trigger === undefined ? "?" : trigger.asString()}" has no eventMap entry (map it to design transitions or waive it)`));
-          continue;
-        }
-        const badIds = entry.transitions().unknownAmong(designIds);
-        if (badIds.length > 0) {
-          obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`eventMap for "${trigger?.asString()}" names unknown design id(s) ${badIds.join(", ")}`));
-          continue;
-        }
-        if (missing.length > 0) {
-          if (unmapped.coversAll(missing)) {
-            obligationStatus.set(ob.id().asString(), RefinementStatus.waived(`depends on unmapped attribute(s) ${missing.join(", ")}`));
-          } else {
-            obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`depends on attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]`));
-          }
-          continue;
-        }
-        obligationStatus.set(ob.id().asString(), RefinementStatus.checkable());
-        eventTransitions.set(ob.id().asString(), entry.transitions().sortedCanonically());
-        continue;
-      }
-      obligationStatus.set(ob.id().asString(), RefinementStatus.capability(`nature "${ob.nature().asString()}" has no refinement check`));
-    }
-    const scenarioStatus = new Map;
-    for (const sc of req.scenarios()) {
-      if (unmapped.covers(sc.id())) {
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.waived(unmapped.reasonOf(sc.id()) ?? "listed in unmapped[]"));
-        continue;
-      }
-      if (sc.hasEvent()) {
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.capability("event scenarios are not replayed in v1"));
-        continue;
-      }
-      const missing = sc.bindings().entriesCanonically().map((binding) => binding.path().asString()).filter((p) => !byReq.has(p)).sort();
-      if (missing.length === 0)
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.checkable());
-      else if (unmapped.coversAll(missing)) {
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.waived(`binds unmapped attribute(s) ${missing.join(", ")}`));
-      } else {
-        scenarioStatus.set(sc.id().asString(), RefinementStatus.gap(`binds attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]`));
-      }
-    }
-    for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])))) {
-      const gapDetail = st.gapDetail();
-      if (gapDetail !== null) {
-        gap([id], `${id}: ${gapDetail}`, req.obligationById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
-      }
-    }
-    for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])))) {
-      const gapDetail = st.gapDetail();
-      if (gapDetail !== null) {
-        gap([id], `${id}: ${gapDetail}`, req.scenarioById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
-      }
-    }
-    return new UnitRefinementPlan({
-      mappings: unitMap.attrMap(),
-      obligationStatus: KeyedIndex.of([...obligationStatus].map(([id, st]) => [ObligationIdentifier.of(id), st])),
-      scenarioStatus: KeyedIndex.of([...scenarioStatus].map(([id, st]) => [ScenarioIdentifier.of(id), st])),
-      eventTransitions: KeyedIndex.of([...eventTransitions].map(([id, trs]) => [ObligationIdentifier.of(id), trs])),
-      gaps: DesignFindings.of(gaps)
-    });
-  }
-  attributeMappings() {
-    return this.#mappings;
-  }
-  gaps() {
-    return this.#gaps;
-  }
-  sortedObligationStatuses() {
-    return [...this.#obligationStatus].map(([id, st]) => [id.asString(), st]).sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])));
-  }
-  sortedScenarioStatuses() {
-    return [...this.#scenarioStatus].map(([id, st]) => [id.asString(), st]).sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])));
-  }
-  statusOfObligation(id) {
-    return this.#obligationStatus.get(ObligationIdentifier.of(id));
-  }
-  statusOfScenario(id) {
-    return this.#scenarioStatus.get(ScenarioIdentifier.of(id));
-  }
-  mappedTransitionsOf(reqId) {
-    return this.#eventTransitions.get(ObligationIdentifier.of(reqId)) ?? [];
-  }
-  smtStatusSkips(unitName) {
-    const skipped = [];
-    for (const [id, st] of this.sortedObligationStatuses()) {
-      const s = st.skipFor(TargetIdentifier.of(id), unitName);
-      if (s !== null)
-        skipped.push(s);
-    }
-    for (const [id, st] of this.sortedScenarioStatuses()) {
-      const s = st.skipFor(TargetIdentifier.of(id), unitName);
-      if (s !== null)
-        skipped.push(s);
-    }
-    return DesignSkips.of(skipped);
-  }
-  quintStatusSkips(req, unitName) {
-    const skipped = [];
-    for (const [rid, st] of [...this.#obligationStatus].map(([id, status]) => [id.asString(), status]).sort((a, b) => a[0] < b[0] ? -1 : 1)) {
-      const s = st.skipFor(TargetIdentifier.of(rid), unitName);
-      if (s !== null)
-        skipped.push(s);
-      else if (st.isCheckable()) {
-        const ob = req.obligationById(rid);
-        if (ob?.isEvent()) {
-          skipped.push(DesignSkipped.of({
-            target: TargetIdentifier.of(rid),
-            reason: SkipReason.capability(),
-            unit: UnitName.of(unitName),
-            detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1"
-          }));
-        } else if (ob?.isInvariantLike()) {
-          const assertion = ob.assertion();
-          if (assertion === undefined)
-            continue;
-          const substituted = this.#mappings.substitute(assertion, false);
-          if (!substituted.ok)
-            skipped.push(substituted.error.asCompileErrorSkip(TargetIdentifier.of(rid), unitName));
-        }
-      }
-    }
-    for (const [rid, st] of [...this.#scenarioStatus].map(([id, status]) => [id.asString(), status]).sort((a, b) => a[0] < b[0] ? -1 : 1)) {
-      const s = st.skipFor(TargetIdentifier.of(rid), unitName);
-      if (s !== null)
-        skipped.push(s);
-      else if (st.isCheckable()) {
-        skipped.push(DesignSkipped.of({
-          target: TargetIdentifier.of(rid),
-          reason: SkipReason.capability(),
-          unit: UnitName.of(unitName),
-          detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)"
-        }));
-      }
-    }
-    return DesignSkips.of(skipped);
-  }
-  quintInvariants(req) {
-    const out = [];
-    for (const ob of req.obligations().sortedCanonically()) {
-      if (!this.#obligationStatus.get(ob.id())?.isCheckable())
-        continue;
-      const assertion = ob.assertion();
-      if (!ob.isInvariantLike() || assertion === undefined)
-        continue;
-      const substituted = this.#mappings.substitute(assertion, false);
-      if (substituted.ok)
-        out.push(RefinementQuintInvariant.of(ob.id(), ob.functionalRequirementReferences(), substituted.value));
-    }
-    return RefinementQuintInvariants.of(out);
   }
 }
 // src/design/domain/unmapped-declarations.ts
@@ -9952,10 +10571,7 @@ class DesignVerifyDirectoryRepositoryImplementation {
   store(aggregate) {
     const directory = aggregate.directory();
     const directoryPath = directory.asString();
-    const candidate = aggregate.candidate();
-    if (candidate === null) {
-      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: "no finalization candidate" });
-    }
+    const candidate = aggregate.publishedReport();
     try {
       mkdirSync3(directoryPath, { recursive: true });
     } catch (e) {
@@ -10646,7 +11262,9 @@ function decodeDesignModel(ctx, model, primed) {
   }
   return out;
 }
-function buildRefinementQueries(u, req, plan) {
+function buildRefinementQueries(plan) {
+  const u = plan.unit();
+  const req = plan.requirements();
   const ctx = refinementSmtContext(u);
   const pre = designBase(ctx, u, false);
   const post = designBase(ctx, u, true);
@@ -10809,6 +11427,7 @@ function buildRefinementQueries(u, req, plan) {
   return {
     queries,
     plan: RefinementSolverPlan.of({
+      preparation: plan,
       pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.of(id), probe])),
       compileSkips: DesignSkips.of(compileSkips)
     }),
@@ -10822,14 +11441,15 @@ class RefinementSolverClientImplementation {
   constructor(config) {
     this.#config = config;
   }
-  check(unit, requirements, plan, budgetMs) {
-    const built = buildRefinementQueries(unit, requirements, plan);
+  check(plan, budgetMs) {
+    const built = buildRefinementQueries(plan);
     if (built.queries.length === 0) {
-      return { plan: built.plan, result: { kind: "no-queries" } };
+      return RefinementCheck.noQueries(built.plan);
     }
     const child = this.#runChild(built.queries, budgetMs);
     if (child.results === null) {
-      return { plan: built.plan, result: { kind: "unavailable", reason: child.unavailable ?? "z3 unavailable" } };
+      const reason = ErrorMessage.parse(child.unavailable ?? "z3 unavailable");
+      return RefinementCheck.unavailable(built.plan, reason.ok ? reason.value : ErrorMessage.of("z3 child reported an invalid unavailable reason"));
     }
     const verdicts = [];
     for (const [queryId, r] of child.results) {
@@ -10838,10 +11458,7 @@ class RefinementSolverClientImplementation {
         core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse)
       });
       if (!parsed.ok)
-        return {
-          plan: built.plan,
-          result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` }
-        };
+        return RefinementCheck.unavailable(built.plan, ErrorMessage.of(`invalid solver query label: ${JSON.stringify(parsed.error)}`));
       verdicts.push([
         parsed.value.label,
         RefinementQueryVerdict.of({
@@ -10852,10 +11469,7 @@ class RefinementSolverClientImplementation {
         })
       ]);
     }
-    return {
-      plan: built.plan,
-      result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)) }
-    };
+    return RefinementCheck.solved(built.plan, RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)));
   }
   #runChild(queries, budgetMs) {
     const payload = JSON.stringify({ queries, timeoutMs: this.#config.perQueryTimeoutMs, budgetMs });
@@ -10938,19 +11552,26 @@ class SiblingBackendClientImplementation {
   }
   runLowered(backend, unit, lowered, wallTimeoutMs) {
     const run = this.#spawn(backend, renderLoweredDocument(unit, lowered), wallTimeoutMs);
-    return {
-      exit: run.exit,
-      doc: run.doc === null ? null : parseSiblingVerdictDocument(run.doc),
-      note: run.note
-    };
-  }
-  probeState(unit, lowered, attrPath, state, wallTimeoutMs) {
-    const variant = reachabilityVariant(renderLoweredDocument(unit, lowered), attrPath, state);
-    const run = this.#spawn("quint", variant, wallTimeoutMs);
-    if (run.exit !== 0 || run.doc === null) {
-      return ReachabilityVerdict.unverified();
+    const document = run.doc === null ? null : parseSiblingVerdictDocument(run.doc);
+    const refinementFailure = ErrorMessage.of(`refinement pass could not run (${run.note.slice(0, 120)})`);
+    if (run.exit === 127) {
+      const reason = document?.unavailableReason() ?? (backend === "smt" ? "z3 could not be executed by the lowered v1 backend" : "quint CLI could not be executed by the lowered v1 backend");
+      const parsedReason = ErrorMessage.parse(reason);
+      return SiblingVerificationResult.backendUnavailable(parsedReason.ok ? parsedReason.value : ErrorMessage.of("lowered backend reported an invalid unavailable reason"), refinementFailure);
     }
-    return parseSiblingVerdictDocument(run.doc).reachabilityOf(attrPath, state);
+    if (document === null)
+      return SiblingVerificationResult.incomplete(ErrorMessage.of(`lowered v1 backend produced no findings document (${run.note.slice(0, 160)})`), refinementFailure);
+    return SiblingVerificationResult.completed(document, run.exit === 0 ? null : refinementFailure);
+  }
+  runRefinement(plan, wallTimeoutMs) {
+    return this.runLowered("quint", plan.unit(), plan.loweredForQuint(), wallTimeoutMs);
+  }
+  probeState(probe, wallTimeoutMs) {
+    const variant = reachabilityVariant(renderLoweredDocument(probe.unit(), probe.lowered()), probe.attributePath(), probe.state());
+    const run = this.#spawn("quint", variant, wallTimeoutMs);
+    if (run.exit !== 0 || run.doc === null)
+      return ReachabilityVerdict.unverified();
+    return parseSiblingVerdictDocument(run.doc).reachabilityOf(probe.attributePath(), probe.state());
   }
   #spawn(backend, loweredDoc, wallTimeoutMs) {
     const tool = this.#config.siblingToolPaths[backend];
@@ -10992,115 +11613,70 @@ class DesignReportFinalizer {
     this.#repository = repository;
     this.#findingsSchema = findingsSchema;
   }
-  finalize(report, model) {
-    return this.#finalizing(report, model);
-  }
-  finalizeIrUnreadable(report) {
-    const finalized = this.#finalizing(report, null);
-    if (!finalized.ok)
-      return err(finalized.error);
-    return ok(undefined);
-  }
-  #finalizing(report, model) {
-    const loaded = this.#repository.findByDirectory(report.id().directory());
-    if (!loaded.ok)
-      return err(loaded.error);
-    const aggregate = loaded.value.finalizedWith(report, model, this.#findingsSchema);
-    const stored = this.#repository.store(aggregate);
-    if (!stored.ok)
-      return err(stored.error);
-    const published = aggregate.candidate();
-    if (published === null) {
-      return err({
-        kind: "io-failed",
-        operation: "write",
-        path: report.id().fileName(),
-        cause: "no finalization candidate"
-      });
-    }
-    return ok({
-      kind: "verified",
-      pass: published.passes(),
-      findingsCount: published.findingsCount(),
-      skippedCount: published.skippedCount(),
-      method: published.method()
+  finalize(directory, report, model) {
+    return matchResult(this.#repository.findByDirectory(directory), {
+      err: (error) => err(error),
+      ok: (loaded) => {
+        const aggregate = loaded.finalizedWith(report, model, this.#findingsSchema);
+        return matchResult(this.#repository.store(aggregate), {
+          err: (error) => err(error),
+          ok: () => ok(aggregate)
+        });
+      }
     });
   }
 }
 // src/design/usecase/design-verification-acquirer.ts
 class DesignVerificationAcquirer {
-  #designModelRepository;
+  #repository;
   #finalizer;
-  constructor(designModelRepository, finalizer) {
-    this.#designModelRepository = designModelRepository;
+  constructor(repository, finalizer) {
+    this.#repository = repository;
     this.#finalizer = finalizer;
   }
-  acquire(modelId, reportId, method) {
-    const acquired = this.#designModelRepository.findById(modelId);
-    if (!acquired.ok) {
-      if (acquired.error.kind === "not-found")
-        return { kind: "terminal", outcome: { kind: "not-applicable" } };
-      if (acquired.error.kind === "io-failed") {
-        return { kind: "terminal", outcome: { kind: "acquisition-failed", error: acquired.error } };
-      }
-      const unreadable = DesignReport.irUnreadable(reportId, method.asString(), acquired.error.cause);
-      const saved = this.#finalizer.finalizeIrUnreadable(unreadable);
-      if (!saved.ok)
-        return { kind: "terminal", outcome: { kind: "save-failed", error: saved.error } };
-      return { kind: "terminal", outcome: { kind: "model-unreadable" } };
-    }
-    const model = acquired.value;
-    const irHash = model.irHash();
-    if (!model.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR)) {
-      const mismatch = DesignReport.versionMismatch(reportId, model, irHash, method.asString());
-      const skippedCount = mismatch.skippedCount();
-      const saved = this.#finalizer.finalize(mismatch, model);
-      if (!saved.ok)
-        return { kind: "terminal", outcome: { kind: "save-failed", error: saved.error } };
-      return { kind: "terminal", outcome: { kind: "version-mismatch", skippedCount } };
-    }
-    return { kind: "ready", model, irHash };
+  acquire(modelId, reportId, method, directory) {
+    return matchResult(this.#repository.findById(modelId), {
+      err: (error) => {
+        if (error.kind === "not-found")
+          return err({ kind: "not-applicable" });
+        if (error.kind === "io-failed")
+          return err({ kind: "acquisition-failed", error });
+        return matchResult(this.#finalizer.finalize(directory, DesignReport.irUnreadable(reportId, method, error.cause), null), {
+          err: (error2) => err({ kind: "save-failed", error: error2 }),
+          ok: () => err({ kind: "model-unreadable" })
+        });
+      },
+      ok: (model) => matchResult(model.prepareVerification(reportId, method), {
+        ok: (ready) => ok(ready),
+        err: (report) => matchResult(this.#finalizer.finalize(directory, report, model), {
+          err: (error) => err({ kind: "save-failed", error }),
+          ok: () => err({ kind: "version-mismatch", report })
+        })
+      })
+    });
   }
 }
 // src/design/usecase/validate-design-intermediate-representation-usecase.ts
 class ValidateDesignIntermediateRepresentationUseCase {
-  #designIrValidationMaterialsRepository;
-  constructor(designIrValidationMaterialsRepository) {
-    this.#designIrValidationMaterialsRepository = designIrValidationMaterialsRepository;
+  #repository;
+  constructor(repository) {
+    this.#repository = repository;
   }
   execute(modelId) {
-    const found = this.#designIrValidationMaterialsRepository.findById(DesignIntermediateRepresentationValidationMaterialsIdentifier.of(modelId));
-    if (!found.ok) {
-      if (found.error.kind === "not-found")
-        return { kind: "not-applicable" };
-      return { kind: "verdict", pass: false, errors: [found.error.cause] };
-    }
-    const materials = found.value;
-    const errors = [];
-    const major = materials.irVersion().majorVersion();
-    if (Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR) {
-      errors.push(`irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`);
-    }
-    errors.push(...materials.schemaErrors().toArray().map((message) => message.asString()));
-    if (errors.length === 0) {
-      errors.push(...materials.units().wellFormednessErrors());
-    }
-    return { kind: "verdict", pass: errors.length === 0, errors };
+    return matchResult(this.#repository.findById(DesignIntermediateRepresentationValidationMaterialsIdentifier.of(modelId)), {
+      ok: (materials) => ({
+        kind: "verdict",
+        assessment: materials.assess()
+      }),
+      err: (error) => error.kind === "not-found" ? { kind: "not-applicable" } : { kind: "acquisition-failed", error }
+    });
   }
 }
 // src/design/usecase/verify-design-quint-usecase.ts
-var BACKEND = "quint";
-var INITIAL_METHOD_NAME = "simulation";
+var INITIAL_METHOD = VerificationMethod.of("simulation");
 var UNIT_WALL_TIMEOUT_MS = 50000;
 var RUN_BUDGET_MS = 50000;
 var UNREACH_BUDGET_MS = 70000;
-var BOUND_STEPS = 8;
-function initialMethod() {
-  const parsed = VerificationMethod.parse(INITIAL_METHOD_NAME);
-  if (!parsed.ok)
-    throw new Error(`defect: "${INITIAL_METHOD_NAME}" is not a verification method`);
-  return parsed.value;
-}
 
 class VerifyDesignQuintUseCase {
   #siblingBackendClient;
@@ -11118,265 +11694,82 @@ class VerifyDesignQuintUseCase {
     this.#acquirer = new DesignVerificationAcquirer(designModelRepository, this.#finalizer);
   }
   execute(input) {
-    const id = DesignReportIdentifier.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#acquirer.acquire(input.modelId, id, initialMethod());
-    if (acquired.kind === "terminal")
-      return acquired.outcome;
-    if (acquired.kind !== "ready")
-      return unreachable(acquired);
-    const model = acquired.model;
-    const irHash = acquired.irHash;
-    const findings = [];
-    const skipped = [];
-    const checkedUnits = [];
-    let method = null;
+    const id = DesignReportIdentifier.of(input.verifyDirectory, "quint");
+    return matchResult(this.#acquirer.acquire(input.modelId, id, INITIAL_METHOD, input.verifyDirectory), {
+      err: (outcome) => outcome,
+      ok: (model) => this.#verify(input, id, model)
+    });
+  }
+  #verify(input, id, model) {
+    let report = DesignReport.started(id, model, INITIAL_METHOD);
     const started = this.#clock.now();
     let probesUsed = 0;
-    for (const u of model.units()) {
+    for (const unit of model) {
       if (this.#clock.now() - started > RUN_BUDGET_MS) {
-        for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({
-            target: t,
-            reason: SkipReason.timeout(),
-            unit: UnitName.of(u.name()),
-            detail: "the per-run backend budget was exhausted before this unit"
-          }));
-        }
+        report = report.unitTimedOut(unit);
         continue;
       }
-      const lowered = u.lowered({ synthetics: false });
-      const mainRemaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
-      if (mainRemaining < 3000) {
-        for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({
-            target: t,
-            reason: SkipReason.timeout(),
-            unit: UnitName.of(u.name()),
-            detail: "the per-run backend budget was exhausted before this unit"
-          }));
-        }
+      const lowered = unit.lowered({ synthetics: false });
+      const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
+      if (remaining < 3000) {
+        report = report.unitTimedOut(unit);
         continue;
       }
-      const run = this.#siblingBackendClient.runLowered("quint", u, lowered, mainRemaining);
-      if (run.exit === 127) {
-        const reason = run.doc?.unavailableReason() ?? "quint CLI could not be executed by the lowered v1 backend";
-        const unavailable = DesignReport.backendUnavailable(id, model, irHash, method ?? INITIAL_METHOD_NAME, reason, "quint CLI missing");
-        const saved = this.#finalizer.finalize(unavailable, model);
-        if (!saved.ok)
-          return { kind: "save-failed", error: saved.error };
-        return { kind: "backend-unavailable" };
+      const run = this.#siblingBackendClient.runLowered("quint", unit, lowered, remaining);
+      report = run.recordedIn(report, model, unit, lowered);
+      if (run.isBackendUnavailable()) {
+        return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
+          err: (error) => ({ kind: "save-failed", error }),
+          ok: () => ({ kind: "backend-unavailable" })
+        });
       }
-      if (run.doc === null) {
-        for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({
-            target: t,
-            reason: SkipReason.unavailable(),
-            unit: UnitName.of(u.name()),
-            detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})`
-          }));
-        }
+      if (!run.canInspectReachability())
         continue;
-      }
-      const remapped = run.doc.remapVerdicts(u, lowered.index());
-      if (remapped.unavailable !== null) {
-        for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({
-            target: t,
-            reason: SkipReason.unavailable(),
-            unit: UnitName.of(u.name()),
-            detail: remapped.unavailable
-          }));
-        }
-        continue;
-      }
-      method = method ?? remapped.method;
-      findings.push(...remapped.findings);
-      skipped.push(...remapped.skipped);
-      checkedUnits.push(`unit:${u.name()}`);
-      for (const sm of u.machines().sortedById()) {
-        const attrPath = lowered.index().attrPathOfMachine(sm.id().asString()) ?? DesignMachines.attrPathOf(sm);
-        const candidates = sm.nonInitialCandidates(u.enumValuesOf(attrPath));
-        if (candidates.length === 0)
-          continue;
-        if (method !== "bounded") {
-          skipped.push(DesignSkipped.of({
-            target: sm.id().asTargetId(),
-            reason: SkipReason.capability(),
-            unit: UnitName.of(u.name()),
-            detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`
-          }));
-          continue;
-        }
-        const leftover = [];
-        for (const state of candidates) {
+      for (let machine of report.planReachability(unit, lowered)) {
+        for (const probe of machine) {
           const probeRemaining = Math.min(UNIT_WALL_TIMEOUT_MS, UNREACH_BUDGET_MS - (this.#clock.now() - started));
-          if (probesUsed >= this.#unreachCap || probeRemaining < 3000) {
-            leftover.push(state);
+          if (probesUsed >= this.#unreachCap || probeRemaining < 3000)
             continue;
-          }
           probesUsed += 1;
-          const probe = this.#siblingBackendClient.probeState(u, lowered, attrPath, state, probeRemaining);
-          probe.match({
-            reached: () => {},
-            unverified: () => {
-              leftover.push(state);
-            },
-            notReachedWithinBound: () => {
-              findings.push(DesignFinding.of({
-                kind: FindingKind.unreachable(),
-                functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-                targets: TargetIdentifiers.of(Array.from([sm.id().asString()], (raw) => TargetIdentifier.of(raw))),
-                witness: DesignWitness.model({ [attrPath]: state }),
-                unit: UnitName.of(u.name()),
-                detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state \u2014 it may be dead.`
-              }));
-            }
-          });
+          machine = machine.withVerdict(probe, this.#siblingBackendClient.probeState(probe, probeRemaining));
         }
-        if (leftover.length > 0) {
-          skipped.push(DesignSkipped.of({
-            target: sm.id().asTargetId(),
-            reason: probesUsed >= this.#unreachCap ? SkipReason.timeout() : SkipReason.unavailable(),
-            unit: UnitName.of(u.name()),
-            detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id().asString()} (per-run cap ${this.#unreachCap} / budget reached, or the probe run failed)`
-          }));
-        }
+        report = machine.recordedIn(report, probesUsed >= this.#unreachCap, this.#unreachCap);
       }
     }
     const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsIdentifier.of(input.modelId));
-    let inputs;
-    if (materials.ok && materials.value.isActive()) {
-      const context = materials.value;
-      const req = context.requirements();
-      const acq = context.mapAcquisition();
-      const reqTargets = req.allTargetIds();
-      const skipAll = (reason, detail) => {
-        for (const u of model.units()) {
-          for (const t of reqTargets)
-            skipped.push(DesignSkipped.of({ target: t, reason, unit: UnitName.of(u.name()), detail }));
+    report = matchResult(materials, {
+      err: (error) => report.refinementUnavailable(error.path, error.kind),
+      ok: (context) => {
+        const prepared = context.prepare(model);
+        let refined = prepared.recordedIn(report);
+        for (const plan of prepared) {
+          refined = plan.quintPreparedIn(refined);
+          if (!plan.hasQuintInvariants())
+            continue;
+          const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (this.#clock.now() - started));
+          if (remaining < 3000) {
+            refined = plan.quintTimedOut(refined);
+            continue;
+          }
+          refined = plan.quintRecordedIn(refined, this.#siblingBackendClient.runRefinement(plan, remaining));
         }
-      };
-      acq.match({
-        absent: (error) => {
-          skipAll(SkipReason.absentInput(), error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
-        },
-        loaded: (map, mapArtifact, mapInputs) => {
-          if (!map.requirementsIrHash().equals(req.hash())) {
-            skipAll(SkipReason.staleInput(), "the refinement map's requirementsIrHash no longer matches the requirements formal model \u2014 re-author the map");
-            return;
-          }
-          if (!map.designIrHash().equals(irHash)) {
-            skipAll(SkipReason.staleInput(), "the refinement map's designIrHash no longer matches this design IR \u2014 re-author the map");
-            return;
-          }
-          inputs = mapInputs;
-          for (const u of model.units()) {
-            const unitMap = map.unitMapOf(u.id());
-            if (!unitMap) {
-              for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({
-                  target: t,
-                  reason: SkipReason.absentInput(),
-                  unit: UnitName.of(u.name()),
-                  detail: `the refinement map has no entry for unit ${u.name()}`
-                }));
-              }
-              continue;
-            }
-            const plan = UnitRefinementPlan.of(u, unitMap, req, mapArtifact);
-            findings.push(...plan.gaps());
-            skipped.push(...plan.quintStatusSkips(req, u.name()));
-            const extras = plan.quintInvariants(req);
-            if (extras.isEmpty())
-              continue;
-            const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (this.#clock.now() - started));
-            if (remaining < 3000) {
-              for (const e of extras) {
-                skipped.push(DesignSkipped.of({
-                  target: e.reqTarget(),
-                  reason: SkipReason.timeout(),
-                  unit: UnitName.of(u.name()),
-                  detail: "the per-run backend budget was exhausted before the refinement pass"
-                }));
-              }
-              continue;
-            }
-            const base = u.lowered({ synthetics: false });
-            let refinementObligations = base.obligations();
-            let refinementIndex = base.index();
-            let n = refinementObligations.count();
-            for (const e of extras) {
-              n += 1;
-              const lowId = LoweredIdentifier.of(`OB-${n}`);
-              refinementObligations = refinementObligations.add(e.loweredAs(lowId));
-              refinementIndex = refinementIndex.withPassthrough(lowId.asString(), e.reqId().asString());
-            }
-            const lowered = base.extendedWith(refinementObligations, refinementIndex);
-            const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
-            if (run.exit !== 0 || run.doc === null) {
-              for (const e of extras) {
-                skipped.push(DesignSkipped.of({
-                  target: e.reqTarget(),
-                  reason: SkipReason.unavailable(),
-                  unit: UnitName.of(u.name()),
-                  detail: `refinement pass could not run (${run.note.slice(0, 120)})`
-                }));
-              }
-              continue;
-            }
-            const remapped = run.doc.remapVerdicts(u, lowered.index());
-            if (remapped.unavailable !== null) {
-              for (const e of extras) {
-                skipped.push(DesignSkipped.of({
-                  target: e.reqTarget(),
-                  reason: SkipReason.unavailable(),
-                  unit: UnitName.of(u.name()),
-                  detail: `refinement pass degraded: ${remapped.unavailable}`
-                }));
-              }
-              continue;
-            }
-            const interpreted = extras.interpret(remapped.findings, remapped.skipped, u.name());
-            findings.push(...interpreted.findings);
-            skipped.push(...interpreted.skipped);
-          }
-        }
-      });
-    }
-    const finalMethod = method ?? INITIAL_METHOD_NAME;
-    const report = DesignReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: finalMethod,
-      findings: DesignFindings.of(findings),
-      skipped: DesignSkips.of(skipped),
-      ...inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {},
-      checked: CheckedUnits.of(Array.from(checkedUnits, (raw) => UnitName.of(raw))),
-      ...!materials.ok ? {
-        unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})`
-      } : {}
+        return refined;
+      }
     });
-    const finalized = this.#finalizer.finalize(report, model);
-    if (!finalized.ok)
-      return { kind: "save-failed", error: finalized.error };
-    if (!materials.ok)
-      return { kind: "acquisition-failed", error: materials.error };
-    return finalized.value;
+    return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
+      err: (error) => ({ kind: "save-failed", error }),
+      ok: (directory) => matchResult(materials, {
+        err: (error) => ({ kind: "acquisition-failed", error }),
+        ok: () => ({ kind: "verified", directory })
+      })
+    });
   }
 }
 // src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts
-var BACKEND2 = "smt";
-var METHOD = "exhaustive";
+var METHOD = VerificationMethod.of("exhaustive");
 var UNIT_WALL_TIMEOUT_MS2 = 55000;
 var RUN_BUDGET_MS2 = 60000;
 var REFINEMENT_DEADLINE_MS = 65000;
-function initialMethod2() {
-  const parsed = VerificationMethod.parse(METHOD);
-  if (!parsed.ok)
-    throw new Error(`defect: "${METHOD}" is not a verification method`);
-  return parsed.value;
-}
 
 class VerifyDesignSatisfiabilityModuloTheoriesUseCase {
   #siblingBackendClient;
@@ -11394,175 +11787,59 @@ class VerifyDesignSatisfiabilityModuloTheoriesUseCase {
     this.#acquirer = new DesignVerificationAcquirer(designModelRepository, this.#finalizer);
   }
   execute(input) {
-    const id = DesignReportIdentifier.of(input.verifyDirectory, BACKEND2);
-    const acquired = this.#acquirer.acquire(input.modelId, id, initialMethod2());
-    if (acquired.kind === "terminal")
-      return acquired.outcome;
-    if (acquired.kind !== "ready")
-      return unreachable(acquired);
-    const model = acquired.model;
-    const irHash = acquired.irHash;
-    const findings = [];
-    const skipped = [];
-    const checkedUnits = [];
+    const id = DesignReportIdentifier.of(input.verifyDirectory, "smt");
+    return matchResult(this.#acquirer.acquire(input.modelId, id, METHOD, input.verifyDirectory), {
+      err: (outcome) => outcome,
+      ok: (model) => this.#verify(input, id, model)
+    });
+  }
+  #verify(input, id, model) {
+    let report = DesignReport.started(id, model, METHOD);
     const started = this.#clock.now();
-    for (const u of model.units()) {
+    for (const unit of model) {
       if (this.#clock.now() - started > RUN_BUDGET_MS2) {
-        for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({
-            target: t,
-            reason: SkipReason.timeout(),
-            unit: UnitName.of(u.name()),
-            detail: "the per-run solver budget was exhausted before this unit"
-          }));
-        }
+        report = report.unitTimedOut(unit);
         continue;
       }
-      const lowered = u.lowered({ synthetics: true });
+      const lowered = unit.lowered({ synthetics: true });
       const remaining = Math.min(UNIT_WALL_TIMEOUT_MS2, RUN_BUDGET_MS2 - (this.#clock.now() - started));
       if (remaining < 3000) {
-        for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({
-            target: t,
-            reason: SkipReason.timeout(),
-            unit: UnitName.of(u.name()),
-            detail: "the per-run solver budget was exhausted before this unit"
-          }));
-        }
+        report = report.unitTimedOut(unit);
         continue;
       }
-      const run = this.#siblingBackendClient.runLowered("smt", u, lowered, remaining);
-      if (run.exit === 127) {
-        const reason = run.doc?.unavailableReason() ?? "z3 could not be executed by the lowered v1 backend";
-        const unavailable = DesignReport.backendUnavailable(id, model, irHash, METHOD, reason, "z3 could not be executed");
-        const saved = this.#finalizer.finalize(unavailable, model);
-        if (!saved.ok)
-          return { kind: "save-failed", error: saved.error };
-        return { kind: "backend-unavailable" };
+      const run = this.#siblingBackendClient.runLowered("smt", unit, lowered, remaining);
+      report = run.recordedIn(report, model, unit, lowered);
+      if (run.isBackendUnavailable()) {
+        return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
+          err: (error) => ({ kind: "save-failed", error }),
+          ok: () => ({ kind: "backend-unavailable" })
+        });
       }
-      if (run.doc === null) {
-        for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({
-            target: t,
-            reason: SkipReason.unavailable(),
-            unit: UnitName.of(u.name()),
-            detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})`
-          }));
-        }
-        continue;
-      }
-      const remapped = run.doc.remapVerdicts(u, lowered.index());
-      if (remapped.unavailable !== null) {
-        for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({
-            target: t,
-            reason: SkipReason.unavailable(),
-            unit: UnitName.of(u.name()),
-            detail: remapped.unavailable
-          }));
-        }
-        continue;
-      }
-      findings.push(...remapped.findings);
-      skipped.push(...remapped.skipped);
-      checkedUnits.push(`unit:${u.name()}`);
     }
     const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsIdentifier.of(input.modelId));
-    let inputs;
-    if (materials.ok && materials.value.isActive()) {
-      const context = materials.value;
-      const req = context.requirements();
-      const acq = context.mapAcquisition();
-      const reqTargets = req.allTargetIds();
-      const skipAll = (reason, detail) => {
-        for (const u of model.units()) {
-          for (const t of reqTargets)
-            skipped.push(DesignSkipped.of({ target: t, reason, unit: UnitName.of(u.name()), detail }));
+    report = matchResult(materials, {
+      err: (error) => report.refinementUnavailable(error.path, error.kind),
+      ok: (context) => {
+        const prepared = context.prepare(model);
+        let refined = prepared.recordedIn(report);
+        for (const plan of prepared) {
+          const remaining = REFINEMENT_DEADLINE_MS - (this.#clock.now() - started);
+          if (remaining < 5000) {
+            refined = plan.smtTimedOut(refined);
+            continue;
+          }
+          refined = this.#refinementSolverClient.check(plan, Math.min(30000, remaining)).recordedIn(refined);
         }
-      };
-      acq.match({
-        absent: (error) => {
-          skipAll(SkipReason.absentInput(), error ?? "no refinement map (deep-spec-analysis-refinement-map.md) was authored for this record");
-        },
-        loaded: (map, mapArtifact, mapInputs) => {
-          if (!map.requirementsIrHash().equals(req.hash())) {
-            skipAll(SkipReason.staleInput(), "the refinement map's requirementsIrHash no longer matches the requirements formal model \u2014 re-author the map");
-            return;
-          }
-          if (!map.designIrHash().equals(irHash)) {
-            skipAll(SkipReason.staleInput(), "the refinement map's designIrHash no longer matches this design IR \u2014 re-author the map");
-            return;
-          }
-          inputs = mapInputs;
-          for (const u of model.units()) {
-            const unitMap = map.unitMapOf(u.id());
-            if (!unitMap) {
-              for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({
-                  target: t,
-                  reason: SkipReason.absentInput(),
-                  unit: UnitName.of(u.name()),
-                  detail: `the refinement map has no entry for unit ${u.name()}`
-                }));
-              }
-              continue;
-            }
-            const refRemaining = REFINEMENT_DEADLINE_MS - (this.#clock.now() - started);
-            if (refRemaining < 5000) {
-              for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({
-                  target: t,
-                  reason: SkipReason.timeout(),
-                  unit: UnitName.of(u.name()),
-                  detail: "the per-run solver budget was exhausted before the refinement pass"
-                }));
-              }
-              continue;
-            }
-            const plan = UnitRefinementPlan.of(u, unitMap, req, mapArtifact);
-            const check = this.#refinementSolverClient.check(u, req, plan, Math.min(30000, refRemaining));
-            if (check.result.kind === "unavailable") {
-              for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({
-                  target: t,
-                  reason: SkipReason.unavailable(),
-                  unit: UnitName.of(u.name()),
-                  detail: check.result.reason
-                }));
-              }
-              continue;
-            }
-            findings.push(...plan.gaps());
-            skipped.push(...plan.smtStatusSkips(u.name()));
-            skipped.push(...check.plan.compileSkips());
-            if (check.result.kind === "solved") {
-              const interpreted = check.plan.interpret(check.result.verdicts, req, plan, u.name());
-              findings.push(...interpreted.findings);
-              skipped.push(...interpreted.skipped);
-            }
-          }
-        }
-      });
-    }
-    const report = DesignReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: METHOD,
-      findings: DesignFindings.of(findings),
-      skipped: DesignSkips.of(skipped),
-      ...inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {},
-      checked: CheckedUnits.of(Array.from(checkedUnits, (raw) => UnitName.of(raw))),
-      ...!materials.ok ? {
-        unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})`
-      } : {}
+        return refined;
+      }
     });
-    const finalized = this.#finalizer.finalize(report, model);
-    if (!finalized.ok)
-      return { kind: "save-failed", error: finalized.error };
-    if (!materials.ok)
-      return { kind: "acquisition-failed", error: materials.error };
-    return finalized.value;
+    return matchResult(this.#finalizer.finalize(input.verifyDirectory, report, model), {
+      err: (error) => ({ kind: "save-failed", error }),
+      ok: (directory) => matchResult(materials, {
+        err: (error) => ({ kind: "acquisition-failed", error }),
+        ok: () => ({ kind: "verified", directory })
+      })
+    });
   }
 }
 // src/entries/aidlc-sensor-deep-spec-design-verify-smt.ts
@@ -11627,7 +11904,7 @@ function main() {
       process.exit(0);
       break;
     case "version-mismatch":
-      process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: outcome.skippedCount, note: "ir-version-mismatch" })}
+      process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: outcome.report.skippedCount(), note: "ir-version-mismatch" })}
 `);
       process.exit(0);
       break;
@@ -11640,11 +11917,13 @@ function main() {
 `);
       process.exit(1);
       break;
-    case "verified":
-      process.stdout.write(`${JSON.stringify({ pass: outcome.pass, findings_count: outcome.findingsCount, skipped_count: outcome.skippedCount, method: outcome.method })}
+    case "verified": {
+      const report = outcome.directory.publishedReport();
+      process.stdout.write(`${JSON.stringify({ pass: report.passes(), findings_count: report.findingsCount(), skipped_count: report.skippedCount(), method: report.method() })}
 `);
       process.exit(0);
       break;
+    }
   }
 }
 main();

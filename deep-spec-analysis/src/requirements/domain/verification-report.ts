@@ -76,13 +76,12 @@ export class VerificationReport {
   static versionMismatch(
     id: VerificationReportIdentifier,
     model: RequirementsModel,
-    irHash: ContentHash,
     method: string,
   ): VerificationReport {
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
-      irHash,
+      irHash: model.irHash(),
       method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of(
@@ -102,14 +101,13 @@ export class VerificationReport {
   static solverUnavailable(
     id: VerificationReportIdentifier,
     model: RequirementsModel,
-    irHash: ContentHash,
     planSkipped: VerificationSkips,
     reason: string,
   ): VerificationReport {
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
-      irHash,
+      irHash: model.irHash(),
       method: "exhaustive",
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
@@ -129,15 +127,11 @@ export class VerificationReport {
   }
 
   // Quint バックエンド固有：CLI 不在（method "simulation" 固定）。
-  static quintUnavailable(
-    id: VerificationReportIdentifier,
-    model: RequirementsModel,
-    irHash: ContentHash,
-  ): VerificationReport {
+  static quintUnavailable(id: VerificationReportIdentifier, model: RequirementsModel): VerificationReport {
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
-      irHash,
+      irHash: model.irHash(),
       method: "simulation",
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of(
@@ -153,14 +147,13 @@ export class VerificationReport {
   static machineUncompilable(
     id: VerificationReportIdentifier,
     model: RequirementsModel,
-    irHash: ContentHash,
     method: string,
     machineError: string,
   ): VerificationReport {
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
-      irHash,
+      irHash: model.irHash(),
       method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([

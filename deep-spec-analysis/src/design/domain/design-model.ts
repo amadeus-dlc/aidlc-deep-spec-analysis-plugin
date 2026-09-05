@@ -2,8 +2,12 @@
 // ユニットのユニット名昇順は集約の不変条件として compose が一度だけ適用する
 // （旧 parseDesignIr 末尾のソートの移設）。
 
-import type { ContentHash, IntermediateRepresentationVersion } from "@deep-spec/kernel-domain";
+import type { ContentHash, IntermediateRepresentationVersion, VerificationMethod } from "@deep-spec/kernel-domain";
+import { err, ok, type Result } from "@deep-spec/kernel-infrastructure";
 import type { DesignModelIdentifier } from "./design-model-identifier.ts";
+import { DesignReport, SUPPORTED_DESIGN_IR_MAJOR } from "./design-report.ts";
+import type { DesignReportIdentifier } from "./design-report-identifier.ts";
+import type { DesignUnit } from "./design-unit.ts";
 import type { DesignUnits } from "./design-units.ts";
 
 export class DesignModel {
@@ -75,5 +79,15 @@ export class DesignModel {
 
   units(): DesignUnits {
     return this.#units;
+  }
+
+  *[Symbol.iterator](): Iterator<DesignUnit> {
+    yield* this.#units;
+  }
+
+  prepareVerification(id: DesignReportIdentifier, method: VerificationMethod): Result<DesignModel, DesignReport> {
+    return this.#irVersion.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR)
+      ? ok(this)
+      : err(DesignReport.versionMismatch(id, this, this.#irHash, method.asString()));
   }
 }

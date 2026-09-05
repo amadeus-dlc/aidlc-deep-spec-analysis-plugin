@@ -15,6 +15,7 @@
 //     ので、finalizing は必ずそれを落とす
 
 import type { ArtifactPath, ContentHash, FindingsSchema } from "@deep-spec/kernel-domain";
+import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReport } from "./verification-report.ts";
 import { VerificationReportIdentifier } from "./verification-report-identifier.ts";
@@ -55,6 +56,9 @@ export class VerificationDirectory {
   // 順）が与える全順序を崩さないため。候補が変わればクロスチェックは「いまの
   // reports から導いたもの」ではなくなるので落とす。
   finalizing(candidate: VerificationReport): VerificationDirectory {
+    if (!candidate.id().directory().equals(this.#directory)) {
+      throw new IllegalArgumentException({ kind: "verification-report-directory-mismatch" });
+    }
     const fileName = candidate.id().fileName();
     const merged: VerificationReport[] = [];
     let replaced = false;
@@ -140,6 +144,14 @@ export class VerificationDirectory {
 
   // 境界: この実行が公開する report。load 直後は不在。
   candidate(): VerificationReport | null {
+    return this.#candidate;
+  }
+
+  // 最終化済みディレクトリから公開文書を描画する境界。未最終化での利用は契約違反。
+  publishedReport(): VerificationReport {
+    if (this.#candidate === null) {
+      throw new IllegalArgumentException({ kind: "verification-directory-not-finalized" });
+    }
     return this.#candidate;
   }
 

@@ -1,13 +1,34 @@
-// doctor/domain の公開 facade — 明示列挙のみ（export * 禁止）。
+// doctor/domainの公開型。査定は観測を所有するモデルに集約する。
 
+export { ArtifactModifiedAt } from "./artifact-modified-at.ts";
 export { Check } from "./check.ts";
 export { CheckSeverity } from "./check-severity.ts";
+export { CoverageAssessment } from "./coverage-assessment.ts";
 export { CoverageState } from "./coverage-state.ts";
+export { DesignArtifactReference } from "./design-artifact-reference.ts";
+export { DesignArtifacts } from "./design-artifacts.ts";
 export { DigestAnchor } from "./digest-anchor.ts";
+export { FindingCount } from "./finding-count.ts";
+export { FunctionalObservation } from "./functional-observation.ts";
+export { FunctionalUnitObservation } from "./functional-unit-observation.ts";
 export { HealthVerdict } from "./health-verdict.ts";
 export { InstallationManifest } from "./installation-manifest.ts";
+export { InstallationProvenance } from "./installation-provenance.ts";
+export { InstallationSource } from "./installation-source.ts";
+export { InstalledRelease } from "./installed-release.ts";
 export { InstalledStatus } from "./installed-status.ts";
+export { IntentLocation } from "./intent-location.ts";
 export { ManifestEntry } from "./manifest-entry.ts";
 export { PluginVersion } from "./plugin-version.ts";
+export { ReleaseCatalog } from "./release-catalog.ts";
 export { SolverAvailability } from "./solver-availability.ts";
+export { StableReleases } from "./stable-releases.ts";
+export { StageScope } from "./stage-scope.ts";
+export { StageScopes } from "./stage-scopes.ts";
+export { StructuralDebt } from "./structural-debt.ts";
+export { StructuralObservation } from "./structural-observation.ts";
+export { UnitCoverage } from "./unit-coverage.ts";
+export { UnitCoverageProblem } from "./unit-coverage-problem.ts";
+export { VerificationObservation } from "./verification-observation.ts";
 export { VerificationStaleness } from "./verification-staleness.ts";
+export { VersionAdvisory } from "./version-advisory.ts";

@@ -1,0 +1,1724 @@
+{
+  "checkedFiles": 81,
+  "diagnostics": [
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-report-finalizer.ts",
+      "line": 47,
+      "column": 53,
+      "member": "DesignReport.id",
+      "declaration": "src/design/domain/design-report.ts",
+      "declarationLine": 200
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-report-finalizer.ts",
+      "line": 47,
+      "column": 53,
+      "member": "DesignReportIdentifier.directory",
+      "declaration": "src/design/domain/design-report-identifier.ts",
+      "declarationLine": 32
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/design-report-finalizer.ts",
+      "line": 49,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-report-finalizer.ts",
+      "line": 52,
+      "column": 23,
+      "member": "DesignVerifyDirectory.candidate",
+      "declaration": "src/design/domain/design-verify-directory.ts",
+      "declarationLine": 134
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-report-finalizer.ts",
+      "line": 58,
+      "column": 15,
+      "member": "DesignReport.id",
+      "declaration": "src/design/domain/design-report.ts",
+      "declarationLine": 200
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-report-finalizer.ts",
+      "line": 58,
+      "column": 15,
+      "member": "DesignReportIdentifier.fileName",
+      "declaration": "src/design/domain/design-report-identifier.ts",
+      "declarationLine": 37
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-report-finalizer.ts",
+      "line": 65,
+      "column": 22,
+      "member": "DesignReport.findingsCount",
+      "declaration": "src/design/domain/design-report.ts",
+      "declarationLine": 249
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-report-finalizer.ts",
+      "line": 66,
+      "column": 21,
+      "member": "DesignReport.skippedCount",
+      "declaration": "src/design/domain/design-report.ts",
+      "declarationLine": 253
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-report-finalizer.ts",
+      "line": 67,
+      "column": 15,
+      "member": "DesignReport.method",
+      "declaration": "src/design/domain/design-report.ts",
+      "declarationLine": 212
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-verification-acquirer.ts",
+      "line": 41,
+      "column": 62,
+      "member": "VerificationMethod.asString",
+      "declaration": "src/kernel/domain/verification-method.ts",
+      "declarationLine": 31
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/design-verification-acquirer.ts",
+      "line": 46,
+      "column": 19,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-verification-acquirer.ts",
+      "line": 47,
+      "column": 20,
+      "member": "DesignModel.irHash",
+      "declaration": "src/design/domain/design-model.ts",
+      "declarationLine": 53
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-verification-acquirer.ts",
+      "line": 51,
+      "column": 78,
+      "member": "VerificationMethod.asString",
+      "declaration": "src/kernel/domain/verification-method.ts",
+      "declarationLine": 31
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/design-verification-acquirer.ts",
+      "line": 53,
+      "column": 28,
+      "member": "DesignReport.skippedCount",
+      "declaration": "src/design/domain/design-report.ts",
+      "declarationLine": 253
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "line": 34,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "line": 37,
+      "column": 19,
+      "member": "DesignIntermediateRepresentationValidationMaterials.irVersion",
+      "declaration": "src/design/domain/design-intermediate-representation-validation-materials.ts",
+      "declarationLine": 46
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "line": 37,
+      "column": 19,
+      "member": "IntermediateRepresentationVersion.majorVersion",
+      "declaration": "src/kernel/domain/intermediate-representation-version.ts",
+      "declarationLine": 29
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "line": 40,
+      "column": 22,
+      "member": "DesignIntermediateRepresentationValidationMaterials.irVersion",
+      "declaration": "src/design/domain/design-intermediate-representation-validation-materials.ts",
+      "declarationLine": 46
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "line": 40,
+      "column": 22,
+      "member": "IntermediateRepresentationVersion.asString",
+      "declaration": "src/kernel/domain/intermediate-representation-version.ts",
+      "declarationLine": 38
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "line": 44,
+      "column": 10,
+      "member": "DesignIntermediateRepresentationValidationMaterials.schemaErrors",
+      "declaration": "src/design/domain/design-intermediate-representation-validation-materials.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "line": 44,
+      "column": 10,
+      "member": "ErrorMessages.toArray",
+      "declaration": "src/kernel/domain/error-messages.ts",
+      "declarationLine": 41
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "line": 47,
+      "column": 27,
+      "member": "ErrorMessage.asString",
+      "declaration": "src/kernel/domain/error-message.ts",
+      "declarationLine": 26
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "line": 51,
+      "column": 22,
+      "member": "DesignIntermediateRepresentationValidationMaterials.units",
+      "declaration": "src/design/domain/design-intermediate-representation-validation-materials.ts",
+      "declarationLine": 54
+    },
+    {
+      "rule": "unclassified-domain-access",
+      "path": "src/design/usecase/validate-design-intermediate-representation-usecase.ts",
+      "line": 51,
+      "column": 22,
+      "member": "DesignUnitDeclarations.wellFormednessErrors",
+      "declaration": "src/design/domain/design-unit-declarations.ts",
+      "declarationLine": 24
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 61,
+      "column": 10,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 107,
+      "column": 21,
+      "member": "DesignModel.units",
+      "declaration": "src/design/domain/design-model.ts",
+      "declarationLine": 76
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 114,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 130,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 139,
+      "column": 24,
+      "member": "SiblingVerdictDocument.unavailableReason",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 63
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 158,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 165,
+      "column": 49,
+      "member": "LoweredUnit.index",
+      "declaration": "src/design/domain/lowered-unit.ts",
+      "declarationLine": 54
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 166,
+      "column": 11,
+      "member": "unavailable",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 108
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 172,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 173,
+      "column": 23,
+      "member": "unavailable",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 109
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 179,
+      "column": 26,
+      "member": "method",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 108
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 180,
+      "column": 24,
+      "member": "findings",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 105
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 181,
+      "column": 23,
+      "member": "skipped",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 106
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 182,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 185,
+      "column": 24,
+      "member": "DesignUnit.machines",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 121
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 186,
+      "column": 26,
+      "member": "LoweredUnit.index",
+      "declaration": "src/design/domain/lowered-unit.ts",
+      "declarationLine": 54
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 186,
+      "column": 26,
+      "member": "LoweringIndex.attrPathOfMachine",
+      "declaration": "src/design/domain/lowering-index.ts",
+      "declarationLine": 84
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 186,
+      "column": 60,
+      "member": "DesignMachine.id",
+      "declaration": "src/design/domain/design-machine.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 186,
+      "column": 60,
+      "member": "DesignMachineIdentifier.asString",
+      "declaration": "src/design/domain/design-machine-identifier.ts",
+      "declarationLine": 32
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 186,
+      "column": 83,
+      "member": "DesignMachines.attrPathOf",
+      "declaration": "src/design/domain/design-machines.ts",
+      "declarationLine": 39
+    },
+    {
+      "rule": "unclassified-domain-access",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 188,
+      "column": 28,
+      "member": "DesignMachine.nonInitialCandidates",
+      "declaration": "src/design/domain/design-machine.ts",
+      "declarationLine": 77
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 188,
+      "column": 52,
+      "member": "DesignUnit.enumValuesOf",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 313
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 193,
+      "column": 23,
+      "member": "DesignMachine.id",
+      "declaration": "src/design/domain/design-machine.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 195,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 196,
+      "column": 58,
+      "member": "DesignMachine.id",
+      "declaration": "src/design/domain/design-machine.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 196,
+      "column": 58,
+      "member": "DesignMachineIdentifier.asString",
+      "declaration": "src/design/domain/design-machine-identifier.ts",
+      "declarationLine": 32
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 220,
+      "column": 61,
+      "member": "DesignMachine.id",
+      "declaration": "src/design/domain/design-machine.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 220,
+      "column": 61,
+      "member": "DesignMachineIdentifier.asString",
+      "declaration": "src/design/domain/design-machine-identifier.ts",
+      "declarationLine": 32
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 222,
+      "column": 37,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 223,
+      "column": 50,
+      "member": "DesignMachine.id",
+      "declaration": "src/design/domain/design-machine.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 223,
+      "column": 50,
+      "member": "DesignMachineIdentifier.asString",
+      "declaration": "src/design/domain/design-machine-identifier.ts",
+      "declarationLine": 32
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 232,
+      "column": 23,
+      "member": "DesignMachine.id",
+      "declaration": "src/design/domain/design-machine.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 234,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 235,
+      "column": 101,
+      "member": "DesignMachine.id",
+      "declaration": "src/design/domain/design-machine.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 235,
+      "column": 101,
+      "member": "DesignMachineIdentifier.asString",
+      "declaration": "src/design/domain/design-machine-identifier.ts",
+      "declarationLine": 32
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 245,
+      "column": 25,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 246,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 247,
+      "column": 19,
+      "member": "RefinementMaterials.requirements",
+      "declaration": "src/design/domain/refinement-materials.ts",
+      "declarationLine": 44
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 248,
+      "column": 19,
+      "member": "RefinementMaterials.mapAcquisition",
+      "declaration": "src/design/domain/refinement-materials.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 251,
+      "column": 25,
+      "member": "DesignModel.units",
+      "declaration": "src/design/domain/design-model.ts",
+      "declarationLine": 76
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 253,
+      "column": 82,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 264,
+      "column": 16,
+      "member": "RefinementMap.requirementsIrHash",
+      "declaration": "src/design/domain/refinement-map.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 264,
+      "column": 48,
+      "member": "RefinementRequirements.hash",
+      "declaration": "src/design/domain/refinement-requirements.ts",
+      "declarationLine": 51
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 271,
+      "column": 16,
+      "member": "RefinementMap.designIrHash",
+      "declaration": "src/design/domain/refinement-map.ts",
+      "declarationLine": 55
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 279,
+      "column": 27,
+      "member": "DesignModel.units",
+      "declaration": "src/design/domain/design-model.ts",
+      "declarationLine": 76
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 280,
+      "column": 29,
+      "member": "RefinementMap.unitMapOf",
+      "declaration": "src/design/domain/refinement-map.ts",
+      "declarationLine": 63
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 287,
+      "column": 39,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 288,
+      "column": 73,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 295,
+      "column": 30,
+      "member": "UnitRefinementPlan.gaps",
+      "declaration": "src/design/domain/unit-refinement-plan.ts",
+      "declarationLine": 335
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 296,
+      "column": 56,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 309,
+      "column": 39,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 317,
+      "column": 41,
+      "member": "LoweredUnit.obligations",
+      "declaration": "src/design/domain/lowered-unit.ts",
+      "declarationLine": 42
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 318,
+      "column": 35,
+      "member": "LoweredUnit.index",
+      "declaration": "src/design/domain/lowered-unit.ts",
+      "declarationLine": 54
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 319,
+      "column": 21,
+      "member": "LoweredObligations.count",
+      "declaration": "src/design/domain/lowered-obligations.ts",
+      "declarationLine": 24
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 324,
+      "column": 65,
+      "member": "LoweredIdentifier.asString",
+      "declaration": "src/design/domain/lowered-identifier.ts",
+      "declarationLine": 27
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 324,
+      "column": 83,
+      "member": "ObligationIdentifier.asString",
+      "declaration": "src/requirements/domain/obligation-identifier.ts",
+      "declarationLine": 37
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 324,
+      "column": 83,
+      "member": "RefinementQuintInvariant.reqId",
+      "declaration": "src/design/domain/refinement-quint-invariant.ts",
+      "declarationLine": 41
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 334,
+      "column": 39,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 341,
+      "column": 55,
+      "member": "LoweredUnit.index",
+      "declaration": "src/design/domain/lowered-unit.ts",
+      "declarationLine": 54
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 342,
+      "column": 17,
+      "member": "unavailable",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 108
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 348,
+      "column": 39,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 349,
+      "column": 58,
+      "member": "unavailable",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 109
+    },
+    {
+      "rule": "unclassified-domain-access",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 355,
+      "column": 33,
+      "member": "RefinementQuintInvariants.interpret",
+      "declaration": "src/design/domain/refinement-quint-invariants.ts",
+      "declarationLine": 44
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 355,
+      "column": 50,
+      "member": "findings",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 105
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 355,
+      "column": 69,
+      "member": "skipped",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 106
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 355,
+      "column": 87,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 356,
+      "column": 30,
+      "member": "findings",
+      "declaration": "src/design/domain/refinement-quint-invariants.ts",
+      "declarationLine": 48
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 357,
+      "column": 29,
+      "member": "skipped",
+      "declaration": "src/design/domain/refinement-quint-invariants.ts",
+      "declarationLine": 48
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 366,
+      "column": 18,
+      "member": "DesignModel.irVersion",
+      "declaration": "src/design/domain/design-model.ts",
+      "declarationLine": 63
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/verify-design-quint-usecase.ts",
+      "line": 384,
+      "column": 12,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 52,
+      "column": 10,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 96,
+      "column": 21,
+      "member": "DesignModel.units",
+      "declaration": "src/design/domain/design-model.ts",
+      "declarationLine": 76
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 103,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 120,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 129,
+      "column": 24,
+      "member": "SiblingVerdictDocument.unavailableReason",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 63
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 148,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 155,
+      "column": 49,
+      "member": "LoweredUnit.index",
+      "declaration": "src/design/domain/lowered-unit.ts",
+      "declarationLine": 54
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 156,
+      "column": 11,
+      "member": "unavailable",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 108
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 162,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 163,
+      "column": 23,
+      "member": "unavailable",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 109
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 169,
+      "column": 24,
+      "member": "findings",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 105
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 170,
+      "column": 23,
+      "member": "skipped",
+      "declaration": "src/design/domain/sibling-verdict-document.ts",
+      "declarationLine": 106
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 171,
+      "column": 33,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 179,
+      "column": 25,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 180,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 181,
+      "column": 19,
+      "member": "RefinementMaterials.requirements",
+      "declaration": "src/design/domain/refinement-materials.ts",
+      "declarationLine": 44
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 182,
+      "column": 19,
+      "member": "RefinementMaterials.mapAcquisition",
+      "declaration": "src/design/domain/refinement-materials.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 185,
+      "column": 25,
+      "member": "DesignModel.units",
+      "declaration": "src/design/domain/design-model.ts",
+      "declarationLine": 76
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 187,
+      "column": 82,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 198,
+      "column": 16,
+      "member": "RefinementMap.requirementsIrHash",
+      "declaration": "src/design/domain/refinement-map.ts",
+      "declarationLine": 50
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 198,
+      "column": 48,
+      "member": "RefinementRequirements.hash",
+      "declaration": "src/design/domain/refinement-requirements.ts",
+      "declarationLine": 51
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 205,
+      "column": 16,
+      "member": "RefinementMap.designIrHash",
+      "declaration": "src/design/domain/refinement-map.ts",
+      "declarationLine": 55
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 213,
+      "column": 27,
+      "member": "DesignModel.units",
+      "declaration": "src/design/domain/design-model.ts",
+      "declarationLine": 76
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 214,
+      "column": 29,
+      "member": "RefinementMap.unitMapOf",
+      "declaration": "src/design/domain/refinement-map.ts",
+      "declarationLine": 63
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 221,
+      "column": 39,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 222,
+      "column": 73,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 235,
+      "column": 39,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 252,
+      "column": 39,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 259,
+      "column": 30,
+      "member": "UnitRefinementPlan.gaps",
+      "declaration": "src/design/domain/unit-refinement-plan.ts",
+      "declarationLine": 335
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 260,
+      "column": 49,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 261,
+      "column": 29,
+      "member": "RefinementSolverPlan.compileSkips",
+      "declaration": "src/design/domain/refinement-solver-plan.ts",
+      "declarationLine": 44
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 263,
+      "column": 90,
+      "member": "DesignUnit.name",
+      "declaration": "src/design/domain/design-unit.ts",
+      "declarationLine": 103
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 264,
+      "column": 32,
+      "member": "findings",
+      "declaration": "src/design/domain/refinement-solver-plan.ts",
+      "declarationLine": 61
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 265,
+      "column": 31,
+      "member": "skipped",
+      "declaration": "src/design/domain/refinement-solver-plan.ts",
+      "declarationLine": 62
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 274,
+      "column": 18,
+      "member": "DesignModel.irVersion",
+      "declaration": "src/design/domain/design-model.ts",
+      "declarationLine": 63
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/design/usecase/verify-design-satisfiability-modulo-theories-usecase.ts",
+      "line": 292,
+      "column": 12,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/doctor/usecase/check-installation-usecase.ts",
+      "line": 15,
+      "column": 66,
+      "member": "ManifestEntry.rel",
+      "declaration": "src/doctor/domain/manifest-entry.ts",
+      "declarationLine": 19
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/doctor/usecase/check-version-advisory-usecase.ts",
+      "line": 23,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/doctor/usecase/check-version-advisory-usecase.ts",
+      "line": 27,
+      "column": 27,
+      "member": "PluginVersion.asString",
+      "declaration": "src/doctor/domain/plugin-version.ts",
+      "declarationLine": 44
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/doctor/usecase/check-version-advisory-usecase.ts",
+      "line": 37,
+      "column": 58,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/doctor/usecase/check-version-advisory-usecase.ts",
+      "line": 37,
+      "column": 86,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/doctor/usecase/check-version-advisory-usecase.ts",
+      "line": 41,
+      "column": 27,
+      "member": "PluginVersion.asString",
+      "declaration": "src/doctor/domain/plugin-version.ts",
+      "declarationLine": 44
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/doctor/usecase/check-version-advisory-usecase.ts",
+      "line": 49,
+      "column": 25,
+      "member": "PluginVersion.asString",
+      "declaration": "src/doctor/domain/plugin-version.ts",
+      "declarationLine": 44
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/doctor/usecase/check-version-advisory-usecase.ts",
+      "line": 50,
+      "column": 22,
+      "member": "PluginVersion.asTag",
+      "declaration": "src/doctor/domain/plugin-version.ts",
+      "declarationLine": 48
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/refcheck/usecase/check-contract-summary-usecase.ts",
+      "line": 33,
+      "column": 21,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/refcheck/usecase/check-contract-summary-usecase.ts",
+      "line": 37,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/refcheck/usecase/check-contract-summary-usecase.ts",
+      "line": 45,
+      "column": 22,
+      "member": "ReferenceCheckReport.findingsCount",
+      "declaration": "src/refcheck/domain/reference-check-report.ts",
+      "declarationLine": 209
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/refcheck/usecase/check-contract-summary-usecase.ts",
+      "line": 46,
+      "column": 21,
+      "member": "ReferenceCheckReport.skippedCount",
+      "declaration": "src/refcheck/domain/reference-check-report.ts",
+      "declarationLine": 213
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/refcheck/usecase/check-domain-components-usecase.ts",
+      "line": 31,
+      "column": 21,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/refcheck/usecase/check-domain-components-usecase.ts",
+      "line": 35,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/refcheck/usecase/check-domain-components-usecase.ts",
+      "line": 43,
+      "column": 22,
+      "member": "ReferenceCheckReport.findingsCount",
+      "declaration": "src/refcheck/domain/reference-check-report.ts",
+      "declarationLine": 209
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/refcheck/usecase/check-domain-components-usecase.ts",
+      "line": 44,
+      "column": 21,
+      "member": "ReferenceCheckReport.skippedCount",
+      "declaration": "src/refcheck/domain/reference-check-report.ts",
+      "declarationLine": 213
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/refcheck/usecase/check-functional-design-usecase.ts",
+      "line": 31,
+      "column": 21,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/refcheck/usecase/check-functional-design-usecase.ts",
+      "line": 35,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/refcheck/usecase/check-functional-design-usecase.ts",
+      "line": 43,
+      "column": 22,
+      "member": "ReferenceCheckReport.findingsCount",
+      "declaration": "src/refcheck/domain/reference-check-report.ts",
+      "declarationLine": 209
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/refcheck/usecase/check-functional-design-usecase.ts",
+      "line": 44,
+      "column": 21,
+      "member": "ReferenceCheckReport.skippedCount",
+      "declaration": "src/refcheck/domain/reference-check-report.ts",
+      "declarationLine": 213
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 41,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 44,
+      "column": 19,
+      "member": "IntermediateRepresentationValidationMaterials.irVersion",
+      "declaration": "src/requirements/domain/intermediate-representation-validation-materials.ts",
+      "declarationLine": 58
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 44,
+      "column": 19,
+      "member": "IntermediateRepresentationVersion.majorVersion",
+      "declaration": "src/kernel/domain/intermediate-representation-version.ts",
+      "declarationLine": 29
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 47,
+      "column": 22,
+      "member": "IntermediateRepresentationValidationMaterials.irVersion",
+      "declaration": "src/requirements/domain/intermediate-representation-validation-materials.ts",
+      "declarationLine": 58
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 47,
+      "column": 22,
+      "member": "IntermediateRepresentationVersion.asString",
+      "declaration": "src/kernel/domain/intermediate-representation-version.ts",
+      "declarationLine": 38
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 51,
+      "column": 10,
+      "member": "ErrorMessages.toArray",
+      "declaration": "src/kernel/domain/error-messages.ts",
+      "declarationLine": 41
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 51,
+      "column": 10,
+      "member": "IntermediateRepresentationValidationMaterials.schemaErrors",
+      "declaration": "src/requirements/domain/intermediate-representation-validation-materials.ts",
+      "declarationLine": 62
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 54,
+      "column": 27,
+      "member": "ErrorMessage.asString",
+      "declaration": "src/kernel/domain/error-message.ts",
+      "declarationLine": 26
+    },
+    {
+      "rule": "unclassified-domain-access",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 59,
+      "column": 22,
+      "member": "IntermediateRepresentationModelDeclaration.wellFormednessErrors",
+      "declaration": "src/requirements/domain/intermediate-representation-model-declaration.ts",
+      "declarationLine": 48
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 59,
+      "column": 22,
+      "member": "IntermediateRepresentationValidationMaterials.view",
+      "declaration": "src/requirements/domain/intermediate-representation-validation-materials.ts",
+      "declarationLine": 66
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 62,
+      "column": 66,
+      "member": "IntermediateRepresentationValidationMaterials.sourceId",
+      "declaration": "src/requirements/domain/intermediate-representation-validation-materials.ts",
+      "declarationLine": 79
+    },
+    {
+      "rule": "unclassified-domain-access",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 66,
+      "column": 24,
+      "member": "FunctionalRequirementReferenceIndex.missingErrors",
+      "declaration": "src/requirements/domain/functional-requirement-reference-index.ts",
+      "declarationLine": 34
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 66,
+      "column": 44,
+      "member": "RequirementsSource.knownIds",
+      "declaration": "src/requirements/domain/requirements-source.ts",
+      "declarationLine": 48
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 66,
+      "column": 44,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "unclassified-domain-access",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 67,
+      "column": 24,
+      "member": "SourceAnchor.errors",
+      "declaration": "src/requirements/domain/source-anchor.ts",
+      "declarationLine": 21
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 67,
+      "column": 40,
+      "member": "IntermediateRepresentationValidationMaterials.declaredDigest",
+      "declaration": "src/requirements/domain/intermediate-representation-validation-materials.ts",
+      "declarationLine": 75
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 67,
+      "column": 68,
+      "member": "RequirementsSource.digest",
+      "declaration": "src/requirements/domain/requirements-source.ts",
+      "declarationLine": 53
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/requirements/usecase/validate-intermediate-representation-usecase.ts",
+      "line": 67,
+      "column": 68,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verification-report-finalizer.ts",
+      "line": 49,
+      "column": 53,
+      "member": "VerificationReport.id",
+      "declaration": "src/requirements/domain/verification-report.ts",
+      "declarationLine": 234
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verification-report-finalizer.ts",
+      "line": 49,
+      "column": 53,
+      "member": "VerificationReportIdentifier.directory",
+      "declaration": "src/requirements/domain/verification-report-identifier.ts",
+      "declarationLine": 31
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/requirements/usecase/verification-report-finalizer.ts",
+      "line": 51,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verification-report-finalizer.ts",
+      "line": 54,
+      "column": 23,
+      "member": "VerificationDirectory.candidate",
+      "declaration": "src/requirements/domain/verification-directory.ts",
+      "declarationLine": 142
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verification-report-finalizer.ts",
+      "line": 60,
+      "column": 15,
+      "member": "VerificationReport.id",
+      "declaration": "src/requirements/domain/verification-report.ts",
+      "declarationLine": 234
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verification-report-finalizer.ts",
+      "line": 60,
+      "column": 15,
+      "member": "VerificationReportIdentifier.fileName",
+      "declaration": "src/requirements/domain/verification-report-identifier.ts",
+      "declarationLine": 36
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/requirements/usecase/verify-requirements-quint-usecase.ts",
+      "line": 57,
+      "column": 19,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-quint-usecase.ts",
+      "line": 58,
+      "column": 20,
+      "member": "RequirementsModel.irHash",
+      "declaration": "src/requirements/domain/requirements-model.ts",
+      "declarationLine": 69
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-quint-usecase.ts",
+      "line": 85,
+      "column": 18,
+      "member": "RequirementsModel.irVersion",
+      "declaration": "src/requirements/domain/requirements-model.ts",
+      "declarationLine": 79
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-quint-usecase.ts",
+      "line": 88,
+      "column": 17,
+      "member": "findings",
+      "declaration": "src/requirements/domain/quint-machine-plan.ts",
+      "declarationLine": 74
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-quint-usecase.ts",
+      "line": 89,
+      "column": 16,
+      "member": "skipped",
+      "declaration": "src/requirements/domain/quint-machine-plan.ts",
+      "declarationLine": 75
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/requirements/usecase/verify-requirements-quint-usecase.ts",
+      "line": 95,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-quint-usecase.ts",
+      "line": 99,
+      "column": 22,
+      "member": "VerificationReport.findingsCount",
+      "declaration": "src/requirements/domain/verification-report.ts",
+      "declarationLine": 275
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-quint-usecase.ts",
+      "line": 100,
+      "column": 21,
+      "member": "VerificationReport.skippedCount",
+      "declaration": "src/requirements/domain/verification-report.ts",
+      "declarationLine": 279
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts",
+      "line": 54,
+      "column": 19,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts",
+      "line": 55,
+      "column": 20,
+      "member": "RequirementsModel.irHash",
+      "declaration": "src/requirements/domain/requirements-model.ts",
+      "declarationLine": 69
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts",
+      "line": 72,
+      "column": 9,
+      "member": "SatisfiabilityModuloTheoriesVerificationPlan.planSkipped",
+      "declaration": "src/requirements/domain/satisfiability-modulo-theories-verification-plan.ts",
+      "declarationLine": 67
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts",
+      "line": 83,
+      "column": 18,
+      "member": "RequirementsModel.irVersion",
+      "declaration": "src/requirements/domain/requirements-model.ts",
+      "declarationLine": 79
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts",
+      "line": 86,
+      "column": 17,
+      "member": "findings",
+      "declaration": "src/requirements/domain/satisfiability-modulo-theories-verification-plan.ts",
+      "declarationLine": 76
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts",
+      "line": 87,
+      "column": 16,
+      "member": "skipped",
+      "declaration": "src/requirements/domain/satisfiability-modulo-theories-verification-plan.ts",
+      "declarationLine": 77
+    },
+    {
+      "rule": "usecase-result-unwrapping",
+      "path": "src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts",
+      "line": 93,
+      "column": 23,
+      "member": "ResultSuccess.value",
+      "declaration": "src/kernel/infrastructure/result-success.ts",
+      "declarationLine": 10
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts",
+      "line": 97,
+      "column": 22,
+      "member": "VerificationReport.findingsCount",
+      "declaration": "src/requirements/domain/verification-report.ts",
+      "declarationLine": 275
+    },
+    {
+      "rule": "usecase-domain-getter",
+      "path": "src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts",
+      "line": 98,
+      "column": 21,
+      "member": "VerificationReport.skippedCount",
+      "declaration": "src/requirements/domain/verification-report.ts",
+      "declarationLine": 279
+    }
+  ]
+}
