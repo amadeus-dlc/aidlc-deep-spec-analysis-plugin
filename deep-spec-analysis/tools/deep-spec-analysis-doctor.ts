@@ -2,120 +2,6 @@
 // src/entries/deep-spec-analysis-doctor.ts
 import { join as join6 } from "path";
 
-// src/doctor/domain/check.ts
-class Check {
-  #pass;
-  #label;
-  #fix;
-  #severity;
-  constructor(props) {
-    this.#pass = props.pass;
-    this.#label = props.label;
-    this.#fix = props.fix;
-    this.#severity = props.severity;
-  }
-  static of(props) {
-    return new Check(props);
-  }
-  passes() {
-    return this.#pass;
-  }
-  label() {
-    return this.#label;
-  }
-  fix() {
-    return this.#fix;
-  }
-  severity() {
-    return this.#severity;
-  }
-  toDocument() {
-    return {
-      pass: this.#pass,
-      label: this.#label,
-      ...this.#fix !== undefined ? { fix: this.#fix } : {},
-      severity: this.#severity.asString()
-    };
-  }
-}
-// src/doctor/domain/check-severity.ts
-class CheckSeverity {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static error() {
-    return new CheckSeverity("error");
-  }
-  static advisory() {
-    return new CheckSeverity("advisory");
-  }
-  blocksDoctor() {
-    return this.#value === "error";
-  }
-  isAdvisory() {
-    return this.#value === "advisory";
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/doctor/domain/coverage-state.ts
-class CoverageState {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static unverified() {
-    return new CoverageState("unverified");
-  }
-  static stale() {
-    return new CoverageState("stale");
-  }
-  match(handlers) {
-    return this.#value === "unverified" ? handlers.unverified() : handlers.stale();
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-}
-// src/doctor/domain/digest-anchor.ts
-class DigestAnchor {
-  #expected;
-  #actual;
-  constructor(expected, actual) {
-    this.#expected = expected;
-    this.#actual = actual;
-  }
-  static of(expected, actual) {
-    return new DigestAnchor(expected, actual);
-  }
-  isStale() {
-    return !this.#expected.equals(this.#actual);
-  }
-}
-// src/doctor/domain/health-verdict.ts
-class HealthVerdict {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new HealthVerdict(values);
-  }
-  add(value) {
-    return new HealthVerdict([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  document() {
-    return { checks: this.#values.map((c) => c.toDocument()) };
-  }
-}
 // src/kernel/infrastructure/illegal-argument-exception.ts
 class IllegalArgumentException extends Error {
   problem;
@@ -344,6 +230,218 @@ function validateSchema(root, schema, value, path, errors) {
     }
   }
   return errors.length === before;
+}
+// src/doctor/domain/artifact-modified-at.ts
+class ArtifactModifiedAt {
+  #value;
+  constructor(milliseconds) {
+    if (!Number.isFinite(milliseconds) || Math.abs(milliseconds) > Number.MAX_SAFE_INTEGER)
+      throw new IllegalArgumentException({ kind: "invalid-artifact-modified-at", raw: milliseconds });
+    this.#value = milliseconds;
+  }
+  static of(milliseconds) {
+    return new ArtifactModifiedAt(milliseconds);
+  }
+  static parse(milliseconds) {
+    return parseConstruction(() => new ArtifactModifiedAt(milliseconds));
+  }
+  isAfter(other) {
+    return this.#value > other.#value;
+  }
+}
+// src/doctor/domain/check.ts
+class Check {
+  #pass;
+  #label;
+  #fix;
+  #severity;
+  constructor(props) {
+    this.#pass = props.pass;
+    this.#label = props.label;
+    this.#fix = props.fix;
+    this.#severity = props.severity;
+  }
+  static of(props) {
+    return new Check(props);
+  }
+  passes() {
+    return this.#pass;
+  }
+  label() {
+    return this.#label;
+  }
+  fix() {
+    return this.#fix;
+  }
+  severity() {
+    return this.#severity;
+  }
+  toDocument() {
+    return {
+      pass: this.#pass,
+      label: this.#label,
+      ...this.#fix !== undefined ? { fix: this.#fix } : {},
+      severity: this.#severity.asString()
+    };
+  }
+}
+// src/doctor/domain/check-severity.ts
+class CheckSeverity {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static error() {
+    return new CheckSeverity("error");
+  }
+  static advisory() {
+    return new CheckSeverity("advisory");
+  }
+  blocksDoctor() {
+    return this.#value === "error";
+  }
+  isAdvisory() {
+    return this.#value === "advisory";
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/doctor/domain/coverage-assessment.ts
+class CoverageAssessment {
+  #observations;
+  #scopes;
+  constructor(observations, scopes) {
+    if (observations.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-verification-observations", raw: observations.length });
+    this.#observations = Object.freeze([...observations]);
+    this.#scopes = scopes;
+  }
+  static of(observations, scopes) {
+    return new CoverageAssessment(observations, scopes);
+  }
+  static parse(observations, scopes) {
+    return parseConstruction(() => new CoverageAssessment(observations, scopes));
+  }
+  isClean() {
+    return this.problems().length === 0;
+  }
+  verifiedCount() {
+    return this.#observations.length - this.problems().length;
+  }
+  eligibleCount() {
+    return this.#observations.length;
+  }
+  problems() {
+    return this.#observations.filter((observation) => observation.problemState() !== null);
+  }
+  scopes() {
+    return this.#scopes;
+  }
+}
+// src/doctor/domain/coverage-state.ts
+class CoverageState {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static unverified() {
+    return new CoverageState("unverified");
+  }
+  static stale() {
+    return new CoverageState("stale");
+  }
+  match(handlers) {
+    return this.#value === "unverified" ? handlers.unverified() : handlers.stale();
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+}
+// src/doctor/domain/design-artifact-reference.ts
+class DesignArtifactReference {
+  #location;
+  #tool;
+  #artifactPath;
+  #relativePath;
+  constructor(props) {
+    this.#location = props.location;
+    this.#tool = props.tool;
+    this.#artifactPath = props.artifactPath;
+    this.#relativePath = props.relativePath;
+  }
+  static of(props) {
+    return new DesignArtifactReference(props);
+  }
+  location() {
+    return this.#location;
+  }
+  tool() {
+    return this.#tool;
+  }
+  artifactPath() {
+    return this.#artifactPath;
+  }
+  relativePath() {
+    return this.#relativePath;
+  }
+}
+// src/doctor/domain/design-artifacts.ts
+class DesignArtifacts {
+  #values;
+  constructor(values) {
+    if (values.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-design-artifacts", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new DesignArtifacts(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DesignArtifacts(values));
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+}
+// src/doctor/domain/digest-anchor.ts
+class DigestAnchor {
+  #expected;
+  #actual;
+  constructor(expected, actual) {
+    this.#expected = expected;
+    this.#actual = actual;
+  }
+  static of(expected, actual) {
+    return new DigestAnchor(expected, actual);
+  }
+  isStale() {
+    return !this.#expected.equals(this.#actual);
+  }
+}
+// src/doctor/domain/finding-count.ts
+class FindingCount {
+  #value;
+  constructor(value) {
+    if (!Number.isSafeInteger(value) || value < 0 || value > 1e6)
+      throw new IllegalArgumentException({ kind: "invalid-finding-count", raw: value });
+    this.#value = value;
+  }
+  static of(value) {
+    return new FindingCount(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new FindingCount(value));
+  }
+  isEmpty() {
+    return this.#value === 0;
+  }
+  asNumber() {
+    return this.#value;
+  }
 }
 // src/kernel/domain/artifact-path.ts
 class ArtifactPath {
@@ -784,10 +882,12 @@ class ErrorMessage {
   }
 }
 // src/kernel/domain/error-messages.ts
+var MAX_MESSAGES = 65536;
+
 class ErrorMessages {
   #values;
   constructor(values) {
-    if (values.length > 65536)
+    if (values.length > MAX_MESSAGES)
       throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
@@ -795,6 +895,17 @@ class ErrorMessages {
     return parseConstruction(() => new ErrorMessages(values));
   }
   static of(values) {
+    return new ErrorMessages(values);
+  }
+  static collect(diagnostics) {
+    const values = [];
+    for (const diagnostic of diagnostics) {
+      if (values.length === MAX_MESSAGES) {
+        values[values.length - 1] = ErrorMessage.of("validation diagnostic limit reached (65536 messages); additional diagnostics omitted");
+        break;
+      }
+      values.push(diagnostic.ok ? diagnostic.value : ErrorMessage.of("validation diagnostic could not be represented within its text budget"));
+    }
     return new ErrorMessages(values);
   }
   add(value) {
@@ -1527,6 +1638,22 @@ class UnitName {
     return this.#value;
   }
 }
+// src/kernel/domain/validation-assessment.ts
+class ValidationAssessment {
+  #errors;
+  constructor(errors) {
+    this.#errors = errors;
+  }
+  static of(errors) {
+    return new ValidationAssessment(errors);
+  }
+  passes() {
+    return this.#errors.isEmpty();
+  }
+  errors() {
+    return this.#errors;
+  }
+}
 // src/kernel/domain/verification-method.ts
 var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
 
@@ -1550,6 +1677,114 @@ class VerificationMethod {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/doctor/domain/unit-coverage-problem.ts
+class UnitCoverageProblem {
+  #location;
+  #unit;
+  #state;
+  constructor(location, unit, state) {
+    this.#location = location;
+    this.#unit = unit;
+    this.#state = state;
+  }
+  static of(location, unit, state) {
+    return new UnitCoverageProblem(location, unit, state);
+  }
+  location() {
+    return this.#location;
+  }
+  unit() {
+    return this.#unit;
+  }
+  matchState(handlers) {
+    return this.#state.match(handlers);
+  }
+}
+
+// src/doctor/domain/functional-observation.ts
+class FunctionalObservation {
+  #location;
+  #units;
+  #modelModifiedAt;
+  #modelUnits;
+  #completedUnits;
+  #hasFindings;
+  #requirementsModelModifiedAt;
+  constructor(props) {
+    if (props.units.length > 65536 || props.modelUnits.length > 65536 || props.completedUnits.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-functional-units" });
+    this.#location = props.location;
+    this.#units = Object.freeze([...props.units]);
+    this.#modelModifiedAt = props.modelModifiedAt;
+    this.#modelUnits = KeySet.of(props.modelUnits);
+    this.#completedUnits = KeySet.of(props.completedUnits);
+    this.#hasFindings = props.hasFindings;
+    this.#requirementsModelModifiedAt = props.requirementsModelModifiedAt;
+  }
+  static of(props) {
+    return new FunctionalObservation(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new FunctionalObservation(props));
+  }
+  location() {
+    return this.#location;
+  }
+  eligibleCount() {
+    return this.#units.length;
+  }
+  problems() {
+    const out = [];
+    for (const unit of this.#units) {
+      if (this.#modelModifiedAt === null || !this.#modelUnits.has(unit.name()) || !this.#hasFindings || !this.#completedUnits.has(unit.name())) {
+        out.push(UnitCoverageProblem.of(this.#location, unit.name(), CoverageState.unverified()));
+      } else if (unit.changedAfter(this.#modelModifiedAt)) {
+        out.push(UnitCoverageProblem.of(this.#location, unit.name(), CoverageState.stale()));
+      }
+    }
+    return out;
+  }
+  refinementIsStale() {
+    return this.#modelModifiedAt !== null && this.#hasFindings && (this.#requirementsModelModifiedAt?.isAfter(this.#modelModifiedAt) ?? false);
+  }
+}
+// src/doctor/domain/functional-unit-observation.ts
+class FunctionalUnitObservation {
+  #name;
+  #newestArtifact;
+  constructor(name, newestArtifact) {
+    this.#name = name;
+    this.#newestArtifact = newestArtifact;
+  }
+  static of(name, newestArtifact) {
+    return new FunctionalUnitObservation(name, newestArtifact);
+  }
+  name() {
+    return this.#name;
+  }
+  changedAfter(model) {
+    return this.#newestArtifact.isAfter(model);
+  }
+}
+// src/doctor/domain/health-verdict.ts
+class HealthVerdict {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new HealthVerdict(values);
+  }
+  add(value) {
+    return new HealthVerdict([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  document() {
+    return { checks: this.#values.map((c) => c.toDocument()) };
   }
 }
 // src/doctor/domain/manifest-entry.ts
@@ -1613,6 +1848,104 @@ class InstallationManifest {
     yield* this.#entries;
   }
 }
+// src/doctor/domain/version-advisory.ts
+class VersionAdvisory {
+  #variant;
+  constructor(variant) {
+    this.#variant = Object.freeze({ ...variant });
+  }
+  static current(installed, latest) {
+    return new VersionAdvisory({ kind: "current", installed, latest });
+  }
+  static updateAvailable(installed, latest) {
+    return new VersionAdvisory({ kind: "update-available", installed, latest });
+  }
+  static skipped(installed, reason) {
+    return new VersionAdvisory({ kind: "skipped", installed, reason });
+  }
+  static provenanceMissing() {
+    return new VersionAdvisory({ kind: "provenance-missing" });
+  }
+  static provenanceMalformed(reason) {
+    return new VersionAdvisory({ kind: "provenance-malformed", reason });
+  }
+  match(cases) {
+    const variant = this.#variant;
+    if (variant.kind === "provenance-missing")
+      return cases.provenanceMissing();
+    if (variant.kind === "provenance-malformed")
+      return cases.provenanceMalformed(variant.reason);
+    if (variant.kind === "skipped")
+      return cases.skipped(variant.installed, variant.reason);
+    return variant.kind === "current" ? cases.current(variant.installed, variant.latest) : cases.updateAvailable(variant.installed, variant.latest);
+  }
+}
+
+// src/doctor/domain/installation-provenance.ts
+class InstallationProvenance {
+  #variant;
+  constructor(variant) {
+    this.#variant = Object.freeze({ ...variant });
+  }
+  static installed(release) {
+    return new InstallationProvenance({ kind: "installed", release });
+  }
+  static missing() {
+    return new InstallationProvenance({ kind: "unavailable", advisory: VersionAdvisory.provenanceMissing() });
+  }
+  static malformed(reason) {
+    return new InstallationProvenance({ kind: "unavailable", advisory: VersionAdvisory.provenanceMalformed(reason) });
+  }
+  match(cases) {
+    return this.#variant.kind === "installed" ? cases.installed(this.#variant.release) : cases.unavailable(this.#variant.advisory);
+  }
+}
+// src/doctor/domain/installation-source.ts
+class InstallationSource {
+  #value;
+  constructor(value) {
+    if (value.length > 6)
+      throw new IllegalArgumentException({ kind: "invalid-installation-source-size", raw: value.length });
+    if (value !== "local" && value !== "ref" && value !== "tag" && value !== "latest")
+      throw new IllegalArgumentException({ kind: "invalid-installation-source", raw: value });
+    this.#value = value;
+  }
+  static of(value) {
+    return new InstallationSource(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new InstallationSource(value));
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/doctor/domain/installed-release.ts
+class InstalledRelease {
+  #version;
+  #source;
+  #reference;
+  constructor(version, source, reference) {
+    this.#version = version;
+    this.#source = source;
+    this.#reference = reference;
+  }
+  static of(version, source, reference) {
+    return new InstalledRelease(version, source, reference);
+  }
+  assessLatest(latest) {
+    return this.#version.isOlderThan(latest) ? VersionAdvisory.updateAvailable(this, latest) : VersionAdvisory.current(this, latest);
+  }
+  version() {
+    return this.#version;
+  }
+  source() {
+    return this.#source;
+  }
+  reference() {
+    return this.#reference;
+  }
+}
 // src/doctor/domain/installed-status.ts
 class InstalledStatus {
   #entry;
@@ -1629,6 +1962,24 @@ class InstalledStatus {
   }
   isPresent() {
     return this.#present;
+  }
+}
+// src/doctor/domain/intent-location.ts
+class IntentLocation {
+  #space;
+  #intent;
+  constructor(space, intent) {
+    this.#space = space;
+    this.#intent = intent;
+  }
+  static of(space, intent) {
+    return new IntentLocation(space, intent);
+  }
+  space() {
+    return this.#space;
+  }
+  intent() {
+    return this.#intent;
   }
 }
 // src/doctor/domain/plugin-version.ts
@@ -1672,6 +2023,22 @@ class PluginVersion {
     return `v${this.asString()}`;
   }
 }
+// src/doctor/domain/release-catalog.ts
+class ReleaseCatalog {
+  #variant;
+  constructor(variant) {
+    this.#variant = Object.freeze({ ...variant });
+  }
+  static available(releases) {
+    return new ReleaseCatalog({ kind: "available", releases });
+  }
+  static unavailable(reason) {
+    return new ReleaseCatalog({ kind: "unavailable", reason });
+  }
+  advise(installed) {
+    return this.#variant.kind === "available" ? this.#variant.releases.advise(installed) : VersionAdvisory.skipped(installed, this.#variant.reason);
+  }
+}
 // src/doctor/domain/solver-availability.ts
 class SolverAvailability {
   #z3Package;
@@ -1705,6 +2072,167 @@ class SolverAvailability {
     return this.#apalacheServerStale;
   }
 }
+// src/doctor/domain/stable-releases.ts
+class StableReleases {
+  #versions;
+  constructor(versions) {
+    if (versions.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-stable-releases", raw: versions.length });
+    this.#versions = Object.freeze([...versions]);
+  }
+  static of(versions) {
+    return new StableReleases(versions);
+  }
+  static parse(versions) {
+    return parseConstruction(() => new StableReleases(versions));
+  }
+  advise(installed) {
+    let latest = null;
+    for (const version of this.#versions)
+      if (latest === null || latest.isOlderThan(version))
+        latest = version;
+    return latest === null ? VersionAdvisory.skipped(installed, ErrorMessage.of("GitHub returned no stable Semantic Versioning tag")) : installed.assessLatest(latest);
+  }
+}
+// src/doctor/domain/stage-scope.ts
+class StageScope {
+  #value;
+  constructor(value) {
+    if (value.length === 0 || value.length > 128)
+      throw new IllegalArgumentException({ kind: "invalid-stage-scope-size", raw: value.length });
+    if (!/^[a-z][a-z0-9-]*$/.test(value))
+      throw new IllegalArgumentException({ kind: "invalid-stage-scope", raw: value });
+    this.#value = value;
+  }
+  static of(value) {
+    return new StageScope(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new StageScope(value));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/doctor/domain/stage-scopes.ts
+class StageScopes {
+  #values;
+  constructor(values) {
+    if (values.length > 1024)
+      throw new IllegalArgumentException({ kind: "too-many-stage-scopes", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new StageScopes(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new StageScopes(values));
+  }
+  includes(scope) {
+    return this.#values.some((value) => value.equals(scope));
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+}
+// src/doctor/domain/structural-debt.ts
+class StructuralDebt {
+  #observations;
+  constructor(observations) {
+    if (observations.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-structural-observations", raw: observations.length });
+    this.#observations = Object.freeze([...observations]);
+  }
+  static of(observations) {
+    return new StructuralDebt(observations);
+  }
+  static parse(observations) {
+    return parseConstruction(() => new StructuralDebt(observations));
+  }
+  hasScans() {
+    return this.#observations.some((observation) => observation.wasScanned());
+  }
+  scannedCount() {
+    return this.#observations.filter((observation) => observation.wasScanned()).length;
+  }
+  totalFindings() {
+    return this.#observations.reduce((sum, observation) => sum + observation.findingCount(), 0);
+  }
+  rows() {
+    return this.#observations.filter((observation) => observation.hasDebt());
+  }
+}
+// src/doctor/domain/structural-observation.ts
+class StructuralObservation {
+  #artifact;
+  #findings;
+  constructor(artifact, findings) {
+    this.#artifact = artifact;
+    this.#findings = findings;
+  }
+  static of(artifact, findings) {
+    return new StructuralObservation(artifact, findings);
+  }
+  wasScanned() {
+    return this.#findings !== null;
+  }
+  hasDebt() {
+    return this.#findings !== null && !this.#findings.isEmpty();
+  }
+  findingCount() {
+    return this.#findings?.asNumber() ?? 0;
+  }
+  artifact() {
+    return this.#artifact;
+  }
+}
+// src/doctor/domain/unit-coverage.ts
+class UnitCoverage {
+  #observations;
+  #scopes;
+  constructor(observations, scopes) {
+    if (observations.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-functional-observations", raw: observations.length });
+    let units = 0;
+    for (const observation of observations) {
+      units += observation.eligibleCount();
+      if (units > 65536)
+        throw new IllegalArgumentException({ kind: "too-many-covered-units", raw: units });
+    }
+    this.#observations = Object.freeze([...observations]);
+    this.#scopes = scopes;
+  }
+  static of(observations, scopes) {
+    return new UnitCoverage(observations, scopes);
+  }
+  static parse(observations, scopes) {
+    return parseConstruction(() => new UnitCoverage(observations, scopes));
+  }
+  hasEligible() {
+    return this.eligibleCount() > 0;
+  }
+  isClean() {
+    return this.problems().length === 0;
+  }
+  verifiedCount() {
+    return this.eligibleCount() - this.problems().length;
+  }
+  eligibleCount() {
+    return this.#observations.reduce((sum, observation) => sum + observation.eligibleCount(), 0);
+  }
+  problems() {
+    return this.#observations.flatMap((observation) => observation.problems());
+  }
+  refinementStale() {
+    return this.#observations.filter((observation) => observation.refinementIsStale()).map((observation) => observation.location());
+  }
+  scopes() {
+    return this.#scopes;
+  }
+}
 // src/doctor/domain/verification-staleness.ts
 class VerificationStaleness {
   #anchor;
@@ -1716,6 +2244,31 @@ class VerificationStaleness {
   }
   isStale() {
     return this.#anchor === null ? true : this.#anchor.isStale();
+  }
+}
+
+// src/doctor/domain/verification-observation.ts
+class VerificationObservation {
+  #location;
+  #hasModel;
+  #hasFindings;
+  #anchor;
+  constructor(props) {
+    this.#location = props.location;
+    this.#hasModel = props.hasModel;
+    this.#hasFindings = props.hasFindings;
+    this.#anchor = props.anchor;
+  }
+  static of(props) {
+    return new VerificationObservation(props);
+  }
+  location() {
+    return this.#location;
+  }
+  problemState() {
+    if (!this.#hasModel || !this.#hasFindings)
+      return CoverageState.unverified();
+    return VerificationStaleness.of({ anchor: this.#anchor }).isStale() ? CoverageState.stale() : null;
   }
 }
 // src/doctor/adapter/doctor-presenter.ts
@@ -1734,20 +2287,20 @@ class DoctorPresenter {
   }
   version(advisory) {
     return advisory.match({
-      current: ({ installedVersion, latestVersion, source, ref }) => Check.of({
+      current: (installed, latest) => Check.of({
         pass: true,
-        label: `deep-spec-analysis: version ${installedVersion} from ${source} ${ref} is current (latest stable tag: ${latestVersion})`,
+        label: `deep-spec-analysis: version ${installed.version().asString()} from ${installed.source().asString()} ${installed.reference().asString()} is current (latest stable tag: ${latest.asTag()})`,
         severity: CheckSeverity.advisory()
       }),
-      updateAvailable: ({ installedVersion, latestVersion, source, ref }) => Check.of({
+      updateAvailable: (installed, latest) => Check.of({
         pass: false,
-        label: `deep-spec-analysis: update available \u2014 version ${installedVersion} from ${source} ${ref}; latest stable tag is ${latestVersion}`,
+        label: `deep-spec-analysis: update available \u2014 version ${installed.version().asString()} from ${installed.source().asString()} ${installed.reference().asString()}; latest stable tag is ${latest.asTag()}`,
         fix: "Re-run the installer with `--project . --update` (and the same `--harness` selector used for this installation).",
         severity: CheckSeverity.advisory()
       }),
-      skipped: ({ installedVersion, source, ref, reason }) => Check.of({
+      skipped: (installed, reason) => Check.of({
         pass: true,
-        label: `deep-spec-analysis: version update check skipped for ${installedVersion} from ${source} ${ref} \u2014 ${reason}`,
+        label: `deep-spec-analysis: version update check skipped for ${installed.version().asString()} from ${installed.source().asString()} ${installed.reference().asString()} \u2014 ${reason.asString()}`,
         severity: CheckSeverity.advisory()
       }),
       provenanceMissing: () => Check.of({
@@ -1758,7 +2311,7 @@ class DoctorPresenter {
       }),
       provenanceMalformed: (reason) => Check.of({
         pass: false,
-        label: `deep-spec-analysis: version update check unavailable \u2014 installation provenance is malformed (${reason})`,
+        label: `deep-spec-analysis: version update check unavailable \u2014 installation provenance is malformed (${reason.asString()})`,
         fix: `Re-run the installer normally (without \`--update\`) to replace ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
         severity: CheckSeverity.advisory()
       })
@@ -1794,20 +2347,20 @@ class DoctorPresenter {
   }
   verificationCoverage(assessment) {
     const rows = assessment.problems().map((row) => {
-      const noun = row.matchState({
+      const noun = row.problemState()?.match({
         unverified: () => "has requirements with no deep-spec verification",
         stale: () => "changed its requirements after the last deep-spec verification"
       });
       return Check.of({
         pass: false,
-        label: `deep-spec-analysis: intent ${row.intentLabel()} ${noun}`,
-        fix: `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` + "then run `/aidlc --stage deep-spec-analysis-verify --single` to verify its requirements without advancing the workflow.",
+        label: `deep-spec-analysis: intent ${row.location().space().asString()}/${row.location().intent().asString()} ${noun}`,
+        fix: `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.location().intent().asString()}\`), ` + "then run `/aidlc --stage deep-spec-analysis-verify --single` to verify its requirements without advancing the workflow.",
         severity: CheckSeverity.advisory()
       });
     });
     rows.push(Check.of({
       pass: assessment.isClean(),
-      label: `deep-spec-analysis: verification coverage \u2014 ${assessment.verifiedCount()}/${assessment.eligibleCount()} ` + "eligible intents verified (scopes: " + assessment.scopes().join(", ") + ")",
+      label: `deep-spec-analysis: verification coverage \u2014 ${assessment.verifiedCount()}/${assessment.eligibleCount()} ` + "eligible intents verified (scopes: " + [...assessment.scopes()].map((scope) => scope.asString()).join(", ") + ")",
       fix: "See the per-intent rows above for the exact command each unverified intent needs.",
       severity: CheckSeverity.advisory()
     }));
@@ -1816,7 +2369,7 @@ class DoctorPresenter {
   structuralDebt(debt) {
     const rows = debt.rows().map((row) => Check.of({
       pass: false,
-      label: `deep-spec-analysis: ${row.locationLabel()} has ${row.findingCount()} reference-integrity finding(s)`,
+      label: `deep-spec-analysis: ${row.artifact().location().space().asString()}/${row.artifact().location().intent().asString()} ${row.artifact().relativePath().asString()} has ${row.findingCount()} reference-integrity finding(s)`,
       fix: "Open the artifact and fix (or record as an accepted risk) each finding; " + "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
       severity: CheckSeverity.advisory()
     }));
@@ -1833,8 +2386,8 @@ class DoctorPresenter {
   functionalCoverage(coverage) {
     const rows = coverage.refinementStale().map((row) => Check.of({
       pass: false,
-      label: `deep-spec-analysis: intent ${row.intentLabel()} re-verified its requirements after the last design verification (refinement evidence is stale)`,
-      fix: `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` + "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
+      label: `deep-spec-analysis: intent ${row.space().asString()}/${row.intent().asString()} re-verified its requirements after the last design verification (refinement evidence is stale)`,
+      fix: `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent().asString()}\`), ` + "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
       severity: CheckSeverity.advisory()
     }));
     for (const row of coverage.problems()) {
@@ -1844,15 +2397,15 @@ class DoctorPresenter {
       });
       rows.push(Check.of({
         pass: false,
-        label: `deep-spec-analysis: unit ${row.unitLabel()} ${noun}`,
-        fix: `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` + "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",
+        label: `deep-spec-analysis: unit ${row.location().space().asString()}/${row.location().intent().asString()}/${row.unit().asString()} ${noun}`,
+        fix: `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.location().intent().asString()}\`), ` + "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",
         severity: CheckSeverity.advisory()
       }));
     }
     if (coverage.hasEligible()) {
       rows.push(Check.of({
         pass: coverage.isClean(),
-        label: `deep-spec-analysis: design verification coverage \u2014 ${coverage.verifiedCount()}/${coverage.eligibleCount()} ` + "eligible units verified (scopes: " + coverage.scopes().join(", ") + ")",
+        label: `deep-spec-analysis: design verification coverage \u2014 ${coverage.verifiedCount()}/${coverage.eligibleCount()} ` + "eligible units verified (scopes: " + [...coverage.scopes()].map((scope) => scope.asString()).join(", ") + ")",
         fix: "See the per-unit rows above for the exact command each unverified unit needs.",
         severity: CheckSeverity.advisory()
       }));
@@ -1872,23 +2425,32 @@ class DoctorWorkspaceClientImplementation {
     this.#root = config.root;
     this.#refcheckToolNames = config.refcheckToolNames;
   }
-  static #FALLBACK_STAGE_SCOPES = ["enterprise", "feature"];
+  static #FALLBACK_STAGE_SCOPES = StageScopes.of([StageScope.of("enterprise"), StageScope.of("feature")]);
   #scopesOfStage(...stagePath) {
     const stageFile = join(this.#root, "aidlc-common", "stages", ...stagePath);
+    let items = null;
     try {
       const frontmatter = readFileSync(stageFile, "utf-8").split(`
 ---`)[0];
       const m = frontmatter.match(/^scopes:\n((?:\s+- .+\n)+)/m);
-      const items = m?.[1]?.match(/- (\S+)/g) ?? null;
-      if (items)
-        return items.map((s) => s.slice(2));
+      items = m?.[1]?.match(/- (\S+)/g)?.map((item) => item.slice(2)) ?? null;
     } catch {}
-    return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
+    if (items === null)
+      return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
+    const scopes = [];
+    for (const item of items) {
+      const parsed2 = StageScope.parse(item);
+      if (!parsed2.ok)
+        return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
+      scopes.push(parsed2.value);
+    }
+    const parsed = StageScopes.parse(scopes);
+    return parsed.ok ? parsed.value : DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
   }
-  verificationScopes() {
+  #verificationScopes() {
     return this.#scopesOfStage("inception", "deep-spec-analysis-verify.md");
   }
-  functionalScopes() {
+  #functionalScopes() {
     return this.#scopesOfStage("construction", "deep-spec-analysis-functional-verify.md");
   }
   #spaces() {
@@ -1917,14 +2479,17 @@ class DoctorWorkspaceClientImplementation {
     }
     return state.match(/^- \*\*Scope\*\*: (\S+)/m)?.[1] ?? null;
   }
-  verificationTargets(scopes) {
+  verificationCoverage() {
+    const scopes = this.#verificationScopes();
     const out = [];
-    const inScope = new Set(scopes);
     for (const space of this.#spaces()) {
       for (const intent of this.#intents(space)) {
         const record = this.#record(space, intent);
         const scope = this.#scopeOf(record);
-        if (!scope || !inScope.has(scope))
+        if (!scope)
+          continue;
+        const parsedScope = StageScope.parse(scope);
+        if (!parsedScope.ok || !scopes.includes(parsedScope.value))
           continue;
         const requirements = join(record, "inception", "requirements-analysis", "requirements.md");
         if (!existsSync(requirements))
@@ -1939,20 +2504,24 @@ class DoctorWorkspaceClientImplementation {
         }
         const hasModel = existsSync(model);
         if (!hasModel || !hasFindings) {
-          out.push({ space, intent, hasModel, hasFindings, anchor: null });
+          out.push(VerificationObservation.of({
+            location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
+            hasModel,
+            hasFindings,
+            anchor: null
+          }));
           continue;
         }
         const anchored = readFileSync(model, "utf-8").match(/```json\n([\s\S]*?)```/)?.[1]?.match(/"sourceDigest"\s*:\s*"([0-9a-f]{64})"/)?.[1];
-        out.push({
-          space,
-          intent,
+        out.push(VerificationObservation.of({
+          location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
           hasModel,
           hasFindings,
           anchor: anchored ? DigestAnchor.of(ContentHash.of(anchored), ContentHash.ofBytes(readFileSync(requirements))) : null
-        });
+        }));
       }
     }
-    return out;
+    return CoverageAssessment.of(out, scopes);
   }
   designArtifacts() {
     const out = [];
@@ -1962,7 +2531,12 @@ class DoctorWorkspaceClientImplementation {
         const ref = (tool, artifactPath, label) => {
           if (!existsSync(artifactPath))
             return;
-          out.push({ space, intent, tool, artifactPath, label });
+          out.push(DesignArtifactReference.of({
+            location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
+            tool: ArtifactPath.of(tool),
+            artifactPath: ArtifactPath.of(artifactPath),
+            relativePath: ArtifactPath.of(label)
+          }));
         };
         ref(this.#refcheckToolNames.domain, join(record, "inception", "domain-design", "components.md"), "inception/domain-design/components.md");
         ref(this.#refcheckToolNames.contract, join(record, "inception", "contract-design", "contract-summary.md"), "inception/contract-design/contract-summary.md");
@@ -1982,16 +2556,19 @@ class DoctorWorkspaceClientImplementation {
         }
       }
     }
-    return out;
+    return DesignArtifacts.of(out);
   }
-  functionalTargets(scopes) {
+  functionalCoverage() {
+    const scopes = this.#functionalScopes();
     const out = [];
-    const inScope = new Set(scopes);
     for (const space of this.#spaces()) {
       for (const intent of this.#intents(space)) {
         const record = this.#record(space, intent);
         const scope = this.#scopeOf(record);
-        if (!scope || !inScope.has(scope))
+        if (!scope)
+          continue;
+        const parsedScope = StageScope.parse(scope);
+        if (!parsedScope.ok || !scopes.includes(parsedScope.value))
           continue;
         const constructionDir = join(record, "construction");
         let unitDirs = [];
@@ -2005,7 +2582,7 @@ class DoctorWorkspaceClientImplementation {
         const stageDir = join(constructionDir, "deep-spec-analysis-functional-verify");
         const modelPath = join(stageDir, "deep-spec-analysis-functional-formal-model.md");
         let modelUnits = [];
-        let modelMtime = 0;
+        let modelMtime = null;
         const completedUnits = new Set;
         let hasFindings = false;
         if (existsSync(modelPath)) {
@@ -2048,22 +2625,27 @@ class DoctorWorkspaceClientImplementation {
             if (existsSync(p))
               newest = Math.max(newest, statSync(p).mtimeMs);
           }
-          return { name: unit, newestArtifactMtime: newest };
+          return FunctionalUnitObservation.of(UnitName.of(unit), ArtifactModifiedAt.of(newest));
         });
         const reqModel = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
-        out.push({
-          space,
-          intent,
+        out.push(FunctionalObservation.of({
+          location: IntentLocation.of(ArtifactPath.of(space), ArtifactPath.of(intent)),
           units,
-          modelMtime,
-          modelUnits,
-          completedUnits: [...completedUnits],
+          modelModifiedAt: modelMtime === null ? null : ArtifactModifiedAt.of(modelMtime),
+          modelUnits: modelUnits.flatMap((name) => {
+            const parsed = UnitName.parse(name);
+            return parsed.ok ? [parsed.value] : [];
+          }),
+          completedUnits: [...completedUnits].flatMap((name) => {
+            const parsed = UnitName.parse(name);
+            return parsed.ok ? [parsed.value] : [];
+          }),
           hasFindings,
-          requirementsModelMtime: existsSync(reqModel) ? statSync(reqModel).mtimeMs : null
-        });
+          requirementsModelModifiedAt: existsSync(reqModel) ? ArtifactModifiedAt.of(statSync(reqModel).mtimeMs) : null
+        }));
       }
     }
-    return out;
+    return UnitCoverage.of(out, scopes);
   }
 }
 // src/doctor/adapter/git-hub-release-tags-client-implementation.ts
@@ -2077,6 +2659,21 @@ class GitHubReleaseTagsClientImplementation {
     this.#timeoutMs = config.timeoutMs ?? 5000;
   }
   async list() {
+    const response = await this.#requestTags();
+    if (response.kind === "unavailable") {
+      const reason = ErrorMessage.parse(response.reason);
+      return ReleaseCatalog.unavailable(reason.ok ? reason.value : ErrorMessage.of("network request failed"));
+    }
+    const versions = [];
+    for (const tag of response.tags) {
+      const parsed = PluginVersion.parse(tag);
+      if (parsed.ok)
+        versions.push(parsed.value);
+    }
+    const releases = StableReleases.parse(versions);
+    return releases.ok ? ReleaseCatalog.available(releases.value) : ReleaseCatalog.unavailable(ErrorMessage.of("GitHub tags API pagination limit was exceeded"));
+  }
+  async#requestTags() {
     const tags = [];
     try {
       for (let page = 1;page <= 100; page++) {
@@ -2089,10 +2686,11 @@ class GitHubReleaseTagsClientImplementation {
         const body = await response.json();
         if (!Array.isArray(body))
           return { kind: "unavailable", reason: "GitHub tags API returned an invalid document" };
+        if (body.length > 100)
+          return { kind: "unavailable", reason: "GitHub tags API pagination limit was exceeded" };
         for (const entry of body) {
-          if (entry && typeof entry === "object" && typeof entry.name === "string") {
+          if (entry && typeof entry === "object" && typeof entry.name === "string")
             tags.push(entry.name);
-          }
         }
         if (body.length < 100)
           return { kind: "available", tags };
@@ -2113,15 +2711,13 @@ class HarnessFileClientImplementation {
   constructor(config) {
     this.#root = config.root;
   }
-  isInstalled(rel) {
-    return existsSync2(join2(this.#root, rel));
+  isInstalled(entry) {
+    return existsSync2(join2(this.#root, entry.rel()));
   }
 }
 // src/doctor/adapter/installation-provenance-client-implementation.ts
 import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
 import { join as join3 } from "path";
-var SOURCE_KINDS = new Set(["local", "ref", "tag", "latest"]);
-
 class InstallationProvenanceClientImplementation {
   #path;
   constructor(config) {
@@ -2129,38 +2725,51 @@ class InstallationProvenanceClientImplementation {
   }
   read() {
     if (!existsSync3(this.#path))
-      return { kind: "missing" };
+      return InstallationProvenance.missing();
     let value;
     try {
       value = JSON.parse(readFileSync2(this.#path, "utf-8"));
     } catch {
-      return { kind: "malformed", reason: "file is not readable JSON" };
+      return InstallationProvenance.malformed(ErrorMessage.of("file is not readable JSON"));
     }
     if (!value || typeof value !== "object" || Array.isArray(value)) {
-      return { kind: "malformed", reason: "document must be an object" };
+      return InstallationProvenance.malformed(ErrorMessage.of("document must be an object"));
     }
     const row = value;
-    if (typeof row.version !== "string" || typeof row.ref !== "string" || row.ref.length === 0 || typeof row.source !== "string" || !SOURCE_KINDS.has(row.source) || typeof row.installed_at !== "string" || row.installed_at.length === 0 || typeof row.payload_sha256 !== "string" || !/^sha256:[0-9a-f]{64}$/.test(row.payload_sha256)) {
-      return { kind: "malformed", reason: "required provenance fields are invalid" };
+    if (typeof row.version !== "string" || typeof row.ref !== "string" || row.ref.length === 0 || typeof row.source !== "string" || typeof row.installed_at !== "string" || row.installed_at.length === 0 || typeof row.payload_sha256 !== "string" || !/^sha256:[0-9a-f]{64}$/.test(row.payload_sha256)) {
+      return InstallationProvenance.malformed(ErrorMessage.of("required provenance fields are invalid"));
     }
-    return { kind: "found", version: row.version, ref: row.ref, source: row.source };
+    const reference = ArtifactPath.parse(row.ref);
+    const source = InstallationSource.parse(row.source);
+    if (!reference.ok || !source.ok)
+      return InstallationProvenance.malformed(ErrorMessage.of("required provenance fields are invalid"));
+    const version = PluginVersion.parse(row.version);
+    if (!version.ok)
+      return InstallationProvenance.malformed(ErrorMessage.of("version is not a stable Semantic Version"));
+    return InstallationProvenance.installed(InstalledRelease.of(version.value, source.value, reference.value));
   }
 }
 // src/doctor/adapter/reference-check-backend-client-implementation.ts
 import { spawnSync } from "child_process";
 import { existsSync as existsSync4 } from "fs";
 import { join as join4 } from "path";
-
 class ReferenceCheckBackendClientImplementation {
   #root;
   constructor(config) {
     this.#root = config.root;
   }
-  reportOnlyFindings(tool, artifactPath) {
-    const script = join4(this.#root, "tools", tool);
+  observe(artifact) {
+    const findings = this.#readFindings(artifact);
+    if (findings === null)
+      return StructuralObservation.of(artifact, null);
+    const parsed = FindingCount.parse(findings);
+    return StructuralObservation.of(artifact, parsed.ok ? parsed.value : null);
+  }
+  #readFindings(artifact) {
+    const script = join4(this.#root, "tools", artifact.tool().asString());
     if (!existsSync4(script))
       return null;
-    const res = spawnSync("bun", [script, "--stage", "doctor", "--output-path", artifactPath, "--report-only"], {
+    const res = spawnSync("bun", [script, "--stage", "doctor", "--output-path", artifact.artifactPath().asString(), "--report-only"], {
       encoding: "utf-8",
       timeout: 15000
     });
@@ -2246,94 +2855,6 @@ class SolverProbeClientImplementation {
     });
   }
 }
-// src/doctor/usecase/read-model/refinement-stale-row.ts
-class RefinementStaleRow {
-  #space;
-  #intent;
-  constructor(space, intent) {
-    this.#space = space;
-    this.#intent = intent;
-  }
-  static of(props) {
-    return new RefinementStaleRow(props.space, props.intent);
-  }
-  intent() {
-    return this.#intent;
-  }
-  intentLabel() {
-    return `${this.#space}/${this.#intent}`;
-  }
-}
-
-// src/doctor/usecase/read-model/unit-coverage.ts
-class UnitCoverage {
-  #eligible;
-  #problems;
-  #refinementStale;
-  #scopes;
-  constructor(props) {
-    this.#eligible = props.eligible;
-    this.#problems = props.problems;
-    this.#refinementStale = props.refinementStale;
-    this.#scopes = props.scopes;
-  }
-  static of(props) {
-    return new UnitCoverage({
-      eligible: props.eligible,
-      problems: [...props.problems],
-      refinementStale: [...props.refinementStale],
-      scopes: [...props.scopes]
-    });
-  }
-  hasEligible() {
-    return this.#eligible > 0;
-  }
-  isClean() {
-    return this.#problems.length === 0;
-  }
-  verifiedCount() {
-    return this.#eligible - this.#problems.length;
-  }
-  eligibleCount() {
-    return this.#eligible;
-  }
-  problems() {
-    return this.#problems;
-  }
-  refinementStale() {
-    return this.#refinementStale;
-  }
-  scopes() {
-    return this.#scopes;
-  }
-}
-
-// src/doctor/usecase/read-model/unit-coverage-row.ts
-class UnitCoverageRow {
-  #space;
-  #intent;
-  #unit;
-  #state;
-  constructor(props) {
-    this.#space = props.space;
-    this.#intent = props.intent;
-    this.#unit = props.unit;
-    this.#state = props.state;
-  }
-  static of(props) {
-    return new UnitCoverageRow(props);
-  }
-  intent() {
-    return this.#intent;
-  }
-  unitLabel() {
-    return `${this.#space}/${this.#intent}/${this.#unit}`;
-  }
-  matchState(handlers) {
-    return this.#state.match(handlers);
-  }
-}
-
 // src/doctor/usecase/check-functional-coverage-usecase.ts
 class CheckFunctionalCoverageUseCase {
   #workspace;
@@ -2341,33 +2862,7 @@ class CheckFunctionalCoverageUseCase {
     this.#workspace = workspace;
   }
   execute() {
-    const scopes = this.#workspace.functionalScopes();
-    const problems = [];
-    const refinementStale = [];
-    let eligible = 0;
-    for (const t of this.#workspace.functionalTargets(scopes)) {
-      const modelUnits = new Set(t.modelUnits);
-      const completed = new Set(t.completedUnits);
-      for (const unit of t.units) {
-        eligible += 1;
-        if (!modelUnits.has(unit.name) || !t.hasFindings || !completed.has(unit.name)) {
-          problems.push(UnitCoverageRow.of({
-            space: t.space,
-            intent: t.intent,
-            unit: unit.name,
-            state: CoverageState.unverified()
-          }));
-          continue;
-        }
-        if (unit.newestArtifactMtime > t.modelMtime) {
-          problems.push(UnitCoverageRow.of({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.stale() }));
-        }
-      }
-      if (t.modelMtime > 0 && t.hasFindings && t.requirementsModelMtime !== null && t.requirementsModelMtime > t.modelMtime) {
-        refinementStale.push(RefinementStaleRow.of({ space: t.space, intent: t.intent }));
-      }
-    }
-    return UnitCoverage.of({ eligible, problems, refinementStale, scopes });
+    return this.#workspace.functionalCoverage();
   }
 }
 // src/doctor/usecase/check-installation-usecase.ts
@@ -2379,7 +2874,7 @@ class CheckInstallationUseCase {
   execute() {
     const out = [];
     for (const entry of InstallationManifest.standard()) {
-      out.push(InstalledStatus.of(entry, this.#files.isInstalled(entry.rel())));
+      out.push(InstalledStatus.of(entry, this.#files.isInstalled(entry)));
     }
     return out;
   }
@@ -2394,54 +2889,6 @@ class CheckSolversUseCase {
     return this.#probes.availability();
   }
 }
-// src/doctor/usecase/read-model/debt-row.ts
-class DebtRow {
-  #space;
-  #intent;
-  #artifact;
-  #findings;
-  constructor(props) {
-    this.#space = props.space;
-    this.#intent = props.intent;
-    this.#artifact = props.artifact;
-    this.#findings = props.findings;
-  }
-  static of(props) {
-    return new DebtRow(props);
-  }
-  findingCount() {
-    return this.#findings;
-  }
-  locationLabel() {
-    return `${this.#space}/${this.#intent} ${this.#artifact}`;
-  }
-}
-
-// src/doctor/usecase/read-model/structural-debt.ts
-class StructuralDebt {
-  #scanned;
-  #rows;
-  constructor(props) {
-    this.#scanned = props.scanned;
-    this.#rows = props.rows;
-  }
-  static of(props) {
-    return new StructuralDebt({ scanned: props.scanned, rows: [...props.rows] });
-  }
-  hasScans() {
-    return this.#scanned > 0;
-  }
-  scannedCount() {
-    return this.#scanned;
-  }
-  totalFindings() {
-    return this.#rows.reduce((n, r) => n + r.findingCount(), 0);
-  }
-  rows() {
-    return this.#rows;
-  }
-}
-
 // src/doctor/usecase/check-structural-debt-usecase.ts
 class CheckStructuralDebtUseCase {
   #workspace;
@@ -2451,77 +2898,12 @@ class CheckStructuralDebtUseCase {
     this.#backend = backend;
   }
   execute() {
-    const rows = [];
-    let scanned = 0;
-    for (const ref of this.#workspace.designArtifacts()) {
-      const findings = this.#backend.reportOnlyFindings(ref.tool, ref.artifactPath);
-      if (findings === null)
-        continue;
-      scanned += 1;
-      if (findings > 0)
-        rows.push(DebtRow.of({ space: ref.space, intent: ref.intent, artifact: ref.label, findings }));
-    }
-    return StructuralDebt.of({ scanned, rows });
+    const observations = [];
+    for (const artifact of this.#workspace.designArtifacts())
+      observations.push(this.#backend.observe(artifact));
+    return StructuralDebt.of(observations);
   }
 }
-// src/doctor/usecase/read-model/coverage-assessment.ts
-class CoverageAssessment {
-  #eligible;
-  #problems;
-  #scopes;
-  constructor(props) {
-    this.#eligible = props.eligible;
-    this.#problems = props.problems;
-    this.#scopes = props.scopes;
-  }
-  static of(props) {
-    return new CoverageAssessment({
-      eligible: props.eligible,
-      problems: [...props.problems],
-      scopes: [...props.scopes]
-    });
-  }
-  isClean() {
-    return this.#problems.length === 0;
-  }
-  verifiedCount() {
-    return this.#eligible - this.#problems.length;
-  }
-  eligibleCount() {
-    return this.#eligible;
-  }
-  problems() {
-    return this.#problems;
-  }
-  scopes() {
-    return this.#scopes;
-  }
-}
-
-// src/doctor/usecase/read-model/coverage-row.ts
-class CoverageRow {
-  #space;
-  #intent;
-  #state;
-  constructor(props) {
-    this.#space = props.space;
-    this.#intent = props.intent;
-    this.#state = props.state;
-  }
-  static of(props) {
-    return new CoverageRow(props);
-  }
-  intent() {
-    return this.#intent;
-  }
-  intentLabel() {
-    return `${this.#space}/${this.#intent}`;
-  }
-  matchState(handlers) {
-    return this.#state.match(handlers);
-  }
-}
-
 // src/doctor/usecase/check-verification-coverage-usecase.ts
 class CheckVerificationCoverageUseCase {
   #workspace;
@@ -2529,54 +2911,9 @@ class CheckVerificationCoverageUseCase {
     this.#workspace = workspace;
   }
   execute() {
-    const scopes = this.#workspace.verificationScopes();
-    const problems = [];
-    const targets = this.#workspace.verificationTargets(scopes);
-    for (const t of targets) {
-      if (!t.hasModel || !t.hasFindings) {
-        problems.push(CoverageRow.of({ space: t.space, intent: t.intent, state: CoverageState.unverified() }));
-        continue;
-      }
-      const stale = VerificationStaleness.of({ anchor: t.anchor }).isStale();
-      if (stale)
-        problems.push(CoverageRow.of({ space: t.space, intent: t.intent, state: CoverageState.stale() }));
-    }
-    return CoverageAssessment.of({ eligible: targets.length, problems, scopes });
+    return this.#workspace.verificationCoverage();
   }
 }
-// src/doctor/usecase/read-model/version-advisory.ts
-class VersionAdvisory {
-  #variant;
-  constructor(variant) {
-    this.#variant = variant;
-  }
-  static current(props) {
-    return new VersionAdvisory({ kind: "current", ...props });
-  }
-  static updateAvailable(props) {
-    return new VersionAdvisory({ kind: "update-available", ...props });
-  }
-  static skipped(props) {
-    return new VersionAdvisory({ kind: "skipped", ...props });
-  }
-  static provenanceMissing() {
-    return new VersionAdvisory({ kind: "provenance-missing" });
-  }
-  static provenanceMalformed(reason) {
-    return new VersionAdvisory({ kind: "provenance-malformed", reason });
-  }
-  match(cases) {
-    const variant = this.#variant;
-    if (variant.kind === "provenance-missing")
-      return cases.provenanceMissing();
-    if (variant.kind === "provenance-malformed")
-      return cases.provenanceMalformed(variant.reason);
-    if (variant.kind === "skipped")
-      return cases.skipped(variant);
-    return variant.kind === "update-available" ? cases.updateAvailable(variant) : cases.current(variant);
-  }
-}
-
 // src/doctor/usecase/check-version-advisory-usecase.ts
 class CheckVersionAdvisoryUseCase {
   #provenance;
@@ -2586,45 +2923,10 @@ class CheckVersionAdvisoryUseCase {
     this.#releaseTags = releaseTags;
   }
   async execute() {
-    const provenance = this.#provenance.read();
-    if (provenance.kind === "missing")
-      return VersionAdvisory.provenanceMissing();
-    if (provenance.kind === "malformed")
-      return VersionAdvisory.provenanceMalformed(provenance.reason);
-    const parsedVersion = PluginVersion.parse(provenance.version);
-    if (!parsedVersion.ok)
-      return VersionAdvisory.provenanceMalformed("version is not a stable Semantic Version");
-    const installed = parsedVersion.value;
-    const releaseTags = await this.#releaseTags.list();
-    if (releaseTags.kind === "unavailable") {
-      return VersionAdvisory.skipped({
-        installedVersion: installed.asString(),
-        source: provenance.source,
-        ref: provenance.ref,
-        reason: releaseTags.reason
-      });
-    }
-    let latest = null;
-    for (const raw of releaseTags.tags) {
-      const candidate = PluginVersion.parse(raw);
-      if (candidate.ok && (!latest || latest.isOlderThan(candidate.value)))
-        latest = candidate.value;
-    }
-    if (!latest) {
-      return VersionAdvisory.skipped({
-        installedVersion: installed.asString(),
-        source: provenance.source,
-        ref: provenance.ref,
-        reason: "GitHub returned no stable Semantic Versioning tag"
-      });
-    }
-    const values = {
-      installedVersion: installed.asString(),
-      latestVersion: latest.asTag(),
-      source: provenance.source,
-      ref: provenance.ref
-    };
-    return installed.isOlderThan(latest) ? VersionAdvisory.updateAvailable(values) : VersionAdvisory.current(values);
+    return this.#provenance.read().match({
+      unavailable: async (advisory) => advisory,
+      installed: async (installed) => (await this.#releaseTags.list()).advise(installed)
+    });
   }
 }
 // src/entries/deep-spec-analysis-doctor.ts

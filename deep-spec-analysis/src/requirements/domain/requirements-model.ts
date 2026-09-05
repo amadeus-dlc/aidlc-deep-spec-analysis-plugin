@@ -6,7 +6,9 @@ import {
   type RequirementIdentifier,
   TargetIdentifier,
   TargetIdentifiers,
+  type VerificationMethod,
 } from "@deep-spec/kernel-domain";
+import { err, ok, type Result } from "@deep-spec/kernel-infrastructure";
 
 // RequirementsModel 集約 — 検証済み要件の形式モデル（契約1）のドメイン表現。
 // 生 Json からの寛容な解体（欠損エントリの黙殺）はアダプタのパーサの責務で、
@@ -20,6 +22,8 @@ import type { Obligations } from "./obligations.ts";
 import type { RequirementAttributeDeclaration } from "./requirement-attribute-declaration.ts";
 import type { RequirementAttributeDeclarations } from "./requirement-attribute-declarations.ts";
 import type { Scenarios } from "./scenarios.ts";
+import { SUPPORTED_IR_MAJOR, VerificationReport } from "./verification-report.ts";
+import type { VerificationReportIdentifier } from "./verification-report-identifier.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type RequirementsModelParam = {
@@ -59,6 +63,16 @@ export class RequirementsModel {
   // アダプタのパーサが解いた型付き部品からの唯一の構築口。
   static of(seed: RequirementsModelParam): RequirementsModel {
     return new RequirementsModel(seed);
+  }
+
+  // 実行可能性と降格文書の整合をモデル自身で決める。呼び手は取得・実行・保存を調整する。
+  prepareVerification(
+    id: VerificationReportIdentifier,
+    method: VerificationMethod,
+  ): Result<RequirementsModel, VerificationReport> {
+    return this.#irVersion.supportsMajor(SUPPORTED_IR_MAJOR)
+      ? ok(this)
+      : err(VerificationReport.versionMismatch(id, this, method.asString()));
   }
 
   id(): FormalModelIdentifier {

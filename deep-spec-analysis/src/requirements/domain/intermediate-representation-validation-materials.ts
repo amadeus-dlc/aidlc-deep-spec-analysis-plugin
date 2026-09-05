@@ -5,12 +5,21 @@
 // （RefinementMaterialsIdentifier と同じ規律）。sourceDocument は成果物の原文
 // （原文材料——store の往復則 findById∘store がバイト恒等になる永続化面）。
 
-import type { DeclaredDigest, ErrorMessages, IntermediateRepresentationVersion } from "@deep-spec/kernel-domain";
+import {
+  type DeclaredDigest,
+  ErrorMessage,
+  ErrorMessages,
+  type IntermediateRepresentationVersion,
+  ValidationAssessment,
+} from "@deep-spec/kernel-domain";
+import { ok, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import type { FunctionalRequirementReferenceClaims } from "./functional-requirement-reference-claims.ts";
 import { FunctionalRequirementReferenceIndex } from "./functional-requirement-reference-index.ts";
 import type { IntermediateRepresentationModelDeclaration } from "./intermediate-representation-model-declaration.ts";
 import type { IntermediateRepresentationValidationMaterialsIdentifier } from "./intermediate-representation-validation-materials-identifier.ts";
 import type { RequirementsSourceIdentifier } from "./requirements-source-identifier.ts";
+import { RequirementsSourceValidation } from "./requirements-source-validation.ts";
+import { SUPPORTED_IR_MAJOR } from "./verification-report.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type IntermediateRepresentationValidationMaterialsParam = {
@@ -51,33 +60,35 @@ export class IntermediateRepresentationValidationMaterials {
     return new IntermediateRepresentationValidationMaterials(seed);
   }
 
+  // バージョンとスキーマが適合した場合だけ、要件原文が必要な検査段階へ進む。
+  // callback は取得フローの選択であり、検査の条件・順序・診断はこの集約が所有する。
+  validate<T>(cases: {
+    complete: (assessment: ValidationAssessment) => T;
+    sourceRequired: (id: RequirementsSourceIdentifier, validation: RequirementsSourceValidation) => T;
+  }): T {
+    const errors = ErrorMessages.collect(this.#initialDiagnostics());
+    if (!errors.isEmpty()) return cases.complete(ValidationAssessment.of(errors));
+    return cases.sourceRequired(
+      this.#sourceId,
+      RequirementsSourceValidation.of(
+        this.#view,
+        FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray()),
+        this.#declaredDigest,
+      ),
+    );
+  }
+
+  *#initialDiagnostics(): Iterable<Result<ErrorMessage, ParseError>> {
+    if (!this.#irVersion.supportsMajor(SUPPORTED_IR_MAJOR)) {
+      yield ErrorMessage.parse(
+        `irVersion ${this.#irVersion.asString()}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`,
+      );
+    }
+    for (const error of this.#schemaErrors) yield ok(error);
+  }
+
   id(): IntermediateRepresentationValidationMaterialsIdentifier {
     return this.#id;
-  }
-
-  irVersion(): IntermediateRepresentationVersion {
-    return this.#irVersion;
-  }
-
-  schemaErrors(): ErrorMessages {
-    return this.#schemaErrors;
-  }
-
-  view(): IntermediateRepresentationModelDeclaration {
-    return this.#view;
-  }
-
-  // 逆トレーサビリティ索引は集約自身が組む（Tell-Don't-Ask）。
-  functionalRequirementReferenceIndex(): FunctionalRequirementReferenceIndex {
-    return FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray());
-  }
-
-  declaredDigest(): DeclaredDigest | null {
-    return this.#declaredDigest;
-  }
-
-  sourceId(): RequirementsSourceIdentifier {
-    return this.#sourceId;
   }
 
   // 境界: store が書く原文（バイト逐語——UTF-8 復号で非可逆にならないよう生

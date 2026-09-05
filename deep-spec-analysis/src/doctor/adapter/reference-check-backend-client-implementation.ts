@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { type DesignArtifactReference, FindingCount, StructuralObservation } from "@deep-spec/doctor-domain";
 import type { ReferenceCheckBackendClient } from "@deep-spec/doctor-usecase";
 import type { ReferenceCheckBackendClientConfiguration } from "./reference-check-backend-client-configuration.ts";
 
@@ -14,13 +15,24 @@ export class ReferenceCheckBackendClientImplementation implements ReferenceCheck
     this.#root = config.root;
   }
 
-  reportOnlyFindings(tool: string, artifactPath: string): number | null {
-    const script = join(this.#root, "tools", tool);
+  observe(artifact: DesignArtifactReference): StructuralObservation {
+    const findings = this.#readFindings(artifact);
+    if (findings === null) return StructuralObservation.of(artifact, null);
+    const parsed = FindingCount.parse(findings);
+    return StructuralObservation.of(artifact, parsed.ok ? parsed.value : null);
+  }
+
+  #readFindings(artifact: DesignArtifactReference): number | null {
+    const script = join(this.#root, "tools", artifact.tool().asString());
     if (!existsSync(script)) return null;
-    const res = spawnSync("bun", [script, "--stage", "doctor", "--output-path", artifactPath, "--report-only"], {
-      encoding: "utf-8",
-      timeout: 15_000,
-    });
+    const res = spawnSync(
+      "bun",
+      [script, "--stage", "doctor", "--output-path", artifact.artifactPath().asString(), "--report-only"],
+      {
+        encoding: "utf-8",
+        timeout: 15_000,
+      },
+    );
     if (res.error || res.status !== 0) return null;
     try {
       const lines = (res.stdout ?? "").trim().split("\n");

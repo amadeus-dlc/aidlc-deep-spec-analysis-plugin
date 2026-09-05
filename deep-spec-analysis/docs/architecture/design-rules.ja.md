@@ -313,7 +313,7 @@ JSON境界では、項目の省略・空配列・明示的なnullを契約に従
 
 **実例**: 全 Repository の `store` が `Result<void, RepositoryError>`。
 
-**意図的な例外**: usecase の上に立つ collaborator は、書いた直後に**書いたものから導いた値**を返してよい。`DesignReportFinalizer.finalize` は保存と同時に判定を返す——「stdout に出す判定とファイルに書いた内容が食い違わない唯一の作り方」だから。例外を作るときは、この水準の理由をコメントに書く。
+**意図的な例外**: Finalizerは保存成功後に**保存したものと同じ集約**を返す。`DesignReportFinalizer.finalize` と `VerificationReportFinalizer.finalize` は保存済みディレクトリ集約を返し、adapterが候補レポートから表示値を導く。保存内容と表示判定を一致させるための例外であり、Finalizerへ表示変換を置く理由にはしない。
 
 **検査**: `commands-return-void`。
 
@@ -347,13 +347,13 @@ JSON境界では、項目の省略・空配列・明示的なnullを契約に従
 
 **検査**: なし（レビュー）。
 
-### P8 — 表示のための投影は usecase に置く
+### P8 — ユースケースはフローを調整し、表示変換はadapterへ置く
 
-**規則**: 照会・表示のためだけに組み立てる型（リードモデル）は domain に置かず、usecase の `read-model/` に置く。永続化のメソッドも port への依存も持たせない。
+**規則**: ユースケースは取得・依頼・保存の順序と失敗伝播を調整する。取得したモデルから値を抜き出して判断・加工・演算を組み立てない。査定・集計はドメイン、表示用DTOやラベル生成はadapterが所有する。CQRSは採用しない。
 
-**なぜ**: 表示の都合はドメインの語彙ではない。domain に置くと、業務の意味を持たない型が domain を薄める。
+**なぜ**: 判断とそれを支える状態を同じ型に置き、ユースケースへ知識を漏らさない。表示の都合はドメインの判断から分離する。
 
-**実例**: `src/doctor/usecase/read-model/` の 8 型（`CoverageAssessment` ほか）。他の 3 文脈は「検証してレポート集約を作り保存する」1 本道なので、リードモデルを持たない。
+**実例**: doctorのカバレッジ・構造負債の査定はドメイン型、ラベルと表示文言は`DoctorPresenter`が所有する。検証ユースケースのoutcomeは保存済みのドメインオブジェクトを運び、出力側で描画する。
 
 **検査**: なし（レビュー）。
 
@@ -391,7 +391,7 @@ JSON境界では、項目の省略・空配列・明示的なnullを契約に従
 
 ### A3 — 未信頼入力は adapter の境界で検査し、判断の材料として domain へ渡す
 
-**規則**: 外から来る JSON / Markdown は adapter で構文と schema を検査する。検査に落ちたことを**例外にせず**、`Result` で返すか、**エラーの一覧を材料として集約に渡す**。合否そのものは domain / usecase が決める。
+**規則**: 外から来る JSON / Markdown は adapter で構文と schema を検査する。検査に落ちたことを**例外にせず**、`Result` で返すか、**エラーの一覧を材料として集約に渡す**。合否と検査順序はdomainが決め、usecaseは取得と検査依頼のフローを調整する。
 
 **なぜ**: 「壊れている」は、このプラグインでは報告すべき結果であって、処理の中断ではない。
 
@@ -411,13 +411,13 @@ JSON境界では、項目の省略・空配列・明示的なnullを契約に従
 
 **検査**: なし（レビュー）。
 
-### A5 — 例外は adapter の中の局所制御にだけ使う
+### A5 — 想定内の変換失敗と契約違反のpanicを混同しない
 
-**規則**: 例外を投げてよいのは adapter の中だけ。例外の型は **export せず**、**同じファイルの中で catch し**、ドメインの値（`Result` / 結果の union / skip の記録）に変換する。層の境界を越えて例外を飛ばさない。
+**規則**: adapterのコンパイラが局所制御に使う想定内の変換例外は、同じファイルで捕捉し型付き結果へ変換する。一方、コンストラクタ・`of`や集約操作の契約違反はpanicとして伝播させ、I/O失敗に偽装しない。入力由来の想定内の不成立は各型の`parse`で扱い、その型自身の構築契約違反だけを非例外の`ParseError`へ変換する。
 
 **なぜ**: 深い再帰的な変換（式木から SMT-LIB への compile など）では、途中で失敗を上まで返すより投げるほうが素直に書ける。しかしそれを外に漏らすと、呼び手は何が飛んでくるか型から読めなくなる。局所に閉じれば両方取れる。
 
-**実例（実測）**: `catch` の分布は adapter 92・entries 4・domain 0・usecase 0・infrastructure 0。`CompileError` / `SatisfiabilityModuloTheoriesCompileError` / `YamlError` はいずれも export されないファイル内クラスで、同じファイルで捕まえて `{kind: "uncompilable"}` や `VerificationSkipped(reason: "compile-error")` に変換される。
+**実例**: `CompileError` / `SatisfiabilityModuloTheoriesCompileError` / `YamlError` は局所の変換失敗を表す。`IllegalArgumentException` は構築・操作契約の違反を表す。未最終化集約の保存要求は、RepositoryのI/O処理に入る前にpanicとし、`RepositoryError`へ変換しない。
 
 **検査**: なし（レビュー）。
 
@@ -546,7 +546,7 @@ JSON境界では、項目の省略・空配列・明示的なnullを契約に従
 
 1. **外の世界を叩く口か？** → port（`usecase/port/`）。うちの集約を出し入れするなら `*Repository`（`find*` と `store` だけ／P2）、よその世界を読む・叩くだけなら `*Client`（P3）。
 2. **ユースケースそのものか？** → `*UseCase`（クラス、コンストラクタ注入、`execute` 1 本／P6）。複数のユースケースが共有する手続きなら application collaborator にして、「ドメインオブジェクトではない」と明記する。
-3. **表示・照会のためだけの形か？** → リードモデル（`usecase/read-model/`／P8）。
+3. **表示・照会のためだけの形か？** → 表示用の投影はadapterへ。業務上の査定・集計なら状態を所有するドメイン型へ置く（P8）。
 4. **外部形式の知識（SMT-LIB、YAML、HTTP の形）か？** → adapter。例外を使うなら export せずそのファイルで捕まえる（A5）。
 5. **Repository が出し入れする単位か？** → 集約ルート。恒等・境界・不変条件を決め、状態変更はコマンドにする（D11）。可変部は集約自身が抱える。
 6. **コレクションから鍵で引かれるか？** → エンティティ（識別子を持つ）。

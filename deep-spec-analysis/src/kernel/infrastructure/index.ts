@@ -12,7 +12,7 @@ export { isObject, type Json, strArr } from "./json.ts";
 export { parseConstruction } from "./parse-construction.ts";
 export type { ParseError } from "./parse-error.ts";
 export { err, ok, type Result, unreachable } from "./result.ts";
-export { combineResults, flatMapResult, traverseResult } from "./result-composition.ts";
+export { combineResults, flatMapResult, matchResult, traverseResult } from "./result-composition.ts";
 export type { ResultFailure } from "./result-failure.ts";
 export type { ResultSuccess } from "./result-success.ts";
 export { type Schema, validateSchema } from "./schema.ts";

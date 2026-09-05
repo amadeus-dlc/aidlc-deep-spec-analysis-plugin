@@ -59,6 +59,10 @@ export class SiblingVerdictDocument {
     return new SiblingVerdictDocument({ kind: "readable", method, findings, skipped });
   }
 
+  isReadable(): boolean {
+    return this.#state.kind === "readable";
+  }
+
   // バックエンドが申告した不能理由。不能申告でなければ不在。
   unavailableReason(): string | null {
     return this.#state.kind === "unavailable" ? this.#state.reason : null;

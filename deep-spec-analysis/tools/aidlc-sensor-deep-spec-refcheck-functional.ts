@@ -135,6 +135,9 @@ function parseConstruction(construct) {
   }
 }
 // src/kernel/infrastructure/result-composition.ts
+function matchResult(result, cases) {
+  return result.ok ? cases.ok(result.value) : cases.err(result.error);
+}
 function flatMapResult(result, next) {
   return result.ok ? next(result.value) : result;
 }
@@ -714,10 +717,12 @@ class ErrorMessage {
   }
 }
 // src/kernel/domain/error-messages.ts
+var MAX_MESSAGES = 65536;
+
 class ErrorMessages {
   #values;
   constructor(values) {
-    if (values.length > 65536)
+    if (values.length > MAX_MESSAGES)
       throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
@@ -725,6 +730,17 @@ class ErrorMessages {
     return parseConstruction(() => new ErrorMessages(values));
   }
   static of(values) {
+    return new ErrorMessages(values);
+  }
+  static collect(diagnostics) {
+    const values = [];
+    for (const diagnostic of diagnostics) {
+      if (values.length === MAX_MESSAGES) {
+        values[values.length - 1] = ErrorMessage.of("validation diagnostic limit reached (65536 messages); additional diagnostics omitted");
+        break;
+      }
+      values.push(diagnostic.ok ? diagnostic.value : ErrorMessage.of("validation diagnostic could not be represented within its text budget"));
+    }
     return new ErrorMessages(values);
   }
   add(value) {
@@ -1455,6 +1471,22 @@ class UnitName {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/kernel/domain/validation-assessment.ts
+class ValidationAssessment {
+  #errors;
+  constructor(errors) {
+    this.#errors = errors;
+  }
+  static of(errors) {
+    return new ValidationAssessment(errors);
+  }
+  passes() {
+    return this.#errors.isEmpty();
+  }
+  errors() {
+    return this.#errors;
   }
 }
 // src/kernel/domain/verification-method.ts
@@ -5822,24 +5854,21 @@ class CheckContractSummaryUseCase {
     this.#findingsSchema = findingsSchema;
   }
   execute(input) {
-    const record = this.#designRecordRepository.findById(input.recordId);
-    if (!record.ok)
-      return { kind: "not-applicable" };
-    const checked = record.value.checkContracts(input.reportDirectory);
-    if (!checked.ok)
-      return { kind: "not-applicable" };
-    const conformed = checked.value.conformedTo(this.#findingsSchema);
-    if (input.mode === "persist") {
-      const stored = this.#referenceCheckReportRepository.store(conformed);
-      if (!stored.ok)
-        return { kind: "save-failed", error: stored.error };
-    }
-    return {
-      kind: "verified",
-      pass: conformed.passes(),
-      findingsCount: conformed.findingsCount(),
-      skippedCount: conformed.skippedCount()
-    };
+    return matchResult(this.#designRecordRepository.findById(input.recordId), {
+      err: () => ({ kind: "not-applicable" }),
+      ok: (record) => matchResult(record.checkContracts(input.reportDirectory), {
+        err: () => ({ kind: "not-applicable" }),
+        ok: (report) => {
+          const conformed = report.conformedTo(this.#findingsSchema);
+          if (input.mode === "report-only")
+            return { kind: "verified", report: conformed };
+          return matchResult(this.#referenceCheckReportRepository.store(conformed), {
+            err: (error) => ({ kind: "save-failed", error }),
+            ok: () => ({ kind: "verified", report: conformed })
+          });
+        }
+      })
+    });
   }
 }
 // src/refcheck/usecase/check-domain-components-usecase.ts
@@ -5853,24 +5882,21 @@ class CheckDomainComponentsUseCase {
     this.#findingsSchema = findingsSchema;
   }
   execute(input) {
-    const record = this.#designRecordRepository.findById(input.recordId);
-    if (!record.ok)
-      return { kind: "not-applicable" };
-    const checked = record.value.checkComponents(input.reportDirectory);
-    if (!checked.ok)
-      return { kind: "not-applicable" };
-    const conformed = checked.value.conformedTo(this.#findingsSchema);
-    if (input.mode === "persist") {
-      const stored = this.#referenceCheckReportRepository.store(conformed);
-      if (!stored.ok)
-        return { kind: "save-failed", error: stored.error };
-    }
-    return {
-      kind: "verified",
-      pass: conformed.passes(),
-      findingsCount: conformed.findingsCount(),
-      skippedCount: conformed.skippedCount()
-    };
+    return matchResult(this.#designRecordRepository.findById(input.recordId), {
+      err: () => ({ kind: "not-applicable" }),
+      ok: (record) => matchResult(record.checkComponents(input.reportDirectory), {
+        err: () => ({ kind: "not-applicable" }),
+        ok: (report) => {
+          const conformed = report.conformedTo(this.#findingsSchema);
+          if (input.mode === "report-only")
+            return { kind: "verified", report: conformed };
+          return matchResult(this.#referenceCheckReportRepository.store(conformed), {
+            err: (error) => ({ kind: "save-failed", error }),
+            ok: () => ({ kind: "verified", report: conformed })
+          });
+        }
+      })
+    });
   }
 }
 // src/refcheck/usecase/check-functional-design-usecase.ts
@@ -5884,24 +5910,21 @@ class CheckFunctionalDesignUseCase {
     this.#findingsSchema = findingsSchema;
   }
   execute(input) {
-    const record = this.#designRecordRepository.findById(input.recordId);
-    if (!record.ok)
-      return { kind: "not-applicable" };
-    const checked = record.value.checkFunctionalDesign(input.reportDirectory);
-    if (!checked.ok)
-      return { kind: "not-applicable" };
-    const conformed = checked.value.conformedTo(this.#findingsSchema);
-    if (input.mode === "persist") {
-      const stored = this.#referenceCheckReportRepository.store(conformed);
-      if (!stored.ok)
-        return { kind: "save-failed", error: stored.error };
-    }
-    return {
-      kind: "verified",
-      pass: conformed.passes(),
-      findingsCount: conformed.findingsCount(),
-      skippedCount: conformed.skippedCount()
-    };
+    return matchResult(this.#designRecordRepository.findById(input.recordId), {
+      err: () => ({ kind: "not-applicable" }),
+      ok: (record) => matchResult(record.checkFunctionalDesign(input.reportDirectory), {
+        err: () => ({ kind: "not-applicable" }),
+        ok: (report) => {
+          const conformed = report.conformedTo(this.#findingsSchema);
+          if (input.mode === "report-only")
+            return { kind: "verified", report: conformed };
+          return matchResult(this.#referenceCheckReportRepository.store(conformed), {
+            err: (error) => ({ kind: "save-failed", error }),
+            ok: () => ({ kind: "verified", report: conformed })
+          });
+        }
+      })
+    });
   }
 }
 // src/entries/aidlc-sensor-deep-spec-refcheck-functional.ts
@@ -5938,7 +5961,7 @@ function main() {
 `);
     process.exit(1);
   }
-  process.stdout.write(renderVerdictLine(outcome.pass, outcome.findingsCount, outcome.skippedCount, flags.reportOnly ? "report-only" : undefined));
+  process.stdout.write(renderVerdictLine(outcome.report.passes(), outcome.report.findingsCount(), outcome.report.skippedCount(), flags.reportOnly ? "report-only" : undefined));
   process.exit(0);
 }
 main();

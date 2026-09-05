@@ -8,8 +8,7 @@
 //     （fence 不正・JSON 不正・契約4 不適合・スキーマ不可読の 4 種）
 //   - map 成立時のみ inputs（設計モデル・map・要件モデルの順）と
 //     mapArtifact（witness refs に載る相対パス）を運ぶ
-// 陳腐化（requirementsIrHash / designIrHash の不一致）の判定はユースケースの
-// フロー制御——ポートは判定しない。
+// 陳腐化・欠落・ユニット帰属の判定は取得されたRefinementMaterialsが所有する。
 
 import type { RefinementMaterials, RefinementMaterialsIdentifier } from "@deep-spec/design-domain";
 import type { Result } from "@deep-spec/kernel-infrastructure";

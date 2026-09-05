@@ -1,7 +1,12 @@
-import type { InstalledStatus, SolverAvailability } from "@deep-spec/doctor-domain";
+import type {
+  CoverageAssessment,
+  InstalledStatus,
+  SolverAvailability,
+  StructuralDebt,
+  UnitCoverage,
+  VersionAdvisory,
+} from "@deep-spec/doctor-domain";
 import { Check, CheckSeverity } from "@deep-spec/doctor-domain";
-
-import type { CoverageAssessment, StructuralDebt, UnitCoverage, VersionAdvisory } from "@deep-spec/doctor-usecase";
 
 // doctor 検査行の presenter——label/fix の凍結文言はすべてここに封じる
 //（移行 PR9、#22）。installer（scripts/install.ts）が grep する部分文字列
@@ -28,23 +33,23 @@ export class DoctorPresenter {
 
   version(advisory: VersionAdvisory): Check {
     return advisory.match({
-      current: ({ installedVersion, latestVersion, source, ref }) =>
+      current: (installed, latest) =>
         Check.of({
           pass: true,
-          label: `deep-spec-analysis: version ${installedVersion} from ${source} ${ref} is current (latest stable tag: ${latestVersion})`,
+          label: `deep-spec-analysis: version ${installed.version().asString()} from ${installed.source().asString()} ${installed.reference().asString()} is current (latest stable tag: ${latest.asTag()})`,
           severity: CheckSeverity.advisory(),
         }),
-      updateAvailable: ({ installedVersion, latestVersion, source, ref }) =>
+      updateAvailable: (installed, latest) =>
         Check.of({
           pass: false,
-          label: `deep-spec-analysis: update available — version ${installedVersion} from ${source} ${ref}; latest stable tag is ${latestVersion}`,
+          label: `deep-spec-analysis: update available — version ${installed.version().asString()} from ${installed.source().asString()} ${installed.reference().asString()}; latest stable tag is ${latest.asTag()}`,
           fix: "Re-run the installer with `--project . --update` (and the same `--harness` selector used for this installation).",
           severity: CheckSeverity.advisory(),
         }),
-      skipped: ({ installedVersion, source, ref, reason }) =>
+      skipped: (installed, reason) =>
         Check.of({
           pass: true,
-          label: `deep-spec-analysis: version update check skipped for ${installedVersion} from ${source} ${ref} — ${reason}`,
+          label: `deep-spec-analysis: version update check skipped for ${installed.version().asString()} from ${installed.source().asString()} ${installed.reference().asString()} — ${reason.asString()}`,
           severity: CheckSeverity.advisory(),
         }),
       provenanceMissing: () =>
@@ -57,7 +62,7 @@ export class DoctorPresenter {
       provenanceMalformed: (reason) =>
         Check.of({
           pass: false,
-          label: `deep-spec-analysis: version update check unavailable — installation provenance is malformed (${reason})`,
+          label: `deep-spec-analysis: version update check unavailable — installation provenance is malformed (${reason.asString()})`,
           fix: `Re-run the installer normally (without \`--update\`) to replace ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
           severity: CheckSeverity.advisory(),
         }),
@@ -99,15 +104,15 @@ export class DoctorPresenter {
 
   verificationCoverage(assessment: CoverageAssessment): Check[] {
     const rows: Check[] = assessment.problems().map((row) => {
-      const noun = row.matchState({
+      const noun = row.problemState()?.match({
         unverified: () => "has requirements with no deep-spec verification",
         stale: () => "changed its requirements after the last deep-spec verification",
       });
       return Check.of({
         pass: false,
-        label: `deep-spec-analysis: intent ${row.intentLabel()} ${noun}`,
+        label: `deep-spec-analysis: intent ${row.location().space().asString()}/${row.location().intent().asString()} ${noun}`,
         fix:
-          `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` +
+          `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.location().intent().asString()}\`), ` +
           "then run `/aidlc --stage deep-spec-analysis-verify --single` to verify its requirements without advancing the workflow.",
         severity: CheckSeverity.advisory(),
       });
@@ -118,7 +123,7 @@ export class DoctorPresenter {
         label:
           `deep-spec-analysis: verification coverage — ${assessment.verifiedCount()}/${assessment.eligibleCount()} ` +
           "eligible intents verified (scopes: " +
-          assessment.scopes().join(", ") +
+          [...assessment.scopes()].map((scope) => scope.asString()).join(", ") +
           ")",
         fix: "See the per-intent rows above for the exact command each unverified intent needs.",
         severity: CheckSeverity.advisory(),
@@ -131,7 +136,7 @@ export class DoctorPresenter {
     const rows: Check[] = debt.rows().map((row) =>
       Check.of({
         pass: false,
-        label: `deep-spec-analysis: ${row.locationLabel()} has ${row.findingCount()} reference-integrity finding(s)`,
+        label: `deep-spec-analysis: ${row.artifact().location().space().asString()}/${row.artifact().location().intent().asString()} ${row.artifact().relativePath().asString()} has ${row.findingCount()} reference-integrity finding(s)`,
         fix:
           "Open the artifact and fix (or record as an accepted risk) each finding; " +
           "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
@@ -156,9 +161,9 @@ export class DoctorPresenter {
     const rows: Check[] = coverage.refinementStale().map((row) =>
       Check.of({
         pass: false,
-        label: `deep-spec-analysis: intent ${row.intentLabel()} re-verified its requirements after the last design verification (refinement evidence is stale)`,
+        label: `deep-spec-analysis: intent ${row.space().asString()}/${row.intent().asString()} re-verified its requirements after the last design verification (refinement evidence is stale)`,
         fix:
-          `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` +
+          `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent().asString()}\`), ` +
           "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
         severity: CheckSeverity.advisory(),
       }),
@@ -171,9 +176,9 @@ export class DoctorPresenter {
       rows.push(
         Check.of({
           pass: false,
-          label: `deep-spec-analysis: unit ${row.unitLabel()} ${noun}`,
+          label: `deep-spec-analysis: unit ${row.location().space().asString()}/${row.location().intent().asString()}/${row.unit().asString()} ${noun}`,
           fix:
-            `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` +
+            `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.location().intent().asString()}\`), ` +
             "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",
           severity: CheckSeverity.advisory(),
         }),
@@ -186,7 +191,7 @@ export class DoctorPresenter {
           label:
             `deep-spec-analysis: design verification coverage — ${coverage.verifiedCount()}/${coverage.eligibleCount()} ` +
             "eligible units verified (scopes: " +
-            coverage.scopes().join(", ") +
+            [...coverage.scopes()].map((scope) => scope.asString()).join(", ") +
             ")",
           fix: "See the per-unit rows above for the exact command each unverified unit needs.",
           severity: CheckSeverity.advisory(),

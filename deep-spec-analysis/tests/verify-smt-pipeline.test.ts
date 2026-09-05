@@ -3,6 +3,7 @@ import {
   ContentHash,
   EnumerationMember,
   EnumerationMembers,
+  ErrorMessage,
   ExpressionTree,
   FindingKind,
   FindingsSchema,
@@ -48,6 +49,7 @@ function ap(raw: string): ArtifactPath {
 }
 
 import {
+  buildSmtPlan,
   FormalModelRepositoryImplementation,
   parseSiblingReportDocument,
   renderVerificationReportBytes,
@@ -69,6 +71,7 @@ import {
   RequirementAttributeDeclaration,
   RequirementAttributeDeclarations,
   RequirementsModel,
+  SatisfiabilityModuloTheoriesCheck,
   SatisfiabilityModuloTheoriesEventPairProbe,
   SatisfiabilityModuloTheoriesEventPairProbes,
   SatisfiabilityModuloTheoriesQueryVerdict,
@@ -88,7 +91,6 @@ import {
 } from "@deep-spec/requirements-domain";
 import {
   type FormalModelRepository,
-  type SatisfiabilityModuloTheoriesCheck,
   VerifyRequirementsSatisfiabilityModuloTheoriesUseCase,
   type Z3SolverClient,
 } from "@deep-spec/requirements-usecase";
@@ -265,10 +267,12 @@ describe("the verify-smt interactor over the InMemory double", () => {
       formalModels(err({ kind: "not-found", path: "/x" })),
       reports,
       schema,
-      solver({
-        plan: SatisfiabilityModuloTheoriesVerificationPlan.of(EMPTY_PLAN),
-        result: { kind: "solved", verdicts: verdictsOf([]) },
-      }),
+      solver(
+        SatisfiabilityModuloTheoriesCheck.of({
+          plan: SatisfiabilityModuloTheoriesVerificationPlan.of(EMPTY_PLAN),
+          result: { kind: "solved", verdicts: verdictsOf([]) },
+        }),
+      ),
     ).execute({ modelId: FormalModelIdentifier.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("not-applicable");
     const stored = reports.findAllByDirectory(ap(DIR));
@@ -282,10 +286,12 @@ describe("the verify-smt interactor over the InMemory double", () => {
       formalModels(err({ kind: "corrupt", path: "/x", cause: "IR lacks a semver irVersion" })),
       reports,
       schema,
-      solver({
-        plan: SatisfiabilityModuloTheoriesVerificationPlan.of(EMPTY_PLAN),
-        result: { kind: "solved", verdicts: verdictsOf([]) },
-      }),
+      solver(
+        SatisfiabilityModuloTheoriesCheck.of({
+          plan: SatisfiabilityModuloTheoriesVerificationPlan.of(EMPTY_PLAN),
+          result: { kind: "solved", verdicts: verdictsOf([]) },
+        }),
+      ),
     ).execute({ modelId: FormalModelIdentifier.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("model-unreadable");
     const written = reports.findById(VerificationReportIdentifier.of(ap(DIR), "smt"));
@@ -310,10 +316,12 @@ describe("the verify-smt interactor over the InMemory double", () => {
       formalModels(ok(m)),
       reports,
       schema,
-      solver({
-        plan: SatisfiabilityModuloTheoriesVerificationPlan.of(EMPTY_PLAN),
-        result: { kind: "solved", verdicts: verdictsOf([]) },
-      }),
+      solver(
+        SatisfiabilityModuloTheoriesCheck.of({
+          plan: SatisfiabilityModuloTheoriesVerificationPlan.of(EMPTY_PLAN),
+          result: { kind: "solved", verdicts: verdictsOf([]) },
+        }),
+      ),
     ).execute({ modelId: FormalModelIdentifier.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("version-mismatch");
     const written = reports.findById(VerificationReportIdentifier.of(ap(DIR), "smt"));
@@ -352,10 +360,15 @@ describe("the verify-smt interactor over the InMemory double", () => {
       formalModels(ok(m)),
       reports,
       schema,
-      solver({
-        plan,
-        result: { kind: "unavailable", reason: "no runtime could execute the z3 child process (node: not on PATH)" },
-      }),
+      solver(
+        SatisfiabilityModuloTheoriesCheck.of({
+          plan,
+          result: {
+            kind: "unavailable",
+            reason: ErrorMessage.of("no runtime could execute the z3 child process (node: not on PATH)"),
+          },
+        }),
+      ),
     ).execute({ modelId: FormalModelIdentifier.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("solver-unavailable");
     const written = reports.findById(VerificationReportIdentifier.of(ap(DIR), "smt"));
@@ -399,11 +412,11 @@ describe("the verify-smt interactor over the InMemory double", () => {
       formalModels(ok(m)),
       reports,
       schema,
-      solver({ plan, result: { kind: "solved", verdicts } }),
+      solver(SatisfiabilityModuloTheoriesCheck.of({ plan, result: { kind: "solved", verdicts } })),
     ).execute({ modelId: FormalModelIdentifier.of(ap("/x")), verifyDirectory: ap(DIR) });
     expect(outcome.kind).toBe("verified");
-    expect(outcome.kind === "verified" && outcome.pass).toBe(false);
-    expect(outcome.kind === "verified" && outcome.findingsCount).toBe(1);
+    expect(outcome.kind === "verified" && outcome.directory.publishedReport().passes()).toBe(false);
+    expect(outcome.kind === "verified" && outcome.directory.publishedReport().findingsCount()).toBe(1);
     const written = reports.findById(VerificationReportIdentifier.of(ap(DIR), "smt"));
     expect(written.ok && written.value.findings().toArray()[0]?.kind()).toBe("scenario-violation");
     const bytes = written.ok ? renderVerificationReportBytes(written.value) : "";
@@ -774,6 +787,24 @@ describe("cross-check computation", () => {
 });
 
 describe("degradation reports and ordering", () => {
+  test("ソルバ診断は入力レコードの変更から独立し、計画のskipと一緒に解釈される", () => {
+    const input = model({
+      obligations: [{ id: ObligationIdentifier.of("OB-1"), nature: ObligationNature.of("invariant"), frRefs: [] }],
+    });
+    const facts = { kind: "unavailable" as const, reason: ErrorMessage.of("original solver failure") };
+    const result = SatisfiabilityModuloTheoriesCheck.of({ plan: buildSmtPlan(input).plan, result: facts });
+    facts.reason = ErrorMessage.of("later solver failure");
+    const report = result.reportFor(input, VerificationReportIdentifier.of(ap("/v"), "smt"));
+    expect(report.isUnavailable()).toBe(true);
+    expect(report.unavailableReason()).toBe("original solver failure");
+    expect(
+      report
+        .skipped()
+        .toArray()
+        .map((skip) => skip.target().asString()),
+    ).toEqual(["OB-1"]);
+  });
+
   test("irUnreadableReport freezes the reason, the 0.0.0 version, and the empty-input hash", () => {
     const r = VerificationReport.irUnreadable(
       VerificationReportIdentifier.of(ap("/v"), "smt"),
@@ -798,12 +829,7 @@ describe("degradation reports and ordering", () => {
     });
     expect(m.supportsMajor(1)).toBe(false);
     expect(m.majorVersion()).toBe(3);
-    const vm = VerificationReport.versionMismatch(
-      VerificationReportIdentifier.of(ap("/v"), "smt"),
-      m,
-      ContentHash.ofText("h"),
-      "exhaustive",
-    );
+    const vm = VerificationReport.versionMismatch(VerificationReportIdentifier.of(ap("/v"), "smt"), m, "exhaustive");
     expect(
       vm
         .skipped()
@@ -813,7 +839,6 @@ describe("degradation reports and ordering", () => {
     const su = VerificationReport.solverUnavailable(
       VerificationReportIdentifier.of(ap("/v"), "smt"),
       m,
-      ContentHash.ofText("h"),
       VerificationSkips.of([
         VerificationSkipped.of({
           target: TargetIdentifier.of("OB-2"),

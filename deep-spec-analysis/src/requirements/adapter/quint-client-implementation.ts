@@ -10,10 +10,11 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { KeyedIndex } from "@deep-spec/kernel-domain";
+import { ErrorMessage, KeyedIndex, VerificationMethod } from "@deep-spec/kernel-domain";
 import type { RequirementsModel } from "@deep-spec/requirements-domain";
 import {
   ObligationIdentifier,
+  QuintCheckResult,
   QuintMachineRunVerdict,
   QuintRuns,
   QuintScenarioVerdict,
@@ -22,7 +23,7 @@ import {
   TraceStates,
   VerificationSkips,
 } from "@deep-spec/requirements-domain";
-import type { QuintCheckResult, QuintClient } from "@deep-spec/requirements-usecase";
+import type { QuintClient } from "@deep-spec/requirements-usecase";
 import type { CompiledQuintMachine } from "./compiled-quint-machine.ts";
 import { decodeItfTrace, itfStatus } from "./itf-decoder.ts";
 import type { QuintClientConfiguration } from "./quint-client-configuration.ts";
@@ -58,13 +59,17 @@ export class QuintClientImplementation implements QuintClient {
   check(model: RequirementsModel): QuintCheckResult {
     const probe = spawnSync(this.#config.quintBin, ["--version"], { encoding: "utf-8", timeout: 15_000 });
     if (probe.error || probe.status !== 0) {
-      return { kind: "cli-unavailable" };
+      return QuintCheckResult.of({ kind: "cli-unavailable" });
     }
     const bounded = this.#detectBoundedMode();
     const method = bounded ? "bounded" : "simulation";
     const compiled = compileQuintMachine(model);
     if (compiled.kind === "uncompilable") {
-      return { kind: "machine-uncompilable", method, error: compiled.error };
+      return QuintCheckResult.of({
+        kind: "machine-uncompilable",
+        method: VerificationMethod.of(method),
+        error: ErrorMessage.of(compiled.error),
+      });
     }
     const machine = compiled.machine;
 
@@ -90,13 +95,13 @@ export class QuintClientImplementation implements QuintClient {
         temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationIdentifier.of(id), v] as const)),
         scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioIdentifier.of(id), v] as const)),
       });
-      return {
+      return QuintCheckResult.of({
         kind: "checked",
-        method,
+        method: VerificationMethod.of(method),
         plan: machine.plan,
         compileSkips: VerificationSkips.of(machine.compileSkips),
         runs,
-      };
+      });
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

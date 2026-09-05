@@ -313,7 +313,7 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 **In this repository**: Every Repository's `store` is `Result<void, RepositoryError>`.
 
-**A deliberate exception**: A collaborator sitting above a usecase may return **a value derived from what it just wrote**, right after writing it. `DesignReportFinalizer.finalize` returns the verdict at the same time it saves — because that is "the one way to build this that guarantees the verdict printed to stdout never disagrees with what was written to the file." When you make an exception, write a comment carrying a reason at this level.
+**A deliberate exception**: A finalizer returns **the same aggregate that was successfully persisted**. `DesignReportFinalizer.finalize` and `VerificationReportFinalizer.finalize` return the persisted directory aggregate; an adapter derives presentation values from its candidate report. This keeps stored content and displayed verdicts consistent without putting presentation logic in the finalizer.
 
 **Check**: `commands-return-void`.
 
@@ -347,13 +347,13 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 **Check**: None (review).
 
-### P8 — A projection meant for display lives in usecase
+### P8 — Use cases orchestrate; adapters own presentation
 
-**Rule**: A type assembled purely for querying or display (a read model) does not live in domain; it lives in usecase's `read-model/`. It carries no persistence method and no dependency on a port.
+**Rule**: Use cases coordinate acquisition, domain tasks, persistence, and failure propagation. They do not extract model state to reconstruct business decisions, calculations, or transformations. Domain types own assessment and aggregation; adapters own display DTOs and labels. CQRS is not adopted.
 
-**Why**: Display's concerns are not domain vocabulary. Placing them in domain dilutes domain with types that carry no business meaning.
+**Why**: A decision belongs with the state supporting it. Presentation concerns stay separate from that decision instead of making the use case its owner.
 
-**In this repository**: The 8 types in `src/doctor/usecase/read-model/` (`CoverageAssessment`, etc.). The other 3 contexts follow a single path — "verify, build a report aggregate, save it" — so they carry no read model.
+**In this repository**: Domain types assess coverage and structural debt; `DoctorPresenter` builds their labels and display text. Verification outcomes carry the persisted domain object to the output adapter.
 
 **Check**: None (review).
 
@@ -391,7 +391,7 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 ### A3 — Untrusted input is checked at the adapter boundary, then passed to domain as material for judgment
 
-**Rule**: JSON / Markdown arriving from outside is checked for syntax and schema at adapter. A failed check is **not turned into an exception**; it is returned as a `Result`, or **passed to the aggregate as a list of errors to use as material**. Domain / usecase decide the verdict itself.
+**Rule**: JSON / Markdown arriving from outside is checked for syntax and schema at adapter. A failed check is **not turned into an exception**; it is returned as a `Result`, or **passed to the aggregate as a list of errors to use as material**. Domain owns the verdict and validation order; use cases coordinate acquisition and request that validation.
 
 **Why**: In this plugin, "broken" is a result to be reported, not a reason to abort processing.
 
@@ -411,13 +411,13 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 **Check**: None (review).
 
-### A5 — Exceptions are used only for local control flow inside adapter
+### A5 — Distinguish expected conversion failures from contract panics
 
-**Rule**: Exceptions may be thrown only inside adapter. The exception type is **never exported**, is **caught within the same file**, and is converted into a domain value (`Result` / a result union / a skip record). No exception is ever thrown across a layer boundary.
+**Rule**: Expected conversion exceptions used locally by adapter compilers are caught in the same file and converted to typed results. Constructor, `of`, and aggregate-operation contract violations propagate as panics and must not be relabeled as I/O failures. Expected invalid input uses the type's `parse` factory, which converts only its construction contract violation to a non-exception `ParseError`.
 
 **Why**: For a deep, recursive transformation (such as compiling an expression tree to SMT-LIB), throwing reads more naturally than threading failure back up manually at every step. But letting it leak outside means the caller can no longer read from the type what might come flying at it. Closing it locally gets both.
 
-**In this repository (measured)**: The distribution of `catch` is: adapter 92, entries 4, domain 0, usecase 0, infrastructure 0. `CompileError` / `SatisfiabilityModuloTheoriesCompileError` / `YamlError` are all unexported classes local to a single file, caught in that same file and converted into `{kind: "uncompilable"}` or a `VerificationSkipped(reason: "compile-error")`.
+**In this repository**: `CompileError`, `SatisfiabilityModuloTheoriesCompileError`, and `YamlError` represent local conversion failures. `IllegalArgumentException` represents a construction or operation contract violation. Attempting to persist an unfinalized aggregate panics before repository I/O instead of becoming a `RepositoryError`.
 
 **Check**: None (review).
 
@@ -546,7 +546,7 @@ Apply these in order from the top, and stop at the first match.
 
 1. **Is it a port to something outside the world?** → port (`usecase/port/`). If it moves our own aggregate in and out, it's `*Repository` (only `find*` and `store` / P2); if it only reads or hits someone else's world, it's `*Client` (P3).
 2. **Is it the use case itself?** → `*UseCase` (a class, constructor injection, one `execute` / P6). If it's a procedure shared by several use cases, make it an application collaborator and note explicitly that it is "not a domain object."
-3. **Is it a shape that exists only for display or query?** → a read model (`usecase/read-model/` / P8).
+3. **Is it a shape that exists only for display or query?** → presentation projections belong in adapters. Business assessments and aggregations belong to the domain type owning their state (P8).
 4. **Is it knowledge of an external format (SMT-LIB, YAML, HTTP's shape)?** → adapter. If you use an exception, don't export it — catch it within that same file (A5).
 5. **Is it a unit a Repository moves in and out?** → an aggregate root. Decide its identity, boundary, and invariants, and make a state change a command (D11). The aggregate itself holds its mutable part.
 6. **Is it looked up from a collection by key?** → an entity (carries an identifier).

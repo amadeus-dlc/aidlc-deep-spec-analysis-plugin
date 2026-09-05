@@ -15,6 +15,7 @@ import {
   EnumerationMembers,
   ErrorMessage,
   ErrorMessages,
+  IntermediateRepresentationVersion,
   RequirementIdentifier,
   RequirementIdentifiers,
   TargetIdentifier,
@@ -107,9 +108,12 @@ import {
   IntermediateRepresentationScenarioDeclaration,
   IntermediateRepresentationScenarioDeclarations,
   IntermediateRepresentationTemporalDeclaration,
+  IntermediateRepresentationValidationMaterials,
   IntermediateRepresentationValidationMaterialsIdentifier,
   ObligationIdentifier,
+  RequirementsSource,
   RequirementsSourceIdentifier,
+  RequirementsSourceValidation,
   ScenarioIdentifier,
   SourceAnchor,
 } from "@deep-spec/requirements-domain";
@@ -143,10 +147,14 @@ function renderVerdict(
   if (outcome.kind === "not-applicable") {
     return `${JSON.stringify({ pass: true, findings_count: 0, errors: [], note: "not-applicable" })}\n`;
   }
+  const errors =
+    outcome.kind === "acquisition-failed"
+      ? [outcome.error.cause]
+      : [...outcome.assessment.errors()].map((message) => message.asString());
   return `${JSON.stringify({
-    pass: outcome.pass,
-    findings_count: outcome.errors.length,
-    errors: outcome.errors.slice(0, MAX_REPORTED_ERRORS),
+    pass: outcome.kind === "verdict" && outcome.assessment.passes(),
+    findings_count: errors.length,
+    errors: errors.slice(0, MAX_REPORTED_ERRORS),
   })}\n`;
 }
 
@@ -198,6 +206,72 @@ function designUseCase(): ValidateDesignIntermediateRepresentationUseCase {
     new DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath: designSchemaPath }),
   );
 }
+
+describe("要件検査の診断予算", () => {
+  function emptyDeclaration(): IntermediateRepresentationModelDeclaration {
+    return IntermediateRepresentationModelDeclaration.of({
+      entities: IntermediateRepresentationEntityDeclarations.of([]),
+      obligations: IntermediateRepresentationObligationDeclarations.of([]),
+      scenarios: IntermediateRepresentationScenarioDeclarations.of([]),
+      background: IntermediateRepresentationBackgroundDeclarations.of([]),
+    });
+  }
+
+  test.each(["1.0.0", "2.0.0"])("最大件数のschema診断と版診断を保持する (%s)", (version) => {
+    const materials = IntermediateRepresentationValidationMaterials.of({
+      id: IntermediateRepresentationValidationMaterialsIdentifier.of(FormalModelIdentifier.of(ap("/record/model.md"))),
+      irVersion: IntermediateRepresentationVersion.of(version),
+      schemaErrors: ErrorMessages.of(Array.from({ length: 65_536 }, () => ErrorMessage.of("schema diagnosis"))),
+      view: emptyDeclaration(),
+      functionalRequirementReferenceClaims: FunctionalRequirementReferenceClaims.of([]),
+      declaredDigest: null,
+      sourceId: RequirementsSourceIdentifier.of(ap("/record")),
+      sourceDocument: new Uint8Array(),
+    });
+    const assessment = materials.validate({
+      complete: (assessment) => assessment,
+      sourceRequired: () => {
+        throw new Error("schema-invalid input must not proceed to source validation");
+      },
+    });
+    const messages = [...assessment.errors()].map((message) => message.asString());
+    expect(assessment.passes()).toBe(false);
+    expect(messages).toHaveLength(65_536);
+    if (version === "1.0.0") {
+      expect(messages[0]).toBe("schema diagnosis");
+      expect(messages.at(-1)).toBe("schema diagnosis");
+    } else {
+      expect(messages[0]).toBe("irVersion 2.0.0: unsupported major version (this validator supports 1.x.x)");
+      expect(messages[1]).toBe("schema diagnosis");
+      expect(messages.at(-1)).toBe(
+        "validation diagnostic limit reached (65536 messages); additional diagnostics omitted",
+      );
+    }
+  });
+
+  test("多数のownerを含む参照診断が文字数上限を超えても検査を失わない", () => {
+    const references = FunctionalRequirementReferences.of([RequirementIdentifier.of("FR-1")]);
+    const index = FunctionalRequirementReferenceIndex.of(
+      Array.from({ length: 600 }, (_, position) =>
+        FunctionalRequirementReferenceClaim.of(`OB-${position}`.padEnd(128, "x"), references),
+      ),
+    );
+    const digest = ContentHash.ofText("requirements");
+    const validation = RequirementsSourceValidation.of(emptyDeclaration(), index, DeclaredDigest.of(digest.asString()));
+    const source = RequirementsSource.of({
+      id: RequirementsSourceIdentifier.of(ap("/record")),
+      sourcePath: ap("/record/requirements.md"),
+      knownIds: RequirementIdentifiers.of([]),
+      digest,
+      sourceDocument: new TextEncoder().encode("requirements"),
+    });
+    const assessment = validation.assess(source);
+    expect(assessment.passes()).toBe(false);
+    expect([...assessment.errors()].map((message) => message.asString())).toEqual([
+      "validation diagnostic could not be represented within its text budget",
+    ]);
+  });
+});
 
 describe("ValidateIntermediateRepresentationUseCase reproduces the ir-valid sensor byte-for-byte", () => {
   const stage = "deep-spec-analysis-verify";
@@ -272,10 +346,9 @@ describe("ValidateIntermediateRepresentationUseCase reproduces the ir-valid sens
       new RequirementsSourceRepositoryImplementation(),
     );
     const outcome = useCase.execute(FormalModelIdentifier.of(ap(modelPath)));
-    expect(outcome.kind).toBe("verdict");
-    if (outcome.kind !== "verdict") return;
-    expect(outcome.pass).toBe(false);
-    expect(outcome.errors[0]).toContain("IR schema not installed at");
+    expect(outcome.kind).toBe("acquisition-failed");
+    if (outcome.kind !== "acquisition-failed") return;
+    expect(outcome.error.cause).toContain("IR schema not installed at");
   });
 
   test("unsupported major version is reported before the schema errors", () => {
@@ -350,9 +423,9 @@ describe("ValidateDesignIntermediateRepresentationUseCase reproduces the design-
       }),
     );
     const outcome = useCase.execute(DesignModelIdentifier.of(ap(modelPath)));
-    expect(outcome.kind).toBe("verdict");
-    if (outcome.kind !== "verdict") return;
-    expect(outcome.errors[0]).toContain("design IR schema not installed at");
+    expect(outcome.kind).toBe("acquisition-failed");
+    if (outcome.kind !== "acquisition-failed") return;
+    expect("cause" in outcome.error && outcome.error.cause).toContain("design IR schema not installed at");
   });
 
   test("unsupported major version", () => {
@@ -1298,9 +1371,17 @@ describe("materials aggregates and the persistence round-trip (repository ruling
     const stored = repo.store(found.value);
     expect(stored.ok).toBe(true);
     expect(readFileSync(modelPath, "utf-8")).toBe(irDoc);
-    expect(found.value.irVersion().asString()).toBe("1.0.0");
-    expect(Array.isArray(found.value.schemaErrors().toArray())).toBe(true);
-    expect(found.value.functionalRequirementReferenceIndex()).toBeDefined();
+    const assessment = found.value.validate({
+      complete: (assessment) => assessment,
+      sourceRequired: () => {
+        throw new Error("schema-invalid materials must not request requirements.md");
+      },
+    });
+    expect([...assessment.errors()].map((message) => message.asString())).toEqual([
+      ': missing required property "schema"',
+      ': missing required property "background"',
+      ': unexpected property "entities"',
+    ]);
 
     // design 側も同じ往復則。
     const dDoc = '# design\n\n```json\n{"irVersion":"1.0.0","units":[]}\n```\n';
@@ -1488,16 +1569,14 @@ describe("unreadable-artifact degradation pins (thaw #38 item 3 — resolved by 
     mkdirSync(designDir);
     try {
       const ir = irUseCase().execute(FormalModelIdentifier.of(ap(irDir)));
-      expect(ir.kind).toBe("verdict");
-      if (ir.kind === "verdict") {
-        expect(ir.pass).toBe(false);
-        expect(ir.errors.join("\n")).toContain("EISDIR");
+      expect(ir.kind).toBe("acquisition-failed");
+      if (ir.kind === "acquisition-failed") {
+        expect("cause" in ir.error && ir.error.cause).toContain("EISDIR");
       }
       const design = designUseCase().execute(DesignModelIdentifier.of(ap(designDir)));
-      expect(design.kind).toBe("verdict");
-      if (design.kind === "verdict") {
-        expect(design.pass).toBe(false);
-        expect(design.errors.join("\n")).toContain("EISDIR");
+      expect(design.kind).toBe("acquisition-failed");
+      if (design.kind === "acquisition-failed") {
+        expect("cause" in design.error && design.error.cause).toContain("EISDIR");
       }
     } finally {
       rmSync(scratch, { recursive: true, force: true });

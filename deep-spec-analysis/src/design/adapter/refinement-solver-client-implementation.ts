@@ -8,11 +8,11 @@ import { combineResults, ok, traverseResult } from "@deep-spec/kernel-infrastruc
 // 旧 runRefinementChild からの逐語移植。
 
 import { spawnSync } from "node:child_process";
-import type { DesignUnit, RefinementRequirements, UnitRefinementPlan } from "@deep-spec/design-domain";
-import { RefinementQueryVerdict, RefinementQueryVerdicts } from "@deep-spec/design-domain";
+import type { UnitRefinementPlan } from "@deep-spec/design-domain";
+import { RefinementCheck, RefinementQueryVerdict, RefinementQueryVerdicts } from "@deep-spec/design-domain";
 
-import type { RefinementCheck, RefinementSolverClient } from "@deep-spec/design-usecase";
-import { KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
+import type { RefinementSolverClient } from "@deep-spec/design-usecase";
+import { ErrorMessage, KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
 import type { RefinementChildQuery } from "./refinement-child-query.ts";
 import { buildRefinementQueries, decodeDesignModel } from "./refinement-query-plan.ts";
 import type { RefinementSolverClientConfiguration } from "./refinement-solver-client-configuration.ts";
@@ -32,19 +32,18 @@ export class RefinementSolverClientImplementation implements RefinementSolverCli
     this.#config = config;
   }
 
-  check(
-    unit: DesignUnit,
-    requirements: RefinementRequirements,
-    plan: UnitRefinementPlan,
-    budgetMs: number,
-  ): RefinementCheck {
-    const built = buildRefinementQueries(unit, requirements, plan);
+  check(plan: UnitRefinementPlan, budgetMs: number): RefinementCheck {
+    const built = buildRefinementQueries(plan);
     if (built.queries.length === 0) {
-      return { plan: built.plan, result: { kind: "no-queries" } };
+      return RefinementCheck.noQueries(built.plan);
     }
     const child = this.#runChild(built.queries, budgetMs);
     if (child.results === null) {
-      return { plan: built.plan, result: { kind: "unavailable", reason: child.unavailable ?? "z3 unavailable" } };
+      const reason = ErrorMessage.parse(child.unavailable ?? "z3 unavailable");
+      return RefinementCheck.unavailable(
+        built.plan,
+        reason.ok ? reason.value : ErrorMessage.of("z3 child reported an invalid unavailable reason"),
+      );
     }
     const verdicts: (readonly [QueryLabel, RefinementQueryVerdict])[] = [];
     for (const [queryId, r] of child.results) {
@@ -53,10 +52,10 @@ export class RefinementSolverClientImplementation implements RefinementSolverCli
         core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse),
       });
       if (!parsed.ok)
-        return {
-          plan: built.plan,
-          result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` },
-        };
+        return RefinementCheck.unavailable(
+          built.plan,
+          ErrorMessage.of(`invalid solver query label: ${JSON.stringify(parsed.error)}`),
+        );
       verdicts.push([
         parsed.value.label,
         RefinementQueryVerdict.of({
@@ -67,10 +66,7 @@ export class RefinementSolverClientImplementation implements RefinementSolverCli
         }),
       ]);
     }
-    return {
-      plan: built.plan,
-      result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)) },
-    };
+    return RefinementCheck.solved(built.plan, RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)));
   }
 
   #runChild(

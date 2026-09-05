@@ -15,6 +15,7 @@
 //     ので、finalizing は必ずそれを落とす（BR2.2／BR2.5）
 
 import type { ArtifactPath, ContentHash, FindingsSchema } from "@deep-spec/kernel-domain";
+import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
 import type { DesignModel } from "./design-model.ts";
 import type { DesignReport } from "./design-report.ts";
 import { DesignReportIdentifier } from "./design-report-identifier.ts";
@@ -51,6 +52,9 @@ export class DesignVerifyDirectory {
   // 順）が与える全順序を崩さないため。候補が変わればクロスチェックは「いまの
   // reports から導いたもの」ではなくなるので落とす。
   finalizing(candidate: DesignReport): DesignVerifyDirectory {
+    if (!candidate.id().directory().equals(this.#directory)) {
+      throw new IllegalArgumentException({ kind: "design-report-directory-mismatch" });
+    }
     const fileName = candidate.id().fileName();
     const merged: DesignReport[] = [];
     let replaced = false;
@@ -128,6 +132,11 @@ export class DesignVerifyDirectory {
   // 読み取り面（候補を含む、ファイル名順の全 report）。
   reports(): DesignReports {
     return this.#reports;
+  }
+
+  publishedReport(): DesignReport {
+    if (this.#candidate === null) throw new Error("defect: no finalized design report candidate");
+    return this.#candidate;
   }
 
   // 境界: この実行が公開する report。load 直後は不在。

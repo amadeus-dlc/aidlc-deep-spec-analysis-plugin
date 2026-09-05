@@ -23,11 +23,14 @@ import { DesignFinding, DesignFindings, DesignSkipped, DesignSkips, DesignWitnes
 import { ObligationIdentifier, ScenarioIdentifier } from "@deep-spec/requirements-domain";
 import type { AttributeMapping } from "./attribute-mapping.ts";
 import type { AttributeMappings } from "./attribute-mappings.ts";
+import type { DesignReport } from "./design-report.ts";
+import type { LoweredUnit } from "./lowered-unit.ts";
 import { RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
 import { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
 import { RefinementStatus } from "./refinement-status.ts";
 import type { RefinementUnitMap } from "./refinement-unit-map.ts";
+import type { SiblingVerificationResult } from "./sibling-verification-result.ts";
 import type { TransitionReference } from "./transition-reference.ts";
 
 function exprRefs(e: Expression, out: Set<string>): void {
@@ -38,6 +41,8 @@ function exprRefs(e: Expression, out: Set<string>): void {
 // map 検査の結果（被覆分類・alpha 文脈・写像索引・mapping-gap findings）を
 // 閉じ込めた計画。露出 Map は死に、照会・skip 導出は plan 自身の振る舞い。
 export class UnitRefinementPlan {
+  readonly #unit: DesignUnit;
+  readonly #requirements: RefinementRequirements;
   readonly #mappings: AttributeMappings;
   readonly #obligationStatus: KeyedIndex<ObligationIdentifier, RefinementStatus>;
   readonly #scenarioStatus: KeyedIndex<ScenarioIdentifier, RefinementStatus>;
@@ -45,12 +50,16 @@ export class UnitRefinementPlan {
   readonly #gaps: DesignFindings;
 
   private constructor(props: {
+    unit: DesignUnit;
+    requirements: RefinementRequirements;
     mappings: AttributeMappings;
     obligationStatus: KeyedIndex<ObligationIdentifier, RefinementStatus>;
     scenarioStatus: KeyedIndex<ScenarioIdentifier, RefinementStatus>;
     eventTransitions: KeyedIndex<ObligationIdentifier, readonly TransitionReference[]>;
     gaps: DesignFindings;
   }) {
+    this.#unit = props.unit;
+    this.#requirements = props.requirements;
     this.#mappings = props.mappings;
     this.#obligationStatus = props.obligationStatus;
     this.#scenarioStatus = props.scenarioStatus;
@@ -315,6 +324,8 @@ export class UnitRefinementPlan {
     }
 
     return new UnitRefinementPlan({
+      unit: u,
+      requirements: req,
       mappings: unitMap.attrMap(),
       obligationStatus: KeyedIndex.of(
         [...obligationStatus].map(([id, st]) => [ObligationIdentifier.of(id), st] as const),
@@ -325,6 +336,68 @@ export class UnitRefinementPlan {
       ),
       gaps: DesignFindings.of(gaps),
     });
+  }
+
+  // adapterのコンパイル入力。applicationは計画をそのままgatewayへ渡す。
+  unit(): DesignUnit {
+    return this.#unit;
+  }
+  requirements(): RefinementRequirements {
+    return this.#requirements;
+  }
+
+  hasQuintInvariants(): boolean {
+    return !this.quintInvariants(this.#requirements).isEmpty();
+  }
+
+  loweredForQuint(): LoweredUnit {
+    return this.#unit.lowered({ synthetics: false }).extendedWith(this.quintInvariants(this.#requirements));
+  }
+
+  quintPreparedIn(report: DesignReport): DesignReport {
+    return report.withEvidence(this.#gaps, this.quintStatusSkips(this.#requirements, this.#unit.name()));
+  }
+
+  quintRecordedIn(report: DesignReport, result: SiblingVerificationResult): DesignReport {
+    const interpreted = result.interpretRefinement(
+      this.#unit,
+      this.loweredForQuint(),
+      this.quintInvariants(this.#requirements),
+    );
+    return report.withEvidence(interpreted.findings, interpreted.skipped);
+  }
+
+  quintTimedOut(report: DesignReport): DesignReport {
+    const skipped = DesignSkips.of(
+      [...this.quintInvariants(this.#requirements)].map((invariant) =>
+        DesignSkipped.of({
+          target: invariant.reqTarget(),
+          reason: SkipReason.timeout(),
+          unit: UnitName.of(this.#unit.name()),
+          detail: "the per-run backend budget was exhausted before the refinement pass",
+        }),
+      ),
+    );
+    return report.withEvidence(DesignFindings.of([]), skipped);
+  }
+
+  smtTimedOut(report: DesignReport): DesignReport {
+    return this.unverifiedIn(
+      report,
+      SkipReason.timeout(),
+      "the per-run solver budget was exhausted before the refinement pass",
+    );
+  }
+
+  unverifiedIn(report: DesignReport, reason: SkipReason, detail: string): DesignReport {
+    return report.withEvidence(
+      DesignFindings.of([]),
+      DesignSkips.of(
+        [...this.#requirements.allTargetIds()].map((target) =>
+          DesignSkipped.of({ target, reason, detail, unit: UnitName.of(this.#unit.name()) }),
+        ),
+      ),
+    );
   }
 
   // 承認済み写像——alpha 置換の門（裁定 10）。

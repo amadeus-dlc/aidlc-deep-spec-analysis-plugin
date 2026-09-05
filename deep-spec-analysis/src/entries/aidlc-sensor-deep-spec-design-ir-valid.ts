@@ -52,11 +52,15 @@ function main(): void {
     process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, errors: [], note: "not-applicable" })}\n`);
     process.exit(0);
   }
+  const errors =
+    outcome.kind === "acquisition-failed"
+      ? [outcome.error.cause]
+      : Array.from(outcome.assessment.errors(), (message) => message.asString());
   process.stdout.write(
     `${JSON.stringify({
-      pass: outcome.pass,
-      findings_count: outcome.errors.length,
-      errors: outcome.errors.slice(0, MAX_REPORTED_ERRORS),
+      pass: outcome.kind === "verdict" && outcome.assessment.passes(),
+      findings_count: errors.length,
+      errors: errors.slice(0, MAX_REPORTED_ERRORS),
     })}\n`,
   );
   process.exit(0);

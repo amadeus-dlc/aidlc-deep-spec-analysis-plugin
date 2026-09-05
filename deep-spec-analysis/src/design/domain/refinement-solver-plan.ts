@@ -18,27 +18,58 @@ import {
 // interpretRefinementVerdicts の逐語移植）。
 
 import { DesignFinding, DesignFindings, DesignSkipped, DesignSkips, DesignWitness } from "@deep-spec/design-domain";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
 import type { RefinementProbe } from "./refinement-probe.ts";
 import type { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
-import type { RefinementRequirements } from "./refinement-requirements.ts";
 import type { UnitRefinementPlan } from "./unit-refinement-plan.ts";
 
 // クエリ計画（値オブジェクト、裁定 8——旧 RefinementSolverFacts）：発行順の Pending 索引と、alpha 置換・SMT コンパイル失敗
 // による compile-error skip（構築時に確定）。
+type RefinementSolverPlanParam = {
+  preparation: UnitRefinementPlan;
+  pending: KeyedIndex<QueryLabel, RefinementProbe>;
+  compileSkips: DesignSkips;
+};
+
 export class RefinementSolverPlan {
+  readonly #preparation: UnitRefinementPlan;
   readonly #pending: KeyedIndex<QueryLabel, RefinementProbe>;
   readonly #compileSkips: DesignSkips;
 
-  private constructor(props: { pending: KeyedIndex<QueryLabel, RefinementProbe>; compileSkips: DesignSkips }) {
+  /** 1ユニットのソルバ計画は65,536問・65,536診断まで。元の準備と帰属を構築時に固定する。 */
+  private constructor(props: RefinementSolverPlanParam) {
+    if (props.pending.size() > 65_536 || props.compileSkips.count() > 65_536) {
+      throw new IllegalArgumentException({ kind: "refinement-solver-plan-too-large" });
+    }
+    const targets = new Set(props.preparation.requirements().allTargetIds().toStrings());
+    const unit = props.preparation.unit().name();
+    for (const [, probe] of props.pending) {
+      if (!targets.has(probe.reqTarget().asString()))
+        throw new IllegalArgumentException({ kind: "refinement-probe-outside-preparation" });
+    }
+    for (const skipped of props.compileSkips) {
+      if (skipped.unit() !== unit) throw new IllegalArgumentException({ kind: "refinement-solver-unit-mismatch" });
+    }
+    this.#preparation = props.preparation;
     this.#pending = props.pending;
     this.#compileSkips = props.compileSkips;
   }
 
-  static of(props: {
-    pending: KeyedIndex<QueryLabel, RefinementProbe>;
-    compileSkips: DesignSkips;
-  }): RefinementSolverPlan {
-    return new RefinementSolverPlan({ pending: props.pending, compileSkips: props.compileSkips });
+  static of(props: RefinementSolverPlanParam): RefinementSolverPlan {
+    return new RefinementSolverPlan(props);
+  }
+
+  static parse(props: RefinementSolverPlanParam): Result<RefinementSolverPlan, ParseError> {
+    return parseConstruction(() => new RefinementSolverPlan(props));
+  }
+
+  preparation(): UnitRefinementPlan {
+    return this.#preparation;
   }
 
   compileSkips(): DesignSkips {
@@ -52,15 +83,13 @@ export class RefinementSolverPlan {
   }
 
   // 旧 interpretRefinementVerdicts の逐語移植。
-  interpret(
-    results: RefinementQueryVerdicts,
-    req: RefinementRequirements,
-    plan: UnitRefinementPlan,
-    unitName: string,
-  ): {
+  interpret(results: RefinementQueryVerdicts): {
     findings: DesignFindings;
     skipped: DesignSkips;
   } {
+    const plan = this.#preparation;
+    const req = plan.requirements();
+    const unitName = plan.unit().name();
     const findings: DesignFinding[] = [];
     const skipped: DesignSkipped[] = [];
     const functionalRequirementReferencesOf = (reqId: string): FunctionalRequirementReferences =>

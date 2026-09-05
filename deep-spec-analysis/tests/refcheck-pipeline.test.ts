@@ -165,7 +165,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
         mode: "report-only",
       });
       expect(outcome.kind).toBe("verified");
-      expect(outcome.kind === "verified" && outcome.pass).toBe(false);
+      expect(outcome.kind === "verified" && outcome.report.passes()).toBe(false);
       const written = new ReferenceCheckReportRepositoryImplementation().findById(
         ReferenceCheckReportIdentifier.of(ap(join(dirname(componentsPath), "deep-spec-refcheck")), "components"),
       );
@@ -191,7 +191,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
         reportDirectory,
         mode: "persist",
       });
-      expect(outcome.kind === "verified" && outcome.pass).toBe(true);
+      expect(outcome.kind === "verified" && outcome.report.passes()).toBe(true);
       const stored = reports.findById(ReferenceCheckReportIdentifier.of(reportDirectory, "components"));
       expect(stored.ok && renderReportBytes(stored.value)).toBe(golden("clean", "components.json"));
     } finally {

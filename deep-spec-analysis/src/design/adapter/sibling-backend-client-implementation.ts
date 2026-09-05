@@ -11,8 +11,15 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { DesignUnit } from "@deep-spec/design-domain";
-import { type LoweredUnit, ReachabilityVerdict } from "@deep-spec/design-domain";
-import type { SiblingBackendClient, SiblingLoweredRun } from "@deep-spec/design-usecase";
+import {
+  type LoweredUnit,
+  type ReachabilityProbe,
+  ReachabilityVerdict,
+  SiblingVerificationResult,
+  type UnitRefinementPlan,
+} from "@deep-spec/design-domain";
+import type { SiblingBackendClient } from "@deep-spec/design-usecase";
+import { ErrorMessage } from "@deep-spec/kernel-domain";
 import type { Json } from "@deep-spec/kernel-infrastructure";
 import { renderLoweredDocument } from "./lowered-document-serializer.ts";
 import { reachabilityVariant } from "./reachability-variant.ts";
@@ -31,28 +38,45 @@ export class SiblingBackendClientImplementation implements SiblingBackendClient 
     unit: DesignUnit,
     lowered: LoweredUnit,
     wallTimeoutMs: number,
-  ): SiblingLoweredRun {
+  ): SiblingVerificationResult {
     const run = this.#spawn(backend, renderLoweredDocument(unit, lowered), wallTimeoutMs);
-    return {
-      exit: run.exit,
-      doc: run.doc === null ? null : parseSiblingVerdictDocument(run.doc),
-      note: run.note,
-    };
+    const document = run.doc === null ? null : parseSiblingVerdictDocument(run.doc);
+    const refinementFailure = ErrorMessage.of(`refinement pass could not run (${run.note.slice(0, 120)})`);
+    if (run.exit === 127) {
+      const reason =
+        document?.unavailableReason() ??
+        (backend === "smt"
+          ? "z3 could not be executed by the lowered v1 backend"
+          : "quint CLI could not be executed by the lowered v1 backend");
+      const parsedReason = ErrorMessage.parse(reason);
+      return SiblingVerificationResult.backendUnavailable(
+        parsedReason.ok
+          ? parsedReason.value
+          : ErrorMessage.of("lowered backend reported an invalid unavailable reason"),
+        refinementFailure,
+      );
+    }
+    if (document === null)
+      return SiblingVerificationResult.incomplete(
+        ErrorMessage.of(`lowered v1 backend produced no findings document (${run.note.slice(0, 160)})`),
+        refinementFailure,
+      );
+    return SiblingVerificationResult.completed(document, run.exit === 0 ? null : refinementFailure);
   }
 
-  probeState(
-    unit: DesignUnit,
-    lowered: LoweredUnit,
-    attrPath: string,
-    state: string,
-    wallTimeoutMs: number,
-  ): ReachabilityVerdict {
-    const variant = reachabilityVariant(renderLoweredDocument(unit, lowered), attrPath, state);
+  runRefinement(plan: UnitRefinementPlan, wallTimeoutMs: number): SiblingVerificationResult {
+    return this.runLowered("quint", plan.unit(), plan.loweredForQuint(), wallTimeoutMs);
+  }
+
+  probeState(probe: ReachabilityProbe, wallTimeoutMs: number): ReachabilityVerdict {
+    const variant = reachabilityVariant(
+      renderLoweredDocument(probe.unit(), probe.lowered()),
+      probe.attributePath(),
+      probe.state(),
+    );
     const run = this.#spawn("quint", variant, wallTimeoutMs);
-    if (run.exit !== 0 || run.doc === null) {
-      return ReachabilityVerdict.unverified();
-    }
-    return parseSiblingVerdictDocument(run.doc).reachabilityOf(attrPath, state);
+    if (run.exit !== 0 || run.doc === null) return ReachabilityVerdict.unverified();
+    return parseSiblingVerdictDocument(run.doc).reachabilityOf(probe.attributePath(), probe.state());
   }
 
   #spawn(

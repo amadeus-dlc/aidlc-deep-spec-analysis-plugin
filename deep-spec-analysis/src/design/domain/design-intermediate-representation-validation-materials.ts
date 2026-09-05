@@ -4,8 +4,15 @@
 // 成果物への 1:1 錨着（RefinementMaterialsIdentifier と同じ規律）。sourceDocument は
 // 成果物の原文（原文材料——store の往復則 findById∘store がバイト恒等）。
 
-import type { ErrorMessages, IntermediateRepresentationVersion } from "@deep-spec/kernel-domain";
+import {
+  ErrorMessage,
+  ErrorMessages,
+  type IntermediateRepresentationVersion,
+  ValidationAssessment,
+} from "@deep-spec/kernel-domain";
+import { ok, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import type { DesignIntermediateRepresentationValidationMaterialsIdentifier } from "./design-intermediate-representation-validation-materials-identifier.ts";
+import { SUPPORTED_DESIGN_IR_MAJOR } from "./design-report.ts";
 import type { DesignUnitDeclarations } from "./design-unit-declarations.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
@@ -43,16 +50,21 @@ export class DesignIntermediateRepresentationValidationMaterials {
     return this.#id;
   }
 
-  irVersion(): IntermediateRepresentationVersion {
-    return this.#irVersion;
+  assess(): ValidationAssessment {
+    return ValidationAssessment.of(ErrorMessages.collect(this.#diagnostics()));
   }
 
-  schemaErrors(): ErrorMessages {
-    return this.#schemaErrors;
-  }
-
-  units(): DesignUnitDeclarations {
-    return this.#units;
+  *#diagnostics(): IterableIterator<Result<ErrorMessage, ParseError>> {
+    const supported = this.#irVersion.supportsMajor(SUPPORTED_DESIGN_IR_MAJOR);
+    if (!supported) {
+      yield ErrorMessage.parse(
+        `irVersion ${this.#irVersion.asString()}: unsupported major version (this validator supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
+      );
+    }
+    for (const error of this.#schemaErrors) yield ok(error);
+    if (supported && this.#schemaErrors.isEmpty()) {
+      for (const error of this.#units.wellFormednessErrors()) yield ErrorMessage.parse(error);
+    }
   }
 
   // 境界: store が書く原文（バイト逐語——UTF-8 復号で非可逆にならないよう生

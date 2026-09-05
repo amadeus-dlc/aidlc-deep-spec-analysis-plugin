@@ -95,12 +95,8 @@ export class VerificationDirectoryRepositoryImplementation implements Verificati
   store(aggregate: VerificationDirectory): Result<void, RepositoryError> {
     const directory = aggregate.directory();
     const directoryPath = directory.asString();
-    const candidate = aggregate.candidate();
-    if (candidate === null) {
-      // 公開すべき候補を持たない集約は finalization の入力ではない——黙って
-      // 成功させず、型のある失敗として運ぶ。
-      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: "no finalization candidate" });
-    }
+    // 未最終化での保存要求は契約違反。I/O失敗として捕捉・変換しない。
+    const candidate = aggregate.publishedReport();
     try {
       mkdirSync(directoryPath, { recursive: true });
     } catch (e) {

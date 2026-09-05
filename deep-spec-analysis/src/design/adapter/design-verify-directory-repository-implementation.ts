@@ -81,12 +81,8 @@ export class DesignVerifyDirectoryRepositoryImplementation implements DesignVeri
   store(aggregate: DesignVerifyDirectory): Result<void, RepositoryError> {
     const directory = aggregate.directory();
     const directoryPath = directory.asString();
-    const candidate = aggregate.candidate();
-    if (candidate === null) {
-      // 公開すべき候補を持たない集約は finalization の入力ではない——黙って
-      // 成功させず、型のある失敗として運ぶ。
-      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: "no finalization candidate" });
-    }
+    // 呼び手の構築契約違反はI/O失敗に変換しない。ファイル作成・ロックより先に確認する。
+    const candidate = aggregate.publishedReport();
     try {
       mkdirSync(directoryPath, { recursive: true });
     } catch (e) {

@@ -1,9 +1,9 @@
 // verify-quint ユースケースの結果 — entry はこの閉じたユニオンで verdict 行と
 // exit code を描く。machine-uncompilable は exit 0（note）、backend-unavailable
-// は exit 127（旧挙動の凍結）。verified の method は検出値（bounded /
-// simulation）で verdict 行に逐語で載る。
+// は exit 127（旧挙動の凍結）。verified は保存済み集約を運び、entryが公開文書から描画する。
 
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
+import type { VerificationDirectory } from "@deep-spec/requirements-domain";
 
 export type VerifyQuintOutcome =
   | { readonly kind: "not-applicable" }
@@ -15,8 +15,5 @@ export type VerifyQuintOutcome =
   | { readonly kind: "save-failed"; readonly error: RepositoryError }
   | {
       readonly kind: "verified";
-      readonly pass: boolean;
-      readonly findingsCount: number;
-      readonly skippedCount: number;
-      readonly method: string;
+      readonly directory: VerificationDirectory;
     };

@@ -41,7 +41,7 @@ jobs:
       - name: Install pinned dev dependencies
         run: bun install --frozen-lockfile
 
-      - name: Format, lint, and imports (Biome)
+      - name: Format, lint, imports, and usecase boundaries
         run: bun run check
 
       - name: Verify release tag matches plugin manifest

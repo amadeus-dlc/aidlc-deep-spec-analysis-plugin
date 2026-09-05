@@ -54,6 +54,7 @@ import {
   SatisfiabilityModuloTheoriesQueryVerdict,
   SatisfiabilityModuloTheoriesQueryVerdicts,
   ScenarioIdentifier,
+  VerificationReportIdentifier,
 } from "@deep-spec/requirements-domain";
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -140,8 +141,29 @@ describe("SMT response completeness", () => {
         runtimeOverride: "node",
         workingDirectory: dir,
       }).check(model());
-      expect(result.result.kind).toBe("unavailable");
-      if (result.result.kind === "unavailable") expect(result.result.reason).toContain("omitted query results: global");
+      const report = result.reportFor(model(), VerificationReportIdentifier.of(ArtifactPath.of(dir), "smt"));
+      expect(report.isUnavailable()).toBe(true);
+      expect(report.unavailableReason()).toContain("omitted query results: global");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each(["", "x".repeat(65_537)])("不正なsolver不能理由を想定内の診断として扱う (%#.case)", (reason) => {
+    const dir = mkdtempSync(join(tmpdir(), "invalid-smt-reason-"));
+    const path = join(dir, "child.mjs");
+    writeFileSync(path, `process.stdout.write(${JSON.stringify(JSON.stringify({ unavailable: reason }))});`);
+    try {
+      const input = model();
+      const result = new Z3SolverClientImplementation({
+        selfPath: path,
+        perQueryTimeoutMs: 100,
+        runtimeOverride: "node",
+        workingDirectory: dir,
+      }).check(input);
+      const report = result.reportFor(input, VerificationReportIdentifier.of(ArtifactPath.of(dir), "smt"));
+      expect(report.isUnavailable()).toBe(true);
+      expect(report.unavailableReason()).toBe("solver child reported an invalid unavailable reason");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

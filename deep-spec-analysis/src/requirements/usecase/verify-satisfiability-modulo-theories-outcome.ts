@@ -1,7 +1,8 @@
 // verify-smt ユースケースの結果 — entry はこの閉じたユニオンで verdict 行と
-// exit code を描く。文書はどの経路でも（not-applicable を除き）書かれた後。
+// exit code を描く。verified は保存済み集約を運ぶ。取得・保存失敗を成功として返さない。
 
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
+import type { VerificationDirectory } from "@deep-spec/requirements-domain";
 
 export type VerifySatisfiabilityModuloTheoriesOutcome =
   | { readonly kind: "not-applicable" }
@@ -12,7 +13,5 @@ export type VerifySatisfiabilityModuloTheoriesOutcome =
   | { readonly kind: "save-failed"; readonly error: RepositoryError }
   | {
       readonly kind: "verified";
-      readonly pass: boolean;
-      readonly findingsCount: number;
-      readonly skippedCount: number;
+      readonly directory: VerificationDirectory;
     };

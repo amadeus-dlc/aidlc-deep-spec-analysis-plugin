@@ -103,7 +103,7 @@ output (fixed seeds, canonical sorting, no timestamps).
 
 ```bash
 bun install --frozen-lockfile
-bun run check        # Biome: format, lint, import order (read-only)
+bun run check        # Biome + usecase getter checks (read-only)
 bun run typecheck    # TypeScript
 bun test --coverage
 ```
@@ -116,6 +116,15 @@ CI も `bun run check` を実行し、警告を含む未解決の指摘があれ
 対象は保守する `src/`・`scripts/`・`tests/` と開発用 JSON 設定です。
 配布用の `tools/` は原本から再生成し、公開契約スキーマと期待値 fixture は
 Biome の書換対象から除きます。整形規約は 2 スペース・120 桁・ダブルクォートです。
+
+`bun run lint:usecase-getters` は、TypeScript の型情報で呼び先を解決し、
+ユースケース層からのドメインgetter・表現取得と `Result.value` の取り出しを検出します。
+`bun run lint:usecase-getters --json` で、呼び出し行と定義行を含む一覧を取得できます。
+`bun run check`・`bun run lint` にも組み込んでいます。既存違反も失敗となり、
+免除リストや既存件数を差し引く仕組みはありません。
+
+`bun run check:fix` は Biome の安全な修正だけを行います。getterの責務移動は
+自動修正できません。検出範囲と限界は[カスタムリンターの説明](docs/architecture/usecase-getter-lint.md)を参照してください。
 
 `tests/conformance.test.ts` drives both backends over the canonical fixture
 (`tests/fixtures/conformance/`) and compares against expected findings
