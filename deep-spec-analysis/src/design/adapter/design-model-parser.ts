@@ -1,19 +1,27 @@
+import { flatMapResult } from "@deep-spec/kernel-infrastructure";
 import { InitialState } from "@deep-spec/design-domain";
 import { decodeScenarioBindings } from "@deep-spec/kernel-adapter";
-import { UnitName, RequirementId, FunctionalRequirementReferences, IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
 import {
-  BrRef,
-  BrRefs,
-  DesignBackgroundId,
+  UnitName,
+  RequirementIdentifier,
+  FunctionalRequirementReferences,
+  IntermediateRepresentationVersion,
+  type Expression,
+  TriggerName,
+} from "@deep-spec/kernel-domain";
+import {
+  BusinessRuleReference,
+  BusinessRuleReferences,
+  DesignBackgroundIdentifier,
   DesignBackgroundAssumption,
   DesignAttributeName,
   DesignEntityName,
-  DesignMachineId,
-  DesignObligationId,
+  DesignMachineIdentifier,
+  DesignObligationIdentifier,
   DesignObligationNature,
   DesignObligationOrigin,
-  DesignScenarioId,
-  DesignTransitionId,
+  DesignScenarioIdentifier,
+  DesignTransitionIdentifier,
   DesignIgnores,
   DesignTransitions,
   DesignUnits,
@@ -43,7 +51,7 @@ import { parseDesignEntities } from "./design-entities-parser.ts";
 export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof DesignModel.compose>[0], "id" | "irHash" | "sourceDocument">, string> {
   if (!isObject(raw)) return err("design IR is not a JSON object");
   if (raw.irKind !== "design") return err('document is not a design IR (missing `"irKind": "design"`)');
-  const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
+  const irVersion = IntermediateRepresentationVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
   if (!irVersion.ok) return err("design IR lacks a semver irVersion");
   if (!Array.isArray(raw.units) || raw.units.length === 0) return err("design IR carries no units[]");
   const units: DesignUnit[] = [];
@@ -58,26 +66,28 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
     for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
       const parsed = combineResults({
-        id: DesignObligationId.parse(ob.id),
+        id: DesignObligationIdentifier.parse(ob.id),
         origin: DesignObligationOrigin.parse(typeof ob.origin === "string" ? ob.origin : ""),
         nature: DesignObligationNature.parse(ob.nature),
-        brRefs: traverseResult(strArr(ob.brRefs), BrRef.parse),
-        frRefs: traverseResult(strArr(ob.frRefs), RequirementId.parse),
+        brRefs: flatMapResult(traverseResult(strArr(ob.brRefs), BusinessRuleReference.parse), BusinessRuleReferences.parse),
+        frRefs: flatMapResult(traverseResult(strArr(ob.frRefs), RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
         trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined),
       });
       if (!parsed.ok) return err(JSON.stringify(parsed.error));
-      obligations.push(DesignObligation.of({
+      const constructed = DesignObligation.parse({
         id: parsed.value.id,
         nature: parsed.value.nature,
         origin: parsed.value.origin,
-        brRefs: BrRefs.of(parsed.value.brRefs),
-        functionalRequirementReferences: FunctionalRequirementReferences.of(parsed.value.frRefs),
+        businessRuleReferences: parsed.value.brRefs,
+        functionalRequirementReferences: parsed.value.frRefs,
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
         trigger: parsed.value.trigger,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
         effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
         temporal: isObject(ob.temporal) ? (ob.temporal as unknown as { pattern: string; assert?: Expression; from?: Expression; to?: Expression }) : undefined,
-      }));
+      });
+      if (!constructed.ok) return err(JSON.stringify(constructed.error));
+      obligations.push(constructed.value);
     }
     const machines: DesignMachine[] = [];
     for (const sm of Array.isArray(rawUnit.stateMachines) ? rawUnit.stateMachines : []) {
@@ -87,20 +97,22 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
         if (!isObject(tr) || typeof tr.id !== "string") continue;
         if (typeof tr.from !== "string" || typeof tr.to !== "string" || typeof tr.trigger !== "string") continue;
         const parsed = combineResults({
-          id: DesignTransitionId.parse(tr.id),
+          id: DesignTransitionIdentifier.parse(tr.id),
           trigger: TriggerName.parse(tr.trigger),
-          brRefs: traverseResult(strArr(tr.brRefs), BrRef.parse),
+          brRefs: flatMapResult(traverseResult(strArr(tr.brRefs), BusinessRuleReference.parse), BusinessRuleReferences.parse),
         });
         if (!parsed.ok) return err(JSON.stringify(parsed.error));
-        transitions.push(DesignTransition.of({
+        const constructed = DesignTransition.parse({
           id: parsed.value.id,
           from: tr.from,
           to: tr.to,
           trigger: parsed.value.trigger,
           guard: isObject(tr.guard) ? (tr.guard as unknown as Expression) : undefined,
           effect: isObject(tr.effect) ? (tr.effect as unknown as Expression) : undefined,
-          brRefs: BrRefs.of(parsed.value.brRefs),
-        }));
+          businessRuleReferences: parsed.value.brRefs,
+        });
+        if (!constructed.ok) return err(JSON.stringify(constructed.error));
+        transitions.push(constructed.value);
       }
       const ignores: DesignIgnore[] = [];
       for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
@@ -110,8 +122,8 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
         ignores.push(DesignIgnore.of({ state: ig.state, trigger: trigger.value }));
       }
       const parsed = combineResults({
-        id: DesignMachineId.parse(sm.id),
-        initial: traverseResult(strArr(sm.initial), InitialState.parse),
+        id: DesignMachineIdentifier.parse(sm.id),
+        initial: flatMapResult(traverseResult(strArr(sm.initial), InitialState.parse), InitialStates.parse),
         entity: DesignEntityName.parse(sm.entity),
         attribute: DesignAttributeName.parse(sm.attribute),
       });
@@ -121,7 +133,7 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
           id: parsed.value.id,
           entity: parsed.value.entity,
           attribute: parsed.value.attribute,
-          initial: InitialStates.of(parsed.value.initial),
+          initial: parsed.value.initial,
           transitions: DesignTransitions.of(transitions),
           ignores: DesignIgnores.of(ignores),
           deterministic: sm.deterministic !== false,
@@ -134,29 +146,33 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
       const kind = sc.kind === "accept" || sc.kind === "reject" ? sc.kind : null;
       if (kind === null || !isObject(sc.bindings)) continue;
       const parsed = combineResults({
-        id: DesignScenarioId.parse(sc.id),
+        id: DesignScenarioIdentifier.parse(sc.id),
       bindings: decodeScenarioBindings(sc.bindings),
-        brRefs: traverseResult(strArr(sc.brRefs), BrRef.parse),
-        frRefs: traverseResult(strArr(sc.frRefs), RequirementId.parse),
+        brRefs: flatMapResult(traverseResult(strArr(sc.brRefs), BusinessRuleReference.parse), BusinessRuleReferences.parse),
+        frRefs: flatMapResult(traverseResult(strArr(sc.frRefs), RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
         trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined),
       });
       if (!parsed.ok) return err(JSON.stringify(parsed.error));
-      scenarios.push(DesignScenario.of({
+      const constructed = DesignScenario.parse({
         id: parsed.value.id,
         kind,
-        brRefs: BrRefs.of(parsed.value.brRefs),
-        functionalRequirementReferences: FunctionalRequirementReferences.of(parsed.value.frRefs),
+        businessRuleReferences: parsed.value.brRefs,
+        functionalRequirementReferences: parsed.value.frRefs,
         bindings: parsed.value.bindings,
         event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },
         expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
-      }));
+      });
+      if (!constructed.ok) return err(JSON.stringify(constructed.error));
+      scenarios.push(constructed.value);
     }
     const background: DesignBackgroundAssumption[] = [];
     for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
       if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
-      const id = DesignBackgroundId.parse(bg.id);
+      const id = DesignBackgroundIdentifier.parse(bg.id);
       if (!id.ok) return err(JSON.stringify(id.error));
-      background.push(DesignBackgroundAssumption.of({ id: id.value, assert: bg.assert as unknown as Expression }));
+      const constructed = DesignBackgroundAssumption.parse({ id: id.value, assert: bg.assert as unknown as Expression });
+      if (!constructed.ok) return err(JSON.stringify(constructed.error));
+      background.push(constructed.value);
     }
     units.push(
       DesignUnit.of({

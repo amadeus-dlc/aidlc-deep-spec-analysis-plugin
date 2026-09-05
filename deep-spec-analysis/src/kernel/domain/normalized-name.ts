@@ -16,7 +16,9 @@ export class NormalizedName {
     return new NormalizedName(raw);
   }
 
-  static parse(raw: string): Result<NormalizedName, ParseError> { return parseConstruction(() => new NormalizedName(raw)); }
+  static parse(raw: string): Result<NormalizedName, ParseError> {
+    return parseConstruction(() => new NormalizedName(raw));
+  }
 
   equals(other: NormalizedName): boolean {
     return this.#value === other.#value;

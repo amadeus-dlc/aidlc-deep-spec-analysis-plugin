@@ -8,9 +8,9 @@
 
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { FormalModelId, RequirementsModel } from "@deep-spec/requirements-domain";
+import type { FormalModelIdentifier, RequirementsModel } from "@deep-spec/requirements-domain";
 
 export interface FormalModelRepository {
-  findById(id: FormalModelId): Result<RequirementsModel, RepositoryError>;
+  findById(id: FormalModelIdentifier): Result<RequirementsModel, RepositoryError>;
   store(model: RequirementsModel): Result<void, RepositoryError>;
 }

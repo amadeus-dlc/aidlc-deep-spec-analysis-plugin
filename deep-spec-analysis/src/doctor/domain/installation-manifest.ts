@@ -1,6 +1,7 @@
+import { ArtifactPath } from "@deep-spec/kernel-domain";
 import { ManifestEntry } from "./manifest-entry.ts";
 
-const err = (rel: string): ManifestEntry => ManifestEntry.error(rel);
+const err = (rel: string): ManifestEntry => ManifestEntry.error(ArtifactPath.of(rel));
 
 // compose が運ぶべきファイルの台帳（entry バンドル・スキーマ・sensors・
 // knowledge）。出荷形は tools/<entry>.ts 10 本＋tools/data/ 4 本ちょうどなので、
@@ -11,7 +12,7 @@ export class InstallationManifest {
   readonly #entries: readonly ManifestEntry[];
 
   private constructor(entries: readonly ManifestEntry[]) {
-    this.#entries = entries;
+    this.#entries = Object.freeze([...entries]);
   }
 
   static standard(): InstallationManifest {

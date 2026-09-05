@@ -1,4 +1,12 @@
-import { UnitName, BackendName, ContentHash, FindingKind, FunctionalRequirementReferences, TargetId, TargetIds } from "@deep-spec/kernel-domain";
+import {
+  UnitName,
+  BackendName,
+  ContentHash,
+  FindingKind,
+  FunctionalRequirementReferences,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec/kernel-domain";
 
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
@@ -7,7 +15,7 @@ import { DesignSkips } from "./design-skips.ts";
 import { DesignFinding } from "./design-finding.ts";
 import { DesignWitness } from "./design-witness.ts";
 import type { DesignModel } from "./design-model.ts";
-import type { DesignReportId } from "./design-report-id.ts";
+import type { DesignReportIdentifier } from "./design-report-identifier.ts";
 import { DesignReport } from "./design-report.ts";
 
 // 兄弟文書のファーストクラスコレクション（設計クロスチェックの入力）。
@@ -15,11 +23,11 @@ export class DesignReports {
   readonly #values: readonly DesignReport[];
 
   private constructor(values: readonly DesignReport[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignReport[]): DesignReports {
-    return new DesignReports([...values]);
+    return new DesignReports(values);
   }
 
   add(value: DesignReport): DesignReports {
@@ -38,7 +46,7 @@ export class DesignReports {
   // 最後の書き手が勝ち、全書き手が同一バイトへ収束。detail 文言は golden 凍結
   // "...not in the design itself."）。旧 designCrossCheckReport の逐語移植
   // （読めないファイルの黙殺は Repository 側）。
-  crossChecked(id: DesignReportId, model: DesignModel, irHash: ContentHash): DesignReport {
+  crossChecked(id: DesignReportIdentifier, model: DesignModel, irHash: ContentHash): DesignReport {
     // 比較に参加するのは同一 irHash の可用文書のみ（旧実装の読込時選別と同値）。
     const docs = this.toArray()
       .filter((s) => s.irHash().equals(irHash) && !s.isUnavailable())
@@ -60,7 +68,7 @@ export class DesignReports {
             const key = `${u.name()}|${sc.id().asString()}`;
             if (a.skipped.has(key) || b.skipped.has(key)) continue;
             const verdictOf = (d: (typeof docs)[number]): boolean =>
-              d.findings.some((f) => f.kind() === "scenario-violation" && f.unit() === u.name() && f.targets().includes(TargetId.of(sc.id().asString())));
+              d.findings.some((f) => f.kind() === "scenario-violation" && f.unit() === u.name() && f.targets().includes(TargetIdentifier.of(sc.id().asString())));
             const va = verdictOf(a);
             const vb = verdictOf(b);
             (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id().asString());
@@ -73,7 +81,7 @@ export class DesignReports {
                 DesignFinding.of({
                   kind: FindingKind.crossCheckDisagreement(),
                   functionalRequirementReferences: FunctionalRequirementReferences.of([...sc.functionalRequirementReferences()]).sortedUnique(),
-                  targets: TargetIds.of(Array.from([sc.id().asString()], (raw) => TargetId.of(raw))),
+                  targets: TargetIdentifiers.of(Array.from([sc.id().asString()], (raw) => TargetIdentifier.of(raw))),
                   witness: DesignWitness.verdicts(verdicts),
                   unit: UnitName.of(u.name()),
                   detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()} of unit ${u.name()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`,
@@ -85,7 +93,7 @@ export class DesignReports {
       }
     }
     const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => DesignCrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIds.of(Array.from([...targets], (raw) => TargetId.of(raw))).sortedCanonically() }))
+      .map(([backend, targets]) => DesignCrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIdentifiers.of(Array.from([...targets], (raw) => TargetIdentifier.of(raw))).sortedCanonically() }))
       .sort((x, y) => x.compareByBackend(y));
 
     return DesignReport.compose({

@@ -1,4 +1,4 @@
-import { SkipReason, FindingKind, TargetIds, KeySet } from "@deep-spec/kernel-domain";
+import { SkipReason, FindingKind, TargetIdentifiers, KeySet } from "@deep-spec/kernel-domain";
 
 // Quint 状態機械の計画——コンパイラが機械を組んだときの対応表で、形式
 // （Quint テキスト）を含まない面（種別規律の裁定 8——値オブジェクト）。旧名
@@ -9,12 +9,12 @@ import { SkipReason, FindingKind, TargetIds, KeySet } from "@deep-spec/kernel-do
 // （旧 interpretQuintVerdicts——detail 文言は golden 凍結・返り値は未ソートで
 // 正準ソートは VerificationReport.compose の不変条件、phase 2 の「既に skip
 // 済みの義務は走らせない」ガードも逐語）は plan 自身の振る舞い（OOUI 裁定）。
-// 対象 id は TargetId / TargetIds で運ぶ（#71 波10——生 string の列ではない）。
+// 対象 id は TargetIdentifier / TargetIdentifiers で運ぶ（#71 波10——生 string の列ではない）。
 
 import { type QuintRuns } from "./quint-runs.ts";
-import { type ObligationIds } from "./obligation-ids.ts";
+import { type ObligationIdentifiers } from "./obligation-identifiers.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
-import type { ScenarioId } from "./scenario-id.ts";
+import type { ScenarioIdentifier } from "./scenario-identifier.ts";
 
 import { TraceState } from "./trace-state.ts";
 import { TraceValue } from "./trace-value.ts";
@@ -28,10 +28,10 @@ import { VerificationWitness } from "./verification-witness.ts";
 
 export class QuintMachinePlan {
   readonly #invariantComponents: QuintMachineComponents;
-  readonly #eventIds: ObligationIds;
-  readonly #scenariosWithInit: KeySet<ScenarioId>;
+  readonly #eventIds: ObligationIdentifiers;
+  readonly #scenariosWithInit: KeySet<ScenarioIdentifier>;
 
-  private constructor(props: { invariantComponents: QuintMachineComponents; eventIds: ObligationIds; scenariosWithInit: KeySet<ScenarioId> }) {
+  private constructor(props: { invariantComponents: QuintMachineComponents; eventIds: ObligationIdentifiers; scenariosWithInit: KeySet<ScenarioIdentifier> }) {
     this.#invariantComponents = props.invariantComponents;
     this.#eventIds = props.eventIds;
     this.#scenariosWithInit = props.scenariosWithInit;
@@ -39,8 +39,8 @@ export class QuintMachinePlan {
 
   static of(seed: {
     readonly invariantComponents: QuintMachineComponents;
-    readonly eventIds: ObligationIds;
-    readonly scenariosWithInit: readonly ScenarioId[];
+    readonly eventIds: ObligationIdentifiers;
+    readonly scenariosWithInit: readonly ScenarioIdentifier[];
   }): QuintMachinePlan {
     return new QuintMachinePlan({
       invariantComponents: seed.invariantComponents,
@@ -50,12 +50,12 @@ export class QuintMachinePlan {
   }
 
   // 機械フェーズが検査する対象の全 id（成分 + イベント義務、正準順・一意）。
-  machineTargets(): TargetIds {
-    return TargetIds.of([...this.#invariantComponents.ids().toTargetIds(), ...this.#eventIds.toTargetIds()]).sortedUniqueCanonically();
+  machineTargets(): TargetIdentifiers {
+    return TargetIdentifiers.of([...this.#invariantComponents.ids().toTargetIds(), ...this.#eventIds.toTargetIds()]).sortedUniqueCanonically();
   }
 
   // 全属性が束縛され init アクションが emit されたシナリオか。
-  #hasInitFor(id: ScenarioId): boolean {
+  #hasInitFor(id: ScenarioIdentifier): boolean {
     return this.#scenariosWithInit.has(id);
   }
 
@@ -109,7 +109,7 @@ export class QuintMachinePlan {
           : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.conflict(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
           targets,
           witness: machineRun.witness(),
           detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`,
@@ -145,8 +145,8 @@ export class QuintMachinePlan {
       } else if (r.isViolation()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.conflict(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([target])),
-          targets: TargetIds.of([target]),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([target])),
+          targets: TargetIdentifiers.of([target]),
           witness: r.witness(),
           detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`,
         }));
@@ -187,7 +187,7 @@ export class QuintMachinePlan {
       const boundModel = sc.bindings().toDocument();
       if (sc.isAccept() && r.isViolated()) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
-        const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
+        const targets = TargetIdentifiers.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
           functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
@@ -199,8 +199,8 @@ export class QuintMachinePlan {
       if (sc.isReject() && !r.isViolated()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([target])),
-          targets: TargetIds.of([target]),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([target])),
+          targets: TargetIdentifiers.of([target]),
           witness: VerificationWitness.model(boundModel),
           detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation — the requirements do not exclude an example that should be rejected.`,
         }));

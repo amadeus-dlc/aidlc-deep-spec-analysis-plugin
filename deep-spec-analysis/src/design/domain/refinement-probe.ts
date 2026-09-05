@@ -1,6 +1,6 @@
-import type { TargetId } from "@deep-spec/kernel-domain";
-import type { ObligationId, ScenarioId } from "@deep-spec/requirements-domain";
-import type { TransitionRef } from "./transition-ref.ts";
+import type { TargetIdentifier } from "@deep-spec/kernel-domain";
+import type { ObligationIdentifier, ScenarioIdentifier } from "@deep-spec/requirements-domain";
+import type { TransitionReference } from "./transition-reference.ts";
 
 // refinement ソルバへ発行した問い 1 件の帰属——どの要件義務／シナリオの、
 // どの種類の検査か（invariant・enabledness・simulation は設計遷移との対・
@@ -8,41 +8,41 @@ import type { TransitionRef } from "./transition-ref.ts";
 // 読んで分岐する代わりに（#71 波22）。
 export class RefinementProbe {
   readonly #kind: "invariant" | "enabledness" | "simulation" | "scenario";
-  readonly #reqId: ObligationId | ScenarioId;
-  readonly #designId: TransitionRef | null;
+  readonly #reqId: ObligationIdentifier | ScenarioIdentifier;
+  readonly #designId: TransitionReference | null;
 
-  private constructor(props: { kind: "invariant" | "enabledness" | "simulation" | "scenario"; reqId: ObligationId | ScenarioId; designId: TransitionRef | null }) {
+  private constructor(props: { kind: "invariant" | "enabledness" | "simulation" | "scenario"; reqId: ObligationIdentifier | ScenarioIdentifier; designId: TransitionReference | null }) {
     this.#kind = props.kind;
     this.#reqId = props.reqId;
     this.#designId = props.designId;
   }
 
-  static invariant(reqId: ObligationId): RefinementProbe {
+  static invariant(reqId: ObligationIdentifier): RefinementProbe {
     return new RefinementProbe({ kind: "invariant", reqId, designId: null });
   }
 
-  static enabledness(reqId: ObligationId): RefinementProbe {
+  static enabledness(reqId: ObligationIdentifier): RefinementProbe {
     return new RefinementProbe({ kind: "enabledness", reqId, designId: null });
   }
 
-  static simulation(reqId: ObligationId, designId: TransitionRef): RefinementProbe {
+  static simulation(reqId: ObligationIdentifier, designId: TransitionReference): RefinementProbe {
     return new RefinementProbe({ kind: "simulation", reqId, designId });
   }
 
-  static scenario(reqId: ScenarioId): RefinementProbe {
+  static scenario(reqId: ScenarioIdentifier): RefinementProbe {
     return new RefinementProbe({ kind: "scenario", reqId, designId: null });
   }
 
-  reqTarget(): TargetId {
+  reqTarget(): TargetIdentifier {
     return this.#reqId.asTargetId();
   }
 
   // 種類ごとの解釈へ命じる。simulation だけが設計遷移との対を渡す。
   match<T>(handlers: {
-    invariant: (reqId: ObligationId | ScenarioId) => T;
-    enabledness: (reqId: ObligationId | ScenarioId) => T;
-    simulation: (reqId: ObligationId | ScenarioId, designId: TransitionRef) => T;
-    scenario: (reqId: ObligationId | ScenarioId) => T;
+    invariant: (reqId: ObligationIdentifier | ScenarioIdentifier) => T;
+    enabledness: (reqId: ObligationIdentifier | ScenarioIdentifier) => T;
+    simulation: (reqId: ObligationIdentifier | ScenarioIdentifier, designId: TransitionReference) => T;
+    scenario: (reqId: ObligationIdentifier | ScenarioIdentifier) => T;
   }): T {
     const kind = this.#kind;
     if (kind === "invariant") return handlers.invariant(this.#reqId);

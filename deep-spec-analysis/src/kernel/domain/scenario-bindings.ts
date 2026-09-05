@@ -1,4 +1,4 @@
-import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import type { AttributePath } from "./attribute-path.ts";
 import type { BindingValue } from "./binding-value.ts";
 import type { ScenarioBinding } from "./scenario-binding.ts";
@@ -19,7 +19,13 @@ export class ScenarioBindings {
     this.#values = Object.freeze([...values]);
   }
 
-  static of(values: readonly ScenarioBinding[]): ScenarioBindings { return new ScenarioBindings(values); }
+  static parse(values: readonly ScenarioBinding[]): Result<ScenarioBindings, ParseError> {
+    return parseConstruction(() => new ScenarioBindings(values));
+  }
+
+  static of(values: readonly ScenarioBinding[]): ScenarioBindings {
+    return new ScenarioBindings(values);
+  }
   add(value: ScenarioBinding): ScenarioBindings { return new ScenarioBindings([...this.#values, value]); }
   has(path: AttributePath): boolean { return this.#values.some((binding) => binding.isFor(path)); }
   valueAt(path: AttributePath): BindingValue | null { return this.#values.find((binding) => binding.isFor(path))?.value() ?? null; }

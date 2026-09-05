@@ -6,11 +6,11 @@ export class TraceStates {
   readonly #values: readonly TraceState[];
 
   private constructor(values: readonly TraceState[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly TraceState[]): TraceStates {
-    return new TraceStates([...values]);
+    return new TraceStates(values);
   }
 
   add(value: TraceState): TraceStates {

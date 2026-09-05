@@ -1,10 +1,10 @@
 import {
-  TargetId,
+  TargetIdentifier,
   UnitName,
   FindingKind,
   FunctionalRequirementReferences,
   SkipReason,
-  TargetIds,
+  TargetIdentifiers,
   VerificationMethod,
   type FindingsSchema,
 } from "@deep-spec/kernel-domain";
@@ -31,9 +31,9 @@ import { DesignWitness,
   type DesignInputAnchor,
   DesignSkipped,
   DesignReport,
-  DesignReportId,
-  RefinementMaterialsId,
-  LoweredId,
+  DesignReportIdentifier,
+  RefinementMaterialsIdentifier,
+  LoweredIdentifier,
 } from "@deep-spec/design-domain";
 import {
   UnitRefinementPlan,
@@ -89,7 +89,7 @@ export class VerifyDesignQuintUseCase {
   }
 
   execute(input: VerifyDesignInput): VerifyDesignOutcome {
-    const id = DesignReportId.of(input.verifyDirectory, BACKEND);
+    const id = DesignReportIdentifier.of(input.verifyDirectory, BACKEND);
     const acquired = this.#acquirer.acquire(input.modelId, id, initialMethod());
     if (acquired.kind === "terminal") return acquired.outcome;
     // 取得境界の結果は ready と terminal に閉じる——増えた瞬間にここが壊れる。
@@ -180,7 +180,7 @@ export class VerifyDesignQuintUseCase {
               findings.push(DesignFinding.of({
                 kind: FindingKind.unreachable(),
                 functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-                targets: TargetIds.of(Array.from([sm.id().asString()], (raw) => TargetId.of(raw))),
+                targets: TargetIdentifiers.of(Array.from([sm.id().asString()], (raw) => TargetIdentifier.of(raw))),
                 witness: DesignWitness.model({ [attrPath]: state }),
                 unit: UnitName.of(u.name()),
                 detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state — it may be dead.`,
@@ -200,7 +200,7 @@ export class VerifyDesignQuintUseCase {
     }
 
     // --- Phase 3（動的）：alpha(P) が機械の不変量面に合流する -----------------
-    const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
+    const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsIdentifier.of(input.modelId));
     let inputs: readonly DesignInputAnchor[] | undefined;
     if (materials.ok && materials.value.isActive()) {
       const context = materials.value;
@@ -252,7 +252,7 @@ export class VerifyDesignQuintUseCase {
             let n = refinementObligations.count();
             for (const e of extras) {
               n += 1;
-              const lowId = LoweredId.of(`OB-${n}`);
+              const lowId = LoweredIdentifier.of(`OB-${n}`);
               refinementObligations = refinementObligations.add(e.loweredAs(lowId));
               refinementIndex = refinementIndex.withPassthrough(lowId.asString(), e.reqId().asString());
             }

@@ -6,11 +6,11 @@ export class DesignUnits {
   readonly #values: readonly DesignUnit[];
 
   private constructor(values: readonly DesignUnit[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignUnit[]): DesignUnits {
-    return new DesignUnits([...values]);
+    return new DesignUnits(values);
   }
 
   add(value: DesignUnit): DesignUnits {

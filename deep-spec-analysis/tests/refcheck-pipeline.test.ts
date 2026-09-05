@@ -1,13 +1,13 @@
 import {
-  TargetId,
+  TargetIdentifier,
   FindingKind,
-  RequirementId,
-  RequirementIds,
+  RequirementIdentifier,
+  RequirementIdentifiers,
   ContentHash,
   ArtifactPath,
   FindingsSchema,
   FunctionalRequirementReferences,
-  TargetIds,
+  TargetIdentifiers,
 } from "@deep-spec/kernel-domain";
 
 // レイヤード refcheck パイプラインの in-process 検証（PR2b/PR3 前段、#15）。
@@ -36,8 +36,8 @@ function ap(raw: string): ArtifactPath {
 }
 
 import {
-  DesignRecordRepositoryImpl,
-  ReferenceCheckReportRepositoryImpl,
+  DesignRecordRepositoryImplementation,
+  ReferenceCheckReportRepositoryImplementation,
   parseComponentCatalog,
   parseDomainEntitiesDocument,
   parseEntitiesDocument,
@@ -52,23 +52,23 @@ import {
 } from "@deep-spec/refcheck-usecase";
 import {
   ReferenceCheckReport,
-  ReferenceCheckReportId,
+  ReferenceCheckReportIdentifier,
   BlockIndex,
   ContractRows,
   LineNumber,
-  SpecBlockAssessments,
-  SpecBlockAssessment,
+  SpecificationBlockAssessments,
+  SpecificationBlockAssessment,
   DeclaredUnitsOutcome,
   ContractsTableOutcome,
   EntitiesOutcome,
   RulesOutcome,
-  FunctionalSpecOutcome,
+  FunctionalSpecificationOutcome,
   DomainEntitiesOutcome,
   UnitName,
   AttributeName,
   AttributeNames,
   DesignRecord,
-  DesignRecordId,
+  DesignRecordIdentifier,
   EntityName,
   SiblingUnitIndex,
   InputAnchor,
@@ -76,7 +76,7 @@ import {
   Finding,
   Findings,
   Skips,
-  WitnessRefs,
+  WitnessReferences,
 } from "@deep-spec/refcheck-domain";
 import { InMemoryReferenceCheckReportRepository } from "./doubles/in-memory-reference-check-report-repository.ts";
 import type { Result } from "@deep-spec/kernel-infrastructure";
@@ -93,8 +93,8 @@ function golden(variant: string, file: string): string {
 
 function realRepositories() {
   return {
-    designRecords: new DesignRecordRepositoryImpl(),
-    reports: new ReferenceCheckReportRepositoryImpl(),
+    designRecords: new DesignRecordRepositoryImplementation(),
+    reports: new ReferenceCheckReportRepositoryImplementation(),
   };
 }
 
@@ -108,19 +108,19 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 
         const componentsPath = join(record, "inception", "domain-design", "components.md");
         const domainOutcome = new CheckDomainComponentsUseCase(designRecords, reports, findingsSchema).execute({
-          recordId: DesignRecordId.of(ap(componentsPath)),
+          recordId: DesignRecordIdentifier.of(ap(componentsPath)),
           reportDirectory: ap(join(dirname(componentsPath), "deep-spec-refcheck")),
           mode: "persist",
         });
         expect(domainOutcome.kind).toBe("verified");
-        const rec = new DesignRecordRepositoryImpl().findById(DesignRecordId.of(ap(componentsPath)));
-        expect(rec.ok && rec.value.id().equals(DesignRecordId.of(ap(componentsPath)))).toBe(true);
+        const rec = new DesignRecordRepositoryImplementation().findById(DesignRecordIdentifier.of(ap(componentsPath)));
+        expect(rec.ok && rec.value.id().equals(DesignRecordIdentifier.of(ap(componentsPath)))).toBe(true);
         expect(readFileSync(join(dirname(componentsPath), "deep-spec-refcheck", "components.json"), "utf-8"))
           .toBe(golden(variant, "components.json"));
 
         const contractPath = join(record, "inception", "contract-design", "contract-summary.md");
         const contractOutcome = new CheckContractSummaryUseCase(designRecords, reports, findingsSchema).execute({
-          recordId: DesignRecordId.of(ap(contractPath)),
+          recordId: DesignRecordIdentifier.of(ap(contractPath)),
           reportDirectory: ap(join(dirname(contractPath), "deep-spec-refcheck")),
           mode: "persist",
         });
@@ -130,7 +130,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 
         const entitiesPath = join(record, "construction", "u1-orders", "functional-design", "entities.md");
         const functionalOutcome = new CheckFunctionalDesignUseCase(designRecords, reports, findingsSchema).execute({
-          recordId: DesignRecordId.of(ap(entitiesPath)),
+          recordId: DesignRecordIdentifier.of(ap(entitiesPath)),
           reportDirectory: ap(join(dirname(entitiesPath), "deep-spec-refcheck")),
           mode: "persist",
         });
@@ -146,7 +146,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
   test("an unreadable target resolves to not-applicable, and report-only writes nothing", () => {
     const { designRecords, reports } = realRepositories();
     const missing = new CheckDomainComponentsUseCase(designRecords, reports, findingsSchema).execute({
-      recordId: DesignRecordId.of(ap("/nonexistent/components.md")),
+      recordId: DesignRecordIdentifier.of(ap("/nonexistent/components.md")),
       reportDirectory: ap("/nonexistent/deep-spec-refcheck"),
       mode: "persist",
     });
@@ -157,14 +157,14 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
       cpSync(join(fixtures, "broken"), record, { recursive: true });
       const componentsPath = join(record, "inception", "domain-design", "components.md");
       const outcome = new CheckDomainComponentsUseCase(designRecords, reports, findingsSchema).execute({
-        recordId: DesignRecordId.of(ap(componentsPath)),
+        recordId: DesignRecordIdentifier.of(ap(componentsPath)),
         reportDirectory: ap(join(dirname(componentsPath), "deep-spec-refcheck")),
         mode: "report-only",
       });
       expect(outcome.kind).toBe("verified");
       expect(outcome.kind === "verified" && outcome.pass).toBe(false);
-      const written = new ReferenceCheckReportRepositoryImpl().findById(
-        ReferenceCheckReportId.of(ap(join(dirname(componentsPath), "deep-spec-refcheck")), "components"),
+      const written = new ReferenceCheckReportRepositoryImplementation().findById(
+        ReferenceCheckReportIdentifier.of(ap(join(dirname(componentsPath), "deep-spec-refcheck")), "components"),
       );
       expect(!written.ok && written.error.kind).toBe("not-found");
     } finally {
@@ -179,13 +179,13 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
       const reports = new InMemoryReferenceCheckReportRepository();
       const componentsPath = join(record, "inception", "domain-design", "components.md");
       const reportDirectory = ap(join(dirname(componentsPath), "deep-spec-refcheck"));
-      const outcome = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImpl(), reports, findingsSchema).execute({
-        recordId: DesignRecordId.of(ap(componentsPath)),
+      const outcome = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImplementation(), reports, findingsSchema).execute({
+        recordId: DesignRecordIdentifier.of(ap(componentsPath)),
         reportDirectory,
         mode: "persist",
       });
       expect(outcome.kind === "verified" && outcome.pass).toBe(true);
-      const stored = reports.findById(ReferenceCheckReportId.of(reportDirectory, "components"));
+      const stored = reports.findById(ReferenceCheckReportIdentifier.of(reportDirectory, "components"));
       expect(stored.ok && renderReportBytes(stored.value)).toBe(golden("clean", "components.json"));
     } finally {
       rmSync(record, { recursive: true, force: true });
@@ -197,7 +197,7 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 
 describe("DesignRecord check gates (the aggregate owns its checks and its inputs)", () => {
   const componentsRecord = () => DesignRecord.of({
-    id: DesignRecordId.of(ap("/tmp/rec/inception/domain-design/components.md")),
+    id: DesignRecordIdentifier.of(ap("/tmp/rec/inception/domain-design/components.md")),
     target: InputAnchor.of({ artifact: "inception/domain-design/components.md", sha256: ContentHash.of("c".repeat(64)) }),
     sourceDocument: new TextEncoder().encode("no fence at all"),
     componentCatalog: parseComponentCatalog("no fence at all"),
@@ -205,13 +205,13 @@ describe("DesignRecord check gates (the aggregate owns its checks and its inputs
     functional: null,
   });
   const contractRecord = () => DesignRecord.of({
-    id: DesignRecordId.of(ap("/tmp/rec/inception/contract-design/contract-summary.md")),
+    id: DesignRecordIdentifier.of(ap("/tmp/rec/inception/contract-design/contract-summary.md")),
     target: InputAnchor.of({ artifact: "inception/contract-design/contract-summary.md", sha256: ContentHash.of("d".repeat(64)) }),
     sourceDocument: new TextEncoder().encode(""),
     componentCatalog: null,
     contractSummary: {
       contractsTable: ContractsTableOutcome.absent(),
-      specBlocks: SpecBlockAssessments.of([]),
+      specBlocks: SpecificationBlockAssessments.of([]),
       declaredUnits: { artifactName: ArtifactPath.of("inception/units-generation/unit-of-work-dependency.md"), document: null },
     },
     functional: null,
@@ -261,7 +261,7 @@ function opened(gate: Result<ReferenceCheckReport, { readonly kind: "not-applica
 
 function componentsReport(md: string): ReferenceCheckReport {
   return opened(DesignRecord.of({
-    id: DesignRecordId.of(ap("/tmp/rec/inception/domain-design/components.md")),
+    id: DesignRecordIdentifier.of(ap("/tmp/rec/inception/domain-design/components.md")),
     target: anchor("components.md"),
     sourceDocument: new TextEncoder().encode(md),
     componentCatalog: parseComponentCatalog(md),
@@ -273,10 +273,10 @@ function componentsReport(md: string): ReferenceCheckReport {
 function contractReport(summary: {
   declaredUnits: DeclaredUnitsOutcome | null;
   contractsTable: ContractsTableOutcome;
-  specBlocks: SpecBlockAssessments;
+  specBlocks: SpecificationBlockAssessments;
 }): ReferenceCheckReport {
   return opened(DesignRecord.of({
-    id: DesignRecordId.of(ap("/tmp/rec/inception/contract-design/contract-summary.md")),
+    id: DesignRecordIdentifier.of(ap("/tmp/rec/inception/contract-design/contract-summary.md")),
     target: anchor("contract-summary.md"),
     sourceDocument: new Uint8Array(),
     componentCatalog: null,
@@ -311,7 +311,7 @@ describe("skip branches the fixtures do not exercise", () => {
     const report = contractReport({
       declaredUnits: null,
       contractsTable: ContractsTableOutcome.absent(),
-      specBlocks: SpecBlockAssessments.of([]),
+      specBlocks: SpecificationBlockAssessments.of([]),
     });
     const reasons = report.skipped().toArray().map((s) => `${s.target()}:${s.reason()}`);
     expect(reasons).toContain("check:CD-1:absent-input");
@@ -323,10 +323,10 @@ describe("skip branches the fixtures do not exercise", () => {
     const report = contractReport({
       declaredUnits: DeclaredUnitsOutcome.unrecognized("no yaml fence with a top-level `units:` list"),
       contractsTable: ContractsTableOutcome.rows(ContractRows.of([])),
-      specBlocks: SpecBlockAssessments.of([
-        SpecBlockAssessment.openapiWithoutPaths(BlockIndex.of(1), LineNumber.of(1)),
-        SpecBlockAssessment.notAMapping(BlockIndex.of(2), LineNumber.of(5)),
-        SpecBlockAssessment.unparseable(BlockIndex.of(3), LineNumber.of(9), "line 1: x"),
+      specBlocks: SpecificationBlockAssessments.of([
+        SpecificationBlockAssessment.openapiWithoutPaths(BlockIndex.of(1), LineNumber.of(1)),
+        SpecificationBlockAssessment.notAMapping(BlockIndex.of(2), LineNumber.of(5)),
+        SpecificationBlockAssessment.unparseable(BlockIndex.of(3), LineNumber.of(9), "line 1: x"),
       ]),
     });
     const details = report.findings().toArray().map((f) => f.detail()).join("\n");
@@ -343,8 +343,8 @@ type FunctionalOverrides = {
   unit?: UnitName | undefined;
   entities?: EntitiesOutcome;
   rules?: RulesOutcome;
-  spec?: FunctionalSpecOutcome;
-  requirementIdsKnown?: RequirementIds | null;
+  spec?: FunctionalSpecificationOutcome;
+  requirementIdsKnown?: RequirementIdentifiers | null;
   domainEntities?: DomainEntitiesOutcome;
   siblingUnits?: SiblingUnitIndex;
 };
@@ -355,7 +355,7 @@ function functionalReport(overrides: FunctionalOverrides): ReferenceCheckReport 
   const doc = <T>(artifact: string, outcome: T | undefined): { input: InputAnchor; outcome: T } | null =>
     outcome === undefined ? null : { input: anchor(artifact), outcome };
   return opened(DesignRecord.of({
-    id: DesignRecordId.of(ap("/tmp/rec/construction/u1/functional-design/entities.md")),
+    id: DesignRecordIdentifier.of(ap("/tmp/rec/construction/u1/functional-design/entities.md")),
     target: anchor("e.md"),
     sourceDocument: new Uint8Array(),
     componentCatalog: null,
@@ -530,7 +530,7 @@ describe("functional branches the fixtures do not exercise", () => {
     const report = functionalReport({
       entities: parseEntitiesDocument(entitiesMd),
       rules: parseRulesDocument(rulesMd),
-      requirementIdsKnown: RequirementIds.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
+      requirementIdsKnown: RequirementIdentifiers.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw))),
     });
     const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain('rule id "BR1.1" is declared more than once');
@@ -603,15 +603,15 @@ describe("functional branches the fixtures do not exercise", () => {
   test("a degraded conformance still renders a schema-valid unavailable document", () => {
     // 正常な finding を厳しいスキーマに適合させ、降格文書の形を確認する。
     const bad = ReferenceCheckReport.of({
-      id: ReferenceCheckReportId.of(ap("/tmp/r"), "components"),
+      id: ReferenceCheckReportIdentifier.of(ap("/tmp/r"), "components"),
       inputs: InputAnchors.of([anchor("x.md")]),
-      checked: TargetIds.of([]),
+      checked: TargetIdentifiers.of([]),
       findings: Findings.of([
         Finding.of({
           kind: FindingKind.conflict(),
           functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-          targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))),
-          witness: { refs: WitnessRefs.of([]) },
+          targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+          witness: { refs: WitnessReferences.of([]) },
           detail: "DD-0: x",
         }),
       ]),

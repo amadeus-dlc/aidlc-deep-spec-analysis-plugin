@@ -11,9 +11,9 @@
 
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { RefinementMap, RefinementMapId } from "@deep-spec/design-domain";
+import type { RefinementMap, RefinementMapIdentifier } from "@deep-spec/design-domain";
 
 export interface RefinementMapRepository {
-  findById(id: RefinementMapId): Result<RefinementMap, RepositoryError>;
+  findById(id: RefinementMapIdentifier): Result<RefinementMap, RepositoryError>;
   store(map: RefinementMap): Result<void, RepositoryError>;
 }

@@ -1,4 +1,4 @@
-import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import type { BindingDeclaration } from "./binding-declaration.ts";
 
 // 診断用の束縛宣言列。宣言順序を保ち、入力側に配列の所有権を残さない。
@@ -11,7 +11,13 @@ export class DeclaredBindings {
     this.#values = Object.freeze([...values]);
   }
 
-  static of(values: readonly BindingDeclaration[]): DeclaredBindings { return new DeclaredBindings(values); }
+  static parse(values: readonly BindingDeclaration[]): Result<DeclaredBindings, ParseError> {
+    return parseConstruction(() => new DeclaredBindings(values));
+  }
+
+  static of(values: readonly BindingDeclaration[]): DeclaredBindings {
+    return new DeclaredBindings(values);
+  }
   add(value: BindingDeclaration): DeclaredBindings { return new DeclaredBindings([...this.#values, value]); }
   *[Symbol.iterator](): Iterator<BindingDeclaration> { yield* this.#values; }
   toArray(): readonly BindingDeclaration[] { return this.#values; }

@@ -1,26 +1,33 @@
+import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 
-import type { DesignBackgroundId } from "./design-background-id.ts";
-import type { LoweredId } from "./lowered-id.ts";
+import type { DesignBackgroundIdentifier } from "./design-background-identifier.ts";
+import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredBackground } from "./lowered-background.ts";
 
 // 設計ユニットの背景仮定 1 件——id と表明。lowering は正準順（id の compareTo）で
 // 並べ、表明を BG-n へ載せる（#71 波25）。
+type DesignBackgroundAssumptionParam = { id: DesignBackgroundIdentifier; assert: Expression };
+
 export class DesignBackgroundAssumption {
-  readonly #id: DesignBackgroundId;
+  readonly #id: DesignBackgroundIdentifier;
   readonly #assert: Expression;
 
-  private constructor(id: DesignBackgroundId, assert: Expression) {
-    this.#id = id;
-    this.#assert = ExpressionTree.of(assert).asExpression();
+  private constructor(props: DesignBackgroundAssumptionParam) {
+    this.#id = props.id;
+    this.#assert = ExpressionTree.of(props.assert).asExpression();
   }
 
-  static of(props: { id: DesignBackgroundId; assert: Expression }): DesignBackgroundAssumption {
-    return new DesignBackgroundAssumption(props.id, props.assert);
+  static parse(props: DesignBackgroundAssumptionParam): Result<DesignBackgroundAssumption, ParseError> {
+    return parseConstruction(() => new DesignBackgroundAssumption(props));
   }
 
-  id(): DesignBackgroundId {
+  static of(props: DesignBackgroundAssumptionParam): DesignBackgroundAssumption {
+    return new DesignBackgroundAssumption(props);
+  }
+
+  id(): DesignBackgroundIdentifier {
     return this.#id;
   }
 
@@ -33,7 +40,7 @@ export class DesignBackgroundAssumption {
   }
 
   // 契約1 への lowering——表明を BG-n へ載せる。
-  loweredAs(id: LoweredId): LoweredBackground {
+  loweredAs(id: LoweredIdentifier): LoweredBackground {
     return LoweredBackground.of({ id, assert: this.#assert });
   }
 }

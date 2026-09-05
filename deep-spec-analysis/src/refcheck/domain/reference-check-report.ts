@@ -1,11 +1,11 @@
 import {
   SkipReason,
-  RequirementId,
+  RequirementIdentifier,
   ContentHash,
   FindingKind,
   FunctionalRequirementReferences,
-  TargetId,
-  TargetIds,
+  TargetIdentifier,
+  TargetIdentifiers,
   type FindingsSchema,
   type UnitName,
 } from "@deep-spec/kernel-domain";
@@ -41,26 +41,26 @@ import { Finding } from "./finding.ts";
 import { Findings } from "./findings.ts";
 import type { InputAnchor } from "./input-anchor.ts";
 import { InputAnchors } from "./input-anchors.ts";
-import { ReferenceCheckReportId } from "./reference-check-report-id.ts";
+import { ReferenceCheckReportIdentifier } from "./reference-check-report-identifier.ts";
 import { Skipped } from "./skipped.ts";
 import { Skips } from "./skips.ts";
 
-import type { WitnessRef } from "./witness-ref.ts";
-import { WitnessRefs } from "./witness-refs.ts";
+import type { WitnessReference } from "./witness-reference.ts";
+import { WitnessReferences } from "./witness-references.ts";
 
 export class ReferenceCheckReport {
-  readonly #id: ReferenceCheckReportId;
+  readonly #id: ReferenceCheckReportIdentifier;
   #inputs: InputAnchors;
-  #checked: TargetIds;
+  #checked: TargetIdentifiers;
   #findings: Findings;
   #skipped: Skips;
   readonly #unavailableReason: string | null;
   readonly #unit: UnitName | undefined;
 
   private constructor(
-    id: ReferenceCheckReportId,
+    id: ReferenceCheckReportIdentifier,
     inputs: InputAnchors,
-    checked: TargetIds,
+    checked: TargetIdentifiers,
     findings: Findings,
     skipped: Skips,
     unavailableReason: string | null,
@@ -77,7 +77,7 @@ export class ReferenceCheckReport {
 
   // 検査ファミリーで空の文書を開く。開いた時点では全 family が checked で、
   // finding／skip がその family を checked から外していく（不変条件）。
-  static open(id: ReferenceCheckReportId, families: CheckFamilies, unit?: UnitName): ReferenceCheckReport {
+  static open(id: ReferenceCheckReportIdentifier, families: CheckFamilies, unit?: UnitName): ReferenceCheckReport {
     return new ReferenceCheckReport(
       id,
       InputAnchors.of([]),
@@ -92,15 +92,15 @@ export class ReferenceCheckReport {
   // 契約不適合時の降格形。inputs は保持し内容を空にする（凍結挙動）。
   // 理由文言は emitter（アダプタ）が組んで渡す——ドメインは値として保持する。
   degraded(reason: string): ReferenceCheckReport {
-    return new ReferenceCheckReport(this.#id, this.#inputs, TargetIds.of([]), Findings.of([]), Skips.of([]), reason, undefined);
+    return new ReferenceCheckReport(this.#id, this.#inputs, TargetIdentifiers.of([]), Findings.of([]), Skips.of([]), reason, undefined);
   }
 
   // 書かれた真実からの再構成（Repository の読出側だけが使う）。書込時に
   // 契約適合が保証されているため、並びも含め「書かれたまま」を保持する。
   static of(seed: {
-    readonly id: ReferenceCheckReportId;
+    readonly id: ReferenceCheckReportIdentifier;
     readonly inputs: InputAnchors;
-    readonly checked: TargetIds;
+    readonly checked: TargetIdentifiers;
     readonly findings: Findings;
     readonly skipped: Skips;
     } & { readonly unavailableReason: string | null }): ReferenceCheckReport {
@@ -119,28 +119,28 @@ export class ReferenceCheckReport {
     // その family は checked から外れる。findings はカタログ順を保つ。
     // kind は検証済みの FindingKind——検査が自ら下す判定は正常生成経路であり、
     // 任意の string を受け取らない（FR3.2）。復元時も同じ契約が成立する。
-    finding(family: CheckFamily, kind: FindingKind, targets: string[], refs: WitnessRef[], detail: string, functionalRequirementReferences: string[] = []): void {
+    finding(family: CheckFamily, kind: FindingKind, targets: string[], refs: WitnessReference[], detail: string, functionalRequirementReferences: string[] = []): void {
       this.#findings = this.#findings.add(Finding.of({
         kind,
-        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(functionalRequirementReferences, (raw) => RequirementId.of(raw))).sortedUnique(),
-        targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
-        witness: { refs: WitnessRefs.of(refs) },
+        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(functionalRequirementReferences, (raw) => RequirementIdentifier.of(raw))).sortedUnique(),
+        targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
+        witness: { refs: WitnessReferences.of(refs) },
         detail: family.prefixedDetail(detail),
         ...(this.#unit !== undefined ? { unit: this.#unit} : {}),
       })).sortedCanonically();
-      this.#checked = this.#checked.excluding(TargetId.of(family.asCheckTarget()));
+      this.#checked = this.#checked.excluding(TargetIdentifier.of(family.asCheckTarget()));
     }
 
     // family の skip を記録する。その family は checked から外れる。
     // skipped は target → reason の正準順を保つ。
     skip(family: CheckFamily, reason: string, detail: string): void {
       this.#skipped = this.#skipped.add(Skipped.of({
-        target: TargetId.of(family.asCheckTarget()),
+        target: TargetIdentifier.of(family.asCheckTarget()),
         reason: SkipReason.of(reason),
         detail,
         ...(this.#unit !== undefined ? { unit: this.#unit} : {}),
       })).sortedCanonically();
-      this.#checked = this.#checked.excluding(TargetId.of(family.asCheckTarget()));
+      this.#checked = this.#checked.excluding(TargetIdentifier.of(family.asCheckTarget()));
     }
 
     // 検査が読んだ文書をアンカーとして記録する。inputs は artifact 順を保つ
@@ -149,7 +149,7 @@ export class ReferenceCheckReport {
       this.#inputs = this.#inputs.add(anchor).sortedByArtifact();
     }
 
-    id(): ReferenceCheckReportId {
+    id(): ReferenceCheckReportIdentifier {
       return this.#id;
     }
 
@@ -157,7 +157,7 @@ export class ReferenceCheckReport {
       return this.#inputs;
     }
 
-    checked(): TargetIds {
+    checked(): TargetIdentifiers {
       return this.#checked;
     }
 

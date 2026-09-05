@@ -8,6 +8,8 @@
 
 すべての生成経路は同じコンストラクタを通る。setterの呼び出し順に依存した初期化や、検証を省略する復元専用の入口を作らない。
 
+単純な引数型はnumber・string・具体的なVO型を明記し、Parameters<typeof X.of>[0]による逆算をしない。複合引数は未検証のXParam型としてconstructor・of・parseで共有し、VO本体とは区別する。constructor・of・parseは複数行の通常表記に揃える。
+
 ## ofとparse
 
 | 入口 | 用途 | 失敗の扱い |
@@ -21,7 +23,9 @@
 
 すべての値が有効な正規化・宣言値や、内部で導出する個数には、形だけの`parse`を強制しない。空配列を禁止するかどうかも意味で判断する。`ErrorMessages`の空は「エラーなし」という有効な値である。
 
-長さ上限などの値の制約を追加した宣言値は、もはや「すべての値が有効」ではない。通常の生成には`parse`を用意し、呼び出し側もResultを処理する。`DeclaredBindingValue`のサイズ超過がその例である。
+長さ上限などの値の制約を追加した宣言値は、もはや「すべての値が有効」ではない。通常の生成には`parse`を用意し、呼び出し側もResultを処理する。`Declaration`のサイズ超過がその例である。`DeclaredBindingValue`は検証済みのDeclarationを受け取り、型別名や生のJSONを受ける互換口は持たない。
+
+コンストラクタが契約違反の例外を送出しうる場合、公開parseは必須である。他のVOや共通処理への委譲も含めて横断監査する。ErrorMessages・FunctionalRequirementReferences等のコレクションも、空が有効という理由で件数超過の失敗を見落とさない。
 
 ## 意味のある生成操作
 

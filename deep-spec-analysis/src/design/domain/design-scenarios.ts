@@ -5,11 +5,11 @@ export class DesignScenarios {
   readonly #values: readonly DesignScenario[];
 
   private constructor(values: readonly DesignScenario[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignScenario[]): DesignScenarios {
-    return new DesignScenarios([...values]);
+    return new DesignScenarios(values);
   }
 
   add(value: DesignScenario): DesignScenarios {

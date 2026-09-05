@@ -9,9 +9,9 @@
 
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { DesignRecord, DesignRecordId } from "@deep-spec/refcheck-domain";
+import type { DesignRecord, DesignRecordIdentifier } from "@deep-spec/refcheck-domain";
 
 export interface DesignRecordRepository {
-  findById(id: DesignRecordId): Result<DesignRecord, RepositoryError>;
+  findById(id: DesignRecordIdentifier): Result<DesignRecord, RepositoryError>;
   store(record: DesignRecord): Result<void, RepositoryError>;
 }

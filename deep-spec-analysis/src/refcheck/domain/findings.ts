@@ -6,11 +6,11 @@ export class Findings {
   readonly #values: readonly Finding[];
 
   private constructor(values: readonly Finding[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly Finding[]): Findings {
-    return new Findings([...values]);
+    return new Findings(values);
   }
 
   add(value: Finding): Findings {

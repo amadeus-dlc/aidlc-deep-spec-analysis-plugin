@@ -10,7 +10,9 @@ export class ObligationNature {
     this.#value = value;
   }
 
-  static parse(value: string): Result<ObligationNature, ParseError> { return parseConstruction(() => new ObligationNature(value)); }
+  static parse(value: string): Result<ObligationNature, ParseError> {
+    return parseConstruction(() => new ObligationNature(value));
+  }
 
   static of(raw: string): ObligationNature {
     return new ObligationNature(raw);

@@ -1,21 +1,12 @@
+import { Declaration } from "@deep-spec/kernel-domain";
+import { EnumerationMembers } from "@deep-spec/kernel-domain";
 import { AttributeKind } from "@deep-spec/kernel-domain";
 import { ErrorMessage } from "@deep-spec/kernel-domain";
 import { InitialState } from "@deep-spec/design-domain";
-import { EnumMember } from "@deep-spec/kernel-domain";
+import { EnumerationMember } from "@deep-spec/kernel-domain";
 import { AttributePath, BindingDeclaration, DeclaredBindings, DeclaredBindingValue } from "@deep-spec/kernel-domain";
-import type { Json } from "@deep-spec/kernel-infrastructure";
-import {
-  DeclaredDigest,
-  ContentHash,
-  RequirementId,
-  TriggerName,
-  ArtifactPath,
-  AttributeBound,
-  DeclaredBound,
-  ErrorMessages,
-  RequirementIds,
-  TargetId,
-} from "@deep-spec/kernel-domain";
+import { Json } from "@deep-spec/kernel-infrastructure";
+import { DeclaredDigest, ContentHash, RequirementIdentifier, TriggerName, ArtifactPath, AttributeBound, DeclaredBound, ErrorMessages, RequirementIdentifiers, TargetIdentifier } from "@deep-spec/kernel-domain";
 
 // 契約1／契約3 の IR バリデータを in-process で駆動するスイート（PR7）。
 //
@@ -32,44 +23,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { DesignIrValidationMaterialsRepositoryImpl, DesignModelRepositoryImpl } from "@deep-spec/design-adapter";
-import { BrReferenceIndex, BrRefs, DeclaredValues, DesignBackgroundDecl, DesignAttributeDecl, DesignAttributeDecls, DesignBackgroundDecls, DesignEntityDecl, DesignEntityDecls, DesignIgnoreDecl, DesignIgnoreDecls, DesignMachineDecl, DesignMachineDecls, DesignModelId, DesignObligationDecl, DesignObligationDecls, DesignScenarioDecl, DesignScenarioDecls, DesignTransitionDecl, DesignTransitionDecls, DesignUnitDecl, DesignUnitDecls, InitialStates, UnformalizedTargets, DesignUnitId, DesignTransitionId, DesignScenarioId, DesignObligationOrigin, DesignObligationId, DesignMachineId, DesignEntityName, DesignBackgroundId, DesignAttributeName, DesignIrValidationMaterialsId, BrRef } from "@deep-spec/design-domain";
-import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "@deep-spec/design-usecase";
-import {
-  FormalModelRepositoryImpl,
-  IrValidationMaterialsRepositoryImpl,
-  RequirementsSourceRepositoryImpl,
-} from "@deep-spec/requirements-adapter";
-import {
-  FormalModelId,
-  FunctionalRequirementReferenceIndex,
-  FunctionalRequirementReferences,
-  IrBackgroundDecl,
-  IrObligationDecl,
-  IrScenarioDecl,
-  IrAttributeDecl,
-  IrAttributeDecls,
-  IrBackgroundDecls,
-
-  IrDeclaredValues,
-  IrEntityDecls,
-  IrModelDecl,
-  IrObligationDecls,
-  IrScenarioDecls,
-  RequirementsSourceId,
-  SourceAnchor,
-  ScenarioId,
-  ObligationId,
-  IrEntityName,
-  IrAttributeName,
-  BackgroundAssumptionId,
-  IrValidationMaterialsId,
-  FunctionalRequirementReferenceClaims,
-  FunctionalRequirementReferenceClaim,
-  IrEntityDecl,
-  IrTemporalDecl,
-} from "@deep-spec/requirements-domain";
-import { ValidateIrUseCase, type ValidateIrOutcome } from "@deep-spec/requirements-usecase";
+import { DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation, DesignModelRepositoryImplementation } from "@deep-spec/design-adapter";
+import { BusinessRuleReferenceIndex, BusinessRuleReferences, DesignBackgroundDeclaration, DesignAttributeDeclaration, DesignAttributeDeclarations, DesignBackgroundDeclarations, DesignEntityDeclaration, DesignEntityDeclarations, DesignIgnoreDeclaration, DesignIgnoreDeclarations, DesignMachineDeclaration, DesignMachineDeclarations, DesignModelIdentifier, DesignObligationDeclaration, DesignObligationDeclarations, DesignScenarioDeclaration, DesignScenarioDeclarations, DesignTransitionDeclaration, DesignTransitionDeclarations, DesignUnitDeclaration, DesignUnitDeclarations, InitialStates, UnformalizedTargets, DesignUnitIdentifier, DesignTransitionIdentifier, DesignScenarioIdentifier, DesignObligationOrigin, DesignObligationIdentifier, DesignMachineIdentifier, DesignEntityName, DesignBackgroundIdentifier, DesignAttributeName, DesignIntermediateRepresentationValidationMaterialsIdentifier, BusinessRuleReference } from "@deep-spec/design-domain";
+import { ValidateDesignIntermediateRepresentationUseCase, type ValidateDesignIntermediateRepresentationOutcome } from "@deep-spec/design-usecase";
+import { FormalModelRepositoryImplementation, IntermediateRepresentationValidationMaterialsRepositoryImplementation, RequirementsSourceRepositoryImplementation } from "@deep-spec/requirements-adapter";
+import { FormalModelIdentifier, FunctionalRequirementReferenceIndex, FunctionalRequirementReferences, IntermediateRepresentationBackgroundDeclaration, IntermediateRepresentationObligationDeclaration, IntermediateRepresentationScenarioDeclaration, IntermediateRepresentationAttributeDeclaration, IntermediateRepresentationAttributeDeclarations, IntermediateRepresentationBackgroundDeclarations, IntermediateRepresentationEntityDeclarations, IntermediateRepresentationModelDeclaration, IntermediateRepresentationObligationDeclarations, IntermediateRepresentationScenarioDeclarations, RequirementsSourceIdentifier, SourceAnchor, ScenarioIdentifier, ObligationIdentifier, IntermediateRepresentationEntityName, IntermediateRepresentationAttributeName, BackgroundAssumptionIdentifier, IntermediateRepresentationValidationMaterialsIdentifier, FunctionalRequirementReferenceClaims, FunctionalRequirementReferenceClaim, IntermediateRepresentationEntityDeclaration, IntermediateRepresentationTemporalDeclaration } from "@deep-spec/requirements-domain";
+import { ValidateIntermediateRepresentationUseCase, type ValidateIntermediateRepresentationOutcome } from "@deep-spec/requirements-usecase";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const toolsDir = join(pluginRoot, "tools");
@@ -90,7 +49,7 @@ function ap(raw: string): ArtifactPath {
 }
 
 // entry の描画と同一の行を組む（比較対象は子プロセスの stdout そのもの）。
-function renderVerdict(outcome: ValidateIrOutcome | ValidateDesignIrOutcome): string {
+function renderVerdict(outcome: ValidateIntermediateRepresentationOutcome | ValidateDesignIntermediateRepresentationOutcome): string {
   if (outcome.kind === "not-applicable") {
     return `${JSON.stringify({ pass: true, findings_count: 0, errors: [], note: "not-applicable" })}\n`;
   }
@@ -137,31 +96,31 @@ function makeDesignRecord(): { record: string; modelPath: string } {
   };
 }
 
-function irUseCase(): ValidateIrUseCase {
-  return new ValidateIrUseCase(
-    new IrValidationMaterialsRepositoryImpl({ schemaPath: irSchemaPath }),
-    new RequirementsSourceRepositoryImpl(),
+function irUseCase(): ValidateIntermediateRepresentationUseCase {
+  return new ValidateIntermediateRepresentationUseCase(
+    new IntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath: irSchemaPath }),
+    new RequirementsSourceRepositoryImplementation(),
   );
 }
 
-function designUseCase(): ValidateDesignIrUseCase {
-  return new ValidateDesignIrUseCase(new DesignIrValidationMaterialsRepositoryImpl({ schemaPath: designSchemaPath }));
+function designUseCase(): ValidateDesignIntermediateRepresentationUseCase {
+  return new ValidateDesignIntermediateRepresentationUseCase(new DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath: designSchemaPath }));
 }
 
-describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () => {
+describe("ValidateIntermediateRepresentationUseCase reproduces the ir-valid sensor byte-for-byte", () => {
   const stage = "deep-spec-analysis-verify";
 
   test("canonical fixture", () => {
     const { modelPath } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelIdentifier.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor)).toMatchObject({ pass: true, findings_count: 0 });
   });
 
   test("broken fixture — semantic defects and frRef traceability", () => {
     const { modelPath } = makeIrRecord(join(fixtures, "invalid", "deep-spec-analysis-formal-model.md"));
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelIdentifier.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).pass).toBe(false);
   });
 
@@ -170,7 +129,7 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
     const req = join(record, "inception", "requirements-analysis", "requirements.md");
     writeFileSync(req, `${readFileSync(req, "utf-8")}\n- FR-9: 監査ログを5年間保持しなければならない。\n`);
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelIdentifier.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).errors.join("\n")).toContain("does not match requirements.md");
   });
 
@@ -178,7 +137,7 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
     const { modelPath } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     writeFileSync(modelPath, readFileSync(modelPath, "utf-8").replace(/^\s*"sourceDigest": "[0-9a-f]{64}",\n/m, ""));
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelIdentifier.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).errors.join("\n")).toContain('add "sourceDigest"');
   });
 
@@ -188,7 +147,7 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
     const modelPath = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
     cpSync(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"), modelPath);
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelIdentifier.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).errors).toContain(
       "requirements.md not found under this intent record — frRefs cannot be reverse-verified",
     );
@@ -197,22 +156,22 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
   test("fence and JSON failures short-circuit before the version check", () => {
     const { modelPath } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     writeFileSync(modelPath, "# no fence here\n");
-    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
+    expect(renderVerdict(irUseCase().execute(FormalModelIdentifier.of(ap(modelPath))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
 
     writeFileSync(modelPath, "```json\n{ not json\n```\n");
-    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
+    expect(renderVerdict(irUseCase().execute(FormalModelIdentifier.of(ap(modelPath))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
 
     writeFileSync(modelPath, "```json\n[]\n```\n");
-    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
+    expect(renderVerdict(irUseCase().execute(FormalModelIdentifier.of(ap(modelPath))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath));
   });
 
   test("schema absent — the acquisition fails before anything else", () => {
     const { modelPath } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
-    const useCase = new ValidateIrUseCase(
-      new IrValidationMaterialsRepositoryImpl({ schemaPath: join(tmpdir(), "no-such-ir-schema.json") }),
-      new RequirementsSourceRepositoryImpl(),
+    const useCase = new ValidateIntermediateRepresentationUseCase(
+      new IntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath: join(tmpdir(), "no-such-ir-schema.json") }),
+      new RequirementsSourceRepositoryImplementation(),
     );
-    const outcome = useCase.execute(FormalModelId.of(ap(modelPath)));
+    const outcome = useCase.execute(FormalModelIdentifier.of(ap(modelPath)));
     expect(outcome.kind).toBe("verdict");
     if (outcome.kind !== "verdict") return;
     expect(outcome.pass).toBe(false);
@@ -223,7 +182,7 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
     const { modelPath } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     writeFileSync(modelPath, readFileSync(modelPath, "utf-8").replace(/"irVersion": "1\.[0-9]+\.[0-9]+"/, '"irVersion": "2.0.0"'));
     const viaSensor = fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(modelPath))))).toBe(viaSensor);
+    expect(renderVerdict(irUseCase().execute(FormalModelIdentifier.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).errors[0]).toContain("unsupported major version");
   });
 
@@ -231,18 +190,18 @@ describe("ValidateIrUseCase reproduces the ir-valid sensor byte-for-byte", () =>
     const { record } = makeIrRecord(join(fixtures, "conformance", "deep-spec-analysis-formal-model.md"));
     const other = join(record, "inception", "deep-spec-analysis-verify", "notes.md");
     writeFileSync(other, "# notes\n");
-    expect(irUseCase().execute(FormalModelId.of(ap(other))).kind).toBe("not-applicable");
-    expect(renderVerdict(irUseCase().execute(FormalModelId.of(ap(other))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, other));
+    expect(irUseCase().execute(FormalModelIdentifier.of(ap(other))).kind).toBe("not-applicable");
+    expect(renderVerdict(irUseCase().execute(FormalModelIdentifier.of(ap(other))))).toBe(fire("aidlc-sensor-deep-spec-ir-valid.ts", stage, other));
   });
 });
 
-describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for-byte", () => {
+describe("ValidateDesignIntermediateRepresentationUseCase reproduces the design-ir-valid sensor byte-for-byte", () => {
   const stage = "deep-spec-analysis-functional-verify";
 
   test("canonical fixture", () => {
     const { modelPath } = makeDesignRecord();
     const viaSensor = fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(viaSensor);
+    expect(renderVerdict(designUseCase().execute(DesignModelIdentifier.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor)).toMatchObject({ pass: true, findings_count: 0 });
   });
 
@@ -250,7 +209,7 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
     const { modelPath } = makeDesignRecord();
     cpSync(join(fixtures, "design", "invalid-formal-model.md"), modelPath);
     const viaSensor = fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(viaSensor);
+    expect(renderVerdict(designUseCase().execute(DesignModelIdentifier.of(ap(modelPath))))).toBe(viaSensor);
     const verdict = JSON.parse(viaSensor);
     expect(verdict.pass).toBe(false);
     const all = verdict.errors.join("\n");
@@ -263,27 +222,27 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
   test("fence and JSON failures short-circuit", () => {
     const { modelPath } = makeDesignRecord();
     writeFileSync(modelPath, "# no fence\n");
-    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(
+    expect(renderVerdict(designUseCase().execute(DesignModelIdentifier.of(ap(modelPath))))).toBe(
       fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath),
     );
 
     writeFileSync(modelPath, "```json\n{ not json\n```\n");
-    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(
+    expect(renderVerdict(designUseCase().execute(DesignModelIdentifier.of(ap(modelPath))))).toBe(
       fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath),
     );
 
     writeFileSync(modelPath, "```json\n[]\n```\n");
-    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(
+    expect(renderVerdict(designUseCase().execute(DesignModelIdentifier.of(ap(modelPath))))).toBe(
       fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath),
     );
   });
 
   test("schema absent — the acquisition fails before anything else", () => {
     const { modelPath } = makeDesignRecord();
-    const useCase = new ValidateDesignIrUseCase(
-      new DesignIrValidationMaterialsRepositoryImpl({ schemaPath: join(tmpdir(), "no-such-design-schema.json") }),
+    const useCase = new ValidateDesignIntermediateRepresentationUseCase(
+      new DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath: join(tmpdir(), "no-such-design-schema.json") }),
     );
-    const outcome = useCase.execute(DesignModelId.of(ap(modelPath)));
+    const outcome = useCase.execute(DesignModelIdentifier.of(ap(modelPath)));
     expect(outcome.kind).toBe("verdict");
     if (outcome.kind !== "verdict") return;
     expect(outcome.errors[0]).toContain("design IR schema not installed at");
@@ -296,7 +255,7 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
       readFileSync(modelPath, "utf-8").replace(/"irVersion": "1\.[0-9]+\.[0-9]+"/, '"irVersion": "3.0.0"'),
     );
     const viaSensor = fire("aidlc-sensor-deep-spec-design-ir-valid.ts", stage, modelPath);
-    expect(renderVerdict(designUseCase().execute(DesignModelId.of(ap(modelPath))))).toBe(viaSensor);
+    expect(renderVerdict(designUseCase().execute(DesignModelIdentifier.of(ap(modelPath))))).toBe(viaSensor);
     expect(JSON.parse(viaSensor).errors[0]).toContain("unsupported major version");
   });
 
@@ -304,30 +263,30 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
     const { record } = makeDesignRecord();
     const other = join(record, "construction", "deep-spec-analysis-functional-verify", "notes.md");
     writeFileSync(other, "# notes\n");
-    expect(designUseCase().execute(DesignModelId.of(ap(other))).kind).toBe("not-applicable");
+    expect(designUseCase().execute(DesignModelIdentifier.of(ap(other))).kind).toBe("not-applicable");
   });
 });
 
 describe("FunctionalRequirementReferenceIndex", () => {
   test("collects owners per frRef and reports the missing ones sorted", () => {
     const index = FunctionalRequirementReferenceIndex.of([
-      FunctionalRequirementReferenceClaim.of("OB-2", FunctionalRequirementReferences.of(Array.from(["FR-1", "FR-9"], (raw) => RequirementId.of(raw)))),
-      FunctionalRequirementReferenceClaim.of("OB-1", FunctionalRequirementReferences.of(Array.from(["FR-9"], (raw) => RequirementId.of(raw)))),
+      FunctionalRequirementReferenceClaim.of("OB-2", FunctionalRequirementReferences.of(Array.from(["FR-1", "FR-9"], (raw) => RequirementIdentifier.of(raw)))),
+      FunctionalRequirementReferenceClaim.of("OB-1", FunctionalRequirementReferences.of(Array.from(["FR-9"], (raw) => RequirementIdentifier.of(raw)))),
       FunctionalRequirementReferenceClaim.of("scenarios[3]", FunctionalRequirementReferences.of([])),
     ]);
     expect(index.referencedIds().sort()).toEqual(["FR-1", "FR-9"]);
-    expect(index.missingErrors(RequirementIds.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))))).toEqual([
+    expect(index.missingErrors(RequirementIdentifiers.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw))))).toEqual([
       'frRef "FR-9" (used by OB-1, OB-2) does not exist in requirements.md',
     ]);
-    expect(index.missingErrors(RequirementIds.of(Array.from(["FR-1", "FR-9"], (raw) => RequirementId.of(raw))))).toEqual([]);
+    expect(index.missingErrors(RequirementIdentifiers.of(Array.from(["FR-1", "FR-9"], (raw) => RequirementIdentifier.of(raw))))).toEqual([]);
   });
 });
 
-describe("RequirementsSourceId", () => {
+describe("RequirementsSourceIdentifier", () => {
   test("identity is the record root, compared by value", () => {
-    const a = RequirementsSourceId.of(ap("/records/r1"));
-    const b = RequirementsSourceId.of(ap("/records/r1"));
-    const c = RequirementsSourceId.of(ap("/records/r2"));
+    const a = RequirementsSourceIdentifier.of(ap("/records/r1"));
+    const b = RequirementsSourceIdentifier.of(ap("/records/r1"));
+    const c = RequirementsSourceIdentifier.of(ap("/records/r2"));
     expect(a.recordRoot().asString()).toBe("/records/r1");
     expect(a.equals(b)).toBe(true);
     expect(a.equals(c)).toBe(false);
@@ -337,10 +296,10 @@ describe("RequirementsSourceId", () => {
     const record = join(tmpdir(), `deep-spec-source-id-${Math.random().toString(36).slice(2)}`);
     mkdirSync(join(record, "construction", "requirements-analysis"), { recursive: true });
     writeFileSync(join(record, "construction", "requirements-analysis", "requirements.md"), "- FR-1: x\n");
-    const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(record)));
+    const source = new RequirementsSourceRepositoryImplementation().findById(RequirementsSourceIdentifier.of(ap(record)));
     expect(source.ok).toBe(true);
     expect([...(source.ok ? source.value.knownIds() : [])].map((id) => id.asString())).toEqual(["FR-1"]);
-    const missing = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(join(record, "nowhere"))));
+    const missing = new RequirementsSourceRepositoryImplementation().findById(RequirementsSourceIdentifier.of(ap(join(record, "nowhere"))));
     expect(!missing.ok && missing.error.kind).toBe("not-found");
   });
 });
@@ -363,12 +322,12 @@ describe("SourceAnchor", () => {
   });
 });
 
-describe("BrReferenceIndex", () => {
+describe("BusinessRuleReferenceIndex", () => {
   test("extracts BR ids from rules markdown", () => {
-    const index = BrReferenceIndex.fromRules("- BR2.1 なにか\n- BR1.10 別の規則\n- BR1.10 再掲\n- BRX.1 は id ではない\n");
+    const index = BusinessRuleReferenceIndex.fromRules("- BR2.1 なにか\n- BR1.10 別の規則\n- BR1.10 再掲\n- BRX.1 は id ではない\n");
     expect(index.sortedIds()).toEqual(["BR1.10", "BR2.1"]);
-    expect(index.has(BrRef.of("BR2.1"))).toBe(true);
-    expect(index.has(BrRef.of("BR9.9"))).toBe(false);
+    expect(index.has(BusinessRuleReference.of("BR2.1"))).toBe(true);
+    expect(index.has(BusinessRuleReference.of("BR9.9"))).toBe(false);
   });
 });
 
@@ -376,39 +335,39 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
   type RawIrAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawIrEntity = { name: string; attributes: RawIrAttr[] };
-  type RawIrObligation = Omit<Parameters<typeof IrObligationDecl.of>[0], "id" | "temporal"> & { id: string; temporal?: Parameters<typeof IrTemporalDecl.of>[0] };
-  type RawIrScenario = Omit<Parameters<typeof IrScenarioDecl.of>[0], "id" | "bindings"> & { id: string; bindings: (readonly [string, Json])[] };
-  type RawIrBackground = Omit<Parameters<typeof IrBackgroundDecl.of>[0], "id"> & { id: string };
+  type RawIrObligation = Omit<Parameters<typeof IntermediateRepresentationObligationDeclaration.of>[0], "id" | "temporal"> & { id: string; temporal?: Parameters<typeof IntermediateRepresentationTemporalDeclaration.of>[0] };
+  type RawIrScenario = Omit<Parameters<typeof IntermediateRepresentationScenarioDeclaration.of>[0], "id" | "bindings"> & { id: string; bindings: (readonly [string, Json])[] };
+  type RawIrBackground = Omit<Parameters<typeof IntermediateRepresentationBackgroundDeclaration.of>[0], "id"> & { id: string };
   function irView(overrides: {
     entities?: RawIrEntity[];
     obligations?: RawIrObligation[];
     scenarios?: RawIrScenario[];
     background?: RawIrBackground[];
-  }): IrModelDecl {
-    return IrModelDecl.of({
-      entities: IrEntityDecls.of(
-        (overrides.entities ?? []).map((e) => IrEntityDecl.of({
-          name: IrEntityName.of(e.name),
-          attributes: IrAttributeDecls.of(
-            e.attributes.map((a) => IrAttributeDecl.of({
+  }): IntermediateRepresentationModelDeclaration {
+    return IntermediateRepresentationModelDeclaration.of({
+      entities: IntermediateRepresentationEntityDeclarations.of(
+        (overrides.entities ?? []).map((e) => IntermediateRepresentationEntityDeclaration.of({
+          name: IntermediateRepresentationEntityName.of(e.name),
+          attributes: IntermediateRepresentationAttributeDeclarations.of(
+            e.attributes.map((a) => IntermediateRepresentationAttributeDeclaration.of({
               ...a,
               kind: AttributeKind.of(a.kind),
-              name: IrAttributeName.of(a.name),
+              name: IntermediateRepresentationAttributeName.of(a.name),
               min: a.min === undefined ? undefined : DeclaredBound.of(a.min),
               max: a.max === undefined ? undefined : DeclaredBound.of(a.max),
-              values: a.values === undefined ? undefined : IrDeclaredValues.of((a.values).map((value) => EnumMember.of(value))),
+              values: a.values === undefined ? undefined : EnumerationMembers.of((a.values).map((value) => EnumerationMember.of(value))),
             })),
           ),
         })),
       ),
-      obligations: IrObligationDecls.of(
-        (overrides.obligations ?? []).map((ob) => IrObligationDecl.of({ ...ob, id: ObligationId.of(ob.id), temporal: ob.temporal === undefined ? undefined : IrTemporalDecl.of(ob.temporal) })),
+      obligations: IntermediateRepresentationObligationDeclarations.of(
+        (overrides.obligations ?? []).map((ob) => IntermediateRepresentationObligationDeclaration.of({ ...ob, id: ObligationIdentifier.of(ob.id), temporal: ob.temporal === undefined ? undefined : IntermediateRepresentationTemporalDeclaration.of(ob.temporal) })),
       ),
-      scenarios: IrScenarioDecls.of(
-        (overrides.scenarios ?? []).map((sc) => IrScenarioDecl.of({ ...sc, id: ScenarioId.of(sc.id), bindings: DeclaredBindings.of(sc.bindings.map(([path, value]) => BindingDeclaration.of(AttributePath.of(path), DeclaredBindingValue.of(value)))) })),
+      scenarios: IntermediateRepresentationScenarioDeclarations.of(
+        (overrides.scenarios ?? []).map((sc) => IntermediateRepresentationScenarioDeclaration.of({ ...sc, id: ScenarioIdentifier.of(sc.id), bindings: DeclaredBindings.of(sc.bindings.map(([path, value]) => BindingDeclaration.of(AttributePath.of(path), DeclaredBindingValue.of(Declaration.of(value))))) })),
       ),
-      background: IrBackgroundDecls.of(
-        (overrides.background ?? []).map((bg) => IrBackgroundDecl.of({ ...bg, id: BackgroundAssumptionId.of(bg.id) })),
+      background: IntermediateRepresentationBackgroundDeclarations.of(
+        (overrides.background ?? []).map((bg) => IntermediateRepresentationBackgroundDeclaration.of({ ...bg, id: BackgroundAssumptionIdentifier.of(bg.id) })),
       ),
     });
   }
@@ -559,25 +518,25 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   });
 });
 
-describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", () => {
+describe("DesignUnitDeclarations.wellFormednessErrors (contract 3 domain branches)", () => {
   // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
   type RawAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawEntity = { name: string; attributes: RawAttr[] };
-  type RawObligation = Omit<Parameters<typeof DesignObligationDecl.of>[0], "id" | "origin" | "brRefs"> & { id: string; origin?: string; brRefs?: string[] };
-  type RawTransition = Omit<Parameters<typeof DesignTransitionDecl.of>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs?: string[]; trigger?: string };
-  type RawIgnore = Omit<Parameters<typeof DesignIgnoreDecl.of>[0], "trigger"> & { trigger: string };
-  type RawMachine = Omit<Parameters<typeof DesignMachineDecl.of>[0], "id" | "initial" | "transitions" | "ignores"> & {
+  type RawObligation = Omit<Parameters<typeof DesignObligationDeclaration.of>[0], "id" | "origin" | "businessRuleReferences"> & { id: string; origin?: string; brRefs?: string[] };
+  type RawTransition = Omit<Parameters<typeof DesignTransitionDeclaration.of>[0], "id" | "businessRuleReferences" | "trigger"> & { id: string; brRefs?: string[]; trigger?: string };
+  type RawIgnore = Omit<Parameters<typeof DesignIgnoreDeclaration.of>[0], "trigger"> & { trigger: string };
+  type RawMachine = Omit<Parameters<typeof DesignMachineDeclaration.of>[0], "id" | "initial" | "transitions" | "ignores"> & {
     id: string;
     initial: string[];
     transitions: RawTransition[];
     ignores: RawIgnore[];
   };
-  type RawScenario = Omit<Parameters<typeof DesignScenarioDecl.of>[0], "id" | "bindings" | "brRefs"> & {
+  type RawScenario = Omit<Parameters<typeof DesignScenarioDeclaration.of>[0], "id" | "bindings" | "businessRuleReferences"> & {
     id: string;
     bindings: (readonly [string, Json])[];
     brRefs?: string[];
   };
-  type RawBackground = Omit<Parameters<typeof DesignBackgroundDecl.of>[0], "id"> & { id: string };
+  type RawBackground = Omit<Parameters<typeof DesignBackgroundDeclaration.of>[0], "id"> & { id: string };
   type RawUnit = {
     entities?: RawEntity[];
     obligations?: RawObligation[];
@@ -588,68 +547,68 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
     directoryExists?: boolean;
     rulesMarkdown?: string | null;
   };
-  const brRefs = (refs: string[] | undefined) => (refs === undefined ? undefined : BrRefs.of(Array.from(refs, (raw) => BrRef.of(raw))));
-  function unit(overrides: RawUnit): DesignUnitDecl {
-    return DesignUnitDecl.of({
-      unit: DesignUnitId.of("u1"),
-      entities: DesignEntityDecls.of(
-        (overrides.entities ?? []).map((e) => DesignEntityDecl.of({
+  const brRefs = (refs: string[] | undefined) => (refs === undefined ? undefined : BusinessRuleReferences.of(Array.from(refs, (raw) => BusinessRuleReference.of(raw))));
+  function unit(overrides: RawUnit): DesignUnitDeclaration {
+    return DesignUnitDeclaration.of({
+      unit: DesignUnitIdentifier.of("u1"),
+      entities: DesignEntityDeclarations.of(
+        (overrides.entities ?? []).map((e) => DesignEntityDeclaration.of({
           name: DesignEntityName.of(e.name),
-          attributes: DesignAttributeDecls.of(
-            e.attributes.map((a) => DesignAttributeDecl.of({
+          attributes: DesignAttributeDeclarations.of(
+            e.attributes.map((a) => DesignAttributeDeclaration.of({
               ...a,
               kind: AttributeKind.of(a.kind),
               name: DesignAttributeName.of(a.name),
               min: a.min === undefined ? undefined : DeclaredBound.of(a.min),
               max: a.max === undefined ? undefined : DeclaredBound.of(a.max),
-              values: a.values === undefined ? undefined : DeclaredValues.of((a.values).map((value) => EnumMember.of(value))),
+              values: a.values === undefined ? undefined : EnumerationMembers.of((a.values).map((value) => EnumerationMember.of(value))),
             })),
           ),
         })),
       ),
-      obligations: DesignObligationDecls.of(
-        (overrides.obligations ?? []).map((ob) => DesignObligationDecl.of({
+      obligations: DesignObligationDeclarations.of(
+        (overrides.obligations ?? []).map((ob) => DesignObligationDeclaration.of({
           ...ob,
-          id: DesignObligationId.of(ob.id),
+          id: DesignObligationIdentifier.of(ob.id),
           origin: ob.origin === undefined ? undefined : DesignObligationOrigin.of(ob.origin),
-          brRefs: brRefs(ob.brRefs),
+          businessRuleReferences: brRefs(ob.brRefs),
         })),
       ),
-      stateMachines: DesignMachineDecls.of(
-        (overrides.stateMachines ?? []).map((sm) => DesignMachineDecl.of({
+      stateMachines: DesignMachineDeclarations.of(
+        (overrides.stateMachines ?? []).map((sm) => DesignMachineDeclaration.of({
           ...sm,
-          id: DesignMachineId.of(sm.id),
+          id: DesignMachineIdentifier.of(sm.id),
           initial: InitialStates.of((sm.initial).map((value) => InitialState.of(value))),
-          transitions: DesignTransitionDecls.of(
-            sm.transitions.map((tr) => DesignTransitionDecl.of({
+          transitions: DesignTransitionDeclarations.of(
+            sm.transitions.map((tr) => DesignTransitionDeclaration.of({
               ...tr,
-              id: DesignTransitionId.of(tr.id),
-              brRefs: brRefs(tr.brRefs),
+              id: DesignTransitionIdentifier.of(tr.id),
+              businessRuleReferences: brRefs(tr.brRefs),
               trigger: tr.trigger === undefined ? undefined : TriggerName.of(tr.trigger),
             })),
           ),
-          ignores: DesignIgnoreDecls.of(sm.ignores.map((g) => DesignIgnoreDecl.of({ ...g, trigger: TriggerName.of(g.trigger) }))),
+          ignores: DesignIgnoreDeclarations.of(sm.ignores.map((g) => DesignIgnoreDeclaration.of({ ...g, trigger: TriggerName.of(g.trigger) }))),
         })),
       ),
-      scenarios: DesignScenarioDecls.of(
-        (overrides.scenarios ?? []).map((sc) => DesignScenarioDecl.of({ ...sc, id: DesignScenarioId.of(sc.id), bindings: DeclaredBindings.of(sc.bindings.map(([path, value]) => BindingDeclaration.of(AttributePath.of(path), DeclaredBindingValue.of(value)))), brRefs: brRefs(sc.brRefs) })),
+      scenarios: DesignScenarioDeclarations.of(
+        (overrides.scenarios ?? []).map((sc) => DesignScenarioDeclaration.of({ ...sc, id: DesignScenarioIdentifier.of(sc.id), bindings: DeclaredBindings.of(sc.bindings.map(([path, value]) => BindingDeclaration.of(AttributePath.of(path), DeclaredBindingValue.of(Declaration.of(value))))), businessRuleReferences: brRefs(sc.brRefs) })),
       ),
-      background: DesignBackgroundDecls.of(
-        (overrides.background ?? []).map((bg) => DesignBackgroundDecl.of({ ...bg, id: DesignBackgroundId.of(bg.id) })),
+      background: DesignBackgroundDeclarations.of(
+        (overrides.background ?? []).map((bg) => DesignBackgroundDeclaration.of({ ...bg, id: DesignBackgroundIdentifier.of(bg.id) })),
       ),
-      unformalizedTargets: UnformalizedTargets.of(Array.from(overrides.unformalizedTargets ?? [], (raw) => TargetId.of(raw))),
+      unformalizedTargets: UnformalizedTargets.of(Array.from(overrides.unformalizedTargets ?? [], (raw) => TargetIdentifier.of(raw))),
       directoryExists: overrides.directoryExists ?? true,
       rulesMarkdown: overrides.rulesMarkdown ?? null,
     });
   }
 
   test("duplicate unit names are reported once per repeat", () => {
-    expect(DesignUnitDecls.of([unit({}), unit({})]).wellFormednessErrors()).toEqual(['duplicate unit "u1"']);
+    expect(DesignUnitDeclarations.of([unit({}), unit({})]).wellFormednessErrors()).toEqual(['duplicate unit "u1"']);
   });
 
   test("design-side colliding encodings and unsafe bounds are rejected (thaw #34)", () => {
     expect(
-      DesignUnitDecls.of([
+      DesignUnitDeclarations.of([
         unit({
           entities: [
             { name: "a", attributes: [{ name: "b_c", kind: "bool" }] },
@@ -659,7 +618,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
       ]).wellFormednessErrors(),
     ).toEqual(['unit u1: attribute paths "a.b_c" and "a_b.c" collide under the solver variable encoding (dots become underscores)']);
     expect(
-      DesignUnitDecls.of([
+      DesignUnitDeclarations.of([
         unit({ entities: [{ name: "t", attributes: [{ name: "n", kind: "int", min: 0, max: 1e21 }] }] }),
       ]).wellFormednessErrors(),
     ).toEqual(["unit u1: t.n: bounds must be safe integers"]);
@@ -667,7 +626,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
 
   test("int attributes require bounds", () => {
     expect(
-      DesignUnitDecls.of([
+      DesignUnitDeclarations.of([
         unit({ entities: [{ name: "t", attributes: [{ name: "age", kind: "int" }, { name: "age", kind: "int", min: 3, max: 1 }] }] }),
       ]).wellFormednessErrors(),
     ).toEqual([
@@ -689,7 +648,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
       },
     ];
     expect(
-      DesignUnitDecls.of([
+      DesignUnitDeclarations.of([
         unit({
           entities,
           obligations: [
@@ -714,7 +673,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
 
   test("temporal branches are walked in design obligations too", () => {
     expect(
-      DesignUnitDecls.of([
+      DesignUnitDeclarations.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "flag", kind: "bool" }] }],
           obligations: [
@@ -736,17 +695,17 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
   });
 
   test("origin \"rules\" requires brRefs", () => {
-    expect(DesignUnitDecls.of([unit({ obligations: [{ id: "DOB-1", origin: "rules" }] })]).wellFormednessErrors()).toEqual([
+    expect(DesignUnitDeclarations.of([unit({ obligations: [{ id: "DOB-1", origin: "rules" }] })]).wellFormednessErrors()).toEqual([
       'unit u1: obligation DOB-1: origin "rules" requires brRefs',
     ]);
   });
 
   test("a machine's lifecycle attribute must be a declared enum", () => {
-    expect(DesignUnitDecls.of([unit({ stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }] })]).wellFormednessErrors()).toEqual([
+    expect(DesignUnitDeclarations.of([unit({ stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }] })]).wellFormednessErrors()).toEqual([
       'unit u1: machine SM-1: lifecycle attribute "t.state" is not declared',
     ]);
     expect(
-      DesignUnitDecls.of([
+      DesignUnitDeclarations.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "state", kind: "bool" }] }],
           stateMachines: [{ id: "SM-1", attrPath: "t.state", initial: [], transitions: [], ignores: [] }],
@@ -756,7 +715,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
   });
 
   test("machine states, self-assignment and ignore collisions", () => {
-    const errors = DesignUnitDecls.of([
+    const errors = DesignUnitDeclarations.of([
       unit({
         entities: [{ name: "t", attributes: [{ name: "state", kind: "enum", values: ["open", "closed"] }] }],
         stateMachines: [
@@ -793,7 +752,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
 
   test("scenario bindings and background assertions are checked per unit", () => {
     expect(
-      DesignUnitDecls.of([
+      DesignUnitDeclarations.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "flag", kind: "bool" }] }],
           scenarios: [
@@ -819,20 +778,20 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
   });
 
   test("a missing construction directory is an error even with zero brRefs", () => {
-    expect(DesignUnitDecls.of([unit({ directoryExists: false })]).wellFormednessErrors()).toEqual([
+    expect(DesignUnitDeclarations.of([unit({ directoryExists: false })]).wellFormednessErrors()).toEqual([
       "unit u1: no construction/u1/ directory exists under this record — the unit name matches no unit-of-work, so BR coverage cannot be verified",
     ]);
   });
 
   test("brRefs without rules.md cannot be reverse-verified", () => {
-    expect(DesignUnitDecls.of([unit({ obligations: [{ id: "DOB-1", brRefs: ["BR1.1"] }] })]).wellFormednessErrors()).toEqual([
+    expect(DesignUnitDeclarations.of([unit({ obligations: [{ id: "DOB-1", brRefs: ["BR1.1"] }] })]).wellFormednessErrors()).toEqual([
       "unit u1: brRefs are used but construction/u1/functional-design/rules.md was not found — they cannot be reverse-verified",
     ]);
   });
 
   test("BR coverage: unknown refs are errors and silent rules are a contract violation", () => {
     expect(
-      DesignUnitDecls.of([
+      DesignUnitDeclarations.of([
         unit({
           obligations: [{ id: "DOB-1", brRefs: ["BR9.9"] }],
           unformalizedTargets: ["BR1.2"],
@@ -847,7 +806,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
 
   test("brRefs from transitions and scenarios count toward coverage", () => {
     expect(
-      DesignUnitDecls.of([
+      DesignUnitDeclarations.of([
         unit({
           entities: [{ name: "t", attributes: [{ name: "state", kind: "enum", values: ["open"] }] }],
           stateMachines: [
@@ -863,13 +822,13 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
 
 describe("design decl collections (first-class operations)", () => {
   test("of/add/iterator/toArray hold insertion order across the decl bundle", () => {
-    const values = DeclaredValues.of((["a"]).map((value) => EnumMember.of(value))).add(EnumMember.of("b"));
+    const values = EnumerationMembers.of((["a"]).map((value) => EnumerationMember.of(value))).add(EnumerationMember.of("b"));
     expect([...values].map((value) => value.asString())).toEqual(["a", "b"]);
     expect(values.includes("b")).toBe(true);
     expect(values.includes("c")).toBe(false);
     expect(values.toArray().map((value) => value.asString())).toEqual(["a", "b"]);
 
-    const refs = BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))).add(BrRef.of("BR1.2"));
+    const refs = BusinessRuleReferences.of(Array.from(["BR1.1"], (raw) => BusinessRuleReference.of(raw))).add(BusinessRuleReference.of("BR1.2"));
     expect([...refs].map((r) => r.asString())).toEqual(["BR1.1", "BR1.2"]);
     expect(refs.toStrings()).toEqual(["BR1.1", "BR1.2"]);
 
@@ -877,61 +836,61 @@ describe("design decl collections (first-class operations)", () => {
     expect([...initial].map((value) => value.asString())).toEqual(["open", "closed"]);
     expect(initial.toArray().map((value) => value.asString())).toEqual(["open", "closed"]);
 
-    const unformalized = UnformalizedTargets.of(Array.from(["BR2.1"], (raw) => TargetId.of(raw))).add(TargetId.of("BR2.2"));
+    const unformalized = UnformalizedTargets.of(Array.from(["BR2.1"], (raw) => TargetIdentifier.of(raw))).add(TargetIdentifier.of("BR2.2"));
     expect([...unformalized].map((t) => t.asString())).toEqual(["BR2.1", "BR2.2"]);
-    expect(unformalized.covers(TargetId.of("BR2.2"))).toBe(true);
-    expect(unformalized.covers(TargetId.of("BR9.9"))).toBe(false);
+    expect(unformalized.covers(TargetIdentifier.of("BR2.2"))).toBe(true);
+    expect(unformalized.covers(TargetIdentifier.of("BR9.9"))).toBe(false);
     expect(unformalized.toStrings()).toEqual(["BR2.1", "BR2.2"]);
 
-    const bindings = DeclaredBindings.of([BindingDeclaration.of(AttributePath.of("t.flag"), DeclaredBindingValue.of(true))]).add(BindingDeclaration.of(AttributePath.of("t.n"), DeclaredBindingValue.of(1)));
+    const bindings = DeclaredBindings.of([BindingDeclaration.of(AttributePath.of("t.flag"), DeclaredBindingValue.of(Declaration.of(true)))]).add(BindingDeclaration.of(AttributePath.of("t.n"), DeclaredBindingValue.of(Declaration.of(1))));
     expect([...bindings].map((binding) => [binding.path().asString(), JSON.parse(binding.value().describe())])).toEqual([
       ["t.flag", true],
       ["t.n", 1],
     ]);
     expect(bindings.toArray().length).toBe(2);
 
-    const attr = DesignAttributeDecl.of({ name: DesignAttributeName.of("state"), kind: AttributeKind.of("enum"), values: DeclaredValues.of((["open"]).map((value) => EnumMember.of(value))) });
-    const attrs = DesignAttributeDecls.of([]).add(attr);
+    const attr = DesignAttributeDeclaration.of({ name: DesignAttributeName.of("state"), kind: AttributeKind.of("enum"), values: EnumerationMembers.of((["open"]).map((value) => EnumerationMember.of(value))) });
+    const attrs = DesignAttributeDeclarations.of([]).add(attr);
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
 
-    const entity = DesignEntityDecl.of({ name: DesignEntityName.of("t"), attributes: attrs });
-    const entities = DesignEntityDecls.of([]).add(entity);
+    const entity = DesignEntityDeclaration.of({ name: DesignEntityName.of("t"), attributes: attrs });
+    const entities = DesignEntityDeclarations.of([]).add(entity);
     expect([...entities]).toEqual([entity]);
     expect(entities.toArray()).toEqual([entity]);
 
-    const ob = DesignObligationDecl.of({ id: DesignObligationId.of("DOB-1") });
-    const obs = DesignObligationDecls.of([]).add(ob);
+    const ob = DesignObligationDeclaration.of({ id: DesignObligationIdentifier.of("DOB-1") });
+    const obs = DesignObligationDeclarations.of([]).add(ob);
     expect([...obs]).toEqual([ob]);
     expect(obs.toArray()).toEqual([ob]);
 
-    const tr = DesignTransitionDecl.of({ id: DesignTransitionId.of("TR-1") });
-    const trs = DesignTransitionDecls.of([]).add(tr);
+    const tr = DesignTransitionDeclaration.of({ id: DesignTransitionIdentifier.of("TR-1") });
+    const trs = DesignTransitionDeclarations.of([]).add(tr);
     expect([...trs]).toEqual([tr]);
     expect(trs.toArray()).toEqual([tr]);
 
-    const ig = DesignIgnoreDecl.of({ state: "open", trigger: TriggerName.of("close") });
-    const igs = DesignIgnoreDecls.of([]).add(ig);
+    const ig = DesignIgnoreDeclaration.of({ state: "open", trigger: TriggerName.of("close") });
+    const igs = DesignIgnoreDeclarations.of([]).add(ig);
     expect([...igs]).toEqual([ig]);
     expect(igs.toArray()).toEqual([ig]);
 
-    const sm = DesignMachineDecl.of({ id: DesignMachineId.of("SM-1"), attrPath: "t.state", initial, transitions: trs, ignores: igs });
-    const sms = DesignMachineDecls.of([]).add(sm);
+    const sm = DesignMachineDeclaration.of({ id: DesignMachineIdentifier.of("SM-1"), attrPath: "t.state", initial, transitions: trs, ignores: igs });
+    const sms = DesignMachineDeclarations.of([]).add(sm);
     expect([...sms]).toEqual([sm]);
     expect(sms.toArray()).toEqual([sm]);
 
-    const sc = DesignScenarioDecl.of({ id: DesignScenarioId.of("DSC-1"), bindings, hasEvent: false });
-    const scs = DesignScenarioDecls.of([]).add(sc);
+    const sc = DesignScenarioDeclaration.of({ id: DesignScenarioIdentifier.of("DSC-1"), bindings, hasEvent: false });
+    const scs = DesignScenarioDeclarations.of([]).add(sc);
     expect([...scs]).toEqual([sc]);
     expect(scs.toArray()).toEqual([sc]);
 
-    const bg = DesignBackgroundDecl.of({ id: DesignBackgroundId.of("DBG-1") });
-    const bgs = DesignBackgroundDecls.of([]).add(bg);
+    const bg = DesignBackgroundDeclaration.of({ id: DesignBackgroundIdentifier.of("DBG-1") });
+    const bgs = DesignBackgroundDeclarations.of([]).add(bg);
     expect([...bgs]).toEqual([bg]);
     expect(bgs.toArray()).toEqual([bg]);
 
-    const ud = DesignUnitDecl.of({
-      unit: DesignUnitId.of("u1"),
+    const ud = DesignUnitDeclaration.of({
+      unit: DesignUnitIdentifier.of("u1"),
       entities,
       obligations: obs,
       stateMachines: sms,
@@ -941,7 +900,7 @@ describe("design decl collections (first-class operations)", () => {
       directoryExists: true,
       rulesMarkdown: null,
     });
-    const uds = DesignUnitDecls.of([]).add(ud);
+    const uds = DesignUnitDeclarations.of([]).add(ud);
     expect([...uds]).toEqual([ud]);
     expect(uds.toArray()).toEqual([ud]);
   });
@@ -949,58 +908,58 @@ describe("design decl collections (first-class operations)", () => {
 
 describe("contract-1 decl collections (first-class operations)", () => {
   test("of/add/iterator/toArray hold declaration order across the Ir bundle", () => {
-    const values = IrDeclaredValues.of((["a"]).map((value) => EnumMember.of(value))).add(EnumMember.of("b"));
+    const values = EnumerationMembers.of((["a"]).map((value) => EnumerationMember.of(value))).add(EnumerationMember.of("b"));
     expect([...values].map((value) => value.asString())).toEqual(["a", "b"]);
     expect(values.includes("b")).toBe(true);
     expect(values.includes("z")).toBe(false);
     expect(values.toArray().map((value) => value.asString())).toEqual(["a", "b"]);
 
-    const attr = IrAttributeDecl.of({ name: IrAttributeName.of("x"), kind: AttributeKind.of("bool") });
-    const attrs = IrAttributeDecls.of([]).add(attr);
+    const attr = IntermediateRepresentationAttributeDeclaration.of({ name: IntermediateRepresentationAttributeName.of("x"), kind: AttributeKind.of("bool") });
+    const attrs = IntermediateRepresentationAttributeDeclarations.of([]).add(attr);
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
 
-    const ent = IrEntityDecl.of({ name: IrEntityName.of("t"), attributes: attrs });
-    const ents = IrEntityDecls.of([]).add(ent);
+    const ent = IntermediateRepresentationEntityDeclaration.of({ name: IntermediateRepresentationEntityName.of("t"), attributes: attrs });
+    const ents = IntermediateRepresentationEntityDeclarations.of([]).add(ent);
     expect([...ents]).toEqual([ent]);
     expect(ents.toArray()).toEqual([ent]);
 
-    const ob = IrObligationDecl.of({ id: ObligationId.of("OB-1") });
-    const obs = IrObligationDecls.of([]).add(ob);
+    const ob = IntermediateRepresentationObligationDeclaration.of({ id: ObligationIdentifier.of("OB-1") });
+    const obs = IntermediateRepresentationObligationDeclarations.of([]).add(ob);
     expect([...obs]).toEqual([ob]);
     expect(obs.toArray()).toEqual([ob]);
 
-    const pairs = DeclaredBindings.of([BindingDeclaration.of(AttributePath.of("t.x"), DeclaredBindingValue.of(true))]).add(BindingDeclaration.of(AttributePath.of("t.y"), DeclaredBindingValue.of(1)));
+    const pairs = DeclaredBindings.of([BindingDeclaration.of(AttributePath.of("t.x"), DeclaredBindingValue.of(Declaration.of(true)))]).add(BindingDeclaration.of(AttributePath.of("t.y"), DeclaredBindingValue.of(Declaration.of(1))));
     expect([...pairs].map((binding) => [binding.path().asString(), JSON.parse(binding.value().describe())])).toEqual([
       ["t.x", true],
       ["t.y", 1],
     ]);
     expect(pairs.toArray().length).toBe(2);
 
-    const sc = IrScenarioDecl.of({ id: ScenarioId.of("SC-1"), bindings: pairs, hasEvent: false });
-    const scs = IrScenarioDecls.of([]).add(sc);
+    const sc = IntermediateRepresentationScenarioDeclaration.of({ id: ScenarioIdentifier.of("SC-1"), bindings: pairs, hasEvent: false });
+    const scs = IntermediateRepresentationScenarioDeclarations.of([]).add(sc);
     expect([...scs]).toEqual([sc]);
     expect(scs.toArray()).toEqual([sc]);
 
-    const bg = IrBackgroundDecl.of({ id: BackgroundAssumptionId.of("BG-1") });
-    const bgs = IrBackgroundDecls.of([]).add(bg);
+    const bg = IntermediateRepresentationBackgroundDeclaration.of({ id: BackgroundAssumptionIdentifier.of("BG-1") });
+    const bgs = IntermediateRepresentationBackgroundDeclarations.of([]).add(bg);
     expect([...bgs]).toEqual([bg]);
     expect(bgs.toArray()).toEqual([bg]);
   });
 });
 
 describe("decl name primitives and the shared bound (issue #46 wave 5c-2)", () => {
-  test("IrEntityName / IrAttributeName parse-reject the empty token and rehydrate verbatim", () => {
-    expect(IrEntityName.parse("").ok).toBe(false);
-    const en = IrEntityName.parse("order");
+  test("IntermediateRepresentationEntityName / IntermediateRepresentationAttributeName parse-reject the empty token and rehydrate verbatim", () => {
+    expect(IntermediateRepresentationEntityName.parse("").ok).toBe(false);
+    const en = IntermediateRepresentationEntityName.parse("order");
     if (!en.ok) throw new Error("unreachable");
-    expect(en.value.equals(IrEntityName.of("order"))).toBe(true);
+    expect(en.value.equals(IntermediateRepresentationEntityName.of("order"))).toBe(true);
     expect(en.value.asString()).toBe("order");
 
-    expect(IrAttributeName.parse("").ok).toBe(false);
-    const an = IrAttributeName.parse("qty");
+    expect(IntermediateRepresentationAttributeName.parse("").ok).toBe(false);
+    const an = IntermediateRepresentationAttributeName.parse("qty");
     if (!an.ok) throw new Error("unreachable");
-    expect(an.value.equals(IrAttributeName.of("qty"))).toBe(true);
+    expect(an.value.equals(IntermediateRepresentationAttributeName.of("qty"))).toBe(true);
     expect(an.value.asString()).toBe("qty");
   });
 
@@ -1019,12 +978,12 @@ describe("materials aggregates and the persistence round-trip (repository ruling
     expect(msgs.toArray().map((value) => value.asString())).toEqual(["a", "b"]);
   });
 
-  test("IrValidationMaterialsId / DesignIrValidationMaterialsId anchor 1:1 to the model id", () => {
-    const rid = IrValidationMaterialsId.ofModel(FormalModelId.of(ap("/r/x.md")));
-    expect(rid.equals(IrValidationMaterialsId.ofModel(FormalModelId.of(ap("/r/x.md"))))).toBe(true);
+  test("IntermediateRepresentationValidationMaterialsIdentifier / DesignIntermediateRepresentationValidationMaterialsIdentifier anchor 1:1 to the model id", () => {
+    const rid = IntermediateRepresentationValidationMaterialsIdentifier.of(FormalModelIdentifier.of(ap("/r/x.md")));
+    expect(rid.equals(IntermediateRepresentationValidationMaterialsIdentifier.of(FormalModelIdentifier.of(ap("/r/x.md"))))).toBe(true);
     expect(rid.modelId().artifactPath().asString()).toBe("/r/x.md");
-    const did = DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap("/r/y.md")));
-    expect(did.equals(DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap("/r/y.md"))))).toBe(true);
+    const did = DesignIntermediateRepresentationValidationMaterialsIdentifier.of(DesignModelIdentifier.of(ap("/r/y.md")));
+    expect(did.equals(DesignIntermediateRepresentationValidationMaterialsIdentifier.of(DesignModelIdentifier.of(ap("/r/y.md"))))).toBe(true);
     expect(did.modelId().artifactPath().asString()).toBe("/r/y.md");
   });
 
@@ -1035,8 +994,8 @@ describe("materials aggregates and the persistence round-trip (repository ruling
     const irDoc = '# model\n\n```json\n{"irVersion":"1.0.0","entities":[],"obligations":[],"scenarios":[]}\n```\n';
     const modelPath = join(stage, "deep-spec-analysis-formal-model.md");
     writeFileSync(modelPath, irDoc);
-    const repo = new IrValidationMaterialsRepositoryImpl({ schemaPath: irSchemaPath });
-    const found = repo.findById(IrValidationMaterialsId.ofModel(FormalModelId.of(ap(modelPath))));
+    const repo = new IntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath: irSchemaPath });
+    const found = repo.findById(IntermediateRepresentationValidationMaterialsIdentifier.of(FormalModelIdentifier.of(ap(modelPath))));
     expect(found.ok).toBe(true);
     if (!found.ok) return;
     expect(Buffer.from(found.value.sourceDocument()).toString("utf-8")).toBe(irDoc);
@@ -1046,14 +1005,14 @@ describe("materials aggregates and the persistence round-trip (repository ruling
     expect(readFileSync(modelPath, "utf-8")).toBe(irDoc);
     expect(found.value.irVersion().asString()).toBe("1.0.0");
     expect(Array.isArray(found.value.schemaErrors().toArray())).toBe(true);
-    expect(found.value.frReferenceIndex()).toBeDefined();
+    expect(found.value.functionalRequirementReferenceIndex()).toBeDefined();
 
     // design 側も同じ往復則。
     const dDoc = '# design\n\n```json\n{"irVersion":"1.0.0","units":[]}\n```\n';
     const dPath = join(stage, "deep-spec-analysis-functional-formal-model.md");
     writeFileSync(dPath, dDoc);
-    const dRepo = new DesignIrValidationMaterialsRepositoryImpl({ schemaPath: designSchemaPath });
-    const dId = DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap(dPath)));
+    const dRepo = new DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath: designSchemaPath });
+    const dId = DesignIntermediateRepresentationValidationMaterialsIdentifier.of(DesignModelIdentifier.of(ap(dPath)));
     const dFound = dRepo.findById(dId);
     expect(dFound.ok).toBe(true);
     if (!dFound.ok) return;
@@ -1066,7 +1025,7 @@ describe("materials aggregates and the persistence round-trip (repository ruling
   });
 
   test("FunctionalRequirementReferenceClaims first-class collection feeds the reverse index", () => {
-    const claims = FunctionalRequirementReferenceClaims.of([]).add(FunctionalRequirementReferenceClaim.of("OB-1", FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw)))));
+    const claims = FunctionalRequirementReferenceClaims.of([]).add(FunctionalRequirementReferenceClaim.of("OB-1", FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)))));
     expect([...claims].length).toBe(1);
     const owners = new Map<string, FunctionalRequirementReferenceClaim[]>();
     claims.toArray()[0]?.claimInto(owners);
@@ -1080,14 +1039,14 @@ describe("repository read failures keep the Result contract (PR#58 review)", () 
     const stage = join(record, "construction", "deep-spec-analysis-verify");
     // 成果物名のディレクトリ: existsSync は真だが readFileSync は EISDIR。
     mkdirSync(join(stage, "deep-spec-analysis-formal-model.md"), { recursive: true });
-    const found = new IrValidationMaterialsRepositoryImpl({ schemaPath: irSchemaPath }).findById(
-      IrValidationMaterialsId.ofModel(FormalModelId.of(ap(join(stage, "deep-spec-analysis-formal-model.md")))),
+    const found = new IntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath: irSchemaPath }).findById(
+      IntermediateRepresentationValidationMaterialsIdentifier.of(FormalModelIdentifier.of(ap(join(stage, "deep-spec-analysis-formal-model.md")))),
     );
     expect(!found.ok && found.error.kind).toBe("io-failed");
 
     mkdirSync(join(stage, "deep-spec-analysis-functional-formal-model.md"), { recursive: true });
-    const dFound = new DesignIrValidationMaterialsRepositoryImpl({ schemaPath: designSchemaPath }).findById(
-      DesignIrValidationMaterialsId.ofModel(DesignModelId.of(ap(join(stage, "deep-spec-analysis-functional-formal-model.md")))),
+    const dFound = new DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath: designSchemaPath }).findById(
+      DesignIntermediateRepresentationValidationMaterialsIdentifier.of(DesignModelIdentifier.of(ap(join(stage, "deep-spec-analysis-functional-formal-model.md")))),
     );
     expect(!dFound.ok && dFound.error.kind).toBe("io-failed");
     rmSync(record, { recursive: true, force: true });
@@ -1096,7 +1055,7 @@ describe("repository read failures keep the Result contract (PR#58 review)", () 
   test("a directory squatting on requirements.md classifies as io-failed", () => {
     const record = join(tmpdir(), `deep-spec-src-iofail-${Math.random().toString(36).slice(2)}`);
     mkdirSync(join(record, "inception", "requirements-analysis", "requirements.md"), { recursive: true });
-    const source = new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ap(record)));
+    const source = new RequirementsSourceRepositoryImplementation().findById(RequirementsSourceIdentifier.of(ap(record)));
     expect(!source.ok && source.error.kind).toBe("io-failed");
     rmSync(record, { recursive: true, force: true });
   });
@@ -1109,8 +1068,8 @@ describe("store faces on the workflow-authored aggregates (owner ruling: writabl
     const doc = '# m\n\n```json\n{"irVersion":"1.0.0","schema":{"entities":[]},"obligations":[],"scenarios":[]}\n```\n';
     const mPath = join(record, "deep-spec-analysis-formal-model.md");
     writeFileSync(mPath, doc);
-    const repo = new FormalModelRepositoryImpl();
-    const found = repo.findById(FormalModelId.of(ap(mPath)));
+    const repo = new FormalModelRepositoryImplementation();
+    const found = repo.findById(FormalModelIdentifier.of(ap(mPath)));
     expect(found.ok).toBe(true);
     if (!found.ok) return;
     expect(Buffer.from(found.value.sourceDocument()).toString("utf-8")).toBe(doc);
@@ -1125,8 +1084,8 @@ describe("store faces on the workflow-authored aggregates (owner ruling: writabl
     );
     const dPath = join(record, "deep-spec-analysis-functional-formal-model.md");
     writeFileSync(dPath, dDoc);
-    const dRepo = new DesignModelRepositoryImpl();
-    const dFound = dRepo.findById(DesignModelId.of(ap(dPath)));
+    const dRepo = new DesignModelRepositoryImplementation();
+    const dFound = dRepo.findById(DesignModelIdentifier.of(ap(dPath)));
     expect(dFound.ok).toBe(true);
     if (!dFound.ok) return;
     rmSync(dPath);
@@ -1140,8 +1099,8 @@ describe("store faces on the workflow-authored aggregates (owner ruling: writabl
     const srcPath = join(record, "inception", "requirements-analysis", "requirements.md");
     mkdirSync(dirname(srcPath), { recursive: true });
     writeFileSync(srcPath, "- FR-1: x\n");
-    const repo = new RequirementsSourceRepositoryImpl();
-    const found = repo.findById(RequirementsSourceId.of(ap(record)));
+    const repo = new RequirementsSourceRepositoryImplementation();
+    const found = repo.findById(RequirementsSourceIdentifier.of(ap(record)));
     expect(found.ok).toBe(true);
     if (!found.ok) return;
     expect(found.value.sourcePath().asString()).toBe(srcPath);
@@ -1162,8 +1121,8 @@ describe("byte-fidelity and mutation safety of the store faces (PR#58 review)", 
     const raw = Buffer.concat([head, fence]);
     const modelPath = join(stage, "deep-spec-analysis-formal-model.md");
     writeFileSync(modelPath, raw);
-    const repo = new IrValidationMaterialsRepositoryImpl({ schemaPath: irSchemaPath });
-    const found = repo.findById(IrValidationMaterialsId.ofModel(FormalModelId.of(ap(modelPath))));
+    const repo = new IntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath: irSchemaPath });
+    const found = repo.findById(IntermediateRepresentationValidationMaterialsIdentifier.of(FormalModelIdentifier.of(ap(modelPath))));
     expect(found.ok).toBe(true);
     if (!found.ok) return;
     rmSync(modelPath);
@@ -1177,11 +1136,11 @@ describe("byte-fidelity and mutation safety of the store faces (PR#58 review)", 
     const srcPath = join(record, "inception", "requirements-analysis", "requirements.md");
     mkdirSync(dirname(srcPath), { recursive: true });
     writeFileSync(srcPath, "- FR-1: x\n");
-    const repo = new RequirementsSourceRepositoryImpl();
-    const found = repo.findById(RequirementsSourceId.of(ap(record)));
+    const repo = new RequirementsSourceRepositoryImplementation();
+    const found = repo.findById(RequirementsSourceIdentifier.of(ap(record)));
     expect(found.ok).toBe(true);
     if (!found.ok) return;
-    expect(found.value.id().equals(RequirementsSourceId.of(ap(record)))).toBe(true);
+    expect(found.value.id().equals(RequirementsSourceIdentifier.of(ap(record)))).toBe(true);
     expect(found.value.digest().asString().length).toBe(64);
     const view = found.value.sourceDocument();
     view.fill(0);
@@ -1201,13 +1160,13 @@ describe("unreadable-artifact degradation pins (thaw #38 item 3 — resolved by 
     mkdirSync(irDir);
     mkdirSync(designDir);
     try {
-      const ir = irUseCase().execute(FormalModelId.of(ap(irDir)));
+      const ir = irUseCase().execute(FormalModelIdentifier.of(ap(irDir)));
       expect(ir.kind).toBe("verdict");
       if (ir.kind === "verdict") {
         expect(ir.pass).toBe(false);
         expect(ir.errors.join("\n")).toContain("EISDIR");
       }
-      const design = designUseCase().execute(DesignModelId.of(ap(designDir)));
+      const design = designUseCase().execute(DesignModelIdentifier.of(ap(designDir)));
       expect(design.kind).toBe("verdict");
       if (design.kind === "verdict") {
         expect(design.pass).toBe(false);

@@ -1,12 +1,12 @@
 import { type Json, type Result, err, isObject, ok } from "@deep-spec/kernel-infrastructure";
-import type { SmtChildResult } from "./smt-child-result.ts";
+import type { SatisfiabilityModuloTheoriesChildResult } from "./satisfiability-modulo-theories-child-result.ts";
 
 // 子プロセスの応答を、発行済みクエリと一対一に対応する結果集合へ復号する。
 // ドメイン生成のpanicは捕捉せず、外部プロトコルの不正をResultで返す。
-export function parseSmtChildResults(raw: Json, expectedIds: readonly string[]): Result<Map<string, SmtChildResult>, string> {
+export function parseSmtChildResults(raw: Json, expectedIds: readonly string[]): Result<Map<string, SatisfiabilityModuloTheoriesChildResult>, string> {
   if (!isObject(raw) || !Array.isArray(raw.results)) return err("solver child response lacks a results array");
   const expected = new Set(expectedIds);
-  const results = new Map<string, SmtChildResult>();
+  const results = new Map<string, SatisfiabilityModuloTheoriesChildResult>();
   for (const item of raw.results) {
     if (!isObject(item) || typeof item.id !== "string") return err("solver child result lacks a query id");
     if (!expected.has(item.id)) return err(`solver child returned unexpected query ${item.id}`);

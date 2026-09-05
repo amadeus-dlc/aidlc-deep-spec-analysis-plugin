@@ -4,11 +4,11 @@ export class EntityReferences {
   readonly #values: readonly EntityReference[];
 
   private constructor(values: readonly EntityReference[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly EntityReference[]): EntityReferences {
-    return new EntityReferences([...values]);
+    return new EntityReferences(values);
   }
 
   add(value: EntityReference): EntityReferences {

@@ -1,4 +1,4 @@
-import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import type { ErrorMessage } from "./error-message.ts";
 
 // 診断の発生順と所有権を保持する。文字列の構築契約はErrorMessageが担う。
@@ -10,6 +10,10 @@ export class ErrorMessages {
     if (values.length > 65_536) throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     // 空配列は「エラーなし」を表す有効な値。
     this.#values = Object.freeze([...values]);
+  }
+
+  static parse(values: readonly ErrorMessage[]): Result<ErrorMessages, ParseError> {
+    return parseConstruction(() => new ErrorMessages(values));
   }
 
   static of(values: readonly ErrorMessage[]): ErrorMessages {

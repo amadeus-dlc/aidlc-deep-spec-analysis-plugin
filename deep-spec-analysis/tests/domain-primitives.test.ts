@@ -4,11 +4,11 @@ import {
   FindingKind,
   FindingsSchema,
   FunctionalRequirementReferences,
-  IrVersion,
+  IntermediateRepresentationVersion,
   ContentHash,
   SkipReason,
-  TargetId,
-  TargetIds,
+  TargetIdentifier,
+  TargetIdentifiers,
   VerificationMethod,
 } from "@deep-spec/kernel-domain";
 
@@ -24,7 +24,7 @@ import {
   DesignFinding,
   DesignFindings,
   DesignReport,
-  DesignReportId,
+  DesignReportIdentifier,
   DesignReports,
   DesignSkipped,
   DesignSkips,
@@ -37,13 +37,13 @@ import {
   VerificationFinding,
   VerificationFindings,
   VerificationReport,
-  VerificationReportId,
+  VerificationReportIdentifier,
   VerificationReports,
   VerificationSkips,
   VerificationWitness,
 } from "@deep-spec/requirements-domain";
-import { Finding, Findings, InputAnchors, ReferenceCheckReport, ReferenceCheckReportId, Skips, WitnessRefs } from "@deep-spec/refcheck-domain";
-import { ReferenceCheckReportRepositoryImpl } from "@deep-spec/refcheck-adapter";
+import { Finding, Findings, InputAnchors, ReferenceCheckReport, ReferenceCheckReportIdentifier, Skips, WitnessReferences } from "@deep-spec/refcheck-domain";
+import { ReferenceCheckReportRepositoryImplementation } from "@deep-spec/refcheck-adapter";
 
 const findingsSchemaPath = join(
   dirname(fileURLToPath(import.meta.url)), "..", "src", "entries", "data", "deep-spec-findings-schema.json",
@@ -78,8 +78,8 @@ function designPath(raw: string): ArtifactPath {
 
 function reportOf(directory: ArtifactPath, backend: string, method = "exhaustive"): DesignReport {
   return DesignReport.compose({
-    id: DesignReportId.of(directory, backend),
-    irVersion: IrVersion.of("1.0.0"),
+    id: DesignReportIdentifier.of(directory, backend),
+    irVersion: IntermediateRepresentationVersion.of("1.0.0"),
     irHash: ContentHash.ofText("ir"),
     method,
     findings: DesignFindings.of([]),
@@ -90,8 +90,8 @@ function reportOf(directory: ArtifactPath, backend: string, method = "exhaustive
 function designReportOf(findings: readonly DesignFinding[]): DesignReport {
   const directory = designPath("/records/deep-spec-design-verify");
   return DesignReport.compose({
-    id: DesignReportId.of(directory, "smt"),
-    irVersion: IrVersion.of("1.0.0"),
+    id: DesignReportIdentifier.of(directory, "smt"),
+    irVersion: IntermediateRepresentationVersion.of("1.0.0"),
     irHash: ContentHash.ofText("ir"),
     method: "exhaustive",
     findings: DesignFindings.of(findings),
@@ -194,13 +194,13 @@ describe("finding kind の strict creation は未知 kind を受け付けない 
     for (const kind of factories) expect(FindingKind.parse(kind.asString()).ok).toBe(true);
 
     // 生の string は 3 クラスのどの正常生成口にも渡らない（型で弾かれる）。
-    const designProps = { functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: DesignWitness.core([]), unit: UnitName.of("u1"), detail: "d" };
+    const designProps = { functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))), witness: DesignWitness.core([]), unit: UnitName.of("u1"), detail: "d" };
     // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
     DesignFinding.of({ kind: "no-such-kind", ...designProps });
     // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
-    VerificationFinding.of({ kind: "no-such-kind", functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: VerificationWitness.core([]), detail: "d" });
+    VerificationFinding.of({ kind: "no-such-kind", functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))), witness: VerificationWitness.core([]), detail: "d" });
     // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
-    Finding.of({ kind: "no-such-kind", functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
+    Finding.of({ kind: "no-such-kind", functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))), witness: { refs: WitnessReferences.of([]) }, detail: "DD-0: x" });
 
     // 検証済み kind を渡した正常生成は、その kind をそのまま持つ。
     expect(DesignFinding.of({ kind: FindingKind.conflict(), ...designProps }).kind()).toBe("conflict");
@@ -229,8 +229,8 @@ describe("未知 kind は既存文書からも生成できず、診断に原文�
           skipped: [],
         }),
       );
-      const repository = new ReferenceCheckReportRepositoryImpl();
-      const found = repository.findById(ReferenceCheckReportId.of(refcheckPath(dir), "components"));
+      const repository = new ReferenceCheckReportRepositoryImplementation();
+      const found = repository.findById(ReferenceCheckReportIdentifier.of(refcheckPath(dir), "components"));
       expect(found.ok).toBe(false);
       if (!found.ok) {
         expect(found.error.kind).toBe("corrupt");
@@ -273,7 +273,7 @@ describe("FindingsSchema は契約2 の適合判定を値として持つ", () =>
       DesignFinding.of({
         kind: FindingKind.conflict(),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-        targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))),
+        targets: TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))),
         witness: DesignWitness.core([]),
         unit: UnitName.of("u1"),
         detail: "from the future",
@@ -299,9 +299,9 @@ describe("ReferenceCheckReport.conformedTo は契約2 の適合判定を集約�
     const schema = FindingsSchema.of({ type: "object", properties: { findings: { type: "array", maxItems: 0 } } });
 
     const clean = ReferenceCheckReport.of({
-      id: ReferenceCheckReportId.of(refcheckPath("/tmp/r"), "components"),
+      id: ReferenceCheckReportIdentifier.of(refcheckPath("/tmp/r"), "components"),
       inputs: InputAnchors.of([]),
-      checked: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))),
+      checked: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
       findings: Findings.of([]),
       skipped: Skips.of([]),
       unavailableReason: null,
@@ -309,15 +309,15 @@ describe("ReferenceCheckReport.conformedTo は契約2 の適合判定を集約�
     expect(clean.conformedTo(schema)).toBe(clean);
 
     const violating = ReferenceCheckReport.of({
-      id: ReferenceCheckReportId.of(refcheckPath("/tmp/r"), "components"),
+      id: ReferenceCheckReportIdentifier.of(refcheckPath("/tmp/r"), "components"),
       inputs: InputAnchors.of([]),
-      checked: TargetIds.of([]),
+      checked: TargetIdentifiers.of([]),
       findings: Findings.of([
         Finding.of({
           kind: FindingKind.conflict(),
           functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-          targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))),
-          witness: { refs: WitnessRefs.of([]) },
+          targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+          witness: { refs: WitnessReferences.of([]) },
           detail: "DD-0: from the future",
         }),
       ]),
@@ -383,8 +383,8 @@ describe("DesignVerifyDirectory は backend ごとに 1 report という不変�
 // テスト用: 要件 report の短縮構築（識別と method 以外は空）。
 function verificationReportOf(directory: ArtifactPath, backend: string, method = "exhaustive"): VerificationReport {
   return VerificationReport.compose({
-    id: VerificationReportId.of(directory, backend),
-    irVersion: IrVersion.of("1.0.0"),
+    id: VerificationReportIdentifier.of(directory, backend),
+    irVersion: IntermediateRepresentationVersion.of("1.0.0"),
     irHash: ContentHash.ofText("ir"),
     method,
     findings: VerificationFindings.of([]),

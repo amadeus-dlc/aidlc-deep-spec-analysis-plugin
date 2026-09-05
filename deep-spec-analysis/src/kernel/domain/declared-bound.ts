@@ -6,12 +6,18 @@ import { parseConstruction, type ParseError, type Result } from "@deep-spec/kern
 export class DeclaredBound {
   readonly #value: number;
 
-  private constructor(value: Parameters<typeof DeclaredBound.of>[0]) { this.#value = value; }
+  private constructor(value: number) {
+    this.#value = value;
+  }
 
-  static of(value: number): DeclaredBound { return new DeclaredBound(value); }
+  static of(value: number): DeclaredBound {
+    return new DeclaredBound(value);
+  }
 
   // 不適合な数値の宣言も診断対象として有効。解析成功と安全な境界値への適合は区別する。
-  static parse(value: number): Result<DeclaredBound, ParseError> { return parseConstruction(() => new DeclaredBound(value)); }
+  static parse(value: number): Result<DeclaredBound, ParseError> {
+    return parseConstruction(() => new DeclaredBound(value));
+  }
 
   asNumber(): number { return this.#value; }
 

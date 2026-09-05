@@ -14,16 +14,16 @@
 
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DirectoryFinalizationLock, parseFlags, readContractSchema } from "@deep-spec/kernel-adapter";
-import { ArtifactPath, FindingsSchema } from "@deep-spec/kernel-domain";
-import { DesignModelId } from "@deep-spec/design-domain";
+import { DirectoryFinalizationLock, parseFlags, readFindingsSchema } from "@deep-spec/kernel-adapter";
+import { ArtifactPath, } from "@deep-spec/kernel-domain";
+import { DesignModelIdentifier } from "@deep-spec/design-domain";
 import { SystemClock } from "@deep-spec/kernel-adapter";
 import { VerifyDesignQuintUseCase } from "@deep-spec/design-usecase";
 import {
-  DesignModelRepositoryImpl,
-  DesignVerifyDirectoryRepositoryImpl,
-  RefinementMaterialsRepositoryImpl,
-  SiblingBackendClientImpl,
+  DesignModelRepositoryImplementation,
+  DesignVerifyDirectoryRepositoryImplementation,
+  RefinementMaterialsRepositoryImplementation,
+  SiblingBackendClientImplementation,
 } from "@deep-spec/design-adapter";
 
 const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
@@ -44,13 +44,10 @@ function main(): void {
   const toolsDir = dirname(fileURLToPath(import.meta.url));
   // 契約2 のスキーマは合成ルートが一度だけ読む。読めなければ「読めなかった」
   // 変種として値に載せ、以後の適合判定はこの 1 つの値からだけ導く（BR1.1）。
-  const findingsSchemaFile = readContractSchema(join(toolsDir, "data", "deep-spec-findings-schema.json"));
-  const findingsSchema = findingsSchemaFile.ok
-    ? FindingsSchema.of(findingsSchemaFile.value)
-    : FindingsSchema.unreadable(findingsSchemaFile.error.cause);
+  const findingsSchema = readFindingsSchema(join(toolsDir, "data", "deep-spec-findings-schema.json"));
   const useCase = new VerifyDesignQuintUseCase(
-    new DesignModelRepositoryImpl(),
-    new DesignVerifyDirectoryRepositoryImpl(
+    new DesignModelRepositoryImplementation(),
+    new DesignVerifyDirectoryRepositoryImplementation(
       // finalization の directory lock は「実時計」と「実 PID／OS liveness
       // probe」を要る。process.* は合成ルートだけが触れてよいので、ここで
       // 組み立てて注入する（ESRCH=不在確定、EPERM=存在確定、他は不明）。
@@ -70,19 +67,19 @@ function main(): void {
       }),
     ),
     findingsSchema,
-    new SiblingBackendClientImpl({
+    new SiblingBackendClientImplementation({
       siblingToolPaths: {
         smt: join(toolsDir, "aidlc-sensor-deep-spec-verify-smt.ts"),
         quint: join(toolsDir, "aidlc-sensor-deep-spec-verify-quint.ts"),
       },
       workingDirectory: process.cwd(),
     }),
-    new RefinementMaterialsRepositoryImpl(join(toolsDir, "data", "deep-spec-refinement-map-schema.json")),
+    new RefinementMaterialsRepositoryImplementation(join(toolsDir, "data", "deep-spec-refinement-map-schema.json")),
     new SystemClock(),
     Number(process.env.AIDLC_DEEP_SPEC_QUINT_UNREACH_CAP) || 2,
   );
   const outcome = useCase.execute({
-    modelId: DesignModelId.of(target.value),
+    modelId: DesignModelIdentifier.of(target.value),
     verifyDirectory: reportLocation.value,
   });
 

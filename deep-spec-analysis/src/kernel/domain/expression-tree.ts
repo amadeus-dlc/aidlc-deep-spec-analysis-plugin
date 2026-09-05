@@ -1,32 +1,18 @@
 import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import type { Expression } from "./expression.ts";
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, boundedValueSnapshot, canonicalStringify, type Result } from "@deep-spec/kernel-infrastructure";
 
 // 式の木——published language の `Expression`（JSON の形、恒久除外）を包む
 // kernel の値オブジェクト。木の走査・prime 参照の検出・参照パスの列挙・正準
 // 同一性は木自身の知識（種別規律の裁定 2・4、2026-09-02。旧随伴 class
 // `Expressions` と design の `ExpressionCanonicalKey` を吸収）。
 // 境界（JSON・コンパイラ）へは `asExpression` で戻す。
-type CanonicalNode = null | boolean | number | string | readonly CanonicalNode[] | { readonly [k: string]: CanonicalNode };
-
-// kernel/infrastructure の canonicalStringify（正準 JSON）と同一バイト——
-// 同値性は tests が canonicalStringify との突き合わせで機械証明する。
-function canonicalKeyOf(value: CanonicalNode): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalKeyOf).join(",")}]`;
-  }
-  if (typeof value === "object" && value !== null) {
-    const record = value as { readonly [k: string]: CanonicalNode };
-    const keys = Object.keys(record).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalKeyOf(record[k] ?? null)}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
 export class ExpressionTree {
   readonly #root: Expression;
 
-  private constructor(root: Parameters<typeof ExpressionTree.of>[0]) {
+  private constructor(root: Expression) {
+    // 生データを読み直さず、予算内のスナップショットへ固定してから式固有の契約を検査する。
+    const snapshot = boundedValueSnapshot(root, { string: 4096, nodes: 100_000, depth: 258, total: 16_777_216 });
     // コピー前のサイズ契約: 10,000ノード、深さ128、各文字列4,096コード単位。
     let nodes = 0;
     const measure = (node: Expression, depth: number): void => {
@@ -38,10 +24,9 @@ export class ExpressionTree {
       }
       for (const child of node.args ?? []) measure(child, depth + 1);
     };
-    measure(root, 0);
+    measure(snapshot, 0);
     // 入力の所有権を引き取らず、独立した不変の木を持つ。寛容な復元が運ぶ
     // 未知のキーや不正な形も、正規化せずコピーする。
-    const snapshot = structuredClone(root);
     const visited = new WeakSet<object>();
     const freeze = (value: object): void => {
       if (visited.has(value)) return;
@@ -59,7 +44,9 @@ export class ExpressionTree {
     return new ExpressionTree(root);
   }
 
-  static parse(root: Expression): Result<ExpressionTree, ParseError> { return parseConstruction(() => new ExpressionTree(root)); }
+  static parse(root: Expression): Result<ExpressionTree, ParseError> {
+    return parseConstruction(() => new ExpressionTree(root));
+  }
 
   asExpression(): Expression {
     return this.#root;
@@ -103,6 +90,6 @@ export class ExpressionTree {
 
   // 正準同一性——shadow（包摂）検出が「効果が同一か」を判定する比較。
   isCanonicallyEqual(other: ExpressionTree): boolean {
-    return canonicalKeyOf(this.#root as unknown as CanonicalNode) === canonicalKeyOf(other.#root as unknown as CanonicalNode);
+    return canonicalStringify(this.#root) === canonicalStringify(other.#root);
   }
 }

@@ -3,23 +3,33 @@
 // （オーナー裁定 7 — expr/enumMap の Option 対を型で畳む）。"unspecified" は
 // 契約4 スキーマ検証を通った文書では到達しない素通し形（旧実装は expr も
 // enumMap も無い entry を byReq へ登録だけしていた——挙動保存のため表現を残す。
-// alpha 到達時は RefinementMapDefect）。ユニットの帰属は DesignUnitId（集約 ID）で運び、
+// alpha 到達時は RefinementMapDefect）。ユニットの帰属は DesignUnitIdentifier（集約 ID）で運び、
 // 集まりはファーストクラスコレクションで運ぶ。
 
-import { DesignUnitId } from "@deep-spec/design-domain";
-import type { RefinementMapId } from "./refinement-map-id.ts";
+import { DesignUnitIdentifier } from "@deep-spec/design-domain";
+import type { RefinementMapIdentifier } from "./refinement-map-identifier.ts";
 import type { ContentHash } from "@deep-spec/kernel-domain";
 import type { RefinementUnitMap } from "./refinement-unit-map.ts";
 import { RefinementUnitMaps } from "./refinement-unit-maps.ts";
 
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type RefinementMapParam = {
+  readonly id: RefinementMapIdentifier;
+  readonly requirementsIrHash: ContentHash;
+  readonly designIrHash: ContentHash;
+  readonly units: RefinementUnitMaps;
+  // 成果物の原文（原文材料——store の往復則 findById∘store がバイト恒等）。
+  readonly sourceDocument: Uint8Array;
+};
+
 export class RefinementMap {
-  readonly #id: RefinementMapId;
+  readonly #id: RefinementMapIdentifier;
   readonly #requirementsIrHash: ContentHash;
   readonly #designIrHash: ContentHash;
   readonly #units: RefinementUnitMaps;
   readonly #sourceDocument: Uint8Array;
 
-  private constructor(seed: Parameters<typeof RefinementMap.of>[0]) {
+  private constructor(seed: RefinementMapParam) {
     this.#id = seed.id;
     this.#requirementsIrHash = seed.requirementsIrHash;
     this.#designIrHash = seed.designIrHash;
@@ -28,19 +38,12 @@ export class RefinementMap {
   }
 
   // アダプタのパーサ（契約4 スキーマ検証済み）からの唯一の構築口。
-  static of(seed: {
-    readonly id: RefinementMapId;
-    readonly requirementsIrHash: ContentHash;
-    readonly designIrHash: ContentHash;
-    readonly units: RefinementUnitMaps;
-    // 成果物の原文（原文材料——store の往復則 findById∘store がバイト恒等）。
-    readonly sourceDocument: Uint8Array;
-  }): RefinementMap {
+  static of(seed: RefinementMapParam): RefinementMap {
     return new RefinementMap(seed);
   }
 
   // 境界: 要件形式モデルの hash と照合される宣言値（陳腐化検出）。
-  id(): RefinementMapId {
+  id(): RefinementMapIdentifier {
     return this.#id;
   }
 
@@ -57,7 +60,7 @@ export class RefinementMap {
     return this.#units;
   }
 
-  unitMapOf(unit: DesignUnitId): RefinementUnitMap | undefined {
+  unitMapOf(unit: DesignUnitIdentifier): RefinementUnitMap | undefined {
     return this.#units.mapOf(unit);
   }
 

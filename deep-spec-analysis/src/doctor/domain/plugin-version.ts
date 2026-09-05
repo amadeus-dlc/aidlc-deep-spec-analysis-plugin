@@ -21,7 +21,9 @@ export class PluginVersion {
     this.#patch = BigInt(patch);
   }
 
-  static of(raw: string): PluginVersion { return new PluginVersion(raw); }
+  static of(raw: string): PluginVersion {
+    return new PluginVersion(raw);
+  }
 
   static parse(raw: string): Result<PluginVersion, ParseError> {
     return parseConstruction(() => new PluginVersion(raw));

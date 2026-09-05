@@ -5,37 +5,25 @@ import type { ParseError } from "@deep-spec/kernel-infrastructure";
 // 値自身の知識で、評価器（QuintMachineComponent）はこれを問うだけ。中身の形
 // は ITF が決める JSON 値で、文書へは `toDocument` で逐語に降りる。
 
-import { assertValueSize, parseConstruction, type Result, } from "@deep-spec/kernel-infrastructure";
+import { boundedValueSnapshot, parseConstruction, type Result, } from "@deep-spec/kernel-infrastructure";
 
-type Decoded = null | boolean | number | string | readonly Decoded[] | { readonly [k: string]: Decoded };
+type TraceValueParam = null | boolean | number | string | readonly TraceValueParam[] | { readonly [k: string]: TraceValueParam };
 
 export class TraceValue {
-  readonly #value: Decoded;
+  readonly #value: TraceValueParam;
 
-  private constructor(value: Parameters<typeof TraceValue.of>[0]) {
+  private constructor(value: TraceValueParam) {
     // 証拠値の処理予算: 100,000ノード、深さ128、文字列65,536、全テキスト16Miコード単位。
-    assertValueSize(value, { string: 65_536, nodes: 100_000, depth: 128, total: 16_777_216 });
-    this.#value = structuredClone(value);
+    this.#value = boundedValueSnapshot(value, { string: 65_536, nodes: 100_000, depth: 128, total: 16_777_216 });
   }
 
   // 復号器（adapter）と scenario binding からの門。
-  static of(value: Decoded): TraceValue {
+  static of(value: TraceValueParam): TraceValue {
     return new TraceValue(value);
   }
 
-  static parse(value: Decoded): Result<TraceValue, ParseError> { return parseConstruction(() => new TraceValue(value)); }
-
-  // 式のリテラル（`bool` / `int` / `enum`）——値が無ければ null（凍結挙動）。
-  static ofLiteral(value: boolean | number | string | undefined): TraceValue {
-    return new TraceValue(value ?? null);
-  }
-
-  static ofBoolean(value: boolean): TraceValue {
-    return new TraceValue(value);
-  }
-
-  static ofNumber(value: number): TraceValue {
-    return new TraceValue(value);
+  static parse(value: TraceValueParam): Result<TraceValue, ParseError> {
+    return parseConstruction(() => new TraceValue(value));
   }
 
   // 参照先が無い・未知の演算子——寛容評価の null。
@@ -59,7 +47,7 @@ export class TraceValue {
   }
 
   // 境界: 文書（witness の trace／model）へ逐語で降りる。
-  toDocument(): Decoded {
+  toDocument(): TraceValueParam {
     return structuredClone(this.#value);
   }
 }

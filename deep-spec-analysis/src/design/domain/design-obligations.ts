@@ -5,11 +5,11 @@ export class DesignObligations {
   readonly #values: readonly DesignObligation[];
 
   private constructor(values: readonly DesignObligation[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignObligation[]): DesignObligations {
-    return new DesignObligations([...values]);
+    return new DesignObligations(values);
   }
 
   add(value: DesignObligation): DesignObligations {

@@ -17,7 +17,7 @@
 import type { ArtifactPath, ContentHash, FindingsSchema } from "@deep-spec/kernel-domain";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { VerificationReport } from "./verification-report.ts";
-import { VerificationReportId } from "./verification-report-id.ts";
+import { VerificationReportIdentifier } from "./verification-report-identifier.ts";
 import { VerificationReports } from "./verification-reports.ts";
 
 const CROSS_CHECK_BACKEND = "cross-check";
@@ -75,14 +75,14 @@ export class VerificationDirectory {
   finalizedWith(candidate: VerificationReport, model: RequirementsModel | null, schema: FindingsSchema): VerificationDirectory {
     const staged = this.finalizing(candidate.conformedTo(schema));
     if (model === null) return staged;
-    const derived = staged.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
+    const derived = staged.#reports.crossChecked(VerificationReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
     return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
   }
 
   // いまの reports からクロスチェックを導く（同一 irHash の可用文書だけが
   // 比較に参加する規則は VerificationReports が持つ）。
   crossChecked(model: RequirementsModel, irHash: ContentHash): VerificationDirectory {
-    const derived = this.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
+    const derived = this.#reports.crossChecked(VerificationReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
     return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, derived);
   }
 

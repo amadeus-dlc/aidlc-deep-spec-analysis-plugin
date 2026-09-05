@@ -1,5 +1,9 @@
 import { type Result, err, ok } from "./result.ts";
 
+export function flatMapResult<T, U, E>(result: Result<T, E>, next: (value: T) => Result<U, E>): Result<U, E> {
+  return result.ok ? next(result.value) : result;
+}
+
 // Result を値のまま合成する。失敗を例外に変換せず、生成処理のpanicも捕捉しない。
 export function combineResults<T, E>(fields: { [K in keyof T]: Result<T[K], E> }): Result<T, E> {
   const values: Partial<T> = {};

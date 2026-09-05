@@ -1,9 +1,9 @@
 // RefinementMaterials 集約 — Phase 3（refinement）の随伴文脈。恒等は設計
-// モデルへの 1:1 錨着（RefinementMaterialsId）。inactive は適用外（レコード
+// モデルへの 1:1 錨着（RefinementMaterialsIdentifier）。inactive は適用外（レコード
 // ルートまたは要件モデルが存在しない場合）だけを表す。取得失敗や不正入力は
 // Repository port の Result で運び、この集約の正当な状態に混ぜない。
 
-import type { RefinementMaterialsId } from "@deep-spec/design-domain";
+import type { RefinementMaterialsIdentifier } from "@deep-spec/design-domain";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
 import type { RefinementMapAcquisition } from "./refinement-map-acquisition.ts";
 
@@ -12,23 +12,23 @@ type RefinementMaterialsState =
   | { readonly kind: "active"; readonly requirements: RefinementRequirements; readonly map: RefinementMapAcquisition };
 
 export class RefinementMaterials {
-  readonly #id: RefinementMaterialsId;
+  readonly #id: RefinementMaterialsIdentifier;
   readonly #state: RefinementMaterialsState;
 
-  private constructor(id: RefinementMaterialsId, state: RefinementMaterialsState) {
+  private constructor(id: RefinementMaterialsIdentifier, state: RefinementMaterialsState) {
     this.#id = id;
     this.#state = state;
   }
 
-  static inactive(id: RefinementMaterialsId): RefinementMaterials {
+  static inactive(id: RefinementMaterialsIdentifier): RefinementMaterials {
     return new RefinementMaterials(id, { kind: "inactive" });
   }
 
-  static active(id: RefinementMaterialsId, requirements: RefinementRequirements, map: RefinementMapAcquisition): RefinementMaterials {
+  static active(id: RefinementMaterialsIdentifier, requirements: RefinementRequirements, map: RefinementMapAcquisition): RefinementMaterials {
     return new RefinementMaterials(id, { kind: "active", requirements, map });
   }
 
-  id(): RefinementMaterialsId {
+  id(): RefinementMaterialsIdentifier {
     return this.#id;
   }
 

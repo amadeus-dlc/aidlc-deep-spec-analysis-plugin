@@ -1,3 +1,4 @@
+import { ArtifactPath } from "@deep-spec/kernel-domain";
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -11,7 +12,7 @@ import {
   type ReleaseTagsClient,
   type ReleaseTagsRead,
 } from "@deep-spec/doctor-usecase";
-import { DoctorPresenter, GitHubReleaseTagsClientImpl, InstallationProvenanceClientImpl } from "@deep-spec/doctor-adapter";
+import { DoctorPresenter, GitHubReleaseTagsClientImplementation, InstallationProvenanceClientImplementation } from "@deep-spec/doctor-adapter";
 
 class FixedProvenanceClient implements InstallationProvenanceClient {
   readonly #result: InstallationProvenanceRead;
@@ -99,7 +100,7 @@ describe("doctor version advisory", () => {
     const missingRoot = temporaryHarness();
     const missingTags = new FixedReleaseTagsClient({ kind: "available", tags: ["v9.9.9"] });
     const missing = await new CheckVersionAdvisoryUseCase(
-      new InstallationProvenanceClientImpl({ harnessRoot: missingRoot }),
+      new InstallationProvenanceClientImplementation({ harnessRoot: missingRoot }),
       missingTags,
     ).execute();
     const presenter = new DoctorPresenter({ harnessDir: ".claude" });
@@ -117,7 +118,7 @@ describe("doctor version advisory", () => {
     writeFileSync(join(dataDir, "deep-spec-analysis-install.json"), "{not-json\n");
     const malformedTags = new FixedReleaseTagsClient({ kind: "available", tags: ["v9.9.9"] });
     const malformed = await new CheckVersionAdvisoryUseCase(
-      new InstallationProvenanceClientImpl({ harnessRoot: malformedRoot }),
+      new InstallationProvenanceClientImplementation({ harnessRoot: malformedRoot }),
       malformedTags,
     ).execute();
     expect(presenter.version(malformed).toDocument()).toEqual({
@@ -140,13 +141,13 @@ describe("doctor version advisory", () => {
   });
 
   test("GitHub adapter はレスポンスを値へ変換し、HTTP failure も unavailable 値で返す", async () => {
-    const available = new GitHubReleaseTagsClientImpl({
+    const available = new GitHubReleaseTagsClientImplementation({
       repository: "example/repository",
       fetcher: async () => new Response(JSON.stringify([{ name: "v0.5.0" }, { name: "development" }]), { status: 200 }),
     });
     expect(await available.list()).toEqual({ kind: "available", tags: ["v0.5.0", "development"] });
 
-    const unavailable = new GitHubReleaseTagsClientImpl({
+    const unavailable = new GitHubReleaseTagsClientImplementation({
       repository: "example/repository",
       fetcher: async () => new Response("rate limited", { status: 503 }),
     });
@@ -160,7 +161,7 @@ describe("doctor version advisory", () => {
       new FixedReleaseTagsClient({ kind: "available", tags: ["v0.5.0"] }),
     ).execute();
     const verdict = HealthVerdict.of([
-      ...presenter.installation([InstalledStatus.of(ManifestEntry.error("tools/deep-spec-analysis-doctor.ts"), true)]),
+      ...presenter.installation([InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("tools/deep-spec-analysis-doctor.ts")), true)]),
       presenter.version(version),
       ...presenter.solvers(SolverAvailability.of({ z3Package: true, nodeRuntime: true, quintCli: true, apalache: true, apalacheServerStale: false })),
     ]).document();

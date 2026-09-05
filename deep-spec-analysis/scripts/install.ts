@@ -576,7 +576,7 @@ const REMOVED_PAYLOADS: readonly RemovedPayload[] = [
   file("tools", "deep-spec-lib.ts"), // DDD 移行 PR2a で refcheck/ と kernel/ へ解体
   file("tools", "deep-spec-design-lib.ts"), // DDD 移行 PR5 で design/ へ解体
   file("tools", "deep-spec-refinement-lib.ts"), // DDD 移行 PR6 で refinement/ と design/ へ解体
-  file("tools", "design", "domain", "design-temporal-decl.ts"), // TDA 波3 で DesignObligationDecl の構築口へ解散
+  file("tools", "design", "domain", "design-temporal-decl.ts"), // TDA 波3 で DesignObligationDeclaration の構築口へ解散
   // src/bundle 分離: entry は tools/<name>.ts の bundle 済み単一ファイルになり、
   // 層ツリーは配布物から消えた（ソースは src/ にしか無い）。entry のファイル名は
   // 変わらないので旧版の entry は upgrade refresh が現行版へ置き換える——tombstone

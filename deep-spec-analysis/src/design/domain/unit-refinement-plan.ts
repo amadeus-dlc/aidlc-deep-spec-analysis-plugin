@@ -5,8 +5,8 @@ import {
   AttributePath,
   FindingKind,
   FunctionalRequirementReferences,
-  TargetIds,
-  TargetId,
+  TargetIdentifiers,
+  TargetIdentifier,
   SkipReason,
   type Expression,
 } from "@deep-spec/kernel-domain";
@@ -18,7 +18,7 @@ import {
 // からの逐語移植——自由関数は UnitRefinementPlan.of（構築）と plan 自身の
 // 照会・skip 導出メソッドになった（OOUI 裁定）。
 
-import { ScenarioId, ObligationId } from "@deep-spec/requirements-domain";
+import { ScenarioIdentifier, ObligationIdentifier } from "@deep-spec/requirements-domain";
 
 import { DesignFinding, DesignFindings, DesignSkips } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
@@ -30,7 +30,7 @@ import { RefinementQuintInvariants } from "./refinement-quint-invariants.ts";
 import { RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
 import { type AttributeMapping } from "./attribute-mapping.ts";
 import { type RefinementUnitMap } from "./refinement-unit-map.ts";
-import { type TransitionRef } from "./transition-ref.ts";
+import { type TransitionReference } from "./transition-reference.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
 import { RefinementStatus } from "./refinement-status.ts";
 
@@ -43,16 +43,16 @@ function exprRefs(e: Expression, out: Set<string>): void {
 // 閉じ込めた計画。露出 Map は死に、照会・skip 導出は plan 自身の振る舞い。
 export class UnitRefinementPlan {
   readonly #mappings: AttributeMappings;
-  readonly #obligationStatus: KeyedIndex<ObligationId, RefinementStatus>;
-  readonly #scenarioStatus: KeyedIndex<ScenarioId, RefinementStatus>;
-  readonly #eventTransitions: KeyedIndex<ObligationId, readonly TransitionRef[]>;
+  readonly #obligationStatus: KeyedIndex<ObligationIdentifier, RefinementStatus>;
+  readonly #scenarioStatus: KeyedIndex<ScenarioIdentifier, RefinementStatus>;
+  readonly #eventTransitions: KeyedIndex<ObligationIdentifier, readonly TransitionReference[]>;
   readonly #gaps: DesignFindings;
 
   private constructor(props: {
     mappings: AttributeMappings;
-    obligationStatus: KeyedIndex<ObligationId, RefinementStatus>;
-    scenarioStatus: KeyedIndex<ScenarioId, RefinementStatus>;
-    eventTransitions: KeyedIndex<ObligationId, readonly TransitionRef[]>;
+    obligationStatus: KeyedIndex<ObligationIdentifier, RefinementStatus>;
+    scenarioStatus: KeyedIndex<ScenarioIdentifier, RefinementStatus>;
+    eventTransitions: KeyedIndex<ObligationIdentifier, readonly TransitionReference[]>;
     gaps: DesignFindings;
   }) {
     this.#mappings = props.mappings;
@@ -70,7 +70,7 @@ export class UnitRefinementPlan {
         DesignFinding.of({
           kind: FindingKind.mappingGap(),
           functionalRequirementReferences: functionalRequirementReferences.sortedUnique(),
-          targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
+          targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
           witness: DesignWitness.refs([{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }]),
           unit: UnitName.of(u.name()),
           detail,
@@ -143,7 +143,7 @@ export class UnitRefinementPlan {
     };
 
     const obligationStatus = new Map<string, RefinementStatus>();
-    const eventTransitions = new Map<string, readonly TransitionRef[]>();
+    const eventTransitions = new Map<string, readonly TransitionReference[]>();
     for (const ob of req.obligations()) {
       if (unmapped.covers(ob.id())) {
         obligationStatus.set(ob.id().asString(), RefinementStatus.waived(unmapped.reasonOf(ob.id()) ?? "listed in unmapped[]"));
@@ -220,13 +220,13 @@ export class UnitRefinementPlan {
     }
 
     // 義務/シナリオの gap 分類は mapping-gap finding へ昇格する。
-    for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])))) {
+    for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])))) {
       const gapDetail = st.gapDetail();
         if (gapDetail !== null) {
         gap([id], `${id}: ${gapDetail}`, req.obligationById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
       }
     }
-    for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])))) {
+    for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])))) {
       const gapDetail = st.gapDetail();
         if (gapDetail !== null) {
         gap([id], `${id}: ${gapDetail}`, req.scenarioById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
@@ -235,9 +235,9 @@ export class UnitRefinementPlan {
 
     return new UnitRefinementPlan({
       mappings: unitMap.attrMap(),
-      obligationStatus: KeyedIndex.of([...obligationStatus].map(([id, st]) => [ObligationId.of(id), st] as const)),
-      scenarioStatus: KeyedIndex.of([...scenarioStatus].map(([id, st]) => [ScenarioId.of(id), st] as const)),
-      eventTransitions: KeyedIndex.of([...eventTransitions].map(([id, trs]) => [ObligationId.of(id), trs] as const)),
+      obligationStatus: KeyedIndex.of([...obligationStatus].map(([id, st]) => [ObligationIdentifier.of(id), st] as const)),
+      scenarioStatus: KeyedIndex.of([...scenarioStatus].map(([id, st]) => [ScenarioIdentifier.of(id), st] as const)),
+      eventTransitions: KeyedIndex.of([...eventTransitions].map(([id, trs]) => [ObligationIdentifier.of(id), trs] as const)),
       gaps: DesignFindings.of(gaps),
     });
   }
@@ -251,36 +251,36 @@ export class UnitRefinementPlan {
     return this.#gaps;
   }
 
-  // 正準順（TargetId.compareTo）の被覆分類——SMT クエリ構築・skip 記録の凍結順。
+  // 正準順（TargetIdentifier.compareTo）の被覆分類——SMT クエリ構築・skip 記録の凍結順。
   sortedObligationStatuses(): readonly (readonly [string, RefinementStatus])[] {
-    return [...this.#obligationStatus].map(([id, st]) => [id.asString(), st] as const).sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])));
+    return [...this.#obligationStatus].map(([id, st]) => [id.asString(), st] as const).sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])));
   }
 
   sortedScenarioStatuses(): readonly (readonly [string, RefinementStatus])[] {
-    return [...this.#scenarioStatus].map(([id, st]) => [id.asString(), st] as const).sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])));
+    return [...this.#scenarioStatus].map(([id, st]) => [id.asString(), st] as const).sort((a, b) => TargetIdentifier.of(a[0]).compareTo(TargetIdentifier.of(b[0])));
   }
 
   statusOfObligation(id: string): RefinementStatus | undefined {
-    return this.#obligationStatus.get(ObligationId.of(id));
+    return this.#obligationStatus.get(ObligationIdentifier.of(id));
   }
 
   statusOfScenario(id: string): RefinementStatus | undefined {
-    return this.#scenarioStatus.get(ScenarioId.of(id));
+    return this.#scenarioStatus.get(ScenarioIdentifier.of(id));
   }
 
-  mappedTransitionsOf(reqId: string): readonly TransitionRef[] {
-    return this.#eventTransitions.get(ObligationId.of(reqId)) ?? [];
+  mappedTransitionsOf(reqId: string): readonly TransitionReference[] {
+    return this.#eventTransitions.get(ObligationIdentifier.of(reqId)) ?? [];
   }
 
   // SMT パスの被覆 skip：waived/capability のみ（旧 smtRefinementStatusSkips）。
   smtStatusSkips(unitName: string): DesignSkips {
     const skipped: DesignSkipped[] = [];
     for (const [id, st] of this.sortedObligationStatuses()) {
-      const s = st.skipFor(TargetId.of(id), unitName);
+      const s = st.skipFor(TargetIdentifier.of(id), unitName);
       if (s !== null) skipped.push(s);
     }
     for (const [id, st] of this.sortedScenarioStatuses()) {
-      const s = st.skipFor(TargetId.of(id), unitName);
+      const s = st.skipFor(TargetIdentifier.of(id), unitName);
       if (s !== null) skipped.push(s);
     }
     return DesignSkips.of(skipped);
@@ -292,12 +292,12 @@ export class UnitRefinementPlan {
   quintStatusSkips(req: RefinementRequirements, unitName: string): DesignSkips {
     const skipped: DesignSkipped[] = [];
     for (const [rid, st] of [...this.#obligationStatus].map(([id, status]) => [id.asString(), status] as const).sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-      const s = st.skipFor(TargetId.of(rid), unitName);
+      const s = st.skipFor(TargetIdentifier.of(rid), unitName);
       if (s !== null) skipped.push(s);
       else if (st.isCheckable()) {
         const ob = req.obligationById(rid);
         if (ob !== undefined && ob.isEvent()) {
-          skipped.push(DesignSkipped.of({ target: TargetId.of(rid), reason: SkipReason.capability(), unit: UnitName.of(unitName), detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" }));
+          skipped.push(DesignSkipped.of({ target: TargetIdentifier.of(rid), reason: SkipReason.capability(), unit: UnitName.of(unitName), detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" }));
         } else if (ob !== undefined && ob.isInvariantLike()) {
           const assertion = ob.assertion();
           if (assertion === undefined) continue;
@@ -305,15 +305,15 @@ export class UnitRefinementPlan {
           // 旧挙動は義務が痕跡なく落ち、SMT 側だけが報告していた）。文言は
           // SMT 側の compile-error skip と逐語で対。
           const substituted = this.#mappings.substitute(assertion, false);
-          if (!substituted.ok) skipped.push(substituted.error.asCompileErrorSkip(TargetId.of(rid), unitName));
+          if (!substituted.ok) skipped.push(substituted.error.asCompileErrorSkip(TargetIdentifier.of(rid), unitName));
         }
       }
     }
     for (const [rid, st] of [...this.#scenarioStatus].map(([id, status]) => [id.asString(), status] as const).sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
-      const s = st.skipFor(TargetId.of(rid), unitName);
+      const s = st.skipFor(TargetIdentifier.of(rid), unitName);
       if (s !== null) skipped.push(s);
       else if (st.isCheckable()) {
-        skipped.push(DesignSkipped.of({ target: TargetId.of(rid), reason: SkipReason.capability(), unit: UnitName.of(unitName), detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)" }));
+        skipped.push(DesignSkipped.of({ target: TargetIdentifier.of(rid), reason: SkipReason.capability(), unit: UnitName.of(unitName), detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)" }));
       }
     }
     return DesignSkips.of(skipped);

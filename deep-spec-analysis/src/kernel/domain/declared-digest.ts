@@ -12,9 +12,13 @@ export class DeclaredDigest {
     if (value.length > 4096) throw new IllegalArgumentException({ kind: "declared-digest-too-long", raw: value.length });
     this.#value = value; }
 
-  static parse(value: string): Result<DeclaredDigest, ParseError> { return parseConstruction(() => new DeclaredDigest(value)); }
+  static parse(value: string): Result<DeclaredDigest, ParseError> {
+    return parseConstruction(() => new DeclaredDigest(value));
+  }
 
-  static of(value: string): DeclaredDigest { return new DeclaredDigest(value); }
+  static of(value: string): DeclaredDigest {
+    return new DeclaredDigest(value);
+  }
 
   asString(): string { return this.#value; }
 

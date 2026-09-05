@@ -149,6 +149,18 @@ function validateSchema(root, schema, value, path, errors) {
   }
   return errors.length === before;
 }
+// src/kernel/infrastructure/canonical-json.ts
+function canonicalStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalStringify).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    const record = value;
+    const keys = Object.keys(record).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(record[k] ?? null)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
 // src/kernel/infrastructure/illegal-argument-exception.ts
 class IllegalArgumentException extends Error {
   problem;
@@ -196,6 +208,9 @@ function sortedUniqueCanonically(values) {
   return [...new Set(values)].sort(compareCanonically);
 }
 // src/kernel/infrastructure/result-composition.ts
+function flatMapResult(result, next) {
+  return result.ok ? next(result.value) : result;
+}
 function combineResults(fields) {
   const values = {};
   for (const key in fields) {
@@ -216,325 +231,52 @@ function traverseResult(values, parse) {
   }
   return ok(parsed);
 }
-// src/kernel/infrastructure/value-size.ts
-function assertValueSize(value, limits) {
+// src/kernel/infrastructure/bounded-value-snapshot.ts
+function boundedValueSnapshot(value, limits) {
   let nodes = 0;
   let total = 0;
-  const visit = (current, depth) => {
-    if (++nodes > limits.nodes || depth > limits.depth)
-      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
-    if (typeof current === "string") {
-      if (current.length > limits.string)
-        throw new IllegalArgumentException({ kind: "value-string-too-long", raw: current.length });
-      total += current.length;
-    } else if (current !== null && typeof current === "object") {
-      if (Array.isArray(current)) {
-        if (current.length > limits.nodes - nodes)
-          throw new IllegalArgumentException({ kind: "value-tree-too-large" });
-        for (const child of current)
-          visit(child, depth + 1);
-      } else {
-        const record = current;
-        for (const key in record) {
-          if (!Object.hasOwn(record, key))
-            continue;
-          if (key.length > limits.string)
-            throw new IllegalArgumentException({ kind: "value-key-too-long", raw: key.length });
-          total += key.length;
-          if (total > limits.total)
-            throw new IllegalArgumentException({ kind: "value-text-too-large" });
-          visit(record[key], depth + 1);
-        }
-      }
-    }
+  const chargeText = (text, kind) => {
+    if (text.length > limits.string)
+      throw new IllegalArgumentException({ kind, raw: text.length });
+    total += text.length;
     if (total > limits.total)
       throw new IllegalArgumentException({ kind: "value-text-too-large" });
   };
-  visit(value, 0);
-}
-// src/kernel/adapter/contract-schema.ts
-function readContractSchema(path) {
-  try {
-    return ok(JSON.parse(readFileSync(path, "utf-8")));
-  } catch (e) {
-    return err({ cause: e instanceof Error ? e.message : String(e) });
-  }
-}
-// src/kernel/adapter/findings-document.ts
-var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
-var optionalString = (value) => value === undefined || typeof value === "string";
-function decodeFindingsDocument(raw) {
-  if (!isObject(raw))
-    return err("findings document must be an object");
-  for (const field of ["backend", "irVersion", "irHash", "method"]) {
-    if (typeof raw[field] !== "string")
-      return err(`${field} must be a string`);
-  }
-  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
-    return err("findings must be an array of complete finding records");
-  }
-  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
-    return err("skipped must be an array of complete skip records");
-  }
-  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
-    return err("unavailable must carry a reason");
-  }
-  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
-    return err("inputs must be an array of input anchors");
-  }
-  if (raw.checked !== undefined && !strings(raw.checked))
-    return err("checked must be an array of strings");
-  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
-    return err("crossChecked must be an array of backend comparisons");
-  }
-  return ok(raw);
-}
-// src/kernel/adapter/fence.ts
-function extractFences(md, lang) {
-  const fences = [];
-  const lines = md.split(`
-`);
-  let open = false;
-  let info = "";
-  let openLine = 0;
-  let buf = [];
-  for (let i = 0;i < lines.length; i++) {
-    const m = (lines[i] ?? "").match(/^\s*```(.*)$/);
-    if (m && !open) {
-      open = true;
-      info = (m[1] ?? "").trim().toLowerCase();
-      openLine = i + 1;
-      buf = [];
-      continue;
+  const copy = (current, depth) => {
+    if (++nodes > limits.nodes || depth > limits.depth)
+      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+    if (typeof current === "string") {
+      chargeText(current, "value-string-too-long");
+      return current;
     }
-    if (m && open) {
-      if (info === lang || info.startsWith(`${lang} `)) {
-        fences.push({ info, body: buf.join(`
-`), line: openLine });
-      }
-      open = false;
-      continue;
+    if (current === null || typeof current !== "object")
+      return current;
+    if (Array.isArray(current)) {
+      const count = current.length;
+      if (count > limits.nodes - nodes)
+        throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+      const values = [];
+      for (let index = 0;index < count; index++)
+        values.push(copy(current[index], depth + 1));
+      return values;
     }
-    if (open)
-      buf.push(lines[i] ?? "");
-  }
-  return fences;
-}
-// src/kernel/adapter/system-clock.ts
-class SystemClock {
-  now() {
-    return Date.now();
-  }
-}
-// src/kernel/adapter/atomic-write.ts
-import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
-import { basename, dirname, join } from "path";
-var sequence = 0;
-function writeFileAtomically(path, data) {
-  const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
-  sequence += 1;
-  const tmp = join(dir, `.${basename(path)}.tmp-${Date.now().toString(36)}-${sequence.toString(36)}`);
-  try {
-    writeFileSync(tmp, data);
-    renameSync(tmp, path);
-  } catch (e) {
-    try {
-      rmSync(tmp, { force: true });
-    } catch {}
-    throw e;
-  }
-}
-// src/kernel/adapter/directory-finalization-lock.ts
-import { randomBytes } from "crypto";
-import { mkdirSync as mkdirSync2, readFileSync as readFileSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
-import { join as join2 } from "path";
-var DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
-var METADATA_BASENAME = "owner.lockmeta";
-var LEASE_MS = 30000;
-var OWNER_TOKEN_BYTES = 16;
-function causeOf(e) {
-  return e instanceof Error ? e.message : String(e);
-}
-
-class DirectoryFinalizationLock {
-  #clock;
-  #liveness;
-  #lockBasename;
-  #ownerTokens;
-  constructor(clock, liveness, lockBasename = DESIGN_LOCK_BASENAME) {
-    this.#clock = clock;
-    this.#liveness = liveness;
-    this.#lockBasename = lockBasename;
-    this.#ownerTokens = new Map;
-  }
-  canonicalPathOf(directory) {
-    return join2(directory.asString(), this.#lockBasename);
-  }
-  ownerTokenOf(directory) {
-    return this.#ownerTokens.get(this.canonicalPathOf(directory)) ?? null;
-  }
-  acquire(directory) {
-    const canonical = this.canonicalPathOf(directory);
-    const token = randomBytes(OWNER_TOKEN_BYTES).toString("hex");
-    const blocked = this.#createOwned(canonical, token);
-    if (blocked === null) {
-      this.#ownerTokens.set(canonical, token);
-      return { kind: "acquired" };
+    const record = current;
+    const entries = [];
+    for (const key in record) {
+      if (!Object.hasOwn(record, key))
+        continue;
+      chargeText(key, "value-key-too-long");
+      entries.push([key, copy(record[key], depth + 1)]);
     }
-    const observed = this.#readMetadata(canonical);
-    if (observed === null) {
-      return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
-    }
-    if (observed.state !== "held") {
-      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.state}"` };
-    }
-    if (this.#clock.now() < observed.leaseExpiresAtMs) {
-      return { kind: "lock-contended", cause: "the lease has not expired" };
-    }
-    const status = this.#liveness.statusOf(observed.pid);
-    if (status !== "absent") {
-      return { kind: "lock-contended", cause: `owner process ${observed.pid} is ${status}` };
-    }
-    const reread = this.#readMetadata(canonical);
-    if (reread === null || reread.token !== observed.token) {
-      return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
-    }
-    const stale = `${canonical}.stale.${observed.token}.${token}`;
-    try {
-      renameSync2(canonical, stale);
-    } catch (e) {
-      return { kind: "lock-recovery-failed", cause: causeOf(e) };
-    }
-    const lost = this.#createOwned(canonical, token);
-    this.#discard(stale);
-    if (lost !== null) {
-      return { kind: "lock-recovery-failed", cause: lost };
-    }
-    this.#ownerTokens.set(canonical, token);
-    return { kind: "recovered", displacedToken: observed.token };
-  }
-  holdsOwnership(directory) {
-    const canonical = this.canonicalPathOf(directory);
-    const mine = this.#ownerTokens.get(canonical);
-    if (mine === undefined)
-      return false;
-    const observed = this.#readMetadata(canonical);
-    return observed !== null && observed.state === "held" && observed.token === mine;
-  }
-  release(directory) {
-    const canonical = this.canonicalPathOf(directory);
-    const mine = this.#ownerTokens.get(canonical);
-    if (mine === undefined) {
-      return { kind: "lock-release-failed", cause: "this writer does not hold the lock" };
-    }
-    this.#ownerTokens.delete(canonical);
-    const observed = this.#readMetadata(canonical);
-    if (observed === null || observed.token !== mine) {
-      return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
-    }
-    const cleanup = `${canonical}.cleanup.${mine}`;
-    try {
-      renameSync2(canonical, cleanup);
-    } catch (e) {
-      return { kind: "lock-release-failed", cause: causeOf(e) };
-    }
-    const swept = this.#discard(cleanup);
-    if (swept !== null) {
-      return { kind: "cleanup-failed", cause: swept };
-    }
-    return { kind: "released" };
-  }
-  #createOwned(canonical, token) {
-    const acquiredAtMs = this.#clock.now();
-    try {
-      mkdirSync2(canonical);
-    } catch (e) {
-      return causeOf(e);
-    }
-    const metadata = {
-      state: "held",
-      token,
-      pid: this.#liveness.self(),
-      acquiredAtMs,
-      leaseExpiresAtMs: acquiredAtMs + LEASE_MS
-    };
-    try {
-      writeFileSync2(join2(canonical, METADATA_BASENAME), `${JSON.stringify(metadata)}
-`, "utf-8");
-      return null;
-    } catch (e) {
-      const cleanup = `${canonical}.cleanup.${token}`;
-      try {
-        renameSync2(canonical, cleanup);
-        this.#discard(cleanup);
-      } catch {}
-      return causeOf(e);
-    }
-  }
-  #readMetadata(canonical) {
-    let raw;
-    try {
-      raw = JSON.parse(readFileSync2(join2(canonical, METADATA_BASENAME), "utf-8"));
-    } catch {
-      return null;
-    }
-    if (typeof raw !== "object" || raw === null)
-      return null;
-    const doc = raw;
-    if (typeof doc.state !== "string" || typeof doc.token !== "string")
-      return null;
-    if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
-      return null;
-    return {
-      state: doc.state,
-      token: doc.token,
-      pid: doc.pid,
-      acquiredAtMs: doc.acquiredAtMs,
-      leaseExpiresAtMs: doc.leaseExpiresAtMs
-    };
-  }
-  #discard(ownPath) {
-    try {
-      rmSync2(ownPath, { recursive: true, force: true });
-      return null;
-    } catch (e) {
-      return causeOf(e);
-    }
-  }
-}
-// src/kernel/adapter/smt-symbols.ts
-function smtVar(path, primed) {
-  return `${primed ? "p" : "v"}_${path.replace(/\./g, "_")}`;
-}
-function smtName(prefix, id) {
-  return `${prefix}_${id.replace(/[^A-Za-z0-9_]/g, "_")}`;
-}
-function smtLit(n) {
-  if (!Number.isInteger(n))
-    return n < 0 ? `(- ${-n})` : String(n);
-  return n < 0 ? `(- ${BigInt(-n)})` : String(BigInt(n));
-}
-function smtIntOf(raw) {
-  const m = raw.match(/^\(-\s*(\d+)\)$/);
-  return m ? -Number.parseInt(m[1] ?? "0", 10) : Number.parseInt(raw, 10);
+    return Object.fromEntries(entries);
+  };
+  return copy(value, 0);
 }
 // src/kernel/domain/expression-tree.ts
-function canonicalKeyOf(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalKeyOf).join(",")}]`;
-  }
-  if (typeof value === "object" && value !== null) {
-    const record = value;
-    const keys = Object.keys(record).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalKeyOf(record[k] ?? null)}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
 class ExpressionTree {
   #root;
   constructor(root) {
+    const snapshot = boundedValueSnapshot(root, { string: 4096, nodes: 1e5, depth: 258, total: 16777216 });
     let nodes = 0;
     const measure = (node, depth) => {
       if (++nodes > 1e4 || depth > 128 || (node.args?.length ?? 0) > 1e4 - nodes) {
@@ -546,8 +288,7 @@ class ExpressionTree {
       for (const child of node.args ?? [])
         measure(child, depth + 1);
     };
-    measure(root, 0);
-    const snapshot = structuredClone(root);
+    measure(snapshot, 0);
     const visited = new WeakSet;
     const freeze = (value) => {
       if (visited.has(value))
@@ -604,7 +345,7 @@ class ExpressionTree {
     return assigned;
   }
   isCanonicallyEqual(other) {
-    return canonicalKeyOf(this.#root) === canonicalKeyOf(other.#root);
+    return canonicalStringify(this.#root) === canonicalStringify(other.#root);
   }
 }
 // src/kernel/domain/content-hash.ts
@@ -659,8 +400,8 @@ class DeclaredDigest {
     return this.#value === actual.asString();
   }
 }
-// src/kernel/domain/ir-version.ts
-class IrVersion {
+// src/kernel/domain/intermediate-representation-version.ts
+class IntermediateRepresentationVersion {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -670,10 +411,10 @@ class IrVersion {
     this.#value = raw;
   }
   static of(raw) {
-    return new IrVersion(raw);
+    return new IntermediateRepresentationVersion(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new IrVersion(raw));
+    return parseConstruction(() => new IntermediateRepresentationVersion(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -688,7 +429,7 @@ class IrVersion {
     return this.#value;
   }
 }
-// src/kernel/domain/target-id.ts
+// src/kernel/domain/target-identifier.ts
 var TARGET_ID_PATTERNS = [
   /^(OB|SC)-[0-9]+$/,
   /^BR[0-9]+\.[0-9]+$/,
@@ -696,7 +437,7 @@ var TARGET_ID_PATTERNS = [
   /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
 ];
 
-class TargetId {
+class TargetIdentifier {
   #value;
   constructor(raw) {
     if (raw.length > 1024)
@@ -706,10 +447,10 @@ class TargetId {
     this.#value = raw;
   }
   static of(raw) {
-    return new TargetId(raw);
+    return new TargetIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new TargetId(raw));
+    return parseConstruction(() => new TargetIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -721,21 +462,21 @@ class TargetId {
     return this.#value;
   }
 }
-// src/kernel/domain/target-ids.ts
-class TargetIds {
+// src/kernel/domain/target-identifiers.ts
+class TargetIdentifiers {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new TargetIds([...values]);
+    return new TargetIdentifiers(values);
   }
   static safe(prefix, raw) {
     const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
     return `${prefix}:${token === "" ? "unknown" : token}`;
   }
   add(value) {
-    return new TargetIds([...this.#values, value]);
+    return new TargetIdentifiers([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -747,13 +488,13 @@ class TargetIds {
     return this.#values.some((v) => v.equals(value));
   }
   excluding(value) {
-    return new TargetIds(this.#values.filter((v) => !v.equals(value)));
+    return new TargetIdentifiers(this.#values.filter((v) => !v.equals(value)));
   }
   sortedCanonically() {
-    return new TargetIds([...this.#values].sort((a, b) => a.compareTo(b)));
+    return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
   }
   sortedUniqueCanonically() {
-    return TargetIds.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetId.of(raw)));
+    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
   }
   joined(separator) {
     return this.toStrings().join(separator);
@@ -772,6 +513,9 @@ class FunctionalRequirementReferences {
     if (values.length > 1e4)
       throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
     this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new FunctionalRequirementReferences(values));
   }
   static of(values) {
     return new FunctionalRequirementReferences(values);
@@ -859,8 +603,8 @@ class KeySet {
   }
 }
 
-// src/kernel/domain/requirement-id.ts
-class RequirementId {
+// src/kernel/domain/requirement-identifier.ts
+class RequirementIdentifier {
   #value;
   constructor(value) {
     if (value.length > 128)
@@ -870,10 +614,10 @@ class RequirementId {
     this.#value = value;
   }
   static of(raw) {
-    return new RequirementId(raw);
+    return new RequirementIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new RequirementId(raw));
+    return parseConstruction(() => new RequirementIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -886,8 +630,8 @@ class RequirementId {
   }
 }
 
-// src/kernel/domain/requirement-ids.ts
-class RequirementIds {
+// src/kernel/domain/requirement-identifiers.ts
+class RequirementIdentifiers {
   #values;
   constructor(values) {
     this.#values = values;
@@ -895,15 +639,15 @@ class RequirementIds {
   static extractFrom(text) {
     const ids = [];
     for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementId.of(m[0]));
+      ids.push(RequirementIdentifier.of(m[0]));
     }
-    return new RequirementIds(KeySet.of(ids));
+    return new RequirementIdentifiers(KeySet.of(ids));
   }
   static of(values) {
-    return new RequirementIds(KeySet.of(values));
+    return new RequirementIdentifiers(KeySet.of(values));
   }
   add(value) {
-    return new RequirementIds(this.#values.with(value));
+    return new RequirementIdentifiers(this.#values.with(value));
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -1018,6 +762,9 @@ class ErrorMessages {
       throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
+  static parse(values) {
+    return parseConstruction(() => new ErrorMessages(values));
+  }
   static of(values) {
     return new ErrorMessages(values);
   }
@@ -1041,11 +788,14 @@ class FindingsSchema {
   #schema;
   #reason;
   constructor(schema, reason) {
-    this.#schema = schema;
+    this.#schema = schema === null ? null : boundedValueSnapshot(schema, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
     this.#reason = reason;
   }
   static of(schema) {
     return new FindingsSchema(schema, null);
+  }
+  static parse(schema) {
+    return parseConstruction(() => new FindingsSchema(schema, null));
   }
   static unreadable(cause) {
     return new FindingsSchema(null, cause);
@@ -1485,22 +1235,57 @@ class AttributeKind {
 class DeclaredBindingValue {
   #value;
   constructor(value) {
-    assertValueSize(value, { string: 4096, total: 65536, nodes: 4096, depth: 32 });
-    this.#value = structuredClone(value);
+    this.#value = value;
   }
   static of(value) {
     return new DeclaredBindingValue(value);
   }
-  static parse(value) {
-    return parseConstruction(() => new DeclaredBindingValue(value));
-  }
   fits(kind, admitsEnum) {
-    return kind.isBool() && typeof this.#value === "boolean" || kind.isInt() && typeof this.#value === "number" && Number.isSafeInteger(this.#value) || kind.isEnum() && typeof this.#value === "string" && admitsEnum(this.#value);
+    return this.#value.match({
+      literal: (value) => kind.isBool() && typeof value === "boolean" || kind.isInt() && typeof value === "number" && Number.isSafeInteger(value) || kind.isEnum() && typeof value === "string" && admitsEnum(value),
+      nonLiteral: () => false
+    });
+  }
+  match(cases) {
+    return this.#value.match(cases);
+  }
+  describe() {
+    return this.#value.describe();
+  }
+}
+// src/kernel/domain/declaration.ts
+class Declaration {
+  #value;
+  constructor(value) {
+    const snapshot = boundedValueSnapshot(value, { string: 4096, total: 65536, nodes: 4096, depth: 32 });
+    const checkNumbers = (current) => {
+      if (typeof current === "number" && !Number.isFinite(current)) {
+        throw new IllegalArgumentException({ kind: "non-finite-declaration-number", raw: current });
+      }
+      if (Array.isArray(current)) {
+        for (const child of current)
+          checkNumbers(child);
+      } else if (current !== null && typeof current === "object") {
+        for (const child of Object.values(current))
+          checkNumbers(child);
+      }
+    };
+    checkNumbers(snapshot);
+    this.#value = snapshot;
+  }
+  static of(value) {
+    return new Declaration(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new Declaration(value));
   }
   match(cases) {
     if (typeof this.#value === "boolean" || typeof this.#value === "number" || typeof this.#value === "string")
       return cases.literal(this.#value);
     return cases.nonLiteral();
+  }
+  equals(other) {
+    return canonicalStringify(this.#value) === canonicalStringify(other.#value);
   }
   describe() {
     return JSON.stringify(this.#value);
@@ -1513,6 +1298,9 @@ class DeclaredBindings {
     if (values.length > 1e4)
       throw new IllegalArgumentException({ kind: "too-many-binding-declarations", raw: values.length });
     this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DeclaredBindings(values));
   }
   static of(values) {
     return new DeclaredBindings(values);
@@ -1541,6 +1329,9 @@ class ScenarioBindings {
       paths.add(path);
     }
     this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ScenarioBindings(values));
   }
   static of(values) {
     return new ScenarioBindings(values);
@@ -1584,8 +1375,8 @@ class ErrorMessage {
     return this.#value;
   }
 }
-// src/kernel/domain/enum-member.ts
-class EnumMember {
+// src/kernel/domain/enumeration-member.ts
+class EnumerationMember {
   #value;
   constructor(value) {
     if (value.length > 4096)
@@ -1593,10 +1384,10 @@ class EnumMember {
     this.#value = value;
   }
   static of(value) {
-    return new EnumMember(value);
+    return new EnumerationMember(value);
   }
   static parse(value) {
-    return parseConstruction(() => new EnumMember(value));
+    return parseConstruction(() => new EnumerationMember(value));
   }
   matchesLiteral(value) {
     return this.#value === value;
@@ -1650,6 +1441,316 @@ class BindingDeclaration {
     return this.#value;
   }
 }
+// src/kernel/domain/enumeration-members.ts
+class EnumerationMembers {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new EnumerationMembers(values));
+  }
+  static of(values) {
+    return new EnumerationMembers(values);
+  }
+  add(value) {
+    return new EnumerationMembers([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  includes(value) {
+    return this.#values.some((member) => member.matchesLiteral(value));
+  }
+  sortedUniqueCanonically() {
+    const members = new Map(this.#values.map((member) => [member.asString(), member]));
+    return new EnumerationMembers([...members.values()].sort((a, b) => a.compareTo(b)));
+  }
+  indexOf(value) {
+    return this.#values.findIndex((member) => member.matchesLiteral(value));
+  }
+  valueAt(index) {
+    return this.#values[index];
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/kernel/adapter/contract-schema.ts
+function readContractSchema(path) {
+  try {
+    const document = JSON.parse(readFileSync(path, "utf-8"));
+    if (!isObject(document))
+      return err({ cause: "contract schema must be a JSON object" });
+    return ok(document);
+  } catch (e) {
+    return err({ cause: e instanceof Error ? e.message : String(e) });
+  }
+}
+// src/kernel/adapter/findings-document.ts
+var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
+var optionalString = (value) => value === undefined || typeof value === "string";
+function decodeFindingsDocument(raw) {
+  if (!isObject(raw))
+    return err("findings document must be an object");
+  for (const field of ["backend", "irVersion", "irHash", "method"]) {
+    if (typeof raw[field] !== "string")
+      return err(`${field} must be a string`);
+  }
+  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
+    return err("findings must be an array of complete finding records");
+  }
+  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
+    return err("skipped must be an array of complete skip records");
+  }
+  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
+    return err("unavailable must carry a reason");
+  }
+  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
+    return err("inputs must be an array of input anchors");
+  }
+  if (raw.checked !== undefined && !strings(raw.checked))
+    return err("checked must be an array of strings");
+  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
+    return err("crossChecked must be an array of backend comparisons");
+  }
+  return ok(raw);
+}
+// src/kernel/adapter/fence.ts
+function extractFences(md, lang) {
+  const fences = [];
+  const lines = md.split(`
+`);
+  let open = false;
+  let info = "";
+  let openLine = 0;
+  let buf = [];
+  for (let i = 0;i < lines.length; i++) {
+    const m = (lines[i] ?? "").match(/^\s*```(.*)$/);
+    if (m && !open) {
+      open = true;
+      info = (m[1] ?? "").trim().toLowerCase();
+      openLine = i + 1;
+      buf = [];
+      continue;
+    }
+    if (m && open) {
+      if (info === lang || info.startsWith(`${lang} `)) {
+        fences.push({ info, body: buf.join(`
+`), line: openLine });
+      }
+      open = false;
+      continue;
+    }
+    if (open)
+      buf.push(lines[i] ?? "");
+  }
+  return fences;
+}
+// src/kernel/adapter/system-clock.ts
+class SystemClock {
+  now() {
+    return Date.now();
+  }
+}
+// src/kernel/adapter/atomic-write.ts
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
+import { basename, dirname, join } from "path";
+var sequence = 0;
+function writeFileAtomically(path, data) {
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+  sequence += 1;
+  const tmp = join(dir, `.${basename(path)}.tmp-${Date.now().toString(36)}-${sequence.toString(36)}`);
+  try {
+    writeFileSync(tmp, data);
+    renameSync(tmp, path);
+  } catch (e) {
+    try {
+      rmSync(tmp, { force: true });
+    } catch {}
+    throw e;
+  }
+}
+// src/kernel/adapter/directory-finalization-lock.ts
+import { randomBytes } from "crypto";
+import { mkdirSync as mkdirSync2, readFileSync as readFileSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { join as join2 } from "path";
+var DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
+var METADATA_BASENAME = "owner.lockmeta";
+var LEASE_MS = 30000;
+var OWNER_TOKEN_BYTES = 16;
+function causeOf(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+
+class DirectoryFinalizationLock {
+  #clock;
+  #liveness;
+  #lockBasename;
+  #ownerTokens;
+  constructor(clock, liveness, lockBasename = DESIGN_LOCK_BASENAME) {
+    this.#clock = clock;
+    this.#liveness = liveness;
+    this.#lockBasename = lockBasename;
+    this.#ownerTokens = new Map;
+  }
+  canonicalPathOf(directory) {
+    return join2(directory.asString(), this.#lockBasename);
+  }
+  ownerTokenOf(directory) {
+    return this.#ownerTokens.get(this.canonicalPathOf(directory)) ?? null;
+  }
+  acquire(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const token = randomBytes(OWNER_TOKEN_BYTES).toString("hex");
+    const blocked = this.#createOwned(canonical, token);
+    if (blocked === null) {
+      this.#ownerTokens.set(canonical, token);
+      return { kind: "acquired" };
+    }
+    const observed = this.#readMetadata(canonical);
+    if (observed === null) {
+      return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
+    }
+    if (observed.state !== "held") {
+      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.state}"` };
+    }
+    if (this.#clock.now() < observed.leaseExpiresAtMs) {
+      return { kind: "lock-contended", cause: "the lease has not expired" };
+    }
+    const status = this.#liveness.statusOf(observed.pid);
+    if (status !== "absent") {
+      return { kind: "lock-contended", cause: `owner process ${observed.pid} is ${status}` };
+    }
+    const reread = this.#readMetadata(canonical);
+    if (reread === null || reread.token !== observed.token) {
+      return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
+    }
+    const stale = `${canonical}.stale.${observed.token}.${token}`;
+    try {
+      renameSync2(canonical, stale);
+    } catch (e) {
+      return { kind: "lock-recovery-failed", cause: causeOf(e) };
+    }
+    const lost = this.#createOwned(canonical, token);
+    this.#discard(stale);
+    if (lost !== null) {
+      return { kind: "lock-recovery-failed", cause: lost };
+    }
+    this.#ownerTokens.set(canonical, token);
+    return { kind: "recovered", displacedToken: observed.token };
+  }
+  holdsOwnership(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined)
+      return false;
+    const observed = this.#readMetadata(canonical);
+    return observed !== null && observed.state === "held" && observed.token === mine;
+  }
+  release(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined) {
+      return { kind: "lock-release-failed", cause: "this writer does not hold the lock" };
+    }
+    this.#ownerTokens.delete(canonical);
+    const observed = this.#readMetadata(canonical);
+    if (observed === null || observed.token !== mine) {
+      return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
+    }
+    const cleanup = `${canonical}.cleanup.${mine}`;
+    try {
+      renameSync2(canonical, cleanup);
+    } catch (e) {
+      return { kind: "lock-release-failed", cause: causeOf(e) };
+    }
+    const swept = this.#discard(cleanup);
+    if (swept !== null) {
+      return { kind: "cleanup-failed", cause: swept };
+    }
+    return { kind: "released" };
+  }
+  #createOwned(canonical, token) {
+    const acquiredAtMs = this.#clock.now();
+    try {
+      mkdirSync2(canonical);
+    } catch (e) {
+      return causeOf(e);
+    }
+    const metadata = {
+      state: "held",
+      token,
+      pid: this.#liveness.self(),
+      acquiredAtMs,
+      leaseExpiresAtMs: acquiredAtMs + LEASE_MS
+    };
+    try {
+      writeFileSync2(join2(canonical, METADATA_BASENAME), `${JSON.stringify(metadata)}
+`, "utf-8");
+      return null;
+    } catch (e) {
+      const cleanup = `${canonical}.cleanup.${token}`;
+      try {
+        renameSync2(canonical, cleanup);
+        this.#discard(cleanup);
+      } catch {}
+      return causeOf(e);
+    }
+  }
+  #readMetadata(canonical) {
+    let raw;
+    try {
+      raw = JSON.parse(readFileSync2(join2(canonical, METADATA_BASENAME), "utf-8"));
+    } catch {
+      return null;
+    }
+    if (typeof raw !== "object" || raw === null)
+      return null;
+    const doc = raw;
+    if (typeof doc.state !== "string" || typeof doc.token !== "string")
+      return null;
+    if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
+      return null;
+    return {
+      state: doc.state,
+      token: doc.token,
+      pid: doc.pid,
+      acquiredAtMs: doc.acquiredAtMs,
+      leaseExpiresAtMs: doc.leaseExpiresAtMs
+    };
+  }
+  #discard(ownPath) {
+    try {
+      rmSync2(ownPath, { recursive: true, force: true });
+      return null;
+    } catch (e) {
+      return causeOf(e);
+    }
+  }
+}
+// src/kernel/adapter/smt-symbols.ts
+function smtVar(path, primed) {
+  return `${primed ? "p" : "v"}_${path.replace(/\./g, "_")}`;
+}
+function smtName(prefix, id) {
+  return `${prefix}_${id.replace(/[^A-Za-z0-9_]/g, "_")}`;
+}
+function smtLit(n) {
+  if (!Number.isInteger(n))
+    return n < 0 ? `(- ${-n})` : String(n);
+  return n < 0 ? `(- ${BigInt(-n)})` : String(BigInt(n));
+}
+function smtIntOf(raw) {
+  const m = raw.match(/^\(-\s*(\d+)\)$/);
+  return m ? -Number.parseInt(m[1] ?? "0", 10) : Number.parseInt(raw, 10);
+}
 // src/kernel/adapter/findings-values-parser.ts
 function parseFindingsValues(raw) {
   const decoded = decodeFindingsDocument(raw);
@@ -1658,23 +1759,23 @@ function parseFindingsValues(raw) {
   const doc = decoded.value;
   const parsed = combineResults({
     backend: BackendName.parse(doc.backend),
-    irVersion: IrVersion.parse(doc.irVersion),
+    irVersion: IntermediateRepresentationVersion.parse(doc.irVersion),
     irHash: ContentHash.parse(doc.irHash),
     method: VerificationMethod.parse(doc.method),
     findings: traverseResult(doc.findings, (entry) => {
       const fields = combineResults({
         kind: FindingKind.parse(entry.kind),
-        functionalRequirementReferences: traverseResult(entry.frRefs, RequirementId.parse),
-        targets: traverseResult(entry.targets, TargetId.parse),
+        functionalRequirementReferences: flatMapResult(traverseResult(entry.frRefs, RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
+        targets: traverseResult(entry.targets, TargetIdentifier.parse),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
       });
       if (!fields.ok)
         return fields;
-      return ok({ ...fields.value, functionalRequirementReferences: FunctionalRequirementReferences.of(fields.value.functionalRequirementReferences), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
+      return ok({ ...fields.value, functionalRequirementReferences: fields.value.functionalRequirementReferences, targets: TargetIdentifiers.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
     }),
     skipped: traverseResult(doc.skipped, (entry) => {
       const fields = combineResults({
-        target: TargetId.parse(entry.target),
+        target: TargetIdentifier.parse(entry.target),
         reason: SkipReason.parse(entry.reason),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
       });
@@ -1687,10 +1788,10 @@ function parseFindingsValues(raw) {
       sha256: ContentHash.parse(entry.sha256)
     })),
     crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
-      const fields = combineResults({ backend: BackendName.parse(entry.backend), targets: traverseResult(entry.targets, TargetId.parse) });
+      const fields = combineResults({ backend: BackendName.parse(entry.backend), targets: traverseResult(entry.targets, TargetIdentifier.parse) });
       if (!fields.ok)
         return fields;
-      return ok({ backend: fields.value.backend, targets: TargetIds.of(fields.value.targets) });
+      return ok({ backend: fields.value.backend, targets: TargetIdentifiers.of(fields.value.targets) });
     })
   });
   if (!parsed.ok)
@@ -1704,15 +1805,16 @@ function decodeDeclaredBindings(raw) {
     const path = AttributePath.parse(key);
     if (!path.ok)
       return err(JSON.stringify(path.error));
-    const declared = DeclaredBindingValue.parse(value);
+    const declared = Declaration.parse(value);
     if (!declared.ok)
       return err(JSON.stringify(declared.error));
-    values.push(BindingDeclaration.of(path.value, declared.value));
+    values.push(BindingDeclaration.of(path.value, DeclaredBindingValue.of(declared.value)));
   }
-  return ok(DeclaredBindings.of(values));
+  const bindings = DeclaredBindings.parse(values);
+  return bindings.ok ? bindings : err(JSON.stringify(bindings.error));
 }
-// src/requirements/domain/attribute-declaration.ts
-class AttributeDeclaration {
+// src/requirements/domain/requirement-attribute-declaration.ts
+class RequirementAttributeDeclaration {
   #path;
   #kind;
   #min;
@@ -1726,7 +1828,7 @@ class AttributeDeclaration {
     this.#values = props.values;
   }
   static of(props) {
-    return new AttributeDeclaration(props);
+    return new RequirementAttributeDeclaration(props);
   }
   path() {
     return this.#path;
@@ -1760,19 +1862,19 @@ class AttributeDeclaration {
     return handlers.enum(this.#values);
   }
 }
-// src/requirements/domain/attribute-declarations.ts
-class AttributeDeclarations {
+// src/requirements/domain/requirement-attribute-declarations.ts
+class RequirementAttributeDeclarations {
   #values;
   #byPath;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
     this.#byPath = KeyedIndex.of(values.map((a) => [a.path(), a]));
   }
   static of(values) {
-    return new AttributeDeclarations([...values]);
+    return new RequirementAttributeDeclarations(values);
   }
   add(value) {
-    return new AttributeDeclarations([...this.#values, value]);
+    return new RequirementAttributeDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -1781,37 +1883,7 @@ class AttributeDeclarations {
     return this.#byPath.get(path);
   }
   sortedByPath() {
-    return new AttributeDeclarations([...this.#values].sort((a, b) => a.path().asString() < b.path().asString() ? -1 : 1));
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/attribute-values.ts
-class AttributeValues {
-  #values;
-  constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new AttributeValues(values);
-  }
-  add(value) {
-    return new AttributeValues([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  indexOf(value) {
-    return this.#values.findIndex((member) => member.matchesLiteral(value));
-  }
-  valueAt(index) {
-    return this.#values[index];
-  }
-  count() {
-    return this.#values.length;
+    return new RequirementAttributeDeclarations([...this.#values].sort((a, b) => a.path().asString() < b.path().asString() ? -1 : 1));
   }
   toArray() {
     return this.#values;
@@ -1843,6 +1915,9 @@ class Obligation {
       ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
       ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
     };
+  }
+  static parse(props) {
+    return parseConstruction(() => new Obligation(props));
   }
   static of(props) {
     return new Obligation(props);
@@ -1906,8 +1981,8 @@ class Obligation {
       visitor(this.#temporal.to, false);
   }
 }
-// src/requirements/domain/obligation-id.ts
-class ObligationId {
+// src/requirements/domain/obligation-identifier.ts
+class ObligationIdentifier {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -1917,10 +1992,10 @@ class ObligationId {
     this.#value = raw;
   }
   static of(raw) {
-    return new ObligationId(raw);
+    return new ObligationIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new ObligationId(raw));
+    return parseConstruction(() => new ObligationIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1932,20 +2007,20 @@ class ObligationId {
     return this.#value;
   }
   asTargetId() {
-    return TargetId.of(this.#value);
+    return TargetIdentifier.of(this.#value);
   }
 }
-// src/requirements/domain/obligation-ids.ts
-class ObligationIds {
+// src/requirements/domain/obligation-identifiers.ts
+class ObligationIdentifiers {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ObligationIds([...values]);
+    return new ObligationIdentifiers(values);
   }
   add(value) {
-    return new ObligationIds([...this.#values, value]);
+    return new ObligationIdentifiers([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -1957,17 +2032,17 @@ class ObligationIds {
     return this.#values.map((v) => v.asString());
   }
   toTargetIds() {
-    return TargetIds.of(this.#values.map((v) => v.asTargetId()));
+    return TargetIdentifiers.of(this.#values.map((v) => v.asTargetId()));
   }
 }
 // src/requirements/domain/obligations.ts
 class Obligations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new Obligations([...values]);
+    return new Obligations(values);
   }
   add(value) {
     return new Obligations([...this.#values, value]);
@@ -2000,6 +2075,9 @@ class Scenario {
     this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
+  }
+  static parse(props) {
+    return parseConstruction(() => new Scenario(props));
   }
   static of(props) {
     return new Scenario(props);
@@ -2035,8 +2113,8 @@ class Scenario {
     return this.#bindings;
   }
 }
-// src/requirements/domain/scenario-id.ts
-class ScenarioId {
+// src/requirements/domain/scenario-identifier.ts
+class ScenarioIdentifier {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -2046,10 +2124,10 @@ class ScenarioId {
     this.#value = raw;
   }
   static of(raw) {
-    return new ScenarioId(raw);
+    return new ScenarioIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new ScenarioId(raw));
+    return parseConstruction(() => new ScenarioIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -2058,17 +2136,17 @@ class ScenarioId {
     return this.#value;
   }
   asTargetId() {
-    return TargetId.of(this.#value);
+    return TargetIdentifier.of(this.#value);
   }
 }
 // src/requirements/domain/scenarios.ts
 class Scenarios {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new Scenarios([...values]);
+    return new Scenarios(values);
   }
   add(value) {
     return new Scenarios([...this.#values, value]);
@@ -2143,7 +2221,7 @@ class RequirementsModel {
     return this.#background;
   }
   allTargets() {
-    return TargetIds.of(Array.from([...this.#obligations.ids(), ...this.#scenarios.ids()], (raw) => TargetId.of(raw))).sortedCanonically();
+    return TargetIdentifiers.of(Array.from([...this.#obligations.ids(), ...this.#scenarios.ids()], (raw) => TargetIdentifier.of(raw))).sortedCanonically();
   }
   functionalRequirementReferencesOf(targets) {
     const refs = [];
@@ -2158,8 +2236,8 @@ class RequirementsModel {
     return FunctionalRequirementReferences.of(refs).sortedUnique();
   }
 }
-// src/requirements/domain/background-assumption-id.ts
-class BackgroundAssumptionId {
+// src/requirements/domain/background-assumption-identifier.ts
+class BackgroundAssumptionIdentifier {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -2169,10 +2247,10 @@ class BackgroundAssumptionId {
     this.#value = raw;
   }
   static of(raw) {
-    return new BackgroundAssumptionId(raw);
+    return new BackgroundAssumptionIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new BackgroundAssumptionId(raw));
+    return parseConstruction(() => new BackgroundAssumptionIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -2185,12 +2263,15 @@ class BackgroundAssumptionId {
 class BackgroundAssumption {
   #id;
   #assert;
-  constructor(id, assert) {
-    this.#id = id;
-    this.#assert = ExpressionTree.of(assert).asExpression();
+  constructor(props) {
+    this.#id = props.id;
+    this.#assert = ExpressionTree.of(props.assert).asExpression();
+  }
+  static parse(props) {
+    return parseConstruction(() => new BackgroundAssumption(props));
   }
   static of(props) {
-    return new BackgroundAssumption(props.id, props.assert);
+    return new BackgroundAssumption(props);
   }
   id() {
     return this.#id;
@@ -2203,10 +2284,10 @@ class BackgroundAssumption {
 class BackgroundAssumptions {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new BackgroundAssumptions([...values]);
+    return new BackgroundAssumptions(values);
   }
   add(value) {
     return new BackgroundAssumptions([...this.#values, value]);
@@ -2276,10 +2357,10 @@ function sortVerificationFindings(findings) {
 class VerificationFindings {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new VerificationFindings([...values]);
+    return new VerificationFindings(values);
   }
   add(value) {
     return new VerificationFindings([...this.#values, value]);
@@ -2340,10 +2421,10 @@ function sortVerificationSkipped(skipped) {
 class VerificationSkips {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new VerificationSkips([...values]);
+    return new VerificationSkips(values);
   }
   add(value) {
     return new VerificationSkips([...this.#values, value]);
@@ -2368,11 +2449,10 @@ class VerificationSkips {
 class VerificationWitness {
   #document;
   constructor(raw) {
-    assertValueSize(raw, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
-    this.#document = structuredClone(raw);
+    this.#document = boundedValueSnapshot(raw, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
   }
   static core(labels) {
-    return VerificationWitness.of({ core: [...labels] });
+    return VerificationWitness.of({ core: labels });
   }
   static model(values) {
     return VerificationWitness.of({ model: values });
@@ -2383,6 +2463,9 @@ class VerificationWitness {
   static trace(states) {
     return VerificationWitness.of({ trace: states.map((state) => state.toDocument()) });
   }
+  static parse(value) {
+    return parseConstruction(() => new VerificationWitness(value));
+  }
   static of(document) {
     return new VerificationWitness(document);
   }
@@ -2390,8 +2473,8 @@ class VerificationWitness {
     return structuredClone(this.#document);
   }
 }
-// src/requirements/domain/verification-report-id.ts
-class VerificationReportId {
+// src/requirements/domain/verification-report-identifier.ts
+class VerificationReportIdentifier {
   #directory;
   #backend;
   constructor(directory, backend) {
@@ -2399,7 +2482,7 @@ class VerificationReportId {
     this.#backend = backend;
   }
   static of(directory, backend) {
-    return new VerificationReportId(directory, BackendName.of(backend));
+    return new VerificationReportIdentifier(directory, BackendName.of(backend));
   }
   equals(other) {
     return this.#directory.equals(other.#directory) && this.#backend.equals(other.#backend);
@@ -2439,7 +2522,7 @@ class VerificationReport {
   static irUnreadable(id, method, cause) {
     return VerificationReport.compose({
       id,
-      irVersion: IrVersion.of("0.0.0"),
+      irVersion: IntermediateRepresentationVersion.of("0.0.0"),
       irHash: ContentHash.ofText(""),
       method,
       findings: VerificationFindings.of([]),
@@ -2604,10 +2687,10 @@ class VerificationReport {
 class CrossCheckedEntries {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new CrossCheckedEntries([...values]);
+    return new CrossCheckedEntries(values);
   }
   add(value) {
     return new CrossCheckedEntries([...this.#values, value]);
@@ -2646,10 +2729,10 @@ class CrossCheckedEntry {
 class VerificationReports {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new VerificationReports([...values]);
+    return new VerificationReports(values);
   }
   add(value) {
     return new VerificationReports([...this.#values, value]);
@@ -2689,7 +2772,7 @@ class VerificationReports {
             findings.push(VerificationFinding.of({
               kind: FindingKind.crossCheckDisagreement(),
               functionalRequirementReferences: FunctionalRequirementReferences.of([...scenarioById.get(sc.id().asString())?.functionalRequirementReferences().toArray() ?? []]).sortedUnique(),
-              targets: TargetIds.of([sc.id().asTargetId()]),
+              targets: TargetIdentifiers.of([sc.id().asTargetId()]),
               witness: VerificationWitness.verdicts(verdicts),
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`
             }));
@@ -2697,7 +2780,7 @@ class VerificationReports {
         }
       }
     }
-    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => CrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIds.of(Array.from([...targets], (raw) => TargetId.of(raw))).sortedCanonically() })).sort((x, y) => x.compareByBackend(y));
+    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => CrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIdentifiers.of(Array.from([...targets], (raw) => TargetIdentifier.of(raw))).sortedCanonically() })).sort((x, y) => x.compareByBackend(y));
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
@@ -2751,11 +2834,11 @@ class VerificationDirectory {
     const staged = this.finalizing(candidate.conformedTo(schema));
     if (model === null)
       return staged;
-    const derived = staged.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
+    const derived = staged.#reports.crossChecked(VerificationReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
     return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
   }
   crossChecked(model, irHash) {
-    const derived = this.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
+    const derived = this.#reports.crossChecked(VerificationReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
     return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, derived);
   }
   withoutCrossCheck() {
@@ -2782,8 +2865,8 @@ class VerificationDirectory {
     return this.#crossCheck;
   }
 }
-// src/requirements/domain/smt-query-verdict.ts
-class SmtQueryVerdict {
+// src/requirements/domain/satisfiability-modulo-theories-query-verdict.ts
+class SatisfiabilityModuloTheoriesQueryVerdict {
   #status;
   #decodedModel;
   #core;
@@ -2792,11 +2875,14 @@ class SmtQueryVerdict {
     this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
     this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
   }
+  static parse(props) {
+    return parseConstruction(() => new SatisfiabilityModuloTheoriesQueryVerdict(props));
+  }
   static of(props) {
-    return new SmtQueryVerdict(props);
+    return new SatisfiabilityModuloTheoriesQueryVerdict(props);
   }
   static missing() {
-    return new SmtQueryVerdict({ status: "missing" });
+    return new SatisfiabilityModuloTheoriesQueryVerdict({ status: "missing" });
   }
   isMissing() {
     return this.#status === "missing";
@@ -2827,21 +2913,21 @@ class SmtQueryVerdict {
     return { ...this.#decodedModel ?? {} };
   }
 }
-// src/requirements/domain/smt-query-verdicts.ts
-class SmtQueryVerdicts {
+// src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts
+class SatisfiabilityModuloTheoriesQueryVerdicts {
   #values;
   constructor(values) {
     this.#values = values;
   }
   static of(values) {
-    return new SmtQueryVerdicts(values);
+    return new SatisfiabilityModuloTheoriesQueryVerdicts(values);
   }
   verdictOf(queryId) {
-    return this.#values.get(queryId) ?? SmtQueryVerdict.missing();
+    return this.#values.get(queryId) ?? SatisfiabilityModuloTheoriesQueryVerdict.missing();
   }
 }
-// src/requirements/domain/smt-verification-plan.ts
-class SmtVerificationPlan {
+// src/requirements/domain/satisfiability-modulo-theories-verification-plan.ts
+class SatisfiabilityModuloTheoriesVerificationPlan {
   #compiled;
   #vacuityQueries;
   #skipped;
@@ -2859,7 +2945,7 @@ class SmtVerificationPlan {
     this.#scenarioQueries = seed.scenarioQueries;
   }
   static of(seed) {
-    return new SmtVerificationPlan(seed);
+    return new SatisfiabilityModuloTheoriesVerificationPlan(seed);
   }
   planSkipped() {
     return this.#skipped;
@@ -2868,10 +2954,10 @@ class SmtVerificationPlan {
     const findings = [];
     const skipped = [...this.#skipped.toArray()];
     const conflictKeys = new Set;
-    const invariantIds = TargetIds.of(model.obligations().toArray().filter((o) => o.isInvariantLike() && this.#compiled.has(o.id())).map((o) => o.id().asTargetId()));
+    const invariantIds = TargetIdentifiers.of(model.obligations().toArray().filter((o) => o.isInvariantLike() && this.#compiled.has(o.id())).map((o) => o.id().asTargetId()));
     const coreToTargets = (core) => {
       const targets = core.map((label) => this.#labelToTarget.get(label)).filter((t) => t !== undefined && t.asString().startsWith("OB-"));
-      return TargetIds.of(targets).sortedUniqueCanonically();
+      return TargetIdentifiers.of(targets).sortedUniqueCanonically();
     };
     const addConflict = (targets, core, detail) => {
       const effective = targets.count() > 0 ? targets : invariantIds;
@@ -2901,10 +2987,10 @@ class SmtVerificationPlan {
       for (const [obligationId, queryId] of this.#vacuityQueries) {
         const r = results.verdictOf(queryId);
         if (r.isUnsat()) {
-          const targets = TargetIds.of([...coreToTargets([...r.coreLabels()]), obligationId.asTargetId()]).sortedUniqueCanonically();
+          const targets = TargetIdentifiers.of([...coreToTargets([...r.coreLabels()]), obligationId.asTargetId()]).sortedUniqueCanonically();
           addConflict(targets, [...r.coreLabels()], `The condition of obligation ${obligationId.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`);
         } else if (r.isUndecided()) {
-          skipped.push(...r.skipsFor(TargetIds.of([obligationId.asTargetId()]), `vacuity check for ${obligationId.asString()}`));
+          skipped.push(...r.skipsFor(TargetIdentifiers.of([obligationId.asTargetId()]), `vacuity check for ${obligationId.asString()}`));
         }
       }
     }
@@ -2939,11 +3025,11 @@ class SmtVerificationPlan {
         continue;
       const r = results.verdictOf(qid);
       if (r.isUndecided()) {
-        skipped.push(...r.skipsFor(TargetIds.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`));
+        skipped.push(...r.skipsFor(TargetIdentifiers.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`));
         continue;
       }
       if (sc.isAccept() && r.isUnsat()) {
-        const targets = TargetIds.of([sc.id().asTargetId(), ...coreToTargets([...r.coreLabels()])]).sortedUniqueCanonically();
+        const targets = TargetIdentifiers.of([sc.id().asTargetId(), ...coreToTargets([...r.coreLabels()])]).sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
           functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
@@ -2955,8 +3041,8 @@ class SmtVerificationPlan {
       if (sc.isReject() && r.isSat()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([sc.id().asTargetId()])),
-          targets: TargetIds.of([sc.id().asTargetId()]),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([sc.id().asTargetId()])),
+          targets: TargetIdentifiers.of([sc.id().asTargetId()]),
           witness: VerificationWitness.model(r.witnessModel()),
           detail: `Reject scenario ${sc.id().asString()} is still satisfiable \u2014 the requirements do not exclude an example that should be rejected (witness state attached).`
         }));
@@ -2965,8 +3051,8 @@ class SmtVerificationPlan {
     return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
   }
 }
-// src/requirements/domain/smt-event-pair-probe.ts
-class SmtEventPairProbe {
+// src/requirements/domain/satisfiability-modulo-theories-event-pair-probe.ts
+class SatisfiabilityModuloTheoriesEventPairProbe {
   #qOverlap;
   #qJoint;
   #a;
@@ -2980,7 +3066,7 @@ class SmtEventPairProbe {
     this.#trigger = props.trigger;
   }
   static of(props) {
-    return new SmtEventPairProbe(props);
+    return new SatisfiabilityModuloTheoriesEventPairProbe(props);
   }
   a() {
     return this.#a;
@@ -2992,7 +3078,7 @@ class SmtEventPairProbe {
     return this.#trigger;
   }
   targets() {
-    return TargetIds.of([this.#a.asTargetId(), this.#b.asTargetId()]);
+    return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
   }
   overlapVerdictIn(results) {
     return results.verdictOf(this.#qOverlap);
@@ -3001,17 +3087,17 @@ class SmtEventPairProbe {
     return results.verdictOf(this.#qJoint);
   }
 }
-// src/requirements/domain/smt-event-pair-probes.ts
-class SmtEventPairProbes {
+// src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts
+class SatisfiabilityModuloTheoriesEventPairProbes {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new SmtEventPairProbes([...values]);
+    return new SatisfiabilityModuloTheoriesEventPairProbes(values);
   }
   add(value) {
-    return new SmtEventPairProbes([...this.#values, value]);
+    return new SatisfiabilityModuloTheoriesEventPairProbes([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -3024,23 +3110,13 @@ class SmtEventPairProbes {
 class TraceValue {
   #value;
   constructor(value) {
-    assertValueSize(value, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
-    this.#value = structuredClone(value);
+    this.#value = boundedValueSnapshot(value, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
   }
   static of(value) {
     return new TraceValue(value);
   }
   static parse(value) {
     return parseConstruction(() => new TraceValue(value));
-  }
-  static ofLiteral(value) {
-    return new TraceValue(value ?? null);
-  }
-  static ofBoolean(value) {
-    return new TraceValue(value);
-  }
-  static ofNumber(value) {
-    return new TraceValue(value);
   }
   static absent() {
     return new TraceValue(null);
@@ -3085,10 +3161,10 @@ class TraceState {
 class TraceStates {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new TraceStates([...values]);
+    return new TraceStates(values);
   }
   add(value) {
     return new TraceStates([...this.#values, value]);
@@ -3121,7 +3197,7 @@ class QuintMachinePlan {
     });
   }
   machineTargets() {
-    return TargetIds.of([...this.#invariantComponents.ids().toTargetIds(), ...this.#eventIds.toTargetIds()]).sortedUniqueCanonically();
+    return TargetIdentifiers.of([...this.#invariantComponents.ids().toTargetIds(), ...this.#eventIds.toTargetIds()]).sortedUniqueCanonically();
   }
   #hasInitFor(id) {
     return this.#scenariosWithInit.has(id);
@@ -3157,7 +3233,7 @@ class QuintMachinePlan {
         const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.conflict(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
           targets,
           witness: machineRun.witness(),
           detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`
@@ -3193,8 +3269,8 @@ class QuintMachinePlan {
       } else if (r.isViolation()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.conflict(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([target])),
-          targets: TargetIds.of([target]),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([target])),
+          targets: TargetIdentifiers.of([target]),
           witness: r.witness(),
           detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`
         }));
@@ -3233,7 +3309,7 @@ class QuintMachinePlan {
       const boundModel = sc.bindings().toDocument();
       if (sc.isAccept() && r.isViolated()) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
-        const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
+        const targets = TargetIdentifiers.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
           functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
@@ -3245,8 +3321,8 @@ class QuintMachinePlan {
       if (sc.isReject() && !r.isViolated()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([target])),
-          targets: TargetIds.of([target]),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([target])),
+          targets: TargetIdentifiers.of([target]),
           witness: VerificationWitness.model(boundModel),
           detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation \u2014 the requirements do not exclude an example that should be rejected.`
         }));
@@ -3260,39 +3336,39 @@ function evaluate(e, state) {
   const arg = (i) => evaluate((e.args ?? [])[i], state);
   switch (e.op) {
     case "and":
-      return TraceValue.ofBoolean((e.args ?? []).every((a) => evaluate(a, state).isTrue()));
+      return TraceValue.of((e.args ?? []).every((a) => evaluate(a, state).isTrue()));
     case "or":
-      return TraceValue.ofBoolean((e.args ?? []).some((a) => evaluate(a, state).isTrue()));
+      return TraceValue.of((e.args ?? []).some((a) => evaluate(a, state).isTrue()));
     case "not":
-      return TraceValue.ofBoolean(!arg(0).isTrue());
+      return TraceValue.of(!arg(0).isTrue());
     case "implies":
-      return TraceValue.ofBoolean(!arg(0).isTrue() || arg(1).isTrue());
+      return TraceValue.of(!arg(0).isTrue() || arg(1).isTrue());
     case "iff":
-      return TraceValue.ofBoolean(arg(0).isTrue() === arg(1).isTrue());
+      return TraceValue.of(arg(0).isTrue() === arg(1).isTrue());
     case "eq":
-      return TraceValue.ofBoolean(arg(0).equals(arg(1)));
+      return TraceValue.of(arg(0).equals(arg(1)));
     case "ne":
-      return TraceValue.ofBoolean(!arg(0).equals(arg(1)));
+      return TraceValue.of(!arg(0).equals(arg(1)));
     case "lt":
-      return TraceValue.ofBoolean(arg(0).asNumber() < arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() < arg(1).asNumber());
     case "le":
-      return TraceValue.ofBoolean(arg(0).asNumber() <= arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() <= arg(1).asNumber());
     case "gt":
-      return TraceValue.ofBoolean(arg(0).asNumber() > arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() > arg(1).asNumber());
     case "ge":
-      return TraceValue.ofBoolean(arg(0).asNumber() >= arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() >= arg(1).asNumber());
     case "add":
-      return TraceValue.ofNumber(arg(0).asNumber() + arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() + arg(1).asNumber());
     case "sub":
-      return TraceValue.ofNumber(arg(0).asNumber() - arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() - arg(1).asNumber());
     case "mul":
-      return TraceValue.ofNumber(arg(0).asNumber() * arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() * arg(1).asNumber());
     case "ref":
       return state.valueAt(AttributePath.of(e.path ?? ""));
     case "bool":
     case "int":
     case "enum":
-      return TraceValue.ofLiteral(e.value);
+      return TraceValue.of(e.value ?? null);
     default:
       return TraceValue.absent();
   }
@@ -3304,6 +3380,9 @@ class QuintMachineComponent {
   constructor(props) {
     this.#id = props.id;
     this.#expression = ExpressionTree.of(props.expression).asExpression();
+  }
+  static parse(props) {
+    return parseConstruction(() => new QuintMachineComponent(props));
   }
   static of(props) {
     return new QuintMachineComponent(props);
@@ -3319,10 +3398,10 @@ class QuintMachineComponent {
 class QuintMachineComponents {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new QuintMachineComponents([...values]);
+    return new QuintMachineComponents(values);
   }
   add(value) {
     return new QuintMachineComponents([...this.#values, value]);
@@ -3334,7 +3413,7 @@ class QuintMachineComponents {
     return this.#values.length === 0;
   }
   ids() {
-    return ObligationIds.of(this.#values.map((c) => c.id()));
+    return ObligationIdentifiers.of(this.#values.map((c) => c.id()));
   }
   violatedBy(state) {
     return new QuintMachineComponents(this.#values.filter((c) => c.isViolatedIn(state)));
@@ -3496,8 +3575,8 @@ class QuintTemporalVerdict {
     return trace !== null ? VerificationWitness.trace(trace.toArray()) : VerificationWitness.model({});
   }
 }
-// src/requirements/domain/ir-model-decl.ts
-class IrModelDecl {
+// src/requirements/domain/intermediate-representation-model-declaration.ts
+class IntermediateRepresentationModelDeclaration {
   #entities;
   #obligations;
   #scenarios;
@@ -3509,7 +3588,7 @@ class IrModelDecl {
     this.#background = seed.background;
   }
   static of(seed) {
-    return new IrModelDecl(seed);
+    return new IntermediateRepresentationModelDeclaration(seed);
   }
   wellFormednessErrors() {
     const errors = [];
@@ -3597,8 +3676,8 @@ class IrModelDecl {
     return errors;
   }
 }
-// src/requirements/domain/ir-attribute-decl.ts
-class IrAttributeDecl {
+// src/requirements/domain/intermediate-representation-attribute-declaration.ts
+class IntermediateRepresentationAttributeDeclaration {
   #name;
   #kind;
   #values;
@@ -3612,7 +3691,7 @@ class IrAttributeDecl {
     this.#max = props.max;
   }
   static of(props) {
-    return new IrAttributeDecl(props);
+    return new IntermediateRepresentationAttributeDeclaration(props);
   }
   name() {
     return this.#name;
@@ -3633,17 +3712,17 @@ class IrAttributeDecl {
     return this.#kind.asString();
   }
 }
-// src/requirements/domain/ir-attribute-decls.ts
-class IrAttributeDecls {
+// src/requirements/domain/intermediate-representation-attribute-declarations.ts
+class IntermediateRepresentationAttributeDeclarations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new IrAttributeDecls([...values]);
+    return new IntermediateRepresentationAttributeDeclarations(values);
   }
   add(value) {
-    return new IrAttributeDecls([...this.#values, value]);
+    return new IntermediateRepresentationAttributeDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -3652,8 +3731,8 @@ class IrAttributeDecls {
     return this.#values;
   }
 }
-// src/requirements/domain/ir-attribute-name.ts
-class IrAttributeName {
+// src/requirements/domain/intermediate-representation-attribute-name.ts
+class IntermediateRepresentationAttributeName {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -3663,10 +3742,10 @@ class IrAttributeName {
     this.#value = raw;
   }
   static of(raw) {
-    return new IrAttributeName(raw);
+    return new IntermediateRepresentationAttributeName(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new IrAttributeName(raw));
+    return parseConstruction(() => new IntermediateRepresentationAttributeName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -3675,16 +3754,19 @@ class IrAttributeName {
     return this.#value;
   }
 }
-// src/requirements/domain/ir-background-decl.ts
-class IrBackgroundDecl {
+// src/requirements/domain/intermediate-representation-background-declaration.ts
+class IntermediateRepresentationBackgroundDeclaration {
   #id;
   #assert;
   constructor(props) {
     this.#id = props.id;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
   }
+  static parse(props) {
+    return parseConstruction(() => new IntermediateRepresentationBackgroundDeclaration(props));
+  }
   static of(props) {
-    return new IrBackgroundDecl(props);
+    return new IntermediateRepresentationBackgroundDeclaration(props);
   }
   id() {
     return this.#id;
@@ -3697,51 +3779,27 @@ class IrBackgroundDecl {
       visitor(this.#assert, false);
   }
 }
-// src/requirements/domain/ir-background-decls.ts
-class IrBackgroundDecls {
+// src/requirements/domain/intermediate-representation-background-declarations.ts
+class IntermediateRepresentationBackgroundDeclarations {
   #values;
   constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new IrBackgroundDecls([...values]);
-  }
-  add(value) {
-    return new IrBackgroundDecls([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/ir-declared-values.ts
-class IrDeclaredValues {
-  #values;
-  constructor(values) {
-    if (values.length > 1e4)
-      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new IrDeclaredValues(values);
+    return new IntermediateRepresentationBackgroundDeclarations(values);
   }
   add(value) {
-    return new IrDeclaredValues([...this.#values, value]);
+    return new IntermediateRepresentationBackgroundDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
-  }
-  includes(value) {
-    return this.#values.some((member) => member.matchesLiteral(value));
   }
   toArray() {
     return this.#values;
   }
 }
-// src/requirements/domain/ir-entity-decl.ts
-class IrEntityDecl {
+// src/requirements/domain/intermediate-representation-entity-declaration.ts
+class IntermediateRepresentationEntityDeclaration {
   #name;
   #attributes;
   constructor(props) {
@@ -3749,7 +3807,7 @@ class IrEntityDecl {
     this.#attributes = props.attributes;
   }
   static of(props) {
-    return new IrEntityDecl(props);
+    return new IntermediateRepresentationEntityDeclaration(props);
   }
   name() {
     return this.#name;
@@ -3766,17 +3824,17 @@ class IrEntityDecl {
     }
   }
 }
-// src/requirements/domain/ir-entity-decls.ts
-class IrEntityDecls {
+// src/requirements/domain/intermediate-representation-entity-declarations.ts
+class IntermediateRepresentationEntityDeclarations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new IrEntityDecls([...values]);
+    return new IntermediateRepresentationEntityDeclarations(values);
   }
   add(value) {
-    return new IrEntityDecls([...this.#values, value]);
+    return new IntermediateRepresentationEntityDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -3785,8 +3843,8 @@ class IrEntityDecls {
     return this.#values;
   }
 }
-// src/requirements/domain/ir-entity-name.ts
-class IrEntityName {
+// src/requirements/domain/intermediate-representation-entity-name.ts
+class IntermediateRepresentationEntityName {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -3796,10 +3854,10 @@ class IrEntityName {
     this.#value = raw;
   }
   static of(raw) {
-    return new IrEntityName(raw);
+    return new IntermediateRepresentationEntityName(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new IrEntityName(raw));
+    return parseConstruction(() => new IntermediateRepresentationEntityName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -3808,8 +3866,8 @@ class IrEntityName {
     return this.#value;
   }
 }
-// src/requirements/domain/ir-obligation-decl.ts
-class IrObligationDecl {
+// src/requirements/domain/intermediate-representation-obligation-declaration.ts
+class IntermediateRepresentationObligationDeclaration {
   #id;
   #assert;
   #guard;
@@ -3822,8 +3880,11 @@ class IrObligationDecl {
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#temporal = props.temporal;
   }
+  static parse(props) {
+    return parseConstruction(() => new IntermediateRepresentationObligationDeclaration(props));
+  }
   static of(props) {
-    return new IrObligationDecl(props);
+    return new IntermediateRepresentationObligationDeclaration(props);
   }
   id() {
     return this.#id;
@@ -3838,17 +3899,17 @@ class IrObligationDecl {
     this.#temporal?.inspectExpressions(visitor);
   }
 }
-// src/requirements/domain/ir-obligation-decls.ts
-class IrObligationDecls {
+// src/requirements/domain/intermediate-representation-obligation-declarations.ts
+class IntermediateRepresentationObligationDeclarations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new IrObligationDecls([...values]);
+    return new IntermediateRepresentationObligationDeclarations(values);
   }
   add(value) {
-    return new IrObligationDecls([...this.#values, value]);
+    return new IntermediateRepresentationObligationDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -3857,8 +3918,8 @@ class IrObligationDecls {
     return this.#values;
   }
 }
-// src/requirements/domain/ir-scenario-decl.ts
-class IrScenarioDecl {
+// src/requirements/domain/intermediate-representation-scenario-declaration.ts
+class IntermediateRepresentationScenarioDeclaration {
   #id;
   #bindings;
   #hasEvent;
@@ -3869,8 +3930,11 @@ class IrScenarioDecl {
     this.#hasEvent = props.hasEvent;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
+  static parse(props) {
+    return parseConstruction(() => new IntermediateRepresentationScenarioDeclaration(props));
+  }
   static of(props) {
-    return new IrScenarioDecl(props);
+    return new IntermediateRepresentationScenarioDeclaration(props);
   }
   id() {
     return this.#id;
@@ -3883,17 +3947,17 @@ class IrScenarioDecl {
       visitor(this.#expect, this.#hasEvent);
   }
 }
-// src/requirements/domain/ir-scenario-decls.ts
-class IrScenarioDecls {
+// src/requirements/domain/intermediate-representation-scenario-declarations.ts
+class IntermediateRepresentationScenarioDeclarations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new IrScenarioDecls([...values]);
+    return new IntermediateRepresentationScenarioDeclarations(values);
   }
   add(value) {
-    return new IrScenarioDecls([...this.#values, value]);
+    return new IntermediateRepresentationScenarioDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -3902,8 +3966,8 @@ class IrScenarioDecls {
     return this.#values;
   }
 }
-// src/requirements/domain/ir-temporal-decl.ts
-class IrTemporalDecl {
+// src/requirements/domain/intermediate-representation-temporal-declaration.ts
+class IntermediateRepresentationTemporalDeclaration {
   #assert;
   #from;
   #to;
@@ -3912,8 +3976,11 @@ class IrTemporalDecl {
     this.#from = props.from === undefined ? undefined : ExpressionTree.of(props.from).asExpression();
     this.#to = props.to === undefined ? undefined : ExpressionTree.of(props.to).asExpression();
   }
+  static parse(props) {
+    return parseConstruction(() => new IntermediateRepresentationTemporalDeclaration(props));
+  }
   static of(props) {
-    return new IrTemporalDecl(props);
+    return new IntermediateRepresentationTemporalDeclaration(props);
   }
   inspectExpressions(visitor) {
     if (this.#assert !== undefined)
@@ -3928,10 +3995,10 @@ class IrTemporalDecl {
 class FunctionalRequirementReferenceClaims {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new FunctionalRequirementReferenceClaims([...values]);
+    return new FunctionalRequirementReferenceClaims(values);
   }
   add(value) {
     return new FunctionalRequirementReferenceClaims([...this.#values, value]);
@@ -3957,7 +4024,7 @@ class FunctionalRequirementReferenceIndex {
     const ownersByRef = new Map;
     for (const claim of claims)
       claim.claimInto(ownersByRef);
-    return new FunctionalRequirementReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.of(ref), FunctionalRequirementReferenceClaims.of(owners)])));
+    return new FunctionalRequirementReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementIdentifier.of(ref), FunctionalRequirementReferenceClaims.of(owners)])));
   }
   referencedIds() {
     return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
@@ -3965,7 +4032,7 @@ class FunctionalRequirementReferenceIndex {
   missingErrors(known) {
     const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
     return missing.map((id) => {
-      const owners = [...this.#ownersByRef.get(RequirementId.of(id))?.ownerDescriptions() ?? []].sort().join(", ");
+      const owners = [...this.#ownersByRef.get(RequirementIdentifier.of(id))?.ownerDescriptions() ?? []].sort().join(", ");
       return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
     });
   }
@@ -4017,14 +4084,14 @@ class SourceAnchor {
     return [];
   }
 }
-// src/requirements/domain/requirements-source-id.ts
-class RequirementsSourceId {
+// src/requirements/domain/requirements-source-identifier.ts
+class RequirementsSourceIdentifier {
   #recordRoot;
   constructor(recordRoot) {
     this.#recordRoot = recordRoot;
   }
   static of(recordRoot) {
-    return new RequirementsSourceId(recordRoot);
+    return new RequirementsSourceIdentifier(recordRoot);
   }
   equals(other) {
     return this.#recordRoot.equals(other.#recordRoot);
@@ -4033,14 +4100,14 @@ class RequirementsSourceId {
     return this.#recordRoot;
   }
 }
-// src/requirements/domain/formal-model-id.ts
-class FormalModelId {
+// src/requirements/domain/formal-model-identifier.ts
+class FormalModelIdentifier {
   #path;
   constructor(path) {
     this.#path = path;
   }
   static of(path) {
-    return new FormalModelId(path);
+    return new FormalModelIdentifier(path);
   }
   equals(other) {
     return this.#path.equals(other.#path);
@@ -4049,13 +4116,13 @@ class FormalModelId {
     return this.#path;
   }
 }
-// src/requirements/domain/ir-validation-materials.ts
-class IrValidationMaterials {
+// src/requirements/domain/intermediate-representation-validation-materials.ts
+class IntermediateRepresentationValidationMaterials {
   #id;
   #irVersion;
   #schemaErrors;
   #view;
-  #frClaims;
+  #functionalRequirementReferenceClaims;
   #declaredDigest;
   #sourceId;
   #sourceDocument;
@@ -4064,13 +4131,13 @@ class IrValidationMaterials {
     this.#irVersion = seed.irVersion;
     this.#schemaErrors = seed.schemaErrors;
     this.#view = seed.view;
-    this.#frClaims = seed.frClaims;
+    this.#functionalRequirementReferenceClaims = seed.functionalRequirementReferenceClaims;
     this.#declaredDigest = seed.declaredDigest;
     this.#sourceId = seed.sourceId;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
   static of(seed) {
-    return new IrValidationMaterials(seed);
+    return new IntermediateRepresentationValidationMaterials(seed);
   }
   id() {
     return this.#id;
@@ -4084,8 +4151,8 @@ class IrValidationMaterials {
   view() {
     return this.#view;
   }
-  frReferenceIndex() {
-    return FunctionalRequirementReferenceIndex.of(this.#frClaims.toArray());
+  functionalRequirementReferenceIndex() {
+    return FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray());
   }
   declaredDigest() {
     return this.#declaredDigest;
@@ -4097,14 +4164,14 @@ class IrValidationMaterials {
     return new Uint8Array(this.#sourceDocument);
   }
 }
-// src/requirements/domain/ir-validation-materials-id.ts
-class IrValidationMaterialsId {
+// src/requirements/domain/intermediate-representation-validation-materials-identifier.ts
+class IntermediateRepresentationValidationMaterialsIdentifier {
   #model;
   constructor(model) {
     this.#model = model;
   }
-  static ofModel(model) {
-    return new IrValidationMaterialsId(model);
+  static of(model) {
+    return new IntermediateRepresentationValidationMaterialsIdentifier(model);
   }
   equals(other) {
     return this.#model.equals(other.#model);
@@ -4146,7 +4213,7 @@ class RequirementsSource {
     return new Uint8Array(this.#sourceDocument);
   }
 }
-// src/requirements/adapter/smt-plan.ts
+// src/requirements/adapter/satisfiability-modulo-theories-plan.ts
 class CompileError extends Error {
   constructor(message) {
     super(message);
@@ -4428,7 +4495,7 @@ function buildSmtPlan(model) {
           assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
           model: []
         });
-        eventPairs.push(SmtEventPairProbe.of({ qOverlap: QueryLabel.of(qOverlap), qJoint: QueryLabel.of(qJoint), a: a.id(), b: b.id(), trigger: TriggerName.of(trigger) }));
+        eventPairs.push(SatisfiabilityModuloTheoriesEventPairProbe.of({ qOverlap: QueryLabel.of(qOverlap), qJoint: QueryLabel.of(qJoint), a: a.id(), b: b.id(), trigger: TriggerName.of(trigger) }));
       }
     }
   }
@@ -4495,14 +4562,14 @@ function buildSmtPlan(model) {
   }
   return {
     queries,
-    plan: SmtVerificationPlan.of({
+    plan: SatisfiabilityModuloTheoriesVerificationPlan.of({
       vacuityQueries: KeyedIndex.of(vacuityQueries),
-      compiled: KeySet.of([...compiled].filter(([, ok2]) => ok2).map(([id]) => ObligationId.of(id))),
+      compiled: KeySet.of([...compiled].filter(([, ok2]) => ok2).map(([id]) => ObligationIdentifier.of(id))),
       skipped: VerificationSkips.of(skipped),
-      labelToTarget: KeyedIndex.of([...labelToTarget].filter(([, target]) => target.startsWith("OB-")).map(([label, target]) => [QueryLabel.of(label), TargetId.of(target)])),
-      eventPairs: SmtEventPairProbes.of(eventPairs),
-      gapTriggers: KeyedIndex.of([...gapTriggers].map(([trigger, ids]) => [TriggerName.of(trigger), TargetIds.of(Array.from(ids, (raw) => TargetId.of(raw)))])),
-      scenarioQueries: KeyedIndex.of([...scenarioQueries].map(([sc, qid]) => [ScenarioId.of(sc), QueryLabel.of(qid)]))
+      labelToTarget: KeyedIndex.of([...labelToTarget].filter(([, target]) => target.startsWith("OB-")).map(([label, target]) => [QueryLabel.of(label), TargetIdentifier.of(target)])),
+      eventPairs: SatisfiabilityModuloTheoriesEventPairProbes.of(eventPairs),
+      gapTriggers: KeyedIndex.of([...gapTriggers].map(([trigger, ids]) => [TriggerName.of(trigger), TargetIdentifiers.of(Array.from(ids, (raw) => TargetIdentifier.of(raw)))])),
+      scenarioQueries: KeyedIndex.of([...scenarioQueries].map(([sc, qid]) => [ScenarioIdentifier.of(sc), QueryLabel.of(qid)]))
     })
   };
 }
@@ -4547,12 +4614,12 @@ function parseSmtChildResults(raw, expectedIds) {
   return ok(results);
 }
 
-// src/requirements/adapter/z3-solver-client-impl.ts
+// src/requirements/adapter/z3-solver-client-implementation.ts
 import { spawnSync } from "child_process";
 var CHILD_BUDGET_MS = 45000;
 var CHILD_WALL_TIMEOUT_MS = 55000;
 
-class Z3SolverClientImpl {
+class Z3SolverClientImplementation {
   #config;
   constructor(config) {
     this.#config = config;
@@ -4574,13 +4641,13 @@ class Z3SolverClientImpl {
       });
       if (!parsed.ok)
         return { plan: plan.plan, result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` } };
-      verdicts.push([parsed.value.label, SmtQueryVerdict.of({
+      verdicts.push([parsed.value.label, SatisfiabilityModuloTheoriesQueryVerdict.of({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
         core: parsed.value.core?.map((label) => label.asString())
       })]);
     }
-    return { plan: plan.plan, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(KeyedIndex.of(verdicts)) } };
+    return { plan: plan.plan, result: { kind: "solved", verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.of(verdicts)) } };
   }
   #runChild(queries) {
     const payload = JSON.stringify({ queries, timeoutMs: this.#config.perQueryTimeoutMs, budgetMs: CHILD_BUDGET_MS });
@@ -4635,24 +4702,31 @@ function parseSiblingReportDocument(directory, fileName, raw) {
   const doc = decoded.value;
   if (`${doc.backend.asString()}.json` !== fileName)
     return err("backend must match the report filename");
-  return ok(VerificationReport.of({
-    id: VerificationReportId.of(directory, doc.backend.asString()),
-    irVersion: doc.irVersion,
-    irHash: doc.irHash,
-    method: doc.method,
-    findings: VerificationFindings.of(doc.findings.map((entry) => VerificationFinding.of({
+  const findings = [];
+  for (const entry of doc.findings) {
+    const witness = VerificationWitness.parse(entry.witness);
+    if (!witness.ok)
+      return err(JSON.stringify(witness.error));
+    findings.push(VerificationFinding.of({
       kind: entry.kind,
       functionalRequirementReferences: entry.functionalRequirementReferences,
       targets: entry.targets,
-      witness: VerificationWitness.of(entry.witness),
+      witness: witness.value,
       detail: entry.detail
-    }))),
+    }));
+  }
+  return ok(VerificationReport.of({
+    id: VerificationReportIdentifier.of(directory, doc.backend.asString()),
+    irVersion: doc.irVersion,
+    irHash: doc.irHash,
+    method: doc.method,
+    findings: VerificationFindings.of(findings),
     skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.of(entry))),
     crossChecked: doc.crossChecked === undefined ? null : CrossCheckedEntries.of(doc.crossChecked.map(CrossCheckedEntry.of)),
     unavailableReason: doc.unavailable?.reason ?? null
   }));
 }
-// src/requirements/adapter/verification-directory-repository-impl.ts
+// src/requirements/adapter/verification-directory-repository-implementation.ts
 import { existsSync, mkdirSync as mkdirSync3, readFileSync as readFileSync3, readdirSync, renameSync as renameSync3, rmSync as rmSync3 } from "fs";
 import { join as join3 } from "path";
 var CROSS_CHECK_BASENAME = "cross-check.json";
@@ -4676,7 +4750,7 @@ function documentsByFileName(reports) {
   return out;
 }
 
-class VerificationDirectoryRepositoryImpl {
+class VerificationDirectoryRepositoryImplementation {
   #lock;
   constructor(lock = new DirectoryFinalizationLock(new SystemClock, UNPROBED_LIVENESS, VERIFICATION_LOCK_BASENAME)) {
     this.#lock = lock;
@@ -5135,7 +5209,7 @@ function compile(model) {
 `,
     plan: QuintMachinePlan.of({
       invariantComponents: QuintMachineComponents.of(invariantComponents),
-      eventIds: ObligationIds.of(eventIds),
+      eventIds: ObligationIdentifiers.of(eventIds),
       scenariosWithInit
     }),
     compileSkips,
@@ -5193,7 +5267,7 @@ function itfStatus(itfText) {
   } catch {}
   return "";
 }
-// src/requirements/adapter/quint-client-impl.ts
+// src/requirements/adapter/quint-client-implementation.ts
 import { spawnSync as spawnSync2 } from "child_process";
 import { existsSync as existsSync2, mkdtempSync, readFileSync as readFileSync4, readdirSync as readdirSync2, rmSync as rmSync4, writeFileSync as writeFileSync3 } from "fs";
 import { tmpdir } from "os";
@@ -5205,7 +5279,7 @@ var RUN_TIMEOUT_MS = 30000;
 var VERIFY_TIMEOUT_MS = 45000;
 var SCENARIO_TIMEOUT_MS = 15000;
 
-class QuintClientImpl {
+class QuintClientImplementation {
   #config;
   constructor(config) {
     this.#config = config;
@@ -5237,8 +5311,8 @@ class QuintClientImpl {
       const scenarios = this.#runScenarioPhase(machine, modulePath, work);
       const runs = QuintRuns.of({
         machine: machineRun,
-        temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationId.of(id), v])),
-        scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioId.of(id), v]))
+        temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationIdentifier.of(id), v])),
+        scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioIdentifier.of(id), v]))
       });
       return { kind: "checked", method, plan: machine.plan, compileSkips: VerificationSkips.of(machine.compileSkips), runs };
     } finally {
@@ -5364,7 +5438,7 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
     return out;
   }
 }
-// src/requirements/adapter/ir-validation-materials-repository-impl.ts
+// src/requirements/adapter/intermediate-representation-validation-materials-repository-implementation.ts
 import { existsSync as existsSync3, readFileSync as readFileSync5 } from "fs";
 import { basename as basename2, dirname as dirname2 } from "path";
 var FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";
@@ -5377,7 +5451,7 @@ function buildView(ir) {
   for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
     if (!isObject(ent) || typeof ent.name !== "string")
       continue;
-    const name = IrEntityName.parse(ent.name);
+    const name = IntermediateRepresentationEntityName.parse(ent.name);
     if (!name.ok)
       return err(JSON.stringify(name.error));
     const attributes = [];
@@ -5388,41 +5462,44 @@ function buildView(ir) {
       const kind = AttributeKind.parse(typeof t.kind === "string" ? t.kind : "");
       if (!kind.ok)
         return err(JSON.stringify(kind.error));
-      const name2 = IrAttributeName.parse(attr.name);
+      const name2 = IntermediateRepresentationAttributeName.parse(attr.name);
       if (!name2.ok)
         return err(JSON.stringify(name2.error));
-      const members = traverseResult(Array.isArray(t.values) ? t.values.filter((v) => typeof v === "string") : [], EnumMember.parse);
+      const members = flatMapResult(traverseResult(Array.isArray(t.values) ? t.values.filter((v) => typeof v === "string") : [], EnumerationMember.parse), EnumerationMembers.parse);
       if (!members.ok)
         return err(JSON.stringify(members.error));
-      attributes.push(IrAttributeDecl.of({
+      attributes.push(IntermediateRepresentationAttributeDeclaration.of({
         name: name2.value,
         kind: kind.value,
-        values: Array.isArray(t.values) ? IrDeclaredValues.of(members.value) : undefined,
+        values: Array.isArray(t.values) ? members.value : undefined,
         min: typeof t.min === "number" ? DeclaredBound.of(t.min) : undefined,
         max: typeof t.max === "number" ? DeclaredBound.of(t.max) : undefined
       }));
     }
-    entities.push(IrEntityDecl.of({ name: name.value, attributes: IrAttributeDecls.of(attributes) }));
+    entities.push(IntermediateRepresentationEntityDeclaration.of({ name: name.value, attributes: IntermediateRepresentationAttributeDeclarations.of(attributes) }));
   }
   const obligations = [];
   for (const ob of Array.isArray(ir.obligations) ? ir.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string")
       continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
-    const id = ObligationId.parse(ob.id);
+    const id = ObligationIdentifier.parse(ob.id);
     if (!id.ok)
       return err(JSON.stringify(id.error));
-    obligations.push(IrObligationDecl.of({
+    const constructed = IntermediateRepresentationObligationDeclaration.parse({
       id: id.value,
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
       effect: asExpression(ob.effect ?? null),
-      temporal: temporal === null ? undefined : IrTemporalDecl.of({
+      temporal: temporal === null ? undefined : IntermediateRepresentationTemporalDeclaration.of({
         assert: asExpression(temporal.assert ?? null),
         from: asExpression(temporal.from ?? null),
         to: asExpression(temporal.to ?? null)
       })
-    }));
+    });
+    if (!constructed.ok)
+      return err(JSON.stringify(constructed.error));
+    obligations.push(constructed.value);
   }
   const scenarios = [];
   for (const sc of Array.isArray(ir.scenarios) ? ir.scenarios : []) {
@@ -5431,33 +5508,39 @@ function buildView(ir) {
     const bindings = decodeDeclaredBindings(isObject(sc.bindings) ? sc.bindings : {});
     if (!bindings.ok)
       return err(bindings.error);
-    const id = ScenarioId.parse(sc.id);
+    const id = ScenarioIdentifier.parse(sc.id);
     if (!id.ok)
       return err(JSON.stringify(id.error));
-    scenarios.push(IrScenarioDecl.of({
+    const constructed = IntermediateRepresentationScenarioDeclaration.parse({
       id: id.value,
       bindings: bindings.value,
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null)
-    }));
+    });
+    if (!constructed.ok)
+      return err(JSON.stringify(constructed.error));
+    scenarios.push(constructed.value);
   }
   const background = [];
   for (const bg of Array.isArray(ir.background) ? ir.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string")
       continue;
-    const id = BackgroundAssumptionId.parse(bg.id);
+    const id = BackgroundAssumptionIdentifier.parse(bg.id);
     if (!id.ok)
       return err(JSON.stringify(id.error));
-    background.push(IrBackgroundDecl.of({ id: id.value, assert: asExpression(bg.assert ?? null) }));
+    const constructed = IntermediateRepresentationBackgroundDeclaration.parse({ id: id.value, assert: asExpression(bg.assert ?? null) });
+    if (!constructed.ok)
+      return err(JSON.stringify(constructed.error));
+    background.push(constructed.value);
   }
-  return ok(IrModelDecl.of({
-    entities: IrEntityDecls.of(entities),
-    obligations: IrObligationDecls.of(obligations),
-    scenarios: IrScenarioDecls.of(scenarios),
-    background: IrBackgroundDecls.of(background)
+  return ok(IntermediateRepresentationModelDeclaration.of({
+    entities: IntermediateRepresentationEntityDeclarations.of(entities),
+    obligations: IntermediateRepresentationObligationDeclarations.of(obligations),
+    scenarios: IntermediateRepresentationScenarioDeclarations.of(scenarios),
+    background: IntermediateRepresentationBackgroundDeclarations.of(background)
   }));
 }
-function collectFrClaims(ir) {
+function collectFunctionalRequirementReferenceClaims(ir) {
   const claims = [];
   for (const section of ["obligations", "scenarios", "unformalized"]) {
     const arr = Array.isArray(ir[section]) ? ir[section] : [];
@@ -5468,16 +5551,16 @@ function collectFrClaims(ir) {
       const refs = entry.frRefs ?? null;
       if (!Array.isArray(refs))
         continue;
-      const parsed = traverseResult(refs.filter((r) => typeof r === "string"), RequirementId.parse);
+      const parsed = flatMapResult(traverseResult(refs.filter((r) => typeof r === "string"), RequirementIdentifier.parse), FunctionalRequirementReferences.parse);
       if (!parsed.ok)
         return err(JSON.stringify(parsed.error));
-      claims.push(FunctionalRequirementReferenceClaim.of(owner, FunctionalRequirementReferences.of(parsed.value)));
+      claims.push(FunctionalRequirementReferenceClaim.of(owner, parsed.value));
     }
   }
   return ok(claims);
 }
 
-class IrValidationMaterialsRepositoryImpl {
+class IntermediateRepresentationValidationMaterialsRepositoryImplementation {
   #schemaPath;
   constructor(config) {
     this.#schemaPath = config.schemaPath;
@@ -5517,12 +5600,12 @@ class IrValidationMaterialsRepositoryImpl {
     }
     const schemaErrors = [];
     validateSchema(schema.value, schema.value, ir, "", schemaErrors);
-    const messages = traverseResult(schemaErrors, ErrorMessage.parse);
+    const messages = flatMapResult(traverseResult(schemaErrors, ErrorMessage.parse), ErrorMessages.parse);
     if (!messages.ok)
       return corrupt(JSON.stringify(messages.error));
     const recordRoot = ArtifactPath.of(dirname2(dirname2(dirname2(outputPath))));
     const parsed = combineResults({
-      irVersion: IrVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : ""),
+      irVersion: IntermediateRepresentationVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : ""),
       declaredDigest: typeof ir.sourceDigest === "string" ? DeclaredDigest.parse(ir.sourceDigest) : ok(null)
     });
     if (!parsed.ok)
@@ -5530,17 +5613,17 @@ class IrValidationMaterialsRepositoryImpl {
     const view = buildView(ir);
     if (!view.ok)
       return corrupt(view.error);
-    const claims = collectFrClaims(ir);
+    const claims = collectFunctionalRequirementReferenceClaims(ir);
     if (!claims.ok)
       return corrupt(claims.error);
-    return ok(IrValidationMaterials.of({
+    return ok(IntermediateRepresentationValidationMaterials.of({
       id,
       irVersion: parsed.value.irVersion,
-      schemaErrors: ErrorMessages.of(messages.value),
+      schemaErrors: messages.value,
       view: view.value,
-      frClaims: FunctionalRequirementReferenceClaims.of(claims.value),
+      functionalRequirementReferenceClaims: FunctionalRequirementReferenceClaims.of(claims.value),
       declaredDigest: parsed.value.declaredDigest,
-      sourceId: RequirementsSourceId.of(recordRoot),
+      sourceId: RequirementsSourceIdentifier.of(recordRoot),
       sourceDocument: new Uint8Array(bytes)
     }));
   }
@@ -5555,7 +5638,7 @@ class IrValidationMaterialsRepositoryImpl {
     }
   }
 }
-// src/requirements/adapter/requirements-source-repository-impl.ts
+// src/requirements/adapter/requirements-source-repository-implementation.ts
 import { existsSync as existsSync4, readFileSync as readFileSync6, readdirSync as readdirSync3 } from "fs";
 import { join as join5 } from "path";
 function findRequirementsFile(recordDir) {
@@ -5576,7 +5659,7 @@ function findRequirementsFile(recordDir) {
   return { kind: "absent" };
 }
 
-class RequirementsSourceRepositoryImpl {
+class RequirementsSourceRepositoryImplementation {
   findById(id) {
     const search = findRequirementsFile(id.recordRoot().asString());
     if (search.kind === "unreadable") {
@@ -5593,7 +5676,7 @@ class RequirementsSourceRepositoryImpl {
     return ok(RequirementsSource.of({
       id,
       sourcePath: ArtifactPath.of(search.path),
-      knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
+      knownIds: RequirementIdentifiers.extractFrom(bytes.toString("utf-8")),
       digest: ContentHash.ofBytes(bytes),
       sourceDocument: new Uint8Array(bytes)
     }));
@@ -5641,10 +5724,10 @@ class VerificationReportFinalizer {
     return ok(published);
   }
 }
-// src/requirements/usecase/verify-requirements-smt-usecase.ts
+// src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts
 var BACKEND = "smt";
 
-class VerifyRequirementsSmtUseCase {
+class VerifyRequirementsSatisfiabilityModuloTheoriesUseCase {
   #formalModelRepository;
   #z3SolverClient;
   #finalizer;
@@ -5654,7 +5737,7 @@ class VerifyRequirementsSmtUseCase {
     this.#finalizer = new VerificationReportFinalizer(verificationDirectoryRepository, findingsSchema);
   }
   execute(input) {
-    const id = VerificationReportId.of(input.verifyDirectory, BACKEND);
+    const id = VerificationReportIdentifier.of(input.verifyDirectory, BACKEND);
     const acquired = this.#formalModelRepository.findById(input.modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found")
@@ -5716,7 +5799,7 @@ class VerifyRequirementsQuintUseCase {
     this.#finalizer = new VerificationReportFinalizer(verificationDirectoryRepository, findingsSchema);
   }
   execute(input) {
-    const id = VerificationReportId.of(input.verifyDirectory, BACKEND2);
+    const id = VerificationReportIdentifier.of(input.verifyDirectory, BACKEND2);
     const acquired = this.#formalModelRepository.findById(input.modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found")
@@ -5772,8 +5855,8 @@ class VerifyRequirementsQuintUseCase {
     };
   }
 }
-// src/requirements/usecase/validate-ir-usecase.ts
-class ValidateIrUseCase {
+// src/requirements/usecase/validate-intermediate-representation-usecase.ts
+class ValidateIntermediateRepresentationUseCase {
   #irValidationMaterialsRepository;
   #requirementsSourceRepository;
   constructor(irValidationMaterialsRepository, requirementsSourceRepository) {
@@ -5781,7 +5864,7 @@ class ValidateIrUseCase {
     this.#requirementsSourceRepository = requirementsSourceRepository;
   }
   execute(modelId) {
-    const found = this.#irValidationMaterialsRepository.findById(IrValidationMaterialsId.ofModel(modelId));
+    const found = this.#irValidationMaterialsRepository.findById(IntermediateRepresentationValidationMaterialsIdentifier.of(modelId));
     if (!found.ok) {
       if (found.error.kind === "not-found")
         return { kind: "not-applicable" };
@@ -5796,7 +5879,7 @@ class ValidateIrUseCase {
     errors.push(...materials.schemaErrors().toArray().map((message) => message.asString()));
     if (errors.length === 0) {
       errors.push(...materials.view().wellFormednessErrors());
-      const index = materials.frReferenceIndex();
+      const index = materials.functionalRequirementReferenceIndex();
       const source = this.#requirementsSourceRepository.findById(materials.sourceId());
       if (!source.ok) {
         errors.push("requirements.md not found under this intent record \u2014 frRefs cannot be reverse-verified");
@@ -5819,8 +5902,8 @@ function main() {
     process.exit(1);
   }
   const schemaPath = join6(dirname3(fileURLToPath(import.meta.url)), "data", "deep-spec-ir-schema.json");
-  const useCase = new ValidateIrUseCase(new IrValidationMaterialsRepositoryImpl({ schemaPath }), new RequirementsSourceRepositoryImpl);
-  const outcome = useCase.execute(FormalModelId.of(target.value));
+  const useCase = new ValidateIntermediateRepresentationUseCase(new IntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath }), new RequirementsSourceRepositoryImplementation);
+  const outcome = useCase.execute(FormalModelIdentifier.of(target.value));
   if (outcome.kind === "not-applicable") {
     process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, errors: [], note: "not-applicable" })}
 `);

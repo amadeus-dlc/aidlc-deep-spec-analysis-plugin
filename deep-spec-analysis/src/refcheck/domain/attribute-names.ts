@@ -8,11 +8,11 @@ export class AttributeNames {
   readonly #values: readonly AttributeName[];
 
   private constructor(values: readonly AttributeName[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly AttributeName[]): AttributeNames {
-    return new AttributeNames([...values]);
+    return new AttributeNames(values);
   }
 
   add(value: AttributeName): AttributeNames {

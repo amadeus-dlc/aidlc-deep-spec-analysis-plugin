@@ -9,9 +9,13 @@ export class AttributeDefault {
   private constructor(value: string | number) {
     if (typeof value === "string" && value.length > 4096) throw new IllegalArgumentException({ kind: "attribute-default-too-long", raw: value.length });
     this.#value = value; }
-  static parse(value: string | number): Result<AttributeDefault, ParseError> { return parseConstruction(() => new AttributeDefault(value)); }
+  static parse(value: string | number): Result<AttributeDefault, ParseError> {
+    return parseConstruction(() => new AttributeDefault(value));
+  }
 
-  static of(raw: string | number): AttributeDefault { return new AttributeDefault(raw); }
+  static of(raw: string | number): AttributeDefault {
+    return new AttributeDefault(raw);
+  }
   isNumber(): boolean { return typeof this.#value === "number"; }
   isString(): boolean { return typeof this.#value === "string"; }
   // 境界: 数値既定値の比較材料（isNumber ガード下でのみ意味を持つ）。

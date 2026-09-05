@@ -3,33 +3,33 @@ import { InitialState } from "@deep-spec/design-domain";
 import { scenarioBindings } from "./binding-fixtures.ts";
 import {
   VerificationMethod,
-  RequirementId,
+  RequirementIdentifier,
   UnitName,
   SkipReason,
   FindingKind,
   TriggerName,
   FunctionalRequirementReferences,
-  TargetId,
-  TargetIds,
+  TargetIdentifier,
+  TargetIdentifiers,
   ContentHash,
   FindingsSchema,
-  IrVersion,
+  IntermediateRepresentationVersion,
   ArtifactPath,
   type Expression,
   ExpressionTree,
 } from "@deep-spec/kernel-domain";
 
 import {
-  BrRef,
-  DesignBackgroundId,
+  BusinessRuleReference,
+  DesignBackgroundIdentifier,
   DesignAttributeName,
   DesignEntityName,
-  DesignMachineId,
-  DesignObligationId,
+  DesignMachineIdentifier,
+  DesignObligationIdentifier,
   DesignObligationNature,
   DesignObligationOrigin,
-  DesignScenarioId,
-  DesignTransitionId,
+  DesignScenarioIdentifier,
+  DesignTransitionIdentifier,
   ReachabilityVerdict,
   CheckedUnits,
   DesignFindings,
@@ -47,7 +47,7 @@ import {
   DesignObligation,
   DesignScenario,
   DesignTransition,
-  BrRefs,
+  BusinessRuleReferences,
   DesignIgnores,
   DesignTransitions,
   InitialStates,
@@ -59,11 +59,11 @@ import {
   SiblingVerdictSkips,
   DesignModel,
   DesignReport,
-  DesignReportId,
+  DesignReportIdentifier,
   DesignUnit,
   LoweredUnit,
-  DesignModelId,
-  LoweredId,
+  DesignModelIdentifier,
+  LoweredIdentifier,
   DesignInputAnchor,
   LoweredObligation,
   LoweredScenario,
@@ -71,10 +71,10 @@ import {
   SiblingVerdictSkip,
   LoweredOrigin,
   DesignWitness,
-  DesignEntityDecls,
-  DesignEntityDecl,
-  DesignAttributeDecls,
-  DesignAttributeDecl,
+  DesignEntityDeclarations,
+  DesignEntityDeclaration,
+  DesignAttributeDeclarations,
+  DesignAttributeDeclaration,
 } from "@deep-spec/design-domain";
 
 // レイヤード design パイプラインの in-process 検証（PR5、#18）。
@@ -109,9 +109,9 @@ function ap(raw: string): ArtifactPath {
 }
 
 import {
-  DesignModelRepositoryImpl,
-  DesignVerifyDirectoryRepositoryImpl,
-  SiblingBackendClientImpl,
+  DesignModelRepositoryImplementation,
+  DesignVerifyDirectoryRepositoryImplementation,
+  SiblingBackendClientImplementation,
   parseSiblingVerdictDocument,
   reachabilityVariant,
   parseDesignEntities,
@@ -142,15 +142,15 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
       cpSync(join(fixtures, "record"), record, { recursive: true });
       const modelPath = join(record, "construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md");
       const verifyDir = join(dirname(modelPath), "deep-spec-design-verify");
-      const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(modelPath)));
+      const acquired = new DesignModelRepositoryImplementation().findById(DesignModelIdentifier.of(ap(modelPath)));
       expect(acquired.ok).toBe(true);
       if (!acquired.ok) return;
       const model = acquired.value;
       const irHash = model.irHash();
-      const reports = new DesignVerifyDirectoryRepositoryImpl();
+      const reports = new DesignVerifyDirectoryRepositoryImplementation();
       // 兄弟 v1 spawn の決定論条件（E2E スイートと同じ seeded simulation）を
       // 明示注入する（bun の spawnSync は実行時の process.env 変異を継がない）。
-      const sibling = new SiblingBackendClientImpl({
+      const sibling = new SiblingBackendClientImplementation({
         siblingToolPaths: {
           smt: join(toolsDir, "aidlc-sensor-deep-spec-verify-smt.ts"),
           quint: join(toolsDir, "aidlc-sensor-deep-spec-verify-quint.ts"),
@@ -191,7 +191,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
           }
         }
         const report = DesignReport.compose({
-          id: DesignReportId.of(ap(verifyDir), backend),
+          id: DesignReportIdentifier.of(ap(verifyDir), backend),
           irVersion: model.irVersion(),
           irHash,
           method: backend === "smt" ? "exhaustive" : (method ?? "simulation"),
@@ -219,7 +219,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
 
 // テストの読みやすさのため素の配列・素の文字列で書き、ここで一括して DP と
 // コレクションに包む。
-type RawDesignObligation = Omit<Parameters<typeof DesignObligation.of>[0], "id" | "nature" | "origin" | "brRefs" | "functionalRequirementReferences" | "trigger"> & {
+type RawDesignObligation = Omit<Parameters<typeof DesignObligation.of>[0], "id" | "nature" | "origin" | "businessRuleReferences" | "functionalRequirementReferences" | "trigger"> & {
   id: string;
   nature: string;
   origin: string;
@@ -227,7 +227,7 @@ type RawDesignObligation = Omit<Parameters<typeof DesignObligation.of>[0], "id" 
   frRefs: string[];
   trigger?: string;
 };
-type RawDesignTransition = Omit<Parameters<typeof DesignTransition.of>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
+type RawDesignTransition = Omit<Parameters<typeof DesignTransition.of>[0], "id" | "businessRuleReferences" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
 // reason は design IR 上の必須注記（文書には残るが domain は運ばない——#71 波9）。
 type RawDesignIgnore = Omit<Parameters<typeof DesignIgnore.of>[0], "trigger"> & { trigger: string; reason: string };
 type RawDesignMachine = Omit<Parameters<typeof DesignMachine.of>[0], "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
@@ -238,7 +238,7 @@ type RawDesignMachine = Omit<Parameters<typeof DesignMachine.of>[0], "id" | "ent
   transitions: RawDesignTransition[];
   ignores: RawDesignIgnore[];
 };
-type RawDesignScenario = Omit<Parameters<typeof DesignScenario.of>[0], "id" | "brRefs" | "functionalRequirementReferences" | "event"> & {
+type RawDesignScenario = Omit<Parameters<typeof DesignScenario.of>[0], "id" | "businessRuleReferences" | "functionalRequirementReferences" | "event"> & {
   id: string;
   brRefs: string[];
   frRefs: string[];
@@ -248,7 +248,7 @@ type RawDesignScenario = Omit<Parameters<typeof DesignScenario.of>[0], "id" | "b
 // テスト用: 生の entities JSON と属性座標から型付き実体宣言を組む（裁定 2 で
 // DesignUnit は生 JSON を持たなくなった）。座標だけ与えられた属性は kind "" の
 // 宣言として補う——旧 attrPaths の役目。
-function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDecls {
+function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDeclarations {
   const parsed = parseDesignEntities({ entities: raw });
   if (!parsed.ok) throw new Error(JSON.stringify(parsed.error));
   let declared = parsed.value;
@@ -261,9 +261,9 @@ function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDecls {
     extra.set(path.slice(0, dot), [...(extra.get(path.slice(0, dot)) ?? []), path.slice(dot + 1)]);
   }
   for (const [entity, attrs] of extra) {
-    declared = declared.add(DesignEntityDecl.of({
+    declared = declared.add(DesignEntityDeclaration.of({
       name: DesignEntityName.of(entity),
-      attributes: DesignAttributeDecls.of(attrs.map((a) => DesignAttributeDecl.of({ name: DesignAttributeName.of(a), kind: AttributeKind.of("") }))),
+      attributes: DesignAttributeDeclarations.of(attrs.map((a) => DesignAttributeDeclaration.of({ name: DesignAttributeName.of(a), kind: AttributeKind.of("") }))),
     }));
   }
   return declared;
@@ -284,11 +284,11 @@ function unit(seed: {
     obligations: DesignObligations.of(
       (seed.obligations ?? []).map((o) => DesignObligation.of({
         ...o,
-        id: DesignObligationId.of(o.id),
+        id: DesignObligationIdentifier.of(o.id),
         nature: DesignObligationNature.of(o.nature),
         origin: DesignObligationOrigin.of(o.origin),
-        brRefs: BrRefs.of(Array.from(o.brRefs, (raw) => BrRef.of(raw))),
-        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))),
+        businessRuleReferences: BusinessRuleReferences.of(Array.from(o.brRefs, (raw) => BusinessRuleReference.of(raw))),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(o.frRefs, (raw) => RequirementIdentifier.of(raw))),
         trigger: o.trigger === undefined ? undefined : TriggerName.of(o.trigger),
       })),
     ),
@@ -296,12 +296,12 @@ function unit(seed: {
       (seed.machines ?? []).map((m) =>
         DesignMachine.of({
           ...m,
-          id: DesignMachineId.of(m.id),
+          id: DesignMachineIdentifier.of(m.id),
           entity: DesignEntityName.of(m.entity),
           attribute: DesignAttributeName.of(m.attribute),
           initial: InitialStates.of((m.initial).map((value) => InitialState.of(value))),
           transitions: DesignTransitions.of(
-            m.transitions.map((t) => DesignTransition.of({ ...t, id: DesignTransitionId.of(t.id), brRefs: BrRefs.of(Array.from(t.brRefs, (raw) => BrRef.of(raw))), trigger: TriggerName.of(t.trigger) })),
+            m.transitions.map((t) => DesignTransition.of({ ...t, id: DesignTransitionIdentifier.of(t.id), businessRuleReferences: BusinessRuleReferences.of(Array.from(t.brRefs, (raw) => BusinessRuleReference.of(raw))), trigger: TriggerName.of(t.trigger) })),
           ),
           ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.of({ ...g, trigger: TriggerName.of(g.trigger) }))),
         }),
@@ -310,24 +310,24 @@ function unit(seed: {
     scenarios: DesignScenarios.of(
       (seed.scenarios ?? []).map((s) => DesignScenario.of({
         ...s,
-        id: DesignScenarioId.of(s.id),
-        brRefs: BrRefs.of(Array.from(s.brRefs, (raw) => BrRef.of(raw))),
-        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))),
+        id: DesignScenarioIdentifier.of(s.id),
+        businessRuleReferences: BusinessRuleReferences.of(Array.from(s.brRefs, (raw) => BusinessRuleReference.of(raw))),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(s.frRefs, (raw) => RequirementIdentifier.of(raw))),
         event: s.event === undefined ? undefined : { trigger: TriggerName.of(s.event.trigger) },
       })),
     ),
     background: DesignBackgroundAssumptions.of(
-      (seed.background ?? []).map((b) => DesignBackgroundAssumption.of({ ...b, id: DesignBackgroundId.of(b.id) })),
+      (seed.background ?? []).map((b) => DesignBackgroundAssumption.of({ ...b, id: DesignBackgroundIdentifier.of(b.id) })),
     ),
   });
 }
 
 function model(units: DesignUnit[], irVersion = "1.0.0"): DesignModel {
   return DesignModel.compose({
-    id: DesignModelId.of(ap("/test/deep-spec-analysis-functional-formal-model.md")),
+    id: DesignModelIdentifier.of(ap("/test/deep-spec-analysis-functional-formal-model.md")),
     irHash: ContentHash.of("c".repeat(64)),
     sourceDocument: new Uint8Array(),
-    irVersion: IrVersion.of(irVersion),
+    irVersion: IntermediateRepresentationVersion.of(irVersion),
     units: DesignUnits.of(units),
   } satisfies Parameters<typeof DesignModel.compose>[0]);
 }
@@ -452,7 +452,7 @@ describe("lowering (typed compile-down)", () => {
     const m = model([unit({ unit: "u2" }), unit({ unit: "u1" })]);
     expect(m.units().toArray().map((x) => x.name())).toEqual(["u1", "u2"]);
     expect(m.irVersion().asString()).toBe("1.0.0");
-    expect(m.id().equals(DesignModelId.of(ap("/test/deep-spec-analysis-functional-formal-model.md")))).toBe(true);
+    expect(m.id().equals(DesignModelIdentifier.of(ap("/test/deep-spec-analysis-functional-formal-model.md")))).toBe(true);
     expect(m.units().toArray()[0]?.id().asString()).toBe(m.units().toArray()[0]?.name() ?? "");
   });
 
@@ -498,9 +498,9 @@ describe("remap (design vocabulary attribution)", () => {
   }): SiblingVerdictDocument =>
     SiblingVerdictDocument.readable( VerificationMethod.of("exhaustive"),
       SiblingVerdictFindings.of(
-        (input.findings ?? []).map((f) => SiblingVerdictFinding.of({ ...f, kind: FindingKind.of(f.kind), witness: DesignWitness.of(f.witness), functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(f.frRefs, (raw) => RequirementId.of(raw))), targets: f.targets.map((t) => LoweredId.of(t)) })),
+        (input.findings ?? []).map((f) => SiblingVerdictFinding.of({ ...f, kind: FindingKind.of(f.kind), witness: DesignWitness.of(f.witness), functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(f.frRefs, (raw) => RequirementIdentifier.of(raw))), targets: f.targets.map((t) => LoweredIdentifier.of(t)) })),
       ),
-      SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.of({ ...k, reason: SkipReason.of(k.reason), target: LoweredId.of(k.target) }))),
+      SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.of({ ...k, reason: SkipReason.of(k.reason), target: LoweredIdentifier.of(k.target) }))),
     );
 
   test("unavailable and unreadable sibling documents pass straight through", () => {
@@ -581,7 +581,7 @@ describe("report ordering, cross-check, and degradations", () => {
     DesignFinding.of({
       kind: FindingKind.of(kind),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))),
+      targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
       witness: DesignWitness.core([]),
       unit: UnitName.of(unitName),
       detail,
@@ -614,9 +614,9 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(sorted[1]?.detail()).toBe("c");
     expect(sorted[3]?.unit()).toBe("u1");
     const skips = DesignSkips.of([
-      DesignSkipped.of({ target: TargetId.of("TR-2"), reason: SkipReason.of("timeout"), unit: UnitName.of("u2")}),
-      DesignSkipped.of({ target: TargetId.of("TR-10"), reason: SkipReason.of("waived"), unit: UnitName.of("u1")}),
-      DesignSkipped.of({ target: TargetId.of("TR-2"), reason: SkipReason.of("capability"), unit: UnitName.of("u1")}),
+      DesignSkipped.of({ target: TargetIdentifier.of("TR-2"), reason: SkipReason.of("timeout"), unit: UnitName.of("u2")}),
+      DesignSkipped.of({ target: TargetIdentifier.of("TR-10"), reason: SkipReason.of("waived"), unit: UnitName.of("u1")}),
+      DesignSkipped.of({ target: TargetIdentifier.of("TR-2"), reason: SkipReason.of("capability"), unit: UnitName.of("u1")}),
     ]).sortedCanonically().toArray();
     expect(skips.map((s) => `${s.unit()}:${s.target().asString()}:${s.reason()}`)).toEqual([
       "u1:TR-2:capability",
@@ -627,8 +627,8 @@ describe("report ordering, cross-check, and degradations", () => {
 
   test("compose sorts inputs by artifact and dedupes checked; degraded strips everything", () => {
     const report = DesignReport.compose({
-      id: DesignReportId.of(ap("/v"), "smt"),
-      irVersion: IrVersion.of("1.0.0"),
+      id: DesignReportIdentifier.of(ap("/v"), "smt"),
+      irVersion: IntermediateRepresentationVersion.of("1.0.0"),
       irHash: ContentHash.of("a".repeat(64)),
       method: "exhaustive",
       findings: DesignFindings.of([f("conflict", "u1", ["DOB-1"], "c")]),
@@ -667,8 +667,8 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(degraded.checked()).toBe(null);
     expect(degraded.passes()).toBe(false);
     expect(degraded.isUnavailable()).toBe(true);
-    expect(DesignReportId.of(ap("/v"), "smt").equals(DesignReportId.of(ap("/v"), "smt"))).toBe(true);
-    expect(DesignReportId.of(ap("/v"), "smt").fileName()).toBe("smt.json");
+    expect(DesignReportIdentifier.of(ap("/v"), "smt").equals(DesignReportIdentifier.of(ap("/v"), "smt"))).toBe(true);
+    expect(DesignReportIdentifier.of(ap("/v"), "smt").fileName()).toBe("smt.json");
   });
 
   test("cross-check compares per (unit, scenario), honors skips, and freezes the design wording", () => {
@@ -677,12 +677,12 @@ describe("report ordering, cross-check, and degradations", () => {
     const HASH = ContentHash.of("a".repeat(64));
     const sibling = (backend: string, violated: boolean, skipKey?: string): DesignReport =>
       DesignReport.of({
-        id: DesignReportId.of(ap("/v"), backend),
-        irVersion: IrVersion.of("1.0.0"),
+        id: DesignReportIdentifier.of(ap("/v"), backend),
+        irVersion: IntermediateRepresentationVersion.of("1.0.0"),
         irHash: HASH,
         method: VerificationMethod.of("exhaustive"),
         findings: DesignFindings.of(violated ? [f("scenario-violation", "u1", ["DSC-1"], "x")] : []),
-        skipped: DesignSkips.of(skipKey ? [DesignSkipped.of({ target: TargetId.of("DSC-1"), reason: SkipReason.of("capability"), unit: UnitName.of("u1")})] : []),
+        skipped: DesignSkips.of(skipKey ? [DesignSkipped.of({ target: TargetIdentifier.of("DSC-1"), reason: SkipReason.of("capability"), unit: UnitName.of("u1")})] : []),
         inputs: null,
         checked: null,
         crossChecked: null,
@@ -691,7 +691,7 @@ describe("report ordering, cross-check, and degradations", () => {
     const report = DesignReports.of([
       sibling("quint", true),
       sibling("smt", false),
-    ]).crossChecked(DesignReportId.of(ap("/v"), "cross-check"), m, HASH);
+    ]).crossChecked(DesignReportIdentifier.of(ap("/v"), "cross-check"), m, HASH);
     const disagreement = report.findings().toArray()[0];
     expect(disagreement?.kind()).toBe("cross-check-disagreement");
     expect(disagreement?.functionalRequirementReferences().toStrings()).toEqual(["FR-1", "FR-2"]);
@@ -708,7 +708,7 @@ describe("report ordering, cross-check, and degradations", () => {
     const skippedOut = DesignReports.of([
       sibling("quint", true, "skip"),
       sibling("smt", false),
-    ]).crossChecked(DesignReportId.of(ap("/v"), "cross-check"), m, HASH);
+    ]).crossChecked(DesignReportIdentifier.of(ap("/v"), "cross-check"), m, HASH);
     expect(skippedOut.findings().toArray()).toEqual([]);
     expect(skippedOut.crossChecked()?.toArray()).toEqual([]);
   });
@@ -724,12 +724,12 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(u1.allTargets().toStrings()).toEqual(["DOB-1", "DSC-1", "TR-1"]);
     expect(u1.enumValuesOf("T.s")).toEqual([]);
 
-    const unread = DesignReport.irUnreadable(DesignReportId.of(ap("/v"), "smt"), "exhaustive", "design IR carries no units[]");
+    const unread = DesignReport.irUnreadable(DesignReportIdentifier.of(ap("/v"), "smt"), "exhaustive", "design IR carries no units[]");
     expect(unread.unavailableReason()).toBe("design IR unreadable: design IR carries no units[] — see the deep-spec-design-ir-valid sensor for details");
     expect(unread.irVersion().asString()).toBe("0.0.0");
     expect(unread.irHash().equals(ContentHash.ofText(""))).toBe(true);
 
-    const mismatch = DesignReport.versionMismatch(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.of("a".repeat(64)), "simulation");
+    const mismatch = DesignReport.versionMismatch(DesignReportIdentifier.of(ap("/v"), "quint"), m, ContentHash.of("a".repeat(64)), "simulation");
     expect(mismatch.skipped().toArray().map((s) => `${s.unit()}:${s.target().asString()}:${s.reason()}`)).toEqual([
       "u1:DOB-1:ir-version-mismatch",
       "u1:DSC-1:ir-version-mismatch",
@@ -737,7 +737,7 @@ describe("report ordering, cross-check, and degradations", () => {
     ]);
     expect(mismatch.skipped().toArray()[0]?.detail()).toBe("design IR major version 2 is not supported by this backend (supports 1.x.x)");
 
-    const down = DesignReport.backendUnavailable(DesignReportId.of(ap("/v"), "quint"), m, ContentHash.of("a".repeat(64)), "simulation", "quint CLI is not available", "quint CLI missing");
+    const down = DesignReport.backendUnavailable(DesignReportIdentifier.of(ap("/v"), "quint"), m, ContentHash.of("a".repeat(64)), "simulation", "quint CLI is not available", "quint CLI missing");
     expect(down.unavailableReason()).toBe("quint CLI is not available");
     expect(down.skipped().toArray().every((s) => s.reason() === "unavailable" && s.detail() === "quint CLI missing")).toBe(true);
   });
@@ -777,17 +777,17 @@ describe("lowered collections and the lowering index (first-class operations)", 
   const base = u.lowered({ synthetics: false });
 
   test("of/add/iterator/count/toArray hold OB/SC/BG numbering order", () => {
-    const obs = base.obligations().add(LoweredObligation.of({ id: LoweredId.of("OB-99"), nature: "invariant", functionalRequirementReferences: FunctionalRequirementReferences.of([]) }));
+    const obs = base.obligations().add(LoweredObligation.of({ id: LoweredIdentifier.of("OB-99"), nature: "invariant", functionalRequirementReferences: FunctionalRequirementReferences.of([]) }));
     expect(obs.count()).toBe(base.obligations().count() + 1);
     expect([...obs].at(-1)?.id().asString()).toBe("OB-99");
     expect(obs.toArray().at(-1)?.nature()).toBe("invariant");
 
-    const scs = base.scenarios().add(LoweredScenario.of({ id: LoweredId.of("SC-99"), kind: "accept", functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: scenarioBindings({}) }));
+    const scs = base.scenarios().add(LoweredScenario.of({ id: LoweredIdentifier.of("SC-99"), kind: "accept", functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: scenarioBindings({}) }));
     expect(scs.count()).toBe(base.scenarios().count() + 1);
     expect([...scs].at(-1)?.id().asString()).toBe("SC-99");
     expect(scs.toArray().at(-1)?.kind()).toBe("accept");
 
-    const bgs = base.background().add(LoweredBackground.of({ id: LoweredId.of("BG-99"), assert: { op: "bool", value: true } }));
+    const bgs = base.background().add(LoweredBackground.of({ id: LoweredIdentifier.of("BG-99"), assert: { op: "bool", value: true } }));
     expect(bgs.count()).toBe(base.background().count() + 1);
     expect([...bgs].at(-1)?.id().asString()).toBe("BG-99");
     expect(bgs.toArray().at(-1)?.id().asString()).toBe("BG-99");
@@ -807,12 +807,12 @@ describe("lowered collections and the lowering index (first-class operations)", 
   });
 
   test("sibling verdict collections keep document order under add", () => {
-    const finding = SiblingVerdictFinding.of({ kind: FindingKind.of("conflict"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: [LoweredId.of("OB-1")], witness: DesignWitness.core([]), detail: "x" });
+    const finding = SiblingVerdictFinding.of({ kind: FindingKind.of("conflict"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: [LoweredIdentifier.of("OB-1")], witness: DesignWitness.core([]), detail: "x" });
     const findings = SiblingVerdictFindings.of([]).add(finding);
     expect([...findings]).toEqual([finding]);
     expect(findings.toArray()).toEqual([finding]);
 
-    const skip = SiblingVerdictSkip.of({ target: LoweredId.of("OB-1"), reason: SkipReason.of("timeout")});
+    const skip = SiblingVerdictSkip.of({ target: LoweredIdentifier.of("OB-1"), reason: SkipReason.of("timeout")});
     const skips = SiblingVerdictSkips.of([]).add(skip);
     expect([...skips]).toEqual([skip]);
     expect(skips.toArray()).toEqual([skip]);
@@ -941,9 +941,9 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
   }): SiblingVerdictDocument =>
     SiblingVerdictDocument.readable( VerificationMethod.of("exhaustive"),
       SiblingVerdictFindings.of(
-        (input.findings ?? []).map((f) => SiblingVerdictFinding.of({ ...f, kind: FindingKind.of(f.kind), witness: DesignWitness.of(f.witness), functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(f.frRefs, (raw) => RequirementId.of(raw))), targets: f.targets.map((t) => LoweredId.of(t)) })),
+        (input.findings ?? []).map((f) => SiblingVerdictFinding.of({ ...f, kind: FindingKind.of(f.kind), witness: DesignWitness.of(f.witness), functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(f.frRefs, (raw) => RequirementIdentifier.of(raw))), targets: f.targets.map((t) => LoweredIdentifier.of(t)) })),
       ),
-      SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.of({ ...k, reason: SkipReason.of(k.reason), target: LoweredId.of(k.target) }))),
+      SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.of({ ...k, reason: SkipReason.of(k.reason), target: LoweredIdentifier.of(k.target) }))),
     );
 
   const originsOf = (l: LoweredUnit): string =>

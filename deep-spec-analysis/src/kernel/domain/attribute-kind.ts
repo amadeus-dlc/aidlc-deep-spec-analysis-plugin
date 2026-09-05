@@ -14,7 +14,9 @@ export class AttributeKind {
     this.#value = value;
   }
 
-  static parse(value: string): Result<AttributeKind, ParseError> { return parseConstruction(() => new AttributeKind(value)); }
+  static parse(value: string): Result<AttributeKind, ParseError> {
+    return parseConstruction(() => new AttributeKind(value));
+  }
 
   static of(raw: string): AttributeKind {
     return new AttributeKind(raw);

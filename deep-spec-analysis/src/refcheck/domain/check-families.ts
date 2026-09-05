@@ -1,4 +1,4 @@
-import { TargetId, TargetIds } from "@deep-spec/kernel-domain";
+import { TargetIdentifier, TargetIdentifiers } from "@deep-spec/kernel-domain";
 
 import { CheckFamily } from "./check-family.ts";
 
@@ -8,11 +8,11 @@ export class CheckFamilies {
   readonly #values: readonly CheckFamily[];
 
   private constructor(values: readonly CheckFamily[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly CheckFamily[]): CheckFamilies {
-    return new CheckFamilies([...values]);
+    return new CheckFamilies(values);
   }
 
   add(value: CheckFamily): CheckFamilies {
@@ -25,8 +25,8 @@ export class CheckFamilies {
 
   // 全 family の check target（`check:${family}`）——レポートを開いた時点の
   // checked の材料。
-  checkTargets(): TargetIds {
-    return TargetIds.of(Array.from(this.#values.map((f) => f.asCheckTarget()), (raw) => TargetId.of(raw)));
+  checkTargets(): TargetIdentifiers {
+    return TargetIdentifiers.of(Array.from(this.#values.map((f) => f.asCheckTarget()), (raw) => TargetIdentifier.of(raw)));
   }
 
   toArray(): readonly CheckFamily[] {

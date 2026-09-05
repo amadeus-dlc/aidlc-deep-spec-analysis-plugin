@@ -9,19 +9,19 @@ import { type Json, combineResults, traverseResult, isObject } from "@deep-spec/
 
 import {
   BlockIndex,
-  ContractId,
+  ContractIdentifier,
   ContractParty,
   ContractRows,
   LineNumber,
-  SpecBlockAssessments,
-  UnitDecls,
+  SpecificationBlockAssessments,
+  UnitDeclarations,
   UnitName,
   UnitNames,
-  UnitDecl,
+  UnitDeclaration,
   ContractRow,
   ContractsTableOutcome,
   DeclaredUnitsOutcome,
-  SpecBlockAssessment,
+  SpecificationBlockAssessment,
 } from "@deep-spec/refcheck-domain";
 
 export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
@@ -32,7 +32,7 @@ export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
     if (parsed.error !== undefined) return DeclaredUnitsOutcome.unrecognized(parsed.error);
     const v = parsed.value ?? null;
     if (!isObject(v) || !Array.isArray(v.units)) continue;
-    const units: UnitDecl[] = [];
+    const units: UnitDeclaration[] = [];
     for (const raw of v.units as Json[]) {
       if (!isObject(raw) || typeof raw.name !== "string") continue;
       const dependsOn = Array.isArray(raw.depends_on)
@@ -40,10 +40,10 @@ export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
         : [];
       const fields = combineResults({ name: UnitName.parse(raw.name), dependsOn: traverseResult(dependsOn, UnitName.parse) });
       if (!fields.ok) return DeclaredUnitsOutcome.unrecognized(JSON.stringify(fields.error));
-      units.push(UnitDecl.of({ name: fields.value.name, dependsOn: UnitNames.of(fields.value.dependsOn) }));
+      units.push(UnitDeclaration.of({ name: fields.value.name, dependsOn: UnitNames.of(fields.value.dependsOn) }));
     }
     if (units.length === 0) return DeclaredUnitsOutcome.unrecognized();
-    return DeclaredUnitsOutcome.declared(UnitDecls.of(units));
+    return DeclaredUnitsOutcome.declared(UnitDeclarations.of(units));
   }
   return DeclaredUnitsOutcome.unrecognized("no yaml fence with a top-level `units:` list");
 }
@@ -62,7 +62,7 @@ export function parseContractsTable(md: string): ContractsTableOutcome {
   const oCol = col(/owner/i);
   const rows: ContractRow[] = [];
   for (const [i, row] of contractsTable.rows.entries()) {
-    const first = ContractId.parse(row.cells[0] || String(i + 1));
+    const first = ContractIdentifier.parse(row.cells[0] || String(i + 1));
     if (!first.ok) return ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(first.error)));
     const token = cleanCell(first.value.asString());
     const fields = combineResults({
@@ -72,7 +72,7 @@ export function parseContractsTable(md: string): ContractsTableOutcome {
     });
     if (!fields.ok) return ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(fields.error)));
     rows.push(ContractRow.of({
-      id: ContractId.of(/^[0-9]+$/.test(token) ? token : String(i + 1)),
+      id: ContractIdentifier.of(/^[0-9]+$/.test(token) ? token : String(i + 1)),
       ...fields.value,
       line: LineNumber.of(row.line),
     }));
@@ -80,23 +80,23 @@ export function parseContractsTable(md: string): ContractsTableOutcome {
   return ContractsTableOutcome.rows(ContractRows.of(rows));
 }
 
-export function assessSpecBlocks(md: string): SpecBlockAssessments {
-  const blocks: SpecBlockAssessment[] = extractFences(md, "yaml").map((fence, i) => {
+export function assessSpecBlocks(md: string): SpecificationBlockAssessments {
+  const blocks: SpecificationBlockAssessment[] = extractFences(md, "yaml").map((fence, i) => {
     const index = BlockIndex.of(i + 1);
     const line = LineNumber.of(fence.line);
     const parsed = parseYamlSubset(fence.body);
     if (parsed.error !== undefined) {
-      return SpecBlockAssessment.unparseable(index, line, parsed.error);
+      return SpecificationBlockAssessment.unparseable(index, line, parsed.error);
     }
     const v = parsed.value ?? null;
     if (!isObject(v)) {
-      return SpecBlockAssessment.notAMapping(index, line);
+      return SpecificationBlockAssessment.notAMapping(index, line);
     }
     if ("openapi" in v && !("paths" in v)) {
-      return SpecBlockAssessment.openapiWithoutPaths(index, line);
+      return SpecificationBlockAssessment.openapiWithoutPaths(index, line);
     }
     // asyncapi and shared-schema blocks: parseability is the check.
-    return SpecBlockAssessment.sound(index, line);
+    return SpecificationBlockAssessment.sound(index, line);
   });
-  return SpecBlockAssessments.of(blocks);
+  return SpecificationBlockAssessments.of(blocks);
 }

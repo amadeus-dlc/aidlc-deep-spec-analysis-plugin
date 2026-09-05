@@ -1,5 +1,6 @@
-import { EnumMember } from "@deep-spec/kernel-domain";
-import { ReqAttributeValues } from "./req-attribute-values.ts";
+import { EnumerationMembers } from "@deep-spec/kernel-domain";
+import { EnumerationMember } from "@deep-spec/kernel-domain";
+
 // 属性写像（attrMap の 1 エントリ）。閉じた 3 variant —— 式写像（bool/int）・
 // enum 場合分け・unspecified。α置換の材料（enum 比較の展開・写像式の代入・
 // 抽象フレーム等式）と全域性チェック（欠けケース・生成値の範囲）は写像自身が
@@ -9,12 +10,12 @@ import { ReqAttributeValues } from "./req-attribute-values.ts";
 
 import { ExpressionTree, type Expression } from "@deep-spec/kernel-domain";
 import { type AttributePath } from "@deep-spec/requirements-domain";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import { type Result, type ParseError, boundedValueSnapshot, parseConstruction, err, ok } from "@deep-spec/kernel-infrastructure";
 import { RefinementMapDefect } from "./refinement-map-defect.ts";
 
-type Variant =
+type AttributeMappingParam =
   | { readonly kind: "expression"; readonly expr: Expression }
-  | { readonly kind: "enum-cases"; readonly from: string; readonly cases: { readonly [designValue: string]: string } }
+  | { readonly kind: "enum-cases"; readonly from: AttributePath; readonly cases: { readonly [designValue: string]: string } }
   | { readonly kind: "unspecified" };
 
 // 旧 refinement-lib の primeAll —— post 文脈では代入式の全参照を prime する。
@@ -25,23 +26,23 @@ function primeAll(e: Expression): Expression {
 
 export class AttributeMapping {
   readonly #req: AttributePath;
-  readonly #variant: Variant;
+  readonly #variant: AttributeMappingParam;
 
-  private constructor(req: AttributePath, variant: Variant) {
+  private constructor(req: AttributePath, variant: AttributeMappingParam) {
     this.#req = req;
-    this.#variant = variant;
+    this.#variant = variant.kind === "expression"
+      ? { kind: "expression", expr: ExpressionTree.of(variant.expr).asExpression() }
+      : variant.kind === "enum-cases"
+        ? { kind: "enum-cases", from: variant.from, cases: boundedValueSnapshot(variant.cases, { string: 4096, nodes: 10_001, depth: 1, total: 16_777_216 }) }
+        : { kind: "unspecified" };
   }
 
-  static expression(req: AttributePath, expr: Expression): AttributeMapping {
-    return new AttributeMapping(req, { kind: "expression", expr: ExpressionTree.of(expr).asExpression() });
+  static of(req: AttributePath, value: AttributeMappingParam): AttributeMapping {
+    return new AttributeMapping(req, value);
   }
 
-  static enumCases(req: AttributePath, from: string, cases: { readonly [designValue: string]: string }): AttributeMapping {
-    return new AttributeMapping(req, { kind: "enum-cases", from, cases: { ...cases } });
-  }
-
-  static unspecified(req: AttributePath): AttributeMapping {
-    return new AttributeMapping(req, { kind: "unspecified" });
+  static parse(req: AttributePath, value: AttributeMappingParam): Result<AttributeMapping, ParseError> {
+    return parseConstruction(() => new AttributeMapping(req, value));
   }
 
   // 同一性——この写像がその要件属性のものか。
@@ -63,7 +64,7 @@ export class AttributeMapping {
 
   // enum-cases の写像元（設計属性パス）。enum-cases でなければ undefined。
   enumFrom(): string | undefined {
-    return this.#variant.kind === "enum-cases" ? this.#variant.from : undefined;
+    return this.#variant.kind === "enum-cases" ? this.#variant.from.asString() : undefined;
   }
 
   // eq/ne 比較の展開（旧 alphaExpr の enum 分岐）: その要件値へ写る設計値の
@@ -71,7 +72,7 @@ export class AttributeMapping {
   expandComparison(op: "eq" | "ne", reqValue: string, primed: boolean): Expression | null {
     const variant = this.#variant;
     if (variant.kind !== "enum-cases") return null;
-    const from: Expression = { op: "ref", path: variant.from, ...(primed ? { prime: true } : {}) };
+    const from: Expression = { op: "ref", path: variant.from.asString(), ...(primed ? { prime: true } : {}) };
     const matching = Object.entries(variant.cases)
       .filter(([, rv]) => rv === reqValue)
       .map(([designValue]) => designValue)
@@ -105,7 +106,7 @@ export class AttributeMapping {
   abstractFrameEquality(): Expression | null {
     const variant = this.#variant;
     if (variant.kind === "enum-cases") {
-      const values = ReqAttributeValues.of(Object.values(variant.cases).map((value) => EnumMember.of(value))).sortedUniqueCanonically().toArray();
+      const values = EnumerationMembers.of(Object.values(variant.cases).map((value) => EnumerationMember.of(value))).sortedUniqueCanonically().toArray();
       // 2 つの設計値が等しく抽象されるのは同じ要件値へ写るとき：要件値ごとに
       // 「pre がその類に居る iff post がその類に居る」。
       const classes = values.map((reqValue) => {
@@ -114,7 +115,7 @@ export class AttributeMapping {
           .map(([d]) => d)
           .sort();
         const inClass = (primed: boolean): Expression => {
-          const refNode: Expression = { op: "ref", path: variant.from, ...(primed ? { prime: true } : {}) };
+          const refNode: Expression = { op: "ref", path: variant.from.asString(), ...(primed ? { prime: true } : {}) };
           const eqs = members.map((d) => ({ op: "eq", args: [refNode, { op: "enum", value: d }] }) as Expression);
           return eqs.length === 1 ? (eqs[0] as Expression) : { op: "or", args: eqs };
         };
@@ -140,7 +141,7 @@ export class AttributeMapping {
   producedValuesOutside(reqValues: { includes(value: string): boolean } | undefined): readonly string[] {
     const variant = this.#variant;
     if (variant.kind !== "enum-cases") return [];
-    return ReqAttributeValues.of(Object.values(variant.cases).filter((rv) => !(reqValues?.includes(rv) ?? false)).map((value) => EnumMember.of(value))).sortedUniqueCanonically().toArray().map((member) => member.asString());
+    return EnumerationMembers.of(Object.values(variant.cases).filter((rv) => !(reqValues?.includes(rv) ?? false)).map((value) => EnumerationMember.of(value))).sortedUniqueCanonically().toArray().map((member) => member.asString());
   }
 
   // 式写像が参照する設計属性パス（昇順・重複なし）。enum-cases / unspecified

@@ -10,13 +10,13 @@ import { SkipReason, type Expression, ExpressionTree } from "@deep-spec/kernel-d
 
 import type { CompiledQuintMachine } from "./compiled-quint-machine.ts";
 import {
-  type AttributeDeclaration,
+  type RequirementAttributeDeclaration,
   type RequirementsModel,
   VerificationSkipped,
   QuintMachineComponents,
   QuintMachinePlan,
-  ObligationIds,
-  type ObligationId, QuintMachineComponent, ScenarioId
+  ObligationIdentifiers,
+  type ObligationIdentifier, QuintMachineComponent, ScenarioIdentifier
 } from "@deep-spec/requirements-domain";
 
 class CompileError extends Error {
@@ -140,7 +140,7 @@ function decomposeEffect(effect: Expression): Map<string, Expression> {
   return assignments;
 }
 
-function domainOf(attr: AttributeDeclaration): string {
+function domainOf(attr: RequirementAttributeDeclaration): string {
   return attr.match({
     bool: () => "Set(true, false)",
     enum: (values) => `Set(${(values?.toArray() ?? []).map((v) => JSON.stringify(v.asString())).join(", ")})`,
@@ -153,7 +153,7 @@ function domainOf(attr: AttributeDeclaration): string {
   });
 }
 
-function quintType(attr: AttributeDeclaration): string {
+function quintType(attr: RequirementAttributeDeclaration): string {
   return attr.match({ bool: () => "bool", int: () => "int", enum: () => "str" });
 }
 
@@ -253,7 +253,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   lines.push("");
 
   // イベント → 明示フレームつき action（言及されない変数は不変）。
-  const eventIds: ObligationId[] = [];
+  const eventIds: ObligationIdentifier[] = [];
   const actionNames: string[] = [];
   for (const ob of model.obligations()) {
     if (!ob.isEvent()) continue;
@@ -305,7 +305,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
 
   // シナリオ init：全属性束縛・イベントなしのシナリオのみ。
   const scenarioInitActions = new Map<string, string>();
-  const scenariosWithInit: ScenarioId[] = [];
+  const scenariosWithInit: ScenarioIdentifier[] = [];
   for (const sc of model.scenarios()) {
     if (sc.hasEvent()) continue;
     const bindings = sc.bindings();
@@ -332,7 +332,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
     moduleText: `${lines.join("\n")}\n`,
     plan: QuintMachinePlan.of({
       invariantComponents: QuintMachineComponents.of(invariantComponents),
-      eventIds: ObligationIds.of(eventIds),
+      eventIds: ObligationIdentifiers.of(eventIds),
       scenariosWithInit,
     }),
     compileSkips,

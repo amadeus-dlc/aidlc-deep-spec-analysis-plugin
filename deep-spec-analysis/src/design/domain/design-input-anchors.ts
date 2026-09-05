@@ -6,11 +6,11 @@ export class DesignInputAnchors {
   readonly #values: readonly DesignInputAnchor[];
 
   private constructor(values: readonly DesignInputAnchor[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignInputAnchor[]): DesignInputAnchors {
-    return new DesignInputAnchors([...values]);
+    return new DesignInputAnchors(values);
   }
 
   add(value: DesignInputAnchor): DesignInputAnchors {

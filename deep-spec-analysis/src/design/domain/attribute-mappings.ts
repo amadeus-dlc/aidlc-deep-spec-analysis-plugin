@@ -13,11 +13,11 @@ export class AttributeMappings {
   readonly #values: readonly AttributeMapping[];
 
   private constructor(values: readonly AttributeMapping[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly AttributeMapping[]): AttributeMappings {
-    return new AttributeMappings([...values]);
+    return new AttributeMappings(values);
   }
 
   add(value: AttributeMapping): AttributeMappings {

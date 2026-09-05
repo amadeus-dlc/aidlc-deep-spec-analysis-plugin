@@ -1,4 +1,4 @@
-import { UnitName, type TargetId, SkipReason } from "@deep-spec/kernel-domain";
+import { UnitName, type TargetIdentifier, SkipReason } from "@deep-spec/kernel-domain";
 
 import { DesignSkipped } from "@deep-spec/design-domain";
 
@@ -41,7 +41,7 @@ export class RefinementStatus {
   }
 
   // 免除と範囲外は被覆 skip（凍結の reason 語彙）。checkable / gap は skip しない。
-  skipFor(target: TargetId, unit: string): DesignSkipped | null {
+  skipFor(target: TargetIdentifier, unit: string): DesignSkipped | null {
     if (this.#kind === "waived") return DesignSkipped.of({ target, reason: SkipReason.waived(), unit: UnitName.of(unit), detail: this.#text });
     if (this.#kind === "capability") return DesignSkipped.of({ target, reason: SkipReason.capability(), unit: UnitName.of(unit), detail: this.#text });
     return null;

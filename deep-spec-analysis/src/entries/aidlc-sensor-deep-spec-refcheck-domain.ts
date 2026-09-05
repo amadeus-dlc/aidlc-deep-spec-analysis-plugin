@@ -20,11 +20,11 @@
 
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseFlags, readContractSchema, renderVerdictLine } from "@deep-spec/kernel-adapter";
-import { ArtifactPath, FindingsSchema } from "@deep-spec/kernel-domain";
-import { DesignRecordId } from "@deep-spec/refcheck-domain";
+import { parseFlags, readFindingsSchema, renderVerdictLine } from "@deep-spec/kernel-adapter";
+import { ArtifactPath, } from "@deep-spec/kernel-domain";
+import { DesignRecordIdentifier } from "@deep-spec/refcheck-domain";
 import { CheckDomainComponentsUseCase } from "@deep-spec/refcheck-usecase";
-import { DesignRecordRepositoryImpl, ReferenceCheckReportRepositoryImpl } from "@deep-spec/refcheck-adapter";
+import { DesignRecordRepositoryImplementation, ReferenceCheckReportRepositoryImplementation } from "@deep-spec/refcheck-adapter";
 
 function main(): void {
   const flags = parseFlags(process.argv.slice(2));
@@ -42,14 +42,11 @@ function main(): void {
   // 契約2 のスキーマは合成ルートが一度だけ読む。読めなければ「読めなかった」
   // 変種として値に載せ、以後の適合判定はこの 1 つの値からだけ導く（usecase が
   // 保存前に一度だけ conformedTo を通す。BR1.1）。
-  const findingsSchemaFile = readContractSchema(join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"));
-  const findingsSchema = findingsSchemaFile.ok
-    ? FindingsSchema.of(findingsSchemaFile.value)
-    : FindingsSchema.unreadable(findingsSchemaFile.error.cause);
-  const reportRepository = new ReferenceCheckReportRepositoryImpl();
-  const useCase = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImpl(), reportRepository, findingsSchema);
+  const findingsSchema = readFindingsSchema(join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"));
+  const reportRepository = new ReferenceCheckReportRepositoryImplementation();
+  const useCase = new CheckDomainComponentsUseCase(new DesignRecordRepositoryImplementation(), reportRepository, findingsSchema);
   const outcome = useCase.execute({
-    recordId: DesignRecordId.of(target.value),
+    recordId: DesignRecordIdentifier.of(target.value),
     reportDirectory: reportLocation.value,
     mode: flags.reportOnly ? "report-only" : "persist",
   });

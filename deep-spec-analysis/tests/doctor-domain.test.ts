@@ -1,3 +1,4 @@
+import { ArtifactPath } from "@deep-spec/kernel-domain";
 // doctor/domain の分岐固定と presenter 文言の凍結ピン（移行 PR9、#22）。
 // 判定書の checks 配列順・label/fix の部分文字列（install.ts が grep する
 // "no deep-spec verification" / "verification coverage" 等）は観測面。
@@ -111,7 +112,7 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
   const presenter = new DoctorPresenter({ harnessDir: ".claude" });
 
   test("manifest and solver rows render the legacy bytes", () => {
-    const rows = presenter.installation([InstalledStatus.of(ManifestEntry.error("sensors/aidlc-deep-spec-ir-valid.md"), false)]);
+    const rows = presenter.installation([InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("sensors/aidlc-deep-spec-ir-valid.md")), false)]);
     expect(rows[0]?.toDocument()).toEqual({
       pass: false,
       label: "deep-spec-analysis: sensors/aidlc-deep-spec-ir-valid.md installed",

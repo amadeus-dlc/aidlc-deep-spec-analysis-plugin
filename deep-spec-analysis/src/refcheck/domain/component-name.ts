@@ -17,7 +17,7 @@ export class ComponentName {
     return parseConstruction(() => new ComponentName(raw));
   }
   equals(other: ComponentName): boolean { return this.#value === other.#value; }
-  // 正準順（裁定 1）——kernel の TargetId が所有する順序に従う。
+  // 正準順（裁定 1）——kernel の TargetIdentifier が所有する順序に従う。
   compareTo(other: ComponentName): number { return compareCanonically(this.#value, other.#value); }
   asString(): string { return this.#value; }
 }

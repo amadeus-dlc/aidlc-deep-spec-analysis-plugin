@@ -9,12 +9,12 @@ export { type RefinementSolverClient } from "./port/refinement-solver-client.ts"
 export { type RefinementCheck } from "./port/refinement-check.ts";
 export { type RefinementSolverResult } from "./port/refinement-solver-result.ts";
 export { type VerifyDesignOutcome } from "./verify-design-outcome.ts";
-export { VerifyDesignSmtUseCase } from "./verify-design-smt-usecase.ts";
+export { VerifyDesignSatisfiabilityModuloTheoriesUseCase } from "./verify-design-satisfiability-modulo-theories-usecase.ts";
 export { type VerifyDesignInput } from "./verify-design-input.ts";
 export { VerifyDesignQuintUseCase } from "./verify-design-quint-usecase.ts";
-export { type DesignIrValidationMaterialsRepository } from "./port/design-ir-validation-materials-repository.ts";
-export { type ValidateDesignIrOutcome } from "./validate-design-ir-outcome.ts";
-export { ValidateDesignIrUseCase } from "./validate-design-ir-usecase.ts";
+export { type DesignIntermediateRepresentationValidationMaterialsRepository } from "./port/design-intermediate-representation-validation-materials-repository.ts";
+export { type ValidateDesignIntermediateRepresentationOutcome } from "./validate-design-intermediate-representation-outcome.ts";
+export { ValidateDesignIntermediateRepresentationUseCase } from "./validate-design-intermediate-representation-usecase.ts";
 export { type RefinementMapRepository } from "./port/refinement-map-repository.ts";
 export { DesignReportFinalizer } from "./design-report-finalizer.ts";
 export { DesignVerificationAcquirer } from "./design-verification-acquirer.ts";

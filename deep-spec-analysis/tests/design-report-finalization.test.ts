@@ -24,16 +24,16 @@ import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import {
   DesignFindings,
-  DesignModelId,
+  DesignModelIdentifier,
   DesignReport,
-  DesignReportId,
+  DesignReportIdentifier,
   DesignSkips,
   DesignVerifyDirectory,
   type DesignModel,
 } from "@deep-spec/design-domain";
 import {
-  DesignModelRepositoryImpl,
-  DesignVerifyDirectoryRepositoryImpl,
+  DesignModelRepositoryImplementation,
+  DesignVerifyDirectoryRepositoryImplementation,
   renderDesignReportBytes,
 } from "@deep-spec/design-adapter";
 
@@ -156,8 +156,8 @@ function makeWorkspace(): Workspace {
   const stageDir = join(record, "construction", "deep-spec-analysis-functional-verify");
   const verifyDir = join(stageDir, "deep-spec-design-verify");
   mkdirSync(verifyDir, { recursive: true });
-  const acquired = new DesignModelRepositoryImpl().findById(
-    DesignModelId.of(ap(join(stageDir, "deep-spec-analysis-functional-formal-model.md"))),
+  const acquired = new DesignModelRepositoryImplementation().findById(
+    DesignModelIdentifier.of(ap(join(stageDir, "deep-spec-analysis-functional-formal-model.md"))),
   );
   if (!acquired.ok) throw new Error("design fixture model is unreadable");
   return { record, verifyDir, model: acquired.value };
@@ -165,7 +165,7 @@ function makeWorkspace(): Workspace {
 
 function candidate(verifyDir: string, backend: string, model: DesignModel, method = "exhaustive"): DesignReport {
   return DesignReport.compose({
-    id: DesignReportId.of(ap(verifyDir), backend),
+    id: DesignReportIdentifier.of(ap(verifyDir), backend),
     irVersion: model.irVersion(),
     irHash: model.irHash(),
     method,
@@ -186,7 +186,7 @@ function tempEntries(verifyDir: string): string[] {
 // 組む（Finalizer と同じ順序——公開経路はこの形しか通らない）。model が無い
 // ときは導けない cross-check を不在にする（IR unreadable 経路）。
 function finalizing(
-  repository: DesignVerifyDirectoryRepositoryImpl,
+  repository: DesignVerifyDirectoryRepositoryImplementation,
   verifyDir: string,
   report: DesignReport,
   schema: FindingsSchema,
@@ -200,7 +200,7 @@ function finalizing(
 // 兄弟文書の作り置き（fixture seed）。公開経路は store だけなので、seed も
 // 集約ひとつぶんとして通す——クロスチェックは導かない。
 function seed(
-  repository: DesignVerifyDirectoryRepositoryImpl,
+  repository: DesignVerifyDirectoryRepositoryImplementation,
   verifyDir: string,
   report: DesignReport,
   schema: FindingsSchema,
@@ -228,7 +228,7 @@ describe("schema conformance is carried by one value per finalization", () => {
     const schemaCopy = join(ws.record, "findings-schema.json");
     cpSync(schemaPath, schemaCopy);
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       // 合成ルートの読込はここ 1 回だけ（Repository はスキーマパスを持たない）。
       const schema = schemaOf(schemaCopy);
       const report = candidate(ws.verifyDir, "smt", ws.model);
@@ -260,7 +260,7 @@ describe("finalization failures never become a success", () => {
     const quintPath = join(ws.verifyDir, "quint.json");
     const crossPath = join(ws.verifyDir, "cross-check.json");
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "quint", ws.model), schema).ok).toBe(true);
       writeFileSync(join(ws.verifyDir, "smt.json"), "{ \"backend\": \"smt\" }\n", "utf-8");
@@ -289,7 +289,7 @@ describe("finalization failures never become a success", () => {
     const ws = makeWorkspace();
     const quintPath = join(ws.verifyDir, "quint.json");
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "quint", ws.model), schema).ok).toBe(true);
       const aggregate = finalizing(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
@@ -312,7 +312,7 @@ describe("finalization failures never become a success", () => {
   test("a backend write failure leaves the previous backend intact and no cross-check", () => {
     const ws = makeWorkspace();
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema).ok).toBe(true);
       const crossPath = join(ws.verifyDir, "cross-check.json");
@@ -323,7 +323,7 @@ describe("finalization failures never become a success", () => {
       const lock = new FencedLock(new StubClock(1_000), new StubLiveness(4242), 2, () => {
         chmodSync(ws.verifyDir, 0o500);
       });
-      const fenced = new DesignVerifyDirectoryRepositoryImpl(lock);
+      const fenced = new DesignVerifyDirectoryRepositoryImplementation(lock);
       const stored = fenced.store(finalizing(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model));
       chmodSync(ws.verifyDir, 0o755);
 
@@ -341,7 +341,7 @@ describe("finalization failures never become a success", () => {
   test("a failed stale rename publishes nothing", () => {
     const ws = makeWorkspace();
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema).ok).toBe(true);
       const crossPath = join(ws.verifyDir, "cross-check.json");
@@ -477,7 +477,7 @@ describe("at most one canonical owner survives a recovery race", () => {
     for (const allowed of [0, 1, 2]) {
       const ws = makeWorkspace();
       try {
-        const seeding = new DesignVerifyDirectoryRepositoryImpl();
+        const seeding = new DesignVerifyDirectoryRepositoryImplementation();
         const schema = schemaOf(schemaPath);
         // 旧 backend は method が違う——公開が起きたかを bytes で判定するため。
         expect(seed(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model, "simulation"), schema).ok).toBe(true);
@@ -488,7 +488,7 @@ describe("at most one canonical owner survives a recovery race", () => {
 
         const aggregate = finalizing(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
         const lock = new FencedLock(new StubClock(1_000), new StubLiveness(4242), allowed);
-        const stored = new DesignVerifyDirectoryRepositoryImpl(lock).store(aggregate);
+        const stored = new DesignVerifyDirectoryRepositoryImplementation(lock).store(aggregate);
 
         expect(stored.ok).toBe(false);
         if (allowed === 0) {
@@ -521,7 +521,7 @@ describe("a finalization that cannot take the lock changes nothing", () => {
     for (const scenario of ["live", "recovery-race"] as const) {
       const ws = makeWorkspace();
       try {
-        const seeding = new DesignVerifyDirectoryRepositoryImpl();
+        const seeding = new DesignVerifyDirectoryRepositoryImplementation();
         const schema = schemaOf(schemaPath);
         expect(seed(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model, "simulation"), schema).ok).toBe(true);
         const crossPath = join(ws.verifyDir, "cross-check.json");
@@ -542,7 +542,7 @@ describe("a finalization that cannot take the lock changes nothing", () => {
             expect(winner.acquire(ap(ws.verifyDir)).kind).toBe("acquired");
           });
         }
-        const stored = new DesignVerifyDirectoryRepositoryImpl(lockOf(clock, liveness)).store(aggregate);
+        const stored = new DesignVerifyDirectoryRepositoryImplementation(lockOf(clock, liveness)).store(aggregate);
 
         // Failure Matrix 行 1・2: old / old / save-failed。
         expect(stored.ok).toBe(false);
@@ -567,7 +567,7 @@ describe("every JSON document is published by rename, never in place", () => {
   test("both documents are replaced atomically and leave no temporary bytes", () => {
     const ws = makeWorkspace();
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "quint", ws.model), schema).ok).toBe(true);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema).ok).toBe(true);
@@ -600,7 +600,7 @@ describe("a stale cross-check is never taken for the latest result", () => {
   test("the published cross-check is rebuilt from the sibling set observed under the lock", () => {
     const ws = makeWorkspace();
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "quint", ws.model), schema).ok).toBe(true);
       const crossPath = join(ws.verifyDir, "cross-check.json");
@@ -623,7 +623,7 @@ describe("a stale cross-check is never taken for the latest result", () => {
   test("the old cross-check is not restored once the new backend is public", () => {
     const ws = makeWorkspace();
     try {
-      const seeding = new DesignVerifyDirectoryRepositoryImpl();
+      const seeding = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema).ok).toBe(true);
       const crossPath = join(ws.verifyDir, "cross-check.json");
@@ -633,7 +633,7 @@ describe("a stale cross-check is never taken for the latest result", () => {
       // 3 回目の fencing まで通し、cross-check 公開の直前で所有を失わせる。
       const aggregate = finalizing(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
       const lock = new FencedLock(new StubClock(1_000), new StubLiveness(4242), 2);
-      expect(new DesignVerifyDirectoryRepositoryImpl(lock).store(aggregate).ok).toBe(false);
+      expect(new DesignVerifyDirectoryRepositoryImplementation(lock).store(aggregate).ok).toBe(false);
 
       // 欠落を許容する——古い cross-check を最新として戻さない（BR2.5）。
       expect(existsSync(crossPath)).toBe(false);
@@ -654,7 +654,7 @@ describe("a stale cross-check is never taken for the latest result", () => {
     for (const scenario of ["changed", "added"] as const) {
       const ws = makeWorkspace();
       try {
-        const repository = new DesignVerifyDirectoryRepositoryImpl();
+        const repository = new DesignVerifyDirectoryRepositoryImplementation();
         const schema = schemaOf(schemaPath);
         expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "quint", ws.model), schema).ok).toBe(true);
         const crossPath = join(ws.verifyDir, "cross-check.json");
@@ -704,8 +704,8 @@ describe("release failures are reported without touching a successor's lock", ()
         );
       });
       const schema = schemaOf(schemaPath);
-      const aggregate = finalizing(new DesignVerifyDirectoryRepositoryImpl(), ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
-      const stored = new DesignVerifyDirectoryRepositoryImpl(lock).store(aggregate);
+      const aggregate = finalizing(new DesignVerifyDirectoryRepositoryImplementation(), ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
+      const stored = new DesignVerifyDirectoryRepositoryImplementation(lock).store(aggregate);
 
       // Failure Matrix 行 8: new / new / cleanup 失敗。canonical lock は残る。
       expect(stored.ok).toBe(false);
@@ -727,8 +727,8 @@ describe("release failures are reported without touching a successor's lock", ()
         chmodSync(canonical, 0o500);
       });
       const schema = schemaOf(schemaPath);
-      const aggregate = finalizing(new DesignVerifyDirectoryRepositoryImpl(), ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
-      const stored = new DesignVerifyDirectoryRepositoryImpl(lock).store(aggregate);
+      const aggregate = finalizing(new DesignVerifyDirectoryRepositoryImplementation(), ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
+      const stored = new DesignVerifyDirectoryRepositoryImplementation(lock).store(aggregate);
 
       // Failure Matrix 行 9: new / new / cleanup 失敗。canonical は空いている。
       expect(stored.ok).toBe(false);

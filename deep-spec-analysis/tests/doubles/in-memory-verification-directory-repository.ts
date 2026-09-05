@@ -15,7 +15,7 @@ import type { ArtifactPath } from "@deep-spec/kernel-domain";
 import {
   VerificationDirectory,
   type VerificationReport,
-  type VerificationReportId,
+  type VerificationReportIdentifier,
   VerificationReports,
 } from "@deep-spec/requirements-domain";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
@@ -26,7 +26,7 @@ const CROSS_CHECK_FILENAME = "cross-check.json";
 export class InMemoryVerificationDirectoryRepository implements VerificationDirectoryRepository {
   readonly #store = new Map<string, VerificationReport>();
 
-  #keyOf(id: VerificationReportId): string {
+  #keyOf(id: VerificationReportIdentifier): string {
     return `${id.directory().asString()}/${id.fileName()}`;
   }
 
@@ -56,7 +56,7 @@ export class InMemoryVerificationDirectoryRepository implements VerificationDire
 
   // --- テスト専用の読み取り面（ポートではない）-------------------------------
 
-  findById(aggregateId: VerificationReportId): Result<VerificationReport, RepositoryError> {
+  findById(aggregateId: VerificationReportIdentifier): Result<VerificationReport, RepositoryError> {
     const found = this.#store.get(this.#keyOf(aggregateId));
     if (found === undefined) {
       return err({ kind: "not-found", path: this.#keyOf(aggregateId) });

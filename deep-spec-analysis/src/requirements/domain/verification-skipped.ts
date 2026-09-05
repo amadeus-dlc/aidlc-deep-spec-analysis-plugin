@@ -1,24 +1,27 @@
-import { SkipReason, type TargetId } from "@deep-spec/kernel-domain";
+import { SkipReason, type TargetIdentifier } from "@deep-spec/kernel-domain";
 
 // v1 検証 skip（契約2）——対象・理由・任意の説明。正準順（target → reason）と
 // 「その対象の skip か」の判定は記録自身の知識（#71 波17）。reason は分類
 // 文字列、detail は prose（裁定の恒久除外）。
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type VerificationSkippedParam = { target: TargetIdentifier; reason: SkipReason; detail?: string };
+
 export class VerificationSkipped {
-  readonly #target: TargetId;
+  readonly #target: TargetIdentifier;
   readonly #reason: SkipReason;
   readonly #detail: string | undefined;
 
-  private constructor(props: Parameters<typeof VerificationSkipped.of>[0]) {
+  private constructor(props: VerificationSkippedParam) {
     this.#target = props.target;
     this.#reason = props.reason;
     this.#detail = props.detail;
   }
 
-  static of(props: { target: TargetId; reason: SkipReason; detail?: string }): VerificationSkipped {
+  static of(props: VerificationSkippedParam): VerificationSkipped {
     return new VerificationSkipped(props);
   }
 
-  target(): TargetId {
+  target(): TargetIdentifier {
     return this.#target;
   }
 
@@ -30,7 +33,7 @@ export class VerificationSkipped {
     return this.#detail;
   }
 
-  isFor(target: TargetId): boolean {
+  isFor(target: TargetIdentifier): boolean {
     return this.#target.equals(target);
   }
 

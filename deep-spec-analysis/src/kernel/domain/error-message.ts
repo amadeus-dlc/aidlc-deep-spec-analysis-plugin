@@ -11,7 +11,11 @@ export class ErrorMessage {
     this.#value = value;
   }
 
-  static of(value: string): ErrorMessage { return new ErrorMessage(value); }
-  static parse(value: string): Result<ErrorMessage, ParseError> { return parseConstruction(() => new ErrorMessage(value)); }
+  static of(value: string): ErrorMessage {
+    return new ErrorMessage(value);
+  }
+  static parse(value: string): Result<ErrorMessage, ParseError> {
+    return parseConstruction(() => new ErrorMessage(value));
+  }
   asString(): string { return this.#value; }
 }

@@ -159,9 +159,9 @@ These three things — **frozen output contracts**, **untrustworthy external pro
 
 Use `parse` where invalid input is expected. Unexpected exceptions propagate. Do not introduce a bypassing `reconstitute` factory. Meaningful operations such as canonicalizing `compose` or `SkipReason.timeout()` must also reach the same constructor.
 
-Add `parse` where input failure is recoverable. `RequirementId`, `BrRef`, `QueryLabel`, and `DesignUnitId` provide it. Total normalization, unrestricted declaration values, and internally derived counts do not need a failure-free `parse` merely for naming uniformity.
+Add `parse` where input failure is recoverable. `RequirementIdentifier`, `BusinessRuleReference`, `QueryLabel`, and `DesignUnitIdentifier` provide it. Total normalization, unrestricted declaration values, and internally derived counts do not need a failure-free `parse` merely for naming uniformity.
 
-An empty `ErrorMessages` means no errors and is valid. `DeclaredBound`, `DeclaredDigest`, and `DeclaredRuleId` preserve declarations for diagnosis without representing them as validated values.
+An empty `ErrorMessages` means no errors and is valid. `DeclaredBound`, `DeclaredDigest`, and `DeclaredRuleIdentifier` preserve declarations for diagnosis without representing them as validated values.
 
 **Check**: `construction-contracts.test.ts`, `no-reconstitution-bypass`, TypeScript checking.
 
@@ -205,7 +205,7 @@ An empty `ErrorMessages` means no errors and is valid. `DeclaredBound`, `Declare
 
 **Why**: Tell-Don't-Ask. When judgment is scattered, changing a rule means hunting down every call site.
 
-**In this repository**: `AttrDecl.boundsInverted()` / `defaultBelowMin()` (a declaration answers its own inconsistency), `Components.dependencyCycles()`, `ExpressionTree.usesPrime()`.
+**In this repository**: `AttributeDeclaration.boundsInverted()` / `defaultBelowMin()` (a declaration answers its own inconsistency), `Components.dependencyCycles()`, `ExpressionTree.usesPrime()`.
 
 **Deviation in this repository**: **15 places** in `design/domain` still branch outside the type (§8). The rule stands as a rule; achievement is not 100%.
 
@@ -263,9 +263,9 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 **Why**: A type that wraps a procedure makes the objects around it anemic. The moment judgment moves outside, the object degrades into "data."
 
-**In this repository**: `AttrDecl` answers its own boundary inversion, `Components` answers dependency cycles and ownership conflicts, `DeclaredEntities` answers reference resolution. **Zero types across all 4 contexts explicitly call themselves a domain service that wraps nothing but a check.**
+**In this repository**: `AttributeDeclaration` answers its own boundary inversion, `Components` answers dependency cycles and ownership conflicts, `DeclaredEntities` answers reference resolution. **Zero types across all 4 contexts explicitly call themselves a domain service that wraps nothing but a check.**
 
-**Deviation in this repository**: A few types have their center of gravity in "procedure" (`DesignUnitDecl.wellFormednessErrors`, 199 lines; `UnitRefinementPlan.of`, 178 lines). Further, the comment in `src/design/domain/index.ts` (in Japanese) calls the 36 symbols it aggregates "a set of domain services" (§8).
+**Deviation in this repository**: A few types have their center of gravity in "procedure" (`DesignUnitDeclaration.wellFormednessErrors`, 199 lines; `UnitRefinementPlan.of`, 178 lines). Further, the comment in `src/design/domain/index.ts` (in Japanese) calls the 36 symbols it aggregates "a set of domain services" (§8).
 
 **Check**: None (review).
 
@@ -417,7 +417,7 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 **Why**: For a deep, recursive transformation (such as compiling an expression tree to SMT-LIB), throwing reads more naturally than threading failure back up manually at every step. But letting it leak outside means the caller can no longer read from the type what might come flying at it. Closing it locally gets both.
 
-**In this repository (measured)**: The distribution of `catch` is: adapter 92, entries 4, domain 0, usecase 0, infrastructure 0. `CompileError` / `SmtCompileError` / `YamlError` are all unexported classes local to a single file, caught in that same file and converted into `{kind: "uncompilable"}` or a `VerificationSkipped(reason: "compile-error")`.
+**In this repository (measured)**: The distribution of `catch` is: adapter 92, entries 4, domain 0, usecase 0, infrastructure 0. `CompileError` / `SatisfiabilityModuloTheoriesCompileError` / `YamlError` are all unexported classes local to a single file, caught in that same file and converted into `{kind: "uncompilable"}` or a `VerificationSkipped(reason: "compile-error")`.
 
 **Check**: None (review).
 
@@ -578,7 +578,7 @@ Places where a rule is not being kept are recorded here as known. This is writte
 | Location | What |
 |---|---|
 | 15 places in `design/domain` | Pull a value out and branch on it outside the type (D8 not achieved) |
-| The comment in `src/design/domain/index.ts` | Calls the 36 symbols it aggregates (in Japanese) "a set of domain services." In substance they are aggregates, value objects, and FCCs, but `UnitRefinementPlan.of` (178 lines) and `DesignUnitDecl.wellFormednessErrors` (199 lines) have their center of gravity in procedure (D12 not achieved) |
+| The comment in `src/design/domain/index.ts` | Calls the 36 symbols it aggregates (in Japanese) "a set of domain services." In substance they are aggregates, value objects, and FCCs, but `UnitRefinementPlan.of` (178 lines) and `DesignUnitDeclaration.wellFormednessErrors` (199 lines) have their center of gravity in procedure (D12 not achieved) |
 | 7 types in `refcheck/domain` | The style of holding fields bundled together under `#seed` coexists with the field-decomposed style in the same layer. The same type literal is copied out 3 times |
 | 5 `*Outcome` types in `refcheck/domain` | Handling of the same "unreachable branch" case is split — 3 types `throw`, 2 types silently fall into another branch |
 | `SiblingUnitIndex` | The only index that does not use `KeyedIndex`, and instead holds a raw nested `ReadonlyMap` |

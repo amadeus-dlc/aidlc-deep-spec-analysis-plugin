@@ -5,11 +5,11 @@ export class AllowedValues {
   readonly #values: readonly AllowedValue[];
 
   private constructor(values: readonly AllowedValue[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly AllowedValue[]): AllowedValues {
-    return new AllowedValues([...values]);
+    return new AllowedValues(values);
   }
 
   add(value: AllowedValue): AllowedValues {

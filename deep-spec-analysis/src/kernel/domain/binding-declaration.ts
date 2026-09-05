@@ -5,8 +5,13 @@ import type { DeclaredBindingValue } from "./declared-binding-value.ts";
 export class BindingDeclaration {
   readonly #path: AttributePath;
   readonly #value: DeclaredBindingValue;
-  private constructor(path: AttributePath, value: DeclaredBindingValue) { this.#path = path; this.#value = value; }
-  static of(path: AttributePath, value: DeclaredBindingValue): BindingDeclaration { return new BindingDeclaration(path, value); }
+  private constructor(path: AttributePath, value: DeclaredBindingValue) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path: AttributePath, value: DeclaredBindingValue): BindingDeclaration {
+    return new BindingDeclaration(path, value);
+  }
   path(): AttributePath { return this.#path; }
   value(): DeclaredBindingValue { return this.#value; }
 }

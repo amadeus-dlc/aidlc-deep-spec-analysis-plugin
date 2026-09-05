@@ -1,4 +1,4 @@
-import { UnitName, FindingKind, SkipReason, TargetId, TargetIds, VerificationMethod } from "@deep-spec/kernel-domain";
+import { UnitName, FindingKind, SkipReason, TargetIdentifier, TargetIdentifiers, VerificationMethod } from "@deep-spec/kernel-domain";
 
 import type { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";
 import type { SiblingVerdictSkips } from "./sibling-verdict-skips.ts";
@@ -122,7 +122,7 @@ export class SiblingVerdictDocument {
           DesignFinding.of({
             kind: FindingKind.unreachable(),
             functionalRequirementReferences: functionalRequirementReferences,
-            targets: TargetIds.of(Array.from([design], (raw) => TargetId.of(raw))),
+            targets: TargetIdentifiers.of(Array.from([design], (raw) => TargetIdentifier.of(raw))),
             witness,
             unit: UnitName.of(u.name()),
             detail: `The guard of ${design} can never hold under the entity constraints and invariants (witness core attached): the ${isTransition ? "transition" : "rule"} is dead.`,
@@ -137,7 +137,7 @@ export class SiblingVerdictDocument {
           finding: DesignFinding.of({
             kind: FindingKind.redundancy(),
             functionalRequirementReferences: functionalRequirementReferences,
-            targets: TargetIds.of(Array.from([pair[0], pair[1]], (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
+            targets: TargetIdentifiers.of(Array.from([pair[0], pair[1]], (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
             witness,
             unit: UnitName.of(u.name()),
             detail: `${pair[1]} is subsumed by ${pair[0]}: same trigger, a provably narrower guard, and an identical effect — it can never apply where ${pair[0]} does not.`,
@@ -149,7 +149,7 @@ export class SiblingVerdictDocument {
       }
       if (synth) continue; // 合成に触れる他の判定はノイズ
 
-      const targets = TargetIds.of(Array.from(mapped.map((m) => m.design), (raw) => TargetId.of(raw))).sortedUniqueCanonically().toStrings();
+      const targets = TargetIdentifiers.of(Array.from(mapped.map((m) => m.design), (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically().toStrings();
       // deterministic:false waiver：同トリガ conflict の対象がすべて、非決定を
       // 宣言した 1 機械の遷移であるとき（判定は機械自身へ命じる——波7）。
       if (f.isKind("conflict") && targets.length > 0) {
@@ -160,7 +160,7 @@ export class SiblingVerdictDocument {
             if (!waived.has(t)) {
               waived.add(t);
               skipped.push(DesignSkipped.of({
-                target: TargetId.of(t),
+                target: TargetIdentifier.of(t),
                 reason: SkipReason.waived(),
                 unit: UnitName.of(u.name()),
                 detail: `machine ${first.id().asString()} declares deterministic: false — the same-(state,trigger) overlap check is waived by the model`,
@@ -171,7 +171,7 @@ export class SiblingVerdictDocument {
         }
       }
       // 兄弟バックエンドの検証済み判定を設計側の座標へ写す。
-      findings.push(DesignFinding.of({ kind: FindingKind.of(f.kind()), functionalRequirementReferences: functionalRequirementReferences, targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))), witness, unit: UnitName.of(u.name()), detail }));
+      findings.push(DesignFinding.of({ kind: FindingKind.of(f.kind()), functionalRequirementReferences: functionalRequirementReferences, targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))), witness, unit: UnitName.of(u.name()), detail }));
     }
 
     // shadow の後段：死んだルール/遷移は既に unreachable——その空虚な包摂は何も
@@ -208,7 +208,7 @@ export class SiblingVerdictDocument {
       if (seenSkip.has(key)) continue;
       seenSkip.add(key);
       skipped.push(DesignSkipped.of({
-        target: TargetId.of(design),
+        target: TargetIdentifier.of(design),
         reason: SkipReason.of(s.reason()),
         unit: UnitName.of(u.name()),
         ...(detail !== undefined ? { detail: remapDetail(detail) } : {}),

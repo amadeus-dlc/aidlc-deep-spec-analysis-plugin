@@ -1,36 +1,26 @@
+import { EnumerationMembers } from "@deep-spec/kernel-domain";
 import { AttributeKind } from "@deep-spec/kernel-domain";
 import { InitialState } from "@deep-spec/design-domain";
-import { EnumMember } from "@deep-spec/kernel-domain";
+import { EnumerationMember } from "@deep-spec/kernel-domain";
 import { scenarioBindings } from "./binding-fixtures.ts";
-import {
-  VerificationMethod,
-  RequirementId,
-  SkipReason,
-  FindingKind,
-  FunctionalRequirementReferences,
-  TargetIds,
-  TriggerName,
-  type Expression,
-  TargetId,
-  UnitName,
-} from "@deep-spec/kernel-domain";
+import { VerificationMethod, RequirementIdentifier, SkipReason, FindingKind, FunctionalRequirementReferences, TargetIdentifiers, TriggerName, type Expression, TargetIdentifier, UnitName } from "@deep-spec/kernel-domain";
 
 // design/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
 
 import { describe, expect, test } from "bun:test";
 
-import { BrRefs, DesignAttributeName, DesignBackgroundDecl, DesignBackgroundId, DesignEntityName, DesignFinding, DesignIgnore, DesignIgnores, DesignMachine, DesignMachineId, DesignTransition, DesignTransitions, InitialStates, DesignObligation, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenario, DesignScenarioId, DesignTransitionDecl, DesignTransitionId, DeclaredValues, DesignAttributeDecl, DesignAttributeDecls, DesignEntityDecl, DesignEntityDecls, DesignIgnoreDecl, DesignIgnoreDecls, DesignMachineDecl, DesignMachineDecls, DesignObligationDecls, DesignScenarioDecls, DesignBackgroundDecls, DesignTransitionDecls, DesignUnitDecl, DesignUnitId, UnformalizedTargets, DesignSkipped, DesignSkips, LoweredId, LoweredObligation, LoweredScenario, LoweredBackground, LoweredOrigin, LoweredOriginRef, SiblingVerdictDocument, SiblingVerdictFinding, DesignBackgroundAssumption, DesignBackgroundAssumptions, SiblingVerdictFindings, SiblingVerdictSkips, DesignWitness, BrRef, CheckedUnits } from "@deep-spec/design-domain";
+import { BusinessRuleReferences, DesignAttributeName, DesignBackgroundDeclaration, DesignBackgroundIdentifier, DesignEntityName, DesignFinding, DesignIgnore, DesignIgnores, DesignMachine, DesignMachineIdentifier, DesignTransition, DesignTransitions, InitialStates, DesignObligation, DesignObligationIdentifier, DesignObligationNature, DesignObligationOrigin, DesignScenario, DesignScenarioIdentifier, DesignTransitionDeclaration, DesignTransitionIdentifier, DesignAttributeDeclaration, DesignAttributeDeclarations, DesignEntityDeclaration, DesignEntityDeclarations, DesignIgnoreDeclaration, DesignIgnoreDeclarations, DesignMachineDeclaration, DesignMachineDeclarations, DesignObligationDeclarations, DesignScenarioDeclarations, DesignBackgroundDeclarations, DesignTransitionDeclarations, DesignUnitDeclaration, DesignUnitIdentifier, UnformalizedTargets, DesignSkipped, DesignSkips, LoweredIdentifier, LoweredObligation, LoweredScenario, LoweredBackground, LoweredOrigin, LoweredOriginReference, SiblingVerdictDocument, SiblingVerdictFinding, DesignBackgroundAssumption, DesignBackgroundAssumptions, SiblingVerdictFindings, SiblingVerdictSkips, DesignWitness, BusinessRuleReference, CheckedUnits } from "@deep-spec/design-domain";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
 
 describe("design obligation", () => {
   test("inspectExpressions visits every held expression, primes allowed only on the effect", () => {
     const obligation = DesignObligation.of({
-      id: DesignObligationId.of("DOB-1"),
+      id: DesignObligationIdentifier.of("DOB-1"),
       nature: DesignObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
-      brRefs: BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))),
-      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
+      businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR1.1"], (raw) => BusinessRuleReference.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw))),
       assert: { op: "a" },
       trigger: TriggerName.of("submit"),
       guard: { op: "g" },
@@ -51,10 +41,10 @@ describe("design obligation", () => {
 
   test("eventDefinition requires a non-empty trigger on top of a complete guarded effect", () => {
     const complete = DesignObligation.of({
-      id: DesignObligationId.of("DOB-2"),
+      id: DesignObligationIdentifier.of("DOB-2"),
       nature: DesignObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
-      brRefs: BrRefs.of([]),
+      businessRuleReferences: BusinessRuleReferences.of([]),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       trigger: TriggerName.of("submit"),
       guard: lit(true),
@@ -63,10 +53,10 @@ describe("design obligation", () => {
     expect(complete.eventDefinition()?.trigger.asString()).toBe("submit");
     expect(
       DesignObligation.of({
-        id: DesignObligationId.of("DOB-3"),
+        id: DesignObligationIdentifier.of("DOB-3"),
         nature: DesignObligationNature.of("event"),
         origin: DesignObligationOrigin.of("rules"),
-        brRefs: BrRefs.of([]),
+        businessRuleReferences: BusinessRuleReferences.of([]),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         guard: lit(true),
         effect: lit(false),
@@ -76,18 +66,18 @@ describe("design obligation", () => {
 
   test("of round-trips every field through the accessors, and temporal() hands out a copy", () => {
     const obligation = DesignObligation.of({
-      id: DesignObligationId.of("DOB-4"),
+      id: DesignObligationIdentifier.of("DOB-4"),
       nature: DesignObligationNature.of("invariant"),
       origin: DesignObligationOrigin.of("rules"),
-      brRefs: BrRefs.of(Array.from(["BR2.1"], (raw) => BrRef.of(raw))),
-      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-3"], (raw) => RequirementId.of(raw))),
+      businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR2.1"], (raw) => BusinessRuleReference.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-3"], (raw) => RequirementIdentifier.of(raw))),
       assert: lit(true),
       temporal: { pattern: "always", assert: lit(true) },
     });
     expect(obligation.id().asString()).toBe("DOB-4");
     expect(obligation.nature().asString()).toBe("invariant");
     expect(obligation.origin().asString()).toBe("rules");
-    expect(obligation.brRefs().toStrings()).toEqual(["BR2.1"]);
+    expect(obligation.businessRuleReferences().toStrings()).toEqual(["BR2.1"]);
     expect(obligation.functionalRequirementReferences().toStrings()).toEqual(["FR-3"]);
     expect(obligation.assertion()).toEqual(lit(true));
     expect(obligation.trigger()).toBeUndefined();
@@ -104,9 +94,9 @@ describe("design obligation", () => {
 describe("design scenario", () => {
   const scenario = (kind: "accept" | "reject") =>
     DesignScenario.of({
-      id: DesignScenarioId.of("DSC-1"),
+      id: DesignScenarioIdentifier.of("DSC-1"),
       kind,
-      brRefs: BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))),
+      businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR1.1"], (raw) => BusinessRuleReference.of(raw))),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       bindings: scenarioBindings({}),
     });
@@ -120,17 +110,17 @@ describe("design scenario", () => {
 
   test("of round-trips every field through the accessors and bindings() hands out a copy", () => {
     const withEvent = DesignScenario.of({
-      id: DesignScenarioId.of("DSC-2"),
+      id: DesignScenarioIdentifier.of("DSC-2"),
       kind: "reject",
-      brRefs: BrRefs.of(Array.from(["BR7.1"], (raw) => BrRef.of(raw))),
-      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-4"], (raw) => RequirementId.of(raw))),
+      businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR7.1"], (raw) => BusinessRuleReference.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-4"], (raw) => RequirementIdentifier.of(raw))),
       bindings: scenarioBindings({ b: 2, a: 1 }),
       event: { trigger: TriggerName.of("close") },
       expect: lit(true),
     });
     expect(withEvent.id().asString()).toBe("DSC-2");
     expect(withEvent.kind()).toBe("reject");
-    expect(withEvent.brRefs().toStrings()).toEqual(["BR7.1"]);
+    expect(withEvent.businessRuleReferences().toStrings()).toEqual(["BR7.1"]);
     expect(withEvent.functionalRequirementReferences().toStrings()).toEqual(["FR-4"]);
     expect(withEvent.eventTrigger()?.asString()).toBe("close");
     expect(withEvent.expectation()).toEqual(lit(true));
@@ -151,12 +141,12 @@ describe("design scenario", () => {
 describe("design transition decl", () => {
   const primed: Expression = { op: "ref", path: "Ticket.state", prime: true };
   const decl = (overrides: { from?: string; trigger?: TriggerName; guard?: Expression; effect?: Expression } = {}) =>
-    DesignTransitionDecl.of({
-      id: DesignTransitionId.of("TR-1"),
+    DesignTransitionDeclaration.of({
+      id: DesignTransitionIdentifier.of("TR-1"),
       from: "open",
       to: "closed",
       trigger: TriggerName.of("close"),
-      brRefs: BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))),
+      businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR1.1"], (raw) => BusinessRuleReference.of(raw))),
       guard: lit(true),
       effect: primed,
       ...overrides,
@@ -201,14 +191,14 @@ describe("design transition decl", () => {
     expect(full.fromState()).toBe("open");
     expect(full.toState()).toBe("closed");
     expect(full.trigger()?.asString()).toBe("close");
-    expect(full.brRefs()?.toStrings()).toEqual(["BR1.1"]);
+    expect(full.businessRuleReferences()?.toStrings()).toEqual(["BR1.1"]);
     expect(full.guard()).toEqual(lit(true));
     expect(full.effect()).toEqual(primed);
-    const bare = DesignTransitionDecl.of({ id: DesignTransitionId.of("TR-2") });
+    const bare = DesignTransitionDeclaration.of({ id: DesignTransitionIdentifier.of("TR-2") });
     expect(bare.fromState()).toBeUndefined();
     expect(bare.toState()).toBeUndefined();
     expect(bare.trigger()).toBeUndefined();
-    expect(bare.brRefs()).toBeUndefined();
+    expect(bare.businessRuleReferences()).toBeUndefined();
     expect(bare.guard()).toBeUndefined();
     expect(bare.effect()).toBeUndefined();
   });
@@ -216,8 +206,8 @@ describe("design transition decl", () => {
 
 describe("design background decl", () => {
   test("inspectExpressions visits the assertion with primes forbidden, and silence when absent", () => {
-    const withAssert = DesignBackgroundDecl.of({
-      id: DesignBackgroundId.of("DBG-1"),
+    const withAssert = DesignBackgroundDeclaration.of({
+      id: DesignBackgroundIdentifier.of("DBG-1"),
       assert: { op: "ref", path: "t.x" },
     });
     const seen: [string, boolean][] = [];
@@ -226,7 +216,7 @@ describe("design background decl", () => {
     expect(withAssert.id().asString()).toBe("DBG-1");
     expect(withAssert.assertion()).toEqual({ op: "ref", path: "t.x" });
 
-    const bare = DesignBackgroundDecl.of({ id: DesignBackgroundId.of("DBG-2") });
+    const bare = DesignBackgroundDeclaration.of({ id: DesignBackgroundIdentifier.of("DBG-2") });
     const none: unknown[] = [];
     bare.inspectExpressions((expression, primesAllowed) => none.push([expression.op, primesAllowed]));
     expect(none).toEqual([]);
@@ -238,13 +228,13 @@ describe("design transition and ignore (compile-down owners)", () => {
   const primed: Expression = { op: "ref", path: "T.s", prime: true };
   const transition = (withExprs: boolean) =>
     DesignTransition.of({
-      id: DesignTransitionId.of("TR-1"),
+      id: DesignTransitionIdentifier.of("TR-1"),
       from: "open",
       to: "closed",
       trigger: TriggerName.of("close"),
       guard: withExprs ? lit(true) : undefined,
       effect: withExprs ? primed : undefined,
-      brRefs: BrRefs.of(Array.from(["BR9.1"], (raw) => BrRef.of(raw))),
+      businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR9.1"], (raw) => BusinessRuleReference.of(raw))),
     });
 
   test("of round-trips every field through the accessors", () => {
@@ -255,7 +245,7 @@ describe("design transition and ignore (compile-down owners)", () => {
     expect(tr.trigger().asString()).toBe("close");
     expect(tr.guard()).toEqual(lit(true));
     expect(tr.effect()).toEqual(primed);
-    expect(tr.brRefs().toStrings()).toEqual(["BR9.1"]);
+    expect(tr.businessRuleReferences().toStrings()).toEqual(["BR9.1"]);
     expect(transition(false).guard()).toBeUndefined();
     expect(transition(false).effect()).toBeUndefined();
   });
@@ -283,8 +273,8 @@ describe("design finding (conflict reinterpretation owner)", () => {
   const finding = (kind: string, targets: string[]) =>
     DesignFinding.of({
       kind: FindingKind.of(kind),
-      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
-      targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw))),
+      targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
       witness: DesignWitness.trace([{ "T.s": "a" }]),
       unit: UnitName.of("u1"),
       detail: "overlap",
@@ -333,12 +323,12 @@ describe("design finding (conflict reinterpretation owner)", () => {
 describe("design machine (probe candidates and the deterministic waiver)", () => {
   const machine = (deterministic: boolean, id = "SM-1") =>
     DesignMachine.of({
-      id: DesignMachineId.of(id),
+      id: DesignMachineIdentifier.of(id),
       entity: DesignEntityName.of("Ticket"),
       attribute: DesignAttributeName.of("status"),
       initial: InitialStates.of((["open"]).map((value) => InitialState.of(value))),
       transitions: DesignTransitions.of([
-        DesignTransition.of({ id: DesignTransitionId.of("TR-1"), from: "open", to: "closed", trigger: TriggerName.of("close"), brRefs: BrRefs.of([]) }),
+        DesignTransition.of({ id: DesignTransitionIdentifier.of("TR-1"), from: "open", to: "closed", trigger: TriggerName.of("close"), businessRuleReferences: BusinessRuleReferences.of([]) }),
       ]),
       ignores: DesignIgnores.of([DesignIgnore.of({ state: "closed", trigger: TriggerName.of("close") })]),
       deterministic,
@@ -368,12 +358,12 @@ describe("design machine (probe candidates and the deterministic waiver)", () =>
 });
 
 describe("design decls (well-formedness materials own their judgements)", () => {
-  const attr = (name: string) => DesignAttributeDecl.of({ name: DesignAttributeName.of(name), kind: AttributeKind.of("enum"), values: DeclaredValues.of((["open", "closed"]).map((value) => EnumMember.of(value))) });
+  const attr = (name: string) => DesignAttributeDeclaration.of({ name: DesignAttributeName.of(name), kind: AttributeKind.of("enum"), values: EnumerationMembers.of((["open", "closed"]).map((value) => EnumerationMember.of(value))) });
 
   test("entity decl visits attributes with their coordinate and flags a repeated name from its second occurrence", () => {
-    const entity = DesignEntityDecl.of({
+    const entity = DesignEntityDeclaration.of({
       name: DesignEntityName.of("ticket"),
-      attributes: DesignAttributeDecls.of([attr("status"), attr("status"), attr("owner")]),
+      attributes: DesignAttributeDeclarations.of([attr("status"), attr("status"), attr("owner")]),
     });
     const seen: [string, boolean][] = [];
     entity.inspectAttributes((coordinate, attribute, duplicated) => seen.push([`${coordinate}=${attribute.name().asString()}`, duplicated]));
@@ -383,23 +373,23 @@ describe("design decls (well-formedness materials own their judgements)", () => 
   });
 
   test("ignore decl knows whether its state belongs to the machine's state set and its transition cell key", () => {
-    const ig = DesignIgnoreDecl.of({ state: "closed", trigger: TriggerName.of("close") });
-    expect(ig.isStateAmong(DeclaredValues.of((["open", "closed"]).map((value) => EnumMember.of(value))))).toBe(true);
-    expect(ig.isStateAmong(DeclaredValues.of((["open"]).map((value) => EnumMember.of(value))))).toBe(false);
+    const ig = DesignIgnoreDeclaration.of({ state: "closed", trigger: TriggerName.of("close") });
+    expect(ig.isStateAmong(EnumerationMembers.of((["open", "closed"]).map((value) => EnumerationMember.of(value))))).toBe(true);
+    expect(ig.isStateAmong(EnumerationMembers.of((["open"]).map((value) => EnumerationMember.of(value))))).toBe(false);
     expect(ig.cellKey()).toBe("closed|close");
     expect(ig.state()).toBe("closed");
     expect(ig.trigger().asString()).toBe("close");
   });
 
   test("machine decl selects the initial states outside the state set in declaration order and round-trips its parts", () => {
-    const sm = DesignMachineDecl.of({
-      id: DesignMachineId.of("SM-1"),
+    const sm = DesignMachineDeclaration.of({
+      id: DesignMachineIdentifier.of("SM-1"),
       attrPath: "ticket.status",
       initial: InitialStates.of((["ghost", "open", "phantom"]).map((value) => InitialState.of(value))),
-      transitions: DesignTransitionDecls.of([]),
-      ignores: DesignIgnoreDecls.of([]),
+      transitions: DesignTransitionDeclarations.of([]),
+      ignores: DesignIgnoreDeclarations.of([]),
     });
-    expect(sm.initialStatesOutside(DeclaredValues.of((["open", "closed"]).map((value) => EnumMember.of(value))))).toEqual(["ghost", "phantom"]);
+    expect(sm.initialStatesOutside(EnumerationMembers.of((["open", "closed"]).map((value) => EnumerationMember.of(value))))).toEqual(["ghost", "phantom"]);
     expect(sm.id().asString()).toBe("SM-1");
     expect(sm.attrPath()).toBe("ticket.status");
     expect([...sm.initial()].map((state) => state.asString())).toEqual(["ghost", "open", "phantom"]);
@@ -408,14 +398,14 @@ describe("design decls (well-formedness materials own their judgements)", () => 
   });
 
   test("unit decl owns the construction-directory judgement and round-trips its materials", () => {
-    const build = (directoryExists: boolean) => DesignUnitDecl.of({
-      unit: DesignUnitId.of("u1"),
-      entities: DesignEntityDecls.of([]),
-      obligations: DesignObligationDecls.of([]),
-      stateMachines: DesignMachineDecls.of([]),
-      scenarios: DesignScenarioDecls.of([]),
-      background: DesignBackgroundDecls.of([]),
-      unformalizedTargets: UnformalizedTargets.of(Array.from(["BR1.1"], (raw) => TargetId.of(raw))),
+    const build = (directoryExists: boolean) => DesignUnitDeclaration.of({
+      unit: DesignUnitIdentifier.of("u1"),
+      entities: DesignEntityDeclarations.of([]),
+      obligations: DesignObligationDeclarations.of([]),
+      stateMachines: DesignMachineDeclarations.of([]),
+      scenarios: DesignScenarioDeclarations.of([]),
+      background: DesignBackgroundDeclarations.of([]),
+      unformalizedTargets: UnformalizedTargets.of(Array.from(["BR1.1"], (raw) => TargetIdentifier.of(raw))),
       directoryExists,
       rulesMarkdown: "# rules",
     });
@@ -435,16 +425,16 @@ describe("design decls (well-formedness materials own their judgements)", () => 
 
 describe("design skipped (a skip record owns its identity and canonical order)", () => {
   test("round-trips its parts, answers isFor, and sorts by unit, then target, then reason", () => {
-    const a = DesignSkipped.of({ target: TargetId.of("TR-2"), reason: SkipReason.of("timeout"), unit: UnitName.of("u2"), detail: "budget" });
-    const b = DesignSkipped.of({ target: TargetId.of("TR-10"), reason: SkipReason.of("waived"), unit: UnitName.of("u1")});
-    const c = DesignSkipped.of({ target: TargetId.of("TR-2"), reason: SkipReason.of("capability"), unit: UnitName.of("u1")});
+    const a = DesignSkipped.of({ target: TargetIdentifier.of("TR-2"), reason: SkipReason.of("timeout"), unit: UnitName.of("u2"), detail: "budget" });
+    const b = DesignSkipped.of({ target: TargetIdentifier.of("TR-10"), reason: SkipReason.of("waived"), unit: UnitName.of("u1")});
+    const c = DesignSkipped.of({ target: TargetIdentifier.of("TR-2"), reason: SkipReason.of("capability"), unit: UnitName.of("u1")});
     expect(a.target().asString()).toBe("TR-2");
     expect(a.reason()).toBe("timeout");
     expect(a.unit()).toBe("u2");
     expect(a.detail()).toBe("budget");
     expect(b.detail()).toBeUndefined();
-    expect(a.isFor(TargetId.of("TR-2"))).toBe(true);
-    expect(a.isFor(TargetId.of("TR-3"))).toBe(false);
+    expect(a.isFor(TargetIdentifier.of("TR-2"))).toBe(true);
+    expect(a.isFor(TargetIdentifier.of("TR-3"))).toBe(false);
     expect(DesignSkips.of([a, b, c]).sortedCanonically().toArray().map((s) => `${s.unit()}:${s.target().asString()}:${s.reason()}`)).toEqual([
       "u1:TR-2:capability",
       "u1:TR-10:waived",
@@ -456,9 +446,9 @@ describe("design skipped (a skip record owns its identity and canonical order)",
 
 describe("lowered records (the v1 payload the sibling backends receive)", () => {
   test("obligation knows whether it is an event and carries its optional parts", () => {
-    const invariant = LoweredObligation.of({ id: LoweredId.of("OB-1"), nature: "invariant", functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))), assert: { op: "bool", value: true } });
+    const invariant = LoweredObligation.of({ id: LoweredIdentifier.of("OB-1"), nature: "invariant", functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw))), assert: { op: "bool", value: true } });
     const event = LoweredObligation.of({
-      id: LoweredId.of("OB-2"), nature: "event", functionalRequirementReferences: FunctionalRequirementReferences.of([]), trigger: "close",
+      id: LoweredIdentifier.of("OB-2"), nature: "event", functionalRequirementReferences: FunctionalRequirementReferences.of([]), trigger: "close",
       guard: { op: "bool", value: true }, effect: { op: "bool", value: true },
       temporal: { pattern: "always", assert: { op: "bool", value: false } },
     });
@@ -476,8 +466,8 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
   });
 
   test("scenario knows accept from reject and carries its bindings, event, and expectation", () => {
-    const accept = LoweredScenario.of({ id: LoweredId.of("SC-1"), kind: "accept", functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-2"], (raw) => RequirementId.of(raw))), bindings: scenarioBindings({ "T.x": 1 }) });
-    const reject = LoweredScenario.of({ id: LoweredId.of("SC-2"), kind: "reject", functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: scenarioBindings({}), event: { trigger: "go" }, expect: { op: "bool", value: true } });
+    const accept = LoweredScenario.of({ id: LoweredIdentifier.of("SC-1"), kind: "accept", functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-2"], (raw) => RequirementIdentifier.of(raw))), bindings: scenarioBindings({ "T.x": 1 }) });
+    const reject = LoweredScenario.of({ id: LoweredIdentifier.of("SC-2"), kind: "reject", functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: scenarioBindings({}), event: { trigger: TriggerName.of("go") }, expect: { op: "bool", value: true } });
     expect(accept.isAccept()).toBe(true);
     expect(reject.isAccept()).toBe(false);
     expect(accept.id().asString()).toBe("SC-1");
@@ -487,15 +477,15 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     expect(accept.event()).toBeUndefined();
     expect(reject.event()).toEqual({ trigger: "go" });
     expect(reject.expectation()).toEqual({ op: "bool", value: true });
-    const bg = LoweredBackground.of({ id: LoweredId.of("BG-1"), assert: { op: "bool", value: true } });
+    const bg = LoweredBackground.of({ id: LoweredIdentifier.of("BG-1"), assert: { op: "bool", value: true } });
     expect(bg.id().asString()).toBe("BG-1");
     expect(bg.assertion()).toEqual({ op: "bool", value: true });
   });
 
   test("origin tells probes from attributions and pairs a shadow probe (a lone origin pairs with itself)", () => {
-    const dead = LoweredOrigin.of({ design: LoweredOriginRef.of("TR-1"), kind: "vac-dead" });
-    const shadow = LoweredOrigin.of({ design: LoweredOriginRef.of("TR-1|TR-2"), kind: "vac-shadow", pair: [LoweredOriginRef.of("TR-1"), LoweredOriginRef.of("TR-2")] });
-    const plain = LoweredOrigin.of({ design: LoweredOriginRef.of("DOB-1"), kind: "passthrough" });
+    const dead = LoweredOrigin.of({ design: LoweredOriginReference.of("TR-1"), kind: "vac-dead" });
+    const shadow = LoweredOrigin.of({ design: LoweredOriginReference.of("TR-1|TR-2"), kind: "vac-shadow", pair: [LoweredOriginReference.of("TR-1"), LoweredOriginReference.of("TR-2")] });
+    const plain = LoweredOrigin.of({ design: LoweredOriginReference.of("DOB-1"), kind: "passthrough" });
     expect(dead.isSyntheticProbe()).toBe(true);
     expect(shadow.isSyntheticProbe()).toBe(true);
     expect(plain.isSyntheticProbe()).toBe(false);
@@ -510,8 +500,8 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
 describe("sibling verdict document and finding (the backend's answer owns its interpretation)", () => {
   const finding = SiblingVerdictFinding.of({
     kind: FindingKind.of("conflict"),
-    functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
-    targets: [LoweredId.of("OB-1")],
+    functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw))),
+    targets: [LoweredIdentifier.of("OB-1")],
     witness: DesignWitness.of({ core: ["g_OB_1", 7] }),
     detail: "x",
   });
@@ -561,7 +551,7 @@ describe("sibling verdict document and finding (the backend's answer owns its in
 describe("design background assumption (an assumption owns its identity and canonical order)", () => {
   test("id, assertion and the numeric-tail order", () => {
     const bg = (id: string, value: boolean): DesignBackgroundAssumption =>
-      DesignBackgroundAssumption.of({ id: DesignBackgroundId.of(id), assert: { op: "bool", value } });
+      DesignBackgroundAssumption.of({ id: DesignBackgroundIdentifier.of(id), assert: { op: "bool", value } });
     const b10 = bg("DBG-10", true);
     const b2 = bg("DBG-2", false);
     expect(b10.id().asString()).toBe("DBG-10");
@@ -573,14 +563,14 @@ describe("design background assumption (an assumption owns its identity and cano
   });
 });
 
-describe("the design-side primitives of ruling 3-1 (BrRef, BrRefs, CheckedUnits, UnformalizedTargets)", () => {
-  test("BrRef compares by plain string order and BrRefs takes primitives through of()", () => {
-    const a = BrRef.of("BR1.2");
-    expect(a.equals(BrRef.of("BR1.2"))).toBe(true);
-    expect(a.compareTo(BrRef.of("BR1.10"))).toBeGreaterThan(0);
-    expect(a.compareTo(BrRef.of("BR1.2"))).toBe(0);
-    expect(a.compareTo(BrRef.of("BR2.0"))).toBeLessThan(0);
-    const refs = BrRefs.of([a]).add(BrRef.of("BR2.0"));
+describe("the design-side primitives of ruling 3-1 (BusinessRuleReference, BusinessRuleReferences, CheckedUnits, UnformalizedTargets)", () => {
+  test("BusinessRuleReference compares by plain string order and BusinessRuleReferences takes primitives through of()", () => {
+    const a = BusinessRuleReference.of("BR1.2");
+    expect(a.equals(BusinessRuleReference.of("BR1.2"))).toBe(true);
+    expect(a.compareTo(BusinessRuleReference.of("BR1.10"))).toBeGreaterThan(0);
+    expect(a.compareTo(BusinessRuleReference.of("BR1.2"))).toBe(0);
+    expect(a.compareTo(BusinessRuleReference.of("BR2.0"))).toBeLessThan(0);
+    const refs = BusinessRuleReferences.of([a]).add(BusinessRuleReference.of("BR2.0"));
     expect(refs.toArray().map((r) => r.asString())).toEqual(["BR1.2", "BR2.0"]);
     expect(refs.toStrings()).toEqual(["BR1.2", "BR2.0"]);
   });
@@ -590,9 +580,9 @@ describe("the design-side primitives of ruling 3-1 (BrRef, BrRefs, CheckedUnits,
     expect([...units].map((u) => u.asString())).toEqual(["unit:u2", "unit:u1"]);
     expect(units.toArray().length).toBe(2);
     expect(units.sortedUniqueCanonically().toStrings()).toEqual(["unit:u1", "unit:u2"]);
-    const targets = UnformalizedTargets.of([TargetId.of("BR1.1")]);
-    expect(targets.covers(TargetId.of("BR1.1"))).toBe(true);
+    const targets = UnformalizedTargets.of([TargetIdentifier.of("BR1.1")]);
+    expect(targets.covers(TargetIdentifier.of("BR1.1"))).toBe(true);
     expect(targets.toArray().map((t) => t.asString())).toEqual(["BR1.1"]);
-    expect(targets.add(TargetId.of("BR1.1")).toStrings()).toEqual(["BR1.1"]);
+    expect(targets.add(TargetIdentifier.of("BR1.1")).toStrings()).toEqual(["BR1.1"]);
   });
 });

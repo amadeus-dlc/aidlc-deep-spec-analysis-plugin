@@ -12,7 +12,9 @@ export class DesignObligationOrigin {
     this.#value = value;
   }
 
-  static parse(value: string): Result<DesignObligationOrigin, ParseError> { return parseConstruction(() => new DesignObligationOrigin(value)); }
+  static parse(value: string): Result<DesignObligationOrigin, ParseError> {
+    return parseConstruction(() => new DesignObligationOrigin(value));
+  }
 
   static of(raw: string): DesignObligationOrigin {
     return new DesignObligationOrigin(raw);

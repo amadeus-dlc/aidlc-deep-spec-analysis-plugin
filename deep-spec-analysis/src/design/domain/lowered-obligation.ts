@@ -1,15 +1,28 @@
+import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import { type Expression, ObligationNature, TriggerName } from "@deep-spec/kernel-domain";
 import type { FunctionalRequirementReferences } from "@deep-spec/kernel-domain";
 
-import type { LoweredId } from "./lowered-id.ts";
+import type { LoweredIdentifier } from "./lowered-identifier.ts";
 
 // lowered v1 義務（兄弟バックエンドへ渡す契約1 の形）。id は lowered 語彙
 // （OB-n）、nature は分類文字列、trigger は lowered 文書の生トリガ名。ペイロード
 // の面（どの任意部が存在するか）は義務自身の知識（#71 波20）。temporal は
 // 契約1 の時相宣言そのまま（pattern と assert / from / to）。
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type LoweredObligationParam = {
+  id: LoweredIdentifier;
+  nature: string;
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  assert?: Expression;
+  trigger?: string;
+  guard?: Expression;
+  effect?: Expression;
+  temporal?: { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression };
+};
+
 export class LoweredObligation {
-  readonly #id: LoweredId;
+  readonly #id: LoweredIdentifier;
   readonly #nature: ObligationNature;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #assert: Expression | undefined;
@@ -18,7 +31,7 @@ export class LoweredObligation {
   readonly #effect: Expression | undefined;
   readonly #temporal: { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression } | undefined;
 
-  private constructor(props: Parameters<typeof LoweredObligation.of>[0]) {
+  private constructor(props: LoweredObligationParam) {
     this.#id = props.id;
     this.#nature = ObligationNature.of(props.nature);
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
@@ -34,20 +47,15 @@ export class LoweredObligation {
     };
   }
 
-  static of(props: {
-    id: LoweredId;
-    nature: string;
-    functionalRequirementReferences: FunctionalRequirementReferences;
-    assert?: Expression;
-    trigger?: string;
-    guard?: Expression;
-    effect?: Expression;
-    temporal?: { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression };
-  }): LoweredObligation {
+  static parse(props: LoweredObligationParam): Result<LoweredObligation, ParseError> {
+    return parseConstruction(() => new LoweredObligation(props));
+  }
+
+  static of(props: LoweredObligationParam): LoweredObligation {
     return new LoweredObligation(props);
   }
 
-  id(): LoweredId {
+  id(): LoweredIdentifier {
     return this.#id;
   }
 

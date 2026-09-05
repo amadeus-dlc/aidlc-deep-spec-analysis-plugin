@@ -12,7 +12,9 @@ export class ContractParty {
     this.#value = value.replace(/[`*]/g, "").trim();
   }
 
-  static parse(value: string): Result<ContractParty, ParseError> { return parseConstruction(() => new ContractParty(value)); }
+  static parse(value: string): Result<ContractParty, ParseError> {
+    return parseConstruction(() => new ContractParty(value));
+  }
 
   static of(raw: string): ContractParty {
     return new ContractParty(raw);

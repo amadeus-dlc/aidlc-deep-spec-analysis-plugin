@@ -2,9 +2,9 @@
 
 export { type HarnessFileClient } from "./port/harness-file-client.ts";
 export { type SolverProbeClient } from "./port/solver-probe-client.ts";
-export { type RefcheckBackendClient } from "./port/refcheck-backend-client.ts";
+export { type ReferenceCheckBackendClient } from "./port/reference-check-backend-client.ts";
 export { type VerificationTarget } from "./port/verification-target.ts";
-export { type DesignArtifactRef } from "./port/design-artifact-ref.ts";
+export { type DesignArtifactReference } from "./port/design-artifact-reference.ts";
 export { type FunctionalUnitScan } from "./port/functional-unit-scan.ts";
 export { type FunctionalTarget } from "./port/functional-target.ts";
 export { type DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";

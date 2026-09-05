@@ -3,8 +3,8 @@
 // 返る——コンパイル時 skip は unavailable 文書にも載るため。
 
 import type { RequirementsModel } from "@deep-spec/requirements-domain";
-import type { SmtCheck } from "./smt-check.ts";
+import type { SatisfiabilityModuloTheoriesCheck } from "./satisfiability-modulo-theories-check.ts";
 
 export interface Z3SolverClient {
-  check(model: RequirementsModel): SmtCheck;
+  check(model: RequirementsModel): SatisfiabilityModuloTheoriesCheck;
 }

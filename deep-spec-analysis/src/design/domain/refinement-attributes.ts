@@ -7,11 +7,11 @@ export class RefinementAttributes {
   readonly #values: readonly RefinementAttribute[];
 
   private constructor(values: readonly RefinementAttribute[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly RefinementAttribute[]): RefinementAttributes {
-    return new RefinementAttributes([...values]);
+    return new RefinementAttributes(values);
   }
 
   add(value: RefinementAttribute): RefinementAttributes {

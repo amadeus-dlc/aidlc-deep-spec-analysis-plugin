@@ -5,11 +5,11 @@ export class UnitNames {
   readonly #values: readonly UnitName[];
 
   private constructor(values: readonly UnitName[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly UnitName[]): UnitNames {
-    return new UnitNames([...values]);
+    return new UnitNames(values);
   }
 
   add(value: UnitName): UnitNames {

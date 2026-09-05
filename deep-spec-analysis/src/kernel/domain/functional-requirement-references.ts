@@ -1,29 +1,33 @@
 // FunctionalRequirementReferences — 義務・シナリオ・finding が指す要件 id の列（ファーストクラス
-// コレクション）。要素は RequirementId（裁定 3-1、2026-09-03——生 string の列
+// コレクション）。要素は RequirementIdentifier（裁定 3-1、2026-09-03——生 string の列
 // ではない）。of は型付きの要素を受け取る。
 // 正準一意化（`sortedUnique`）は finding の frRefs 面の凍結正準形。
 
-import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
-import { RequirementId } from "./requirement-id.ts";
+import { IllegalArgumentException, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
+import { RequirementIdentifier } from "./requirement-identifier.ts";
 
 export class FunctionalRequirementReferences {
-  readonly #values: readonly RequirementId[];
+  readonly #values: readonly RequirementIdentifier[];
 
-  private constructor(values: readonly RequirementId[]) {
+  private constructor(values: readonly RequirementIdentifier[]) {
     // 1要素が持つ要件参照の処理予算は10,000件。コピーの前に確認する。
     if (values.length > 10_000) throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
 
-  static of(values: readonly RequirementId[]): FunctionalRequirementReferences {
+  static parse(values: readonly RequirementIdentifier[]): Result<FunctionalRequirementReferences, ParseError> {
+    return parseConstruction(() => new FunctionalRequirementReferences(values));
+  }
+
+  static of(values: readonly RequirementIdentifier[]): FunctionalRequirementReferences {
     return new FunctionalRequirementReferences(values);
   }
 
-  add(value: RequirementId): FunctionalRequirementReferences {
+  add(value: RequirementIdentifier): FunctionalRequirementReferences {
     return new FunctionalRequirementReferences([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<RequirementId> {
+  *[Symbol.iterator](): Iterator<RequirementIdentifier> {
     yield* this.#values;
   }
 
@@ -36,7 +40,7 @@ export class FunctionalRequirementReferences {
     return new FunctionalRequirementReferences([...unique.values()].sort((a, b) => a.compareTo(b)));
   }
 
-  toArray(): readonly RequirementId[] {
+  toArray(): readonly RequirementIdentifier[] {
     return this.#values;
   }
 

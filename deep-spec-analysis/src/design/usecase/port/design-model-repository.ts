@@ -8,9 +8,9 @@
 
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { DesignModel, DesignModelId } from "@deep-spec/design-domain";
+import type { DesignModel, DesignModelIdentifier } from "@deep-spec/design-domain";
 
 export interface DesignModelRepository {
-  findById(id: DesignModelId): Result<DesignModel, RepositoryError>;
+  findById(id: DesignModelIdentifier): Result<DesignModel, RepositoryError>;
   store(model: DesignModel): Result<void, RepositoryError>;
 }

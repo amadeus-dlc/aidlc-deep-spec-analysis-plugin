@@ -1,13 +1,11 @@
+import { Declaration } from "@deep-spec/kernel-domain";
+import { EnumerationMembers } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
-import {
-  AttributeKind, AttributePath, BindingDeclaration, BindingValue, DeclaredBindings, DeclaredBindingValue,
-  EnumMember, ErrorMessage, ErrorMessages, ScenarioBinding, ScenarioBindings,
-  FunctionalRequirementReferences, RequirementId,
-} from "@deep-spec/kernel-domain";
+import { AttributeKind, AttributePath, BindingDeclaration, BindingValue, DeclaredBindings, DeclaredBindingValue, EnumerationMember, ErrorMessage, ErrorMessages, ScenarioBinding, ScenarioBindings, FunctionalRequirementReferences, RequirementIdentifier } from "@deep-spec/kernel-domain";
 import { decodeDeclaredBindings, decodeScenarioBindings } from "@deep-spec/kernel-adapter";
-import { IllegalArgumentException, assertValueSize } from "@deep-spec/kernel-infrastructure";
-import { AttributeValues, IrDeclaredValues } from "@deep-spec/requirements-domain";
-import { DeclaredValues, ReqAttributeValues, InitialState, InitialStates, AttrPaths } from "@deep-spec/design-domain";
+import { IllegalArgumentException, boundedValueSnapshot } from "@deep-spec/kernel-infrastructure";
+
+import { InitialState, InitialStates, AttributePaths } from "@deep-spec/design-domain";
 
 describe("domain collection element contracts", () => {
   test("ErrorMessages retains diagnostic occurrences and owns its array", () => {
@@ -23,13 +21,13 @@ describe("domain collection element contracts", () => {
     expect(() => ErrorMessages.of(Array(65_537).fill(first))).toThrow(IllegalArgumentException);
   });
 
-  for (const collection of [AttributeValues, IrDeclaredValues, DeclaredValues, ReqAttributeValues]) {
+  for (const collection of [EnumerationMembers]) {
     test(`${collection.name} accepts enum members and owns its array`, () => {
-      const open = EnumMember.of("open");
+      const open = EnumerationMember.of("open");
       const source = [open];
       const values = collection.of(source);
-      source.push(EnumMember.of("outside"));
-      const extended = values.add(EnumMember.of("closed"));
+      source.push(EnumerationMember.of("outside"));
+      const extended = values.add(EnumerationMember.of("closed"));
       expect([...values].map((member) => member.asString())).toEqual(["open"]);
       expect(extended.toArray().map((member) => member.asString())).toEqual(["open", "closed"]);
       expect(() => collection.of(Array(10_001).fill(open))).toThrow(IllegalArgumentException);
@@ -43,26 +41,26 @@ describe("domain collection element contracts", () => {
     expect(states.includes("closed")).toBe(false);
     expect(() => InitialStates.of(Array(10_001).fill(state))).toThrow(IllegalArgumentException);
     const path = AttributePath.of("ticket.state");
-    const paths = AttrPaths.of([path]).add(AttributePath.of("ticket.state"));
+    const paths = AttributePaths.of([path]).add(AttributePath.of("ticket.state"));
     expect(paths.toArray()).toHaveLength(1);
     expect(paths.has(AttributePath.of("ticket.state"))).toBe(true);
-    expect(EnumMember.of("open").equals(EnumMember.of("open"))).toBe(true);
-    expect(EnumMember.of("open").equals(EnumMember.of("closed"))).toBe(false);
+    expect(EnumerationMember.of("open").equals(EnumerationMember.of("open"))).toBe(true);
+    expect(EnumerationMember.of("open").equals(EnumerationMember.of("closed"))).toBe(false);
   });
 
   test("primitive elements and raw binding tuples are excluded by TypeScript", () => {
     const acceptsText: string extends Parameters<typeof ErrorMessages.of>[0][number] ? true : false = false;
-    const acceptsLiteral: string extends Parameters<typeof DeclaredValues.of>[0][number] ? true : false = false;
+    const acceptsLiteral: string extends Parameters<typeof EnumerationMembers.of>[0][number] ? true : false = false;
     const acceptsTuple: readonly [string, boolean] extends Parameters<typeof ScenarioBindings.of>[0][number] ? true : false = false;
     expect([acceptsText, acceptsLiteral, acceptsTuple]).toEqual([false, false, false]);
-    expect("parse" in ErrorMessages).toBe(false);
-    expect("parse" in ScenarioBindings).toBe(false);
-    expect("parse" in DeclaredBindings).toBe(false);
+    expect(ErrorMessages.parse([]).ok).toBe(true);
+    expect(ScenarioBindings.parse([]).ok).toBe(true);
+    expect(DeclaredBindings.parse([]).ok).toBe(true);
   });
 
   test("functional requirement references own their array and preserve typed elements when sorting", () => {
-    const reference = RequirementId.of("FR-2");
-    const source = [reference, RequirementId.of("FR-1"), reference];
+    const reference = RequirementIdentifier.of("FR-2");
+    const source = [reference, RequirementIdentifier.of("FR-1"), reference];
     const references = FunctionalRequirementReferences.of(source);
     source.length = 0;
     expect(references.sortedUnique().toStrings()).toEqual(["FR-1", "FR-2"]);
@@ -76,7 +74,7 @@ describe("domain collection element contracts", () => {
 describe("scenario binding contracts", () => {
   test("declarations retain malformed values for diagnosis without mutable aliases", () => {
     const payload = { values: [1] };
-    const value = DeclaredBindingValue.of(payload);
+    const value = DeclaredBindingValue.of(Declaration.of(payload));
     const declaration = BindingDeclaration.of(AttributePath.of("ticket.state"), value);
     const source = [declaration];
     const declarations = DeclaredBindings.of(source);
@@ -96,14 +94,16 @@ describe("scenario binding contracts", () => {
       const value = BindingValue.of(primitive);
       expect(value.equals(BindingValue.of(primitive))).toBe(true);
       expect(value.asExpression()).toEqual({ op, value: primitive });
-      expect(BindingValue.resolve(DeclaredBindingValue.of(primitive)).ok).toBe(true);
+      expect(BindingValue.resolve(DeclaredBindingValue.of(Declaration.of(primitive))).ok).toBe(true);
     }
     for (const value of [1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
       expect(() => BindingValue.of(value)).toThrow(IllegalArgumentException);
-      expect(BindingValue.resolve(DeclaredBindingValue.of(value)).ok).toBe(false);
+      const declaration = Declaration.parse(value);
+      if (declaration.ok) expect(BindingValue.resolve(DeclaredBindingValue.of(declaration.value)).ok).toBe(false);
+      else expect(declaration.error.kind).toBe("non-finite-declaration-number");
     }
     expect(() => BindingValue.of("x".repeat(4097))).toThrow(IllegalArgumentException);
-    expect(BindingValue.resolve(DeclaredBindingValue.of(null)).ok).toBe(false);
+    expect(BindingValue.resolve(DeclaredBindingValue.of(Declaration.of(null))).ok).toBe(false);
   });
 
   test("scenario bindings preserve entities, sort paths and reject duplicate assignments", () => {
@@ -138,10 +138,10 @@ describe("scenario binding contracts", () => {
 
 test("recursive value size budgets reject before copying", () => {
   const limits = { string: 4, nodes: 8, depth: 2, total: 8 };
-  expect(() => assertValueSize({ a: [1, null, "x"] }, limits)).not.toThrow();
-  const oversized: Parameters<typeof assertValueSize>[0][] = ["xxxxx", { xxxxx: 1 }, Array(9).fill(0), { a: { b: { c: 1 } } }, ["abcd", "abcd", "a"], { abcd: "abcd", x: 1 }];
+  expect(() => boundedValueSnapshot({ a: [1, null, "x"] }, limits)).not.toThrow();
+  const oversized: Parameters<typeof boundedValueSnapshot>[0][] = ["xxxxx", { xxxxx: 1 }, Array(9).fill(0), { a: { b: { c: 1 } } }, ["abcd", "abcd", "a"], { abcd: "abcd", x: 1 }];
   for (const value of oversized) {
-    expect(() => assertValueSize(value, limits)).toThrow(IllegalArgumentException);
+    expect(() => boundedValueSnapshot(value, limits)).toThrow(IllegalArgumentException);
   }
-  expect(DeclaredBindingValue.parse({ a: "x".repeat(4097) }).ok).toBe(false);
+  expect(Declaration.parse({ a: "x".repeat(4097) }).ok).toBe(false);
 });

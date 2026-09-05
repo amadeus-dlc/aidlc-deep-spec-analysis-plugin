@@ -1,4 +1,4 @@
-import { TargetId, BackendName, ContentHash, FindingKind, FunctionalRequirementReferences, TargetIds } from "@deep-spec/kernel-domain";
+import { TargetIdentifier, BackendName, ContentHash, FindingKind, FunctionalRequirementReferences, TargetIdentifiers } from "@deep-spec/kernel-domain";
 
 import { CrossCheckedEntries } from "./cross-checked-entries.ts";
 import { CrossCheckedEntry } from "./cross-checked-entry.ts";
@@ -6,7 +6,7 @@ import type { RequirementsModel } from "./requirements-model.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 import { VerificationFinding } from "./verification-finding.ts";
-import type { VerificationReportId } from "./verification-report-id.ts";
+import type { VerificationReportIdentifier } from "./verification-report-identifier.ts";
 import { VerificationReport } from "./verification-report.ts";
 import { VerificationWitness } from "./verification-witness.ts";
 
@@ -15,11 +15,11 @@ export class VerificationReports {
   readonly #values: readonly VerificationReport[];
 
   private constructor(values: readonly VerificationReport[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly VerificationReport[]): VerificationReports {
-    return new VerificationReports([...values]);
+    return new VerificationReports(values);
   }
 
   add(value: VerificationReport): VerificationReports {
@@ -39,7 +39,7 @@ export class VerificationReports {
   // detail 文言は golden 凍結。全書き手がこれを再計算して収束するため、結果は
   // センサーの発火順に依存しない）。旧 crossCheckReport の逐語移植（成立文書の
   // 選別のうち、読めないファイルの黙殺は Repository 側）。
-  crossChecked(id: VerificationReportId, model: RequirementsModel, irHash: ContentHash): VerificationReport {
+  crossChecked(id: VerificationReportIdentifier, model: RequirementsModel, irHash: ContentHash): VerificationReport {
     // 比較に参加するのは同一 irHash の可用文書のみ（旧実装の読込時選別と同値）。
     const docs = this.toArray()
       .filter((s) => s.irHash().equals(irHash) && !s.isUnavailable())
@@ -70,7 +70,7 @@ export class VerificationReports {
             findings.push(VerificationFinding.of({
               kind: FindingKind.crossCheckDisagreement(),
               functionalRequirementReferences: FunctionalRequirementReferences.of([...(scenarioById.get(sc.id().asString())?.functionalRequirementReferences().toArray() ?? [])]).sortedUnique(),
-              targets: TargetIds.of([sc.id().asTargetId()]),
+              targets: TargetIdentifiers.of([sc.id().asTargetId()]),
               witness: VerificationWitness.verdicts(verdicts),
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
             }));
@@ -79,7 +79,7 @@ export class VerificationReports {
       }
     }
     const crossChecked: CrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => CrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIds.of(Array.from([...targets], (raw) => TargetId.of(raw))).sortedCanonically() }))
+      .map(([backend, targets]) => CrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIdentifiers.of(Array.from([...targets], (raw) => TargetIdentifier.of(raw))).sortedCanonically() }))
       .sort((x, y) => x.compareByBackend(y));
 
     return VerificationReport.compose({

@@ -6,7 +6,7 @@
 // ラベル書き換え（lowered id → design id）は witness 自身の知識で、形の判定
 // （`core` を持つか、ラベルが文字列か）は値の内側にだけある。
 
-import { assertValueSize } from "@deep-spec/kernel-infrastructure";
+import { boundedValueSnapshot, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 
 type WitnessDocument = null | boolean | number | string | readonly WitnessDocument[] | { readonly [k: string]: WitnessDocument };
 
@@ -15,31 +15,34 @@ export class DesignWitness {
 
   private constructor(document: WitnessDocument) {
     // 証拠文書の処理予算。サイズ計測をスナップショットのコピーに先行させる。
-    assertValueSize(document, { string: 65_536, nodes: 100_000, depth: 128, total: 16_777_216 });
-    this.#document = structuredClone(document);
+    this.#document = boundedValueSnapshot(document, { string: 65_536, nodes: 100_000, depth: 128, total: 16_777_216 });
   }
 
   static core(labels: readonly string[]): DesignWitness {
-    return new DesignWitness({ core: [...labels] });
+    return new DesignWitness({ core: labels });
   }
 
   static model(values: { readonly [path: string]: boolean | number | string }): DesignWitness {
-    return new DesignWitness({ model: { ...values } });
+    return new DesignWitness({ model: values });
   }
 
   static verdicts(byBackend: { readonly [backend: string]: "violated" | "clean" }): DesignWitness {
-    return new DesignWitness({ verdicts: { ...byBackend } });
+    return new DesignWitness({ verdicts: byBackend });
   }
 
   static trace(states: readonly { readonly [path: string]: boolean | number | string }[]): DesignWitness {
-    return new DesignWitness({ trace: states.map((state) => ({ ...state })) });
+    return new DesignWitness({ trace: states });
   }
 
   static refs(entries: readonly { readonly artifact: string; readonly element: string }[]): DesignWitness {
-    return new DesignWitness({ refs: entries.map((entry) => ({ artifact: entry.artifact, element: entry.element })) });
+    return new DesignWitness({ refs: entries });
   }
 
   // 兄弟文書と生成済みレポートから型付きの証拠を構築する。
+  static parse(value: WitnessDocument): Result<DesignWitness, ParseError> {
+    return parseConstruction(() => new DesignWitness(value));
+  }
+
   static of(raw: WitnessDocument): DesignWitness {
     return new DesignWitness(raw);
   }

@@ -10,7 +10,9 @@ export class DesignObligationNature {
     this.#value = value;
   }
 
-  static parse(value: string): Result<DesignObligationNature, ParseError> { return parseConstruction(() => new DesignObligationNature(value)); }
+  static parse(value: string): Result<DesignObligationNature, ParseError> {
+    return parseConstruction(() => new DesignObligationNature(value));
+  }
 
   static of(raw: string): DesignObligationNature {
     return new DesignObligationNature(raw);

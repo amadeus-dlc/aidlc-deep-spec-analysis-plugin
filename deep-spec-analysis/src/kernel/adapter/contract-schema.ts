@@ -7,12 +7,23 @@ import type { SchemaUnreadable } from "./schema-unreadable.ts";
 import { readFileSync } from "node:fs";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
 import { type Schema } from "@deep-spec/kernel-infrastructure";
+import { isObject } from "@deep-spec/kernel-infrastructure";
+import { FindingsSchema } from "@deep-spec/kernel-domain";
 
 
 export function readContractSchema(path: string): Result<Schema, SchemaUnreadable> {
   try {
-    return ok(JSON.parse(readFileSync(path, "utf-8")) as Schema);
+    const document = JSON.parse(readFileSync(path, "utf-8"));
+    if (!isObject(document)) return err({ cause: "contract schema must be a JSON object" });
+    return ok(document);
   } catch (e) {
     return err({ cause: e instanceof Error ? e.message : String(e) });
   }
+}
+
+export function readFindingsSchema(path: string): FindingsSchema {
+  const document = readContractSchema(path);
+  if (!document.ok) return FindingsSchema.unreadable(document.error.cause);
+  const parsed = FindingsSchema.parse(document.value);
+  return parsed.ok ? parsed.value : FindingsSchema.unreadable(JSON.stringify(parsed.error));
 }

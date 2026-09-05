@@ -1,4 +1,4 @@
-import { type FunctionalRequirementReferences, type TargetId, type TargetIds, FindingKind } from "@deep-spec/kernel-domain";
+import { type FunctionalRequirementReferences, type TargetIdentifier, type TargetIdentifiers, FindingKind } from "@deep-spec/kernel-domain";
 import type { VerificationWitness } from "./verification-witness.ts";
 
 // v1 検証 finding（契約2）——kind・要件参照・対象・witness・説明。契約2 の
@@ -7,14 +7,17 @@ import type { VerificationWitness } from "./verification-witness.ts";
 // 知識（#71 波18）。kind は分類文字列、detail は prose（裁定の恒久除外）。
 // witness は型付きユニオン——unsat core のラベル列・decode 済み状態モデル・
 // クロスチェック判定表・状態機械のステップトレース。
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type VerificationFindingParam = { kind: FindingKind; functionalRequirementReferences: FunctionalRequirementReferences; targets: TargetIdentifiers; witness: VerificationWitness; detail: string };
+
 export class VerificationFinding {
   readonly #kind: FindingKind;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
-  readonly #targets: TargetIds;
+  readonly #targets: TargetIdentifiers;
   readonly #witness: VerificationWitness;
   readonly #detail: string;
 
-  private constructor(props: Parameters<typeof VerificationFinding.of>[0]) {
+  private constructor(props: VerificationFindingParam) {
     this.#kind = props.kind;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#targets = props.targets;
@@ -24,7 +27,7 @@ export class VerificationFinding {
 
   // 正常生成（strict creation）——検証済みの FindingKind だけを受け取る。
   // domain／usecase が自ら下す判定はこの口を通る（FR3.2）。
-  static of(props: { kind: FindingKind; functionalRequirementReferences: FunctionalRequirementReferences; targets: TargetIds; witness: VerificationWitness; detail: string }): VerificationFinding {
+  static of(props: VerificationFindingParam): VerificationFinding {
     return new VerificationFinding(props);
   }
 
@@ -36,7 +39,7 @@ export class VerificationFinding {
     return this.#functionalRequirementReferences;
   }
 
-  targets(): TargetIds {
+  targets(): TargetIdentifiers {
     return this.#targets;
   }
 
@@ -57,7 +60,7 @@ export class VerificationFinding {
     return parsed.ok && this.#kind.equals(parsed.value);
   }
 
-  implicates(target: TargetId): boolean {
+  implicates(target: TargetIdentifier): boolean {
     return this.#targets.includes(target);
   }
 

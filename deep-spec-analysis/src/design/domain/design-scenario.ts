@@ -1,47 +1,55 @@
+import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import type { ScenarioBindings } from "@deep-spec/kernel-domain";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
 // 設計シナリオ。accept/reject の意味、binding の正準列挙、BR/FR 帰属を所有する。
 
-import { type BrRefs } from "./br-refs.ts";
-import { DesignScenarioId } from "./design-scenario-id.ts";
-import type { LoweredId } from "./lowered-id.ts";
+import { type BusinessRuleReferences } from "./business-rule-references.ts";
+import { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
+import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredScenario } from "./lowered-scenario.ts";
 
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type DesignScenarioParam = {
+  id: DesignScenarioIdentifier;
+  kind: "accept" | "reject";
+  businessRuleReferences: BusinessRuleReferences;
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  bindings: ScenarioBindings;
+  event?: { readonly trigger: TriggerName };
+  expect?: Expression;
+};
+
 export class DesignScenario {
-  readonly #id: DesignScenarioId;
+  readonly #id: DesignScenarioIdentifier;
   readonly #kind: "accept" | "reject";
-  readonly #brRefs: BrRefs;
+  readonly #businessRuleReferences: BusinessRuleReferences;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #bindings: ScenarioBindings;
   readonly #eventTrigger: TriggerName | undefined;
   readonly #expect: Expression | undefined;
 
-  private constructor(props: Parameters<typeof DesignScenario.of>[0]) {
+  private constructor(props: DesignScenarioParam) {
     this.#id = props.id;
     this.#kind = props.kind;
-    this.#brRefs = props.brRefs;
+    this.#businessRuleReferences = props.businessRuleReferences;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
-  static of(props: {
-    id: DesignScenarioId;
-    kind: "accept" | "reject";
-    brRefs: BrRefs;
-    functionalRequirementReferences: FunctionalRequirementReferences;
-    bindings: ScenarioBindings;
-    event?: { readonly trigger: TriggerName };
-    expect?: Expression;
-  }): DesignScenario {
+  static parse(props: DesignScenarioParam): Result<DesignScenario, ParseError> {
+    return parseConstruction(() => new DesignScenario(props));
+  }
+
+  static of(props: DesignScenarioParam): DesignScenario {
     return new DesignScenario(props);
   }
 
-  id(): DesignScenarioId { return this.#id; }
+  id(): DesignScenarioIdentifier { return this.#id; }
   kind(): "accept" | "reject" { return this.#kind; }
-  brRefs(): BrRefs { return this.#brRefs; }
+  businessRuleReferences(): BusinessRuleReferences { return this.#businessRuleReferences; }
   functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
   eventTrigger(): TriggerName | undefined { return this.#eventTrigger; }
   expectation(): Expression | undefined { return this.#expect; }
@@ -57,13 +65,13 @@ export class DesignScenario {
   bindings(): ScenarioBindings { return this.#bindings; }
 
   // 契約1 への lowering——任意部（イベント・期待式）の有無はシナリオ自身の知識。
-  loweredAs(id: LoweredId): LoweredScenario {
+  loweredAs(id: LoweredIdentifier): LoweredScenario {
     return LoweredScenario.of({
       id,
       kind: this.#kind,
       functionalRequirementReferences: this.#functionalRequirementReferences,
       bindings: this.#bindings,
-      ...(this.#eventTrigger !== undefined ? { event: { trigger: this.#eventTrigger.asString() } } : {}),
+      ...(this.#eventTrigger !== undefined ? { event: { trigger: this.#eventTrigger } } : {}),
       ...(this.#expect !== undefined ? { expect: this.#expect } : {}),
     });
   }

@@ -1,3 +1,4 @@
+import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import { type Expression, FunctionalRequirementReferences, type TriggerName } from "@deep-spec/kernel-domain";
 // 状態機械の遷移（契約3）。id はドメインプリミティブで運ぶ。
@@ -5,43 +6,50 @@ import { type Expression, FunctionalRequirementReferences, type TriggerName } fr
 // ∧ 明示効果、代入表の state 遷移代入）は遷移自身が所有する——lowering と
 // イベントカタログの2箇所に重複していた知識をここに戻す（#71 波5b）。
 
-import { type BrRefs } from "./br-refs.ts";
-import { DesignTransitionId } from "./design-transition-id.ts";
-import type { LoweredId } from "./lowered-id.ts";
+import { type BusinessRuleReferences } from "./business-rule-references.ts";
+import { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
+import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
-import { LoweredOriginRef } from "./lowered-origin-ref.ts";
+import { LoweredOriginReference } from "./lowered-origin-reference.ts";
+
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type DesignTransitionParam = { id: DesignTransitionIdentifier; from: string; to: string; trigger: TriggerName; guard?: Expression; effect?: Expression; businessRuleReferences: BusinessRuleReferences };
 
 export class DesignTransition {
-  readonly #id: DesignTransitionId;
+  readonly #id: DesignTransitionIdentifier;
   readonly #from: string;
   readonly #to: string;
   readonly #trigger: TriggerName;
   readonly #guard: Expression | undefined;
   readonly #effect: Expression | undefined;
-  readonly #brRefs: BrRefs;
+  readonly #businessRuleReferences: BusinessRuleReferences;
 
-  private constructor(props: Parameters<typeof DesignTransition.of>[0]) {
+  private constructor(props: DesignTransitionParam) {
     this.#id = props.id;
     this.#from = props.from;
     this.#to = props.to;
     this.#trigger = props.trigger;
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
-    this.#brRefs = props.brRefs;
+    this.#businessRuleReferences = props.businessRuleReferences;
   }
 
-  static of(props: { id: DesignTransitionId; from: string; to: string; trigger: TriggerName; guard?: Expression; effect?: Expression; brRefs: BrRefs }): DesignTransition {
+  static parse(props: DesignTransitionParam): Result<DesignTransition, ParseError> {
+    return parseConstruction(() => new DesignTransition(props));
+  }
+
+  static of(props: DesignTransitionParam): DesignTransition {
     return new DesignTransition(props);
   }
 
-  id(): DesignTransitionId { return this.#id; }
+  id(): DesignTransitionIdentifier { return this.#id; }
   fromState(): string { return this.#from; }
   toState(): string { return this.#to; }
   trigger(): TriggerName { return this.#trigger; }
   guard(): Expression | undefined { return this.#guard; }
   effect(): Expression | undefined { return this.#effect; }
-  brRefs(): BrRefs { return this.#brRefs; }
+  businessRuleReferences(): BusinessRuleReferences { return this.#businessRuleReferences; }
 
   // `attrPath == enum(state)`（prime なら `attrPath' == enum(state)`）——状態機械の
   // 暗黙ガード／効果の符号。ignore の no-op 等式と同じ形（裁定 2）。
@@ -62,7 +70,7 @@ export class DesignTransition {
   }
 
   // compile-down された event 義務そのもの（暗黙ガード・効果つき）。
-  loweredAs(id: LoweredId, attrPath: string): LoweredObligation {
+  loweredAs(id: LoweredIdentifier, attrPath: string): LoweredObligation {
     return LoweredObligation.of({
       id,
       nature: "event",
@@ -75,7 +83,7 @@ export class DesignTransition {
 
   // 降ろし方の帰属：遷移。
   loweredOrigin(): LoweredOrigin {
-    return LoweredOrigin.of({ design: LoweredOriginRef.of(this.#id.asString()), kind: "transition" });
+    return LoweredOrigin.of({ design: LoweredOriginReference.of(this.#id.asString()), kind: "transition" });
   }
 
   // 代入表（DesignEventCatalog）用の state 遷移代入: attrPath ← enum(to)。

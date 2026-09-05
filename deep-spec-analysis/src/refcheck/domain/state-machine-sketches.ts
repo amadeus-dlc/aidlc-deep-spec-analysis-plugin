@@ -8,11 +8,11 @@ export class StateMachineSketches {
   readonly #values: readonly StateMachineSketch[];
 
   private constructor(values: readonly StateMachineSketch[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly StateMachineSketch[]): StateMachineSketches {
-    return new StateMachineSketches([...values]);
+    return new StateMachineSketches(values);
   }
 
   add(value: StateMachineSketch): StateMachineSketches {

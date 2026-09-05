@@ -2,7 +2,7 @@ import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // ArtifactPath — 記録ワークスペース内の成果物・配置先を指すパスの語彙。
 // 全コンテキストが「成果物パス（識別）」として話すため kernel が所有する。
-// parse が唯一の構築口（DP 規律）：境界（entry の flags）で一度だけ parse し、
+// 通常の入力は境界（entry の flags）でparseし、再構成にはofを使う。
 // 以後は VO のまま運ぶ。プリミティブへ戻すのは adapter の fs 境界（asString()）
 // だけ。エラーは材料のみの閉じたユニオンで、文言は emitter 側の責務。
 

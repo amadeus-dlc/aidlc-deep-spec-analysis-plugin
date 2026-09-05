@@ -7,11 +7,11 @@ export class EventMappings {
   readonly #values: readonly EventMapping[];
 
   private constructor(values: readonly EventMapping[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly EventMapping[]): EventMappings {
-    return new EventMappings([...values]);
+    return new EventMappings(values);
   }
 
   add(value: EventMapping): EventMappings {

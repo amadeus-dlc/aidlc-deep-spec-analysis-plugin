@@ -16,11 +16,11 @@ export class RefinementQuintInvariants {
   readonly #values: readonly RefinementQuintInvariant[];
 
   private constructor(values: readonly RefinementQuintInvariant[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly RefinementQuintInvariant[]): RefinementQuintInvariants {
-    return new RefinementQuintInvariants([...values]);
+    return new RefinementQuintInvariants(values);
   }
 
   add(value: RefinementQuintInvariant): RefinementQuintInvariants {

@@ -1,10 +1,14 @@
+import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
 
-import type { ObligationId, ObligationNature } from "@deep-spec/requirements-domain";
+import type { ObligationIdentifier, ObligationNature } from "@deep-spec/requirements-domain";
+
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type RefinementObligationParam = { id: ObligationIdentifier; nature: ObligationNature; functionalRequirementReferences: FunctionalRequirementReferences; assert?: Expression; trigger?: TriggerName; guard?: Expression; effect?: Expression };
 
 export class RefinementObligation {
-  readonly #id: ObligationId;
+  readonly #id: ObligationIdentifier;
   readonly #nature: ObligationNature;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #assert: Expression | undefined;
@@ -12,7 +16,7 @@ export class RefinementObligation {
   readonly #guard: Expression | undefined;
   readonly #effect: Expression | undefined;
 
-  private constructor(props: Parameters<typeof RefinementObligation.of>[0]) {
+  private constructor(props: RefinementObligationParam) {
     this.#id = props.id;
     this.#nature = props.nature;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
@@ -22,11 +26,15 @@ export class RefinementObligation {
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
   }
 
-  static of(props: { id: ObligationId; nature: ObligationNature; functionalRequirementReferences: FunctionalRequirementReferences; assert?: Expression; trigger?: TriggerName; guard?: Expression; effect?: Expression }): RefinementObligation {
+  static parse(props: RefinementObligationParam): Result<RefinementObligation, ParseError> {
+    return parseConstruction(() => new RefinementObligation(props));
+  }
+
+  static of(props: RefinementObligationParam): RefinementObligation {
     return new RefinementObligation(props);
   }
 
-  id(): ObligationId { return this.#id; }
+  id(): ObligationIdentifier { return this.#id; }
   nature(): ObligationNature { return this.#nature; }
   functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
   assertion(): Expression | undefined { return this.#assert; }

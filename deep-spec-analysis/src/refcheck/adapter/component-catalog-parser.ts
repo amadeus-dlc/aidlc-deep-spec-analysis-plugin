@@ -1,3 +1,4 @@
+import { FenceCount } from "@deep-spec/refcheck-domain";
 // components.md の解析 — 形式（fence/YAML/Json 歩き）の知識をここに封じ、
 // 型付きの ComponentCatalogOutcome へ解く。抽出ロジックは旧センサーの
 // extractComponents の逐語移動。
@@ -12,8 +13,8 @@ import {
   ComponentEntities,
   ComponentEntity,
   ComponentName,
-  ComponentRef,
-  ComponentRefs,
+  ComponentReference,
+  ComponentReferences,
   Components,
   ComponentShapeErrors,
   ElementPath,
@@ -49,9 +50,9 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
       shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(`${element}.name`), detail: JSON.stringify(parsedName.error) }));
       return;
     }
-    const refs = (key: "depends_on" | "dependents"): ComponentRefs => {
-      const out: ComponentRef[] = [];
-      if (!Array.isArray(raw[key])) return ComponentRefs.of(out);
+    const refs = (key: "depends_on" | "dependents"): ComponentReferences => {
+      const out: ComponentReference[] = [];
+      if (!Array.isArray(raw[key])) return ComponentReferences.of(out);
       (raw[key] as Json[]).forEach((entry, j) => {
         const el = `${element}.${key}[${j}].component`;
         const comp = isObject(entry) ? str(entry.component) : str(entry);
@@ -61,9 +62,9 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
           shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(el), detail: JSON.stringify(component.error) }));
           return;
         }
-        out.push(ComponentRef.of({ component: component.value, element: ElementPath.of(el) }));
+        out.push(ComponentReference.of({ component: component.value, element: ElementPath.of(el) }));
       });
-      return ComponentRefs.of(out);
+      return ComponentReferences.of(out);
     };
     const entities: ComponentEntity[] = [];
     if (Array.isArray(raw.entities)) {
@@ -124,7 +125,7 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
 export function parseComponentCatalog(md: string): ComponentCatalogOutcome {
   const fences = extractFences(md, "yaml");
   if (fences.length !== 1) {
-    return ComponentCatalogOutcome.wrongFenceCount(fences.length);
+    return ComponentCatalogOutcome.wrongFenceCount(FenceCount.of(fences.length));
   }
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {

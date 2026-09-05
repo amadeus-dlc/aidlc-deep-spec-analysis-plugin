@@ -7,12 +7,12 @@ export class ManifestEntry {
   readonly #rel: ArtifactPath;
   readonly #severity: CheckSeverity;
 
-  private constructor(rel: string, severity: CheckSeverity) {
-    this.#rel = ArtifactPath.of(rel);
+  private constructor(rel: ArtifactPath, severity: CheckSeverity) {
+    this.#rel = rel;
     this.#severity = severity;
   }
 
-  static error(rel: string): ManifestEntry {
+  static error(rel: ArtifactPath): ManifestEntry {
     return new ManifestEntry(rel, CheckSeverity.error());
   }
 

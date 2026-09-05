@@ -25,16 +25,16 @@ import {
   DesignVerifyDirectory,
   RefinementMaterials,
   type DesignModel,
-  DesignModelId,
-  DesignReportId,
-  type RefinementMaterialsId,
+  DesignModelIdentifier,
+  DesignReportIdentifier,
+  type RefinementMaterialsIdentifier,
 } from "@deep-spec/design-domain";
-import { DesignModelRepositoryImpl, DesignVerifyDirectoryRepositoryImpl } from "@deep-spec/design-adapter";
+import { DesignModelRepositoryImplementation, DesignVerifyDirectoryRepositoryImplementation } from "@deep-spec/design-adapter";
 import {
   DesignReportFinalizer,
   DesignVerificationAcquirer,
   VerifyDesignQuintUseCase,
-  VerifyDesignSmtUseCase,
+  VerifyDesignSatisfiabilityModuloTheoriesUseCase,
   type DesignAcquisitionTerminal,
   type DesignModelRepository,
   type DesignVerifyDirectoryRepository,
@@ -70,7 +70,7 @@ function ap(raw: string): ArtifactPath {
 }
 
 function fixtureModel(): DesignModel {
-  const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(fixtureModelPath)));
+  const acquired = new DesignModelRepositoryImplementation().findById(DesignModelIdentifier.of(ap(fixtureModelPath)));
   if (!acquired.ok) throw new Error("design fixture model is unreadable");
   return acquired.value;
 }
@@ -79,7 +79,7 @@ function fixtureModel(): DesignModel {
 function unsupportedMajorModel(directory: string): DesignModel {
   const path = join(directory, "deep-spec-analysis-functional-formal-model.md");
   writeFileSync(path, readFileSync(fixtureModelPath, "utf-8").replace('"irVersion": "1.0.0"', '"irVersion": "2.0.0"'));
-  const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(path)));
+  const acquired = new DesignModelRepositoryImplementation().findById(DesignModelIdentifier.of(ap(path)));
   if (!acquired.ok) throw new Error("the version-mismatch fixture is unreadable");
   return acquired.value;
 }
@@ -91,8 +91,8 @@ function strictMethod(raw: string): VerificationMethod {
   return parsed.value;
 }
 
-function reportIdOf(directory: ArtifactPath): DesignReportId {
-  return DesignReportId.of(directory, "smt");
+function reportIdOf(directory: ArtifactPath): DesignReportIdentifier {
+  return DesignReportIdentifier.of(directory, "smt");
 }
 
 function targetCount(model: DesignModel): number {
@@ -120,7 +120,7 @@ class StubSiblingBackendClient implements SiblingBackendClient {
 }
 
 class InactiveMaterialsRepository implements RefinementMaterialsRepository {
-  findById(id: RefinementMaterialsId): Result<RefinementMaterials, RepositoryError> {
+  findById(id: RefinementMaterialsIdentifier): Result<RefinementMaterials, RepositoryError> {
     return ok(RefinementMaterials.inactive(id));
   }
 }
@@ -185,27 +185,27 @@ class SeamRepository implements DesignVerifyDirectoryRepository {
 }
 
 function runSmt(reports: DesignVerifyDirectoryRepository, verifyDir: string, schema: FindingsSchema = contractSchema, modelPath = fixtureModelPath): VerifyDesignOutcome {
-  return new VerifyDesignSmtUseCase(
-    new DesignModelRepositoryImpl(),
+  return new VerifyDesignSatisfiabilityModuloTheoriesUseCase(
+    new DesignModelRepositoryImplementation(),
     reports,
     schema,
     new StubSiblingBackendClient(),
     new InactiveMaterialsRepository(),
     new UnusedSolverClient(),
     new FixedClock(),
-  ).execute({ modelId: DesignModelId.of(ap(modelPath)), verifyDirectory: ap(verifyDir) });
+  ).execute({ modelId: DesignModelIdentifier.of(ap(modelPath)), verifyDirectory: ap(verifyDir) });
 }
 
 function runQuint(reports: DesignVerifyDirectoryRepository, verifyDir: string, schema: FindingsSchema = contractSchema, modelPath = fixtureModelPath): VerifyDesignOutcome {
   return new VerifyDesignQuintUseCase(
-    new DesignModelRepositoryImpl(),
+    new DesignModelRepositoryImplementation(),
     reports,
     schema,
     new StubSiblingBackendClient(),
     new InactiveMaterialsRepository(),
     new FixedClock(),
     2,
-  ).execute({ modelId: DesignModelId.of(ap(modelPath)), verifyDirectory: ap(verifyDir) });
+  ).execute({ modelId: DesignModelIdentifier.of(ap(modelPath)), verifyDirectory: ap(verifyDir) });
 }
 
 // --- #14 共通 finalization は 1 実装 ----------------------------------------
@@ -324,7 +324,7 @@ describe("DesignVerificationAcquirer は取得専用の 5 変種へ結果を閉�
       for (const row of rows) {
         const reports = new SeamRepository(row.failure);
         const acquirer = new DesignVerificationAcquirer(new StubModelRepository(row.model), new DesignReportFinalizer(reports, contractSchema));
-        const acquired = acquirer.acquire(DesignModelId.of(ap("/records/model.md")), reportIdOf(verifyDir), strictMethod(method));
+        const acquired = acquirer.acquire(DesignModelIdentifier.of(ap("/records/model.md")), reportIdOf(verifyDir), strictMethod(method));
         expect(`${row.name}: ${acquired.kind}`).toBe(`${row.name}: terminal`);
         if (acquired.kind !== "terminal") continue;
         expect(`${row.name}: ${acquired.outcome.kind}`).toBe(`${row.name}: ${row.expected}`);
@@ -373,7 +373,7 @@ describe("FR1.4 兄弟 report が読めないとき verified を返さない", (
       const verifyDir = join(workspace, "deep-spec-design-verify");
       mkdirSync(verifyDir, { recursive: true });
       writeFileSync(join(verifyDir, "broken.json"), "{ this is not JSON");
-      const reports = new DesignVerifyDirectoryRepositoryImpl();
+      const reports = new DesignVerifyDirectoryRepositoryImplementation();
 
       const smt = runSmt(reports, verifyDir);
       expect(smt.kind).toBe("save-failed");
@@ -393,7 +393,7 @@ describe("FR1.4 兄弟 report が読めないとき verified を返さない", (
     try {
       const verifyDir = join(workspace, "deep-spec-design-verify");
       mkdirSync(verifyDir, { recursive: true });
-      const reports = new DesignVerifyDirectoryRepositoryImpl();
+      const reports = new DesignVerifyDirectoryRepositoryImplementation();
       expect(runSmt(reports, verifyDir).kind).toBe("verified");
       expect(existsSync(join(verifyDir, "smt.json"))).toBe(true);
       expect(existsSync(join(verifyDir, "cross-check.json"))).toBe(true);

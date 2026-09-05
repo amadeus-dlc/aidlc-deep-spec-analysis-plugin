@@ -12,6 +12,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { abbreviatedTypeNames, missingConstructionParsers } from "./architecture/construction-contracts.ts";
 import {
   ENTRY_FILES,
   layerDirection,
@@ -303,8 +304,8 @@ describe("rule red/green examples (detection power proof)", () => {
   test("published-language-layers confines every table entry to its layers", () => {
     expect(publishedLanguageLayers("design/usecase/foo.ts", 'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}')).toHaveLength(1);
     expect(publishedLanguageLayers("design/domain/foo.ts", 'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}')).toHaveLength(0);
-    expect(publishedLanguageLayers("design/adapter/foo.ts", "const x: AttrPaths = y;")).toHaveLength(0);
-    expect(publishedLanguageLayers("design/domain/foo.ts", "const x: AttrPaths = y;")).toHaveLength(0);
+    expect(publishedLanguageLayers("design/adapter/foo.ts", "const x: AttributePaths = y;")).toHaveLength(0);
+    expect(publishedLanguageLayers("design/domain/foo.ts", "const x: AttributePaths = y;")).toHaveLength(0);
     expect(publishedLanguageLayers("entries/aidlc-sensor-deep-spec-verify-smt.ts", "const k = KeyedIndex.empty();")).toHaveLength(1);
     // 文字列・コメントの中の名前には反応しない。
     expect(publishedLanguageLayers("design/usecase/foo.ts", '// Expression is documented here\nconst s = "Expression";')).toHaveLength(0);
@@ -477,6 +478,16 @@ describe("the real src/ tree", () => {
     expect(all).toEqual([]);
   });
 
+  test("every constructor with a contract-violation path exposes parse", () => {
+    const sources = new Map(files.map((path) => [path, readFileSync(join(srcDir, path), "utf-8")]));
+    expect(missingConstructionParsers(sources)).toEqual([]);
+  });
+
+  test("domain and boundary type names use complete terms", () => {
+    const abbreviated = files.flatMap((path) => abbreviatedTypeNames(readFileSync(join(srcDir, path), "utf-8")).map((name) => `${path}: ${name}`));
+    expect(abbreviated).toEqual([]);
+  });
+
   // NFR5 / BR7.6: production ファイルは 1 ファイルあたり 1,000 行未満に収める。
   const MAX_PRODUCTION_FILE_LINES = 1000;
 
@@ -532,5 +543,42 @@ describe("the real src/ tree", () => {
     // 走査が空振りしていないことの証明——実ツリーに辺が実在する。
     const declared = manifests.flatMap(({ manifest }) => Object.keys(manifest.dependencies ?? {}));
     expect(declared.length).toBeGreaterThan(0);
+  });
+});
+
+describe("construction audit detection examples", () => {
+  const guarded = `export class Guarded {
+    private constructor(value: number) { if (value < 0) throw new IllegalArgumentException({ kind: "negative" }); }
+    static of(value: number) { return new Guarded(value); }
+    static parse(value: number) { return parseConstruction(() => new Guarded(value)); }
+  }`;
+  test("detects direct and delegated constructor failures", () => {
+    const childWithoutParse = guarded.replace(/    static parse[^\n]+\n/, "");
+    expect(missingConstructionParsers(new Map([["kernel/domain/guarded.ts", childWithoutParse]]))).toEqual(["kernel/domain/guarded.ts"]);
+    const parent = `export class Parent {
+      private constructor(value: number) { this.value = Guarded.of(value); }
+      static of(value: number) { return new Parent(value); }
+    }`;
+    expect(missingConstructionParsers(new Map([["kernel/domain/guarded.ts", guarded], ["kernel/domain/parent.ts", parent]]))).toEqual(["kernel/domain/parent.ts"]);
+    expect(missingConstructionParsers(new Map([["kernel/domain/guarded.ts", guarded]]))).toEqual([]);
+  });
+  test("comments and strings do not create exception paths or parser methods", () => {
+    const source = `export class Pure {
+      private constructor() { this.value = "throw new Error"; /* throw */ }
+    }`;
+    expect(missingConstructionParsers(new Map([["kernel/domain/pure.ts", source]]))).toEqual([]);
+    expect(missingConstructionParsers(new Map([["kernel/domain/guarded.ts", guarded.replace("static parse", "private static parse")]]))).toEqual(["kernel/domain/guarded.ts"]);
+  });
+  test("quote characters in regular expressions do not hide the constructor body", () => {
+    const source = 'export class Quoted { private constructor(value: string) { if (!/^[`*]+$/.test(value)) throw new Error("invalid"); } }';
+    expect(missingConstructionParsers(new Map([["kernel/domain/quoted.ts", source]]))).toEqual(["kernel/domain/quoted.ts"]);
+  });
+  test("bounds delegated to the shared snapshot builder also require parse", () => {
+    const source = 'export class Snapshot { private constructor(value: Json) { this.value = boundedValueSnapshot(value, limits); } }';
+    expect(missingConstructionParsers(new Map([["kernel/domain/snapshot.ts", source]]))).toEqual(["kernel/domain/snapshot.ts"]);
+  });
+  test("type-name checks distinguish shortened words from complete terms and proper names", () => {
+    expect(abbreviatedTypeNames("export class IrModelDecl {}\nexport class BrRef {}\nexport interface SmtConfig {}\ntype AttrDecls = never;")).toEqual(["IrModelDecl", "BrRef", "SmtConfig", "AttrDecls"]);
+    expect(abbreviatedTypeNames("export class IntermediateRepresentationVersion {}\nexport class BusinessRuleReference {}\nexport class Z3SolverClientImplementation {}\ntype DeclarationParam = Json;")).toEqual([]);
   });
 });

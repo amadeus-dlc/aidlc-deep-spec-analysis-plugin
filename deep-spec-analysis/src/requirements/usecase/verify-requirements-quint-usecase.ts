@@ -15,7 +15,7 @@
 // 適合と両文書の公開は VerificationReportFinalizer が一か所で持つ——ここに残る
 // のは Quint 固有の method 検出とコンパイル判断だけ。
 
-import { VerificationReport, VerificationReportId } from "@deep-spec/requirements-domain";
+import { VerificationReport, VerificationReportIdentifier } from "@deep-spec/requirements-domain";
 import { SUPPORTED_IR_MAJOR } from "@deep-spec/requirements-domain";
 import type { FindingsSchema } from "@deep-spec/kernel-domain";
 import type { FormalModelRepository } from "./port/formal-model-repository.ts";
@@ -44,7 +44,7 @@ export class VerifyRequirementsQuintUseCase {
   }
 
   execute(input: VerifyRequirementsQuintInput): VerifyQuintOutcome {
-    const id = VerificationReportId.of(input.verifyDirectory, BACKEND);
+    const id = VerificationReportIdentifier.of(input.verifyDirectory, BACKEND);
     const acquired = this.#formalModelRepository.findById(input.modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found") return { kind: "not-applicable" };

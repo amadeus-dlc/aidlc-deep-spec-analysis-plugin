@@ -6,17 +6,17 @@
 
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { ReferenceCheckReport, ReferenceCheckReportId } from "@deep-spec/refcheck-domain";
+import type { ReferenceCheckReport, ReferenceCheckReportIdentifier } from "@deep-spec/refcheck-domain";
 import type { ReferenceCheckReportRepository } from "@deep-spec/refcheck-usecase";
 
 export class InMemoryReferenceCheckReportRepository implements ReferenceCheckReportRepository {
   readonly #store = new Map<string, ReferenceCheckReport>();
 
-  #keyOf(id: ReferenceCheckReportId): string {
+  #keyOf(id: ReferenceCheckReportIdentifier): string {
     return `${id.directory().asString()}/${id.fileName()}`;
   }
 
-  findById(aggregateId: ReferenceCheckReportId): Result<ReferenceCheckReport, RepositoryError> {
+  findById(aggregateId: ReferenceCheckReportIdentifier): Result<ReferenceCheckReport, RepositoryError> {
     const found = this.#store.get(this.#keyOf(aggregateId));
     if (found === undefined) {
       return err({ kind: "not-found", path: this.#keyOf(aggregateId) });

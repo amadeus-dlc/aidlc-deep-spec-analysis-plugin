@@ -5,11 +5,11 @@ export class FunctionalRequirementReferenceClaims {
   readonly #values: readonly FunctionalRequirementReferenceClaim[];
 
   private constructor(values: readonly FunctionalRequirementReferenceClaim[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly FunctionalRequirementReferenceClaim[]): FunctionalRequirementReferenceClaims {
-    return new FunctionalRequirementReferenceClaims([...values]);
+    return new FunctionalRequirementReferenceClaims(values);
   }
 
   add(value: FunctionalRequirementReferenceClaim): FunctionalRequirementReferenceClaims {

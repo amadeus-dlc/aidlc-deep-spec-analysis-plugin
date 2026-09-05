@@ -6,11 +6,11 @@ export class DesignIgnores {
   readonly #values: readonly DesignIgnore[];
 
   private constructor(values: readonly DesignIgnore[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignIgnore[]): DesignIgnores {
-    return new DesignIgnores([...values]);
+    return new DesignIgnores(values);
   }
 
   add(value: DesignIgnore): DesignIgnores {

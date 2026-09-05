@@ -4,18 +4,28 @@
 // 要件 id に届く conflict は refinement-violation へ昇格する——文言は凍結）
 // は finding 自身が所有する（#71 波7）。
 
-import { TargetIds, type FunctionalRequirementReferences, FindingKind, UnitName } from "@deep-spec/kernel-domain";
+import { TargetIdentifiers, type FunctionalRequirementReferences, FindingKind, UnitName } from "@deep-spec/kernel-domain";
 import type { DesignWitness } from "./design-witness.ts";
+
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type DesignFindingParam = {
+  kind: FindingKind;
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  targets: TargetIdentifiers;
+  witness: DesignWitness;
+  unit: UnitName;
+  detail: string;
+};
 
 export class DesignFinding {
   readonly #kind: FindingKind;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
-  readonly #targets: TargetIds;
+  readonly #targets: TargetIdentifiers;
   readonly #witness: DesignWitness;
   readonly #unit: UnitName;
   readonly #detail: string;
 
-  private constructor(props: Parameters<typeof DesignFinding.of>[0]) {
+  private constructor(props: DesignFindingParam) {
     this.#kind = props.kind;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#targets = props.targets;
@@ -26,14 +36,7 @@ export class DesignFinding {
 
   // 正常生成（strict creation）——検証済みの FindingKind だけを受け取る。
   // domain／usecase が自ら下す判定はこの口を通る（FR3.2）。
-  static of(props: {
-    kind: FindingKind;
-    functionalRequirementReferences: FunctionalRequirementReferences;
-    targets: TargetIds;
-    witness: DesignWitness;
-    unit: UnitName;
-    detail: string;
-  }): DesignFinding {
+  static of(props: DesignFindingParam): DesignFinding {
     return new DesignFinding(props);
   }
 
@@ -45,7 +48,7 @@ export class DesignFinding {
     return this.#functionalRequirementReferences;
   }
 
-  targets(): TargetIds {
+  targets(): TargetIdentifiers {
     return this.#targets;
   }
 
@@ -76,7 +79,7 @@ export class DesignFinding {
     return new DesignFinding({
       kind: FindingKind.refinementViolation(),
       functionalRequirementReferences: this.#functionalRequirementReferences,
-      targets: TargetIds.of(reqHits),
+      targets: TargetIdentifiers.of(reqHits),
       witness: this.#witness,
       unit,
       detail: `The design machine of unit ${unit.asString()} reaches a state that violates requirements obligation ${reqHits.map((t) => t.asString()).join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,

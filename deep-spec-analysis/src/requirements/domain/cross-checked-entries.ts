@@ -5,11 +5,11 @@ export class CrossCheckedEntries {
   readonly #values: readonly CrossCheckedEntry[];
 
   private constructor(values: readonly CrossCheckedEntry[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly CrossCheckedEntry[]): CrossCheckedEntries {
-    return new CrossCheckedEntries([...values]);
+    return new CrossCheckedEntries(values);
   }
 
   add(value: CrossCheckedEntry): CrossCheckedEntries {

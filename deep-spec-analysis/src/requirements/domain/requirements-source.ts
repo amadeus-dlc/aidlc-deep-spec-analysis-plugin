@@ -4,17 +4,26 @@
 // 解決された所在（sourcePath）は store の書き先として集約が保持する。
 // digest と原文の整合を守るため、バイト列は構築・照会の両方で防御コピー。
 
-import { type ArtifactPath, type RequirementIds, ContentHash } from "@deep-spec/kernel-domain";
-import type { RequirementsSourceId } from "./requirements-source-id.ts";
+import { type ArtifactPath, type RequirementIdentifiers, ContentHash } from "@deep-spec/kernel-domain";
+import type { RequirementsSourceIdentifier } from "./requirements-source-identifier.ts";
+
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type RequirementsSourceParam = {
+  readonly id: RequirementsSourceIdentifier;
+  readonly sourcePath: ArtifactPath;
+  readonly knownIds: RequirementIdentifiers;
+  readonly digest: ContentHash;
+  readonly sourceDocument: Uint8Array;
+};
 
 export class RequirementsSource {
-  readonly #id: RequirementsSourceId;
+  readonly #id: RequirementsSourceIdentifier;
   readonly #sourcePath: ArtifactPath;
-  readonly #knownIds: RequirementIds;
+  readonly #knownIds: RequirementIdentifiers;
   readonly #digest: ContentHash;
   readonly #sourceDocument: Uint8Array;
 
-  private constructor(seed: Parameters<typeof RequirementsSource.of>[0]) {
+  private constructor(seed: RequirementsSourceParam) {
     this.#id = seed.id;
     this.#sourcePath = seed.sourcePath;
     this.#knownIds = seed.knownIds;
@@ -23,17 +32,11 @@ export class RequirementsSource {
   }
 
   // アダプタの解決からの唯一の構築口。
-  static of(seed: {
-    readonly id: RequirementsSourceId;
-    readonly sourcePath: ArtifactPath;
-    readonly knownIds: RequirementIds;
-    readonly digest: ContentHash;
-    readonly sourceDocument: Uint8Array;
-  }): RequirementsSource {
+  static of(seed: RequirementsSourceParam): RequirementsSource {
     return new RequirementsSource(seed);
   }
 
-  id(): RequirementsSourceId {
+  id(): RequirementsSourceIdentifier {
     return this.#id;
   }
 
@@ -42,7 +45,7 @@ export class RequirementsSource {
     return this.#sourcePath;
   }
 
-  knownIds(): RequirementIds {
+  knownIds(): RequirementIdentifiers {
     return this.#knownIds;
   }
 

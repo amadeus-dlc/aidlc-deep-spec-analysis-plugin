@@ -3,38 +3,38 @@ import { ErrorMessage } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
 import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
 import {
-  DesignUnitId,
-  BrRef,
+  DesignUnitIdentifier,
+  BusinessRuleReference,
   DesignAttributeName,
-  UnmappedTargetRef,
+  UnmappedTargetReference,
   DesignEntityName,
-  DesignTransitionId,
-  LoweredOriginRef,
-  DesignObligationId,
-  DesignScenarioId,
-  DesignMachineId,
-  DesignBackgroundId,
-  TransitionRef,
-  LoweredId,
+  DesignTransitionIdentifier,
+  LoweredOriginReference,
+  DesignObligationIdentifier,
+  DesignScenarioIdentifier,
+  DesignMachineIdentifier,
+  DesignBackgroundIdentifier,
+  TransitionReference,
+  LoweredIdentifier,
 } from "@deep-spec/design-domain";
 import {
-  ObligationId,
-  IrAttributeName,
-  ScenarioId,
-  BackgroundAssumptionId,
-  IrEntityName,
+  ObligationIdentifier,
+  IntermediateRepresentationAttributeName,
+  ScenarioIdentifier,
+  BackgroundAssumptionIdentifier,
+  IntermediateRepresentationEntityName,
 } from "@deep-spec/requirements-domain";
 import {
   CardinalityNotation,
   CheckFamily,
-  ContractId,
-  MachineSpec,
+  ContractIdentifier,
+  MachineSpecification,
   FenceCount,
   NumericBound,
   LineNumber,
   RuleCategory,
-  BusinessRuleId,
-  SourceId,
+  BusinessRuleIdentifier,
+  SourceIdentifier,
   AttributeName,
   ElementPath,
   BlockIndex,
@@ -48,18 +48,18 @@ import {
 } from "@deep-spec/refcheck-domain";
 import {
   QueryLabel,
-  RequirementId,
+  RequirementIdentifier,
   SkipReason,
   UnitName,
   ArtifactPath,
   FindingKind,
   ContentHash,
-  IrVersion,
+  IntermediateRepresentationVersion,
   BackendName,
   AttributePath,
   AttributeBound,
   VerificationMethod,
-  TargetId,
+  TargetIdentifier,
   TriggerName,
   ErrorMessages,
 } from "@deep-spec/kernel-domain";
@@ -87,30 +87,30 @@ function contract<R extends string | number, V>(factory: {
 
 describe("domain construction contracts", () => {
   contract(DesignAttributeName, "value", "");
-  contract(UnmappedTargetRef, "value", "");
+  contract(UnmappedTargetReference, "value", "");
   contract(DesignEntityName, "value", "");
-  contract(DesignTransitionId, "TR-1", "");
-  contract(LoweredOriginRef, "value", "");
-  contract(DesignObligationId, "DOB-1", "");
-  contract(DesignScenarioId, "DSC-1", "");
-  contract(DesignMachineId, "SM-1", "");
-  contract(DesignBackgroundId, "DBG-1", "");
-  contract(TransitionRef, "value", "");
-  contract(LoweredId, "value", "");
-  contract(ObligationId, "OB-1", "");
-  contract(IrAttributeName, "value", "");
-  contract(ScenarioId, "SC-1", "");
-  contract(BackgroundAssumptionId, "BG-1", "");
-  contract(IrEntityName, "value", "");
+  contract(DesignTransitionIdentifier, "TR-1", "");
+  contract(LoweredOriginReference, "value", "");
+  contract(DesignObligationIdentifier, "DOB-1", "");
+  contract(DesignScenarioIdentifier, "DSC-1", "");
+  contract(DesignMachineIdentifier, "SM-1", "");
+  contract(DesignBackgroundIdentifier, "DBG-1", "");
+  contract(TransitionReference, "value", "");
+  contract(LoweredIdentifier, "value", "");
+  contract(ObligationIdentifier, "OB-1", "");
+  contract(IntermediateRepresentationAttributeName, "value", "");
+  contract(ScenarioIdentifier, "SC-1", "");
+  contract(BackgroundAssumptionIdentifier, "BG-1", "");
+  contract(IntermediateRepresentationEntityName, "value", "");
   contract(CardinalityNotation, "value", "");
   contract(CheckFamily, "value", "");
-  contract(ContractId, "value", "");
-  contract(MachineSpec, "value", "");
+  contract(ContractIdentifier, "value", "");
+  contract(MachineSpecification, "value", "");
   contract(NumericBound, 1, Number.POSITIVE_INFINITY);
   contract(LineNumber, 1, 0.5);
   contract(RuleCategory, "value", "");
-  contract(BusinessRuleId, "BR1.1", "");
-  contract(SourceId, "value", "");
+  contract(BusinessRuleIdentifier, "BR1.1", "");
+  contract(SourceIdentifier, "value", "");
   contract(AttributeName, "value", "");
   contract(ElementPath, "value", "");
   contract(BlockIndex, 1, 0.5);
@@ -126,18 +126,18 @@ describe("domain construction contracts", () => {
   contract(ArtifactPath, "value", "");
   contract(FindingKind, "conflict", "");
   contract(ContentHash, "a".repeat(64), "");
-  contract(IrVersion, "1.0.0", "");
+  contract(IntermediateRepresentationVersion, "1.0.0", "");
   contract(BackendName, "value", "");
   contract(AttributePath, "value", "");
   contract(AttributeBound, 1, 0.5);
   contract(VerificationMethod, "exhaustive", "");
-  contract(TargetId, "OB-1", "");
+  contract(TargetIdentifier, "OB-1", "");
   contract(TriggerName, "value", "");
   contract(PluginVersion, "1.2.3", "1.2");
-  contract(RequirementId, "FR-1", "FR-");
-  contract(BrRef, "BR1.1", "BR-1");
+  contract(RequirementIdentifier, "FR-1", "FR-");
+  contract(BusinessRuleReference, "BR1.1", "BR-1");
   contract(QueryLabel, "global", "");
-  contract(DesignUnitId, "u1", "");
+  contract(DesignUnitIdentifier, "u1", "");
 
   test("a derived fence count cannot be negative, fractional, or unsafe", () => {
     expect(FenceCount.of(0).asNumber()).toBe(0);

@@ -5,80 +5,83 @@
 
 import { AttributePath, KeyedIndex } from "@deep-spec/kernel-domain";
 import type { DesignMachine } from "./design-machine.ts";
-import { DesignMachineId } from "./design-machine-id.ts";
-import { DesignScenarioId } from "./design-scenario-id.ts";
-import { DesignTransitionId } from "./design-transition-id.ts";
-import { LoweredId } from "./lowered-id.ts";
-import { LoweredOriginRef } from "./lowered-origin-ref.ts";
+import { DesignMachineIdentifier } from "./design-machine-identifier.ts";
+import { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
+import { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
+import { LoweredIdentifier } from "./lowered-identifier.ts";
+import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
 
 function designToken(id: string): string {
   return id.replace(/[^A-Za-z0-9_]/g, "_");
 }
 
-export class LoweringIndex {
-  readonly #origins: KeyedIndex<LoweredId, LoweredOrigin>;
-  readonly #scenarioDesignIds: KeyedIndex<LoweredId, DesignScenarioId>;
-  readonly #machinesByTransition: KeyedIndex<DesignTransitionId, DesignMachine>;
-  readonly #attrPathsByMachine: KeyedIndex<DesignMachineId, AttributePath>;
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type LoweringIndexParam = {
+  origins: KeyedIndex<LoweredIdentifier, LoweredOrigin>;
+  scenarioDesignIds: KeyedIndex<LoweredIdentifier, DesignScenarioIdentifier>;
+  machinesByTransition: KeyedIndex<DesignTransitionIdentifier, DesignMachine>;
+  attrPathsByMachine: KeyedIndex<DesignMachineIdentifier, AttributePath>;
+};
 
-  private constructor(props: Parameters<typeof LoweringIndex.of>[0]) {
+export class LoweringIndex {
+  readonly #origins: KeyedIndex<LoweredIdentifier, LoweredOrigin>;
+  readonly #scenarioDesignIds: KeyedIndex<LoweredIdentifier, DesignScenarioIdentifier>;
+  readonly #machinesByTransition: KeyedIndex<DesignTransitionIdentifier, DesignMachine>;
+  readonly #attrPathsByMachine: KeyedIndex<DesignMachineIdentifier, AttributePath>;
+
+  private constructor(props: LoweringIndexParam) {
     this.#origins = props.origins;
     this.#scenarioDesignIds = props.scenarioDesignIds;
     this.#machinesByTransition = props.machinesByTransition;
     this.#attrPathsByMachine = props.attrPathsByMachine;
   }
 
-  static of(props: {
-    origins: KeyedIndex<LoweredId, LoweredOrigin>;
-    scenarioDesignIds: KeyedIndex<LoweredId, DesignScenarioId>;
-    machinesByTransition: KeyedIndex<DesignTransitionId, DesignMachine>;
-    attrPathsByMachine: KeyedIndex<DesignMachineId, AttributePath>;
-  }): LoweringIndex {
+  static of(props: LoweringIndexParam): LoweringIndex {
     return new LoweringIndex(props);
   }
 
   originOf(loweredId: string): LoweredOrigin | null {
-    return this.#origins.get(LoweredId.of(loweredId)) ?? null;
+    return this.#origins.get(LoweredIdentifier.of(loweredId)) ?? null;
   }
 
   resolveDesignTarget(loweredId: string): { design: string; entry: LoweredOrigin | null } {
-    const entry = this.#origins.get(LoweredId.of(loweredId)) ?? null;
+    const entry = this.#origins.get(LoweredIdentifier.of(loweredId)) ?? null;
     if (entry) return { design: entry.design().asString(), entry };
-    const dsc = this.#scenarioDesignIds.get(LoweredId.of(loweredId));
+    const dsc = this.#scenarioDesignIds.get(LoweredIdentifier.of(loweredId));
     if (dsc) return { design: dsc.asString(), entry: null };
     return { design: loweredId, entry: null };
   }
 
   rewriteLoweredIds(text: string): string {
-    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(LoweredId.of(`OB-${num}`))?.design().asString() ?? m);
+    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(LoweredIdentifier.of(`OB-${num}`))?.design().asString() ?? m);
   }
 
   rewriteLoweredIdTokens(label: string): string {
     return label.replace(/OB_([0-9]+)/g, (m, num) => {
-      const entry = this.#origins.get(LoweredId.of(`OB-${num}`));
+      const entry = this.#origins.get(LoweredIdentifier.of(`OB-${num}`));
       return entry ? designToken(entry.design().asString()) : m;
     });
   }
 
   isTransition(designId: string): boolean {
-    const parsed = DesignTransitionId.parse(designId);
+    const parsed = DesignTransitionIdentifier.parse(designId);
     return parsed.ok && this.#machinesByTransition.has(parsed.value);
   }
 
   machineOfTransition(designId: string): DesignMachine | null {
-    const parsed = DesignTransitionId.parse(designId);
+    const parsed = DesignTransitionIdentifier.parse(designId);
     return parsed.ok ? this.#machinesByTransition.get(parsed.value) ?? null : null;
   }
 
   attrPathOfMachine(machineId: string): string | null {
-    const parsed = DesignMachineId.parse(machineId);
+    const parsed = DesignMachineIdentifier.parse(machineId);
     return parsed.ok ? this.#attrPathsByMachine.get(parsed.value)?.asString() ?? null : null;
   }
 
   withPassthrough(loweredId: string, designId: string): LoweringIndex {
     return new LoweringIndex({
-      origins: this.#origins.with(LoweredId.of(loweredId), LoweredOrigin.of({ design: LoweredOriginRef.of(designId), kind: "passthrough" })),
+      origins: this.#origins.with(LoweredIdentifier.of(loweredId), LoweredOrigin.of({ design: LoweredOriginReference.of(designId), kind: "passthrough" })),
       scenarioDesignIds: this.#scenarioDesignIds,
       machinesByTransition: this.#machinesByTransition,
       attrPathsByMachine: this.#attrPathsByMachine,

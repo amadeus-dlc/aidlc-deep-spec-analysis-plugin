@@ -2,7 +2,7 @@ import type { ContractRows } from "./contract-rows.ts";
 import type { ArtifactPath, ErrorMessage } from "@deep-spec/kernel-domain";
 import { CD_1, CD_3 } from "./contract-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
-import type { UnitDecls } from "./unit-decls.ts";
+import type { UnitDeclarations } from "./unit-declarations.ts";
 
 // contract-summary.md の契約表——Provider 列を持つ表が無い（absent）か、行が
 // 読めた（rows）。CD 検査は `match` で解釈へ命じる（#71 波26）。
@@ -33,7 +33,7 @@ export class ContractsTableOutcome {
 
   // CD-1 の門（種別規律の裁定 12）: 表が無ければ skip、あれば各行の当事者が
   // 宣言済みかを行に判定させる（宣言が使えるときだけ）。CD-3 のために行を返す。
-  check(report: ReferenceCheckReport, units: UnitDecls | null, artifact: ArtifactPath, depArtifact: ArtifactPath): ContractRows | null {
+  check(report: ReferenceCheckReport, units: UnitDeclarations | null, artifact: ArtifactPath, depArtifact: ArtifactPath): ContractRows | null {
     return this.match<ContractRows | null>({
       unparseable: (error) => {
         report.skip(CD_1, "unrecognized-format", error.asString());

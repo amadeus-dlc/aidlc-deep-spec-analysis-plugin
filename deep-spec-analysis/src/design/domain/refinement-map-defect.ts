@@ -1,4 +1,4 @@
-import { UnitName, type TargetId, SkipReason } from "@deep-spec/kernel-domain";
+import { UnitName, type TargetIdentifier, SkipReason } from "@deep-spec/kernel-domain";
 
 import { DesignSkipped } from "@deep-spec/design-domain";
 import { AttributePath } from "@deep-spec/requirements-domain";
@@ -53,7 +53,7 @@ export class RefinementMapDefect {
   }
 
   // 公開語彙への対応：compile-error skip（文言は golden 凍結）。
-  asCompileErrorSkip(target: TargetId, unit: string): DesignSkipped {
+  asCompileErrorSkip(target: TargetIdentifier, unit: string): DesignSkipped {
     return DesignSkipped.of({ target, reason: SkipReason.compileError(), unit: UnitName.of(unit), detail: `alpha substitution failed: ${this.message()}` });
   }
 }

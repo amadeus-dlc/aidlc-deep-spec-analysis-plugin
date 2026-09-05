@@ -6,7 +6,7 @@
 
 | 性質 | 実例 |
 | --- | --- |
-| 型付きのコンストラクタ、ofのpanic、parseのResult | [ir-version.ts](../../../../../../deep-spec-analysis/src/kernel/domain/ir-version.ts) |
+| 型付きのコンストラクタ、ofのpanic、parseのResult | [ir-version.ts](../../../../../../deep-spec-analysis/src/kernel/domain/intermediate-representation-version.ts) |
 | 同じ入力に対するofとparseの契約検証 | [construction-contracts.test.ts](../../../../../../deep-spec-analysis/tests/construction-contracts.test.ts) |
 | 入力のResult処理、panicの伝播、ロック解放 | [result-boundaries.test.ts](../../../../../../deep-spec-analysis/tests/result-boundaries.test.ts) |
 | 有効な空コレクションと不変スナップショット | [error-messages.ts](../../../../../../deep-spec-analysis/src/kernel/domain/error-messages.ts) |

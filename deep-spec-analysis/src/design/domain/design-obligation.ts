@@ -1,15 +1,16 @@
+import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
 // 設計義務。分類、rules 起源の参照要件、event 完全性、式の役割を所有する。
 
-import { type BrRefs } from "./br-refs.ts";
-import { DesignObligationId } from "./design-obligation-id.ts";
+import { type BusinessRuleReferences } from "./business-rule-references.ts";
+import { DesignObligationIdentifier } from "./design-obligation-identifier.ts";
 import { DesignObligationNature } from "./design-obligation-nature.ts";
 import { DesignObligationOrigin } from "./design-obligation-origin.ts";
-import type { LoweredId } from "./lowered-id.ts";
+import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
-import { LoweredOriginRef } from "./lowered-origin-ref.ts";
+import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 
 type DesignTemporalExpressions = {
   readonly pattern: string;
@@ -18,11 +19,25 @@ type DesignTemporalExpressions = {
   readonly to?: Expression;
 };
 
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type DesignObligationParam = {
+  id: DesignObligationIdentifier;
+  nature: DesignObligationNature;
+  origin: DesignObligationOrigin;
+  businessRuleReferences: BusinessRuleReferences;
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  assert?: Expression;
+  trigger?: TriggerName;
+  guard?: Expression;
+  effect?: Expression;
+  temporal?: DesignTemporalExpressions;
+};
+
 export class DesignObligation {
-  readonly #id: DesignObligationId;
+  readonly #id: DesignObligationIdentifier;
   readonly #nature: DesignObligationNature;
   readonly #origin: DesignObligationOrigin;
-  readonly #brRefs: BrRefs;
+  readonly #businessRuleReferences: BusinessRuleReferences;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #assert: Expression | undefined;
   readonly #trigger: TriggerName | undefined;
@@ -30,11 +45,11 @@ export class DesignObligation {
   readonly #effect: Expression | undefined;
   readonly #temporal: DesignTemporalExpressions | undefined;
 
-  private constructor(props: Parameters<typeof DesignObligation.of>[0]) {
+  private constructor(props: DesignObligationParam) {
     this.#id = props.id;
     this.#nature = props.nature;
     this.#origin = props.origin;
-    this.#brRefs = props.brRefs;
+    this.#businessRuleReferences = props.businessRuleReferences;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
@@ -48,25 +63,18 @@ export class DesignObligation {
     };
   }
 
-  static of(props: {
-    id: DesignObligationId;
-    nature: DesignObligationNature;
-    origin: DesignObligationOrigin;
-    brRefs: BrRefs;
-    functionalRequirementReferences: FunctionalRequirementReferences;
-    assert?: Expression;
-    trigger?: TriggerName;
-    guard?: Expression;
-    effect?: Expression;
-    temporal?: DesignTemporalExpressions;
-  }): DesignObligation {
+  static parse(props: DesignObligationParam): Result<DesignObligation, ParseError> {
+    return parseConstruction(() => new DesignObligation(props));
+  }
+
+  static of(props: DesignObligationParam): DesignObligation {
     return new DesignObligation(props);
   }
 
-  id(): DesignObligationId { return this.#id; }
+  id(): DesignObligationIdentifier { return this.#id; }
   nature(): DesignObligationNature { return this.#nature; }
   origin(): DesignObligationOrigin { return this.#origin; }
-  brRefs(): BrRefs { return this.#brRefs; }
+  businessRuleReferences(): BusinessRuleReferences { return this.#businessRuleReferences; }
   functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
   assertion(): Expression | undefined { return this.#assert; }
   trigger(): TriggerName | undefined { return this.#trigger; }
@@ -89,7 +97,7 @@ export class DesignObligation {
 
   // 契約1 への素通し lowering——どの任意部を lowered 文書へ運ぶかは義務自身の
   // 知識（空の frRefs も帰属として運ぶ：v1 は不透明な文字列として扱う）。
-  loweredAs(id: LoweredId): LoweredObligation {
+  loweredAs(id: LoweredIdentifier): LoweredObligation {
     const lowered: Parameters<typeof LoweredObligation.of>[0] = { id, nature: this.#nature.asString(), functionalRequirementReferences: this.#functionalRequirementReferences };
     const temporal = this.temporal();
     if (this.#assert !== undefined) lowered.assert = this.#assert;
@@ -102,7 +110,7 @@ export class DesignObligation {
 
   // 降ろし方の帰属：設計義務は素通し。
   loweredOrigin(): LoweredOrigin {
-    return LoweredOrigin.of({ design: LoweredOriginRef.of(this.#id.asString()), kind: "passthrough" });
+    return LoweredOrigin.of({ design: LoweredOriginReference.of(this.#id.asString()), kind: "passthrough" });
   }
 
   inspectExpressions(visitor: (expression: Expression, primesAllowed: boolean) => void): void {

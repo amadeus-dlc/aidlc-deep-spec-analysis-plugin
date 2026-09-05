@@ -1,3 +1,4 @@
+import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import type { FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
@@ -5,7 +6,7 @@ import { ObligationNature } from "@deep-spec/kernel-domain";
 // 義務（EARS nature 付き）。分類・event 完全性・式の役割は義務自身が所有し、
 // コンパイラは外部形式への射影だけを担う。
 
-import { ObligationId } from "./obligation-id.ts";
+import { ObligationIdentifier } from "./obligation-identifier.ts";
 
 type TemporalExpressions = {
   readonly pattern: string;
@@ -14,8 +15,21 @@ type TemporalExpressions = {
   readonly to?: Expression;
 };
 
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type ObligationParam = {
+  id: ObligationIdentifier;
+  nature: ObligationNature;
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  ears?: string;
+  assert?: Expression;
+  trigger?: TriggerName;
+  guard?: Expression;
+  effect?: Expression;
+  temporal?: TemporalExpressions;
+};
+
 export class Obligation {
-  readonly #id: ObligationId;
+  readonly #id: ObligationIdentifier;
   readonly #nature: ObligationNature;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #ears: string | undefined;
@@ -25,7 +39,7 @@ export class Obligation {
   readonly #effect: Expression | undefined;
   readonly #temporal: TemporalExpressions | undefined;
 
-  private constructor(props: Parameters<typeof Obligation.of>[0]) {
+  private constructor(props: ObligationParam) {
     this.#id = props.id;
     this.#nature = props.nature;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
@@ -42,21 +56,15 @@ export class Obligation {
     };
   }
 
-  static of(props: {
-    id: ObligationId;
-    nature: ObligationNature;
-    functionalRequirementReferences: FunctionalRequirementReferences;
-    ears?: string;
-    assert?: Expression;
-    trigger?: TriggerName;
-    guard?: Expression;
-    effect?: Expression;
-    temporal?: TemporalExpressions;
-  }): Obligation {
+  static parse(props: ObligationParam): Result<Obligation, ParseError> {
+    return parseConstruction(() => new Obligation(props));
+  }
+
+  static of(props: ObligationParam): Obligation {
     return new Obligation(props);
   }
 
-  id(): ObligationId { return this.#id; }
+  id(): ObligationIdentifier { return this.#id; }
   nature(): ObligationNature { return this.#nature; }
   functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
   ears(): string | undefined { return this.#ears; }

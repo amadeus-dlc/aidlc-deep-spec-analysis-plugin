@@ -1,4 +1,4 @@
-import { SkipReason, ContentHash, IrVersion, VerificationMethod, type FindingsSchema } from "@deep-spec/kernel-domain";
+import { SkipReason, ContentHash, IntermediateRepresentationVersion, VerificationMethod, type FindingsSchema } from "@deep-spec/kernel-domain";
 
 // VerificationReport 集約 — v1 バックエンド（smt / quint / cross-check）の
 // 検証結果文書（契約2）のドメイン表現。compose が正準ソートを所有し、
@@ -9,7 +9,7 @@ import { SkipReason, ContentHash, IrVersion, VerificationMethod, type FindingsSc
 
 import type { Json } from "@deep-spec/kernel-infrastructure";
 import type { RequirementsModel } from "./requirements-model.ts";
-import type { VerificationReportId } from "./verification-report-id.ts";
+import type { VerificationReportIdentifier } from "./verification-report-identifier.ts";
 import { VerificationFindings } from "./verification-findings.ts";
 import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationSkips } from "./verification-skips.ts";
@@ -17,9 +17,21 @@ import { CrossCheckedEntries } from "./cross-checked-entries.ts";
 
 export const SUPPORTED_IR_MAJOR = 1;
 
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type VerificationReportParam = {
+  readonly id: VerificationReportIdentifier;
+  readonly irVersion: IntermediateRepresentationVersion;
+  readonly irHash: ContentHash;
+  readonly method: VerificationMethod;
+  readonly findings: VerificationFindings;
+  readonly skipped: VerificationSkips;
+  readonly crossChecked: CrossCheckedEntries | null;
+  readonly unavailableReason: string | null;
+};
+
 export class VerificationReport {
-  readonly #id: VerificationReportId;
-  readonly #irVersion: IrVersion;
+  readonly #id: VerificationReportIdentifier;
+  readonly #irVersion: IntermediateRepresentationVersion;
   readonly #irHash: ContentHash;
   readonly #method: VerificationMethod;
   readonly #findings: VerificationFindings;
@@ -27,7 +39,7 @@ export class VerificationReport {
   readonly #crossChecked: CrossCheckedEntries | null;
   readonly #unavailableReason: string | null;
 
-  private constructor(seed: Parameters<typeof VerificationReport.of>[0]) {
+  private constructor(seed: VerificationReportParam) {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#irHash = seed.irHash;
@@ -42,10 +54,10 @@ export class VerificationReport {
 
   // IR が読めない（fence 不正・JSON 不正・構造不正）。irVersion "0.0.0" と
   // 空文字列の sha256 が「モデル不在」の凍結表現。
-  static irUnreadable(id: VerificationReportId, method: string, cause: string): VerificationReport {
+  static irUnreadable(id: VerificationReportIdentifier, method: string, cause: string): VerificationReport {
     return VerificationReport.compose({
       id,
-      irVersion: IrVersion.of("0.0.0"),
+      irVersion: IntermediateRepresentationVersion.of("0.0.0"),
       irHash: ContentHash.ofText(""),
       method,
       findings: VerificationFindings.of([]),
@@ -56,7 +68,7 @@ export class VerificationReport {
 
   // IR の major がこのバックエンドの対応外——全対象を skip として記録する。
   static versionMismatch(
-    id: VerificationReportId,
+    id: VerificationReportIdentifier,
     model: RequirementsModel,
     irHash: ContentHash,
     method: string,
@@ -78,7 +90,7 @@ export class VerificationReport {
   // SMT バックエンド固有：ソルバ実行不能。コンパイル時 skip を保ちつつ、
   // 残る全対象を unavailable として記録する。
   static solverUnavailable(
-    id: VerificationReportId,
+    id: VerificationReportIdentifier,
     model: RequirementsModel,
     irHash: ContentHash,
     planSkipped: VerificationSkips,
@@ -101,7 +113,7 @@ export class VerificationReport {
   }
 
   // Quint バックエンド固有：CLI 不在（method "simulation" 固定）。
-  static quintUnavailable(id: VerificationReportId, model: RequirementsModel, irHash: ContentHash): VerificationReport {
+  static quintUnavailable(id: VerificationReportIdentifier, model: RequirementsModel, irHash: ContentHash): VerificationReport {
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
@@ -115,7 +127,7 @@ export class VerificationReport {
 
   // Quint バックエンド固有：機械コンパイル不能（非有界 int・変数名衝突）。
   static machineUncompilable(
-    id: VerificationReportId,
+    id: VerificationReportIdentifier,
     model: RequirementsModel,
     irHash: ContentHash,
     method: string,
@@ -136,8 +148,8 @@ export class VerificationReport {
 
   // 検査結果の並びを正準化してから、共通の生成口へ渡す。
   static compose(input: {
-    readonly id: VerificationReportId;
-    readonly irVersion: IrVersion;
+    readonly id: VerificationReportIdentifier;
+    readonly irVersion: IntermediateRepresentationVersion;
     readonly irHash: ContentHash;
     readonly method: string;
     readonly findings: VerificationFindings;
@@ -158,16 +170,7 @@ export class VerificationReport {
   }
 
   // 型付きの文書を、要素の並びを保持して構築する。
-  static of(seed: {
-    readonly id: VerificationReportId;
-    readonly irVersion: IrVersion;
-    readonly irHash: ContentHash;
-    readonly method: VerificationMethod;
-    readonly findings: VerificationFindings;
-    readonly skipped: VerificationSkips;
-    readonly crossChecked: CrossCheckedEntries | null;
-    readonly unavailableReason: string | null;
-  }): VerificationReport {
+  static of(seed: VerificationReportParam): VerificationReport {
     return new VerificationReport(seed);
   }
 
@@ -186,11 +189,11 @@ export class VerificationReport {
     });
   }
 
-  id(): VerificationReportId {
+  id(): VerificationReportIdentifier {
     return this.#id;
   }
 
-  irVersion(): IrVersion {
+  irVersion(): IntermediateRepresentationVersion {
     return this.#irVersion;
   }
 

@@ -5,11 +5,11 @@ export class DesignTransitions {
   readonly #values: readonly DesignTransition[];
 
   private constructor(values: readonly DesignTransition[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignTransition[]): DesignTransitions {
-    return new DesignTransitions([...values]);
+    return new DesignTransitions(values);
   }
 
   add(value: DesignTransition): DesignTransitions {

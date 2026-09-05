@@ -1,3 +1,4 @@
+import { parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import { QueryLabel } from "@deep-spec/kernel-domain";
 
 // refinement クエリ 1 件の判定。主従の裁定（#71 波2）: interpret が吸い出して
@@ -9,14 +10,17 @@ import { QueryLabel } from "@deep-spec/kernel-domain";
 // 十進文字列——凍結解除 #34 項 4）。
 type RefinementQueryStatus = "sat" | "unsat" | "unknown" | "budget" | "error";
 
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type RefinementQueryVerdictParam = { status: RefinementQueryStatus; decodedModel?: { [path: string]: boolean | number | string }; decodedPostModel?: { [path: string]: boolean | number | string }; core?: string[] };
+
 export class RefinementQueryVerdict {
   readonly #status: RefinementQueryStatus;
   readonly #decodedModel: { [path: string]: boolean | number | string } | undefined;
   readonly #decodedPostModel: { [path: string]: boolean | number | string } | undefined;
   readonly #core: readonly QueryLabel[] | undefined;
 
-  // ドアの引数は無名のインライン署名で運ぶ（主従の裁定・補遺）。
-  private constructor(props: Parameters<typeof RefinementQueryVerdict.of>[0]) {
+  // 未検証の構築引数はParam型として明示し、各生成経路で共有する。
+  private constructor(props: RefinementQueryVerdictParam) {
     this.#status = props.status;
     // 判定の内部状態は外部と参照を共有しない（入出力ともにコピー）。
     this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
@@ -24,7 +28,11 @@ export class RefinementQueryVerdict {
     this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
   }
 
-  static of(props: { status: RefinementQueryStatus; decodedModel?: { [path: string]: boolean | number | string }; decodedPostModel?: { [path: string]: boolean | number | string }; core?: string[] }): RefinementQueryVerdict {
+  static parse(props: RefinementQueryVerdictParam): Result<RefinementQueryVerdict, ParseError> {
+    return parseConstruction(() => new RefinementQueryVerdict(props));
+  }
+
+  static of(props: RefinementQueryVerdictParam): RefinementQueryVerdict {
     return new RefinementQueryVerdict(props);
   }
 

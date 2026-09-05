@@ -1,6 +1,7 @@
+import { flatMapResult } from "@deep-spec/kernel-infrastructure";
 import {
-  ArtifactPath, BackendName, ContentHash, FindingKind, FunctionalRequirementReferences, IrVersion,
-  RequirementId, SkipReason, TargetId, TargetIds, UnitName, VerificationMethod,
+  ArtifactPath, BackendName, ContentHash, FindingKind, FunctionalRequirementReferences, IntermediateRepresentationVersion,
+  RequirementIdentifier, SkipReason, TargetIdentifier, TargetIdentifiers, UnitName, VerificationMethod,
 } from "@deep-spec/kernel-domain";
 import { type Json, combineResults, traverseResult, err, ok } from "@deep-spec/kernel-infrastructure";
 import { decodeFindingsDocument } from "./findings-document.ts";
@@ -12,22 +13,22 @@ export function parseFindingsValues(raw: Json) {
   const doc = decoded.value;
   const parsed = combineResults({
     backend: BackendName.parse(doc.backend),
-    irVersion: IrVersion.parse(doc.irVersion),
+    irVersion: IntermediateRepresentationVersion.parse(doc.irVersion),
     irHash: ContentHash.parse(doc.irHash),
     method: VerificationMethod.parse(doc.method),
     findings: traverseResult(doc.findings, (entry) => {
       const fields = combineResults({
         kind: FindingKind.parse(entry.kind),
-        functionalRequirementReferences: traverseResult(entry.frRefs, RequirementId.parse),
-        targets: traverseResult(entry.targets, TargetId.parse),
+        functionalRequirementReferences: flatMapResult(traverseResult(entry.frRefs, RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
+        targets: traverseResult(entry.targets, TargetIdentifier.parse),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
       });
       if (!fields.ok) return fields;
-      return ok({ ...fields.value, functionalRequirementReferences: FunctionalRequirementReferences.of(fields.value.functionalRequirementReferences), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
+      return ok({ ...fields.value, functionalRequirementReferences: fields.value.functionalRequirementReferences, targets: TargetIdentifiers.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
     }),
     skipped: traverseResult(doc.skipped, (entry) => {
       const fields = combineResults({
-        target: TargetId.parse(entry.target),
+        target: TargetIdentifier.parse(entry.target),
         reason: SkipReason.parse(entry.reason),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
       });
@@ -38,9 +39,9 @@ export function parseFindingsValues(raw: Json) {
       artifact: ArtifactPath.parse(entry.artifact), sha256: ContentHash.parse(entry.sha256),
     })),
     crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
-      const fields = combineResults({ backend: BackendName.parse(entry.backend), targets: traverseResult(entry.targets, TargetId.parse) });
+      const fields = combineResults({ backend: BackendName.parse(entry.backend), targets: traverseResult(entry.targets, TargetIdentifier.parse) });
       if (!fields.ok) return fields;
-      return ok({ backend: fields.value.backend, targets: TargetIds.of(fields.value.targets) });
+      return ok({ backend: fields.value.backend, targets: TargetIdentifiers.of(fields.value.targets) });
     }),
   });
   if (!parsed.ok) return err(JSON.stringify(parsed.error));

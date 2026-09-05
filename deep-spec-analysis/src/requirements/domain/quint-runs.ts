@@ -3,22 +3,22 @@
 // 逐語で載る。フェーズ横断の判定面（機械・時相・シナリオ）は QuintRuns が
 // クラスとして持ち、露出 Map は死んだ。
 
-import type { ObligationId } from "./obligation-id.ts";
+import type { ObligationIdentifier } from "./obligation-identifier.ts";
 import type { QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";
-import type { ScenarioId } from "./scenario-id.ts";
+import type { ScenarioIdentifier } from "./scenario-identifier.ts";
 import type { QuintScenarioVerdict } from "./quint-scenario-verdict.ts";
 import type { QuintTemporalVerdict } from "./quint-temporal-verdict.ts";
 import { KeyedIndex } from "@deep-spec/kernel-domain";
 
 export class QuintRuns {
   readonly #machine: QuintMachineRunVerdict | null;
-  readonly #temporals: KeyedIndex<ObligationId, QuintTemporalVerdict>;
-  readonly #scenarios: KeyedIndex<ScenarioId, QuintScenarioVerdict>;
+  readonly #temporals: KeyedIndex<ObligationIdentifier, QuintTemporalVerdict>;
+  readonly #scenarios: KeyedIndex<ScenarioIdentifier, QuintScenarioVerdict>;
 
   private constructor(seed: {
     readonly machine: QuintMachineRunVerdict | null;
-    readonly temporals: KeyedIndex<ObligationId, QuintTemporalVerdict>;
-    readonly scenarios: KeyedIndex<ScenarioId, QuintScenarioVerdict>;
+    readonly temporals: KeyedIndex<ObligationIdentifier, QuintTemporalVerdict>;
+    readonly scenarios: KeyedIndex<ScenarioIdentifier, QuintScenarioVerdict>;
   }) {
     this.#machine = seed.machine;
     this.#temporals = seed.temporals;
@@ -27,8 +27,8 @@ export class QuintRuns {
 
   static of(seed: {
     readonly machine: QuintMachineRunVerdict | null;
-    readonly temporals: KeyedIndex<ObligationId, QuintTemporalVerdict>;
-    readonly scenarios: KeyedIndex<ScenarioId, QuintScenarioVerdict>;
+    readonly temporals: KeyedIndex<ObligationIdentifier, QuintTemporalVerdict>;
+    readonly scenarios: KeyedIndex<ScenarioIdentifier, QuintScenarioVerdict>;
   }): QuintRuns {
     return new QuintRuns({
       machine: seed.machine,
@@ -41,11 +41,11 @@ export class QuintRuns {
     return this.#machine;
   }
 
-  temporalOf(obligationId: ObligationId): QuintTemporalVerdict | undefined {
+  temporalOf(obligationId: ObligationIdentifier): QuintTemporalVerdict | undefined {
     return this.#temporals.get(obligationId);
   }
 
-  scenarioOf(scenarioId: ScenarioId): QuintScenarioVerdict | undefined {
+  scenarioOf(scenarioId: ScenarioIdentifier): QuintScenarioVerdict | undefined {
     return this.#scenarios.get(scenarioId);
   }
 }

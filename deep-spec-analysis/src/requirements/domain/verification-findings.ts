@@ -14,11 +14,11 @@ export class VerificationFindings {
   readonly #values: readonly VerificationFinding[];
 
   private constructor(values: readonly VerificationFinding[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly VerificationFinding[]): VerificationFindings {
-    return new VerificationFindings([...values]);
+    return new VerificationFindings(values);
   }
 
   add(value: VerificationFinding): VerificationFindings {

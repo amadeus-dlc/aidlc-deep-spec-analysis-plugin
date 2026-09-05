@@ -188,11 +188,12 @@ function canonicalStringify(value) {
   if (Array.isArray(value)) {
     return `[${value.map(canonicalStringify).join(",")}]`;
   }
-  if (isObject(value)) {
-    const keys = Object.keys(value).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(value[k] ?? null)}`).join(",")}}`;
+  if (value !== null && typeof value === "object") {
+    const record = value;
+    const keys = Object.keys(record).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(record[k] ?? null)}`).join(",")}}`;
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "null";
 }
 // src/kernel/infrastructure/illegal-argument-exception.ts
 class IllegalArgumentException extends Error {
@@ -241,6 +242,9 @@ function sortedUniqueCanonically(values) {
   return [...new Set(values)].sort(compareCanonically);
 }
 // src/kernel/infrastructure/result-composition.ts
+function flatMapResult(result, next) {
+  return result.ok ? next(result.value) : result;
+}
 function combineResults(fields) {
   const values = {};
   for (const key in fields) {
@@ -261,504 +265,52 @@ function traverseResult(values, parse) {
   }
   return ok(parsed);
 }
-// src/kernel/infrastructure/value-size.ts
-function assertValueSize(value, limits) {
+// src/kernel/infrastructure/bounded-value-snapshot.ts
+function boundedValueSnapshot(value, limits) {
   let nodes = 0;
   let total = 0;
-  const visit = (current, depth) => {
-    if (++nodes > limits.nodes || depth > limits.depth)
-      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
-    if (typeof current === "string") {
-      if (current.length > limits.string)
-        throw new IllegalArgumentException({ kind: "value-string-too-long", raw: current.length });
-      total += current.length;
-    } else if (current !== null && typeof current === "object") {
-      if (Array.isArray(current)) {
-        if (current.length > limits.nodes - nodes)
-          throw new IllegalArgumentException({ kind: "value-tree-too-large" });
-        for (const child of current)
-          visit(child, depth + 1);
-      } else {
-        const record = current;
-        for (const key in record) {
-          if (!Object.hasOwn(record, key))
-            continue;
-          if (key.length > limits.string)
-            throw new IllegalArgumentException({ kind: "value-key-too-long", raw: key.length });
-          total += key.length;
-          if (total > limits.total)
-            throw new IllegalArgumentException({ kind: "value-text-too-large" });
-          visit(record[key], depth + 1);
-        }
-      }
-    }
+  const chargeText = (text, kind) => {
+    if (text.length > limits.string)
+      throw new IllegalArgumentException({ kind, raw: text.length });
+    total += text.length;
     if (total > limits.total)
       throw new IllegalArgumentException({ kind: "value-text-too-large" });
   };
-  visit(value, 0);
-}
-// src/kernel/adapter/contract-schema.ts
-function readContractSchema(path) {
-  try {
-    return ok(JSON.parse(readFileSync2(path, "utf-8")));
-  } catch (e) {
-    return err({ cause: e instanceof Error ? e.message : String(e) });
-  }
-}
-// src/kernel/adapter/findings-document.ts
-var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
-var optionalString = (value) => value === undefined || typeof value === "string";
-function decodeFindingsDocument(raw) {
-  if (!isObject(raw))
-    return err("findings document must be an object");
-  for (const field of ["backend", "irVersion", "irHash", "method"]) {
-    if (typeof raw[field] !== "string")
-      return err(`${field} must be a string`);
-  }
-  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
-    return err("findings must be an array of complete finding records");
-  }
-  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
-    return err("skipped must be an array of complete skip records");
-  }
-  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
-    return err("unavailable must carry a reason");
-  }
-  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
-    return err("inputs must be an array of input anchors");
-  }
-  if (raw.checked !== undefined && !strings(raw.checked))
-    return err("checked must be an array of strings");
-  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
-    return err("crossChecked must be an array of backend comparisons");
-  }
-  return ok(raw);
-}
-// src/kernel/adapter/yaml.ts
-class YamlError extends Error {
-  constructor(message) {
-    super(message);
-  }
-}
-function parseYamlSubset(src) {
-  const raw = src.split(`
-`);
-  const lines = [];
-  for (let i = 0;i < raw.length; i++) {
-    const expanded = (raw[i] ?? "").replace(/\t/g, "  ");
-    const trimmed = expanded.trim();
-    if (trimmed === "" || trimmed.startsWith("#"))
-      continue;
-    lines.push({ indent: expanded.length - expanded.trimStart().length, text: trimmed, n: i + 1 });
-  }
-  if (lines.length === 0)
-    return { value: null };
-  try {
-    const [value, next] = parseBlock(lines, 0, lines[0]?.indent ?? 0);
-    if (next < lines.length) {
-      throw new YamlError(`line ${lines[next]?.n}: content outside the top-level block`);
+  const copy = (current, depth) => {
+    if (++nodes > limits.nodes || depth > limits.depth)
+      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+    if (typeof current === "string") {
+      chargeText(current, "value-string-too-long");
+      return current;
     }
-    return { value };
-  } catch (err2) {
-    return { error: err2 instanceof Error ? err2.message : String(err2) };
-  }
-}
-function parseBlock(lines, start, indent) {
-  const first = lines[start];
-  if (!first)
-    return [null, start];
-  if (first.text === "-" || first.text.startsWith("- ")) {
-    return parseSequence(lines, start, indent);
-  }
-  return parseMapping(lines, start, indent);
-}
-function parseSequence(lines, start, indent) {
-  const out = [];
-  let i = start;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (!line || line.indent !== indent || !(line.text === "-" || line.text.startsWith("- ")))
-      break;
-    const rest = line.text === "-" ? "" : line.text.slice(2).trim();
-    if (rest === "") {
-      const next = lines[i + 1];
-      if (next && next.indent > indent) {
-        const [child, ni] = parseBlock(lines, i + 1, next.indent);
-        out.push(child);
-        i = ni;
-      } else {
-        out.push(null);
-        i++;
-      }
-      continue;
+    if (current === null || typeof current !== "object")
+      return current;
+    if (Array.isArray(current)) {
+      const count = current.length;
+      if (count > limits.nodes - nodes)
+        throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+      const values = [];
+      for (let index = 0;index < count; index++)
+        values.push(copy(current[index], depth + 1));
+      return values;
     }
-    if (isMappingEntry(rest)) {
-      const virtual = { indent: indent + 2, text: rest, n: line.n };
-      const sub = [virtual];
-      let j = i + 1;
-      while (j < lines.length && (lines[j]?.indent ?? 0) > indent) {
-        sub.push(lines[j]);
-        j++;
-      }
-      const [child] = parseMapping(sub, 0, indent + 2);
-      out.push(child);
-      i = j;
-      continue;
+    const record = current;
+    const entries = [];
+    for (const key in record) {
+      if (!Object.hasOwn(record, key))
+        continue;
+      chargeText(key, "value-key-too-long");
+      entries.push([key, copy(record[key], depth + 1)]);
     }
-    out.push(parseScalar(rest, line.n));
-    i++;
-  }
-  return [out, i];
-}
-function isMappingEntry(text) {
-  if (text.startsWith("[") || text.startsWith("'") || text.startsWith('"'))
-    return false;
-  return /^[^:]+:(\s|$)/.test(text);
-}
-function parseMapping(lines, start, indent) {
-  const out = {};
-  let i = start;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (!line || line.indent !== indent)
-      break;
-    if (line.text === "-" || line.text.startsWith("- "))
-      break;
-    const m = line.text.match(/^([^:]+):(?:\s+(.*))?$/);
-    if (!m)
-      throw new YamlError(`line ${line.n}: not a mapping entry: "${line.text}"`);
-    const key = unquote((m[1] ?? "").trim());
-    const valPart = (m[2] ?? "").trim();
-    if (valPart === "") {
-      const next = lines[i + 1];
-      if (next && next.indent > indent) {
-        const [child, ni] = parseBlock(lines, i + 1, next.indent);
-        out[key] = child;
-        i = ni;
-      } else {
-        out[key] = null;
-        i++;
-      }
-      continue;
-    }
-    if (/^[>|][+-]?$/.test(valPart)) {
-      const parts = [];
-      let j = i + 1;
-      while (j < lines.length && (lines[j]?.indent ?? 0) > indent) {
-        parts.push(lines[j]?.text ?? "");
-        j++;
-      }
-      out[key] = parts.join(valPart.startsWith(">") ? " " : `
-`);
-      i = j;
-      continue;
-    }
-    out[key] = parseScalar(valPart, line.n);
-    i++;
-  }
-  return [out, i];
-}
-function unquote(s) {
-  if (s.startsWith('"') && s.endsWith('"') || s.startsWith("'") && s.endsWith("'")) {
-    return s.slice(1, -1);
-  }
-  return s;
-}
-function parseScalar(s, lineNo) {
-  let v = s;
-  if (v.startsWith("&") || v.startsWith("*") || v.startsWith("!")) {
-    throw new YamlError(`line ${lineNo}: unsupported YAML feature (anchor/alias/tag): "${v}"`);
-  }
-  if (v.startsWith("{")) {
-    throw new YamlError(`line ${lineNo}: unsupported YAML feature (flow mapping): "${v}"`);
-  }
-  if (v.startsWith('"') || v.startsWith("'")) {
-    const quote = v[0];
-    const close = v.indexOf(quote, 1);
-    if (close > 0)
-      return v.slice(1, close);
-    throw new YamlError(`line ${lineNo}: unterminated quoted scalar: "${v}"`);
-  }
-  const hash = v.indexOf(" #");
-  if (hash >= 0)
-    v = v.slice(0, hash).trim();
-  if (v.startsWith("[")) {
-    if (!v.endsWith("]"))
-      throw new YamlError(`line ${lineNo}: unterminated inline sequence: "${v}"`);
-    const inner = v.slice(1, -1).trim();
-    if (inner === "")
-      return [];
-    return inner.split(",").map((item) => parseScalar(item.trim(), lineNo));
-  }
-  if (v === "true")
-    return true;
-  if (v === "false")
-    return false;
-  if (v === "null" || v === "~")
-    return null;
-  if (/^-?[0-9]+$/.test(v))
-    return Number.parseInt(v, 10);
-  if (/^-?[0-9]+\.[0-9]+$/.test(v))
-    return Number.parseFloat(v);
-  return v;
-}
-// src/kernel/adapter/fence.ts
-function extractFences(md, lang) {
-  const fences = [];
-  const lines = md.split(`
-`);
-  let open = false;
-  let info = "";
-  let openLine = 0;
-  let buf = [];
-  for (let i = 0;i < lines.length; i++) {
-    const m = (lines[i] ?? "").match(/^\s*```(.*)$/);
-    if (m && !open) {
-      open = true;
-      info = (m[1] ?? "").trim().toLowerCase();
-      openLine = i + 1;
-      buf = [];
-      continue;
-    }
-    if (m && open) {
-      if (info === lang || info.startsWith(`${lang} `)) {
-        fences.push({ info, body: buf.join(`
-`), line: openLine });
-      }
-      open = false;
-      continue;
-    }
-    if (open)
-      buf.push(lines[i] ?? "");
-  }
-  return fences;
-}
-// src/kernel/adapter/md-table.ts
-function parseMarkdownTables(md) {
-  const tables = [];
-  const lines = md.split(`
-`);
-  let i = 0;
-  const splitRow = (row) => row.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
-  while (i < lines.length) {
-    const isRow = (n) => /^\s*\|.*\|\s*$/.test(lines[n] ?? "");
-    if (isRow(i) && isRow(i + 1) && /^[\s|:-]+$/.test(lines[i + 1] ?? "")) {
-      const table = { header: splitRow(lines[i] ?? ""), rows: [], line: i + 1 };
-      let j = i + 2;
-      while (j < lines.length && isRow(j)) {
-        table.rows.push({ cells: splitRow(lines[j] ?? ""), line: j + 1 });
-        j++;
-      }
-      tables.push(table);
-      i = j;
-      continue;
-    }
-    i++;
-  }
-  return tables;
-}
-// src/kernel/adapter/list-subdirectories.ts
-import { readdirSync } from "fs";
-function listSubdirectories(dir) {
-  try {
-    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
-  } catch {
-    return [];
-  }
-}
-// src/kernel/adapter/atomic-write.ts
-import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
-import { basename, dirname as dirname2, join as join2 } from "path";
-var sequence = 0;
-function writeFileAtomically(path, data) {
-  const dir = dirname2(path);
-  mkdirSync(dir, { recursive: true });
-  sequence += 1;
-  const tmp = join2(dir, `.${basename(path)}.tmp-${Date.now().toString(36)}-${sequence.toString(36)}`);
-  try {
-    writeFileSync(tmp, data);
-    renameSync(tmp, path);
-  } catch (e) {
-    try {
-      rmSync(tmp, { force: true });
-    } catch {}
-    throw e;
-  }
-}
-// src/kernel/adapter/directory-finalization-lock.ts
-import { randomBytes } from "crypto";
-import { mkdirSync as mkdirSync2, readFileSync as readFileSync3, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
-import { join as join3 } from "path";
-var DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
-var METADATA_BASENAME = "owner.lockmeta";
-var LEASE_MS = 30000;
-var OWNER_TOKEN_BYTES = 16;
-function causeOf(e) {
-  return e instanceof Error ? e.message : String(e);
-}
-
-class DirectoryFinalizationLock {
-  #clock;
-  #liveness;
-  #lockBasename;
-  #ownerTokens;
-  constructor(clock, liveness, lockBasename = DESIGN_LOCK_BASENAME) {
-    this.#clock = clock;
-    this.#liveness = liveness;
-    this.#lockBasename = lockBasename;
-    this.#ownerTokens = new Map;
-  }
-  canonicalPathOf(directory) {
-    return join3(directory.asString(), this.#lockBasename);
-  }
-  ownerTokenOf(directory) {
-    return this.#ownerTokens.get(this.canonicalPathOf(directory)) ?? null;
-  }
-  acquire(directory) {
-    const canonical = this.canonicalPathOf(directory);
-    const token = randomBytes(OWNER_TOKEN_BYTES).toString("hex");
-    const blocked = this.#createOwned(canonical, token);
-    if (blocked === null) {
-      this.#ownerTokens.set(canonical, token);
-      return { kind: "acquired" };
-    }
-    const observed = this.#readMetadata(canonical);
-    if (observed === null) {
-      return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
-    }
-    if (observed.state !== "held") {
-      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.state}"` };
-    }
-    if (this.#clock.now() < observed.leaseExpiresAtMs) {
-      return { kind: "lock-contended", cause: "the lease has not expired" };
-    }
-    const status = this.#liveness.statusOf(observed.pid);
-    if (status !== "absent") {
-      return { kind: "lock-contended", cause: `owner process ${observed.pid} is ${status}` };
-    }
-    const reread = this.#readMetadata(canonical);
-    if (reread === null || reread.token !== observed.token) {
-      return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
-    }
-    const stale = `${canonical}.stale.${observed.token}.${token}`;
-    try {
-      renameSync2(canonical, stale);
-    } catch (e) {
-      return { kind: "lock-recovery-failed", cause: causeOf(e) };
-    }
-    const lost = this.#createOwned(canonical, token);
-    this.#discard(stale);
-    if (lost !== null) {
-      return { kind: "lock-recovery-failed", cause: lost };
-    }
-    this.#ownerTokens.set(canonical, token);
-    return { kind: "recovered", displacedToken: observed.token };
-  }
-  holdsOwnership(directory) {
-    const canonical = this.canonicalPathOf(directory);
-    const mine = this.#ownerTokens.get(canonical);
-    if (mine === undefined)
-      return false;
-    const observed = this.#readMetadata(canonical);
-    return observed !== null && observed.state === "held" && observed.token === mine;
-  }
-  release(directory) {
-    const canonical = this.canonicalPathOf(directory);
-    const mine = this.#ownerTokens.get(canonical);
-    if (mine === undefined) {
-      return { kind: "lock-release-failed", cause: "this writer does not hold the lock" };
-    }
-    this.#ownerTokens.delete(canonical);
-    const observed = this.#readMetadata(canonical);
-    if (observed === null || observed.token !== mine) {
-      return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
-    }
-    const cleanup = `${canonical}.cleanup.${mine}`;
-    try {
-      renameSync2(canonical, cleanup);
-    } catch (e) {
-      return { kind: "lock-release-failed", cause: causeOf(e) };
-    }
-    const swept = this.#discard(cleanup);
-    if (swept !== null) {
-      return { kind: "cleanup-failed", cause: swept };
-    }
-    return { kind: "released" };
-  }
-  #createOwned(canonical, token) {
-    const acquiredAtMs = this.#clock.now();
-    try {
-      mkdirSync2(canonical);
-    } catch (e) {
-      return causeOf(e);
-    }
-    const metadata = {
-      state: "held",
-      token,
-      pid: this.#liveness.self(),
-      acquiredAtMs,
-      leaseExpiresAtMs: acquiredAtMs + LEASE_MS
-    };
-    try {
-      writeFileSync2(join3(canonical, METADATA_BASENAME), `${JSON.stringify(metadata)}
-`, "utf-8");
-      return null;
-    } catch (e) {
-      const cleanup = `${canonical}.cleanup.${token}`;
-      try {
-        renameSync2(canonical, cleanup);
-        this.#discard(cleanup);
-      } catch {}
-      return causeOf(e);
-    }
-  }
-  #readMetadata(canonical) {
-    let raw;
-    try {
-      raw = JSON.parse(readFileSync3(join3(canonical, METADATA_BASENAME), "utf-8"));
-    } catch {
-      return null;
-    }
-    if (typeof raw !== "object" || raw === null)
-      return null;
-    const doc = raw;
-    if (typeof doc.state !== "string" || typeof doc.token !== "string")
-      return null;
-    if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
-      return null;
-    return {
-      state: doc.state,
-      token: doc.token,
-      pid: doc.pid,
-      acquiredAtMs: doc.acquiredAtMs,
-      leaseExpiresAtMs: doc.leaseExpiresAtMs
-    };
-  }
-  #discard(ownPath) {
-    try {
-      rmSync2(ownPath, { recursive: true, force: true });
-      return null;
-    } catch (e) {
-      return causeOf(e);
-    }
-  }
+    return Object.fromEntries(entries);
+  };
+  return copy(value, 0);
 }
 // src/kernel/domain/expression-tree.ts
-function canonicalKeyOf(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalKeyOf).join(",")}]`;
-  }
-  if (typeof value === "object" && value !== null) {
-    const record = value;
-    const keys = Object.keys(record).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalKeyOf(record[k] ?? null)}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
 class ExpressionTree {
   #root;
   constructor(root) {
+    const snapshot = boundedValueSnapshot(root, { string: 4096, nodes: 1e5, depth: 258, total: 16777216 });
     let nodes = 0;
     const measure = (node, depth) => {
       if (++nodes > 1e4 || depth > 128 || (node.args?.length ?? 0) > 1e4 - nodes) {
@@ -770,8 +322,7 @@ class ExpressionTree {
       for (const child of node.args ?? [])
         measure(child, depth + 1);
     };
-    measure(root, 0);
-    const snapshot = structuredClone(root);
+    measure(snapshot, 0);
     const visited = new WeakSet;
     const freeze = (value) => {
       if (visited.has(value))
@@ -828,7 +379,7 @@ class ExpressionTree {
     return assigned;
   }
   isCanonicallyEqual(other) {
-    return canonicalKeyOf(this.#root) === canonicalKeyOf(other.#root);
+    return canonicalStringify(this.#root) === canonicalStringify(other.#root);
   }
 }
 // src/kernel/domain/content-hash.ts
@@ -883,8 +434,8 @@ class DeclaredDigest {
     return this.#value === actual.asString();
   }
 }
-// src/kernel/domain/ir-version.ts
-class IrVersion {
+// src/kernel/domain/intermediate-representation-version.ts
+class IntermediateRepresentationVersion {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -894,10 +445,10 @@ class IrVersion {
     this.#value = raw;
   }
   static of(raw) {
-    return new IrVersion(raw);
+    return new IntermediateRepresentationVersion(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new IrVersion(raw));
+    return parseConstruction(() => new IntermediateRepresentationVersion(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -912,7 +463,7 @@ class IrVersion {
     return this.#value;
   }
 }
-// src/kernel/domain/target-id.ts
+// src/kernel/domain/target-identifier.ts
 var TARGET_ID_PATTERNS = [
   /^(OB|SC)-[0-9]+$/,
   /^BR[0-9]+\.[0-9]+$/,
@@ -920,7 +471,7 @@ var TARGET_ID_PATTERNS = [
   /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
 ];
 
-class TargetId {
+class TargetIdentifier {
   #value;
   constructor(raw) {
     if (raw.length > 1024)
@@ -930,10 +481,10 @@ class TargetId {
     this.#value = raw;
   }
   static of(raw) {
-    return new TargetId(raw);
+    return new TargetIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new TargetId(raw));
+    return parseConstruction(() => new TargetIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -945,21 +496,21 @@ class TargetId {
     return this.#value;
   }
 }
-// src/kernel/domain/target-ids.ts
-class TargetIds {
+// src/kernel/domain/target-identifiers.ts
+class TargetIdentifiers {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new TargetIds([...values]);
+    return new TargetIdentifiers(values);
   }
   static safe(prefix, raw) {
     const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
     return `${prefix}:${token === "" ? "unknown" : token}`;
   }
   add(value) {
-    return new TargetIds([...this.#values, value]);
+    return new TargetIdentifiers([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -971,13 +522,13 @@ class TargetIds {
     return this.#values.some((v) => v.equals(value));
   }
   excluding(value) {
-    return new TargetIds(this.#values.filter((v) => !v.equals(value)));
+    return new TargetIdentifiers(this.#values.filter((v) => !v.equals(value)));
   }
   sortedCanonically() {
-    return new TargetIds([...this.#values].sort((a, b) => a.compareTo(b)));
+    return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
   }
   sortedUniqueCanonically() {
-    return TargetIds.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetId.of(raw)));
+    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
   }
   joined(separator) {
     return this.toStrings().join(separator);
@@ -996,6 +547,9 @@ class FunctionalRequirementReferences {
     if (values.length > 1e4)
       throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
     this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new FunctionalRequirementReferences(values));
   }
   static of(values) {
     return new FunctionalRequirementReferences(values);
@@ -1083,8 +637,8 @@ class KeySet {
   }
 }
 
-// src/kernel/domain/requirement-id.ts
-class RequirementId {
+// src/kernel/domain/requirement-identifier.ts
+class RequirementIdentifier {
   #value;
   constructor(value) {
     if (value.length > 128)
@@ -1094,10 +648,10 @@ class RequirementId {
     this.#value = value;
   }
   static of(raw) {
-    return new RequirementId(raw);
+    return new RequirementIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new RequirementId(raw));
+    return parseConstruction(() => new RequirementIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1110,8 +664,8 @@ class RequirementId {
   }
 }
 
-// src/kernel/domain/requirement-ids.ts
-class RequirementIds {
+// src/kernel/domain/requirement-identifiers.ts
+class RequirementIdentifiers {
   #values;
   constructor(values) {
     this.#values = values;
@@ -1119,15 +673,15 @@ class RequirementIds {
   static extractFrom(text) {
     const ids = [];
     for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementId.of(m[0]));
+      ids.push(RequirementIdentifier.of(m[0]));
     }
-    return new RequirementIds(KeySet.of(ids));
+    return new RequirementIdentifiers(KeySet.of(ids));
   }
   static of(values) {
-    return new RequirementIds(KeySet.of(values));
+    return new RequirementIdentifiers(KeySet.of(values));
   }
   add(value) {
-    return new RequirementIds(this.#values.with(value));
+    return new RequirementIdentifiers(this.#values.with(value));
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -1242,6 +796,9 @@ class ErrorMessages {
       throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
+  static parse(values) {
+    return parseConstruction(() => new ErrorMessages(values));
+  }
   static of(values) {
     return new ErrorMessages(values);
   }
@@ -1265,11 +822,14 @@ class FindingsSchema {
   #schema;
   #reason;
   constructor(schema, reason) {
-    this.#schema = schema;
+    this.#schema = schema === null ? null : boundedValueSnapshot(schema, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
     this.#reason = reason;
   }
   static of(schema) {
     return new FindingsSchema(schema, null);
+  }
+  static parse(schema) {
+    return parseConstruction(() => new FindingsSchema(schema, null));
   }
   static unreadable(cause) {
     return new FindingsSchema(null, cause);
@@ -1709,22 +1269,57 @@ class AttributeKind {
 class DeclaredBindingValue {
   #value;
   constructor(value) {
-    assertValueSize(value, { string: 4096, total: 65536, nodes: 4096, depth: 32 });
-    this.#value = structuredClone(value);
+    this.#value = value;
   }
   static of(value) {
     return new DeclaredBindingValue(value);
   }
-  static parse(value) {
-    return parseConstruction(() => new DeclaredBindingValue(value));
-  }
   fits(kind, admitsEnum) {
-    return kind.isBool() && typeof this.#value === "boolean" || kind.isInt() && typeof this.#value === "number" && Number.isSafeInteger(this.#value) || kind.isEnum() && typeof this.#value === "string" && admitsEnum(this.#value);
+    return this.#value.match({
+      literal: (value) => kind.isBool() && typeof value === "boolean" || kind.isInt() && typeof value === "number" && Number.isSafeInteger(value) || kind.isEnum() && typeof value === "string" && admitsEnum(value),
+      nonLiteral: () => false
+    });
+  }
+  match(cases) {
+    return this.#value.match(cases);
+  }
+  describe() {
+    return this.#value.describe();
+  }
+}
+// src/kernel/domain/declaration.ts
+class Declaration {
+  #value;
+  constructor(value) {
+    const snapshot = boundedValueSnapshot(value, { string: 4096, total: 65536, nodes: 4096, depth: 32 });
+    const checkNumbers = (current) => {
+      if (typeof current === "number" && !Number.isFinite(current)) {
+        throw new IllegalArgumentException({ kind: "non-finite-declaration-number", raw: current });
+      }
+      if (Array.isArray(current)) {
+        for (const child of current)
+          checkNumbers(child);
+      } else if (current !== null && typeof current === "object") {
+        for (const child of Object.values(current))
+          checkNumbers(child);
+      }
+    };
+    checkNumbers(snapshot);
+    this.#value = snapshot;
+  }
+  static of(value) {
+    return new Declaration(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new Declaration(value));
   }
   match(cases) {
     if (typeof this.#value === "boolean" || typeof this.#value === "number" || typeof this.#value === "string")
       return cases.literal(this.#value);
     return cases.nonLiteral();
+  }
+  equals(other) {
+    return canonicalStringify(this.#value) === canonicalStringify(other.#value);
   }
   describe() {
     return JSON.stringify(this.#value);
@@ -1737,6 +1332,9 @@ class DeclaredBindings {
     if (values.length > 1e4)
       throw new IllegalArgumentException({ kind: "too-many-binding-declarations", raw: values.length });
     this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DeclaredBindings(values));
   }
   static of(values) {
     return new DeclaredBindings(values);
@@ -1765,6 +1363,9 @@ class ScenarioBindings {
       paths.add(path);
     }
     this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ScenarioBindings(values));
   }
   static of(values) {
     return new ScenarioBindings(values);
@@ -1808,8 +1409,8 @@ class ErrorMessage {
     return this.#value;
   }
 }
-// src/kernel/domain/enum-member.ts
-class EnumMember {
+// src/kernel/domain/enumeration-member.ts
+class EnumerationMember {
   #value;
   constructor(value) {
     if (value.length > 4096)
@@ -1817,10 +1418,10 @@ class EnumMember {
     this.#value = value;
   }
   static of(value) {
-    return new EnumMember(value);
+    return new EnumerationMember(value);
   }
   static parse(value) {
-    return parseConstruction(() => new EnumMember(value));
+    return parseConstruction(() => new EnumerationMember(value));
   }
   matchesLiteral(value) {
     return this.#value === value;
@@ -1874,6 +1475,502 @@ class BindingDeclaration {
     return this.#value;
   }
 }
+// src/kernel/domain/enumeration-members.ts
+class EnumerationMembers {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new EnumerationMembers(values));
+  }
+  static of(values) {
+    return new EnumerationMembers(values);
+  }
+  add(value) {
+    return new EnumerationMembers([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  includes(value) {
+    return this.#values.some((member) => member.matchesLiteral(value));
+  }
+  sortedUniqueCanonically() {
+    const members = new Map(this.#values.map((member) => [member.asString(), member]));
+    return new EnumerationMembers([...members.values()].sort((a, b) => a.compareTo(b)));
+  }
+  indexOf(value) {
+    return this.#values.findIndex((member) => member.matchesLiteral(value));
+  }
+  valueAt(index) {
+    return this.#values[index];
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/kernel/adapter/contract-schema.ts
+function readContractSchema(path) {
+  try {
+    const document = JSON.parse(readFileSync2(path, "utf-8"));
+    if (!isObject(document))
+      return err({ cause: "contract schema must be a JSON object" });
+    return ok(document);
+  } catch (e) {
+    return err({ cause: e instanceof Error ? e.message : String(e) });
+  }
+}
+function readFindingsSchema(path) {
+  const document = readContractSchema(path);
+  if (!document.ok)
+    return FindingsSchema.unreadable(document.error.cause);
+  const parsed = FindingsSchema.parse(document.value);
+  return parsed.ok ? parsed.value : FindingsSchema.unreadable(JSON.stringify(parsed.error));
+}
+// src/kernel/adapter/findings-document.ts
+var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
+var optionalString = (value) => value === undefined || typeof value === "string";
+function decodeFindingsDocument(raw) {
+  if (!isObject(raw))
+    return err("findings document must be an object");
+  for (const field of ["backend", "irVersion", "irHash", "method"]) {
+    if (typeof raw[field] !== "string")
+      return err(`${field} must be a string`);
+  }
+  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
+    return err("findings must be an array of complete finding records");
+  }
+  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
+    return err("skipped must be an array of complete skip records");
+  }
+  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
+    return err("unavailable must carry a reason");
+  }
+  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
+    return err("inputs must be an array of input anchors");
+  }
+  if (raw.checked !== undefined && !strings(raw.checked))
+    return err("checked must be an array of strings");
+  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
+    return err("crossChecked must be an array of backend comparisons");
+  }
+  return ok(raw);
+}
+// src/kernel/adapter/yaml.ts
+class YamlError extends Error {
+  constructor(message) {
+    super(message);
+  }
+}
+function parseYamlSubset(src) {
+  const raw = src.split(`
+`);
+  const lines = [];
+  for (let i = 0;i < raw.length; i++) {
+    const expanded = (raw[i] ?? "").replace(/\t/g, "  ");
+    const trimmed = expanded.trim();
+    if (trimmed === "" || trimmed.startsWith("#"))
+      continue;
+    lines.push({ indent: expanded.length - expanded.trimStart().length, text: trimmed, n: i + 1 });
+  }
+  if (lines.length === 0)
+    return { value: null };
+  try {
+    const [value, next] = parseBlock(lines, 0, lines[0]?.indent ?? 0);
+    if (next < lines.length) {
+      throw new YamlError(`line ${lines[next]?.n}: content outside the top-level block`);
+    }
+    return { value };
+  } catch (err2) {
+    return { error: err2 instanceof Error ? err2.message : String(err2) };
+  }
+}
+function parseBlock(lines, start, indent) {
+  const first = lines[start];
+  if (!first)
+    return [null, start];
+  if (first.text === "-" || first.text.startsWith("- ")) {
+    return parseSequence(lines, start, indent);
+  }
+  return parseMapping(lines, start, indent);
+}
+function parseSequence(lines, start, indent) {
+  const out = [];
+  let i = start;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line || line.indent !== indent || !(line.text === "-" || line.text.startsWith("- ")))
+      break;
+    const rest = line.text === "-" ? "" : line.text.slice(2).trim();
+    if (rest === "") {
+      const next = lines[i + 1];
+      if (next && next.indent > indent) {
+        const [child, ni] = parseBlock(lines, i + 1, next.indent);
+        out.push(child);
+        i = ni;
+      } else {
+        out.push(null);
+        i++;
+      }
+      continue;
+    }
+    if (isMappingEntry(rest)) {
+      const virtual = { indent: indent + 2, text: rest, n: line.n };
+      const sub = [virtual];
+      let j = i + 1;
+      while (j < lines.length && (lines[j]?.indent ?? 0) > indent) {
+        sub.push(lines[j]);
+        j++;
+      }
+      const [child] = parseMapping(sub, 0, indent + 2);
+      out.push(child);
+      i = j;
+      continue;
+    }
+    out.push(parseScalar(rest, line.n));
+    i++;
+  }
+  return [out, i];
+}
+function isMappingEntry(text) {
+  if (text.startsWith("[") || text.startsWith("'") || text.startsWith('"'))
+    return false;
+  return /^[^:]+:(\s|$)/.test(text);
+}
+function parseMapping(lines, start, indent) {
+  const out = {};
+  let i = start;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (!line || line.indent !== indent)
+      break;
+    if (line.text === "-" || line.text.startsWith("- "))
+      break;
+    const m = line.text.match(/^([^:]+):(?:\s+(.*))?$/);
+    if (!m)
+      throw new YamlError(`line ${line.n}: not a mapping entry: "${line.text}"`);
+    const key = unquote((m[1] ?? "").trim());
+    const valPart = (m[2] ?? "").trim();
+    if (valPart === "") {
+      const next = lines[i + 1];
+      if (next && next.indent > indent) {
+        const [child, ni] = parseBlock(lines, i + 1, next.indent);
+        out[key] = child;
+        i = ni;
+      } else {
+        out[key] = null;
+        i++;
+      }
+      continue;
+    }
+    if (/^[>|][+-]?$/.test(valPart)) {
+      const parts = [];
+      let j = i + 1;
+      while (j < lines.length && (lines[j]?.indent ?? 0) > indent) {
+        parts.push(lines[j]?.text ?? "");
+        j++;
+      }
+      out[key] = parts.join(valPart.startsWith(">") ? " " : `
+`);
+      i = j;
+      continue;
+    }
+    out[key] = parseScalar(valPart, line.n);
+    i++;
+  }
+  return [out, i];
+}
+function unquote(s) {
+  if (s.startsWith('"') && s.endsWith('"') || s.startsWith("'") && s.endsWith("'")) {
+    return s.slice(1, -1);
+  }
+  return s;
+}
+function parseScalar(s, lineNo) {
+  let v = s;
+  if (v.startsWith("&") || v.startsWith("*") || v.startsWith("!")) {
+    throw new YamlError(`line ${lineNo}: unsupported YAML feature (anchor/alias/tag): "${v}"`);
+  }
+  if (v.startsWith("{")) {
+    throw new YamlError(`line ${lineNo}: unsupported YAML feature (flow mapping): "${v}"`);
+  }
+  if (v.startsWith('"') || v.startsWith("'")) {
+    const quote = v[0];
+    const close = v.indexOf(quote, 1);
+    if (close > 0)
+      return v.slice(1, close);
+    throw new YamlError(`line ${lineNo}: unterminated quoted scalar: "${v}"`);
+  }
+  const hash = v.indexOf(" #");
+  if (hash >= 0)
+    v = v.slice(0, hash).trim();
+  if (v.startsWith("[")) {
+    if (!v.endsWith("]"))
+      throw new YamlError(`line ${lineNo}: unterminated inline sequence: "${v}"`);
+    const inner = v.slice(1, -1).trim();
+    if (inner === "")
+      return [];
+    return inner.split(",").map((item) => parseScalar(item.trim(), lineNo));
+  }
+  if (v === "true")
+    return true;
+  if (v === "false")
+    return false;
+  if (v === "null" || v === "~")
+    return null;
+  if (/^-?[0-9]+$/.test(v))
+    return Number.parseInt(v, 10);
+  if (/^-?[0-9]+\.[0-9]+$/.test(v))
+    return Number.parseFloat(v);
+  return v;
+}
+// src/kernel/adapter/fence.ts
+function extractFences(md, lang) {
+  const fences = [];
+  const lines = md.split(`
+`);
+  let open = false;
+  let info = "";
+  let openLine = 0;
+  let buf = [];
+  for (let i = 0;i < lines.length; i++) {
+    const m = (lines[i] ?? "").match(/^\s*```(.*)$/);
+    if (m && !open) {
+      open = true;
+      info = (m[1] ?? "").trim().toLowerCase();
+      openLine = i + 1;
+      buf = [];
+      continue;
+    }
+    if (m && open) {
+      if (info === lang || info.startsWith(`${lang} `)) {
+        fences.push({ info, body: buf.join(`
+`), line: openLine });
+      }
+      open = false;
+      continue;
+    }
+    if (open)
+      buf.push(lines[i] ?? "");
+  }
+  return fences;
+}
+// src/kernel/adapter/markdown-table.ts
+function parseMarkdownTables(md) {
+  const tables = [];
+  const lines = md.split(`
+`);
+  let i = 0;
+  const splitRow = (row) => row.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
+  while (i < lines.length) {
+    const isRow = (n) => /^\s*\|.*\|\s*$/.test(lines[n] ?? "");
+    if (isRow(i) && isRow(i + 1) && /^[\s|:-]+$/.test(lines[i + 1] ?? "")) {
+      const table = { header: splitRow(lines[i] ?? ""), rows: [], line: i + 1 };
+      let j = i + 2;
+      while (j < lines.length && isRow(j)) {
+        table.rows.push({ cells: splitRow(lines[j] ?? ""), line: j + 1 });
+        j++;
+      }
+      tables.push(table);
+      i = j;
+      continue;
+    }
+    i++;
+  }
+  return tables;
+}
+// src/kernel/adapter/list-subdirectories.ts
+import { readdirSync } from "fs";
+function listSubdirectories(dir) {
+  try {
+    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  } catch {
+    return [];
+  }
+}
+// src/kernel/adapter/atomic-write.ts
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
+import { basename, dirname as dirname2, join as join2 } from "path";
+var sequence = 0;
+function writeFileAtomically(path, data) {
+  const dir = dirname2(path);
+  mkdirSync(dir, { recursive: true });
+  sequence += 1;
+  const tmp = join2(dir, `.${basename(path)}.tmp-${Date.now().toString(36)}-${sequence.toString(36)}`);
+  try {
+    writeFileSync(tmp, data);
+    renameSync(tmp, path);
+  } catch (e) {
+    try {
+      rmSync(tmp, { force: true });
+    } catch {}
+    throw e;
+  }
+}
+// src/kernel/adapter/directory-finalization-lock.ts
+import { randomBytes } from "crypto";
+import { mkdirSync as mkdirSync2, readFileSync as readFileSync3, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { join as join3 } from "path";
+var DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
+var METADATA_BASENAME = "owner.lockmeta";
+var LEASE_MS = 30000;
+var OWNER_TOKEN_BYTES = 16;
+function causeOf(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+
+class DirectoryFinalizationLock {
+  #clock;
+  #liveness;
+  #lockBasename;
+  #ownerTokens;
+  constructor(clock, liveness, lockBasename = DESIGN_LOCK_BASENAME) {
+    this.#clock = clock;
+    this.#liveness = liveness;
+    this.#lockBasename = lockBasename;
+    this.#ownerTokens = new Map;
+  }
+  canonicalPathOf(directory) {
+    return join3(directory.asString(), this.#lockBasename);
+  }
+  ownerTokenOf(directory) {
+    return this.#ownerTokens.get(this.canonicalPathOf(directory)) ?? null;
+  }
+  acquire(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const token = randomBytes(OWNER_TOKEN_BYTES).toString("hex");
+    const blocked = this.#createOwned(canonical, token);
+    if (blocked === null) {
+      this.#ownerTokens.set(canonical, token);
+      return { kind: "acquired" };
+    }
+    const observed = this.#readMetadata(canonical);
+    if (observed === null) {
+      return { kind: "lock-contended", cause: `owner metadata is unreadable (${blocked})` };
+    }
+    if (observed.state !== "held") {
+      return { kind: "lock-contended", cause: `owner metadata is in state "${observed.state}"` };
+    }
+    if (this.#clock.now() < observed.leaseExpiresAtMs) {
+      return { kind: "lock-contended", cause: "the lease has not expired" };
+    }
+    const status = this.#liveness.statusOf(observed.pid);
+    if (status !== "absent") {
+      return { kind: "lock-contended", cause: `owner process ${observed.pid} is ${status}` };
+    }
+    const reread = this.#readMetadata(canonical);
+    if (reread === null || reread.token !== observed.token) {
+      return { kind: "lock-contended", cause: "the lock changed hands during the recovery check" };
+    }
+    const stale = `${canonical}.stale.${observed.token}.${token}`;
+    try {
+      renameSync2(canonical, stale);
+    } catch (e) {
+      return { kind: "lock-recovery-failed", cause: causeOf(e) };
+    }
+    const lost = this.#createOwned(canonical, token);
+    this.#discard(stale);
+    if (lost !== null) {
+      return { kind: "lock-recovery-failed", cause: lost };
+    }
+    this.#ownerTokens.set(canonical, token);
+    return { kind: "recovered", displacedToken: observed.token };
+  }
+  holdsOwnership(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined)
+      return false;
+    const observed = this.#readMetadata(canonical);
+    return observed !== null && observed.state === "held" && observed.token === mine;
+  }
+  release(directory) {
+    const canonical = this.canonicalPathOf(directory);
+    const mine = this.#ownerTokens.get(canonical);
+    if (mine === undefined) {
+      return { kind: "lock-release-failed", cause: "this writer does not hold the lock" };
+    }
+    this.#ownerTokens.delete(canonical);
+    const observed = this.#readMetadata(canonical);
+    if (observed === null || observed.token !== mine) {
+      return { kind: "lock-release-failed", cause: "the canonical lock is no longer owned by this writer" };
+    }
+    const cleanup = `${canonical}.cleanup.${mine}`;
+    try {
+      renameSync2(canonical, cleanup);
+    } catch (e) {
+      return { kind: "lock-release-failed", cause: causeOf(e) };
+    }
+    const swept = this.#discard(cleanup);
+    if (swept !== null) {
+      return { kind: "cleanup-failed", cause: swept };
+    }
+    return { kind: "released" };
+  }
+  #createOwned(canonical, token) {
+    const acquiredAtMs = this.#clock.now();
+    try {
+      mkdirSync2(canonical);
+    } catch (e) {
+      return causeOf(e);
+    }
+    const metadata = {
+      state: "held",
+      token,
+      pid: this.#liveness.self(),
+      acquiredAtMs,
+      leaseExpiresAtMs: acquiredAtMs + LEASE_MS
+    };
+    try {
+      writeFileSync2(join3(canonical, METADATA_BASENAME), `${JSON.stringify(metadata)}
+`, "utf-8");
+      return null;
+    } catch (e) {
+      const cleanup = `${canonical}.cleanup.${token}`;
+      try {
+        renameSync2(canonical, cleanup);
+        this.#discard(cleanup);
+      } catch {}
+      return causeOf(e);
+    }
+  }
+  #readMetadata(canonical) {
+    let raw;
+    try {
+      raw = JSON.parse(readFileSync3(join3(canonical, METADATA_BASENAME), "utf-8"));
+    } catch {
+      return null;
+    }
+    if (typeof raw !== "object" || raw === null)
+      return null;
+    const doc = raw;
+    if (typeof doc.state !== "string" || typeof doc.token !== "string")
+      return null;
+    if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
+      return null;
+    return {
+      state: doc.state,
+      token: doc.token,
+      pid: doc.pid,
+      acquiredAtMs: doc.acquiredAtMs,
+      leaseExpiresAtMs: doc.leaseExpiresAtMs
+    };
+  }
+  #discard(ownPath) {
+    try {
+      rmSync2(ownPath, { recursive: true, force: true });
+      return null;
+    } catch (e) {
+      return causeOf(e);
+    }
+  }
+}
 // src/kernel/adapter/findings-values-parser.ts
 function parseFindingsValues(raw) {
   const decoded = decodeFindingsDocument(raw);
@@ -1882,23 +1979,23 @@ function parseFindingsValues(raw) {
   const doc = decoded.value;
   const parsed = combineResults({
     backend: BackendName.parse(doc.backend),
-    irVersion: IrVersion.parse(doc.irVersion),
+    irVersion: IntermediateRepresentationVersion.parse(doc.irVersion),
     irHash: ContentHash.parse(doc.irHash),
     method: VerificationMethod.parse(doc.method),
     findings: traverseResult(doc.findings, (entry) => {
       const fields = combineResults({
         kind: FindingKind.parse(entry.kind),
-        functionalRequirementReferences: traverseResult(entry.frRefs, RequirementId.parse),
-        targets: traverseResult(entry.targets, TargetId.parse),
+        functionalRequirementReferences: flatMapResult(traverseResult(entry.frRefs, RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
+        targets: traverseResult(entry.targets, TargetIdentifier.parse),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
       });
       if (!fields.ok)
         return fields;
-      return ok({ ...fields.value, functionalRequirementReferences: FunctionalRequirementReferences.of(fields.value.functionalRequirementReferences), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
+      return ok({ ...fields.value, functionalRequirementReferences: fields.value.functionalRequirementReferences, targets: TargetIdentifiers.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
     }),
     skipped: traverseResult(doc.skipped, (entry) => {
       const fields = combineResults({
-        target: TargetId.parse(entry.target),
+        target: TargetIdentifier.parse(entry.target),
         reason: SkipReason.parse(entry.reason),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
       });
@@ -1911,10 +2008,10 @@ function parseFindingsValues(raw) {
       sha256: ContentHash.parse(entry.sha256)
     })),
     crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
-      const fields = combineResults({ backend: BackendName.parse(entry.backend), targets: traverseResult(entry.targets, TargetId.parse) });
+      const fields = combineResults({ backend: BackendName.parse(entry.backend), targets: traverseResult(entry.targets, TargetIdentifier.parse) });
       if (!fields.ok)
         return fields;
-      return ok({ backend: fields.value.backend, targets: TargetIds.of(fields.value.targets) });
+      return ok({ backend: fields.value.backend, targets: TargetIdentifiers.of(fields.value.targets) });
     })
   });
   if (!parsed.ok)
@@ -1947,8 +2044,8 @@ class ElementPath {
   }
 }
 
-// src/refcheck/domain/witness-ref.ts
-class WitnessRef {
+// src/refcheck/domain/witness-reference.ts
+class WitnessReference {
   #artifact;
   #element;
   #value;
@@ -1957,8 +2054,11 @@ class WitnessRef {
     this.#element = ElementPath.of(props.element);
     this.#value = props.value;
   }
+  static parse(props) {
+    return parseConstruction(() => new WitnessReference(props));
+  }
   static of(props) {
-    return new WitnessRef(props);
+    return new WitnessReference(props);
   }
   artifact() {
     return this.#artifact.asString();
@@ -1973,20 +2073,20 @@ class WitnessRef {
     return this.#artifact.asString() === artifact && this.#element.asString() === element;
   }
   static at(artifact, element, value) {
-    return new WitnessRef(value === undefined ? { artifact, element } : { artifact, element, value });
+    return new WitnessReference(value === undefined ? { artifact, element } : { artifact, element, value });
   }
 }
-// src/refcheck/domain/witness-refs.ts
-class WitnessRefs {
+// src/refcheck/domain/witness-references.ts
+class WitnessReferences {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new WitnessRefs([...values]);
+    return new WitnessReferences(values);
   }
   add(value) {
-    return new WitnessRefs([...this.#values, value]);
+    return new WitnessReferences([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -2047,10 +2147,10 @@ class Finding {
 class Findings {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new Findings([...values]);
+    return new Findings(values);
   }
   add(value) {
     return new Findings([...this.#values, value]);
@@ -2075,10 +2175,10 @@ class Findings {
 class Skips {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new Skips([...values]);
+    return new Skips(values);
   }
   add(value) {
     return new Skips([...this.#values, value]);
@@ -2138,6 +2238,9 @@ class InputAnchor {
     this.#artifact = ArtifactPath.of(props.artifact);
     this.#sha256 = props.sha256;
   }
+  static parse(props) {
+    return parseConstruction(() => new InputAnchor(props));
+  }
   static of(props) {
     return new InputAnchor(props);
   }
@@ -2157,10 +2260,10 @@ class InputAnchor {
 class InputAnchors {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new InputAnchors([...values]);
+    return new InputAnchors(values);
   }
   add(value) {
     return new InputAnchors([...this.#values, value]);
@@ -2200,7 +2303,7 @@ class ReferenceCheckReport {
     return new ReferenceCheckReport(id, InputAnchors.of([]), families.checkTargets().sortedUniqueCanonically(), Findings.of([]), Skips.of([]), null, unit);
   }
   degraded(reason) {
-    return new ReferenceCheckReport(this.#id, this.#inputs, TargetIds.of([]), Findings.of([]), Skips.of([]), reason, undefined);
+    return new ReferenceCheckReport(this.#id, this.#inputs, TargetIdentifiers.of([]), Findings.of([]), Skips.of([]), reason, undefined);
   }
   static of(seed) {
     return new ReferenceCheckReport(seed.id, seed.inputs, seed.checked, seed.findings, seed.skipped, seed.unavailableReason, undefined);
@@ -2208,22 +2311,22 @@ class ReferenceCheckReport {
   finding(family, kind, targets, refs, detail, functionalRequirementReferences = []) {
     this.#findings = this.#findings.add(Finding.of({
       kind,
-      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(functionalRequirementReferences, (raw) => RequirementId.of(raw))).sortedUnique(),
-      targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
-      witness: { refs: WitnessRefs.of(refs) },
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(functionalRequirementReferences, (raw) => RequirementIdentifier.of(raw))).sortedUnique(),
+      targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
+      witness: { refs: WitnessReferences.of(refs) },
       detail: family.prefixedDetail(detail),
       ...this.#unit !== undefined ? { unit: this.#unit } : {}
     })).sortedCanonically();
-    this.#checked = this.#checked.excluding(TargetId.of(family.asCheckTarget()));
+    this.#checked = this.#checked.excluding(TargetIdentifier.of(family.asCheckTarget()));
   }
   skip(family, reason, detail) {
     this.#skipped = this.#skipped.add(Skipped.of({
-      target: TargetId.of(family.asCheckTarget()),
+      target: TargetIdentifier.of(family.asCheckTarget()),
       reason: SkipReason.of(reason),
       detail,
       ...this.#unit !== undefined ? { unit: this.#unit } : {}
     })).sortedCanonically();
-    this.#checked = this.#checked.excluding(TargetId.of(family.asCheckTarget()));
+    this.#checked = this.#checked.excluding(TargetIdentifier.of(family.asCheckTarget()));
   }
   input(anchor) {
     this.#inputs = this.#inputs.add(anchor).sortedByArtifact();
@@ -2308,8 +2411,8 @@ class ReferenceCheckReport {
     return reason === null ? this : this.degraded(reason);
   }
 }
-// src/refcheck/domain/reference-check-report-id.ts
-class ReferenceCheckReportId {
+// src/refcheck/domain/reference-check-report-identifier.ts
+class ReferenceCheckReportIdentifier {
   #directory;
   #backend;
   constructor(directory, backend) {
@@ -2317,7 +2420,7 @@ class ReferenceCheckReportId {
     this.#backend = backend;
   }
   static of(directory, backend) {
-    return new ReferenceCheckReportId(directory, BackendName.of(backend));
+    return new ReferenceCheckReportIdentifier(directory, BackendName.of(backend));
   }
   equals(other) {
     return this.#directory.equals(other.#directory) && this.#backend.equals(other.#backend);
@@ -2365,10 +2468,10 @@ class CheckFamily {
 class CheckFamilies {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new CheckFamilies([...values]);
+    return new CheckFamilies(values);
   }
   add(value) {
     return new CheckFamilies([...this.#values, value]);
@@ -2377,7 +2480,7 @@ class CheckFamilies {
     yield* this.#values;
   }
   checkTargets() {
-    return TargetIds.of(Array.from(this.#values.map((f) => f.asCheckTarget()), (raw) => TargetId.of(raw)));
+    return TargetIdentifiers.of(Array.from(this.#values.map((f) => f.asCheckTarget()), (raw) => TargetIdentifier.of(raw)));
   }
   toArray() {
     return this.#values;
@@ -2387,10 +2490,10 @@ class CheckFamilies {
 class UnitNames {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new UnitNames([...values]);
+    return new UnitNames(values);
   }
   add(value) {
     return new UnitNames([...this.#values, value]);
@@ -2537,10 +2640,10 @@ var COMPONENT_FAMILIES = CheckFamilies.of([DD_0, DD_1, DD_2, DD_3, DD_4, DD_5, D
 class Components {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new Components([...values]);
+    return new Components(values);
   }
   add(value) {
     return new Components([...this.#values, value]);
@@ -2636,30 +2739,30 @@ class Components {
     for (const c of this) {
       if (!c.nameIsPascalCase()) {
         const cName = c.name().asString();
-        report.finding(DD_1, FindingKind.structureInvalid(), [TargetIds.safe("component", cName)], [WitnessRef.at(art, `${c.element().asString()}.name`, cName)], `component name "${cName}" is not PascalCase`);
+        report.finding(DD_1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", cName)], [WitnessReference.at(art, `${c.element().asString()}.name`, cName)], `component name "${cName}" is not PascalCase`);
       }
     }
     for (const { prior, current } of this.duplicateNamePairs()) {
       const cName = current.name().asString();
-      report.finding(DD_1, FindingKind.structureInvalid(), [TargetIds.safe("component", cName)], [WitnessRef.at(art, `${prior.element().asString()}.name`, cName), WitnessRef.at(art, `${current.element().asString()}.name`, cName)], `component name "${cName}" is declared more than once`);
+      report.finding(DD_1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", cName)], [WitnessReference.at(art, `${prior.element().asString()}.name`, cName), WitnessReference.at(art, `${current.element().asString()}.name`, cName)], `component name "${cName}" is declared more than once`);
     }
     for (const c of this) {
       for (const r of [...c.dependsOn(), ...c.dependents()]) {
         if (!this.declares(r.component())) {
-          report.finding(DD_2, FindingKind.referenceBroken(), [TargetIds.safe("component", r.component().asString())], [WitnessRef.at(art, r.element().asString(), r.component().asString())], `"${c.name().asString()}" references undeclared component "${r.component().asString()}"`);
+          report.finding(DD_2, FindingKind.referenceBroken(), [TargetIdentifiers.safe("component", r.component().asString())], [WitnessReference.at(art, r.element().asString(), r.component().asString())], `"${c.name().asString()}" references undeclared component "${r.component().asString()}"`);
         }
       }
       for (const e of c.entities()) {
         for (const r of e.references()) {
           if (!this.declares(r.ownedBy())) {
-            report.finding(DD_2, FindingKind.referenceBroken(), [TargetIds.safe("component", r.ownedBy().asString())], [WitnessRef.at(art, `${r.element().asString()}.owned_by`, r.ownedBy().asString())], `entity "${e.name().asString()}" references owner component "${r.ownedBy().asString()}" which is not declared`);
+            report.finding(DD_2, FindingKind.referenceBroken(), [TargetIdentifiers.safe("component", r.ownedBy().asString())], [WitnessReference.at(art, `${r.element().asString()}.owned_by`, r.ownedBy().asString())], `entity "${e.name().asString()}" references owner component "${r.ownedBy().asString()}" which is not declared`);
           }
         }
       }
     }
     for (const c of this) {
       for (const r of c.selfReferences()) {
-        report.finding(DD_3, FindingKind.structureInvalid(), [TargetIds.safe("component", c.name().asString())], [WitnessRef.at(art, r.element().asString(), c.name().asString())], `component "${c.name().asString()}" lists itself as a dependency`);
+        report.finding(DD_3, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", c.name().asString())], [WitnessReference.at(art, r.element().asString(), c.name().asString())], `component "${c.name().asString()}" lists itself as a dependency`);
       }
     }
     for (const c of this) {
@@ -2668,7 +2771,7 @@ class Components {
         if (!other || r.pointsAt(c.name()))
           continue;
         if (!other.dependents().listsComponent(c.name())) {
-          report.finding(DD_4, FindingKind.structureInvalid(), [TargetIds.safe("component", c.name().asString()), TargetIds.safe("component", r.component().asString())], [WitnessRef.at(art, r.element().asString(), r.component().asString()), WitnessRef.at(art, `${other.element().asString()}.dependents`, c.name().asString())], `"${c.name().asString()}" depends on "${r.component().asString()}" but "${r.component().asString()}" does not list "${c.name().asString()}" in dependents`);
+          report.finding(DD_4, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", c.name().asString()), TargetIdentifiers.safe("component", r.component().asString())], [WitnessReference.at(art, r.element().asString(), r.component().asString()), WitnessReference.at(art, `${other.element().asString()}.dependents`, c.name().asString())], `"${c.name().asString()}" depends on "${r.component().asString()}" but "${r.component().asString()}" does not list "${c.name().asString()}" in dependents`);
         }
       }
       for (const r of c.dependents()) {
@@ -2676,20 +2779,20 @@ class Components {
         if (!other || r.pointsAt(c.name()))
           continue;
         if (!other.dependsOn().listsComponent(c.name())) {
-          report.finding(DD_4, FindingKind.structureInvalid(), [TargetIds.safe("component", c.name().asString()), TargetIds.safe("component", r.component().asString())], [WitnessRef.at(art, r.element().asString(), r.component().asString()), WitnessRef.at(art, `${other.element().asString()}.depends_on`, c.name().asString())], `"${c.name().asString()}" lists "${r.component().asString()}" as a dependent but "${r.component().asString()}" does not depend on "${c.name().asString()}"`);
+          report.finding(DD_4, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", c.name().asString()), TargetIdentifiers.safe("component", r.component().asString())], [WitnessReference.at(art, r.element().asString(), r.component().asString()), WitnessReference.at(art, `${other.element().asString()}.depends_on`, c.name().asString())], `"${c.name().asString()}" lists "${r.component().asString()}" as a dependent but "${r.component().asString()}" does not depend on "${c.name().asString()}"`);
         }
       }
     }
     for (const c of this) {
       for (const e of c.entities()) {
         if (!e.hasIdentifier()) {
-          report.finding(DD_5, FindingKind.structureInvalid(), [TargetIds.safe("entity", e.name().asString())], [WitnessRef.at(art, `${e.element().asString()}.identifier`)], `entity "${e.name().asString()}" has no identifier`);
+          report.finding(DD_5, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", e.name().asString())], [WitnessReference.at(art, `${e.element().asString()}.identifier`)], `entity "${e.name().asString()}" has no identifier`);
         }
       }
     }
     for (const conflict of this.ownershipConflicts()) {
       const name = conflict.name.asString();
-      report.finding(DD_5, FindingKind.structureInvalid(), [TargetIds.safe("entity", name)], conflict.owners.map((o) => WitnessRef.at(art, o.entity.element().asString(), o.component.name().asString())), `entity "${name}" is owned by ${conflict.owners.length} components (${conflict.owners.map((o) => o.component.name().asString()).join(", ")}) \u2014 must be exactly one`);
+      report.finding(DD_5, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", name)], conflict.owners.map((o) => WitnessReference.at(art, o.entity.element().asString(), o.component.name().asString())), `entity "${name}" is owned by ${conflict.owners.length} components (${conflict.owners.map((o) => o.component.name().asString()).join(", ")}) \u2014 must be exactly one`);
     }
     for (const c of this) {
       for (const e of c.entities()) {
@@ -2698,13 +2801,13 @@ class Components {
           if (!owner)
             continue;
           if (!owner.entities().declaresEntity(r.entity())) {
-            report.finding(DD_6, FindingKind.referenceBroken(), [TargetIds.safe("entity", r.entity().asString())], [WitnessRef.at(art, `${r.element().asString()}.entity`, r.entity().asString())], `entity "${e.name().asString()}" references "${r.entity().asString()}" as owned by "${r.ownedBy().asString()}", but "${r.ownedBy().asString()}" declares no such entity`);
+            report.finding(DD_6, FindingKind.referenceBroken(), [TargetIdentifiers.safe("entity", r.entity().asString())], [WitnessReference.at(art, `${r.element().asString()}.entity`, r.entity().asString())], `entity "${e.name().asString()}" references "${r.entity().asString()}" as owned by "${r.ownedBy().asString()}", but "${r.ownedBy().asString()}" declares no such entity`);
           }
         }
       }
     }
     for (const cycle of this.dependencyCycles().filter((c) => c.length > 1)) {
-      report.finding(DD_7, FindingKind.structureInvalid(), cycle.map((n) => TargetIds.safe("component", n)), cycle.map((n, i) => WitnessRef.at(art, `${this.byName(ComponentName.of(n))?.element().asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])), `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
+      report.finding(DD_7, FindingKind.structureInvalid(), cycle.map((n) => TargetIdentifiers.safe("component", n)), cycle.map((n, i) => WitnessReference.at(art, `${this.byName(ComponentName.of(n))?.element().asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])), `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
     }
   }
 }
@@ -2718,7 +2821,7 @@ class ComponentCatalogOutcome {
   #shapeErrors;
   constructor(props) {
     this.#kind = props.kind;
-    this.#found = FenceCount.of(props.found);
+    this.#found = props.found;
     this.#line = props.line;
     this.#error = props.error;
     this.#components = props.components;
@@ -2728,10 +2831,10 @@ class ComponentCatalogOutcome {
     return new ComponentCatalogOutcome({ kind: "wrong-fence-count", found, line: null, error: null, components: null, shapeErrors: null });
   }
   static unparseable(line, error) {
-    return new ComponentCatalogOutcome({ kind: "unparseable", found: 0, line, error, components: null, shapeErrors: null });
+    return new ComponentCatalogOutcome({ kind: "unparseable", found: FenceCount.of(0), line, error, components: null, shapeErrors: null });
   }
   static extracted(components, shapeErrors) {
-    return new ComponentCatalogOutcome({ kind: "extracted", found: 0, line: null, error: null, components, shapeErrors });
+    return new ComponentCatalogOutcome({ kind: "extracted", found: FenceCount.of(0), line: null, error: null, components, shapeErrors });
   }
   match(handlers) {
     if (this.#kind === "wrong-fence-count")
@@ -2746,16 +2849,16 @@ class ComponentCatalogOutcome {
     const art = artifact.asString();
     const usable = this.match({
       wrongFenceCount: (found) => {
-        report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessRef.at(art, "yaml fence")], `components.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
+        report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessReference.at(art, "yaml fence")], `components.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
         return null;
       },
       unparseable: (line, error) => {
-        report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
+        report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessReference.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
         return null;
       },
       extracted: (components, shapeErrors) => {
         for (const e of shapeErrors) {
-          report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessRef.at(art, e.element().asString())], e.detail());
+          report.finding(DD_0, FindingKind.structureInvalid(), [DD_0.asCheckTarget()], [WitnessReference.at(art, e.element().asString())], e.detail());
         }
         return shapeErrors.count() > 0 && components.count() === 0 ? null : components;
       }
@@ -2773,10 +2876,10 @@ class ComponentCatalogOutcome {
 class ComponentEntities {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ComponentEntities([...values]);
+    return new ComponentEntities(values);
   }
   add(value) {
     return new ComponentEntities([...this.#values, value]);
@@ -2819,8 +2922,8 @@ class ComponentEntity {
     return this.#identifier !== null;
   }
 }
-// src/refcheck/domain/component-ref.ts
-class ComponentRef {
+// src/refcheck/domain/component-reference.ts
+class ComponentReference {
   #component;
   #element;
   constructor(props) {
@@ -2828,7 +2931,7 @@ class ComponentRef {
     this.#element = props.element;
   }
   static of(props) {
-    return new ComponentRef(props);
+    return new ComponentReference(props);
   }
   component() {
     return this.#component;
@@ -2840,17 +2943,17 @@ class ComponentRef {
     return this.#component.equals(name);
   }
 }
-// src/refcheck/domain/component-refs.ts
-class ComponentRefs {
+// src/refcheck/domain/component-references.ts
+class ComponentReferences {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ComponentRefs([...values]);
+    return new ComponentReferences(values);
   }
   add(value) {
-    return new ComponentRefs([...this.#values, value]);
+    return new ComponentReferences([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -2884,10 +2987,10 @@ class ComponentShapeError {
 class ComponentShapeErrors {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ComponentShapeErrors([...values]);
+    return new ComponentShapeErrors(values);
   }
   add(value) {
     return new ComponentShapeErrors([...this.#values, value]);
@@ -2968,10 +3071,10 @@ class EntityReference {
 class EntityReferences {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new EntityReferences([...values]);
+    return new EntityReferences(values);
   }
   add(value) {
     return new EntityReferences([...this.#values, value]);
@@ -2987,10 +3090,10 @@ class EntityReferences {
 class ContractRows {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ContractRows([...values]);
+    return new ContractRows(values);
   }
   add(value) {
     return new ContractRows([...this.#values, value]);
@@ -3010,8 +3113,8 @@ class ContractRows {
     }
   }
 }
-// src/refcheck/domain/contract-id.ts
-class ContractId {
+// src/refcheck/domain/contract-identifier.ts
+class ContractIdentifier {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -3021,10 +3124,10 @@ class ContractId {
     this.#value = raw;
   }
   static of(raw) {
-    return new ContractId(raw);
+    return new ContractIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new ContractId(raw));
+    return parseConstruction(() => new ContractIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -3097,13 +3200,13 @@ class ContractRow {
     const depArt = depArtifact.asString();
     const el = this.locationLabel();
     if (!this.#provider.isBlank() && !declared.declares(this.#provider.asString())) {
-      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#provider.asString())], [WitnessRef.at(art, el, this.#provider.asString()), WitnessRef.at(depArt, "units")], `Provider Unit "${this.#provider.asString()}" is not a declared unit`);
+      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIdentifiers.safe("unit", this.#provider.asString())], [WitnessReference.at(art, el, this.#provider.asString()), WitnessReference.at(depArt, "units")], `Provider Unit "${this.#provider.asString()}" is not a declared unit`);
     }
     if (!this.#consumer.isBlank() && !declared.declares(this.#consumer.asString()) && !this.#consumer.declaresExternal()) {
-      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#consumer.asString())], [WitnessRef.at(art, el, this.#consumer.asString()), WitnessRef.at(depArt, "units")], `Consumer "${this.#consumer.asString()}" is neither a declared unit nor \`External: \u2026\``);
+      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIdentifiers.safe("unit", this.#consumer.asString())], [WitnessReference.at(art, el, this.#consumer.asString()), WitnessReference.at(depArt, "units")], `Consumer "${this.#consumer.asString()}" is neither a declared unit nor \`External: \u2026\``);
     }
     if (!this.#owner.isBlank() && !declared.declares(this.#owner.asString())) {
-      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIds.safe("unit", this.#owner.asString())], [WitnessRef.at(art, el, this.#owner.asString()), WitnessRef.at(depArt, "units")], `Owner "${this.#owner.asString()}" is not a declared unit`);
+      report.finding(CD_1, FindingKind.referenceBroken(), [`contract:${this.#id.asString()}`, TargetIdentifiers.safe("unit", this.#owner.asString())], [WitnessReference.at(art, el, this.#owner.asString()), WitnessReference.at(depArt, "units")], `Owner "${this.#owner.asString()}" is not a declared unit`);
     }
   }
 }
@@ -3192,8 +3295,8 @@ class DeclaredUnitsOutcome {
     });
   }
 }
-// src/refcheck/domain/spec-block-assessment.ts
-class SpecBlockAssessment {
+// src/refcheck/domain/specification-block-assessment.ts
+class SpecificationBlockAssessment {
   #index;
   #line;
   #issue;
@@ -3205,16 +3308,16 @@ class SpecBlockAssessment {
     this.#error = error;
   }
   static sound(index, line) {
-    return new SpecBlockAssessment(index, line, "sound", null);
+    return new SpecificationBlockAssessment(index, line, "sound", null);
   }
   static unparseable(index, line, error) {
-    return new SpecBlockAssessment(index, line, "unparseable", error);
+    return new SpecificationBlockAssessment(index, line, "unparseable", error);
   }
   static notAMapping(index, line) {
-    return new SpecBlockAssessment(index, line, "not-a-mapping", null);
+    return new SpecificationBlockAssessment(index, line, "not-a-mapping", null);
   }
   static openapiWithoutPaths(index, line) {
-    return new SpecBlockAssessment(index, line, "openapi-without-paths", null);
+    return new SpecificationBlockAssessment(index, line, "openapi-without-paths", null);
   }
   blockId() {
     return `contract:block-${this.#index.asNumber()}`;
@@ -3238,28 +3341,28 @@ class SpecBlockAssessment {
     this.matchIssue({
       sound: () => {},
       unparseable: (error) => {
-        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessRef.at(art, el)], `spec block does not parse in the supported YAML subset: ${error}`);
+        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessReference.at(art, el)], `spec block does not parse in the supported YAML subset: ${error}`);
       },
       notAMapping: () => {
-        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessRef.at(art, el)], "spec block is not a YAML mapping");
+        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessReference.at(art, el)], "spec block is not a YAML mapping");
       },
       openapiWithoutPaths: () => {
-        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessRef.at(art, el, "openapi")], "OpenAPI spec block carries `openapi:` but no `paths:`");
+        report.finding(CD_2, FindingKind.structureInvalid(), [blockId], [WitnessReference.at(art, el, "openapi")], "OpenAPI spec block carries `openapi:` but no `paths:`");
       }
     });
   }
 }
-// src/refcheck/domain/spec-block-assessments.ts
-class SpecBlockAssessments {
+// src/refcheck/domain/specification-block-assessments.ts
+class SpecificationBlockAssessments {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new SpecBlockAssessments([...values]);
+    return new SpecificationBlockAssessments(values);
   }
   add(value) {
-    return new SpecBlockAssessments([...this.#values, value]);
+    return new SpecificationBlockAssessments([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -3273,8 +3376,8 @@ class SpecBlockAssessments {
     }
   }
 }
-// src/refcheck/domain/unit-decl.ts
-class UnitDecl {
+// src/refcheck/domain/unit-declaration.ts
+class UnitDeclaration {
   #name;
   #dependsOn;
   constructor(props) {
@@ -3282,7 +3385,7 @@ class UnitDecl {
     this.#dependsOn = props.dependsOn;
   }
   static of(props) {
-    return new UnitDecl(props);
+    return new UnitDeclaration(props);
   }
   name() {
     return this.#name;
@@ -3294,17 +3397,17 @@ class UnitDecl {
     return [...this.#dependsOn.sortedByValue()].filter((dep) => declared.declares(dep.asString()));
   }
 }
-// src/refcheck/domain/unit-decls.ts
-class UnitDecls {
+// src/refcheck/domain/unit-declarations.ts
+class UnitDeclarations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new UnitDecls([...values]);
+    return new UnitDeclarations(values);
   }
   add(value) {
-    return new UnitDecls([...this.#values, value]);
+    return new UnitDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -3316,7 +3419,7 @@ class UnitDecls {
     return UnitNames.of(this.#values.map((u) => u.name()));
   }
   sortedByName() {
-    return new UnitDecls([...this.#values].sort((a, b) => a.name().asString() < b.name().asString() ? -1 : 1));
+    return new UnitDeclarations([...this.#values].sort((a, b) => a.name().asString() < b.name().asString() ? -1 : 1));
   }
   toArray() {
     return this.#values;
@@ -3329,14 +3432,14 @@ class UnitDecls {
       for (const dep of u.declaredDependencies(this)) {
         const depName = dep.asString();
         if (!rows.coversEdge(depName, uName)) {
-          report.finding(CD_3, FindingKind.consistencyMismatch(), [TargetIds.safe("unit", depName), TargetIds.safe("unit", uName)], [WitnessRef.at(depArt, `units (${uName} depends_on ${depName})`), WitnessRef.at(art, "contracts table")], `unit dependency edge "${uName}" -> "${depName}" has no contracts-table row in either orientation`);
+          report.finding(CD_3, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("unit", depName), TargetIdentifiers.safe("unit", uName)], [WitnessReference.at(depArt, `units (${uName} depends_on ${depName})`), WitnessReference.at(art, "contracts table")], `unit dependency edge "${uName}" -> "${depName}" has no contracts-table row in either orientation`);
         }
       }
     }
   }
 }
-// src/refcheck/domain/attr-decl.ts
-class AttrDecl {
+// src/refcheck/domain/attribute-declaration.ts
+class AttributeDeclaration {
   #name;
   #element;
   #type;
@@ -3362,7 +3465,7 @@ class AttrDecl {
     this.#max = seed.max;
   }
   static of(seed) {
-    return new AttrDecl(seed);
+    return new AttributeDeclaration(seed);
   }
   name() {
     return this.#name;
@@ -3435,17 +3538,17 @@ class AttrDecl {
     return this.#allowed === null ? [] : this.#allowed.absentFrom(states);
   }
 }
-// src/refcheck/domain/attr-decls.ts
-class AttrDecls {
+// src/refcheck/domain/attribute-declarations.ts
+class AttributeDeclarations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new AttrDecls([...values]);
+    return new AttributeDeclarations(values);
   }
   add(value) {
-    return new AttrDecls([...this.#values, value]);
+    return new AttributeDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -3541,58 +3644,58 @@ class DeclaredEntities {
   check(report, artifact) {
     const art = artifact.asString();
     for (const e of this.shapeErrors()) {
-      report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessRef.at(art, e.element().asString())], e.detail());
+      report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessReference.at(art, e.element().asString())], e.detail());
     }
     for (const dup of this.entities().duplicatesByName()) {
-      report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIds.safe("entity", dup.name().asString())], [WitnessRef.at(art, `${dup.element().asString()}.name`, dup.name().asString())], `entity "${dup.name().asString()}" is declared more than once`);
+      report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", dup.name().asString())], [WitnessReference.at(art, `${dup.element().asString()}.name`, dup.name().asString())], `entity "${dup.name().asString()}" is declared more than once`);
     }
     for (const e of this.entities()) {
       for (const dup of e.attrs().duplicatesByName()) {
-        report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIds.safe("attr", `${e.name().asString()}.${dup.name().asString()}`)], [WitnessRef.at(art, `${dup.element().asString()}.name`, dup.name().asString())], `attribute "${e.name().asString()}.${dup.name().asString()}" is declared more than once`);
+        report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("attr", `${e.name().asString()}.${dup.name().asString()}`)], [WitnessReference.at(art, `${dup.element().asString()}.name`, dup.name().asString())], `attribute "${e.name().asString()}.${dup.name().asString()}" is declared more than once`);
       }
     }
     for (const e of this.entities()) {
       for (const a of e.attrs()) {
-        const attrId = TargetIds.safe("attr", `${e.name().asString()}.${a.name().asString()}`);
+        const attrId = TargetIdentifiers.safe("attr", `${e.name().asString()}.${a.name().asString()}`);
         const label = `${e.name().asString()}.${a.name().asString()}`;
         if (a.declaresAllowedValuesOnNonEnumerableType()) {
-          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.typeToken())], `"${label}" declares allowed values but its type "${a.typeText()}" is not an enumerable type`);
+          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.typeToken())], `"${label}" declares allowed values but its type "${a.typeText()}" is not an enumerable type`);
         }
         if (a.declaresBoundsOnNonNumericType()) {
-          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.typeToken())], `"${label}" declares min/max but its type "${a.typeText()}" is not numeric or date-like`);
+          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.typeToken())], `"${label}" declares min/max but its type "${a.typeText()}" is not numeric or date-like`);
         }
         if (a.declaresUniqueOnCollectionType()) {
-          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.typeToken())], `"${label}" declares unique but its type "${a.typeText()}" is not scalar`);
+          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.typeToken())], `"${label}" declares unique but its type "${a.typeText()}" is not scalar`);
         }
         if (a.boundsInverted()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), `min ${a.min()?.asNumber()} > max ${a.max()?.asNumber()}`)], `"${label}": min ${a.min()?.asNumber()} exceeds max ${a.max()?.asNumber()}`);
+          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), `min ${a.min()?.asNumber()} > max ${a.max()?.asNumber()}`)], `"${label}": min ${a.min()?.asNumber()} exceeds max ${a.max()?.asNumber()}`);
         }
         if (a.defaultBelowMin()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default ${a.def()?.render()} is below min ${a.min()?.asNumber()}`);
+          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default ${a.def()?.render()} is below min ${a.min()?.asNumber()}`);
         }
         if (a.defaultAboveMax()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default ${a.def()?.render()} is above max ${a.max()?.asNumber()}`);
+          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default ${a.def()?.render()} is above max ${a.max()?.asNumber()}`);
         }
         if (a.defaultOutsideAllowed()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessRef.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default "${a.def()?.render()}" is not one of the allowed values`);
+          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default "${a.def()?.render()}" is not one of the allowed values`);
         }
         const reference = a.references();
         if (reference !== null && !this.entities().resolvesReference(reference)) {
-          report.finding(FD_E6, FindingKind.referenceBroken(), [attrId], [WitnessRef.at(art, a.element().asString(), reference.asString())], `"${label}" references "${reference.asString()}" which is not a declared entity`);
+          report.finding(FD_E6, FindingKind.referenceBroken(), [attrId], [WitnessReference.at(art, a.element().asString(), reference.asString())], `"${label}" references "${reference.asString()}" which is not a declared entity`);
         }
       }
     }
     for (const r of this.allRels()) {
       for (const endpoint of [r.from(), r.to()]) {
         if (endpoint !== null && !this.entities().containsNamed(endpoint)) {
-          report.finding(FD_E4, FindingKind.referenceBroken(), [TargetIds.safe("entity", endpoint.asString())], [WitnessRef.at(art, r.element().asString(), endpoint.asString())], `relationship endpoint "${endpoint.asString()}" is not a declared entity`);
+          report.finding(FD_E4, FindingKind.referenceBroken(), [TargetIdentifiers.safe("entity", endpoint.asString())], [WitnessReference.at(art, r.element().asString(), endpoint.asString())], `relationship endpoint "${endpoint.asString()}" is not a declared entity`);
         }
       }
       if (r.cardinalityOutsideClosedSet()) {
-        report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessRef.at(art, r.element().asString(), r.cardinality()?.asString() ?? "")], `cardinality "${r.cardinality()?.asString()}" is not in the closed set 1:1 | 1:N | N:1 | N:M`);
+        report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessReference.at(art, r.element().asString(), r.cardinality()?.asString() ?? "")], `cardinality "${r.cardinality()?.asString()}" is not in the closed set 1:1 | 1:N | N:1 | N:M`);
       }
       if (r.cardinalityWithoutDirection()) {
-        report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessRef.at(art, r.element().asString())], "relationship declares a cardinality but no direction (from/to or direction key)");
+        report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessReference.at(art, r.element().asString())], "relationship declares a cardinality but no direction (from/to or direction key)");
       }
     }
   }
@@ -3671,10 +3774,10 @@ class DomainEntitySketch {
 class DomainEntitySketches {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new DomainEntitySketches([...values]);
+    return new DomainEntitySketches(values);
   }
   add(value) {
     return new DomainEntitySketches([...this.#values, value]);
@@ -3704,19 +3807,19 @@ class DomainEntitySketches {
       const key = de.name().normalized().asString();
       const definers = unitEntities.definersOf(key);
       if (definers.length >= 2) {
-        report.finding(XS_1, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", de.name().asString())], [
-          WitnessRef.at(compArt, de.catalogLabel()),
-          ...definers.map((u) => WitnessRef.at(`construction/${u}/functional-design/entities.md`, `entity ${de.name().asString()}`))
+        report.finding(XS_1, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", de.name().asString())], [
+          WitnessReference.at(compArt, de.catalogLabel()),
+          ...definers.map((u) => WitnessReference.at(`construction/${u}/functional-design/entities.md`, `entity ${de.name().asString()}`))
         ], `domain entity "${de.name().asString()}" is defined in ${definers.length} units (${definers.join(", ")}) \u2014 ownership is duplicated`);
       } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
-        report.finding(XS_2, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", de.name().asString())], [WitnessRef.at(compArt, de.catalogLabel())], `domain entity "${de.name().asString()}" is defined in no unit's entities.md \u2014 it was dropped on the way to functional design`);
+        report.finding(XS_2, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", de.name().asString())], [WitnessReference.at(compArt, de.catalogLabel())], `domain entity "${de.name().asString()}" is defined in no unit's entities.md \u2014 it was dropped on the way to functional design`);
       }
       if (unit !== undefined) {
         const mine = unitEntities.entityDeclaredIn(unit.asString(), key);
         if (mine) {
           const dropped = de.attributesDroppedIn(mine.attrs);
           if (dropped.length > 0) {
-            report.finding(XS_3, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", de.name().asString())], dropped.map((a) => WitnessRef.at(compArt, `entity ${de.name().asString()}.attributes`, a)), `domain-design declares attribute(s) ${dropped.join(", ")} on "${de.name().asString()}" that this unit's entities.md does not carry`);
+            report.finding(XS_3, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", de.name().asString())], dropped.map((a) => WitnessReference.at(compArt, `entity ${de.name().asString()}.attributes`, a)), `domain-design declares attribute(s) ${dropped.join(", ")} on "${de.name().asString()}" that this unit's entities.md does not carry`);
           }
         }
       }
@@ -3735,22 +3838,22 @@ class EntitiesOutcome {
   #model;
   constructor(props) {
     this.#kind = props.kind;
-    this.#found = FenceCount.of(props.found);
+    this.#found = props.found;
     this.#line = props.line;
     this.#error = props.error;
     this.#model = props.model;
   }
   static absent() {
-    return new EntitiesOutcome({ kind: "absent", found: 0, line: null, error: null, model: null });
+    return new EntitiesOutcome({ kind: "absent", found: FenceCount.of(0), line: null, error: null, model: null });
   }
   static wrongFenceCount(found) {
     return new EntitiesOutcome({ kind: "wrong-fence-count", found, line: null, error: null, model: null });
   }
   static unparseable(line, error) {
-    return new EntitiesOutcome({ kind: "unparseable", found: 0, line, error, model: null });
+    return new EntitiesOutcome({ kind: "unparseable", found: FenceCount.of(0), line, error, model: null });
   }
   static extracted(model) {
-    return new EntitiesOutcome({ kind: "extracted", found: 0, line: null, error: null, model });
+    return new EntitiesOutcome({ kind: "extracted", found: FenceCount.of(0), line: null, error: null, model });
   }
   match(handlers) {
     if (this.#kind === "absent")
@@ -3773,14 +3876,14 @@ class EntitiesOutcome {
         return null;
       },
       wrongFenceCount: (found) => {
-        report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")], `entities.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
+        report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessReference.at(art, "yaml fence")], `entities.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
         for (const f of [FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
           report.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
         }
         return null;
       },
       unparseable: (line, error) => {
-        report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
+        report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessReference.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
         for (const f of [FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
           report.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
         }
@@ -3793,8 +3896,8 @@ class EntitiesOutcome {
     });
   }
 }
-// src/refcheck/domain/entity-decl.ts
-class EntityDecl {
+// src/refcheck/domain/entity-declaration.ts
+class EntityDeclaration {
   #name;
   #element;
   #attrs;
@@ -3806,7 +3909,7 @@ class EntityDecl {
     this.#rels = seed.rels;
   }
   static of(seed) {
-    return new EntityDecl(seed);
+    return new EntityDeclaration(seed);
   }
   name() {
     return this.#name;
@@ -3827,19 +3930,19 @@ class EntityDecl {
     return this.#attrs.named(token);
   }
 }
-// src/refcheck/domain/entity-decls.ts
-class EntityDecls {
+// src/refcheck/domain/entity-declarations.ts
+class EntityDeclarations {
   #values;
   #names;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
     this.#names = KeySet.of(values.map((e) => e.name()));
   }
   static of(values) {
-    return new EntityDecls([...values]);
+    return new EntityDeclarations(values);
   }
   add(value) {
-    return new EntityDecls([...this.#values, value]);
+    return new EntityDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -3882,17 +3985,17 @@ class EntityDecls {
     return this.#values;
   }
 }
-// src/refcheck/domain/functional-spec-outcome.ts
-class FunctionalSpecOutcome {
+// src/refcheck/domain/functional-specification-outcome.ts
+class FunctionalSpecificationOutcome {
   #machines;
   constructor(machines) {
     this.#machines = machines;
   }
   static absent() {
-    return new FunctionalSpecOutcome(null);
+    return new FunctionalSpecificationOutcome(null);
   }
   static present(machines) {
-    return new FunctionalSpecOutcome(machines);
+    return new FunctionalSpecificationOutcome(machines);
   }
   match(handlers) {
     return this.#machines === null ? handlers.absent() : handlers.present(this.#machines);
@@ -3914,8 +4017,8 @@ class FunctionalSpecOutcome {
     });
   }
 }
-// src/refcheck/domain/rel-decl.ts
-class RelDecl {
+// src/refcheck/domain/relationship-declaration.ts
+class RelationshipDeclaration {
   #element;
   #from;
   #to;
@@ -3929,7 +4032,7 @@ class RelDecl {
     this.#hasDirection = seed.hasDirection;
   }
   static of(seed) {
-    return new RelDecl(seed);
+    return new RelationshipDeclaration(seed);
   }
   element() {
     return this.#element;
@@ -3950,20 +4053,20 @@ class RelDecl {
     return this.#cardinality !== null && !this.#hasDirection;
   }
 }
-// src/refcheck/domain/rel-decls.ts
-class RelDecls {
+// src/refcheck/domain/relationship-declarations.ts
+class RelationshipDeclarations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new RelDecls([...values]);
+    return new RelationshipDeclarations(values);
   }
   add(value) {
-    return new RelDecls([...this.#values, value]);
+    return new RelationshipDeclarations([...this.#values, value]);
   }
   concat(other) {
-    return new RelDecls([...this.#values, ...other.#values]);
+    return new RelationshipDeclarations([...this.#values, ...other.#values]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -3972,8 +4075,8 @@ class RelDecls {
     return this.#values;
   }
 }
-// src/refcheck/domain/rule-decl.ts
-class RuleDecl {
+// src/refcheck/domain/rule-declaration.ts
+class RuleDeclaration {
   #id;
   #element;
   #category;
@@ -3989,7 +4092,7 @@ class RuleDecl {
     this.#missing = Object.freeze([...seed.missing]);
   }
   static of(seed) {
-    return new RuleDecl(seed);
+    return new RuleDeclaration(seed);
   }
   id() {
     return this.#id;
@@ -4016,17 +4119,17 @@ class RuleDecl {
     return this.#category !== null && !this.#category.isKnownCategory();
   }
 }
-// src/refcheck/domain/rule-decls.ts
-class RuleDecls {
+// src/refcheck/domain/rule-declarations.ts
+class RuleDeclarations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new RuleDecls([...values]);
+    return new RuleDeclarations(values);
   }
   add(value) {
-    return new RuleDecls([...this.#values, value]);
+    return new RuleDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -4038,7 +4141,7 @@ class RuleDecls {
     const art = artifact.asString();
     for (const r of this) {
       if (r.missing().length > 0) {
-        report.finding(FD_R1, FindingKind.structureInvalid(), [r.findingTarget("check:FD-R1")], [WitnessRef.at(art, r.element().asString())], `rule is missing required key(s): ${r.missing().join(", ")}`);
+        report.finding(FD_R1, FindingKind.structureInvalid(), [r.findingTarget("check:FD-R1")], [WitnessReference.at(art, r.element().asString())], `rule is missing required key(s): ${r.missing().join(", ")}`);
       }
     }
     const seenIds = new Set;
@@ -4047,11 +4150,11 @@ class RuleDecls {
       if (id === null)
         continue;
       if (!id.matchesShape()) {
-        report.finding(FD_R2, FindingKind.structureInvalid(), [FD_R2.asCheckTarget()], [WitnessRef.at(art, `${r.element().asString()}.id`, id.asString())], `rule id "${id.asString()}" does not match BR{group}.{seq}`);
+        report.finding(FD_R2, FindingKind.structureInvalid(), [FD_R2.asCheckTarget()], [WitnessReference.at(art, `${r.element().asString()}.id`, id.asString())], `rule id "${id.asString()}" does not match BR{group}.{seq}`);
         continue;
       }
       if (seenIds.has(id.asString())) {
-        report.finding(FD_R2, FindingKind.structureInvalid(), [id.asString()], [WitnessRef.at(art, `${r.element().asString()}.id`, id.asString())], `rule id "${id.asString()}" is declared more than once`);
+        report.finding(FD_R2, FindingKind.structureInvalid(), [id.asString()], [WitnessReference.at(art, `${r.element().asString()}.id`, id.asString())], `rule id "${id.asString()}" is declared more than once`);
       }
       seenIds.add(id.asString());
     }
@@ -4061,7 +4164,7 @@ class RuleDecls {
       for (const r of this) {
         const missing = r.sourceIdValuesMissingFrom(requirementIdsKnown);
         if (missing.length > 0) {
-          report.finding(FD_R3, FindingKind.referenceBroken(), [r.findingTarget("check:FD-R3")], missing.map((id) => WitnessRef.at(art, `${r.element().asString()}.source`, id)), `source id(s) ${missing.join(", ")} do not exist in requirements.md`, missing);
+          report.finding(FD_R3, FindingKind.referenceBroken(), [r.findingTarget("check:FD-R3")], missing.map((id) => WitnessReference.at(art, `${r.element().asString()}.source`, id)), `source id(s) ${missing.join(", ")} do not exist in requirements.md`, missing);
         }
       }
     }
@@ -4073,13 +4176,13 @@ class RuleDecls {
         if (appliesTo === null)
           continue;
         if (!entities.entities().resolvesAppliesTo(appliesTo)) {
-          report.finding(FD_R4, FindingKind.referenceBroken(), [r.findingTarget("check:FD-R4")], [WitnessRef.at(art, r.element().asString(), appliesTo.asString())], `applies-to "${appliesTo.asString()}" does not resolve to a declared entity or entity.attribute`);
+          report.finding(FD_R4, FindingKind.referenceBroken(), [r.findingTarget("check:FD-R4")], [WitnessReference.at(art, r.element().asString(), appliesTo.asString())], `applies-to "${appliesTo.asString()}" does not resolve to a declared entity or entity.attribute`);
         }
       }
     }
     for (const r of this) {
       if (r.categoryOutsideClosedSet()) {
-        report.finding(FD_R5, FindingKind.structureInvalid(), [r.findingTarget("check:FD-R5")], [WitnessRef.at(art, `${r.element().asString()}.category`, r.category()?.asString() ?? "")], `category "${r.category()?.asString()}" is not one of validation | authorization | constraint | calculation | policy`);
+        report.finding(FD_R5, FindingKind.structureInvalid(), [r.findingTarget("check:FD-R5")], [WitnessReference.at(art, `${r.element().asString()}.category`, r.category()?.asString() ?? "")], `category "${r.category()?.asString()}" is not one of validation | authorization | constraint | calculation | policy`);
       }
     }
   }
@@ -4093,25 +4196,25 @@ class RulesOutcome {
   #rules;
   constructor(props) {
     this.#kind = props.kind;
-    this.#found = FenceCount.of(props.found);
+    this.#found = props.found;
     this.#line = props.line;
     this.#error = props.error;
     this.#rules = props.rules;
   }
   static absent() {
-    return new RulesOutcome({ kind: "absent", found: 0, line: null, error: null, rules: null });
+    return new RulesOutcome({ kind: "absent", found: FenceCount.of(0), line: null, error: null, rules: null });
   }
   static wrongFenceCount(found) {
     return new RulesOutcome({ kind: "wrong-fence-count", found, line: null, error: null, rules: null });
   }
   static unparseable(line, error) {
-    return new RulesOutcome({ kind: "unparseable", found: 0, line, error, rules: null });
+    return new RulesOutcome({ kind: "unparseable", found: FenceCount.of(0), line, error, rules: null });
   }
   static noRulesList() {
-    return new RulesOutcome({ kind: "no-rules-list", found: 0, line: null, error: null, rules: null });
+    return new RulesOutcome({ kind: "no-rules-list", found: FenceCount.of(0), line: null, error: null, rules: null });
   }
   static extracted(rules) {
-    return new RulesOutcome({ kind: "extracted", found: 0, line: null, error: null, rules });
+    return new RulesOutcome({ kind: "extracted", found: FenceCount.of(0), line: null, error: null, rules });
   }
   isExtracted() {
     return this.#kind === "extracted";
@@ -4142,15 +4245,15 @@ class RulesOutcome {
         }
       },
       wrongFenceCount: (found) => {
-        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")], `rules.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
+        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessReference.at(art, "yaml fence")], `rules.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
         blockRs("blocked by FD-R1: the rules yaml block is unusable");
       },
       unparseable: (line, error) => {
-        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
+        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessReference.at(art, `yaml fence (line ${line.asNumber()})`)], `yaml block does not parse in the supported subset: ${error}`);
         blockRs("blocked by FD-R1: the rules yaml block is unusable");
       },
       noRulesList: () => {
-        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessRef.at(art, "rules")], "top-level `rules:` list is missing");
+        report.finding(FD_R1, FindingKind.structureInvalid(), [FD_R1.asCheckTarget()], [WitnessReference.at(art, "rules")], "top-level `rules:` list is missing");
         blockRs("blocked by FD-R1: the rules yaml block is unusable");
       },
       extracted: (ruleDecls) => {
@@ -4181,10 +4284,10 @@ class ShapeError {
 class ShapeErrors {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ShapeErrors([...values]);
+    return new ShapeErrors(values);
   }
   add(value) {
     return new ShapeErrors([...this.#values, value]);
@@ -4256,7 +4359,7 @@ class StateMachineSketch {
     }
     const ent = entities.entities().byNormalizedName(entity.normalized());
     if (!ent) {
-      report.finding(FD_S1, FindingKind.consistencyMismatch(), [TargetIds.safe("entity", entName)], [WitnessRef.at(specArt, el, entName)], `state machine names entity "${entName}" which is not declared in entities.md`);
+      report.finding(FD_S1, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", entName)], [WitnessReference.at(specArt, el, entName)], `state machine names entity "${entName}" which is not declared in entities.md`);
       return;
     }
     const attr = attrName !== undefined ? ent.attrNamed(attrName) : ent.lifecycleAttr();
@@ -4265,14 +4368,14 @@ class StateMachineSketch {
       report.skip(FD_S2, "unrecognized-format", `${el}: no lifecycle attribute with allowed values could be determined for entity "${ent.name().asString()}"`);
       return;
     }
-    const attrId = TargetIds.safe("attr", `${ent.name().asString()}.${attr.name().asString()}`);
+    const attrId = TargetIdentifiers.safe("attr", `${ent.name().asString()}.${attr.name().asString()}`);
     const rogue = attr.rogueDiagramStates(this.states());
     if (rogue.length > 0) {
-      report.finding(FD_S1, FindingKind.consistencyMismatch(), [attrId], rogue.map((v) => WitnessRef.at(specArt, el, v)), `diagram state(s) ${rogue.join(", ")} are not allowed values of ${ent.name().asString()}.${attr.name().asString()} in entities.md`);
+      report.finding(FD_S1, FindingKind.consistencyMismatch(), [attrId], rogue.map((v) => WitnessReference.at(specArt, el, v)), `diagram state(s) ${rogue.join(", ")} are not allowed values of ${ent.name().asString()}.${attr.name().asString()} in entities.md`);
     }
     const dangling = attr.allowedValuesAbsentFrom(this.states());
     if (dangling.length > 0) {
-      report.finding(FD_S2, FindingKind.consistencyMismatch(), [attrId], dangling.map((v) => WitnessRef.at(entitiesArt, attr.element().asString(), v)), `allowed value(s) ${dangling.join(", ")} of ${ent.name().asString()}.${attr.name().asString()} appear in no diagram state`);
+      report.finding(FD_S2, FindingKind.consistencyMismatch(), [attrId], dangling.map((v) => WitnessReference.at(entitiesArt, attr.element().asString(), v)), `allowed value(s) ${dangling.join(", ")} of ${ent.name().asString()}.${attr.name().asString()} appear in no diagram state`);
     }
   }
 }
@@ -4280,10 +4383,10 @@ class StateMachineSketch {
 class StateMachineSketches {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new StateMachineSketches([...values]);
+    return new StateMachineSketches(values);
   }
   add(value) {
     return new StateMachineSketches([...this.#values, value]);
@@ -4338,7 +4441,7 @@ class DesignRecord {
     const catalog = this.#componentCatalog;
     if (catalog === null)
       return err({ kind: "not-applicable" });
-    const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(reportDirectory, "components"), COMPONENT_FAMILIES);
+    const report = ReferenceCheckReport.open(ReferenceCheckReportIdentifier.of(reportDirectory, "components"), COMPONENT_FAMILIES);
     catalog.check(report, ArtifactPath.of(this.#target.artifact()));
     report.input(this.#target);
     return ok(report);
@@ -4347,7 +4450,7 @@ class DesignRecord {
     const summary = this.#contractSummary;
     if (summary === null)
       return err({ kind: "not-applicable" });
-    const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(reportDirectory, "contract-summary"), CONTRACT_FAMILIES);
+    const report = ReferenceCheckReport.open(ReferenceCheckReportIdentifier.of(reportDirectory, "contract-summary"), CONTRACT_FAMILIES);
     const artifact = ArtifactPath.of(this.#target.artifact());
     const depArtifact = summary.declaredUnits.artifactName;
     const units = (summary.declaredUnits.document === null ? DeclaredUnitsOutcome.absent() : summary.declaredUnits.document.outcome).check(report);
@@ -4364,10 +4467,10 @@ class DesignRecord {
     const fd = this.#functional;
     if (fd === null)
       return err({ kind: "not-applicable" });
-    const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(reportDirectory, "functional-design"), FUNCTIONAL_FAMILIES, fd.unit);
+    const report = ReferenceCheckReport.open(ReferenceCheckReportIdentifier.of(reportDirectory, "functional-design"), FUNCTIONAL_FAMILIES, fd.unit);
     const entities = (fd.entities === null ? EntitiesOutcome.absent() : fd.entities.outcome).check(report, fd.entitiesArtifact);
     (fd.rules === null ? RulesOutcome.absent() : fd.rules.outcome).check(report, fd.rulesArtifact, fd.requirements === null ? null : fd.requirements.outcome, entities);
-    (fd.spec === null ? FunctionalSpecOutcome.absent() : fd.spec.outcome).check(report, fd.specArtifact, fd.entitiesArtifact, entities);
+    (fd.spec === null ? FunctionalSpecificationOutcome.absent() : fd.spec.outcome).check(report, fd.specArtifact, fd.entitiesArtifact, entities);
     (fd.components === null ? DomainEntitiesOutcome.absent() : fd.components.outcome).check(report, fd.componentsArtifact, fd.siblingUnits, fd.unit);
     if (fd.entities !== null)
       report.input(fd.entities.input);
@@ -4384,14 +4487,14 @@ class DesignRecord {
     return ok(report);
   }
 }
-// src/refcheck/domain/design-record-id.ts
-class DesignRecordId {
+// src/refcheck/domain/design-record-identifier.ts
+class DesignRecordIdentifier {
   #path;
   constructor(path) {
     this.#path = path;
   }
   static of(path) {
-    return new DesignRecordId(path);
+    return new DesignRecordIdentifier(path);
   }
   equals(other) {
     return this.#path.equals(other.#path);
@@ -4430,10 +4533,10 @@ class AllowedValue {
 class AllowedValues {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new AllowedValues([...values]);
+    return new AllowedValues(values);
   }
   add(value) {
     return new AllowedValues([...this.#values, value]);
@@ -4562,10 +4665,10 @@ class AttributeName {
 class AttributeNames {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new AttributeNames([...values]);
+    return new AttributeNames(values);
   }
   add(value) {
     return new AttributeNames([...this.#values, value]);
@@ -4583,8 +4686,8 @@ class AttributeNames {
     return this.#values;
   }
 }
-// src/refcheck/domain/business-rule-id.ts
-class BusinessRuleId {
+// src/refcheck/domain/business-rule-identifier.ts
+class BusinessRuleIdentifier {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -4594,10 +4697,10 @@ class BusinessRuleId {
     this.#value = raw;
   }
   static of(raw) {
-    return new BusinessRuleId(raw);
+    return new BusinessRuleIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new BusinessRuleId(raw));
+    return parseConstruction(() => new BusinessRuleIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -4640,8 +4743,8 @@ class CardinalityNotation {
     return CARDINALITIES.has(this.normalizedToken());
   }
 }
-// src/refcheck/domain/machine-spec.ts
-class MachineSpec {
+// src/refcheck/domain/machine-specification.ts
+class MachineSpecification {
   #value;
   constructor(raw) {
     if (raw.length > 4096)
@@ -4651,10 +4754,10 @@ class MachineSpec {
     this.#value = raw;
   }
   static of(raw) {
-    return new MachineSpec(raw);
+    return new MachineSpecification(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new MachineSpec(raw));
+    return parseConstruction(() => new MachineSpecification(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -4754,8 +4857,8 @@ class RuleCategory {
     return CATEGORIES.has(this.normalized());
   }
 }
-// src/refcheck/domain/source-id.ts
-class SourceId {
+// src/refcheck/domain/source-identifier.ts
+class SourceIdentifier {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -4765,10 +4868,10 @@ class SourceId {
     this.#value = raw;
   }
   static of(raw) {
-    return new SourceId(raw);
+    return new SourceIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new SourceId(raw));
+    return parseConstruction(() => new SourceIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -4777,24 +4880,24 @@ class SourceId {
     return this.#value;
   }
 }
-// src/refcheck/domain/source-ids.ts
-class SourceIds {
+// src/refcheck/domain/source-identifiers.ts
+class SourceIdentifiers {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new SourceIds([...values]);
+    return new SourceIdentifiers(values);
   }
   add(value) {
-    return new SourceIds([...this.#values, value]);
+    return new SourceIdentifiers([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
   }
   valuesMissingFrom(known) {
     return this.#values.map((id) => id.asString()).filter((id) => {
-      const parsed = RequirementId.parse(id);
+      const parsed = RequirementIdentifier.parse(id);
       return !parsed.ok || !known.has(parsed.value);
     }).sort();
   }
@@ -4832,10 +4935,10 @@ class StateName {
 class StateNames {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new StateNames([...values]);
+    return new StateNames(values);
   }
   add(value) {
     return new StateNames([...this.#values, value]);
@@ -4890,8 +4993,8 @@ class TypeName {
     return COLLECTIONISH.has(this.normalized());
   }
 }
-// src/refcheck/domain/declared-rule-id.ts
-class DeclaredRuleId {
+// src/refcheck/domain/declared-rule-identifier.ts
+class DeclaredRuleIdentifier {
   #value;
   constructor(value) {
     if (value.length > 128)
@@ -4899,16 +5002,16 @@ class DeclaredRuleId {
     this.#value = value;
   }
   static parse(value) {
-    return parseConstruction(() => new DeclaredRuleId(value));
+    return parseConstruction(() => new DeclaredRuleIdentifier(value));
   }
   static of(value) {
-    return new DeclaredRuleId(value);
+    return new DeclaredRuleIdentifier(value);
   }
   asString() {
     return this.#value;
   }
   matchesShape() {
-    return BusinessRuleId.parse(this.#value).ok;
+    return BusinessRuleIdentifier.parse(this.#value).ok;
   }
 }
 // src/refcheck/usecase/check-domain-components-usecase.ts
@@ -5004,7 +5107,7 @@ class CheckFunctionalDesignUseCase {
     };
   }
 }
-// src/refcheck/adapter/reference-check-report-repository-impl.ts
+// src/refcheck/adapter/reference-check-report-repository-implementation.ts
 import { existsSync as existsSync3, readFileSync as readFileSync4 } from "fs";
 import { join as join4 } from "path";
 
@@ -5022,7 +5125,7 @@ function parseReportDocument(id, raw) {
     return err({ cause: `document backend "${doc.backend.asString()}" does not match the id backend "${id.backendName().asString()}"` });
   if (doc.inputs === undefined || doc.checked === undefined)
     return err({ cause: "document lacks inputs/checked/findings/skipped arrays" });
-  const checked = traverseResult(doc.checked, TargetId.parse);
+  const checked = traverseResult(doc.checked, TargetIdentifier.parse);
   if (!checked.ok)
     return err({ cause: JSON.stringify(checked.error) });
   const findings = [];
@@ -5037,28 +5140,28 @@ function parseReportDocument(id, raw) {
       });
       if (!parsed.ok)
         return err({ cause: JSON.stringify(parsed.error) });
-      refs.push(WitnessRef.of({
+      refs.push(WitnessReference.of({
         artifact: parsed.value.artifact.asString(),
         element: parsed.value.element.asString(),
         ...typeof ref.value === "string" ? { value: ref.value } : {}
       }));
     }
-    findings.push(Finding.of({ ...entry, witness: { refs: WitnessRefs.of(refs) } }));
+    findings.push(Finding.of({ ...entry, witness: { refs: WitnessReferences.of(refs) } }));
   }
   return ok(ReferenceCheckReport.of({
     id,
     inputs: InputAnchors.of(doc.inputs.map((entry) => InputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }))),
-    checked: TargetIds.of(checked.value),
+    checked: TargetIdentifiers.of(checked.value),
     findings: Findings.of(findings),
     skipped: Skips.of(doc.skipped.map(Skipped.of)),
     unavailableReason: doc.unavailable?.reason ?? null
   }));
 }
 
-// src/refcheck/adapter/reference-check-report-repository-impl.ts
+// src/refcheck/adapter/reference-check-report-repository-implementation.ts
 var encoder = new TextEncoder;
 
-class ReferenceCheckReportRepositoryImpl {
+class ReferenceCheckReportRepositoryImplementation {
   findById(aggregateId) {
     const path = join4(aggregateId.directory().asString(), aggregateId.fileName());
     if (!existsSync3(path)) {
@@ -5117,7 +5220,7 @@ function extractComponents(value) {
     const refs = (key) => {
       const out = [];
       if (!Array.isArray(raw[key]))
-        return ComponentRefs.of(out);
+        return ComponentReferences.of(out);
       raw[key].forEach((entry, j) => {
         const el = `${element}.${key}[${j}].component`;
         const comp = isObject(entry) ? str(entry.component) : str(entry);
@@ -5128,9 +5231,9 @@ function extractComponents(value) {
           shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(el), detail: JSON.stringify(component.error) }));
           return;
         }
-        out.push(ComponentRef.of({ component: component.value, element: ElementPath.of(el) }));
+        out.push(ComponentReference.of({ component: component.value, element: ElementPath.of(el) }));
       });
-      return ComponentRefs.of(out);
+      return ComponentReferences.of(out);
     };
     const entities = [];
     if (Array.isArray(raw.entities)) {
@@ -5193,7 +5296,7 @@ function extractComponents(value) {
 function parseComponentCatalog(md) {
   const fences = extractFences(md, "yaml");
   if (fences.length !== 1) {
-    return ComponentCatalogOutcome.wrongFenceCount(fences.length);
+    return ComponentCatalogOutcome.wrongFenceCount(FenceCount.of(fences.length));
   }
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
@@ -5222,11 +5325,11 @@ function parseDeclaredUnits(depMd) {
       const fields = combineResults({ name: UnitName.parse(raw.name), dependsOn: traverseResult(dependsOn, UnitName.parse) });
       if (!fields.ok)
         return DeclaredUnitsOutcome.unrecognized(JSON.stringify(fields.error));
-      units.push(UnitDecl.of({ name: fields.value.name, dependsOn: UnitNames.of(fields.value.dependsOn) }));
+      units.push(UnitDeclaration.of({ name: fields.value.name, dependsOn: UnitNames.of(fields.value.dependsOn) }));
     }
     if (units.length === 0)
       return DeclaredUnitsOutcome.unrecognized();
-    return DeclaredUnitsOutcome.declared(UnitDecls.of(units));
+    return DeclaredUnitsOutcome.declared(UnitDeclarations.of(units));
   }
   return DeclaredUnitsOutcome.unrecognized("no yaml fence with a top-level `units:` list");
 }
@@ -5244,7 +5347,7 @@ function parseContractsTable(md) {
   const oCol = col(/owner/i);
   const rows = [];
   for (const [i, row] of contractsTable.rows.entries()) {
-    const first = ContractId.parse(row.cells[0] || String(i + 1));
+    const first = ContractIdentifier.parse(row.cells[0] || String(i + 1));
     if (!first.ok)
       return ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(first.error)));
     const token = cleanCell(first.value.asString());
@@ -5256,7 +5359,7 @@ function parseContractsTable(md) {
     if (!fields.ok)
       return ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(fields.error)));
     rows.push(ContractRow.of({
-      id: ContractId.of(/^[0-9]+$/.test(token) ? token : String(i + 1)),
+      id: ContractIdentifier.of(/^[0-9]+$/.test(token) ? token : String(i + 1)),
       ...fields.value,
       line: LineNumber.of(row.line)
     }));
@@ -5269,18 +5372,18 @@ function assessSpecBlocks(md) {
     const line = LineNumber.of(fence.line);
     const parsed = parseYamlSubset(fence.body);
     if (parsed.error !== undefined) {
-      return SpecBlockAssessment.unparseable(index, line, parsed.error);
+      return SpecificationBlockAssessment.unparseable(index, line, parsed.error);
     }
     const v = parsed.value ?? null;
     if (!isObject(v)) {
-      return SpecBlockAssessment.notAMapping(index, line);
+      return SpecificationBlockAssessment.notAMapping(index, line);
     }
     if ("openapi" in v && !("paths" in v)) {
-      return SpecBlockAssessment.openapiWithoutPaths(index, line);
+      return SpecificationBlockAssessment.openapiWithoutPaths(index, line);
     }
-    return SpecBlockAssessment.sound(index, line);
+    return SpecificationBlockAssessment.sound(index, line);
   });
-  return SpecBlockAssessments.of(blocks);
+  return SpecificationBlockAssessments.of(blocks);
 }
 // src/refcheck/adapter/functional-design-parser.ts
 function str2(v) {
@@ -5307,7 +5410,7 @@ function extractRel(raw, element, implicitFrom) {
   });
   if (!fields.ok)
     return err(JSON.stringify(fields.error));
-  return ok(RelDecl.of({
+  return ok(RelationshipDeclaration.of({
     element: ElementPath.of(element),
     from: fields.value.from,
     to: fields.value.to,
@@ -5321,8 +5424,8 @@ function extractEntities(value) {
   if (!isObject(value) || !Array.isArray(value.entities)) {
     model.shapeErrors.push(ShapeError.of({ element: ElementPath.of("entities"), detail: "top-level `entities:` list is missing" }));
     return DeclaredEntities.of({
-      entities: EntityDecls.of(collected.entities),
-      rels: RelDecls.of(collected.rels),
+      entities: EntityDeclarations.of(collected.entities),
+      rels: RelationshipDeclarations.of(collected.rels),
       shapeErrors: ShapeErrors.of(collected.shapeErrors)
     });
   }
@@ -5378,7 +5481,7 @@ function extractEntities(value) {
           model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(ael), detail: JSON.stringify(fields.error) }));
           return;
         }
-        attrs.push(AttrDecl.of({
+        attrs.push(AttributeDeclaration.of({
           name: fields.value.name,
           element: ElementPath.of(ael),
           type: fields.value.type,
@@ -5403,11 +5506,11 @@ function extractEntities(value) {
           rels.push(rel.value);
       });
     }
-    model.entities.push(EntityDecl.of({
+    model.entities.push(EntityDeclaration.of({
       name: entity.value,
       element: ElementPath.of(element),
-      attrs: AttrDecls.of(attrs),
-      rels: RelDecls.of(rels)
+      attrs: AttributeDeclarations.of(attrs),
+      rels: RelationshipDeclarations.of(rels)
     }));
   });
   if (Array.isArray(value.relationships)) {
@@ -5420,8 +5523,8 @@ function extractEntities(value) {
     });
   }
   return DeclaredEntities.of({
-    entities: EntityDecls.of(collected.entities),
-    rels: RelDecls.of(collected.rels),
+    entities: EntityDeclarations.of(collected.entities),
+    rels: RelationshipDeclarations.of(collected.rels),
     shapeErrors: ShapeErrors.of(collected.shapeErrors)
   });
 }
@@ -5430,7 +5533,7 @@ function parseEntitiesDocument(md) {
     return EntitiesOutcome.absent();
   const fences = extractFences(md, "yaml");
   if (fences.length !== 1)
-    return EntitiesOutcome.wrongFenceCount(fences.length);
+    return EntitiesOutcome.wrongFenceCount(FenceCount.of(fences.length));
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
     return EntitiesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
@@ -5442,7 +5545,7 @@ function parseRulesDocument(md) {
     return RulesOutcome.absent();
   const fences = extractFences(md, "yaml");
   if (fences.length !== 1)
-    return RulesOutcome.wrongFenceCount(fences.length);
+    return RulesOutcome.wrongFenceCount(FenceCount.of(fences.length));
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
     return RulesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
@@ -5453,7 +5556,7 @@ function parseRulesDocument(md) {
   const ruleList = v.rules.map((raw, i) => {
     const element = `rules[${i}]`;
     if (!isObject(raw)) {
-      return RuleDecl.of({ id: null, element: ElementPath.of(element), category: null, appliesTo: null, sourceIds: SourceIds.of([]), missing: ["<entry is not a mapping>"] });
+      return RuleDeclaration.of({ id: null, element: ElementPath.of(element), category: null, appliesTo: null, sourceIds: SourceIdentifiers.of([]), missing: ["<entry is not a mapping>"] });
     }
     const missing = ["id", "statement", "category"].filter((k) => !(k in raw));
     if (!("source" in raw) && !("sources" in raw))
@@ -5463,7 +5566,7 @@ function parseRulesDocument(md) {
     const id = str2(raw.id);
     const category = str2(raw.category);
     const appliesTo = str2(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
-    const parsedId = id === null ? ok(null) : DeclaredRuleId.parse(id);
+    const parsedId = id === null ? ok(null) : DeclaredRuleIdentifier.parse(id);
     if (!parsedId.ok)
       missing.push("id");
     const parsedCategory = category === null ? ok(null) : RuleCategory.parse(category);
@@ -5472,20 +5575,20 @@ function parseRulesDocument(md) {
       missing.push("category");
     if (!parsedAppliesTo.ok)
       missing.push("applies_to");
-    return RuleDecl.of({
+    return RuleDeclaration.of({
       id: parsedId.ok ? parsedId.value : null,
       element: ElementPath.of(element),
       category: parsedCategory.ok ? parsedCategory.value : null,
       appliesTo: parsedAppliesTo.ok ? parsedAppliesTo.value : null,
-      sourceIds: SourceIds.of([...RequirementIds.extractFrom(sourceText)].map((v2) => SourceId.of(v2.asString()))),
+      sourceIds: SourceIdentifiers.of([...RequirementIdentifiers.extractFrom(sourceText)].map((v2) => SourceIdentifier.of(v2.asString()))),
       missing
     });
   });
-  return RulesOutcome.extracted(RuleDecls.of(ruleList));
+  return RulesOutcome.extracted(RuleDeclarations.of(ruleList));
 }
 function parseFunctionalSpecDocument(md) {
   if (md === null)
-    return FunctionalSpecOutcome.absent();
+    return FunctionalSpecificationOutcome.absent();
   const machines = [];
   const lines = md.split(`
 `);
@@ -5493,7 +5596,7 @@ function parseFunctionalSpecDocument(md) {
     const h = (lines[i] ?? "").match(/^#{2,4}\s+State Machine:\s*(.+?)\s*$/i);
     if (!h)
       continue;
-    const spec = MachineSpec.parse((h[1] ?? "").trim());
+    const spec = MachineSpecification.parse((h[1] ?? "").trim());
     if (!spec.ok)
       continue;
     for (let j = i + 1;j < lines.length; j++) {
@@ -5537,7 +5640,7 @@ function parseFunctionalSpecDocument(md) {
       break;
     }
   }
-  return FunctionalSpecOutcome.present(StateMachineSketches.of(machines));
+  return FunctionalSpecificationOutcome.present(StateMachineSketches.of(machines));
 }
 function parseDomainEntitiesDocument(md) {
   if (md === null)
@@ -5589,10 +5692,10 @@ function buildSiblingUnitEntities(texts) {
   }
   return SiblingUnitIndex.of(unitEntities);
 }
-// src/refcheck/adapter/design-record-repository-impl.ts
+// src/refcheck/adapter/design-record-repository-implementation.ts
 import { readFileSync as readFileSync5 } from "fs";
 import { basename as basename2, dirname as dirname3, join as join5 } from "path";
-class DesignRecordRepositoryImpl {
+class DesignRecordRepositoryImplementation {
   findById(id) {
     const artifactPath = id.artifactPath().asString();
     let sourceBytes;
@@ -5662,7 +5765,7 @@ class DesignRecordRepositoryImpl {
     const specPath = join5(fdDir, "functional-spec.md");
     const spec = load(specPath, (t) => parseFunctionalSpecDocument(t));
     const reqPath = recordRoot === null ? null : join5(recordRoot, "inception", "requirements-analysis", "requirements.md");
-    const requirements = rules !== null && rules.outcome.isExtracted() && reqPath !== null ? load(reqPath, (t) => RequirementIds.extractFrom(t)) : null;
+    const requirements = rules !== null && rules.outcome.isExtracted() && reqPath !== null ? load(reqPath, (t) => RequirementIdentifiers.extractFrom(t)) : null;
     const componentsPath = recordRoot === null ? null : join5(recordRoot, "inception", "domain-design", "components.md");
     const components = componentsPath === null ? null : load(componentsPath, (t) => parseDomainEntitiesDocument(t));
     const siblingTexts = [];
@@ -5706,12 +5809,11 @@ function main() {
 `);
     process.exit(0);
   }
-  const findingsSchemaFile = readContractSchema(join6(dirname4(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"));
-  const findingsSchema = findingsSchemaFile.ok ? FindingsSchema.of(findingsSchemaFile.value) : FindingsSchema.unreadable(findingsSchemaFile.error.cause);
-  const reportRepository = new ReferenceCheckReportRepositoryImpl;
-  const useCase = new CheckContractSummaryUseCase(new DesignRecordRepositoryImpl, reportRepository, findingsSchema);
+  const findingsSchema = readFindingsSchema(join6(dirname4(fileURLToPath(import.meta.url)), "data", "deep-spec-findings-schema.json"));
+  const reportRepository = new ReferenceCheckReportRepositoryImplementation;
+  const useCase = new CheckContractSummaryUseCase(new DesignRecordRepositoryImplementation, reportRepository, findingsSchema);
   const outcome = useCase.execute({
-    recordId: DesignRecordId.of(target.value),
+    recordId: DesignRecordIdentifier.of(target.value),
     reportDirectory: reportLocation.value,
     mode: flags.reportOnly ? "report-only" : "persist"
   });

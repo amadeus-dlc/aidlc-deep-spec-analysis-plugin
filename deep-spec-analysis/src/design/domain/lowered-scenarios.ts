@@ -5,11 +5,11 @@ export class LoweredScenarios {
   readonly #values: readonly LoweredScenario[];
 
   private constructor(values: readonly LoweredScenario[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly LoweredScenario[]): LoweredScenarios {
-    return new LoweredScenarios([...values]);
+    return new LoweredScenarios(values);
   }
 
   add(value: LoweredScenario): LoweredScenarios {

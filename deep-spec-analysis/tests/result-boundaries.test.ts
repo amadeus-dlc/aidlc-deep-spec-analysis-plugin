@@ -2,17 +2,17 @@ import { describe, expect, spyOn, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ArtifactPath, ContentHash, IrVersion, SkipReason, VerificationMethod } from "@deep-spec/kernel-domain";
+import { ArtifactPath, ContentHash, IntermediateRepresentationVersion, SkipReason, VerificationMethod } from "@deep-spec/kernel-domain";
 import { IllegalArgumentException, type Json, combineResults, traverseResult, ok, err } from "@deep-spec/kernel-infrastructure";
 import { parseFindingsValues } from "@deep-spec/kernel-adapter";
 import {
-  parseFormalModel, parseSiblingReportDocument, RequirementsSourceRepositoryImpl,
-  VerificationDirectoryRepositoryImpl, VERIFICATION_LOCK_BASENAME,
+  parseFormalModel, parseSiblingReportDocument, RequirementsSourceRepositoryImplementation,
+  VerificationDirectoryRepositoryImplementation, VERIFICATION_LOCK_BASENAME,
 } from "@deep-spec/requirements-adapter";
 import { parseDesignModel } from "@deep-spec/design-adapter";
 import {
-  VerificationReport, VerificationReportId, VerificationFindings, VerificationSkips,
-  VerificationDirectory, VerificationReports, RequirementsSource, RequirementsSourceId,
+  VerificationReport, VerificationReportIdentifier, VerificationFindings, VerificationSkips,
+  VerificationDirectory, VerificationReports, RequirementsSource, RequirementsSourceIdentifier,
 } from "@deep-spec/requirements-domain";
 
 function document() {
@@ -68,7 +68,7 @@ describe("recoverable input uses parse; construction panics propagate", () => {
     const panic = new IllegalArgumentException({ kind: "source-defect" });
     const construction = spyOn(RequirementsSource, "of").mockImplementation(() => { throw panic; });
     try {
-      expect(() => new RequirementsSourceRepositoryImpl().findById(RequirementsSourceId.of(ArtifactPath.of(root)))).toThrow(panic);
+      expect(() => new RequirementsSourceRepositoryImplementation().findById(RequirementsSourceIdentifier.of(ArtifactPath.of(root)))).toThrow(panic);
     } finally {
       construction.mockRestore();
       rmSync(root, { recursive: true, force: true });
@@ -79,7 +79,7 @@ describe("recoverable input uses parse; construction panics propagate", () => {
     const root = mkdtempSync(join(tmpdir(), "publication-panic-"));
     const directory = ArtifactPath.of(root);
     const candidate = VerificationReport.of({
-      id: VerificationReportId.of(directory, "smt"), irVersion: IrVersion.of("1.0.0"),
+      id: VerificationReportIdentifier.of(directory, "smt"), irVersion: IntermediateRepresentationVersion.of("1.0.0"),
       irHash: ContentHash.ofText("model"), method: VerificationMethod.of("exhaustive"),
       findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]), crossChecked: null, unavailableReason: null,
     });
@@ -87,7 +87,7 @@ describe("recoverable input uses parse; construction panics propagate", () => {
     const panic = new IllegalArgumentException({ kind: "serialization-defect" });
     const rendering = spyOn(VerificationReport.prototype, "toDocument").mockImplementation(() => { throw panic; });
     try {
-      expect(() => new VerificationDirectoryRepositoryImpl().store(aggregate)).toThrow(panic);
+      expect(() => new VerificationDirectoryRepositoryImplementation().store(aggregate)).toThrow(panic);
       expect(existsSync(join(root, VERIFICATION_LOCK_BASENAME))).toBe(false);
       expect(existsSync(join(root, "smt.json"))).toBe(false);
     } finally {

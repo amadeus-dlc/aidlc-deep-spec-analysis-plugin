@@ -62,10 +62,10 @@ class Check {
 class HealthVerdict {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new HealthVerdict([...values]);
+    return new HealthVerdict(values);
   }
   add(value) {
     return new HealthVerdict([...this.#values, value]);
@@ -75,6 +75,24 @@ class HealthVerdict {
   }
   document() {
     return { checks: this.#values.map((c) => c.toDocument()) };
+  }
+}
+// src/doctor/domain/manifest-entry.ts
+class ManifestEntry {
+  #rel;
+  #severity;
+  constructor(rel, severity) {
+    this.#rel = rel;
+    this.#severity = severity;
+  }
+  static error(rel) {
+    return new ManifestEntry(rel, CheckSeverity.error());
+  }
+  rel() {
+    return this.#rel.asString();
+  }
+  severity() {
+    return this.#severity;
   }
 }
 // src/kernel/infrastructure/result.ts
@@ -205,6 +223,18 @@ function validateSchema(root, schema, value, path, errors) {
   }
   return errors.length === before;
 }
+// src/kernel/infrastructure/canonical-json.ts
+function canonicalStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalStringify).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    const record = value;
+    const keys = Object.keys(record).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(record[k] ?? null)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
 // src/kernel/infrastructure/illegal-argument-exception.ts
 class IllegalArgumentException extends Error {
   problem;
@@ -251,58 +281,52 @@ function compareCanonically(a, b) {
 function sortedUniqueCanonically(values) {
   return [...new Set(values)].sort(compareCanonically);
 }
-// src/kernel/infrastructure/value-size.ts
-function assertValueSize(value, limits) {
+// src/kernel/infrastructure/bounded-value-snapshot.ts
+function boundedValueSnapshot(value, limits) {
   let nodes = 0;
   let total = 0;
-  const visit = (current, depth) => {
-    if (++nodes > limits.nodes || depth > limits.depth)
-      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
-    if (typeof current === "string") {
-      if (current.length > limits.string)
-        throw new IllegalArgumentException({ kind: "value-string-too-long", raw: current.length });
-      total += current.length;
-    } else if (current !== null && typeof current === "object") {
-      if (Array.isArray(current)) {
-        if (current.length > limits.nodes - nodes)
-          throw new IllegalArgumentException({ kind: "value-tree-too-large" });
-        for (const child of current)
-          visit(child, depth + 1);
-      } else {
-        const record = current;
-        for (const key in record) {
-          if (!Object.hasOwn(record, key))
-            continue;
-          if (key.length > limits.string)
-            throw new IllegalArgumentException({ kind: "value-key-too-long", raw: key.length });
-          total += key.length;
-          if (total > limits.total)
-            throw new IllegalArgumentException({ kind: "value-text-too-large" });
-          visit(record[key], depth + 1);
-        }
-      }
-    }
+  const chargeText = (text, kind) => {
+    if (text.length > limits.string)
+      throw new IllegalArgumentException({ kind, raw: text.length });
+    total += text.length;
     if (total > limits.total)
       throw new IllegalArgumentException({ kind: "value-text-too-large" });
   };
-  visit(value, 0);
+  const copy = (current, depth) => {
+    if (++nodes > limits.nodes || depth > limits.depth)
+      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+    if (typeof current === "string") {
+      chargeText(current, "value-string-too-long");
+      return current;
+    }
+    if (current === null || typeof current !== "object")
+      return current;
+    if (Array.isArray(current)) {
+      const count = current.length;
+      if (count > limits.nodes - nodes)
+        throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+      const values = [];
+      for (let index = 0;index < count; index++)
+        values.push(copy(current[index], depth + 1));
+      return values;
+    }
+    const record = current;
+    const entries = [];
+    for (const key in record) {
+      if (!Object.hasOwn(record, key))
+        continue;
+      chargeText(key, "value-key-too-long");
+      entries.push([key, copy(record[key], depth + 1)]);
+    }
+    return Object.fromEntries(entries);
+  };
+  return copy(value, 0);
 }
 // src/kernel/domain/expression-tree.ts
-function canonicalKeyOf(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalKeyOf).join(",")}]`;
-  }
-  if (typeof value === "object" && value !== null) {
-    const record = value;
-    const keys = Object.keys(record).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalKeyOf(record[k] ?? null)}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
 class ExpressionTree {
   #root;
   constructor(root) {
+    const snapshot = boundedValueSnapshot(root, { string: 4096, nodes: 1e5, depth: 258, total: 16777216 });
     let nodes = 0;
     const measure = (node, depth) => {
       if (++nodes > 1e4 || depth > 128 || (node.args?.length ?? 0) > 1e4 - nodes) {
@@ -314,8 +338,7 @@ class ExpressionTree {
       for (const child of node.args ?? [])
         measure(child, depth + 1);
     };
-    measure(root, 0);
-    const snapshot = structuredClone(root);
+    measure(snapshot, 0);
     const visited = new WeakSet;
     const freeze = (value) => {
       if (visited.has(value))
@@ -372,7 +395,7 @@ class ExpressionTree {
     return assigned;
   }
   isCanonicallyEqual(other) {
-    return canonicalKeyOf(this.#root) === canonicalKeyOf(other.#root);
+    return canonicalStringify(this.#root) === canonicalStringify(other.#root);
   }
 }
 // src/kernel/domain/content-hash.ts
@@ -427,8 +450,8 @@ class DeclaredDigest {
     return this.#value === actual.asString();
   }
 }
-// src/kernel/domain/ir-version.ts
-class IrVersion {
+// src/kernel/domain/intermediate-representation-version.ts
+class IntermediateRepresentationVersion {
   #value;
   constructor(raw) {
     if (raw.length > 128)
@@ -438,10 +461,10 @@ class IrVersion {
     this.#value = raw;
   }
   static of(raw) {
-    return new IrVersion(raw);
+    return new IntermediateRepresentationVersion(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new IrVersion(raw));
+    return parseConstruction(() => new IntermediateRepresentationVersion(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -456,7 +479,7 @@ class IrVersion {
     return this.#value;
   }
 }
-// src/kernel/domain/target-id.ts
+// src/kernel/domain/target-identifier.ts
 var TARGET_ID_PATTERNS = [
   /^(OB|SC)-[0-9]+$/,
   /^BR[0-9]+\.[0-9]+$/,
@@ -464,7 +487,7 @@ var TARGET_ID_PATTERNS = [
   /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
 ];
 
-class TargetId {
+class TargetIdentifier {
   #value;
   constructor(raw) {
     if (raw.length > 1024)
@@ -474,10 +497,10 @@ class TargetId {
     this.#value = raw;
   }
   static of(raw) {
-    return new TargetId(raw);
+    return new TargetIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new TargetId(raw));
+    return parseConstruction(() => new TargetIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -489,21 +512,21 @@ class TargetId {
     return this.#value;
   }
 }
-// src/kernel/domain/target-ids.ts
-class TargetIds {
+// src/kernel/domain/target-identifiers.ts
+class TargetIdentifiers {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new TargetIds([...values]);
+    return new TargetIdentifiers(values);
   }
   static safe(prefix, raw) {
     const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
     return `${prefix}:${token === "" ? "unknown" : token}`;
   }
   add(value) {
-    return new TargetIds([...this.#values, value]);
+    return new TargetIdentifiers([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -515,13 +538,13 @@ class TargetIds {
     return this.#values.some((v) => v.equals(value));
   }
   excluding(value) {
-    return new TargetIds(this.#values.filter((v) => !v.equals(value)));
+    return new TargetIdentifiers(this.#values.filter((v) => !v.equals(value)));
   }
   sortedCanonically() {
-    return new TargetIds([...this.#values].sort((a, b) => a.compareTo(b)));
+    return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
   }
   sortedUniqueCanonically() {
-    return TargetIds.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetId.of(raw)));
+    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
   }
   joined(separator) {
     return this.toStrings().join(separator);
@@ -540,6 +563,9 @@ class FunctionalRequirementReferences {
     if (values.length > 1e4)
       throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
     this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new FunctionalRequirementReferences(values));
   }
   static of(values) {
     return new FunctionalRequirementReferences(values);
@@ -627,8 +653,8 @@ class KeySet {
   }
 }
 
-// src/kernel/domain/requirement-id.ts
-class RequirementId {
+// src/kernel/domain/requirement-identifier.ts
+class RequirementIdentifier {
   #value;
   constructor(value) {
     if (value.length > 128)
@@ -638,10 +664,10 @@ class RequirementId {
     this.#value = value;
   }
   static of(raw) {
-    return new RequirementId(raw);
+    return new RequirementIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new RequirementId(raw));
+    return parseConstruction(() => new RequirementIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -654,8 +680,8 @@ class RequirementId {
   }
 }
 
-// src/kernel/domain/requirement-ids.ts
-class RequirementIds {
+// src/kernel/domain/requirement-identifiers.ts
+class RequirementIdentifiers {
   #values;
   constructor(values) {
     this.#values = values;
@@ -663,15 +689,15 @@ class RequirementIds {
   static extractFrom(text) {
     const ids = [];
     for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementId.of(m[0]));
+      ids.push(RequirementIdentifier.of(m[0]));
     }
-    return new RequirementIds(KeySet.of(ids));
+    return new RequirementIdentifiers(KeySet.of(ids));
   }
   static of(values) {
-    return new RequirementIds(KeySet.of(values));
+    return new RequirementIdentifiers(KeySet.of(values));
   }
   add(value) {
-    return new RequirementIds(this.#values.with(value));
+    return new RequirementIdentifiers(this.#values.with(value));
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -786,6 +812,9 @@ class ErrorMessages {
       throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
+  static parse(values) {
+    return parseConstruction(() => new ErrorMessages(values));
+  }
   static of(values) {
     return new ErrorMessages(values);
   }
@@ -809,11 +838,14 @@ class FindingsSchema {
   #schema;
   #reason;
   constructor(schema, reason) {
-    this.#schema = schema;
+    this.#schema = schema === null ? null : boundedValueSnapshot(schema, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
     this.#reason = reason;
   }
   static of(schema) {
     return new FindingsSchema(schema, null);
+  }
+  static parse(schema) {
+    return parseConstruction(() => new FindingsSchema(schema, null));
   }
   static unreadable(cause) {
     return new FindingsSchema(null, cause);
@@ -1253,22 +1285,57 @@ class AttributeKind {
 class DeclaredBindingValue {
   #value;
   constructor(value) {
-    assertValueSize(value, { string: 4096, total: 65536, nodes: 4096, depth: 32 });
-    this.#value = structuredClone(value);
+    this.#value = value;
   }
   static of(value) {
     return new DeclaredBindingValue(value);
   }
-  static parse(value) {
-    return parseConstruction(() => new DeclaredBindingValue(value));
-  }
   fits(kind, admitsEnum) {
-    return kind.isBool() && typeof this.#value === "boolean" || kind.isInt() && typeof this.#value === "number" && Number.isSafeInteger(this.#value) || kind.isEnum() && typeof this.#value === "string" && admitsEnum(this.#value);
+    return this.#value.match({
+      literal: (value) => kind.isBool() && typeof value === "boolean" || kind.isInt() && typeof value === "number" && Number.isSafeInteger(value) || kind.isEnum() && typeof value === "string" && admitsEnum(value),
+      nonLiteral: () => false
+    });
+  }
+  match(cases) {
+    return this.#value.match(cases);
+  }
+  describe() {
+    return this.#value.describe();
+  }
+}
+// src/kernel/domain/declaration.ts
+class Declaration {
+  #value;
+  constructor(value) {
+    const snapshot = boundedValueSnapshot(value, { string: 4096, total: 65536, nodes: 4096, depth: 32 });
+    const checkNumbers = (current) => {
+      if (typeof current === "number" && !Number.isFinite(current)) {
+        throw new IllegalArgumentException({ kind: "non-finite-declaration-number", raw: current });
+      }
+      if (Array.isArray(current)) {
+        for (const child of current)
+          checkNumbers(child);
+      } else if (current !== null && typeof current === "object") {
+        for (const child of Object.values(current))
+          checkNumbers(child);
+      }
+    };
+    checkNumbers(snapshot);
+    this.#value = snapshot;
+  }
+  static of(value) {
+    return new Declaration(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new Declaration(value));
   }
   match(cases) {
     if (typeof this.#value === "boolean" || typeof this.#value === "number" || typeof this.#value === "string")
       return cases.literal(this.#value);
     return cases.nonLiteral();
+  }
+  equals(other) {
+    return canonicalStringify(this.#value) === canonicalStringify(other.#value);
   }
   describe() {
     return JSON.stringify(this.#value);
@@ -1281,6 +1348,9 @@ class DeclaredBindings {
     if (values.length > 1e4)
       throw new IllegalArgumentException({ kind: "too-many-binding-declarations", raw: values.length });
     this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DeclaredBindings(values));
   }
   static of(values) {
     return new DeclaredBindings(values);
@@ -1309,6 +1379,9 @@ class ScenarioBindings {
       paths.add(path);
     }
     this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ScenarioBindings(values));
   }
   static of(values) {
     return new ScenarioBindings(values);
@@ -1352,8 +1425,8 @@ class ErrorMessage {
     return this.#value;
   }
 }
-// src/kernel/domain/enum-member.ts
-class EnumMember {
+// src/kernel/domain/enumeration-member.ts
+class EnumerationMember {
   #value;
   constructor(value) {
     if (value.length > 4096)
@@ -1361,10 +1434,10 @@ class EnumMember {
     this.#value = value;
   }
   static of(value) {
-    return new EnumMember(value);
+    return new EnumerationMember(value);
   }
   static parse(value) {
-    return parseConstruction(() => new EnumMember(value));
+    return parseConstruction(() => new EnumerationMember(value));
   }
   matchesLiteral(value) {
     return this.#value === value;
@@ -1418,31 +1491,53 @@ class BindingDeclaration {
     return this.#value;
   }
 }
-// src/doctor/domain/manifest-entry.ts
-class ManifestEntry {
-  #rel;
-  #severity;
-  constructor(rel, severity) {
-    this.#rel = ArtifactPath.of(rel);
-    this.#severity = severity;
+// src/kernel/domain/enumeration-members.ts
+class EnumerationMembers {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
+    this.#values = Object.freeze([...values]);
   }
-  static error(rel) {
-    return new ManifestEntry(rel, CheckSeverity.error());
+  static parse(values) {
+    return parseConstruction(() => new EnumerationMembers(values));
   }
-  rel() {
-    return this.#rel.asString();
+  static of(values) {
+    return new EnumerationMembers(values);
   }
-  severity() {
-    return this.#severity;
+  add(value) {
+    return new EnumerationMembers([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  includes(value) {
+    return this.#values.some((member) => member.matchesLiteral(value));
+  }
+  sortedUniqueCanonically() {
+    const members = new Map(this.#values.map((member) => [member.asString(), member]));
+    return new EnumerationMembers([...members.values()].sort((a, b) => a.compareTo(b)));
+  }
+  indexOf(value) {
+    return this.#values.findIndex((member) => member.matchesLiteral(value));
+  }
+  valueAt(index) {
+    return this.#values[index];
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
   }
 }
 // src/doctor/domain/installation-manifest.ts
-var err2 = (rel) => ManifestEntry.error(rel);
+var err2 = (rel) => ManifestEntry.error(ArtifactPath.of(rel));
 
 class InstallationManifest {
   #entries;
   constructor(entries) {
-    this.#entries = entries;
+    this.#entries = Object.freeze([...entries]);
   }
   static standard() {
     return new InstallationManifest([
@@ -1989,11 +2084,11 @@ class CheckFunctionalCoverageUseCase {
     return UnitCoverage.of({ eligible, problems, refinementStale, scopes });
   }
 }
-// src/doctor/adapter/harness-file-client-impl.ts
+// src/doctor/adapter/harness-file-client-implementation.ts
 import { existsSync } from "fs";
 import { join } from "path";
 
-class HarnessFileClientImpl {
+class HarnessFileClientImplementation {
   #root;
   constructor(config) {
     this.#root = config.root;
@@ -2002,7 +2097,7 @@ class HarnessFileClientImpl {
     return existsSync(join(this.#root, rel));
   }
 }
-// src/doctor/adapter/solver-probe-client-impl.ts
+// src/doctor/adapter/solver-probe-client-implementation.ts
 import { spawnSync } from "child_process";
 import { existsSync as existsSync2, mkdtempSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -2018,7 +2113,7 @@ var PROBE_MODULE = `module probe {
 }
 `;
 
-class SolverProbeClientImpl {
+class SolverProbeClientImplementation {
   #config;
   constructor(config) {
     this.#config = config;
@@ -2072,12 +2167,12 @@ class SolverProbeClientImpl {
     });
   }
 }
-// src/doctor/adapter/refcheck-backend-client-impl.ts
+// src/doctor/adapter/reference-check-backend-client-implementation.ts
 import { spawnSync as spawnSync2 } from "child_process";
 import { existsSync as existsSync3 } from "fs";
 import { join as join3 } from "path";
 
-class RefcheckBackendClientImpl {
+class ReferenceCheckBackendClientImplementation {
   #root;
   constructor(config) {
     this.#root = config.root;
@@ -2102,10 +2197,10 @@ class RefcheckBackendClientImpl {
     }
   }
 }
-// src/doctor/adapter/doctor-workspace-client-impl.ts
+// src/doctor/adapter/doctor-workspace-client-implementation.ts
 import { existsSync as existsSync4, readdirSync as readdirSync2, readFileSync, statSync } from "fs";
 import { join as join4 } from "path";
-class DoctorWorkspaceClientImpl {
+class DoctorWorkspaceClientImplementation {
   #projectDir;
   #root;
   #refcheckToolNames;
@@ -2125,7 +2220,7 @@ class DoctorWorkspaceClientImpl {
       if (items)
         return items.map((s) => s.slice(2));
     } catch {}
-    return DoctorWorkspaceClientImpl.#FALLBACK_STAGE_SCOPES;
+    return DoctorWorkspaceClientImplementation.#FALLBACK_STAGE_SCOPES;
   }
   verificationScopes() {
     return this.#scopesOfStage("inception", "deep-spec-analysis-verify.md");
@@ -2308,12 +2403,12 @@ class DoctorWorkspaceClientImpl {
     return out;
   }
 }
-// src/doctor/adapter/installation-provenance-client-impl.ts
+// src/doctor/adapter/installation-provenance-client-implementation.ts
 import { existsSync as existsSync5, readFileSync as readFileSync2 } from "fs";
 import { join as join5 } from "path";
 var SOURCE_KINDS = new Set(["local", "ref", "tag", "latest"]);
 
-class InstallationProvenanceClientImpl {
+class InstallationProvenanceClientImplementation {
   #path;
   constructor(config) {
     this.#path = join5(config.harnessRoot, "tools", "data", "deep-spec-analysis-install.json");
@@ -2337,8 +2432,8 @@ class InstallationProvenanceClientImpl {
     return { kind: "found", version: row.version, ref: row.ref, source: row.source };
   }
 }
-// src/doctor/adapter/git-hub-release-tags-client-impl.ts
-class GitHubReleaseTagsClientImpl {
+// src/doctor/adapter/git-hub-release-tags-client-implementation.ts
+class GitHubReleaseTagsClientImplementation {
   #repository;
   #fetcher;
   #timeoutMs;
@@ -2523,7 +2618,7 @@ async function main() {
   const harnessDir = process.env.AIDLC_HARNESS_DIR || ".claude";
   const root = join6(projectDir, harnessDir);
   const presenter = new DoctorPresenter({ harnessDir });
-  const workspace = new DoctorWorkspaceClientImpl({
+  const workspace = new DoctorWorkspaceClientImplementation({
     projectDir,
     root,
     refcheckToolNames: {
@@ -2533,9 +2628,9 @@ async function main() {
     }
   });
   const verdict = HealthVerdict.of([
-    ...presenter.installation(new CheckInstallationUseCase(new HarnessFileClientImpl({ root })).execute()),
-    presenter.version(await new CheckVersionAdvisoryUseCase(new InstallationProvenanceClientImpl({ harnessRoot: root }), new GitHubReleaseTagsClientImpl({ repository: "j5ik2o/deep-spec-analysis" })).execute()),
-    ...presenter.solvers(new CheckSolversUseCase(new SolverProbeClientImpl({
+    ...presenter.installation(new CheckInstallationUseCase(new HarnessFileClientImplementation({ root })).execute()),
+    presenter.version(await new CheckVersionAdvisoryUseCase(new InstallationProvenanceClientImplementation({ harnessRoot: root }), new GitHubReleaseTagsClientImplementation({ repository: "j5ik2o/deep-spec-analysis" })).execute()),
+    ...presenter.solvers(new CheckSolversUseCase(new SolverProbeClientImplementation({
       projectDir,
       quintBin: process.env.AIDLC_DEEP_SPEC_QUINT_BIN || "quint",
       apalacheDistDeclared: Boolean(process.env.APALACHE_DIST),
@@ -2544,7 +2639,7 @@ async function main() {
       runtimeBin: process.execPath
     })).execute()),
     ...presenter.verificationCoverage(new CheckVerificationCoverageUseCase(workspace).execute()),
-    ...presenter.structuralDebt(new CheckStructuralDebtUseCase(workspace, new RefcheckBackendClientImpl({ root })).execute()),
+    ...presenter.structuralDebt(new CheckStructuralDebtUseCase(workspace, new ReferenceCheckBackendClientImplementation({ root })).execute()),
     ...presenter.functionalCoverage(new CheckFunctionalCoverageUseCase(workspace).execute())
   ]);
   process.stdout.write(`${JSON.stringify(verdict.document())}
