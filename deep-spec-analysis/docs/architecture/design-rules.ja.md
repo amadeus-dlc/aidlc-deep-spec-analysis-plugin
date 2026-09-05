@@ -2,6 +2,8 @@
 
 日本語 | [English](design-rules.md)
 
+補助ガイド: [共有コーディング規則](../../../aidlc/spaces/default/knowledge/aidlc-shared/coding-rules/README.md)。CQSを採用し、CQRSは採用しない（2026-09-05、ユーザー確認）。
+
 この文書は `deep-spec-analysis/src/`（6 文脈・489 ファイル・26,007 行）を全ファイル読んで書き起こした、**いま実際に効いている**設計規則である。「こうありたい」ではなく「こう書かれている」を先に確定し、そこから規範を抜き出した。
 
 他の AI-DLC プラグインでも同じ形を使えるように書いてある。移し方は §9、このリポジトリに残っている逸脱は §8。
@@ -128,7 +130,7 @@
 
 ### D2 — フィールドは `#private` だけ
 
-**規則**: domain のクラスのインスタンスフィールドは JavaScript の `#` プライベートフィールドで宣言する。TypeScript の `private` / `protected` / `public` 修飾子は使わない（`private constructor` を除く）。原則として `readonly` を付ける。
+**規則**: domain のクラスのインスタンスフィールドは JavaScript の `#` プライベートフィールドで宣言する。TypeScript の `private` / `protected` / `public` 修飾子は使わない（`private constructor` を除く）。原則として `readonly` を付ける。参照先の可変性は別に防ぐ。共有する式の木は `ExpressionTree` が入力をコピーして深い階層まで凍結し、`Expression` の型も再帰的にreadonlyにする。
 
 **なぜ**: TS の `private` は型検査だけで、実行時には素通りする。`#` は言語が守る。「見えない」ことを本当に保証すると、外から中身を取り出して外で判断する道が塞がる。
 
@@ -146,25 +148,22 @@
 
 **検査**: `private-constructor-in-domain`。
 
-### D4 — 生成の門は三つに分ける
+### D4 — コンストラクタに契約を集約する
 
-**規則**: 静的ファクトリの名前は役割で決める。
+**規則**: コンストラクタの引数は `string`・`number`・型付きの要素など、必要な型を維持する。TypeScriptで保証する型を実行時に再検査しない。非空・形式・値域など、型では表せない不変条件をコンストラクタで検査し、違反時は `IllegalArgumentException` を送出する。
 
-| 名前 | 入力 | 検証 | 戻り値 |
-|---|---|---|---|
-| `of` | すでに型のついた値 | しない（型が保証済み） | 値そのもの |
-| `parse` | 未検証の生値 | **する** | `Result<T, E>` |
-| `reconstitute` | **書かれた文書**の生値 | **しない**（逐語で運ぶ） | 値そのもの |
+| 名前 | 責務 | 戻り値 |
+|---|---|---|
+| `of` | コンストラクタを呼ぶ。契約違反は呼び出し側のバグとして送出する | 値そのもの |
+| `parse` | 同じコンストラクタを呼び、`IllegalArgumentException` だけをエラー値へ変換する | `Result<T, E>` |
 
-閉じた集合の枝は、これに加えて枝ごとの名前つきファクトリを持つ（`SkipReason.timeout()` など）。
+`parse` は入力不正が起こりうる境界で使う。想定外の例外は捕捉して値へ変換せず、呼び出し側へ送出する。検証を迂回する `reconstitute` は設けない。正準化を行う `compose` や `SkipReason.timeout()` など意味のある生成操作も、最終的には同じコンストラクタを通る。
 
-**なぜ**: これが**この設計で最も効いている規則**である。「厳格な生成」と「寛容な復元」を型の同じ場所に並べて書くことで、壊れた文書を読むときに何が起きるかが一目で分かる。壊れた値を `parse` で拒否すると、検査が「壊れている」と**報告**できなくなる——だから復元は逐語で通し、判断は検査に任せる。
+`parse` の要否は回復可能な入力失敗があるかで決める。`RequirementId`・`BrRef`・`QueryLabel`・`DesignUnitId` は生値を解析する `parse` を持つ。すべての文字列を受理する正規化・宣言値や、内部で導出する個数に、形だけの失敗しない `parse` は追加しない。
 
-**実例**: `src/kernel/domain/skip-reason.ts` の `SkipReason.parse`（閉集合 9 値の門）と `SkipReason.reconstitute`（未知の値も逐語で保持）。`src/requirements/domain/verification-finding.ts` の `VerificationFinding.of`（検証済み `FindingKind` だけ受ける）と `.reconstitute`（未知の kind も文字列で運ぶ）——`src/refcheck/domain/finding.ts` に**コメント文まで逐語同一の対**がある。
+`ErrorMessages` の空配列は「エラーなし」を表す有効な状態であり、拒否しない。不正入力を診断するための `DeclaredBound`・`DeclaredDigest`・`DeclaredRuleId` は、検証済みの値とは別の宣言モデルとして保持する。
 
-**実測**: domain 層で `of` 137・`reconstitute` 143・`parse` 48。
-
-**検査**: なし（レビュー）。
+**検査**: `construction-contracts.test.ts`、`no-reconstitution-bypass`、TypeScriptの型検査。
 
 ### D5 — domain にデータモデルを置かない
 
@@ -234,13 +233,27 @@
 
 **検査**: なし（レビュー）。
 
+**不在と判定の使い分け（2026-09-05）**: このリポジトリでは次の意味を区別する。同じ値に理由なく `null` と `undefined` の両方を許さない。
+
+| 意味 | 表現 | 実例 |
+|---|---|---|
+| 任意の入力・文書項目が指定されていない | `field?` / `undefined` | `FindingsDocument.inputs`、`skipped.detail` |
+| 集約が明示的に持つ値の不在 | `T \| null` | ディレクトリ集約の `crossCheck` |
+| コマンド成功時に返す値がない | `void` / `ok(undefined)` | Repositoryの `store` |
+| 取得・操作の失敗 | `Result`などの失敗の型 | `RepositoryError` |
+| 業務上の判定 | 名前つき変種を持つ値オブジェクト | `ReachabilityVerdict` の到達・範囲内で非到達・未検証 |
+
+`boolean | null` に「未検証」のような第三の判定を割り当てない。到達性は `ReachabilityVerdict.match` で全変種を処理し、portも同じ値を運ぶ。変種ごとに必要な材料が異なる場合は、クラス内部の判別共用体で状態と材料を束ねる。例えば `SiblingVerdictDocument` は読めた変種だけが必須の `method` を持ち、無関係な変種のためにnullableへ広げない。
+
+JSON境界では、項目の省略・空配列・明示的なnullを契約に従って区別する。内部のnullをJSONへそのまま出すとは限らない。`crossChecked` の不在は出力で省略し、空の比較結果は `[]` を保持する。
+
 ### D11 — 集約は境界と不変条件をコメントではなくコマンドで守る
 
 **規則**: 集約ルートは、恒等（識別）・境界の内側に抱えるもの・守る不変条件を持つ。状態を変える操作は**集約自身のコマンド**として書き、そのコマンドの中で不変条件を再確立する。省略可能な部分は集約自身が抱える（Repository のメソッド変種で吸収しない）。
 
 **なぜ**: 「保存の直前に整える」ようにすると、整える前の状態が外に漏れる。コマンドの中で守れば、集約はいつ見ても正しい。
 
-**実例**: `src/design/domain/design-verify-directory.ts` の `DesignVerifyDirectory`——恒等は verify ディレクトリのパス、境界には backend ごとの report・候補・cross-check を抱え、不変条件は「backend ごとに report は 1 つ」「cross-check は不在か、いまの reports から導いたもの」。コマンドは `finalizing` / `crossChecked` / `withoutCrossCheck` / `conformedTo` で、`finalizing` は候補を差し替えると同時に cross-check を落とす。可変部は `DesignReport | null`（`Option` 型は使わない）。`src/requirements/domain/verification-directory.ts` に同型がある。
+**実例**: `src/design/domain/design-verify-directory.ts` の `DesignVerifyDirectory`——恒等は verify ディレクトリのパス、境界には backend ごとの report・候補・cross-check を抱え、不変条件は「backend ごとに report は 1 つ」「cross-check は不在か、いまの reports から導いたもの」。公開準備は `finalizedWith(candidate, model, schema)` が候補の適合とcross-check導出をまとめて行う。個別操作でも、`finalizing` と候補を変更する `conformedTo` は古いcross-checkを落とす。可変部は `DesignReport | null`（`Option` 型は使わない）。`src/requirements/domain/verification-directory.ts` に同型がある。
 
 **検査**: なし（レビュー）。
 
@@ -276,9 +289,9 @@
 
 **なぜ**: Repository は集約を出し入れする口であって、業務の語彙を持つ場所ではない。ここに語彙が増えるのは、たいてい**集約の設計が間違っている**という信号である。「保存のしかたが 2 通り要る」と思ったら、その差は集約自身が持つべき状態である。
 
-**実例（実測）**: Repository の interface は 11 個あり、**例外なく** `findById`（または `findByDirectory`）と `store` の 2 メソッドだけ。`store` の引数は集約そのもの。
+**実例（実測）**: Repositoryのinterfaceは11個。`RefinementMaterialsRepository` は読取専用で `findById` のみ。他の10個は取得と `store` を持ち、`store` の引数は集約そのもの。
 
-**このリポジトリでの逸脱**: `RefinementMaterialsRepository.findById` だけが `Result` で包まず生の集約を返す（§8）。
+**失敗契約**: 全Repositoryの取得は `Result<集約, RepositoryError>` を返す。refinementの適用外（要件モデルの不在）と、存在する入力の不正・I/O失敗を混同しない。
 
 **検査**: `ports-live-in-port-dir`（命名）、`commands-return-void`（`store` の戻り値）。
 
@@ -358,15 +371,13 @@
 
 ## 4. 外界 — adapter と entry（A）
 
-### A1 — 寛容な復元は adapter から入り、domain の内側へ連鎖する
+### A1 — 復元も生成と同じ契約を通る
 
-**規則**: 書かれた文書を読んで domain の値にする経路（`reconstitute`）は adapter が起点になる。domain の型は、自分のフィールドを DP に包み直すために `reconstitute` を呼んでよい。**検証つきの `parse` を呼ぶのは、未検証の生値を初めて受け取る場所だけ。**
+**規則**: adapter は既存の文書デコーダーで外部形式を解き、型付きの値から domain を構築する。復元にも `of` / `parse` と同じ不変条件が適用される。生値は各DPの `parse` に渡して `Result` を処理し、解析済みの値から集約を `of` で組み立てる。`of` を例外変換ラッパーで包んではならない。
 
-**なぜ**: 復元は「文書に書かれている姿を、そのまま型に載せる」操作である。途中で検証を挟むと、壊れた文書を「壊れている」と報告できなくなる。
+**なぜ**: 保存済みという理由だけで不変条件を免除すると、型が表す保証を呼び出し側が信用できなくなる。壊れた宣言を診断する必要がある場合は、原文を表す宣言モデルと検証済みの値を分ける。
 
-**実例（実測）**: `.reconstitute(` の呼び出しは adapter 270・domain 201・usecase 11・entries 0。domain 側の呼び出しは、`private constructor` や `static reconstitute` の中で生の `string` を DP に包む形（`UnitName.reconstitute(props.unit)` など）。
-
-**検査**: なし（レビュー）。
+**検査**: 文書復号・Repositoryの破損入力テスト、`construction-contracts.test.ts`。
 
 ### A2 — 文書の形は domain が持ち、adapter は byte を描くだけ
 
@@ -387,6 +398,8 @@
 **実例**: schema 検査の結果は `ErrorMessages` として集約に渡り、判定は集約が下す。JSON の parse 失敗・フェンス数の不一致は `err({kind: "corrupt", …})` として Repository の境界で返る。
 
 **検査**: なし（レビュー）。
+
+**補足（2026-09-05）**: 検証結果文書の欠落や型不一致を空のfindings／skippedへ補完してはならない。adapterの `decodeFindingsDocument` は復号できない形を失敗にし、未知の語彙は逐語で運ぶ。到達性の判定とrefinementの対象別結果の解釈はドメイン側が所有する。
 
 ### A4 — 書き込みは atomic に、読み書きは往復させる
 
@@ -438,15 +451,13 @@
 
 **検査**: なし（レビュー）。
 
-### F2 — `throw` は欠陥の検出にだけ使い、文言を `defect:` で始める
+### F2 — 契約違反は例外として送出する
 
-**規則**: domain と usecase で `throw` してよいのは、**型の不変条件が破れている＝プログラムの欠陥**を検出したときだけ。メッセージは `defect:` で始める。
+**規則**: `of` の引数が値の不変条件に反する場合、コンストラクタは `IllegalArgumentException` を送出する。呼び出し側は通常の業務分岐として捕捉しない。各DPの `parse` だけが、自分のコンストラクタが送出した契約違反を `Result` に変換する。`of` の例外はpanicであり、adapter・Repositoryも業務エラーへ変換してはならない。I/Oやコンパイルの失敗は捕捉範囲・例外の種類を限定して扱う。
 
-**なぜ**: 「起こりえないはずの状態」を黙って通すとバグが遠くで顔を出す。かといってそれは業務上の失敗ではないので、`Result` の枝にすると呼び手全員が意味のない分岐を書くことになる。前置きを固定すると、grep 一発で「これは欠陥検出だ」と分かる。
+閉じた状態の不整合など、その他の実装欠陥は従来どおり `defect:` を付けた例外で検出する。予期しない例外を広く捕捉して成功・入力不正へ読み替えない。
 
-**実例（実測）**: domain 7 件・usecase 2 件、**全部 `defect:` 始まり**。例: 「`kind` が `extracted` なのにペイロードが `null`」という到達不能ケースの番人。
-
-**検査**: なし（レビュー）。ただし `grep -rn 'throw new' src | grep -v defect:` で機械的に見つけられる（adapter の局所例外は A5 の対象）。
+**検査**: `construction-contracts.test.ts`。
 
 ### F3 — 網羅性はコンパイラに証明させる
 
@@ -456,21 +467,16 @@
 
 **検査**: なし（型検査が担う）。
 
-### F4 — 失敗の型を二段に分ける
+### F4 — 業務上の失敗と契約違反を分ける
 
-**規則**: 失敗を表す型は、**業務の失敗**と**生成の門の失敗**で形を変える。
+**規則**: 業務の言葉で名付けた失敗は、従来どおりドメインエラーのクラスで表す。生成時の契約違反は共通の `IllegalArgumentException` が `kind` と診断用の値を持ち、`parseConstruction` がその情報を `Result` のエラーへ変換する。
 
-**(a) ドメインエラー — 業務の言葉で名づけた失敗**。ユビキタス言語の一員なので、公開するクラスとして書く。`#kind` に閉じたバリアントを持ち、バリアントごとに名前つきファクトリを置き、**その失敗が外にどう見えるか**（凍結文言、公開語彙への対応）を自分で知る。`Result` の値として運ぶ。
+業務上の失敗には判定・文言・公開語彙への変換を持たせる。生成の事前条件は各コンストラクタに一度だけ記述し、`parse` 用の重複した検証規則を持たない。
 
-**(b) 生成の門の失敗 — `parse` が返すもの**。`type XxxError = { readonly kind: "…"; readonly raw: … }` の判別 union として、そのファイルの中に置き、**export しない**。`parse` が返す `Result` の型引数として現れるだけで、外の誰も名前で参照しない。
+**実例**: `RefinementMapDefect` は業務上の失敗、`AttributeBound` の非整数・安全整数範囲外は生成契約の違反。
 
-**なぜ**: この 2 つを同じ形にすると、どちらかが割を食う。業務の失敗を匿名の `type` にすると、文言や公開語彙への対応の置き場が無くなって呼び手に散る。逆に「空文字だった」程度の失敗までクラスにすると、名前だけの型が増える。
+**検査**: `construction-contracts.test.ts`。
 
-**実例**: (a) `src/design/domain/refinement-map-defect.ts` の `RefinementMapDefect`——4 バリアント、名前つきファクトリ 4 つ、凍結文言と skip 理由 `compile-error` への対応を型自身が持つ。`index.ts` から公開されている。(b) domain 層に **46 件**の局所 `type`（`ObligationIdError`・`TokenError` など）。いずれも export されない。
-
-**このリポジトリでの逸脱**: (b) の名前が重複している——`TokenError`（`kind: "empty-token"`）が refcheck の 12 ファイルで別々に定義され、うち `BusinessRuleId.parse` は実際には形式検査なのに `empty-token` を返す（§8）。
-
-**検査**: なし（レビュー）。
 
 ---
 
@@ -545,7 +551,7 @@
 5. **Repository が出し入れする単位か？** → 集約ルート。恒等・境界・不変条件を決め、状態変更はコマンドにする（D11）。可変部は集約自身が抱える。
 6. **コレクションから鍵で引かれるか？** → エンティティ（識別子を持つ）。
 7. **配列や集合を隠したいか？** → ファーストクラスコレクション（D9）。
-8. **スカラー 1 個か？** → ドメインプリミティブ。`of` / `parse` / `reconstitute` の門を決める（D4）。
+8. **スカラー 1 個か？** → ドメインプリミティブ。`of` / `parse` の門を決める（D4）。
 9. **「いくつかの姿のどれか」か？** → `#kind` ＋ 名前つきファクトリ ＋ `match<T>` か述語（D10）。
 10. **ドメインで起きた出来事の不変の記録か？** → ドメインイベント。
 11. **ここまでで当たらない** → **作る前に人間の裁定にかける。** 実測した問題と、なぜ既存の 4 種で表せないかを添える。「手順を包んだ型」に見えるなら、まずその判断を言える側（宣言・コレクション・集約）に移せないかを試す（D12）。
@@ -574,10 +580,7 @@
 | `design/domain` の 15 箇所 | domain の中で値を取り出して外で分岐している（D8 の未達） |
 | `src/design/domain/index.ts` のコメント | 統合された 36 シンボルを「ドメインサービス群」と自称。実体は集約・値オブジェクト・FCC だが、`UnitRefinementPlan.of`（178 行）や `DesignUnitDecl.wellFormednessErrors`（199 行）は手続きに重心がある（D12 の未達） |
 | `refcheck/domain` の 7 型 | `#seed` にフィールドを一括で持つ書き方が、同じ層のフィールド分解型と混在。同じ型リテラルを 3 回書き写している |
-| `doctor/domain` の `PluginVersion.parse` | 全 48 個の `parse` で唯一 `Result` を返さない（`PluginVersion \| null`）。doctor/domain は `kernel-infrastructure` を 1 件も import しない |
 | `refcheck/domain` の `*Outcome` 5 型 | 同じ「到達不能な枝」の扱いが、3 型は `throw`、2 型は黙って別の枝へ落ちる、と割れている |
-| `VerificationSkipped` / `Skipped` の `reason` | kernel に `SkipReason` DP（閉集合 9 値）があるのに、両方とも生の `string` で運ぶ（D6 の未達） |
-| `RefinementMaterialsRepository.findById` | 11 個の Repository で唯一 `Result` を返さない（P2 の未達） |
 | `SiblingUnitIndex` | 索引で唯一 `KeyedIndex` を使わず生の `ReadonlyMap` の入れ子を持つ |
 | `refcheck/domain/functional-design.ts` | コメントだけの孤児ファイル（export 0、どこからも import されない） |
 | 閉じた union の公開面 | `match<T>`（refcheck）と述語群（requirements の `*Verdict`）に割れている（D10 の未達） |

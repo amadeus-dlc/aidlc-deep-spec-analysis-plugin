@@ -7,7 +7,7 @@ import type { ArtifactPath } from "@deep-spec/kernel-domain";
 export class DesignRecordId {
   readonly #path: ArtifactPath;
 
-  private constructor(path: ArtifactPath) {
+  private constructor(path: Parameters<typeof DesignRecordId.of>[0]) {
     this.#path = path;
   }
 

@@ -13,14 +13,14 @@ export class RefinementUnitMap {
   readonly #eventMap: EventMappings;
   readonly #unmapped: UnmappedDeclarations;
 
-  private constructor(props: { unit: DesignUnitId; attrMap: AttributeMappings; eventMap: EventMappings; unmapped: UnmappedDeclarations }) {
+  private constructor(props: Parameters<typeof RefinementUnitMap.of>[0]) {
     this.#unit = props.unit;
     this.#attrMap = props.attrMap;
     this.#eventMap = props.eventMap;
     this.#unmapped = props.unmapped;
   }
 
-  static reconstitute(props: { unit: DesignUnitId; attrMap: AttributeMappings; eventMap: EventMappings; unmapped: UnmappedDeclarations }): RefinementUnitMap {
+  static of(props: { unit: DesignUnitId; attrMap: AttributeMappings; eventMap: EventMappings; unmapped: UnmappedDeclarations }): RefinementUnitMap {
     return new RefinementUnitMap(props);
   }
 

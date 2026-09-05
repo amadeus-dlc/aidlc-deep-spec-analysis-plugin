@@ -1,23 +1,20 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-
-type ContractCellError = { readonly kind: "empty-contract-id"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 // contracts テーブルの ID 列の値。
 export class ContractId {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-contract-id", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<ContractId, ContractCellError> {
-    if (raw === "") return err({ kind: "empty-contract-id", raw });
-    return ok(new ContractId(raw));
-  }
-
-  static reconstitute(raw: string): ContractId {
+  static of(raw: string): ContractId {
     return new ContractId(raw);
+  }
+
+  static parse(raw: string): Result<ContractId, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new ContractId(raw));
   }
 
   equals(other: ContractId): boolean {

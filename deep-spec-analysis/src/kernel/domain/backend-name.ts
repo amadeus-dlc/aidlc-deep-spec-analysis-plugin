@@ -1,25 +1,22 @@
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // BackendName — 検証バックエンド名（smt / quint / cross-check / components …）
 // のドメインプリミティブ。レポート id の派生名・crossChecked 判定表・比較表の
 // キーとして全コンテキストが話す共有語彙。
 
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-
-type BackendNameError = { readonly kind: "empty-backend-name"; readonly raw: string };
-
 export class BackendName {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-backend-name", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<BackendName, BackendNameError> {
-    if (raw === "") return err({ kind: "empty-backend-name", raw });
-    return ok(new BackendName(raw));
-  }
-
-  static reconstitute(raw: string): BackendName {
+  static of(raw: string): BackendName {
     return new BackendName(raw);
+  }
+
+  static parse(raw: string): Result<BackendName, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new BackendName(raw));
   }
 
   equals(other: BackendName): boolean {

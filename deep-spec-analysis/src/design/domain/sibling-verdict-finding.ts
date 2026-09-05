@@ -12,15 +12,15 @@ export class SiblingVerdictFinding {
   readonly #witness: DesignWitness;
   readonly #detail: string;
 
-  private constructor(props: { kind: string; frRefs: FrRefs; targets: readonly LoweredId[]; witness: DesignWitness; detail: string }) {
-    this.#kind = FindingKind.reconstitute(props.kind);
+  private constructor(props: Parameters<typeof SiblingVerdictFinding.of>[0]) {
+    this.#kind = props.kind;
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#detail = props.detail;
   }
 
-  static reconstitute(props: { kind: string; frRefs: FrRefs; targets: readonly LoweredId[]; witness: DesignWitness; detail: string }): SiblingVerdictFinding {
+  static of(props: { kind: FindingKind; frRefs: FrRefs; targets: readonly LoweredId[]; witness: DesignWitness; detail: string }): SiblingVerdictFinding {
     return new SiblingVerdictFinding(props);
   }
 
@@ -47,6 +47,10 @@ export class SiblingVerdictFinding {
 
   detail(): string {
     return this.#detail;
+  }
+
+  provesReachabilityOf(attrPath: string, state: string): boolean {
+    return this.isKind("conflict") && this.#witness.reachesState(attrPath, state);
   }
 
   // core のラベル（lowered id）を design id へ書き換えた witness——形の判定は

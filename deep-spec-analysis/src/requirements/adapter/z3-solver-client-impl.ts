@@ -1,3 +1,4 @@
+import { combineResults, traverseResult, ok } from "@deep-spec/kernel-infrastructure";
 // Z3SolverClient の実 Gateway 実装。計画を組み、自分自身のエントリ
 // （--smt-child）を node 優先・bun フォールバックで spawn して解かせ、
 // 生のテキストモデルを decode した型付き判定を返す。selfPath・タイムアウト・
@@ -10,6 +11,7 @@ import { spawnSync } from "node:child_process";
 import { SmtQueryVerdicts } from "@deep-spec/requirements-domain";
 import { SmtQueryVerdict } from "@deep-spec/requirements-domain";
 import type { RequirementsModel } from "@deep-spec/requirements-domain";
+
 import type { SmtCheck, Z3SolverClient } from "@deep-spec/requirements-usecase";
 import { type SmtChildQuery } from "./smt-child-query.ts";
 import { buildSmtPlan, decodeSolverModel } from "./smt-plan.ts";
@@ -19,7 +21,6 @@ import { KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
 
 const CHILD_BUDGET_MS = 45_000;
 const CHILD_WALL_TIMEOUT_MS = 55_000;
-
 
 export class Z3SolverClientImpl implements Z3SolverClient {
   readonly #config: Z3SolverClientConfig;
@@ -39,10 +40,15 @@ export class Z3SolverClientImpl implements Z3SolverClient {
     }
     const verdicts: (readonly [QueryLabel, SmtQueryVerdict])[] = [];
     for (const [id, r] of outcome.results) {
-      verdicts.push([QueryLabel.reconstitute(id), SmtQueryVerdict.reconstitute({
+      const parsed = combineResults({
+        label: QueryLabel.parse(id),
+        core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse),
+      });
+      if (!parsed.ok) return { plan: plan.plan, result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` } };
+      verdicts.push([parsed.value.label, SmtQueryVerdict.of({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
-        core: r.core,
+        core: parsed.value.core?.map((label) => label.asString()),
       })]);
     }
     return { plan: plan.plan, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(KeyedIndex.of(verdicts)) } };

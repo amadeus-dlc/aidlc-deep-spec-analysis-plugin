@@ -81,3 +81,4 @@ export { SourceIds } from "./source-ids.ts";
 export { StateName } from "./state-name.ts";
 export { StateNames } from "./state-names.ts";
 export { TypeName } from "./type-name.ts";
+export { DeclaredRuleId } from "./declared-rule-id.ts";

@@ -1,10 +1,12 @@
-// 契約1 IR（生 Json）→ Parameters<typeof RequirementsModel.reconstitute>[0] の寛容パース。欠損・型不一致の
+import { RequirementId, IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
+
+// 契約1 IR（生 Json）→ Parameters<typeof RequirementsModel.of>[0] の寛容パース。欠損・型不一致の
 // エントリは黙って落とす（旧 parseIr の凍結挙動——ir-valid センサーが別途
-// 厳密検査を担う）。集約として成立しない形は凍結文言の文字列で返す。
+// 厳密検査を担う）。集約として成立しない形はResultのエラーで返す。
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
 
-import { type Json, isObject, strArr } from "@deep-spec/kernel-infrastructure";
-import { IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
+import { type Json, type Result, err, combineResults, traverseResult, ok, isObject, strArr } from "@deep-spec/kernel-infrastructure";
+
 import {
   AttributeBound,
   AttributePath,
@@ -27,10 +29,10 @@ import {
 
 // 恒等（FormalModelId）は Repository が findById の引数から注入する——
 // パーサは文書の中身しか知らない。
-export function parseFormalModel(raw: Json): Omit<Parameters<typeof RequirementsModel.reconstitute>[0], "id" | "irHash" | "sourceDocument"> | string {
-  if (!isObject(raw)) return "IR is not a JSON object";
+export function parseFormalModel(raw: Json): Result<Omit<Parameters<typeof RequirementsModel.of>[0], "id" | "irHash" | "sourceDocument">, string> {
+  if (!isObject(raw)) return err("IR is not a JSON object");
   const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
-  if (!irVersion.ok) return "IR lacks a semver irVersion";
+  if (!irVersion.ok) return err("IR lacks a semver irVersion");
   const attributes: AttributeDeclaration[] = [];
   const schema = isObject(raw.schema) ? raw.schema : {};
   for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
@@ -40,11 +42,17 @@ export function parseFormalModel(raw: Json): Omit<Parameters<typeof Requirements
       const t = attr.type;
       const kind = t.kind;
       if (kind !== "bool" && kind !== "int" && kind !== "enum") continue;
-      attributes.push(AttributeDeclaration.reconstitute({
-        path: AttributePath.reconstitute(`${ent.name}.${attr.name}`),
+      const parsed = combineResults({
+        path: AttributePath.parse(`${ent.name}.${attr.name}`),
+        min: typeof t.min === "number" ? AttributeBound.parse(t.min) : ok(undefined),
+        max: typeof t.max === "number" ? AttributeBound.parse(t.max) : ok(undefined),
+      });
+      if (!parsed.ok) return err(JSON.stringify(parsed.error));
+      attributes.push(AttributeDeclaration.of({
+        path: parsed.value.path,
         kind,
-        min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
-        max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
+        min: parsed.value.min,
+        max: parsed.value.max,
         values: Array.isArray(t.values) ? AttributeValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
       }));
     }
@@ -52,13 +60,19 @@ export function parseFormalModel(raw: Json): Omit<Parameters<typeof Requirements
   const obligations: Obligation[] = [];
   for (const ob of Array.isArray(raw.obligations) ? raw.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
-    obligations.push(Obligation.reconstitute({
-      id: ObligationId.reconstitute(ob.id),
-      nature: ObligationNature.reconstitute(ob.nature),
-      frRefs: FrRefs.reconstitute(strArr(ob.frRefs)),
+    const parsed = combineResults({
+      id: ObligationId.parse(ob.id),
+      frRefs: traverseResult(strArr(ob.frRefs), RequirementId.parse),
+      trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined),
+    });
+    if (!parsed.ok) return err(JSON.stringify(parsed.error));
+    obligations.push(Obligation.of({
+      id: parsed.value.id,
+      nature: ObligationNature.of(ob.nature),
+      frRefs: FrRefs.of(parsed.value.frRefs),
       ears: typeof ob.ears === "string" ? ob.ears : undefined,
       assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
-      trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
+      trigger: parsed.value.trigger,
       guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
       effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
       temporal: isObject(ob.temporal) ? (ob.temporal as unknown as { pattern: string; assert?: Expression; from?: Expression; to?: Expression }) : undefined,
@@ -73,25 +87,33 @@ export function parseFormalModel(raw: Json): Omit<Parameters<typeof Requirements
     for (const [k, v] of Object.entries(sc.bindings)) {
       if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
     }
-    scenarios.push(Scenario.reconstitute({
-      id: ScenarioId.reconstitute(sc.id),
+    const parsed = combineResults({
+      id: ScenarioId.parse(sc.id),
+      frRefs: traverseResult(strArr(sc.frRefs), RequirementId.parse),
+      trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined),
+    });
+    if (!parsed.ok) return err(JSON.stringify(parsed.error));
+    scenarios.push(Scenario.of({
+      id: parsed.value.id,
       kind,
-      frRefs: FrRefs.reconstitute(strArr(sc.frRefs)),
+      frRefs: FrRefs.of(parsed.value.frRefs),
       bindings,
-      event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
+      event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },
       expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
     }));
   }
   const background: BackgroundAssumption[] = [];
   for (const bg of Array.isArray(raw.background) ? raw.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
-    background.push(BackgroundAssumption.reconstitute({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: bg.assert as unknown as Expression }));
+    const id = BackgroundAssumptionId.parse(bg.id);
+    if (!id.ok) return err(JSON.stringify(id.error));
+    background.push(BackgroundAssumption.of({ id: id.value, assert: bg.assert as unknown as Expression }));
   }
-  return {
+  return ok({
     irVersion: irVersion.value,
     attributes: AttributeDeclarations.of(attributes),
     obligations: Obligations.of(obligations),
     scenarios: Scenarios.of(scenarios),
     background: BackgroundAssumptions.of(background),
-  };
+  });
 }

@@ -3,8 +3,8 @@ import { NumericBound } from "./numeric-bound.ts";
 // default 宣言 — 文書上は文字列または数値（それ以外は宣言なし扱い＝凍結挙動）。
 export class AttributeDefault {
   readonly #value: string | number;
-  private constructor(value: string | number) { this.#value = value; }
-  static reconstitute(raw: string | number): AttributeDefault { return new AttributeDefault(raw); }
+  private constructor(value: Parameters<typeof AttributeDefault.of>[0]) { this.#value = value; }
+  static of(raw: string | number): AttributeDefault { return new AttributeDefault(raw); }
   isNumber(): boolean { return typeof this.#value === "number"; }
   isString(): boolean { return typeof this.#value === "string"; }
   // 境界: 数値既定値の比較材料（isNumber ガード下でのみ意味を持つ）。

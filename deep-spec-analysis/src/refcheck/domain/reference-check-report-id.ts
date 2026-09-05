@@ -15,7 +15,7 @@ export class ReferenceCheckReportId {
 
   // of は識別組立ての門——backend 名は生語彙(ファイル名・CLI)から包む。
   static of(directory: ArtifactPath, backend: string): ReferenceCheckReportId {
-    return new ReferenceCheckReportId(directory, BackendName.reconstitute(backend));
+    return new ReferenceCheckReportId(directory, BackendName.of(backend));
   }
 
   equals(other: ReferenceCheckReportId): boolean {

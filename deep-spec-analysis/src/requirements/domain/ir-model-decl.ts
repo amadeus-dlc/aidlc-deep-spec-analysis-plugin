@@ -17,35 +17,13 @@ import { IrEntityDecls } from "./ir-entity-decls.ts";
 import { IrObligationDecls } from "./ir-obligation-decls.ts";
 import { IrScenarioDecls } from "./ir-scenario-decls.ts";
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 export class IrModelDecl {
   readonly #entities: IrEntityDecls;
   readonly #obligations: IrObligationDecls;
   readonly #scenarios: IrScenarioDecls;
   readonly #background: IrBackgroundDecls;
 
-  private constructor(seed: {
-    readonly entities: IrEntityDecls;
-    readonly obligations: IrObligationDecls;
-    readonly scenarios: IrScenarioDecls;
-    readonly background: IrBackgroundDecls;
-  }) {
+  private constructor(seed: Parameters<typeof IrModelDecl.of>[0]) {
     this.#entities = seed.entities;
     this.#obligations = seed.obligations;
     this.#scenarios = seed.scenarios;
@@ -53,7 +31,7 @@ export class IrModelDecl {
   }
 
   // アダプタの寛容パースからの唯一の構築口。
-  static reconstitute(seed: {
+  static of(seed: {
     readonly entities: IrEntityDecls;
     readonly obligations: IrObligationDecls;
     readonly scenarios: IrScenarioDecls;

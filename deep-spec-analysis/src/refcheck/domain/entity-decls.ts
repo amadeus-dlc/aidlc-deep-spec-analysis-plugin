@@ -1,8 +1,9 @@
 import type { NormalizedName } from "@deep-spec/kernel-domain";
+import { KeySet } from "@deep-spec/kernel-domain";
 import { EntityDecl } from "./entity-decl.ts";
 import { type AppliesTo } from "./applies-to.ts";
 import { type ReferenceTarget } from "./reference-target.ts";
-import { KeySet } from "@deep-spec/kernel-domain";
+
 import { EntityName } from "./entity-name.ts";
 
 // エンティティ宣言のコレクション。重複・所属・正規化名解決・ライフサイクル
@@ -54,7 +55,7 @@ export class EntityDecls {
   // 小文字包含の緩い照合（凍結挙動）。
   resolvesReference(reference: ReferenceTarget): boolean {
     const token = reference.entityToken();
-    if (token !== null) return this.#names.has(EntityName.reconstitute(token));
+    if (token !== null) return this.#names.has(EntityName.of(token));
     return this.#values.some((d) => reference.looselyMentions(d.name()));
   }
 

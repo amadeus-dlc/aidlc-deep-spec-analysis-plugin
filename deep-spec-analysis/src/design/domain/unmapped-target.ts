@@ -11,7 +11,7 @@ export class UnmappedTarget {
     this.#reason = reason;
   }
 
-  static reconstitute(props: { target: UnmappedTargetRef; reason: string }): UnmappedTarget {
+  static of(props: { target: UnmappedTargetRef; reason: string }): UnmappedTarget {
     return new UnmappedTarget(props.target, props.reason);
   }
 

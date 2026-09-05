@@ -1,4 +1,5 @@
-import { BackendName, ContentHash, FindingKind, FrRefs, TargetId, TargetIds } from "@deep-spec/kernel-domain";
+import { UnitName, BackendName, ContentHash, FindingKind, FrRefs, TargetId, TargetIds } from "@deep-spec/kernel-domain";
+
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
 import { DesignFindings } from "./design-findings.ts";
@@ -59,7 +60,7 @@ export class DesignReports {
             const key = `${u.name()}|${sc.id().asString()}`;
             if (a.skipped.has(key) || b.skipped.has(key)) continue;
             const verdictOf = (d: (typeof docs)[number]): boolean =>
-              d.findings.some((f) => f.kind() === "scenario-violation" && f.unit() === u.name() && f.targets().includes(TargetId.reconstitute(sc.id().asString())));
+              d.findings.some((f) => f.kind() === "scenario-violation" && f.unit() === u.name() && f.targets().includes(TargetId.of(sc.id().asString())));
             const va = verdictOf(a);
             const vb = verdictOf(b);
             (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set()).get(a.backend))?.add(sc.id().asString());
@@ -72,9 +73,9 @@ export class DesignReports {
                 DesignFinding.of({
                   kind: FindingKind.crossCheckDisagreement(),
                   frRefs: FrRefs.of([...sc.frRefs()]).sortedUnique(),
-                  targets: TargetIds.reconstitute([sc.id().asString()]),
+                  targets: TargetIds.of(Array.from([sc.id().asString()], (raw) => TargetId.of(raw))),
                   witness: DesignWitness.verdicts(verdicts),
-                  unit: u.name(),
+                  unit: UnitName.of(u.name()),
                   detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()} of unit ${u.name()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`,
                 }),
               );
@@ -84,7 +85,7 @@ export class DesignReports {
       }
     }
     const crossChecked: DesignCrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => DesignCrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets]).sortedCanonically() }))
+      .map(([backend, targets]) => DesignCrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIds.of(Array.from([...targets], (raw) => TargetId.of(raw))).sortedCanonically() }))
       .sort((x, y) => x.compareByBackend(y));
 
     return DesignReport.compose({

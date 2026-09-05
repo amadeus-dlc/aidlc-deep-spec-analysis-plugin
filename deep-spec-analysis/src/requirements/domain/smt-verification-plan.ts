@@ -1,3 +1,4 @@
+import { SkipReason, FindingKind, TargetIds, KeySet, KeyedIndex, QueryLabel, TargetId, TriggerName } from "@deep-spec/kernel-domain";
 // SMT 検証計画——コンパイラが要件モデルを SMT クエリに変換したときの対応表
 // （形式 SMT-LIB を含まない面）。計画は値オブジェクト（種別規律の裁定 7、
 // 2026-09-02——「事実」の名はドメインイベントに取っておく）。
@@ -8,7 +9,6 @@
 // ソートは VerificationReport.compose の不変条件）は plan 自身の振る舞い
 // （OOUI 裁定）。
 
-import { FindingKind, TargetIds, KeySet, KeyedIndex, QueryLabel, TargetId, TriggerName } from "@deep-spec/kernel-domain";
 import type { RequirementsModel } from "./requirements-model.ts";
 import { type SmtQueryVerdicts } from "./smt-query-verdicts.ts";
 import { VerificationFinding } from "./verification-finding.ts";
@@ -109,12 +109,12 @@ export class SmtVerificationPlan {
 
     const timeoutSkip = (targets: TargetIds, what: string): void => {
       for (const t of targets) {
-        skipped.push(VerificationSkipped.reconstitute({ target: t, reason: "timeout", detail: `${what} exceeded the solver budget` }));
+        skipped.push(VerificationSkipped.of({ target: t, reason: SkipReason.of("timeout"), detail: `${what} exceeded the solver budget` }));
       }
     };
 
     // (a) 大域一貫性。
-    const global = results.verdictOf(QueryLabel.reconstitute("global"));
+    const global = results.verdictOf(QueryLabel.of("global"));
     let globallyUnsat = false;
     if (global?.isUnsat()) {
       globallyUnsat = true;
@@ -130,7 +130,7 @@ export class SmtVerificationPlan {
     // (a) 前件空虚（大域 unsat のときは冗長な派生なので黙る）。
     if (!globallyUnsat) {
       for (const ob of model.obligations()) {
-        const r = results.verdictOf(QueryLabel.reconstitute(`vac:${ob.id().asString()}`));
+        const r = results.verdictOf(QueryLabel.of(`vac:${ob.id().asString()}`));
         if (!r) continue;
         if (r.isUnsat()) {
           const targets = TargetIds.of([...coreToTargets([...r.coreLabels()]), ob.id().asTargetId()]).sortedUniqueCanonically();
@@ -167,7 +167,7 @@ export class SmtVerificationPlan {
     // (b) 完全性ギャップ。
     for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => (a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0))) {
       const trigger = triggerName.asString();
-      const r = results.verdictOf(QueryLabel.reconstitute(`gap:${trigger}`));
+      const r = results.verdictOf(QueryLabel.of(`gap:${trigger}`));
       if (!r) continue;
       if (r.isSat()) {
         findings.push(VerificationFinding.of({

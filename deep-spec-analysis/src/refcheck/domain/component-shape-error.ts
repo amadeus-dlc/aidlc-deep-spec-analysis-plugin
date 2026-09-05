@@ -11,7 +11,7 @@ export class ComponentShapeError {
     this.#detail = detail;
   }
 
-  static reconstitute(props: { element: ElementPath; detail: string }): ComponentShapeError {
+  static of(props: { element: ElementPath; detail: string }): ComponentShapeError {
     return new ComponentShapeError(props.element, props.detail);
   }
 

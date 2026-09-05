@@ -15,7 +15,7 @@ import type { Result } from "@deep-spec/kernel-infrastructure";
 import { err, ok } from "@deep-spec/kernel-infrastructure";
 import type { FindingsSchema } from "@deep-spec/kernel-domain";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { RequirementsModel, VerificationDirectory, VerificationReport } from "@deep-spec/requirements-domain";
+import type { RequirementsModel, VerificationReport } from "@deep-spec/requirements-domain";
 import type { VerificationDirectoryRepository } from "./port/verification-directory-repository.ts";
 
 export class VerificationReportFinalizer {
@@ -30,28 +30,25 @@ export class VerificationReportFinalizer {
   // ディレクトリ集約を取得し、候補を置き、クロスチェックを導き、契約2 へ適合
   // させてから一塊で保存する。verdict は「保存したのと同じ集約」の候補から導く。
   finalize(report: VerificationReport, model: RequirementsModel): Result<VerificationReport, RepositoryError> {
-    return this.#finalizing(report, (staged) => staged.crossChecked(model, report.irHash()).conformedTo(this.#findingsSchema));
+    return this.#finalizing(report, model);
   }
 
   // IR が読めないときは RequirementsModel が無く、兄弟集合からクロスチェックを
   // 導けない。導けないのは cross-check だけで、直列化と atomic write に model は
   // 要らない——同じ経路で自文書だけを公開する。
   finalizeIrUnreadable(report: VerificationReport): Result<void, RepositoryError> {
-    const finalized = this.#finalizing(report, (staged) => staged.withoutCrossCheck());
+    const finalized = this.#finalizing(report, null);
     if (!finalized.ok) return err(finalized.error);
     return ok(undefined);
   }
 
   #finalizing(
     report: VerificationReport,
-    resolveCrossCheck: (staged: VerificationDirectory) => VerificationDirectory,
+    model: RequirementsModel | null,
   ): Result<VerificationReport, RepositoryError> {
     const loaded = this.#repository.findByDirectory(report.id().directory());
     if (!loaded.ok) return err(loaded.error);
-    // 候補を先に適合させる：クロスチェックは「適合後の兄弟集合」から導く
-    // ——降格した候補は比較に参加しない（VerificationReports.crossChecked の規則）。
-    const staged = loaded.value.finalizing(report).conformedTo(this.#findingsSchema);
-    const aggregate = resolveCrossCheck(staged).conformedTo(this.#findingsSchema);
+    const aggregate = loaded.value.finalizedWith(report, model, this.#findingsSchema);
     const stored = this.#repository.store(aggregate);
     if (!stored.ok) return err(stored.error);
     const published = aggregate.candidate();

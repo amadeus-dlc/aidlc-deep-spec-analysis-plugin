@@ -1,29 +1,23 @@
-// ContentHash — sha256 hex ダイジェストの語彙（64 桁小文字 16 進）。
-// parse が strict な構築口（境界の検証）、reconstitute は凍結文書からの
-// 逐語再水和専用——集約の compose/reconstitute と同じ二面性で、寛容読みの
-// 責務はアダプタに残る。ContentHash.ofText() は常に正な値を生むため直接構築する
-// （型ごとの new は 1 箇所：private constructor のみ）。
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
+// SHA-256 ダイジェスト。64 桁の小文字16進数という不変条件を
+// コンストラクタに集約し、of / parse / ハッシュ計算の全経路で保証する。
 
 import { createHash } from "node:crypto";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-
-type ContentHashError = { readonly kind: "not-a-sha256-hex"; readonly raw: string };
 
 export class ContentHash {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (!/^[0-9a-f]{64}$/.test(raw)) throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<ContentHash, ContentHashError> {
-    if (!/^[0-9a-f]{64}$/.test(raw)) return err({ kind: "not-a-sha256-hex", raw });
-    return ok(new ContentHash(raw));
-  }
-
-  // 凍結文書の逐語再水和専用（不正値も文書の bytes として保存する）。
-  static reconstitute(raw: string): ContentHash {
+  static of(raw: string): ContentHash {
     return new ContentHash(raw);
+  }
+
+  static parse(raw: string): Result<ContentHash, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new ContentHash(raw));
   }
 
   static ofText(text: string): ContentHash {

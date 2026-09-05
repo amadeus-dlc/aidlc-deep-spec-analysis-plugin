@@ -1,4 +1,6 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression, FrRefs, TargetId } from "@deep-spec/kernel-domain";
+
 import type { ObligationId } from "@deep-spec/requirements-domain";
 import { LoweredObligation, type LoweredId } from "@deep-spec/design-domain";
 
@@ -13,7 +15,7 @@ export class RefinementQuintInvariant {
   private constructor(reqId: ObligationId, frRefs: FrRefs, expr: Expression) {
     this.#reqId = reqId;
     this.#frRefs = frRefs;
-    this.#expr = expr;
+    this.#expr = ExpressionTree.of(expr).asExpression();
   }
 
   static of(reqId: ObligationId, frRefs: FrRefs, expr: Expression): RefinementQuintInvariant {
@@ -30,6 +32,6 @@ export class RefinementQuintInvariant {
 
   // 兄弟バックエンドへ渡す lowering 上の invariant 義務（id は呼び手が採番）。
   loweredAs(id: LoweredId): LoweredObligation {
-    return LoweredObligation.reconstitute({ id, nature: "invariant", frRefs: this.#frRefs, assert: this.#expr });
+    return LoweredObligation.of({ id, nature: "invariant", frRefs: this.#frRefs, assert: this.#expr });
   }
 }

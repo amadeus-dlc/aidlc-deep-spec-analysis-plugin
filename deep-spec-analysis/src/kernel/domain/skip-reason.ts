@@ -1,14 +1,7 @@
-// SkipReason — design／refinement／refcheck の各 skip 文書（契約2）が共有する
-// reason のドメインプリミティブ（種別規律の裁定 3-2、2026-09-04）。閉集合 9 値
-// （契約2 skippedEntry.reason、deep-spec-findings-schema.json が正本）:
-// unavailable / timeout / capability / compile-error / waived / absent-input /
-// stale-input / ir-version-mismatch / unrecognized-format。
-// parse は閉集合の門、reconstitute は逐語——adapter の寛容な hydration 用
-// （書かれた文書の降格試験が未知の reason を運びうるため）。閉集合 9 値には
-// それぞれ名前付き静的ファクトリがある——domain／usecase が自ら選ぶ理由は
-// 文字列を経由せずこの口から得る（種別規律：自由関数を置かない）。
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+// 検証を省略した理由。findings スキーマの閉集合9値を生成時に保証する。
+// 業務が選ぶ理由には名前付きファクトリを使う。
 
 const KNOWN_REASONS: ReadonlySet<string> = new Set([
   "unavailable",
@@ -22,59 +15,57 @@ const KNOWN_REASONS: ReadonlySet<string> = new Set([
   "unrecognized-format",
 ]);
 
-type SkipReasonError = { readonly kind: "unknown-skip-reason"; readonly raw: string };
-
 export class SkipReason {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (!KNOWN_REASONS.has(raw)) throw new IllegalArgumentException({ kind: "unknown-skip-reason", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<SkipReason, SkipReasonError> {
-    if (!KNOWN_REASONS.has(raw)) return err({ kind: "unknown-skip-reason", raw });
-    return ok(new SkipReason(raw));
-  }
-
-  static reconstitute(raw: string): SkipReason {
+  static of(raw: string): SkipReason {
     return new SkipReason(raw);
+  }
+
+  static parse(raw: string): Result<SkipReason, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new SkipReason(raw));
   }
 
   // 閉集合 9 値の名前付きファクトリ（値オブジェクト自身の生成口）。
   static unavailable(): SkipReason {
-    return new SkipReason("unavailable");
+    return SkipReason.of("unavailable");
   }
 
   static timeout(): SkipReason {
-    return new SkipReason("timeout");
+    return SkipReason.of("timeout");
   }
 
   static capability(): SkipReason {
-    return new SkipReason("capability");
+    return SkipReason.of("capability");
   }
 
   static compileError(): SkipReason {
-    return new SkipReason("compile-error");
+    return SkipReason.of("compile-error");
   }
 
   static waived(): SkipReason {
-    return new SkipReason("waived");
+    return SkipReason.of("waived");
   }
 
   static absentInput(): SkipReason {
-    return new SkipReason("absent-input");
+    return SkipReason.of("absent-input");
   }
 
   static staleInput(): SkipReason {
-    return new SkipReason("stale-input");
+    return SkipReason.of("stale-input");
   }
 
   static irVersionMismatch(): SkipReason {
-    return new SkipReason("ir-version-mismatch");
+    return SkipReason.of("ir-version-mismatch");
   }
 
   static unrecognizedFormat(): SkipReason {
-    return new SkipReason("unrecognized-format");
+    return SkipReason.of("unrecognized-format");
   }
 
   asString(): string {

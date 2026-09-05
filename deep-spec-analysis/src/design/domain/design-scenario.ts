@@ -1,6 +1,7 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
+import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
 // 設計シナリオ。accept/reject の意味、binding の正準列挙、BR/FR 帰属を所有する。
 
-import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
 import { type BrRefs } from "./br-refs.ts";
 import { DesignScenarioId } from "./design-scenario-id.ts";
 import type { LoweredId } from "./lowered-id.ts";
@@ -15,25 +16,17 @@ export class DesignScenario {
   readonly #eventTrigger: TriggerName | undefined;
   readonly #expect: Expression | undefined;
 
-  private constructor(props: {
-    id: DesignScenarioId;
-    kind: "accept" | "reject";
-    brRefs: BrRefs;
-    frRefs: FrRefs;
-    bindings: Readonly<Record<string, boolean | number | string>>;
-    event?: { readonly trigger: TriggerName };
-    expect?: Expression;
-  }) {
+  private constructor(props: Parameters<typeof DesignScenario.of>[0]) {
     this.#id = props.id;
     this.#kind = props.kind;
     this.#brRefs = props.brRefs;
     this.#frRefs = props.frRefs;
     this.#bindings = { ...props.bindings };
     this.#eventTrigger = props.event?.trigger;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
-  static reconstitute(props: {
+  static of(props: {
     id: DesignScenarioId;
     kind: "accept" | "reject";
     brRefs: BrRefs;
@@ -67,7 +60,7 @@ export class DesignScenario {
 
   // 契約1 への lowering——任意部（イベント・期待式）の有無はシナリオ自身の知識。
   loweredAs(id: LoweredId): LoweredScenario {
-    return LoweredScenario.reconstitute({
+    return LoweredScenario.of({
       id,
       kind: this.#kind,
       frRefs: this.#frRefs,

@@ -1,17 +1,20 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-import { EntityName } from "./entity-name.ts";
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-type TokenError = { readonly kind: "empty-token"; readonly raw: string };
+import { EntityName } from "./entity-name.ts";
 
 export class AppliesTo {
   readonly #value: string;
-  private constructor(value: string) { this.#value = value; }
-  static parse(raw: string): Result<AppliesTo, TokenError> {
-    if (raw === "") return err({ kind: "empty-token", raw });
-    return ok(new AppliesTo(raw));
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-token", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw: string): AppliesTo { return new AppliesTo(raw); }
+  static of(raw: string): AppliesTo {
+    return new AppliesTo(raw);
+  }
+
+  static parse(raw: string): Result<AppliesTo, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new AppliesTo(raw));
+  }
   equals(other: AppliesTo): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
   // FD-R4: Entity / Entity.attribute 形の構文知識は参照自身が所有（凍結正規表現）。

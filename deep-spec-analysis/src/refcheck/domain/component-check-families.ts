@@ -5,13 +5,13 @@
 import { CheckFamily } from "./check-family.ts";
 import { CheckFamilies } from "./check-families.ts";
 
-export const DD_0 = CheckFamily.reconstitute("DD-0");
-export const DD_1 = CheckFamily.reconstitute("DD-1");
-export const DD_2 = CheckFamily.reconstitute("DD-2");
-export const DD_3 = CheckFamily.reconstitute("DD-3");
-export const DD_4 = CheckFamily.reconstitute("DD-4");
-export const DD_5 = CheckFamily.reconstitute("DD-5");
-export const DD_6 = CheckFamily.reconstitute("DD-6");
-export const DD_7 = CheckFamily.reconstitute("DD-7");
+export const DD_0 = CheckFamily.of("DD-0");
+export const DD_1 = CheckFamily.of("DD-1");
+export const DD_2 = CheckFamily.of("DD-2");
+export const DD_3 = CheckFamily.of("DD-3");
+export const DD_4 = CheckFamily.of("DD-4");
+export const DD_5 = CheckFamily.of("DD-5");
+export const DD_6 = CheckFamily.of("DD-6");
+export const DD_7 = CheckFamily.of("DD-7");
 
 export const COMPONENT_FAMILIES = CheckFamilies.of([DD_0, DD_1, DD_2, DD_3, DD_4, DD_5, DD_6, DD_7]);

@@ -5,9 +5,10 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import { type Json, canonicalStringify } from "@deep-spec/kernel-infrastructure";
 import { ContentHash } from "@deep-spec/kernel-domain";
 import { extractFences, writeFileAtomically } from "@deep-spec/kernel-adapter";
-import { type Json, canonicalStringify } from "@deep-spec/kernel-infrastructure";
+
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import { type FormalModelId, RequirementsModel } from "@deep-spec/requirements-domain";
 import type { FormalModelRepository } from "@deep-spec/requirements-usecase";
@@ -44,17 +45,18 @@ export class FormalModelRepositoryImpl implements FormalModelRepository {
       return err({ kind: "corrupt", path: modelPath, cause: "formal model does not contain exactly one readable ```json fence" });
     }
     const seed = parseFormalModel(rawIr);
-    if (typeof seed === "string") {
-      return err({ kind: "corrupt", path: modelPath, cause: seed });
+    if (!seed.ok) {
+      return err({ kind: "corrupt", path: modelPath, cause: seed.error });
     }
-    return ok(RequirementsModel.reconstitute({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), sourceDocument: new Uint8Array(bytes), ...seed }));
+    return ok(RequirementsModel.of({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), sourceDocument: new Uint8Array(bytes), ...seed.value }));
   }
 
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
   store(model: RequirementsModel): Result<void, RepositoryError> {
     const modelPath = model.id().artifactPath().asString();
+    const bytes = model.sourceDocument();
     try {
-      writeFileAtomically(modelPath, model.sourceDocument());
+      writeFileAtomically(modelPath, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path: modelPath, cause: e instanceof Error ? e.message : String(e) });

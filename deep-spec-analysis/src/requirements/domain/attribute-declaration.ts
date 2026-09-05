@@ -1,6 +1,7 @@
 export { AttributeBound } from "@deep-spec/kernel-domain";
 import type { AttributeBound } from "@deep-spec/kernel-domain";
 import type { AttributePath } from "@deep-spec/kernel-domain";
+
 import type { AttributeValues } from "./attribute-values.ts";
 
 // 要件 IR の属性宣言——パス・種類（bool／int／enum）・int の上下限・enum の
@@ -13,7 +14,7 @@ export class AttributeDeclaration {
   readonly #max: AttributeBound | undefined;
   readonly #values: AttributeValues | undefined;
 
-  private constructor(props: { path: AttributePath; kind: "bool" | "int" | "enum"; min?: AttributeBound; max?: AttributeBound; values?: AttributeValues }) {
+  private constructor(props: Parameters<typeof AttributeDeclaration.of>[0]) {
     this.#path = props.path;
     this.#kind = props.kind;
     this.#min = props.min;
@@ -21,7 +22,7 @@ export class AttributeDeclaration {
     this.#values = props.values;
   }
 
-  static reconstitute(props: { path: AttributePath; kind: "bool" | "int" | "enum"; min?: AttributeBound; max?: AttributeBound; values?: AttributeValues }): AttributeDeclaration {
+  static of(props: { path: AttributePath; kind: "bool" | "int" | "enum"; min?: AttributeBound; max?: AttributeBound; values?: AttributeValues }): AttributeDeclaration {
     return new AttributeDeclaration(props);
   }
 

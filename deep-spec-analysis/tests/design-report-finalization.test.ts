@@ -194,9 +194,7 @@ function finalizing(
 ): DesignVerifyDirectory {
   const loaded = repository.findByDirectory(ap(verifyDir));
   if (!loaded.ok) throw new Error(`test setup: the verify directory is unreadable (${loaded.error.kind})`);
-  const staged = loaded.value.finalizing(report).conformedTo(schema);
-  const resolved = model === null ? staged.withoutCrossCheck() : staged.crossChecked(model, report.irHash());
-  return resolved.conformedTo(schema);
+  return loaded.value.finalizedWith(report, model, schema);
 }
 
 // 兄弟文書の作り置き（fixture seed）。公開経路は store だけなので、seed も

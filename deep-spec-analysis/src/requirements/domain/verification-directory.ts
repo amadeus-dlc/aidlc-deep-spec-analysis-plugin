@@ -70,6 +70,15 @@ export class VerificationDirectory {
     return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, null);
   }
 
+  // 公開する候補の適合と、それに基づく cross-check の導出を一つの操作で行う。
+  // model が無いときは導出物を残さない。呼び手は適合の順序を知る必要がない。
+  finalizedWith(candidate: VerificationReport, model: RequirementsModel | null, schema: FindingsSchema): VerificationDirectory {
+    const staged = this.finalizing(candidate.conformedTo(schema));
+    if (model === null) return staged;
+    const derived = staged.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
+    return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
+  }
+
   // いまの reports からクロスチェックを導く（同一 irHash の可用文書だけが
   // 比較に参加する規則は VerificationReports が持つ）。
   crossChecked(model: RequirementsModel, irHash: ContentHash): VerificationDirectory {
@@ -89,7 +98,9 @@ export class VerificationDirectory {
     const candidate = this.#candidate;
     const crossCheck = this.#crossCheck;
     const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
-    const conformedCrossCheck = crossCheck === null ? null : crossCheck.conformedTo(schema);
+    // 候補が変わったら、以前の reports から導いた cross-check は無効。
+    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck === null
+      ? null : crossCheck.conformedTo(schema);
     const reports = conformedCandidate === null
       ? this.#reports
       : VerificationReports.of(this.#reports.toArray().map((r) => (r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r)));

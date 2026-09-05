@@ -1,55 +1,51 @@
-// レイヤード refinement パイプラインの in-process 検証（PR6、#19）。
-//
-// 1) golden 同値：refinement fixture（要件モデル＋map＋設計モデル）を tmp へ
-//    複製し、両 design interactor を実 Impl（実 v1 兄弟・実 z3 子）で駆動して、
-//    書かれた smt.json / quint.json / cross-check.json を期待 golden とバイト
-//    比較する。Phase 3 込みの独立第 2 経路。
-// 2) SMT スクリプトのキャラクタライゼーション：両コンパイラ（v1 計画ビルダ・
-//    refinement 第 2 コンパイラ）の生成物を fixture スナップショットと逐語比較
-//    ——PR8（コンパイラ統一の判断点）の安全網。
-// 3) ドメイン検査の分岐固定：alpha・計画分類・カタログ・解釈・status-skips の
-//    各純関数を直接駆動する（refinement/domain の 90% 床）。
-
-import { describe, expect, test } from "bun:test";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { Json } from "@deep-spec/kernel-infrastructure";
-import { SystemClock, readContractSchema } from "@deep-spec/kernel-adapter";
-import { TriggerName, FrRefs, ContentHash, ArtifactPath, FindingsSchema, TargetId, KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
-import type { Expression } from "@deep-spec/kernel-domain";
-import { AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "@deep-spec/requirements-domain";
-// テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
-function ap(raw: string): ArtifactPath {
-  const parsed = ArtifactPath.parse(raw);
-  if (!parsed.ok) throw new Error(`test fixture path is empty: ${raw}`);
-  return parsed.value;
-}
-
-import { DesignBackgroundId, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignBackgroundAssumption, DesignMachine, DesignObligation, DesignScenario, DesignIgnore, DesignTransition, BrRefs, DesignIgnores, DesignModelId, DesignSkips, DesignTransitions, DesignUnit, DesignUnitId, InitialStates, RefinementMaterialsId,
-
+import {
+  RequirementId,
+  TriggerName,
+  FrRefs,
+  ContentHash,
+  ArtifactPath,
+  FindingsSchema,
+  TargetId,
+  KeyedIndex,
+  QueryLabel,
+  type Expression,
+} from "@deep-spec/kernel-domain";
+import {
+  BrRef,
+  DesignBackgroundId,
+  DesignAttributeName,
+  DesignEntityName,
+  DesignMachineId,
+  DesignObligationId,
+  DesignObligationNature,
+  DesignObligationOrigin,
+  DesignScenarioId,
+  DesignTransitionId,
+  DesignBackgroundAssumptions,
+  DesignMachines,
+  DesignObligations,
+  DesignScenarios,
+  DesignBackgroundAssumption,
+  DesignMachine,
+  DesignObligation,
+  DesignScenario,
+  DesignIgnore,
+  DesignTransition,
+  BrRefs,
+  DesignIgnores,
+  DesignModelId,
+  DesignSkips,
+  DesignTransitions,
+  DesignUnit,
+  DesignUnitId,
+  InitialStates,
+  RefinementMaterialsId,
   LoweredId,
   DesignEntityDecls,
   DesignEntityDecl,
   DesignAttributeDecls,
-  DesignAttributeDecl
-} from "@deep-spec/design-domain";
-import { type DesignUnit as DesignUnitType } from "@deep-spec/design-domain";
-import {
-  DesignModelRepositoryImpl,
-  DesignVerifyDirectoryRepositoryImpl,
-  RefinementMaterialsRepositoryImpl,
-  RefinementSolverClientImpl,
-  SiblingBackendClientImpl,
-  buildRefinementQueries,
-  decodeDesignModel,
-  type RefinementSmtContext,
-  RefinementMapRepositoryImpl,
-  parseDesignEntities
-} from "@deep-spec/design-adapter";
-import { VerifyDesignQuintUseCase, VerifyDesignSmtUseCase } from "@deep-spec/design-usecase";
-import {
+  DesignAttributeDecl,
+  type DesignUnit as DesignUnitType,
   RefinementMapDefect,
   AttributeMappings,
   DesignEventCatalog,
@@ -84,6 +80,49 @@ import {
   RefinementStatus,
   RefinementMapAcquisition,
 } from "@deep-spec/design-domain";
+
+// レイヤード refinement パイプラインの in-process 検証（PR6、#19）。
+//
+// 1) golden 同値：refinement fixture（要件モデル＋map＋設計モデル）を tmp へ
+//    複製し、両 design interactor を実 Impl（実 v1 兄弟・実 z3 子）で駆動して、
+//    書かれた smt.json / quint.json / cross-check.json を期待 golden とバイト
+//    比較する。Phase 3 込みの独立第 2 経路。
+// 2) SMT スクリプトのキャラクタライゼーション：両コンパイラ（v1 計画ビルダ・
+//    refinement 第 2 コンパイラ）の生成物を fixture スナップショットと逐語比較
+//    ——PR8（コンパイラ統一の判断点）の安全網。
+// 3) ドメイン検査の分岐固定：alpha・計画分類・カタログ・解釈・status-skips の
+//    各純関数を直接駆動する（refinement/domain の 90% 床）。
+
+import { describe, expect, test } from "bun:test";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Json } from "@deep-spec/kernel-infrastructure";
+import { SystemClock, readContractSchema } from "@deep-spec/kernel-adapter";
+
+import { AttributePath, FormalModelId, ObligationId, ObligationNature, ScenarioId } from "@deep-spec/requirements-domain";
+// テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
+function ap(raw: string): ArtifactPath {
+  const parsed = ArtifactPath.parse(raw);
+  if (!parsed.ok) throw new Error(`test fixture path is empty: ${raw}`);
+  return parsed.value;
+}
+
+import {
+  DesignModelRepositoryImpl,
+  DesignVerifyDirectoryRepositoryImpl,
+  RefinementMaterialsRepositoryImpl,
+  RefinementSolverClientImpl,
+  SiblingBackendClientImpl,
+  buildRefinementQueries,
+  decodeDesignModel,
+  type RefinementSmtContext,
+  RefinementMapRepositoryImpl,
+  parseDesignEntities
+} from "@deep-spec/design-adapter";
+import { VerifyDesignQuintUseCase, VerifyDesignSmtUseCase } from "@deep-spec/design-usecase";
+
 import { FormalModelRepositoryImpl, buildSmtPlan } from "@deep-spec/requirements-adapter";
 
 // 被覆状態は class（#71 波22）——期待値は公開の面（checkable / gap / skip）から平文へ射影して比較する。
@@ -92,10 +131,9 @@ const plainStatus = (st: RefinementStatus | undefined) => {
   if (st.isCheckable()) return { kind: "checkable" };
   const gap = st.gapDetail();
   if (gap !== null) return { kind: "gap", detail: gap };
-  const skip = st.skipFor(TargetId.reconstitute("X-0"), "u");
+  const skip = st.skipFor(TargetId.of("OB-999"), "u");
   return skip === null ? undefined : skip.reason() === "waived" ? { kind: "waived", reason: skip.detail() } : { kind: "capability", detail: skip.detail() };
 };
-
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const toolsDir = join(pluginRoot, "tools");
@@ -191,9 +229,10 @@ describe("SMT script characterization (the PR8 safety net)", () => {
   test("the second (refinement) compiler emits byte-identical scripts for the refinement fixture", () => {
     const modelPath = join(fixtures, "record", ...MODEL_RELPATH);
     const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(modelPath)));
-    const context = new RefinementMaterialsRepositoryImpl(mapSchemaPath).findById(RefinementMaterialsId.ofModel(DesignModelId.of(ap(modelPath))));
-    expect(acquired.ok && context.isActive()).toBe(true);
-    if (!acquired.ok || !context.isActive()) return;
+    const materials = new RefinementMaterialsRepositoryImpl(mapSchemaPath).findById(RefinementMaterialsId.ofModel(DesignModelId.of(ap(modelPath))));
+    expect(acquired.ok && materials.ok && materials.value.isActive()).toBe(true);
+    if (!acquired.ok || !materials.ok || !materials.value.isActive()) return;
+    const context = materials.value;
     const acq = context.mapAcquisition();
     const req = context.requirements();
     expect(req.id().artifactPath().asString().endsWith("deep-spec-analysis-formal-model.md")).toBe(true);
@@ -223,17 +262,17 @@ describe("SMT script characterization (the PR8 safety net)", () => {
 
 // テストの読みやすさのため素の配列・素の文字列で書き、ここで一括して DP と
 // コレクションに包む。
-type RawDesignObligation = Omit<Parameters<typeof DesignObligation.reconstitute>[0], "id" | "nature" | "origin" | "brRefs" | "frRefs"> & {
+type RawDesignObligation = Omit<Parameters<typeof DesignObligation.of>[0], "id" | "nature" | "origin" | "brRefs" | "frRefs"> & {
   id: string;
   nature: string;
   origin: string;
   brRefs: string[];
   frRefs: string[];
 };
-type RawDesignTransition = Omit<Parameters<typeof DesignTransition.reconstitute>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
+type RawDesignTransition = Omit<Parameters<typeof DesignTransition.of>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs: string[]; trigger: string };
 // reason は design IR 上の必須注記（文書には残るが domain は運ばない——#71 波9）。
-type RawDesignIgnore = Omit<Parameters<typeof DesignIgnore.reconstitute>[0], "trigger"> & { trigger: string; reason: string };
-type RawDesignMachine = Omit<Parameters<typeof DesignMachine.reconstitute>[0], "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
+type RawDesignIgnore = Omit<Parameters<typeof DesignIgnore.of>[0], "trigger"> & { trigger: string; reason: string };
+type RawDesignMachine = Omit<Parameters<typeof DesignMachine.of>[0], "id" | "entity" | "attribute" | "initial" | "transitions" | "ignores"> & {
   id: string;
   entity: string;
   attribute: string;
@@ -241,13 +280,15 @@ type RawDesignMachine = Omit<Parameters<typeof DesignMachine.reconstitute>[0], "
   transitions: RawDesignTransition[];
   ignores: RawDesignIgnore[];
 };
-type RawDesignScenario = Omit<Parameters<typeof DesignScenario.reconstitute>[0], "id" | "brRefs" | "frRefs"> & { id: string; brRefs: string[]; frRefs: string[] };
+type RawDesignScenario = Omit<Parameters<typeof DesignScenario.of>[0], "id" | "brRefs" | "frRefs"> & { id: string; brRefs: string[]; frRefs: string[] };
 
 // テスト用: 生の entities JSON と属性座標から型付き実体宣言を組む（裁定 2 で
 // DesignUnit は生 JSON を持たなくなった）。座標だけ与えられた属性は kind "" の
 // 宣言として補う——旧 attrPaths の役目。
 function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDecls {
-  let declared = parseDesignEntities({ entities: raw });
+  const parsed = parseDesignEntities({ entities: raw });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.error));
+  let declared = parsed.value;
   const covered = new Set<string>();
   for (const ent of declared) for (const attr of ent.attributes()) covered.add(`${ent.name().asString()}.${attr.name().asString()}`);
   const extra = new Map<string, string[]>();
@@ -257,9 +298,9 @@ function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDecls {
     extra.set(path.slice(0, dot), [...(extra.get(path.slice(0, dot)) ?? []), path.slice(dot + 1)]);
   }
   for (const [entity, attrs] of extra) {
-    declared = declared.add(DesignEntityDecl.reconstitute({
-      name: DesignEntityName.reconstitute(entity),
-      attributes: DesignAttributeDecls.of(attrs.map((a) => DesignAttributeDecl.reconstitute({ name: DesignAttributeName.reconstitute(a), kind: "" }))),
+    declared = declared.add(DesignEntityDecl.of({
+      name: DesignEntityName.of(entity),
+      attributes: DesignAttributeDecls.of(attrs.map((a) => DesignAttributeDecl.of({ name: DesignAttributeName.of(a), kind: "" }))),
     }));
   }
   return declared;
@@ -274,39 +315,39 @@ function unit(seed: {
   scenarios?: RawDesignScenario[];
   background?: { id: string; assert: Expression }[];
 }): DesignUnitType {
-  return DesignUnit.reconstitute({
+  return DesignUnit.of({
     unit: seed.unit ?? "u1",
     entities: entitiesOf(seed.rawEntities ?? [], seed.attrPaths ?? new Set<string>()),
     obligations: DesignObligations.of(
-      (seed.obligations ?? []).map((o) => DesignObligation.reconstitute({
+      (seed.obligations ?? []).map((o) => DesignObligation.of({
         ...o,
-        id: DesignObligationId.reconstitute(o.id),
-        nature: DesignObligationNature.reconstitute(o.nature),
-        origin: DesignObligationOrigin.reconstitute(o.origin),
-        brRefs: BrRefs.reconstitute(o.brRefs),
-        frRefs: FrRefs.reconstitute(o.frRefs),
+        id: DesignObligationId.of(o.id),
+        nature: DesignObligationNature.of(o.nature),
+        origin: DesignObligationOrigin.of(o.origin),
+        brRefs: BrRefs.of(Array.from(o.brRefs, (raw) => BrRef.of(raw))),
+        frRefs: FrRefs.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))),
       })),
     ),
     machines: DesignMachines.of(
       (seed.machines ?? []).map((m) =>
-        DesignMachine.reconstitute({
+        DesignMachine.of({
           ...m,
-          id: DesignMachineId.reconstitute(m.id),
-          entity: DesignEntityName.reconstitute(m.entity),
-          attribute: DesignAttributeName.reconstitute(m.attribute),
+          id: DesignMachineId.of(m.id),
+          entity: DesignEntityName.of(m.entity),
+          attribute: DesignAttributeName.of(m.attribute),
           initial: InitialStates.of(m.initial),
           transitions: DesignTransitions.of(
-            m.transitions.map((t) => DesignTransition.reconstitute({ ...t, id: DesignTransitionId.reconstitute(t.id), brRefs: BrRefs.reconstitute(t.brRefs), trigger: TriggerName.reconstitute(t.trigger) })),
+            m.transitions.map((t) => DesignTransition.of({ ...t, id: DesignTransitionId.of(t.id), brRefs: BrRefs.of(Array.from(t.brRefs, (raw) => BrRef.of(raw))), trigger: TriggerName.of(t.trigger) })),
           ),
-          ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
+          ignores: DesignIgnores.of(m.ignores.map((g) => DesignIgnore.of({ ...g, trigger: TriggerName.of(g.trigger) }))),
         }),
       ),
     ),
     scenarios: DesignScenarios.of(
-      (seed.scenarios ?? []).map((s) => DesignScenario.reconstitute({ ...s, id: DesignScenarioId.reconstitute(s.id), brRefs: BrRefs.reconstitute(s.brRefs), frRefs: FrRefs.reconstitute(s.frRefs) })),
+      (seed.scenarios ?? []).map((s) => DesignScenario.of({ ...s, id: DesignScenarioId.of(s.id), brRefs: BrRefs.of(Array.from(s.brRefs, (raw) => BrRef.of(raw))), frRefs: FrRefs.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))) })),
     ),
     background: DesignBackgroundAssumptions.of(
-      (seed.background ?? []).map((b) => DesignBackgroundAssumption.reconstitute({ ...b, id: DesignBackgroundId.reconstitute(b.id) })),
+      (seed.background ?? []).map((b) => DesignBackgroundAssumption.of({ ...b, id: DesignBackgroundId.of(b.id) })),
     ),
   });
 }
@@ -314,38 +355,38 @@ function unit(seed: {
 // テストの読みやすさのため素の配列・素の id で書き、ここで一括して DP と
 // コレクションに包む（アダプタの門と同型）。
 type RawReqAttribute = { path: string; kind: "bool" | "int" | "enum"; min?: number; max?: number; values?: string[] };
-type RawReqObligation = Omit<Parameters<typeof RefinementObligation.reconstitute>[0], "id" | "nature" | "frRefs" | "trigger"> & { id: string; nature: string; frRefs: string[]; trigger?: string };
-type RawReqScenario = Omit<Parameters<typeof RefinementScenario.reconstitute>[0], "id" | "frRefs" | "event"> & { id: string; frRefs: string[]; event?: { trigger: string } };
+type RawReqObligation = Omit<Parameters<typeof RefinementObligation.of>[0], "id" | "nature" | "frRefs" | "trigger"> & { id: string; nature: string; frRefs: string[]; trigger?: string };
+type RawReqScenario = Omit<Parameters<typeof RefinementScenario.of>[0], "id" | "frRefs" | "event"> & { id: string; frRefs: string[]; event?: { trigger: string } };
 function requirements(seed: {
   attributes?: RawReqAttribute[];
   obligations?: RawReqObligation[];
   scenarios?: RawReqScenario[];
 }): RefinementRequirements {
-  return RefinementRequirements.reconstitute({
+  return RefinementRequirements.of({
     id: FormalModelId.of(ap("/test/deep-spec-analysis-formal-model.md")),
-    hash: ContentHash.reconstitute("a".repeat(64)),
+    hash: ContentHash.of("a".repeat(64)),
     attributes: RefinementAttributes.of(
-      (seed.attributes ?? []).map((a) => RefinementAttribute.reconstitute({
-        path: AttributePath.reconstitute(a.path),
+      (seed.attributes ?? []).map((a) => RefinementAttribute.of({
+        path: AttributePath.of(a.path),
         kind: a.kind,
         values: a.values === undefined ? undefined : ReqAttributeValues.of(a.values),
       })),
     ),
     obligations: RefinementObligations.of(
-      (seed.obligations ?? []).map((o) => RefinementObligation.reconstitute({
+      (seed.obligations ?? []).map((o) => RefinementObligation.of({
         ...o,
-        id: ObligationId.reconstitute(o.id),
-        nature: ObligationNature.reconstitute(o.nature),
-        frRefs: FrRefs.reconstitute(o.frRefs),
-        trigger: o.trigger === undefined ? undefined : TriggerName.reconstitute(o.trigger),
+        id: ObligationId.of(o.id),
+        nature: ObligationNature.of(o.nature),
+        frRefs: FrRefs.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))),
+        trigger: o.trigger === undefined ? undefined : TriggerName.of(o.trigger),
       })),
     ),
     scenarios: RefinementScenarios.of(
-      (seed.scenarios ?? []).map((s) => RefinementScenario.reconstitute({
+      (seed.scenarios ?? []).map((s) => RefinementScenario.of({
         ...s,
-        id: ScenarioId.reconstitute(s.id),
-        frRefs: FrRefs.reconstitute(s.frRefs),
-        event: s.event === undefined ? undefined : { trigger: TriggerName.reconstitute(s.event.trigger) },
+        id: ScenarioId.of(s.id),
+        frRefs: FrRefs.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))),
+        event: s.event === undefined ? undefined : { trigger: TriggerName.of(s.event.trigger) },
       })),
     ),
   });
@@ -358,7 +399,7 @@ type RawAttributeMapping =
 type RawEventMapping = { reqTrigger: string; transitions: string[]; waived?: { reason: string } };
 type RawUnmappedTarget = { target: string; reason: string };
 function wrapMapping(m: RawAttributeMapping): AttributeMapping {
-  const req = AttributePath.reconstitute(m.req);
+  const req = AttributePath.of(m.req);
   switch (m.kind) {
     case "expression":
       return AttributeMapping.expression(req, m.expr);
@@ -374,14 +415,14 @@ function refUnitMap(seed: {
   eventMap?: RawEventMapping[];
   unmapped?: RawUnmappedTarget[];
 }): RefinementUnitMap {
-  return RefinementUnitMap.reconstitute({
+  return RefinementUnitMap.of({
     unit: DesignUnitId.of(seed.unit ?? "u1"),
     attrMap: AttributeMappings.of((seed.attrMap ?? []).map(wrapMapping)),
     eventMap: EventMappings.of(
-      (seed.eventMap ?? []).map((e) => EventMapping.reconstitute({ ...e, reqTrigger: TriggerName.reconstitute(e.reqTrigger), transitions: TransitionRefs.of(e.transitions.map((t) => TransitionRef.reconstitute(t))) })),
+      (seed.eventMap ?? []).map((e) => EventMapping.of({ ...e, reqTrigger: TriggerName.of(e.reqTrigger), transitions: TransitionRefs.of(e.transitions.map((t) => TransitionRef.of(t))) })),
     ),
     unmapped: UnmappedDeclarations.of(
-      (seed.unmapped ?? []).map((un) => UnmappedTarget.reconstitute({ ...un, target: UnmappedTargetRef.reconstitute(un.target) })),
+      (seed.unmapped ?? []).map((un) => UnmappedTarget.of({ ...un, target: UnmappedTargetRef.of(un.target) })),
     ),
   });
 }
@@ -393,12 +434,12 @@ const enumMapping = (req: string, from: string, cases: { [d: string]: string }) 
 
 describe("attribute mapping totality", () => {
   test("an inherited property name (e.g. \"toString\") does not count as a covered case", () => {
-    const mapping = AttributeMapping.enumCases(AttributePath.reconstitute("R.state"), "D.phase", { draft: "open" });
+    const mapping = AttributeMapping.enumCases(AttributePath.of("R.state"), "D.phase", { draft: "open" });
     // from の宣言値に "toString" があっても、cases の own mapping が無ければ欠けとして報告する。
     expect(mapping.missingCasesOver(["draft", "toString"])).toEqual(["toString"]);
     expect(mapping.missingCasesOver(["draft"])).toEqual([]);
     expect(mapping.producedValuesOutside({ includes: (v: string) => v === "open" })).toEqual([]);
-    expect(AttributeMapping.expression(AttributePath.reconstitute("R.x"), { op: "ref", path: "D.x" }).missingCasesOver(["a"])).toEqual([]);
+    expect(AttributeMapping.expression(AttributePath.of("R.x"), { op: "ref", path: "D.x" }).missingCasesOver(["a"])).toEqual([]);
   });
 });
 
@@ -453,7 +494,7 @@ describe("alpha substitution", () => {
     expect(defectOf({ op: "ref", path: "R.none" }).message()).toBe('attrMap entry for "R.none" declares neither an expression nor enum cases');
     // 引数の欠陥は宣言順の最初のものが返る（旧 throw の順序）。
     expect(defectOf({ op: "and", args: [{ op: "ref", path: "R.flag" }, { op: "ref", path: "R.none" }, { op: "ref", path: "R.missing" }] }).message()).toBe('attrMap entry for "R.none" declares neither an expression nor enum cases');
-    const skip = defectOf({ op: "ref", path: "R.missing" }).asCompileErrorSkip(TargetId.reconstitute("OB-1"), "u1");
+    const skip = defectOf({ op: "ref", path: "R.missing" }).asCompileErrorSkip(TargetId.of("OB-1"), "u1");
     expect(skip.reason()).toBe("compile-error");
     expect(skip.detail()).toBe('alpha substitution failed: requirements attribute "R.missing" is not covered by the attrMap');
   });
@@ -528,7 +569,7 @@ describe("plan classification and gap findings", () => {
   });
 
   test("statuses classify checkable / waived / capability / gap, and gaps become findings", () => {
-    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.reconstitute("construction/x/map.md"));
+    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.of("construction/x/map.md"));
     expect(plainStatus(plan.statusOfObligation("OB-1"))).toEqual({ kind: "checkable" });
     expect(plainStatus(plan.statusOfObligation("OB-2"))).toEqual({ kind: "checkable" });
     expect(plan.mappedTransitionsOf("OB-2").map((t) => t.asString())).toEqual(["TR-1"]);
@@ -575,7 +616,7 @@ describe("plan classification and gap findings", () => {
         { id: "OB-2", nature: "event", frRefs: [], trigger: "finish", guard: { op: "ref", path: "R.flag" }, effect: { op: "eq", args: [{ op: "ref", path: "R.flag", prime: true }, { op: "bool", value: true }] } },
       ],
     });
-    const plan = UnitRefinementPlan.of(designUnit, badMap, reqLocal, ArtifactPath.reconstitute("m.md"));
+    const plan = UnitRefinementPlan.of(designUnit, badMap, reqLocal, ArtifactPath.of("m.md"));
     const details = plan.gaps().toArray().map((g) => g.detail()).join("\n");
     expect(details).toContain('attrMap maps "R.flag" more than once');
     expect(details).toContain('attrMap entry "R.ghost" names no attribute of the requirements IR');
@@ -596,7 +637,7 @@ describe("plan classification and gap findings", () => {
   });
 
   test("status skips differ by backend flavor (frozen wordings)", () => {
-    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.reconstitute("m.md"));
+    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.of("m.md"));
     const smtSkips = plan.smtStatusSkips("u1").toArray().map((s) => `${s.target().asString()}:${s.reason()}`);
     expect(smtSkips).toContain("OB-3:capability");
     expect(smtSkips).toContain("OB-4:waived");
@@ -609,10 +650,10 @@ describe("plan classification and gap findings", () => {
   });
 
   test("quint extras carry alpha(P) for checkable invariants only", () => {
-    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.reconstitute("m.md"));
+    const plan = UnitRefinementPlan.of(designUnit, unitMap, req, ArtifactPath.of("m.md"));
     const extras = plan.quintInvariants(req);
     expect(extras.toArray().map((e) => e.reqId().asString())).toEqual(["OB-1"]);
-    expect(extras.toArray()[0]?.loweredAs(LoweredId.reconstitute("OB-9")).assertion()).toEqual({ op: "ref", path: "D.flag" });
+    expect(extras.toArray()[0]?.loweredAs(LoweredId.of("OB-9")).assertion()).toEqual({ op: "ref", path: "D.flag" });
   });
 });
 
@@ -648,16 +689,16 @@ describe("event catalog and effect assignments", () => {
       ],
     });
     const catalog = DesignEventCatalog.of(u);
-    expect(catalog.eventOf(TargetId.reconstitute("TR-1"))?.guard().op).toBe("and");
-    expect(catalog.eventOf(TargetId.reconstitute("TR-1"))?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
-    expect(catalog.eventOf(TargetId.reconstitute("TR-1"))?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 1 });
+    expect(catalog.eventOf(TargetId.of("TR-1"))?.guard().op).toBe("and");
+    expect(catalog.eventOf(TargetId.of("TR-1"))?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
+    expect(catalog.eventOf(TargetId.of("TR-1"))?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 1 });
     // 分解不能な追加効果は暗黙代入だけが残る（設計パスが報告する）。
-    expect(catalog.eventOf(TargetId.reconstitute("TR-2"))?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
-    expect(catalog.eventOf(TargetId.reconstitute("TR-2"))?.assignedRhsOf("D.n")).toBe(undefined);
-    expect(catalog.eventOf(TargetId.reconstitute("DOB-1"))?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 2 });
+    expect(catalog.eventOf(TargetId.of("TR-2"))?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
+    expect(catalog.eventOf(TargetId.of("TR-2"))?.assignedRhsOf("D.n")).toBe(undefined);
+    expect(catalog.eventOf(TargetId.of("DOB-1"))?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 2 });
     // 分解不能な event 義務はカタログに載らない。
-    expect(catalog.eventOf(TargetId.reconstitute("DOB-2"))).toBe(null);
-    expect(catalog.eventOf(TargetId.reconstitute("DOB-3"))).toBe(null);
+    expect(catalog.eventOf(TargetId.of("DOB-2"))).toBe(null);
+    expect(catalog.eventOf(TargetId.of("DOB-3"))).toBe(null);
 
     const orEffect = EffectAssignments.ofEffect({ op: "or", args: [] });
     expect(!orEffect.ok && orEffect.error.message()).toBe("requirements effect is not a conjunction of primed assignments");
@@ -702,21 +743,21 @@ describe("refinement verdict interpretation", () => {
     planUnit,
     refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")], eventMap: [{ reqTrigger: "go", transitions: ["TR-1", "TR-2"] }] }),
     req,
-    ArtifactPath.reconstitute("m.md"),
+    ArtifactPath.of("m.md"),
   );
   const solverPlan = (entries: [string, RefinementProbe][]): RefinementSolverPlan =>
-    RefinementSolverPlan.of({ pending: KeyedIndex.of(entries.map(([id, p]) => [QueryLabel.reconstitute(id), p] as const)), compileSkips: DesignSkips.of([]) });
-  const run = (f: RefinementSolverPlan, results: [string, Parameters<typeof RefinementQueryVerdict.reconstitute>[0]][]) =>
-    f.interpret(RefinementQueryVerdicts.of(KeyedIndex.of(results.map(([id, v]) => [QueryLabel.reconstitute(id), RefinementQueryVerdict.reconstitute(v)] as const))), req, plan, "u1");
+    RefinementSolverPlan.of({ pending: KeyedIndex.of(entries.map(([id, p]) => [QueryLabel.of(id), p] as const)), compileSkips: DesignSkips.of([]) });
+  const run = (f: RefinementSolverPlan, results: [string, Parameters<typeof RefinementQueryVerdict.of>[0]][]) =>
+    f.interpret(RefinementQueryVerdicts.of(KeyedIndex.of(results.map(([id, v]) => [QueryLabel.of(id), RefinementQueryVerdict.of(v)] as const))), req, plan, "u1");
 
   test("each probe kind emits its frozen finding on the deciding verdict", () => {
     const out = run(
       solverPlan([
-        ["rv:OB-1", RefinementProbe.invariant(ObligationId.reconstitute("OB-1"))],
-        ["rs:SC-1", RefinementProbe.scenario(ScenarioId.reconstitute("SC-1"))],
-        ["rs:SC-2", RefinementProbe.scenario(ScenarioId.reconstitute("SC-2"))],
-        ["re:OB-2", RefinementProbe.enabledness(ObligationId.reconstitute("OB-2"))],
-        ["rs2:OB-2:TR-1", RefinementProbe.simulation(ObligationId.reconstitute("OB-2"), TransitionRef.reconstitute("TR-1"))],
+        ["rv:OB-1", RefinementProbe.invariant(ObligationId.of("OB-1"))],
+        ["rs:SC-1", RefinementProbe.scenario(ScenarioId.of("SC-1"))],
+        ["rs:SC-2", RefinementProbe.scenario(ScenarioId.of("SC-2"))],
+        ["re:OB-2", RefinementProbe.enabledness(ObligationId.of("OB-2"))],
+        ["rs2:OB-2:TR-1", RefinementProbe.simulation(ObligationId.of("OB-2"), TransitionRef.of("TR-1"))],
       ]),
       [
         ["rv:OB-1", { status: "sat", decodedModel: { "D.flag": true } }],
@@ -743,12 +784,12 @@ describe("refinement verdict interpretation", () => {
   test("quiet verdicts emit nothing; undecided and missing become the frozen timeout skip", () => {
     const out = run(
       solverPlan([
-        ["rv:OB-1", RefinementProbe.invariant(ObligationId.reconstitute("OB-1"))],
-        ["rs:SC-1", RefinementProbe.scenario(ScenarioId.reconstitute("SC-1"))],
-        ["rs:SC-2", RefinementProbe.scenario(ScenarioId.reconstitute("SC-2"))],
-        ["re:OB-2", RefinementProbe.enabledness(ObligationId.reconstitute("OB-2"))],
-        ["rs2:OB-2:TR-1", RefinementProbe.simulation(ObligationId.reconstitute("OB-2"), TransitionRef.reconstitute("TR-1"))],
-        ["rv:OB-9", RefinementProbe.invariant(ObligationId.reconstitute("OB-9"))],
+        ["rv:OB-1", RefinementProbe.invariant(ObligationId.of("OB-1"))],
+        ["rs:SC-1", RefinementProbe.scenario(ScenarioId.of("SC-1"))],
+        ["rs:SC-2", RefinementProbe.scenario(ScenarioId.of("SC-2"))],
+        ["re:OB-2", RefinementProbe.enabledness(ObligationId.of("OB-2"))],
+        ["rs2:OB-2:TR-1", RefinementProbe.simulation(ObligationId.of("OB-2"), TransitionRef.of("TR-1"))],
+        ["rv:OB-9", RefinementProbe.invariant(ObligationId.of("OB-9"))],
       ]),
       [
         ["rv:OB-1", { status: "unsat" }],
@@ -770,7 +811,7 @@ describe("refinement collections (first-class operations)", () => {
     expect([...am].length).toBe(1);
     expect(am.toArray()[0]?.req().asString()).toBe("R.a");
 
-    const tref = (raw: string): TransitionRef => TransitionRef.reconstitute(raw);
+    const tref = (raw: string): TransitionRef => TransitionRef.of(raw);
     const tr = TransitionRefs.of([tref("TR-2")]).add(tref("TR-10"));
     expect([...tr].map((t) => t.asString())).toEqual(["TR-2", "TR-10"]);
     expect(tr.isEmpty()).toBe(false);
@@ -782,9 +823,9 @@ describe("refinement collections (first-class operations)", () => {
     expect(tref("TR-1").equals(tref("TR-1"))).toBe(true);
     expect(TransitionRef.parse("").ok).toBe(false);
 
-    const trig = (raw: string): TriggerName => TriggerName.reconstitute(raw);
-    const em = EventMappings.of([]).add(EventMapping.reconstitute({ reqTrigger: trig("go"), transitions: TransitionRefs.of([tref("TR-1")]) }))
-      .add(EventMapping.reconstitute({ reqTrigger: trig("go"), transitions: TransitionRefs.of([tref("TR-9")]), waived: { reason: "later" } }));
+    const trig = (raw: string): TriggerName => TriggerName.of(raw);
+    const em = EventMappings.of([]).add(EventMapping.of({ reqTrigger: trig("go"), transitions: TransitionRefs.of([tref("TR-1")]) }))
+      .add(EventMapping.of({ reqTrigger: trig("go"), transitions: TransitionRefs.of([tref("TR-9")]), waived: { reason: "later" } }));
     expect([...em].length).toBe(2);
     // 重複トリガは最後の宣言が勝つ（旧 new Map の凍結挙動）。
     expect([...(em.ofTrigger(trig("go"))?.transitions() ?? TransitionRefs.of([]))].map((t) => t.asString())).toEqual(["TR-9"]);
@@ -793,8 +834,8 @@ describe("refinement collections (first-class operations)", () => {
     expect(em.ofTrigger(trig("ghost"))).toBe(undefined);
     expect(em.toArray().length).toBe(2);
 
-    const uref = (raw: string): UnmappedTargetRef => UnmappedTargetRef.reconstitute(raw);
-    const un = UnmappedDeclarations.of([UnmappedTarget.reconstitute({ target: uref("R.x"), reason: "first" })]).add(UnmappedTarget.reconstitute({ target: uref("R.x"), reason: "last" }));
+    const uref = (raw: string): UnmappedTargetRef => UnmappedTargetRef.of(raw);
+    const un = UnmappedDeclarations.of([UnmappedTarget.of({ target: uref("R.x"), reason: "first" })]).add(UnmappedTarget.of({ target: uref("R.x"), reason: "last" }));
     expect([...un].length).toBe(2);
     expect(un.covers("R.x")).toBe(true);
     expect(un.covers("R.y")).toBe(false);
@@ -821,10 +862,10 @@ describe("refinement collections (first-class operations)", () => {
     expect(vals.includes("ghost")).toBe(false);
     expect(vals.toArray()).toEqual(["open", "closed"]);
 
-    const apath = (raw: string): AttributePath => AttributePath.reconstitute(raw);
-    const attrs = RefinementAttributes.of([RefinementAttribute.reconstitute({ path: apath("R.b"), kind: "bool" })])
-      .add(RefinementAttribute.reconstitute({ path: apath("R.a"), kind: "int" }))
-      .add(RefinementAttribute.reconstitute({ path: apath("R.a"), kind: "bool", values: ReqAttributeValues.of(["x"]) }));
+    const apath = (raw: string): AttributePath => AttributePath.of(raw);
+    const attrs = RefinementAttributes.of([RefinementAttribute.of({ path: apath("R.b"), kind: "bool" })])
+      .add(RefinementAttribute.of({ path: apath("R.a"), kind: "int" }))
+      .add(RefinementAttribute.of({ path: apath("R.a"), kind: "bool", values: ReqAttributeValues.of(["x"]) }));
     expect([...attrs].length).toBe(3);
     expect(attrs.covers("R.a")).toBe(true);
     expect(attrs.covers("R.z")).toBe(false);
@@ -836,7 +877,7 @@ describe("refinement collections (first-class operations)", () => {
     expect(attrs.byPath("R.z")).toBe(undefined);
     expect(attrs.sortedByPath().toArray().map((a) => a.path().asString())).toEqual(["R.a", "R.a", "R.b"]);
 
-    const rob = (id: string, nature: string) => RefinementObligation.reconstitute({ id: ObligationId.reconstitute(id), nature: ObligationNature.reconstitute(nature), frRefs: FrRefs.reconstitute([]) });
+    const rob = (id: string, nature: string) => RefinementObligation.of({ id: ObligationId.of(id), nature: ObligationNature.of(nature), frRefs: FrRefs.of([]) });
     const obs = RefinementObligations.of([rob("OB-2", "invariant")])
       .add(rob("OB-1", "event"))
       .add(rob("OB-1", "numeric"));
@@ -845,7 +886,7 @@ describe("refinement collections (first-class operations)", () => {
     expect(obs.byId("OB-9")).toBe(undefined);
     expect(obs.sortedCanonically().toArray().map((o) => o.id().asString())).toEqual(["OB-1", "OB-1", "OB-2"]);
 
-    const rsc = (id: string, kind: "accept" | "reject") => RefinementScenario.reconstitute({ id: ScenarioId.reconstitute(id), kind, frRefs: FrRefs.reconstitute([]), bindings: {} });
+    const rsc = (id: string, kind: "accept" | "reject") => RefinementScenario.of({ id: ScenarioId.of(id), kind, frRefs: FrRefs.of([]), bindings: {} });
     const scs = RefinementScenarios.of([rsc("SC-2", "accept")])
       .add(rsc("SC-1", "reject"))
       .add(rsc("SC-1", "accept"));
@@ -856,13 +897,13 @@ describe("refinement collections (first-class operations)", () => {
   });
 
   test("quint invariant collection knows its req ids", () => {
-    const inv = RefinementQuintInvariants.of([]).add(RefinementQuintInvariant.of(ObligationId.reconstitute("OB-1"), FrRefs.reconstitute(["FR-1"]), { op: "bool", value: true }));
+    const inv = RefinementQuintInvariants.of([]).add(RefinementQuintInvariant.of(ObligationId.of("OB-1"), FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))), { op: "bool", value: true }));
     expect(inv.isEmpty()).toBe(false);
     expect([...inv].length).toBe(1);
     expect([...inv.reqIds()]).toEqual(["OB-1"]);
     expect(inv.toArray()[0]?.reqId().asString()).toBe("OB-1");
     expect(inv.toArray()[0]?.reqTarget().asString()).toBe("OB-1");
-    const lowered = inv.toArray()[0]?.loweredAs(LoweredId.reconstitute("OB-7"));
+    const lowered = inv.toArray()[0]?.loweredAs(LoweredId.of("OB-7"));
     expect(lowered?.id().asString()).toBe("OB-7");
   });
 });
@@ -887,7 +928,7 @@ describe("catalog misses in the enabledness path (frozen null-drop)", () => {
       u,
       refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")], eventMap: [{ reqTrigger: "go", transitions: ["DOB-9"] }] }),
       req,
-      ArtifactPath.reconstitute("m.md"),
+      ArtifactPath.of("m.md"),
     );
     expect(plainStatus(plan.statusOfObligation("OB-2"))).toEqual({ kind: "checkable" });
     const built = buildRefinementQueries(u, req, plan);
@@ -946,14 +987,14 @@ describe("split-file coverage pins (one-public-type refactor)", () => {
   test("solver plan expose compile skips and issue-order iteration; unmapped target parses", () => {
     const f = RefinementSolverPlan.of({
       pending: KeyedIndex.of([
-        [QueryLabel.reconstitute("rv:OB-9"), RefinementProbe.invariant(ObligationId.reconstitute("OB-9"))] as const,
+        [QueryLabel.of("rv:OB-9"), RefinementProbe.invariant(ObligationId.of("OB-9"))] as const,
       ]),
       compileSkips: DesignSkips.of([]),
     });
     expect([...f].map(([id]) => id.asString())).toEqual(["rv:OB-9"]);
     expect(f.compileSkips().toArray()).toEqual([]);
     const parsed = UnmappedTargetRef.parse("OB-1");
-    expect(parsed.ok && parsed.value.equals(UnmappedTargetRef.reconstitute("OB-1"))).toBe(true);
+    expect(parsed.ok && parsed.value.equals(UnmappedTargetRef.of("OB-1"))).toBe(true);
     expect(UnmappedTargetRef.parse("").ok).toBe(false);
   });
 });
@@ -970,7 +1011,7 @@ describe("thaw pins — quint alpha skips, timeout break, exact decode (#34/#38)
   test("alpha failures reach the quint document as compile-error skips, wording lockstep with the SMT pass", () => {
     const u = designUnit();
     const req = reqOneInvariant();
-    const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [{ kind: "unspecified", req: "R.flag" }] }), req, ArtifactPath.reconstitute("m.md"));
+    const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [{ kind: "unspecified", req: "R.flag" }] }), req, ArtifactPath.of("m.md"));
     const quint = plan.quintStatusSkips(req, "u1").toArray().filter((s) => s.reason() === "compile-error");
     expect(quint.map((s) => ({ target: s.target().asString(), reason: s.reason(), unit: s.unit(), detail: s.detail() }))).toEqual([{
       target: "OB-1",
@@ -985,7 +1026,7 @@ describe("thaw pins — quint alpha skips, timeout break, exact decode (#34/#38)
   test("a timed-out runtime is not retried on the fallback runtime (thaw #38 item 2)", () => {
     const u = designUnit();
     const req = reqOneInvariant();
-    const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")] }), req, ArtifactPath.reconstitute("m.md"));
+    const plan = UnitRefinementPlan.of(u, refUnitMap({ attrMap: [exprMapping("R.flag", "D.flag")] }), req, ArtifactPath.of("m.md"));
     const host = join(mkdtempSync(join(tmpdir(), "sleepy-child-")), "sleepy.ts");
     writeFileSync(host, "setTimeout(() => process.exit(0), 30_000);\n");
     const started = Date.now();
@@ -1019,7 +1060,7 @@ describe("unmapped dependencies of an event obligation are listed in canonical o
       attributes: [{ path: "R.b", kind: "bool" }, { path: "R.a", kind: "bool" }],
       obligations: [{ id: "OB-1", nature: "event", frRefs: [], trigger: "go", guard: { op: "ref", path: "R.b" }, effect: { op: "ref", path: "R.a" } }],
     });
-    const plan = UnitRefinementPlan.of(unit({}), refUnitMap({ unmapped: [{ target: "R.a", reason: "" }, { target: "R.b", reason: "" }] }), req, ArtifactPath.reconstitute("m.md"));
+    const plan = UnitRefinementPlan.of(unit({}), refUnitMap({ unmapped: [{ target: "R.a", reason: "" }, { target: "R.b", reason: "" }] }), req, ArtifactPath.of("m.md"));
     expect(plainStatus(plan.statusOfObligation("OB-1"))).toEqual({ kind: "gap", detail: 'requirements event trigger "go" has no eventMap entry (map it to design transitions or waive it)' });
   });
 });

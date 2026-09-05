@@ -1,3 +1,4 @@
+import { combineResults, traverseResult, ok } from "@deep-spec/kernel-infrastructure";
 // RefinementSolverClient の実 Gateway 実装。第 2 コンパイラでクエリ計画を組み、
 // PROVEN v1 z3 子（verify-smt entry の --smt-child）へ実行させ、生のテキスト
 // モデルを decode した型付き判定を返す。クエリゼロは子を起動しない（凍結）。
@@ -13,6 +14,7 @@ import type {
   UnitRefinementPlan,
 } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
+
 import type { RefinementCheck, RefinementSolverClient } from "@deep-spec/design-usecase";
 import { type RefinementChildQuery } from "./refinement-child-query.ts";
 import { buildRefinementQueries, decodeDesignModel } from "./refinement-query-plan.ts";
@@ -26,7 +28,6 @@ interface RefinementChildResult {
   core?: string[];
   error?: string;
 }
-
 
 export class RefinementSolverClientImpl implements RefinementSolverClient {
   readonly #config: RefinementSolverClientConfig;
@@ -46,11 +47,16 @@ export class RefinementSolverClientImpl implements RefinementSolverClient {
     }
     const verdicts: (readonly [QueryLabel, RefinementQueryVerdict])[] = [];
     for (const [queryId, r] of child.results) {
-      verdicts.push([QueryLabel.reconstitute(queryId), RefinementQueryVerdict.reconstitute({
+      const parsed = combineResults({
+        label: QueryLabel.parse(queryId),
+        core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse),
+      });
+      if (!parsed.ok) return { plan: built.plan, result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` } };
+      verdicts.push([parsed.value.label, RefinementQueryVerdict.of({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
         decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
-        core: r.core,
+        core: parsed.value.core?.map((label) => label.asString()),
       })]);
     }
     return { plan: built.plan, result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)) } };

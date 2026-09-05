@@ -1,26 +1,23 @@
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // CheckFamily — 検査ファミリー識別子（DD-0 / CD-1 / FD-E1 / XS-1 …）の
 // ドメインプリミティブ。レポートの描画規約はファミリー自身の知識：finding detail
 // の `${family}: ${detail}` prefix と checked/skip target の `check:${family}`
 // はどちらも golden バイト凍結の文言面で、ここ以外では組み立てない。
 
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-
-type CheckFamilyError = { readonly kind: "empty-family"; readonly raw: string };
-
 export class CheckFamily {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-family", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<CheckFamily, CheckFamilyError> {
-    if (raw === "") return err({ kind: "empty-family", raw });
-    return ok(new CheckFamily(raw));
-  }
-
-  static reconstitute(raw: string): CheckFamily {
+  static of(raw: string): CheckFamily {
     return new CheckFamily(raw);
+  }
+
+  static parse(raw: string): Result<CheckFamily, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new CheckFamily(raw));
   }
 
   equals(other: CheckFamily): boolean {

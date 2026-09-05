@@ -7,12 +7,12 @@ export class DesignCrossCheckedEntry {
   readonly #backend: BackendName;
   readonly #targets: TargetIds;
 
-  private constructor(props: { backend: BackendName; targets: TargetIds }) {
+  private constructor(props: Parameters<typeof DesignCrossCheckedEntry.of>[0]) {
     this.#backend = props.backend;
     this.#targets = props.targets;
   }
 
-  static reconstitute(props: { backend: BackendName; targets: TargetIds }): DesignCrossCheckedEntry {
+  static of(props: { backend: BackendName; targets: TargetIds }): DesignCrossCheckedEntry {
     return new DesignCrossCheckedEntry(props);
   }
 

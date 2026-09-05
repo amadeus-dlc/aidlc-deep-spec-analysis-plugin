@@ -9,13 +9,13 @@ export class EntityReference {
   readonly #ownedBy: ComponentName;
   readonly #element: ElementPath;
 
-  private constructor(props: { entity: EntityName; ownedBy: ComponentName; element: ElementPath }) {
+  private constructor(props: Parameters<typeof EntityReference.of>[0]) {
     this.#entity = props.entity;
     this.#ownedBy = props.ownedBy;
     this.#element = props.element;
   }
 
-  static reconstitute(props: { entity: EntityName; ownedBy: ComponentName; element: ElementPath }): EntityReference {
+  static of(props: { entity: EntityName; ownedBy: ComponentName; element: ElementPath }): EntityReference {
     return new EntityReference(props);
   }
 

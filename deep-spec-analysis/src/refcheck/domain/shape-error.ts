@@ -11,7 +11,7 @@ export class ShapeError {
     this.#detail = detail;
   }
 
-  static reconstitute(props: { element: ElementPath; detail: string }): ShapeError {
+  static of(props: { element: ElementPath; detail: string }): ShapeError {
     return new ShapeError(props.element, props.detail);
   }
 

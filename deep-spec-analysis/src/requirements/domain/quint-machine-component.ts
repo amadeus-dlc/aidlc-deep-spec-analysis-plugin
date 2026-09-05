@@ -1,6 +1,9 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
-import type { ObligationId } from "./obligation-id.ts";
 import { AttributePath } from "@deep-spec/kernel-domain";
+
+import type { ObligationId } from "./obligation-id.ts";
+
 import type { TraceState } from "./trace-state.ts";
 import { TraceValue } from "./trace-value.ts";
 
@@ -45,7 +48,7 @@ function evaluate(e: Expression, state: TraceState): TraceValue {
     case "mul":
       return TraceValue.ofNumber(arg(0).asNumber() * arg(1).asNumber());
     case "ref":
-      return state.valueAt(AttributePath.reconstitute(e.path ?? ""));
+      return state.valueAt(AttributePath.of(e.path ?? ""));
     case "bool":
     case "int":
     case "enum":
@@ -59,12 +62,12 @@ export class QuintMachineComponent {
   readonly #id: ObligationId;
   readonly #expression: Expression;
 
-  private constructor(props: { id: ObligationId; expression: Expression }) {
+  private constructor(props: Parameters<typeof QuintMachineComponent.of>[0]) {
     this.#id = props.id;
-    this.#expression = props.expression;
+    this.#expression = ExpressionTree.of(props.expression).asExpression();
   }
 
-  static reconstitute(props: { id: ObligationId; expression: Expression }): QuintMachineComponent {
+  static of(props: { id: ObligationId; expression: Expression }): QuintMachineComponent {
     return new QuintMachineComponent(props);
   }
 

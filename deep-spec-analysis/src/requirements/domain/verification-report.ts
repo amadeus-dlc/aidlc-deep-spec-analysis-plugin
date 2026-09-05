@@ -1,3 +1,5 @@
+import { SkipReason, ContentHash, IrVersion, VerificationMethod, type FindingsSchema } from "@deep-spec/kernel-domain";
+
 // VerificationReport 集約 — v1 バックエンド（smt / quint / cross-check）の
 // 検証結果文書（契約2）のドメイン表現。compose が正準ソートを所有し、
 // 以後この集約は不変。文書のキー順は契約2 の知識なので集約が `toDocument()` で
@@ -5,8 +7,6 @@
 // degraded は契約適合の降格形（findings/skipped/crossChecked を空にして
 // unavailable 理由だけ残す——旧 writeFindingsDoc の自己検証降格と同じ姿）。
 
-import { ContentHash, IrVersion, VerificationMethod } from "@deep-spec/kernel-domain";
-import type { FindingsSchema } from "@deep-spec/kernel-domain";
 import type { Json } from "@deep-spec/kernel-infrastructure";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { VerificationReportId } from "./verification-report-id.ts";
@@ -27,28 +27,17 @@ export class VerificationReport {
   readonly #crossChecked: CrossCheckedEntries | null;
   readonly #unavailableReason: string | null;
 
-  private constructor(seed: {
-    readonly id: VerificationReportId;
-    readonly irVersion: IrVersion;
-    readonly irHash: ContentHash;
-    readonly method: string;
-    readonly findings: VerificationFindings;
-    readonly skipped: VerificationSkips;
-    readonly crossChecked: CrossCheckedEntries | null;
-    readonly unavailableReason: string | null;
-  }) {
+  private constructor(seed: Parameters<typeof VerificationReport.of>[0]) {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#irHash = seed.irHash;
-    this.#method = VerificationMethod.reconstitute(seed.method);
+    this.#method = seed.method;
     this.#findings = seed.findings;
     this.#skipped = seed.skipped;
     this.#crossChecked = seed.crossChecked;
     this.#unavailableReason = seed.unavailableReason;
   }
 
-  // 検査結果からの組成。findings / skipped の正準ソート（kind 順位→targets→
-  // detail、target→reason）は集約の不変条件としてここで一度だけ適用する。
   // ---- 降格レポートの static ファクトリ（OOUI 裁定・文言は golden 凍結） ----
 
   // IR が読めない（fence 不正・JSON 不正・構造不正）。irVersion "0.0.0" と
@@ -56,7 +45,7 @@ export class VerificationReport {
   static irUnreadable(id: VerificationReportId, method: string, cause: string): VerificationReport {
     return VerificationReport.compose({
       id,
-      irVersion: IrVersion.reconstitute("0.0.0"),
+      irVersion: IrVersion.of("0.0.0"),
       irHash: ContentHash.ofText(""),
       method,
       findings: VerificationFindings.of([]),
@@ -78,9 +67,9 @@ export class VerificationReport {
       irHash,
       method,
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => (VerificationSkipped.reconstitute({
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => (VerificationSkipped.of({
         target: t,
-        reason: "ir-version-mismatch",
+        reason: SkipReason.of("ir-version-mismatch"),
         detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`,
       })))),
     });
@@ -105,7 +94,7 @@ export class VerificationReport {
         ...planSkipped.toArray(),
         ...[...model.allTargets()]
           .filter((t) => !planSkipped.toArray().some((s) => s.isFor(t)))
-          .map((t) => (VerificationSkipped.reconstitute({ target: t, reason: "unavailable", detail: "z3 could not be executed" }))),
+          .map((t) => (VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "z3 could not be executed" }))),
       ]),
       unavailableReason: reason,
     });
@@ -119,7 +108,7 @@ export class VerificationReport {
       irHash,
       method: "simulation",
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => (VerificationSkipped.reconstitute({ target: t, reason: "unavailable", detail: "quint CLI missing" })))),
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => (VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "quint CLI missing" })))),
       unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)",
     });
   }
@@ -139,12 +128,13 @@ export class VerificationReport {
       method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
-        ...model.obligations().toArray().map((ob) => (VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: machineError }))),
-        ...model.scenarios().toArray().map((sc) => (VerificationSkipped.reconstitute({ target: sc.id().asTargetId(), reason: "compile-error", detail: machineError }))),
+        ...model.obligations().toArray().map((ob) => (VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: machineError }))),
+        ...model.scenarios().toArray().map((sc) => (VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: machineError }))),
       ]),
     });
   }
 
+  // 検査結果の並びを正準化してから、共通の生成口へ渡す。
   static compose(input: {
     readonly id: VerificationReportId;
     readonly irVersion: IrVersion;
@@ -155,11 +145,11 @@ export class VerificationReport {
     readonly crossChecked?: CrossCheckedEntries;
     readonly unavailableReason?: string;
   }): VerificationReport {
-    return new VerificationReport({
+    return VerificationReport.of({
       id: input.id,
       irVersion: input.irVersion,
       irHash: input.irHash,
-      method: input.method,
+      method: VerificationMethod.of(input.method),
       findings: input.findings.sortedCanonically(),
       skipped: input.skipped.sortedCanonically(),
       crossChecked: input.crossChecked ?? null,
@@ -167,12 +157,12 @@ export class VerificationReport {
     });
   }
 
-  // 書かれた文書からの再構成（ソートしない——書かれた姿が正）。
-  static reconstitute(seed: {
+  // 型付きの文書を、要素の並びを保持して構築する。
+  static of(seed: {
     readonly id: VerificationReportId;
     readonly irVersion: IrVersion;
     readonly irHash: ContentHash;
-    readonly method: string;
+    readonly method: VerificationMethod;
     readonly findings: VerificationFindings;
     readonly skipped: VerificationSkips;
     readonly crossChecked: CrossCheckedEntries | null;
@@ -188,7 +178,7 @@ export class VerificationReport {
       id: this.#id,
       irVersion: this.#irVersion,
       irHash: this.#irHash,
-      method: this.#method.asString(),
+      method: this.#method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([]),
       crossChecked: null,

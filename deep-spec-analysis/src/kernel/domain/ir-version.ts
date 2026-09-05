@@ -1,30 +1,21 @@
-// IrVersion — 契約 IR の semver（major.minor.patch）。parse が strict な
-// 構築口で、invariant は両モデルパーサが課してきた凍結パターン
-// /^\d+\.\d+\.\d+$/ の逐語——先行ゼロ（01.2.3）を許すのは厳密 SemVer との
-// 意図的な差で、これを締めると旧実装が受理した IR を corrupt に落とす
-// 観測面の変更になる（厳密化は PR10 の凍結解除と同時）。reconstitute は
-// 凍結文書からの逐語再水和専用。major 抽出とサポート判定はバージョン語彙
-// そのものなので DP が持つ。
-
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-
-type IrVersionError = { readonly kind: "not-a-semver"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
+// 契約 IR のバージョン。major.minor.patch の形式を生成時に保証する。
+// 既存 IR の互換性のため先行ゼロを許す。major の解釈もこの値が所有する。
 
 export class IrVersion {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (!/^\d+\.\d+\.\d+$/.test(raw)) throw new IllegalArgumentException({ kind: "not-a-semver", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<IrVersion, IrVersionError> {
-    if (!/^\d+\.\d+\.\d+$/.test(raw)) return err({ kind: "not-a-semver", raw });
-    return ok(new IrVersion(raw));
-  }
-
-  // 凍結文書の逐語再水和専用（"" を含む不正値も文書の bytes として保存）。
-  static reconstitute(raw: string): IrVersion {
+  static of(raw: string): IrVersion {
     return new IrVersion(raw);
+  }
+
+  static parse(raw: string): Result<IrVersion, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new IrVersion(raw));
   }
 
   equals(other: IrVersion): boolean {

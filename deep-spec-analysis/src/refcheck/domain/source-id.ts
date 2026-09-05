@@ -1,17 +1,19 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-
-type TokenError = { readonly kind: "empty-token"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 // rules.md の source 欄から抽出された FR/NFR 参照。
 export class SourceId {
   readonly #value: string;
-  private constructor(value: string) { this.#value = value; }
-  static parse(raw: string): Result<SourceId, TokenError> {
-    if (raw === "") return err({ kind: "empty-token", raw });
-    return ok(new SourceId(raw));
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-token", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw: string): SourceId { return new SourceId(raw); }
+  static of(raw: string): SourceId {
+    return new SourceId(raw);
+  }
+
+  static parse(raw: string): Result<SourceId, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new SourceId(raw));
+  }
   equals(other: SourceId): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
 }

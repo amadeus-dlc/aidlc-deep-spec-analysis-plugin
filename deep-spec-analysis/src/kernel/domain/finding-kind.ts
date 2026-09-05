@@ -1,11 +1,7 @@
-// FindingKind — findings 文書（契約2）の finding.kind のドメインプリミティブ
-//（種別規律の裁定 3-2、2026-09-03）。閉集合 11 種と正準順位（文書の並び）を
-// 所有する。parse は閉集合の門、reconstitute は逐語——書かれた文書の降格試験
-// が未知の kind を運ぶため。未知の kind は既知のどれよりも後ろ（凍結挙動）。
-// v1 バックエンド（smt／quint）が出す 4 種の相対順序はこの表と一致する
-//（旧 kind-rank.test が機械証明していた必要条件）。
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+// findings 文書の finding.kind。閉集合11種と正準順位を所有する。
+// 未知の種類は生成時に拒否し、正常な判定として復元しない。
 
 const KIND_RANK: { readonly [k: string]: number } = {
   conflict: 0,
@@ -23,73 +19,68 @@ const KIND_RANK: { readonly [k: string]: number } = {
 
 // kind は任意文字列なので、素の index アクセスだと "toString" 等が prototype の
 // 継承プロパティを拾い NaN 比較になる。所有プロパティのみで順位を引く。
-function rankOf(kind: string): number {
-  return Object.hasOwn(KIND_RANK, kind) ? (KIND_RANK[kind] as number) : 99;
-}
-
-type FindingKindError = { readonly kind: "unknown-finding-kind"; readonly raw: string };
 
 export class FindingKind {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (!Object.hasOwn(KIND_RANK, raw)) throw new IllegalArgumentException({ kind: "unknown-finding-kind", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<FindingKind, FindingKindError> {
-    if (!Object.hasOwn(KIND_RANK, raw)) return err({ kind: "unknown-finding-kind", raw });
-    return ok(new FindingKind(raw));
-  }
-
-  static reconstitute(raw: string): FindingKind {
+  static of(raw: string): FindingKind {
     return new FindingKind(raw);
+  }
+
+  static parse(raw: string): Result<FindingKind, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new FindingKind(raw));
   }
 
   // 閉集合 11 種の名前付きファクトリ（値オブジェクト自身の生成口）。domain／
   // usecase が自ら選ぶ kind は文字列を経由せずこの口から得る——正常生成経路に
   // 任意の string が入る余地を型で断つ（FR3.2、種別規律 3-2）。
   static conflict(): FindingKind {
-    return new FindingKind("conflict");
+    return FindingKind.of("conflict");
   }
 
   static completenessGap(): FindingKind {
-    return new FindingKind("completeness-gap");
+    return FindingKind.of("completeness-gap");
   }
 
   static scenarioViolation(): FindingKind {
-    return new FindingKind("scenario-violation");
+    return FindingKind.of("scenario-violation");
   }
 
   static unreachable(): FindingKind {
-    return new FindingKind("unreachable");
+    return FindingKind.of("unreachable");
   }
 
   static redundancy(): FindingKind {
-    return new FindingKind("redundancy");
+    return FindingKind.of("redundancy");
   }
 
   static refinementViolation(): FindingKind {
-    return new FindingKind("refinement-violation");
+    return FindingKind.of("refinement-violation");
   }
 
   static mappingGap(): FindingKind {
-    return new FindingKind("mapping-gap");
+    return FindingKind.of("mapping-gap");
   }
 
   static structureInvalid(): FindingKind {
-    return new FindingKind("structure-invalid");
+    return FindingKind.of("structure-invalid");
   }
 
   static referenceBroken(): FindingKind {
-    return new FindingKind("reference-broken");
+    return FindingKind.of("reference-broken");
   }
 
   static consistencyMismatch(): FindingKind {
-    return new FindingKind("consistency-mismatch");
+    return FindingKind.of("consistency-mismatch");
   }
 
   static crossCheckDisagreement(): FindingKind {
-    return new FindingKind("cross-check-disagreement");
+    return FindingKind.of("cross-check-disagreement");
   }
 
   // 文書の正準順位（kind 順位表）。
@@ -102,7 +93,7 @@ export class FindingKind {
   }
 
   compareTo(other: FindingKind): number {
-    return rankOf(this.#value) - rankOf(other.#value);
+    return KIND_RANK[this.#value] - KIND_RANK[other.#value];
   }
 
   isConflict(): boolean {

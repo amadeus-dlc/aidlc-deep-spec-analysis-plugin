@@ -1,19 +1,20 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
+import type { Expression } from "@deep-spec/kernel-domain";
 // 設計 IR の背景仮定宣言。抱える式の列挙と prime 禁止（背景仮定は常に
 // 無prime）は宣言自身が所有する——波3の義務／シナリオと同じ裁定（#71 波4）。
 
-import type { Expression } from "@deep-spec/kernel-domain";
 import { DesignBackgroundId } from "./design-background-id.ts";
 
 export class DesignBackgroundDecl {
   readonly #id: DesignBackgroundId;
   readonly #assert: Expression | undefined;
 
-  private constructor(props: { id: DesignBackgroundId; assert?: Expression }) {
+  private constructor(props: Parameters<typeof DesignBackgroundDecl.of>[0]) {
     this.#id = props.id;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
   }
 
-  static reconstitute(props: { id: DesignBackgroundId; assert?: Expression }): DesignBackgroundDecl {
+  static of(props: { id: DesignBackgroundId; assert?: Expression }): DesignBackgroundDecl {
     return new DesignBackgroundDecl(props);
   }
 

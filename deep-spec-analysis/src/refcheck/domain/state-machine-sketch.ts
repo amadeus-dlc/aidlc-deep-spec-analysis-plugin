@@ -16,16 +16,11 @@ export class StateMachineSketch {
   readonly unsupported: string | null; // 文言材料（理由のプローズ）
   };
 
-  private constructor(seed: {
-    readonly spec: MachineSpec; // "Entity" or "Entity.attribute" from the heading
-    readonly states: StateNames;
-    readonly fenceLine: LineNumber;
-    readonly unsupported: string | null; // 文言材料（理由のプローズ）
-  }) {
+  private constructor(seed: Parameters<typeof StateMachineSketch.of>[0]) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: {
+  static of(seed: {
     readonly spec: MachineSpec; // "Entity" or "Entity.attribute" from the heading
     readonly states: StateNames;
     readonly fenceLine: LineNumber;
@@ -50,7 +45,6 @@ export class StateMachineSketch {
   locationLabel(): string {
     return `State Machine: ${this.#seed.spec.asString()} (fence line ${this.#seed.fenceLine.asNumber()})`;
   }
-
 
   // FD-S1／S2 の不変条件（種別規律の裁定 13）: 図の状態は実体のライフサイクル
   // 属性の allowed values に含まれ（S1）、allowed values は図のどこかに現れる

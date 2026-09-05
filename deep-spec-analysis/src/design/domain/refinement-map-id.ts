@@ -6,7 +6,7 @@ import type { ArtifactPath } from "@deep-spec/kernel-domain";
 export class RefinementMapId {
   readonly #path: ArtifactPath;
 
-  private constructor(path: ArtifactPath) {
+  private constructor(path: Parameters<typeof RefinementMapId.of>[0]) {
     this.#path = path;
   }
 

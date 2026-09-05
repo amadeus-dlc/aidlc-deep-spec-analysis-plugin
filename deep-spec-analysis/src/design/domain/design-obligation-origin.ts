@@ -3,11 +3,11 @@
 export class DesignObligationOrigin {
   readonly #value: string;
 
-  private constructor(value: string) {
+  private constructor(value: Parameters<typeof DesignObligationOrigin.of>[0]) {
     this.#value = value;
   }
 
-  static reconstitute(raw: string): DesignObligationOrigin {
+  static of(raw: string): DesignObligationOrigin {
     return new DesignObligationOrigin(raw);
   }
 

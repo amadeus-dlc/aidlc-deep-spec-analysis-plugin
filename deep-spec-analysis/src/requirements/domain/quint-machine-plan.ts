@@ -1,3 +1,5 @@
+import { SkipReason, FindingKind, TargetIds, KeySet, AttributePath } from "@deep-spec/kernel-domain";
+
 // Quint 状態機械の計画——コンパイラが機械を組んだときの対応表で、形式
 // （Quint テキスト）を含まない面（種別規律の裁定 8——値オブジェクト）。旧名
 // QuintMachineFacts の「事実」はドメインイベントに取っておく。判定解釈に必要な、形式（Quint テキスト）を
@@ -9,12 +11,11 @@
 // 済みの義務は走らせない」ガードも逐語）は plan 自身の振る舞い（OOUI 裁定）。
 // 対象 id は TargetId / TargetIds で運ぶ（#71 波10——生 string の列ではない）。
 
-import { FindingKind, TargetIds, KeySet } from "@deep-spec/kernel-domain";
 import { type QuintRuns } from "./quint-runs.ts";
 import { type ObligationIds } from "./obligation-ids.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { ScenarioId } from "./scenario-id.ts";
-import { AttributePath } from "@deep-spec/kernel-domain";
+
 import { TraceState } from "./trace-state.ts";
 import { TraceValue } from "./trace-value.ts";
 import { VerificationFinding } from "./verification-finding.ts";
@@ -83,9 +84,9 @@ export class QuintMachinePlan {
     const machineRun = runs.machineRun();
     if (machineRun === null) {
       for (const target of machineTargets) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "unavailable",
+          reason: SkipReason.of("unavailable"),
           detail: "quint returned no machine run: the event machine was not decided",
         }));
       }
@@ -122,18 +123,18 @@ export class QuintMachinePlan {
       const target = ob.id().asTargetId();
       if (skipped.some((s) => s.isFor(target))) continue;
       if (!bounded) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "capability",
+          reason: SkipReason.of("capability"),
           detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them",
         }));
         continue;
       }
       const r = runs.temporalOf(ob.id());
       if (!r) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "unavailable",
+          reason: SkipReason.of("unavailable"),
           detail: "quint returned no run for this temporal obligation",
         }));
         continue;
@@ -156,22 +157,22 @@ export class QuintMachinePlan {
     for (const sc of model.scenarios()) {
       const target = sc.id().asTargetId();
       if (sc.hasEvent()) {
-        skipped.push(VerificationSkipped.reconstitute({ target, reason: "capability", detail: "scenarios with a When-event are not checked by the quint backend in v1" }));
+        skipped.push(VerificationSkipped.of({ target, reason: SkipReason.of("capability"), detail: "scenarios with a When-event are not checked by the quint backend in v1" }));
         continue;
       }
       if (!this.#hasInitFor(sc.id())) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "capability",
+          reason: SkipReason.of("capability"),
           detail: "quint scenario evaluation requires bindings for every declared attribute",
         }));
         continue;
       }
       const r = runs.scenarioOf(sc.id());
       if (!r) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "unavailable",
+          reason: SkipReason.of("unavailable"),
           detail: "quint returned no run for this scenario",
         }));
         continue;
@@ -182,7 +183,7 @@ export class QuintMachinePlan {
         continue;
       }
       const bindings = sc.bindingEntriesCanonically();
-      const state = TraceState.of(bindings.map(([path, value]) => [AttributePath.reconstitute(path), TraceValue.of(value)] as const));
+      const state = TraceState.of(bindings.map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)] as const));
       const boundModel: { [path: string]: boolean | number | string } = {};
       for (const [path, value] of bindings) boundModel[path] = value;
       if (sc.isAccept() && r.isViolated()) {

@@ -32,7 +32,7 @@ export class AttributeMapping {
   }
 
   static expression(req: AttributePath, expr: Expression): AttributeMapping {
-    return new AttributeMapping(req, { kind: "expression", expr });
+    return new AttributeMapping(req, { kind: "expression", expr: ExpressionTree.of(expr).asExpression() });
   }
 
   static enumCases(req: AttributePath, from: string, cases: { readonly [designValue: string]: string }): AttributeMapping {

@@ -1,3 +1,15 @@
+import {
+  SkipReason,
+  type Expression,
+  ExpressionTree,
+  TriggerName,
+  KeyedIndex,
+  KeySet,
+  QueryLabel,
+  TargetId,
+  TargetIds,
+} from "@deep-spec/kernel-domain";
+
 // IR → SMT-LIB の検証計画ビルダ。SMT-LIB という形式の知識（変数名符号化・
 // s 式・仮定間接化つき baseScript・クエリ台本）はすべてここに封じ、判定解釈に
 // 必要な事実（SmtVerificationPlan）だけをドメイン語彙で返す。
@@ -5,7 +17,6 @@
 // smtOf / buildPlan からの逐語移植（IrDoc → RequirementsModel の読み替えのみ）。
 // 描画語彙（smtVar/smtName/smtLit/smtIntOf）は移行 PR8 で kernel 共有へ。
 
-import { type Expression, ExpressionTree, TriggerName, KeyedIndex, KeySet, QueryLabel, TargetId, TargetIds } from "@deep-spec/kernel-domain";
 import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
 import type { SmtChildQuery } from "./smt-child-query.ts";
 import { ObligationId, ScenarioId,
@@ -17,7 +28,6 @@ import { ObligationId, ScenarioId,
   VerificationSkipped,
   SmtEventPairProbe,
 } from "@deep-spec/requirements-domain";
-
 
 export interface SmtPlan {
   queries: SmtChildQuery[];
@@ -178,6 +188,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       bg.push({ name: smtName("bg", b.id().asString()), smt: smtOf(model, b.assertion()) });
       labelToTarget.set(smtName("bg", b.id().asString()), b.id().asString());
     } catch (err) {
+      if (!(err instanceof CompileError)) throw err;
       // コンパイルできない背景仮定は全クエリから落ちる。OB/SC の id を持たない
       // ため skipped[] を占められず、不変量の detail 経由でだけ観測される。
       void err;
@@ -191,7 +202,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     if (ob.isInvariantLike()) {
       const assertion = ob.assertion();
       if (assertion === undefined) {
-        skipped.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: "invariant obligation lacks an assert expression" }));
+        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "invariant obligation lacks an assert expression" }));
         compiled.set(ob.id().asString(), false);
         continue;
       }
@@ -201,13 +212,14 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         invariantObs.push(ob);
         compiled.set(ob.id().asString(), true);
       } catch (err) {
-        skipped.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) }));
+        if (!(err instanceof CompileError)) throw err;
+        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
         compiled.set(ob.id().asString(), false);
       }
     } else if (ob.isEvent()) {
       const event = ob.eventDefinition();
       if (event === null) {
-        skipped.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" }));
+        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "event obligation lacks trigger/guard/effect" }));
         compiled.set(ob.id().asString(), false);
         continue;
       }
@@ -218,12 +230,13 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         events.push(ob);
         compiled.set(ob.id().asString(), true);
       } catch (err) {
-        skipped.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) }));
+        if (!(err instanceof CompileError)) throw err;
+        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
         compiled.set(ob.id().asString(), false);
       }
     } else {
       // state-temporal — このバックエンドの nature 範囲外（FR6.2）。
-      skipped.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "capability", detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend` }));
+      skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("capability"), detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend` }));
       compiled.set(ob.id().asString(), false);
     }
   }
@@ -254,7 +267,8 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       const name = smtName("ant", ob.id().asString());
       const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${smtOf(model, ant)}))`].join("\n");
       queries.push({ id: `vac:${ob.id().asString()}`, script, assumptions: [...baseAssumptions, name], model: [] });
-    } catch {
+    } catch (error) {
+      if (!(error instanceof CompileError)) throw error;
       // 前件は完全形 assert のコンパイルで一度通っている——到達不能。
     }
   }
@@ -309,7 +323,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
           assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
           model: [],
         });
-        eventPairs.push(SmtEventPairProbe.of({ qOverlap: QueryLabel.reconstitute(qOverlap), qJoint: QueryLabel.reconstitute(qJoint), a: a.id(), b: b.id(), trigger: TriggerName.reconstitute(trigger) }));
+        eventPairs.push(SmtEventPairProbe.of({ qOverlap: QueryLabel.of(qOverlap), qJoint: QueryLabel.of(qJoint), a: a.id(), b: b.id(), trigger: TriggerName.of(trigger) }));
       }
     }
   }
@@ -336,7 +350,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   const scenarioQueries = new Map<string, string>();
   for (const sc of model.scenarios()) {
     if (sc.hasEvent()) {
-      skipped.push(VerificationSkipped.reconstitute({ target: sc.id().asTargetId(), reason: "capability", detail: "scenarios with a When-event are not checked by the SMT backend in v1" }));
+      skipped.push(VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("capability"), detail: "scenarios with a When-event are not checked by the SMT backend in v1" }));
       continue;
     }
     try {
@@ -359,19 +373,20 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       queries.push({ id: qid, script, assumptions: [...baseAssumptions, name], model: modelVars });
       scenarioQueries.set(sc.id().asString(), qid);
     } catch (err) {
-      skipped.push(VerificationSkipped.reconstitute({ target: sc.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) }));
+      if (!(err instanceof CompileError)) throw err;
+      skipped.push(VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
     }
   }
 
   return {
     queries,
     plan: SmtVerificationPlan.of({
-      compiled: KeySet.of([...compiled].filter(([, ok]) => ok).map(([id]) => ObligationId.reconstitute(id))),
+      compiled: KeySet.of([...compiled].filter(([, ok]) => ok).map(([id]) => ObligationId.of(id))),
       skipped: VerificationSkips.of(skipped),
-      labelToTarget: KeyedIndex.of([...labelToTarget].map(([label, target]) => [QueryLabel.reconstitute(label), TargetId.reconstitute(target)] as const)),
+      labelToTarget: KeyedIndex.of([...labelToTarget].filter(([, target]) => target.startsWith("OB-")).map(([label, target]) => [QueryLabel.of(label), TargetId.of(target)] as const)),
       eventPairs: SmtEventPairProbes.of(eventPairs),
-      gapTriggers: KeyedIndex.of([...gapTriggers].map(([trigger, ids]) => [TriggerName.reconstitute(trigger), TargetIds.reconstitute(ids)] as const)),
-      scenarioQueries: KeyedIndex.of([...scenarioQueries].map(([sc, qid]) => [ScenarioId.reconstitute(sc), QueryLabel.reconstitute(qid)] as const)),
+      gapTriggers: KeyedIndex.of([...gapTriggers].map(([trigger, ids]) => [TriggerName.of(trigger), TargetIds.of(Array.from(ids, (raw) => TargetId.of(raw)))] as const)),
+      scenarioQueries: KeyedIndex.of([...scenarioQueries].map(([sc, qid]) => [ScenarioId.of(sc), QueryLabel.of(qid)] as const)),
     }),
   };
 }

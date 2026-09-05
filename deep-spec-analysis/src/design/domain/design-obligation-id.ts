@@ -1,23 +1,19 @@
-import { TargetId } from "@deep-spec/kernel-domain";
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-
-type DesignObligationIdError = { readonly kind: "empty-design-obligation-id"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, compareCanonically, type Result } from "@deep-spec/kernel-infrastructure";
 
 export class DesignObligationId {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-design-obligation-id", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<DesignObligationId, DesignObligationIdError> {
-    if (raw === "") return err({ kind: "empty-design-obligation-id", raw });
-    return ok(new DesignObligationId(raw));
-  }
-
-  static reconstitute(raw: string): DesignObligationId {
+  static of(raw: string): DesignObligationId {
     return new DesignObligationId(raw);
+  }
+
+  static parse(raw: string): Result<DesignObligationId, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new DesignObligationId(raw));
   }
 
   equals(other: DesignObligationId): boolean {
@@ -26,7 +22,7 @@ export class DesignObligationId {
 
   // 正準順（英字骨格→数値セグメント）——kernel の TargetId が所有する順序に従う（裁定 1）。
   compareTo(other: DesignObligationId): number {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
 
   asString(): string {

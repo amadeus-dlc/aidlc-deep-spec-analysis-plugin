@@ -47,27 +47,27 @@ export class RequirementsSourceRepositoryImpl implements RequirementsSourceRepos
       return err({ kind: "io-failed", operation: "read", path: id.recordRoot().asString(), cause: search.cause });
     }
     if (search.kind === "absent") return err({ kind: "not-found", path: id.recordRoot().asString() });
+    let bytes: Buffer;
     try {
-      const bytes = readFileSync(search.path);
-      return ok(
-        RequirementsSource.reconstitute({
-          id,
-          sourcePath: ArtifactPath.reconstitute(search.path),
-          knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
-          digest: ContentHash.ofBytes(bytes).asString(),
-          sourceDocument: new Uint8Array(bytes),
-        }),
-      );
+      bytes = readFileSync(search.path);
     } catch (e) {
       return err({ kind: "io-failed", operation: "read", path: search.path, cause: e instanceof Error ? e.message : String(e) });
     }
+    return ok(RequirementsSource.of({
+      id,
+      sourcePath: ArtifactPath.of(search.path),
+      knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
+      digest: ContentHash.ofBytes(bytes),
+      sourceDocument: new Uint8Array(bytes),
+    }));
   }
 
   // 往復則: findById が読んだ原文バイト列を解決済みの所在へ逐語で書き戻す。
   store(source: RequirementsSource): Result<void, RepositoryError> {
     const path = source.sourcePath().asString();
+    const bytes = source.sourceDocument();
     try {
-      writeFileAtomically(path, source.sourceDocument());
+      writeFileAtomically(path, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });

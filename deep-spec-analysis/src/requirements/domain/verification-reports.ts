@@ -1,4 +1,5 @@
-import { BackendName, ContentHash, FindingKind, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+import { TargetId, BackendName, ContentHash, FindingKind, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+
 import { CrossCheckedEntries } from "./cross-checked-entries.ts";
 import { CrossCheckedEntry } from "./cross-checked-entry.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
@@ -78,7 +79,7 @@ export class VerificationReports {
       }
     }
     const crossChecked: CrossCheckedEntry[] = [...comparedByBackend.entries()]
-      .map(([backend, targets]) => CrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets]).sortedCanonically() }))
+      .map(([backend, targets]) => CrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIds.of(Array.from([...targets], (raw) => TargetId.of(raw))).sortedCanonically() }))
       .sort((x, y) => x.compareByBackend(y));
 
     return VerificationReport.compose({

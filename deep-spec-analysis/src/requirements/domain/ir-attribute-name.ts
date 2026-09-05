@@ -1,22 +1,19 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-
-type IrDeclTokenError = { readonly kind: "empty-ir-decl-token"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 export class IrAttributeName {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<IrAttributeName, IrDeclTokenError> {
-    if (raw === "") return err({ kind: "empty-ir-decl-token", raw });
-    return ok(new IrAttributeName(raw));
-  }
-
-  static reconstitute(raw: string): IrAttributeName {
+  static of(raw: string): IrAttributeName {
     return new IrAttributeName(raw);
+  }
+
+  static parse(raw: string): Result<IrAttributeName, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new IrAttributeName(raw));
   }
 
   equals(other: IrAttributeName): boolean {

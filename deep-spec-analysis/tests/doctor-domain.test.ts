@@ -4,9 +4,10 @@
 
 import { HealthVerdict, InstallationManifest, VerificationStaleness, CheckSeverity, CoverageState, Check, DigestAnchor, InstalledStatus, ManifestEntry, SolverAvailability } from "@deep-spec/doctor-domain";
 import { CoverageRow, DebtRow, RefinementStaleRow, UnitCoverageRow, CoverageAssessment, StructuralDebt, UnitCoverage, CheckFunctionalCoverageUseCase } from "@deep-spec/doctor-usecase";
+import type { DoctorWorkspaceClient } from "@deep-spec/doctor-usecase";
 import { describe, expect, test } from "bun:test";
 import { ContentHash } from "@deep-spec/kernel-domain";
-import type { DoctorWorkspaceClient } from "@deep-spec/doctor-usecase";
+
 import { DoctorPresenter } from "@deep-spec/doctor-adapter";
 
 const h = (text: string): ContentHash => ContentHash.ofText(text);
@@ -49,7 +50,7 @@ describe("assessment aggregates", () => {
   test("coverage assessment counts verified against eligible", () => {
     const a = CoverageAssessment.of({
       eligible: 3,
-      problems: [CoverageRow.reconstitute({ space: "default", intent: "i1", state: CoverageState.unverified() })],
+      problems: [CoverageRow.of({ space: "default", intent: "i1", state: CoverageState.unverified() })],
       scopes: ["enterprise", "feature"],
     });
     expect(a.isClean()).toBe(false);
@@ -64,8 +65,8 @@ describe("assessment aggregates", () => {
     const d = StructuralDebt.of({
       scanned: 2,
       rows: [
-        DebtRow.reconstitute({ space: "default", intent: "i1", artifact: "inception/domain-design/components.md", findings: 3 }),
-        DebtRow.reconstitute({ space: "default", intent: "i1", artifact: "construction/u1/functional-design", findings: 2 }),
+        DebtRow.of({ space: "default", intent: "i1", artifact: "inception/domain-design/components.md", findings: 3 }),
+        DebtRow.of({ space: "default", intent: "i1", artifact: "construction/u1/functional-design", findings: 2 }),
       ],
     });
     expect(d.hasScans()).toBe(true);
@@ -78,8 +79,8 @@ describe("assessment aggregates", () => {
   test("unit coverage carries unit problems and refinement staleness apart", () => {
     const u = UnitCoverage.of({
       eligible: 3,
-      problems: [UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u1", state: CoverageState.stale() })],
-      refinementStale: [RefinementStaleRow.reconstitute({ space: "default", intent: "i1" })],
+      problems: [UnitCoverageRow.of({ space: "default", intent: "i1", unit: "u1", state: CoverageState.stale() })],
+      refinementStale: [RefinementStaleRow.of({ space: "default", intent: "i1" })],
       scopes: ["feature"],
     });
     expect(u.hasEligible()).toBe(true);
@@ -94,12 +95,12 @@ describe("assessment aggregates", () => {
   });
 
   test("the health verdict keeps the frozen checks order and serialized shape", () => {
-    const row: Check = Check.reconstitute({ pass: true, label: "l", fix: "f", severity: CheckSeverity.advisory() });
-    const v = HealthVerdict.of([row]).add(Check.reconstitute({ pass: false, label: "m", fix: "g", severity: CheckSeverity.error() }));
+    const row: Check = Check.of({ pass: true, label: "l", fix: "f", severity: CheckSeverity.advisory() });
+    const v = HealthVerdict.of([row]).add(Check.of({ pass: false, label: "m", fix: "g", severity: CheckSeverity.error() }));
     expect([...v].map((c) => c.label())).toEqual(["l", "m"]);
     expect(row.passes()).toBe(true);
     expect(row.fix()).toBe("f");
-    expect(Check.reconstitute({ pass: true, label: "n", severity: CheckSeverity.advisory() }).toDocument()).toEqual({ pass: true, label: "n", severity: "advisory" });
+    expect(Check.of({ pass: true, label: "n", severity: CheckSeverity.advisory() }).toDocument()).toEqual({ pass: true, label: "n", severity: "advisory" });
     expect(JSON.stringify(v.document())).toBe(
       '{"checks":[{"pass":true,"label":"l","fix":"f","severity":"advisory"},{"pass":false,"label":"m","fix":"g","severity":"error"}]}',
     );
@@ -161,8 +162,8 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
     const rows = presenter.verificationCoverage(CoverageAssessment.of({
       eligible: 2,
       problems: [
-        CoverageRow.reconstitute({ space: "default", intent: "i1", state: CoverageState.unverified() }),
-        CoverageRow.reconstitute({ space: "default", intent: "i2", state: CoverageState.stale() }),
+        CoverageRow.of({ space: "default", intent: "i1", state: CoverageState.unverified() }),
+        CoverageRow.of({ space: "default", intent: "i2", state: CoverageState.stale() }),
       ],
       scopes: ["enterprise", "feature"],
     }));
@@ -183,7 +184,7 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
   test("debt rows and the report-only summary render the legacy bytes; no scans, no summary", () => {
     const rows = presenter.structuralDebt(StructuralDebt.of({
       scanned: 3,
-      rows: [DebtRow.reconstitute({ space: "default", intent: "i1", artifact: "inception/domain-design/components.md", findings: 4 })],
+      rows: [DebtRow.of({ space: "default", intent: "i1", artifact: "inception/domain-design/components.md", findings: 4 })],
     }));
     expect(rows[0]?.label()).toBe("deep-spec-analysis: default/i1 inception/domain-design/components.md has 4 reference-integrity finding(s)");
     expect(rows[1]?.label()).toBe("deep-spec-analysis: design refcheck — 4 structural finding(s) across 3 design artifact(s) scanned (report-only)");
@@ -194,10 +195,10 @@ describe("presenter — 凍結文言のピン（installer が grep する部分�
     const rows = presenter.functionalCoverage(UnitCoverage.of({
       eligible: 2,
       problems: [
-        UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u1", state: CoverageState.unverified() }),
-        UnitCoverageRow.reconstitute({ space: "default", intent: "i1", unit: "u2", state: CoverageState.stale() }),
+        UnitCoverageRow.of({ space: "default", intent: "i1", unit: "u1", state: CoverageState.unverified() }),
+        UnitCoverageRow.of({ space: "default", intent: "i1", unit: "u2", state: CoverageState.stale() }),
       ],
-      refinementStale: [RefinementStaleRow.reconstitute({ space: "default", intent: "i1" })],
+      refinementStale: [RefinementStaleRow.of({ space: "default", intent: "i1" })],
       scopes: ["feature"],
     }));
     expect(rows.map((c) => c.label())).toEqual([

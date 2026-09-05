@@ -1,4 +1,6 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+
 import { IrBindingPairs } from "./ir-binding-pairs.ts";
 import { type ScenarioId } from "./scenario-id.ts";
 
@@ -8,14 +10,14 @@ export class IrScenarioDecl {
   readonly #hasEvent: boolean;
   readonly #expect: Expression | undefined;
 
-  private constructor(props: { id: ScenarioId; bindings: IrBindingPairs; hasEvent: boolean; expect?: Expression }) {
+  private constructor(props: Parameters<typeof IrScenarioDecl.of>[0]) {
     this.#id = props.id;
     this.#bindings = props.bindings;
     this.#hasEvent = props.hasEvent;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
-  static reconstitute(props: { id: ScenarioId; bindings: IrBindingPairs; hasEvent: boolean; expect?: Expression }): IrScenarioDecl {
+  static of(props: { id: ScenarioId; bindings: IrBindingPairs; hasEvent: boolean; expect?: Expression }): IrScenarioDecl {
     return new IrScenarioDecl(props);
   }
 

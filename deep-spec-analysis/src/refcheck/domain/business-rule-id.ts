@@ -1,16 +1,18 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-
-type TokenError = { readonly kind: "empty-token"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 export class BusinessRuleId {
   readonly #value: string;
-  private constructor(value: string) { this.#value = value; }
-  static parse(raw: string): Result<BusinessRuleId, TokenError> {
-    if (!/^BR[0-9]+\.[0-9]+$/.test(raw)) return err({ kind: "empty-token", raw });
-    return ok(new BusinessRuleId(raw));
+  private constructor(raw: string) {
+    if (!/^BR[0-9]+\.[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "empty-token", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw: string): BusinessRuleId { return new BusinessRuleId(raw); }
+  static of(raw: string): BusinessRuleId {
+    return new BusinessRuleId(raw);
+  }
+
+  static parse(raw: string): Result<BusinessRuleId, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new BusinessRuleId(raw));
+  }
   equals(other: BusinessRuleId): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
   // BR{group}.{seq} 形か（FD-R2 の判定と finding target の選別に使う）。

@@ -5,8 +5,7 @@
 // 除外し（到達には 1 ステップ要る）、設計不変量が invAll に残ると到達可能な
 // 違反で先に転んでプローブを隠す。設計不変量なしの探索は到達性の過大近似で、
 // それが健全な方向：「無制約でも到達しない」は本当に到達不能。
-// probeReached：プローブ実行の違反トレースが実際にその状態で終わるときのみ
-// 「到達した」と判定する（conflict 単体は証拠でない——ベルトとサスペンダー）。
+// 実行結果の到達性判断は SiblingVerdictDocument が所有する。
 // 旧 aidlc-sensor-deep-spec-design-verify-quint.ts からの逐語移植。
 
 import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
@@ -28,17 +27,4 @@ export function reachabilityVariant(base: Json, attrPath: string, state: string)
     scenarios: [] as unknown as Json,
     background: (Array.isArray(base.background) ? base.background : []) as unknown as Json,
   };
-}
-
-export function probeReached(doc: Json, attrPath: string, state: string): boolean {
-  if (!isObject(doc) || !Array.isArray(doc.findings)) return false;
-  for (const f of doc.findings) {
-    if (!isObject(f) || f.kind !== "conflict") continue;
-    const witness = isObject(f.witness) ? f.witness : {};
-    const trace = Array.isArray(witness.trace) ? witness.trace : null;
-    if (trace === null) return true; // トレース詳細なしの違反——到達したとみなす
-    const last = trace[trace.length - 1];
-    if (isObject(last) && last[attrPath] === state) return true;
-  }
-  return false;
 }

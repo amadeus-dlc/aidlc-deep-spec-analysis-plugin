@@ -1,14 +1,7 @@
 // RefinementMaterials 集約 — Phase 3（refinement）の随伴文脈。恒等は設計
-// モデルへの 1:1 錨着（RefinementMaterialsId）。inactive（レコードルートが
-// 辿れない／要件モデルが読めない——Phase 3 は丸ごと発火しない旧 req === null
-// 挙動）は不在ではなく集約の正当な状態なので、findById は Result ではなく
-// 集約そのものを返す。状態の内訳は private に閉じ、照会は振る舞いで行う
-// （Tell-Don't-Ask 裁定）。ツリー投影のため書き込み面は持たない（#46 台帳の
-// 裁定待ち行）。
-//
-// refinement/domain に置く理由: 公認エッジは refinement/domain →
-// {requirements,design}/domain であり、設計側 domain からは refinement 語彙
-// （RefinementRequirements / RefinementMap）へ届かない。
+// モデルへの 1:1 錨着（RefinementMaterialsId）。inactive は適用外（レコード
+// ルートまたは要件モデルが存在しない場合）だけを表す。取得失敗や不正入力は
+// Repository port の Result で運び、この集約の正当な状態に混ぜない。
 
 import type { RefinementMaterialsId } from "@deep-spec/design-domain";
 import type { RefinementRequirements } from "./refinement-requirements.ts";

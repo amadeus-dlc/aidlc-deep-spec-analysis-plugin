@@ -5,13 +5,12 @@
 // findings document" 経路）、SiblingVerdictDocument の "unreadable" は読めたが
 // 文書として成立しないことを区別する（旧挙動の凍結）。
 
-import type { DesignUnit, LoweredUnit } from "@deep-spec/design-domain";
-import type { ReachabilityProbe } from "./reachability-probe.ts";
+import type { DesignUnit, LoweredUnit, ReachabilityVerdict } from "@deep-spec/design-domain";
 import type { SiblingLoweredRun } from "./sibling-lowered-run.ts";
 
 
 
 export interface SiblingBackendClient {
   runLowered(backend: "smt" | "quint", unit: DesignUnit, lowered: LoweredUnit, wallTimeoutMs: number): SiblingLoweredRun;
-  probeState(unit: DesignUnit, lowered: LoweredUnit, attrPath: string, state: string, wallTimeoutMs: number): ReachabilityProbe;
+  probeState(unit: DesignUnit, lowered: LoweredUnit, attrPath: string, state: string, wallTimeoutMs: number): ReachabilityVerdict;
 }

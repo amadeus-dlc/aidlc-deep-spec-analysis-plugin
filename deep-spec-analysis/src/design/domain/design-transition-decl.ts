@@ -11,17 +11,17 @@ export class DesignTransitionDecl {
   readonly #guard: Expression | undefined;
   readonly #effect: Expression | undefined;
 
-  private constructor(props: { id: DesignTransitionId; from?: string; to?: string; trigger?: TriggerName; brRefs?: BrRefs; guard?: Expression; effect?: Expression }) {
+  private constructor(props: Parameters<typeof DesignTransitionDecl.of>[0]) {
     this.#id = props.id;
     this.#from = props.from;
     this.#to = props.to;
     this.#trigger = props.trigger;
     this.#brRefs = props.brRefs;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
   }
 
-  static reconstitute(props: { id: DesignTransitionId; from?: string; to?: string; trigger?: TriggerName; brRefs?: BrRefs; guard?: Expression; effect?: Expression }): DesignTransitionDecl {
+  static of(props: { id: DesignTransitionId; from?: string; to?: string; trigger?: TriggerName; brRefs?: BrRefs; guard?: Expression; effect?: Expression }): DesignTransitionDecl {
     return new DesignTransitionDecl(props);
   }
 

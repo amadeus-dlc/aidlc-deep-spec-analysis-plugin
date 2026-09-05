@@ -8,7 +8,7 @@ export class ManifestEntry {
   readonly #severity: CheckSeverity;
 
   private constructor(rel: string, severity: CheckSeverity) {
-    this.#rel = ArtifactPath.reconstitute(rel);
+    this.#rel = ArtifactPath.of(rel);
     this.#severity = severity;
   }
 

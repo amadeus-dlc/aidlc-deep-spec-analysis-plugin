@@ -1,3 +1,5 @@
+import { UnitName, TargetId, FindingKind, FrRefs, TargetIds, KeyedIndex, QueryLabel, SkipReason } from "@deep-spec/kernel-domain";
+
 // refinement ソルバ実行の型付き判定と計画（対応表）。SMT-LIB スクリプト・z3 の生
 // 表現はアダプタ（第 2 コンパイラ＋クライアント）が持ち、ドメインへは
 // クエリ id（"rv:OB-x" / "re:OB-x" / "rs2:OB-x:TR-y" / "rs:SC-x"）ごとの
@@ -6,15 +8,15 @@
 // detail 文言は golden 凍結）は plan 自身の振る舞い（OOUI 裁定——旧
 // interpretRefinementVerdicts の逐語移植）。
 
-import { FindingKind, FrRefs, TargetIds, KeyedIndex, QueryLabel, SkipReason } from "@deep-spec/kernel-domain";
 import { DesignFinding, DesignFindings, DesignSkips } from "@deep-spec/design-domain";
 import { DesignSkipped } from "@deep-spec/design-domain";
+import { DesignWitness } from "@deep-spec/design-domain";
+
 import { type UnitRefinementPlan } from "./unit-refinement-plan.ts";
 import type { RefinementRequirements } from "./refinement-requirements.ts";
 
 import type { RefinementProbe } from "./refinement-probe.ts";
 import { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
-import { DesignWitness } from "@deep-spec/design-domain";
 
 // クエリ計画（値オブジェクト、裁定 8——旧 RefinementSolverFacts）：発行順の Pending 索引と、alpha 置換・SMT コンパイル失敗
 // による compile-error skip（構築時に確定）。
@@ -61,7 +63,7 @@ export class RefinementSolverPlan {
         skipped.push(DesignSkipped.of({
           target: p.reqTarget(),
           reason: SkipReason.timeout(),
-          unit: unitName,
+          unit: UnitName.of(unitName),
           detail: `refinement query ${queryId.asString()} exceeded the solver budget or errored`,
         }));
         continue;
@@ -74,9 +76,9 @@ export class RefinementSolverPlan {
               DesignFinding.of({
                 kind: FindingKind.refinementViolation(),
                 frRefs: frOf(reqId.asString()),
-                targets: TargetIds.reconstitute([reqId.asString()]),
+                targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.model(r.witnessModel()),
-                unit: unitName,
+                unit: UnitName.of(unitName),
                 detail: `A design-legal state of unit ${unitName} violates requirements obligation ${reqId.asString()} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`,
               }),
             );
@@ -89,9 +91,9 @@ export class RefinementSolverPlan {
               DesignFinding.of({
                 kind: FindingKind.refinementViolation(),
                 frRefs: frOf(reqId.asString()),
-                targets: TargetIds.reconstitute([reqId.asString()]),
+                targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.core(r.sortedCore()),
-                unit: unitName,
+                unit: UnitName.of(unitName),
                 detail: `Accept scenario ${reqId.asString()} has no design-legal counterpart in unit ${unitName} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
               }),
             );
@@ -101,9 +103,9 @@ export class RefinementSolverPlan {
               DesignFinding.of({
                 kind: FindingKind.refinementViolation(),
                 frRefs: frOf(reqId.asString()),
-                targets: TargetIds.reconstitute([reqId.asString()]),
+                targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.model(r.witnessModel()),
-                unit: unitName,
+                unit: UnitName.of(unitName),
                 detail: `Reject scenario ${reqId.asString()} is still admitted by unit ${unitName} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`,
               }),
             );
@@ -115,9 +117,9 @@ export class RefinementSolverPlan {
               DesignFinding.of({
                 kind: FindingKind.completenessGap(),
                 frRefs: frOf(reqId.asString()),
-                targets: TargetIds.reconstitute([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())]).sortedUniqueCanonically(),
+                targets: TargetIds.of(Array.from([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())], (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
                 witness: DesignWitness.model(r.witnessModel()),
-                unit: unitName,
+                unit: UnitName.of(unitName),
                 detail: `The requirements event ${reqId.asString()} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
               }),
             );
@@ -131,9 +133,9 @@ export class RefinementSolverPlan {
                 frRefs: frOf(reqId.asString()),
                 // simulation probe の designId は構築時に必須——旧 `?? ""` +空除去は
                 // designId 未設定の防御で、必須化により恒等（挙動保存）。
-                targets: TargetIds.reconstitute([reqId.asString(), designId.asString()].filter((t) => t !== "")).sortedUniqueCanonically(),
+                targets: TargetIds.of(Array.from([reqId.asString(), designId.asString()].filter((t) => t !== ""), (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
                 witness: DesignWitness.trace(r.witnessTrace()),
-                unit: unitName,
+                unit: UnitName.of(unitName),
                 detail: `Design step ${designId.asString()} of unit ${unitName}, taken where requirements event ${reqId.asString()} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,
               }),
             );

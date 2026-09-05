@@ -15,7 +15,7 @@ export class DesignMachineDecl {
   readonly #transitions: DesignTransitionDecls;
   readonly #ignores: DesignIgnoreDecls;
 
-  private constructor(props: { id: DesignMachineId; attrPath: string; initial: InitialStates; transitions: DesignTransitionDecls; ignores: DesignIgnoreDecls }) {
+  private constructor(props: Parameters<typeof DesignMachineDecl.of>[0]) {
     this.#id = props.id;
     this.#attrPath = props.attrPath;
     this.#initial = props.initial;
@@ -23,7 +23,7 @@ export class DesignMachineDecl {
     this.#ignores = props.ignores;
   }
 
-  static reconstitute(props: { id: DesignMachineId; attrPath: string; initial: InitialStates; transitions: DesignTransitionDecls; ignores: DesignIgnoreDecls }): DesignMachineDecl {
+  static of(props: { id: DesignMachineId; attrPath: string; initial: InitialStates; transitions: DesignTransitionDecls; ignores: DesignIgnoreDecls }): DesignMachineDecl {
     return new DesignMachineDecl(props);
   }
 

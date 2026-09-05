@@ -8,8 +8,6 @@ import type { ErrorMessages, IrVersion } from "@deep-spec/kernel-domain";
 import { type DesignUnitDecls } from "./design-unit-decls.ts";
 import { DesignIrValidationMaterialsId } from "./design-ir-validation-materials-id.ts";
 
-
-
 export class DesignIrValidationMaterials {
   readonly #id: DesignIrValidationMaterialsId;
   readonly #irVersion: IrVersion;
@@ -17,13 +15,7 @@ export class DesignIrValidationMaterials {
   readonly #units: DesignUnitDecls;
   readonly #sourceDocument: Uint8Array;
 
-  private constructor(seed: {
-    readonly id: DesignIrValidationMaterialsId;
-    readonly irVersion: IrVersion;
-    readonly schemaErrors: ErrorMessages;
-    readonly units: DesignUnitDecls;
-    readonly sourceDocument: Uint8Array;
-  }) {
+  private constructor(seed: Parameters<typeof DesignIrValidationMaterials.of>[0]) {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#schemaErrors = seed.schemaErrors;
@@ -32,7 +24,7 @@ export class DesignIrValidationMaterials {
   }
 
   // アダプタの寛容パースからの唯一の構築口。
-  static reconstitute(seed: {
+  static of(seed: {
     readonly id: DesignIrValidationMaterialsId;
     readonly irVersion: IrVersion;
     readonly schemaErrors: ErrorMessages;

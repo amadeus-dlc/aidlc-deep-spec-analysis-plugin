@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 
 // 契約1 要件 IR の時相宣言（well-formedness 検査材料）: always の assert、
@@ -8,13 +9,13 @@ export class IrTemporalDecl {
   readonly #from: Expression | undefined;
   readonly #to: Expression | undefined;
 
-  private constructor(props: { assert?: Expression; from?: Expression; to?: Expression }) {
-    this.#assert = props.assert;
-    this.#from = props.from;
-    this.#to = props.to;
+  private constructor(props: Parameters<typeof IrTemporalDecl.of>[0]) {
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#from = props.from === undefined ? undefined : ExpressionTree.of(props.from).asExpression();
+    this.#to = props.to === undefined ? undefined : ExpressionTree.of(props.to).asExpression();
   }
 
-  static reconstitute(props: { assert?: Expression; from?: Expression; to?: Expression }): IrTemporalDecl {
+  static of(props: { assert?: Expression; from?: Expression; to?: Expression }): IrTemporalDecl {
     return new IrTemporalDecl(props);
   }
 

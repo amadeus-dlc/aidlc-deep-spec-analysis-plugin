@@ -35,6 +35,8 @@
 
 ## Code Style
 
+- 共有のコーディング規則は[ガイドの入口](../knowledge/aidlc-shared/coding-rules/README.md)から参照する。2026-09-05のユーザー確認により、CQSは採用、CQRSは不採用。移植元のRust固有の規則や保存方式は、当該のTypeScript・既存裁定へ適用し直した範囲に限る。
+
 <!-- Project-specific specialisation. -->
 
 ## Tech Stack
@@ -64,7 +66,7 @@
 - **識別規律（2026-09-02 オーナー裁定）**: コレクションからキーで検索される要素は識別が要るのでエンティティにする。値オブジェクトは識別できないものにだけ使う。
 - **命名規律（2026-09-02 オーナー裁定）**: 「事実（facts）」という語はドメインイベント（成立した事態）以外に使わない。コンパイラの対応表や解釈材料は `*Plan` 等の実体に合う名にする。
 - **ドメインエラー規律（2026-09-02 オーナー裁定）**: ドメインエラー型は domain 層のモデルだが、型とバリアントがユビキタス言語に対応づくこと。予期された失敗は例外で投げず `Result` の値で返す。
-- **リードモデル規律（2026-09-02 オーナー裁定）**: CQRS のリードモデル（表示・照会のための投影）は domain 層に置かず usecase（クエリ側）に置く。
+- **CQS・CQRSの採用範囲（2026-09-05 ユーザー確認）**: CQSは採用し、個々のメソッドの状態変更と照会を区別する。CQRSは不採用で、コマンド側・クエリ側の分離や投影専用のリードモデルを要求しない。2026-09-02の「usecase（クエリ側）」への配置指示は、CQRS導入を前提にした規則として適用しない。表示・照会専用のDTOは、既存のport・adapterの責務に従って配置する。
 - **モデル委譲規律（2026-09-03 オーナー指示）**: Fable 5 のレートリミットを早期に使い切らないため、メインセッションは要件の明確化・設計・計画・監査・レビュー・最終的な統合判断に充てる。実装中は、見込まれる資源節約が調整コストを上回るときは常に、範囲の明確な実行タスクをサブエージェントへ委譲する。境界が明確な定型的実装は Sonnet に、強い推論を要する複雑または高リスクの実装は Opus に任せ、委譲が安全にも効率的にもできない例外的に難しい・密結合な作業だけ Fable 5 が直接行う。委譲のオーバーヘッドが見込まれる節約を上回る小さく範囲の明確なタスクはメインセッションに残す。委譲プロンプトは必ずスコープ・担当ファイル・受け入れ基準・検証手順を定め、書き込み範囲は重複させない。差分全体のレビュー、最終検証の確認、統合結果を受け入れるかの判断は Fable 5 のメインセッションが責任を持つ。
 
 <!-- Populated by practices-discovery affirmation gate. -->
@@ -98,3 +100,12 @@
 - FR8.1 の「解決された Unit 集合がゼロ件」は `resolveBoltDag` の `state === "none"` と同値と読んだ。`parseBoltDag` が空の `units:` ブロックを `malformed` として弾くため `{ state: "ok", units: [] }` は到達不能で、`malformed` は誤りとして表面化させるべきだから、ゼロ件扱いに含めない。 (learned 2026-09-04) <!-- cid:260904-ddd-clean-architecture:code-generation:e72b8ea3e6861d1c960c4e5c1d1124413eab9d3de72300d4ad46436c2f598043 -->
 - 初回承認版の Wave 4／5（Repository port に `conformedOf`・`storeConformed(report, model)`・`storeConformedWithoutCrossCheck` を置く設計）をオーナー裁定で撤回した。裁定: Repository の語彙は保存・検索・取得・削除だけで、interface はこの語彙にしか依存できない。他の語彙が要るなら集約の設計を見直す。集約は一塊で、可変部（cross-check の有無）は `Option` として集約自身が持ち、Repository のメソッド変種で吸収しない。functional-spec の Decisions 表「Schema conformance owner: Repository の `conformedOf` を維持」と project.md の「`conformedOf` を既存裁定として維持」は本裁定で覆る。置き換えは集約ルート `DesignVerifyDirectory`（`crossCheck: DesignReport | null` を持つ）＋ `FindingsSchema` 値オブジェクト＋ `DesignReport.conformedTo(schema)`、port は `findByDirectory` と `store(aggregate)` のみ。Wave 4／5 で書いた実装は作り直しになる（実装済みの `DirectoryFinalizationLock`・typed failure・Acquirer は流用）。 (learned 2026-09-04) <!-- cid:260904-ddd-clean-architecture:code-generation:e69297cf8c6f80fec8714deeba602f40aece0575c5e4d656e3cef89b7ed4f721 -->
 - 作業ツリーに既にあったゼロ Unit 修正を破棄せず土台として採用した（Q1=A）。7 harness の配布物まで生成済みで、いま動いているこのステージ自体がその修正の上に乗っているため、破棄の損失が作り直しの利得を上回る。 (learned 2026-09-04) <!-- cid:260904-ddd-clean-architecture:code-generation:545fa85ae1626617a9f2ba44e0eb768ca4f2a7a398a451006e2c962764480bf2 -->
+
+## 生成契約の補正（2026-09-05、ユーザー指示）
+
+- コンストラクタの具体的な引数型を維持する。TypeScriptで保証する型の実行時検査を追加しない。
+- 値の不変条件はコンストラクタに一度だけ書き、違反は `IllegalArgumentException` とする。`of` は直接生成して違反を送出し、`parse` は契約違反だけを `Result` へ変換する。
+- `reconstitute` による検証迂回を廃止し、復元にも同じ契約を適用する。診断対象の宣言値は、検証済みの値とは別の概念として保持する。
+- 空配列などを一律に禁止しない。`ErrorMessages` の空は「エラーなし」という有効な状態。
+
+- 追加裁定（2026-09-05）: `of`の例外はpanicとして扱い、adapterやRepositoryでResultへ変換しない。外部の生値はDPの`parse`を呼び、そのResultを明示的に処理する。例外変換が許されるのは各DPのparseが自分のコンストラクタを呼ぶ箇所だけ。既存の汎用復号ラッパーはこの裁定に反するため削除する。

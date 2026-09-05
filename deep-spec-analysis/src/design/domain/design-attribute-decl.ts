@@ -1,4 +1,4 @@
-import { type AttributeBound, AttributeKind } from "@deep-spec/kernel-domain";
+import { type DeclaredBound, AttributeKind } from "@deep-spec/kernel-domain";
 import type { DeclaredValues } from "./declared-values.ts";
 import { type DesignAttributeName } from "./design-attribute-name.ts";
 
@@ -14,21 +14,21 @@ export class DesignAttributeDecl {
   // 執筆者向けの説明文（契約3 の任意項目——ツールは読まず、lowered 文書へ逐語で運ぶ）。
   readonly #description: string | undefined;
   readonly #values: DeclaredValues | undefined;
-  readonly #min: AttributeBound | undefined;
-  readonly #max: AttributeBound | undefined;
+  readonly #min: DeclaredBound | undefined;
+  readonly #max: DeclaredBound | undefined;
 
   // ドアの引数は無名のインライン署名で運ぶ——名前付き getter-only 型
   //（データモデル）を domain 層に住まわせない（主従の裁定・補遺）。
-  private constructor(props: { name: DesignAttributeName; kind: string; description?: string; values?: DeclaredValues; min?: AttributeBound; max?: AttributeBound }) {
+  private constructor(props: Parameters<typeof DesignAttributeDecl.of>[0]) {
     this.#name = props.name;
-    this.#kind = AttributeKind.reconstitute(props.kind);
+    this.#kind = AttributeKind.of(props.kind);
     this.#description = props.description;
     this.#values = props.values;
     this.#min = props.min;
     this.#max = props.max;
   }
 
-  static reconstitute(props: { name: DesignAttributeName; kind: string; description?: string; values?: DeclaredValues; min?: AttributeBound; max?: AttributeBound }): DesignAttributeDecl {
+  static of(props: { name: DesignAttributeName; kind: string; description?: string; values?: DeclaredValues; min?: DeclaredBound; max?: DeclaredBound }): DesignAttributeDecl {
     return new DesignAttributeDecl(props);
   }
 
@@ -48,8 +48,8 @@ export class DesignAttributeDecl {
 
   boundsOutsideSafeRange(): boolean {
     return (
-      (this.#min !== undefined && !Number.isSafeInteger(this.#min.asNumber())) ||
-      (this.#max !== undefined && !Number.isSafeInteger(this.#max.asNumber()))
+      (this.#min !== undefined && !this.#min.isSafeInteger()) ||
+      (this.#max !== undefined && !this.#max.isSafeInteger())
     );
   }
 
@@ -85,11 +85,11 @@ export class DesignAttributeDecl {
     return this.#description;
   }
 
-  minBound(): AttributeBound | undefined {
+  minBound(): DeclaredBound | undefined {
     return this.#min;
   }
 
-  maxBound(): AttributeBound | undefined {
+  maxBound(): DeclaredBound | undefined {
     return this.#max;
   }
 }

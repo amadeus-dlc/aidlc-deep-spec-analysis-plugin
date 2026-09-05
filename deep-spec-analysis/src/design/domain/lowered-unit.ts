@@ -18,12 +18,7 @@ export class LoweredUnit {
   readonly #background: LoweredBackgrounds;
   readonly #index: LoweringIndex;
 
-  private constructor(props: {
-    obligations: LoweredObligations;
-    scenarios: LoweredScenarios;
-    background: LoweredBackgrounds;
-    index: LoweringIndex;
-  }) {
+  private constructor(props: Parameters<typeof LoweredUnit.of>[0]) {
     this.#obligations = props.obligations;
     this.#scenarios = props.scenarios;
     this.#background = props.background;

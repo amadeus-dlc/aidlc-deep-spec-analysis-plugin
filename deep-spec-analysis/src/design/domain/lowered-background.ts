@@ -1,4 +1,6 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+
 import type { LoweredId } from "./lowered-id.ts";
 
 // lowered v1 背景制約（#71 波20）。
@@ -6,12 +8,12 @@ export class LoweredBackground {
   readonly #id: LoweredId;
   readonly #assert: Expression;
 
-  private constructor(props: { id: LoweredId; assert: Expression }) {
+  private constructor(props: Parameters<typeof LoweredBackground.of>[0]) {
     this.#id = props.id;
-    this.#assert = props.assert;
+    this.#assert = ExpressionTree.of(props.assert).asExpression();
   }
 
-  static reconstitute(props: { id: LoweredId; assert: Expression }): LoweredBackground {
+  static of(props: { id: LoweredId; assert: Expression }): LoweredBackground {
     return new LoweredBackground(props);
   }
 

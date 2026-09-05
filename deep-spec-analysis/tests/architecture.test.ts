@@ -36,11 +36,27 @@ import {
   noTestPayloads,
   onlySanctionedImports,
   privateConstructorInDomain,
+  noReconstitutionBypass,
+  constructionParsingInDomain,
   processOnlyInEntries,
   violationsOf,
 } from "./architecture/rules.ts";
 
 const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
+
+test("restoration uses of instead of a separate reconstitute gate", () => {
+  expect(noReconstitutionBypass("kernel/domain/x.ts", "export class X { static reconstitute(value: string) {} }")).toHaveLength(1);
+  expect(noReconstitutionBypass("kernel/domain/x.ts", "export class X { static of(value: string) {} static parse(value: string) {} }")).toHaveLength(0);
+  expect(noReconstitutionBypass("kernel/domain/x.ts", "// static reconstitute(value: string) {}\nexport class X {}")).toHaveLength(0);
+  expect(noReconstitutionBypass("kernel/domain/x.ts", 'const example = "static reconstitute(value: string) {}";')).toHaveLength(0);
+});
+
+test("adapters consume parse Results instead of catching constructor panics", () => {
+  expect(constructionParsingInDomain("kernel/adapter/decoder.ts", "parseConstruction(() => Foo.of(raw))")).toHaveLength(1);
+  expect(constructionParsingInDomain("kernel/adapter/decoder.ts", "const parsed = Foo.parse(raw); if (!parsed.ok) return parsed;")).toHaveLength(0);
+  expect(constructionParsingInDomain("kernel/domain/foo.ts", "static parse(raw: string) { return parseConstruction(() => new Foo(raw)); }")).toHaveLength(0);
+  expect(constructionParsingInDomain("kernel/adapter/decoder.ts", "// parseConstruction is prohibited")).toHaveLength(0);
+});
 
 // isolated linker は各パッケージ直下に node_modules/ を作り、その中身は他
 // パッケージへのシンボリックリンク。名前とリンク種別の両方で落とす（潜ると

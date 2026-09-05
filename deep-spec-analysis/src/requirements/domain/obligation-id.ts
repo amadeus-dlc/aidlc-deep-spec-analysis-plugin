@@ -1,23 +1,21 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-import { TargetId } from "@deep-spec/kernel-domain";
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-type ObligationIdError = { readonly kind: "empty-obligation-id"; readonly raw: string };
+import { TargetId } from "@deep-spec/kernel-domain";
 
 export class ObligationId {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-obligation-id", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<ObligationId, ObligationIdError> {
-    if (raw === "") return err({ kind: "empty-obligation-id", raw });
-    return ok(new ObligationId(raw));
-  }
-
-  static reconstitute(raw: string): ObligationId {
+  static of(raw: string): ObligationId {
     return new ObligationId(raw);
+  }
+
+  static parse(raw: string): Result<ObligationId, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new ObligationId(raw));
   }
 
   equals(other: ObligationId): boolean {
@@ -35,6 +33,6 @@ export class ObligationId {
 
   // 義務 id は検査対象 id でもある（finding の targets / skip の target 面）。
   asTargetId(): TargetId {
-    return TargetId.reconstitute(this.#value);
+    return TargetId.of(this.#value);
   }
 }

@@ -1,4 +1,6 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+
 import { BindingPairs } from "./binding-pairs.ts";
 import { BrRefs } from "./br-refs.ts";
 import { type DesignScenarioId } from "./design-scenario-id.ts";
@@ -10,15 +12,15 @@ export class DesignScenarioDecl {
   readonly #expect: Expression | undefined;
   readonly #brRefs: BrRefs | undefined;
 
-  private constructor(props: { id: DesignScenarioId; bindings: BindingPairs; hasEvent: boolean; expect?: Expression; brRefs?: BrRefs }) {
+  private constructor(props: Parameters<typeof DesignScenarioDecl.of>[0]) {
     this.#id = props.id;
     this.#bindings = props.bindings;
     this.#hasEvent = props.hasEvent;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
     this.#brRefs = props.brRefs;
   }
 
-  static reconstitute(props: { id: DesignScenarioId; bindings: BindingPairs; hasEvent: boolean; expect?: Expression; brRefs?: BrRefs }): DesignScenarioDecl {
+  static of(props: { id: DesignScenarioId; bindings: BindingPairs; hasEvent: boolean; expect?: Expression; brRefs?: BrRefs }): DesignScenarioDecl {
     return new DesignScenarioDecl(props);
   }
 

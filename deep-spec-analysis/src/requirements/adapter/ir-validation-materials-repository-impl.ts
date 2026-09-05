@@ -1,3 +1,14 @@
+import {
+  DeclaredDigest,
+  RequirementId,
+  ArtifactPath,
+  DeclaredBound,
+  ErrorMessages,
+  IrVersion,
+  type Expression,
+} from "@deep-spec/kernel-domain";
+import { extractFences, readContractSchema, writeFileAtomically } from "@deep-spec/kernel-adapter";
+
 // 契約1 IR の検査材料ゲートウェイ。markdown フェンスの抽出、JSON 解釈、
 // 契約スキーマの適用、そして「生 Json をどう寛容に読むか」をここに閉じ込め、
 // use-case へは型付きの材料だけを渡す。
@@ -8,10 +19,10 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
-import { extractFences, readContractSchema, writeFileAtomically } from "@deep-spec/kernel-adapter";
+
 import { type Json, isObject, validateSchema } from "@deep-spec/kernel-infrastructure";
-import { ArtifactPath, AttributeBound, ErrorMessages, IrVersion, type Expression } from "@deep-spec/kernel-domain";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import { type Result, combineResults, traverseResult, err, ok } from "@deep-spec/kernel-infrastructure";
+
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import {
   FrRefClaim,
@@ -43,44 +54,49 @@ import type { IrValidationMaterialsConfig } from "./ir-validation-materials-conf
 
 const FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";
 
-
 function asExpression(v: Json): Expression | undefined {
   return isObject(v) ? (v as unknown as Expression) : undefined;
 }
 
-function buildView(ir: { [k: string]: Json }): IrModelDecl {
+function buildView(ir: { [k: string]: Json }): Result<IrModelDecl, string> {
   const entities: IrEntityDecl[] = [];
   const schema = isObject(ir.schema) ? ir.schema : {};
   for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
     if (!isObject(ent) || typeof ent.name !== "string") continue;
+    const name = IrEntityName.parse(ent.name);
+    if (!name.ok) return err(JSON.stringify(name.error));
     const attributes: IrAttributeDecl[] = [];
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string") continue;
       const t = isObject(attr.type) ? attr.type : {};
-      attributes.push(IrAttributeDecl.reconstitute({
-        name: IrAttributeName.reconstitute(attr.name),
+      const name = IrAttributeName.parse(attr.name);
+      if (!name.ok) return err(JSON.stringify(name.error));
+      attributes.push(IrAttributeDecl.of({
+        name: name.value,
         kind: typeof t.kind === "string" ? t.kind : "",
         values: Array.isArray(t.values) ? IrDeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
-        min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
-        max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
+        min: typeof t.min === "number" ? DeclaredBound.of(t.min) : undefined,
+        max: typeof t.max === "number" ? DeclaredBound.of(t.max) : undefined,
       }));
     }
-    entities.push(IrEntityDecl.reconstitute({ name: IrEntityName.reconstitute(ent.name), attributes: IrAttributeDecls.of(attributes) }));
+    entities.push(IrEntityDecl.of({ name: name.value, attributes: IrAttributeDecls.of(attributes) }));
   }
 
   const obligations: IrObligationDecl[] = [];
   for (const ob of Array.isArray(ir.obligations) ? ir.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string") continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
-    obligations.push(IrObligationDecl.reconstitute({
-      id: ObligationId.reconstitute(ob.id),
+    const id = ObligationId.parse(ob.id);
+    if (!id.ok) return err(JSON.stringify(id.error));
+    obligations.push(IrObligationDecl.of({
+      id: id.value,
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
       effect: asExpression(ob.effect ?? null),
       temporal:
         temporal === null
           ? undefined
-          : IrTemporalDecl.reconstitute({
+          : IrTemporalDecl.of({
               assert: asExpression(temporal.assert ?? null),
               from: asExpression(temporal.from ?? null),
               to: asExpression(temporal.to ?? null),
@@ -92,8 +108,10 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
   for (const sc of Array.isArray(ir.scenarios) ? ir.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
-    scenarios.push(IrScenarioDecl.reconstitute({
-      id: ScenarioId.reconstitute(sc.id),
+    const id = ScenarioId.parse(sc.id);
+    if (!id.ok) return err(JSON.stringify(id.error));
+    scenarios.push(IrScenarioDecl.of({
+      id: id.value,
       bindings: IrBindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
@@ -103,31 +121,35 @@ function buildView(ir: { [k: string]: Json }): IrModelDecl {
   const background: IrBackgroundDecl[] = [];
   for (const bg of Array.isArray(ir.background) ? ir.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string") continue;
-    background.push(IrBackgroundDecl.reconstitute({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: asExpression(bg.assert ?? null) }));
+    const id = BackgroundAssumptionId.parse(bg.id);
+    if (!id.ok) return err(JSON.stringify(id.error));
+    background.push(IrBackgroundDecl.of({ id: id.value, assert: asExpression(bg.assert ?? null) }));
   }
 
-  return IrModelDecl.reconstitute({
+  return ok(IrModelDecl.of({
     entities: IrEntityDecls.of(entities),
     obligations: IrObligationDecls.of(obligations),
     scenarios: IrScenarioDecls.of(scenarios),
     background: IrBackgroundDecls.of(background),
-  });
+  }));
 }
 
 // owner は id、無ければ `<section>[<index>]`（旧 collectFrRefs の逐語）。
-function collectFrClaims(ir: { [k: string]: Json }): FrRefClaim[] {
+function collectFrClaims(ir: { [k: string]: Json }): Result<FrRefClaim[], string> {
   const claims: FrRefClaim[] = [];
   for (const section of ["obligations", "scenarios", "unformalized"] as const) {
     const arr = Array.isArray(ir[section]) ? (ir[section] as Json[]) : [];
-    arr.forEach((entry, i) => {
-      if (!isObject(entry)) return;
+    for (const [i, entry] of arr.entries()) {
+      if (!isObject(entry)) continue;
       const owner = typeof entry.id === "string" ? entry.id : `${section}[${i}]`;
       const refs = entry.frRefs ?? null;
-      if (!Array.isArray(refs)) return;
-      claims.push(FrRefClaim.of(owner, FrRefs.reconstitute(refs.filter((r) => typeof r === "string") as string[])));
-    });
+      if (!Array.isArray(refs)) continue;
+      const parsed = traverseResult(refs.filter((r): r is string => typeof r === "string"), RequirementId.parse);
+      if (!parsed.ok) return err(JSON.stringify(parsed.error));
+      claims.push(FrRefClaim.of(owner, FrRefs.of(parsed.value)));
+    }
   }
-  return claims;
+  return ok(claims);
 }
 
 export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterialsRepository {
@@ -183,24 +205,26 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
     const schemaErrors: string[] = [];
     validateSchema(schema.value, schema.value, ir, "", schemaErrors);
 
-    // <record>/<phase>/<stage>/… → 記録ルートは 3 階層上（旧
-    // findRequirementsFile の導出の逐語——識別子の導出はパス知識）。dirname は
-    // 空文字列を返さないため parse は失敗し得ない；分岐は型の網羅のみで、
-    // 到達すれば defect として corrupt に落とす（黙殺しない）。
-    const recordRoot = ArtifactPath.parse(dirname(dirname(dirname(outputPath))));
-    if (!recordRoot.ok) {
-      return corrupt("defect: record-root derivation produced an empty path");
-    }
+    // dirnameで導出した非空パスは内部の組み立て。違反があればpanicとして伝播する。
+    const recordRoot = ArtifactPath.of(dirname(dirname(dirname(outputPath))));
+    const parsed = combineResults({
+      irVersion: IrVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : ""),
+    });
+    if (!parsed.ok) return corrupt(JSON.stringify(parsed.error));
+    const view = buildView(ir);
+    if (!view.ok) return corrupt(view.error);
+    const claims = collectFrClaims(ir);
+    if (!claims.ok) return corrupt(claims.error);
 
     return ok(
-      IrValidationMaterials.reconstitute({
+      IrValidationMaterials.of({
         id,
-        irVersion: IrVersion.reconstitute(typeof ir.irVersion === "string" ? ir.irVersion : ""),
+        irVersion: parsed.value.irVersion,
         schemaErrors: ErrorMessages.of(schemaErrors),
-        view: buildView(ir),
-        frClaims: FrRefClaims.of(collectFrClaims(ir)),
-        declaredDigest: typeof ir.sourceDigest === "string" ? ir.sourceDigest : null,
-        sourceId: RequirementsSourceId.of(recordRoot.value),
+        view: view.value,
+        frClaims: FrRefClaims.of(claims.value),
+        declaredDigest: typeof ir.sourceDigest === "string" ? DeclaredDigest.of(ir.sourceDigest) : null,
+        sourceId: RequirementsSourceId.of(recordRoot),
         sourceDocument: new Uint8Array(bytes),
       }),
     );
@@ -209,8 +233,9 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
   store(materials: IrValidationMaterials): Result<void, RepositoryError> {
     const outputPath = materials.id().modelId().artifactPath().asString();
+    const bytes = materials.sourceDocument();
     try {
-      writeFileAtomically(outputPath, materials.sourceDocument());
+      writeFileAtomically(outputPath, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });

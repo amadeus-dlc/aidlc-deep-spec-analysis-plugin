@@ -2,9 +2,10 @@
 // 型付きの outcome へ解く。抽出ロジックは旧センサーの逐語移動。
 
 import { extractFences } from "@deep-spec/kernel-adapter";
-import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
 import { parseMarkdownTables } from "@deep-spec/kernel-adapter";
 import { parseYamlSubset } from "@deep-spec/kernel-adapter";
+import { type Json, combineResults, traverseResult, isObject } from "@deep-spec/kernel-infrastructure";
+
 import {
   BlockIndex,
   ContractId,
@@ -36,7 +37,9 @@ export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
       const dependsOn = Array.isArray(raw.depends_on)
         ? (raw.depends_on as Json[]).filter((d): d is string => typeof d === "string")
         : [];
-      units.push(UnitDecl.reconstitute({ name: UnitName.reconstitute(raw.name), dependsOn: UnitNames.reconstitute(dependsOn) }));
+      const fields = combineResults({ name: UnitName.parse(raw.name), dependsOn: traverseResult(dependsOn, UnitName.parse) });
+      if (!fields.ok) return DeclaredUnitsOutcome.unrecognized(JSON.stringify(fields.error));
+      units.push(UnitDecl.of({ name: fields.value.name, dependsOn: UnitNames.of(fields.value.dependsOn) }));
     }
     if (units.length === 0) return DeclaredUnitsOutcome.unrecognized();
     return DeclaredUnitsOutcome.declared(UnitDecls.of(units));
@@ -60,12 +63,12 @@ export function parseContractsTable(md: string): ContractsTableOutcome {
     ContractRows.of(
       contractsTable.rows.map((r, i) => {
         const first = cleanCell(r.cells[0] ?? "");
-        return ContractRow.reconstitute({
-          id: ContractId.reconstitute(/^[0-9]+$/.test(first) ? first : String(i + 1)),
-          provider: ContractParty.reconstitute(cleanCell(r.cells[pCol] ?? "")),
-          consumer: ContractParty.reconstitute(cCol >= 0 ? cleanCell(r.cells[cCol] ?? "") : ""),
-          owner: ContractParty.reconstitute(oCol >= 0 ? cleanCell(r.cells[oCol] ?? "") : ""),
-          line: LineNumber.reconstitute(r.line),
+        return ContractRow.of({
+          id: ContractId.of(/^[0-9]+$/.test(first) ? first : String(i + 1)),
+          provider: ContractParty.of(cleanCell(r.cells[pCol] ?? "")),
+          consumer: ContractParty.of(cCol >= 0 ? cleanCell(r.cells[cCol] ?? "") : ""),
+          owner: ContractParty.of(oCol >= 0 ? cleanCell(r.cells[oCol] ?? "") : ""),
+          line: LineNumber.of(r.line),
         });
       }),
     ),
@@ -74,8 +77,8 @@ export function parseContractsTable(md: string): ContractsTableOutcome {
 
 export function assessSpecBlocks(md: string): SpecBlockAssessments {
   const blocks: SpecBlockAssessment[] = extractFences(md, "yaml").map((fence, i) => {
-    const index = BlockIndex.reconstitute(i + 1);
-    const line = LineNumber.reconstitute(fence.line);
+    const index = BlockIndex.of(i + 1);
+    const line = LineNumber.of(fence.line);
     const parsed = parseYamlSubset(fence.body);
     if (parsed.error !== undefined) {
       return SpecBlockAssessment.unparseable(index, line, parsed.error);

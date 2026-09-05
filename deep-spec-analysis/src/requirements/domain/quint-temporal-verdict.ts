@@ -1,4 +1,5 @@
-import type { TargetId } from "@deep-spec/kernel-domain";
+import { SkipReason, type TargetId } from "@deep-spec/kernel-domain";
+
 import type { TraceStates } from "./trace-states.ts";
 import { VerificationSkipped } from "./verification-skipped.ts";
 import { VerificationWitness } from "./verification-witness.ts";
@@ -41,8 +42,8 @@ export class QuintTemporalVerdict {
   // 予算超過・実行失敗の skip（凍結文言）。violation / clean は skip しない。
   skipFor(target: TargetId): VerificationSkipped | null {
     const kind = this.#kind;
-    if (kind === "timeout") return VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "temporal check exceeded its budget" });
-    if (kind === "run-failed") return VerificationSkipped.reconstitute({ target, reason: "unavailable", detail: `quint verify failed unexpectedly: ${this.#outputTail}` });
+    if (kind === "timeout") return VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "temporal check exceeded its budget" });
+    if (kind === "run-failed") return VerificationSkipped.of({ target, reason: SkipReason.of("unavailable"), detail: `quint verify failed unexpectedly: ${this.#outputTail}` });
     return null;
   }
 

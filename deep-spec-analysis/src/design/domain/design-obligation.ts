@@ -1,6 +1,7 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
+import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
 // 設計義務。分類、rules 起源の参照要件、event 完全性、式の役割を所有する。
 
-import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
 import { type BrRefs } from "./br-refs.ts";
 import { DesignObligationId } from "./design-obligation-id.ts";
 import { DesignObligationNature } from "./design-obligation-nature.ts";
@@ -29,31 +30,25 @@ export class DesignObligation {
   readonly #effect: Expression | undefined;
   readonly #temporal: DesignTemporalExpressions | undefined;
 
-  private constructor(props: {
-    id: DesignObligationId;
-    nature: DesignObligationNature;
-    origin: DesignObligationOrigin;
-    brRefs: BrRefs;
-    frRefs: FrRefs;
-    assert?: Expression;
-    trigger?: TriggerName;
-    guard?: Expression;
-    effect?: Expression;
-    temporal?: DesignTemporalExpressions;
-  }) {
+  private constructor(props: Parameters<typeof DesignObligation.of>[0]) {
     this.#id = props.id;
     this.#nature = props.nature;
     this.#origin = props.origin;
     this.#brRefs = props.brRefs;
     this.#frRefs = props.frRefs;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal === undefined ? undefined : { ...props.temporal };
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...(props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {}),
+      ...(props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {}),
+      ...(props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}),
+    };
   }
 
-  static reconstitute(props: {
+  static of(props: {
     id: DesignObligationId;
     nature: DesignObligationNature;
     origin: DesignObligationOrigin;
@@ -88,26 +83,26 @@ export class DesignObligation {
 
   eventDefinition(): { readonly trigger: TriggerName; readonly guard: Expression; readonly effect: Expression } | null {
     const behavior = this.guardedEffect();
-    if (behavior === null || this.#trigger === undefined || this.#trigger.isEmpty()) return null;
+    if (behavior === null || this.#trigger === undefined) return null;
     return { trigger: this.#trigger, ...behavior };
   }
 
   // 契約1 への素通し lowering——どの任意部を lowered 文書へ運ぶかは義務自身の
   // 知識（空の frRefs も帰属として運ぶ：v1 は不透明な文字列として扱う）。
   loweredAs(id: LoweredId): LoweredObligation {
-    const lowered: Parameters<typeof LoweredObligation.reconstitute>[0] = { id, nature: this.#nature.asString(), frRefs: this.#frRefs };
+    const lowered: Parameters<typeof LoweredObligation.of>[0] = { id, nature: this.#nature.asString(), frRefs: this.#frRefs };
     const temporal = this.temporal();
     if (this.#assert !== undefined) lowered.assert = this.#assert;
     if (this.#trigger !== undefined) lowered.trigger = this.#trigger.asString();
     if (this.#guard !== undefined) lowered.guard = this.#guard;
     if (this.#effect !== undefined) lowered.effect = this.#effect;
     if (temporal !== undefined) lowered.temporal = temporal;
-    return LoweredObligation.reconstitute(lowered);
+    return LoweredObligation.of(lowered);
   }
 
   // 降ろし方の帰属：設計義務は素通し。
   loweredOrigin(): LoweredOrigin {
-    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "passthrough" });
+    return LoweredOrigin.of({ design: LoweredOriginRef.of(this.#id.asString()), kind: "passthrough" });
   }
 
   inspectExpressions(visitor: (expression: Expression, primesAllowed: boolean) => void): void {

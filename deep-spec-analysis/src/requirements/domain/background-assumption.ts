@@ -1,4 +1,6 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+
 import type { BackgroundAssumptionId } from "./background-assumption-id.ts";
 
 // 要件 IR の背景仮定 1 件——id と表明。コンパイラは id で名前を付け、表明を
@@ -9,10 +11,10 @@ export class BackgroundAssumption {
 
   private constructor(id: BackgroundAssumptionId, assert: Expression) {
     this.#id = id;
-    this.#assert = assert;
+    this.#assert = ExpressionTree.of(assert).asExpression();
   }
 
-  static reconstitute(props: { id: BackgroundAssumptionId; assert: Expression }): BackgroundAssumption {
+  static of(props: { id: BackgroundAssumptionId; assert: Expression }): BackgroundAssumption {
     return new BackgroundAssumption(props.id, props.assert);
   }
 

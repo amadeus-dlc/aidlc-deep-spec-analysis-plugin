@@ -8,7 +8,7 @@ import type { ArtifactPath } from "@deep-spec/kernel-domain";
 export class FormalModelId {
   readonly #path: ArtifactPath;
 
-  private constructor(path: ArtifactPath) {
+  private constructor(path: Parameters<typeof FormalModelId.of>[0]) {
     this.#path = path;
   }
 

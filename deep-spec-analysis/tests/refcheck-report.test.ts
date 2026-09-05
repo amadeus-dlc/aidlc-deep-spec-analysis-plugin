@@ -1,3 +1,5 @@
+import { TargetId, ContentHash, ArtifactPath, FindingKind, FindingsSchema, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+
 // ReferenceCheckReport 集約・serializer・Repository の契約テスト（PR2b、#15）。
 //
 // ドメインは型付き語彙のみ（Json 追放後）。直列化・契約適合・降格文言は
@@ -11,7 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "@deep-spec/kernel-adapter";
-import { ContentHash, ArtifactPath } from "@deep-spec/kernel-domain";
+
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -23,7 +25,7 @@ import {
   ReferenceCheckReportRepositoryImpl,
   renderReportBytes,
 } from "@deep-spec/refcheck-adapter";
-import { FindingKind, FindingsSchema, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+
 import {
   CheckFamilies,
   CheckFamily,
@@ -50,12 +52,12 @@ function seed(
   directory: string,
   overrides: { inputs?: InputAnchor[]; checked?: string[]; findings?: Finding[]; skipped?: Skipped[] } = {},
 ) {
-  return ReferenceCheckReport.reconstitute({
+  return ReferenceCheckReport.of({
     id: ReferenceCheckReportId.of(ap(directory), "components"),
     inputs: InputAnchors.of(
-      overrides.inputs ?? [InputAnchor.reconstitute({ artifact: "inception/domain-design/components.md", sha256: ContentHash.reconstitute("a".repeat(64)) })],
+      overrides.inputs ?? [InputAnchor.of({ artifact: "inception/domain-design/components.md", sha256: ContentHash.of("a".repeat(64)) })],
     ),
-    checked: TargetIds.reconstitute(overrides.checked ?? ["check:DD-0"]),
+    checked: TargetIds.of(Array.from(overrides.checked ?? ["check:DD-0"], (raw) => TargetId.of(raw))),
     findings: Findings.of(overrides.findings ?? []),
     skipped: Skips.of(overrides.skipped ?? []),
     unavailableReason: null,
@@ -63,7 +65,7 @@ function seed(
 }
 
 function anchor(artifact: string, fill: string): InputAnchor {
-  return InputAnchor.reconstitute({ artifact, sha256: ContentHash.reconstitute(fill.repeat(64)) });
+  return InputAnchor.of({ artifact, sha256: ContentHash.of(fill.repeat(64)) });
 }
 
 describe("ReferenceCheckReportId", () => {
@@ -81,7 +83,7 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
   test("open starts with every family checked, in canonical order, and answers the verdict queries", () => {
     const report = ReferenceCheckReport.open(
       ReferenceCheckReportId.of(ap("/tmp/r"), "components"),
-      CheckFamilies.reconstitute(["DD-1", "DD-0", "DD-1"]),
+      CheckFamilies.of(Array.from(["DD-1", "DD-0", "DD-1"], (raw) => CheckFamily.of(raw))),
     );
     report.input(anchor("b.md", "b"));
     report.input(anchor("a.md", "a"));
@@ -98,11 +100,11 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
   test("finding and skip remove their family from checked and render the frozen family prefixes", () => {
     const report = ReferenceCheckReport.open(
       ReferenceCheckReportId.of(ap("/tmp/r"), "functional-design"),
-      CheckFamilies.reconstitute(["A-1", "A-2", "A-3"]),
-      UnitName.reconstitute("u9"),
+      CheckFamilies.of(Array.from(["A-1", "A-2", "A-3"], (raw) => CheckFamily.of(raw))),
+      UnitName.of("u9"),
     );
-    report.finding(CheckFamily.reconstitute("A-1"), FindingKind.structureInvalid(), ["check:A-1"], [], "boom");
-    report.skip(CheckFamily.reconstitute("A-2"), "absent-input", "gone");
+    report.finding(CheckFamily.of("A-1"), FindingKind.structureInvalid(), ["check:A-1"], [], "boom");
+    report.skip(CheckFamily.of("A-2"), "absent-input", "gone");
     expect(report.findings().toArray()[0]?.detail()).toBe("A-1: boom");
     expect(report.findings().toArray()[0]?.unit()).toBe("u9");
     expect(report.findings().toArray()[0]?.targets().toStrings()).toEqual(["check:A-1"]);
@@ -118,13 +120,13 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
   test("a family failing twice leaves checked once; findings and skips keep the canonical order as they arrive", () => {
     const report = ReferenceCheckReport.open(
       ReferenceCheckReportId.of(ap("/tmp/r"), "components"),
-      CheckFamilies.reconstitute(["DD-0", "DD-1", "DD-2"]),
+      CheckFamilies.of(Array.from(["DD-0", "DD-1", "DD-2"], (raw) => CheckFamily.of(raw))),
     );
-    report.finding(CheckFamily.reconstitute("DD-1"), FindingKind.referenceBroken(), ["check:DD-1"], [], "second kind");
-    report.finding(CheckFamily.reconstitute("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "first kind");
-    report.finding(CheckFamily.reconstitute("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "a earlier detail", ["FR-2", "FR-1", "FR-2"]);
-    report.skip(CheckFamily.reconstitute("DD-2"), "unrecognized-format", "later");
-    report.skip(CheckFamily.reconstitute("DD-0"), "absent-input", "earlier");
+    report.finding(CheckFamily.of("DD-1"), FindingKind.referenceBroken(), ["check:DD-1"], [], "second kind");
+    report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "first kind");
+    report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "a earlier detail", ["FR-2", "FR-1", "FR-2"]);
+    report.skip(CheckFamily.of("DD-2"), "unrecognized-format", "later");
+    report.skip(CheckFamily.of("DD-0"), "absent-input", "earlier");
     expect(report.findings().toArray().map((f) => f.detail())).toEqual(["DD-1: a earlier detail", "DD-1: first kind", "DD-1: second kind"]);
     expect(report.findings().toArray()[0]?.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(report.findings().toArray()[0]?.unit()).toBe(undefined);
@@ -154,8 +156,8 @@ describe("serializer (adapter owns the format knowledge)", () => {
   });
 
   test("a non-conforming document degrades with the frozen wording", () => {
-    const badFinding: Finding = Finding.reconstitute({ kind: "no-such-kind", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["check:DD-0"]), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
-    const conformed = seed("/tmp/r", { findings: [badFinding] }).conformedTo(findingsSchema);
+    const badFinding: Finding = Finding.of({ kind: FindingKind.conflict(), frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
+    const conformed = seed("/tmp/r", { findings: [badFinding] }).conformedTo(FindingsSchema.of({ type: "object", properties: { findings: { maxItems: 0 } } }));
     expect(conformed.isUnavailable()).toBe(true);
     expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
     expect(JSON.parse(renderReportBytes(conformed)).unavailable.reason).toStartWith("self-validation against ");

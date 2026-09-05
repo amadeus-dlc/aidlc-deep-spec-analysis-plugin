@@ -12,10 +12,6 @@ export class UnitNames {
     return new UnitNames([...values]);
   }
 
-  static reconstitute(raws: readonly string[]): UnitNames {
-    return new UnitNames(raws.map((r) => UnitName.reconstitute(r)));
-  }
-
   add(value: UnitName): UnitNames {
     return new UnitNames([...this.#values, value]);
   }

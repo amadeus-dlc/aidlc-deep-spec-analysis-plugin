@@ -1,4 +1,4 @@
-import { TargetId, UnitName } from "@deep-spec/kernel-domain";
+import { SkipReason, TargetId, UnitName } from "@deep-spec/kernel-domain";
 
 // refcheck skip 記録（無沈黙台帳の 1 行）——対象・理由・任意の帰属ユニットと
 // 説明。正準順（target → reason）は記録自身の知識（#71 波17）。target は
@@ -6,18 +6,18 @@ import { TargetId, UnitName } from "@deep-spec/kernel-domain";
 // まま）、reason は分類文字列、detail は prose（裁定の恒久除外）。
 export class Skipped {
   readonly #target: TargetId;
-  readonly #reason: string;
+  readonly #reason: SkipReason;
   readonly #unit: UnitName | undefined;
   readonly #detail: string | undefined;
 
-  private constructor(props: { target: string; reason: string; unit?: string; detail?: string }) {
-    this.#target = TargetId.reconstitute(props.target);
+  private constructor(props: Parameters<typeof Skipped.of>[0]) {
+    this.#target = props.target;
     this.#reason = props.reason;
-    this.#unit = props.unit === undefined ? undefined : UnitName.reconstitute(props.unit);
+    this.#unit = props.unit;
     this.#detail = props.detail;
   }
 
-  static reconstitute(props: { target: string; reason: string; unit?: string; detail?: string }): Skipped {
+  static of(props: { target: TargetId; reason: SkipReason; unit?: UnitName; detail?: string }): Skipped {
     return new Skipped(props);
   }
 
@@ -26,7 +26,7 @@ export class Skipped {
   }
 
   reason(): string {
-    return this.#reason;
+    return this.#reason.asString();
   }
 
   unit(): string | undefined {
@@ -41,6 +41,6 @@ export class Skipped {
   compareTo(other: Skipped): number {
     const c = this.#target.compareTo(other.#target);
     if (c !== 0) return c;
-    return this.#reason < other.#reason ? -1 : this.#reason > other.#reason ? 1 : 0;
+    return this.#reason.compareTo(other.#reason);
   }
 }

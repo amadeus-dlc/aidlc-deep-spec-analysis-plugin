@@ -1,3 +1,15 @@
+import {
+  compareCanonically,
+  isObject,
+  type Json,
+  validateSchema,
+  canonicalStringify,
+  type Result,
+  err,
+  ok,
+  unreachable,
+} from "@deep-spec/kernel-infrastructure";
+
 // kernel/domain の単体テスト（DDD 移行 PR1、issue #14）。
 //
 // この層は 90% カバレッジ床の対象。エラー文言は refcheck findings の detail・
@@ -7,9 +19,7 @@
 import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName, KeyedIndex, KeySet, RequirementId, QueryLabel, AttributeKind, VerificationMethod, FindingKind } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
 import { extractFences, parseMarkdownTables, parseYamlSubset } from "@deep-spec/kernel-adapter";
-import { isObject, type Json, validateSchema, canonicalStringify } from "@deep-spec/kernel-infrastructure";
 import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
-import { type Result, err, ok, unreachable } from "@deep-spec/kernel-infrastructure";
 
 describe("result", () => {
   test("ok and err narrow through the ok discriminant", () => {
@@ -64,7 +74,7 @@ describe("canonical-json + content-hash", () => {
 });
 
 describe("canonical id order (owned by the id value object, ruling 1)", () => {
-  const cmp = (a: string, b: string): number => TargetId.reconstitute(a).compareTo(TargetId.reconstitute(b));
+  const cmp = compareCanonically;
   test("letter skeleton orders before numeric segments", () => {
     expect(cmp("DD-2", "FD-1")).toBeLessThan(0);
     expect(cmp("OB-2", "OB-10")).toBeLessThan(0);
@@ -77,8 +87,8 @@ describe("canonical id order (owned by the id value object, ruling 1)", () => {
   });
 
   test("the collections deduplicate then sort canonically", () => {
-    expect(TargetIds.reconstitute(["OB-10", "OB-2", "OB-2"]).sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10"]);
-    expect(FrRefs.reconstitute(["FR-10", "FR-2", "FR-2"]).sortedUnique().toStrings()).toEqual(["FR-2", "FR-10"]);
+    expect(TargetIds.of(Array.from(["OB-10", "OB-2", "OB-2"], (raw) => TargetId.of(raw))).sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10"]);
+    expect(FrRefs.of(Array.from(["FR-10", "FR-2", "FR-2"], (raw) => RequirementId.of(raw))).sortedUnique().toStrings()).toEqual(["FR-2", "FR-10"]);
   });
 });
 
@@ -246,30 +256,28 @@ describe("target id (the target vocabulary's primitive)", () => {
     }
   });
 
-  test("reconstitute is verbatim, equality is by value, and the order is the canonical id order", () => {
-    const a = TargetId.reconstitute("OB-2");
-    const b = TargetId.reconstitute("OB-10");
-    expect(a.equals(TargetId.reconstitute("OB-2"))).toBe(true);
-    expect(a.equals(b)).toBe(false);
-    expect(a.compareTo(b)).toBeLessThan(0);
-    expect(b.compareTo(a)).toBeGreaterThan(0);
-    expect(a.compareTo(TargetId.reconstitute("OB-2"))).toBe(0);
-    expect(TargetId.reconstitute("weird id").asString()).toBe("weird id");
+  test("of rejects invalid ids and preserves equality and canonical ordering", () => {
+    expect(TargetId.parse("weird id").ok).toBe(false);
+    const id = TargetId.of("OB-1");
+    expect(id.equals(TargetId.of("OB-1"))).toBe(true);
+    expect(id.equals(TargetId.of("OB-2"))).toBe(false);
+    expect(id.compareTo(TargetId.of("OB-10"))).toBeLessThan(0);
+    expect(id.asString()).toBe("OB-1");
   });
 
-  test("target ids collect primitives, reconstitute raw ids, and escape through toStrings", () => {
-    const ids = TargetIds.of([TargetId.reconstitute("OB-10")]).add(TargetId.reconstitute("OB-2")).add(TargetId.reconstitute("OB-2"));
+  test("target ids collect primitives, collect typed ids, and escape through toStrings", () => {
+    const ids = TargetIds.of([TargetId.of("OB-10")]).add(TargetId.of("OB-2")).add(TargetId.of("OB-2"));
     expect(ids.toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect(ids.count()).toBe(3);
     expect(ids.toArray().length).toBe(3);
-    expect(ids.includes(TargetId.reconstitute("OB-2"))).toBe(true);
-    expect(ids.includes(TargetId.reconstitute("OB-3"))).toBe(false);
-    expect(ids.excluding(TargetId.reconstitute("OB-2")).toStrings()).toEqual(["OB-10"]);
-    expect(ids.excluding(TargetId.reconstitute("OB-3")).toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
+    expect(ids.includes(TargetId.of("OB-2"))).toBe(true);
+    expect(ids.includes(TargetId.of("OB-3"))).toBe(false);
+    expect(ids.excluding(TargetId.of("OB-2")).toStrings()).toEqual(["OB-10"]);
+    expect(ids.excluding(TargetId.of("OB-3")).toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect([...ids].map((t) => t.asString())).toEqual(["OB-10", "OB-2", "OB-2"]);
-    expect(TargetIds.reconstitute(["SC-1", "OB-1"]).joined(",")).toBe("SC-1,OB-1");
+    expect(TargetIds.of(Array.from(["SC-1", "OB-1"], (raw) => TargetId.of(raw))).joined(",")).toBe("SC-1,OB-1");
     // sortedCanonically keeps duplicates; sortedUniqueCanonically folds them.
-    const mixed = TargetIds.reconstitute(["OB-10", "OB-2", "OB-2", "SC-1"]);
+    const mixed = TargetIds.of(Array.from(["OB-10", "OB-2", "OB-2", "SC-1"], (raw) => TargetId.of(raw)));
     expect(mixed.sortedCanonically().toStrings()).toEqual(["OB-2", "OB-2", "OB-10", "SC-1"]);
     expect(mixed.sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10", "SC-1"]);
   });
@@ -294,7 +302,6 @@ describe("target-ids / requirement-ids / names", () => {
     expect(NormalizedName.of("OrderItem").asString()).toBe("orderitem");
   });
 });
-
 
 describe("smt-symbols — shared rendering vocabulary (PR8, thaw #34 item 4)", () => {
   test("smtVar / smtName render the frozen encodings", () => {
@@ -335,7 +342,7 @@ describe("attribute-bound — the parse door gates integer sanity (thaw #34 item
 });
 
 describe("KeyedIndex (the keyed-index representation primitive, ruling 3-1)", () => {
-  const id = (raw: string) => TargetId.reconstitute(raw);
+  const id = (raw: string) => TargetId.of(raw);
 
   test("keys are compared by their string form, insertion order is kept, and with() replaces in place", () => {
     const empty = KeyedIndex.empty<TargetId, number>();
@@ -363,46 +370,46 @@ describe("the 2026-09-03 kernel primitives (rulings 3-1 to 3-3)", () => {
     const empty = KeySet.empty<TargetId>();
     expect(empty.isEmpty()).toBe(true);
     expect(empty.size()).toBe(0);
-    const set = KeySet.of([TargetId.reconstitute("OB-2"), TargetId.reconstitute("OB-1"), TargetId.reconstitute("OB-2")]);
+    const set = KeySet.of([TargetId.of("OB-2"), TargetId.of("OB-1"), TargetId.of("OB-2")]);
     expect(set.size()).toBe(2);
-    expect(set.has(TargetId.reconstitute("OB-1"))).toBe(true);
-    expect(set.has(TargetId.reconstitute("OB-9"))).toBe(false);
-    expect(set.with(TargetId.reconstitute("OB-1"))).toBe(set);
-    const grown = set.with(TargetId.reconstitute("OB-3"));
+    expect(set.has(TargetId.of("OB-1"))).toBe(true);
+    expect(set.has(TargetId.of("OB-9"))).toBe(false);
+    expect(set.with(TargetId.of("OB-1"))).toBe(set);
+    const grown = set.with(TargetId.of("OB-3"));
     expect([...grown].map((t) => t.asString())).toEqual(["OB-2", "OB-1", "OB-3"]);
     expect(grown.toArray().length).toBe(3);
     expect(set.size()).toBe(2);
   });
 
   test("RequirementId, QueryLabel and RequirementIds", () => {
-    const a = RequirementId.reconstitute("FR-2");
-    expect(a.equals(RequirementId.reconstitute("FR-2"))).toBe(true);
-    expect(a.equals(RequirementId.reconstitute("FR-10"))).toBe(false);
-    expect(a.compareTo(RequirementId.reconstitute("FR-10"))).toBeLessThan(0);
+    const a = RequirementId.of("FR-2");
+    expect(a.equals(RequirementId.of("FR-2"))).toBe(true);
+    expect(a.equals(RequirementId.of("FR-10"))).toBe(false);
+    expect(a.compareTo(RequirementId.of("FR-10"))).toBeLessThan(0);
     expect(a.asString()).toBe("FR-2");
-    const ids = RequirementIds.of([a, RequirementId.reconstitute("NFR-1")]);
+    const ids = RequirementIds.of([a, RequirementId.of("NFR-1")]);
     expect(ids.has(a)).toBe(true);
     expect(ids.toArray().map((id) => id.asString())).toEqual(["FR-2", "NFR-1"]);
-    expect(ids.add(RequirementId.reconstitute("FR-3")).toStrings()).toEqual(["FR-2", "NFR-1", "FR-3"]);
-    const q = QueryLabel.reconstitute("gap:submit");
-    expect(q.equals(QueryLabel.reconstitute("gap:submit"))).toBe(true);
-    expect(q.compareTo(QueryLabel.reconstitute("global"))).toBeLessThan(0);
-    expect(q.compareTo(QueryLabel.reconstitute("gap:submit"))).toBe(0);
-    expect(QueryLabel.reconstitute("z").compareTo(q)).toBeGreaterThan(0);
+    expect(ids.add(RequirementId.of("FR-3")).toStrings()).toEqual(["FR-2", "NFR-1", "FR-3"]);
+    const q = QueryLabel.of("gap:submit");
+    expect(q.equals(QueryLabel.of("gap:submit"))).toBe(true);
+    expect(q.compareTo(QueryLabel.of("global"))).toBeLessThan(0);
+    expect(q.compareTo(QueryLabel.of("gap:submit"))).toBe(0);
+    expect(QueryLabel.of("z").compareTo(q)).toBeGreaterThan(0);
     expect(q.asString()).toBe("gap:submit");
   });
 
   test("AttributeKind and VerificationMethod", () => {
-    const k = AttributeKind.reconstitute("enum");
+    const k = AttributeKind.of("enum");
     expect(k.isEnum()).toBe(true);
     expect(k.isInt()).toBe(false);
     expect(k.isBool()).toBe(false);
-    expect(k.equals(AttributeKind.reconstitute("enum"))).toBe(true);
-    expect(AttributeKind.reconstitute("").asString()).toBe("");
-    const m = VerificationMethod.reconstitute("bounded");
-    expect(m.equals(VerificationMethod.reconstitute("bounded"))).toBe(true);
-    expect(m.equals(VerificationMethod.reconstitute("static"))).toBe(false);
+    expect(k.equals(AttributeKind.of("enum"))).toBe(true);
+    expect(AttributeKind.of("").asString()).toBe("");
+    const m = VerificationMethod.of("bounded");
+    expect(m.equals(VerificationMethod.of("bounded"))).toBe(true);
+    expect(m.equals(VerificationMethod.of("static"))).toBe(false);
     expect(m.asString()).toBe("bounded");
-    expect(FindingKind.reconstitute("conflict").compareTo(FindingKind.reconstitute("redundancy"))).toBeLessThan(0);
+    expect(FindingKind.of("conflict").compareTo(FindingKind.of("redundancy"))).toBeLessThan(0);
   });
 });

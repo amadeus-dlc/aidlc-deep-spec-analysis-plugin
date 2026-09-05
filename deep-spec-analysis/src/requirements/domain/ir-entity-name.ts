@@ -1,23 +1,20 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-
-type IrDeclTokenError = { readonly kind: "empty-ir-decl-token"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 // decl 束のエンティティ名（well-formedness の重複・座標文言が使う）。
 export class IrEntityName {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<IrEntityName, IrDeclTokenError> {
-    if (raw === "") return err({ kind: "empty-ir-decl-token", raw });
-    return ok(new IrEntityName(raw));
-  }
-
-  static reconstitute(raw: string): IrEntityName {
+  static of(raw: string): IrEntityName {
     return new IrEntityName(raw);
+  }
+
+  static parse(raw: string): Result<IrEntityName, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new IrEntityName(raw));
   }
 
   equals(other: IrEntityName): boolean {

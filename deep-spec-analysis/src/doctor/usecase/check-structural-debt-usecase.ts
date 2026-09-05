@@ -22,7 +22,7 @@ export class CheckStructuralDebtUseCase {
       const findings = this.#backend.reportOnlyFindings(ref.tool, ref.artifactPath);
       if (findings === null) continue;
       scanned += 1;
-      if (findings > 0) rows.push(DebtRow.reconstitute({ space: ref.space, intent: ref.intent, artifact: ref.label, findings }));
+      if (findings > 0) rows.push(DebtRow.of({ space: ref.space, intent: ref.intent, artifact: ref.label, findings }));
     }
     return StructuralDebt.of({ scanned, rows });
   }

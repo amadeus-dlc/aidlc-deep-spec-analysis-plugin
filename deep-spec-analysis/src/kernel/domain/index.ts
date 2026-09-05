@@ -7,6 +7,7 @@
 export { type Expression } from "./expression.ts";
 export { ExpressionTree } from "./expression-tree.ts";
 export { ContentHash } from "./content-hash.ts";
+export { DeclaredDigest } from "./declared-digest.ts";
 export { IrVersion } from "./ir-version.ts";
 export { TargetId } from "./target-id.ts";
 export { TargetIds } from "./target-ids.ts";
@@ -16,6 +17,7 @@ export { RequirementIds } from "./requirement-ids.ts";
 export { NormalizedName } from "./normalized-name.ts";
 export { ArtifactPath } from "./artifact-path.ts";
 export { AttributeBound } from "./attribute-bound.ts";
+export { DeclaredBound } from "./declared-bound.ts";
 export { ErrorMessages } from "./error-messages.ts";
 export { FindingsSchema } from "./findings-schema.ts";
 export { TriggerName } from "./trigger-name.ts";

@@ -79,7 +79,7 @@ export class Components {
     return [...owners.entries()]
       .sort((a, b) => (a[0] < b[0] ? -1 : 1))
       .filter(([, list]) => list.length > 1)
-      .map(([name, list]) => ({ name: EntityName.reconstitute(name), owners: list }));
+      .map(([name, list]) => ({ name: EntityName.of(name), owners: list }));
   }
 
   // Deterministic cycle detection over the depends_on graph. Returns each
@@ -128,7 +128,6 @@ export class Components {
   toArray(): readonly Component[] {
     return this.#values;
   }
-
 
   // DD-1..DD-7 の不変条件（種別規律の裁定 11）。判定は宣言と集まりの知識、
   // 文言と発生順は golden 凍結。
@@ -232,7 +231,7 @@ export class Components {
     // Self-loops are DD-3's finding; DD-7 reports only genuine multi-node cycles.
     for (const cycle of this.dependencyCycles().filter((c) => c.length > 1)) {
       report.finding(DD_7, FindingKind.structureInvalid(), cycle.map((n) => TargetIds.safe("component", n)),
-        cycle.map((n, i) => WitnessRef.at(art, `${this.byName(ComponentName.reconstitute(n))?.element().asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])),
+        cycle.map((n, i) => WitnessRef.at(art, `${this.byName(ComponentName.of(n))?.element().asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])),
         `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
     }
   }

@@ -27,15 +27,15 @@ export class CheckFunctionalCoverageUseCase {
       for (const unit of t.units) {
         eligible += 1;
         if (!modelUnits.has(unit.name) || !t.hasFindings || !completed.has(unit.name)) {
-          problems.push(UnitCoverageRow.reconstitute({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.unverified() }));
+          problems.push(UnitCoverageRow.of({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.unverified() }));
           continue;
         }
         if (unit.newestArtifactMtime > t.modelMtime) {
-          problems.push(UnitCoverageRow.reconstitute({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.stale() }));
+          problems.push(UnitCoverageRow.of({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.stale() }));
         }
       }
       if (t.modelMtime > 0 && t.hasFindings && t.requirementsModelMtime !== null && t.requirementsModelMtime > t.modelMtime) {
-        refinementStale.push(RefinementStaleRow.reconstitute({ space: t.space, intent: t.intent }));
+        refinementStale.push(RefinementStaleRow.of({ space: t.space, intent: t.intent }));
       }
     }
     return UnitCoverage.of({ eligible, problems, refinementStale, scopes });

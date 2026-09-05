@@ -13,13 +13,7 @@ export class Component {
   readonly #dependents: ComponentRefs;
   readonly #entities: ComponentEntities;
 
-  private constructor(props: {
-    name: ComponentName;
-    element: ElementPath;
-    dependsOn: ComponentRefs;
-    dependents: ComponentRefs;
-    entities: ComponentEntities;
-  }) {
+  private constructor(props: Parameters<typeof Component.of>[0]) {
     this.#name = props.name;
     this.#element = props.element;
     this.#dependsOn = props.dependsOn;
@@ -27,7 +21,7 @@ export class Component {
     this.#entities = props.entities;
   }
 
-  static reconstitute(props: {
+  static of(props: {
     name: ComponentName;
     element: ElementPath;
     dependsOn: ComponentRefs;

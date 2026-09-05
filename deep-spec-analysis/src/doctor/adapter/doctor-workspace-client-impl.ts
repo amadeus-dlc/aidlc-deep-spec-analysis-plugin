@@ -120,7 +120,7 @@ export class DoctorWorkspaceClientImpl implements DoctorWorkspaceClient {
           hasModel,
           hasFindings,
           anchor: anchored
-            ? DigestAnchor.of(ContentHash.reconstitute(anchored), ContentHash.ofBytes(readFileSync(requirements)))
+            ? DigestAnchor.of(ContentHash.of(anchored), ContentHash.ofBytes(readFileSync(requirements)))
             : null,
         });
       }

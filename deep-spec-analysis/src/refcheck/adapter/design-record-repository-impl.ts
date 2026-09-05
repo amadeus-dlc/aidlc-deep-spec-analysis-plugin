@@ -1,3 +1,11 @@
+import {
+  findRecordRoot,
+  listSubdirectories,
+  readIfExists,
+  relArtifact,
+  writeFileAtomically,
+} from "@deep-spec/kernel-adapter";
+
 // DesignRecordRepository の実 Gateway 実装。
 // record ルートの発見・関連成果物の読取・解析（形式知識）をここに集約し、
 // 型付きの DesignRecord を再構成する。取得規則は旧 entry 群の凍結挙動：
@@ -10,7 +18,7 @@ import { readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
 import { ArtifactPath, ContentHash, RequirementIds } from "@deep-spec/kernel-domain";
-import { findRecordRoot, listSubdirectories, readIfExists, relArtifact, writeFileAtomically } from "@deep-spec/kernel-adapter";
+
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import {
   type DesignRecordId,
@@ -41,9 +49,9 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     const isFunctional = basename(fdDir) === "functional-design";
     const recordRoot = findRecordRoot(isFunctional ? fdDir : dirname(artifactPath));
     const rel = (p: string): string => relArtifact(recordRoot, p);
-    const input = (p: string, text: string): InputAnchor => (InputAnchor.reconstitute({ artifact: rel(p), sha256: ContentHash.ofText(text) }));
+    const input = (p: string, text: string): InputAnchor => (InputAnchor.of({ artifact: rel(p), sha256: ContentHash.ofText(text) }));
 
-    const seed: Parameters<typeof DesignRecord.reconstitute>[0] = {
+    const seed: Parameters<typeof DesignRecord.of>[0] = {
       id,
       target: input(artifactPath, md),
       sourceDocument: sourceBytes,
@@ -53,44 +61,45 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
         : null,
       functional: isFunctional ? this.#functional(recordRoot, fdDir) : null,
     };
-    return ok(DesignRecord.reconstitute(seed));
+    return ok(DesignRecord.of(seed));
   }
 
   // 往復則: findById が読んだ錨成果物の原文をバイト逐語で書き戻す。
   store(record: DesignRecord): Result<void, RepositoryError> {
     const path = record.id().artifactPath().asString();
+    const bytes = record.sourceDocument();
     try {
-      writeFileAtomically(path, record.sourceDocument());
+      writeFileAtomically(path, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
     }
   }
 
-  #declaredUnits(recordRoot: string | null): NonNullable<Parameters<typeof DesignRecord.reconstitute>[0]["contractSummary"]>["declaredUnits"] {
+  #declaredUnits(recordRoot: string | null): NonNullable<Parameters<typeof DesignRecord.of>[0]["contractSummary"]>["declaredUnits"] {
     const depPath = recordRoot === null ? null : join(recordRoot, "inception", "units-generation", "unit-of-work-dependency.md");
     const depMd = depPath === null ? null : readIfExists(depPath);
     if (depPath === null || depMd === null) {
       return {
-        artifactName: ArtifactPath.reconstitute(depPath === null ? "unit-of-work-dependency.md" : relArtifact(recordRoot, depPath)),
+        artifactName: ArtifactPath.of(depPath === null ? "unit-of-work-dependency.md" : relArtifact(recordRoot, depPath)),
         document: null,
       };
     }
     return {
-      artifactName: ArtifactPath.reconstitute(relArtifact(recordRoot, depPath)),
+      artifactName: ArtifactPath.of(relArtifact(recordRoot, depPath)),
       document: {
-        input: InputAnchor.reconstitute({ artifact: relArtifact(recordRoot, depPath), sha256: ContentHash.ofText(depMd) }),
+        input: InputAnchor.of({ artifact: relArtifact(recordRoot, depPath), sha256: ContentHash.ofText(depMd) }),
         outcome: parseDeclaredUnits(depMd),
       },
     };
   }
 
-  #functional(recordRoot: string | null, fdDir: string): NonNullable<Parameters<typeof DesignRecord.reconstitute>[0]["functional"]> {
+  #functional(recordRoot: string | null, fdDir: string): NonNullable<Parameters<typeof DesignRecord.of>[0]["functional"]> {
     const rel = (p: string): string => relArtifact(recordRoot, p);
     const load = <T>(path: string, parse: (text: string) => T): { input: InputAnchor; outcome: T } | null => {
       const text = readIfExists(path);
       if (text === null) return null;
-      return { input: InputAnchor.reconstitute({ artifact: rel(path), sha256: ContentHash.ofText(text) }), outcome: parse(text) };
+      return { input: InputAnchor.of({ artifact: rel(path), sha256: ContentHash.ofText(text) }), outcome: parse(text) };
     };
 
     const unitDir = dirname(fdDir);
@@ -124,21 +133,21 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
     }
 
     return {
-      unit: unit === undefined ? undefined : UnitName.reconstitute(unit),
-      entitiesArtifact: ArtifactPath.reconstitute(rel(entitiesPath)),
+      unit: unit === undefined ? undefined : UnitName.of(unit),
+      entitiesArtifact: ArtifactPath.of(rel(entitiesPath)),
       entities,
-      rulesArtifact: ArtifactPath.reconstitute(rel(rulesPath)),
+      rulesArtifact: ArtifactPath.of(rel(rulesPath)),
       rules,
-      specArtifact: ArtifactPath.reconstitute(rel(specPath)),
+      specArtifact: ArtifactPath.of(rel(specPath)),
       spec,
       requirements,
-      componentsArtifact: ArtifactPath.reconstitute(componentsPath === null ? "components.md" : rel(componentsPath)),
+      componentsArtifact: ArtifactPath.of(componentsPath === null ? "components.md" : rel(componentsPath)),
       components,
       siblingUnits: buildSiblingUnitEntities(siblingTexts),
       siblingInputs: InputAnchors.of(
         siblingTexts
           .filter((s) => s.path !== entitiesPath)
-          .map((s) => (InputAnchor.reconstitute({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) }))),
+          .map((s) => (InputAnchor.of({ artifact: rel(s.path), sha256: ContentHash.ofText(s.text) }))),
       ),
     };
   }

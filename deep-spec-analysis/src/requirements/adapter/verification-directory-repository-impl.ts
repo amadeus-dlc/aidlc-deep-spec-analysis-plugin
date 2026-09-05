@@ -103,14 +103,13 @@ export class VerificationDirectoryRepositoryImpl implements VerificationDirector
       return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(acquired) });
     }
     let outcome: Result<void, RepositoryError>;
+    let released: DirectoryFinalizationLockOutcome;
     try {
       outcome = this.#publish(aggregate, candidate, directory);
-    } catch (e) {
-      outcome = err({ kind: "io-failed", operation: "write", path: directoryPath, cause: causeOf(e) });
+    } finally {
+      // panicも伝播させたままロックを解放する。成功結果へ変換しない。
+      released = this.#lock.release(directory);
     }
-    // 成功・失敗のどちらの経路も必ずここを通る。cleanup の失敗は成功を上書き
-    // する（公開と cleanup が揃って初めて成功）。
-    const released = this.#lock.release(directory);
     if (released.kind !== "released" && outcome.ok) {
       return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(released) });
     }
@@ -132,14 +131,8 @@ export class VerificationDirectoryRepositoryImpl implements VerificationDirector
     if (!unchanged.ok) return err(unchanged.error);
     // 公開する文書を render する。ここまでの失敗では公開ファイルを変えない。
     const crossCheck = aggregate.crossCheck();
-    let backendBytes: string;
-    let crossBytes: string | null;
-    try {
-      backendBytes = renderVerificationReportBytes(candidate);
-      crossBytes = crossCheck === null ? null : renderVerificationReportBytes(crossCheck);
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf(e) });
-    }
+    const backendBytes = renderVerificationReportBytes(candidate);
+    const crossBytes = crossCheck === null ? null : renderVerificationReportBytes(crossCheck);
     // 既存 cross-check を public path から先に外す。
     if (!this.#lock.holdsOwnership(directory)) return this.#fenced(directory, crossPath);
     if (existsSync(crossPath)) {
@@ -223,14 +216,13 @@ export class VerificationDirectoryRepositoryImpl implements VerificationDirector
     for (const file of entries) {
       const report = this.#readReport(directory, file);
       if (!report.ok) return err(report.error);
-      if (report.value !== null) reports.push(report.value);
+      reports.push(report.value);
     }
     return ok(reports);
   }
 
-  // 1 文書の読込。JSON として読めない文書は型のある失敗、JSON ではあるが
-  // オブジェクトでない文書は不在（呼び手が除く）。
-  #readReport(directory: ArtifactPath, fileName: string): Result<VerificationReport | null, RepositoryError> {
+  // 1 文書の読込。JSON 構文と文書の形の不正はいずれも型のある失敗にする。
+  #readReport(directory: ArtifactPath, fileName: string): Result<VerificationReport, RepositoryError> {
     const path = join(directory.asString(), fileName);
     let raw: Json;
     try {
@@ -238,7 +230,8 @@ export class VerificationDirectoryRepositoryImpl implements VerificationDirector
     } catch (e) {
       return err({ kind: "corrupt", path, cause: causeOf(e) });
     }
-    return ok(parseSiblingReportDocument(directory, fileName, raw));
+    const parsed = parseSiblingReportDocument(directory, fileName, raw);
+    return parsed.ok ? ok(parsed.value) : err({ kind: "corrupt", path, cause: parsed.error });
   }
 
   #fenced(directory: ArtifactPath, path: string): Result<void, RepositoryError> {

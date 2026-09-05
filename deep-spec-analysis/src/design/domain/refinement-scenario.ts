@@ -8,7 +8,7 @@ export class RefinementScenario {
   readonly #bindings: Readonly<Record<string, boolean | number | string>>;
   readonly #eventTrigger: TriggerName | undefined;
 
-  private constructor(props: { id: ScenarioId; kind: "accept" | "reject"; frRefs: FrRefs; bindings: Readonly<Record<string, boolean | number | string>>; event?: { readonly trigger: TriggerName } }) {
+  private constructor(props: Parameters<typeof RefinementScenario.of>[0]) {
     this.#id = props.id;
     this.#kind = props.kind;
     this.#frRefs = props.frRefs;
@@ -16,7 +16,7 @@ export class RefinementScenario {
     this.#eventTrigger = props.event?.trigger;
   }
 
-  static reconstitute(props: { id: ScenarioId; kind: "accept" | "reject"; frRefs: FrRefs; bindings: Readonly<Record<string, boolean | number | string>>; event?: { readonly trigger: TriggerName } }): RefinementScenario {
+  static of(props: { id: ScenarioId; kind: "accept" | "reject"; frRefs: FrRefs; bindings: Readonly<Record<string, boolean | number | string>>; event?: { readonly trigger: TriggerName } }): RefinementScenario {
     return new RefinementScenario(props);
   }
 

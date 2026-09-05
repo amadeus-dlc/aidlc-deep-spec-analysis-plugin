@@ -12,8 +12,6 @@ import type { ContentHash } from "@deep-spec/kernel-domain";
 import type { RefinementUnitMap } from "./refinement-unit-map.ts";
 import { RefinementUnitMaps } from "./refinement-unit-maps.ts";
 
-
-
 export class RefinementMap {
   readonly #id: RefinementMapId;
   readonly #requirementsIrHash: ContentHash;
@@ -21,14 +19,7 @@ export class RefinementMap {
   readonly #units: RefinementUnitMaps;
   readonly #sourceDocument: Uint8Array;
 
-  private constructor(seed: {
-    readonly id: RefinementMapId;
-    readonly requirementsIrHash: ContentHash;
-    readonly designIrHash: ContentHash;
-    readonly units: RefinementUnitMaps;
-    // 成果物の原文（原文材料——store の往復則 findById∘store がバイト恒等）。
-    readonly sourceDocument: Uint8Array;
-  }) {
+  private constructor(seed: Parameters<typeof RefinementMap.of>[0]) {
     this.#id = seed.id;
     this.#requirementsIrHash = seed.requirementsIrHash;
     this.#designIrHash = seed.designIrHash;
@@ -37,7 +28,7 @@ export class RefinementMap {
   }
 
   // アダプタのパーサ（契約4 スキーマ検証済み）からの唯一の構築口。
-  static reconstitute(seed: {
+  static of(seed: {
     readonly id: RefinementMapId;
     readonly requirementsIrHash: ContentHash;
     readonly designIrHash: ContentHash;

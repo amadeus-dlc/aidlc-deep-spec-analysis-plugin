@@ -1,5 +1,4 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 const NUMERICISH = new Set(["int", "integer", "number", "decimal", "float", "double", "long"]);
 
@@ -9,16 +8,19 @@ const COLLECTIONISH = new Set(["list", "array", "map", "object", "collection", "
 
 const BOOLISH = new Set(["bool", "boolean"]);
 
-type TokenError = { readonly kind: "empty-token"; readonly raw: string };
-
 export class TypeName {
   readonly #value: string;
-  private constructor(value: string) { this.#value = value; }
-  static parse(raw: string): Result<TypeName, TokenError> {
-    if (raw === "") return err({ kind: "empty-token", raw });
-    return ok(new TypeName(raw));
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-token", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw: string): TypeName { return new TypeName(raw); }
+  static of(raw: string): TypeName {
+    return new TypeName(raw);
+  }
+
+  static parse(raw: string): Result<TypeName, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new TypeName(raw));
+  }
   equals(other: TypeName): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
   // 型区分（numeric/date/bool/…）の照合は小文字正規化で行う（凍結挙動）。

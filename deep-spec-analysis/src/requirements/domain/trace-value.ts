@@ -9,7 +9,7 @@ type Decoded = null | boolean | number | string | readonly Decoded[] | { readonl
 export class TraceValue {
   readonly #value: Decoded;
 
-  private constructor(value: Decoded) {
+  private constructor(value: Parameters<typeof TraceValue.of>[0]) {
     this.#value = value;
   }
 

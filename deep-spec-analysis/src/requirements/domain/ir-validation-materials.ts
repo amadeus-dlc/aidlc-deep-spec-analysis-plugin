@@ -5,14 +5,12 @@
 // （RefinementMaterialsId と同じ規律）。sourceDocument は成果物の原文
 // （原文材料——store の往復則 findById∘store がバイト恒等になる永続化面）。
 
-import { type ErrorMessages, type IrVersion, ContentHash } from "@deep-spec/kernel-domain";
+import { type ErrorMessages, type IrVersion, DeclaredDigest } from "@deep-spec/kernel-domain";
 import { FrReferenceIndex } from "./fr-reference-index.ts";
 import { FrRefClaims } from "./fr-ref-claims.ts";
 import type { IrModelDecl } from "./ir-model-decl.ts";
 import type { RequirementsSourceId } from "./requirements-source-id.ts";
 import { IrValidationMaterialsId } from "./ir-validation-materials-id.ts";
-
-
 
 export class IrValidationMaterials {
   readonly #id: IrValidationMaterialsId;
@@ -20,40 +18,30 @@ export class IrValidationMaterials {
   readonly #schemaErrors: ErrorMessages;
   readonly #view: IrModelDecl;
   readonly #frClaims: FrRefClaims;
-  readonly #declaredDigest: ContentHash | null;
+  readonly #declaredDigest: DeclaredDigest | null;
   readonly #sourceId: RequirementsSourceId;
   readonly #sourceDocument: Uint8Array;
 
-  private constructor(seed: {
-    readonly id: IrValidationMaterialsId;
-    readonly irVersion: IrVersion;
-    readonly schemaErrors: ErrorMessages;
-    readonly view: IrModelDecl;
-    readonly frClaims: FrRefClaims;
-    // IR の sourceDigest。文字列でなければ null（宣言なし）。
-    readonly declaredDigest: string | null;
-    readonly sourceId: RequirementsSourceId;
-    readonly sourceDocument: Uint8Array;
-  }) {
+  private constructor(seed: Parameters<typeof IrValidationMaterials.of>[0]) {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#schemaErrors = seed.schemaErrors;
     this.#view = seed.view;
     this.#frClaims = seed.frClaims;
-    this.#declaredDigest = seed.declaredDigest === null ? null : ContentHash.reconstitute(seed.declaredDigest);
+    this.#declaredDigest = seed.declaredDigest;
     this.#sourceId = seed.sourceId;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
 
   // アダプタの寛容パースからの唯一の構築口。
-  static reconstitute(seed: {
+  static of(seed: {
     readonly id: IrValidationMaterialsId;
     readonly irVersion: IrVersion;
     readonly schemaErrors: ErrorMessages;
     readonly view: IrModelDecl;
     readonly frClaims: FrRefClaims;
     // IR の sourceDigest。文字列でなければ null（宣言なし）。
-    readonly declaredDigest: string | null;
+    readonly declaredDigest: DeclaredDigest | null;
     readonly sourceId: RequirementsSourceId;
     readonly sourceDocument: Uint8Array;
   }): IrValidationMaterials {
@@ -81,8 +69,8 @@ export class IrValidationMaterials {
     return FrReferenceIndex.of(this.#frClaims.toArray());
   }
 
-  declaredDigest(): string | null {
-    return this.#declaredDigest?.asString() ?? null;
+  declaredDigest(): DeclaredDigest | null {
+    return this.#declaredDigest;
   }
 
   sourceId(): RequirementsSourceId {

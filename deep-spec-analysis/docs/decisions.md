@@ -4,6 +4,18 @@ English | [日本語](decisions.ja.md)
 
 The record of implementation-time decisions, spike results, and deviations from the requirements draft (docs/TODO.md, 2026-08).
 
+## 2026-09-05 — Never convert of panics into input errors
+
+This supersedes the exception wrapper around `of` at input boundaries. Each DP’s own `parse` invokes its constructor and returns contract failures as Result; adapters consume those Results explicitly. Exceptions from `of` always propagate as panics. Removed `decodeDomainValues`, moved domain construction and rendering outside I/O catches, and guaranteed publication lock release with finally. Compiler handlers process only expected compilation errors.
+
+Added missing constructor contracts and parse factories to RequirementId, BrRef, QueryLabel, and DesignUnitId. Internally derived FenceCount requires a nonnegative safe integer. Total normalization and unrestricted declaration values do not need artificial parse failures.
+
+## 2026-09-05 — Unify construction and restoration contracts
+
+This supersedes the earlier strict-parse / unchecked-reconstitute split. Constructors retain precise TypeScript parameter types, without added runtime type checks. They enforce value invariants once and throw `IllegalArgumentException`. `of` propagates the exception; `parse` converts only contract violations to `Result`. `PluginVersion.parse` follows the same rule.
+
+Restoration uses `of`. `DeclaredBound`, `DeclaredDigest`, and `DeclaredRuleId` preserve malformed declarations for diagnosis without bypassing validated-value invariants. Empty `ErrorMessages` means no errors and remains valid. Canonicalizing `compose` remains a meaningful separate operation.
+
 ## Spike results (verifying assumptions A1–A4)
 
 - **A1: does z3-solver (WASM) run under bun → NO (with a workaround)**
@@ -2656,3 +2668,47 @@ requirements had also folded a zero-Unit fix for the AI-DLC engine
 Test that `aidlc-workflows/` is not a development target of this
 repository and must not be modified, so that work was reverted to the
 engine's HEAD and is not part of this record.
+
+## Boundary information loss and aggregate invariants — six audit fixes (2026-09-05)
+
+The owner selected implementation of all six audit findings. Normal contract
+1–4 formats and golden outputs are preserved; the affected failure paths are:
+
+- `SiblingVerdictDocument.reachabilityOf` owns reachability. A final-state
+  witness proves reachability in any mode; only a completed bounded search
+  can establish non-reachability. Timeouts, compilation failures and missing
+  evidence remain undecided.
+- `RefinementQuintInvariants.interpret` maps findings and skips together,
+  retaining unverified additional requirements instead of letting the use
+  case collect only conflicts.
+- `decodeFindingsDocument` shares structural decoding across adapters.
+  Missing or malformed fields produce `corrupt`, never empty successful
+  results. Unknown vocabulary is preserved verbatim; conformance remains
+  domain-owned.
+- `Expression` is recursively readonly. Domain objects own deeply copied,
+  frozen trees through `ExpressionTree`. Inputs, accessors and visitors
+  cannot change the model while leaving its hash unchanged. Traversals that
+  index nodes by reference share one immutable tree.
+- `RefinementMaterialsRepository` returns
+  `Result<RefinementMaterials, RepositoryError>`. Only absence is inapplicable;
+  corrupt existing input and I/O failures are explicit. Use cases save the
+  already completed design checks before returning acquisition failure.
+  Requirements and map provenance hashes use the bytes already read.
+- Both verify-directory aggregates expose `finalizedWith`, which conforms
+  the candidate and derives its cross-check in one operation. Individual
+  `conformedTo` calls also invalidate the old cross-check when changing the
+  candidate. The finalizer no longer compensates for an unsafe call order.
+
+Regression coverage is in `tests/verification-boundaries.test.ts`. Tests
+that required expression reference identity now require equal values and
+separate references. The previous malformed-document test now requires an
+explicit failure instead of filtering away invalid records.
+
+
+## Separate absence from reachability verdicts (2026-09-05)
+
+At the owner's request, `ReachabilityVerdict` replaces `boolean | null`. Named factories represent reached, not reached within the bound, and unverified; `match` requires all three handlers. `SiblingBackendClient.probeState` returns the same value, removing the nullable-boolean conversion and the redundant `ReachabilityProbe` port representation.
+
+`SiblingVerdictDocument` now stores a private discriminated union instead of independent nullable fields. The decoder requires `method` on decoded documents, so both readable and unavailable factories and their `match` handlers take `string`. Successful remapping also guarantees `method: string`; only an unreadable result can lack the method.
+
+Design rule D10 documents optional-field `undefined`, explicit aggregate absence as `null`, command success as `void`, failure as `Result`, and domain verdicts as value objects. JSON contracts and verdict behavior are unchanged. Regression tests cover all three verdicts through the use case and reject nullable or optional methods at the type boundary.

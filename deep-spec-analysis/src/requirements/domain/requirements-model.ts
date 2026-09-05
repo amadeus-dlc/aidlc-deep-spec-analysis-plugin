@@ -1,22 +1,18 @@
+import { TargetId, type IrVersion, FrRefs, TargetIds, RequirementId, AttributePath, type ContentHash } from "@deep-spec/kernel-domain";
+
 // RequirementsModel 集約 — 検証済み要件の形式モデル（契約1）のドメイン表現。
 // 生 Json からの寛容な解体（欠損エントリの黙殺）はアダプタのパーサの責務で、
 // ここは型付き部品を組む。クエリ（allTargets / frRefsOf / attributeAt /
 // supportsMajor）は旧センサーの自由関数群を集約メソッドへ移したもの。
 // 配列を生で運ばない：部品はファーストクラスコレクションで受け取り・返す。
 
-import { type IrVersion, FrRefs, TargetIds, RequirementId, AttributePath } from "@deep-spec/kernel-domain";
 import { type AttributeDeclaration } from "./attribute-declaration.ts";
 import { AttributeDeclarations } from "./attribute-declarations.ts";
-import type { ContentHash } from "@deep-spec/kernel-domain";
+
 import type { FormalModelId } from "./formal-model-id.ts";
 import { Obligations } from "./obligations.ts";
 import { Scenarios } from "./scenarios.ts";
 import { BackgroundAssumptions } from "./background-assumptions.ts";
-
-
-
-
-
 
 export class RequirementsModel {
   readonly #id: FormalModelId;
@@ -28,18 +24,7 @@ export class RequirementsModel {
   readonly #scenarios: Scenarios;
   readonly #background: BackgroundAssumptions;
 
-  private constructor(seed: {
-    readonly id: FormalModelId;
-    // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
-    readonly irHash: ContentHash;
-    // 成果物の原文の生バイト列（原文材料——store の往復則 findById∘store がバイト恒等）。
-    readonly sourceDocument: Uint8Array;
-    readonly irVersion: IrVersion;
-    readonly attributes: AttributeDeclarations;
-    readonly obligations: Obligations;
-    readonly scenarios: Scenarios;
-    readonly background: BackgroundAssumptions;
-  }) {
+  private constructor(seed: Parameters<typeof RequirementsModel.of>[0]) {
     this.#id = seed.id;
     this.#irHash = seed.irHash;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
@@ -51,7 +36,7 @@ export class RequirementsModel {
   }
 
   // アダプタのパーサが解いた型付き部品からの唯一の構築口。
-  static reconstitute(seed: {
+  static of(seed: {
     readonly id: FormalModelId;
     // 生 IR の正準 JSON の sha256（アダプタが導出——文書の同一性照合材料）。
     readonly irHash: ContentHash;
@@ -99,7 +84,7 @@ export class RequirementsModel {
   }
 
   attributeAt(path: string): AttributeDeclaration | undefined {
-    return this.#attributes.byPath(AttributePath.reconstitute(path));
+    return this.#attributes.byPath(AttributePath.of(path));
   }
 
   obligations(): Obligations {
@@ -116,7 +101,7 @@ export class RequirementsModel {
 
   // 境界: 縮退文書の skip 対象列（義務 id ＋シナリオ id の昇順——凍結順）。
   allTargets(): TargetIds {
-    return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#scenarios.ids()]).sortedCanonically();
+    return TargetIds.of(Array.from([...this.#obligations.ids(), ...this.#scenarios.ids()], (raw) => TargetId.of(raw))).sortedCanonically();
   }
 
   // 対象 id 列が指す義務・シナリオの FR 参照（一意・正準順）。

@@ -1,3 +1,16 @@
+import {
+  DeclaredDigest,
+  ContentHash,
+  RequirementId,
+  TriggerName,
+  ArtifactPath,
+  AttributeBound,
+  DeclaredBound,
+  ErrorMessages,
+  RequirementIds,
+  TargetId,
+} from "@deep-spec/kernel-domain";
+
 // 契約1／契約3 の IR バリデータを in-process で駆動するスイート（PR7）。
 //
 // 主証拠は「子プロセスで実センサーを撃った verdict 行」と「同じ入力を
@@ -12,7 +25,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } f
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TriggerName, ArtifactPath, AttributeBound, ErrorMessages, RequirementIds, TargetId } from "@deep-spec/kernel-domain";
+
 import { DesignIrValidationMaterialsRepositoryImpl, DesignModelRepositoryImpl } from "@deep-spec/design-adapter";
 import { BindingPairs, BrReferenceIndex, BrRefs, DeclaredValues, DesignBackgroundDecl, DesignAttributeDecl, DesignAttributeDecls, DesignBackgroundDecls, DesignEntityDecl, DesignEntityDecls, DesignIgnoreDecl, DesignIgnoreDecls, DesignMachineDecl, DesignMachineDecls, DesignModelId, DesignObligationDecl, DesignObligationDecls, DesignScenarioDecl, DesignScenarioDecls, DesignTransitionDecl, DesignTransitionDecls, DesignUnitDecl, DesignUnitDecls, InitialStates, UnformalizedTargets, DesignUnitId, DesignTransitionId, DesignScenarioId, DesignObligationOrigin, DesignObligationId, DesignMachineId, DesignEntityName, DesignBackgroundId, DesignAttributeName, DesignIrValidationMaterialsId, BrRef } from "@deep-spec/design-domain";
 import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "@deep-spec/design-usecase";
@@ -292,15 +305,15 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
 describe("FrReferenceIndex", () => {
   test("collects owners per frRef and reports the missing ones sorted", () => {
     const index = FrReferenceIndex.of([
-      FrRefClaim.of("OB-2", FrRefs.reconstitute(["FR-1", "FR-9"])),
-      FrRefClaim.of("OB-1", FrRefs.reconstitute(["FR-9"])),
-      FrRefClaim.of("scenarios[3]", FrRefs.reconstitute([])),
+      FrRefClaim.of("OB-2", FrRefs.of(Array.from(["FR-1", "FR-9"], (raw) => RequirementId.of(raw)))),
+      FrRefClaim.of("OB-1", FrRefs.of(Array.from(["FR-9"], (raw) => RequirementId.of(raw)))),
+      FrRefClaim.of("scenarios[3]", FrRefs.of([])),
     ]);
     expect(index.referencedIds().sort()).toEqual(["FR-1", "FR-9"]);
-    expect(index.missingErrors(RequirementIds.reconstitute(["FR-1"]))).toEqual([
+    expect(index.missingErrors(RequirementIds.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))))).toEqual([
       'frRef "FR-9" (used by OB-1, OB-2) does not exist in requirements.md',
     ]);
-    expect(index.missingErrors(RequirementIds.reconstitute(["FR-1", "FR-9"]))).toEqual([]);
+    expect(index.missingErrors(RequirementIds.of(Array.from(["FR-1", "FR-9"], (raw) => RequirementId.of(raw))))).toEqual([]);
   });
 });
 
@@ -328,19 +341,19 @@ describe("RequirementsSourceId", () => {
 
 describe("SourceAnchor", () => {
   test("an absent digest hands back the value to stamp", () => {
-    expect(SourceAnchor.of(null, "abc").errors()).toEqual([
-      'IR has no sourceDigest — requirements drift would be undetectable; add "sourceDigest": "abc" (sha256 of requirements.md) to the IR',
+    expect(SourceAnchor.of(null, ContentHash.ofText("actual")).errors()).toEqual([
+      `IR has no sourceDigest — requirements drift would be undetectable; add "sourceDigest": "${ContentHash.ofText("actual").asString()}" (sha256 of requirements.md) to the IR`,
     ]);
   });
 
   test("a drifted digest names both sides", () => {
-    expect(SourceAnchor.of("old", "new").errors()).toEqual([
-      "sourceDigest old does not match requirements.md (sha256 new) — the requirements changed since formalization; re-formalize against the current text and restamp the digest",
+    expect(SourceAnchor.of(DeclaredDigest.of("old"), ContentHash.ofText("new")).errors()).toEqual([
+      `sourceDigest old does not match requirements.md (sha256 ${ContentHash.ofText("new").asString()}) — the requirements changed since formalization; re-formalize against the current text and restamp the digest`,
     ]);
   });
 
   test("a matching digest is silent", () => {
-    expect(SourceAnchor.of("same", "same").errors()).toEqual([]);
+    expect(SourceAnchor.of(DeclaredDigest.of(ContentHash.ofText("same").asString()), ContentHash.ofText("same")).errors()).toEqual([]);
   });
 });
 
@@ -348,8 +361,8 @@ describe("BrReferenceIndex", () => {
   test("extracts BR ids from rules markdown", () => {
     const index = BrReferenceIndex.fromRules("- BR2.1 なにか\n- BR1.10 別の規則\n- BR1.10 再掲\n- BRX.1 は id ではない\n");
     expect(index.sortedIds()).toEqual(["BR1.10", "BR2.1"]);
-    expect(index.has(BrRef.reconstitute("BR2.1"))).toBe(true);
-    expect(index.has(BrRef.reconstitute("BR9.9"))).toBe(false);
+    expect(index.has(BrRef.of("BR2.1"))).toBe(true);
+    expect(index.has(BrRef.of("BR9.9"))).toBe(false);
   });
 });
 
@@ -357,38 +370,38 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
   type RawIrAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawIrEntity = { name: string; attributes: RawIrAttr[] };
-  type RawIrObligation = Omit<Parameters<typeof IrObligationDecl.reconstitute>[0], "id" | "temporal"> & { id: string; temporal?: Parameters<typeof IrTemporalDecl.reconstitute>[0] };
-  type RawIrScenario = Omit<Parameters<typeof IrScenarioDecl.reconstitute>[0], "id" | "bindings"> & { id: string; bindings: (readonly [string, unknown])[] };
-  type RawIrBackground = Omit<Parameters<typeof IrBackgroundDecl.reconstitute>[0], "id"> & { id: string };
+  type RawIrObligation = Omit<Parameters<typeof IrObligationDecl.of>[0], "id" | "temporal"> & { id: string; temporal?: Parameters<typeof IrTemporalDecl.of>[0] };
+  type RawIrScenario = Omit<Parameters<typeof IrScenarioDecl.of>[0], "id" | "bindings"> & { id: string; bindings: (readonly [string, unknown])[] };
+  type RawIrBackground = Omit<Parameters<typeof IrBackgroundDecl.of>[0], "id"> & { id: string };
   function irView(overrides: {
     entities?: RawIrEntity[];
     obligations?: RawIrObligation[];
     scenarios?: RawIrScenario[];
     background?: RawIrBackground[];
   }): IrModelDecl {
-    return IrModelDecl.reconstitute({
+    return IrModelDecl.of({
       entities: IrEntityDecls.of(
-        (overrides.entities ?? []).map((e) => IrEntityDecl.reconstitute({
-          name: IrEntityName.reconstitute(e.name),
+        (overrides.entities ?? []).map((e) => IrEntityDecl.of({
+          name: IrEntityName.of(e.name),
           attributes: IrAttributeDecls.of(
-            e.attributes.map((a) => IrAttributeDecl.reconstitute({
+            e.attributes.map((a) => IrAttributeDecl.of({
               ...a,
-              name: IrAttributeName.reconstitute(a.name),
-              min: a.min === undefined ? undefined : AttributeBound.reconstitute(a.min),
-              max: a.max === undefined ? undefined : AttributeBound.reconstitute(a.max),
+              name: IrAttributeName.of(a.name),
+              min: a.min === undefined ? undefined : DeclaredBound.of(a.min),
+              max: a.max === undefined ? undefined : DeclaredBound.of(a.max),
               values: a.values === undefined ? undefined : IrDeclaredValues.of(a.values),
             })),
           ),
         })),
       ),
       obligations: IrObligationDecls.of(
-        (overrides.obligations ?? []).map((ob) => IrObligationDecl.reconstitute({ ...ob, id: ObligationId.reconstitute(ob.id), temporal: ob.temporal === undefined ? undefined : IrTemporalDecl.reconstitute(ob.temporal) })),
+        (overrides.obligations ?? []).map((ob) => IrObligationDecl.of({ ...ob, id: ObligationId.of(ob.id), temporal: ob.temporal === undefined ? undefined : IrTemporalDecl.of(ob.temporal) })),
       ),
       scenarios: IrScenarioDecls.of(
-        (overrides.scenarios ?? []).map((sc) => IrScenarioDecl.reconstitute({ ...sc, id: ScenarioId.reconstitute(sc.id), bindings: IrBindingPairs.of(sc.bindings) })),
+        (overrides.scenarios ?? []).map((sc) => IrScenarioDecl.of({ ...sc, id: ScenarioId.of(sc.id), bindings: IrBindingPairs.of(sc.bindings) })),
       ),
       background: IrBackgroundDecls.of(
-        (overrides.background ?? []).map((bg) => IrBackgroundDecl.reconstitute({ ...bg, id: BackgroundAssumptionId.reconstitute(bg.id) })),
+        (overrides.background ?? []).map((bg) => IrBackgroundDecl.of({ ...bg, id: BackgroundAssumptionId.of(bg.id) })),
       ),
     });
   }
@@ -542,21 +555,21 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
   // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
   type RawAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawEntity = { name: string; attributes: RawAttr[] };
-  type RawObligation = Omit<Parameters<typeof DesignObligationDecl.reconstitute>[0], "id" | "origin" | "brRefs"> & { id: string; origin?: string; brRefs?: string[] };
-  type RawTransition = Omit<Parameters<typeof DesignTransitionDecl.reconstitute>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs?: string[]; trigger?: string };
-  type RawIgnore = Omit<Parameters<typeof DesignIgnoreDecl.reconstitute>[0], "trigger"> & { trigger: string };
-  type RawMachine = Omit<Parameters<typeof DesignMachineDecl.reconstitute>[0], "id" | "initial" | "transitions" | "ignores"> & {
+  type RawObligation = Omit<Parameters<typeof DesignObligationDecl.of>[0], "id" | "origin" | "brRefs"> & { id: string; origin?: string; brRefs?: string[] };
+  type RawTransition = Omit<Parameters<typeof DesignTransitionDecl.of>[0], "id" | "brRefs" | "trigger"> & { id: string; brRefs?: string[]; trigger?: string };
+  type RawIgnore = Omit<Parameters<typeof DesignIgnoreDecl.of>[0], "trigger"> & { trigger: string };
+  type RawMachine = Omit<Parameters<typeof DesignMachineDecl.of>[0], "id" | "initial" | "transitions" | "ignores"> & {
     id: string;
     initial: string[];
     transitions: RawTransition[];
     ignores: RawIgnore[];
   };
-  type RawScenario = Omit<Parameters<typeof DesignScenarioDecl.reconstitute>[0], "id" | "bindings" | "brRefs"> & {
+  type RawScenario = Omit<Parameters<typeof DesignScenarioDecl.of>[0], "id" | "bindings" | "brRefs"> & {
     id: string;
     bindings: (readonly [string, unknown])[];
     brRefs?: string[];
   };
-  type RawBackground = Omit<Parameters<typeof DesignBackgroundDecl.reconstitute>[0], "id"> & { id: string };
+  type RawBackground = Omit<Parameters<typeof DesignBackgroundDecl.of>[0], "id"> & { id: string };
   type RawUnit = {
     entities?: RawEntity[];
     obligations?: RawObligation[];
@@ -567,55 +580,55 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
     directoryExists?: boolean;
     rulesMarkdown?: string | null;
   };
-  const brRefs = (refs: string[] | undefined) => (refs === undefined ? undefined : BrRefs.reconstitute(refs));
+  const brRefs = (refs: string[] | undefined) => (refs === undefined ? undefined : BrRefs.of(Array.from(refs, (raw) => BrRef.of(raw))));
   function unit(overrides: RawUnit): DesignUnitDecl {
-    return DesignUnitDecl.reconstitute({
+    return DesignUnitDecl.of({
       unit: DesignUnitId.of("u1"),
       entities: DesignEntityDecls.of(
-        (overrides.entities ?? []).map((e) => DesignEntityDecl.reconstitute({
-          name: DesignEntityName.reconstitute(e.name),
+        (overrides.entities ?? []).map((e) => DesignEntityDecl.of({
+          name: DesignEntityName.of(e.name),
           attributes: DesignAttributeDecls.of(
-            e.attributes.map((a) => DesignAttributeDecl.reconstitute({
+            e.attributes.map((a) => DesignAttributeDecl.of({
               ...a,
-              name: DesignAttributeName.reconstitute(a.name),
-              min: a.min === undefined ? undefined : AttributeBound.reconstitute(a.min),
-              max: a.max === undefined ? undefined : AttributeBound.reconstitute(a.max),
+              name: DesignAttributeName.of(a.name),
+              min: a.min === undefined ? undefined : DeclaredBound.of(a.min),
+              max: a.max === undefined ? undefined : DeclaredBound.of(a.max),
               values: a.values === undefined ? undefined : DeclaredValues.of(a.values),
             })),
           ),
         })),
       ),
       obligations: DesignObligationDecls.of(
-        (overrides.obligations ?? []).map((ob) => DesignObligationDecl.reconstitute({
+        (overrides.obligations ?? []).map((ob) => DesignObligationDecl.of({
           ...ob,
-          id: DesignObligationId.reconstitute(ob.id),
-          origin: ob.origin === undefined ? undefined : DesignObligationOrigin.reconstitute(ob.origin),
+          id: DesignObligationId.of(ob.id),
+          origin: ob.origin === undefined ? undefined : DesignObligationOrigin.of(ob.origin),
           brRefs: brRefs(ob.brRefs),
         })),
       ),
       stateMachines: DesignMachineDecls.of(
-        (overrides.stateMachines ?? []).map((sm) => DesignMachineDecl.reconstitute({
+        (overrides.stateMachines ?? []).map((sm) => DesignMachineDecl.of({
           ...sm,
-          id: DesignMachineId.reconstitute(sm.id),
+          id: DesignMachineId.of(sm.id),
           initial: InitialStates.of(sm.initial),
           transitions: DesignTransitionDecls.of(
-            sm.transitions.map((tr) => DesignTransitionDecl.reconstitute({
+            sm.transitions.map((tr) => DesignTransitionDecl.of({
               ...tr,
-              id: DesignTransitionId.reconstitute(tr.id),
+              id: DesignTransitionId.of(tr.id),
               brRefs: brRefs(tr.brRefs),
-              trigger: tr.trigger === undefined ? undefined : TriggerName.reconstitute(tr.trigger),
+              trigger: tr.trigger === undefined ? undefined : TriggerName.of(tr.trigger),
             })),
           ),
-          ignores: DesignIgnoreDecls.of(sm.ignores.map((g) => DesignIgnoreDecl.reconstitute({ ...g, trigger: TriggerName.reconstitute(g.trigger) }))),
+          ignores: DesignIgnoreDecls.of(sm.ignores.map((g) => DesignIgnoreDecl.of({ ...g, trigger: TriggerName.of(g.trigger) }))),
         })),
       ),
       scenarios: DesignScenarioDecls.of(
-        (overrides.scenarios ?? []).map((sc) => DesignScenarioDecl.reconstitute({ ...sc, id: DesignScenarioId.reconstitute(sc.id), bindings: BindingPairs.of(sc.bindings), brRefs: brRefs(sc.brRefs) })),
+        (overrides.scenarios ?? []).map((sc) => DesignScenarioDecl.of({ ...sc, id: DesignScenarioId.of(sc.id), bindings: BindingPairs.of(sc.bindings), brRefs: brRefs(sc.brRefs) })),
       ),
       background: DesignBackgroundDecls.of(
-        (overrides.background ?? []).map((bg) => DesignBackgroundDecl.reconstitute({ ...bg, id: DesignBackgroundId.reconstitute(bg.id) })),
+        (overrides.background ?? []).map((bg) => DesignBackgroundDecl.of({ ...bg, id: DesignBackgroundId.of(bg.id) })),
       ),
-      unformalizedTargets: UnformalizedTargets.reconstitute(overrides.unformalizedTargets ?? []),
+      unformalizedTargets: UnformalizedTargets.of(Array.from(overrides.unformalizedTargets ?? [], (raw) => TargetId.of(raw))),
       directoryExists: overrides.directoryExists ?? true,
       rulesMarkdown: overrides.rulesMarkdown ?? null,
     });
@@ -847,7 +860,7 @@ describe("design decl collections (first-class operations)", () => {
     expect(values.includes("c")).toBe(false);
     expect(values.toArray()).toEqual(["a", "b"]);
 
-    const refs = BrRefs.reconstitute(["BR1.1"]).add(BrRef.reconstitute("BR1.2"));
+    const refs = BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))).add(BrRef.of("BR1.2"));
     expect([...refs].map((r) => r.asString())).toEqual(["BR1.1", "BR1.2"]);
     expect(refs.toStrings()).toEqual(["BR1.1", "BR1.2"]);
 
@@ -855,10 +868,10 @@ describe("design decl collections (first-class operations)", () => {
     expect([...initial]).toEqual(["open", "closed"]);
     expect(initial.toArray()).toEqual(["open", "closed"]);
 
-    const unformalized = UnformalizedTargets.reconstitute(["BR2.1"]).add(TargetId.reconstitute("BR2.2"));
+    const unformalized = UnformalizedTargets.of(Array.from(["BR2.1"], (raw) => TargetId.of(raw))).add(TargetId.of("BR2.2"));
     expect([...unformalized].map((t) => t.asString())).toEqual(["BR2.1", "BR2.2"]);
-    expect(unformalized.covers(TargetId.reconstitute("BR2.2"))).toBe(true);
-    expect(unformalized.covers(TargetId.reconstitute("BR9.9"))).toBe(false);
+    expect(unformalized.covers(TargetId.of("BR2.2"))).toBe(true);
+    expect(unformalized.covers(TargetId.of("BR9.9"))).toBe(false);
     expect(unformalized.toStrings()).toEqual(["BR2.1", "BR2.2"]);
 
     const bindings = BindingPairs.of([["t.flag", true]]).add(["t.n", 1]);
@@ -868,47 +881,47 @@ describe("design decl collections (first-class operations)", () => {
     ]);
     expect(bindings.toArray().length).toBe(2);
 
-    const attr = DesignAttributeDecl.reconstitute({ name: DesignAttributeName.reconstitute("state"), kind: "enum", values: DeclaredValues.of(["open"]) });
+    const attr = DesignAttributeDecl.of({ name: DesignAttributeName.of("state"), kind: "enum", values: DeclaredValues.of(["open"]) });
     const attrs = DesignAttributeDecls.of([]).add(attr);
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
 
-    const entity = DesignEntityDecl.reconstitute({ name: DesignEntityName.reconstitute("t"), attributes: attrs });
+    const entity = DesignEntityDecl.of({ name: DesignEntityName.of("t"), attributes: attrs });
     const entities = DesignEntityDecls.of([]).add(entity);
     expect([...entities]).toEqual([entity]);
     expect(entities.toArray()).toEqual([entity]);
 
-    const ob = DesignObligationDecl.reconstitute({ id: DesignObligationId.reconstitute("DOB-1") });
+    const ob = DesignObligationDecl.of({ id: DesignObligationId.of("DOB-1") });
     const obs = DesignObligationDecls.of([]).add(ob);
     expect([...obs]).toEqual([ob]);
     expect(obs.toArray()).toEqual([ob]);
 
-    const tr = DesignTransitionDecl.reconstitute({ id: DesignTransitionId.reconstitute("TR-1") });
+    const tr = DesignTransitionDecl.of({ id: DesignTransitionId.of("TR-1") });
     const trs = DesignTransitionDecls.of([]).add(tr);
     expect([...trs]).toEqual([tr]);
     expect(trs.toArray()).toEqual([tr]);
 
-    const ig = DesignIgnoreDecl.reconstitute({ state: "open", trigger: TriggerName.reconstitute("close") });
+    const ig = DesignIgnoreDecl.of({ state: "open", trigger: TriggerName.of("close") });
     const igs = DesignIgnoreDecls.of([]).add(ig);
     expect([...igs]).toEqual([ig]);
     expect(igs.toArray()).toEqual([ig]);
 
-    const sm = DesignMachineDecl.reconstitute({ id: DesignMachineId.reconstitute("SM-1"), attrPath: "t.state", initial, transitions: trs, ignores: igs });
+    const sm = DesignMachineDecl.of({ id: DesignMachineId.of("SM-1"), attrPath: "t.state", initial, transitions: trs, ignores: igs });
     const sms = DesignMachineDecls.of([]).add(sm);
     expect([...sms]).toEqual([sm]);
     expect(sms.toArray()).toEqual([sm]);
 
-    const sc = DesignScenarioDecl.reconstitute({ id: DesignScenarioId.reconstitute("DSC-1"), bindings, hasEvent: false });
+    const sc = DesignScenarioDecl.of({ id: DesignScenarioId.of("DSC-1"), bindings, hasEvent: false });
     const scs = DesignScenarioDecls.of([]).add(sc);
     expect([...scs]).toEqual([sc]);
     expect(scs.toArray()).toEqual([sc]);
 
-    const bg = DesignBackgroundDecl.reconstitute({ id: DesignBackgroundId.reconstitute("DBG-1") });
+    const bg = DesignBackgroundDecl.of({ id: DesignBackgroundId.of("DBG-1") });
     const bgs = DesignBackgroundDecls.of([]).add(bg);
     expect([...bgs]).toEqual([bg]);
     expect(bgs.toArray()).toEqual([bg]);
 
-    const ud = DesignUnitDecl.reconstitute({
+    const ud = DesignUnitDecl.of({
       unit: DesignUnitId.of("u1"),
       entities,
       obligations: obs,
@@ -933,17 +946,17 @@ describe("contract-1 decl collections (first-class operations)", () => {
     expect(values.includes("z")).toBe(false);
     expect(values.toArray()).toEqual(["a", "b"]);
 
-    const attr = IrAttributeDecl.reconstitute({ name: IrAttributeName.reconstitute("x"), kind: "bool" });
+    const attr = IrAttributeDecl.of({ name: IrAttributeName.of("x"), kind: "bool" });
     const attrs = IrAttributeDecls.of([]).add(attr);
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
 
-    const ent = IrEntityDecl.reconstitute({ name: IrEntityName.reconstitute("t"), attributes: attrs });
+    const ent = IrEntityDecl.of({ name: IrEntityName.of("t"), attributes: attrs });
     const ents = IrEntityDecls.of([]).add(ent);
     expect([...ents]).toEqual([ent]);
     expect(ents.toArray()).toEqual([ent]);
 
-    const ob = IrObligationDecl.reconstitute({ id: ObligationId.reconstitute("OB-1") });
+    const ob = IrObligationDecl.of({ id: ObligationId.of("OB-1") });
     const obs = IrObligationDecls.of([]).add(ob);
     expect([...obs]).toEqual([ob]);
     expect(obs.toArray()).toEqual([ob]);
@@ -955,12 +968,12 @@ describe("contract-1 decl collections (first-class operations)", () => {
     ]);
     expect(pairs.toArray().length).toBe(2);
 
-    const sc = IrScenarioDecl.reconstitute({ id: ScenarioId.reconstitute("SC-1"), bindings: pairs, hasEvent: false });
+    const sc = IrScenarioDecl.of({ id: ScenarioId.of("SC-1"), bindings: pairs, hasEvent: false });
     const scs = IrScenarioDecls.of([]).add(sc);
     expect([...scs]).toEqual([sc]);
     expect(scs.toArray()).toEqual([sc]);
 
-    const bg = IrBackgroundDecl.reconstitute({ id: BackgroundAssumptionId.reconstitute("BG-1") });
+    const bg = IrBackgroundDecl.of({ id: BackgroundAssumptionId.of("BG-1") });
     const bgs = IrBackgroundDecls.of([]).add(bg);
     expect([...bgs]).toEqual([bg]);
     expect(bgs.toArray()).toEqual([bg]);
@@ -972,19 +985,19 @@ describe("decl name primitives and the shared bound (issue #46 wave 5c-2)", () =
     expect(IrEntityName.parse("").ok).toBe(false);
     const en = IrEntityName.parse("order");
     if (!en.ok) throw new Error("unreachable");
-    expect(en.value.equals(IrEntityName.reconstitute("order"))).toBe(true);
+    expect(en.value.equals(IrEntityName.of("order"))).toBe(true);
     expect(en.value.asString()).toBe("order");
 
     expect(IrAttributeName.parse("").ok).toBe(false);
     const an = IrAttributeName.parse("qty");
     if (!an.ok) throw new Error("unreachable");
-    expect(an.value.equals(IrAttributeName.reconstitute("qty"))).toBe(true);
+    expect(an.value.equals(IrAttributeName.of("qty"))).toBe(true);
     expect(an.value.asString()).toBe("qty");
   });
 
   test("AttributeBound owns the range-inversion comparison", () => {
-    expect(AttributeBound.reconstitute(9).exceeds(AttributeBound.reconstitute(1))).toBe(true);
-    expect(AttributeBound.reconstitute(1).exceeds(AttributeBound.reconstitute(1))).toBe(false);
+    expect(AttributeBound.of(9).exceeds(AttributeBound.of(1))).toBe(true);
+    expect(AttributeBound.of(1).exceeds(AttributeBound.of(1))).toBe(false);
   });
 });
 
@@ -1044,11 +1057,11 @@ describe("materials aggregates and the persistence round-trip (repository ruling
   });
 
   test("FrRefClaims first-class collection feeds the reverse index", () => {
-    const claims = FrRefClaims.of([]).add(FrRefClaim.of("OB-1", FrRefs.reconstitute(["FR-1"])));
+    const claims = FrRefClaims.of([]).add(FrRefClaim.of("OB-1", FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw)))));
     expect([...claims].length).toBe(1);
-    const owners = new Map<string, string[]>();
+    const owners = new Map<string, FrRefClaim[]>();
     claims.toArray()[0]?.claimInto(owners);
-    expect([...owners]).toEqual([["FR-1", ["OB-1"]]]);
+    expect([...owners].map(([id, list]) => [id, list.map((claim) => claim.ownerDescription())])).toEqual([["FR-1", ["OB-1"]]]);
   });
 });
 
@@ -1160,7 +1173,7 @@ describe("byte-fidelity and mutation safety of the store faces (PR#58 review)", 
     expect(found.ok).toBe(true);
     if (!found.ok) return;
     expect(found.value.id().equals(RequirementsSourceId.of(ap(record)))).toBe(true);
-    expect(found.value.digest().length).toBe(64);
+    expect(found.value.digest().asString().length).toBe(64);
     const view = found.value.sourceDocument();
     view.fill(0);
     expect(repo.store(found.value).ok).toBe(true);

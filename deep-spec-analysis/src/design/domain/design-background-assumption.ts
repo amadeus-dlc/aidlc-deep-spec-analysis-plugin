@@ -1,4 +1,6 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+
 import type { DesignBackgroundId } from "./design-background-id.ts";
 import type { LoweredId } from "./lowered-id.ts";
 import { LoweredBackground } from "./lowered-background.ts";
@@ -11,10 +13,10 @@ export class DesignBackgroundAssumption {
 
   private constructor(id: DesignBackgroundId, assert: Expression) {
     this.#id = id;
-    this.#assert = assert;
+    this.#assert = ExpressionTree.of(assert).asExpression();
   }
 
-  static reconstitute(props: { id: DesignBackgroundId; assert: Expression }): DesignBackgroundAssumption {
+  static of(props: { id: DesignBackgroundId; assert: Expression }): DesignBackgroundAssumption {
     return new DesignBackgroundAssumption(props.id, props.assert);
   }
 
@@ -32,6 +34,6 @@ export class DesignBackgroundAssumption {
 
   // 契約1 への lowering——表明を BG-n へ載せる。
   loweredAs(id: LoweredId): LoweredBackground {
-    return LoweredBackground.reconstitute({ id, assert: this.#assert });
+    return LoweredBackground.of({ id, assert: this.#assert });
   }
 }

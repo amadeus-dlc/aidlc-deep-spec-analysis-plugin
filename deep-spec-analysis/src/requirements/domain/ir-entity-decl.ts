@@ -9,12 +9,12 @@ export class IrEntityDecl {
   readonly #name: IrEntityName;
   readonly #attributes: IrAttributeDecls;
 
-  private constructor(props: { name: IrEntityName; attributes: IrAttributeDecls }) {
+  private constructor(props: Parameters<typeof IrEntityDecl.of>[0]) {
     this.#name = props.name;
     this.#attributes = props.attributes;
   }
 
-  static reconstitute(props: { name: IrEntityName; attributes: IrAttributeDecls }): IrEntityDecl {
+  static of(props: { name: IrEntityName; attributes: IrAttributeDecls }): IrEntityDecl {
     return new IrEntityDecl(props);
   }
 

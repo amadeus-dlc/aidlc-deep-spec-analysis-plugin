@@ -13,7 +13,7 @@ export class CoverageRow {
     this.#state = props.state;
   }
 
-  static reconstitute(props: { space: string; intent: string; state: CoverageState }): CoverageRow {
+  static of(props: { space: string; intent: string; state: CoverageState }): CoverageRow {
     return new CoverageRow(props);
   }
 

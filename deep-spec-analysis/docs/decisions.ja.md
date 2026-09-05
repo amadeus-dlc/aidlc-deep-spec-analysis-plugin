@@ -4,6 +4,18 @@
 
 要件定義（docs/TODO.md, 2026-08）に対する実装時の判断・スパイク結果・逸脱の記録。
 
+## 2026-09-05 — ofのpanicを入力エラーへ変換しない
+
+入力境界で `of` を呼び、その例外をまとめて `Result` へ変換する方式を撤回する。各DPの `parse` が自分のコンストラクタを呼んで契約違反を変換し、adapterはそのResultを明示的に処理する。`of` の例外は常にpanicとして伝播させる。汎用の `decodeDomainValues` を削除し、Repositoryの生成・描画をI/Oのcatchから外した。公開処理のロック解放はfinallyで保証する。コンパイラも想定したコンパイルエラーだけを処理する。
+
+生値を受け取るIDの不足を補い、RequirementId・BrRef・QueryLabel・DesignUnitIdに生成時の契約とparseを追加した。FenceCountは内部で導出する安全な非負整数を要求する。正規化名や診断対象の宣言値は、すべての入力が有効な契約であるためparseを強制しない。
+
+## 2026-09-05 — 生成・復元の契約を一本化
+
+旧来の「parseは厳格、reconstituteは不変条件を免除」という判断を撤回する。コンストラクタは具体的なTypeScriptの引数型を維持し、実行時の型検査を追加しない。値の形式・範囲・非空などの不変条件を一度だけ検査して `IllegalArgumentException` を送出する。`of` はその例外を送出し、`parse` は契約違反だけを `Result` に変換する。`PluginVersion.parse` も同じ規則に従う。
+
+復元は `of` に統一する。壊れた入力を診断するために保持する宣言値は `DeclaredBound`・`DeclaredDigest`・`DeclaredRuleId` で表し、検証済み値の不変条件を迂回しない。`ErrorMessages` の空配列は有効な「エラーなし」であり、禁止しない。文書の正準化を担う `compose` は意味のある操作として維持する。
+
 ## スパイク結果（前提A1〜A4の検証）
 
 - **A1: z3-solver（WASM）はbunで動くか → 不成立（回避策あり）**
@@ -2314,3 +2326,42 @@ exit 1 し何も公開せず、design IR を読めなくすると凍結の降格
 途中でオーナーが「`aidlc-workflows/` はこのリポジトリの開発対象ではなく、
 変更してはならない」と裁定したため、その作業はエンジンの HEAD へ戻し、
 本記録には含めない。
+
+## 境界の情報欠落と集約の不変条件 — 監査6件の修正（2026-09-05）
+
+オーナーが監査結果6件の修正を選択したことを受け、誤判定・検査記録の欠落と
+公開APIの不変条件を修正した。正常な契約1〜4とgoldenの出力形式は維持する。
+変更対象となる異常系は、以下の各項目に対応する。
+
+- 到達性は `SiblingVerdictDocument.reachabilityOf` が判断する。到達の証跡は
+  検査方法によらず有効だが、非到達を言えるのはbounded探索が中断なく完了した
+  場合だけ。timeout・compile-error・証跡不足は未検証として返す。
+- `RefinementQuintInvariants.interpret` が要件へのfindingとskipを一緒に写す。
+  usecaseがfindingだけを回収していた経路をなくし、追加要件の未検証記録を残す。
+- 検証結果文書の復号は `decodeFindingsDocument` に集約する。欠落や型不一致を
+  空配列へ補完せず、Repositoryは `corrupt` を返す。未知の語彙の逐語保持と、
+  domainが契約適合を判断する分担は維持する。
+- `Expression` は再帰的にreadonlyとする。各ドメインオブジェクトは
+  `ExpressionTree` を通じて独立した深いコピーを凍結して所有し、入力・公開面・
+  visitorからの変更でモデルの内容とハッシュが食い違わないようにする。
+  ノード参照を索引に使う走査は、一つの不変な木を共有する。
+- `RefinementMaterialsRepository` も `Result<RefinementMaterials, RepositoryError>`
+  を返す。不在だけが適用外となり、既存入力の不正・I/O失敗は明示する。
+  usecaseは既に完了した設計検査を保存してから取得失敗を返す。読み込んだ要件・
+  mapの原文を入力ハッシュにも使い、同じファイルを読み直して証跡を作らない。
+- `VerificationDirectory` と `DesignVerifyDirectory` の `finalizedWith` が候補の
+  適合とcross-check導出を一操作で完了する。個別の `conformedTo` でも候補を
+  変更したら以前のcross-checkを破棄し、Finalizerの呼び順に不変条件を依存させない。
+
+回帰検証は `tests/verification-boundaries.test.ts`。既存テストのうち入力と
+式の参照同一性を要求していたものは、値の一致と参照の分離を確認するように
+変更した。不正文書の要素を削除して成功させる旧テストも、明示した失敗を要求する。
+
+
+## 不在と到達性判定を分ける（2026-09-05）
+
+オーナーの指示により、到達性の `boolean | null` を `ReachabilityVerdict` 値オブジェクトへ置き換えた。到達・検査範囲内で非到達・未検証は別々の名前つきファクトリで生成し、`match` は三つの処理を要求する。`SiblingBackendClient.probeState` もこの値を返すため、途中のnullableな真偽値やport固有の二重表現は不要になった。旧 `ReachabilityProbe` は削除した。
+
+`SiblingVerdictDocument` は独立したnullableフィールド群をやめ、クラス内部の判別共用体で変種と材料を束ねた。decoderが読めた文書は `method` が必須なので、readable／unavailableの生成口と `match` の引数は `string` とする。remapの成功結果も `method: string` に絞り、読めなかった結果だけがmethodの不在を表せる。
+
+省略項目の `undefined`、集約の明示的な不在の `null`、成功時の `void`、失敗の `Result`、業務判定の値オブジェクトを設計規則D10に明記した。既存のJSON契約と判定内容は変えない。回帰テストでは三つの到達性がusecaseまで区別されることと、読み取り成功の型がnull／undefinedのmethodを受け付けないことを確認する。

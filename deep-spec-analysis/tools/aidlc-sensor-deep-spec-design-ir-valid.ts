@@ -190,6 +190,68 @@ function canonicalStringify(value) {
   }
   return JSON.stringify(value);
 }
+// src/kernel/infrastructure/illegal-argument-exception.ts
+class IllegalArgumentException extends Error {
+  problem;
+  constructor(problem) {
+    super(`Illegal argument: ${problem.kind}`);
+    this.name = "IllegalArgumentException";
+    this.problem = Object.freeze({ ...problem });
+  }
+}
+// src/kernel/infrastructure/parse-construction.ts
+function parseConstruction(construct) {
+  try {
+    return ok(construct());
+  } catch (error) {
+    if (error instanceof IllegalArgumentException)
+      return err(error.problem);
+    throw error;
+  }
+}
+// src/kernel/infrastructure/canonical-order.ts
+function numSegments(id) {
+  return (id.match(/[0-9]+/g) ?? []).map((s) => Number.parseInt(s, 10));
+}
+function compareCanonically(a, b) {
+  const pa = a.replace(/[0-9.]/g, "");
+  const pb = b.replace(/[0-9.]/g, "");
+  if (pa !== pb)
+    return pa < pb ? -1 : 1;
+  const na = numSegments(a);
+  const nb = numSegments(b);
+  for (let i = 0;i < Math.max(na.length, nb.length); i++) {
+    const da = na[i] ?? -1;
+    const db = nb[i] ?? -1;
+    if (da !== db)
+      return da - db;
+  }
+  return 0;
+}
+function sortedUniqueCanonically(values) {
+  return [...new Set(values)].sort(compareCanonically);
+}
+// src/kernel/infrastructure/result-composition.ts
+function combineResults(fields) {
+  const values = {};
+  for (const key in fields) {
+    const field = fields[key];
+    if (!field.ok)
+      return err(field.error);
+    values[key] = field.value;
+  }
+  return ok(values);
+}
+function traverseResult(values, parse) {
+  const parsed = [];
+  for (const value of values) {
+    const result = parse(value);
+    if (!result.ok)
+      return err(result.error);
+    parsed.push(result.value);
+  }
+  return ok(parsed);
+}
 // src/kernel/adapter/contract-schema.ts
 function readContractSchema(path) {
   try {
@@ -197,6 +259,35 @@ function readContractSchema(path) {
   } catch (e) {
     return err({ cause: e instanceof Error ? e.message : String(e) });
   }
+}
+// src/kernel/adapter/findings-document.ts
+var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
+var optionalString = (value) => value === undefined || typeof value === "string";
+function decodeFindingsDocument(raw) {
+  if (!isObject(raw))
+    return err("findings document must be an object");
+  for (const field of ["backend", "irVersion", "irHash", "method"]) {
+    if (typeof raw[field] !== "string")
+      return err(`${field} must be a string`);
+  }
+  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
+    return err("findings must be an array of complete finding records");
+  }
+  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
+    return err("skipped must be an array of complete skip records");
+  }
+  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
+    return err("unavailable must carry a reason");
+  }
+  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
+    return err("inputs must be an array of input anchors");
+  }
+  if (raw.checked !== undefined && !strings(raw.checked))
+    return err("checked must be an array of strings");
+  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
+    return err("crossChecked must be an array of backend comparisons");
+  }
+  return ok(raw);
 }
 // src/kernel/adapter/fence.ts
 function extractFences(md, lang) {
@@ -444,7 +535,20 @@ function canonicalKeyOf(value) {
 class ExpressionTree {
   #root;
   constructor(root) {
-    this.#root = root;
+    const snapshot = structuredClone(root);
+    const visited = new WeakSet;
+    const freeze = (value) => {
+      if (visited.has(value))
+        return;
+      visited.add(value);
+      for (const child of Object.values(value)) {
+        if (child !== null && typeof child === "object")
+          freeze(child);
+      }
+      Object.freeze(value);
+    };
+    freeze(snapshot);
+    this.#root = snapshot;
   }
   static of(root) {
     return new ExpressionTree(root);
@@ -490,18 +594,19 @@ class ExpressionTree {
 }
 // src/kernel/domain/content-hash.ts
 import { createHash } from "crypto";
+
 class ContentHash {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!/^[0-9a-f]{64}$/.test(raw))
+      throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ContentHash(raw);
   }
   static parse(raw) {
-    if (!/^[0-9a-f]{64}$/.test(raw))
-      return err({ kind: "not-a-sha256-hex", raw });
-    return ok(new ContentHash(raw));
-  }
-  static reconstitute(raw) {
-    return new ContentHash(raw);
+    return parseConstruction(() => new ContentHash(raw));
   }
   static ofText(text) {
     return new ContentHash(createHash("sha256").update(text, "utf-8").digest("hex"));
@@ -516,19 +621,35 @@ class ContentHash {
     return this.#value;
   }
 }
-// src/kernel/domain/ir-version.ts
-class IrVersion {
+// src/kernel/domain/declared-digest.ts
+class DeclaredDigest {
   #value;
   constructor(value) {
     this.#value = value;
   }
-  static parse(raw) {
-    if (!/^\d+\.\d+\.\d+$/.test(raw))
-      return err({ kind: "not-a-semver", raw });
-    return ok(new IrVersion(raw));
+  static of(value) {
+    return new DeclaredDigest(value);
   }
-  static reconstitute(raw) {
+  asString() {
+    return this.#value;
+  }
+  matches(actual) {
+    return this.#value === actual.asString();
+  }
+}
+// src/kernel/domain/ir-version.ts
+class IrVersion {
+  #value;
+  constructor(raw) {
+    if (!/^\d+\.\d+\.\d+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "not-a-semver", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
     return new IrVersion(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new IrVersion(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -543,29 +664,6 @@ class IrVersion {
     return this.#value;
   }
 }
-// src/kernel/domain/canonical-order.ts
-function numSegments(id) {
-  return (id.match(/[0-9]+/g) ?? []).map((s) => Number.parseInt(s, 10));
-}
-function compareCanonically(a, b) {
-  const pa = a.replace(/[0-9.]/g, "");
-  const pb = b.replace(/[0-9.]/g, "");
-  if (pa !== pb)
-    return pa < pb ? -1 : 1;
-  const na = numSegments(a);
-  const nb = numSegments(b);
-  for (let i = 0;i < Math.max(na.length, nb.length); i++) {
-    const da = na[i] ?? -1;
-    const db = nb[i] ?? -1;
-    if (da !== db)
-      return da - db;
-  }
-  return 0;
-}
-function sortedUniqueCanonically(values) {
-  return [...new Set(values)].sort(compareCanonically);
-}
-
 // src/kernel/domain/target-id.ts
 var TARGET_ID_PATTERNS = [
   /^(OB|SC)-[0-9]+$/,
@@ -576,16 +674,16 @@ var TARGET_ID_PATTERNS = [
 
 class TargetId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
+      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TargetId(raw);
   }
   static parse(raw) {
-    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
-      return err({ kind: "malformed-target-id", raw });
-    return ok(new TargetId(raw));
-  }
-  static reconstitute(raw) {
-    return new TargetId(raw);
+    return parseConstruction(() => new TargetId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -605,9 +703,6 @@ class TargetIds {
   }
   static of(values) {
     return new TargetIds([...values]);
-  }
-  static reconstitute(values) {
-    return new TargetIds(values.map((v) => TargetId.reconstitute(v)));
   }
   static safe(prefix, raw) {
     const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
@@ -632,7 +727,7 @@ class TargetIds {
     return new TargetIds([...this.#values].sort((a, b) => a.compareTo(b)));
   }
   sortedUniqueCanonically() {
-    return TargetIds.reconstitute(sortedUniqueCanonically(this.toStrings()));
+    return TargetIds.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetId.of(raw)));
   }
   joined(separator) {
     return this.toStrings().join(separator);
@@ -648,16 +743,21 @@ class TargetIds {
 class RequirementId {
   #value;
   constructor(value) {
+    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
+      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new RequirementId(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new RequirementId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -673,9 +773,6 @@ class FrRefs {
   static of(values) {
     return new FrRefs([...values]);
   }
-  static reconstitute(raws) {
-    return new FrRefs(raws.map((raw) => RequirementId.reconstitute(raw)));
-  }
   add(value) {
     return new FrRefs([...this.#values, value]);
   }
@@ -686,7 +783,7 @@ class FrRefs {
     return this.#values.length === 0;
   }
   sortedUnique() {
-    return FrRefs.reconstitute(sortedUniqueCanonically(this.toStrings()));
+    return FrRefs.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => RequirementId.of(raw)));
   }
   toArray() {
     return this.#values;
@@ -698,16 +795,16 @@ class FrRefs {
 // src/kernel/domain/backend-name.ts
 class BackendName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-backend-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new BackendName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-backend-name", raw });
-    return ok(new BackendName(raw));
-  }
-  static reconstitute(raw) {
-    return new BackendName(raw);
+    return parseConstruction(() => new BackendName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -765,15 +862,12 @@ class RequirementIds {
   static extractFrom(text) {
     const ids = [];
     for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementId.reconstitute(m[0]));
+      ids.push(RequirementId.of(m[0]));
     }
     return new RequirementIds(KeySet.of(ids));
   }
   static of(values) {
     return new RequirementIds(KeySet.of(values));
-  }
-  static reconstitute(raws) {
-    return new RequirementIds(KeySet.of(raws.map((raw) => RequirementId.reconstitute(raw))));
   }
   add(value) {
     return new RequirementIds(this.#values.with(value));
@@ -810,16 +904,16 @@ class NormalizedName {
 // src/kernel/domain/artifact-path.ts
 class ArtifactPath {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-path" });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ArtifactPath(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-path" });
-    return ok(new ArtifactPath(raw));
-  }
-  static reconstitute(raw) {
-    return new ArtifactPath(raw);
+    return parseConstruction(() => new ArtifactPath(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -831,18 +925,18 @@ class ArtifactPath {
 // src/kernel/domain/attribute-bound.ts
 class AttributeBound {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!Number.isInteger(raw))
+      throw new IllegalArgumentException({ kind: "non-integer-bound", raw });
+    if (!Number.isSafeInteger(raw))
+      throw new IllegalArgumentException({ kind: "unsafe-bound", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new AttributeBound(raw);
   }
   static parse(raw) {
-    if (!Number.isInteger(raw))
-      return err({ kind: "non-integer-bound", raw });
-    if (!Number.isSafeInteger(raw))
-      return err({ kind: "unsafe-bound", raw });
-    return ok(new AttributeBound(raw));
-  }
-  static reconstitute(raw) {
-    return new AttributeBound(raw);
+    return parseConstruction(() => new AttributeBound(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -854,14 +948,33 @@ class AttributeBound {
     return this.#value > other.#value;
   }
 }
+// src/kernel/domain/declared-bound.ts
+class DeclaredBound {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static of(value) {
+    return new DeclaredBound(value);
+  }
+  asNumber() {
+    return this.#value;
+  }
+  isSafeInteger() {
+    return AttributeBound.parse(this.#value).ok;
+  }
+  exceeds(other) {
+    return this.#value > other.#value;
+  }
+}
 // src/kernel/domain/error-messages.ts
 class ErrorMessages {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ErrorMessages([...values]);
+    return new ErrorMessages(values);
   }
   add(value) {
     return new ErrorMessages([...this.#values, value]);
@@ -908,25 +1021,22 @@ class FindingsSchema {
 // src/kernel/domain/trigger-name.ts
 class TriggerName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-trigger-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TriggerName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-trigger-name", raw });
-    return ok(new TriggerName(raw));
-  }
-  static reconstitute(raw) {
-    return new TriggerName(raw);
+    return parseConstruction(() => new TriggerName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   asString() {
     return this.#value;
-  }
-  isEmpty() {
-    return this.#value === "";
   }
 }
 // src/kernel/domain/keyed-index.ts
@@ -977,10 +1087,15 @@ class KeyedIndex {
 class QueryLabel {
   #value;
   constructor(value) {
+    if (value === "")
+      throw new IllegalArgumentException({ kind: "empty-query-label", raw: value });
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new QueryLabel(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new QueryLabel(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -995,22 +1110,22 @@ class QueryLabel {
 // src/kernel/domain/attribute-path.ts
 class AttributePath {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-attribute-path", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new AttributePath(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-attribute-path", raw });
-    return ok(new AttributePath(raw));
-  }
-  static reconstitute(raw) {
-    return new AttributePath(raw);
+    return parseConstruction(() => new AttributePath(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -1019,16 +1134,16 @@ class AttributePath {
 // src/kernel/domain/unit-name.ts
 class UnitName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-unit-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new UnitName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-unit-name", raw });
-    return ok(new UnitName(raw));
-  }
-  static reconstitute(raw) {
-    return new UnitName(raw);
+    return parseConstruction(() => new UnitName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1043,7 +1158,7 @@ class ObligationNature {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new ObligationNature(raw);
   }
   equals(other) {
@@ -1079,55 +1194,52 @@ var KIND_RANK = {
   "consistency-mismatch": 9,
   "cross-check-disagreement": 10
 };
-function rankOf(kind) {
-  return Object.hasOwn(KIND_RANK, kind) ? KIND_RANK[kind] : 99;
-}
 
 class FindingKind {
   #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static parse(raw) {
+  constructor(raw) {
     if (!Object.hasOwn(KIND_RANK, raw))
-      return err({ kind: "unknown-finding-kind", raw });
-    return ok(new FindingKind(raw));
+      throw new IllegalArgumentException({ kind: "unknown-finding-kind", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new FindingKind(raw);
   }
+  static parse(raw) {
+    return parseConstruction(() => new FindingKind(raw));
+  }
   static conflict() {
-    return new FindingKind("conflict");
+    return FindingKind.of("conflict");
   }
   static completenessGap() {
-    return new FindingKind("completeness-gap");
+    return FindingKind.of("completeness-gap");
   }
   static scenarioViolation() {
-    return new FindingKind("scenario-violation");
+    return FindingKind.of("scenario-violation");
   }
   static unreachable() {
-    return new FindingKind("unreachable");
+    return FindingKind.of("unreachable");
   }
   static redundancy() {
-    return new FindingKind("redundancy");
+    return FindingKind.of("redundancy");
   }
   static refinementViolation() {
-    return new FindingKind("refinement-violation");
+    return FindingKind.of("refinement-violation");
   }
   static mappingGap() {
-    return new FindingKind("mapping-gap");
+    return FindingKind.of("mapping-gap");
   }
   static structureInvalid() {
-    return new FindingKind("structure-invalid");
+    return FindingKind.of("structure-invalid");
   }
   static referenceBroken() {
-    return new FindingKind("reference-broken");
+    return FindingKind.of("reference-broken");
   }
   static consistencyMismatch() {
-    return new FindingKind("consistency-mismatch");
+    return FindingKind.of("consistency-mismatch");
   }
   static crossCheckDisagreement() {
-    return new FindingKind("cross-check-disagreement");
+    return FindingKind.of("cross-check-disagreement");
   }
   static canonicalOrder() {
     return Object.keys(KIND_RANK);
@@ -1136,7 +1248,7 @@ class FindingKind {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return rankOf(this.#value) - rankOf(other.#value);
+    return KIND_RANK[this.#value] - KIND_RANK[other.#value];
   }
   isConflict() {
     return this.#value === "conflict";
@@ -1150,16 +1262,16 @@ var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
 
 class VerificationMethod {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!KNOWN_METHODS.has(raw))
+      throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new VerificationMethod(raw);
   }
   static parse(raw) {
-    if (!KNOWN_METHODS.has(raw))
-      return err({ kind: "unknown-verification-method", raw });
-    return ok(new VerificationMethod(raw));
-  }
-  static reconstitute(raw) {
-    return new VerificationMethod(raw);
+    return parseConstruction(() => new VerificationMethod(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1183,43 +1295,43 @@ var KNOWN_REASONS = new Set([
 
 class SkipReason {
   #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static parse(raw) {
+  constructor(raw) {
     if (!KNOWN_REASONS.has(raw))
-      return err({ kind: "unknown-skip-reason", raw });
-    return ok(new SkipReason(raw));
+      throw new IllegalArgumentException({ kind: "unknown-skip-reason", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new SkipReason(raw);
   }
+  static parse(raw) {
+    return parseConstruction(() => new SkipReason(raw));
+  }
   static unavailable() {
-    return new SkipReason("unavailable");
+    return SkipReason.of("unavailable");
   }
   static timeout() {
-    return new SkipReason("timeout");
+    return SkipReason.of("timeout");
   }
   static capability() {
-    return new SkipReason("capability");
+    return SkipReason.of("capability");
   }
   static compileError() {
-    return new SkipReason("compile-error");
+    return SkipReason.of("compile-error");
   }
   static waived() {
-    return new SkipReason("waived");
+    return SkipReason.of("waived");
   }
   static absentInput() {
-    return new SkipReason("absent-input");
+    return SkipReason.of("absent-input");
   }
   static staleInput() {
-    return new SkipReason("stale-input");
+    return SkipReason.of("stale-input");
   }
   static irVersionMismatch() {
-    return new SkipReason("ir-version-mismatch");
+    return SkipReason.of("ir-version-mismatch");
   }
   static unrecognizedFormat() {
-    return new SkipReason("unrecognized-format");
+    return SkipReason.of("unrecognized-format");
   }
   asString() {
     return this.#value;
@@ -1234,7 +1346,7 @@ class AttributeKind {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new AttributeKind(raw);
   }
   equals(other) {
@@ -1253,11 +1365,58 @@ class AttributeKind {
     return this.#value;
   }
 }
+// src/kernel/adapter/findings-values-parser.ts
+function parseFindingsValues(raw) {
+  const decoded = decodeFindingsDocument(raw);
+  if (!decoded.ok)
+    return decoded;
+  const doc = decoded.value;
+  const parsed = combineResults({
+    backend: BackendName.parse(doc.backend),
+    irVersion: IrVersion.parse(doc.irVersion),
+    irHash: ContentHash.parse(doc.irHash),
+    method: VerificationMethod.parse(doc.method),
+    findings: traverseResult(doc.findings, (entry) => {
+      const fields = combineResults({
+        kind: FindingKind.parse(entry.kind),
+        frRefs: traverseResult(entry.frRefs, RequirementId.parse),
+        targets: traverseResult(entry.targets, TargetId.parse),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({ ...fields.value, frRefs: FrRefs.of(fields.value.frRefs), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
+    }),
+    skipped: traverseResult(doc.skipped, (entry) => {
+      const fields = combineResults({
+        target: TargetId.parse(entry.target),
+        reason: SkipReason.parse(entry.reason),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({ ...fields.value, detail: entry.detail });
+    }),
+    inputs: doc.inputs === undefined ? ok(undefined) : traverseResult(doc.inputs, (entry) => combineResults({
+      artifact: ArtifactPath.parse(entry.artifact),
+      sha256: ContentHash.parse(entry.sha256)
+    })),
+    crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
+      const fields = combineResults({ backend: BackendName.parse(entry.backend), targets: traverseResult(entry.targets, TargetId.parse) });
+      if (!fields.ok)
+        return fields;
+      return ok({ backend: fields.value.backend, targets: TargetIds.of(fields.value.targets) });
+    })
+  });
+  if (!parsed.ok)
+    return err(JSON.stringify(parsed.error));
+  return ok({ ...parsed.value, checked: doc.checked, unavailable: doc.unavailable });
+}
 // src/design/domain/design-witness.ts
 class DesignWitness {
   #document;
   constructor(document) {
-    this.#document = document;
+    this.#document = structuredClone(document);
   }
   static core(labels) {
     return new DesignWitness({ core: [...labels] });
@@ -1274,8 +1433,8 @@ class DesignWitness {
   static refs(entries) {
     return new DesignWitness({ refs: entries.map((entry) => ({ artifact: entry.artifact, element: entry.element })) });
   }
-  static fromDocument(raw) {
-    return new DesignWitness(raw ?? null);
+  static of(raw) {
+    return new DesignWitness(raw);
   }
   remapCore(rewrite) {
     const document = this.#document;
@@ -1286,8 +1445,47 @@ class DesignWitness {
     }
     return this;
   }
+  reachesState(attrPath, state) {
+    const document = this.#document;
+    if (document === null || typeof document !== "object" || !("trace" in document))
+      return false;
+    const trace = document.trace;
+    if (!Array.isArray(trace))
+      return false;
+    const last = trace[trace.length - 1];
+    return last !== null && typeof last === "object" && !Array.isArray(last) && last[attrPath] === state;
+  }
   toDocument() {
-    return this.#document;
+    return structuredClone(this.#document);
+  }
+}
+// src/design/domain/reachability-verdict.ts
+class ReachabilityVerdict {
+  #kind;
+  constructor(kind) {
+    this.#kind = kind;
+  }
+  static reached() {
+    return new ReachabilityVerdict("reached");
+  }
+  static notReachedWithinBound() {
+    return new ReachabilityVerdict("not-reached-within-bound");
+  }
+  static unverified() {
+    return new ReachabilityVerdict("unverified");
+  }
+  equals(other) {
+    return this.#kind === other.#kind;
+  }
+  match(handlers) {
+    switch (this.#kind) {
+      case "reached":
+        return handlers.reached();
+      case "not-reached-within-bound":
+        return handlers.notReachedWithinBound();
+      case "unverified":
+        return handlers.unverified();
+    }
   }
 }
 // src/design/domain/lowered-obligation.ts
@@ -1302,15 +1500,20 @@ class LoweredObligation {
   #temporal;
   constructor(props) {
     this.#id = props.id;
-    this.#nature = ObligationNature.reconstitute(props.nature);
+    this.#nature = ObligationNature.of(props.nature);
     this.#frRefs = props.frRefs;
-    this.#assert = props.assert;
-    this.#trigger = props.trigger === undefined ? undefined : TriggerName.reconstitute(props.trigger);
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#trigger = props.trigger === undefined ? undefined : TriggerName.of(props.trigger);
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
+      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
+      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
+    };
   }
-  static reconstitute(props) {
+  static of(props) {
     return new LoweredObligation(props);
   }
   id() {
@@ -1335,7 +1538,7 @@ class LoweredObligation {
     return this.#effect;
   }
   temporal() {
-    return this.#temporal;
+    return this.#temporal === undefined ? undefined : { ...this.#temporal };
   }
   isEvent() {
     return this.#trigger !== undefined;
@@ -1352,7 +1555,7 @@ class LoweredOrigin {
     this.#kind = props.kind;
     this.#pair = props.pair;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new LoweredOrigin(props);
   }
   design() {
@@ -1372,16 +1575,16 @@ class LoweredOrigin {
 // src/design/domain/lowered-origin-ref.ts
 class LoweredOriginRef {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-lowered-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new LoweredOriginRef(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-lowered-token", raw });
-    return ok(new LoweredOriginRef(raw));
-  }
-  static reconstitute(raw) {
-    return new LoweredOriginRef(raw);
+    return parseConstruction(() => new LoweredOriginRef(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1405,11 +1608,11 @@ class DesignTransition {
     this.#from = props.from;
     this.#to = props.to;
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#brRefs = props.brRefs;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignTransition(props);
   }
   id() {
@@ -1445,7 +1648,7 @@ class DesignTransition {
     return this.#effect === undefined ? base : { op: "and", args: [base, this.#effect] };
   }
   loweredAs(id, attrPath) {
-    return LoweredObligation.reconstitute({
+    return LoweredObligation.of({
       id,
       nature: "event",
       frRefs: FrRefs.of([]),
@@ -1455,7 +1658,7 @@ class DesignTransition {
     });
   }
   loweredOrigin() {
-    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "transition" });
+    return LoweredOrigin.of({ design: LoweredOriginRef.of(this.#id.asString()), kind: "transition" });
   }
   stateAssignment(attrPath) {
     return [attrPath, { op: "enum", value: this.#to }];
@@ -1464,22 +1667,22 @@ class DesignTransition {
 // src/design/domain/design-transition-id.ts
 class DesignTransitionId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-design-transition-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new DesignTransitionId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-design-transition-id", raw });
-    return ok(new DesignTransitionId(raw));
-  }
-  static reconstitute(raw) {
-    return new DesignTransitionId(raw);
+    return parseConstruction(() => new DesignTransitionId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -1528,7 +1731,7 @@ class DesignMachine {
     this.#ignores = props.ignores;
     this.#deterministic = props.deterministic;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignMachine(props);
   }
   id() {
@@ -1547,7 +1750,7 @@ class DesignMachine {
     return this.#ignores;
   }
   loweredIgnoreOrigin() {
-    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "ignore" });
+    return LoweredOrigin.of({ design: LoweredOriginRef.of(this.#id.asString()), kind: "ignore" });
   }
   nonInitialCandidates(values) {
     return values.filter((s) => !this.#initial.includes(s)).sort();
@@ -1559,16 +1762,16 @@ class DesignMachine {
 // src/design/domain/design-attribute-name.ts
 class DesignAttributeName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-machine-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new DesignAttributeName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-machine-token", raw });
-    return ok(new DesignAttributeName(raw));
-  }
-  static reconstitute(raw) {
-    return new DesignAttributeName(raw);
+    return parseConstruction(() => new DesignAttributeName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1580,16 +1783,16 @@ class DesignAttributeName {
 // src/design/domain/design-entity-name.ts
 class DesignEntityName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-machine-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new DesignEntityName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-machine-token", raw });
-    return ok(new DesignEntityName(raw));
-  }
-  static reconstitute(raw) {
-    return new DesignEntityName(raw);
+    return parseConstruction(() => new DesignEntityName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1606,7 +1809,7 @@ class DesignIgnore {
     this.#state = props.state;
     this.#trigger = props.trigger;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignIgnore(props);
   }
   state() {
@@ -1622,7 +1825,7 @@ class DesignIgnore {
     return { op: "eq", args: [{ op: "ref", path: attrPath, prime: true }, { op: "ref", path: attrPath }] };
   }
   loweredAs(id, attrPath) {
-    return LoweredObligation.reconstitute({
+    return LoweredObligation.of({
       id,
       nature: "event",
       frRefs: FrRefs.of([]),
@@ -1657,16 +1860,16 @@ class DesignIgnores {
 // src/design/domain/design-machine-id.ts
 class DesignMachineId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-machine-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new DesignMachineId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-machine-token", raw });
-    return ok(new DesignMachineId(raw));
-  }
-  static reconstitute(raw) {
-    return new DesignMachineId(raw);
+    return parseConstruction(() => new DesignMachineId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1678,7 +1881,7 @@ class DesignMachineId {
     return this.#value;
   }
   asTargetId() {
-    return TargetId.reconstitute(this.#value);
+    return TargetId.of(this.#value);
   }
 }
 // src/design/domain/design-machines.ts
@@ -1730,13 +1933,18 @@ class DesignObligation {
     this.#origin = props.origin;
     this.#brRefs = props.brRefs;
     this.#frRefs = props.frRefs;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal === undefined ? undefined : { ...props.temporal };
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
+      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
+      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
+    };
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignObligation(props);
   }
   id() {
@@ -1782,7 +1990,7 @@ class DesignObligation {
   }
   eventDefinition() {
     const behavior = this.guardedEffect();
-    if (behavior === null || this.#trigger === undefined || this.#trigger.isEmpty())
+    if (behavior === null || this.#trigger === undefined)
       return null;
     return { trigger: this.#trigger, ...behavior };
   }
@@ -1799,10 +2007,10 @@ class DesignObligation {
       lowered.effect = this.#effect;
     if (temporal !== undefined)
       lowered.temporal = temporal;
-    return LoweredObligation.reconstitute(lowered);
+    return LoweredObligation.of(lowered);
   }
   loweredOrigin() {
-    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "passthrough" });
+    return LoweredOrigin.of({ design: LoweredOriginRef.of(this.#id.asString()), kind: "passthrough" });
   }
   inspectExpressions(visitor) {
     if (this.#assert !== undefined)
@@ -1822,22 +2030,22 @@ class DesignObligation {
 // src/design/domain/design-obligation-id.ts
 class DesignObligationId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-design-obligation-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new DesignObligationId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-design-obligation-id", raw });
-    return ok(new DesignObligationId(raw));
-  }
-  static reconstitute(raw) {
-    return new DesignObligationId(raw);
+    return parseConstruction(() => new DesignObligationId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -1849,7 +2057,7 @@ class DesignObligationNature {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new DesignObligationNature(raw);
   }
   equals(other) {
@@ -1877,7 +2085,7 @@ class DesignObligationOrigin {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new DesignObligationOrigin(raw);
   }
   equals(other) {
@@ -1929,9 +2137,9 @@ class LoweredScenario {
     this.#frRefs = props.frRefs;
     this.#bindings = { ...props.bindings };
     this.#event = props.event;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new LoweredScenario(props);
   }
   id() {
@@ -1973,9 +2181,9 @@ class DesignScenario {
     this.#frRefs = props.frRefs;
     this.#bindings = { ...props.bindings };
     this.#eventTrigger = props.event?.trigger;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignScenario(props);
   }
   id() {
@@ -2015,7 +2223,7 @@ class DesignScenario {
     return { ...this.#bindings };
   }
   loweredAs(id) {
-    return LoweredScenario.reconstitute({
+    return LoweredScenario.of({
       id,
       kind: this.#kind,
       frRefs: this.#frRefs,
@@ -2028,22 +2236,22 @@ class DesignScenario {
 // src/design/domain/design-scenario-id.ts
 class DesignScenarioId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-design-scenario-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new DesignScenarioId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-design-scenario-id", raw });
-    return ok(new DesignScenarioId(raw));
-  }
-  static reconstitute(raw) {
-    return new DesignScenarioId(raw);
+    return parseConstruction(() => new DesignScenarioId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -2078,10 +2286,15 @@ class DesignScenarios {
 class DesignUnitId {
   #value;
   constructor(value) {
+    if (value === "")
+      throw new IllegalArgumentException({ kind: "empty-design-unit-id", raw: value });
     this.#value = value;
   }
   static of(value) {
     return new DesignUnitId(value);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new DesignUnitId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -2140,16 +2353,16 @@ class LoweredBackgrounds {
 // src/design/domain/lowered-id.ts
 class LoweredId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-lowered-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new LoweredId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-lowered-token", raw });
-    return ok(new LoweredId(raw));
-  }
-  static reconstitute(raw) {
-    return new LoweredId(raw);
+    return parseConstruction(() => new LoweredId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -2257,38 +2470,38 @@ class LoweringIndex {
     return new LoweringIndex(props);
   }
   originOf(loweredId) {
-    return this.#origins.get(LoweredId.reconstitute(loweredId)) ?? null;
+    return this.#origins.get(LoweredId.of(loweredId)) ?? null;
   }
   resolveDesignTarget(loweredId) {
-    const entry = this.#origins.get(LoweredId.reconstitute(loweredId)) ?? null;
+    const entry = this.#origins.get(LoweredId.of(loweredId)) ?? null;
     if (entry)
       return { design: entry.design().asString(), entry };
-    const dsc = this.#scenarioDesignIds.get(LoweredId.reconstitute(loweredId));
+    const dsc = this.#scenarioDesignIds.get(LoweredId.of(loweredId));
     if (dsc)
       return { design: dsc.asString(), entry: null };
     return { design: loweredId, entry: null };
   }
   rewriteLoweredIds(text) {
-    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(LoweredId.reconstitute(`OB-${num}`))?.design().asString() ?? m);
+    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(LoweredId.of(`OB-${num}`))?.design().asString() ?? m);
   }
   rewriteLoweredIdTokens(label) {
     return label.replace(/OB_([0-9]+)/g, (m, num) => {
-      const entry = this.#origins.get(LoweredId.reconstitute(`OB-${num}`));
+      const entry = this.#origins.get(LoweredId.of(`OB-${num}`));
       return entry ? designToken(entry.design().asString()) : m;
     });
   }
   isTransition(designId) {
-    return this.#machinesByTransition.has(DesignTransitionId.reconstitute(designId));
+    return this.#machinesByTransition.has(DesignTransitionId.of(designId));
   }
   machineOfTransition(designId) {
-    return this.#machinesByTransition.get(DesignTransitionId.reconstitute(designId)) ?? null;
+    return this.#machinesByTransition.get(DesignTransitionId.of(designId)) ?? null;
   }
   attrPathOfMachine(machineId) {
-    return this.#attrPathsByMachine.get(DesignMachineId.reconstitute(machineId))?.asString() ?? null;
+    return this.#attrPathsByMachine.get(DesignMachineId.of(machineId))?.asString() ?? null;
   }
   withPassthrough(loweredId, designId) {
     return new LoweringIndex({
-      origins: this.#origins.with(LoweredId.reconstitute(loweredId), LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(designId), kind: "passthrough" })),
+      origins: this.#origins.with(LoweredId.of(loweredId), LoweredOrigin.of({ design: LoweredOriginRef.of(designId), kind: "passthrough" })),
       scenarioDesignIds: this.#scenarioDesignIds,
       machinesByTransition: this.#machinesByTransition,
       attrPathsByMachine: this.#attrPathsByMachine
@@ -2309,7 +2522,7 @@ class DesignUnit {
   #scenarios;
   #background;
   constructor(seed) {
-    this.#unit = UnitName.reconstitute(seed.unit);
+    this.#unit = UnitName.of(seed.unit);
     this.#entities = seed.entities;
     const coordinates = new Set;
     for (const ent of seed.entities) {
@@ -2322,7 +2535,7 @@ class DesignUnit {
     this.#scenarios = seed.scenarios;
     this.#background = seed.background;
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new DesignUnit(seed);
   }
   id() {
@@ -2350,7 +2563,7 @@ class DesignUnit {
     return this.#background;
   }
   allTargets() {
-    return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()]).sortedUniqueCanonically();
+    return TargetIds.of(Array.from([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()], (raw) => TargetId.of(raw))).sortedUniqueCanonically();
   }
   lowered(opts) {
     const obligations = [];
@@ -2361,7 +2574,7 @@ class DesignUnit {
     let n = 0;
     const nextId = () => {
       n += 1;
-      return LoweredId.reconstitute(`OB-${n}`);
+      return LoweredId.of(`OB-${n}`);
     };
     for (const ob of this.#obligations.sortedCanonically()) {
       const id = nextId();
@@ -2374,7 +2587,7 @@ class DesignUnit {
     }
     for (const sm of this.#machines.sortedCanonically()) {
       const attrPath = DesignMachines.attrPathOf(sm);
-      attrPathsByMachine.push([sm.id(), AttributePath.reconstitute(attrPath)]);
+      attrPathsByMachine.push([sm.id(), AttributePath.of(attrPath)]);
       for (const tr of sm.transitions().sortedCanonically()) {
         const id = nextId();
         obligations.push(tr.loweredAs(id, attrPath));
@@ -2391,8 +2604,8 @@ class DesignUnit {
     if (opts.synthetics) {
       for (const c of candidates) {
         const id = nextId();
-        obligations.push(LoweredObligation.reconstitute({ id, nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
-        origins.push([id, LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(c.design), kind: "vac-dead" })]);
+        obligations.push(LoweredObligation.of({ id, nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
+        origins.push([id, LoweredOrigin.of({ design: LoweredOriginRef.of(c.design), kind: "vac-dead" })]);
       }
       const byTrigger = new Map;
       for (const c of candidates) {
@@ -2409,7 +2622,7 @@ class DesignUnit {
             if (!ExpressionTree.of(a.effect).isCanonicallyEqual(ExpressionTree.of(b.effect)))
               continue;
             const id = nextId();
-            obligations.push(LoweredObligation.reconstitute({
+            obligations.push(LoweredObligation.of({
               id,
               nature: "invariant",
               frRefs: FrRefs.of([]),
@@ -2418,10 +2631,10 @@ class DesignUnit {
                 args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }]
               }
             }));
-            origins.push([id, LoweredOrigin.reconstitute({
-              design: LoweredOriginRef.reconstitute(`${a.design}|${b.design}`),
+            origins.push([id, LoweredOrigin.of({
+              design: LoweredOriginRef.of(`${a.design}|${b.design}`),
               kind: "vac-shadow",
-              pair: [LoweredOriginRef.reconstitute(a.design), LoweredOriginRef.reconstitute(b.design)]
+              pair: [LoweredOriginRef.of(a.design), LoweredOriginRef.of(b.design)]
             })]);
           }
         }
@@ -2432,7 +2645,7 @@ class DesignUnit {
     let scN = 0;
     for (const sc of this.#scenarios.sortedCanonically()) {
       scN += 1;
-      const id = LoweredId.reconstitute(`SC-${scN}`);
+      const id = LoweredId.of(`SC-${scN}`);
       scenarios.push(sc.loweredAs(id));
       scenarioDesignIds.push([id, sc.id()]);
     }
@@ -2440,7 +2653,7 @@ class DesignUnit {
     let bgN = 0;
     for (const bg of this.#background.sortedCanonically()) {
       bgN += 1;
-      background.push(bg.loweredAs(LoweredId.reconstitute(`BG-${bgN}`)));
+      background.push(bg.loweredAs(LoweredId.of(`BG-${bgN}`)));
     }
     return LoweredUnit.of({
       obligations: LoweredObligations.of(obligations),
@@ -2477,9 +2690,9 @@ class LoweredBackground {
   #assert;
   constructor(props) {
     this.#id = props.id;
-    this.#assert = props.assert;
+    this.#assert = ExpressionTree.of(props.assert).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new LoweredBackground(props);
   }
   id() {
@@ -2496,9 +2709,9 @@ class DesignBackgroundAssumption {
   #assert;
   constructor(id, assert) {
     this.#id = id;
-    this.#assert = assert;
+    this.#assert = ExpressionTree.of(assert).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignBackgroundAssumption(props.id, props.assert);
   }
   id() {
@@ -2511,7 +2724,7 @@ class DesignBackgroundAssumption {
     return this.#id.compareTo(other.#id);
   }
   loweredAs(id) {
-    return LoweredBackground.reconstitute({ id, assert: this.#assert });
+    return LoweredBackground.of({ id, assert: this.#assert });
   }
 }
 // src/design/domain/design-background-assumptions.ts
@@ -2539,22 +2752,22 @@ class DesignBackgroundAssumptions {
 // src/design/domain/design-background-id.ts
 class DesignBackgroundId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-design-background-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new DesignBackgroundId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-design-background-id", raw });
-    return ok(new DesignBackgroundId(raw));
-  }
-  static reconstitute(raw) {
-    return new DesignBackgroundId(raw);
+    return parseConstruction(() => new DesignBackgroundId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -2637,14 +2850,11 @@ class DesignFinding {
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
-    this.#unit = UnitName.reconstitute(props.unit);
+    this.#unit = props.unit;
     this.#detail = props.detail;
   }
   static of(props) {
     return new DesignFinding(props);
-  }
-  static reconstitute(props) {
-    return new DesignFinding({ ...props, kind: FindingKind.reconstitute(props.kind) });
   }
   kind() {
     return this.#kind.asString();
@@ -2679,7 +2889,7 @@ class DesignFinding {
       targets: TargetIds.of(reqHits),
       witness: this.#witness,
       unit,
-      detail: `The design machine of unit ${unit} reaches a state that violates requirements obligation ${reqHits.map((t) => t.asString()).join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`
+      detail: `The design machine of unit ${unit.asString()} reaches a state that violates requirements obligation ${reqHits.map((t) => t.asString()).join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`
     });
   }
   compareKindTo(other) {
@@ -2691,7 +2901,7 @@ class DesignFinding {
       frRefs: this.#frRefs,
       targets: this.#targets,
       witness: this.#witness,
-      unit: this.#unit.asString(),
+      unit: this.#unit,
       detail
     });
   }
@@ -2748,14 +2958,11 @@ class DesignSkipped {
   constructor(props) {
     this.#target = props.target;
     this.#reason = props.reason;
-    this.#unit = UnitName.reconstitute(props.unit);
+    this.#unit = props.unit;
     this.#detail = props.detail;
   }
   static of(props) {
     return new DesignSkipped(props);
-  }
-  static reconstitute(props) {
-    return new DesignSkipped({ ...props, reason: SkipReason.reconstitute(props.reason) });
   }
   target() {
     return this.#target;
@@ -2815,42 +3022,51 @@ class DesignSkips {
 }
 // src/design/domain/sibling-verdict-document.ts
 class SiblingVerdictDocument {
-  #kind;
-  #reason;
-  #method;
-  #findings;
-  #skipped;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#reason = props.reason;
-    this.#method = props.method === null ? null : VerificationMethod.reconstitute(props.method);
-    this.#findings = props.findings;
-    this.#skipped = props.skipped;
+  #state;
+  constructor(state) {
+    this.#state = state;
   }
-  static unreadable() {
-    return new SiblingVerdictDocument({ kind: "unreadable", reason: null, method: null, findings: null, skipped: null });
+  static unreadable(reason = "sibling backend produced no findings document") {
+    return new SiblingVerdictDocument({ kind: "unreadable", reason });
   }
   static unavailable(reason, method) {
-    return new SiblingVerdictDocument({ kind: "unavailable", reason, method, findings: null, skipped: null });
+    return new SiblingVerdictDocument({ kind: "unavailable", reason, method });
   }
   static readable(method, findings, skipped) {
-    return new SiblingVerdictDocument({ kind: "readable", reason: null, method, findings, skipped });
+    return new SiblingVerdictDocument({ kind: "readable", method, findings, skipped });
   }
   unavailableReason() {
-    return this.#kind === "unavailable" ? this.#reason : null;
+    return this.#state.kind === "unavailable" ? this.#state.reason : null;
+  }
+  reachabilityOf(attrPath, state) {
+    return this.match({
+      unreadable: () => ReachabilityVerdict.unverified(),
+      unavailable: () => ReachabilityVerdict.unverified(),
+      readable: (method, findings, skipped) => {
+        for (const finding of findings) {
+          if (finding.provesReachabilityOf(attrPath, state))
+            return ReachabilityVerdict.reached();
+        }
+        if (method !== "bounded" || !skipped.isEmpty() || !findings.isEmpty())
+          return ReachabilityVerdict.unverified();
+        return ReachabilityVerdict.notReachedWithinBound();
+      }
+    });
   }
   match(handlers) {
-    if (this.#kind === "unreadable")
-      return handlers.unreadable();
-    if (this.#kind === "unavailable")
-      return handlers.unavailable(this.#reason ?? "", this.#method?.asString() ?? null);
-    if (this.#findings === null || this.#skipped === null)
-      throw new Error("defect: a readable sibling document carries no verdicts");
-    return handlers.readable(this.#method?.asString() ?? null, this.#findings, this.#skipped);
+    const state = this.#state;
+    switch (state.kind) {
+      case "unreadable":
+        return handlers.unreadable(state.reason);
+      case "unavailable":
+        return handlers.unavailable(state.reason, state.method.asString());
+      case "readable":
+        return handlers.readable(state.method.asString(), state.findings, state.skipped);
+    }
   }
   remapVerdicts(unit, index) {
     return this.match({
-      unreadable: () => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: "sibling backend produced no findings document", method: null }),
+      unreadable: (reason) => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: reason, method: null }),
       unavailable: (reason, method) => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: reason, method }),
       readable: (method, findings, skipped) => this.#remapReadable(unit, index, method, findings, skipped)
     });
@@ -2877,9 +3093,9 @@ class SiblingVerdictDocument {
         findings.push(DesignFinding.of({
           kind: FindingKind.unreachable(),
           frRefs,
-          targets: TargetIds.reconstitute([design]),
+          targets: TargetIds.of(Array.from([design], (raw) => TargetId.of(raw))),
           witness,
-          unit: u.name(),
+          unit: UnitName.of(u.name()),
           detail: `The guard of ${design} can never hold under the entity constraints and invariants (witness core attached): the ${isTransition ? "transition" : "rule"} is dead.`
         }));
         continue;
@@ -2891,9 +3107,9 @@ class SiblingVerdictDocument {
           finding: DesignFinding.of({
             kind: FindingKind.redundancy(),
             frRefs,
-            targets: TargetIds.reconstitute([pair[0], pair[1]]).sortedUniqueCanonically(),
+            targets: TargetIds.of(Array.from([pair[0], pair[1]], (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
             witness,
-            unit: u.name(),
+            unit: UnitName.of(u.name()),
             detail: `${pair[1]} is subsumed by ${pair[0]}: same trigger, a provably narrower guard, and an identical effect \u2014 it can never apply where ${pair[0]} does not.`
           }),
           subsumer: pair[0],
@@ -2903,7 +3119,7 @@ class SiblingVerdictDocument {
       }
       if (synth)
         continue;
-      const targets = TargetIds.reconstitute(mapped.map((m) => m.design)).sortedUniqueCanonically().toStrings();
+      const targets = TargetIds.of(Array.from(mapped.map((m) => m.design), (raw) => TargetId.of(raw))).sortedUniqueCanonically().toStrings();
       if (f.isKind("conflict") && targets.length > 0) {
         const machines = targets.map((t) => index.machineOfTransition(t));
         const first = machines[0];
@@ -2912,9 +3128,9 @@ class SiblingVerdictDocument {
             if (!waived.has(t)) {
               waived.add(t);
               skipped.push(DesignSkipped.of({
-                target: TargetId.reconstitute(t),
+                target: TargetId.of(t),
                 reason: SkipReason.waived(),
-                unit: u.name(),
+                unit: UnitName.of(u.name()),
                 detail: `machine ${first.id().asString()} declares deterministic: false \u2014 the same-(state,trigger) overlap check is waived by the model`
               }));
             }
@@ -2922,7 +3138,7 @@ class SiblingVerdictDocument {
           continue;
         }
       }
-      findings.push(DesignFinding.reconstitute({ kind: f.kind(), frRefs, targets: TargetIds.reconstitute(targets), witness, unit: u.name(), detail }));
+      findings.push(DesignFinding.of({ kind: FindingKind.of(f.kind()), frRefs, targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))), witness, unit: UnitName.of(u.name()), detail }));
     }
     const liveShadows = shadowFindings.filter((s) => !deadDesignIds.has(s.subsumed) && !deadDesignIds.has(s.subsumer));
     const byPair = new Map;
@@ -2955,10 +3171,10 @@ class SiblingVerdictDocument {
       if (seenSkip.has(key))
         continue;
       seenSkip.add(key);
-      skipped.push(DesignSkipped.reconstitute({
-        target: TargetId.reconstitute(design),
-        reason: s.reason(),
-        unit: u.name(),
+      skipped.push(DesignSkipped.of({
+        target: TargetId.of(design),
+        reason: SkipReason.of(s.reason()),
+        unit: UnitName.of(u.name()),
         ...detail !== undefined ? { detail: remapDetail(detail) } : {}
       }));
     }
@@ -2973,13 +3189,13 @@ class SiblingVerdictFinding {
   #witness;
   #detail;
   constructor(props) {
-    this.#kind = FindingKind.reconstitute(props.kind);
+    this.#kind = props.kind;
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#detail = props.detail;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new SiblingVerdictFinding(props);
   }
   kind() {
@@ -2997,6 +3213,9 @@ class SiblingVerdictFinding {
   }
   detail() {
     return this.#detail;
+  }
+  provesReachabilityOf(attrPath, state) {
+    return this.isKind("conflict") && this.#witness.reachesState(attrPath, state);
   }
   witnessRemappedBy(rewrite) {
     return this.#witness.remapCore(rewrite);
@@ -3017,6 +3236,9 @@ class SiblingVerdictFindings {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
   toArray() {
     return this.#values;
   }
@@ -3031,14 +3253,14 @@ class SiblingVerdictSkip {
     this.#reason = props.reason;
     this.#detail = props.detail;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new SiblingVerdictSkip(props);
   }
   target() {
     return this.#target;
   }
   reason() {
-    return this.#reason;
+    return this.#reason.asString();
   }
   detail() {
     return this.#detail;
@@ -3059,6 +3281,9 @@ class SiblingVerdictSkips {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
   toArray() {
     return this.#values;
   }
@@ -3072,7 +3297,7 @@ class DesignReportId {
     this.#backend = backend;
   }
   static of(directory, backend) {
-    return new DesignReportId(directory, BackendName.reconstitute(backend));
+    return new DesignReportId(directory, BackendName.of(backend));
   }
   equals(other) {
     return this.#directory.equals(other.#directory) && this.#backend.equals(other.#backend);
@@ -3105,7 +3330,7 @@ class DesignReport {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#irHash = seed.irHash;
-    this.#method = VerificationMethod.reconstitute(seed.method);
+    this.#method = seed.method;
     this.#findings = seed.findings;
     this.#skipped = seed.skipped;
     this.#inputs = seed.inputs;
@@ -3116,7 +3341,7 @@ class DesignReport {
   static irUnreadable(id, method, cause) {
     return DesignReport.compose({
       id,
-      irVersion: IrVersion.reconstitute("0.0.0"),
+      irVersion: IrVersion.of("0.0.0"),
       irHash: ContentHash.ofText(""),
       method,
       findings: DesignFindings.of([]),
@@ -3134,7 +3359,7 @@ class DesignReport {
       skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.of({
         target: t,
         reason: SkipReason.irVersionMismatch(),
-        unit: u.name(),
+        unit: UnitName.of(u.name()),
         detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`
       }))))
     });
@@ -3146,16 +3371,16 @@ class DesignReport {
       irHash,
       method,
       findings: DesignFindings.of([]),
-      skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: skipDetail })))),
+      skipped: DesignSkips.of(model.units().toArray().flatMap((u) => [...u.allTargets()].map((t) => DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: skipDetail })))),
       unavailableReason: reason
     });
   }
   static compose(input) {
-    return new DesignReport({
+    return DesignReport.of({
       id: input.id,
       irVersion: input.irVersion,
       irHash: input.irHash,
-      method: input.method,
+      method: VerificationMethod.of(input.method),
       findings: input.findings.sortedCanonically(),
       skipped: input.skipped.sortedCanonically(),
       inputs: input.inputs === undefined ? null : input.inputs.sortedByArtifact(),
@@ -3164,7 +3389,7 @@ class DesignReport {
       unavailableReason: input.unavailableReason ?? null
     });
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new DesignReport(seed);
   }
   degraded(reason) {
@@ -3172,7 +3397,7 @@ class DesignReport {
       id: this.#id,
       irVersion: this.#irVersion,
       irHash: this.#irHash,
-      method: this.#method.asString(),
+      method: this.#method,
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of([]),
       inputs: null,
@@ -3277,9 +3502,6 @@ class CheckedUnits {
   static of(values) {
     return new CheckedUnits([...values]);
   }
-  static reconstitute(raws) {
-    return new CheckedUnits(raws.map((raw) => UnitName.reconstitute(raw)));
-  }
   add(value) {
     return new CheckedUnits([...this.#values, value]);
   }
@@ -3287,7 +3509,7 @@ class CheckedUnits {
     yield* this.#values;
   }
   sortedUniqueCanonically() {
-    return CheckedUnits.reconstitute(TargetIds.reconstitute(this.toStrings()).sortedUniqueCanonically().toStrings());
+    return CheckedUnits.of(Array.from(TargetIds.of(Array.from(this.toStrings(), (raw) => TargetId.of(raw))).sortedUniqueCanonically().toStrings(), (raw) => UnitName.of(raw)));
   }
   toArray() {
     return this.#values;
@@ -3323,7 +3545,7 @@ class DesignCrossCheckedEntry {
     this.#backend = props.backend;
     this.#targets = props.targets;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignCrossCheckedEntry(props);
   }
   backend() {
@@ -3343,10 +3565,10 @@ class DesignInputAnchor {
   #artifact;
   #sha256;
   constructor(props) {
-    this.#artifact = ArtifactPath.reconstitute(props.artifact);
+    this.#artifact = ArtifactPath.of(props.artifact);
     this.#sha256 = props.sha256;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignInputAnchor(props);
   }
   artifact() {
@@ -3420,7 +3642,7 @@ class DesignReports {
             const key = `${u.name()}|${sc.id().asString()}`;
             if (a.skipped.has(key) || b.skipped.has(key))
               continue;
-            const verdictOf = (d) => d.findings.some((f) => f.kind() === "scenario-violation" && f.unit() === u.name() && f.targets().includes(TargetId.reconstitute(sc.id().asString())));
+            const verdictOf = (d) => d.findings.some((f) => f.kind() === "scenario-violation" && f.unit() === u.name() && f.targets().includes(TargetId.of(sc.id().asString())));
             const va = verdictOf(a);
             const vb = verdictOf(b);
             (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set).get(a.backend))?.add(sc.id().asString());
@@ -3432,9 +3654,9 @@ class DesignReports {
               findings.push(DesignFinding.of({
                 kind: FindingKind.crossCheckDisagreement(),
                 frRefs: FrRefs.of([...sc.frRefs()]).sortedUnique(),
-                targets: TargetIds.reconstitute([sc.id().asString()]),
+                targets: TargetIds.of(Array.from([sc.id().asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.verdicts(verdicts),
-                unit: u.name(),
+                unit: UnitName.of(u.name()),
                 detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()} of unit ${u.name()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`
               }));
             }
@@ -3442,7 +3664,7 @@ class DesignReports {
         }
       }
     }
-    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => DesignCrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets]).sortedCanonically() })).sort((x, y) => x.compareByBackend(y));
+    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => DesignCrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIds.of(Array.from([...targets], (raw) => TargetId.of(raw))).sortedCanonically() })).sort((x, y) => x.compareByBackend(y));
     return DesignReport.compose({
       id,
       irVersion: model.irVersion(),
@@ -3492,6 +3714,13 @@ class DesignVerifyDirectory {
     }
     return new DesignVerifyDirectory(this.#directory, DesignReports.of(merged), candidate, null);
   }
+  finalizedWith(candidate, model, schema) {
+    const staged = this.finalizing(candidate.conformedTo(schema));
+    if (model === null)
+      return staged;
+    const derived = staged.#reports.crossChecked(DesignReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
+    return new DesignVerifyDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
+  }
   crossChecked(model, irHash) {
     const derived = this.#reports.crossChecked(DesignReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
     return new DesignVerifyDirectory(this.#directory, this.#reports, this.#candidate, derived);
@@ -3503,7 +3732,7 @@ class DesignVerifyDirectory {
     const candidate = this.#candidate;
     const crossCheck = this.#crossCheck;
     const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
-    const conformedCrossCheck = crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck === null ? null : crossCheck.conformedTo(schema);
     const reports = conformedCandidate === null ? this.#reports : DesignReports.of(this.#reports.toArray().map((r) => r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
     return new DesignVerifyDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
   }
@@ -3543,10 +3772,15 @@ class BindingPairs {
 class BrRef {
   #value;
   constructor(value) {
+    if (!/^BR[0-9]+\.[0-9]+$/.test(value))
+      throw new IllegalArgumentException({ kind: "malformed-business-rule-reference", raw: value });
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new BrRef(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new BrRef(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -3566,9 +3800,6 @@ class BrRefs {
   }
   static of(values) {
     return new BrRefs([...values]);
-  }
-  static reconstitute(raws) {
-    return new BrRefs(raws.map((raw) => BrRef.reconstitute(raw)));
   }
   add(value) {
     return new BrRefs([...this.#values, value]);
@@ -3615,13 +3846,13 @@ class DesignAttributeDecl {
   #max;
   constructor(props) {
     this.#name = props.name;
-    this.#kind = AttributeKind.reconstitute(props.kind);
+    this.#kind = AttributeKind.of(props.kind);
     this.#description = props.description;
     this.#values = props.values;
     this.#min = props.min;
     this.#max = props.max;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignAttributeDecl(props);
   }
   name() {
@@ -3634,7 +3865,7 @@ class DesignAttributeDecl {
     return this.#kind.isInt() && this.#min !== undefined && this.#max !== undefined && this.#min.exceeds(this.#max);
   }
   boundsOutsideSafeRange() {
-    return this.#min !== undefined && !Number.isSafeInteger(this.#min.asNumber()) || this.#max !== undefined && !Number.isSafeInteger(this.#max.asNumber());
+    return this.#min !== undefined && !this.#min.isSafeInteger() || this.#max !== undefined && !this.#max.isSafeInteger();
   }
   isEnum() {
     return this.#kind.isEnum();
@@ -3686,9 +3917,9 @@ class DesignBackgroundDecl {
   #assert;
   constructor(props) {
     this.#id = props.id;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignBackgroundDecl(props);
   }
   id() {
@@ -3731,7 +3962,7 @@ class DesignEntityDecl {
     this.#description = props.description;
     this.#attributes = props.attributes;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignEntityDecl(props);
   }
   name() {
@@ -3779,7 +4010,7 @@ class DesignIgnoreDecl {
     this.#state = props.state;
     this.#trigger = props.trigger;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignIgnoreDecl(props);
   }
   state() {
@@ -3828,7 +4059,7 @@ class DesignMachineDecl {
     this.#transitions = props.transitions;
     this.#ignores = props.ignores;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignMachineDecl(props);
   }
   id() {
@@ -3882,12 +4113,17 @@ class DesignObligationDecl {
     this.#id = props.id;
     this.#origin = props.origin;
     this.#brRefs = props.brRefs;
-    this.#assert = props.assert;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal === undefined ? undefined : { ...props.temporal };
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
+      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
+      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
+    };
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignObligationDecl(props);
   }
   id() {
@@ -3944,10 +4180,10 @@ class DesignScenarioDecl {
     this.#id = props.id;
     this.#bindings = props.bindings;
     this.#hasEvent = props.hasEvent;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
     this.#brRefs = props.brRefs;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignScenarioDecl(props);
   }
   id() {
@@ -3998,10 +4234,10 @@ class DesignTransitionDecl {
     this.#to = props.to;
     this.#trigger = props.trigger;
     this.#brRefs = props.brRefs;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignTransitionDecl(props);
   }
   id() {
@@ -4069,7 +4305,7 @@ class BrReferenceIndex {
   static fromRules(rulesMarkdown) {
     const ids = [];
     for (const m of rulesMarkdown.matchAll(/\bBR[0-9]+\.[0-9]+\b/g))
-      ids.push(BrRef.reconstitute(m[0]));
+      ids.push(BrRef.of(m[0]));
     return new BrReferenceIndex(KeySet.of(ids));
   }
   has(br) {
@@ -4102,7 +4338,7 @@ class DesignUnitDecl {
     this.#directoryExists = props.directoryExists;
     this.#rulesMarkdown = props.rulesMarkdown;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DesignUnitDecl(props);
   }
   unit() {
@@ -4165,7 +4401,8 @@ class DesignUnitDecl {
     }
     const checkExpr = (e, ctx, primesAllowed) => {
       const boundEnum = new Map;
-      ExpressionTree.of(e).walk((node) => {
+      const tree = ExpressionTree.of(e);
+      tree.walk((node) => {
         const args = node.args ?? [];
         if (args.length === 2) {
           const ref = args.find((a) => a.op === "ref" && typeof a.path === "string");
@@ -4174,7 +4411,7 @@ class DesignUnitDecl {
             boundEnum.set(en, ref.path);
         }
       });
-      ExpressionTree.of(e).walk((node) => {
+      tree.walk((node) => {
         if (node.op === "ref" && typeof node.path === "string") {
           if (!attrTypes.has(node.path))
             errors.push(where(`${ctx}: unresolvable reference "${node.path}"`));
@@ -4297,12 +4534,12 @@ class DesignUnitDecl {
     } else {
       const known = BrReferenceIndex.fromRules(rulesMd);
       for (const br of [...brRefsUsed].sort()) {
-        if (!known.has(BrRef.reconstitute(br)))
+        if (!known.has(BrRef.of(br)))
           errors.push(where(`brRef "${br}" does not exist in rules.md`));
       }
       const unformalizedTargets = this.#unformalizedTargets;
       for (const br of known.sortedIds()) {
-        if (!brRefsUsed.has(br) && !unformalizedTargets.covers(TargetId.reconstitute(br))) {
+        if (!brRefsUsed.has(br) && !unformalizedTargets.covers(TargetId.of(br))) {
           errors.push(where(`BR coverage: rule ${br} in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] \u2014 silence is a contract violation`));
         }
       }
@@ -4372,9 +4609,6 @@ class UnformalizedTargets {
   static of(values) {
     return new UnformalizedTargets(KeySet.of(values));
   }
-  static reconstitute(raws) {
-    return new UnformalizedTargets(KeySet.of(raws.map((raw) => TargetId.reconstitute(raw))));
-  }
   add(value) {
     return new UnformalizedTargets(this.#values.with(value));
   }
@@ -4437,7 +4671,7 @@ class DesignIrValidationMaterials {
     this.#units = seed.units;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new DesignIrValidationMaterials(seed);
   }
   id() {
@@ -4486,7 +4720,7 @@ class RefinementRequirements {
     this.#obligations = seed.obligations;
     this.#scenarios = seed.scenarios;
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new RefinementRequirements(seed);
   }
   id() {
@@ -4527,7 +4761,7 @@ class RefinementAttribute {
     this.#kind = props.kind;
     this.#values = props.values;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new RefinementAttribute(props);
   }
   path() {
@@ -4594,12 +4828,12 @@ class RefinementObligation {
     this.#id = props.id;
     this.#nature = props.nature;
     this.#frRefs = props.frRefs;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new RefinementObligation(props);
   }
   id() {
@@ -4633,7 +4867,7 @@ class RefinementObligation {
     return this.#nature.isStateTemporal();
   }
   eventDefinition() {
-    if (!this.#nature.isEvent() || this.#trigger === undefined || this.#trigger.isEmpty() || this.#guard === undefined || this.#effect === undefined)
+    if (!this.#nature.isEvent() || this.#trigger === undefined || this.#guard === undefined || this.#effect === undefined)
       return null;
     return { trigger: this.#trigger, guard: this.#guard, effect: this.#effect };
   }
@@ -4682,7 +4916,7 @@ class RefinementScenario {
     this.#bindings = { ...props.bindings };
     this.#eventTrigger = props.event?.trigger;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new RefinementScenario(props);
   }
   id() {
@@ -4759,7 +4993,7 @@ class ReqAttributeValues {
     return this.#values.includes(value);
   }
   sortedUniqueCanonically() {
-    return new ReqAttributeValues([...new Set(this.#values)].sort((a, b) => TargetId.reconstitute(a).compareTo(TargetId.reconstitute(b))));
+    return new ReqAttributeValues([...new Set(this.#values)].sort(compareCanonically));
   }
   toArray() {
     return this.#values;
@@ -4779,7 +5013,7 @@ class RefinementMap {
     this.#units = seed.units;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new RefinementMap(seed);
   }
   id() {
@@ -4815,7 +5049,7 @@ class AttributeDeclaration {
     this.#max = props.max;
     this.#values = props.values;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new AttributeDeclaration(props);
   }
   path() {
@@ -4921,13 +5155,18 @@ class Obligation {
     this.#nature = props.nature;
     this.#frRefs = props.frRefs;
     this.#ears = props.ears;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal === undefined ? undefined : { ...props.temporal };
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
+      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
+      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
+    };
   }
-  static reconstitute(props) {
+  static of(props) {
     return new Obligation(props);
   }
   id() {
@@ -4967,7 +5206,7 @@ class Obligation {
     return this.#nature.isStateTemporal();
   }
   eventDefinition() {
-    if (!this.isEvent() || this.#trigger === undefined || this.#trigger.isEmpty() || this.#guard === undefined || this.#effect === undefined)
+    if (!this.isEvent() || this.#trigger === undefined || this.#guard === undefined || this.#effect === undefined)
       return null;
     return { trigger: this.#trigger, guard: this.#guard, effect: this.#effect };
   }
@@ -4992,16 +5231,16 @@ class Obligation {
 // src/requirements/domain/obligation-id.ts
 class ObligationId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-obligation-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ObligationId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-obligation-id", raw });
-    return ok(new ObligationId(raw));
-  }
-  static reconstitute(raw) {
-    return new ObligationId(raw);
+    return parseConstruction(() => new ObligationId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -5013,7 +5252,7 @@ class ObligationId {
     return this.#value;
   }
   asTargetId() {
-    return TargetId.reconstitute(this.#value);
+    return TargetId.of(this.#value);
   }
 }
 // src/requirements/domain/obligation-ids.ts
@@ -5080,9 +5319,9 @@ class Scenario {
     this.#frRefs = props.frRefs;
     this.#bindings = { ...props.bindings };
     this.#eventTrigger = props.event?.trigger;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new Scenario(props);
   }
   id() {
@@ -5122,16 +5361,16 @@ class Scenario {
 // src/requirements/domain/scenario-id.ts
 class ScenarioId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-scenario-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ScenarioId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-scenario-id", raw });
-    return ok(new ScenarioId(raw));
-  }
-  static reconstitute(raw) {
-    return new ScenarioId(raw);
+    return parseConstruction(() => new ScenarioId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -5140,7 +5379,7 @@ class ScenarioId {
     return this.#value;
   }
   asTargetId() {
-    return TargetId.reconstitute(this.#value);
+    return TargetId.of(this.#value);
   }
 }
 // src/requirements/domain/scenarios.ts
@@ -5188,7 +5427,7 @@ class RequirementsModel {
     this.#scenarios = seed.scenarios;
     this.#background = seed.background;
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new RequirementsModel(seed);
   }
   id() {
@@ -5213,7 +5452,7 @@ class RequirementsModel {
     return this.#attributes;
   }
   attributeAt(path) {
-    return this.#attributes.byPath(AttributePath.reconstitute(path));
+    return this.#attributes.byPath(AttributePath.of(path));
   }
   obligations() {
     return this.#obligations;
@@ -5225,7 +5464,7 @@ class RequirementsModel {
     return this.#background;
   }
   allTargets() {
-    return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#scenarios.ids()]).sortedCanonically();
+    return TargetIds.of(Array.from([...this.#obligations.ids(), ...this.#scenarios.ids()], (raw) => TargetId.of(raw))).sortedCanonically();
   }
   frRefsOf(targets) {
     const refs = [];
@@ -5243,16 +5482,16 @@ class RequirementsModel {
 // src/requirements/domain/background-assumption-id.ts
 class BackgroundAssumptionId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-background-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new BackgroundAssumptionId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-background-id", raw });
-    return ok(new BackgroundAssumptionId(raw));
-  }
-  static reconstitute(raw) {
-    return new BackgroundAssumptionId(raw);
+    return parseConstruction(() => new BackgroundAssumptionId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -5267,9 +5506,9 @@ class BackgroundAssumption {
   #assert;
   constructor(id, assert) {
     this.#id = id;
-    this.#assert = assert;
+    this.#assert = ExpressionTree.of(assert).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new BackgroundAssumption(props.id, props.assert);
   }
   id() {
@@ -5314,9 +5553,6 @@ class VerificationFinding {
   }
   static of(props) {
     return new VerificationFinding(props);
-  }
-  static reconstitute(props) {
-    return new VerificationFinding({ ...props, kind: FindingKind.reconstitute(props.kind) });
   }
   kind() {
     return this.#kind.asString();
@@ -5393,14 +5629,14 @@ class VerificationSkipped {
     this.#reason = props.reason;
     this.#detail = props.detail;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new VerificationSkipped(props);
   }
   target() {
     return this.#target;
   }
   reason() {
-    return this.#reason;
+    return this.#reason.asString();
   }
   detail() {
     return this.#detail;
@@ -5412,7 +5648,7 @@ class VerificationSkipped {
     const c = this.#target.compareTo(other.#target);
     if (c !== 0)
       return c;
-    return this.#reason < other.#reason ? -1 : this.#reason > other.#reason ? 1 : 0;
+    return this.#reason.compareTo(other.#reason);
   }
 }
 // src/requirements/domain/verification-skips.ts
@@ -5450,26 +5686,26 @@ class VerificationSkips {
 // src/requirements/domain/verification-witness.ts
 class VerificationWitness {
   #document;
-  constructor(document) {
-    this.#document = document;
+  constructor(raw) {
+    this.#document = structuredClone(raw);
   }
   static core(labels) {
-    return new VerificationWitness({ core: [...labels] });
+    return VerificationWitness.of({ core: [...labels] });
   }
   static model(values) {
-    return new VerificationWitness({ model: values });
+    return VerificationWitness.of({ model: values });
   }
   static verdicts(byBackend) {
-    return new VerificationWitness({ verdicts: byBackend });
+    return VerificationWitness.of({ verdicts: byBackend });
   }
   static trace(states) {
-    return new VerificationWitness({ trace: states.map((state) => state.toDocument()) });
+    return VerificationWitness.of({ trace: states.map((state) => state.toDocument()) });
   }
-  static fromDocument(raw) {
-    return new VerificationWitness(raw ?? { core: [] });
+  static of(document) {
+    return new VerificationWitness(document);
   }
   toDocument() {
-    return this.#document;
+    return structuredClone(this.#document);
   }
 }
 // src/requirements/domain/verification-report-id.ts
@@ -5481,7 +5717,7 @@ class VerificationReportId {
     this.#backend = backend;
   }
   static of(directory, backend) {
-    return new VerificationReportId(directory, BackendName.reconstitute(backend));
+    return new VerificationReportId(directory, BackendName.of(backend));
   }
   equals(other) {
     return this.#directory.equals(other.#directory) && this.#backend.equals(other.#backend);
@@ -5512,7 +5748,7 @@ class VerificationReport {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#irHash = seed.irHash;
-    this.#method = VerificationMethod.reconstitute(seed.method);
+    this.#method = seed.method;
     this.#findings = seed.findings;
     this.#skipped = seed.skipped;
     this.#crossChecked = seed.crossChecked;
@@ -5521,7 +5757,7 @@ class VerificationReport {
   static irUnreadable(id, method, cause) {
     return VerificationReport.compose({
       id,
-      irVersion: IrVersion.reconstitute("0.0.0"),
+      irVersion: IrVersion.of("0.0.0"),
       irHash: ContentHash.ofText(""),
       method,
       findings: VerificationFindings.of([]),
@@ -5536,9 +5772,9 @@ class VerificationReport {
       irHash,
       method,
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.reconstitute({
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({
         target: t,
-        reason: "ir-version-mismatch",
+        reason: SkipReason.of("ir-version-mismatch"),
         detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`
       })))
     });
@@ -5552,7 +5788,7 @@ class VerificationReport {
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
         ...planSkipped.toArray(),
-        ...[...model.allTargets()].filter((t) => !planSkipped.toArray().some((s) => s.isFor(t))).map((t) => VerificationSkipped.reconstitute({ target: t, reason: "unavailable", detail: "z3 could not be executed" }))
+        ...[...model.allTargets()].filter((t) => !planSkipped.toArray().some((s) => s.isFor(t))).map((t) => VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "z3 could not be executed" }))
       ]),
       unavailableReason: reason
     });
@@ -5564,7 +5800,7 @@ class VerificationReport {
       irHash,
       method: "simulation",
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.reconstitute({ target: t, reason: "unavailable", detail: "quint CLI missing" }))),
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "quint CLI missing" }))),
       unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)"
     });
   }
@@ -5576,24 +5812,24 @@ class VerificationReport {
       method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
-        ...model.obligations().toArray().map((ob) => VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: machineError })),
-        ...model.scenarios().toArray().map((sc) => VerificationSkipped.reconstitute({ target: sc.id().asTargetId(), reason: "compile-error", detail: machineError }))
+        ...model.obligations().toArray().map((ob) => VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: machineError })),
+        ...model.scenarios().toArray().map((sc) => VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: machineError }))
       ])
     });
   }
   static compose(input) {
-    return new VerificationReport({
+    return VerificationReport.of({
       id: input.id,
       irVersion: input.irVersion,
       irHash: input.irHash,
-      method: input.method,
+      method: VerificationMethod.of(input.method),
       findings: input.findings.sortedCanonically(),
       skipped: input.skipped.sortedCanonically(),
       crossChecked: input.crossChecked ?? null,
       unavailableReason: input.unavailableReason ?? null
     });
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new VerificationReport(seed);
   }
   degraded(reason) {
@@ -5601,7 +5837,7 @@ class VerificationReport {
       id: this.#id,
       irVersion: this.#irVersion,
       irHash: this.#irHash,
-      method: this.#method.asString(),
+      method: this.#method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([]),
       crossChecked: null,
@@ -5709,7 +5945,7 @@ class CrossCheckedEntry {
     this.#backend = props.backend;
     this.#targets = props.targets;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new CrossCheckedEntry(props);
   }
   backend() {
@@ -5779,7 +6015,7 @@ class VerificationReports {
         }
       }
     }
-    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => CrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets]).sortedCanonically() })).sort((x, y) => x.compareByBackend(y));
+    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => CrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIds.of(Array.from([...targets], (raw) => TargetId.of(raw))).sortedCanonically() })).sort((x, y) => x.compareByBackend(y));
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
@@ -5829,6 +6065,13 @@ class VerificationDirectory {
     }
     return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, null);
   }
+  finalizedWith(candidate, model, schema) {
+    const staged = this.finalizing(candidate.conformedTo(schema));
+    if (model === null)
+      return staged;
+    const derived = staged.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND2), model, candidate.irHash());
+    return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
+  }
   crossChecked(model, irHash) {
     const derived = this.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND2), model, irHash);
     return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, derived);
@@ -5840,7 +6083,7 @@ class VerificationDirectory {
     const candidate = this.#candidate;
     const crossCheck = this.#crossCheck;
     const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
-    const conformedCrossCheck = crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck === null ? null : crossCheck.conformedTo(schema);
     const reports = conformedCandidate === null ? this.#reports : VerificationReports.of(this.#reports.toArray().map((r) => r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
     return new VerificationDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
   }
@@ -5865,9 +6108,9 @@ class SmtQueryVerdict {
   constructor(props) {
     this.#status = props.status;
     this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
-    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.reconstitute(label));
+    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
   }
-  static reconstitute(props) {
+  static of(props) {
     return new SmtQueryVerdict(props);
   }
   isSat() {
@@ -5958,10 +6201,10 @@ class SmtVerificationPlan {
     };
     const timeoutSkip = (targets, what) => {
       for (const t of targets) {
-        skipped.push(VerificationSkipped.reconstitute({ target: t, reason: "timeout", detail: `${what} exceeded the solver budget` }));
+        skipped.push(VerificationSkipped.of({ target: t, reason: SkipReason.of("timeout"), detail: `${what} exceeded the solver budget` }));
       }
     };
-    const global = results.verdictOf(QueryLabel.reconstitute("global"));
+    const global = results.verdictOf(QueryLabel.of("global"));
     let globallyUnsat = false;
     if (global?.isUnsat()) {
       globallyUnsat = true;
@@ -5971,7 +6214,7 @@ class SmtVerificationPlan {
     }
     if (!globallyUnsat) {
       for (const ob of model.obligations()) {
-        const r = results.verdictOf(QueryLabel.reconstitute(`vac:${ob.id().asString()}`));
+        const r = results.verdictOf(QueryLabel.of(`vac:${ob.id().asString()}`));
         if (!r)
           continue;
         if (r.isUnsat()) {
@@ -5995,7 +6238,7 @@ class SmtVerificationPlan {
     }
     for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0)) {
       const trigger = triggerName.asString();
-      const r = results.verdictOf(QueryLabel.reconstitute(`gap:${trigger}`));
+      const r = results.verdictOf(QueryLabel.of(`gap:${trigger}`));
       if (!r)
         continue;
       if (r.isSat()) {
@@ -6210,9 +6453,9 @@ class QuintMachinePlan {
     const machineRun = runs.machineRun();
     if (machineRun === null) {
       for (const target of machineTargets) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "unavailable",
+          reason: SkipReason.of("unavailable"),
           detail: "quint returned no machine run: the event machine was not decided"
         }));
       }
@@ -6246,18 +6489,18 @@ class QuintMachinePlan {
       if (skipped.some((s) => s.isFor(target)))
         continue;
       if (!bounded) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "capability",
+          reason: SkipReason.of("capability"),
           detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them"
         }));
         continue;
       }
       const r = runs.temporalOf(ob.id());
       if (!r) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "unavailable",
+          reason: SkipReason.of("unavailable"),
           detail: "quint returned no run for this temporal obligation"
         }));
         continue;
@@ -6278,22 +6521,22 @@ class QuintMachinePlan {
     for (const sc of model.scenarios()) {
       const target = sc.id().asTargetId();
       if (sc.hasEvent()) {
-        skipped.push(VerificationSkipped.reconstitute({ target, reason: "capability", detail: "scenarios with a When-event are not checked by the quint backend in v1" }));
+        skipped.push(VerificationSkipped.of({ target, reason: SkipReason.of("capability"), detail: "scenarios with a When-event are not checked by the quint backend in v1" }));
         continue;
       }
       if (!this.#hasInitFor(sc.id())) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "capability",
+          reason: SkipReason.of("capability"),
           detail: "quint scenario evaluation requires bindings for every declared attribute"
         }));
         continue;
       }
       const r = runs.scenarioOf(sc.id());
       if (!r) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "unavailable",
+          reason: SkipReason.of("unavailable"),
           detail: "quint returned no run for this scenario"
         }));
         continue;
@@ -6304,7 +6547,7 @@ class QuintMachinePlan {
         continue;
       }
       const bindings = sc.bindingEntriesCanonically();
-      const state = TraceState.of(bindings.map(([path, value]) => [AttributePath.reconstitute(path), TraceValue.of(value)]));
+      const state = TraceState.of(bindings.map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)]));
       const boundModel = {};
       for (const [path, value] of bindings)
         boundModel[path] = value;
@@ -6365,7 +6608,7 @@ function evaluate(e, state) {
     case "mul":
       return TraceValue.ofNumber(arg(0).asNumber() * arg(1).asNumber());
     case "ref":
-      return state.valueAt(AttributePath.reconstitute(e.path ?? ""));
+      return state.valueAt(AttributePath.of(e.path ?? ""));
     case "bool":
     case "int":
     case "enum":
@@ -6380,9 +6623,9 @@ class QuintMachineComponent {
   #expression;
   constructor(props) {
     this.#id = props.id;
-    this.#expression = props.expression;
+    this.#expression = ExpressionTree.of(props.expression).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new QuintMachineComponent(props);
   }
   id() {
@@ -6451,13 +6694,13 @@ class QuintMachineRunVerdict {
   skipsFor(targets, bounded) {
     const kind = this.#kind;
     if (kind === "timeout") {
-      return [...targets].map((target) => VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "machine invariant check exceeded its budget" }));
+      return [...targets].map((target) => VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "machine invariant check exceeded its budget" }));
     }
     if (kind === "run-failed") {
       const outputTail = this.#outputTail;
-      return [...targets].map((target) => VerificationSkipped.reconstitute({
+      return [...targets].map((target) => VerificationSkipped.of({
         target,
-        reason: "unavailable",
+        reason: SkipReason.of("unavailable"),
         detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`
       }));
     }
@@ -6526,9 +6769,9 @@ class QuintScenarioVerdict {
   skipFor(target) {
     const kind = this.#kind;
     if (kind === "timeout")
-      return VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "scenario evaluation exceeded its budget" });
+      return VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "scenario evaluation exceeded its budget" });
     if (kind === "run-failed")
-      return VerificationSkipped.reconstitute({ target, reason: "unavailable", detail: `quint run failed unexpectedly: ${this.#outputTail}` });
+      return VerificationSkipped.of({ target, reason: SkipReason.of("unavailable"), detail: `quint run failed unexpectedly: ${this.#outputTail}` });
     return null;
   }
   isViolated() {
@@ -6560,9 +6803,9 @@ class QuintTemporalVerdict {
   skipFor(target) {
     const kind = this.#kind;
     if (kind === "timeout")
-      return VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "temporal check exceeded its budget" });
+      return VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "temporal check exceeded its budget" });
     if (kind === "run-failed")
-      return VerificationSkipped.reconstitute({ target, reason: "unavailable", detail: `quint verify failed unexpectedly: ${this.#outputTail}` });
+      return VerificationSkipped.of({ target, reason: SkipReason.of("unavailable"), detail: `quint verify failed unexpectedly: ${this.#outputTail}` });
     return null;
   }
   isViolation() {
@@ -6585,7 +6828,7 @@ class IrModelDecl {
     this.#scenarios = seed.scenarios;
     this.#background = seed.background;
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new IrModelDecl(seed);
   }
   wellFormednessErrors() {
@@ -6681,12 +6924,12 @@ class IrAttributeDecl {
   #max;
   constructor(props) {
     this.#name = props.name;
-    this.#kind = AttributeKind.reconstitute(props.kind);
+    this.#kind = AttributeKind.of(props.kind);
     this.#values = props.values;
     this.#min = props.min;
     this.#max = props.max;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrAttributeDecl(props);
   }
   name() {
@@ -6696,7 +6939,7 @@ class IrAttributeDecl {
     return this.#kind.isInt() && this.#min !== undefined && this.#max !== undefined && this.#min.exceeds(this.#max);
   }
   boundsOutsideSafeRange() {
-    return this.#min !== undefined && !Number.isSafeInteger(this.#min.asNumber()) || this.#max !== undefined && !Number.isSafeInteger(this.#max.asNumber());
+    return this.#min !== undefined && !this.#min.isSafeInteger() || this.#max !== undefined && !this.#max.isSafeInteger();
   }
   admitsEnumLiteral(value) {
     return this.#kind.isEnum() && (this.#values?.includes(value) ?? false);
@@ -6730,16 +6973,16 @@ class IrAttributeDecls {
 // src/requirements/domain/ir-attribute-name.ts
 class IrAttributeName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new IrAttributeName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-ir-decl-token", raw });
-    return ok(new IrAttributeName(raw));
-  }
-  static reconstitute(raw) {
-    return new IrAttributeName(raw);
+    return parseConstruction(() => new IrAttributeName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -6754,9 +6997,9 @@ class IrBackgroundDecl {
   #assert;
   constructor(props) {
     this.#id = props.id;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrBackgroundDecl(props);
   }
   id() {
@@ -6838,7 +7081,7 @@ class IrEntityDecl {
     this.#name = props.name;
     this.#attributes = props.attributes;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrEntityDecl(props);
   }
   name() {
@@ -6878,16 +7121,16 @@ class IrEntityDecls {
 // src/requirements/domain/ir-entity-name.ts
 class IrEntityName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new IrEntityName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-ir-decl-token", raw });
-    return ok(new IrEntityName(raw));
-  }
-  static reconstitute(raw) {
-    return new IrEntityName(raw);
+    return parseConstruction(() => new IrEntityName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -6905,12 +7148,12 @@ class IrObligationDecl {
   #temporal;
   constructor(props) {
     this.#id = props.id;
-    this.#assert = props.assert;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#temporal = props.temporal;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrObligationDecl(props);
   }
   id() {
@@ -6955,9 +7198,9 @@ class IrScenarioDecl {
     this.#id = props.id;
     this.#bindings = props.bindings;
     this.#hasEvent = props.hasEvent;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrScenarioDecl(props);
   }
   id() {
@@ -6996,11 +7239,11 @@ class IrTemporalDecl {
   #from;
   #to;
   constructor(props) {
-    this.#assert = props.assert;
-    this.#from = props.from;
-    this.#to = props.to;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#from = props.from === undefined ? undefined : ExpressionTree.of(props.from).asExpression();
+    this.#to = props.to === undefined ? undefined : ExpressionTree.of(props.to).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrTemporalDecl(props);
   }
   inspectExpressions(visitor) {
@@ -7010,48 +7253,6 @@ class IrTemporalDecl {
       visitor(this.#from, false);
     if (this.#to !== undefined)
       visitor(this.#to, false);
-  }
-}
-// src/requirements/domain/fr-reference-index.ts
-class FrReferenceIndex {
-  #ownersByRef;
-  constructor(ownersByRef) {
-    this.#ownersByRef = ownersByRef;
-  }
-  static of(claims) {
-    const ownersByRef = new Map;
-    for (const claim of claims)
-      claim.claimInto(ownersByRef);
-    return new FrReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.reconstitute(ref), TargetIds.reconstitute(owners)])));
-  }
-  referencedIds() {
-    return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
-  }
-  missingErrors(known) {
-    const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
-    return missing.map((id) => {
-      const owners = [...this.#ownersByRef.get(RequirementId.reconstitute(id))?.toStrings() ?? []].sort().join(", ");
-      return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
-    });
-  }
-}
-// src/requirements/domain/fr-ref-claim.ts
-class FrRefClaim {
-  #owner;
-  #frRefs;
-  constructor(owner, frRefs) {
-    this.#owner = owner;
-    this.#frRefs = frRefs;
-  }
-  static of(owner, frRefs) {
-    return new FrRefClaim(owner, frRefs);
-  }
-  claimInto(ownersByRef) {
-    for (const ref of this.#frRefs) {
-      const owners = ownersByRef.get(ref.asString()) ?? [];
-      owners.push(this.#owner);
-      ownersByRef.set(ref.asString(), owners);
-    }
   }
 }
 // src/requirements/domain/fr-ref-claims.ts
@@ -7069,8 +7270,57 @@ class FrRefClaims {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  ownerDescriptions() {
+    return this.#values.map((claim) => claim.ownerDescription());
+  }
   toArray() {
     return this.#values;
+  }
+}
+
+// src/requirements/domain/fr-reference-index.ts
+class FrReferenceIndex {
+  #ownersByRef;
+  constructor(ownersByRef) {
+    this.#ownersByRef = ownersByRef;
+  }
+  static of(claims) {
+    const ownersByRef = new Map;
+    for (const claim of claims)
+      claim.claimInto(ownersByRef);
+    return new FrReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.of(ref), FrRefClaims.of(owners)])));
+  }
+  referencedIds() {
+    return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
+  }
+  missingErrors(known) {
+    const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
+    return missing.map((id) => {
+      const owners = [...this.#ownersByRef.get(RequirementId.of(id))?.ownerDescriptions() ?? []].sort().join(", ");
+      return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
+    });
+  }
+}
+// src/requirements/domain/fr-ref-claim.ts
+class FrRefClaim {
+  #owner;
+  #frRefs;
+  constructor(owner, frRefs) {
+    this.#owner = owner;
+    this.#frRefs = frRefs;
+  }
+  static of(owner, frRefs) {
+    return new FrRefClaim(owner, frRefs);
+  }
+  ownerDescription() {
+    return this.#owner;
+  }
+  claimInto(ownersByRef) {
+    for (const ref of this.#frRefs) {
+      const owners = ownersByRef.get(ref.asString()) ?? [];
+      owners.push(this);
+      ownersByRef.set(ref.asString(), owners);
+    }
   }
 }
 // src/requirements/domain/source-anchor.ts
@@ -7078,8 +7328,8 @@ class SourceAnchor {
   #declared;
   #actual;
   constructor(declared, actual) {
-    this.#declared = declared === null ? null : ContentHash.reconstitute(declared);
-    this.#actual = ContentHash.reconstitute(actual);
+    this.#declared = declared;
+    this.#actual = actual;
   }
   static of(declared, actual) {
     return new SourceAnchor(declared, actual);
@@ -7090,7 +7340,7 @@ class SourceAnchor {
         `IR has no sourceDigest \u2014 requirements drift would be undetectable; add "sourceDigest": "${this.#actual.asString()}" (sha256 of requirements.md) to the IR`
       ];
     }
-    if (!this.#declared.equals(this.#actual)) {
+    if (!this.#declared.matches(this.#actual)) {
       return [
         `sourceDigest ${this.#declared.asString()} does not match requirements.md (sha256 ${this.#actual.asString()}) \u2014 the requirements changed since formalization; re-formalize against the current text and restamp the digest`
       ];
@@ -7146,11 +7396,11 @@ class IrValidationMaterials {
     this.#schemaErrors = seed.schemaErrors;
     this.#view = seed.view;
     this.#frClaims = seed.frClaims;
-    this.#declaredDigest = seed.declaredDigest === null ? null : ContentHash.reconstitute(seed.declaredDigest);
+    this.#declaredDigest = seed.declaredDigest;
     this.#sourceId = seed.sourceId;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new IrValidationMaterials(seed);
   }
   id() {
@@ -7169,7 +7419,7 @@ class IrValidationMaterials {
     return FrReferenceIndex.of(this.#frClaims.toArray());
   }
   declaredDigest() {
-    return this.#declaredDigest?.asString() ?? null;
+    return this.#declaredDigest;
   }
   sourceId() {
     return this.#sourceId;
@@ -7205,10 +7455,10 @@ class RequirementsSource {
     this.#id = seed.id;
     this.#sourcePath = seed.sourcePath;
     this.#knownIds = seed.knownIds;
-    this.#digest = ContentHash.reconstitute(seed.digest);
+    this.#digest = seed.digest;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new RequirementsSource(seed);
   }
   id() {
@@ -7221,7 +7471,7 @@ class RequirementsSource {
     return this.#knownIds;
   }
   digest() {
-    return this.#digest.asString();
+    return this.#digest;
   }
   sourceDocument() {
     return new Uint8Array(this.#sourceDocument);
@@ -7236,13 +7486,13 @@ class RefinementMapDefect {
     this.#reqPath = reqPath;
   }
   static uncoveredAttribute(reqPath) {
-    return new RefinementMapDefect("uncovered-attribute", AttributePath.reconstitute(reqPath));
+    return new RefinementMapDefect("uncovered-attribute", AttributePath.of(reqPath));
   }
   static enumMappingOutsideEquality(reqPath) {
-    return new RefinementMapDefect("enum-mapping-outside-equality", AttributePath.reconstitute(reqPath));
+    return new RefinementMapDefect("enum-mapping-outside-equality", AttributePath.of(reqPath));
   }
   static unspecifiedMapping(reqPath) {
-    return new RefinementMapDefect("unspecified-mapping", AttributePath.reconstitute(reqPath));
+    return new RefinementMapDefect("unspecified-mapping", AttributePath.of(reqPath));
   }
   static effectNotAssignmentConjunction() {
     return new RefinementMapDefect("effect-not-assignment-conjunction", null);
@@ -7261,7 +7511,7 @@ class RefinementMapDefect {
     }
   }
   asCompileErrorSkip(target, unit) {
-    return DesignSkipped.of({ target, reason: SkipReason.compileError(), unit, detail: `alpha substitution failed: ${this.message()}` });
+    return DesignSkipped.of({ target, reason: SkipReason.compileError(), unit: UnitName.of(unit), detail: `alpha substitution failed: ${this.message()}` });
   }
 }
 
@@ -7280,7 +7530,7 @@ class AttributeMapping {
     this.#variant = variant;
   }
   static expression(req, expr) {
-    return new AttributeMapping(req, { kind: "expression", expr });
+    return new AttributeMapping(req, { kind: "expression", expr: ExpressionTree.of(expr).asExpression() });
   }
   static enumCases(req, from, cases) {
     return new AttributeMapping(req, { kind: "enum-cases", from, cases: { ...cases } });
@@ -7434,7 +7684,7 @@ class EventMapping {
     this.#transitions = props.transitions;
     this.#reason = props.reason;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new EventMapping({ reqTrigger: props.reqTrigger, transitions: props.transitions, reason: props.waived?.reason ?? null });
   }
   isForTrigger(reqTrigger) {
@@ -7486,7 +7736,7 @@ class RefinementUnitMap {
     this.#eventMap = props.eventMap;
     this.#unmapped = props.unmapped;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new RefinementUnitMap(props);
   }
   unit() {
@@ -7530,22 +7780,22 @@ class RefinementUnitMaps {
 // src/design/domain/transition-ref.ts
 class TransitionRef {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-refinement-map-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TransitionRef(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-refinement-map-token", raw });
-    return ok(new TransitionRef(raw));
-  }
-  static reconstitute(raw) {
-    return new TransitionRef(raw);
+    return parseConstruction(() => new TransitionRef(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -7621,16 +7871,16 @@ class UnmappedDeclarations {
 // src/design/domain/unmapped-target-ref.ts
 class UnmappedTargetRef {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-refinement-map-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new UnmappedTargetRef(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-refinement-map-token", raw });
-    return ok(new UnmappedTargetRef(raw));
-  }
-  static reconstitute(raw) {
-    return new UnmappedTargetRef(raw);
+    return parseConstruction(() => new UnmappedTargetRef(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -7647,7 +7897,7 @@ class UnmappedTarget {
     this.#target = target;
     this.#reason = reason;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new UnmappedTarget(props.target, props.reason);
   }
   isFor(token) {
@@ -7678,6 +7928,34 @@ class RefinementQuintInvariants {
   reqIds() {
     return new Set(this.#values.map((e) => e.reqId().asString()));
   }
+  interpret(findings, skipped, unit) {
+    const reqIds = this.reqIds();
+    let violations = DesignFindings.of([]);
+    let pending = DesignSkips.of([...skipped].filter((s) => reqIds.has(s.target().asString())));
+    let designConflict = false;
+    for (const finding of findings) {
+      if (!finding.isConflict())
+        continue;
+      const violation = finding.asRefinementViolation(reqIds, UnitName.of(unit));
+      if (violation !== null)
+        violations = violations.add(violation);
+      else
+        designConflict = true;
+    }
+    if (violations.isEmpty() && designConflict) {
+      for (const invariant of this.#values) {
+        if ([...pending].some((s) => s.isFor(invariant.reqTarget())))
+          continue;
+        pending = pending.add(DesignSkipped.of({
+          target: invariant.reqTarget(),
+          reason: SkipReason.capability(),
+          unit: UnitName.of(unit),
+          detail: "the machine reachably violates its own design invariants first (see the design conflict findings) \u2014 refinement reachability is masked until those are resolved"
+        }));
+      }
+    }
+    return { findings: violations, skipped: pending };
+  }
   toArray() {
     return this.#values;
   }
@@ -7691,7 +7969,7 @@ class RefinementQuintInvariant {
   constructor(reqId, frRefs, expr) {
     this.#reqId = reqId;
     this.#frRefs = frRefs;
-    this.#expr = expr;
+    this.#expr = ExpressionTree.of(expr).asExpression();
   }
   static of(reqId, frRefs, expr) {
     return new RefinementQuintInvariant(reqId, frRefs, expr);
@@ -7703,7 +7981,7 @@ class RefinementQuintInvariant {
     return this.#reqId.asTargetId();
   }
   loweredAs(id) {
-    return LoweredObligation.reconstitute({ id, nature: "invariant", frRefs: this.#frRefs, assert: this.#expr });
+    return LoweredObligation.of({ id, nature: "invariant", frRefs: this.#frRefs, assert: this.#expr });
   }
 }
 
@@ -7735,9 +8013,9 @@ class RefinementStatus {
   }
   skipFor(target, unit) {
     if (this.#kind === "waived")
-      return DesignSkipped.of({ target, reason: SkipReason.waived(), unit, detail: this.#text });
+      return DesignSkipped.of({ target, reason: SkipReason.waived(), unit: UnitName.of(unit), detail: this.#text });
     if (this.#kind === "capability")
-      return DesignSkipped.of({ target, reason: SkipReason.capability(), unit, detail: this.#text });
+      return DesignSkipped.of({ target, reason: SkipReason.capability(), unit: UnitName.of(unit), detail: this.#text });
     return null;
   }
 }
@@ -7769,9 +8047,9 @@ class UnitRefinementPlan {
       gaps.push(DesignFinding.of({
         kind: FindingKind.mappingGap(),
         frRefs: frRefs.sortedUnique(),
-        targets: TargetIds.reconstitute(targets).sortedUniqueCanonically(),
+        targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
         witness: DesignWitness.refs([{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }]),
-        unit: u.name(),
+        unit: UnitName.of(u.name()),
         detail
       }));
     };
@@ -7783,7 +8061,7 @@ class UnitRefinementPlan {
       if (byReq.has(reqPath))
         gap(gapTarget, `attrMap maps "${reqPath}" more than once`);
       byReq.set(reqPath, m);
-      const reqAttr = req.attributes().byPath(AttributePath.reconstitute(reqPath));
+      const reqAttr = req.attributes().byPath(AttributePath.of(reqPath));
       if (!reqAttr) {
         gap(gapTarget, `attrMap entry "${reqPath}" names no attribute of the requirements IR`);
         continue;
@@ -7864,7 +8142,7 @@ class UnitRefinementPlan {
         }
         const covG = attrsCovered(ob.guard());
         const covE = attrsCovered(ob.effect());
-        const missing = [...new Set([...covG.missing, ...covE.missing])].sort((a, b) => AttributePath.reconstitute(a).compareTo(AttributePath.reconstitute(b)));
+        const missing = [...new Set([...covG.missing, ...covE.missing])].sort((a, b) => AttributePath.of(a).compareTo(AttributePath.of(b)));
         if (!entry || entry.transitions().isEmpty()) {
           obligationStatus.set(ob.id().asString(), RefinementStatus.gap(`requirements event trigger "${trigger === undefined ? "?" : trigger.asString()}" has no eventMap entry (map it to design transitions or waive it)`));
           continue;
@@ -7907,13 +8185,13 @@ class UnitRefinementPlan {
         scenarioStatus.set(sc.id().asString(), RefinementStatus.gap(`binds attribute(s) ${missing.join(", ")} that are neither mapped nor in unmapped[]`));
       }
     }
-    for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => TargetId.reconstitute(a[0]).compareTo(TargetId.reconstitute(b[0])))) {
+    for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])))) {
       const gapDetail = st.gapDetail();
       if (gapDetail !== null) {
         gap([id], `${id}: ${gapDetail}`, req.obligationById(id)?.frRefs() ?? FrRefs.of([]));
       }
     }
-    for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => TargetId.reconstitute(a[0]).compareTo(TargetId.reconstitute(b[0])))) {
+    for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])))) {
       const gapDetail = st.gapDetail();
       if (gapDetail !== null) {
         gap([id], `${id}: ${gapDetail}`, req.scenarioById(id)?.frRefs() ?? FrRefs.of([]));
@@ -7921,9 +8199,9 @@ class UnitRefinementPlan {
     }
     return new UnitRefinementPlan({
       mappings: unitMap.attrMap(),
-      obligationStatus: KeyedIndex.of([...obligationStatus].map(([id, st]) => [ObligationId.reconstitute(id), st])),
-      scenarioStatus: KeyedIndex.of([...scenarioStatus].map(([id, st]) => [ScenarioId.reconstitute(id), st])),
-      eventTransitions: KeyedIndex.of([...eventTransitions].map(([id, trs]) => [ObligationId.reconstitute(id), trs])),
+      obligationStatus: KeyedIndex.of([...obligationStatus].map(([id, st]) => [ObligationId.of(id), st])),
+      scenarioStatus: KeyedIndex.of([...scenarioStatus].map(([id, st]) => [ScenarioId.of(id), st])),
+      eventTransitions: KeyedIndex.of([...eventTransitions].map(([id, trs]) => [ObligationId.of(id), trs])),
       gaps: DesignFindings.of(gaps)
     });
   }
@@ -7934,29 +8212,29 @@ class UnitRefinementPlan {
     return this.#gaps;
   }
   sortedObligationStatuses() {
-    return [...this.#obligationStatus].map(([id, st]) => [id.asString(), st]).sort((a, b) => TargetId.reconstitute(a[0]).compareTo(TargetId.reconstitute(b[0])));
+    return [...this.#obligationStatus].map(([id, st]) => [id.asString(), st]).sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])));
   }
   sortedScenarioStatuses() {
-    return [...this.#scenarioStatus].map(([id, st]) => [id.asString(), st]).sort((a, b) => TargetId.reconstitute(a[0]).compareTo(TargetId.reconstitute(b[0])));
+    return [...this.#scenarioStatus].map(([id, st]) => [id.asString(), st]).sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])));
   }
   statusOfObligation(id) {
-    return this.#obligationStatus.get(ObligationId.reconstitute(id));
+    return this.#obligationStatus.get(ObligationId.of(id));
   }
   statusOfScenario(id) {
-    return this.#scenarioStatus.get(ScenarioId.reconstitute(id));
+    return this.#scenarioStatus.get(ScenarioId.of(id));
   }
   mappedTransitionsOf(reqId) {
-    return this.#eventTransitions.get(ObligationId.reconstitute(reqId)) ?? [];
+    return this.#eventTransitions.get(ObligationId.of(reqId)) ?? [];
   }
   smtStatusSkips(unitName) {
     const skipped = [];
     for (const [id, st] of this.sortedObligationStatuses()) {
-      const s = st.skipFor(TargetId.reconstitute(id), unitName);
+      const s = st.skipFor(TargetId.of(id), unitName);
       if (s !== null)
         skipped.push(s);
     }
     for (const [id, st] of this.sortedScenarioStatuses()) {
-      const s = st.skipFor(TargetId.reconstitute(id), unitName);
+      const s = st.skipFor(TargetId.of(id), unitName);
       if (s !== null)
         skipped.push(s);
     }
@@ -7965,29 +8243,29 @@ class UnitRefinementPlan {
   quintStatusSkips(req, unitName) {
     const skipped = [];
     for (const [rid, st] of [...this.#obligationStatus].map(([id, status]) => [id.asString(), status]).sort((a, b) => a[0] < b[0] ? -1 : 1)) {
-      const s = st.skipFor(TargetId.reconstitute(rid), unitName);
+      const s = st.skipFor(TargetId.of(rid), unitName);
       if (s !== null)
         skipped.push(s);
       else if (st.isCheckable()) {
         const ob = req.obligationById(rid);
         if (ob !== undefined && ob.isEvent()) {
-          skipped.push(DesignSkipped.of({ target: TargetId.reconstitute(rid), reason: SkipReason.capability(), unit: unitName, detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" }));
+          skipped.push(DesignSkipped.of({ target: TargetId.of(rid), reason: SkipReason.capability(), unit: UnitName.of(unitName), detail: "event simulation and enabledness are checked by the SMT refinement pass only in v1" }));
         } else if (ob !== undefined && ob.isInvariantLike()) {
           const assertion = ob.assertion();
           if (assertion === undefined)
             continue;
           const substituted = this.#mappings.substitute(assertion, false);
           if (!substituted.ok)
-            skipped.push(substituted.error.asCompileErrorSkip(TargetId.reconstitute(rid), unitName));
+            skipped.push(substituted.error.asCompileErrorSkip(TargetId.of(rid), unitName));
         }
       }
     }
     for (const [rid, st] of [...this.#scenarioStatus].map(([id, status]) => [id.asString(), status]).sort((a, b) => a[0] < b[0] ? -1 : 1)) {
-      const s = st.skipFor(TargetId.reconstitute(rid), unitName);
+      const s = st.skipFor(TargetId.of(rid), unitName);
       if (s !== null)
         skipped.push(s);
       else if (st.isCheckable()) {
-        skipped.push(DesignSkipped.of({ target: TargetId.reconstitute(rid), reason: SkipReason.capability(), unit: unitName, detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)" }));
+        skipped.push(DesignSkipped.of({ target: TargetId.of(rid), reason: SkipReason.capability(), unit: UnitName.of(unitName), detail: "scenario replay is checked by the SMT refinement pass only in v1 (abstract constraints do not determine a concrete init)" }));
       }
     }
     return DesignSkips.of(skipped);
@@ -8011,7 +8289,7 @@ class UnitRefinementPlan {
 class EffectAssignments {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = KeyedIndex.of([...values].map(([path, expression]) => [path, ExpressionTree.of(expression).asExpression()]));
   }
   static ofEffect(effect) {
     const assignments = [];
@@ -8031,7 +8309,7 @@ class EffectAssignments {
       const target = a?.op === "ref" && a.prime === true ? a : b?.op === "ref" && b.prime === true ? b : null;
       if (!target || typeof target.path !== "string")
         return err(RefinementMapDefect.effectNotAssignmentConjunction());
-      assignments.push([AttributePath.reconstitute(target.path), term]);
+      assignments.push([AttributePath.of(target.path), term]);
     }
     return ok(new EffectAssignments(KeyedIndex.of(assignments)));
   }
@@ -8046,7 +8324,7 @@ class EffectAssignments {
 class DesignAssignments {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = KeyedIndex.of([...values].map(([path, expression]) => [path, ExpressionTree.of(expression).asExpression()]));
   }
   static of(values) {
     return new DesignAssignments(values);
@@ -8061,7 +8339,7 @@ class DesignEvent {
   #guard;
   #effectAssign;
   constructor(guard, effectAssign) {
-    this.#guard = guard;
+    this.#guard = ExpressionTree.of(guard).asExpression();
     this.#effectAssign = effectAssign;
   }
   static of(guard, effectAssign) {
@@ -8071,7 +8349,7 @@ class DesignEvent {
     return this.#guard;
   }
   assignedRhsOf(path) {
-    return this.#effectAssign.rhsOf(AttributePath.reconstitute(path));
+    return this.#effectAssign.rhsOf(AttributePath.of(path));
   }
 }
 
@@ -8094,7 +8372,7 @@ class DesignEventCatalog {
         const guard = tr.loweredGuard(attrPath);
         const effectAssign = [];
         const [statePath, stateRhs] = tr.stateAssignment(attrPath);
-        effectAssign.push([AttributePath.reconstitute(statePath), stateRhs]);
+        effectAssign.push([AttributePath.of(statePath), stateRhs]);
         const explicitEffect = tr.effect();
         if (explicitEffect !== undefined) {
           const assigned = EffectAssignments.ofEffect(explicitEffect);
@@ -8106,7 +8384,7 @@ class DesignEventCatalog {
             }
           }
         }
-        out.push([TargetId.reconstitute(tr.id().asString()), DesignEvent.of(guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))]);
+        out.push([TargetId.of(tr.id().asString()), DesignEvent.of(guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))]);
       }
     }
     for (const ob of u.obligations()) {
@@ -8122,7 +8400,7 @@ class DesignEventCatalog {
         if (rhs)
           effectAssign.push([path, rhs]);
       }
-      out.push([TargetId.reconstitute(ob.id().asString()), DesignEvent.of(event.guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))]);
+      out.push([TargetId.of(ob.id().asString()), DesignEvent.of(event.guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))]);
     }
     return new DesignEventCatalog(KeyedIndex.of(out));
   }
@@ -8157,7 +8435,7 @@ class RefinementSolverPlan {
         skipped.push(DesignSkipped.of({
           target: p.reqTarget(),
           reason: SkipReason.timeout(),
-          unit: unitName,
+          unit: UnitName.of(unitName),
           detail: `refinement query ${queryId.asString()} exceeded the solver budget or errored`
         }));
         continue;
@@ -8168,9 +8446,9 @@ class RefinementSolverPlan {
             findings.push(DesignFinding.of({
               kind: FindingKind.refinementViolation(),
               frRefs: frOf(reqId.asString()),
-              targets: TargetIds.reconstitute([reqId.asString()]),
+              targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
               witness: DesignWitness.model(r.witnessModel()),
-              unit: unitName,
+              unit: UnitName.of(unitName),
               detail: `A design-legal state of unit ${unitName} violates requirements obligation ${reqId.asString()} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`
             }));
           }
@@ -8181,9 +8459,9 @@ class RefinementSolverPlan {
             findings.push(DesignFinding.of({
               kind: FindingKind.refinementViolation(),
               frRefs: frOf(reqId.asString()),
-              targets: TargetIds.reconstitute([reqId.asString()]),
+              targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
               witness: DesignWitness.core(r.sortedCore()),
-              unit: unitName,
+              unit: UnitName.of(unitName),
               detail: `Accept scenario ${reqId.asString()} has no design-legal counterpart in unit ${unitName} under the refinement map: the design excludes an example the requirements accept (witness core attached).`
             }));
           }
@@ -8191,9 +8469,9 @@ class RefinementSolverPlan {
             findings.push(DesignFinding.of({
               kind: FindingKind.refinementViolation(),
               frRefs: frOf(reqId.asString()),
-              targets: TargetIds.reconstitute([reqId.asString()]),
+              targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
               witness: DesignWitness.model(r.witnessModel()),
-              unit: unitName,
+              unit: UnitName.of(unitName),
               detail: `Reject scenario ${reqId.asString()} is still admitted by unit ${unitName} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`
             }));
           }
@@ -8203,9 +8481,9 @@ class RefinementSolverPlan {
             findings.push(DesignFinding.of({
               kind: FindingKind.completenessGap(),
               frRefs: frOf(reqId.asString()),
-              targets: TargetIds.reconstitute([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())]).sortedUniqueCanonically(),
+              targets: TargetIds.of(Array.from([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())], (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
               witness: DesignWitness.model(r.witnessModel()),
-              unit: unitName,
+              unit: UnitName.of(unitName),
               detail: `The requirements event ${reqId.asString()} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`
             }));
           }
@@ -8215,9 +8493,9 @@ class RefinementSolverPlan {
             findings.push(DesignFinding.of({
               kind: FindingKind.refinementViolation(),
               frRefs: frOf(reqId.asString()),
-              targets: TargetIds.reconstitute([reqId.asString(), designId.asString()].filter((t) => t !== "")).sortedUniqueCanonically(),
+              targets: TargetIds.of(Array.from([reqId.asString(), designId.asString()].filter((t) => t !== ""), (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
               witness: DesignWitness.trace(r.witnessTrace()),
-              unit: unitName,
+              unit: UnitName.of(unitName),
               detail: `Design step ${designId.asString()} of unit ${unitName}, taken where requirements event ${reqId.asString()} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`
             }));
           }
@@ -8275,9 +8553,9 @@ class RefinementQueryVerdict {
     this.#status = props.status;
     this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
     this.#decodedPostModel = props.decodedPostModel === undefined ? undefined : { ...props.decodedPostModel };
-    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.reconstitute(label));
+    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
   }
-  static reconstitute(props) {
+  static of(props) {
     return new RefinementQueryVerdict(props);
   }
   isSat() {
@@ -8389,27 +8667,33 @@ function parseDesignEntities(schema) {
   for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
     if (!isObject(ent) || typeof ent.name !== "string")
       continue;
+    const name = DesignEntityName.parse(ent.name);
+    if (!name.ok)
+      return name;
     const attributes = [];
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string")
         continue;
       const t = isObject(attr.type) ? attr.type : {};
-      attributes.push(DesignAttributeDecl.reconstitute({
-        name: DesignAttributeName.reconstitute(attr.name),
+      const name2 = DesignAttributeName.parse(attr.name);
+      if (!name2.ok)
+        return name2;
+      attributes.push(DesignAttributeDecl.of({
+        name: name2.value,
         kind: typeof t.kind === "string" ? t.kind : "",
         ...typeof attr.description === "string" ? { description: attr.description } : {},
         ...Array.isArray(t.values) ? { values: DeclaredValues.of(t.values.filter((v) => typeof v === "string")) } : {},
-        ...typeof t.min === "number" ? { min: AttributeBound.reconstitute(t.min) } : {},
-        ...typeof t.max === "number" ? { max: AttributeBound.reconstitute(t.max) } : {}
+        ...typeof t.min === "number" ? { min: DeclaredBound.of(t.min) } : {},
+        ...typeof t.max === "number" ? { max: DeclaredBound.of(t.max) } : {}
       }));
     }
-    entities.push(DesignEntityDecl.reconstitute({
-      name: DesignEntityName.reconstitute(ent.name),
+    entities.push(DesignEntityDecl.of({
+      name: name.value,
       ...typeof ent.description === "string" ? { description: ent.description } : {},
       attributes: DesignAttributeDecls.of(attributes)
     }));
   }
-  return DesignEntityDecls.of(entities);
+  return ok(DesignEntityDecls.of(entities));
 }
 function renderDesignEntities(entities) {
   return entities.toArray().map((ent) => {
@@ -8495,34 +8779,25 @@ import { join as join4 } from "path";
 
 // src/design/adapter/sibling-document-parser.ts
 function parseSiblingVerdictDocument(raw) {
-  if (!isObject(raw))
-    return SiblingVerdictDocument.unreadable();
-  if (isObject(raw.unavailable) && typeof raw.unavailable.reason === "string") {
-    return SiblingVerdictDocument.unavailable(raw.unavailable.reason, typeof raw.method === "string" ? raw.method : null);
-  }
-  const findings = [];
-  for (const f of Array.isArray(raw.findings) ? raw.findings : []) {
-    if (!isObject(f) || typeof f.kind !== "string" || !Array.isArray(f.targets))
-      continue;
-    findings.push(SiblingVerdictFinding.reconstitute({
-      kind: f.kind,
-      frRefs: FrRefs.reconstitute(strArr(f.frRefs)),
-      targets: f.targets.filter((t) => typeof t === "string").map((t) => LoweredId.reconstitute(t)),
-      witness: DesignWitness.fromDocument(f.witness ?? null),
-      detail: typeof f.detail === "string" ? f.detail : ""
-    }));
-  }
-  const skipped = [];
-  for (const s of Array.isArray(raw.skipped) ? raw.skipped : []) {
-    if (!isObject(s) || typeof s.target !== "string" || typeof s.reason !== "string")
-      continue;
-    skipped.push(SiblingVerdictSkip.reconstitute({
-      target: LoweredId.reconstitute(s.target),
-      reason: s.reason,
-      ...typeof s.detail === "string" ? { detail: s.detail } : {}
-    }));
-  }
-  return SiblingVerdictDocument.readable(typeof raw.method === "string" ? raw.method : null, SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
+  const decoded = parseFindingsValues(raw);
+  if (!decoded.ok)
+    return SiblingVerdictDocument.unreadable(decoded.error);
+  const doc = decoded.value;
+  if (doc.unavailable !== undefined)
+    return SiblingVerdictDocument.unavailable(doc.unavailable.reason, doc.method);
+  const findings = doc.findings.map((f) => SiblingVerdictFinding.of({
+    kind: f.kind,
+    frRefs: f.frRefs,
+    targets: [...f.targets].map((target) => LoweredId.of(target.asString())),
+    witness: DesignWitness.of(f.witness),
+    detail: f.detail
+  }));
+  const skipped = doc.skipped.map((s) => SiblingVerdictSkip.of({
+    target: LoweredId.of(s.target.asString()),
+    reason: s.reason,
+    detail: s.detail
+  }));
+  return SiblingVerdictDocument.readable(doc.method, SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
 }
 
 // src/design/adapter/reachability-variant.ts
@@ -8545,22 +8820,6 @@ function reachabilityVariant(base, attrPath, state) {
     background: Array.isArray(base.background) ? base.background : []
   };
 }
-function probeReached(doc, attrPath, state) {
-  if (!isObject(doc) || !Array.isArray(doc.findings))
-    return false;
-  for (const f of doc.findings) {
-    if (!isObject(f) || f.kind !== "conflict")
-      continue;
-    const witness = isObject(f.witness) ? f.witness : {};
-    const trace = Array.isArray(witness.trace) ? witness.trace : null;
-    if (trace === null)
-      return true;
-    const last = trace[trace.length - 1];
-    if (isObject(last) && last[attrPath] === state)
-      return true;
-  }
-  return false;
-}
 
 // src/design/adapter/sibling-backend-client-impl.ts
 class SiblingBackendClientImpl {
@@ -8579,10 +8838,10 @@ class SiblingBackendClientImpl {
   probeState(unit, lowered, attrPath, state, wallTimeoutMs) {
     const variant = reachabilityVariant(renderLoweredDocument(unit, lowered), attrPath, state);
     const run = this.#spawn("quint", variant, wallTimeoutMs);
-    if (run.exit !== 0 || run.doc === null || isObject(run.doc) && isObject(run.doc.unavailable)) {
-      return { kind: "failed" };
+    if (run.exit !== 0 || run.doc === null) {
+      return ReachabilityVerdict.unverified();
     }
-    return { kind: "probed", reached: probeReached(run.doc, attrPath, state) };
+    return parseSiblingVerdictDocument(run.doc).reachabilityOf(attrPath, state);
   }
   #spawn(backend, loweredDoc, wallTimeoutMs) {
     const tool = this.#config.siblingToolPaths[backend];
@@ -8622,48 +8881,39 @@ function renderDesignReportBytes(report) {
 `;
 }
 function parseSiblingDesignReportDocument(directory, fileName, raw) {
-  if (!isObject(raw))
-    return null;
-  const backend = typeof raw.backend === "string" ? raw.backend : fileName.replace(/\.json$/, "");
-  const skipped = (Array.isArray(raw.skipped) ? raw.skipped : []).filter((s) => isObject(s) && typeof s.target === "string");
-  return DesignReport.reconstitute({
-    id: DesignReportId.of(directory, backend),
-    irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
-    irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
-    method: typeof raw.method === "string" ? raw.method : "",
-    findings: DesignFindings.of((Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []).map((e) => {
-      const entry = e;
-      return DesignFinding.reconstitute({
-        kind: typeof entry.kind === "string" ? entry.kind : "",
-        frRefs: FrRefs.reconstitute(Array.isArray(entry.frRefs) ? entry.frRefs.filter((x) => typeof x === "string") : []),
-        targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? entry.targets.filter((x) => typeof x === "string") : []),
-        witness: DesignWitness.fromDocument(entry.witness ?? null),
-        unit: typeof entry.unit === "string" ? entry.unit : "",
-        detail: typeof entry.detail === "string" ? entry.detail : ""
-      });
-    })),
-    skipped: DesignSkips.of(skipped.map((entry) => {
-      return DesignSkipped.reconstitute({
-        target: TargetId.reconstitute(typeof entry.target === "string" ? entry.target : ""),
-        reason: typeof entry.reason === "string" ? entry.reason : "",
-        unit: typeof entry.unit === "string" ? entry.unit : "",
-        ...typeof entry.detail === "string" ? { detail: entry.detail } : {}
-      });
-    })),
-    inputs: Array.isArray(raw.inputs) ? DesignInputAnchors.of(raw.inputs.map((e) => {
-      const entry = isObject(e) ? e : {};
-      return DesignInputAnchor.reconstitute({
-        artifact: typeof entry.artifact === "string" ? entry.artifact : "",
-        sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : "")
-      });
-    })) : null,
-    checked: Array.isArray(raw.checked) ? CheckedUnits.reconstitute(raw.checked.filter((c) => typeof c === "string")) : null,
-    crossChecked: Array.isArray(raw.crossChecked) ? DesignCrossCheckedEntries.of(raw.crossChecked.filter(isObject).map((e) => DesignCrossCheckedEntry.reconstitute({
-      backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
-      targets: TargetIds.reconstitute(Array.isArray(e.targets) ? e.targets.filter((t) => typeof t === "string") : [])
-    }))) : null,
-    unavailableReason: isObject(raw.unavailable) ? typeof raw.unavailable.reason === "string" ? raw.unavailable.reason : "" : null
-  });
+  const decoded = parseFindingsValues(raw);
+  if (!decoded.ok)
+    return decoded;
+  const doc = decoded.value;
+  if (`${doc.backend.asString()}.json` !== fileName)
+    return err("backend must match the report filename");
+  const findings = [];
+  for (const entry of doc.findings) {
+    if (entry.unit === undefined)
+      return err("design finding requires a unit");
+    findings.push(DesignFinding.of({ ...entry, unit: entry.unit, witness: DesignWitness.of(entry.witness) }));
+  }
+  const skipped = [];
+  for (const entry of doc.skipped) {
+    if (entry.unit === undefined)
+      return err("design skip requires a unit");
+    skipped.push(DesignSkipped.of({ ...entry, unit: entry.unit }));
+  }
+  const checked = doc.checked === undefined ? ok(undefined) : traverseResult(doc.checked, UnitName.parse);
+  if (!checked.ok)
+    return err(JSON.stringify(checked.error));
+  return ok(DesignReport.of({
+    id: DesignReportId.of(directory, doc.backend.asString()),
+    irVersion: doc.irVersion,
+    irHash: doc.irHash,
+    method: doc.method,
+    findings: DesignFindings.of(findings),
+    skipped: DesignSkips.of(skipped),
+    inputs: doc.inputs === undefined ? null : DesignInputAnchors.of(doc.inputs.map((entry) => DesignInputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }))),
+    checked: checked.value === undefined ? null : CheckedUnits.of(checked.value),
+    crossChecked: doc.crossChecked === undefined ? null : DesignCrossCheckedEntries.of(doc.crossChecked.map(DesignCrossCheckedEntry.of)),
+    unavailableReason: doc.unavailable?.reason ?? null
+  }));
 }
 // src/design/adapter/design-verify-directory-repository-impl.ts
 import { existsSync as existsSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync5, readdirSync, renameSync as renameSync3, rmSync as rmSync4 } from "fs";
@@ -8722,12 +8972,12 @@ class DesignVerifyDirectoryRepositoryImpl {
       return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(acquired) });
     }
     let outcome;
+    let released;
     try {
       outcome = this.#publish(aggregate, candidate, directory);
-    } catch (e) {
-      outcome = err({ kind: "io-failed", operation: "write", path: directoryPath, cause: causeOf2(e) });
+    } finally {
+      released = this.#lock.release(directory);
     }
-    const released = this.#lock.release(directory);
     if (released.kind !== "released" && outcome.ok) {
       return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(released) });
     }
@@ -8742,14 +8992,8 @@ class DesignVerifyDirectoryRepositoryImpl {
     if (!unchanged.ok)
       return err(unchanged.error);
     const crossCheck = aggregate.crossCheck();
-    let backendBytes;
-    let crossBytes;
-    try {
-      backendBytes = renderDesignReportBytes(candidate);
-      crossBytes = crossCheck === null ? null : renderDesignReportBytes(crossCheck);
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
-    }
+    const backendBytes = renderDesignReportBytes(candidate);
+    const crossBytes = crossCheck === null ? null : renderDesignReportBytes(crossCheck);
     if (!this.#lock.holdsOwnership(directory))
       return this.#fenced(directory, crossPath);
     if (existsSync3(crossPath)) {
@@ -8819,8 +9063,7 @@ class DesignVerifyDirectoryRepositoryImpl {
       const report = this.#readReport(directory, file);
       if (!report.ok)
         return err(report.error);
-      if (report.value !== null)
-        reports.push(report.value);
+      reports.push(report.value);
     }
     return ok(reports);
   }
@@ -8832,7 +9075,8 @@ class DesignVerifyDirectoryRepositoryImpl {
     } catch (e) {
       return err({ kind: "corrupt", path, cause: causeOf2(e) });
     }
-    return ok(parseSiblingDesignReportDocument(directory, fileName, raw));
+    const parsed = parseSiblingDesignReportDocument(directory, fileName, raw);
+    return parsed.ok ? ok(parsed.value) : err({ kind: "corrupt", path, cause: parsed.error });
   }
   #fenced(directory, path) {
     return err({
@@ -8962,14 +9206,20 @@ function designBase(ctx, u, primed) {
     for (const bg of u.background()) {
       try {
         constraints.push({ name: smtName("bg", bg.id().asString()), smt: smtOfExpr(ctx, bg.assertion()) });
-      } catch {}
+      } catch (error) {
+        if (!(error instanceof SmtCompileError))
+          throw error;
+      }
     }
     for (const ob of u.obligations()) {
       const assertion = ob.assertion();
       if (ob.isInvariantLike() && assertion !== undefined) {
         try {
           constraints.push({ name: smtName("inv", ob.id().asString()), smt: smtOfExpr(ctx, assertion) });
-        } catch {}
+        } catch (error) {
+          if (!(error instanceof SmtCompileError))
+            throw error;
+        }
       }
     }
   }
@@ -9016,9 +9266,9 @@ function buildRefinementQueries(u, req, plan) {
   const compileSkips = [];
   const alphaFail = (target, message) => {
     compileSkips.push(DesignSkipped.of({
-      target: TargetId.reconstitute(target),
+      target: TargetId.of(target),
       reason: SkipReason.compileError(),
-      unit: u.name(),
+      unit: UnitName.of(u.name()),
       detail: `alpha substitution failed: ${message}`
     }));
   };
@@ -9040,8 +9290,10 @@ function buildRefinementQueries(u, req, plan) {
       try {
         const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP.value)})` }], modelVars);
         queries.push(q);
-        pending.set(q.id, RefinementProbe.invariant(ObligationId.reconstitute(obId)));
+        pending.set(q.id, RefinementProbe.invariant(ObligationId.of(obId)));
       } catch (err2) {
+        if (!(err2 instanceof SmtCompileError))
+          throw err2;
         alphaFail(obId, failureMessage(err2));
       }
       continue;
@@ -9055,7 +9307,7 @@ function buildRefinementQueries(u, req, plan) {
         continue;
       }
       try {
-        const designGuards = mapped.map((id) => catalog.eventOf(TargetId.reconstitute(id.asString()))).filter((d) => d !== null).map((d) => smtOfExpr(ctx, d.guard()));
+        const designGuards = mapped.map((id) => catalog.eventOf(TargetId.of(id.asString()))).filter((d) => d !== null).map((d) => smtOfExpr(ctx, d.guard()));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
         const qe = assembleQuery(`re:${obId}`, pre.decls, [
           ...pre.constraints,
@@ -9063,7 +9315,7 @@ function buildRefinementQueries(u, req, plan) {
           { name: smtName("ne", obId), smt: notEnabled }
         ], modelVars);
         queries.push(qe);
-        pending.set(qe.id, RefinementProbe.enabledness(ObligationId.reconstitute(obId)));
+        pending.set(qe.id, RefinementProbe.enabledness(ObligationId.of(obId)));
         const decomposed = EffectAssignments.ofEffect(event.effect);
         if (!decomposed.ok) {
           alphaFail(obId, decomposed.error.message());
@@ -9086,7 +9338,7 @@ function buildRefinementQueries(u, req, plan) {
         const fBar = smtOfExpr(ctx, alphaF.value);
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
-          const ev = catalog.eventOf(TargetId.reconstitute(designId.asString()));
+          const ev = catalog.eventOf(TargetId.of(designId.asString()));
           if (!ev)
             continue;
           const stepParts = [smtOfExpr(ctx, ev.guard())];
@@ -9108,9 +9360,11 @@ function buildRefinementQueries(u, req, plan) {
             { name: smtName("viol", obId), smt: `(not ${postCond})` }
           ], modelVarsBoth);
           queries.push(qs);
-          pending.set(qs.id, RefinementProbe.simulation(ObligationId.reconstitute(obId), designId));
+          pending.set(qs.id, RefinementProbe.simulation(ObligationId.of(obId), designId));
         }
       } catch (err2) {
+        if (!(err2 instanceof SmtCompileError))
+          throw err2;
         alphaFail(obId, failureMessage(err2));
       }
     }
@@ -9140,19 +9394,21 @@ function buildRefinementQueries(u, req, plan) {
       }
       const q = assembleQuery(`rs:${scId}`, pre.decls, [...pre.constraints, { name: smtName("sc", scId), smt: parts.length === 1 ? parts[0] : `(and ${parts.join(" ")})` }], modelVars);
       queries.push(q);
-      pending.set(q.id, RefinementProbe.scenario(ScenarioId.reconstitute(scId)));
+      pending.set(q.id, RefinementProbe.scenario(ScenarioId.of(scId)));
     } catch (err2) {
+      if (!(err2 instanceof SmtCompileError))
+        throw err2;
       alphaFail(scId, failureMessage(err2));
     }
   }
   return {
     queries,
-    plan: RefinementSolverPlan.of({ pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.reconstitute(id), probe])), compileSkips: DesignSkips.of(compileSkips) }),
+    plan: RefinementSolverPlan.of({ pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.of(id), probe])), compileSkips: DesignSkips.of(compileSkips) }),
     context: ctx
   };
 }
 // src/design/adapter/refinement-materials-repository-impl.ts
-import { existsSync as existsSync4, readFileSync as readFileSync6 } from "fs";
+import { readFileSync as readFileSync6 } from "fs";
 import { dirname as dirname3, join as join6 } from "path";
 var REFINEMENT_MAP_BASENAME = "deep-spec-analysis-refinement-map.md";
 var REQUIREMENTS_MODEL_RELPATH = ["inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md"];
@@ -9169,30 +9425,43 @@ class RefinementMaterialsRepositoryImpl {
   findById(id) {
     const modelPath = id.modelArtifactPath().asString();
     const recordRoot = findRecordRoot(dirname3(modelPath));
-    const requirements = recordRoot === null ? null : this.#loadRequirements(recordRoot);
-    if (recordRoot === null || requirements === null)
-      return RefinementMaterials.inactive(id);
-    const stageDir = dirname3(modelPath);
-    return RefinementMaterials.active(id, requirements, this.#loadMap(recordRoot, stageDir, modelPath));
+    if (recordRoot === null)
+      return ok(RefinementMaterials.inactive(id));
+    const requirements = this.#loadRequirements(recordRoot);
+    if (!requirements.ok) {
+      return requirements.error.kind === "not-found" ? ok(RefinementMaterials.inactive(id)) : err(requirements.error);
+    }
+    const map = this.#loadMap(recordRoot, dirname3(modelPath), modelPath, requirements.value.bytes);
+    if (!map.ok)
+      return err(map.error);
+    return ok(RefinementMaterials.active(id, requirements.value.model, map.value));
+  }
+  #read(path) {
+    try {
+      return ok(new Uint8Array(readFileSync6(path)));
+    } catch (e) {
+      if (e.code === "ENOENT")
+        return err({ kind: "not-found", path });
+      return err({ kind: "io-failed", operation: "read", path, cause: e instanceof Error ? e.message : String(e) });
+    }
   }
   #loadRequirements(recordRoot) {
     const path = join6(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
-    const idPath = ArtifactPath.parse(path);
-    if (!idPath.ok)
-      return null;
-    if (!existsSync4(path))
-      return null;
-    const fence = extractSingleJsonFence(readFileSync6(path, "utf-8"));
+    const bytes = this.#read(path);
+    if (!bytes.ok)
+      return err(bytes.error);
+    const fence = extractSingleJsonFence(Buffer.from(bytes.value).toString("utf-8"));
     if (fence === null)
-      return null;
+      return err({ kind: "corrupt", path, cause: "requirements model must contain exactly one JSON fence" });
     let raw;
     try {
       raw = JSON.parse(fence);
-    } catch {
-      return null;
+    } catch (e) {
+      return err({ kind: "corrupt", path, cause: e instanceof Error ? e.message : String(e) });
     }
-    if (!isObject(raw))
-      return null;
+    if (!isObject(raw) || typeof raw.irVersion !== "string" || !isObject(raw.schema) || !Array.isArray(raw.schema.entities) || !Array.isArray(raw.obligations) || !Array.isArray(raw.scenarios)) {
+      return err({ kind: "corrupt", path, cause: "requirements model lacks its version, schema, obligations or scenarios" });
+    }
     const attributes = [];
     const schema = isObject(raw.schema) ? raw.schema : {};
     for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
@@ -9204,8 +9473,13 @@ class RefinementMaterialsRepositoryImpl {
         const t = attr.type;
         if (t.kind !== "bool" && t.kind !== "int" && t.kind !== "enum")
           continue;
-        attributes.push(RefinementAttribute.reconstitute({
-          path: AttributePath.reconstitute(`${ent.name}.${attr.name}`),
+        const parsed = combineResults({
+          path: AttributePath.parse(`${ent.name}.${attr.name}`)
+        });
+        if (!parsed.ok)
+          return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
+        attributes.push(RefinementAttribute.of({
+          path: parsed.value.path,
           kind: t.kind,
           values: Array.isArray(t.values) ? ReqAttributeValues.of(t.values.filter((v) => typeof v === "string")) : undefined
         }));
@@ -9215,12 +9489,19 @@ class RefinementMaterialsRepositoryImpl {
     for (const ob of Array.isArray(raw.obligations) ? raw.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string")
         continue;
-      obligations.push(RefinementObligation.reconstitute({
-        id: ObligationId.reconstitute(ob.id),
-        nature: ObligationNature.reconstitute(ob.nature),
-        frRefs: FrRefs.reconstitute(strArr(ob.frRefs)),
+      const parsed = combineResults({
+        id: ObligationId.parse(ob.id),
+        frRefs: traverseResult(strArr(ob.frRefs), RequirementId.parse),
+        trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined)
+      });
+      if (!parsed.ok)
+        return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
+      obligations.push(RefinementObligation.of({
+        id: parsed.value.id,
+        nature: ObligationNature.of(ob.nature),
+        frRefs: FrRefs.of(parsed.value.frRefs),
         assert: isObject(ob.assert) ? ob.assert : undefined,
-        trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
+        trigger: parsed.value.trigger,
         guard: isObject(ob.guard) ? ob.guard : undefined,
         effect: isObject(ob.effect) ? ob.effect : undefined
       }));
@@ -9236,41 +9517,50 @@ class RefinementMaterialsRepositoryImpl {
         if (typeof v === "boolean" || typeof v === "number" || typeof v === "string")
           bindings[k] = v;
       }
-      scenarios.push(RefinementScenario.reconstitute({
-        id: ScenarioId.reconstitute(sc.id),
+      const parsed = combineResults({
+        id: ScenarioId.parse(sc.id),
+        frRefs: traverseResult(strArr(sc.frRefs), RequirementId.parse),
+        trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined)
+      });
+      if (!parsed.ok)
+        return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
+      scenarios.push(RefinementScenario.of({
+        id: parsed.value.id,
         kind: sc.kind,
-        frRefs: FrRefs.reconstitute(strArr(sc.frRefs)),
+        frRefs: FrRefs.of(parsed.value.frRefs),
         bindings,
-        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined
+        event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger }
       }));
     }
-    return RefinementRequirements.reconstitute({
-      id: FormalModelId.of(idPath.value),
+    const model = RefinementRequirements.of({
+      id: FormalModelId.of(ArtifactPath.of(path)),
       hash: ContentHash.ofText(canonicalStringify(raw)),
       attributes: RefinementAttributes.of(attributes),
       obligations: RefinementObligations.of(obligations),
       scenarios: RefinementScenarios.of(scenarios)
     });
+    return ok({ model, bytes: bytes.value });
   }
-  #loadMap(recordRoot, stageDir, modelPath) {
+  #loadMap(recordRoot, stageDir, modelPath, requirementsBytes) {
     const path = join6(stageDir, REFINEMENT_MAP_BASENAME);
-    if (!existsSync4(path))
-      return RefinementMapAcquisition.absent(null);
-    const mapPath = ArtifactPath.parse(path);
-    if (!mapPath.ok)
-      return RefinementMapAcquisition.absent("defect: refinement map path derivation produced an empty path");
-    const parsed = parseRefinementMapDocument(new Uint8Array(readFileSync6(path)), RefinementMapId.of(mapPath.value), this.#mapSchemaPath);
+    const bytes = this.#read(path);
+    if (!bytes.ok) {
+      return bytes.error.kind === "not-found" ? ok(RefinementMapAcquisition.absent(null)) : err(bytes.error);
+    }
+    const parsed = parseRefinementMapDocument(bytes.value, RefinementMapId.of(ArtifactPath.of(path)), this.#mapSchemaPath);
     if (parsed.kind === "malformed")
-      return RefinementMapAcquisition.absent(parsed.error);
-    const map = parsed.map;
+      return ok(RefinementMapAcquisition.absent(parsed.error));
+    const modelBytes = this.#read(modelPath);
+    if (!modelBytes.ok)
+      return err(modelBytes.error);
     const reqModelPath = join6(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
     const mapArtifact = relArtifact(recordRoot, path);
     const inputs = [
-      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, modelPath), sha256: ContentHash.ofText(readFileSync6(modelPath, "utf-8")) }),
-      DesignInputAnchor.reconstitute({ artifact: mapArtifact, sha256: ContentHash.ofText(readFileSync6(path, "utf-8")) }),
-      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, reqModelPath), sha256: ContentHash.ofText(readFileSync6(reqModelPath, "utf-8")) })
+      DesignInputAnchor.of({ artifact: relArtifact(recordRoot, modelPath), sha256: ContentHash.ofText(Buffer.from(modelBytes.value).toString("utf-8")) }),
+      DesignInputAnchor.of({ artifact: mapArtifact, sha256: ContentHash.ofText(Buffer.from(bytes.value).toString("utf-8")) }),
+      DesignInputAnchor.of({ artifact: relArtifact(recordRoot, reqModelPath), sha256: ContentHash.ofText(Buffer.from(requirementsBytes).toString("utf-8")) })
     ];
-    return RefinementMapAcquisition.loaded(map, ArtifactPath.reconstitute(mapArtifact), inputs);
+    return ok(RefinementMapAcquisition.loaded(parsed.map, ArtifactPath.of(mapArtifact), inputs));
   }
 }
 function parseRefinementMapDocument(bytes, id, mapSchemaPath) {
@@ -9302,48 +9592,69 @@ function parseRefinementMapDocument(bytes, id, mapSchemaPath) {
     for (const m of Array.isArray(u.attrMap) ? u.attrMap : []) {
       if (!isObject(m) || typeof m.req !== "string")
         continue;
+      const req = AttributePath.parse(m.req);
+      if (!req.ok)
+        return { kind: "malformed", error: JSON.stringify(req.error) };
       if (isObject(m.enumMap) && typeof m.enumMap.from === "string" && isObject(m.enumMap.cases)) {
         const cases = {};
         for (const [k, v] of Object.entries(m.enumMap.cases)) {
           if (typeof v === "string")
             cases[k] = v;
         }
-        attrMap.push(AttributeMapping.enumCases(AttributePath.reconstitute(m.req), m.enumMap.from, cases));
+        attrMap.push(AttributeMapping.enumCases(req.value, m.enumMap.from, cases));
       } else if (isObject(m.expr)) {
-        attrMap.push(AttributeMapping.expression(AttributePath.reconstitute(m.req), m.expr));
+        attrMap.push(AttributeMapping.expression(req.value, m.expr));
       } else {
-        attrMap.push(AttributeMapping.unspecified(AttributePath.reconstitute(m.req)));
+        attrMap.push(AttributeMapping.unspecified(req.value));
       }
     }
     const eventMap = [];
     for (const e of Array.isArray(u.eventMap) ? u.eventMap : []) {
       if (!isObject(e) || typeof e.reqTrigger !== "string")
         continue;
-      eventMap.push(EventMapping.reconstitute({
-        reqTrigger: TriggerName.reconstitute(e.reqTrigger),
-        transitions: TransitionRefs.of(strArr(e.transitions).map((t) => TransitionRef.reconstitute(t))),
+      const parsed = combineResults({
+        reqTrigger: TriggerName.parse(e.reqTrigger),
+        transitions: traverseResult(strArr(e.transitions), TransitionRef.parse)
+      });
+      if (!parsed.ok)
+        return { kind: "malformed", error: JSON.stringify(parsed.error) };
+      eventMap.push(EventMapping.of({
+        reqTrigger: parsed.value.reqTrigger,
+        transitions: TransitionRefs.of(parsed.value.transitions),
         waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined
       }));
     }
     const unmapped = [];
     for (const un of Array.isArray(u.unmapped) ? u.unmapped : []) {
       if (isObject(un) && typeof un.target === "string") {
-        unmapped.push(UnmappedTarget.reconstitute({ target: UnmappedTargetRef.reconstitute(un.target), reason: typeof un.reason === "string" ? un.reason : "" }));
+        const target = UnmappedTargetRef.parse(un.target);
+        if (!target.ok)
+          return { kind: "malformed", error: JSON.stringify(target.error) };
+        unmapped.push(UnmappedTarget.of({ target: target.value, reason: typeof un.reason === "string" ? un.reason : "" }));
       }
     }
-    units.push(RefinementUnitMap.reconstitute({
-      unit: DesignUnitId.of(u.unit),
+    const unit = DesignUnitId.parse(u.unit);
+    if (!unit.ok)
+      return { kind: "malformed", error: JSON.stringify(unit.error) };
+    units.push(RefinementUnitMap.of({
+      unit: unit.value,
       attrMap: AttributeMappings.of(attrMap),
       eventMap: EventMappings.of(eventMap),
       unmapped: UnmappedDeclarations.of(unmapped)
     }));
   }
+  const hashes = combineResults({
+    requirements: ContentHash.parse(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
+    design: ContentHash.parse(typeof doc.designIrHash === "string" ? doc.designIrHash : "")
+  });
+  if (!hashes.ok)
+    return { kind: "malformed", error: JSON.stringify(hashes.error) };
   return {
     kind: "parsed",
-    map: RefinementMap.reconstitute({
+    map: RefinementMap.of({
       id,
-      requirementsIrHash: ContentHash.reconstitute(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
-      designIrHash: ContentHash.reconstitute(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
+      requirementsIrHash: hashes.value.requirements,
+      designIrHash: hashes.value.design,
       units: RefinementUnitMaps.of(units),
       sourceDocument: bytes
     })
@@ -9367,11 +9678,17 @@ class RefinementSolverClientImpl {
     }
     const verdicts = [];
     for (const [queryId, r] of child.results) {
-      verdicts.push([QueryLabel.reconstitute(queryId), RefinementQueryVerdict.reconstitute({
+      const parsed = combineResults({
+        label: QueryLabel.parse(queryId),
+        core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse)
+      });
+      if (!parsed.ok)
+        return { plan: built.plan, result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` } };
+      verdicts.push([parsed.value.label, RefinementQueryVerdict.of({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
         decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
-        core: r.core
+        core: parsed.value.core?.map((label) => label.asString())
       })]);
     }
     return { plan: built.plan, result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)) } };
@@ -9416,7 +9733,7 @@ class RefinementSolverClientImpl {
   }
 }
 // src/design/adapter/design-ir-validation-materials-repository-impl.ts
-import { existsSync as existsSync5, readFileSync as readFileSync7 } from "fs";
+import { existsSync as existsSync4, readFileSync as readFileSync7 } from "fs";
 import { basename as basename2, dirname as dirname4, join as join7 } from "path";
 var DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 function asExpression(v) {
@@ -9427,19 +9744,33 @@ function strArrayOrUndefined(v) {
 }
 function brRefsOrUndefined(v) {
   const arr = strArrayOrUndefined(v);
-  return arr === undefined ? undefined : BrRefs.reconstitute(arr);
+  if (arr === undefined)
+    return ok(undefined);
+  const parsed = traverseResult(arr, BrRef.parse);
+  return parsed.ok ? ok(BrRefs.of(parsed.value)) : parsed;
 }
 function buildUnitView(rawUnit, unitName, recordRoot) {
+  const unit = DesignUnitId.parse(unitName);
+  if (!unit.ok)
+    return err(JSON.stringify(unit.error));
   const entities = parseDesignEntities(isObject(rawUnit.schema) ? rawUnit.schema : {});
+  if (!entities.ok)
+    return err(JSON.stringify(entities.error));
   const obligations = [];
   for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string")
       continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
-    obligations.push(DesignObligationDecl.reconstitute({
-      id: DesignObligationId.reconstitute(ob.id),
-      origin: typeof ob.origin === "string" ? DesignObligationOrigin.reconstitute(ob.origin) : undefined,
-      brRefs: brRefsOrUndefined(ob.brRefs ?? null),
+    const parsed = combineResults({
+      id: DesignObligationId.parse(ob.id),
+      brRefs: brRefsOrUndefined(ob.brRefs ?? null)
+    });
+    if (!parsed.ok)
+      return err(JSON.stringify(parsed.error));
+    obligations.push(DesignObligationDecl.of({
+      id: parsed.value.id,
+      origin: typeof ob.origin === "string" ? DesignObligationOrigin.of(ob.origin) : undefined,
+      brRefs: parsed.value.brRefs,
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
       effect: asExpression(ob.effect ?? null),
@@ -9460,12 +9791,19 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
     for (const tr of Array.isArray(sm.transitions) ? sm.transitions : []) {
       if (!isObject(tr) || typeof tr.id !== "string")
         continue;
-      transitions.push(DesignTransitionDecl.reconstitute({
-        id: DesignTransitionId.reconstitute(tr.id),
+      const parsed = combineResults({
+        id: DesignTransitionId.parse(tr.id),
+        trigger: typeof tr.trigger === "string" ? TriggerName.parse(tr.trigger) : ok(undefined),
+        brRefs: brRefsOrUndefined(tr.brRefs ?? null)
+      });
+      if (!parsed.ok)
+        return err(JSON.stringify(parsed.error));
+      transitions.push(DesignTransitionDecl.of({
+        id: parsed.value.id,
         from: typeof tr.from === "string" ? tr.from : undefined,
         to: typeof tr.to === "string" ? tr.to : undefined,
-        trigger: typeof tr.trigger === "string" ? TriggerName.reconstitute(tr.trigger) : undefined,
-        brRefs: brRefsOrUndefined(tr.brRefs ?? null),
+        trigger: parsed.value.trigger,
+        brRefs: parsed.value.brRefs,
         guard: asExpression(tr.guard ?? null),
         effect: asExpression(tr.effect ?? null)
       }));
@@ -9474,28 +9812,43 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
     for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
       if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string")
         continue;
-      ignores.push(DesignIgnoreDecl.reconstitute({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger) }));
+      const trigger = TriggerName.parse(ig.trigger);
+      if (!trigger.ok)
+        return err(JSON.stringify(trigger.error));
+      ignores.push(DesignIgnoreDecl.of({ state: ig.state, trigger: trigger.value }));
     }
-    stateMachines.push(DesignMachineDecl.reconstitute({ id: DesignMachineId.reconstitute(sm.id), attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
+    const id = DesignMachineId.parse(sm.id);
+    if (!id.ok)
+      return err(JSON.stringify(id.error));
+    stateMachines.push(DesignMachineDecl.of({ id: id.value, attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
   }
   const scenarios = [];
   for (const sc of Array.isArray(rawUnit.scenarios) ? rawUnit.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string")
       continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
-    scenarios.push(DesignScenarioDecl.reconstitute({
-      id: DesignScenarioId.reconstitute(sc.id),
+    const parsed = combineResults({
+      id: DesignScenarioId.parse(sc.id),
+      brRefs: brRefsOrUndefined(sc.brRefs ?? null)
+    });
+    if (!parsed.ok)
+      return err(JSON.stringify(parsed.error));
+    scenarios.push(DesignScenarioDecl.of({
+      id: parsed.value.id,
       bindings: BindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
-      brRefs: brRefsOrUndefined(sc.brRefs ?? null)
+      brRefs: parsed.value.brRefs
     }));
   }
   const background = [];
   for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string")
       continue;
-    background.push(DesignBackgroundDecl.reconstitute({ id: DesignBackgroundId.reconstitute(bg.id), assert: asExpression(bg.assert ?? null) }));
+    const id = DesignBackgroundId.parse(bg.id);
+    if (!id.ok)
+      return err(JSON.stringify(id.error));
+    background.push(DesignBackgroundDecl.of({ id: id.value, assert: asExpression(bg.assert ?? null) }));
   }
   const unformalizedTargets = [];
   for (const uf of Array.isArray(rawUnit.unformalized) ? rawUnit.unformalized : []) {
@@ -9506,20 +9859,23 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
         unformalizedTargets.push(t);
     }
   }
-  const directoryExists = recordRoot === null ? true : existsSync5(join7(recordRoot, "construction", unitName));
+  const directoryExists = recordRoot === null ? true : existsSync4(join7(recordRoot, "construction", unitName));
   const rulesPath = recordRoot === null ? null : join7(recordRoot, "construction", unitName, "functional-design", "rules.md");
   const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
-  return DesignUnitDecl.reconstitute({
-    unit: DesignUnitId.of(unitName),
-    entities,
+  const targets = traverseResult(unformalizedTargets, TargetId.parse);
+  if (!targets.ok)
+    return err(JSON.stringify(targets.error));
+  return ok(DesignUnitDecl.of({
+    unit: unit.value,
+    entities: entities.value,
     obligations: DesignObligationDecls.of(obligations),
     stateMachines: DesignMachineDecls.of(stateMachines),
     scenarios: DesignScenarioDecls.of(scenarios),
     background: DesignBackgroundDecls.of(background),
-    unformalizedTargets: UnformalizedTargets.reconstitute(unformalizedTargets),
+    unformalizedTargets: UnformalizedTargets.of(targets.value),
     directoryExists,
     rulesMarkdown
-  });
+  }));
 }
 
 class DesignIrValidationMaterialsRepositoryImpl {
@@ -9529,7 +9885,7 @@ class DesignIrValidationMaterialsRepositoryImpl {
   }
   findById(id) {
     const outputPath = id.modelId().artifactPath().asString();
-    if (basename2(outputPath) !== DESIGN_MODEL_BASENAME || !existsSync5(outputPath)) {
+    if (basename2(outputPath) !== DESIGN_MODEL_BASENAME || !existsSync4(outputPath)) {
       return err({ kind: "not-found", path: outputPath });
     }
     const corrupt = (cause) => err({ kind: "corrupt", path: outputPath, cause });
@@ -9553,7 +9909,7 @@ class DesignIrValidationMaterialsRepositoryImpl {
     if (!isObject(ir)) {
       return corrupt("design IR fence must contain a JSON object");
     }
-    if (!existsSync5(this.#schemaPath)) {
+    if (!existsSync4(this.#schemaPath)) {
       return corrupt(`design IR schema not installed at ${this.#schemaPath} \u2014 run plugin sync`);
     }
     const schema = readContractSchema(this.#schemaPath);
@@ -9562,8 +9918,10 @@ class DesignIrValidationMaterialsRepositoryImpl {
     }
     const schemaErrors = [];
     validateSchema(schema.value, schema.value, ir, "", schemaErrors);
-    const irVersion = typeof ir.irVersion === "string" ? ir.irVersion : "";
-    const major = Number.parseInt(irVersion.split(".")[0] ?? "", 10);
+    const irVersion = IrVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : "");
+    if (!irVersion.ok)
+      return corrupt(JSON.stringify(irVersion.error));
+    const major = irVersion.value.majorVersion();
     const semanticGateOpen = schemaErrors.length === 0 && !(Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR);
     const units = [];
     if (semanticGateOpen) {
@@ -9571,12 +9929,15 @@ class DesignIrValidationMaterialsRepositoryImpl {
       for (const rawUnit of Array.isArray(ir.units) ? ir.units : []) {
         if (!isObject(rawUnit) || typeof rawUnit.unit !== "string")
           continue;
-        units.push(buildUnitView(rawUnit, rawUnit.unit, recordRoot));
+        const parsed = buildUnitView(rawUnit, rawUnit.unit, recordRoot);
+        if (!parsed.ok)
+          return corrupt(parsed.error);
+        units.push(parsed.value);
       }
     }
-    return ok(DesignIrValidationMaterials.reconstitute({
+    return ok(DesignIrValidationMaterials.of({
       id,
-      irVersion: IrVersion.reconstitute(irVersion),
+      irVersion: irVersion.value,
       schemaErrors: ErrorMessages.of(schemaErrors),
       units: DesignUnitDecls.of(units),
       sourceDocument: new Uint8Array(bytes)
@@ -9584,8 +9945,9 @@ class DesignIrValidationMaterialsRepositoryImpl {
   }
   store(materials) {
     const outputPath = materials.id().modelId().artifactPath().asString();
+    const bytes = materials.sourceDocument();
     try {
-      writeFileAtomically(outputPath, materials.sourceDocument());
+      writeFileAtomically(outputPath, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
@@ -9593,7 +9955,7 @@ class DesignIrValidationMaterialsRepositoryImpl {
   }
 }
 // src/design/adapter/refinement-map-repository-impl.ts
-import { existsSync as existsSync6, readFileSync as readFileSync8 } from "fs";
+import { existsSync as existsSync5, readFileSync as readFileSync8 } from "fs";
 class RefinementMapRepositoryImpl {
   #mapSchemaPath;
   constructor(mapSchemaPath) {
@@ -9601,7 +9963,7 @@ class RefinementMapRepositoryImpl {
   }
   findById(id) {
     const path = id.artifactPath().asString();
-    if (!existsSync6(path))
+    if (!existsSync5(path))
       return err({ kind: "not-found", path });
     let bytes;
     try {
@@ -9616,8 +9978,9 @@ class RefinementMapRepositoryImpl {
   }
   store(map) {
     const path = map.id().artifactPath().asString();
+    const bytes = map.sourceDocument();
     try {
-      writeFileAtomically(path, map.sourceDocument());
+      writeFileAtomically(path, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
@@ -9633,20 +9996,19 @@ class DesignReportFinalizer {
     this.#findingsSchema = findingsSchema;
   }
   finalize(report, model) {
-    return this.#finalizing(report, (staged) => staged.crossChecked(model, report.irHash()).conformedTo(this.#findingsSchema));
+    return this.#finalizing(report, model);
   }
   finalizeIrUnreadable(report) {
-    const finalized = this.#finalizing(report, (staged) => staged.withoutCrossCheck());
+    const finalized = this.#finalizing(report, null);
     if (!finalized.ok)
       return err(finalized.error);
     return ok(undefined);
   }
-  #finalizing(report, resolveCrossCheck) {
+  #finalizing(report, model) {
     const loaded = this.#repository.findByDirectory(report.id().directory());
     if (!loaded.ok)
       return err(loaded.error);
-    const staged = loaded.value.finalizing(report).conformedTo(this.#findingsSchema);
-    const aggregate = resolveCrossCheck(staged).conformedTo(this.#findingsSchema);
+    const aggregate = loaded.value.finalizedWith(report, model, this.#findingsSchema);
     const stored = this.#repository.store(aggregate);
     if (!stored.ok)
       return err(stored.error);
@@ -9744,7 +10106,7 @@ class VerifyDesignSmtUseCase {
     for (const u of model.units()) {
       if (this.#clock.now() - started > RUN_BUDGET_MS) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run solver budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -9752,7 +10114,7 @@ class VerifyDesignSmtUseCase {
       const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
       if (remaining < 3000) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run solver budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -9767,14 +10129,14 @@ class VerifyDesignSmtUseCase {
       }
       if (run.doc === null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
         }
         continue;
       }
       const remapped = run.doc.remapVerdicts(u, lowered.index());
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: remapped.unavailable }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: remapped.unavailable }));
         }
         continue;
       }
@@ -9782,16 +10144,17 @@ class VerifyDesignSmtUseCase {
       skipped.push(...remapped.skipped);
       checkedUnits.push(`unit:${u.name()}`);
     }
-    const context = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
+    const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
     let inputs;
-    if (context.isActive()) {
+    if (materials.ok && materials.value.isActive()) {
+      const context = materials.value;
       const req = context.requirements();
       const acq = context.mapAcquisition();
       const reqTargets = req.allTargetIds();
       const skipAll = (reason, detail) => {
         for (const u of model.units()) {
           for (const t of reqTargets)
-            skipped.push(DesignSkipped.of({ target: t, reason, unit: u.name(), detail }));
+            skipped.push(DesignSkipped.of({ target: t, reason, unit: UnitName.of(u.name()), detail }));
         }
       };
       acq.match({
@@ -9812,14 +10175,14 @@ class VerifyDesignSmtUseCase {
             const unitMap = map.unitMapOf(u.id());
             if (!unitMap) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: UnitName.of(u.name()), detail: `the refinement map has no entry for unit ${u.name()}` }));
               }
               continue;
             }
             const refRemaining = REFINEMENT_DEADLINE_MS - (this.#clock.now() - started);
             if (refRemaining < 5000) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run solver budget was exhausted before the refinement pass" }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run solver budget was exhausted before the refinement pass" }));
               }
               continue;
             }
@@ -9827,7 +10190,7 @@ class VerifyDesignSmtUseCase {
             const check = this.#refinementSolverClient.check(u, req, plan, Math.min(30000, refRemaining));
             if (check.result.kind === "unavailable") {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: check.result.reason }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: check.result.reason }));
               }
               continue;
             }
@@ -9851,11 +10214,14 @@ class VerifyDesignSmtUseCase {
       findings: DesignFindings.of(findings),
       skipped: DesignSkips.of(skipped),
       ...inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {},
-      checked: CheckedUnits.reconstitute(checkedUnits)
+      checked: CheckedUnits.of(Array.from(checkedUnits, (raw) => UnitName.of(raw))),
+      ...!materials.ok ? { unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})` } : {}
     });
     const finalized = this.#finalizer.finalize(report, model);
     if (!finalized.ok)
       return { kind: "save-failed", error: finalized.error };
+    if (!materials.ok)
+      return { kind: "acquisition-failed", error: materials.error };
     return finalized.value;
   }
 }
@@ -9906,7 +10272,7 @@ class VerifyDesignQuintUseCase {
     for (const u of model.units()) {
       if (this.#clock.now() - started > RUN_BUDGET_MS2) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run backend budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -9914,7 +10280,7 @@ class VerifyDesignQuintUseCase {
       const mainRemaining = Math.min(UNIT_WALL_TIMEOUT_MS2, RUN_BUDGET_MS2 - (this.#clock.now() - started));
       if (mainRemaining < 3000) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run backend budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -9929,14 +10295,14 @@ class VerifyDesignQuintUseCase {
       }
       if (run.doc === null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
         }
         continue;
       }
       const remapped = run.doc.remapVerdicts(u, lowered.index());
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: remapped.unavailable }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: remapped.unavailable }));
         }
         continue;
       }
@@ -9953,7 +10319,7 @@ class VerifyDesignQuintUseCase {
           skipped.push(DesignSkipped.of({
             target: sm.id().asTargetId(),
             reason: SkipReason.capability(),
-            unit: u.name(),
+            unit: UnitName.of(u.name()),
             detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`
           }));
           continue;
@@ -9967,41 +10333,44 @@ class VerifyDesignQuintUseCase {
           }
           probesUsed += 1;
           const probe = this.#siblingBackendClient.probeState(u, lowered, attrPath, state, probeRemaining);
-          if (probe.kind === "failed") {
-            leftover.push(state);
-            continue;
-          }
-          if (!probe.reached) {
-            findings.push(DesignFinding.of({
-              kind: FindingKind.unreachable(),
-              frRefs: FrRefs.reconstitute([]),
-              targets: TargetIds.reconstitute([sm.id().asString()]),
-              witness: DesignWitness.model({ [attrPath]: state }),
-              unit: u.name(),
-              detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state \u2014 it may be dead.`
-            }));
-          }
+          probe.match({
+            reached: () => {},
+            unverified: () => {
+              leftover.push(state);
+            },
+            notReachedWithinBound: () => {
+              findings.push(DesignFinding.of({
+                kind: FindingKind.unreachable(),
+                frRefs: FrRefs.of([]),
+                targets: TargetIds.of(Array.from([sm.id().asString()], (raw) => TargetId.of(raw))),
+                witness: DesignWitness.model({ [attrPath]: state }),
+                unit: UnitName.of(u.name()),
+                detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state \u2014 it may be dead.`
+              }));
+            }
+          });
         }
         if (leftover.length > 0) {
           skipped.push(DesignSkipped.of({
             target: sm.id().asTargetId(),
             reason: probesUsed >= this.#unreachCap ? SkipReason.timeout() : SkipReason.unavailable(),
-            unit: u.name(),
+            unit: UnitName.of(u.name()),
             detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id().asString()} (per-run cap ${this.#unreachCap} / budget reached, or the probe run failed)`
           }));
         }
       }
     }
-    const context = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
+    const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
     let inputs;
-    if (context.isActive()) {
+    if (materials.ok && materials.value.isActive()) {
+      const context = materials.value;
       const req = context.requirements();
       const acq = context.mapAcquisition();
       const reqTargets = req.allTargetIds();
       const skipAll = (reason, detail) => {
         for (const u of model.units()) {
           for (const t of reqTargets)
-            skipped.push(DesignSkipped.of({ target: t, reason, unit: u.name(), detail }));
+            skipped.push(DesignSkipped.of({ target: t, reason, unit: UnitName.of(u.name()), detail }));
         }
       };
       acq.match({
@@ -10022,7 +10391,7 @@ class VerifyDesignQuintUseCase {
             const unitMap = map.unitMapOf(u.id());
             if (!unitMap) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: UnitName.of(u.name()), detail: `the refinement map has no entry for unit ${u.name()}` }));
               }
               continue;
             }
@@ -10035,7 +10404,7 @@ class VerifyDesignQuintUseCase {
             const remaining = Math.min(UNIT_WALL_TIMEOUT_MS2, RUN_BUDGET_MS2 + UNREACH_BUDGET_MS - (this.#clock.now() - started));
             if (remaining < 3000) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run backend budget was exhausted before the refinement pass" }));
               }
               continue;
             }
@@ -10045,7 +10414,7 @@ class VerifyDesignQuintUseCase {
             let n = refinementObligations.count();
             for (const e of extras) {
               n += 1;
-              const lowId = LoweredId.reconstitute(`OB-${n}`);
+              const lowId = LoweredId.of(`OB-${n}`);
               refinementObligations = refinementObligations.add(e.loweredAs(lowId));
               refinementIndex = refinementIndex.withPassthrough(lowId.asString(), e.reqId().asString());
             }
@@ -10053,41 +10422,20 @@ class VerifyDesignQuintUseCase {
             const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
             if (run.exit !== 0 || run.doc === null) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
               }
               continue;
             }
             const remapped = run.doc.remapVerdicts(u, lowered.index());
             if (remapped.unavailable !== null) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: `refinement pass degraded: ${remapped.unavailable}` }));
               }
               continue;
             }
-            const reqIdSet = extras.reqIds();
-            let hitExtra = false;
-            let designConflict = false;
-            for (const f of remapped.findings) {
-              if (!f.isConflict())
-                continue;
-              const violation = f.asRefinementViolation(reqIdSet, u.name());
-              if (violation !== null) {
-                hitExtra = true;
-                findings.push(violation);
-              } else {
-                designConflict = true;
-              }
-            }
-            if (!hitExtra && designConflict) {
-              for (const e of extras) {
-                skipped.push(DesignSkipped.of({
-                  target: e.reqTarget(),
-                  reason: SkipReason.capability(),
-                  unit: u.name(),
-                  detail: "the machine reachably violates its own design invariants first (see the design conflict findings) \u2014 refinement reachability is masked until those are resolved"
-                }));
-              }
-            }
+            const interpreted = extras.interpret(remapped.findings, remapped.skipped, u.name());
+            findings.push(...interpreted.findings);
+            skipped.push(...interpreted.skipped);
           }
         }
       });
@@ -10101,11 +10449,14 @@ class VerifyDesignQuintUseCase {
       findings: DesignFindings.of(findings),
       skipped: DesignSkips.of(skipped),
       ...inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {},
-      checked: CheckedUnits.reconstitute(checkedUnits)
+      checked: CheckedUnits.of(Array.from(checkedUnits, (raw) => UnitName.of(raw))),
+      ...!materials.ok ? { unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})` } : {}
     });
     const finalized = this.#finalizer.finalize(report, model);
     if (!finalized.ok)
       return { kind: "save-failed", error: finalized.error };
+    if (!materials.ok)
+      return { kind: "acquisition-failed", error: materials.error };
     return finalized.value;
   }
 }

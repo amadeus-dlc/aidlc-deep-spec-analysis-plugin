@@ -7,12 +7,12 @@ export class InputAnchor {
   readonly #artifact: ArtifactPath;
   readonly #sha256: ContentHash;
 
-  private constructor(props: { artifact: string; sha256: ContentHash }) {
-    this.#artifact = ArtifactPath.reconstitute(props.artifact);
+  private constructor(props: Parameters<typeof InputAnchor.of>[0]) {
+    this.#artifact = ArtifactPath.of(props.artifact);
     this.#sha256 = props.sha256;
   }
 
-  static reconstitute(props: { artifact: string; sha256: ContentHash }): InputAnchor {
+  static of(props: { artifact: string; sha256: ContentHash }): InputAnchor {
     return new InputAnchor(props);
   }
 

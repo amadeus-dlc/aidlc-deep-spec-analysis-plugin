@@ -22,15 +22,7 @@ export class DesignMachine {
   readonly #ignores: DesignIgnores;
   readonly #deterministic: boolean;
 
-  private constructor(props: {
-    id: DesignMachineId;
-    entity: DesignEntityName;
-    attribute: DesignAttributeName;
-    initial: InitialStates;
-    transitions: DesignTransitions;
-    ignores: DesignIgnores;
-    deterministic: boolean;
-  }) {
+  private constructor(props: Parameters<typeof DesignMachine.of>[0]) {
     this.#id = props.id;
     this.#entity = props.entity;
     this.#attribute = props.attribute;
@@ -40,7 +32,7 @@ export class DesignMachine {
     this.#deterministic = props.deterministic;
   }
 
-  static reconstitute(props: {
+  static of(props: {
     id: DesignMachineId;
     entity: DesignEntityName;
     attribute: DesignAttributeName;
@@ -74,7 +66,7 @@ export class DesignMachine {
 
   // 降ろし方の帰属：ignore の no-op event は宣言元の機械に帰属する。
   loweredIgnoreOrigin(): LoweredOrigin {
-    return LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(this.#id.asString()), kind: "ignore" });
+    return LoweredOrigin.of({ design: LoweredOriginRef.of(this.#id.asString()), kind: "ignore" });
   }
 
   // 到達不能プローブの候補：enum 宣言値のうち初期状態でないもの（昇順——

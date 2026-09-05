@@ -1,3 +1,4 @@
+import { SkipReason, type Expression, ExpressionTree } from "@deep-spec/kernel-domain";
 // IR → Quint モジュールのコンパイラ。Quint という形式の知識（変数名符号化・
 // 式構文・action/temporal/init の台本）はすべてここに封じ、判定解釈に必要な
 // 事実（QuintMachinePlan）だけをドメイン語彙で返す。
@@ -7,7 +8,6 @@
 // コンパイル時 skip を戻り値で返す（生成されるモジュール本文・skip 文言は
 // バイト同一）。
 
-import { type Expression, ExpressionTree } from "@deep-spec/kernel-domain";
 import type { CompiledQuintMachine } from "./compiled-quint-machine.ts";
 import {
   type AttributeDeclaration,
@@ -165,6 +165,7 @@ export function compileQuintMachine(model: RequirementsModel): QuintCompilation 
   try {
     return { kind: "compiled", machine: compile(model) };
   } catch (err) {
+    if (!(err instanceof CompileError)) throw err;
     return { kind: "uncompilable", error: err instanceof Error ? err.message : String(err) };
   }
 }
@@ -199,12 +200,12 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   for (const ob of model.obligations()) {
     const assertion = ob.assertion();
     if (ob.isInvariantLike() && assertion !== undefined) {
-      invariantComponents.push(QuintMachineComponent.reconstitute({ id: ob.id(), expression: assertion }));
+      invariantComponents.push(QuintMachineComponent.of({ id: ob.id(), expression: assertion }));
       propDefs.push({ id: ob.id().asString(), expr: assertion });
     }
     const temporal = ob.temporal();
     if (ob.isStateTemporal() && temporal?.pattern === "always" && temporal.assert !== undefined) {
-      invariantComponents.push(QuintMachineComponent.reconstitute({ id: ob.id(), expression: temporal.assert }));
+      invariantComponents.push(QuintMachineComponent.of({ id: ob.id(), expression: temporal.assert }));
       propDefs.push({ id: ob.id().asString(), expr: temporal.assert });
     }
   }
@@ -258,7 +259,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
     if (!ob.isEvent()) continue;
     const event = ob.eventDefinition();
     if (event === null) {
-      compileSkips.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" }));
+      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "event obligation lacks trigger/guard/effect" }));
       continue;
     }
     try {
@@ -275,7 +276,8 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       actionNames.push(action);
       eventIds.push(ob.id());
     } catch (err) {
-      compileSkips.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) }));
+      if (!(err instanceof CompileError)) throw err;
+      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
     }
   }
   const idleParts = attrs.map((a) => `${qVar(a.path().asString())}' = ${qVar(a.path().asString())}`);
@@ -295,7 +297,8 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       lines.push(`  temporal ${qId("temp", ob.id().asString())} = always(${from} implies eventually(${to}))`);
       temporalNames.set(ob.id().asString(), qId("temp", ob.id().asString()));
     } catch (err) {
-      compileSkips.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err instanceof Error ? err.message : String(err) }));
+      if (!(err instanceof CompileError)) throw err;
+      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
     }
   }
   lines.push("");
