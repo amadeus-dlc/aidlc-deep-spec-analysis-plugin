@@ -196,6 +196,17 @@ describe("ContentHash", () => {
 });
 
 describe("IrVersion", () => {
+  test("equality compares the complete preserved version, not only the supported major", () => {
+    const version = IrVersion.of("1.2.3");
+    const same = IrVersion.of("1.2.3");
+    expect(version.equals(version)).toBe(true);
+    expect(version.equals(same)).toBe(true);
+    expect(same.equals(version)).toBe(true);
+    for (const raw of ["2.2.3", "1.3.3", "1.2.4", "01.2.3"]) {
+      expect(version.equals(IrVersion.of(raw))).toBe(false);
+    }
+  });
+
   test("parse accepts exactly major.minor.patch", () => {
     const ok = IrVersion.parse("1.2.3");
     expect(ok.ok).toBe(true);
