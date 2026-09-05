@@ -1,27 +1,40 @@
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec/kernel-infrastructure";
+import type { InitialState } from "./initial-state.ts";
 export class InitialStates {
-  readonly #values: readonly string[];
+  readonly #values: readonly InitialState[];
 
-  private constructor(values: readonly string[]) {
-    this.#values = values;
+  private constructor(values: readonly InitialState[]) {
+    if (values.length > 10_000)
+      throw new IllegalArgumentException({ kind: "too-many-initial-states", raw: values.length });
+    this.#values = Object.freeze([...values]);
   }
 
-  static of(values: readonly string[]): InitialStates {
-    return new InitialStates([...values]);
+  static parse(values: readonly InitialState[]): Result<InitialStates, ParseError> {
+    return parseConstruction(() => new InitialStates(values));
   }
 
-  add(value: string): InitialStates {
+  static of(values: readonly InitialState[]): InitialStates {
+    return new InitialStates(values);
+  }
+
+  add(value: InitialState): InitialStates {
     return new InitialStates([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<string> {
+  *[Symbol.iterator](): Iterator<InitialState> {
     yield* this.#values;
   }
 
   includes(value: string): boolean {
-    return this.#values.includes(value);
+    return this.#values.some((state) => state.matchesName(value));
   }
 
-  toArray(): readonly string[] {
+  toArray(): readonly InitialState[] {
     return this.#values;
   }
 }

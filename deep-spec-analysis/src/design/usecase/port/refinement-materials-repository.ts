@@ -11,11 +11,10 @@
 // 陳腐化（requirementsIrHash / designIrHash の不一致）の判定はユースケースの
 // フロー制御——ポートは判定しない。
 
+import type { RefinementMaterials, RefinementMaterialsIdentifier } from "@deep-spec/design-domain";
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { RefinementMaterialsId } from "@deep-spec/design-domain";
-import type { RefinementMaterials } from "@deep-spec/design-domain";
 
 export interface RefinementMaterialsRepository {
-  findById(id: RefinementMaterialsId): Result<RefinementMaterials, RepositoryError>;
+  findById(id: RefinementMaterialsIdentifier): Result<RefinementMaterials, RepositoryError>;
 }

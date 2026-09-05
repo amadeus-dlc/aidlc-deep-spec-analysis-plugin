@@ -4,17 +4,28 @@
 // 到達不能プローブの候補選別（初期状態でない宣言値）と deterministic:false
 // waiver の判定は機械自身が所有する（#71 波7）。
 
-import { type DesignTransitions } from "./design-transitions.ts";
-import { type InitialStates } from "./initial-states.ts";
-import { DesignAttributeName } from "./design-attribute-name.ts";
-import { DesignEntityName } from "./design-entity-name.ts";
-import { DesignIgnores } from "./design-ignores.ts";
-import { DesignMachineId } from "./design-machine-id.ts";
+import type { DesignAttributeName } from "./design-attribute-name.ts";
+import type { DesignEntityName } from "./design-entity-name.ts";
+import type { DesignIgnores } from "./design-ignores.ts";
+import type { DesignMachineIdentifier } from "./design-machine-identifier.ts";
+import type { DesignTransitions } from "./design-transitions.ts";
+import type { InitialStates } from "./initial-states.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
-import { LoweredOriginRef } from "./lowered-origin-ref.ts";
+import { LoweredOriginReference } from "./lowered-origin-reference.ts";
+
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type DesignMachineParam = {
+  id: DesignMachineIdentifier;
+  entity: DesignEntityName;
+  attribute: DesignAttributeName;
+  initial: InitialStates;
+  transitions: DesignTransitions;
+  ignores: DesignIgnores;
+  deterministic: boolean;
+};
 
 export class DesignMachine {
-  readonly #id: DesignMachineId;
+  readonly #id: DesignMachineIdentifier;
   readonly #entity: DesignEntityName;
   readonly #attribute: DesignAttributeName;
   readonly #initial: InitialStates;
@@ -22,7 +33,7 @@ export class DesignMachine {
   readonly #ignores: DesignIgnores;
   readonly #deterministic: boolean;
 
-  private constructor(props: Parameters<typeof DesignMachine.of>[0]) {
+  private constructor(props: DesignMachineParam) {
     this.#id = props.id;
     this.#entity = props.entity;
     this.#attribute = props.attribute;
@@ -32,19 +43,11 @@ export class DesignMachine {
     this.#deterministic = props.deterministic;
   }
 
-  static of(props: {
-    id: DesignMachineId;
-    entity: DesignEntityName;
-    attribute: DesignAttributeName;
-    initial: InitialStates;
-    transitions: DesignTransitions;
-    ignores: DesignIgnores;
-    deterministic: boolean;
-  }): DesignMachine {
+  static of(props: DesignMachineParam): DesignMachine {
     return new DesignMachine(props);
   }
 
-  id(): DesignMachineId {
+  id(): DesignMachineIdentifier {
     return this.#id;
   }
 
@@ -66,7 +69,7 @@ export class DesignMachine {
 
   // 降ろし方の帰属：ignore の no-op event は宣言元の機械に帰属する。
   loweredIgnoreOrigin(): LoweredOrigin {
-    return LoweredOrigin.of({ design: LoweredOriginRef.of(this.#id.asString()), kind: "ignore" });
+    return LoweredOrigin.of({ design: LoweredOriginReference.of(this.#id.asString()), kind: "ignore" });
   }
 
   // 到達不能プローブの候補：enum 宣言値のうち初期状態でないもの（昇順——

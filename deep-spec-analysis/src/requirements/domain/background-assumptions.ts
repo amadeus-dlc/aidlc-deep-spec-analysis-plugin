@@ -5,11 +5,11 @@ export class BackgroundAssumptions {
   readonly #values: readonly BackgroundAssumption[];
 
   private constructor(values: readonly BackgroundAssumption[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly BackgroundAssumption[]): BackgroundAssumptions {
-    return new BackgroundAssumptions([...values]);
+    return new BackgroundAssumptions(values);
   }
 
   add(value: BackgroundAssumption): BackgroundAssumptions {

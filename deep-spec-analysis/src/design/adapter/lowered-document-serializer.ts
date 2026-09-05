@@ -3,44 +3,52 @@
 // ユニットの型付き実体宣言から描画する（裁定 2、2026-09-03——整形済み IR と
 // バイト同一）。
 
+import type { DesignUnit, LoweredUnit } from "@deep-spec/design-domain";
 import type { Json } from "@deep-spec/kernel-infrastructure";
-import { LoweredUnit } from "@deep-spec/design-domain";
-import type { DesignUnit } from "@deep-spec/design-domain";
 import { renderDesignEntities } from "./design-entities-parser.ts";
 
 export function renderLoweredDocument(u: DesignUnit, low: LoweredUnit): Json {
-  const obligations: Json[] = low.obligations().toArray().map((ob) => {
-    const out: { [k: string]: Json } = {
-      id: ob.id().asString(),
-      nature: ob.nature(),
-      frRefs: ob.frRefs().toStrings() as unknown as Json,
-    };
-    const assertion = ob.assertion();
-    if (assertion) out.assert = assertion as unknown as Json;
-    const trigger = ob.trigger();
-    if (trigger !== undefined) out.trigger = trigger;
-    const guard = ob.guard();
-    if (guard) out.guard = guard as unknown as Json;
-    const effect = ob.effect();
-    if (effect) out.effect = effect as unknown as Json;
-    const temporal = ob.temporal();
-    if (temporal) out.temporal = temporal as unknown as Json;
-    return out;
-  });
-  const scenarios: Json[] = low.scenarios().toArray().map((sc) => {
-    const out: { [k: string]: Json } = {
-      id: sc.id().asString(),
-      kind: sc.kind(),
-      frRefs: sc.frRefs().toStrings() as unknown as Json,
-      bindings: sc.bindings() as unknown as Json,
-    };
-    const event = sc.event();
-    if (event) out.event = event as unknown as Json;
-    const expectation = sc.expectation();
-    if (expectation) out.expect = expectation as unknown as Json;
-    return out;
-  });
-  const background: Json[] = low.background().toArray().map((bg) => ({ id: bg.id().asString(), assert: bg.assertion() as unknown as Json }));
+  const obligations: Json[] = low
+    .obligations()
+    .toArray()
+    .map((ob) => {
+      const out: { [k: string]: Json } = {
+        id: ob.id().asString(),
+        nature: ob.nature(),
+        frRefs: ob.functionalRequirementReferences().toStrings() as unknown as Json,
+      };
+      const assertion = ob.assertion();
+      if (assertion) out.assert = assertion as unknown as Json;
+      const trigger = ob.trigger();
+      if (trigger !== undefined) out.trigger = trigger;
+      const guard = ob.guard();
+      if (guard) out.guard = guard as unknown as Json;
+      const effect = ob.effect();
+      if (effect) out.effect = effect as unknown as Json;
+      const temporal = ob.temporal();
+      if (temporal) out.temporal = temporal as unknown as Json;
+      return out;
+    });
+  const scenarios: Json[] = low
+    .scenarios()
+    .toArray()
+    .map((sc) => {
+      const out: { [k: string]: Json } = {
+        id: sc.id().asString(),
+        kind: sc.kind(),
+        frRefs: sc.functionalRequirementReferences().toStrings() as unknown as Json,
+        bindings: sc.bindings().toDocument(),
+      };
+      const event = sc.event();
+      if (event) out.event = event as unknown as Json;
+      const expectation = sc.expectation();
+      if (expectation) out.expect = expectation as unknown as Json;
+      return out;
+    });
+  const background: Json[] = low
+    .background()
+    .toArray()
+    .map((bg) => ({ id: bg.id().asString(), assert: bg.assertion() as unknown as Json }));
   return {
     irVersion: "1.0.0",
     schema: { entities: renderDesignEntities(u.entities()) },

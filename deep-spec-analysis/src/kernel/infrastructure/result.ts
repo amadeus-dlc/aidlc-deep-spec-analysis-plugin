@@ -1,14 +1,13 @@
-import type { Err } from "./err.ts";
-import type { Ok } from "./ok.ts";
+import type { ResultFailure } from "./result-failure.ts";
+import type { ResultSuccess } from "./result-success.ts";
 
+export type Result<T, E> = ResultSuccess<T> | ResultFailure<E>;
 
-export type Result<T, E> = Ok<T> | Err<E>;
-
-export function ok<T>(value: T): Ok<T> {
+export function ok<T>(value: T): ResultSuccess<T> {
   return { ok: true, value };
 }
 
-export function err<E>(error: E): Err<E> {
+export function err<E>(error: E): ResultFailure<E> {
   return { ok: false, error };
 }
 

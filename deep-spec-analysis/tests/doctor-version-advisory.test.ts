@@ -1,9 +1,21 @@
+import { afterEach, describe, expect, test } from "bun:test";
 
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "bun:test";
-import { CheckSeverity, HealthVerdict, InstalledStatus, ManifestEntry, PluginVersion, SolverAvailability } from "@deep-spec/doctor-domain";
+import {
+  DoctorPresenter,
+  GitHubReleaseTagsClientImplementation,
+  InstallationProvenanceClientImplementation,
+} from "@deep-spec/doctor-adapter";
+import {
+  CheckSeverity,
+  HealthVerdict,
+  InstalledStatus,
+  ManifestEntry,
+  PluginVersion,
+  SolverAvailability,
+} from "@deep-spec/doctor-domain";
 import {
   CheckVersionAdvisoryUseCase,
   type InstallationProvenanceClient,
@@ -11,7 +23,7 @@ import {
   type ReleaseTagsClient,
   type ReleaseTagsRead,
 } from "@deep-spec/doctor-usecase";
-import { DoctorPresenter, GitHubReleaseTagsClientImpl, InstallationProvenanceClientImpl } from "@deep-spec/doctor-adapter";
+import { ArtifactPath } from "@deep-spec/kernel-domain";
 
 class FixedProvenanceClient implements InstallationProvenanceClient {
   readonly #result: InstallationProvenanceRead;
@@ -57,10 +69,7 @@ const provenance = (version = "0.5.0"): InstallationProvenanceRead => ({
   source: "latest",
 });
 
-const check = async (
-  provenanceRead: InstallationProvenanceRead,
-  tagsRead: ReleaseTagsRead,
-) => {
+const check = async (provenanceRead: InstallationProvenanceRead, tagsRead: ReleaseTagsRead) => {
   const advisory = await new CheckVersionAdvisoryUseCase(
     new FixedProvenanceClient(provenanceRead),
     new FixedReleaseTagsClient(tagsRead),
@@ -99,7 +108,7 @@ describe("doctor version advisory", () => {
     const missingRoot = temporaryHarness();
     const missingTags = new FixedReleaseTagsClient({ kind: "available", tags: ["v9.9.9"] });
     const missing = await new CheckVersionAdvisoryUseCase(
-      new InstallationProvenanceClientImpl({ harnessRoot: missingRoot }),
+      new InstallationProvenanceClientImplementation({ harnessRoot: missingRoot }),
       missingTags,
     ).execute();
     const presenter = new DoctorPresenter({ harnessDir: ".claude" });
@@ -117,12 +126,13 @@ describe("doctor version advisory", () => {
     writeFileSync(join(dataDir, "deep-spec-analysis-install.json"), "{not-json\n");
     const malformedTags = new FixedReleaseTagsClient({ kind: "available", tags: ["v9.9.9"] });
     const malformed = await new CheckVersionAdvisoryUseCase(
-      new InstallationProvenanceClientImpl({ harnessRoot: malformedRoot }),
+      new InstallationProvenanceClientImplementation({ harnessRoot: malformedRoot }),
       malformedTags,
     ).execute();
     expect(presenter.version(malformed).toDocument()).toEqual({
       pass: false,
-      label: "deep-spec-analysis: version update check unavailable — installation provenance is malformed (file is not readable JSON)",
+      label:
+        "deep-spec-analysis: version update check unavailable — installation provenance is malformed (file is not readable JSON)",
       fix: "Re-run the installer normally (without `--update`) to replace .claude/tools/data/deep-spec-analysis-install.json.",
       severity: "advisory",
     });
@@ -140,13 +150,13 @@ describe("doctor version advisory", () => {
   });
 
   test("GitHub adapter はレスポンスを値へ変換し、HTTP failure も unavailable 値で返す", async () => {
-    const available = new GitHubReleaseTagsClientImpl({
+    const available = new GitHubReleaseTagsClientImplementation({
       repository: "example/repository",
       fetcher: async () => new Response(JSON.stringify([{ name: "v0.5.0" }, { name: "development" }]), { status: 200 }),
     });
     expect(await available.list()).toEqual({ kind: "available", tags: ["v0.5.0", "development"] });
 
-    const unavailable = new GitHubReleaseTagsClientImpl({
+    const unavailable = new GitHubReleaseTagsClientImplementation({
       repository: "example/repository",
       fetcher: async () => new Response("rate limited", { status: 503 }),
     });
@@ -160,9 +170,19 @@ describe("doctor version advisory", () => {
       new FixedReleaseTagsClient({ kind: "available", tags: ["v0.5.0"] }),
     ).execute();
     const verdict = HealthVerdict.of([
-      ...presenter.installation([InstalledStatus.of(ManifestEntry.error("tools/deep-spec-analysis-doctor.ts"), true)]),
+      ...presenter.installation([
+        InstalledStatus.of(ManifestEntry.error(ArtifactPath.of("tools/deep-spec-analysis-doctor.ts")), true),
+      ]),
       presenter.version(version),
-      ...presenter.solvers(SolverAvailability.of({ z3Package: true, nodeRuntime: true, quintCli: true, apalache: true, apalacheServerStale: false })),
+      ...presenter.solvers(
+        SolverAvailability.of({
+          z3Package: true,
+          nodeRuntime: true,
+          quintCli: true,
+          apalache: true,
+          apalacheServerStale: false,
+        }),
+      ),
     ]).document();
 
     expect(verdict.checks.slice(0, 3).map((row) => row.label)).toEqual([

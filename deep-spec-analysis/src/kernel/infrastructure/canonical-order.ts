@@ -2,8 +2,8 @@
 // checked[] の順序（= golden バイト）を決める。
 //
 // kernel の非公開ヘルパー（種別規律の裁定 1、2026-09-02）: facade からは出さず、
-// 公開面は DP の `compareTo`（TargetId）とコレクションの正準ソート
-// （TargetIds / FrRefs）だけ。他の文脈は必ずその門を通る。
+// 公開面は DP の `compareTo`（TargetIdentifier）とコレクションの正準ソート
+// （TargetIdentifiers / FunctionalRequirementReferences）だけ。他の文脈は必ずその門を通る。
 
 function numSegments(id: string): number[] {
   return (id.match(/[0-9]+/g) ?? []).map((s) => Number.parseInt(s, 10));

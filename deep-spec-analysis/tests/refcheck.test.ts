@@ -14,7 +14,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,10 +41,14 @@ interface SensorRun {
 }
 
 function fire(tool: string, outputPath: string, extraArgs: string[] = []): SensorRun {
-  const res = spawnSync("bun", [join(toolsDir, tool), "--stage", "refcheck-test", "--output-path", outputPath, ...extraArgs], {
-    encoding: "utf-8",
-    timeout: 60_000,
-  });
+  const res = spawnSync(
+    "bun",
+    [join(toolsDir, tool), "--stage", "refcheck-test", "--output-path", outputPath, ...extraArgs],
+    {
+      encoding: "utf-8",
+      timeout: 60_000,
+    },
+  );
   return { status: res.status, stdout: res.stdout ?? "", stderr: res.stderr ?? "" };
 }
 
@@ -89,11 +93,15 @@ describe("refcheck golden findings (byte-for-byte)", () => {
     for (const kind of ["domain", "contract", "functional"] as const) {
       expect(fire(TOOLS[kind], join(record, ...PATHS[kind])).status).toBe(0);
     }
-    const before = (["domain", "contract", "functional"] as const).map((k) => readFileSync(join(record, ...OUT[k]), "utf-8"));
+    const before = (["domain", "contract", "functional"] as const).map((k) =>
+      readFileSync(join(record, ...OUT[k]), "utf-8"),
+    );
     for (const kind of ["domain", "contract", "functional"] as const) {
       expect(fire(TOOLS[kind], join(record, ...PATHS[kind])).status).toBe(0);
     }
-    const after = (["domain", "contract", "functional"] as const).map((k) => readFileSync(join(record, ...OUT[k]), "utf-8"));
+    const after = (["domain", "contract", "functional"] as const).map((k) =>
+      readFileSync(join(record, ...OUT[k]), "utf-8"),
+    );
     expect(after).toEqual(before);
     rmSync(record, { recursive: true, force: true });
   });
@@ -107,9 +115,22 @@ describe("refcheck golden findings (byte-for-byte)", () => {
     expect(checkedOf("contract-summary.json")).toEqual(["CD-1", "CD-2", "CD-3"].map((f) => `check:${f}`));
     expect(checkedOf("functional-design.json")).toEqual(
       [
-        "FD-E1", "FD-E2", "FD-E3", "FD-E4", "FD-E5", "FD-E6",
-        "FD-R1", "FD-R2", "FD-R3", "FD-R4", "FD-R5",
-        "FD-S1", "FD-S2", "XS-1", "XS-2", "XS-3",
+        "FD-E1",
+        "FD-E2",
+        "FD-E3",
+        "FD-E4",
+        "FD-E5",
+        "FD-E6",
+        "FD-R1",
+        "FD-R2",
+        "FD-R3",
+        "FD-R4",
+        "FD-R5",
+        "FD-S1",
+        "FD-S2",
+        "XS-1",
+        "XS-2",
+        "XS-3",
       ].map((f) => `check:${f}`),
     );
   });
@@ -127,7 +148,12 @@ describe("refcheck degradation (never a crash, never silence)", () => {
     expect(e1.kind).toBe("structure-invalid");
     expect(e1.detail).toContain("unsupported YAML feature");
     for (const family of ["FD-E2", "FD-E3", "FD-E4", "FD-E5", "FD-E6"]) {
-      expect(doc.skipped.some((s: { target: string; reason: string }) => s.target === `check:${family}` && s.reason === "unrecognized-format")).toBe(true);
+      expect(
+        doc.skipped.some(
+          (s: { target: string; reason: string }) =>
+            s.target === `check:${family}` && s.reason === "unrecognized-format",
+        ),
+      ).toBe(true);
     }
     rmSync(record, { recursive: true, force: true });
   });
@@ -139,7 +165,11 @@ describe("refcheck degradation (never a crash, never silence)", () => {
     expect(run.status).toBe(0);
     const doc = JSON.parse(readFileSync(join(record, ...OUT.functional), "utf-8"));
     for (const family of ["XS-1", "XS-2", "XS-3"]) {
-      expect(doc.skipped.some((s: { target: string; reason: string }) => s.target === `check:${family}` && s.reason === "absent-input")).toBe(true);
+      expect(
+        doc.skipped.some(
+          (s: { target: string; reason: string }) => s.target === `check:${family}` && s.reason === "absent-input",
+        ),
+      ).toBe(true);
     }
     rmSync(record, { recursive: true, force: true });
   });
@@ -151,7 +181,11 @@ describe("refcheck degradation (never a crash, never silence)", () => {
     expect(run.status).toBe(0);
     const doc = JSON.parse(readFileSync(join(record, ...OUT.contract), "utf-8"));
     for (const family of ["CD-1", "CD-3"]) {
-      expect(doc.skipped.some((s: { target: string; reason: string }) => s.target === `check:${family}` && s.reason === "absent-input")).toBe(true);
+      expect(
+        doc.skipped.some(
+          (s: { target: string; reason: string }) => s.target === `check:${family}` && s.reason === "absent-input",
+        ),
+      ).toBe(true);
     }
     expect(doc.checked).toContain("check:CD-2");
     rmSync(record, { recursive: true, force: true });
@@ -213,7 +247,9 @@ describe("contract-2 schema conformance of every golden findings file (FR1.3)", 
     join(expected, "clean"),
   ];
   for (const dir of goldenDirs) {
-    for (const file of readdirSync(dir).filter((f) => f.endsWith(".json")).sort()) {
+    for (const file of readdirSync(dir)
+      .filter((f) => f.endsWith(".json"))
+      .sort()) {
       test(`${dir.split("/").slice(-2).join("/")}/${file} conforms to deep-spec-findings-schema.json`, () => {
         const doc = JSON.parse(readFileSync(join(dir, file), "utf-8"));
         const errors: string[] = [];

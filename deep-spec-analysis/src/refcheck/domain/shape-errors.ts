@@ -4,11 +4,11 @@ export class ShapeErrors {
   readonly #values: readonly ShapeError[];
 
   private constructor(values: readonly ShapeError[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly ShapeError[]): ShapeErrors {
-    return new ShapeErrors([...values]);
+    return new ShapeErrors(values);
   }
 
   add(value: ShapeError): ShapeErrors {

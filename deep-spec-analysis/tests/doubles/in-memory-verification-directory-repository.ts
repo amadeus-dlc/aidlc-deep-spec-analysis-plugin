@@ -10,15 +10,15 @@
 // 末尾の 2 つはテスト専用の読み取り面であってポートの一部ではない：書かれた
 // 個々の文書を検査するために、ダブルのキー空間をそのまま覗く。
 
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
 import type { ArtifactPath } from "@deep-spec/kernel-domain";
+import { err, ok, type Result } from "@deep-spec/kernel-infrastructure";
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import {
   VerificationDirectory,
   type VerificationReport,
-  type VerificationReportId,
+  type VerificationReportIdentifier,
   VerificationReports,
 } from "@deep-spec/requirements-domain";
-import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import type { VerificationDirectoryRepository } from "@deep-spec/requirements-usecase";
 
 const CROSS_CHECK_FILENAME = "cross-check.json";
@@ -26,7 +26,7 @@ const CROSS_CHECK_FILENAME = "cross-check.json";
 export class InMemoryVerificationDirectoryRepository implements VerificationDirectoryRepository {
   readonly #store = new Map<string, VerificationReport>();
 
-  #keyOf(id: VerificationReportId): string {
+  #keyOf(id: VerificationReportIdentifier): string {
     return `${id.directory().asString()}/${id.fileName()}`;
   }
 
@@ -43,7 +43,12 @@ export class InMemoryVerificationDirectoryRepository implements VerificationDire
   store(aggregate: VerificationDirectory): Result<void, RepositoryError> {
     const candidate = aggregate.candidate();
     if (candidate === null) {
-      return err({ kind: "io-failed", operation: "write", path: aggregate.directory().asString(), cause: "no finalization candidate" });
+      return err({
+        kind: "io-failed",
+        operation: "write",
+        path: aggregate.directory().asString(),
+        cause: "no finalization candidate",
+      });
     }
     this.#store.set(this.#keyOf(candidate.id()), candidate);
     const crossCheck = aggregate.crossCheck();
@@ -56,7 +61,7 @@ export class InMemoryVerificationDirectoryRepository implements VerificationDire
 
   // --- テスト専用の読み取り面（ポートではない）-------------------------------
 
-  findById(aggregateId: VerificationReportId): Result<VerificationReport, RepositoryError> {
+  findById(aggregateId: VerificationReportIdentifier): Result<VerificationReport, RepositoryError> {
     const found = this.#store.get(this.#keyOf(aggregateId));
     if (found === undefined) {
       return err({ kind: "not-found", path: this.#keyOf(aggregateId) });

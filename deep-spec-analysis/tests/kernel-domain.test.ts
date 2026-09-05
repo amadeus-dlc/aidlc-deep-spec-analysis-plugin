@@ -1,13 +1,13 @@
 import {
+  canonicalStringify,
   compareCanonically,
+  err,
   isObject,
   type Json,
-  validateSchema,
-  canonicalStringify,
-  type Result,
-  err,
   ok,
+  type Result,
   unreachable,
+  validateSchema,
 } from "@deep-spec/kernel-infrastructure";
 
 // kernel/domain の単体テスト（DDD 移行 PR1、issue #14）。
@@ -16,10 +16,32 @@ import {
 // ir-valid の errors[]・契約2 の unavailable.reason として golden バイトに
 // 現れるため、文言は「含む」ではなく完全一致で固定する。
 
-import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName, KeyedIndex, KeySet, RequirementId, QueryLabel, AttributeKind, VerificationMethod, FindingKind } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
-import { extractFences, parseMarkdownTables, parseYamlSubset } from "@deep-spec/kernel-adapter";
-import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
+import {
+  extractFences,
+  parseMarkdownTables,
+  parseYamlSubset,
+  smtIntOf,
+  smtLit,
+  smtName,
+  smtVar,
+} from "@deep-spec/kernel-adapter";
+import {
+  AttributeBound,
+  AttributeKind,
+  ContentHash,
+  FindingKind,
+  FunctionalRequirementReferences,
+  KeyedIndex,
+  KeySet,
+  NormalizedName,
+  QueryLabel,
+  RequirementIdentifier,
+  RequirementIdentifiers,
+  TargetIdentifier,
+  TargetIdentifiers,
+  VerificationMethod,
+} from "@deep-spec/kernel-domain";
 
 describe("result", () => {
   test("ok and err narrow through the ok discriminant", () => {
@@ -29,7 +51,7 @@ describe("result", () => {
     expect(!bad.ok && bad.error).toBe("boom");
   });
 
-  test("an Err propagates unchanged into a Result of another value type", () => {
+  test("an ResultFailure propagates unchanged into a Result of another value type", () => {
     const parse = (): Result<number, { kind: "empty" }> => err({ kind: "empty" });
     const use = (): Result<string, { kind: "empty" }> => {
       const r = parse();
@@ -87,8 +109,16 @@ describe("canonical id order (owned by the id value object, ruling 1)", () => {
   });
 
   test("the collections deduplicate then sort canonically", () => {
-    expect(TargetIds.of(Array.from(["OB-10", "OB-2", "OB-2"], (raw) => TargetId.of(raw))).sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10"]);
-    expect(FrRefs.of(Array.from(["FR-10", "FR-2", "FR-2"], (raw) => RequirementId.of(raw))).sortedUnique().toStrings()).toEqual(["FR-2", "FR-10"]);
+    expect(
+      TargetIdentifiers.of(Array.from(["OB-10", "OB-2", "OB-2"], (raw) => TargetIdentifier.of(raw)))
+        .sortedUniqueCanonically()
+        .toStrings(),
+    ).toEqual(["OB-2", "OB-10"]);
+    expect(
+      FunctionalRequirementReferences.of(Array.from(["FR-10", "FR-2", "FR-2"], (raw) => RequirementIdentifier.of(raw)))
+        .sortedUnique()
+        .toStrings(),
+    ).toEqual(["FR-2", "FR-10"]);
   });
 });
 
@@ -116,7 +146,9 @@ describe("yaml — accepted shapes", () => {
   });
 
   test("block sequence, nested mapping, inline sequence, quoted scalars", () => {
-    const r = parseYamlSubset('items:\n  - a\n  - b\nmeta:\n  tags: [x, y]\n  label: "hello: world"\n  single: \'q\'\n');
+    const r = parseYamlSubset(
+      "items:\n  - a\n  - b\nmeta:\n  tags: [x, y]\n  label: \"hello: world\"\n  single: 'q'\n",
+    );
     expect(r.value).toEqual({ items: ["a", "b"], meta: { tags: ["x", "y"], label: "hello: world", single: "q" } });
   });
 
@@ -151,7 +183,9 @@ describe("yaml — rejections with exact error strings", () => {
   test("anchor, alias, and tag scalars", () => {
     expect(parseYamlSubset("a: &x 1\n").error).toBe('line 1: unsupported YAML feature (anchor/alias/tag): "&x 1"');
     expect(parseYamlSubset("a: *x\n").error).toBe('line 1: unsupported YAML feature (anchor/alias/tag): "*x"');
-    expect(parseYamlSubset("a: !!str x\n").error).toBe('line 1: unsupported YAML feature (anchor/alias/tag): "!!str x"');
+    expect(parseYamlSubset("a: !!str x\n").error).toBe(
+      'line 1: unsupported YAML feature (anchor/alias/tag): "!!str x"',
+    );
   });
 
   test("flow mapping", () => {
@@ -177,7 +211,14 @@ describe("md-table", () => {
     const md = "prose\n| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\nafter\n";
     const tables = parseMarkdownTables(md);
     expect(tables).toEqual([
-      { header: ["A", "B"], line: 2, rows: [{ cells: ["1", "2"], line: 4 }, { cells: ["3", "4"], line: 5 }] },
+      {
+        header: ["A", "B"],
+        line: 2,
+        rows: [
+          { cells: ["1", "2"], line: 4 },
+          { cells: ["3", "4"], line: 5 },
+        ],
+      },
     ]);
   });
 
@@ -212,11 +253,15 @@ describe("schema — per-keyword exact messages", () => {
   test("object keywords: required / minProperties / additionalProperties / propertyNames", () => {
     expect(check({ type: "object", required: ["x"] }, {})).toEqual([': missing required property "x"']);
     expect(check({ type: "object", minProperties: 1 }, {})).toEqual([": fewer than 1 properties"]);
-    expect(check({ type: "object", properties: {}, additionalProperties: false }, { y: 1 })).toEqual([': unexpected property "y"']);
-    expect(check({ type: "object", additionalProperties: { type: "string" } }, { y: 1 })).toEqual(["/y: expected type string"]);
-    expect(check({ type: "object", propertyNames: { pattern: "^[a-z]+$" }, additionalProperties: {} }, { UP: 1 })).toEqual([
-      ': property name "UP" does not match required pattern',
+    expect(check({ type: "object", properties: {}, additionalProperties: false }, { y: 1 })).toEqual([
+      ': unexpected property "y"',
     ]);
+    expect(check({ type: "object", additionalProperties: { type: "string" } }, { y: 1 })).toEqual([
+      "/y: expected type string",
+    ]);
+    expect(
+      check({ type: "object", propertyNames: { pattern: "^[a-z]+$" }, additionalProperties: {} }, { UP: 1 }),
+    ).toEqual([': property name "UP" does not match required pattern']);
   });
 
   test("oneOf counts matching branches exactly", () => {
@@ -247,37 +292,55 @@ describe("schema — per-keyword exact messages", () => {
 
 describe("target id (the target vocabulary's primitive)", () => {
   test("parse admits the findings-schema shapes and rejects the rest", () => {
-    for (const raw of ["OB-1", "SC-12", "BR1.2", "DOB-3", "DSC-1", "DBG-2", "SM-1", "TR-10", "component:Order", "unit:u1-orders", "check:DD-1"]) {
-      const r = TargetId.parse(raw);
+    for (const raw of [
+      "OB-1",
+      "SC-12",
+      "BR1.2",
+      "DOB-3",
+      "DSC-1",
+      "DBG-2",
+      "SM-1",
+      "TR-10",
+      "component:Order",
+      "unit:u1-orders",
+      "check:DD-1",
+    ]) {
+      const r = TargetIdentifier.parse(raw);
       expect(r.ok && r.value.asString()).toBe(raw);
     }
     for (const raw of ["", "ob-1", "OB1", "BG-1", "FR-1", "entity:Order Item", "X-1"]) {
-      expect(TargetId.parse(raw).ok).toBe(false);
+      expect(TargetIdentifier.parse(raw).ok).toBe(false);
     }
   });
 
   test("of rejects invalid ids and preserves equality and canonical ordering", () => {
-    expect(TargetId.parse("weird id").ok).toBe(false);
-    const id = TargetId.of("OB-1");
-    expect(id.equals(TargetId.of("OB-1"))).toBe(true);
-    expect(id.equals(TargetId.of("OB-2"))).toBe(false);
-    expect(id.compareTo(TargetId.of("OB-10"))).toBeLessThan(0);
+    expect(TargetIdentifier.parse("weird id").ok).toBe(false);
+    const id = TargetIdentifier.of("OB-1");
+    expect(id.equals(TargetIdentifier.of("OB-1"))).toBe(true);
+    expect(id.equals(TargetIdentifier.of("OB-2"))).toBe(false);
+    expect(id.compareTo(TargetIdentifier.of("OB-10"))).toBeLessThan(0);
     expect(id.asString()).toBe("OB-1");
   });
 
   test("target ids collect primitives, collect typed ids, and escape through toStrings", () => {
-    const ids = TargetIds.of([TargetId.of("OB-10")]).add(TargetId.of("OB-2")).add(TargetId.of("OB-2"));
+    const ids = TargetIdentifiers.of([TargetIdentifier.of("OB-10")])
+      .add(TargetIdentifier.of("OB-2"))
+      .add(TargetIdentifier.of("OB-2"));
     expect(ids.toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect(ids.count()).toBe(3);
     expect(ids.toArray().length).toBe(3);
-    expect(ids.includes(TargetId.of("OB-2"))).toBe(true);
-    expect(ids.includes(TargetId.of("OB-3"))).toBe(false);
-    expect(ids.excluding(TargetId.of("OB-2")).toStrings()).toEqual(["OB-10"]);
-    expect(ids.excluding(TargetId.of("OB-3")).toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
+    expect(ids.includes(TargetIdentifier.of("OB-2"))).toBe(true);
+    expect(ids.includes(TargetIdentifier.of("OB-3"))).toBe(false);
+    expect(ids.excluding(TargetIdentifier.of("OB-2")).toStrings()).toEqual(["OB-10"]);
+    expect(ids.excluding(TargetIdentifier.of("OB-3")).toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect([...ids].map((t) => t.asString())).toEqual(["OB-10", "OB-2", "OB-2"]);
-    expect(TargetIds.of(Array.from(["SC-1", "OB-1"], (raw) => TargetId.of(raw))).joined(",")).toBe("SC-1,OB-1");
+    expect(TargetIdentifiers.of(Array.from(["SC-1", "OB-1"], (raw) => TargetIdentifier.of(raw))).joined(",")).toBe(
+      "SC-1,OB-1",
+    );
     // sortedCanonically keeps duplicates; sortedUniqueCanonically folds them.
-    const mixed = TargetIds.of(Array.from(["OB-10", "OB-2", "OB-2", "SC-1"], (raw) => TargetId.of(raw)));
+    const mixed = TargetIdentifiers.of(
+      Array.from(["OB-10", "OB-2", "OB-2", "SC-1"], (raw) => TargetIdentifier.of(raw)),
+    );
     expect(mixed.sortedCanonically().toStrings()).toEqual(["OB-2", "OB-2", "OB-10", "SC-1"]);
     expect(mixed.sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10", "SC-1"]);
   });
@@ -285,15 +348,19 @@ describe("target id (the target vocabulary's primitive)", () => {
 
 describe("target-ids / requirement-ids / names", () => {
   test("safeTarget sanitizes out-of-alphabet characters and empty tokens", () => {
-    expect(TargetIds.safe("unit", "u1-orders")).toBe("unit:u1-orders");
-    expect(TargetIds.safe("entity", "Order Item")).toBe("entity:Order-Item");
-    expect(TargetIds.safe("component", "")).toBe("component:unknown");
+    expect(TargetIdentifiers.safe("unit", "u1-orders")).toBe("unit:u1-orders");
+    expect(TargetIdentifiers.safe("entity", "Order Item")).toBe("entity:Order-Item");
+    expect(TargetIdentifiers.safe("component", "")).toBe("component:unknown");
     // 置換であって削除ではない: 各文字が "-" になる（凍結挙動の記録）。
-    expect(TargetIds.safe("attr", "注文")).toBe("attr:--");
+    expect(TargetIdentifiers.safe("attr", "注文")).toBe("attr:--");
   });
 
   test("requirementIds finds FR/NFR ids with optional dash and dotted segments", () => {
-    expect([...RequirementIds.extractFrom("FR-1 covers NFR2.1 but FRX-9 does not; FR-1 repeats")].map((id) => id.asString()).sort()).toEqual(["FR-1", "NFR2.1"]);
+    expect(
+      [...RequirementIdentifiers.extractFrom("FR-1 covers NFR2.1 but FRX-9 does not; FR-1 repeats")]
+        .map((id) => id.asString())
+        .sort(),
+    ).toEqual(["FR-1", "NFR2.1"]);
   });
 
   test("normalizeName casefolds and strips non-alphanumerics", () => {
@@ -342,14 +409,17 @@ describe("attribute-bound — the parse door gates integer sanity (thaw #34 item
 });
 
 describe("KeyedIndex (the keyed-index representation primitive, ruling 3-1)", () => {
-  const id = (raw: string) => TargetId.of(raw);
+  const id = (raw: string) => TargetIdentifier.of(raw);
 
   test("keys are compared by their string form, insertion order is kept, and with() replaces in place", () => {
-    const empty = KeyedIndex.empty<TargetId, number>();
+    const empty = KeyedIndex.empty<TargetIdentifier, number>();
     expect(empty.isEmpty()).toBe(true);
     expect(empty.size()).toBe(0);
     expect(empty.get(id("OB-1"))).toBe(undefined);
-    const index = KeyedIndex.of<TargetId, number>([[id("OB-2"), 2], [id("OB-1"), 1]]);
+    const index = KeyedIndex.of<TargetIdentifier, number>([
+      [id("OB-2"), 2],
+      [id("OB-1"), 1],
+    ]);
     expect(index.has(id("OB-1"))).toBe(true);
     expect(index.has(id("OB-3"))).toBe(false);
     expect(index.get(id("OB-2"))).toBe(2);
@@ -367,30 +437,30 @@ describe("KeyedIndex (the keyed-index representation primitive, ruling 3-1)", ()
 
 describe("the 2026-09-03 kernel primitives (rulings 3-1 to 3-3)", () => {
   test("KeySet keeps insertion order, dedupes by string form, and with() is a no-op for a present key", () => {
-    const empty = KeySet.empty<TargetId>();
+    const empty = KeySet.empty<TargetIdentifier>();
     expect(empty.isEmpty()).toBe(true);
     expect(empty.size()).toBe(0);
-    const set = KeySet.of([TargetId.of("OB-2"), TargetId.of("OB-1"), TargetId.of("OB-2")]);
+    const set = KeySet.of([TargetIdentifier.of("OB-2"), TargetIdentifier.of("OB-1"), TargetIdentifier.of("OB-2")]);
     expect(set.size()).toBe(2);
-    expect(set.has(TargetId.of("OB-1"))).toBe(true);
-    expect(set.has(TargetId.of("OB-9"))).toBe(false);
-    expect(set.with(TargetId.of("OB-1"))).toBe(set);
-    const grown = set.with(TargetId.of("OB-3"));
+    expect(set.has(TargetIdentifier.of("OB-1"))).toBe(true);
+    expect(set.has(TargetIdentifier.of("OB-9"))).toBe(false);
+    expect(set.with(TargetIdentifier.of("OB-1"))).toBe(set);
+    const grown = set.with(TargetIdentifier.of("OB-3"));
     expect([...grown].map((t) => t.asString())).toEqual(["OB-2", "OB-1", "OB-3"]);
     expect(grown.toArray().length).toBe(3);
     expect(set.size()).toBe(2);
   });
 
-  test("RequirementId, QueryLabel and RequirementIds", () => {
-    const a = RequirementId.of("FR-2");
-    expect(a.equals(RequirementId.of("FR-2"))).toBe(true);
-    expect(a.equals(RequirementId.of("FR-10"))).toBe(false);
-    expect(a.compareTo(RequirementId.of("FR-10"))).toBeLessThan(0);
+  test("RequirementIdentifier, QueryLabel and RequirementIdentifiers", () => {
+    const a = RequirementIdentifier.of("FR-2");
+    expect(a.equals(RequirementIdentifier.of("FR-2"))).toBe(true);
+    expect(a.equals(RequirementIdentifier.of("FR-10"))).toBe(false);
+    expect(a.compareTo(RequirementIdentifier.of("FR-10"))).toBeLessThan(0);
     expect(a.asString()).toBe("FR-2");
-    const ids = RequirementIds.of([a, RequirementId.of("NFR-1")]);
+    const ids = RequirementIdentifiers.of([a, RequirementIdentifier.of("NFR-1")]);
     expect(ids.has(a)).toBe(true);
     expect(ids.toArray().map((id) => id.asString())).toEqual(["FR-2", "NFR-1"]);
-    expect(ids.add(RequirementId.of("FR-3")).toStrings()).toEqual(["FR-2", "NFR-1", "FR-3"]);
+    expect(ids.add(RequirementIdentifier.of("FR-3")).toStrings()).toEqual(["FR-2", "NFR-1", "FR-3"]);
     const q = QueryLabel.of("gap:submit");
     expect(q.equals(QueryLabel.of("gap:submit"))).toBe(true);
     expect(q.compareTo(QueryLabel.of("global"))).toBeLessThan(0);

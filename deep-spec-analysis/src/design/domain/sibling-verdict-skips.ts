@@ -5,11 +5,11 @@ export class SiblingVerdictSkips {
   readonly #values: readonly SiblingVerdictSkip[];
 
   private constructor(values: readonly SiblingVerdictSkip[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly SiblingVerdictSkip[]): SiblingVerdictSkips {
-    return new SiblingVerdictSkips([...values]);
+    return new SiblingVerdictSkips(values);
   }
 
   add(value: SiblingVerdictSkip): SiblingVerdictSkips {

@@ -1,5 +1,5 @@
-import { Check, CheckSeverity } from "@deep-spec/doctor-domain";
 import type { InstalledStatus, SolverAvailability } from "@deep-spec/doctor-domain";
+import { Check, CheckSeverity } from "@deep-spec/doctor-domain";
 
 import type { CoverageAssessment, StructuralDebt, UnitCoverage, VersionAdvisory } from "@deep-spec/doctor-usecase";
 
@@ -16,44 +16,51 @@ export class DoctorPresenter {
   }
 
   installation(statuses: readonly InstalledStatus[]): Check[] {
-    return statuses.map((s) => Check.of({
-      pass: s.isPresent(),
-      label: `deep-spec-analysis: ${s.entry().rel()} installed`,
-      fix: `Run \`bun ${this.#harnessDir}/tools/aidlc-utility.ts plugin-sync\` (or re-run the plugin's \`hooks/compose.ts\`).`,
-      severity: s.entry().severity(),
-    }));
+    return statuses.map((s) =>
+      Check.of({
+        pass: s.isPresent(),
+        label: `deep-spec-analysis: ${s.entry().rel()} installed`,
+        fix: `Run \`bun ${this.#harnessDir}/tools/aidlc-utility.ts plugin-sync\` (or re-run the plugin's \`hooks/compose.ts\`).`,
+        severity: s.entry().severity(),
+      }),
+    );
   }
 
   version(advisory: VersionAdvisory): Check {
     return advisory.match({
-      current: ({ installedVersion, latestVersion, source, ref }) => Check.of({
-        pass: true,
-        label: `deep-spec-analysis: version ${installedVersion} from ${source} ${ref} is current (latest stable tag: ${latestVersion})`,
-        severity: CheckSeverity.advisory(),
-      }),
-      updateAvailable: ({ installedVersion, latestVersion, source, ref }) => Check.of({
-        pass: false,
-        label: `deep-spec-analysis: update available — version ${installedVersion} from ${source} ${ref}; latest stable tag is ${latestVersion}`,
-        fix: "Re-run the installer with `--project . --update` (and the same `--harness` selector used for this installation).",
-        severity: CheckSeverity.advisory(),
-      }),
-      skipped: ({ installedVersion, source, ref, reason }) => Check.of({
-        pass: true,
-        label: `deep-spec-analysis: version update check skipped for ${installedVersion} from ${source} ${ref} — ${reason}`,
-        severity: CheckSeverity.advisory(),
-      }),
-      provenanceMissing: () => Check.of({
-        pass: false,
-        label: "deep-spec-analysis: version update check unavailable — installation provenance is missing",
-        fix: `Re-run the installer normally (without \`--update\`) to create ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
-        severity: CheckSeverity.advisory(),
-      }),
-      provenanceMalformed: (reason) => Check.of({
-        pass: false,
-        label: `deep-spec-analysis: version update check unavailable — installation provenance is malformed (${reason})`,
-        fix: `Re-run the installer normally (without \`--update\`) to replace ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
-        severity: CheckSeverity.advisory(),
-      }),
+      current: ({ installedVersion, latestVersion, source, ref }) =>
+        Check.of({
+          pass: true,
+          label: `deep-spec-analysis: version ${installedVersion} from ${source} ${ref} is current (latest stable tag: ${latestVersion})`,
+          severity: CheckSeverity.advisory(),
+        }),
+      updateAvailable: ({ installedVersion, latestVersion, source, ref }) =>
+        Check.of({
+          pass: false,
+          label: `deep-spec-analysis: update available — version ${installedVersion} from ${source} ${ref}; latest stable tag is ${latestVersion}`,
+          fix: "Re-run the installer with `--project . --update` (and the same `--harness` selector used for this installation).",
+          severity: CheckSeverity.advisory(),
+        }),
+      skipped: ({ installedVersion, source, ref, reason }) =>
+        Check.of({
+          pass: true,
+          label: `deep-spec-analysis: version update check skipped for ${installedVersion} from ${source} ${ref} — ${reason}`,
+          severity: CheckSeverity.advisory(),
+        }),
+      provenanceMissing: () =>
+        Check.of({
+          pass: false,
+          label: "deep-spec-analysis: version update check unavailable — installation provenance is missing",
+          fix: `Re-run the installer normally (without \`--update\`) to create ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
+          severity: CheckSeverity.advisory(),
+        }),
+      provenanceMalformed: (reason) =>
+        Check.of({
+          pass: false,
+          label: `deep-spec-analysis: version update check unavailable — installation provenance is malformed (${reason})`,
+          fix: `Re-run the installer normally (without \`--update\`) to replace ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
+          severity: CheckSeverity.advisory(),
+        }),
     });
   }
 
@@ -105,70 +112,86 @@ export class DoctorPresenter {
         severity: CheckSeverity.advisory(),
       });
     });
-    rows.push(Check.of({
-      pass: assessment.isClean(),
-      label:
-        `deep-spec-analysis: verification coverage — ${assessment.verifiedCount()}/${assessment.eligibleCount()} ` +
-        "eligible intents verified (scopes: " + assessment.scopes().join(", ") + ")",
-      fix: "See the per-intent rows above for the exact command each unverified intent needs.",
-      severity: CheckSeverity.advisory(),
-    }));
+    rows.push(
+      Check.of({
+        pass: assessment.isClean(),
+        label:
+          `deep-spec-analysis: verification coverage — ${assessment.verifiedCount()}/${assessment.eligibleCount()} ` +
+          "eligible intents verified (scopes: " +
+          assessment.scopes().join(", ") +
+          ")",
+        fix: "See the per-intent rows above for the exact command each unverified intent needs.",
+        severity: CheckSeverity.advisory(),
+      }),
+    );
     return rows;
   }
 
   structuralDebt(debt: StructuralDebt): Check[] {
-    const rows: Check[] = debt.rows().map((row) => Check.of({
-      pass: false,
-      label: `deep-spec-analysis: ${row.locationLabel()} has ${row.findingCount()} reference-integrity finding(s)`,
-      fix:
-        "Open the artifact and fix (or record as an accepted risk) each finding; " +
-        "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
-      severity: CheckSeverity.advisory(),
-    }));
-    if (debt.hasScans()) {
-      rows.push(Check.of({
-        pass: debt.totalFindings() === 0,
-        label: `deep-spec-analysis: design refcheck — ${debt.totalFindings()} structural finding(s) across ${debt.scannedCount()} design artifact(s) scanned (report-only)`,
-        fix: "See the per-artifact rows above.",
+    const rows: Check[] = debt.rows().map((row) =>
+      Check.of({
+        pass: false,
+        label: `deep-spec-analysis: ${row.locationLabel()} has ${row.findingCount()} reference-integrity finding(s)`,
+        fix:
+          "Open the artifact and fix (or record as an accepted risk) each finding; " +
+          "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
         severity: CheckSeverity.advisory(),
-      }));
+      }),
+    );
+    if (debt.hasScans()) {
+      rows.push(
+        Check.of({
+          pass: debt.totalFindings() === 0,
+          label: `deep-spec-analysis: design refcheck — ${debt.totalFindings()} structural finding(s) across ${debt.scannedCount()} design artifact(s) scanned (report-only)`,
+          fix: "See the per-artifact rows above.",
+          severity: CheckSeverity.advisory(),
+        }),
+      );
     }
     return rows;
   }
 
   functionalCoverage(coverage: UnitCoverage): Check[] {
     // 凍結順: refinement 失効行（走査順）→ unit 問題行 → 要約行。
-    const rows: Check[] = coverage.refinementStale().map((row) => Check.of({
-      pass: false,
-      label: `deep-spec-analysis: intent ${row.intentLabel()} re-verified its requirements after the last design verification (refinement evidence is stale)`,
-      fix:
-        `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` +
-        "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
-      severity: CheckSeverity.advisory(),
-    }));
+    const rows: Check[] = coverage.refinementStale().map((row) =>
+      Check.of({
+        pass: false,
+        label: `deep-spec-analysis: intent ${row.intentLabel()} re-verified its requirements after the last design verification (refinement evidence is stale)`,
+        fix:
+          `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` +
+          "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
+        severity: CheckSeverity.advisory(),
+      }),
+    );
     for (const row of coverage.problems()) {
       const noun = row.matchState({
         unverified: () => "has functional-design artifacts with no deep-spec design verification",
         stale: () => "changed its functional-design artifacts after the last design verification",
       });
-      rows.push(Check.of({
-        pass: false,
-        label: `deep-spec-analysis: unit ${row.unitLabel()} ${noun}`,
-        fix:
-          `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` +
-          "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",
-        severity: CheckSeverity.advisory(),
-      }));
+      rows.push(
+        Check.of({
+          pass: false,
+          label: `deep-spec-analysis: unit ${row.unitLabel()} ${noun}`,
+          fix:
+            `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` +
+            "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",
+          severity: CheckSeverity.advisory(),
+        }),
+      );
     }
     if (coverage.hasEligible()) {
-      rows.push(Check.of({
-        pass: coverage.isClean(),
-        label:
-          `deep-spec-analysis: design verification coverage — ${coverage.verifiedCount()}/${coverage.eligibleCount()} ` +
-          "eligible units verified (scopes: " + coverage.scopes().join(", ") + ")",
-        fix: "See the per-unit rows above for the exact command each unverified unit needs.",
-        severity: CheckSeverity.advisory(),
-      }));
+      rows.push(
+        Check.of({
+          pass: coverage.isClean(),
+          label:
+            `deep-spec-analysis: design verification coverage — ${coverage.verifiedCount()}/${coverage.eligibleCount()} ` +
+            "eligible units verified (scopes: " +
+            coverage.scopes().join(", ") +
+            ")",
+          fix: "See the per-unit rows above for the exact command each unverified unit needs.",
+          severity: CheckSeverity.advisory(),
+        }),
+      );
     }
     return rows;
   }

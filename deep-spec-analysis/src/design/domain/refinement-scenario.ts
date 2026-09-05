@@ -1,34 +1,56 @@
-import type { FrRefs, TriggerName } from "@deep-spec/kernel-domain";
-import type { ScenarioId } from "@deep-spec/requirements-domain";
+import type { FunctionalRequirementReferences, ScenarioBindings, TriggerName } from "@deep-spec/kernel-domain";
+import type { ScenarioIdentifier } from "@deep-spec/requirements-domain";
+
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type RefinementScenarioParam = {
+  id: ScenarioIdentifier;
+  kind: "accept" | "reject";
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  bindings: ScenarioBindings;
+  event?: { readonly trigger: TriggerName };
+};
 
 export class RefinementScenario {
-  readonly #id: ScenarioId;
+  readonly #id: ScenarioIdentifier;
   readonly #kind: "accept" | "reject";
-  readonly #frRefs: FrRefs;
-  readonly #bindings: Readonly<Record<string, boolean | number | string>>;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
+  readonly #bindings: ScenarioBindings;
   readonly #eventTrigger: TriggerName | undefined;
 
-  private constructor(props: Parameters<typeof RefinementScenario.of>[0]) {
+  private constructor(props: RefinementScenarioParam) {
     this.#id = props.id;
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
-    this.#bindings = { ...props.bindings };
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
   }
 
-  static of(props: { id: ScenarioId; kind: "accept" | "reject"; frRefs: FrRefs; bindings: Readonly<Record<string, boolean | number | string>>; event?: { readonly trigger: TriggerName } }): RefinementScenario {
+  static of(props: RefinementScenarioParam): RefinementScenario {
     return new RefinementScenario(props);
   }
 
-  id(): ScenarioId { return this.#id; }
-  kind(): "accept" | "reject" { return this.#kind; }
-  frRefs(): FrRefs { return this.#frRefs; }
-  eventTrigger(): TriggerName | undefined { return this.#eventTrigger; }
-  isAccept(): boolean { return this.#kind === "accept"; }
-  isReject(): boolean { return this.#kind === "reject"; }
-  hasEvent(): boolean { return this.#eventTrigger !== undefined; }
-  bindings(): Readonly<Record<string, boolean | number | string>> { return { ...this.#bindings }; }
-  bindingEntriesCanonically(): readonly (readonly [string, boolean | number | string])[] {
-    return Object.entries(this.#bindings).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  id(): ScenarioIdentifier {
+    return this.#id;
+  }
+  kind(): "accept" | "reject" {
+    return this.#kind;
+  }
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
+  }
+  eventTrigger(): TriggerName | undefined {
+    return this.#eventTrigger;
+  }
+  isAccept(): boolean {
+    return this.#kind === "accept";
+  }
+  isReject(): boolean {
+    return this.#kind === "reject";
+  }
+  hasEvent(): boolean {
+    return this.#eventTrigger !== undefined;
+  }
+  bindings(): ScenarioBindings {
+    return this.#bindings;
   }
 }

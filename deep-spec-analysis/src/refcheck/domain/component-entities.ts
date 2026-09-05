@@ -1,15 +1,15 @@
 import type { ComponentEntity } from "./component-entity.ts";
-import { type EntityName } from "./entity-name.ts";
+import type { EntityName } from "./entity-name.ts";
 
 export class ComponentEntities {
   readonly #values: readonly ComponentEntity[];
 
   private constructor(values: readonly ComponentEntity[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly ComponentEntity[]): ComponentEntities {
-    return new ComponentEntities([...values]);
+    return new ComponentEntities(values);
   }
 
   add(value: ComponentEntity): ComponentEntities {

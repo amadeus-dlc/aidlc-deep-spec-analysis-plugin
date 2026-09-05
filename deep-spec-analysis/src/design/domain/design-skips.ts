@@ -8,11 +8,11 @@ export class DesignSkips {
   readonly #values: readonly DesignSkipped[];
 
   private constructor(values: readonly DesignSkipped[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignSkipped[]): DesignSkips {
-    return new DesignSkips([...values]);
+    return new DesignSkips(values);
   }
 
   add(value: DesignSkipped): DesignSkips {

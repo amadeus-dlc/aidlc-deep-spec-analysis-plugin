@@ -14,17 +14,16 @@
 
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DirectoryFinalizationLock, parseFlags, readContractSchema } from "@deep-spec/kernel-adapter";
-import { ArtifactPath, FindingsSchema } from "@deep-spec/kernel-domain";
-import { DesignModelId } from "@deep-spec/design-domain";
-import { SystemClock } from "@deep-spec/kernel-adapter";
-import { VerifyDesignQuintUseCase } from "@deep-spec/design-usecase";
 import {
-  DesignModelRepositoryImpl,
-  DesignVerifyDirectoryRepositoryImpl,
-  RefinementMaterialsRepositoryImpl,
-  SiblingBackendClientImpl,
+  DesignModelRepositoryImplementation,
+  DesignVerifyDirectoryRepositoryImplementation,
+  RefinementMaterialsRepositoryImplementation,
+  SiblingBackendClientImplementation,
 } from "@deep-spec/design-adapter";
+import { DesignModelIdentifier } from "@deep-spec/design-domain";
+import { VerifyDesignQuintUseCase } from "@deep-spec/design-usecase";
+import { DirectoryFinalizationLock, parseFlags, readFindingsSchema, SystemClock } from "@deep-spec/kernel-adapter";
+import { ArtifactPath } from "@deep-spec/kernel-domain";
 
 const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 const DESIGN_VERIFY_DIRNAME = "deep-spec-design-verify";
@@ -38,19 +37,18 @@ function main(): void {
     process.exit(1);
   }
   if (basename(flags.outputPath) !== DESIGN_MODEL_BASENAME) {
-    process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`,
+    );
     process.exit(0);
   }
   const toolsDir = dirname(fileURLToPath(import.meta.url));
   // 契約2 のスキーマは合成ルートが一度だけ読む。読めなければ「読めなかった」
   // 変種として値に載せ、以後の適合判定はこの 1 つの値からだけ導く（BR1.1）。
-  const findingsSchemaFile = readContractSchema(join(toolsDir, "data", "deep-spec-findings-schema.json"));
-  const findingsSchema = findingsSchemaFile.ok
-    ? FindingsSchema.of(findingsSchemaFile.value)
-    : FindingsSchema.unreadable(findingsSchemaFile.error.cause);
+  const findingsSchema = readFindingsSchema(join(toolsDir, "data", "deep-spec-findings-schema.json"));
   const useCase = new VerifyDesignQuintUseCase(
-    new DesignModelRepositoryImpl(),
-    new DesignVerifyDirectoryRepositoryImpl(
+    new DesignModelRepositoryImplementation(),
+    new DesignVerifyDirectoryRepositoryImplementation(
       // finalization の directory lock は「実時計」と「実 PID／OS liveness
       // probe」を要る。process.* は合成ルートだけが触れてよいので、ここで
       // 組み立てて注入する（ESRCH=不在確定、EPERM=存在確定、他は不明）。
@@ -70,33 +68,39 @@ function main(): void {
       }),
     ),
     findingsSchema,
-    new SiblingBackendClientImpl({
+    new SiblingBackendClientImplementation({
       siblingToolPaths: {
         smt: join(toolsDir, "aidlc-sensor-deep-spec-verify-smt.ts"),
         quint: join(toolsDir, "aidlc-sensor-deep-spec-verify-quint.ts"),
       },
       workingDirectory: process.cwd(),
     }),
-    new RefinementMaterialsRepositoryImpl(join(toolsDir, "data", "deep-spec-refinement-map-schema.json")),
+    new RefinementMaterialsRepositoryImplementation(join(toolsDir, "data", "deep-spec-refinement-map-schema.json")),
     new SystemClock(),
     Number(process.env.AIDLC_DEEP_SPEC_QUINT_UNREACH_CAP) || 2,
   );
   const outcome = useCase.execute({
-    modelId: DesignModelId.of(target.value),
+    modelId: DesignModelIdentifier.of(target.value),
     verifyDirectory: reportLocation.value,
   });
 
   switch (outcome.kind) {
     case "not-applicable":
-      process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`);
+      process.stdout.write(
+        `${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`,
+      );
       process.exit(0);
       break;
     case "model-unreadable":
-      process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "ir-unreadable" })}\n`);
+      process.stdout.write(
+        `${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "ir-unreadable" })}\n`,
+      );
       process.exit(0);
       break;
     case "version-mismatch":
-      process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: outcome.skippedCount, note: "ir-version-mismatch" })}\n`);
+      process.stdout.write(
+        `${JSON.stringify({ pass: true, findings_count: 0, skipped_count: outcome.skippedCount, note: "ir-version-mismatch" })}\n`,
+      );
       process.exit(0);
       break;
     case "backend-unavailable":
@@ -106,7 +110,9 @@ function main(): void {
       break;
     case "acquisition-failed":
     case "save-failed":
-      process.stderr.write(`deep-spec-design-verify-quint: ${outcome.error.path}: ${outcome.error.kind}${"cause" in outcome.error ? ` (${outcome.error.cause})` : ""}\n`);
+      process.stderr.write(
+        `deep-spec-design-verify-quint: ${outcome.error.path}: ${outcome.error.kind}${"cause" in outcome.error ? ` (${outcome.error.cause})` : ""}\n`,
+      );
       process.exit(1);
       break;
     case "verified":

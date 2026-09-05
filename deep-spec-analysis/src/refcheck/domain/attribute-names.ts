@@ -1,4 +1,4 @@
-import { AttributeName } from "./attribute-name.ts";
+import type { AttributeName } from "./attribute-name.ts";
 
 // ---- ファーストクラスコレクション（語彙） -----------------------------------
 // ドメイン層は配列を生で扱わない。集合の知識（正規化照合・差分・所属）は
@@ -8,11 +8,11 @@ export class AttributeNames {
   readonly #values: readonly AttributeName[];
 
   private constructor(values: readonly AttributeName[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly AttributeName[]): AttributeNames {
-    return new AttributeNames([...values]);
+    return new AttributeNames(values);
   }
 
   add(value: AttributeName): AttributeNames {

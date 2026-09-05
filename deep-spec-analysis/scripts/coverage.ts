@@ -143,7 +143,8 @@ export function measureWithBun(repoRoot: string, run: CommandRunner = defaultRun
     const failed = failedTestCount(`${result.stdout}\n${result.stderr}`);
     if (failed > 0) throw new Error(`テストが ${failed} 件失敗しました (${packageDir})。カバレッジは判定しません`);
     const lcovPath = join(coverageDir, "lcov.info");
-    if (!existsSync(lcovPath)) throw new Error(`lcov.info が書かれていません (${lcovPath}): ${describeFailure(result)}`);
+    if (!existsSync(lcovPath))
+      throw new Error(`lcov.info が書かれていません (${lcovPath}): ${describeFailure(result)}`);
     const percent = parseLcovLinePercent(readFileSync(lcovPath, "utf-8"));
     if (percent === null) throw new Error(`line coverage の取得に失敗しました (${lcovPath})`);
     return percent;
@@ -176,13 +177,22 @@ export function checkoutBaseWorktree(repoRoot: string, baseRef: string, run: Com
   const worktreeDir = mkdtempSync(join(tmpdir(), "deep-spec-coverage-base-"));
   // mktemp が作る空ディレクトリが残っていると `git worktree add` が失敗する
   rmSync(worktreeDir, { recursive: true, force: true });
-  requireOk(run("git", ["worktree", "add", "--detach", worktreeDir, baseRef], repoRoot), `git worktree add (${baseRef})`);
+  requireOk(
+    run("git", ["worktree", "add", "--detach", worktreeDir, baseRef], repoRoot),
+    `git worktree add (${baseRef})`,
+  );
   try {
-    requireOk(run("git", ["submodule", "update", "--init", "--", "aidlc-workflows"], worktreeDir), "git submodule update (base worktree)");
+    requireOk(
+      run("git", ["submodule", "update", "--init", "--", "aidlc-workflows"], worktreeDir),
+      "git submodule update (base worktree)",
+    );
     // install より前に写す。bunfig.toml は [install] linker も持つので、依存の
     // 配置も head と同じ条件にする。
     pinCoverageConfig(repoRoot, worktreeDir);
-    requireOk(run("bun", ["install", "--frozen-lockfile"], join(worktreeDir, PACKAGE_DIR)), "bun install (base worktree)");
+    requireOk(
+      run("bun", ["install", "--frozen-lockfile"], join(worktreeDir, PACKAGE_DIR)),
+      "bun install (base worktree)",
+    );
   } catch (error) {
     removeWorktree(repoRoot, worktreeDir, run);
     throw error;
@@ -233,9 +243,13 @@ export function runGate(options: GateOptions = {}): GateReport {
     log(`base (${options.baseRef}) line coverage: ${formatPercent(basePercent)}%`);
 
     if (geWithTolerance(headPercent, basePercent, TOLERANCE)) {
-      log(`[PASS] relative gate: head (${formatPercent(headPercent)}%) >= base (${formatPercent(basePercent)}%) - tolerance (${TOLERANCE})`);
+      log(
+        `[PASS] relative gate: head (${formatPercent(headPercent)}%) >= base (${formatPercent(basePercent)}%) - tolerance (${TOLERANCE})`,
+      );
     } else {
-      log(`[FAIL] relative gate: head (${formatPercent(headPercent)}%) < base (${formatPercent(basePercent)}%) - tolerance (${TOLERANCE})`);
+      log(
+        `[FAIL] relative gate: head (${formatPercent(headPercent)}%) < base (${formatPercent(basePercent)}%) - tolerance (${TOLERANCE})`,
+      );
       exitCode = 1;
     }
   }

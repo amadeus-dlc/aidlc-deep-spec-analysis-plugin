@@ -7,11 +7,11 @@ export class RefinementAttributes {
   readonly #values: readonly RefinementAttribute[];
 
   private constructor(values: readonly RefinementAttribute[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly RefinementAttribute[]): RefinementAttributes {
-    return new RefinementAttributes([...values]);
+    return new RefinementAttributes(values);
   }
 
   add(value: RefinementAttribute): RefinementAttributes {
@@ -40,7 +40,9 @@ export class RefinementAttributes {
 
   // 閉包検査・フレーム構築の走査順（path の辞書順）はコレクション知識。
   sortedByPath(): RefinementAttributes {
-    return new RefinementAttributes([...this.#values].sort((x, y) => (x.path().asString() < y.path().asString() ? -1 : 1)));
+    return new RefinementAttributes(
+      [...this.#values].sort((x, y) => (x.path().asString() < y.path().asString() ? -1 : 1)),
+    );
   }
 
   toArray(): readonly RefinementAttribute[] {

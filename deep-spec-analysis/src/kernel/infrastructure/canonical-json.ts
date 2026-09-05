@@ -2,15 +2,16 @@
 // ため 1 文字も変えてはならない。deep-spec-lib.ts からの逐語移動。
 // I/O を一切持たない純関数なので最内層に置く（kernel/adapter からの移設）。
 
-import { type Json, isObject } from "./json.ts";
+import type { ValueSnapshotParam } from "./value-snapshot-param.ts";
 
-export function canonicalStringify(value: Json): string {
+export function canonicalStringify(value: ValueSnapshotParam): string {
   if (Array.isArray(value)) {
     return `[${value.map(canonicalStringify).join(",")}]`;
   }
-  if (isObject(value)) {
-    const keys = Object.keys(value).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(value[k] ?? null)}`).join(",")}}`;
+  if (value !== null && typeof value === "object") {
+    const record = value as { readonly [key: string]: ValueSnapshotParam };
+    const keys = Object.keys(record).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(record[k] ?? null)}`).join(",")}}`;
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "null";
 }

@@ -5,11 +5,10 @@
 // inputs[] は集約が凍結取得規則で解決済みの文書から自分で記録する。
 
 import type { FindingsSchema } from "@deep-spec/kernel-domain";
+import type { CheckFunctionalDesignInput } from "./check-functional-design-input.ts";
 import type { CheckOutcome } from "./check-outcome.ts";
 import type { DesignRecordRepository } from "./port/design-record-repository.ts";
 import type { ReferenceCheckReportRepository } from "./port/reference-check-report-repository.ts";
-import type { CheckFunctionalDesignInput } from "./check-functional-design-input.ts";
-
 
 export class CheckFunctionalDesignUseCase {
   readonly #designRecordRepository: DesignRecordRepository;

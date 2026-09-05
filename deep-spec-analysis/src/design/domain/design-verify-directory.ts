@@ -16,8 +16,8 @@
 
 import type { ArtifactPath, ContentHash, FindingsSchema } from "@deep-spec/kernel-domain";
 import type { DesignModel } from "./design-model.ts";
-import { DesignReport } from "./design-report.ts";
-import { DesignReportId } from "./design-report-id.ts";
+import type { DesignReport } from "./design-report.ts";
+import { DesignReportIdentifier } from "./design-report-identifier.ts";
 import { DesignReports } from "./design-reports.ts";
 
 const CROSS_CHECK_BACKEND = "cross-check";
@@ -75,14 +75,22 @@ export class DesignVerifyDirectory {
   finalizedWith(candidate: DesignReport, model: DesignModel | null, schema: FindingsSchema): DesignVerifyDirectory {
     const staged = this.finalizing(candidate.conformedTo(schema));
     if (model === null) return staged;
-    const derived = staged.#reports.crossChecked(DesignReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
+    const derived = staged.#reports.crossChecked(
+      DesignReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND),
+      model,
+      candidate.irHash(),
+    );
     return new DesignVerifyDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
   }
 
   // いまの reports からクロスチェックを導く（同一 irHash の可用文書だけが
   // 比較に参加する規則は DesignReports が持つ）。
   crossChecked(model: DesignModel, irHash: ContentHash): DesignVerifyDirectory {
-    const derived = this.#reports.crossChecked(DesignReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
+    const derived = this.#reports.crossChecked(
+      DesignReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND),
+      model,
+      irHash,
+    );
     return new DesignVerifyDirectory(this.#directory, this.#reports, this.#candidate, derived);
   }
 
@@ -99,11 +107,16 @@ export class DesignVerifyDirectory {
     const crossCheck = this.#crossCheck;
     const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
     // 候補が変わったら、以前の reports から導いた cross-check は無効。
-    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck === null
-      ? null : crossCheck.conformedTo(schema);
-    const reports = conformedCandidate === null
-      ? this.#reports
-      : DesignReports.of(this.#reports.toArray().map((r) => (r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r)));
+    const conformedCrossCheck =
+      conformedCandidate !== candidate || crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const reports =
+      conformedCandidate === null
+        ? this.#reports
+        : DesignReports.of(
+            this.#reports
+              .toArray()
+              .map((r) => (r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r)),
+          );
     return new DesignVerifyDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
   }
 

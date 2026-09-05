@@ -1,0 +1,47 @@
+{
+  "base_commit": "26324f9def27e396cdcb08d11136dcf7691bf73c",
+  "scope": "deep-spec-analysis/src/**/*.ts",
+  "typescript_files": 497,
+  "lines": 26103,
+  "largest_production_file": {
+    "path": "deep-spec-analysis/src/design/adapter/refinement-query-plan.ts",
+    "lines": 404
+  },
+  "excluded": [
+    "aidlc-workflows/",
+    "deep-spec-analysis/tools/ (generated bundles)",
+    "node_modules/",
+    "dist/"
+  ],
+  "method": "全原本の機械走査と、入力・ソルバ応答・ドメイン生成・所有権・判定処理の重点精読",
+  "baseline": {
+    "typecheck": "PASS",
+    "architecture_and_package_boundary_tests": {
+      "pass": 43,
+      "fail": 0,
+      "assertions": 270
+    }
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "priority": "P1",
+      "title": "欠落したSMT応答を検証済み成功として扱う"
+    },
+    {
+      "id": "R2",
+      "priority": "P2",
+      "title": "IDのparse契約と通常操作が要求する値域が一致しない"
+    },
+    {
+      "id": "R3",
+      "priority": "P2",
+      "title": "入力参照の共有により不変な宣言が呼び出し側から変わる"
+    },
+    {
+      "id": "R4",
+      "priority": "P2",
+      "title": "JSONを扱うbindingsの値型がunknownに消えている"
+    }
+  ]
+}

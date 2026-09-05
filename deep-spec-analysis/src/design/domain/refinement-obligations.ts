@@ -6,11 +6,11 @@ export class RefinementObligations {
   readonly #values: readonly RefinementObligation[];
 
   private constructor(values: readonly RefinementObligation[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly RefinementObligation[]): RefinementObligations {
-    return new RefinementObligations([...values]);
+    return new RefinementObligations(values);
   }
 
   add(value: RefinementObligation): RefinementObligations {

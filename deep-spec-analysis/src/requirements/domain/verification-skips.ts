@@ -8,11 +8,11 @@ export class VerificationSkips {
   readonly #values: readonly VerificationSkipped[];
 
   private constructor(values: readonly VerificationSkipped[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly VerificationSkipped[]): VerificationSkips {
-    return new VerificationSkips([...values]);
+    return new VerificationSkips(values);
   }
 
   add(value: VerificationSkipped): VerificationSkips {

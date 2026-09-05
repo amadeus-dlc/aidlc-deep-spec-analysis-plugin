@@ -1,36 +1,48 @@
-import { RequirementId, FrRefs, TargetId, TargetIds, TriggerName, type Expression } from "@deep-spec/kernel-domain";
+import {
+  AttributeKind,
+  type Expression,
+  FunctionalRequirementReferences,
+  RequirementIdentifier,
+  TargetIdentifier,
+  TargetIdentifiers,
+  TriggerName,
+} from "@deep-spec/kernel-domain";
+import { scenarioBindings } from "./binding-fixtures.ts";
 
 // requirements/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
 
 import { describe, expect, test } from "bun:test";
 
 import {
-  BackgroundAssumptionId,
-  IrBackgroundDecl,
+  AttributePath,
+  BackgroundAssumptionIdentifier,
+  IntermediateRepresentationAttributeDeclaration,
+  IntermediateRepresentationAttributeDeclarations,
+  IntermediateRepresentationAttributeName,
+  IntermediateRepresentationBackgroundDeclaration,
+  IntermediateRepresentationEntityDeclaration,
+  IntermediateRepresentationEntityName,
+  IntermediateRepresentationTemporalDeclaration,
   Obligation,
-  ObligationId,
+  ObligationIdentifier,
   ObligationNature,
   QuintMachineRunVerdict,
-  Scenario,
-  ScenarioId,
-  TraceStates,
-  IrAttributeDecl,
-  IrAttributeDecls,
-  IrAttributeName,
-  IrEntityDecl,
-  IrEntityName,
-  IrTemporalDecl,
-  VerificationSkipped,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
- VerificationWitness, AttributePath,
+  Scenario,
+  ScenarioIdentifier,
   TraceState,
-  TraceValue
+  TraceStates,
+  TraceValue,
+  type VerificationSkipped,
+  VerificationWitness,
 } from "@deep-spec/requirements-domain";
 
 // テスト用: 平文の状態 → TraceState（裁定 2 で値オブジェクトになった）。
 function st(values: { [path: string]: boolean | number | string }): TraceState {
-  return TraceState.of(Object.entries(values).map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)] as const));
+  return TraceState.of(
+    Object.entries(values).map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)] as const),
+  );
 }
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
@@ -38,9 +50,11 @@ const lit = (value: boolean): Expression => ({ op: "lit", value });
 describe("obligation", () => {
   const event = (overrides: { trigger?: TriggerName; guard?: Expression; effect?: Expression } = {}) =>
     Obligation.of({
-      id: ObligationId.of("OB-1"),
+      id: ObligationIdentifier.of("OB-1"),
       nature: ObligationNature.of("event"),
-      frRefs: FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(
+        Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
+      ),
       trigger: TriggerName.of("submit"),
       guard: lit(true),
       effect: lit(false),
@@ -57,9 +71,9 @@ describe("obligation", () => {
     expect(event({ guard: undefined }).eventDefinition()).toBeNull();
     expect(
       Obligation.of({
-        id: ObligationId.of("OB-2"),
+        id: ObligationIdentifier.of("OB-2"),
         nature: ObligationNature.of("invariant"),
-        frRefs: FrRefs.of([]),
+        functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         assert: lit(true),
       }).eventDefinition(),
     ).toBeNull();
@@ -68,18 +82,18 @@ describe("obligation", () => {
   test("vacuityAntecedent surfaces the antecedent of an implies assertion only", () => {
     const antecedent = lit(true);
     const implied = Obligation.of({
-      id: ObligationId.of("OB-3"),
+      id: ObligationIdentifier.of("OB-3"),
       nature: ObligationNature.of("invariant"),
-      frRefs: FrRefs.of([]),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       assert: { op: "implies", args: [antecedent, lit(false)] },
     });
     expect(implied.vacuityAntecedent()).toEqual(antecedent);
     expect(implied.vacuityAntecedent()).not.toBe(antecedent);
     expect(
       Obligation.of({
-        id: ObligationId.of("OB-4"),
+        id: ObligationIdentifier.of("OB-4"),
         nature: ObligationNature.of("invariant"),
-        frRefs: FrRefs.of([]),
+        functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         assert: lit(true),
       }).vacuityAntecedent(),
     ).toBeUndefined();
@@ -87,9 +101,9 @@ describe("obligation", () => {
 
   test("inspectExpressions visits every held expression, primes allowed only on the effect", () => {
     const obligation = Obligation.of({
-      id: ObligationId.of("OB-5"),
+      id: ObligationIdentifier.of("OB-5"),
       nature: ObligationNature.of("state-temporal"),
-      frRefs: FrRefs.of([]),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       assert: { op: "a" },
       guard: { op: "g" },
       effect: { op: "e" },
@@ -109,9 +123,11 @@ describe("obligation", () => {
 
   test("of round-trips every field through the accessors, and temporal() hands out a copy", () => {
     const obligation = Obligation.of({
-      id: ObligationId.of("OB-6"),
+      id: ObligationIdentifier.of("OB-6"),
       nature: ObligationNature.of("numeric"),
-      frRefs: FrRefs.of(Array.from(["FR-9"], (raw) => RequirementId.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(
+        Array.from(["FR-9"], (raw) => RequirementIdentifier.of(raw)),
+      ),
       ears: "the system shall ...",
       assert: lit(true),
       trigger: TriggerName.of("tick"),
@@ -121,7 +137,7 @@ describe("obligation", () => {
     });
     expect(obligation.id().asString()).toBe("OB-6");
     expect(obligation.nature().asString()).toBe("numeric");
-    expect(obligation.frRefs().toStrings()).toEqual(["FR-9"]);
+    expect(obligation.functionalRequirementReferences().toStrings()).toEqual(["FR-9"]);
     expect(obligation.ears()).toBe("the system shall ...");
     expect(obligation.assertion()).toEqual(lit(true));
     expect(obligation.trigger()?.asString()).toBe("tick");
@@ -139,24 +155,28 @@ describe("obligation", () => {
 describe("scenario", () => {
   const scenario = (kind: "accept" | "reject") =>
     Scenario.of({
-      id: ScenarioId.of("SC-1"),
+      id: ScenarioIdentifier.of("SC-1"),
       kind,
-      frRefs: FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
-      bindings: { b: 2, a: 1 },
+      functionalRequirementReferences: FunctionalRequirementReferences.of(
+        Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
+      ),
+      bindings: scenarioBindings({ b: 2, a: 1 }),
     });
 
   test("of round-trips every field through the accessors", () => {
     const withEvent = Scenario.of({
-      id: ScenarioId.of("SC-2"),
+      id: ScenarioIdentifier.of("SC-2"),
       kind: "accept",
-      frRefs: FrRefs.of(Array.from(["FR-1", "FR-2"], (raw) => RequirementId.of(raw))),
-      bindings: { a: 1 },
+      functionalRequirementReferences: FunctionalRequirementReferences.of(
+        Array.from(["FR-1", "FR-2"], (raw) => RequirementIdentifier.of(raw)),
+      ),
+      bindings: scenarioBindings({ a: 1 }),
       event: { trigger: TriggerName.of("submit") },
       expect: lit(true),
     });
     expect(withEvent.id().asString()).toBe("SC-2");
     expect(withEvent.kind()).toBe("accept");
-    expect(withEvent.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
+    expect(withEvent.functionalRequirementReferences().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(withEvent.eventTrigger()?.asString()).toBe("submit");
     expect(withEvent.expectation()).toEqual(lit(true));
     expect(withEvent.isAccept()).toBe(true);
@@ -177,20 +197,25 @@ describe("scenario", () => {
   });
 
   test("bindingEntriesCanonically sorts by key and bindings() hands out a copy", () => {
-    expect(scenario("accept").bindingEntriesCanonically()).toEqual([
+    expect(
+      scenario("accept")
+        .bindings()
+        .entriesCanonically()
+        .map((binding) => [binding.path().asString(), binding.value().toDocument()]),
+    ).toEqual([
       ["a", 1],
       ["b", 2],
     ]);
-    const out = scenario("accept").bindings();
+    const out = scenario("accept").bindings().toDocument();
     (out as Record<string, number>).c = 3;
-    expect(scenario("accept").bindings()).toEqual({ b: 2, a: 1 });
+    expect(scenario("accept").bindings().toDocument()).toEqual({ b: 2, a: 1 });
   });
 });
 
 describe("ir background decl", () => {
   test("inspectExpressions visits the assertion with primes forbidden, and silence when absent", () => {
-    const withAssert = IrBackgroundDecl.of({
-      id: BackgroundAssumptionId.of("BG-1"),
+    const withAssert = IntermediateRepresentationBackgroundDeclaration.of({
+      id: BackgroundAssumptionIdentifier.of("BG-1"),
       assert: { op: "ref", path: "a.b" },
     });
     const seen: [string, boolean][] = [];
@@ -199,7 +224,7 @@ describe("ir background decl", () => {
     expect(withAssert.id().asString()).toBe("BG-1");
     expect(withAssert.assertion()).toEqual({ op: "ref", path: "a.b" });
 
-    const bare = IrBackgroundDecl.of({ id: BackgroundAssumptionId.of("BG-2") });
+    const bare = IntermediateRepresentationBackgroundDeclaration.of({ id: BackgroundAssumptionIdentifier.of("BG-2") });
     const none: unknown[] = [];
     bare.inspectExpressions((expression, primesAllowed) => none.push([expression.op, primesAllowed]));
     expect(none).toEqual([]);
@@ -208,7 +233,7 @@ describe("ir background decl", () => {
 });
 
 describe("quint machine run verdict", () => {
-  const targets = TargetIds.of(Array.from(["OB-1", "OB-2"], (raw) => TargetId.of(raw)));
+  const targets = TargetIdentifiers.of(Array.from(["OB-1", "OB-2"], (raw) => TargetIdentifier.of(raw)));
   const flat = (skips: readonly VerificationSkipped[]) =>
     skips.map((s) => `${s.target().asString()}:${s.reason()}:${s.detail()}`);
 
@@ -225,7 +250,9 @@ describe("quint machine run verdict", () => {
       "quint run failed unexpectedly: boom",
       "quint run failed unexpectedly: boom",
     ]);
-    expect(flat(failed.skipsFor(TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), true))).toEqual(["OB-1:unavailable:quint verify failed unexpectedly: boom"]);
+    expect(
+      flat(failed.skipsFor(TargetIdentifiers.of(Array.from(["OB-1"], (raw) => TargetIdentifier.of(raw))), true)),
+    ).toEqual(["OB-1:unavailable:quint verify failed unexpectedly: boom"]);
     expect([timeout, failed].some((v) => v.isDeadlock() || v.isViolation())).toBe(false);
   });
 
@@ -259,29 +286,50 @@ describe("quint machine run verdict", () => {
 
 describe("ir entity and temporal decls (well-formedness materials own their judgements)", () => {
   test("entity decl visits attributes with their coordinate and flags a repeated name from its second occurrence", () => {
-    const attr = (name: string) => IrAttributeDecl.of({ name: IrAttributeName.of(name), kind: "bool" });
-    const entity = IrEntityDecl.of({ name: IrEntityName.of("order"), attributes: IrAttributeDecls.of([attr("qty"), attr("qty"), attr("paid")]) });
+    const attr = (name: string) =>
+      IntermediateRepresentationAttributeDeclaration.of({
+        name: IntermediateRepresentationAttributeName.of(name),
+        kind: AttributeKind.of("bool"),
+      });
+    const entity = IntermediateRepresentationEntityDeclaration.of({
+      name: IntermediateRepresentationEntityName.of("order"),
+      attributes: IntermediateRepresentationAttributeDeclarations.of([attr("qty"), attr("qty"), attr("paid")]),
+    });
     const seen: [string, boolean][] = [];
-    entity.inspectAttributes((coordinate, attribute, duplicated) => seen.push([`${coordinate}=${attribute.name().asString()}`, duplicated]));
-    expect(seen).toEqual([["order.qty=qty", false], ["order.qty=qty", true], ["order.paid=paid", false]]);
+    entity.inspectAttributes((coordinate, attribute, duplicated) =>
+      seen.push([`${coordinate}=${attribute.name().asString()}`, duplicated]),
+    );
+    expect(seen).toEqual([
+      ["order.qty=qty", false],
+      ["order.qty=qty", true],
+      ["order.paid=paid", false],
+    ]);
     expect(entity.name().asString()).toBe("order");
     expect(entity.attributes().toArray().length).toBe(3);
   });
 
   test("temporal decl visits assert, from and to in that order with primes forbidden, and silence when absent", () => {
-    const full = IrTemporalDecl.of({ assert: lit(true), from: { op: "ref", path: "a" }, to: { op: "ref", path: "b" } });
+    const full = IntermediateRepresentationTemporalDeclaration.of({
+      assert: lit(true),
+      from: { op: "ref", path: "a" },
+      to: { op: "ref", path: "b" },
+    });
     const seen: [string, boolean][] = [];
     full.inspectExpressions((expression, primesAllowed) => seen.push([expression.op, primesAllowed]));
-    expect(seen).toEqual([["lit", false], ["ref", false], ["ref", false]]);
+    expect(seen).toEqual([
+      ["lit", false],
+      ["ref", false],
+      ["ref", false],
+    ]);
     const none: unknown[] = [];
-    IrTemporalDecl.of({}).inspectExpressions((expression) => none.push(expression));
+    IntermediateRepresentationTemporalDeclaration.of({}).inspectExpressions((expression) => none.push(expression));
     expect(none).toEqual([]);
   });
 });
 
 describe("quint temporal and scenario verdicts", () => {
   test("a temporal timeout skips its obligation with the frozen wording; a violation carries its trace; clean stays silent", () => {
-    const target = TargetId.of("OB-3");
+    const target = TargetIdentifier.of("OB-3");
     const timeout = QuintTemporalVerdict.timeout();
     expect(timeout.skipFor(target)?.reason()).toBe("timeout");
     expect(timeout.skipFor(target)?.detail()).toBe("temporal check exceeded its budget");
@@ -296,7 +344,7 @@ describe("quint temporal and scenario verdicts", () => {
   });
 
   test("a scenario timeout or failed run skips with the frozen wording; only an evaluated verdict can be violated", () => {
-    const target = TargetId.of("SC-1");
+    const target = TargetIdentifier.of("SC-1");
     expect(QuintScenarioVerdict.timeout().skipFor(target)?.detail()).toBe("scenario evaluation exceeded its budget");
     const failed = QuintScenarioVerdict.runFailed("boom");
     expect(failed.skipFor(target)?.reason()).toBe("unavailable");
@@ -311,9 +359,15 @@ describe("quint temporal and scenario verdicts", () => {
 describe("verification witness (the contract-2 witness owns its document face)", () => {
   test("each face serializes verbatim and the document round-trips through the frozen blind cast", () => {
     expect(VerificationWitness.core(["b", "a"]).toDocument()).toEqual({ core: ["b", "a"] });
-    expect(VerificationWitness.model({ "T.ok": true, "T.n": 2 }).toDocument()).toEqual({ model: { "T.ok": true, "T.n": 2 } });
-    expect(VerificationWitness.verdicts({ quint: "violated", smt: "clean" }).toDocument()).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
-    expect(VerificationWitness.trace([st({ "T.ok": true }), st({ "T.ok": false })]).toDocument()).toEqual({ trace: [{ "T.ok": true }, { "T.ok": false }] });
+    expect(VerificationWitness.model({ "T.ok": true, "T.n": 2 }).toDocument()).toEqual({
+      model: { "T.ok": true, "T.n": 2 },
+    });
+    expect(VerificationWitness.verdicts({ quint: "violated", smt: "clean" }).toDocument()).toEqual({
+      verdicts: { quint: "violated", smt: "clean" },
+    });
+    expect(VerificationWitness.trace([st({ "T.ok": true }), st({ "T.ok": false })]).toDocument()).toEqual({
+      trace: [{ "T.ok": true }, { "T.ok": false }],
+    });
     expect(VerificationWitness.of({ model: { x: 1 } }).toDocument()).toEqual({ model: { x: 1 } });
   });
 });
@@ -335,10 +389,10 @@ describe("trace values and states own their semantics (ruling 2)", () => {
     expect(Number.isNaN(TraceValue.absent().asNumber())).toBe(true);
     expect(TraceValue.of({ a: [1, "x"] }).equals(TraceValue.of({ a: [1, "x"] }))).toBe(true);
     expect(TraceValue.of({ a: 1 }).equals(TraceValue.of({ a: 2 }))).toBe(false);
-    expect(TraceValue.ofLiteral(undefined).toDocument()).toBe(null);
-    expect(TraceValue.ofLiteral("on").toDocument()).toBe("on");
-    expect(TraceValue.ofBoolean(false).toDocument()).toBe(false);
-    expect(TraceValue.ofNumber(2.5).toDocument()).toBe(2.5);
+    expect(TraceValue.absent().toDocument()).toBe(null);
+    expect(TraceValue.of("on").toDocument()).toBe("on");
+    expect(TraceValue.of(false).toDocument()).toBe(false);
+    expect(TraceValue.of(2.5).toDocument()).toBe(2.5);
   });
 
   test("a state resolves references, answers absent for unknown paths, and renders in insertion order", () => {

@@ -1,7 +1,7 @@
-import { VerificationStaleness, CoverageState } from "@deep-spec/doctor-domain";
+import { CoverageState, VerificationStaleness } from "@deep-spec/doctor-domain";
+import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 import { CoverageAssessment } from "./read-model/coverage-assessment.ts";
 import { CoverageRow } from "./read-model/coverage-row.ts";
-import type { DoctorWorkspaceClient } from "./port/doctor-workspace-client.ts";
 
 // 要件検証カバレッジの査定（checks 配列の第 3 ブロック）。適格＝スコープ
 // 一致かつ requirements.md 実在（ゲートウェイが母数を絞る）。モデルか

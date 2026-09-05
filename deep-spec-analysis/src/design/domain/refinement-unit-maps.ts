@@ -1,4 +1,4 @@
-import { DesignUnitId } from "@deep-spec/design-domain";
+import type { DesignUnitIdentifier } from "@deep-spec/design-domain";
 import type { RefinementUnitMap } from "./refinement-unit-map.ts";
 
 // ユニット写像のファーストクラスコレクション。重複ユニットは最初の宣言が
@@ -7,11 +7,11 @@ export class RefinementUnitMaps {
   readonly #values: readonly RefinementUnitMap[];
 
   private constructor(values: readonly RefinementUnitMap[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly RefinementUnitMap[]): RefinementUnitMaps {
-    return new RefinementUnitMaps([...values]);
+    return new RefinementUnitMaps(values);
   }
 
   add(value: RefinementUnitMap): RefinementUnitMaps {
@@ -22,7 +22,7 @@ export class RefinementUnitMaps {
     yield* this.#values;
   }
 
-  mapOf(unit: DesignUnitId): RefinementUnitMap | undefined {
+  mapOf(unit: DesignUnitIdentifier): RefinementUnitMap | undefined {
     return this.#values.find((m) => m.isForUnit(unit));
   }
 

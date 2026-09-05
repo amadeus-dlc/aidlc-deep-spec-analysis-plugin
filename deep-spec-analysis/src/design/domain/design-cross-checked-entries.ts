@@ -5,11 +5,11 @@ export class DesignCrossCheckedEntries {
   readonly #values: readonly DesignCrossCheckedEntry[];
 
   private constructor(values: readonly DesignCrossCheckedEntry[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignCrossCheckedEntry[]): DesignCrossCheckedEntries {
-    return new DesignCrossCheckedEntries([...values]);
+    return new DesignCrossCheckedEntries(values);
   }
 
   add(value: DesignCrossCheckedEntry): DesignCrossCheckedEntries {

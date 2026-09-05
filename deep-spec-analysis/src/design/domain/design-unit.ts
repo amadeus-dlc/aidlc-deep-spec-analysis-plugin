@@ -1,13 +1,14 @@
 import {
-  TargetId,
   AttributePath,
-  ExpressionTree,
-  FrRefs,
-  KeyedIndex,
-  TargetIds,
-  UnitName,
   type Expression,
+  ExpressionTree,
+  FunctionalRequirementReferences,
+  KeyedIndex,
+  TargetIdentifier,
+  TargetIdentifiers,
+  UnitName,
 } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 // 設計 IR の 1 ユニット。rawEntities は契約3 のエンティティスキーマ断片の
 // 素通し（lowering が契約1 文書へそのまま埋め込む）で、enum 値の照会だけを
@@ -26,42 +27,51 @@ import {
 // 合成不変量はトートロジーなので、大域・gap・シナリオの判定を変えない。
 // OB-n / SC-n / BG-n の採番・整列順は文書バイト（子の処理順）に効く凍結面。
 
-import { DesignUnitId } from "./design-unit-id.ts";
-
-import { DesignMachines } from "./design-machines.ts";
-import { DesignObligations } from "./design-obligations.ts";
-import { DesignScenarios } from "./design-scenarios.ts";
-import type { DesignAttributeDecl } from "./design-attribute-decl.ts";
-import type { DesignEntityDecls } from "./design-entity-decls.ts";
-import { AttrPaths } from "./attr-paths.ts";
-import { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
+import { AttributePaths } from "./attribute-paths.ts";
+import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
+import type { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
+import type { DesignEntityDeclarations } from "./design-entity-declarations.ts";
 import type { DesignMachine } from "./design-machine.ts";
-import type { DesignMachineId } from "./design-machine-id.ts";
-import type { DesignScenarioId } from "./design-scenario-id.ts";
-import type { DesignTransitionId } from "./design-transition-id.ts";
+import type { DesignMachineIdentifier } from "./design-machine-identifier.ts";
+import { DesignMachines } from "./design-machines.ts";
+import type { DesignObligations } from "./design-obligations.ts";
+import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
+import type { DesignScenarios } from "./design-scenarios.ts";
+import type { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
+import { DesignUnitIdentifier } from "./design-unit-identifier.ts";
 import type { LoweredBackground } from "./lowered-background.ts";
 import { LoweredBackgrounds } from "./lowered-backgrounds.ts";
-import { LoweredId } from "./lowered-id.ts";
+import { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredObligations } from "./lowered-obligations.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
-import { LoweredOriginRef } from "./lowered-origin-ref.ts";
+import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 import type { LoweredScenario } from "./lowered-scenario.ts";
 import { LoweredScenarios } from "./lowered-scenarios.ts";
 import { LoweredUnit } from "./lowered-unit.ts";
 import { LoweringIndex } from "./lowering-index.ts";
 
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type DesignUnitParam = {
+  readonly unit: string;
+  readonly entities: DesignEntityDeclarations;
+  readonly obligations: DesignObligations;
+  readonly machines: DesignMachines;
+  readonly scenarios: DesignScenarios;
+  readonly background: DesignBackgroundAssumptions;
+};
+
 export class DesignUnit {
   readonly #unit: UnitName;
   // 契約3 の実体宣言（型付き）。属性座標と enum 宣言値はここから答える。
-  readonly #entities: DesignEntityDecls;
-  readonly #attrPaths: AttrPaths;
+  readonly #entities: DesignEntityDeclarations;
+  readonly #attrPaths: AttributePaths;
   readonly #obligations: DesignObligations;
   readonly #machines: DesignMachines;
   readonly #scenarios: DesignScenarios;
   readonly #background: DesignBackgroundAssumptions;
 
-  private constructor(seed: Parameters<typeof DesignUnit.of>[0]) {
+  private constructor(seed: DesignUnitParam) {
     this.#unit = UnitName.of(seed.unit);
     this.#entities = seed.entities;
     // 属性座標（`Entity.attr`）は宣言から導く——一意化し宣言順（凍結挙動）。
@@ -69,27 +79,24 @@ export class DesignUnit {
     for (const ent of seed.entities) {
       for (const attr of ent.attributes()) coordinates.add(`${ent.name().asString()}.${attr.name().asString()}`);
     }
-    this.#attrPaths = AttrPaths.of([...coordinates]);
+    this.#attrPaths = AttributePaths.of([...coordinates].map((path) => AttributePath.of(path)));
     this.#obligations = seed.obligations;
     this.#machines = seed.machines;
     this.#scenarios = seed.scenarios;
     this.#background = seed.background;
   }
 
-  // アダプタのパーサが解いた型付き部品からの唯一の構築口。
-  static of(seed: {
-    readonly unit: string;
-    readonly entities: DesignEntityDecls;
-    readonly obligations: DesignObligations;
-    readonly machines: DesignMachines;
-    readonly scenarios: DesignScenarios;
-    readonly background: DesignBackgroundAssumptions;
-  }): DesignUnit {
+  // アダプタのパーサが解いた型付き部品からの構築口。
+  static parse(seed: DesignUnitParam): Result<DesignUnit, ParseError> {
+    return parseConstruction(() => new DesignUnit(seed));
+  }
+
+  static of(seed: DesignUnitParam): DesignUnit {
     return new DesignUnit(seed);
   }
 
-  id(): DesignUnitId {
-    return DesignUnitId.of(this.#unit.asString());
+  id(): DesignUnitIdentifier {
+    return DesignUnitIdentifier.of(this.#unit.asString());
   }
 
   // 境界: 文書・文言に逐語で載るユニット名（恒等の値）。
@@ -99,11 +106,11 @@ export class DesignUnit {
 
   // 境界: lowering が契約1 文書の schema.entities へ逐語で埋め込む断片。
   // 境界: lowered 文書の描画と refinement の SMT 文脈（adapter）が読む。
-  entities(): DesignEntityDecls {
+  entities(): DesignEntityDeclarations {
     return this.#entities;
   }
 
-  attrPaths(): AttrPaths {
+  attrPaths(): AttributePaths {
     return this.#attrPaths;
   }
 
@@ -124,8 +131,12 @@ export class DesignUnit {
   }
 
   // このユニットでバックエンドが検査し得る全対象（義務・遷移・シナリオ）。
-  allTargets(): TargetIds {
-    return TargetIds.of(Array.from([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()], (raw) => TargetId.of(raw))).sortedUniqueCanonically();
+  allTargets(): TargetIdentifiers {
+    return TargetIdentifiers.of(
+      Array.from([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()], (raw) =>
+        TargetIdentifier.of(raw),
+      ),
+    ).sortedUniqueCanonically();
   }
 
   // このユニットの lowering。synthetics は設計だけの 2 検査（到達不能・包摂）を
@@ -142,14 +153,14 @@ export class DesignUnit {
     }
 
     const obligations: LoweredObligation[] = [];
-    const origins: (readonly [LoweredId, LoweredOrigin])[] = [];
-    const machinesByTransition: (readonly [DesignTransitionId, DesignMachine])[] = [];
-    const attrPathsByMachine: (readonly [DesignMachineId, AttributePath])[] = [];
+    const origins: (readonly [LoweredIdentifier, LoweredOrigin])[] = [];
+    const machinesByTransition: (readonly [DesignTransitionIdentifier, DesignMachine])[] = [];
+    const attrPathsByMachine: (readonly [DesignMachineIdentifier, AttributePath])[] = [];
     const candidates: EventCandidate[] = [];
     let n = 0;
-    const nextId = (): LoweredId => {
+    const nextId = (): LoweredIdentifier => {
       n += 1;
-      return LoweredId.of(`OB-${n}`);
+      return LoweredIdentifier.of(`OB-${n}`);
     };
 
     // 1) 設計義務は素通し（frRefs は帰属のため保持。空の frRefs は lowered
@@ -160,7 +171,12 @@ export class DesignUnit {
       origins.push([id, ob.loweredOrigin()]);
       const event = ob.eventDefinition();
       if (event !== null) {
-        candidates.push({ design: ob.id().asString(), trigger: event.trigger.asString(), guard: event.guard, effect: event.effect });
+        candidates.push({
+          design: ob.id().asString(),
+          trigger: event.trigger.asString(),
+          guard: event.guard,
+          effect: event.effect,
+        });
       }
     }
 
@@ -174,7 +190,12 @@ export class DesignUnit {
         obligations.push(tr.loweredAs(id, attrPath));
         origins.push([id, tr.loweredOrigin()]);
         machinesByTransition.push([tr.id(), sm]);
-        candidates.push({ design: tr.id().asString(), trigger: tr.trigger().asString(), guard: tr.loweredGuard(attrPath), effect: tr.loweredEffect(attrPath) });
+        candidates.push({
+          design: tr.id().asString(),
+          trigger: tr.trigger().asString(),
+          guard: tr.loweredGuard(attrPath),
+          effect: tr.loweredEffect(attrPath),
+        });
       }
       for (const ig of sm.ignores().sortedByStateTrigger()) {
         const id = nextId();
@@ -188,8 +209,15 @@ export class DesignUnit {
     if (opts.synthetics) {
       for (const c of candidates) {
         const id = nextId();
-        obligations.push(LoweredObligation.of({ id, nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
-        origins.push([id, LoweredOrigin.of({ design: LoweredOriginRef.of(c.design), kind: "vac-dead" })]);
+        obligations.push(
+          LoweredObligation.of({
+            id,
+            nature: "invariant",
+            functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+            assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] },
+          }),
+        );
+        origins.push([id, LoweredOrigin.of({ design: LoweredOriginReference.of(c.design), kind: "vac-dead" })]);
       }
       const byTrigger = new Map<string, EventCandidate[]>();
       for (const c of candidates) {
@@ -206,20 +234,28 @@ export class DesignUnit {
             // (guardB and not guardA) の空虚性は guardB => guardA を証明する：
             // b は a に包摂される（同トリガ・証明可能に狭いガード・同一効果）。
             const id = nextId();
-            obligations.push(LoweredObligation.of({
+            obligations.push(
+              LoweredObligation.of({
+                id,
+                nature: "invariant",
+                functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+                assert: {
+                  op: "implies",
+                  args: [
+                    { op: "and", args: [b.guard, { op: "not", args: [a.guard] }] },
+                    { op: "bool", value: true },
+                  ],
+                },
+              }),
+            );
+            origins.push([
               id,
-              nature: "invariant",
-              frRefs: FrRefs.of([]),
-              assert: {
-                op: "implies",
-                args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }],
-              },
-            }));
-            origins.push([id, LoweredOrigin.of({
-              design: LoweredOriginRef.of(`${a.design}|${b.design}`),
-              kind: "vac-shadow",
-              pair: [LoweredOriginRef.of(a.design), LoweredOriginRef.of(b.design)],
-            })]);
+              LoweredOrigin.of({
+                design: LoweredOriginReference.of(`${a.design}|${b.design}`),
+                kind: "vac-shadow",
+                pair: [LoweredOriginReference.of(a.design), LoweredOriginReference.of(b.design)],
+              }),
+            ]);
           }
         }
       }
@@ -227,11 +263,11 @@ export class DesignUnit {
 
     // 4) シナリオと背景。
     const scenarios: LoweredScenario[] = [];
-    const scenarioDesignIds: (readonly [LoweredId, DesignScenarioId])[] = [];
+    const scenarioDesignIds: (readonly [LoweredIdentifier, DesignScenarioIdentifier])[] = [];
     let scN = 0;
     for (const sc of this.#scenarios.sortedCanonically()) {
       scN += 1;
-      const id = LoweredId.of(`SC-${scN}`);
+      const id = LoweredIdentifier.of(`SC-${scN}`);
       scenarios.push(sc.loweredAs(id));
       scenarioDesignIds.push([id, sc.id()]);
     }
@@ -239,7 +275,7 @@ export class DesignUnit {
     let bgN = 0;
     for (const bg of this.#background.sortedCanonically()) {
       bgN += 1;
-      background.push(bg.loweredAs(LoweredId.of(`BG-${bgN}`)));
+      background.push(bg.loweredAs(LoweredIdentifier.of(`BG-${bgN}`)));
     }
 
     return LoweredUnit.of({
@@ -256,7 +292,7 @@ export class DesignUnit {
   }
 
   // 属性座標の宣言を引く（最初に一致した宣言——凍結挙動）。
-  #attributeAt(attrPath: string): DesignAttributeDecl | null {
+  #attributeAt(attrPath: string): DesignAttributeDeclaration | null {
     for (const ent of this.#entities) {
       for (const attr of ent.attributes()) {
         if (`${ent.name().asString()}.${attr.name().asString()}` === attrPath) return attr;
@@ -270,7 +306,7 @@ export class DesignUnit {
   // 自由関数 designEnumValues のメソッド化（OOUI 裁定）。判定は宣言に問う。
   declaredEnumValuesOf(attrPath: string): string[] | null {
     const values = this.#attributeAt(attrPath)?.enumStates() ?? null;
-    return values === null ? null : [...values.toArray()];
+    return values === null ? null : values.toArray().map((member) => member.asString());
   }
 
   // 属性パスの enum 宣言値（未宣言・非 enum は空）。旧 enumValuesOf の逐語移植。

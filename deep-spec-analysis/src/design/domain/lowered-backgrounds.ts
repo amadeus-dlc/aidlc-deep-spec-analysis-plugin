@@ -5,11 +5,11 @@ export class LoweredBackgrounds {
   readonly #values: readonly LoweredBackground[];
 
   private constructor(values: readonly LoweredBackground[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly LoweredBackground[]): LoweredBackgrounds {
-    return new LoweredBackgrounds([...values]);
+    return new LoweredBackgrounds(values);
   }
 
   add(value: LoweredBackground): LoweredBackgrounds {

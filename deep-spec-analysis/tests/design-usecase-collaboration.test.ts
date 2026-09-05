@@ -15,28 +15,25 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ArtifactPath, FindingsSchema, VerificationMethod } from "@deep-spec/kernel-domain";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
-import { readContractSchema } from "@deep-spec/kernel-adapter";
 import {
-  ReachabilityVerdict,
+  DesignModelRepositoryImplementation,
+  DesignVerifyDirectoryRepositoryImplementation,
+} from "@deep-spec/design-adapter";
+import {
+  type DesignModel,
+  DesignModelIdentifier,
+  DesignReportIdentifier,
   DesignReports,
   DesignVerifyDirectory,
+  ReachabilityVerdict,
   RefinementMaterials,
-  type DesignModel,
-  DesignModelId,
-  DesignReportId,
-  type RefinementMaterialsId,
+  type RefinementMaterialsIdentifier,
 } from "@deep-spec/design-domain";
-import { DesignModelRepositoryImpl, DesignVerifyDirectoryRepositoryImpl } from "@deep-spec/design-adapter";
 import {
-  DesignReportFinalizer,
-  DesignVerificationAcquirer,
-  VerifyDesignQuintUseCase,
-  VerifyDesignSmtUseCase,
   type DesignAcquisitionTerminal,
   type DesignModelRepository,
+  DesignReportFinalizer,
+  DesignVerificationAcquirer,
   type DesignVerifyDirectoryRepository,
   type RefinementCheck,
   type RefinementMaterialsRepository,
@@ -44,13 +41,21 @@ import {
   type SiblingBackendClient,
   type SiblingLoweredRun,
   type VerifyDesignOutcome,
+  VerifyDesignQuintUseCase,
+  VerifyDesignSatisfiabilityModuloTheoriesUseCase,
 } from "@deep-spec/design-usecase";
+import { readContractSchema } from "@deep-spec/kernel-adapter";
+import { ArtifactPath, FindingsSchema, VerificationMethod } from "@deep-spec/kernel-domain";
+import { err, ok, type Result } from "@deep-spec/kernel-infrastructure";
+import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const schemaPath = join(pluginRoot, "src", "entries", "data", "deep-spec-findings-schema.json");
 // 契約2 のスキーマは合成ルート相当のここで一度だけ読む（entry と同じ形）。
 const schemaFile = readContractSchema(schemaPath);
-const contractSchema = schemaFile.ok ? FindingsSchema.of(schemaFile.value) : FindingsSchema.unreadable(schemaFile.error.cause);
+const contractSchema = schemaFile.ok
+  ? FindingsSchema.of(schemaFile.value)
+  : FindingsSchema.unreadable(schemaFile.error.cause);
 const fixtureModelPath = join(
   pluginRoot,
   "tests",
@@ -70,7 +75,7 @@ function ap(raw: string): ArtifactPath {
 }
 
 function fixtureModel(): DesignModel {
-  const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(fixtureModelPath)));
+  const acquired = new DesignModelRepositoryImplementation().findById(DesignModelIdentifier.of(ap(fixtureModelPath)));
   if (!acquired.ok) throw new Error("design fixture model is unreadable");
   return acquired.value;
 }
@@ -79,7 +84,7 @@ function fixtureModel(): DesignModel {
 function unsupportedMajorModel(directory: string): DesignModel {
   const path = join(directory, "deep-spec-analysis-functional-formal-model.md");
   writeFileSync(path, readFileSync(fixtureModelPath, "utf-8").replace('"irVersion": "1.0.0"', '"irVersion": "2.0.0"'));
-  const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(path)));
+  const acquired = new DesignModelRepositoryImplementation().findById(DesignModelIdentifier.of(ap(path)));
   if (!acquired.ok) throw new Error("the version-mismatch fixture is unreadable");
   return acquired.value;
 }
@@ -91,12 +96,15 @@ function strictMethod(raw: string): VerificationMethod {
   return parsed.value;
 }
 
-function reportIdOf(directory: ArtifactPath): DesignReportId {
-  return DesignReportId.of(directory, "smt");
+function reportIdOf(directory: ArtifactPath): DesignReportIdentifier {
+  return DesignReportIdentifier.of(directory, "smt");
 }
 
 function targetCount(model: DesignModel): number {
-  return model.units().toArray().reduce((n, u) => n + [...u.allTargets()].length, 0);
+  return model
+    .units()
+    .toArray()
+    .reduce((n, u) => n + [...u.allTargets()].length, 0);
 }
 
 // --- 注入する協力者 ---------------------------------------------------------
@@ -120,7 +128,7 @@ class StubSiblingBackendClient implements SiblingBackendClient {
 }
 
 class InactiveMaterialsRepository implements RefinementMaterialsRepository {
-  findById(id: RefinementMaterialsId): Result<RefinementMaterials, RepositoryError> {
+  findById(id: RefinementMaterialsIdentifier): Result<RefinementMaterials, RepositoryError> {
     return ok(RefinementMaterials.inactive(id));
   }
 }
@@ -184,28 +192,38 @@ class SeamRepository implements DesignVerifyDirectoryRepository {
   }
 }
 
-function runSmt(reports: DesignVerifyDirectoryRepository, verifyDir: string, schema: FindingsSchema = contractSchema, modelPath = fixtureModelPath): VerifyDesignOutcome {
-  return new VerifyDesignSmtUseCase(
-    new DesignModelRepositoryImpl(),
+function runSmt(
+  reports: DesignVerifyDirectoryRepository,
+  verifyDir: string,
+  schema: FindingsSchema = contractSchema,
+  modelPath = fixtureModelPath,
+): VerifyDesignOutcome {
+  return new VerifyDesignSatisfiabilityModuloTheoriesUseCase(
+    new DesignModelRepositoryImplementation(),
     reports,
     schema,
     new StubSiblingBackendClient(),
     new InactiveMaterialsRepository(),
     new UnusedSolverClient(),
     new FixedClock(),
-  ).execute({ modelId: DesignModelId.of(ap(modelPath)), verifyDirectory: ap(verifyDir) });
+  ).execute({ modelId: DesignModelIdentifier.of(ap(modelPath)), verifyDirectory: ap(verifyDir) });
 }
 
-function runQuint(reports: DesignVerifyDirectoryRepository, verifyDir: string, schema: FindingsSchema = contractSchema, modelPath = fixtureModelPath): VerifyDesignOutcome {
+function runQuint(
+  reports: DesignVerifyDirectoryRepository,
+  verifyDir: string,
+  schema: FindingsSchema = contractSchema,
+  modelPath = fixtureModelPath,
+): VerifyDesignOutcome {
   return new VerifyDesignQuintUseCase(
-    new DesignModelRepositoryImpl(),
+    new DesignModelRepositoryImplementation(),
     reports,
     schema,
     new StubSiblingBackendClient(),
     new InactiveMaterialsRepository(),
     new FixedClock(),
     2,
-  ).execute({ modelId: DesignModelId.of(ap(modelPath)), verifyDirectory: ap(verifyDir) });
+  ).execute({ modelId: DesignModelIdentifier.of(ap(modelPath)), verifyDirectory: ap(verifyDir) });
 }
 
 // --- #14 共通 finalization は 1 実装 ----------------------------------------
@@ -251,12 +269,21 @@ describe("#14 report finalization は 1 実装——1 か所の変更が両 back
     // 同じ 1 つの FindingsSchema が cross-check にも及ぶ（適合先は 2 文書）。
     expect(aggregate?.crossCheck()?.unavailableReason()).toBe("findings schema unreadable: boom");
     // 集約の中の兄弟集合にも適合済みの候補が入っている（cross-check の導出元）。
-    expect(aggregate?.reports().toArray().map((r) => r.isUnavailable())).toEqual([true]);
+    expect(
+      aggregate
+        ?.reports()
+        .toArray()
+        .map((r) => r.isUnavailable()),
+    ).toEqual([true]);
   });
 
   test("verdict は適合済み report から導かれ、永続化に成功したときだけ返る", () => {
     const verifyDir = "/design-usecase-collaboration/deep-spec-design-verify";
-    const outcome = runSmt(new SeamRepository(null), verifyDir, FindingsSchema.unreadable("contract 2 schema is unreadable"));
+    const outcome = runSmt(
+      new SeamRepository(null),
+      verifyDir,
+      FindingsSchema.unreadable("contract 2 schema is unreadable"),
+    );
     expect(outcome).toEqual({ kind: "verified", pass: false, findingsCount: 0, skippedCount: 0, method: "exhaustive" });
   });
 });
@@ -267,13 +294,20 @@ type IsNever<T> = [T] extends [never] ? true : false;
 
 // Acquirer は成功も backend 固有 outcome も返せない——型で証明する。
 const noVerifiedInTerminal: IsNever<Extract<DesignAcquisitionTerminal, { kind: "verified" }>> = true;
-const noBackendUnavailableInTerminal: IsNever<Extract<DesignAcquisitionTerminal, { kind: "backend-unavailable" }>> = true;
+const noBackendUnavailableInTerminal: IsNever<Extract<DesignAcquisitionTerminal, { kind: "backend-unavailable" }>> =
+  true;
 // terminal はちょうど 5 変種（増えても減っても、この 2 行の型が壊れる）。
 const noExtraTerminalKind: IsNever<
-  Exclude<DesignAcquisitionTerminal["kind"], "not-applicable" | "acquisition-failed" | "model-unreadable" | "version-mismatch" | "save-failed">
+  Exclude<
+    DesignAcquisitionTerminal["kind"],
+    "not-applicable" | "acquisition-failed" | "model-unreadable" | "version-mismatch" | "save-failed"
+  >
 > = true;
 const noMissingTerminalKind: IsNever<
-  Exclude<"not-applicable" | "acquisition-failed" | "model-unreadable" | "version-mismatch" | "save-failed", DesignAcquisitionTerminal["kind"]>
+  Exclude<
+    "not-applicable" | "acquisition-failed" | "model-unreadable" | "version-mismatch" | "save-failed",
+    DesignAcquisitionTerminal["kind"]
+  >
 > = true;
 
 describe("DesignVerificationAcquirer は取得専用の 5 変種へ結果を閉じる", () => {
@@ -289,7 +323,12 @@ describe("DesignVerificationAcquirer は取得専用の 5 変種へ結果を閉�
     try {
       const verifyDir = ap(join(workspace, "deep-spec-design-verify"));
       const mismatched = unsupportedMajorModel(workspace);
-      const saveFailure: RepositoryError = { kind: "io-failed", operation: "write", path: "smt.json", cause: "disk is full" };
+      const saveFailure: RepositoryError = {
+        kind: "io-failed",
+        operation: "write",
+        path: "smt.json",
+        cause: "disk is full",
+      };
       const method = "exhaustive";
 
       const rows: readonly {
@@ -298,7 +337,12 @@ describe("DesignVerificationAcquirer は取得専用の 5 変種へ結果を閉�
         readonly failure: RepositoryError | null;
         readonly expected: DesignAcquisitionTerminal["kind"];
       }[] = [
-        { name: "不在は not-applicable", model: err({ kind: "not-found", path: "model.md" }), failure: null, expected: "not-applicable" },
+        {
+          name: "不在は not-applicable",
+          model: err({ kind: "not-found", path: "model.md" }),
+          failure: null,
+          expected: "not-applicable",
+        },
         {
           name: "I/O 失敗は acquisition-failed",
           model: err({ kind: "io-failed", operation: "read", path: "model.md", cause: "permission denied" }),
@@ -307,24 +351,49 @@ describe("DesignVerificationAcquirer は取得専用の 5 変種へ結果を閉�
         },
         {
           name: "読めない入力は保存に成功すれば model-unreadable",
-          model: err({ kind: "corrupt", path: "model.md", cause: "formal model does not contain exactly one readable ```json fence" }),
+          model: err({
+            kind: "corrupt",
+            path: "model.md",
+            cause: "formal model does not contain exactly one readable ```json fence",
+          }),
           failure: null,
           expected: "model-unreadable",
         },
         {
           name: "読めない入力は保存に失敗すれば save-failed",
-          model: err({ kind: "corrupt", path: "model.md", cause: "formal model does not contain exactly one readable ```json fence" }),
+          model: err({
+            kind: "corrupt",
+            path: "model.md",
+            cause: "formal model does not contain exactly one readable ```json fence",
+          }),
           failure: saveFailure,
           expected: "save-failed",
         },
-        { name: "未対応 major は保存に成功すれば version-mismatch", model: ok(mismatched), failure: null, expected: "version-mismatch" },
-        { name: "未対応 major は保存に失敗すれば save-failed", model: ok(mismatched), failure: saveFailure, expected: "save-failed" },
+        {
+          name: "未対応 major は保存に成功すれば version-mismatch",
+          model: ok(mismatched),
+          failure: null,
+          expected: "version-mismatch",
+        },
+        {
+          name: "未対応 major は保存に失敗すれば save-failed",
+          model: ok(mismatched),
+          failure: saveFailure,
+          expected: "save-failed",
+        },
       ];
 
       for (const row of rows) {
         const reports = new SeamRepository(row.failure);
-        const acquirer = new DesignVerificationAcquirer(new StubModelRepository(row.model), new DesignReportFinalizer(reports, contractSchema));
-        const acquired = acquirer.acquire(DesignModelId.of(ap("/records/model.md")), reportIdOf(verifyDir), strictMethod(method));
+        const acquirer = new DesignVerificationAcquirer(
+          new StubModelRepository(row.model),
+          new DesignReportFinalizer(reports, contractSchema),
+        );
+        const acquired = acquirer.acquire(
+          DesignModelIdentifier.of(ap("/records/model.md")),
+          reportIdOf(verifyDir),
+          strictMethod(method),
+        );
         expect(`${row.name}: ${acquired.kind}`).toBe(`${row.name}: terminal`);
         if (acquired.kind !== "terminal") continue;
         expect(`${row.name}: ${acquired.outcome.kind}`).toBe(`${row.name}: ${row.expected}`);
@@ -353,8 +422,15 @@ describe("DesignVerificationAcquirer は取得専用の 5 変種へ結果を閉�
   test("対応 version なら同じ model と IR hash を ready として返す", () => {
     const model = fixtureModel();
     const reports = new SeamRepository();
-    const acquirer = new DesignVerificationAcquirer(new StubModelRepository(ok(model)), new DesignReportFinalizer(reports, contractSchema));
-    const acquired = acquirer.acquire(model.id(), reportIdOf(ap("/records/deep-spec-design-verify")), strictMethod("exhaustive"));
+    const acquirer = new DesignVerificationAcquirer(
+      new StubModelRepository(ok(model)),
+      new DesignReportFinalizer(reports, contractSchema),
+    );
+    const acquired = acquirer.acquire(
+      model.id(),
+      reportIdOf(ap("/records/deep-spec-design-verify")),
+      strictMethod("exhaustive"),
+    );
     expect(acquired.kind).toBe("ready");
     if (acquired.kind !== "ready") return;
     expect(acquired.model).toBe(model);
@@ -373,7 +449,7 @@ describe("FR1.4 兄弟 report が読めないとき verified を返さない", (
       const verifyDir = join(workspace, "deep-spec-design-verify");
       mkdirSync(verifyDir, { recursive: true });
       writeFileSync(join(verifyDir, "broken.json"), "{ this is not JSON");
-      const reports = new DesignVerifyDirectoryRepositoryImpl();
+      const reports = new DesignVerifyDirectoryRepositoryImplementation();
 
       const smt = runSmt(reports, verifyDir);
       expect(smt.kind).toBe("save-failed");
@@ -393,7 +469,7 @@ describe("FR1.4 兄弟 report が読めないとき verified を返さない", (
     try {
       const verifyDir = join(workspace, "deep-spec-design-verify");
       mkdirSync(verifyDir, { recursive: true });
-      const reports = new DesignVerifyDirectoryRepositoryImpl();
+      const reports = new DesignVerifyDirectoryRepositoryImplementation();
       expect(runSmt(reports, verifyDir).kind).toBe("verified");
       expect(existsSync(join(verifyDir, "smt.json"))).toBe(true);
       expect(existsSync(join(verifyDir, "cross-check.json"))).toBe(true);

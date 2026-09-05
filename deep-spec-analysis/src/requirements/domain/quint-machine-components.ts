@@ -1,4 +1,4 @@
-import { ObligationIds } from "./obligation-ids.ts";
+import { ObligationIdentifiers } from "./obligation-identifiers.ts";
 import type { QuintMachineComponent } from "./quint-machine-component.ts";
 import type { TraceState } from "./trace-state.ts";
 
@@ -8,11 +8,11 @@ export class QuintMachineComponents {
   readonly #values: readonly QuintMachineComponent[];
 
   private constructor(values: readonly QuintMachineComponent[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly QuintMachineComponent[]): QuintMachineComponents {
-    return new QuintMachineComponents([...values]);
+    return new QuintMachineComponents(values);
   }
 
   add(value: QuintMachineComponent): QuintMachineComponents {
@@ -27,8 +27,8 @@ export class QuintMachineComponents {
     return this.#values.length === 0;
   }
 
-  ids(): ObligationIds {
-    return ObligationIds.of(this.#values.map((c) => c.id()));
+  ids(): ObligationIdentifiers {
+    return ObligationIdentifiers.of(this.#values.map((c) => c.id()));
   }
 
   violatedBy(state: TraceState): QuintMachineComponents {

@@ -13,29 +13,40 @@
 // の読み出し点が、stale rename と canonical 再取得のあいだの割り込み点になる。
 
 import { describe, expect, test } from "bun:test";
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  DesignModelRepositoryImplementation,
+  DesignVerifyDirectoryRepositoryImplementation,
+  renderDesignReportBytes,
+} from "@deep-spec/design-adapter";
+import {
+  DesignFindings,
+  type DesignModel,
+  DesignModelIdentifier,
+  DesignReport,
+  DesignReportIdentifier,
+  DesignSkips,
+  type DesignVerifyDirectory,
+} from "@deep-spec/design-domain";
 import type { ProcessLiveness } from "@deep-spec/kernel-adapter";
 import { DirectoryFinalizationLock, readContractSchema } from "@deep-spec/kernel-adapter";
 import { ArtifactPath, FindingsSchema } from "@deep-spec/kernel-domain";
-import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
 import type { Result } from "@deep-spec/kernel-infrastructure";
-import {
-  DesignFindings,
-  DesignModelId,
-  DesignReport,
-  DesignReportId,
-  DesignSkips,
-  DesignVerifyDirectory,
-  type DesignModel,
-} from "@deep-spec/design-domain";
-import {
-  DesignModelRepositoryImpl,
-  DesignVerifyDirectoryRepositoryImpl,
-  renderDesignReportBytes,
-} from "@deep-spec/design-adapter";
+import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dataDir = join(pluginRoot, "src", "entries", "data");
@@ -156,8 +167,8 @@ function makeWorkspace(): Workspace {
   const stageDir = join(record, "construction", "deep-spec-analysis-functional-verify");
   const verifyDir = join(stageDir, "deep-spec-design-verify");
   mkdirSync(verifyDir, { recursive: true });
-  const acquired = new DesignModelRepositoryImpl().findById(
-    DesignModelId.of(ap(join(stageDir, "deep-spec-analysis-functional-formal-model.md"))),
+  const acquired = new DesignModelRepositoryImplementation().findById(
+    DesignModelIdentifier.of(ap(join(stageDir, "deep-spec-analysis-functional-formal-model.md"))),
   );
   if (!acquired.ok) throw new Error("design fixture model is unreadable");
   return { record, verifyDir, model: acquired.value };
@@ -165,7 +176,7 @@ function makeWorkspace(): Workspace {
 
 function candidate(verifyDir: string, backend: string, model: DesignModel, method = "exhaustive"): DesignReport {
   return DesignReport.compose({
-    id: DesignReportId.of(ap(verifyDir), backend),
+    id: DesignReportIdentifier.of(ap(verifyDir), backend),
     irVersion: model.irVersion(),
     irHash: model.irHash(),
     method,
@@ -186,7 +197,7 @@ function tempEntries(verifyDir: string): string[] {
 // 組む（Finalizer と同じ順序——公開経路はこの形しか通らない）。model が無い
 // ときは導けない cross-check を不在にする（IR unreadable 経路）。
 function finalizing(
-  repository: DesignVerifyDirectoryRepositoryImpl,
+  repository: DesignVerifyDirectoryRepositoryImplementation,
   verifyDir: string,
   report: DesignReport,
   schema: FindingsSchema,
@@ -200,7 +211,7 @@ function finalizing(
 // 兄弟文書の作り置き（fixture seed）。公開経路は store だけなので、seed も
 // 集約ひとつぶんとして通す——クロスチェックは導かない。
 function seed(
-  repository: DesignVerifyDirectoryRepositoryImpl,
+  repository: DesignVerifyDirectoryRepositoryImplementation,
   verifyDir: string,
   report: DesignReport,
   schema: FindingsSchema,
@@ -228,7 +239,7 @@ describe("schema conformance is carried by one value per finalization", () => {
     const schemaCopy = join(ws.record, "findings-schema.json");
     cpSync(schemaPath, schemaCopy);
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       // 合成ルートの読込はここ 1 回だけ（Repository はスキーマパスを持たない）。
       const schema = schemaOf(schemaCopy);
       const report = candidate(ws.verifyDir, "smt", ws.model);
@@ -239,8 +250,12 @@ describe("schema conformance is carried by one value per finalization", () => {
       expect(repository.store(aggregate).ok).toBe(true);
       expect(publishedOf(aggregate).isUnavailable()).toBe(false);
       expect(crossCheckOf(aggregate).isUnavailable()).toBe(false);
-      expect(readFileSync(join(ws.verifyDir, "smt.json"), "utf-8")).toBe(renderDesignReportBytes(publishedOf(aggregate)));
-      expect(readFileSync(join(ws.verifyDir, "cross-check.json"), "utf-8")).toBe(renderDesignReportBytes(crossCheckOf(aggregate)));
+      expect(readFileSync(join(ws.verifyDir, "smt.json"), "utf-8")).toBe(
+        renderDesignReportBytes(publishedOf(aggregate)),
+      );
+      expect(readFileSync(join(ws.verifyDir, "cross-check.json"), "utf-8")).toBe(
+        renderDesignReportBytes(crossCheckOf(aggregate)),
+      );
 
       // 対照：同じ path をいま読む値は「読めない」変種になり、両文書を降格させる。
       const unreadable = finalizing(repository, ws.verifyDir, report, schemaOf(schemaCopy), ws.model);
@@ -260,11 +275,11 @@ describe("finalization failures never become a success", () => {
     const quintPath = join(ws.verifyDir, "quint.json");
     const crossPath = join(ws.verifyDir, "cross-check.json");
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "quint", ws.model), schema).ok).toBe(true);
-      writeFileSync(join(ws.verifyDir, "smt.json"), "{ \"backend\": \"smt\" }\n", "utf-8");
-      writeFileSync(crossPath, "{ \"backend\": \"cross-check\", \"irHash\": \"stale\" }\n", "utf-8");
+      writeFileSync(join(ws.verifyDir, "smt.json"), '{ "backend": "smt" }\n', "utf-8");
+      writeFileSync(crossPath, '{ "backend": "cross-check", "irHash": "stale" }\n', "utf-8");
       const backendBefore = readFileSync(join(ws.verifyDir, "smt.json"), "utf-8");
       const crossBefore = readFileSync(crossPath, "utf-8");
 
@@ -289,10 +304,16 @@ describe("finalization failures never become a success", () => {
     const ws = makeWorkspace();
     const quintPath = join(ws.verifyDir, "quint.json");
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "quint", ws.model), schema).ok).toBe(true);
-      const aggregate = finalizing(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
+      const aggregate = finalizing(
+        repository,
+        ws.verifyDir,
+        candidate(ws.verifyDir, "smt", ws.model),
+        schema,
+        ws.model,
+      );
 
       chmodSync(quintPath, 0o000);
       const stored = repository.store(aggregate);
@@ -312,19 +333,21 @@ describe("finalization failures never become a success", () => {
   test("a backend write failure leaves the previous backend intact and no cross-check", () => {
     const ws = makeWorkspace();
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema).ok).toBe(true);
       const crossPath = join(ws.verifyDir, "cross-check.json");
-      writeFileSync(crossPath, "{ \"backend\": \"cross-check\", \"irHash\": \"stale\" }\n", "utf-8");
+      writeFileSync(crossPath, '{ "backend": "cross-check", "irHash": "stale" }\n', "utf-8");
       const backendBefore = readFileSync(join(ws.verifyDir, "smt.json"), "utf-8");
 
       // stale 退避のあと、backend 公開の直前でディレクトリを書込不可にする。
       const lock = new FencedLock(new StubClock(1_000), new StubLiveness(4242), 2, () => {
         chmodSync(ws.verifyDir, 0o500);
       });
-      const fenced = new DesignVerifyDirectoryRepositoryImpl(lock);
-      const stored = fenced.store(finalizing(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model));
+      const fenced = new DesignVerifyDirectoryRepositoryImplementation(lock);
+      const stored = fenced.store(
+        finalizing(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model),
+      );
       chmodSync(ws.verifyDir, 0o755);
 
       expect(stored.ok).toBe(false);
@@ -341,14 +364,20 @@ describe("finalization failures never become a success", () => {
   test("a failed stale rename publishes nothing", () => {
     const ws = makeWorkspace();
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema).ok).toBe(true);
       const crossPath = join(ws.verifyDir, "cross-check.json");
-      writeFileSync(crossPath, "{ \"backend\": \"cross-check\", \"irHash\": \"stale\" }\n", "utf-8");
+      writeFileSync(crossPath, '{ "backend": "cross-check", "irHash": "stale" }\n', "utf-8");
       const backendBefore = readFileSync(join(ws.verifyDir, "smt.json"), "utf-8");
       const crossBefore = readFileSync(crossPath, "utf-8");
-      const aggregate = finalizing(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
+      const aggregate = finalizing(
+        repository,
+        ws.verifyDir,
+        candidate(ws.verifyDir, "smt", ws.model),
+        schema,
+        ws.model,
+      );
       // stale 名をディレクトリで塞ぐ——rename は必ず失敗する。
       mkdirSync(join(ws.verifyDir, STALE_CROSS_CHECK));
 
@@ -477,18 +506,20 @@ describe("at most one canonical owner survives a recovery race", () => {
     for (const allowed of [0, 1, 2]) {
       const ws = makeWorkspace();
       try {
-        const seeding = new DesignVerifyDirectoryRepositoryImpl();
+        const seeding = new DesignVerifyDirectoryRepositoryImplementation();
         const schema = schemaOf(schemaPath);
         // 旧 backend は method が違う——公開が起きたかを bytes で判定するため。
-        expect(seed(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model, "simulation"), schema).ok).toBe(true);
+        expect(seed(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model, "simulation"), schema).ok).toBe(
+          true,
+        );
         const crossPath = join(ws.verifyDir, "cross-check.json");
-        writeFileSync(crossPath, "{ \"backend\": \"cross-check\", \"irHash\": \"stale\" }\n", "utf-8");
+        writeFileSync(crossPath, '{ "backend": "cross-check", "irHash": "stale" }\n', "utf-8");
         const backendBefore = readFileSync(join(ws.verifyDir, "smt.json"), "utf-8");
         const crossBefore = readFileSync(crossPath, "utf-8");
 
         const aggregate = finalizing(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
         const lock = new FencedLock(new StubClock(1_000), new StubLiveness(4242), allowed);
-        const stored = new DesignVerifyDirectoryRepositoryImpl(lock).store(aggregate);
+        const stored = new DesignVerifyDirectoryRepositoryImplementation(lock).store(aggregate);
 
         expect(stored.ok).toBe(false);
         if (allowed === 0) {
@@ -521,11 +552,13 @@ describe("a finalization that cannot take the lock changes nothing", () => {
     for (const scenario of ["live", "recovery-race"] as const) {
       const ws = makeWorkspace();
       try {
-        const seeding = new DesignVerifyDirectoryRepositoryImpl();
+        const seeding = new DesignVerifyDirectoryRepositoryImplementation();
         const schema = schemaOf(schemaPath);
-        expect(seed(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model, "simulation"), schema).ok).toBe(true);
+        expect(seed(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model, "simulation"), schema).ok).toBe(
+          true,
+        );
         const crossPath = join(ws.verifyDir, "cross-check.json");
-        writeFileSync(crossPath, "{ \"backend\": \"cross-check\", \"irHash\": \"stale\" }\n", "utf-8");
+        writeFileSync(crossPath, '{ "backend": "cross-check", "irHash": "stale" }\n', "utf-8");
         const backendBefore = readFileSync(join(ws.verifyDir, "smt.json"), "utf-8");
         const crossBefore = readFileSync(crossPath, "utf-8");
         const aggregate = finalizing(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
@@ -542,7 +575,7 @@ describe("a finalization that cannot take the lock changes nothing", () => {
             expect(winner.acquire(ap(ws.verifyDir)).kind).toBe("acquired");
           });
         }
-        const stored = new DesignVerifyDirectoryRepositoryImpl(lockOf(clock, liveness)).store(aggregate);
+        const stored = new DesignVerifyDirectoryRepositoryImplementation(lockOf(clock, liveness)).store(aggregate);
 
         // Failure Matrix 行 1・2: old / old / save-failed。
         expect(stored.ok).toBe(false);
@@ -567,17 +600,23 @@ describe("every JSON document is published by rename, never in place", () => {
   test("both documents are replaced atomically and leave no temporary bytes", () => {
     const ws = makeWorkspace();
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "quint", ws.model), schema).ok).toBe(true);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema).ok).toBe(true);
       const backendPath = join(ws.verifyDir, "smt.json");
       const crossPath = join(ws.verifyDir, "cross-check.json");
-      writeFileSync(crossPath, "{ \"backend\": \"cross-check\", \"irHash\": \"stale\" }\n", "utf-8");
+      writeFileSync(crossPath, '{ "backend": "cross-check", "irHash": "stale" }\n', "utf-8");
       const backendInode = statSync(backendPath).ino;
       const crossInode = statSync(crossPath).ino;
 
-      const aggregate = finalizing(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
+      const aggregate = finalizing(
+        repository,
+        ws.verifyDir,
+        candidate(ws.verifyDir, "smt", ws.model),
+        schema,
+        ws.model,
+      );
       expect(repository.store(aggregate).ok).toBe(true);
 
       // 置換であって上書きではない（同一 inode への書込みは truncate を伴う）。
@@ -600,13 +639,17 @@ describe("a stale cross-check is never taken for the latest result", () => {
   test("the published cross-check is rebuilt from the sibling set observed under the lock", () => {
     const ws = makeWorkspace();
     try {
-      const repository = new DesignVerifyDirectoryRepositoryImpl();
+      const repository = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "quint", ws.model), schema).ok).toBe(true);
       const crossPath = join(ws.verifyDir, "cross-check.json");
-      writeFileSync(crossPath, "{ \"backend\": \"cross-check\", \"irHash\": \"stale-and-wrong\" }\n", "utf-8");
+      writeFileSync(crossPath, '{ "backend": "cross-check", "irHash": "stale-and-wrong" }\n', "utf-8");
 
-      expect(repository.store(finalizing(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model)).ok).toBe(true);
+      expect(
+        repository.store(
+          finalizing(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model),
+        ).ok,
+      ).toBe(true);
 
       const published = JSON.parse(readFileSync(crossPath, "utf-8")) as { [k: string]: unknown };
       expect(published.backend).toBe("cross-check");
@@ -623,17 +666,17 @@ describe("a stale cross-check is never taken for the latest result", () => {
   test("the old cross-check is not restored once the new backend is public", () => {
     const ws = makeWorkspace();
     try {
-      const seeding = new DesignVerifyDirectoryRepositoryImpl();
+      const seeding = new DesignVerifyDirectoryRepositoryImplementation();
       const schema = schemaOf(schemaPath);
       expect(seed(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema).ok).toBe(true);
       const crossPath = join(ws.verifyDir, "cross-check.json");
-      const stale = "{ \"backend\": \"cross-check\", \"irHash\": \"stale-and-wrong\" }\n";
+      const stale = '{ "backend": "cross-check", "irHash": "stale-and-wrong" }\n';
       writeFileSync(crossPath, stale, "utf-8");
 
       // 3 回目の fencing まで通し、cross-check 公開の直前で所有を失わせる。
       const aggregate = finalizing(seeding, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
       const lock = new FencedLock(new StubClock(1_000), new StubLiveness(4242), 2);
-      expect(new DesignVerifyDirectoryRepositoryImpl(lock).store(aggregate).ok).toBe(false);
+      expect(new DesignVerifyDirectoryRepositoryImplementation(lock).store(aggregate).ok).toBe(false);
 
       // 欠落を許容する——古い cross-check を最新として戻さない（BR2.5）。
       expect(existsSync(crossPath)).toBe(false);
@@ -642,7 +685,12 @@ describe("a stale cross-check is never taken for the latest result", () => {
       const reloaded = seeding.findByDirectory(ap(ws.verifyDir));
       expect(reloaded.ok).toBe(true);
       if (reloaded.ok) {
-        expect(reloaded.value.reports().toArray().map((r) => r.id().fileName())).toEqual(["smt.json"]);
+        expect(
+          reloaded.value
+            .reports()
+            .toArray()
+            .map((r) => r.id().fileName()),
+        ).toEqual(["smt.json"]);
         expect(reloaded.value.crossCheck()).toBe(null);
       }
     } finally {
@@ -654,20 +702,34 @@ describe("a stale cross-check is never taken for the latest result", () => {
     for (const scenario of ["changed", "added"] as const) {
       const ws = makeWorkspace();
       try {
-        const repository = new DesignVerifyDirectoryRepositoryImpl();
+        const repository = new DesignVerifyDirectoryRepositoryImplementation();
         const schema = schemaOf(schemaPath);
         expect(seed(repository, ws.verifyDir, candidate(ws.verifyDir, "quint", ws.model), schema).ok).toBe(true);
         const crossPath = join(ws.verifyDir, "cross-check.json");
-        const stale = "{ \"backend\": \"cross-check\", \"irHash\": \"stale-and-wrong\" }\n";
+        const stale = '{ "backend": "cross-check", "irHash": "stale-and-wrong" }\n';
         writeFileSync(crossPath, stale, "utf-8");
 
         // load の時点の兄弟集合でクロスチェックを導く。
-        const aggregate = finalizing(repository, ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
+        const aggregate = finalizing(
+          repository,
+          ws.verifyDir,
+          candidate(ws.verifyDir, "smt", ws.model),
+          schema,
+          ws.model,
+        );
         // その後で別 writer が兄弟を差し替える／増やす。
         if (scenario === "changed") {
-          writeFileSync(join(ws.verifyDir, "quint.json"), renderDesignReportBytes(candidate(ws.verifyDir, "quint", ws.model, "simulation")), "utf-8");
+          writeFileSync(
+            join(ws.verifyDir, "quint.json"),
+            renderDesignReportBytes(candidate(ws.verifyDir, "quint", ws.model, "simulation")),
+            "utf-8",
+          );
         } else {
-          writeFileSync(join(ws.verifyDir, "alt.json"), renderDesignReportBytes(candidate(ws.verifyDir, "alt", ws.model)), "utf-8");
+          writeFileSync(
+            join(ws.verifyDir, "alt.json"),
+            renderDesignReportBytes(candidate(ws.verifyDir, "alt", ws.model)),
+            "utf-8",
+          );
         }
         const stored = repository.store(aggregate);
 
@@ -704,13 +766,21 @@ describe("release failures are reported without touching a successor's lock", ()
         );
       });
       const schema = schemaOf(schemaPath);
-      const aggregate = finalizing(new DesignVerifyDirectoryRepositoryImpl(), ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
-      const stored = new DesignVerifyDirectoryRepositoryImpl(lock).store(aggregate);
+      const aggregate = finalizing(
+        new DesignVerifyDirectoryRepositoryImplementation(),
+        ws.verifyDir,
+        candidate(ws.verifyDir, "smt", ws.model),
+        schema,
+        ws.model,
+      );
+      const stored = new DesignVerifyDirectoryRepositoryImplementation(lock).store(aggregate);
 
       // Failure Matrix 行 8: new / new / cleanup 失敗。canonical lock は残る。
       expect(stored.ok).toBe(false);
       if (!stored.ok) expect(stored.error.kind).toBe("io-failed");
-      expect(readFileSync(join(ws.verifyDir, "smt.json"), "utf-8")).toBe(renderDesignReportBytes(publishedOf(aggregate)));
+      expect(readFileSync(join(ws.verifyDir, "smt.json"), "utf-8")).toBe(
+        renderDesignReportBytes(publishedOf(aggregate)),
+      );
       expect(existsSync(join(ws.verifyDir, "cross-check.json"))).toBe(true);
       expect(existsSync(join(ws.verifyDir, LOCK_BASENAME))).toBe(true);
     } finally {
@@ -727,12 +797,20 @@ describe("release failures are reported without touching a successor's lock", ()
         chmodSync(canonical, 0o500);
       });
       const schema = schemaOf(schemaPath);
-      const aggregate = finalizing(new DesignVerifyDirectoryRepositoryImpl(), ws.verifyDir, candidate(ws.verifyDir, "smt", ws.model), schema, ws.model);
-      const stored = new DesignVerifyDirectoryRepositoryImpl(lock).store(aggregate);
+      const aggregate = finalizing(
+        new DesignVerifyDirectoryRepositoryImplementation(),
+        ws.verifyDir,
+        candidate(ws.verifyDir, "smt", ws.model),
+        schema,
+        ws.model,
+      );
+      const stored = new DesignVerifyDirectoryRepositoryImplementation(lock).store(aggregate);
 
       // Failure Matrix 行 9: new / new / cleanup 失敗。canonical は空いている。
       expect(stored.ok).toBe(false);
-      expect(readFileSync(join(ws.verifyDir, "smt.json"), "utf-8")).toBe(renderDesignReportBytes(publishedOf(aggregate)));
+      expect(readFileSync(join(ws.verifyDir, "smt.json"), "utf-8")).toBe(
+        renderDesignReportBytes(publishedOf(aggregate)),
+      );
       expect(existsSync(join(ws.verifyDir, "cross-check.json"))).toBe(true);
       expect(existsSync(canonical)).toBe(false);
       const leftovers = readdirSync(ws.verifyDir).filter((f) => f.includes(".cleanup."));

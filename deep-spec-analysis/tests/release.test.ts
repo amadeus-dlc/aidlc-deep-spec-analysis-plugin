@@ -2,12 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  assertTagMatchesManifest,
-  release,
-  type GitResult,
-  type GitRunner,
-} from "../scripts/release";
+import { assertTagMatchesManifest, type GitResult, type GitRunner, release } from "../scripts/release";
 
 const sandboxes: string[] = [];
 
@@ -87,7 +82,9 @@ describe("release preflight", () => {
     const localTag = "show-ref --verify --quiet refs/tags/v1.2.3";
     const { calls, runner } = scriptedRunner({ [localTag]: result(0) });
 
-    expect(() => release("1.2.3", { repoRoot, manifestPath, runGit: runner })).toThrow("local tag v1.2.3 already exists");
+    expect(() => release("1.2.3", { repoRoot, manifestPath, runGit: runner })).toThrow(
+      "local tag v1.2.3 already exists",
+    );
     expect(mutationCalls(calls)).toEqual([]);
     expect(readFileSync(manifestPath, "utf-8")).toBe(original);
   });
@@ -97,7 +94,9 @@ describe("release preflight", () => {
     const remoteTag = "ls-remote --exit-code --tags origin refs/tags/v1.2.3";
     const { calls, runner } = scriptedRunner({ [remoteTag]: result(0, "deadbeef\trefs/tags/v1.2.3\n") });
 
-    expect(() => release("1.2.3", { repoRoot, manifestPath, runGit: runner })).toThrow("remote tag v1.2.3 already exists");
+    expect(() => release("1.2.3", { repoRoot, manifestPath, runGit: runner })).toThrow(
+      "remote tag v1.2.3 already exists",
+    );
     expect(mutationCalls(calls)).toEqual([]);
     expect(readFileSync(manifestPath, "utf-8")).toBe(original);
   });
@@ -129,12 +128,8 @@ describe("release mutation", () => {
 
     release("0.5.0", { repoRoot, manifestPath, runGit: runner });
 
-    expect(mutationCalls(calls)).toContainEqual([
-      "commit", "--allow-empty", "-m", "chore(release): publish v0.5.0",
-    ]);
-    expect(mutationCalls(calls).at(-1)).toEqual([
-      "push", "--atomic", "origin", "main", "v0.5.0",
-    ]);
+    expect(mutationCalls(calls)).toContainEqual(["commit", "--allow-empty", "-m", "chore(release): publish v0.5.0"]);
+    expect(mutationCalls(calls).at(-1)).toEqual(["push", "--atomic", "origin", "main", "v0.5.0"]);
   });
 });
 

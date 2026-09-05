@@ -16,8 +16,16 @@ export class CoverageAssessment {
     this.#scopes = props.scopes;
   }
 
-  static of(props: { eligible: number; problems: readonly CoverageRow[]; scopes: readonly string[] }): CoverageAssessment {
-    return new CoverageAssessment({ eligible: props.eligible, problems: [...props.problems], scopes: [...props.scopes] });
+  static of(props: {
+    eligible: number;
+    problems: readonly CoverageRow[];
+    scopes: readonly string[];
+  }): CoverageAssessment {
+    return new CoverageAssessment({
+      eligible: props.eligible,
+      problems: [...props.problems],
+      scopes: [...props.scopes],
+    });
   }
 
   isClean(): boolean {

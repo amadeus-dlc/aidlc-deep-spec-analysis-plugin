@@ -1,4 +1,4 @@
-import { SkipReason, type TargetIds } from "@deep-spec/kernel-domain";
+import { SkipReason, type TargetIdentifiers } from "@deep-spec/kernel-domain";
 
 import { TraceState } from "./trace-state.ts";
 import type { TraceStates } from "./trace-states.ts";
@@ -61,18 +61,26 @@ export class QuintMachineRunVerdict {
   // 対象ごとの skip（timeout は budget 文言、run-failed は method 別の失敗
   // 文言——いずれも golden 凍結、対象の順を保つ）。deadlock / violation /
   // clean は何も skip しない。
-  skipsFor(targets: TargetIds, bounded: boolean): VerificationSkipped[] {
+  skipsFor(targets: TargetIdentifiers, bounded: boolean): VerificationSkipped[] {
     const kind = this.#kind;
     if (kind === "timeout") {
-      return [...targets].map((target) => (VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "machine invariant check exceeded its budget" })));
+      return [...targets].map((target) =>
+        VerificationSkipped.of({
+          target,
+          reason: SkipReason.of("timeout"),
+          detail: "machine invariant check exceeded its budget",
+        }),
+      );
     }
     if (kind === "run-failed") {
       const outputTail = this.#outputTail;
-      return [...targets].map((target) => (VerificationSkipped.of({
-        target,
-        reason: SkipReason.of("unavailable"),
-        detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`,
-      })));
+      return [...targets].map((target) =>
+        VerificationSkipped.of({
+          target,
+          reason: SkipReason.of("unavailable"),
+          detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`,
+        }),
+      );
     }
     return [];
   }

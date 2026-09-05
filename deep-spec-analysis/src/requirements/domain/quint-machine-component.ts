@@ -1,8 +1,8 @@
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
-import { AttributePath } from "@deep-spec/kernel-domain";
+import { AttributePath, ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-import type { ObligationId } from "./obligation-id.ts";
+import type { ObligationIdentifier } from "./obligation-identifier.ts";
 
 import type { TraceState } from "./trace-state.ts";
 import { TraceValue } from "./trace-value.ts";
@@ -20,58 +20,65 @@ function evaluate(e: Expression, state: TraceState): TraceValue {
   const arg = (i: number): TraceValue => evaluate((e.args ?? [])[i] as Expression, state);
   switch (e.op) {
     case "and":
-      return TraceValue.ofBoolean((e.args ?? []).every((a) => evaluate(a, state).isTrue()));
+      return TraceValue.of((e.args ?? []).every((a) => evaluate(a, state).isTrue()));
     case "or":
-      return TraceValue.ofBoolean((e.args ?? []).some((a) => evaluate(a, state).isTrue()));
+      return TraceValue.of((e.args ?? []).some((a) => evaluate(a, state).isTrue()));
     case "not":
-      return TraceValue.ofBoolean(!arg(0).isTrue());
+      return TraceValue.of(!arg(0).isTrue());
     case "implies":
-      return TraceValue.ofBoolean(!arg(0).isTrue() || arg(1).isTrue());
+      return TraceValue.of(!arg(0).isTrue() || arg(1).isTrue());
     case "iff":
-      return TraceValue.ofBoolean(arg(0).isTrue() === arg(1).isTrue());
+      return TraceValue.of(arg(0).isTrue() === arg(1).isTrue());
     case "eq":
-      return TraceValue.ofBoolean(arg(0).equals(arg(1)));
+      return TraceValue.of(arg(0).equals(arg(1)));
     case "ne":
-      return TraceValue.ofBoolean(!arg(0).equals(arg(1)));
+      return TraceValue.of(!arg(0).equals(arg(1)));
     case "lt":
-      return TraceValue.ofBoolean(arg(0).asNumber() < arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() < arg(1).asNumber());
     case "le":
-      return TraceValue.ofBoolean(arg(0).asNumber() <= arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() <= arg(1).asNumber());
     case "gt":
-      return TraceValue.ofBoolean(arg(0).asNumber() > arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() > arg(1).asNumber());
     case "ge":
-      return TraceValue.ofBoolean(arg(0).asNumber() >= arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() >= arg(1).asNumber());
     case "add":
-      return TraceValue.ofNumber(arg(0).asNumber() + arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() + arg(1).asNumber());
     case "sub":
-      return TraceValue.ofNumber(arg(0).asNumber() - arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() - arg(1).asNumber());
     case "mul":
-      return TraceValue.ofNumber(arg(0).asNumber() * arg(1).asNumber());
+      return TraceValue.of(arg(0).asNumber() * arg(1).asNumber());
     case "ref":
       return state.valueAt(AttributePath.of(e.path ?? ""));
     case "bool":
     case "int":
     case "enum":
-      return TraceValue.ofLiteral(e.value);
+      return TraceValue.of(e.value ?? null);
     default:
       return TraceValue.absent();
   }
 }
 
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type QuintMachineComponentParam = { id: ObligationIdentifier; expression: Expression };
+
 export class QuintMachineComponent {
-  readonly #id: ObligationId;
+  readonly #id: ObligationIdentifier;
   readonly #expression: Expression;
 
-  private constructor(props: Parameters<typeof QuintMachineComponent.of>[0]) {
+  private constructor(props: QuintMachineComponentParam) {
     this.#id = props.id;
     this.#expression = ExpressionTree.of(props.expression).asExpression();
   }
 
-  static of(props: { id: ObligationId; expression: Expression }): QuintMachineComponent {
+  static parse(props: QuintMachineComponentParam): Result<QuintMachineComponent, ParseError> {
+    return parseConstruction(() => new QuintMachineComponent(props));
+  }
+
+  static of(props: QuintMachineComponentParam): QuintMachineComponent {
     return new QuintMachineComponent(props);
   }
 
-  id(): ObligationId {
+  id(): ObligationIdentifier {
     return this.#id;
   }
 

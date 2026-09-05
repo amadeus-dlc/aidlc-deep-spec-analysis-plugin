@@ -110,37 +110,39 @@ const SCENARIOS: Scenario[] = [
     ],
     captureDirs: [],
   },
-  ...(["broken", "clean"] as const).map((variant): Scenario => ({
-    name: `refcheck-${variant}`,
-    seed: (record) => {
-      cpSync(join(fixtures, "refcheck", variant), record, { recursive: true });
-    },
-    fires: [
-      {
-        label: "refcheck-domain",
-        tool: "aidlc-sensor-deep-spec-refcheck-domain.ts",
-        stage: "refcheck-parity",
-        outputPath: ["inception", "domain-design", "components.md"],
+  ...(["broken", "clean"] as const).map(
+    (variant): Scenario => ({
+      name: `refcheck-${variant}`,
+      seed: (record) => {
+        cpSync(join(fixtures, "refcheck", variant), record, { recursive: true });
       },
-      {
-        label: "refcheck-contract",
-        tool: "aidlc-sensor-deep-spec-refcheck-contract.ts",
-        stage: "refcheck-parity",
-        outputPath: ["inception", "contract-design", "contract-summary.md"],
-      },
-      {
-        label: "refcheck-functional",
-        tool: "aidlc-sensor-deep-spec-refcheck-functional.ts",
-        stage: "refcheck-parity",
-        outputPath: ["construction", "u1-orders", "functional-design", "entities.md"],
-      },
-    ],
-    captureDirs: [
-      ["inception", "domain-design", "deep-spec-refcheck"],
-      ["inception", "contract-design", "deep-spec-refcheck"],
-      ["construction", "u1-orders", "functional-design", "deep-spec-refcheck"],
-    ],
-  })),
+      fires: [
+        {
+          label: "refcheck-domain",
+          tool: "aidlc-sensor-deep-spec-refcheck-domain.ts",
+          stage: "refcheck-parity",
+          outputPath: ["inception", "domain-design", "components.md"],
+        },
+        {
+          label: "refcheck-contract",
+          tool: "aidlc-sensor-deep-spec-refcheck-contract.ts",
+          stage: "refcheck-parity",
+          outputPath: ["inception", "contract-design", "contract-summary.md"],
+        },
+        {
+          label: "refcheck-functional",
+          tool: "aidlc-sensor-deep-spec-refcheck-functional.ts",
+          stage: "refcheck-parity",
+          outputPath: ["construction", "u1-orders", "functional-design", "entities.md"],
+        },
+      ],
+      captureDirs: [
+        ["inception", "domain-design", "deep-spec-refcheck"],
+        ["inception", "contract-design", "deep-spec-refcheck"],
+        ["construction", "u1-orders", "functional-design", "deep-spec-refcheck"],
+      ],
+    }),
+  ),
   {
     name: "design",
     seed: (record) => {
@@ -151,19 +153,31 @@ const SCENARIOS: Scenario[] = [
         label: "design-ir-valid",
         tool: "aidlc-sensor-deep-spec-design-ir-valid.ts",
         stage: "deep-spec-analysis-functional-verify",
-        outputPath: ["construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"],
+        outputPath: [
+          "construction",
+          "deep-spec-analysis-functional-verify",
+          "deep-spec-analysis-functional-formal-model.md",
+        ],
       },
       {
         label: "design-verify-smt",
         tool: "aidlc-sensor-deep-spec-design-verify-smt.ts",
         stage: "deep-spec-analysis-functional-verify",
-        outputPath: ["construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"],
+        outputPath: [
+          "construction",
+          "deep-spec-analysis-functional-verify",
+          "deep-spec-analysis-functional-formal-model.md",
+        ],
       },
       {
         label: "design-verify-quint",
         tool: "aidlc-sensor-deep-spec-design-verify-quint.ts",
         stage: "deep-spec-analysis-functional-verify",
-        outputPath: ["construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"],
+        outputPath: [
+          "construction",
+          "deep-spec-analysis-functional-verify",
+          "deep-spec-analysis-functional-formal-model.md",
+        ],
         env: quintEnv,
       },
     ],
@@ -179,13 +193,21 @@ const SCENARIOS: Scenario[] = [
         label: "design-verify-smt",
         tool: "aidlc-sensor-deep-spec-design-verify-smt.ts",
         stage: "deep-spec-analysis-functional-verify",
-        outputPath: ["construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"],
+        outputPath: [
+          "construction",
+          "deep-spec-analysis-functional-verify",
+          "deep-spec-analysis-functional-formal-model.md",
+        ],
       },
       {
         label: "design-verify-quint",
         tool: "aidlc-sensor-deep-spec-design-verify-quint.ts",
         stage: "deep-spec-analysis-functional-verify",
-        outputPath: ["construction", "deep-spec-analysis-functional-verify", "deep-spec-analysis-functional-formal-model.md"],
+        outputPath: [
+          "construction",
+          "deep-spec-analysis-functional-verify",
+          "deep-spec-analysis-functional-formal-model.md",
+        ],
         env: quintEnv,
       },
     ],

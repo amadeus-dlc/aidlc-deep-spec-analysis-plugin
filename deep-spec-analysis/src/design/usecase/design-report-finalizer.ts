@@ -6,11 +6,11 @@
 // どれも所有せず、それらは Repository アダプタの側にある。契約2 のスキーマは
 // 合成ルートが一度だけ読んで値として注入する——ここも Repository も読まない。
 
+import type { DesignModel, DesignReport } from "@deep-spec/design-domain";
+import type { FindingsSchema } from "@deep-spec/kernel-domain";
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { FindingsSchema } from "@deep-spec/kernel-domain";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { DesignModel, DesignReport } from "@deep-spec/design-domain";
 import type { DesignVerifyDirectoryRepository } from "./port/design-verify-directory-repository.ts";
 import type { VerifyDesignOutcome } from "./verify-design-outcome.ts";
 
@@ -43,10 +43,7 @@ export class DesignReportFinalizer {
     return ok(undefined);
   }
 
-  #finalizing(
-    report: DesignReport,
-    model: DesignModel | null,
-  ): Result<VerifiedOutcome, RepositoryError> {
+  #finalizing(report: DesignReport, model: DesignModel | null): Result<VerifiedOutcome, RepositoryError> {
     const loaded = this.#repository.findByDirectory(report.id().directory());
     if (!loaded.ok) return err(loaded.error);
     const aggregate = loaded.value.finalizedWith(report, model, this.#findingsSchema);
@@ -55,7 +52,12 @@ export class DesignReportFinalizer {
     const published = aggregate.candidate();
     if (published === null) {
       // finalizing が候補を置いた直後なので到達しない。黙って成功させない。
-      return err({ kind: "io-failed", operation: "write", path: report.id().fileName(), cause: "no finalization candidate" });
+      return err({
+        kind: "io-failed",
+        operation: "write",
+        path: report.id().fileName(),
+        cause: "no finalization candidate",
+      });
     }
     return ok({
       kind: "verified",

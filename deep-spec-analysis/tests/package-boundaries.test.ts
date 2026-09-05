@@ -107,7 +107,7 @@ function buildFixture(): void {
   // 宣言していない層——解決できないべき例。
   writeFileSync(
     join(fixtureDir, "undeclared.ts"),
-    'import { DesignModelId } from "@deep-spec/design-domain";\nexport const probe = DesignModelId;\n',
+    'import { DesignModelIdentifier } from "@deep-spec/design-domain";\nexport const probe = DesignModelIdentifier;\n',
   );
   // exports に無い深いパス——宣言済みの層でも解決できないべき例。
   writeFileSync(

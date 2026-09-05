@@ -12,24 +12,24 @@
 // installation ブロック直後へ挿入し、既存行同士の順序は変えない。
 
 import { join } from "node:path";
+import {
+  DoctorPresenter,
+  DoctorWorkspaceClientImplementation,
+  GitHubReleaseTagsClientImplementation,
+  HarnessFileClientImplementation,
+  InstallationProvenanceClientImplementation,
+  ReferenceCheckBackendClientImplementation,
+  SolverProbeClientImplementation,
+} from "@deep-spec/doctor-adapter";
 import { HealthVerdict } from "@deep-spec/doctor-domain";
 import {
   CheckFunctionalCoverageUseCase,
   CheckInstallationUseCase,
-  CheckVersionAdvisoryUseCase,
   CheckSolversUseCase,
   CheckStructuralDebtUseCase,
   CheckVerificationCoverageUseCase,
+  CheckVersionAdvisoryUseCase,
 } from "@deep-spec/doctor-usecase";
-import {
-  DoctorPresenter,
-  DoctorWorkspaceClientImpl,
-  GitHubReleaseTagsClientImpl,
-  HarnessFileClientImpl,
-  InstallationProvenanceClientImpl,
-  RefcheckBackendClientImpl,
-  SolverProbeClientImpl,
-} from "@deep-spec/doctor-adapter";
 
 async function main(): Promise<void> {
   const projectDir = process.env.AIDLC_PROJECT_DIR || process.cwd();
@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   const root = join(projectDir, harnessDir);
 
   const presenter = new DoctorPresenter({ harnessDir });
-  const workspace = new DoctorWorkspaceClientImpl({
+  const workspace = new DoctorWorkspaceClientImplementation({
     projectDir,
     root,
     refcheckToolNames: {
@@ -47,14 +47,16 @@ async function main(): Promise<void> {
     },
   });
   const verdict = HealthVerdict.of([
-    ...presenter.installation(new CheckInstallationUseCase(new HarnessFileClientImpl({ root })).execute()),
-    presenter.version(await new CheckVersionAdvisoryUseCase(
-      new InstallationProvenanceClientImpl({ harnessRoot: root }),
-      new GitHubReleaseTagsClientImpl({ repository: "j5ik2o/deep-spec-analysis" }),
-    ).execute()),
+    ...presenter.installation(new CheckInstallationUseCase(new HarnessFileClientImplementation({ root })).execute()),
+    presenter.version(
+      await new CheckVersionAdvisoryUseCase(
+        new InstallationProvenanceClientImplementation({ harnessRoot: root }),
+        new GitHubReleaseTagsClientImplementation({ repository: "j5ik2o/deep-spec-analysis" }),
+      ).execute(),
+    ),
     ...presenter.solvers(
       new CheckSolversUseCase(
-        new SolverProbeClientImpl({
+        new SolverProbeClientImplementation({
           projectDir,
           quintBin: process.env.AIDLC_DEEP_SPEC_QUINT_BIN || "quint",
           apalacheDistDeclared: Boolean(process.env.APALACHE_DIST),
@@ -67,7 +69,9 @@ async function main(): Promise<void> {
       ).execute(),
     ),
     ...presenter.verificationCoverage(new CheckVerificationCoverageUseCase(workspace).execute()),
-    ...presenter.structuralDebt(new CheckStructuralDebtUseCase(workspace, new RefcheckBackendClientImpl({ root })).execute()),
+    ...presenter.structuralDebt(
+      new CheckStructuralDebtUseCase(workspace, new ReferenceCheckBackendClientImplementation({ root })).execute(),
+    ),
     ...presenter.functionalCoverage(new CheckFunctionalCoverageUseCase(workspace).execute()),
   ]);
   process.stdout.write(`${JSON.stringify(verdict.document())}\n`);

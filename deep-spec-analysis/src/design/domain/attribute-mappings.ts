@@ -1,7 +1,7 @@
 import type { Expression } from "@deep-spec/kernel-domain";
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import { RefinementMapDefect } from "./refinement-map-defect.ts";
+import { err, ok, type Result } from "@deep-spec/kernel-infrastructure";
 import type { AttributeMapping } from "./attribute-mapping.ts";
+import { RefinementMapDefect } from "./refinement-map-defect.ts";
 
 // attrMap の写像のファーストクラスコレクション——要素は要件属性パスで識別される
 // エンティティ `AttributeMapping`。要件パスによる検索（重複は最後の宣言が勝つ、
@@ -13,11 +13,11 @@ export class AttributeMappings {
   readonly #values: readonly AttributeMapping[];
 
   private constructor(values: readonly AttributeMapping[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly AttributeMapping[]): AttributeMappings {
-    return new AttributeMappings([...values]);
+    return new AttributeMappings(values);
   }
 
   add(value: AttributeMapping): AttributeMappings {
@@ -49,7 +49,11 @@ export class AttributeMappings {
       const refArg = a?.op === "ref" ? a : b?.op === "ref" ? b : null;
       const enumArg = a?.op === "enum" ? a : b?.op === "enum" ? b : null;
       if (refArg && enumArg && typeof refArg.path === "string" && typeof enumArg.value === "string") {
-        const expanded = this.byRequirementPath(refArg.path)?.expandComparison(e.op, enumArg.value, post || refArg.prime === true);
+        const expanded = this.byRequirementPath(refArg.path)?.expandComparison(
+          e.op,
+          enumArg.value,
+          post || refArg.prime === true,
+        );
         if (expanded !== null && expanded !== undefined) return ok(expanded);
       }
     }

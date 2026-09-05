@@ -1,6 +1,6 @@
-import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
-import { AttributePath } from "@deep-spec/kernel-domain";
+import { AttributePath, ExpressionTree } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 import type { DesignAssignments } from "./design-assignments.ts";
 
@@ -14,6 +14,10 @@ export class DesignEvent {
   private constructor(guard: Expression, effectAssign: DesignAssignments) {
     this.#guard = ExpressionTree.of(guard).asExpression();
     this.#effectAssign = effectAssign;
+  }
+
+  static parse(guard: Expression, effectAssign: DesignAssignments): Result<DesignEvent, ParseError> {
+    return parseConstruction(() => new DesignEvent(guard, effectAssign));
   }
 
   static of(guard: Expression, effectAssign: DesignAssignments): DesignEvent {

@@ -9,7 +9,15 @@
 // スキーマファイルの読込（I/O）はここには無い：それはアダプタの責務で、
 // この値は読み終えた材料だけを受け取る。
 
-import { type Json, type Schema, validateSchema } from "@deep-spec/kernel-infrastructure";
+import {
+  boundedValueSnapshot,
+  type Json,
+  type ParseError,
+  parseConstruction,
+  type Result,
+  type Schema,
+  validateSchema,
+} from "@deep-spec/kernel-infrastructure";
 
 const CONTRACT_BASENAME = "deep-spec-findings-schema.json";
 
@@ -18,13 +26,20 @@ export class FindingsSchema {
   readonly #reason: string | null;
 
   private constructor(schema: Schema | null, reason: string | null) {
-    this.#schema = schema;
+    this.#schema =
+      schema === null
+        ? null
+        : boundedValueSnapshot(schema, { string: 65_536, nodes: 100_000, depth: 128, total: 16_777_216 });
     this.#reason = reason;
   }
 
   // 読めたスキーマ。文書はこのスキーマで自己検証される。
   static of(schema: Schema): FindingsSchema {
     return new FindingsSchema(schema, null);
+  }
+
+  static parse(schema: Schema): Result<FindingsSchema, ParseError> {
+    return parseConstruction(() => new FindingsSchema(schema, null));
   }
 
   // 読めなかったスキーマ。cause は捕捉した Error.message を逐語で運ぶ。

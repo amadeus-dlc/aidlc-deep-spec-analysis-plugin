@@ -1,6 +1,14 @@
-import { UnitName, TargetId, KeyedIndex, QueryLabel, SkipReason, type Expression } from "@deep-spec/kernel-domain";
+import {
+  type Expression,
+  KeyedIndex,
+  QueryLabel,
+  SkipReason,
+  TargetIdentifier,
+  UnitName,
+} from "@deep-spec/kernel-domain";
 
-import type { RefinementAttr } from "./refinement-attr.ts";
+import type { RefinementAttributeParam } from "./refinement-attribute-param.ts";
+
 // refinement の SMT-LIB コンパイラ — v1（requirements/adapter/smt-plan）と
 // 統一しない**明示的な第 2 コンパイラ**（移行計画のアーキテクチャ判断 Q1 /
 // 移行 PR8 で確定——描画語彙は kernel 共有、式コンパイラは ref の解決表と
@@ -13,37 +21,31 @@ import type { RefinementAttr } from "./refinement-attr.ts";
 // 旧 refinement-lib の designSmtCtx / smtOfExpr / designBase / assembleQuery /
 // decodeDesignModel とクエリ構築部からの逐語移植。
 
-import {
-  ObligationId,
-  ScenarioId,
-  type RefinementMapDefect,
-} from "@deep-spec/design-domain";
-import { DesignSkips } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
-import { DesignSkipped } from "@deep-spec/design-domain";
 import {
   type DesignEvent,
+  DesignEventCatalog,
+  DesignSkipped,
+  DesignSkips,
+  EffectAssignments,
+  ObligationIdentifier,
+  RefinementMapDefect,
   RefinementProbe,
   type RefinementRequirements,
   RefinementSolverPlan,
+  ScenarioIdentifier,
   type UnitRefinementPlan,
-  DesignEventCatalog,
-  EffectAssignments,
 } from "@deep-spec/design-domain";
 
 import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
 
 import type { RefinementChildQuery } from "./refinement-child-query.ts";
-import type { RefinementSmtContext } from "./refinement-smt-context.ts";
+import type { RefinementSatisfiabilityModuloTheoriesContext } from "./refinement-satisfiability-modulo-theories-context.ts";
 
-class SmtCompileError extends Error {
-  constructor(message: string) {
-    super(message);
-  }
-}
+class SatisfiabilityModuloTheoriesCompileError extends Error {}
 
-export function refinementSmtContext(u: DesignUnit): RefinementSmtContext {
-  const attrs: RefinementAttr[] = [];
+export function refinementSmtContext(u: DesignUnit): RefinementSatisfiabilityModuloTheoriesContext {
+  const attrs: RefinementAttributeParam[] = [];
   for (const ent of u.entities()) {
     for (const attr of ent.attributes()) {
       const kind = attr.kindLabel();
@@ -56,25 +58,27 @@ export function refinementSmtContext(u: DesignUnit): RefinementSmtContext {
         kind,
         ...(min !== undefined ? { min: min.asNumber() } : {}),
         ...(max !== undefined ? { max: max.asNumber() } : {}),
-        ...(values !== null ? { values: [...values.toArray()] } : {}),
+        ...(values !== null ? { values: values.toArray().map((member) => member.asString()) } : {}),
       });
     }
   }
   return { attrs, byPath: new Map(attrs.map((a) => [a.path, a])) };
 }
 
-function enumCode(ctx: RefinementSmtContext, attrPath: string, value: string): number {
+function enumCode(ctx: RefinementSatisfiabilityModuloTheoriesContext, attrPath: string, value: string): number {
   const attr = ctx.byPath.get(attrPath);
-  if (!attr || attr.kind !== "enum" || !attr.values) throw new SmtCompileError(`"${attrPath}" is not an enum attribute`);
+  if (attr?.kind !== "enum" || !attr.values)
+    throw new SatisfiabilityModuloTheoriesCompileError(`"${attrPath}" is not an enum attribute`);
   const idx = attr.values.indexOf(value);
-  if (idx < 0) throw new SmtCompileError(`enum value "${value}" is not declared on "${attrPath}"`);
+  if (idx < 0)
+    throw new SatisfiabilityModuloTheoriesCompileError(`enum value "${value}" is not declared on "${attrPath}"`);
   return idx;
 }
 
-export function smtOfExpr(ctx: RefinementSmtContext, e: Expression): string {
+export function smtOfExpr(ctx: RefinementSatisfiabilityModuloTheoriesContext, e: Expression): string {
   const bin = (op: string): string => {
     const [a, b] = e.args ?? [];
-    if (!a || !b) throw new SmtCompileError(`operator "${e.op}" needs two arguments`);
+    if (!a || !b) throw new SatisfiabilityModuloTheoriesCompileError(`operator "${e.op}" needs two arguments`);
     const refArg = a.op === "ref" ? a : b.op === "ref" ? b : null;
     const enumArg = a.op === "enum" ? a : b.op === "enum" ? b : null;
     if (enumArg && refArg && typeof refArg.path === "string" && typeof enumArg.value === "string") {
@@ -83,7 +87,10 @@ export function smtOfExpr(ctx: RefinementSmtContext, e: Expression): string {
       const right = b === enumArg ? code : smtOfExpr(ctx, b);
       return `(${op} ${left} ${right})`;
     }
-    if (enumArg) throw new SmtCompileError("enum literal without a ref sibling has no resolvable encoding");
+    if (enumArg)
+      throw new SatisfiabilityModuloTheoriesCompileError(
+        "enum literal without a ref sibling has no resolvable encoding",
+      );
     return `(${op} ${smtOfExpr(ctx, a)} ${smtOfExpr(ctx, b)})`;
   };
   switch (e.op) {
@@ -114,18 +121,19 @@ export function smtOfExpr(ctx: RefinementSmtContext, e: Expression): string {
     case "mul":
       return bin("*");
     case "ref": {
-      if (typeof e.path !== "string" || !ctx.byPath.has(e.path)) throw new SmtCompileError(`unresolvable reference "${e.path ?? ""}"`);
+      if (typeof e.path !== "string" || !ctx.byPath.has(e.path))
+        throw new SatisfiabilityModuloTheoriesCompileError(`unresolvable reference "${e.path ?? ""}"`);
       return smtVar(e.path, e.prime === true);
     }
     case "bool":
       return e.value === true ? "true" : "false";
     case "int": {
       const n = typeof e.value === "number" ? e.value : Number.NaN;
-      if (!Number.isInteger(n)) throw new SmtCompileError("int literal is not an integer");
+      if (!Number.isInteger(n)) throw new SatisfiabilityModuloTheoriesCompileError("int literal is not an integer");
       return smtLit(n);
     }
     default:
-      throw new SmtCompileError(`unknown operator "${e.op}"`);
+      throw new SatisfiabilityModuloTheoriesCompileError(`unknown operator "${e.op}"`);
   }
 }
 
@@ -135,7 +143,7 @@ interface NamedConstraint {
 }
 
 export function designBase(
-  ctx: RefinementSmtContext,
+  ctx: RefinementSatisfiabilityModuloTheoriesContext,
   u: DesignUnit,
   primed: boolean,
 ): { decls: string[]; constraints: NamedConstraint[] } {
@@ -146,12 +154,18 @@ export function designBase(
     decls.push(`(declare-const ${smtVar(attr.path, primed)} ${sort})`);
     const v = smtVar(attr.path, primed);
     if (attr.kind === "enum" && attr.values) {
-      constraints.push({ name: `${primed ? "typ" : "ty"}_${attr.path.replace(/\./g, "_")}`, smt: `(and (>= ${v} 0) (<= ${v} ${attr.values.length - 1}))` });
+      constraints.push({
+        name: `${primed ? "typ" : "ty"}_${attr.path.replace(/\./g, "_")}`,
+        smt: `(and (>= ${v} 0) (<= ${v} ${attr.values.length - 1}))`,
+      });
     } else if (attr.kind === "int" && (attr.min !== undefined || attr.max !== undefined)) {
       const parts: string[] = [];
       if (attr.min !== undefined) parts.push(`(>= ${v} ${smtLit(attr.min)})`);
       if (attr.max !== undefined) parts.push(`(<= ${v} ${smtLit(attr.max)})`);
-      constraints.push({ name: `${primed ? "typ" : "ty"}_${attr.path.replace(/\./g, "_")}`, smt: parts.length === 1 ? (parts[0] as string) : `(and ${parts.join(" ")})` });
+      constraints.push({
+        name: `${primed ? "typ" : "ty"}_${attr.path.replace(/\./g, "_")}`,
+        smt: parts.length === 1 ? (parts[0] as string) : `(and ${parts.join(" ")})`,
+      });
     }
   }
   if (!primed) {
@@ -159,7 +173,7 @@ export function designBase(
       try {
         constraints.push({ name: smtName("bg", bg.id().asString()), smt: smtOfExpr(ctx, bg.assertion()) });
       } catch (error) {
-        if (!(error instanceof SmtCompileError)) throw error;
+        if (!(error instanceof SatisfiabilityModuloTheoriesCompileError)) throw error;
         // コンパイルできない背景は落とす——設計パスが報告する。
       }
     }
@@ -169,7 +183,7 @@ export function designBase(
         try {
           constraints.push({ name: smtName("inv", ob.id().asString()), smt: smtOfExpr(ctx, assertion) });
         } catch (error) {
-          if (!(error instanceof SmtCompileError)) throw error;
+          if (!(error instanceof SatisfiabilityModuloTheoriesCompileError)) throw error;
           // 同上。
         }
       }
@@ -192,7 +206,7 @@ export function assembleQuery(
 }
 
 export function decodeDesignModel(
-  ctx: RefinementSmtContext,
+  ctx: RefinementSatisfiabilityModuloTheoriesContext,
   model: { [name: string]: string },
   primed: boolean,
 ): { [path: string]: boolean | number | string } {
@@ -218,7 +232,7 @@ export function decodeDesignModel(
 export interface RefinementQueryPlan {
   queries: RefinementChildQuery[];
   plan: RefinementSolverPlan;
-  context: RefinementSmtContext;
+  context: RefinementSatisfiabilityModuloTheoriesContext;
 }
 
 // クエリ計画の構築 — 旧 runUnitRefinementSmt のクエリ構築部（867-999 行）。
@@ -231,8 +245,17 @@ export function buildRefinementQueries(
   const ctx = refinementSmtContext(u);
   const pre = designBase(ctx, u, false);
   const post = designBase(ctx, u, true);
-  const modelVars = ctx.attrs.map((a) => ({ name: smtVar(a.path, false), sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool" }));
-  const modelVarsBoth = [...modelVars, ...ctx.attrs.map((a) => ({ name: smtVar(a.path, true), sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool" }))];
+  const modelVars = ctx.attrs.map((a) => ({
+    name: smtVar(a.path, false),
+    sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool",
+  }));
+  const modelVarsBoth = [
+    ...modelVars,
+    ...ctx.attrs.map((a) => ({
+      name: smtVar(a.path, true),
+      sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool",
+    })),
+  ];
   const catalog = DesignEventCatalog.of(u);
   const queries: RefinementChildQuery[] = [];
   const pending = new Map<string, RefinementProbe>();
@@ -240,12 +263,14 @@ export function buildRefinementQueries(
   // alpha 置換の欠陥（RefinementMapDefect）と SMT コンパイル失敗（例外）は同じ
   // 凍結文言の compile-error skip に落ちる。
   const alphaFail = (target: string, message: string): void => {
-    compileSkips.push(DesignSkipped.of({
-      target: TargetId.of(target),
-      reason: SkipReason.compileError(),
-      unit: UnitName.of(u.name()),
-      detail: `alpha substitution failed: ${message}`,
-    }));
+    compileSkips.push(
+      DesignSkipped.of({
+        target: TargetIdentifier.of(target),
+        reason: SkipReason.compileError(),
+        unit: UnitName.of(u.name()),
+        detail: `alpha substitution failed: ${message}`,
+      }),
+    );
   };
   const failureMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -262,11 +287,16 @@ export function buildRefinementQueries(
         continue;
       }
       try {
-        const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP.value)})` }], modelVars);
+        const q = assembleQuery(
+          `rv:${obId}`,
+          pre.decls,
+          [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP.value)})` }],
+          modelVars,
+        );
         queries.push(q);
-        pending.set(q.id, RefinementProbe.invariant(ObligationId.of(obId)));
+        pending.set(q.id, RefinementProbe.invariant(ObligationIdentifier.of(obId)));
       } catch (err) {
-        if (!(err instanceof SmtCompileError)) throw err;
+        if (!(err instanceof SatisfiabilityModuloTheoriesCompileError)) throw err;
         alphaFail(obId, failureMessage(err));
       }
       continue;
@@ -283,7 +313,7 @@ export function buildRefinementQueries(
         // enabledness：alpha(guard) は成り立つが、写像済み設計イベントが
         // ひとつも発火可能でない。
         const designGuards = mapped
-          .map((id) => catalog.eventOf(TargetId.of(id.asString())))
+          .map((id) => catalog.eventOf(TargetIdentifier.of(id.asString())))
           .filter((d): d is DesignEvent => d !== null)
           .map((d) => smtOfExpr(ctx, d.guard()));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
@@ -298,15 +328,20 @@ export function buildRefinementQueries(
           modelVars,
         );
         queries.push(qe);
-        pending.set(qe.id, RefinementProbe.enabledness(ObligationId.of(obId)));
+        pending.set(qe.id, RefinementProbe.enabledness(ObligationIdentifier.of(obId)));
 
         // 写像済み設計イベントごとのワンステップシミュレーション：alpha(guard)
         // が成り立つところで踏んだ 1 歩の抽象 post が、要件効果か抽象フレーム
         // （Q2：未代入の要件属性は抽象値を保つ。unmapped 属性のフレーム等式は
         // 検査不能なので省く）に反する。
-        const decomposed = EffectAssignments.ofEffect(event.effect);
+        const decomposed = EffectAssignments.parse(event.effect);
         if (!decomposed.ok) {
-          alphaFail(obId, decomposed.error.message());
+          alphaFail(
+            obId,
+            decomposed.error.kind === "effect-not-assignment-conjunction"
+              ? RefinementMapDefect.effectNotAssignmentConjunction().message()
+              : JSON.stringify(decomposed.error),
+          );
           continue;
         }
         const assigned = decomposed.value;
@@ -324,16 +359,17 @@ export function buildRefinementQueries(
         const fBar = smtOfExpr(ctx, alphaF.value);
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
-          const ev = catalog.eventOf(TargetId.of(designId.asString()));
+          const ev = catalog.eventOf(TargetIdentifier.of(designId.asString()));
           if (!ev) continue;
           const stepParts: string[] = [smtOfExpr(ctx, ev.guard())];
           for (const attr of ctx.attrs) {
             const rhs = ev.assignedRhsOf(attr.path);
             const target = smtVar(attr.path, true);
             if (rhs) {
-              const rhsSmt = rhs.op === "enum" && typeof rhs.value === "string"
-                ? String(enumCode(ctx, attr.path, rhs.value))
-                : smtOfExpr(ctx, rhs);
+              const rhsSmt =
+                rhs.op === "enum" && typeof rhs.value === "string"
+                  ? String(enumCode(ctx, attr.path, rhs.value))
+                  : smtOfExpr(ctx, rhs);
               stepParts.push(`(= ${target} ${rhsSmt})`);
             } else {
               stepParts.push(`(= ${target} ${smtVar(attr.path, false)})`);
@@ -352,10 +388,10 @@ export function buildRefinementQueries(
             modelVarsBoth,
           );
           queries.push(qs);
-          pending.set(qs.id, RefinementProbe.simulation(ObligationId.of(obId), designId));
+          pending.set(qs.id, RefinementProbe.simulation(ObligationIdentifier.of(obId), designId));
         }
       } catch (err) {
-        if (!(err instanceof SmtCompileError)) throw err;
+        if (!(err instanceof SatisfiabilityModuloTheoriesCompileError)) throw err;
         alphaFail(obId, failureMessage(err));
       }
     }
@@ -368,9 +404,10 @@ export function buildRefinementQueries(
     let defect: RefinementMapDefect | null = null;
     try {
       const parts: string[] = [];
-      for (const [path, value] of sc.bindingEntriesCanonically()) {
-        const lit: Expression = typeof value === "boolean" ? { op: "bool", value } : typeof value === "number" ? { op: "int", value } : { op: "enum", value };
-        const constraint: Expression = { op: "eq", args: [{ op: "ref", path }, lit] };
+      for (const binding of sc.bindings().entriesCanonically()) {
+        const path = binding.path();
+        const value = binding.value();
+        const constraint: Expression = { op: "eq", args: [{ op: "ref", path: path.asString() }, value.asExpression()] };
         const bound = mappings.substitute(constraint, false);
         if (!bound.ok) {
           defect = bound.error;
@@ -385,20 +422,26 @@ export function buildRefinementQueries(
       const q = assembleQuery(
         `rs:${scId}`,
         pre.decls,
-        [...pre.constraints, { name: smtName("sc", scId), smt: parts.length === 1 ? (parts[0] as string) : `(and ${parts.join(" ")})` }],
+        [
+          ...pre.constraints,
+          { name: smtName("sc", scId), smt: parts.length === 1 ? (parts[0] as string) : `(and ${parts.join(" ")})` },
+        ],
         modelVars,
       );
       queries.push(q);
-      pending.set(q.id, RefinementProbe.scenario(ScenarioId.of(scId)));
+      pending.set(q.id, RefinementProbe.scenario(ScenarioIdentifier.of(scId)));
     } catch (err) {
-      if (!(err instanceof SmtCompileError)) throw err;
+      if (!(err instanceof SatisfiabilityModuloTheoriesCompileError)) throw err;
       alphaFail(scId, failureMessage(err));
     }
   }
 
   return {
     queries,
-    plan: RefinementSolverPlan.of({ pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.of(id), probe] as const)), compileSkips: DesignSkips.of(compileSkips) }),
+    plan: RefinementSolverPlan.of({
+      pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.of(id), probe] as const)),
+      compileSkips: DesignSkips.of(compileSkips),
+    }),
     context: ctx,
   };
 }

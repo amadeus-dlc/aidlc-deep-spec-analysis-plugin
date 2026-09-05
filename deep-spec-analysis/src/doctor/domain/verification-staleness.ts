@@ -5,14 +5,17 @@ import type { DigestAnchor } from "./digest-anchor.ts";
 // anchor は現行契約の必須宣言（ir-valid が強制）なので、持たないモデルは
 // 無条件に stale——再検証が digest を刻む（anchor 以前の旧モデルを mtime
 // ヒューリスティックで救う後方互換はオーナー裁定 2026-09-01 で削除）。
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type VerificationStalenessParam = { anchor: DigestAnchor | null };
+
 export class VerificationStaleness {
   readonly #anchor: DigestAnchor | null;
 
-  private constructor(props: Parameters<typeof VerificationStaleness.of>[0]) {
+  private constructor(props: VerificationStalenessParam) {
     this.#anchor = props.anchor;
   }
 
-  static of(props: { anchor: DigestAnchor | null }): VerificationStaleness {
+  static of(props: VerificationStalenessParam): VerificationStaleness {
     return new VerificationStaleness(props);
   }
 

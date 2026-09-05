@@ -7,10 +7,18 @@
 // OB-n / SC-n / BG-n の採番順は文書バイト（子の処理順）に効く凍結面で、
 // コレクション自身が順序を保って運ぶ。
 
-import { LoweredBackgrounds } from "./lowered-backgrounds.ts";
-import { LoweredObligations } from "./lowered-obligations.ts";
-import { LoweredScenarios } from "./lowered-scenarios.ts";
-import { LoweringIndex } from "./lowering-index.ts";
+import type { LoweredBackgrounds } from "./lowered-backgrounds.ts";
+import type { LoweredObligations } from "./lowered-obligations.ts";
+import type { LoweredScenarios } from "./lowered-scenarios.ts";
+import type { LoweringIndex } from "./lowering-index.ts";
+
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type LoweredUnitParam = {
+  obligations: LoweredObligations;
+  scenarios: LoweredScenarios;
+  background: LoweredBackgrounds;
+  index: LoweringIndex;
+};
 
 export class LoweredUnit {
   readonly #obligations: LoweredObligations;
@@ -18,7 +26,7 @@ export class LoweredUnit {
   readonly #background: LoweredBackgrounds;
   readonly #index: LoweringIndex;
 
-  private constructor(props: Parameters<typeof LoweredUnit.of>[0]) {
+  private constructor(props: LoweredUnitParam) {
     this.#obligations = props.obligations;
     this.#scenarios = props.scenarios;
     this.#background = props.background;
@@ -27,12 +35,7 @@ export class LoweredUnit {
 
   // 検証済み生成口——採番済みの lowered コレクションと、その採番に対応する
   // 帰属索引だけを受け取る（門を通るのは `DesignUnit.lowered` と `extendedWith`）。
-  static of(props: {
-    obligations: LoweredObligations;
-    scenarios: LoweredScenarios;
-    background: LoweredBackgrounds;
-    index: LoweringIndex;
-  }): LoweredUnit {
+  static of(props: LoweredUnitParam): LoweredUnit {
     return new LoweredUnit(props);
   }
 

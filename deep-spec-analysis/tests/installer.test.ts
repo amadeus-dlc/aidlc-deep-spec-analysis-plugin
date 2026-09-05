@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
 import {
   acquireLocal,
   acquireRemote,
@@ -35,13 +35,13 @@ function tarGz(entries: readonly { name: string; bytes: Uint8Array; type?: strin
     header.set(encoder.encode("0000777\0"), 100);
     header.set(encoder.encode("0000000\0"), 108);
     header.set(encoder.encode("0000000\0"), 116);
-    header.set(encoder.encode(entry.bytes.length.toString(8).padStart(11, "0") + "\0"), 124);
+    header.set(encoder.encode(`${entry.bytes.length.toString(8).padStart(11, "0")}\0`), 124);
     header.set(encoder.encode("00000000000\0"), 136);
     header.fill(32, 148, 156);
     header[156] = (entry.type ?? "0").charCodeAt(0);
     header.set(encoder.encode("ustar\0"), 257);
     const sum = header.reduce((total, byte) => total + byte, 0);
-    header.set(encoder.encode(sum.toString(8).padStart(6, "0") + "\0 "), 148);
+    header.set(encoder.encode(`${sum.toString(8).padStart(6, "0")}\0 `), 148);
     chunks.push(header, entry.bytes);
     const padding = (512 - (entry.bytes.length % 512)) % 512;
     if (padding) chunks.push(new Uint8Array(padding));
@@ -59,7 +59,10 @@ function tarGz(entries: readonly { name: string; bytes: Uint8Array; type?: strin
 
 describe("installer source selection", () => {
   test("uses --from > --ref > --tag > latest precedence", () => {
-    expect(selectSourceSelector({ from: "/repo", ref: "main", tag: "v1.0.0" })).toEqual({ kind: "local", value: "/repo" });
+    expect(selectSourceSelector({ from: "/repo", ref: "main", tag: "v1.0.0" })).toEqual({
+      kind: "local",
+      value: "/repo",
+    });
     expect(selectSourceSelector({ ref: "main", tag: "v1.0.0" })).toEqual({ kind: "ref", value: "main" });
     expect(selectSourceSelector({ tag: "v1.0.0" })).toEqual({ kind: "tag", value: "v1.0.0" });
     expect(selectSourceSelector({})).toEqual({ kind: "latest", value: "" });
@@ -91,9 +94,13 @@ describe("installer source selection", () => {
     const sentinel = join(project, ".claude", "sentinel.txt");
     writeFileSync(sentinel, "unchanged\n");
 
-    const result = spawnSync("bun", [join(import.meta.dir, "..", "scripts", "install.ts"), "--project", project, "--from", repo], {
-      encoding: "utf-8",
-    });
+    const result = spawnSync(
+      "bun",
+      [join(import.meta.dir, "..", "scripts", "install.ts"), "--project", project, "--from", repo],
+      {
+        encoding: "utf-8",
+      },
+    );
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("AI-DLC plugin toolchain is missing");
     expect(readFileSync(sentinel, "utf-8")).toBe("unchanged\n");
@@ -103,14 +110,16 @@ describe("installer source selection", () => {
     const manifest = new TextEncoder().encode('{"name":"deep-spec-analysis","version":"1.10.0"}\n');
     const archive = tarGz([{ name: "repo-v1.10.0/deep-spec-analysis/.aidlc-plugin/plugin.json", bytes: manifest }]);
     const calls: string[] = [];
-    const fetcher = (async (input: string | URL | Request) => {
+    const fetcher = async (input: string | URL | Request) => {
       const url = String(input);
       calls.push(url);
       if (url.includes("api.github.com")) {
-        return new Response(JSON.stringify([{ name: "v1.0.0" }, { name: "v1.10.0" }, { name: "v2.0.0-rc.1" }]), { status: 200 });
+        return new Response(JSON.stringify([{ name: "v1.0.0" }, { name: "v1.10.0" }, { name: "v2.0.0-rc.1" }]), {
+          status: 200,
+        });
       }
       return new Response(archive, { status: 200 });
-    });
+    };
 
     const source = await acquireRemote("latest", "", fetcher);
     if (source.cleanupRoot) temporaryRoots.push(source.cleanupRoot);
@@ -121,10 +130,12 @@ describe("installer source selection", () => {
   });
 
   test("rejects a tag whose version differs from the manifest", async () => {
-    const archive = tarGz([{
-      name: "repo-v1.0.0/deep-spec-analysis/.aidlc-plugin/plugin.json",
-      bytes: new TextEncoder().encode('{"name":"deep-spec-analysis","version":"1.1.0"}\n'),
-    }]);
+    const archive = tarGz([
+      {
+        name: "repo-v1.0.0/deep-spec-analysis/.aidlc-plugin/plugin.json",
+        bytes: new TextEncoder().encode('{"name":"deep-spec-analysis","version":"1.1.0"}\n'),
+      },
+    ]);
     const fetcher = async () => new Response(archive, { status: 200 });
     const source = await acquireRemote("tag", "v1.0.0", fetcher);
     if (source.cleanupRoot) temporaryRoots.push(source.cleanupRoot);
@@ -136,16 +147,23 @@ describe("installer archive and provenance integrity", () => {
   test("extracts regular files below the destination", () => {
     const destination = temporaryRoot();
     const payload = new TextEncoder().encode('{"name":"deep-spec-analysis","version":"0.5.0"}\n');
-    extractTarGz(tarGz([{ name: "repo-rev/deep-spec-analysis/.aidlc-plugin/plugin.json", bytes: payload }]), destination);
+    extractTarGz(
+      tarGz([{ name: "repo-rev/deep-spec-analysis/.aidlc-plugin/plugin.json", bytes: payload }]),
+      destination,
+    );
     const manifest = join(destination, "repo-rev", "deep-spec-analysis", ".aidlc-plugin", "plugin.json");
     expect(readFileSync(manifest, "utf-8")).toContain("deep-spec-analysis");
   });
 
   test("rejects path traversal and archive links", () => {
     const destination = temporaryRoot();
-    expect(() => extractTarGz(tarGz([{ name: "../escaped", bytes: new Uint8Array() }]), destination)).toThrow("unsafe archive path");
+    expect(() => extractTarGz(tarGz([{ name: "../escaped", bytes: new Uint8Array() }]), destination)).toThrow(
+      "unsafe archive path",
+    );
     expect(existsSync(join(destination, "..", "escaped"))).toBe(false);
-    expect(() => extractTarGz(tarGz([{ name: "repo/link", bytes: new Uint8Array(), type: "2" }]), destination)).toThrow("archive links are not allowed");
+    expect(() => extractTarGz(tarGz([{ name: "repo/link", bytes: new Uint8Array(), type: "2" }]), destination)).toThrow(
+      "archive links are not allowed",
+    );
   });
 
   test("hashes path and content bytes in byte-sorted order", () => {
@@ -155,8 +173,6 @@ describe("installer archive and provenance integrity", () => {
     expect(canonicalPayloadSha256([a, b])).not.toBe(
       canonicalPayloadSha256([a, { ...b, bytes: new TextEncoder().encode("B") }]),
     );
-    expect(canonicalPayloadSha256([a, b])).not.toBe(
-      canonicalPayloadSha256([a, { ...b, path: "tools/c.ts" }]),
-    );
+    expect(canonicalPayloadSha256([a, b])).not.toBe(canonicalPayloadSha256([a, { ...b, path: "tools/c.ts" }]));
   });
 });

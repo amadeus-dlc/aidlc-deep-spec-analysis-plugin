@@ -10,11 +10,11 @@ export class UnmappedDeclarations {
   readonly #values: readonly UnmappedTarget[];
 
   private constructor(values: readonly UnmappedTarget[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly UnmappedTarget[]): UnmappedDeclarations {
-    return new UnmappedDeclarations([...values]);
+    return new UnmappedDeclarations(values);
   }
 
   add(value: UnmappedTarget): UnmappedDeclarations {

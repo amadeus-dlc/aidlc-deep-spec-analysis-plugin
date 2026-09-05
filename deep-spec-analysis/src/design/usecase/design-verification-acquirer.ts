@@ -2,17 +2,17 @@
 // 「モデル取得 → 3 種の失敗分類 → IR version の適合判定」を一度だけ所有する
 // application collaborator であって、ドメインオブジェクトではない（BR5.1）。
 //
-// 入力は 3 つだけ：modelId、呼出側が生成した DesignReportId、strict に生成
+// 入力は 3 つだけ：modelId、呼出側が生成した DesignReportIdentifier、strict に生成
 // 済みの初期 VerificationMethod。backend 名の文字列・mode boolean・unknown の
 // payload・optional hook は受け取らない——backend 固有の判断（solver・probe・
 // budget・refinement）は各 usecase に残る（BR5.2）。
 
-import type { VerificationMethod } from "@deep-spec/kernel-domain";
-import type { DesignModelId, DesignReportId } from "@deep-spec/design-domain";
+import type { DesignModelIdentifier, DesignReportIdentifier } from "@deep-spec/design-domain";
 import { DesignReport, SUPPORTED_DESIGN_IR_MAJOR } from "@deep-spec/design-domain";
-import type { DesignModelRepository } from "./port/design-model-repository.ts";
+import type { VerificationMethod } from "@deep-spec/kernel-domain";
 import type { DesignAcquisitionResult } from "./design-acquisition-result.ts";
 import type { DesignReportFinalizer } from "./design-report-finalizer.ts";
+import type { DesignModelRepository } from "./port/design-model-repository.ts";
 
 export class DesignVerificationAcquirer {
   readonly #designModelRepository: DesignModelRepository;
@@ -23,7 +23,11 @@ export class DesignVerificationAcquirer {
     this.#finalizer = finalizer;
   }
 
-  acquire(modelId: DesignModelId, reportId: DesignReportId, method: VerificationMethod): DesignAcquisitionResult {
+  acquire(
+    modelId: DesignModelIdentifier,
+    reportId: DesignReportIdentifier,
+    method: VerificationMethod,
+  ): DesignAcquisitionResult {
     // 2. 取得結果の分類は一度だけ：不在は not-applicable、I/O の失敗は
     //    acquisition-failed（どちらも文書を書かない）。
     const acquired = this.#designModelRepository.findById(modelId);

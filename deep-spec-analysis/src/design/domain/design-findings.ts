@@ -21,11 +21,11 @@ export class DesignFindings {
   readonly #values: readonly DesignFinding[];
 
   private constructor(values: readonly DesignFinding[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignFinding[]): DesignFindings {
-    return new DesignFindings([...values]);
+    return new DesignFindings(values);
   }
 
   add(value: DesignFinding): DesignFindings {

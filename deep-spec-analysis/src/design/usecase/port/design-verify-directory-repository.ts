@@ -13,10 +13,10 @@
 // 集約が決めた文書だけを原子的に公開する。CQS（オーナー裁定 2026-09-01）：
 // コマンドは書くだけ——正常時は void。
 
+import type { DesignVerifyDirectory } from "@deep-spec/design-domain";
+import type { ArtifactPath } from "@deep-spec/kernel-domain";
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { ArtifactPath } from "@deep-spec/kernel-domain";
-import type { DesignVerifyDirectory } from "@deep-spec/design-domain";
 
 export interface DesignVerifyDirectoryRepository {
   findByDirectory(directory: ArtifactPath): Result<DesignVerifyDirectory, RepositoryError>;

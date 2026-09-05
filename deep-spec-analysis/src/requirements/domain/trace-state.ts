@@ -3,8 +3,7 @@
 // の知識で、評価器はこれを問うだけ。挿入順は文書のキー順（復号器のソート順、
 // scenario binding の正準順）で、`toDocument` がその順で逐語に降りる。
 
-import { KeyedIndex } from "@deep-spec/kernel-domain";
-import { AttributePath } from "@deep-spec/kernel-domain";
+import { type AttributePath, KeyedIndex } from "@deep-spec/kernel-domain";
 import { TraceValue } from "./trace-value.ts";
 
 export class TraceState {

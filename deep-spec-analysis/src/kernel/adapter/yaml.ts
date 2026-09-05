@@ -7,7 +7,7 @@
 // as "unsupported YAML feature" — out-of-subset input is an error, never an
 // interpretation guess (NFR: deterministic parsing).
 
-import { type Json } from "@deep-spec/kernel-infrastructure";
+import type { Json } from "@deep-spec/kernel-infrastructure";
 
 export type Yaml = Json;
 
@@ -17,13 +17,7 @@ interface YamlLine {
   n: number;
 }
 
-class YamlError extends Error {
-  // 既定コンストラクタのままだと bun のカバレッジ計測が「未実行の関数」として
-  // 数えてしまう（実際は throw 経路で毎回実行される）ため明示する。挙動は不変。
-  constructor(message: string) {
-    super(message);
-  }
-}
+class YamlError extends Error {}
 
 export function parseYamlSubset(src: string): { value?: Yaml; error?: string } {
   const raw = src.split("\n");

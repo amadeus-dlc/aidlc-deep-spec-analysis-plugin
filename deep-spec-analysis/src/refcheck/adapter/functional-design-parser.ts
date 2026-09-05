@@ -1,54 +1,63 @@
+import { FenceCount } from "@deep-spec/refcheck-domain";
+
 // functional-design 三点セットと XS 用 components.md の解析 — 形式知識を
 // ここに封じ、型付き outcome へ解く。抽出ロジックは旧センサーの逐語移動
-//（AttrDecl の生 Json フィールドのみ、検査が区別する意味論へ無損失に写像）。
+//（AttributeDeclaration の生 Json フィールドのみ、検査が区別する意味論へ無損失に写像）。
 
-import { RequirementIds } from "@deep-spec/kernel-domain";
-import { extractFences } from "@deep-spec/kernel-adapter";
-import { parseYamlSubset } from "@deep-spec/kernel-adapter";
-import { type Json, type Result, combineResults, traverseResult, err, ok, isObject } from "@deep-spec/kernel-infrastructure";
+import { extractFences, parseYamlSubset } from "@deep-spec/kernel-adapter";
+import { RequirementIdentifiers } from "@deep-spec/kernel-domain";
+import {
+  combineResults,
+  err,
+  isObject,
+  type Json,
+  ok,
+  type Result,
+  traverseResult,
+} from "@deep-spec/kernel-infrastructure";
 
 import {
   AllowedValue,
-  LineNumber,
+  AllowedValues,
   AppliesTo,
+  AttributeDeclaration,
+  AttributeDeclarations,
   AttributeDefault,
   AttributeName,
-  DeclaredRuleId,
+  AttributeNames,
   CardinalityNotation,
   ComponentName,
-  ElementPath,
-  EntityName,
-  MachineSpec,
-  NumericBound,
-  ReferenceTarget,
-  RuleCategory,
-  SourceId,
-  StateName,
-  TypeName,
-  AllowedValues,
-  AttrDecl,
-  AttrDecls,
-  AttributeNames,
   DeclaredEntities,
+  DeclaredRuleIdentifier,
+  DomainEntitiesOutcome,
   DomainEntitySketch,
   DomainEntitySketches,
-  EntityDecl,
-  EntityDecls,
-  RelDecl,
-  RelDecls,
-  RuleDecl,
-  RuleDecls,
-  ShapeErrors,
-  SiblingUnitIndex,
-  SourceIds,
-  StateMachineSketch,
-  StateMachineSketches,
-  StateNames,
-  DomainEntitiesOutcome,
+  ElementPath,
   EntitiesOutcome,
-  FunctionalSpecOutcome,
+  EntityDeclaration,
+  EntityDeclarations,
+  EntityName,
+  FunctionalSpecificationOutcome,
+  LineNumber,
+  MachineSpecification,
+  NumericBound,
+  ReferenceTarget,
+  RelationshipDeclaration,
+  RelationshipDeclarations,
+  RuleCategory,
+  RuleDeclaration,
+  RuleDeclarations,
   RulesOutcome,
   ShapeError,
+  ShapeErrors,
+  SiblingUnitIndex,
+  SourceIdentifier,
+  SourceIdentifiers,
+  StateMachineSketch,
+  StateMachineSketches,
+  StateName,
+  StateNames,
+  TypeName,
 } from "@deep-spec/refcheck-domain";
 
 function str(v: Json): string | null {
@@ -62,7 +71,11 @@ function pick(v: { [k: string]: Json }, keys: string[]): Json {
   return null;
 }
 
-function extractRel(raw: Json, element: string, implicitFrom: string | null): Result<RelDecl | null, string> {
+function extractRel(
+  raw: Json,
+  element: string,
+  implicitFrom: string | null,
+): Result<RelationshipDeclaration | null, string> {
   if (!isObject(raw)) return ok(null);
   const from = str(pick(raw, ["from", "source"])) ?? implicitFrom;
   const to = str(pick(raw, ["to", "target", "entity"]));
@@ -74,58 +87,81 @@ function extractRel(raw: Json, element: string, implicitFrom: string | null): Re
     cardinality: cardinality === null ? ok(null) : CardinalityNotation.parse(cardinality),
   });
   if (!fields.ok) return err(JSON.stringify(fields.error));
-  return ok(RelDecl.of({
-    element: ElementPath.of(element),
-    from: fields.value.from,
-    to: fields.value.to,
-    cardinality: fields.value.cardinality,
-    hasDirection,
-  }));
+  return ok(
+    RelationshipDeclaration.of({
+      element: ElementPath.of(element),
+      from: fields.value.from,
+      to: fields.value.to,
+      cardinality: fields.value.cardinality,
+      hasDirection,
+    }),
+  );
 }
 
 function extractEntities(value: Json): DeclaredEntities {
-  const collected: { entities: EntityDecl[]; rels: RelDecl[]; shapeErrors: ShapeError[] } = { entities: [], rels: [], shapeErrors: [] };
+  const collected: { entities: EntityDeclaration[]; rels: RelationshipDeclaration[]; shapeErrors: ShapeError[] } = {
+    entities: [],
+    rels: [],
+    shapeErrors: [],
+  };
   const model = collected;
   if (!isObject(value) || !Array.isArray(value.entities)) {
-    model.shapeErrors.push(ShapeError.of({ element: ElementPath.of("entities"), detail: "top-level `entities:` list is missing" }));
+    model.shapeErrors.push(
+      ShapeError.of({ element: ElementPath.of("entities"), detail: "top-level `entities:` list is missing" }),
+    );
     return DeclaredEntities.of({
-      entities: EntityDecls.of(collected.entities),
-      rels: RelDecls.of(collected.rels),
+      entities: EntityDeclarations.of(collected.entities),
+      rels: RelationshipDeclarations.of(collected.rels),
       shapeErrors: ShapeErrors.of(collected.shapeErrors),
     });
   }
   value.entities.forEach((raw, i) => {
     const element = `entities[${i}]`;
     if (!isObject(raw)) {
-      model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(element), detail: "entity entry is not a mapping" }));
+      model.shapeErrors.push(
+        ShapeError.of({ element: ElementPath.of(element), detail: "entity entry is not a mapping" }),
+      );
       return;
     }
     const name = str(raw.name);
     if (name === null) {
-      model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "entity has no string `name`" }));
+      model.shapeErrors.push(
+        ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "entity has no string `name`" }),
+      );
       return;
     }
     const entity = EntityName.parse(name);
     if (!entity.ok) {
-      model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: JSON.stringify(entity.error) }));
+      model.shapeErrors.push(
+        ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: JSON.stringify(entity.error) }),
+      );
       return;
     }
-    const attrs: AttrDecl[] = [];
+    const attrs: AttributeDeclaration[] = [];
     if (Array.isArray(raw.attributes)) {
       (raw.attributes as Json[]).forEach((a, j) => {
         const ael = `${element}.attributes[${j}]`;
         if (!isObject(a)) {
-          model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(ael), detail: "attribute entry is not a mapping" }));
+          model.shapeErrors.push(
+            ShapeError.of({ element: ElementPath.of(ael), detail: "attribute entry is not a mapping" }),
+          );
           return;
         }
         const aname = str(a.name);
         if (aname === null) {
-          model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${ael}.name`), detail: "attribute has no string `name`" }));
+          model.shapeErrors.push(
+            ShapeError.of({ element: ElementPath.of(`${ael}.name`), detail: "attribute has no string `name`" }),
+          );
           return;
         }
         const type = str(pick(a, ["type", "logical_type", "logical-type"]));
         if (type === null) {
-          model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${ael}.type`), detail: `attribute "${name}.${aname}" has no logical type` }));
+          model.shapeErrors.push(
+            ShapeError.of({
+              element: ElementPath.of(`${ael}.type`),
+              detail: `attribute "${name}.${aname}" has no logical type`,
+            }),
+          );
         }
         const allowedRaw = pick(a, ["allowed_values", "allowed-values", "allowed", "values"]);
         const allowed = Array.isArray(allowedRaw)
@@ -137,6 +173,7 @@ function extractEntities(value: Json): DeclaredEntities {
         const references = str(pick(a, ["references", "reference", "ref"]));
         const fields = combineResults({
           name: AttributeName.parse(aname),
+          def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.parse(defRaw) : ok(null),
           type: type === null ? ok(null) : TypeName.parse(type),
           references: references === null ? ok(null) : ReferenceTarget.parse(references),
           allowed: allowed === null ? ok(null) : traverseResult(allowed, AllowedValue.parse),
@@ -147,46 +184,54 @@ function extractEntities(value: Json): DeclaredEntities {
           model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(ael), detail: JSON.stringify(fields.error) }));
           return;
         }
-        attrs.push(AttrDecl.of({
-          name: fields.value.name,
-          element: ElementPath.of(ael),
-          type: fields.value.type,
-          uniqueIsTrue: pick(a, ["unique"]) === true,
-          references: fields.value.references,
-          allowed: fields.value.allowed === null ? null : AllowedValues.of(fields.value.allowed),
-          def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.of(defRaw) : null,
-          minDeclared: minRaw !== null,
-          maxDeclared: maxRaw !== null,
-          min: fields.value.min,
-          max: fields.value.max,
-        }));
+        attrs.push(
+          AttributeDeclaration.of({
+            name: fields.value.name,
+            element: ElementPath.of(ael),
+            type: fields.value.type,
+            uniqueIsTrue: pick(a, ["unique"]) === true,
+            references: fields.value.references,
+            allowed: fields.value.allowed === null ? null : AllowedValues.of(fields.value.allowed),
+            def: fields.value.def,
+            minDeclared: minRaw !== null,
+            maxDeclared: maxRaw !== null,
+            min: fields.value.min,
+            max: fields.value.max,
+          }),
+        );
       });
     }
-    const rels: RelDecl[] = [];
+    const rels: RelationshipDeclaration[] = [];
     if (Array.isArray(raw.relationships)) {
       (raw.relationships as Json[]).forEach((r, j) => {
         const rel = extractRel(r, `${element}.relationships[${j}]`, name);
-        if (!rel.ok) model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.relationships[${j}]`), detail: rel.error }));
+        if (!rel.ok)
+          model.shapeErrors.push(
+            ShapeError.of({ element: ElementPath.of(`${element}.relationships[${j}]`), detail: rel.error }),
+          );
         else if (rel.value !== null) rels.push(rel.value);
       });
     }
-    model.entities.push(EntityDecl.of({
-      name: entity.value,
-      element: ElementPath.of(element),
-      attrs: AttrDecls.of(attrs),
-      rels: RelDecls.of(rels),
-    }));
+    model.entities.push(
+      EntityDeclaration.of({
+        name: entity.value,
+        element: ElementPath.of(element),
+        attrs: AttributeDeclarations.of(attrs),
+        rels: RelationshipDeclarations.of(rels),
+      }),
+    );
   });
   if (Array.isArray(value.relationships)) {
     (value.relationships as Json[]).forEach((r, j) => {
       const rel = extractRel(r, `relationships[${j}]`, null);
-      if (!rel.ok) model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`relationships[${j}]`), detail: rel.error }));
+      if (!rel.ok)
+        model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`relationships[${j}]`), detail: rel.error }));
       else if (rel.value !== null) model.rels.push(rel.value);
     });
   }
   return DeclaredEntities.of({
-    entities: EntityDecls.of(collected.entities),
-    rels: RelDecls.of(collected.rels),
+    entities: EntityDeclarations.of(collected.entities),
+    rels: RelationshipDeclarations.of(collected.rels),
     shapeErrors: ShapeErrors.of(collected.shapeErrors),
   });
 }
@@ -194,7 +239,7 @@ function extractEntities(value: Json): DeclaredEntities {
 export function parseEntitiesDocument(md: string | null): EntitiesOutcome {
   if (md === null) return EntitiesOutcome.absent();
   const fences = extractFences(md, "yaml");
-  if (fences.length !== 1) return EntitiesOutcome.wrongFenceCount(fences.length);
+  if (fences.length !== 1) return EntitiesOutcome.wrongFenceCount(FenceCount.of(fences.length));
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
     return EntitiesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
@@ -205,17 +250,24 @@ export function parseEntitiesDocument(md: string | null): EntitiesOutcome {
 export function parseRulesDocument(md: string | null): RulesOutcome {
   if (md === null) return RulesOutcome.absent();
   const fences = extractFences(md, "yaml");
-  if (fences.length !== 1) return RulesOutcome.wrongFenceCount(fences.length);
+  if (fences.length !== 1) return RulesOutcome.wrongFenceCount(FenceCount.of(fences.length));
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
     return RulesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
   }
   const v = parsed.value ?? null;
   if (!isObject(v) || !Array.isArray(v.rules)) return RulesOutcome.noRulesList();
-  const ruleList: RuleDecl[] = (v.rules as Json[]).map((raw, i) => {
+  const ruleList: RuleDeclaration[] = (v.rules as Json[]).map((raw, i) => {
     const element = `rules[${i}]`;
     if (!isObject(raw)) {
-      return RuleDecl.of({ id: null, element: ElementPath.of(element), category: null, appliesTo: null, sourceIds: SourceIds.of([]), missing: ["<entry is not a mapping>"] });
+      return RuleDeclaration.of({
+        id: null,
+        element: ElementPath.of(element),
+        category: null,
+        appliesTo: null,
+        sourceIds: SourceIdentifiers.of([]),
+        missing: ["<entry is not a mapping>"],
+      });
     }
     const missing = ["id", "statement", "category"].filter((k) => !(k in raw));
     if (!("source" in raw) && !("sources" in raw)) missing.push("source");
@@ -226,30 +278,34 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
     const id = str(raw.id);
     const category = str(raw.category);
     const appliesTo = str(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
+    const parsedId = id === null ? ok(null) : DeclaredRuleIdentifier.parse(id);
+    if (!parsedId.ok) missing.push("id");
     const parsedCategory = category === null ? ok(null) : RuleCategory.parse(category);
     const parsedAppliesTo = appliesTo === null ? ok(null) : AppliesTo.parse(appliesTo);
     if (!parsedCategory.ok) missing.push("category");
     if (!parsedAppliesTo.ok) missing.push("applies_to");
-    return RuleDecl.of({
-      id: id === null ? null : DeclaredRuleId.of(id),
+    return RuleDeclaration.of({
+      id: parsedId.ok ? parsedId.value : null,
       element: ElementPath.of(element),
       category: parsedCategory.ok ? parsedCategory.value : null,
       appliesTo: parsedAppliesTo.ok ? parsedAppliesTo.value : null,
-      sourceIds: SourceIds.of([...RequirementIds.extractFrom(sourceText)].map((v) => SourceId.of(v.asString()))),
+      sourceIds: SourceIdentifiers.of(
+        [...RequirementIdentifiers.extractFrom(sourceText)].map((v) => SourceIdentifier.of(v.asString())),
+      ),
       missing,
     });
   });
-  return RulesOutcome.extracted(RuleDecls.of(ruleList));
+  return RulesOutcome.extracted(RuleDeclarations.of(ruleList));
 }
 
-export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecOutcome {
-  if (md === null) return FunctionalSpecOutcome.absent();
+export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecificationOutcome {
+  if (md === null) return FunctionalSpecificationOutcome.absent();
   const machines: StateMachineSketch[] = [];
   const lines = md.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const h = (lines[i] ?? "").match(/^#{2,4}\s+State Machine:\s*(.+?)\s*$/i);
     if (!h) continue;
-    const spec = MachineSpec.parse((h[1] ?? "").trim());
+    const spec = MachineSpecification.parse((h[1] ?? "").trim());
     if (!spec.ok) continue; // 名前のない見出しは状態機械の宣言ではない。
     // Find the next mermaid fence before the next heading of same/higher level.
     for (let j = i + 1; j < lines.length; j++) {
@@ -266,7 +322,8 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecOu
       if (!/stateDiagram/i.test(text)) break;
       let unsupported: string | null = null;
       if (/\{/.test(text)) unsupported = "composite states are outside the supported stateDiagram subset";
-      if (/<<choice>>|<<fork>>|<<join>>/.test(text)) unsupported = "choice/fork/join nodes are outside the supported stateDiagram subset";
+      if (/<<choice>>|<<fork>>|<<join>>/.test(text))
+        unsupported = "choice/fork/join nodes are outside the supported stateDiagram subset";
       const states = new Set<string>();
       for (const line of body) {
         const t = (line ?? "").trim();
@@ -277,16 +334,18 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecOu
           }
         }
       }
-      machines.push(StateMachineSketch.of({
-        spec: spec.value,
-        states: StateNames.of([...states].sort().map((v) => StateName.of(v))),
-        fenceLine: LineNumber.of(j + 1),
-        unsupported,
-      }));
+      machines.push(
+        StateMachineSketch.of({
+          spec: spec.value,
+          states: StateNames.of([...states].sort().map((v) => StateName.of(v))),
+          fenceLine: LineNumber.of(j + 1),
+          unsupported,
+        }),
+      );
       break;
     }
   }
-  return FunctionalSpecOutcome.present(StateMachineSketches.of(machines));
+  return FunctionalSpecificationOutcome.present(StateMachineSketches.of(machines));
 }
 
 export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOutcome {
@@ -305,13 +364,19 @@ export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOu
         const attributes = Array.isArray(e.attributes)
           ? (e.attributes as Json[]).filter((a): a is string => typeof a === "string")
           : [];
-        const fields = combineResults({ name: EntityName.parse(e.name), component: ComponentName.parse(raw.name), attributes: traverseResult(attributes, AttributeName.parse) });
+        const fields = combineResults({
+          name: EntityName.parse(e.name),
+          component: ComponentName.parse(raw.name),
+          attributes: traverseResult(attributes, AttributeName.parse),
+        });
         if (!fields.ok) return DomainEntitiesOutcome.unusable(JSON.stringify(fields.error));
-        out.push(DomainEntitySketch.of({
-          name: fields.value.name,
-          component: fields.value.component,
-          attributes: AttributeNames.of(fields.value.attributes),
-        }));
+        out.push(
+          DomainEntitySketch.of({
+            name: fields.value.name,
+            component: fields.value.component,
+            attributes: AttributeNames.of(fields.value.attributes),
+          }),
+        );
       }
     }
   }

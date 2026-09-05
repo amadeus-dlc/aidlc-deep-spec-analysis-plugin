@@ -21,16 +21,16 @@
 // stdout; always exit 0 for a real verdict.
 //
 // 合成ルート：フラグ解釈・スキーマパスの解決・実装の結線・verdict 行の描画
-// だけを持つ。検査そのものは ValidateDesignIrUseCase（design/usecase）と
+// だけを持つ。検査そのものは ValidateDesignIntermediateRepresentationUseCase（design/usecase）と
 // well-formedness ドメイン（design/domain）にある。
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation } from "@deep-spec/design-adapter";
+import { DesignModelIdentifier } from "@deep-spec/design-domain";
+import { ValidateDesignIntermediateRepresentationUseCase } from "@deep-spec/design-usecase";
 import { parseFlags } from "@deep-spec/kernel-adapter";
 import { ArtifactPath } from "@deep-spec/kernel-domain";
-import { DesignIrValidationMaterialsRepositoryImpl } from "@deep-spec/design-adapter";
-import { DesignModelId } from "@deep-spec/design-domain";
-import { ValidateDesignIrUseCase } from "@deep-spec/design-usecase";
 
 const MAX_REPORTED_ERRORS = 25;
 
@@ -43,9 +43,11 @@ function main(): void {
   }
 
   const schemaPath = join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-design-ir-schema.json");
-  const useCase = new ValidateDesignIrUseCase(new DesignIrValidationMaterialsRepositoryImpl({ schemaPath }));
+  const useCase = new ValidateDesignIntermediateRepresentationUseCase(
+    new DesignIntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath }),
+  );
 
-  const outcome = useCase.execute(DesignModelId.of(target.value));
+  const outcome = useCase.execute(DesignModelIdentifier.of(target.value));
   if (outcome.kind === "not-applicable") {
     process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, errors: [], note: "not-applicable" })}\n`);
     process.exit(0);

@@ -1,9 +1,8 @@
+import type { ArtifactPath, UnitName } from "@deep-spec/kernel-domain";
 import type { DomainEntitySketches } from "./domain-entity-sketches.ts";
-import type { ArtifactPath } from "@deep-spec/kernel-domain";
 import { XS_1, XS_2, XS_3 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
-import type { UnitName } from "@deep-spec/kernel-domain";
 
 // domain-design の components.md から読む実体スケッチ——文書が無い（absent）、
 // yaml が使えない（unusable：理由つき）、抽出できた（extracted）。XS 検査は
@@ -13,7 +12,11 @@ export class DomainEntitiesOutcome {
   readonly #error: string | null;
   readonly #entities: DomainEntitySketches | null;
 
-  private constructor(kind: "absent" | "unusable" | "extracted", error: string | null, entities: DomainEntitySketches | null) {
+  private constructor(
+    kind: "absent" | "unusable" | "extracted",
+    error: string | null,
+    entities: DomainEntitySketches | null,
+  ) {
     this.#kind = kind;
     this.#error = error;
     this.#entities = entities;
@@ -36,16 +39,24 @@ export class DomainEntitiesOutcome {
     return this.#kind === "extracted";
   }
 
-  match<T>(handlers: { absent: () => T; unusable: (error: string) => T; extracted: (entities: DomainEntitySketches) => T }): T {
+  match<T>(handlers: {
+    absent: () => T;
+    unusable: (error: string) => T;
+    extracted: (entities: DomainEntitySketches) => T;
+  }): T {
     if (this.#kind === "absent") return handlers.absent();
     if (this.#kind === "unusable" || this.#entities === null) return handlers.unusable(this.#error ?? "");
     return handlers.extracted(this.#entities);
   }
 
-
   // XS の門（種別規律の裁定 13）: components.md が無い／使えなければ XS-1..3 を
   // skip。抽出できれば実体素描が XS-1..3 を書く。文言は golden 凍結。
-  check(report: ReferenceCheckReport, componentsArtifact: ArtifactPath, siblingUnits: SiblingUnitIndex, unit: UnitName | undefined): void {
+  check(
+    report: ReferenceCheckReport,
+    componentsArtifact: ArtifactPath,
+    siblingUnits: SiblingUnitIndex,
+    unit: UnitName | undefined,
+  ): void {
     this.match<void>({
       absent: () => {
         for (const f of [XS_1, XS_2, XS_3]) {

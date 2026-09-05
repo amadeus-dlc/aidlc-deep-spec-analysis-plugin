@@ -11,9 +11,9 @@
 // 済みの report をそのまま返して各 interactor が自分の outcome を組む——
 // stdout とファイルが食い違わない唯一の作り方は変わらない。
 
+import type { FindingsSchema } from "@deep-spec/kernel-domain";
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { FindingsSchema } from "@deep-spec/kernel-domain";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import type { RequirementsModel, VerificationReport } from "@deep-spec/requirements-domain";
 import type { VerificationDirectoryRepository } from "./port/verification-directory-repository.ts";
@@ -54,7 +54,12 @@ export class VerificationReportFinalizer {
     const published = aggregate.candidate();
     if (published === null) {
       // finalizing が候補を置いた直後なので到達しない。黙って成功させない。
-      return err({ kind: "io-failed", operation: "write", path: report.id().fileName(), cause: "no finalization candidate" });
+      return err({
+        kind: "io-failed",
+        operation: "write",
+        path: report.id().fileName(),
+        cause: "no finalization candidate",
+      });
     }
     return ok(published);
   }

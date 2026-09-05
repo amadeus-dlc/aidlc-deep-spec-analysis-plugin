@@ -6,11 +6,11 @@ export class Skips {
   readonly #values: readonly Skipped[];
 
   private constructor(values: readonly Skipped[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly Skipped[]): Skips {
-    return new Skips([...values]);
+    return new Skips(values);
   }
 
   add(value: Skipped): Skips {
@@ -26,9 +26,7 @@ export class Skips {
   }
 
   sortedCanonically(): Skips {
-    return new Skips(
-      [...this.#values].sort((a, b) => a.compareTo(b)),
-    );
+    return new Skips([...this.#values].sort((a, b) => a.compareTo(b)));
   }
 
   toArray(): readonly Skipped[] {

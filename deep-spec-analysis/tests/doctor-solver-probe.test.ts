@@ -1,4 +1,4 @@
-// SolverProbeClientImpl の契約テスト（issue #128）。
+// SolverProbeClientImplementation の契約テスト（issue #128）。
 //
 // 静的検査（JDK ＋ 配布物）が通っても、8822 番の Apalache サーバが消えた作業
 // ディレクトリを掴んだ孤児なら verify は必ず落ちる。プローブの 3 分岐を固定
@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs
 import { createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SolverProbeClientImpl } from "@deep-spec/doctor-adapter";
+import { SolverProbeClientImplementation } from "@deep-spec/doctor-adapter";
 
 const TRUE_BIN = ["/usr/bin/true", "/bin/true"].find((path) => existsSync(path));
 const unsupported = process.platform === "win32" || TRUE_BIN === undefined;
@@ -58,8 +58,8 @@ describe.skipIf(unsupported)("the solver probe measures whether Apalache can act
     rmSync(work, { recursive: true, force: true });
   });
 
-  function client(quintBin: string, port: number): SolverProbeClientImpl {
-    return new SolverProbeClientImpl({
+  function client(quintBin: string, port: number): SolverProbeClientImplementation {
+    return new SolverProbeClientImplementation({
       projectDir: work,
       quintBin,
       apalacheDistDeclared: true,

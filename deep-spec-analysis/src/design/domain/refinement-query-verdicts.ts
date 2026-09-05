@@ -1,7 +1,7 @@
 // RefinementQueryVerdicts — クエリ id（QueryLabel）→ refinement 判定の索引。
 // 内側は KeyedIndex（裁定 3-1、2026-09-03）。
 
-import { KeyedIndex, type QueryLabel } from "@deep-spec/kernel-domain";
+import type { KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
 import type { RefinementQueryVerdict } from "./refinement-query-verdict.ts";
 
 export class RefinementQueryVerdicts {

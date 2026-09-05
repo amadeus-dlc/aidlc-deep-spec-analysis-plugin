@@ -4,11 +4,11 @@ export class ComponentShapeErrors {
   readonly #values: readonly ComponentShapeError[];
 
   private constructor(values: readonly ComponentShapeError[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly ComponentShapeError[]): ComponentShapeErrors {
-    return new ComponentShapeErrors([...values]);
+    return new ComponentShapeErrors(values);
   }
 
   add(value: ComponentShapeError): ComponentShapeErrors {

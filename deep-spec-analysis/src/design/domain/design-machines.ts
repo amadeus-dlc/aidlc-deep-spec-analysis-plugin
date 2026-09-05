@@ -5,11 +5,11 @@ export class DesignMachines {
   readonly #values: readonly DesignMachine[];
 
   private constructor(values: readonly DesignMachine[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignMachine[]): DesignMachines {
-    return new DesignMachines([...values]);
+    return new DesignMachines(values);
   }
 
   add(value: DesignMachine): DesignMachines {

@@ -1,4 +1,4 @@
-import type { SmtChildResult } from "./smt-child-result.ts";
+import type { SatisfiabilityModuloTheoriesChildResult } from "./satisfiability-modulo-theories-child-result.ts";
 // z3 実行の子プロセス本体。stdin の {queries, timeoutMs, budgetMs} を解いて
 // z3-solver（WASM）でクエリを流し、{results} または {unavailable} の JSON
 // 1 行を返す。プロトコルは凍結——design の refinement ソルバも同じ子（エントリの
@@ -11,11 +11,10 @@ import type { SmtChildResult } from "./smt-child-result.ts";
 // （node 優先・bun フォールバック）で行われる。
 
 import { readFileSync } from "node:fs";
-import { type SmtChildQuery } from "./smt-child-query.ts";
-
+import type { SatisfiabilityModuloTheoriesChildQuery } from "./satisfiability-modulo-theories-child-query.ts";
 
 export async function solveSmtChild(): Promise<string> {
-  let payload: { queries: SmtChildQuery[]; timeoutMs: number; budgetMs: number };
+  let payload: { queries: SatisfiabilityModuloTheoriesChildQuery[]; timeoutMs: number; budgetMs: number };
   try {
     payload = JSON.parse(readFileSync(0, "utf-8"));
   } catch (err) {
@@ -35,7 +34,7 @@ export async function solveSmtChild(): Promise<string> {
   // 型依存を持ってはならない。
   // biome-ignore lint/suspicious/noExplicitAny: optional runtime, no type dep
   const Z3 = api.Context("main") as any;
-  const results: SmtChildResult[] = [];
+  const results: SatisfiabilityModuloTheoriesChildResult[] = [];
   // 決定化（#28）: z3-solver の高水準 API は JS ラッパの GC 時に
   // FinalizationRegistry 経由で dec_ref を発行する。負荷で GC タイミングが
   // 変わると z3 内部の解放・ID 再利用パターンが揺れ、制約上自由な変数の

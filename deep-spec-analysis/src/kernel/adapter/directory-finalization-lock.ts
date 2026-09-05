@@ -29,8 +29,8 @@ import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node
 import { join } from "node:path";
 import type { ArtifactPath } from "@deep-spec/kernel-domain";
 import type { Clock } from "@deep-spec/kernel-usecase";
-import type { ProcessLiveness } from "./process-liveness.ts";
 import type { DirectoryFinalizationLockOutcome } from "./directory-finalization-lock-outcome.ts";
+import type { ProcessLiveness } from "./process-liveness.ts";
 
 const DESIGN_LOCK_BASENAME = ".deep-spec-design-finalization.lock";
 const METADATA_BASENAME = "owner.lockmeta";
@@ -201,7 +201,8 @@ export class DirectoryFinalizationLock {
     if (typeof raw !== "object" || raw === null) return null;
     const doc = raw as { [k: string]: unknown };
     if (typeof doc.state !== "string" || typeof doc.token !== "string") return null;
-    if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number") return null;
+    if (typeof doc.pid !== "number" || typeof doc.acquiredAtMs !== "number" || typeof doc.leaseExpiresAtMs !== "number")
+      return null;
     return {
       state: doc.state,
       token: doc.token,

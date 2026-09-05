@@ -1,4 +1,5 @@
-import { SkipReason, type Expression, ExpressionTree } from "@deep-spec/kernel-domain";
+import { type Expression, ExpressionTree, SkipReason } from "@deep-spec/kernel-domain";
+
 // IR → Quint モジュールのコンパイラ。Quint という形式の知識（変数名符号化・
 // 式構文・action/temporal/init の台本）はすべてここに封じ、判定解釈に必要な
 // 事実（QuintMachinePlan）だけをドメイン語彙で返す。
@@ -8,22 +9,20 @@ import { SkipReason, type Expression, ExpressionTree } from "@deep-spec/kernel-d
 // コンパイル時 skip を戻り値で返す（生成されるモジュール本文・skip 文言は
 // バイト同一）。
 
-import type { CompiledQuintMachine } from "./compiled-quint-machine.ts";
 import {
-  type AttributeDeclaration,
-  type RequirementsModel,
-  VerificationSkipped,
+  type ObligationIdentifier,
+  ObligationIdentifiers,
+  QuintMachineComponent,
   QuintMachineComponents,
   QuintMachinePlan,
-  ObligationIds,
-  type ObligationId, QuintMachineComponent, ScenarioId
+  type RequirementAttributeDeclaration,
+  type RequirementsModel,
+  type ScenarioIdentifier,
+  VerificationSkipped,
 } from "@deep-spec/requirements-domain";
+import type { CompiledQuintMachine } from "./compiled-quint-machine.ts";
 
-class CompileError extends Error {
-  constructor(message: string) {
-    super(message);
-  }
-}
+class CompileError extends Error {}
 
 export function qVar(path: string): string {
   return path.replace(/\./g, "_");
@@ -126,34 +125,38 @@ function decomposeEffect(effect: Expression): Map<string, Expression> {
   };
   flatten(effect);
   for (const term of terms) {
-    if (term.op !== "eq") throw new CompileError("effect must be a conjunction of primed assignments (eq(prime-ref, expr))");
+    if (term.op !== "eq")
+      throw new CompileError("effect must be a conjunction of primed assignments (eq(prime-ref, expr))");
     const [a, b] = term.args ?? [];
     const target = a?.op === "ref" && a.prime === true ? a : b?.op === "ref" && b.prime === true ? b : null;
     const rhs = target === a ? b : a;
     if (!target || !rhs || typeof target.path !== "string") {
       throw new CompileError("effect must be a conjunction of primed assignments (eq(prime-ref, expr))");
     }
-    if (ExpressionTree.of(rhs).usesPrime()) throw new CompileError("assignment right-hand side must not use primed references");
+    if (ExpressionTree.of(rhs).usesPrime())
+      throw new CompileError("assignment right-hand side must not use primed references");
     if (assignments.has(target.path)) throw new CompileError(`attribute "${target.path}" assigned twice in one effect`);
     assignments.set(target.path, rhs);
   }
   return assignments;
 }
 
-function domainOf(attr: AttributeDeclaration): string {
+function domainOf(attr: RequirementAttributeDeclaration): string {
   return attr.match({
     bool: () => "Set(true, false)",
-    enum: (values) => `Set(${(values?.toArray() ?? []).map((v) => JSON.stringify(v)).join(", ")})`,
+    enum: (values) => `Set(${(values?.toArray() ?? []).map((v) => JSON.stringify(v.asString())).join(", ")})`,
     int: (min, max) => {
       if (min === undefined || max === undefined) {
-        throw new CompileError(`int attribute "${attr.path().asString()}" lacks min/max — bounded domains are required by the quint backend`);
+        throw new CompileError(
+          `int attribute "${attr.path().asString()}" lacks min/max — bounded domains are required by the quint backend`,
+        );
       }
       return `(${min.asNumber()}).to(${max.asNumber()})`;
     },
   });
 }
 
-function quintType(attr: AttributeDeclaration): string {
+function quintType(attr: RequirementAttributeDeclaration): string {
   return attr.match({ bool: () => "bool", int: () => "int", enum: () => "str" });
 }
 
@@ -221,7 +224,9 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   for (const attr of attrs) {
     attr.match({
       int: (min, max) => {
-        boundExprs.push(`(${qVar(attr.path().asString())} >= ${min?.asNumber()} and ${qVar(attr.path().asString())} <= ${max?.asNumber()})`);
+        boundExprs.push(
+          `(${qVar(attr.path().asString())} >= ${min?.asNumber()} and ${qVar(attr.path().asString())} <= ${max?.asNumber()})`,
+        );
       },
       enum: () => {
         boundExprs.push(`${domainOf(attr)}.contains(${qVar(attr.path().asString())})`);
@@ -253,13 +258,19 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   lines.push("");
 
   // イベント → 明示フレームつき action（言及されない変数は不変）。
-  const eventIds: ObligationId[] = [];
+  const eventIds: ObligationIdentifier[] = [];
   const actionNames: string[] = [];
   for (const ob of model.obligations()) {
     if (!ob.isEvent()) continue;
     const event = ob.eventDefinition();
     if (event === null) {
-      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "event obligation lacks trigger/guard/effect" }));
+      compileSkips.push(
+        VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: "event obligation lacks trigger/guard/effect",
+        }),
+      );
       continue;
     }
     try {
@@ -270,14 +281,22 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       const parts: string[] = [guard];
       for (const attr of attrs) {
         const rhs = assignments.get(attr.path().asString());
-        parts.push(`${qVar(attr.path().asString())}' = ${rhs ? quintOf(rhs, stateName) : qVar(attr.path().asString())}`);
+        parts.push(
+          `${qVar(attr.path().asString())}' = ${rhs ? quintOf(rhs, stateName) : qVar(attr.path().asString())}`,
+        );
       }
       lines.push(`  action ${action} = all { ${parts.join(", ")} }`);
       actionNames.push(action);
       eventIds.push(ob.id());
     } catch (err) {
       if (!(err instanceof CompileError)) throw err;
-      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
+      compileSkips.push(
+        VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: err instanceof Error ? err.message : String(err),
+        }),
+      );
     }
   }
   const idleParts = attrs.map((a) => `${qVar(a.path().asString())}' = ${qVar(a.path().asString())}`);
@@ -298,28 +317,33 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       temporalNames.set(ob.id().asString(), qId("temp", ob.id().asString()));
     } catch (err) {
       if (!(err instanceof CompileError)) throw err;
-      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
+      compileSkips.push(
+        VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: err instanceof Error ? err.message : String(err),
+        }),
+      );
     }
   }
   lines.push("");
 
   // シナリオ init：全属性束縛・イベントなしのシナリオのみ。
   const scenarioInitActions = new Map<string, string>();
-  const scenariosWithInit: ScenarioId[] = [];
+  const scenariosWithInit: ScenarioIdentifier[] = [];
   for (const sc of model.scenarios()) {
     if (sc.hasEvent()) continue;
     const bindings = sc.bindings();
-    const boundPaths = new Set(Object.keys(bindings));
-    if (attrs.some((a) => !boundPaths.has(a.path().asString()))) continue;
+    if (!bindings.covers(attrs.map((a) => a.path()))) continue;
     const parts: string[] = [];
     let okAll = true;
     for (const attr of attrs) {
-      const value = bindings[attr.path().asString()];
-      if (value === undefined) {
+      const value = bindings.valueAt(attr.path());
+      if (value === null) {
         okAll = false;
         break;
       }
-      parts.push(`${qVar(attr.path().asString())}' = ${qLit(value)}`);
+      parts.push(`${qVar(attr.path().asString())}' = ${value.match({ bool: qLit, int: qLit, enum: qLit })}`);
     }
     if (!okAll) continue;
     const initAction = qId("scInit", sc.id().asString());
@@ -333,7 +357,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
     moduleText: `${lines.join("\n")}\n`,
     plan: QuintMachinePlan.of({
       invariantComponents: QuintMachineComponents.of(invariantComponents),
-      eventIds: ObligationIds.of(eventIds),
+      eventIds: ObligationIdentifiers.of(eventIds),
       scenariosWithInit,
     }),
     compileSkips,

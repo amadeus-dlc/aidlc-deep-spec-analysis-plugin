@@ -1,10 +1,10 @@
+import { type ArtifactPath, FindingKind } from "@deep-spec/kernel-domain";
 import type { DeclaredEntities } from "./declared-entities.ts";
-import type { LineNumber } from "./line-number.ts";
-import { FindingKind, type ArtifactPath } from "@deep-spec/kernel-domain";
-import { FD_E1, FD_E2, FD_E3, FD_E4, FD_E5, FD_E6 } from "./functional-check-families.ts";
-import type { ReferenceCheckReport } from "./reference-check-report.ts";
-import { WitnessRef } from "./witness-ref.ts";
 import { FenceCount } from "./fence-count.ts";
+import { FD_E1, FD_E2, FD_E3, FD_E4, FD_E5, FD_E6 } from "./functional-check-families.ts";
+import type { LineNumber } from "./line-number.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
+import { WitnessReference } from "./witness-reference.ts";
 
 // entities.md の yaml 真実源ブロックの解析結果——文書が無い、フェンス数が
 // 違う、解析できない、抽出できた。FD-E 検査は `match` で解釈へ命じる
@@ -16,28 +16,34 @@ export class EntitiesOutcome {
   readonly #error: string | null;
   readonly #model: DeclaredEntities | null;
 
-  private constructor(props: { kind: "absent" | "wrong-fence-count" | "unparseable" | "extracted"; found: number; line: LineNumber | null; error: string | null; model: DeclaredEntities | null }) {
+  private constructor(props: {
+    kind: "absent" | "wrong-fence-count" | "unparseable" | "extracted";
+    found: FenceCount;
+    line: LineNumber | null;
+    error: string | null;
+    model: DeclaredEntities | null;
+  }) {
     this.#kind = props.kind;
-    this.#found = FenceCount.of(props.found);
+    this.#found = props.found;
     this.#line = props.line;
     this.#error = props.error;
     this.#model = props.model;
   }
 
   static absent(): EntitiesOutcome {
-    return new EntitiesOutcome({ kind: "absent", found: 0, line: null, error: null, model: null });
+    return new EntitiesOutcome({ kind: "absent", found: FenceCount.of(0), line: null, error: null, model: null });
   }
 
-  static wrongFenceCount(found: number): EntitiesOutcome {
+  static wrongFenceCount(found: FenceCount): EntitiesOutcome {
     return new EntitiesOutcome({ kind: "wrong-fence-count", found, line: null, error: null, model: null });
   }
 
   static unparseable(line: LineNumber, error: string): EntitiesOutcome {
-    return new EntitiesOutcome({ kind: "unparseable", found: 0, line, error, model: null });
+    return new EntitiesOutcome({ kind: "unparseable", found: FenceCount.of(0), line, error, model: null });
   }
 
   static extracted(model: DeclaredEntities): EntitiesOutcome {
-    return new EntitiesOutcome({ kind: "extracted", found: 0, line: null, error: null, model });
+    return new EntitiesOutcome({ kind: "extracted", found: FenceCount.of(0), line: null, error: null, model });
   }
 
   match<T>(handlers: {
@@ -53,7 +59,6 @@ export class EntitiesOutcome {
     return handlers.extracted(this.#model);
   }
 
-
   // FD-E1 の門（種別規律の裁定 13）: 文書が無ければ FD-E を skip、fence の形が
   // 崩れていれば finding と blocked スキップ。抽出できれば宣言集合が FD-E1..E6
   // を書き、後続（FD-R4／FD-S）のために宣言集合を返す。文言は golden 凍結。
@@ -67,16 +72,26 @@ export class EntitiesOutcome {
         return null;
       },
       wrongFenceCount: (found) => {
-        report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessRef.at(art, "yaml fence")],
-          `entities.md must carry exactly one fenced yaml source-of-truth block (found ${found})`);
+        report.finding(
+          FD_E1,
+          FindingKind.structureInvalid(),
+          [FD_E1.asCheckTarget()],
+          [WitnessReference.at(art, "yaml fence")],
+          `entities.md must carry exactly one fenced yaml source-of-truth block (found ${found})`,
+        );
         for (const f of [FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
           report.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
         }
         return null;
       },
       unparseable: (line, error) => {
-        report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessRef.at(art, `yaml fence (line ${line.asNumber()})`)],
-          `yaml block does not parse in the supported subset: ${error}`);
+        report.finding(
+          FD_E1,
+          FindingKind.structureInvalid(),
+          [FD_E1.asCheckTarget()],
+          [WitnessReference.at(art, `yaml fence (line ${line.asNumber()})`)],
+          `yaml block does not parse in the supported subset: ${error}`,
+        );
         for (const f of [FD_E2, FD_E3, FD_E4, FD_E5, FD_E6]) {
           report.skip(f, "unrecognized-format", "blocked by FD-E1: the entities yaml block is unusable");
         }

@@ -3,24 +3,114 @@
 import { dirname as dirname3, join as join6 } from "path";
 import { fileURLToPath } from "url";
 
-// src/kernel/adapter/sensor-flags.ts
-function parseFlags(argv) {
-  let stage = "";
-  let outputPath = "";
-  let reportOnly = false;
-  for (let i = 0;i < argv.length; i++) {
-    if (argv[i] === "--stage")
-      stage = argv[i + 1] ?? "";
-    if (argv[i] === "--output-path")
-      outputPath = argv[i + 1] ?? "";
-    if (argv[i] === "--report-only")
-      reportOnly = true;
+// src/kernel/adapter/atomic-write.ts
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
+import { basename, dirname, join } from "path";
+var sequence = 0;
+function writeFileAtomically(path, data) {
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true });
+  sequence += 1;
+  const tmp = join(dir, `.${basename(path)}.tmp-${Date.now().toString(36)}-${sequence.toString(36)}`);
+  try {
+    writeFileSync(tmp, data);
+    renameSync(tmp, path);
+  } catch (e) {
+    try {
+      rmSync(tmp, { force: true });
+    } catch {}
+    throw e;
   }
-  return { stage, outputPath, reportOnly };
 }
-// src/kernel/adapter/contract-schema.ts
-import { readFileSync } from "fs";
+// src/kernel/infrastructure/illegal-argument-exception.ts
+class IllegalArgumentException extends Error {
+  problem;
+  constructor(problem) {
+    super(`Illegal argument: ${problem.kind}`);
+    this.name = "IllegalArgumentException";
+    this.problem = Object.freeze({ ...problem });
+  }
+}
 
+// src/kernel/infrastructure/bounded-value-snapshot.ts
+function boundedValueSnapshot(value, limits) {
+  let nodes = 0;
+  let total = 0;
+  const chargeText = (text, kind) => {
+    if (text.length > limits.string)
+      throw new IllegalArgumentException({ kind, raw: text.length });
+    total += text.length;
+    if (total > limits.total)
+      throw new IllegalArgumentException({ kind: "value-text-too-large" });
+  };
+  const copy = (current, depth) => {
+    if (++nodes > limits.nodes || depth > limits.depth)
+      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+    if (typeof current === "string") {
+      chargeText(current, "value-string-too-long");
+      return current;
+    }
+    if (current === null || typeof current !== "object")
+      return current;
+    if (Array.isArray(current)) {
+      const count = current.length;
+      if (count > limits.nodes - nodes)
+        throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+      const values = [];
+      for (let index = 0;index < count; index++)
+        values.push(copy(current[index], depth + 1));
+      return values;
+    }
+    const record = current;
+    const entries = [];
+    for (const key in record) {
+      if (!Object.hasOwn(record, key))
+        continue;
+      chargeText(key, "value-key-too-long");
+      entries.push([key, copy(record[key], depth + 1)]);
+    }
+    return Object.fromEntries(entries);
+  };
+  return copy(value, 0);
+}
+// src/kernel/infrastructure/canonical-json.ts
+function canonicalStringify(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalStringify).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    const record = value;
+    const keys = Object.keys(record).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(record[k] ?? null)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+// src/kernel/infrastructure/canonical-order.ts
+function numSegments(id) {
+  return (id.match(/[0-9]+/g) ?? []).map((s) => Number.parseInt(s, 10));
+}
+function compareCanonically(a, b) {
+  const pa = a.replace(/[0-9.]/g, "");
+  const pb = b.replace(/[0-9.]/g, "");
+  if (pa !== pb)
+    return pa < pb ? -1 : 1;
+  const na = numSegments(a);
+  const nb = numSegments(b);
+  for (let i = 0;i < Math.max(na.length, nb.length); i++) {
+    const da = na[i] ?? -1;
+    const db = nb[i] ?? -1;
+    if (da !== db)
+      return da - db;
+  }
+  return 0;
+}
+function sortedUniqueCanonically(values) {
+  return [...new Set(values)].sort(compareCanonically);
+}
+// src/kernel/infrastructure/json.ts
+function isObject(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
 // src/kernel/infrastructure/result.ts
 function ok(value) {
   return { ok: true, value };
@@ -28,9 +118,45 @@ function ok(value) {
 function err(error) {
   return { ok: false, error };
 }
-// src/kernel/infrastructure/json.ts
-function isObject(v) {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
+
+// src/kernel/infrastructure/parse-construction.ts
+function parseConstruction(construct) {
+  try {
+    return ok(construct());
+  } catch (error) {
+    if (error instanceof IllegalArgumentException) {
+      const failure = Object.freeze({
+        kind: error.problem.kind,
+        ...error.problem.raw === undefined ? {} : { raw: error.problem.raw }
+      });
+      return err(failure);
+    }
+    throw error;
+  }
+}
+// src/kernel/infrastructure/result-composition.ts
+function flatMapResult(result, next) {
+  return result.ok ? next(result.value) : result;
+}
+function combineResults(fields) {
+  const values = {};
+  for (const key in fields) {
+    const field = fields[key];
+    if (!field.ok)
+      return err(field.error);
+    values[key] = field.value;
+  }
+  return ok(values);
+}
+function traverseResult(values, parse) {
+  const parsed = [];
+  for (const value of values) {
+    const result = parse(value);
+    if (!result.ok)
+      return err(result.error);
+    parsed.push(result.value);
+  }
+  return ok(parsed);
 }
 // src/kernel/infrastructure/schema.ts
 function typeMatches(t, v) {
@@ -149,159 +275,1238 @@ function validateSchema(root, schema, value, path, errors) {
   }
   return errors.length === before;
 }
-// src/kernel/infrastructure/illegal-argument-exception.ts
-class IllegalArgumentException extends Error {
-  problem;
-  constructor(problem) {
-    super(`Illegal argument: ${problem.kind}`);
-    this.name = "IllegalArgumentException";
-    this.problem = Object.freeze({ ...problem });
+// src/kernel/domain/artifact-path.ts
+class ArtifactPath {
+  #value;
+  constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "artifact-path-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-path" });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ArtifactPath(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new ArtifactPath(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
   }
 }
-// src/kernel/infrastructure/parse-construction.ts
-function parseConstruction(construct) {
-  try {
-    return ok(construct());
-  } catch (error) {
-    if (error instanceof IllegalArgumentException)
-      return err(error.problem);
-    throw error;
+// src/kernel/domain/attribute-bound.ts
+class AttributeBound {
+  #value;
+  constructor(raw) {
+    if (!Number.isInteger(raw))
+      throw new IllegalArgumentException({ kind: "non-integer-bound", raw });
+    if (!Number.isSafeInteger(raw))
+      throw new IllegalArgumentException({ kind: "unsafe-bound", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new AttributeBound(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new AttributeBound(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asNumber() {
+    return this.#value;
+  }
+  exceeds(other) {
+    return this.#value > other.#value;
   }
 }
-// src/kernel/infrastructure/canonical-order.ts
-function numSegments(id) {
-  return (id.match(/[0-9]+/g) ?? []).map((s) => Number.parseInt(s, 10));
-}
-function compareCanonically(a, b) {
-  const pa = a.replace(/[0-9.]/g, "");
-  const pb = b.replace(/[0-9.]/g, "");
-  if (pa !== pb)
-    return pa < pb ? -1 : 1;
-  const na = numSegments(a);
-  const nb = numSegments(b);
-  for (let i = 0;i < Math.max(na.length, nb.length); i++) {
-    const da = na[i] ?? -1;
-    const db = nb[i] ?? -1;
-    if (da !== db)
-      return da - db;
+// src/kernel/domain/attribute-kind.ts
+class AttributeKind {
+  #value;
+  constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "attribute-kind-too-long", raw: value.length });
+    this.#value = value;
   }
-  return 0;
-}
-function sortedUniqueCanonically(values) {
-  return [...new Set(values)].sort(compareCanonically);
-}
-// src/kernel/infrastructure/result-composition.ts
-function combineResults(fields) {
-  const values = {};
-  for (const key in fields) {
-    const field = fields[key];
-    if (!field.ok)
-      return err(field.error);
-    values[key] = field.value;
+  static parse(value) {
+    return parseConstruction(() => new AttributeKind(value));
   }
-  return ok(values);
-}
-function traverseResult(values, parse) {
-  const parsed = [];
-  for (const value of values) {
-    const result = parse(value);
-    if (!result.ok)
-      return err(result.error);
-    parsed.push(result.value);
+  static of(raw) {
+    return new AttributeKind(raw);
   }
-  return ok(parsed);
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  isBool() {
+    return this.#value === "bool";
+  }
+  isInt() {
+    return this.#value === "int";
+  }
+  isEnum() {
+    return this.#value === "enum";
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/attribute-path.ts
+class AttributePath {
+  #value;
+  constructor(raw) {
+    if (raw.length > 257)
+      throw new IllegalArgumentException({ kind: "attribute-path-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-attribute-path", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new AttributePath(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new AttributePath(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/backend-name.ts
+class BackendName {
+  #value;
+  constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "backend-name-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-backend-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new BackendName(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new BackendName(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/binding-declaration.ts
+class BindingDeclaration {
+  #path;
+  #value;
+  constructor(path, value) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path, value) {
+    return new BindingDeclaration(path, value);
+  }
+  path() {
+    return this.#path;
+  }
+  value() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/binding-value.ts
+class BindingValue {
+  #value;
+  constructor(value) {
+    if (typeof value === "string" && value.length > 4096)
+      throw new IllegalArgumentException({ kind: "binding-literal-too-long", raw: value.length });
+    if (typeof value === "number" && !Number.isSafeInteger(value)) {
+      throw new IllegalArgumentException({ kind: "invalid-binding-integer", raw: value });
+    }
+    this.#value = value;
+  }
+  static of(value) {
+    return new BindingValue(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new BindingValue(value));
+  }
+  static resolve(declaration) {
+    return declaration.match({
+      literal: (value) => {
+        const result = BindingValue.parse(value);
+        return result.ok ? result : err(JSON.stringify(result.error));
+      },
+      nonLiteral: () => err(`binding value ${declaration.describe()} is not a boolean, safe integer, or enum literal`)
+    });
+  }
+  toDocument() {
+    return this.#value;
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  match(cases) {
+    if (typeof this.#value === "boolean")
+      return cases.bool(this.#value);
+    if (typeof this.#value === "number")
+      return cases.int(this.#value);
+    return cases.enum(this.#value);
+  }
+  asExpression() {
+    return this.match({
+      bool: (value) => ({ op: "bool", value }),
+      int: (value) => ({ op: "int", value }),
+      enum: (value) => ({ op: "enum", value })
+    });
+  }
+}
+// src/kernel/domain/content-hash.ts
+import { createHash } from "crypto";
+
+class ContentHash {
+  #value;
+  constructor(raw) {
+    if (raw.length !== 64)
+      throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
+    if (/[^0-9a-f]/.test(raw))
+      throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ContentHash(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new ContentHash(raw));
+  }
+  static ofText(text) {
+    return new ContentHash(createHash("sha256").update(text, "utf-8").digest("hex"));
+  }
+  static ofBytes(bytes) {
+    return new ContentHash(createHash("sha256").update(bytes).digest("hex"));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/declaration.ts
+class Declaration {
+  #value;
+  constructor(value) {
+    const snapshot = boundedValueSnapshot(value, { string: 4096, total: 65536, nodes: 4096, depth: 32 });
+    const checkNumbers = (current) => {
+      if (typeof current === "number" && !Number.isFinite(current)) {
+        throw new IllegalArgumentException({ kind: "non-finite-declaration-number", raw: current });
+      }
+      if (Array.isArray(current)) {
+        for (const child of current)
+          checkNumbers(child);
+      } else if (current !== null && typeof current === "object") {
+        for (const child of Object.values(current))
+          checkNumbers(child);
+      }
+    };
+    checkNumbers(snapshot);
+    this.#value = snapshot;
+  }
+  static of(value) {
+    return new Declaration(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new Declaration(value));
+  }
+  match(cases) {
+    if (typeof this.#value === "boolean" || typeof this.#value === "number" || typeof this.#value === "string")
+      return cases.literal(this.#value);
+    return cases.nonLiteral();
+  }
+  equals(other) {
+    return canonicalStringify(this.#value) === canonicalStringify(other.#value);
+  }
+  describe() {
+    return JSON.stringify(this.#value);
+  }
+}
+// src/kernel/domain/declared-binding-value.ts
+class DeclaredBindingValue {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static of(value) {
+    return new DeclaredBindingValue(value);
+  }
+  fits(kind, admitsEnum) {
+    return this.#value.match({
+      literal: (value) => kind.isBool() && typeof value === "boolean" || kind.isInt() && typeof value === "number" && Number.isSafeInteger(value) || kind.isEnum() && typeof value === "string" && admitsEnum(value),
+      nonLiteral: () => false
+    });
+  }
+  match(cases) {
+    return this.#value.match(cases);
+  }
+  describe() {
+    return this.#value.describe();
+  }
+}
+// src/kernel/domain/declared-bindings.ts
+class DeclaredBindings {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-binding-declarations", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new DeclaredBindings(values));
+  }
+  static of(values) {
+    return new DeclaredBindings(values);
+  }
+  add(value) {
+    return new DeclaredBindings([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/kernel/domain/declared-bound.ts
+class DeclaredBound {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static of(value) {
+    return new DeclaredBound(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredBound(value));
+  }
+  asNumber() {
+    return this.#value;
+  }
+  isSafeInteger() {
+    return AttributeBound.parse(this.#value).ok;
+  }
+  exceeds(other) {
+    return this.#value > other.#value;
+  }
+}
+// src/kernel/domain/declared-digest.ts
+class DeclaredDigest {
+  #value;
+  constructor(value) {
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "declared-digest-too-long", raw: value.length });
+    this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredDigest(value));
+  }
+  static of(value) {
+    return new DeclaredDigest(value);
+  }
+  asString() {
+    return this.#value;
+  }
+  matches(actual) {
+    return this.#value === actual.asString();
+  }
+}
+// src/kernel/domain/enumeration-member.ts
+class EnumerationMember {
+  #value;
+  constructor(value) {
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "enum-member-too-long", raw: value.length });
+    this.#value = value;
+  }
+  static of(value) {
+    return new EnumerationMember(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new EnumerationMember(value));
+  }
+  matchesLiteral(value) {
+    return this.#value === value;
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/enumeration-members.ts
+class EnumerationMembers {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new EnumerationMembers(values));
+  }
+  static of(values) {
+    return new EnumerationMembers(values);
+  }
+  add(value) {
+    return new EnumerationMembers([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  includes(value) {
+    return this.#values.some((member) => member.matchesLiteral(value));
+  }
+  sortedUniqueCanonically() {
+    const members = new Map(this.#values.map((member) => [member.asString(), member]));
+    return new EnumerationMembers([...members.values()].sort((a, b) => a.compareTo(b)));
+  }
+  indexOf(value) {
+    return this.#values.findIndex((member) => member.matchesLiteral(value));
+  }
+  valueAt(index) {
+    return this.#values[index];
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/kernel/domain/error-message.ts
+class ErrorMessage {
+  #value;
+  constructor(value) {
+    if (value.length > 65536)
+      throw new IllegalArgumentException({ kind: "error-message-too-long", raw: value.length });
+    if (value.length === 0)
+      throw new IllegalArgumentException({ kind: "empty-error-message" });
+    this.#value = value;
+  }
+  static of(value) {
+    return new ErrorMessage(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new ErrorMessage(value));
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/error-messages.ts
+class ErrorMessages {
+  #values;
+  constructor(values) {
+    if (values.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ErrorMessages(values));
+  }
+  static of(values) {
+    return new ErrorMessages(values);
+  }
+  add(value) {
+    return new ErrorMessages([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/kernel/domain/expression-tree.ts
+class ExpressionTree {
+  #root;
+  constructor(root) {
+    const snapshot = boundedValueSnapshot(root, { string: 4096, nodes: 1e5, depth: 258, total: 16777216 });
+    let nodes = 0;
+    const measure = (node, depth) => {
+      if (++nodes > 1e4 || depth > 128 || (node.args?.length ?? 0) > 1e4 - nodes) {
+        throw new IllegalArgumentException({ kind: "expression-too-large" });
+      }
+      if ((node.op?.length ?? 0) > 128 || (node.path?.length ?? 0) > 257 || typeof node.value === "string" && node.value.length > 4096) {
+        throw new IllegalArgumentException({ kind: "expression-token-too-long" });
+      }
+      for (const child of node.args ?? [])
+        measure(child, depth + 1);
+    };
+    measure(snapshot, 0);
+    const visited = new WeakSet;
+    const freeze = (value) => {
+      if (visited.has(value))
+        return;
+      visited.add(value);
+      for (const child of Object.values(value)) {
+        if (child !== null && typeof child === "object")
+          freeze(child);
+      }
+      Object.freeze(value);
+    };
+    freeze(snapshot);
+    this.#root = snapshot;
+  }
+  static of(root) {
+    return new ExpressionTree(root);
+  }
+  static parse(root) {
+    return parseConstruction(() => new ExpressionTree(root));
+  }
+  asExpression() {
+    return this.#root;
+  }
+  walk(visit) {
+    const go = (e) => {
+      visit(e);
+      for (const a of e.args ?? [])
+        go(a);
+    };
+    go(this.#root);
+  }
+  usesPrime() {
+    let found = false;
+    this.walk((node) => {
+      if (node.op === "ref" && node.prime === true)
+        found = true;
+    });
+    return found;
+  }
+  referencedPaths() {
+    const refs = new Set;
+    this.walk((node) => {
+      if (node.op === "ref" && typeof node.path === "string")
+        refs.add(node.path);
+    });
+    return [...refs].sort();
+  }
+  assignsPrimed(path) {
+    let assigned = false;
+    this.walk((node) => {
+      if (node.op === "ref" && node.prime === true && node.path === path)
+        assigned = true;
+    });
+    return assigned;
+  }
+  isCanonicallyEqual(other) {
+    return canonicalStringify(this.#root) === canonicalStringify(other.#root);
+  }
+}
+// src/kernel/domain/finding-kind.ts
+var KIND_RANK = {
+  conflict: 0,
+  "completeness-gap": 1,
+  "scenario-violation": 2,
+  unreachable: 3,
+  redundancy: 4,
+  "refinement-violation": 5,
+  "mapping-gap": 6,
+  "structure-invalid": 7,
+  "reference-broken": 8,
+  "consistency-mismatch": 9,
+  "cross-check-disagreement": 10
+};
+
+class FindingKind {
+  #value;
+  constructor(raw) {
+    if (raw.length > 24)
+      throw new IllegalArgumentException({ kind: "finding-kind-too-long", raw: raw.length });
+    if (!Object.hasOwn(KIND_RANK, raw))
+      throw new IllegalArgumentException({ kind: "unknown-finding-kind", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new FindingKind(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new FindingKind(raw));
+  }
+  static conflict() {
+    return FindingKind.of("conflict");
+  }
+  static completenessGap() {
+    return FindingKind.of("completeness-gap");
+  }
+  static scenarioViolation() {
+    return FindingKind.of("scenario-violation");
+  }
+  static unreachable() {
+    return FindingKind.of("unreachable");
+  }
+  static redundancy() {
+    return FindingKind.of("redundancy");
+  }
+  static refinementViolation() {
+    return FindingKind.of("refinement-violation");
+  }
+  static mappingGap() {
+    return FindingKind.of("mapping-gap");
+  }
+  static structureInvalid() {
+    return FindingKind.of("structure-invalid");
+  }
+  static referenceBroken() {
+    return FindingKind.of("reference-broken");
+  }
+  static consistencyMismatch() {
+    return FindingKind.of("consistency-mismatch");
+  }
+  static crossCheckDisagreement() {
+    return FindingKind.of("cross-check-disagreement");
+  }
+  static canonicalOrder() {
+    return Object.keys(KIND_RANK);
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return KIND_RANK[this.#value] - KIND_RANK[other.#value];
+  }
+  isConflict() {
+    return this.#value === "conflict";
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/findings-schema.ts
+var CONTRACT_BASENAME = "deep-spec-findings-schema.json";
+
+class FindingsSchema {
+  #schema;
+  #reason;
+  constructor(schema, reason) {
+    this.#schema = schema === null ? null : boundedValueSnapshot(schema, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
+    this.#reason = reason;
+  }
+  static of(schema) {
+    return new FindingsSchema(schema, null);
+  }
+  static parse(schema) {
+    return parseConstruction(() => new FindingsSchema(schema, null));
+  }
+  static unreadable(cause) {
+    return new FindingsSchema(null, cause);
+  }
+  degradationReasonFor(document) {
+    const schema = this.#schema;
+    if (schema === null) {
+      return `findings schema unreadable: ${this.#reason ?? ""}`;
+    }
+    const errors = [];
+    validateSchema(schema, schema, document, "", errors);
+    const first = errors[0];
+    if (first === undefined)
+      return null;
+    return `self-validation against ${CONTRACT_BASENAME} failed: ${first}`;
+  }
+}
+// src/kernel/domain/functional-requirement-references.ts
+class FunctionalRequirementReferences {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new FunctionalRequirementReferences(values));
+  }
+  static of(values) {
+    return new FunctionalRequirementReferences(values);
+  }
+  add(value) {
+    return new FunctionalRequirementReferences([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+  sortedUnique() {
+    const unique = new Map(this.#values.map((value) => [value.asString(), value]));
+    return new FunctionalRequirementReferences([...unique.values()].sort((a, b) => a.compareTo(b)));
+  }
+  toArray() {
+    return this.#values;
+  }
+  toStrings() {
+    return this.#values.map((v) => v.asString());
+  }
+}
+// src/kernel/domain/intermediate-representation-version.ts
+class IntermediateRepresentationVersion {
+  #value;
+  constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "ir-version-too-long", raw: raw.length });
+    if (!/^\d+\.\d+\.\d+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "not-a-semver", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new IntermediateRepresentationVersion(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new IntermediateRepresentationVersion(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  majorVersion() {
+    return Number.parseInt(this.#value.split(".")[0] ?? "", 10);
+  }
+  supportsMajor(major) {
+    return this.majorVersion() === major;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/key-set.ts
+class KeySet {
+  #values;
+  constructor(values) {
+    this.#values = values;
+  }
+  static empty() {
+    return new KeySet(new Map);
+  }
+  static of(keys) {
+    const map = new Map;
+    for (const key of keys)
+      if (!map.has(key.asString()))
+        map.set(key.asString(), key);
+    return new KeySet(map);
+  }
+  with(key) {
+    if (this.#values.has(key.asString()))
+      return this;
+    const map = new Map(this.#values);
+    map.set(key.asString(), key);
+    return new KeySet(map);
+  }
+  has(key) {
+    return this.#values.has(key.asString());
+  }
+  size() {
+    return this.#values.size;
+  }
+  isEmpty() {
+    return this.#values.size === 0;
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values.values();
+  }
+  toArray() {
+    return [...this.#values.values()];
+  }
+}
+// src/kernel/domain/keyed-index.ts
+class KeyedIndex {
+  #entries;
+  constructor(entries) {
+    this.#entries = entries;
+  }
+  static empty() {
+    return new KeyedIndex(new Map);
+  }
+  static of(entries) {
+    const map = new Map;
+    for (const [key, value] of entries)
+      map.set(key.asString(), [key, value]);
+    return new KeyedIndex(map);
+  }
+  with(key, value) {
+    const map = new Map(this.#entries);
+    map.set(key.asString(), [key, value]);
+    return new KeyedIndex(map);
+  }
+  get(key) {
+    return this.#entries.get(key.asString())?.[1];
+  }
+  has(key) {
+    return this.#entries.has(key.asString());
+  }
+  size() {
+    return this.#entries.size;
+  }
+  isEmpty() {
+    return this.#entries.size === 0;
+  }
+  *keys() {
+    for (const [key] of this.#entries.values())
+      yield key;
+  }
+  *values() {
+    for (const [, value] of this.#entries.values())
+      yield value;
+  }
+  *[Symbol.iterator]() {
+    yield* this.#entries.values();
+  }
+}
+// src/kernel/domain/normalized-name.ts
+class NormalizedName {
+  #value;
+  constructor(value) {
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "normalized-name-too-long", raw: value.length });
+    this.#value = value.toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+  static of(raw) {
+    return new NormalizedName(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new NormalizedName(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/obligation-nature.ts
+class ObligationNature {
+  #value;
+  constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "obligation-nature-too-long", raw: value.length });
+    this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new ObligationNature(value));
+  }
+  static of(raw) {
+    return new ObligationNature(raw);
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+  isInvariant() {
+    return this.#value === "invariant";
+  }
+  isNumeric() {
+    return this.#value === "numeric";
+  }
+  isEvent() {
+    return this.#value === "event";
+  }
+  isStateTemporal() {
+    return this.#value === "state-temporal";
+  }
+}
+// src/kernel/domain/query-label.ts
+class QueryLabel {
+  #value;
+  constructor(value) {
+    if (value.length > 2048)
+      throw new IllegalArgumentException({ kind: "query-label-too-long", raw: value.length });
+    if (value === "")
+      throw new IllegalArgumentException({ kind: "empty-query-label", raw: value });
+    this.#value = value;
+  }
+  static of(raw) {
+    return new QueryLabel(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new QueryLabel(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/requirement-identifier.ts
+class RequirementIdentifier {
+  #value;
+  constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "requirement-id-too-long", raw: value.length });
+    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
+      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
+    this.#value = value;
+  }
+  static of(raw) {
+    return new RequirementIdentifier(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new RequirementIdentifier(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/requirement-identifiers.ts
+class RequirementIdentifiers {
+  #values;
+  constructor(values) {
+    this.#values = values;
+  }
+  static extractFrom(text) {
+    const ids = [];
+    for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
+      ids.push(RequirementIdentifier.of(m[0]));
+    }
+    return new RequirementIdentifiers(KeySet.of(ids));
+  }
+  static of(values) {
+    return new RequirementIdentifiers(KeySet.of(values));
+  }
+  add(value) {
+    return new RequirementIdentifiers(this.#values.with(value));
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  has(value) {
+    return this.#values.has(value);
+  }
+  toArray() {
+    return this.#values.toArray();
+  }
+  toStrings() {
+    return this.#values.toArray().map((v) => v.asString());
+  }
+}
+// src/kernel/domain/scenario-binding.ts
+class ScenarioBinding {
+  #path;
+  #value;
+  constructor(path, value) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path, value) {
+    return new ScenarioBinding(path, value);
+  }
+  path() {
+    return this.#path;
+  }
+  value() {
+    return this.#value;
+  }
+  isFor(path) {
+    return this.#path.equals(path);
+  }
+}
+// src/kernel/domain/scenario-bindings.ts
+class ScenarioBindings {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-scenario-bindings", raw: values.length });
+    const paths = new Set;
+    for (const binding of values) {
+      const path = binding.path().asString();
+      if (paths.has(path))
+        throw new IllegalArgumentException({ kind: "duplicate-scenario-binding", raw: path });
+      paths.add(path);
+    }
+    this.#values = Object.freeze([...values]);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ScenarioBindings(values));
+  }
+  static of(values) {
+    return new ScenarioBindings(values);
+  }
+  add(value) {
+    return new ScenarioBindings([...this.#values, value]);
+  }
+  has(path) {
+    return this.#values.some((binding) => binding.isFor(path));
+  }
+  valueAt(path) {
+    return this.#values.find((binding) => binding.isFor(path))?.value() ?? null;
+  }
+  covers(paths) {
+    return paths.every((path) => this.has(path));
+  }
+  entriesCanonically() {
+    return [...this.#values].sort((a, b) => a.path().asString() < b.path().asString() ? -1 : a.path().asString() > b.path().asString() ? 1 : 0);
+  }
+  toDocument() {
+    return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
+  }
+}
+// src/kernel/domain/skip-reason.ts
+var KNOWN_REASONS = new Set([
+  "unavailable",
+  "timeout",
+  "capability",
+  "compile-error",
+  "waived",
+  "absent-input",
+  "stale-input",
+  "ir-version-mismatch",
+  "unrecognized-format"
+]);
+
+class SkipReason {
+  #value;
+  constructor(raw) {
+    if (raw.length > 19)
+      throw new IllegalArgumentException({ kind: "skip-reason-too-long", raw: raw.length });
+    if (!KNOWN_REASONS.has(raw))
+      throw new IllegalArgumentException({ kind: "unknown-skip-reason", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new SkipReason(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new SkipReason(raw));
+  }
+  static unavailable() {
+    return SkipReason.of("unavailable");
+  }
+  static timeout() {
+    return SkipReason.of("timeout");
+  }
+  static capability() {
+    return SkipReason.of("capability");
+  }
+  static compileError() {
+    return SkipReason.of("compile-error");
+  }
+  static waived() {
+    return SkipReason.of("waived");
+  }
+  static absentInput() {
+    return SkipReason.of("absent-input");
+  }
+  static staleInput() {
+    return SkipReason.of("stale-input");
+  }
+  static irVersionMismatch() {
+    return SkipReason.of("ir-version-mismatch");
+  }
+  static unrecognizedFormat() {
+    return SkipReason.of("unrecognized-format");
+  }
+  asString() {
+    return this.#value;
+  }
+  compareTo(other) {
+    return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
+  }
+}
+// src/kernel/domain/target-identifier.ts
+var TARGET_ID_PATTERNS = [
+  /^(OB|SC)-[0-9]+$/,
+  /^BR[0-9]+\.[0-9]+$/,
+  /^(DOB|DSC|DBG|SM|TR)-[0-9]+$/,
+  /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
+];
+
+class TargetIdentifier {
+  #value;
+  constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
+    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
+      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TargetIdentifier(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new TargetIdentifier(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/target-identifiers.ts
+class TargetIdentifiers {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new TargetIdentifiers(values);
+  }
+  static safe(prefix, raw) {
+    const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
+    return `${prefix}:${token === "" ? "unknown" : token}`;
+  }
+  add(value) {
+    return new TargetIdentifiers([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  includes(value) {
+    return this.#values.some((v) => v.equals(value));
+  }
+  excluding(value) {
+    return new TargetIdentifiers(this.#values.filter((v) => !v.equals(value)));
+  }
+  sortedCanonically() {
+    return new TargetIdentifiers([...this.#values].sort((a, b) => a.compareTo(b)));
+  }
+  sortedUniqueCanonically() {
+    return TargetIdentifiers.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetIdentifier.of(raw)));
+  }
+  joined(separator) {
+    return this.toStrings().join(separator);
+  }
+  toArray() {
+    return this.#values;
+  }
+  toStrings() {
+    return this.#values.map((v) => v.asString());
+  }
+}
+// src/kernel/domain/trigger-name.ts
+class TriggerName {
+  #value;
+  constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "trigger-name-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-trigger-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TriggerName(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new TriggerName(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/unit-name.ts
+class UnitName {
+  #value;
+  constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "unit-name-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-unit-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new UnitName(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new UnitName(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/verification-method.ts
+var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
+
+class VerificationMethod {
+  #value;
+  constructor(raw) {
+    if (raw.length > 10)
+      throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
+    if (!KNOWN_METHODS.has(raw))
+      throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new VerificationMethod(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new VerificationMethod(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/adapter/bindings-decoder.ts
+function decodeDeclaredBindings(raw) {
+  const values = [];
+  for (const [key, value] of Object.entries(raw)) {
+    const path = AttributePath.parse(key);
+    if (!path.ok)
+      return err(JSON.stringify(path.error));
+    const declared = Declaration.parse(value);
+    if (!declared.ok)
+      return err(JSON.stringify(declared.error));
+    values.push(BindingDeclaration.of(path.value, DeclaredBindingValue.of(declared.value)));
+  }
+  const bindings = DeclaredBindings.parse(values);
+  return bindings.ok ? bindings : err(JSON.stringify(bindings.error));
 }
 // src/kernel/adapter/contract-schema.ts
+import { readFileSync } from "fs";
 function readContractSchema(path) {
   try {
-    return ok(JSON.parse(readFileSync(path, "utf-8")));
+    const document = JSON.parse(readFileSync(path, "utf-8"));
+    if (!isObject(document))
+      return err({ cause: "contract schema must be a JSON object" });
+    return ok(document);
   } catch (e) {
     return err({ cause: e instanceof Error ? e.message : String(e) });
-  }
-}
-// src/kernel/adapter/findings-document.ts
-var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
-var optionalString = (value) => value === undefined || typeof value === "string";
-function decodeFindingsDocument(raw) {
-  if (!isObject(raw))
-    return err("findings document must be an object");
-  for (const field of ["backend", "irVersion", "irHash", "method"]) {
-    if (typeof raw[field] !== "string")
-      return err(`${field} must be a string`);
-  }
-  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
-    return err("findings must be an array of complete finding records");
-  }
-  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
-    return err("skipped must be an array of complete skip records");
-  }
-  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
-    return err("unavailable must carry a reason");
-  }
-  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
-    return err("inputs must be an array of input anchors");
-  }
-  if (raw.checked !== undefined && !strings(raw.checked))
-    return err("checked must be an array of strings");
-  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
-    return err("crossChecked must be an array of backend comparisons");
-  }
-  return ok(raw);
-}
-// src/kernel/adapter/fence.ts
-function extractFences(md, lang) {
-  const fences = [];
-  const lines = md.split(`
-`);
-  let open = false;
-  let info = "";
-  let openLine = 0;
-  let buf = [];
-  for (let i = 0;i < lines.length; i++) {
-    const m = (lines[i] ?? "").match(/^\s*```(.*)$/);
-    if (m && !open) {
-      open = true;
-      info = (m[1] ?? "").trim().toLowerCase();
-      openLine = i + 1;
-      buf = [];
-      continue;
-    }
-    if (m && open) {
-      if (info === lang || info.startsWith(`${lang} `)) {
-        fences.push({ info, body: buf.join(`
-`), line: openLine });
-      }
-      open = false;
-      continue;
-    }
-    if (open)
-      buf.push(lines[i] ?? "");
-  }
-  return fences;
-}
-// src/kernel/adapter/system-clock.ts
-class SystemClock {
-  now() {
-    return Date.now();
-  }
-}
-// src/kernel/adapter/atomic-write.ts
-import { mkdirSync, renameSync, rmSync, writeFileSync } from "fs";
-import { basename, dirname, join } from "path";
-var sequence = 0;
-function writeFileAtomically(path, data) {
-  const dir = dirname(path);
-  mkdirSync(dir, { recursive: true });
-  sequence += 1;
-  const tmp = join(dir, `.${basename(path)}.tmp-${Date.now().toString(36)}-${sequence.toString(36)}`);
-  try {
-    writeFileSync(tmp, data);
-    renameSync(tmp, path);
-  } catch (e) {
-    try {
-      rmSync(tmp, { force: true });
-    } catch {}
-    throw e;
   }
 }
 // src/kernel/adapter/directory-finalization-lock.ts
@@ -462,6 +1667,137 @@ class DirectoryFinalizationLock {
     }
   }
 }
+// src/kernel/adapter/fence.ts
+function extractFences(md, lang) {
+  const fences = [];
+  const lines = md.split(`
+`);
+  let open = false;
+  let info = "";
+  let openLine = 0;
+  let buf = [];
+  for (let i = 0;i < lines.length; i++) {
+    const m = (lines[i] ?? "").match(/^\s*```(.*)$/);
+    if (m && !open) {
+      open = true;
+      info = (m[1] ?? "").trim().toLowerCase();
+      openLine = i + 1;
+      buf = [];
+      continue;
+    }
+    if (m && open) {
+      if (info === lang || info.startsWith(`${lang} `)) {
+        fences.push({ info, body: buf.join(`
+`), line: openLine });
+      }
+      open = false;
+      continue;
+    }
+    if (open)
+      buf.push(lines[i] ?? "");
+  }
+  return fences;
+}
+// src/kernel/adapter/findings-document.ts
+var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
+var optionalString = (value) => value === undefined || typeof value === "string";
+function decodeFindingsDocument(raw) {
+  if (!isObject(raw))
+    return err("findings document must be an object");
+  for (const field of ["backend", "irVersion", "irHash", "method"]) {
+    if (typeof raw[field] !== "string")
+      return err(`${field} must be a string`);
+  }
+  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
+    return err("findings must be an array of complete finding records");
+  }
+  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
+    return err("skipped must be an array of complete skip records");
+  }
+  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
+    return err("unavailable must carry a reason");
+  }
+  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
+    return err("inputs must be an array of input anchors");
+  }
+  if (raw.checked !== undefined && !strings(raw.checked))
+    return err("checked must be an array of strings");
+  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
+    return err("crossChecked must be an array of backend comparisons");
+  }
+  return ok(raw);
+}
+// src/kernel/adapter/findings-values-parser.ts
+function parseFindingsValues(raw) {
+  const decoded = decodeFindingsDocument(raw);
+  if (!decoded.ok)
+    return decoded;
+  const doc = decoded.value;
+  const parsed = combineResults({
+    backend: BackendName.parse(doc.backend),
+    irVersion: IntermediateRepresentationVersion.parse(doc.irVersion),
+    irHash: ContentHash.parse(doc.irHash),
+    method: VerificationMethod.parse(doc.method),
+    findings: traverseResult(doc.findings, (entry) => {
+      const fields = combineResults({
+        kind: FindingKind.parse(entry.kind),
+        functionalRequirementReferences: flatMapResult(traverseResult(entry.frRefs, RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
+        targets: traverseResult(entry.targets, TargetIdentifier.parse),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({
+        ...fields.value,
+        functionalRequirementReferences: fields.value.functionalRequirementReferences,
+        targets: TargetIdentifiers.of(fields.value.targets),
+        witness: entry.witness,
+        detail: entry.detail
+      });
+    }),
+    skipped: traverseResult(doc.skipped, (entry) => {
+      const fields = combineResults({
+        target: TargetIdentifier.parse(entry.target),
+        reason: SkipReason.parse(entry.reason),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({ ...fields.value, detail: entry.detail });
+    }),
+    inputs: doc.inputs === undefined ? ok(undefined) : traverseResult(doc.inputs, (entry) => combineResults({
+      artifact: ArtifactPath.parse(entry.artifact),
+      sha256: ContentHash.parse(entry.sha256)
+    })),
+    crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
+      const fields = combineResults({
+        backend: BackendName.parse(entry.backend),
+        targets: traverseResult(entry.targets, TargetIdentifier.parse)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({ backend: fields.value.backend, targets: TargetIdentifiers.of(fields.value.targets) });
+    })
+  });
+  if (!parsed.ok)
+    return err(JSON.stringify(parsed.error));
+  return ok({ ...parsed.value, checked: doc.checked, unavailable: doc.unavailable });
+}
+// src/kernel/adapter/sensor-flags.ts
+function parseFlags(argv) {
+  let stage = "";
+  let outputPath = "";
+  let reportOnly = false;
+  for (let i = 0;i < argv.length; i++) {
+    if (argv[i] === "--stage")
+      stage = argv[i + 1] ?? "";
+    if (argv[i] === "--output-path")
+      outputPath = argv[i + 1] ?? "";
+    if (argv[i] === "--report-only")
+      reportOnly = true;
+  }
+  return { stage, outputPath, reportOnly };
+}
 // src/kernel/adapter/smt-symbols.ts
 function smtVar(path, primed) {
   return `${primed ? "p" : "v"}_${path.replace(/\./g, "_")}`;
@@ -478,100 +1814,48 @@ function smtIntOf(raw) {
   const m = raw.match(/^\(-\s*(\d+)\)$/);
   return m ? -Number.parseInt(m[1] ?? "0", 10) : Number.parseInt(raw, 10);
 }
-// src/kernel/domain/expression-tree.ts
-function canonicalKeyOf(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalKeyOf).join(",")}]`;
-  }
-  if (typeof value === "object" && value !== null) {
-    const record = value;
-    const keys = Object.keys(record).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalKeyOf(record[k] ?? null)}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-class ExpressionTree {
-  #root;
-  constructor(root) {
-    const snapshot = structuredClone(root);
-    const visited = new WeakSet;
-    const freeze = (value) => {
-      if (visited.has(value))
-        return;
-      visited.add(value);
-      for (const child of Object.values(value)) {
-        if (child !== null && typeof child === "object")
-          freeze(child);
-      }
-      Object.freeze(value);
-    };
-    freeze(snapshot);
-    this.#root = snapshot;
-  }
-  static of(root) {
-    return new ExpressionTree(root);
-  }
-  asExpression() {
-    return this.#root;
-  }
-  walk(visit) {
-    const go = (e) => {
-      visit(e);
-      for (const a of e.args ?? [])
-        go(a);
-    };
-    go(this.#root);
-  }
-  usesPrime() {
-    let found = false;
-    this.walk((node) => {
-      if (node.op === "ref" && node.prime === true)
-        found = true;
-    });
-    return found;
-  }
-  referencedPaths() {
-    const refs = new Set;
-    this.walk((node) => {
-      if (node.op === "ref" && typeof node.path === "string")
-        refs.add(node.path);
-    });
-    return [...refs].sort();
-  }
-  assignsPrimed(path) {
-    let assigned = false;
-    this.walk((node) => {
-      if (node.op === "ref" && node.prime === true && node.path === path)
-        assigned = true;
-    });
-    return assigned;
-  }
-  isCanonicallyEqual(other) {
-    return canonicalKeyOf(this.#root) === canonicalKeyOf(other.#root);
+// src/kernel/adapter/system-clock.ts
+class SystemClock {
+  now() {
+    return Date.now();
   }
 }
-// src/kernel/domain/content-hash.ts
-import { createHash } from "crypto";
-
-class ContentHash {
+// src/requirements/domain/background-assumption.ts
+class BackgroundAssumption {
+  #id;
+  #assert;
+  constructor(props) {
+    this.#id = props.id;
+    this.#assert = ExpressionTree.of(props.assert).asExpression();
+  }
+  static parse(props) {
+    return parseConstruction(() => new BackgroundAssumption(props));
+  }
+  static of(props) {
+    return new BackgroundAssumption(props);
+  }
+  id() {
+    return this.#id;
+  }
+  assertion() {
+    return this.#assert;
+  }
+}
+// src/requirements/domain/background-assumption-identifier.ts
+class BackgroundAssumptionIdentifier {
   #value;
   constructor(raw) {
-    if (!/^[0-9a-f]{64}$/.test(raw))
-      throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "background-assumption-id-too-long", raw: raw.length });
+    if (!/^BG-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-background-assumption-id", raw });
     this.#value = raw;
   }
   static of(raw) {
-    return new ContentHash(raw);
+    return new BackgroundAssumptionIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new ContentHash(raw));
-  }
-  static ofText(text) {
-    return new ContentHash(createHash("sha256").update(text, "utf-8").digest("hex"));
-  }
-  static ofBytes(bytes) {
-    return new ContentHash(createHash("sha256").update(bytes).digest("hex"));
+    return parseConstruction(() => new BackgroundAssumptionIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -580,906 +1864,635 @@ class ContentHash {
     return this.#value;
   }
 }
-// src/kernel/domain/declared-digest.ts
-class DeclaredDigest {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static of(value) {
-    return new DeclaredDigest(value);
-  }
-  asString() {
-    return this.#value;
-  }
-  matches(actual) {
-    return this.#value === actual.asString();
-  }
-}
-// src/kernel/domain/ir-version.ts
-class IrVersion {
-  #value;
-  constructor(raw) {
-    if (!/^\d+\.\d+\.\d+$/.test(raw))
-      throw new IllegalArgumentException({ kind: "not-a-semver", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new IrVersion(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new IrVersion(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  majorVersion() {
-    return Number.parseInt(this.#value.split(".")[0] ?? "", 10);
-  }
-  supportsMajor(major) {
-    return this.majorVersion() === major;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/target-id.ts
-var TARGET_ID_PATTERNS = [
-  /^(OB|SC)-[0-9]+$/,
-  /^BR[0-9]+\.[0-9]+$/,
-  /^(DOB|DSC|DBG|SM|TR)-[0-9]+$/,
-  /^(component|entity|attr|unit|contract|state|check):[A-Za-z0-9_./-]+$/
-];
-
-class TargetId {
-  #value;
-  constructor(raw) {
-    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
-      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new TargetId(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new TargetId(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return compareCanonically(this.#value, other.#value);
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/target-ids.ts
-class TargetIds {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new TargetIds([...values]);
-  }
-  static safe(prefix, raw) {
-    const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
-    return `${prefix}:${token === "" ? "unknown" : token}`;
-  }
-  add(value) {
-    return new TargetIds([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  count() {
-    return this.#values.length;
-  }
-  includes(value) {
-    return this.#values.some((v) => v.equals(value));
-  }
-  excluding(value) {
-    return new TargetIds(this.#values.filter((v) => !v.equals(value)));
-  }
-  sortedCanonically() {
-    return new TargetIds([...this.#values].sort((a, b) => a.compareTo(b)));
-  }
-  sortedUniqueCanonically() {
-    return TargetIds.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetId.of(raw)));
-  }
-  joined(separator) {
-    return this.toStrings().join(separator);
-  }
-  toArray() {
-    return this.#values;
-  }
-  toStrings() {
-    return this.#values.map((v) => v.asString());
-  }
-}
-// src/kernel/domain/requirement-id.ts
-class RequirementId {
-  #value;
-  constructor(value) {
-    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
-      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
-    this.#value = value;
-  }
-  static of(raw) {
-    return new RequirementId(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new RequirementId(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return compareCanonically(this.#value, other.#value);
-  }
-  asString() {
-    return this.#value;
-  }
-}
-
-// src/kernel/domain/fr-refs.ts
-class FrRefs {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new FrRefs([...values]);
-  }
-  add(value) {
-    return new FrRefs([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
-  sortedUnique() {
-    return FrRefs.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => RequirementId.of(raw)));
-  }
-  toArray() {
-    return this.#values;
-  }
-  toStrings() {
-    return this.#values.map((v) => v.asString());
-  }
-}
-// src/kernel/domain/backend-name.ts
-class BackendName {
-  #value;
-  constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-backend-name", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new BackendName(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new BackendName(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/key-set.ts
-class KeySet {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static empty() {
-    return new KeySet(new Map);
-  }
-  static of(keys) {
-    const map = new Map;
-    for (const key of keys)
-      if (!map.has(key.asString()))
-        map.set(key.asString(), key);
-    return new KeySet(map);
-  }
-  with(key) {
-    if (this.#values.has(key.asString()))
-      return this;
-    const map = new Map(this.#values);
-    map.set(key.asString(), key);
-    return new KeySet(map);
-  }
-  has(key) {
-    return this.#values.has(key.asString());
-  }
-  size() {
-    return this.#values.size;
-  }
-  isEmpty() {
-    return this.#values.size === 0;
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values.values();
-  }
-  toArray() {
-    return [...this.#values.values()];
-  }
-}
-
-// src/kernel/domain/requirement-ids.ts
-class RequirementIds {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static extractFrom(text) {
-    const ids = [];
-    for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementId.of(m[0]));
-    }
-    return new RequirementIds(KeySet.of(ids));
-  }
-  static of(values) {
-    return new RequirementIds(KeySet.of(values));
-  }
-  add(value) {
-    return new RequirementIds(this.#values.with(value));
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  has(value) {
-    return this.#values.has(value);
-  }
-  toArray() {
-    return this.#values.toArray();
-  }
-  toStrings() {
-    return this.#values.toArray().map((v) => v.asString());
-  }
-}
-// src/kernel/domain/normalized-name.ts
-class NormalizedName {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static of(raw) {
-    return new NormalizedName(raw.toLowerCase().replace(/[^a-z0-9]/g, ""));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/artifact-path.ts
-class ArtifactPath {
-  #value;
-  constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-path" });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new ArtifactPath(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new ArtifactPath(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/attribute-bound.ts
-class AttributeBound {
-  #value;
-  constructor(raw) {
-    if (!Number.isInteger(raw))
-      throw new IllegalArgumentException({ kind: "non-integer-bound", raw });
-    if (!Number.isSafeInteger(raw))
-      throw new IllegalArgumentException({ kind: "unsafe-bound", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new AttributeBound(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new AttributeBound(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asNumber() {
-    return this.#value;
-  }
-  exceeds(other) {
-    return this.#value > other.#value;
-  }
-}
-// src/kernel/domain/declared-bound.ts
-class DeclaredBound {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static of(value) {
-    return new DeclaredBound(value);
-  }
-  asNumber() {
-    return this.#value;
-  }
-  isSafeInteger() {
-    return AttributeBound.parse(this.#value).ok;
-  }
-  exceeds(other) {
-    return this.#value > other.#value;
-  }
-}
-// src/kernel/domain/error-messages.ts
-class ErrorMessages {
+// src/requirements/domain/background-assumptions.ts
+class BackgroundAssumptions {
   #values;
   constructor(values) {
     this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ErrorMessages(values);
+    return new BackgroundAssumptions(values);
   }
   add(value) {
-    return new ErrorMessages([...this.#values, value]);
+    return new BackgroundAssumptions([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
   }
   toArray() {
     return this.#values;
   }
 }
-// src/kernel/domain/findings-schema.ts
-var CONTRACT_BASENAME = "deep-spec-findings-schema.json";
-
-class FindingsSchema {
-  #schema;
-  #reason;
-  constructor(schema, reason) {
-    this.#schema = schema;
-    this.#reason = reason;
+// src/requirements/domain/cross-checked-entries.ts
+class CrossCheckedEntries {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
   }
-  static of(schema) {
-    return new FindingsSchema(schema, null);
+  static of(values) {
+    return new CrossCheckedEntries(values);
   }
-  static unreadable(cause) {
-    return new FindingsSchema(null, cause);
-  }
-  degradationReasonFor(document) {
-    const schema = this.#schema;
-    if (schema === null) {
-      return `findings schema unreadable: ${this.#reason ?? ""}`;
-    }
-    const errors = [];
-    validateSchema(schema, schema, document, "", errors);
-    const first = errors[0];
-    if (first === undefined)
-      return null;
-    return `self-validation against ${CONTRACT_BASENAME} failed: ${first}`;
-  }
-}
-// src/kernel/domain/trigger-name.ts
-class TriggerName {
-  #value;
-  constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-trigger-name", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new TriggerName(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new TriggerName(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/keyed-index.ts
-class KeyedIndex {
-  #entries;
-  constructor(entries) {
-    this.#entries = entries;
-  }
-  static empty() {
-    return new KeyedIndex(new Map);
-  }
-  static of(entries) {
-    const map = new Map;
-    for (const [key, value] of entries)
-      map.set(key.asString(), [key, value]);
-    return new KeyedIndex(map);
-  }
-  with(key, value) {
-    const map = new Map(this.#entries);
-    map.set(key.asString(), [key, value]);
-    return new KeyedIndex(map);
-  }
-  get(key) {
-    return this.#entries.get(key.asString())?.[1];
-  }
-  has(key) {
-    return this.#entries.has(key.asString());
-  }
-  size() {
-    return this.#entries.size;
-  }
-  isEmpty() {
-    return this.#entries.size === 0;
-  }
-  *keys() {
-    for (const [key] of this.#entries.values())
-      yield key;
-  }
-  *values() {
-    for (const [, value] of this.#entries.values())
-      yield value;
+  add(value) {
+    return new CrossCheckedEntries([...this.#values, value]);
   }
   *[Symbol.iterator]() {
-    yield* this.#entries.values();
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
   }
 }
-// src/kernel/domain/query-label.ts
-class QueryLabel {
-  #value;
-  constructor(value) {
-    if (value === "")
-      throw new IllegalArgumentException({ kind: "empty-query-label", raw: value });
-    this.#value = value;
-  }
-  static of(raw) {
-    return new QueryLabel(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new QueryLabel(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/attribute-path.ts
-class AttributePath {
-  #value;
-  constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-attribute-path", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new AttributePath(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new AttributePath(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return compareCanonically(this.#value, other.#value);
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/unit-name.ts
-class UnitName {
-  #value;
-  constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-unit-name", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new UnitName(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new UnitName(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/obligation-nature.ts
-class ObligationNature {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static of(raw) {
-    return new ObligationNature(raw);
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-  isInvariant() {
-    return this.#value === "invariant";
-  }
-  isNumeric() {
-    return this.#value === "numeric";
-  }
-  isEvent() {
-    return this.#value === "event";
-  }
-  isStateTemporal() {
-    return this.#value === "state-temporal";
-  }
-}
-// src/kernel/domain/finding-kind.ts
-var KIND_RANK = {
-  conflict: 0,
-  "completeness-gap": 1,
-  "scenario-violation": 2,
-  unreachable: 3,
-  redundancy: 4,
-  "refinement-violation": 5,
-  "mapping-gap": 6,
-  "structure-invalid": 7,
-  "reference-broken": 8,
-  "consistency-mismatch": 9,
-  "cross-check-disagreement": 10
-};
-
-class FindingKind {
-  #value;
-  constructor(raw) {
-    if (!Object.hasOwn(KIND_RANK, raw))
-      throw new IllegalArgumentException({ kind: "unknown-finding-kind", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new FindingKind(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new FindingKind(raw));
-  }
-  static conflict() {
-    return FindingKind.of("conflict");
-  }
-  static completenessGap() {
-    return FindingKind.of("completeness-gap");
-  }
-  static scenarioViolation() {
-    return FindingKind.of("scenario-violation");
-  }
-  static unreachable() {
-    return FindingKind.of("unreachable");
-  }
-  static redundancy() {
-    return FindingKind.of("redundancy");
-  }
-  static refinementViolation() {
-    return FindingKind.of("refinement-violation");
-  }
-  static mappingGap() {
-    return FindingKind.of("mapping-gap");
-  }
-  static structureInvalid() {
-    return FindingKind.of("structure-invalid");
-  }
-  static referenceBroken() {
-    return FindingKind.of("reference-broken");
-  }
-  static consistencyMismatch() {
-    return FindingKind.of("consistency-mismatch");
-  }
-  static crossCheckDisagreement() {
-    return FindingKind.of("cross-check-disagreement");
-  }
-  static canonicalOrder() {
-    return Object.keys(KIND_RANK);
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return KIND_RANK[this.#value] - KIND_RANK[other.#value];
-  }
-  isConflict() {
-    return this.#value === "conflict";
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/verification-method.ts
-var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
-
-class VerificationMethod {
-  #value;
-  constructor(raw) {
-    if (!KNOWN_METHODS.has(raw))
-      throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new VerificationMethod(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new VerificationMethod(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/domain/skip-reason.ts
-var KNOWN_REASONS = new Set([
-  "unavailable",
-  "timeout",
-  "capability",
-  "compile-error",
-  "waived",
-  "absent-input",
-  "stale-input",
-  "ir-version-mismatch",
-  "unrecognized-format"
-]);
-
-class SkipReason {
-  #value;
-  constructor(raw) {
-    if (!KNOWN_REASONS.has(raw))
-      throw new IllegalArgumentException({ kind: "unknown-skip-reason", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new SkipReason(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new SkipReason(raw));
-  }
-  static unavailable() {
-    return SkipReason.of("unavailable");
-  }
-  static timeout() {
-    return SkipReason.of("timeout");
-  }
-  static capability() {
-    return SkipReason.of("capability");
-  }
-  static compileError() {
-    return SkipReason.of("compile-error");
-  }
-  static waived() {
-    return SkipReason.of("waived");
-  }
-  static absentInput() {
-    return SkipReason.of("absent-input");
-  }
-  static staleInput() {
-    return SkipReason.of("stale-input");
-  }
-  static irVersionMismatch() {
-    return SkipReason.of("ir-version-mismatch");
-  }
-  static unrecognizedFormat() {
-    return SkipReason.of("unrecognized-format");
-  }
-  asString() {
-    return this.#value;
-  }
-  compareTo(other) {
-    return this.#value < other.#value ? -1 : this.#value > other.#value ? 1 : 0;
-  }
-}
-// src/kernel/domain/attribute-kind.ts
-class AttributeKind {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static of(raw) {
-    return new AttributeKind(raw);
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  isBool() {
-    return this.#value === "bool";
-  }
-  isInt() {
-    return this.#value === "int";
-  }
-  isEnum() {
-    return this.#value === "enum";
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/kernel/adapter/findings-values-parser.ts
-function parseFindingsValues(raw) {
-  const decoded = decodeFindingsDocument(raw);
-  if (!decoded.ok)
-    return decoded;
-  const doc = decoded.value;
-  const parsed = combineResults({
-    backend: BackendName.parse(doc.backend),
-    irVersion: IrVersion.parse(doc.irVersion),
-    irHash: ContentHash.parse(doc.irHash),
-    method: VerificationMethod.parse(doc.method),
-    findings: traverseResult(doc.findings, (entry) => {
-      const fields = combineResults({
-        kind: FindingKind.parse(entry.kind),
-        frRefs: traverseResult(entry.frRefs, RequirementId.parse),
-        targets: traverseResult(entry.targets, TargetId.parse),
-        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
-      });
-      if (!fields.ok)
-        return fields;
-      return ok({ ...fields.value, frRefs: FrRefs.of(fields.value.frRefs), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
-    }),
-    skipped: traverseResult(doc.skipped, (entry) => {
-      const fields = combineResults({
-        target: TargetId.parse(entry.target),
-        reason: SkipReason.parse(entry.reason),
-        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
-      });
-      if (!fields.ok)
-        return fields;
-      return ok({ ...fields.value, detail: entry.detail });
-    }),
-    inputs: doc.inputs === undefined ? ok(undefined) : traverseResult(doc.inputs, (entry) => combineResults({
-      artifact: ArtifactPath.parse(entry.artifact),
-      sha256: ContentHash.parse(entry.sha256)
-    })),
-    crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
-      const fields = combineResults({ backend: BackendName.parse(entry.backend), targets: traverseResult(entry.targets, TargetId.parse) });
-      if (!fields.ok)
-        return fields;
-      return ok({ backend: fields.value.backend, targets: TargetIds.of(fields.value.targets) });
-    })
-  });
-  if (!parsed.ok)
-    return err(JSON.stringify(parsed.error));
-  return ok({ ...parsed.value, checked: doc.checked, unavailable: doc.unavailable });
-}
-// src/requirements/domain/attribute-declaration.ts
-class AttributeDeclaration {
-  #path;
-  #kind;
-  #min;
-  #max;
-  #values;
+// src/requirements/domain/cross-checked-entry.ts
+class CrossCheckedEntry {
+  #backend;
+  #targets;
   constructor(props) {
-    this.#path = props.path;
-    this.#kind = props.kind;
-    this.#min = props.min;
-    this.#max = props.max;
-    this.#values = props.values;
+    this.#backend = props.backend;
+    this.#targets = props.targets;
   }
   static of(props) {
-    return new AttributeDeclaration(props);
+    return new CrossCheckedEntry(props);
   }
-  path() {
+  backend() {
+    return this.#backend;
+  }
+  targets() {
+    return this.#targets;
+  }
+  compareByBackend(other) {
+    const a = this.#backend.asString();
+    const b = other.#backend.asString();
+    return a < b ? -1 : a > b ? 1 : 0;
+  }
+}
+// src/requirements/domain/formal-model-identifier.ts
+class FormalModelIdentifier {
+  #path;
+  constructor(path) {
+    this.#path = path;
+  }
+  static of(path) {
+    return new FormalModelIdentifier(path);
+  }
+  equals(other) {
+    return this.#path.equals(other.#path);
+  }
+  artifactPath() {
     return this.#path;
   }
-  isAt(path) {
-    return this.#path.asString() === path;
+}
+// src/requirements/domain/functional-requirement-reference-claim.ts
+class FunctionalRequirementReferenceClaim {
+  #owner;
+  #functionalRequirementReferences;
+  constructor(owner, functionalRequirementReferences) {
+    this.#owner = owner;
+    this.#functionalRequirementReferences = functionalRequirementReferences;
   }
-  isBool() {
-    return this.#kind === "bool";
+  static of(owner, functionalRequirementReferences) {
+    return new FunctionalRequirementReferenceClaim(owner, functionalRequirementReferences);
   }
-  isInt() {
-    return this.#kind === "int";
+  ownerDescription() {
+    return this.#owner;
   }
-  isEnum() {
-    return this.#kind === "enum";
-  }
-  declaredValues() {
-    return this.#values;
-  }
-  minBound() {
-    return this.#min;
-  }
-  maxBound() {
-    return this.#max;
-  }
-  match(handlers) {
-    if (this.#kind === "bool")
-      return handlers.bool();
-    if (this.#kind === "int")
-      return handlers.int(this.#min, this.#max);
-    return handlers.enum(this.#values);
+  claimInto(ownersByRef) {
+    for (const ref of this.#functionalRequirementReferences) {
+      const owners = ownersByRef.get(ref.asString()) ?? [];
+      owners.push(this);
+      ownersByRef.set(ref.asString(), owners);
+    }
   }
 }
-// src/requirements/domain/attribute-declarations.ts
-class AttributeDeclarations {
+// src/requirements/domain/functional-requirement-reference-claims.ts
+class FunctionalRequirementReferenceClaims {
   #values;
-  #byPath;
   constructor(values) {
-    this.#values = values;
-    this.#byPath = KeyedIndex.of(values.map((a) => [a.path(), a]));
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new AttributeDeclarations([...values]);
+    return new FunctionalRequirementReferenceClaims(values);
   }
   add(value) {
-    return new AttributeDeclarations([...this.#values, value]);
+    return new FunctionalRequirementReferenceClaims([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
   }
-  byPath(path) {
-    return this.#byPath.get(path);
-  }
-  sortedByPath() {
-    return new AttributeDeclarations([...this.#values].sort((a, b) => a.path().asString() < b.path().asString() ? -1 : 1));
+  ownerDescriptions() {
+    return this.#values.map((claim) => claim.ownerDescription());
   }
   toArray() {
     return this.#values;
   }
 }
-// src/requirements/domain/attribute-values.ts
-class AttributeValues {
+// src/requirements/domain/functional-requirement-reference-index.ts
+class FunctionalRequirementReferenceIndex {
+  #ownersByRef;
+  constructor(ownersByRef) {
+    this.#ownersByRef = ownersByRef;
+  }
+  static of(claims) {
+    const ownersByRef = new Map;
+    for (const claim of claims)
+      claim.claimInto(ownersByRef);
+    return new FunctionalRequirementReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementIdentifier.of(ref), FunctionalRequirementReferenceClaims.of(owners)])));
+  }
+  referencedIds() {
+    return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
+  }
+  missingErrors(known) {
+    const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
+    return missing.map((id) => {
+      const owners = [...this.#ownersByRef.get(RequirementIdentifier.of(id))?.ownerDescriptions() ?? []].sort().join(", ");
+      return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
+    });
+  }
+}
+// src/requirements/domain/intermediate-representation-attribute-declaration.ts
+class IntermediateRepresentationAttributeDeclaration {
+  #name;
+  #kind;
+  #values;
+  #min;
+  #max;
+  constructor(props) {
+    this.#name = props.name;
+    this.#kind = props.kind;
+    this.#values = props.values;
+    this.#min = props.min;
+    this.#max = props.max;
+  }
+  static of(props) {
+    return new IntermediateRepresentationAttributeDeclaration(props);
+  }
+  name() {
+    return this.#name;
+  }
+  boundsInverted() {
+    return this.#kind.isInt() && this.#min !== undefined && this.#max !== undefined && this.#min.exceeds(this.#max);
+  }
+  boundsOutsideSafeRange() {
+    return this.#min !== undefined && !this.#min.isSafeInteger() || this.#max !== undefined && !this.#max.isSafeInteger();
+  }
+  admitsEnumLiteral(value) {
+    return this.#kind.isEnum() && (this.#values?.includes(value) ?? false);
+  }
+  fitsBinding(value) {
+    return value.fits(this.#kind, (literal) => this.admitsEnumLiteral(literal));
+  }
+  kindLabel() {
+    return this.#kind.asString();
+  }
+}
+// src/requirements/domain/intermediate-representation-attribute-declarations.ts
+class IntermediateRepresentationAttributeDeclarations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new AttributeValues([...values]);
+    return new IntermediateRepresentationAttributeDeclarations(values);
   }
   add(value) {
-    return new AttributeValues([...this.#values, value]);
+    return new IntermediateRepresentationAttributeDeclarations([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
   }
-  indexOf(value) {
-    return this.#values.indexOf(value);
+  toArray() {
+    return this.#values;
   }
-  valueAt(index) {
-    return this.#values[index];
+}
+// src/requirements/domain/intermediate-representation-attribute-name.ts
+class IntermediateRepresentationAttributeName {
+  #value;
+  constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "ir-attribute-name-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
+    this.#value = raw;
   }
-  count() {
-    return this.#values.length;
+  static of(raw) {
+    return new IntermediateRepresentationAttributeName(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new IntermediateRepresentationAttributeName(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/requirements/domain/intermediate-representation-background-declaration.ts
+class IntermediateRepresentationBackgroundDeclaration {
+  #id;
+  #assert;
+  constructor(props) {
+    this.#id = props.id;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+  }
+  static parse(props) {
+    return parseConstruction(() => new IntermediateRepresentationBackgroundDeclaration(props));
+  }
+  static of(props) {
+    return new IntermediateRepresentationBackgroundDeclaration(props);
+  }
+  id() {
+    return this.#id;
+  }
+  assertion() {
+    return this.#assert;
+  }
+  inspectExpressions(visitor) {
+    if (this.#assert !== undefined)
+      visitor(this.#assert, false);
+  }
+}
+// src/requirements/domain/intermediate-representation-background-declarations.ts
+class IntermediateRepresentationBackgroundDeclarations {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new IntermediateRepresentationBackgroundDeclarations(values);
+  }
+  add(value) {
+    return new IntermediateRepresentationBackgroundDeclarations([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
   }
   toArray() {
     return this.#values;
+  }
+}
+// src/requirements/domain/intermediate-representation-entity-declaration.ts
+class IntermediateRepresentationEntityDeclaration {
+  #name;
+  #attributes;
+  constructor(props) {
+    this.#name = props.name;
+    this.#attributes = props.attributes;
+  }
+  static of(props) {
+    return new IntermediateRepresentationEntityDeclaration(props);
+  }
+  name() {
+    return this.#name;
+  }
+  attributes() {
+    return this.#attributes;
+  }
+  inspectAttributes(visitor) {
+    const seen = new Set;
+    for (const attribute of this.#attributes) {
+      const attributeName = attribute.name().asString();
+      visitor(`${this.#name.asString()}.${attributeName}`, attribute, seen.has(attributeName));
+      seen.add(attributeName);
+    }
+  }
+}
+// src/requirements/domain/intermediate-representation-entity-declarations.ts
+class IntermediateRepresentationEntityDeclarations {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new IntermediateRepresentationEntityDeclarations(values);
+  }
+  add(value) {
+    return new IntermediateRepresentationEntityDeclarations([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/requirements/domain/intermediate-representation-entity-name.ts
+class IntermediateRepresentationEntityName {
+  #value;
+  constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "ir-entity-name-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new IntermediateRepresentationEntityName(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new IntermediateRepresentationEntityName(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/requirements/domain/intermediate-representation-model-declaration.ts
+class IntermediateRepresentationModelDeclaration {
+  #entities;
+  #obligations;
+  #scenarios;
+  #background;
+  constructor(seed) {
+    this.#entities = seed.entities;
+    this.#obligations = seed.obligations;
+    this.#scenarios = seed.scenarios;
+    this.#background = seed.background;
+  }
+  static of(seed) {
+    return new IntermediateRepresentationModelDeclaration(seed);
+  }
+  wellFormednessErrors() {
+    const errors = [];
+    const attrTypes = new Map;
+    const entityNames = new Set;
+    for (const ent of this.#entities) {
+      const entName = ent.name().asString();
+      if (entityNames.has(entName))
+        errors.push(`schema: duplicate entity "${entName}"`);
+      entityNames.add(entName);
+      ent.inspectAttributes((coord, attr, duplicated) => {
+        if (duplicated) {
+          errors.push(`schema: duplicate attribute "${coord}"`);
+        }
+        if (attr.boundsInverted()) {
+          errors.push(`schema: ${coord}: min > max`);
+        }
+        if (attr.boundsOutsideSafeRange()) {
+          errors.push(`schema: ${coord}: bounds must be safe integers`);
+        }
+        attrTypes.set(coord, attr);
+      });
+    }
+    const encoded = new Map;
+    for (const path of attrTypes.keys()) {
+      const key = path.replace(/\./g, "_");
+      const prior = encoded.get(key);
+      if (prior !== undefined) {
+        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
+      } else {
+        encoded.set(key, path);
+      }
+    }
+    const checkExpr = (e, where, primesAllowed) => {
+      ExpressionTree.of(e).walk((node) => {
+        if (node.op === "ref" && typeof node.path === "string") {
+          if (!attrTypes.has(node.path)) {
+            errors.push(`${where}: unresolvable reference "${node.path}"`);
+          }
+          if (node.prime === true && !primesAllowed) {
+            errors.push(`${where}: primed reference "${node.path}" is only legal in event effects and event-scenario expectations`);
+          }
+        }
+        if (node.op === "enum" && typeof node.value === "string") {
+          const known = [...attrTypes.values()].some((t) => t.admitsEnumLiteral(node.value));
+          if (!known) {
+            errors.push(`${where}: enum literal "${node.value}" is not a value of any declared enum attribute`);
+          }
+        }
+      });
+    };
+    const seenIds = new Set;
+    const dupCheck = (id, where) => {
+      if (seenIds.has(id))
+        errors.push(`${where}: duplicate id "${id}"`);
+      seenIds.add(id);
+    };
+    for (const ob of this.#obligations) {
+      const where = `obligation ${ob.id().asString()}`;
+      dupCheck(ob.id().asString(), where);
+      ob.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
+    }
+    for (const sc of this.#scenarios) {
+      const where = `scenario ${sc.id().asString()}`;
+      dupCheck(sc.id().asString(), where);
+      for (const binding of sc.bindings()) {
+        const path = binding.path();
+        const val = binding.value();
+        const t = attrTypes.get(path.asString());
+        if (!t) {
+          errors.push(`${where}: binding for unknown attribute "${path.asString()}"`);
+          continue;
+        }
+        if (!t.fitsBinding(val)) {
+          errors.push(`${where}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`);
+        }
+      }
+      sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
+    }
+    for (const bg of this.#background) {
+      const where = `background ${bg.id().asString()}`;
+      dupCheck(bg.id().asString(), where);
+      bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
+    }
+    return errors;
+  }
+}
+// src/requirements/domain/intermediate-representation-obligation-declaration.ts
+class IntermediateRepresentationObligationDeclaration {
+  #id;
+  #assert;
+  #guard;
+  #effect;
+  #temporal;
+  constructor(props) {
+    this.#id = props.id;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal;
+  }
+  static parse(props) {
+    return parseConstruction(() => new IntermediateRepresentationObligationDeclaration(props));
+  }
+  static of(props) {
+    return new IntermediateRepresentationObligationDeclaration(props);
+  }
+  id() {
+    return this.#id;
+  }
+  inspectExpressions(visitor) {
+    if (this.#assert !== undefined)
+      visitor(this.#assert, false);
+    if (this.#guard !== undefined)
+      visitor(this.#guard, false);
+    if (this.#effect !== undefined)
+      visitor(this.#effect, true);
+    this.#temporal?.inspectExpressions(visitor);
+  }
+}
+// src/requirements/domain/intermediate-representation-obligation-declarations.ts
+class IntermediateRepresentationObligationDeclarations {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new IntermediateRepresentationObligationDeclarations(values);
+  }
+  add(value) {
+    return new IntermediateRepresentationObligationDeclarations([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/requirements/domain/intermediate-representation-scenario-declaration.ts
+class IntermediateRepresentationScenarioDeclaration {
+  #id;
+  #bindings;
+  #hasEvent;
+  #expect;
+  constructor(props) {
+    this.#id = props.id;
+    this.#bindings = props.bindings;
+    this.#hasEvent = props.hasEvent;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
+  }
+  static parse(props) {
+    return parseConstruction(() => new IntermediateRepresentationScenarioDeclaration(props));
+  }
+  static of(props) {
+    return new IntermediateRepresentationScenarioDeclaration(props);
+  }
+  id() {
+    return this.#id;
+  }
+  bindings() {
+    return this.#bindings;
+  }
+  inspectExpectation(visitor) {
+    if (this.#expect !== undefined)
+      visitor(this.#expect, this.#hasEvent);
+  }
+}
+// src/requirements/domain/intermediate-representation-scenario-declarations.ts
+class IntermediateRepresentationScenarioDeclarations {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new IntermediateRepresentationScenarioDeclarations(values);
+  }
+  add(value) {
+    return new IntermediateRepresentationScenarioDeclarations([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/requirements/domain/intermediate-representation-temporal-declaration.ts
+class IntermediateRepresentationTemporalDeclaration {
+  #assert;
+  #from;
+  #to;
+  constructor(props) {
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#from = props.from === undefined ? undefined : ExpressionTree.of(props.from).asExpression();
+    this.#to = props.to === undefined ? undefined : ExpressionTree.of(props.to).asExpression();
+  }
+  static parse(props) {
+    return parseConstruction(() => new IntermediateRepresentationTemporalDeclaration(props));
+  }
+  static of(props) {
+    return new IntermediateRepresentationTemporalDeclaration(props);
+  }
+  inspectExpressions(visitor) {
+    if (this.#assert !== undefined)
+      visitor(this.#assert, false);
+    if (this.#from !== undefined)
+      visitor(this.#from, false);
+    if (this.#to !== undefined)
+      visitor(this.#to, false);
+  }
+}
+// src/requirements/domain/intermediate-representation-validation-materials.ts
+class IntermediateRepresentationValidationMaterials {
+  #id;
+  #irVersion;
+  #schemaErrors;
+  #view;
+  #functionalRequirementReferenceClaims;
+  #declaredDigest;
+  #sourceId;
+  #sourceDocument;
+  constructor(seed) {
+    this.#id = seed.id;
+    this.#irVersion = seed.irVersion;
+    this.#schemaErrors = seed.schemaErrors;
+    this.#view = seed.view;
+    this.#functionalRequirementReferenceClaims = seed.functionalRequirementReferenceClaims;
+    this.#declaredDigest = seed.declaredDigest;
+    this.#sourceId = seed.sourceId;
+    this.#sourceDocument = new Uint8Array(seed.sourceDocument);
+  }
+  static of(seed) {
+    return new IntermediateRepresentationValidationMaterials(seed);
+  }
+  id() {
+    return this.#id;
+  }
+  irVersion() {
+    return this.#irVersion;
+  }
+  schemaErrors() {
+    return this.#schemaErrors;
+  }
+  view() {
+    return this.#view;
+  }
+  functionalRequirementReferenceIndex() {
+    return FunctionalRequirementReferenceIndex.of(this.#functionalRequirementReferenceClaims.toArray());
+  }
+  declaredDigest() {
+    return this.#declaredDigest;
+  }
+  sourceId() {
+    return this.#sourceId;
+  }
+  sourceDocument() {
+    return new Uint8Array(this.#sourceDocument);
+  }
+}
+// src/requirements/domain/intermediate-representation-validation-materials-identifier.ts
+class IntermediateRepresentationValidationMaterialsIdentifier {
+  #model;
+  constructor(model) {
+    this.#model = model;
+  }
+  static of(model) {
+    return new IntermediateRepresentationValidationMaterialsIdentifier(model);
+  }
+  equals(other) {
+    return this.#model.equals(other.#model);
+  }
+  modelId() {
+    return this.#model;
   }
 }
 // src/requirements/domain/obligation.ts
 class Obligation {
   #id;
   #nature;
-  #frRefs;
+  #functionalRequirementReferences;
   #ears;
   #assert;
   #trigger;
@@ -1489,7 +2502,7 @@ class Obligation {
   constructor(props) {
     this.#id = props.id;
     this.#nature = props.nature;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#ears = props.ears;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
@@ -1502,6 +2515,9 @@ class Obligation {
       ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
     };
   }
+  static parse(props) {
+    return parseConstruction(() => new Obligation(props));
+  }
   static of(props) {
     return new Obligation(props);
   }
@@ -1511,8 +2527,8 @@ class Obligation {
   nature() {
     return this.#nature;
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   ears() {
     return this.#ears;
@@ -1564,44 +2580,46 @@ class Obligation {
       visitor(this.#temporal.to, false);
   }
 }
-// src/requirements/domain/obligation-id.ts
-class ObligationId {
+// src/requirements/domain/obligation-identifier.ts
+class ObligationIdentifier {
   #value;
   constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-obligation-id", raw });
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "obligation-id-too-long", raw: raw.length });
+    if (!/^OB-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-obligation-id", raw });
     this.#value = raw;
   }
   static of(raw) {
-    return new ObligationId(raw);
+    return new ObligationIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new ObligationId(raw));
+    return parseConstruction(() => new ObligationIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return this.asTargetId().compareTo(other.asTargetId());
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
   }
   asTargetId() {
-    return TargetId.of(this.#value);
+    return TargetIdentifier.of(this.#value);
   }
 }
-// src/requirements/domain/obligation-ids.ts
-class ObligationIds {
+// src/requirements/domain/obligation-identifiers.ts
+class ObligationIdentifiers {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ObligationIds([...values]);
+    return new ObligationIdentifiers(values);
   }
   add(value) {
-    return new ObligationIds([...this.#values, value]);
+    return new ObligationIdentifiers([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -1613,17 +2631,17 @@ class ObligationIds {
     return this.#values.map((v) => v.asString());
   }
   toTargetIds() {
-    return TargetIds.of(this.#values.map((v) => v.asTargetId()));
+    return TargetIdentifiers.of(this.#values.map((v) => v.asTargetId()));
   }
 }
 // src/requirements/domain/obligations.ts
 class Obligations {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new Obligations([...values]);
+    return new Obligations(values);
   }
   add(value) {
     return new Obligations([...this.#values, value]);
@@ -1641,103 +2659,734 @@ class Obligations {
     return this.#values;
   }
 }
-// src/requirements/domain/scenario.ts
-class Scenario {
+// src/requirements/domain/trace-value.ts
+class TraceValue {
+  #value;
+  constructor(value) {
+    this.#value = boundedValueSnapshot(value, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
+  }
+  static of(value) {
+    return new TraceValue(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new TraceValue(value));
+  }
+  static absent() {
+    return new TraceValue(null);
+  }
+  isTrue() {
+    return this.#value === true;
+  }
+  asNumber() {
+    return typeof this.#value === "number" ? this.#value : Number.NaN;
+  }
+  equals(other) {
+    return JSON.stringify(this.#value) === JSON.stringify(other.#value);
+  }
+  toDocument() {
+    return structuredClone(this.#value);
+  }
+}
+
+// src/requirements/domain/quint-machine-component.ts
+function evaluate(e, state) {
+  const arg = (i) => evaluate((e.args ?? [])[i], state);
+  switch (e.op) {
+    case "and":
+      return TraceValue.of((e.args ?? []).every((a) => evaluate(a, state).isTrue()));
+    case "or":
+      return TraceValue.of((e.args ?? []).some((a) => evaluate(a, state).isTrue()));
+    case "not":
+      return TraceValue.of(!arg(0).isTrue());
+    case "implies":
+      return TraceValue.of(!arg(0).isTrue() || arg(1).isTrue());
+    case "iff":
+      return TraceValue.of(arg(0).isTrue() === arg(1).isTrue());
+    case "eq":
+      return TraceValue.of(arg(0).equals(arg(1)));
+    case "ne":
+      return TraceValue.of(!arg(0).equals(arg(1)));
+    case "lt":
+      return TraceValue.of(arg(0).asNumber() < arg(1).asNumber());
+    case "le":
+      return TraceValue.of(arg(0).asNumber() <= arg(1).asNumber());
+    case "gt":
+      return TraceValue.of(arg(0).asNumber() > arg(1).asNumber());
+    case "ge":
+      return TraceValue.of(arg(0).asNumber() >= arg(1).asNumber());
+    case "add":
+      return TraceValue.of(arg(0).asNumber() + arg(1).asNumber());
+    case "sub":
+      return TraceValue.of(arg(0).asNumber() - arg(1).asNumber());
+    case "mul":
+      return TraceValue.of(arg(0).asNumber() * arg(1).asNumber());
+    case "ref":
+      return state.valueAt(AttributePath.of(e.path ?? ""));
+    case "bool":
+    case "int":
+    case "enum":
+      return TraceValue.of(e.value ?? null);
+    default:
+      return TraceValue.absent();
+  }
+}
+
+class QuintMachineComponent {
   #id;
-  #kind;
-  #frRefs;
-  #bindings;
-  #eventTrigger;
-  #expect;
+  #expression;
   constructor(props) {
     this.#id = props.id;
-    this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
-    this.#bindings = { ...props.bindings };
-    this.#eventTrigger = props.event?.trigger;
-    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
+    this.#expression = ExpressionTree.of(props.expression).asExpression();
+  }
+  static parse(props) {
+    return parseConstruction(() => new QuintMachineComponent(props));
   }
   static of(props) {
-    return new Scenario(props);
+    return new QuintMachineComponent(props);
   }
   id() {
     return this.#id;
   }
-  kind() {
-    return this.#kind;
-  }
-  frRefs() {
-    return this.#frRefs;
-  }
-  eventTrigger() {
-    return this.#eventTrigger;
-  }
-  expectation() {
-    return this.#expect;
-  }
-  isAccept() {
-    return this.#kind === "accept";
-  }
-  isReject() {
-    return this.#kind === "reject";
-  }
-  hasEvent() {
-    return this.#eventTrigger !== undefined;
-  }
-  isViolatedBySatisfiability(satisfiable) {
-    return this.isAccept() && !satisfiable || this.isReject() && satisfiable;
-  }
-  bindingEntriesCanonically() {
-    return Object.entries(this.#bindings).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
-  }
-  bindings() {
-    return { ...this.#bindings };
+  isViolatedIn(state) {
+    return !evaluate(this.#expression, state).isTrue();
   }
 }
-// src/requirements/domain/scenario-id.ts
-class ScenarioId {
-  #value;
-  constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-scenario-id", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new ScenarioId(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new ScenarioId(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-  asTargetId() {
-    return TargetId.of(this.#value);
-  }
-}
-// src/requirements/domain/scenarios.ts
-class Scenarios {
+// src/requirements/domain/quint-machine-components.ts
+class QuintMachineComponents {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new Scenarios([...values]);
+    return new QuintMachineComponents(values);
   }
   add(value) {
-    return new Scenarios([...this.#values, value]);
+    return new QuintMachineComponents([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
   }
-  byId(id) {
-    return this.#values.find((s) => s.id().asString() === id);
+  isEmpty() {
+    return this.#values.length === 0;
   }
   ids() {
-    return this.#values.map((s) => s.id().asString());
+    return ObligationIdentifiers.of(this.#values.map((c) => c.id()));
+  }
+  violatedBy(state) {
+    return new QuintMachineComponents(this.#values.filter((c) => c.isViolatedIn(state)));
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/requirements/domain/trace-state.ts
+class TraceState {
+  #values;
+  constructor(values) {
+    this.#values = values;
+  }
+  static empty() {
+    return new TraceState(KeyedIndex.empty());
+  }
+  static of(entries) {
+    return new TraceState(KeyedIndex.of(entries));
+  }
+  valueAt(path) {
+    return this.#values.get(path) ?? TraceValue.absent();
+  }
+  toDocument() {
+    const out = {};
+    for (const [path, value] of this.#values)
+      out[path.asString()] = value.toDocument();
+    return out;
+  }
+}
+
+// src/requirements/domain/verification-finding.ts
+class VerificationFinding {
+  #kind;
+  #functionalRequirementReferences;
+  #targets;
+  #witness;
+  #detail;
+  constructor(props) {
+    this.#kind = props.kind;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#targets = props.targets;
+    this.#witness = props.witness;
+    this.#detail = props.detail;
+  }
+  static of(props) {
+    return new VerificationFinding(props);
+  }
+  kind() {
+    return this.#kind.asString();
+  }
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
+  }
+  targets() {
+    return this.#targets;
+  }
+  witness() {
+    return this.#witness;
+  }
+  detail() {
+    return this.#detail;
+  }
+  isKind(kind) {
+    const parsed = FindingKind.parse(kind);
+    return parsed.ok && this.#kind.equals(parsed.value);
+  }
+  implicates(target) {
+    return this.#targets.includes(target);
+  }
+  compareTo(other) {
+    const kr = this.#kind.compareTo(other.#kind);
+    if (kr !== 0)
+      return kr;
+    const ta = this.#targets.joined(",");
+    const tb = other.#targets.joined(",");
+    if (ta !== tb)
+      return ta < tb ? -1 : 1;
+    return this.#detail < other.#detail ? -1 : this.#detail > other.#detail ? 1 : 0;
+  }
+}
+
+// src/requirements/domain/verification-findings.ts
+function sortVerificationFindings(findings) {
+  return [...findings].sort((a, b) => a.compareTo(b));
+}
+
+class VerificationFindings {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new VerificationFindings(values);
+  }
+  add(value) {
+    return new VerificationFindings([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  sortedCanonically() {
+    return new VerificationFindings(sortVerificationFindings(this.#values));
+  }
+  count() {
+    return this.#values.length;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/requirements/domain/verification-skipped.ts
+class VerificationSkipped {
+  #target;
+  #reason;
+  #detail;
+  constructor(props) {
+    this.#target = props.target;
+    this.#reason = props.reason;
+    this.#detail = props.detail;
+  }
+  static of(props) {
+    return new VerificationSkipped(props);
+  }
+  target() {
+    return this.#target;
+  }
+  reason() {
+    return this.#reason.asString();
+  }
+  detail() {
+    return this.#detail;
+  }
+  isFor(target) {
+    return this.#target.equals(target);
+  }
+  compareTo(other) {
+    const c = this.#target.compareTo(other.#target);
+    if (c !== 0)
+      return c;
+    return this.#reason.compareTo(other.#reason);
+  }
+}
+
+// src/requirements/domain/verification-skips.ts
+function sortVerificationSkipped(skipped) {
+  return [...skipped].sort((a, b) => a.compareTo(b));
+}
+
+class VerificationSkips {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new VerificationSkips(values);
+  }
+  add(value) {
+    return new VerificationSkips([...this.#values, value]);
+  }
+  concat(other) {
+    return new VerificationSkips([...this.#values, ...other.#values]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  sortedCanonically() {
+    return new VerificationSkips(sortVerificationSkipped(this.#values));
+  }
+  count() {
+    return this.#values.length;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/requirements/domain/verification-witness.ts
+class VerificationWitness {
+  #document;
+  constructor(raw) {
+    this.#document = boundedValueSnapshot(raw, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
+  }
+  static core(labels) {
+    return VerificationWitness.of({ core: labels });
+  }
+  static model(values) {
+    return VerificationWitness.of({ model: values });
+  }
+  static verdicts(byBackend) {
+    return VerificationWitness.of({ verdicts: byBackend });
+  }
+  static trace(states) {
+    return VerificationWitness.of({ trace: states.map((state) => state.toDocument()) });
+  }
+  static parse(value) {
+    return parseConstruction(() => new VerificationWitness(value));
+  }
+  static of(document) {
+    return new VerificationWitness(document);
+  }
+  toDocument() {
+    return structuredClone(this.#document);
+  }
+}
+
+// src/requirements/domain/quint-machine-plan.ts
+class QuintMachinePlan {
+  #invariantComponents;
+  #eventIds;
+  #scenariosWithInit;
+  constructor(props) {
+    this.#invariantComponents = props.invariantComponents;
+    this.#eventIds = props.eventIds;
+    this.#scenariosWithInit = props.scenariosWithInit;
+  }
+  static of(seed) {
+    return new QuintMachinePlan({
+      invariantComponents: seed.invariantComponents,
+      eventIds: seed.eventIds,
+      scenariosWithInit: KeySet.of(seed.scenariosWithInit)
+    });
+  }
+  machineTargets() {
+    return TargetIdentifiers.of([
+      ...this.#invariantComponents.ids().toTargetIds(),
+      ...this.#eventIds.toTargetIds()
+    ]).sortedUniqueCanonically();
+  }
+  #hasInitFor(id) {
+    return this.#scenariosWithInit.has(id);
+  }
+  interpret(model, compileSkips, method, runs) {
+    const bounded = method === "bounded";
+    const findings = [];
+    const skipped = [...compileSkips.toArray()];
+    const machineTargets = this.machineTargets();
+    const eventTargets = this.#eventIds.toTargetIds();
+    const machineRun = runs.machineRun();
+    if (machineRun === null) {
+      for (const target of machineTargets) {
+        skipped.push(VerificationSkipped.of({
+          target,
+          reason: SkipReason.of("unavailable"),
+          detail: "quint returned no machine run: the event machine was not decided"
+        }));
+      }
+    }
+    if (machineRun !== null) {
+      skipped.push(...machineRun.skipsFor(machineTargets, bounded));
+      if (machineRun.isDeadlock()) {
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.completenessGap(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventTargets),
+          targets: this.#eventIds.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
+          witness: machineRun.witness(),
+          detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified."
+        }));
+      } else if (machineRun.isViolation()) {
+        const violatedComponents = this.#invariantComponents.violatedBy(machineRun.finalState());
+        const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.conflict(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
+          targets,
+          witness: machineRun.witness(),
+          detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`
+        }));
+      }
+    }
+    for (const ob of model.obligations()) {
+      if (!ob.isStateTemporal() || ob.temporal()?.pattern !== "leads-to")
+        continue;
+      const target = ob.id().asTargetId();
+      if (skipped.some((s) => s.isFor(target)))
+        continue;
+      if (!bounded) {
+        skipped.push(VerificationSkipped.of({
+          target,
+          reason: SkipReason.of("capability"),
+          detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them"
+        }));
+        continue;
+      }
+      const r = runs.temporalOf(ob.id());
+      if (!r) {
+        skipped.push(VerificationSkipped.of({
+          target,
+          reason: SkipReason.of("unavailable"),
+          detail: "quint returned no run for this temporal obligation"
+        }));
+        continue;
+      }
+      const skip = r.skipFor(target);
+      if (skip !== null) {
+        skipped.push(skip);
+      } else if (r.isViolation()) {
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.conflict(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([target])),
+          targets: TargetIdentifiers.of([target]),
+          witness: r.witness(),
+          detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`
+        }));
+      }
+    }
+    for (const sc of model.scenarios()) {
+      const target = sc.id().asTargetId();
+      if (sc.hasEvent()) {
+        skipped.push(VerificationSkipped.of({
+          target,
+          reason: SkipReason.of("capability"),
+          detail: "scenarios with a When-event are not checked by the quint backend in v1"
+        }));
+        continue;
+      }
+      if (!this.#hasInitFor(sc.id())) {
+        skipped.push(VerificationSkipped.of({
+          target,
+          reason: SkipReason.of("capability"),
+          detail: "quint scenario evaluation requires bindings for every declared attribute"
+        }));
+        continue;
+      }
+      const r = runs.scenarioOf(sc.id());
+      if (!r) {
+        skipped.push(VerificationSkipped.of({
+          target,
+          reason: SkipReason.of("unavailable"),
+          detail: "quint returned no run for this scenario"
+        }));
+        continue;
+      }
+      const skip = r.skipFor(target);
+      if (skip !== null) {
+        skipped.push(skip);
+        continue;
+      }
+      const bindings = sc.bindings().entriesCanonically();
+      const state = TraceState.of(bindings.map((binding) => [binding.path(), TraceValue.of(binding.value().toDocument())]));
+      const boundModel = sc.bindings().toDocument();
+      if (sc.isAccept() && r.isViolated()) {
+        const violatedComponents = this.#invariantComponents.violatedBy(state);
+        const targets = TargetIdentifiers.of([
+          target,
+          ...violatedComponents.ids().toTargetIds()
+        ]).sortedUniqueCanonically();
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+          targets,
+          witness: VerificationWitness.model(boundModel),
+          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out \u2014 the requirements reject an example that should be accepted.`
+        }));
+      }
+      if (sc.isReject() && !r.isViolated()) {
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([target])),
+          targets: TargetIdentifiers.of([target]),
+          witness: VerificationWitness.model(boundModel),
+          detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation \u2014 the requirements do not exclude an example that should be rejected.`
+        }));
+      }
+    }
+    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
+  }
+}
+// src/requirements/domain/quint-machine-run-verdict.ts
+class QuintMachineRunVerdict {
+  #kind;
+  #trace;
+  #outputTail;
+  constructor(props) {
+    this.#kind = props.kind;
+    this.#trace = props.trace;
+    this.#outputTail = props.outputTail;
+  }
+  static timeout() {
+    return new QuintMachineRunVerdict({ kind: "timeout", trace: null, outputTail: "" });
+  }
+  static deadlock(trace) {
+    return new QuintMachineRunVerdict({ kind: "deadlock", trace, outputTail: "" });
+  }
+  static violation(trace) {
+    return new QuintMachineRunVerdict({ kind: "violation", trace, outputTail: "" });
+  }
+  static runFailed(outputTail) {
+    return new QuintMachineRunVerdict({ kind: "run-failed", trace: null, outputTail });
+  }
+  static clean() {
+    return new QuintMachineRunVerdict({ kind: "clean", trace: null, outputTail: "" });
+  }
+  abortsMachineTargets() {
+    return this.#kind === "timeout" || this.#kind === "run-failed";
+  }
+  skipsFor(targets, bounded) {
+    const kind = this.#kind;
+    if (kind === "timeout") {
+      return [...targets].map((target) => VerificationSkipped.of({
+        target,
+        reason: SkipReason.of("timeout"),
+        detail: "machine invariant check exceeded its budget"
+      }));
+    }
+    if (kind === "run-failed") {
+      const outputTail = this.#outputTail;
+      return [...targets].map((target) => VerificationSkipped.of({
+        target,
+        reason: SkipReason.of("unavailable"),
+        detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`
+      }));
+    }
+    return [];
+  }
+  isDeadlock() {
+    return this.#kind === "deadlock";
+  }
+  isViolation() {
+    return this.#kind === "violation";
+  }
+  witness() {
+    const trace = this.#trace;
+    return trace !== null ? VerificationWitness.trace(trace.toArray()) : VerificationWitness.model({});
+  }
+  finalState() {
+    return this.#trace?.finalState() ?? TraceState.empty();
+  }
+}
+// src/requirements/domain/quint-runs.ts
+class QuintRuns {
+  #machine;
+  #temporals;
+  #scenarios;
+  constructor(seed) {
+    this.#machine = seed.machine;
+    this.#temporals = seed.temporals;
+    this.#scenarios = seed.scenarios;
+  }
+  static of(seed) {
+    return new QuintRuns({
+      machine: seed.machine,
+      temporals: seed.temporals,
+      scenarios: seed.scenarios
+    });
+  }
+  machineRun() {
+    return this.#machine;
+  }
+  temporalOf(obligationId) {
+    return this.#temporals.get(obligationId);
+  }
+  scenarioOf(scenarioId) {
+    return this.#scenarios.get(scenarioId);
+  }
+}
+// src/requirements/domain/quint-scenario-verdict.ts
+class QuintScenarioVerdict {
+  #kind;
+  #violated;
+  #outputTail;
+  constructor(props) {
+    this.#kind = props.kind;
+    this.#violated = props.violated;
+    this.#outputTail = props.outputTail;
+  }
+  static timeout() {
+    return new QuintScenarioVerdict({ kind: "timeout", violated: false, outputTail: "" });
+  }
+  static runFailed(outputTail) {
+    return new QuintScenarioVerdict({ kind: "run-failed", violated: false, outputTail });
+  }
+  static evaluated(violated) {
+    return new QuintScenarioVerdict({ kind: "evaluated", violated, outputTail: "" });
+  }
+  skipFor(target) {
+    const kind = this.#kind;
+    if (kind === "timeout")
+      return VerificationSkipped.of({
+        target,
+        reason: SkipReason.of("timeout"),
+        detail: "scenario evaluation exceeded its budget"
+      });
+    if (kind === "run-failed")
+      return VerificationSkipped.of({
+        target,
+        reason: SkipReason.of("unavailable"),
+        detail: `quint run failed unexpectedly: ${this.#outputTail}`
+      });
+    return null;
+  }
+  isViolated() {
+    return this.#kind === "evaluated" && this.#violated;
+  }
+}
+// src/requirements/domain/quint-temporal-verdict.ts
+class QuintTemporalVerdict {
+  #kind;
+  #trace;
+  #outputTail;
+  constructor(props) {
+    this.#kind = props.kind;
+    this.#trace = props.trace;
+    this.#outputTail = props.outputTail;
+  }
+  static timeout() {
+    return new QuintTemporalVerdict({ kind: "timeout", trace: null, outputTail: "" });
+  }
+  static runFailed(outputTail) {
+    return new QuintTemporalVerdict({ kind: "run-failed", trace: null, outputTail });
+  }
+  static violation(trace) {
+    return new QuintTemporalVerdict({ kind: "violation", trace, outputTail: "" });
+  }
+  static clean() {
+    return new QuintTemporalVerdict({ kind: "clean", trace: null, outputTail: "" });
+  }
+  skipFor(target) {
+    const kind = this.#kind;
+    if (kind === "timeout")
+      return VerificationSkipped.of({
+        target,
+        reason: SkipReason.of("timeout"),
+        detail: "temporal check exceeded its budget"
+      });
+    if (kind === "run-failed")
+      return VerificationSkipped.of({
+        target,
+        reason: SkipReason.of("unavailable"),
+        detail: `quint verify failed unexpectedly: ${this.#outputTail}`
+      });
+    return null;
+  }
+  isViolation() {
+    return this.#kind === "violation";
+  }
+  witness() {
+    const trace = this.#trace;
+    return trace !== null ? VerificationWitness.trace(trace.toArray()) : VerificationWitness.model({});
+  }
+}
+// src/requirements/domain/requirement-attribute-declaration.ts
+class RequirementAttributeDeclaration {
+  #path;
+  #kind;
+  #min;
+  #max;
+  #values;
+  constructor(props) {
+    this.#path = props.path;
+    this.#kind = props.kind;
+    this.#min = props.min;
+    this.#max = props.max;
+    this.#values = props.values;
+  }
+  static of(props) {
+    return new RequirementAttributeDeclaration(props);
+  }
+  path() {
+    return this.#path;
+  }
+  isAt(path) {
+    return this.#path.asString() === path;
+  }
+  isBool() {
+    return this.#kind === "bool";
+  }
+  isInt() {
+    return this.#kind === "int";
+  }
+  isEnum() {
+    return this.#kind === "enum";
+  }
+  declaredValues() {
+    return this.#values;
+  }
+  minBound() {
+    return this.#min;
+  }
+  maxBound() {
+    return this.#max;
+  }
+  match(handlers) {
+    if (this.#kind === "bool")
+      return handlers.bool();
+    if (this.#kind === "int")
+      return handlers.int(this.#min, this.#max);
+    return handlers.enum(this.#values);
+  }
+}
+// src/requirements/domain/requirement-attribute-declarations.ts
+class RequirementAttributeDeclarations {
+  #values;
+  #byPath;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+    this.#byPath = KeyedIndex.of(values.map((a) => [a.path(), a]));
+  }
+  static of(values) {
+    return new RequirementAttributeDeclarations(values);
+  }
+  add(value) {
+    return new RequirementAttributeDeclarations([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  byPath(path) {
+    return this.#byPath.get(path);
+  }
+  sortedByPath() {
+    return new RequirementAttributeDeclarations([...this.#values].sort((a, b) => a.path().asString() < b.path().asString() ? -1 : 1));
   }
   toArray() {
     return this.#values;
@@ -1800,34 +3449,385 @@ class RequirementsModel {
     return this.#background;
   }
   allTargets() {
-    return TargetIds.of(Array.from([...this.#obligations.ids(), ...this.#scenarios.ids()], (raw) => TargetId.of(raw))).sortedCanonically();
+    return TargetIdentifiers.of(Array.from([...this.#obligations.ids(), ...this.#scenarios.ids()], (raw) => TargetIdentifier.of(raw))).sortedCanonically();
   }
-  frRefsOf(targets) {
+  functionalRequirementReferencesOf(targets) {
     const refs = [];
     for (const t of targets) {
       const ob = this.#obligations.byId(t.asString());
       if (ob)
-        refs.push(...ob.frRefs());
+        refs.push(...ob.functionalRequirementReferences());
       const sc = this.#scenarios.byId(t.asString());
       if (sc)
-        refs.push(...sc.frRefs());
+        refs.push(...sc.functionalRequirementReferences());
     }
-    return FrRefs.of(refs).sortedUnique();
+    return FunctionalRequirementReferences.of(refs).sortedUnique();
   }
 }
-// src/requirements/domain/background-assumption-id.ts
-class BackgroundAssumptionId {
+// src/requirements/domain/requirements-source.ts
+class RequirementsSource {
+  #id;
+  #sourcePath;
+  #knownIds;
+  #digest;
+  #sourceDocument;
+  constructor(seed) {
+    this.#id = seed.id;
+    this.#sourcePath = seed.sourcePath;
+    this.#knownIds = seed.knownIds;
+    this.#digest = seed.digest;
+    this.#sourceDocument = new Uint8Array(seed.sourceDocument);
+  }
+  static of(seed) {
+    return new RequirementsSource(seed);
+  }
+  id() {
+    return this.#id;
+  }
+  sourcePath() {
+    return this.#sourcePath;
+  }
+  knownIds() {
+    return this.#knownIds;
+  }
+  digest() {
+    return this.#digest;
+  }
+  sourceDocument() {
+    return new Uint8Array(this.#sourceDocument);
+  }
+}
+// src/requirements/domain/requirements-source-identifier.ts
+class RequirementsSourceIdentifier {
+  #recordRoot;
+  constructor(recordRoot) {
+    this.#recordRoot = recordRoot;
+  }
+  static of(recordRoot) {
+    return new RequirementsSourceIdentifier(recordRoot);
+  }
+  equals(other) {
+    return this.#recordRoot.equals(other.#recordRoot);
+  }
+  recordRoot() {
+    return this.#recordRoot;
+  }
+}
+// src/requirements/domain/satisfiability-modulo-theories-event-pair-probe.ts
+class SatisfiabilityModuloTheoriesEventPairProbe {
+  #qOverlap;
+  #qJoint;
+  #a;
+  #b;
+  #trigger;
+  constructor(props) {
+    this.#qOverlap = props.qOverlap;
+    this.#qJoint = props.qJoint;
+    this.#a = props.a;
+    this.#b = props.b;
+    this.#trigger = props.trigger;
+  }
+  static of(props) {
+    return new SatisfiabilityModuloTheoriesEventPairProbe(props);
+  }
+  a() {
+    return this.#a;
+  }
+  b() {
+    return this.#b;
+  }
+  trigger() {
+    return this.#trigger;
+  }
+  targets() {
+    return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
+  }
+  overlapVerdictIn(results) {
+    return results.verdictOf(this.#qOverlap);
+  }
+  jointVerdictIn(results) {
+    return results.verdictOf(this.#qJoint);
+  }
+}
+// src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts
+class SatisfiabilityModuloTheoriesEventPairProbes {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new SatisfiabilityModuloTheoriesEventPairProbes(values);
+  }
+  add(value) {
+    return new SatisfiabilityModuloTheoriesEventPairProbes([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/requirements/domain/satisfiability-modulo-theories-query-verdict.ts
+class SatisfiabilityModuloTheoriesQueryVerdict {
+  #status;
+  #decodedModel;
+  #core;
+  constructor(props) {
+    this.#status = props.status;
+    this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
+    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
+  }
+  static parse(props) {
+    return parseConstruction(() => new SatisfiabilityModuloTheoriesQueryVerdict(props));
+  }
+  static of(props) {
+    return new SatisfiabilityModuloTheoriesQueryVerdict(props);
+  }
+  static missing() {
+    return new SatisfiabilityModuloTheoriesQueryVerdict({ status: "missing" });
+  }
+  isMissing() {
+    return this.#status === "missing";
+  }
+  skipsFor(targets, what) {
+    if (!this.isUndecided())
+      return VerificationSkips.of([]);
+    const reason = this.isMissing() ? SkipReason.unrecognizedFormat() : SkipReason.timeout();
+    const detail = this.isMissing() ? `${what} returned no solver result` : `${what} exceeded the solver budget`;
+    return VerificationSkips.of([...targets].map((target) => VerificationSkipped.of({ target, reason, detail })));
+  }
+  isSat() {
+    return this.#status === "sat";
+  }
+  isUnsat() {
+    return this.#status === "unsat";
+  }
+  isUndecided() {
+    return this.#status !== "sat" && this.#status !== "unsat";
+  }
+  coreLabels() {
+    return [...this.#core ?? []];
+  }
+  sortedCore() {
+    return (this.#core ?? []).map((label) => label.asString()).sort();
+  }
+  witnessModel() {
+    return { ...this.#decodedModel ?? {} };
+  }
+}
+// src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts
+class SatisfiabilityModuloTheoriesQueryVerdicts {
+  #values;
+  constructor(values) {
+    this.#values = values;
+  }
+  static of(values) {
+    return new SatisfiabilityModuloTheoriesQueryVerdicts(values);
+  }
+  verdictOf(queryId) {
+    return this.#values.get(queryId) ?? SatisfiabilityModuloTheoriesQueryVerdict.missing();
+  }
+}
+// src/requirements/domain/satisfiability-modulo-theories-verification-plan.ts
+class SatisfiabilityModuloTheoriesVerificationPlan {
+  #compiled;
+  #vacuityQueries;
+  #skipped;
+  #labelToTarget;
+  #eventPairs;
+  #gapTriggers;
+  #scenarioQueries;
+  constructor(seed) {
+    this.#compiled = seed.compiled;
+    this.#vacuityQueries = seed.vacuityQueries;
+    this.#skipped = seed.skipped;
+    this.#labelToTarget = seed.labelToTarget;
+    this.#eventPairs = seed.eventPairs;
+    this.#gapTriggers = seed.gapTriggers;
+    this.#scenarioQueries = seed.scenarioQueries;
+  }
+  static of(seed) {
+    return new SatisfiabilityModuloTheoriesVerificationPlan(seed);
+  }
+  planSkipped() {
+    return this.#skipped;
+  }
+  interpret(model, results) {
+    const findings = [];
+    const skipped = [...this.#skipped.toArray()];
+    const conflictKeys = new Set;
+    const invariantIds = TargetIdentifiers.of(model.obligations().toArray().filter((o) => o.isInvariantLike() && this.#compiled.has(o.id())).map((o) => o.id().asTargetId()));
+    const coreToTargets = (core) => {
+      const targets = core.map((label) => this.#labelToTarget.get(label)).filter((t) => t?.asString().startsWith("OB-") ?? false);
+      return TargetIdentifiers.of(targets).sortedUniqueCanonically();
+    };
+    const addConflict = (targets, core, detail) => {
+      const effective = targets.count() > 0 ? targets : invariantIds;
+      if (effective.count() === 0)
+        return;
+      const key = effective.joined(",");
+      if (conflictKeys.has(key))
+        return;
+      conflictKeys.add(key);
+      findings.push(VerificationFinding.of({
+        kind: FindingKind.conflict(),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
+        targets: effective,
+        witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
+        detail
+      }));
+    };
+    const global = results.verdictOf(QueryLabel.of("global"));
+    let globallyUnsat = false;
+    if (global.isUnsat()) {
+      globallyUnsat = true;
+      addConflict(coreToTargets([...global.coreLabels()]), [...global.coreLabels()], "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.");
+    } else if (global.isUndecided()) {
+      skipped.push(...global.skipsFor(invariantIds, "global consistency check"));
+    }
+    if (!globallyUnsat) {
+      for (const [obligationId, queryId] of this.#vacuityQueries) {
+        const r = results.verdictOf(queryId);
+        if (r.isUnsat()) {
+          const targets = TargetIdentifiers.of([
+            ...coreToTargets([...r.coreLabels()]),
+            obligationId.asTargetId()
+          ]).sortedUniqueCanonically();
+          addConflict(targets, [...r.coreLabels()], `The condition of obligation ${obligationId.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`);
+        } else if (r.isUndecided()) {
+          skipped.push(...r.skipsFor(TargetIdentifiers.of([obligationId.asTargetId()]), `vacuity check for ${obligationId.asString()}`));
+        }
+      }
+    }
+    for (const pair of this.#eventPairs) {
+      const overlap = pair.overlapVerdictIn(results);
+      const joint = pair.jointVerdictIn(results);
+      if (overlap.isSat() && joint.isUnsat()) {
+        addConflict(pair.targets().sortedUniqueCanonically(), [...joint.coreLabels()], `Events ${pair.a().asString()} and ${pair.b().asString()} for trigger "${pair.trigger().asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`);
+      } else if (overlap.isUndecided() || joint.isUndecided()) {
+        const pending = [overlap, joint].find((v) => v.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
+        skipped.push(...pending.skipsFor(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`));
+      }
+    }
+    for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0)) {
+      const trigger = triggerName.asString();
+      const r = results.verdictOf(QueryLabel.of(`gap:${trigger}`));
+      if (r.isSat()) {
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.completenessGap(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventIds),
+          targets: eventIds,
+          witness: VerificationWitness.model(r.witnessModel()),
+          detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`
+        }));
+      } else if (r.isUndecided()) {
+        skipped.push(...r.skipsFor(eventIds, `completeness check for trigger "${trigger}"`));
+      }
+    }
+    for (const sc of model.scenarios()) {
+      const qid = this.#scenarioQueries.get(sc.id());
+      if (!qid)
+        continue;
+      const r = results.verdictOf(qid);
+      if (r.isUndecided()) {
+        skipped.push(...r.skipsFor(TargetIdentifiers.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`));
+        continue;
+      }
+      if (sc.isAccept() && r.isUnsat()) {
+        const targets = TargetIdentifiers.of([
+          sc.id().asTargetId(),
+          ...coreToTargets([...r.coreLabels()])
+        ]).sortedUniqueCanonically();
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+          targets,
+          witness: VerificationWitness.core(r.sortedCore()),
+          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out \u2014 the requirements reject an example that should be accepted.`
+        }));
+      }
+      if (sc.isReject() && r.isSat()) {
+        findings.push(VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([sc.id().asTargetId()])),
+          targets: TargetIdentifiers.of([sc.id().asTargetId()]),
+          witness: VerificationWitness.model(r.witnessModel()),
+          detail: `Reject scenario ${sc.id().asString()} is still satisfiable \u2014 the requirements do not exclude an example that should be rejected (witness state attached).`
+        }));
+      }
+    }
+    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
+  }
+}
+// src/requirements/domain/scenario.ts
+class Scenario {
+  #id;
+  #kind;
+  #functionalRequirementReferences;
+  #bindings;
+  #eventTrigger;
+  #expect;
+  constructor(props) {
+    this.#id = props.id;
+    this.#kind = props.kind;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#bindings = props.bindings;
+    this.#eventTrigger = props.event?.trigger;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
+  }
+  static parse(props) {
+    return parseConstruction(() => new Scenario(props));
+  }
+  static of(props) {
+    return new Scenario(props);
+  }
+  id() {
+    return this.#id;
+  }
+  kind() {
+    return this.#kind;
+  }
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
+  }
+  eventTrigger() {
+    return this.#eventTrigger;
+  }
+  expectation() {
+    return this.#expect;
+  }
+  isAccept() {
+    return this.#kind === "accept";
+  }
+  isReject() {
+    return this.#kind === "reject";
+  }
+  hasEvent() {
+    return this.#eventTrigger !== undefined;
+  }
+  isViolatedBySatisfiability(satisfiable) {
+    return this.isAccept() && !satisfiable || this.isReject() && satisfiable;
+  }
+  bindings() {
+    return this.#bindings;
+  }
+}
+// src/requirements/domain/scenario-identifier.ts
+class ScenarioIdentifier {
   #value;
   constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-background-id", raw });
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "scenario-id-too-long", raw: raw.length });
+    if (!/^SC-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-scenario-id", raw });
     this.#value = raw;
   }
   static of(raw) {
-    return new BackgroundAssumptionId(raw);
+    return new ScenarioIdentifier(raw);
   }
   static parse(raw) {
-    return parseConstruction(() => new BackgroundAssumptionId(raw));
+    return parseConstruction(() => new ScenarioIdentifier(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1835,217 +3835,84 @@ class BackgroundAssumptionId {
   asString() {
     return this.#value;
   }
-}
-// src/requirements/domain/background-assumption.ts
-class BackgroundAssumption {
-  #id;
-  #assert;
-  constructor(id, assert) {
-    this.#id = id;
-    this.#assert = ExpressionTree.of(assert).asExpression();
-  }
-  static of(props) {
-    return new BackgroundAssumption(props.id, props.assert);
-  }
-  id() {
-    return this.#id;
-  }
-  assertion() {
-    return this.#assert;
+  asTargetId() {
+    return TargetIdentifier.of(this.#value);
   }
 }
-// src/requirements/domain/background-assumptions.ts
-class BackgroundAssumptions {
+// src/requirements/domain/scenarios.ts
+class Scenarios {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new BackgroundAssumptions([...values]);
+    return new Scenarios(values);
   }
   add(value) {
-    return new BackgroundAssumptions([...this.#values, value]);
+    return new Scenarios([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  byId(id) {
+    return this.#values.find((s) => s.id().asString() === id);
+  }
+  ids() {
+    return this.#values.map((s) => s.id().asString());
   }
   toArray() {
     return this.#values;
   }
 }
-// src/requirements/domain/verification-finding.ts
-class VerificationFinding {
-  #kind;
-  #frRefs;
-  #targets;
-  #witness;
-  #detail;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
-    this.#targets = props.targets;
-    this.#witness = props.witness;
-    this.#detail = props.detail;
+// src/requirements/domain/source-anchor.ts
+class SourceAnchor {
+  #declared;
+  #actual;
+  constructor(declared, actual) {
+    this.#declared = declared;
+    this.#actual = actual;
   }
-  static of(props) {
-    return new VerificationFinding(props);
+  static of(declared, actual) {
+    return new SourceAnchor(declared, actual);
   }
-  kind() {
-    return this.#kind.asString();
-  }
-  frRefs() {
-    return this.#frRefs;
-  }
-  targets() {
-    return this.#targets;
-  }
-  witness() {
-    return this.#witness;
-  }
-  detail() {
-    return this.#detail;
-  }
-  isKind(kind) {
-    const parsed = FindingKind.parse(kind);
-    return parsed.ok && this.#kind.equals(parsed.value);
-  }
-  implicates(target) {
-    return this.#targets.includes(target);
-  }
-  compareTo(other) {
-    const kr = this.#kind.compareTo(other.#kind);
-    if (kr !== 0)
-      return kr;
-    const ta = this.#targets.joined(",");
-    const tb = other.#targets.joined(",");
-    if (ta !== tb)
-      return ta < tb ? -1 : 1;
-    return this.#detail < other.#detail ? -1 : this.#detail > other.#detail ? 1 : 0;
+  errors() {
+    if (this.#declared === null) {
+      return [
+        `IR has no sourceDigest \u2014 requirements drift would be undetectable; add "sourceDigest": "${this.#actual.asString()}" (sha256 of requirements.md) to the IR`
+      ];
+    }
+    if (!this.#declared.matches(this.#actual)) {
+      return [
+        `sourceDigest ${this.#declared.asString()} does not match requirements.md (sha256 ${this.#actual.asString()}) \u2014 the requirements changed since formalization; re-formalize against the current text and restamp the digest`
+      ];
+    }
+    return [];
   }
 }
-// src/requirements/domain/verification-findings.ts
-function sortVerificationFindings(findings) {
-  return [...findings].sort((a, b) => a.compareTo(b));
-}
-
-class VerificationFindings {
+// src/requirements/domain/trace-states.ts
+class TraceStates {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new VerificationFindings([...values]);
+    return new TraceStates(values);
   }
   add(value) {
-    return new VerificationFindings([...this.#values, value]);
+    return new TraceStates([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
   }
-  sortedCanonically() {
-    return new VerificationFindings(sortVerificationFindings(this.#values));
-  }
-  count() {
-    return this.#values.length;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
+  finalState() {
+    return this.#values[this.#values.length - 1] ?? TraceState.empty();
   }
   toArray() {
-    return this.#values;
+    return [...this.#values];
   }
 }
-// src/requirements/domain/verification-skipped.ts
-class VerificationSkipped {
-  #target;
-  #reason;
-  #detail;
-  constructor(props) {
-    this.#target = props.target;
-    this.#reason = props.reason;
-    this.#detail = props.detail;
-  }
-  static of(props) {
-    return new VerificationSkipped(props);
-  }
-  target() {
-    return this.#target;
-  }
-  reason() {
-    return this.#reason.asString();
-  }
-  detail() {
-    return this.#detail;
-  }
-  isFor(target) {
-    return this.#target.equals(target);
-  }
-  compareTo(other) {
-    const c = this.#target.compareTo(other.#target);
-    if (c !== 0)
-      return c;
-    return this.#reason.compareTo(other.#reason);
-  }
-}
-// src/requirements/domain/verification-skips.ts
-function sortVerificationSkipped(skipped) {
-  return [...skipped].sort((a, b) => a.compareTo(b));
-}
-
-class VerificationSkips {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new VerificationSkips([...values]);
-  }
-  add(value) {
-    return new VerificationSkips([...this.#values, value]);
-  }
-  concat(other) {
-    return new VerificationSkips([...this.#values, ...other.#values]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  sortedCanonically() {
-    return new VerificationSkips(sortVerificationSkipped(this.#values));
-  }
-  count() {
-    return this.#values.length;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/verification-witness.ts
-class VerificationWitness {
-  #document;
-  constructor(raw) {
-    this.#document = structuredClone(raw);
-  }
-  static core(labels) {
-    return VerificationWitness.of({ core: [...labels] });
-  }
-  static model(values) {
-    return VerificationWitness.of({ model: values });
-  }
-  static verdicts(byBackend) {
-    return VerificationWitness.of({ verdicts: byBackend });
-  }
-  static trace(states) {
-    return VerificationWitness.of({ trace: states.map((state) => state.toDocument()) });
-  }
-  static of(document) {
-    return new VerificationWitness(document);
-  }
-  toDocument() {
-    return structuredClone(this.#document);
-  }
-}
-// src/requirements/domain/verification-report-id.ts
-class VerificationReportId {
+// src/requirements/domain/verification-report-identifier.ts
+class VerificationReportIdentifier {
   #directory;
   #backend;
   constructor(directory, backend) {
@@ -2053,7 +3920,7 @@ class VerificationReportId {
     this.#backend = backend;
   }
   static of(directory, backend) {
-    return new VerificationReportId(directory, BackendName.of(backend));
+    return new VerificationReportIdentifier(directory, BackendName.of(backend));
   }
   equals(other) {
     return this.#directory.equals(other.#directory) && this.#backend.equals(other.#backend);
@@ -2068,6 +3935,7 @@ class VerificationReportId {
     return `${this.#backend.asString()}.json`;
   }
 }
+
 // src/requirements/domain/verification-report.ts
 var SUPPORTED_IR_MAJOR = 1;
 
@@ -2093,7 +3961,7 @@ class VerificationReport {
   static irUnreadable(id, method, cause) {
     return VerificationReport.compose({
       id,
-      irVersion: IrVersion.of("0.0.0"),
+      irVersion: IntermediateRepresentationVersion.of("0.0.0"),
       irHash: ContentHash.ofText(""),
       method,
       findings: VerificationFindings.of([]),
@@ -2124,7 +3992,11 @@ class VerificationReport {
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
         ...planSkipped.toArray(),
-        ...[...model.allTargets()].filter((t) => !planSkipped.toArray().some((s) => s.isFor(t))).map((t) => VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "z3 could not be executed" }))
+        ...[...model.allTargets()].filter((t) => !planSkipped.toArray().some((s) => s.isFor(t))).map((t) => VerificationSkipped.of({
+          target: t,
+          reason: SkipReason.of("unavailable"),
+          detail: "z3 could not be executed"
+        }))
       ]),
       unavailableReason: reason
     });
@@ -2148,8 +4020,16 @@ class VerificationReport {
       method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
-        ...model.obligations().toArray().map((ob) => VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: machineError })),
-        ...model.scenarios().toArray().map((sc) => VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: machineError }))
+        ...model.obligations().toArray().map((ob) => VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: machineError
+        })),
+        ...model.scenarios().toArray().map((sc) => VerificationSkipped.of({
+          target: sc.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: machineError
+        }))
       ])
     });
   }
@@ -2229,7 +4109,7 @@ class VerificationReport {
     ordered.findings = this.#findings.toArray().map((f) => {
       const out = {
         kind: f.kind(),
-        frRefs: f.frRefs().toStrings(),
+        frRefs: f.functionalRequirementReferences().toStrings(),
         targets: f.targets().toStrings(),
         witness: f.witness().toDocument(),
         detail: f.detail()
@@ -2254,56 +4134,15 @@ class VerificationReport {
     return reason === null ? this : this.degraded(reason);
   }
 }
-// src/requirements/domain/cross-checked-entries.ts
-class CrossCheckedEntries {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new CrossCheckedEntries([...values]);
-  }
-  add(value) {
-    return new CrossCheckedEntries([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/cross-checked-entry.ts
-class CrossCheckedEntry {
-  #backend;
-  #targets;
-  constructor(props) {
-    this.#backend = props.backend;
-    this.#targets = props.targets;
-  }
-  static of(props) {
-    return new CrossCheckedEntry(props);
-  }
-  backend() {
-    return this.#backend;
-  }
-  targets() {
-    return this.#targets;
-  }
-  compareByBackend(other) {
-    const a = this.#backend.asString();
-    const b = other.#backend.asString();
-    return a < b ? -1 : a > b ? 1 : 0;
-  }
-}
+
 // src/requirements/domain/verification-reports.ts
 class VerificationReports {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new VerificationReports([...values]);
+    return new VerificationReports(values);
   }
   add(value) {
     return new VerificationReports([...this.#values, value]);
@@ -2342,8 +4181,10 @@ class VerificationReports {
             verdicts[b.backend] = vb ? "violated" : "clean";
             findings.push(VerificationFinding.of({
               kind: FindingKind.crossCheckDisagreement(),
-              frRefs: FrRefs.of([...scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? []]).sortedUnique(),
-              targets: TargetIds.of([sc.id().asTargetId()]),
+              functionalRequirementReferences: FunctionalRequirementReferences.of([
+                ...scenarioById.get(sc.id().asString())?.functionalRequirementReferences().toArray() ?? []
+              ]).sortedUnique(),
+              targets: TargetIdentifiers.of([sc.id().asTargetId()]),
               witness: VerificationWitness.verdicts(verdicts),
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`
             }));
@@ -2351,7 +4192,10 @@ class VerificationReports {
         }
       }
     }
-    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => CrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIds.of(Array.from([...targets], (raw) => TargetId.of(raw))).sortedCanonically() })).sort((x, y) => x.compareByBackend(y));
+    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => CrossCheckedEntry.of({
+      backend: BackendName.of(backend),
+      targets: TargetIdentifiers.of(Array.from([...targets], (raw) => TargetIdentifier.of(raw))).sortedCanonically()
+    })).sort((x, y) => x.compareByBackend(y));
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
@@ -2363,6 +4207,7 @@ class VerificationReports {
     });
   }
 }
+
 // src/requirements/domain/verification-directory.ts
 var CROSS_CHECK_BACKEND = "cross-check";
 
@@ -2405,11 +4250,11 @@ class VerificationDirectory {
     const staged = this.finalizing(candidate.conformedTo(schema));
     if (model === null)
       return staged;
-    const derived = staged.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
+    const derived = staged.#reports.crossChecked(VerificationReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
     return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
   }
   crossChecked(model, irHash) {
-    const derived = this.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
+    const derived = this.#reports.crossChecked(VerificationReportIdentifier.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
     return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, derived);
   }
   withoutCrossCheck() {
@@ -2436,2008 +4281,279 @@ class VerificationDirectory {
     return this.#crossCheck;
   }
 }
-// src/requirements/domain/smt-query-verdict.ts
-class SmtQueryVerdict {
-  #status;
-  #decodedModel;
-  #core;
-  constructor(props) {
-    this.#status = props.status;
-    this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
-    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
-  }
-  static of(props) {
-    return new SmtQueryVerdict(props);
-  }
-  isSat() {
-    return this.#status === "sat";
-  }
-  isUnsat() {
-    return this.#status === "unsat";
-  }
-  isUndecided() {
-    return this.#status !== "sat" && this.#status !== "unsat";
-  }
-  coreLabels() {
-    return [...this.#core ?? []];
-  }
-  sortedCore() {
-    return (this.#core ?? []).map((label) => label.asString()).sort();
-  }
-  witnessModel() {
-    return { ...this.#decodedModel ?? {} };
-  }
+// src/requirements/adapter/intermediate-representation-validation-materials-repository-implementation.ts
+import { existsSync, readFileSync as readFileSync3 } from "fs";
+import { basename as basename2, dirname as dirname2 } from "path";
+var FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";
+function asExpression(v) {
+  return isObject(v) ? v : undefined;
 }
-// src/requirements/domain/smt-query-verdicts.ts
-class SmtQueryVerdicts {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new SmtQueryVerdicts(values);
-  }
-  verdictOf(queryId) {
-    return this.#values.get(queryId);
-  }
-}
-// src/requirements/domain/smt-verification-plan.ts
-class SmtVerificationPlan {
-  #compiled;
-  #skipped;
-  #labelToTarget;
-  #eventPairs;
-  #gapTriggers;
-  #scenarioQueries;
-  constructor(seed) {
-    this.#compiled = seed.compiled;
-    this.#skipped = seed.skipped;
-    this.#labelToTarget = seed.labelToTarget;
-    this.#eventPairs = seed.eventPairs;
-    this.#gapTriggers = seed.gapTriggers;
-    this.#scenarioQueries = seed.scenarioQueries;
-  }
-  static of(seed) {
-    return new SmtVerificationPlan({
-      compiled: seed.compiled,
-      skipped: seed.skipped,
-      labelToTarget: seed.labelToTarget,
-      eventPairs: seed.eventPairs,
-      gapTriggers: seed.gapTriggers,
-      scenarioQueries: seed.scenarioQueries
-    });
-  }
-  planSkipped() {
-    return this.#skipped;
-  }
-  interpret(model, results) {
-    const findings = [];
-    const skipped = [...this.#skipped.toArray()];
-    const conflictKeys = new Set;
-    const invariantIds = TargetIds.of(model.obligations().toArray().filter((o) => o.isInvariantLike() && this.#compiled.has(o.id())).map((o) => o.id().asTargetId()));
-    const coreToTargets = (core) => {
-      const targets = core.map((label) => this.#labelToTarget.get(label)).filter((t) => t !== undefined && t.asString().startsWith("OB-"));
-      return TargetIds.of(targets).sortedUniqueCanonically();
-    };
-    const addConflict = (targets, core, detail) => {
-      const effective = targets.count() > 0 ? targets : invariantIds;
-      if (effective.count() === 0)
-        return;
-      const key = effective.joined(",");
-      if (conflictKeys.has(key))
-        return;
-      conflictKeys.add(key);
-      findings.push(VerificationFinding.of({
-        kind: FindingKind.conflict(),
-        frRefs: model.frRefsOf(effective),
-        targets: effective,
-        witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
-        detail
-      }));
-    };
-    const timeoutSkip = (targets, what) => {
-      for (const t of targets) {
-        skipped.push(VerificationSkipped.of({ target: t, reason: SkipReason.of("timeout"), detail: `${what} exceeded the solver budget` }));
-      }
-    };
-    const global = results.verdictOf(QueryLabel.of("global"));
-    let globallyUnsat = false;
-    if (global?.isUnsat()) {
-      globallyUnsat = true;
-      addConflict(coreToTargets([...global.coreLabels()]), [...global.coreLabels()], "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.");
-    } else if (global?.isUndecided()) {
-      timeoutSkip(invariantIds, "global consistency check");
-    }
-    if (!globallyUnsat) {
-      for (const ob of model.obligations()) {
-        const r = results.verdictOf(QueryLabel.of(`vac:${ob.id().asString()}`));
-        if (!r)
-          continue;
-        if (r.isUnsat()) {
-          const targets = TargetIds.of([...coreToTargets([...r.coreLabels()]), ob.id().asTargetId()]).sortedUniqueCanonically();
-          addConflict(targets, [...r.coreLabels()], `The condition of obligation ${ob.id().asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`);
-        } else if (r.isUndecided()) {
-          timeoutSkip(TargetIds.of([ob.id().asTargetId()]), `vacuity check for ${ob.id().asString()}`);
-        }
-      }
-    }
-    for (const pair of this.#eventPairs) {
-      const overlap = pair.overlapVerdictIn(results);
-      const joint = pair.jointVerdictIn(results);
-      if (!overlap || !joint)
-        continue;
-      if (overlap.isSat() && joint.isUnsat()) {
-        addConflict(pair.targets().sortedUniqueCanonically(), [...joint.coreLabels()], `Events ${pair.a().asString()} and ${pair.b().asString()} for trigger "${pair.trigger().asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`);
-      } else if (overlap.isUndecided() || joint.isUndecided()) {
-        timeoutSkip(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`);
-      }
-    }
-    for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0)) {
-      const trigger = triggerName.asString();
-      const r = results.verdictOf(QueryLabel.of(`gap:${trigger}`));
-      if (!r)
-        continue;
-      if (r.isSat()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.completenessGap(),
-          frRefs: model.frRefsOf(eventIds),
-          targets: eventIds,
-          witness: VerificationWitness.model(r.witnessModel()),
-          detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`
-        }));
-      } else if (r.isUndecided()) {
-        timeoutSkip(eventIds, `completeness check for trigger "${trigger}"`);
-      }
-    }
-    for (const sc of model.scenarios()) {
-      const qid = this.#scenarioQueries.get(sc.id());
-      if (!qid)
-        continue;
-      const r = results.verdictOf(qid);
-      if (!r)
-        continue;
-      if (r.isUndecided()) {
-        timeoutSkip(TargetIds.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`);
-        continue;
-      }
-      if (sc.isAccept() && r.isUnsat()) {
-        const targets = TargetIds.of([sc.id().asTargetId(), ...coreToTargets([...r.coreLabels()])]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(targets),
-          targets,
-          witness: VerificationWitness.core(r.sortedCore()),
-          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out \u2014 the requirements reject an example that should be accepted.`
-        }));
-      }
-      if (sc.isReject() && r.isSat()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(TargetIds.of([sc.id().asTargetId()])),
-          targets: TargetIds.of([sc.id().asTargetId()]),
-          witness: VerificationWitness.model(r.witnessModel()),
-          detail: `Reject scenario ${sc.id().asString()} is still satisfiable \u2014 the requirements do not exclude an example that should be rejected (witness state attached).`
-        }));
-      }
-    }
-    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
-  }
-}
-// src/requirements/domain/smt-event-pair-probe.ts
-class SmtEventPairProbe {
-  #qOverlap;
-  #qJoint;
-  #a;
-  #b;
-  #trigger;
-  constructor(props) {
-    this.#qOverlap = props.qOverlap;
-    this.#qJoint = props.qJoint;
-    this.#a = props.a;
-    this.#b = props.b;
-    this.#trigger = props.trigger;
-  }
-  static of(props) {
-    return new SmtEventPairProbe(props);
-  }
-  a() {
-    return this.#a;
-  }
-  b() {
-    return this.#b;
-  }
-  trigger() {
-    return this.#trigger;
-  }
-  targets() {
-    return TargetIds.of([this.#a.asTargetId(), this.#b.asTargetId()]);
-  }
-  overlapVerdictIn(results) {
-    return results.verdictOf(this.#qOverlap);
-  }
-  jointVerdictIn(results) {
-    return results.verdictOf(this.#qJoint);
-  }
-}
-// src/requirements/domain/smt-event-pair-probes.ts
-class SmtEventPairProbes {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new SmtEventPairProbes([...values]);
-  }
-  add(value) {
-    return new SmtEventPairProbes([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/trace-value.ts
-class TraceValue {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static of(value) {
-    return new TraceValue(value);
-  }
-  static ofLiteral(value) {
-    return new TraceValue(value ?? null);
-  }
-  static ofBoolean(value) {
-    return new TraceValue(value);
-  }
-  static ofNumber(value) {
-    return new TraceValue(value);
-  }
-  static absent() {
-    return new TraceValue(null);
-  }
-  isTrue() {
-    return this.#value === true;
-  }
-  asNumber() {
-    return typeof this.#value === "number" ? this.#value : Number.NaN;
-  }
-  equals(other) {
-    return JSON.stringify(this.#value) === JSON.stringify(other.#value);
-  }
-  toDocument() {
-    return this.#value;
-  }
-}
-
-// src/requirements/domain/trace-state.ts
-class TraceState {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static empty() {
-    return new TraceState(KeyedIndex.empty());
-  }
-  static of(entries) {
-    return new TraceState(KeyedIndex.of(entries));
-  }
-  valueAt(path) {
-    return this.#values.get(path) ?? TraceValue.absent();
-  }
-  toDocument() {
-    const out = {};
-    for (const [path, value] of this.#values)
-      out[path.asString()] = value.toDocument();
-    return out;
-  }
-}
-// src/requirements/domain/trace-states.ts
-class TraceStates {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new TraceStates([...values]);
-  }
-  add(value) {
-    return new TraceStates([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  finalState() {
-    return this.#values[this.#values.length - 1] ?? TraceState.empty();
-  }
-  toArray() {
-    return [...this.#values];
-  }
-}
-// src/requirements/domain/quint-machine-plan.ts
-class QuintMachinePlan {
-  #invariantComponents;
-  #eventIds;
-  #scenariosWithInit;
-  constructor(props) {
-    this.#invariantComponents = props.invariantComponents;
-    this.#eventIds = props.eventIds;
-    this.#scenariosWithInit = props.scenariosWithInit;
-  }
-  static of(seed) {
-    return new QuintMachinePlan({
-      invariantComponents: seed.invariantComponents,
-      eventIds: seed.eventIds,
-      scenariosWithInit: KeySet.of(seed.scenariosWithInit)
-    });
-  }
-  machineTargets() {
-    return TargetIds.of([...this.#invariantComponents.ids().toTargetIds(), ...this.#eventIds.toTargetIds()]).sortedUniqueCanonically();
-  }
-  #hasInitFor(id) {
-    return this.#scenariosWithInit.has(id);
-  }
-  interpret(model, compileSkips, method, runs) {
-    const bounded = method === "bounded";
-    const findings = [];
-    const skipped = [...compileSkips.toArray()];
-    const machineTargets = this.machineTargets();
-    const eventTargets = this.#eventIds.toTargetIds();
-    const machineRun = runs.machineRun();
-    if (machineRun === null) {
-      for (const target of machineTargets) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("unavailable"),
-          detail: "quint returned no machine run: the event machine was not decided"
-        }));
-      }
-    }
-    if (machineRun !== null) {
-      skipped.push(...machineRun.skipsFor(machineTargets, bounded));
-      if (machineRun.isDeadlock()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.completenessGap(),
-          frRefs: model.frRefsOf(eventTargets),
-          targets: this.#eventIds.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
-          witness: machineRun.witness(),
-          detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified."
-        }));
-      } else if (machineRun.isViolation()) {
-        const violatedComponents = this.#invariantComponents.violatedBy(machineRun.finalState());
-        const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.conflict(),
-          frRefs: model.frRefsOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
-          targets,
-          witness: machineRun.witness(),
-          detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`
-        }));
-      }
-    }
-    for (const ob of model.obligations()) {
-      if (!ob.isStateTemporal() || ob.temporal()?.pattern !== "leads-to")
-        continue;
-      const target = ob.id().asTargetId();
-      if (skipped.some((s) => s.isFor(target)))
-        continue;
-      if (!bounded) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("capability"),
-          detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them"
-        }));
-        continue;
-      }
-      const r = runs.temporalOf(ob.id());
-      if (!r) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("unavailable"),
-          detail: "quint returned no run for this temporal obligation"
-        }));
-        continue;
-      }
-      const skip = r.skipFor(target);
-      if (skip !== null) {
-        skipped.push(skip);
-      } else if (r.isViolation()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.conflict(),
-          frRefs: model.frRefsOf(TargetIds.of([target])),
-          targets: TargetIds.of([target]),
-          witness: r.witness(),
-          detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`
-        }));
-      }
-    }
-    for (const sc of model.scenarios()) {
-      const target = sc.id().asTargetId();
-      if (sc.hasEvent()) {
-        skipped.push(VerificationSkipped.of({ target, reason: SkipReason.of("capability"), detail: "scenarios with a When-event are not checked by the quint backend in v1" }));
-        continue;
-      }
-      if (!this.#hasInitFor(sc.id())) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("capability"),
-          detail: "quint scenario evaluation requires bindings for every declared attribute"
-        }));
-        continue;
-      }
-      const r = runs.scenarioOf(sc.id());
-      if (!r) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("unavailable"),
-          detail: "quint returned no run for this scenario"
-        }));
-        continue;
-      }
-      const skip = r.skipFor(target);
-      if (skip !== null) {
-        skipped.push(skip);
-        continue;
-      }
-      const bindings = sc.bindingEntriesCanonically();
-      const state = TraceState.of(bindings.map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)]));
-      const boundModel = {};
-      for (const [path, value] of bindings)
-        boundModel[path] = value;
-      if (sc.isAccept() && r.isViolated()) {
-        const violatedComponents = this.#invariantComponents.violatedBy(state);
-        const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(targets),
-          targets,
-          witness: VerificationWitness.model(boundModel),
-          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out \u2014 the requirements reject an example that should be accepted.`
-        }));
-      }
-      if (sc.isReject() && !r.isViolated()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(TargetIds.of([target])),
-          targets: TargetIds.of([target]),
-          witness: VerificationWitness.model(boundModel),
-          detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation \u2014 the requirements do not exclude an example that should be rejected.`
-        }));
-      }
-    }
-    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
-  }
-}
-// src/requirements/domain/quint-machine-component.ts
-function evaluate(e, state) {
-  const arg = (i) => evaluate((e.args ?? [])[i], state);
-  switch (e.op) {
-    case "and":
-      return TraceValue.ofBoolean((e.args ?? []).every((a) => evaluate(a, state).isTrue()));
-    case "or":
-      return TraceValue.ofBoolean((e.args ?? []).some((a) => evaluate(a, state).isTrue()));
-    case "not":
-      return TraceValue.ofBoolean(!arg(0).isTrue());
-    case "implies":
-      return TraceValue.ofBoolean(!arg(0).isTrue() || arg(1).isTrue());
-    case "iff":
-      return TraceValue.ofBoolean(arg(0).isTrue() === arg(1).isTrue());
-    case "eq":
-      return TraceValue.ofBoolean(arg(0).equals(arg(1)));
-    case "ne":
-      return TraceValue.ofBoolean(!arg(0).equals(arg(1)));
-    case "lt":
-      return TraceValue.ofBoolean(arg(0).asNumber() < arg(1).asNumber());
-    case "le":
-      return TraceValue.ofBoolean(arg(0).asNumber() <= arg(1).asNumber());
-    case "gt":
-      return TraceValue.ofBoolean(arg(0).asNumber() > arg(1).asNumber());
-    case "ge":
-      return TraceValue.ofBoolean(arg(0).asNumber() >= arg(1).asNumber());
-    case "add":
-      return TraceValue.ofNumber(arg(0).asNumber() + arg(1).asNumber());
-    case "sub":
-      return TraceValue.ofNumber(arg(0).asNumber() - arg(1).asNumber());
-    case "mul":
-      return TraceValue.ofNumber(arg(0).asNumber() * arg(1).asNumber());
-    case "ref":
-      return state.valueAt(AttributePath.of(e.path ?? ""));
-    case "bool":
-    case "int":
-    case "enum":
-      return TraceValue.ofLiteral(e.value);
-    default:
-      return TraceValue.absent();
-  }
-}
-
-class QuintMachineComponent {
-  #id;
-  #expression;
-  constructor(props) {
-    this.#id = props.id;
-    this.#expression = ExpressionTree.of(props.expression).asExpression();
-  }
-  static of(props) {
-    return new QuintMachineComponent(props);
-  }
-  id() {
-    return this.#id;
-  }
-  isViolatedIn(state) {
-    return !evaluate(this.#expression, state).isTrue();
-  }
-}
-// src/requirements/domain/quint-machine-components.ts
-class QuintMachineComponents {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new QuintMachineComponents([...values]);
-  }
-  add(value) {
-    return new QuintMachineComponents([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  isEmpty() {
-    return this.#values.length === 0;
-  }
-  ids() {
-    return ObligationIds.of(this.#values.map((c) => c.id()));
-  }
-  violatedBy(state) {
-    return new QuintMachineComponents(this.#values.filter((c) => c.isViolatedIn(state)));
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/quint-machine-run-verdict.ts
-class QuintMachineRunVerdict {
-  #kind;
-  #trace;
-  #outputTail;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#trace = props.trace;
-    this.#outputTail = props.outputTail;
-  }
-  static timeout() {
-    return new QuintMachineRunVerdict({ kind: "timeout", trace: null, outputTail: "" });
-  }
-  static deadlock(trace) {
-    return new QuintMachineRunVerdict({ kind: "deadlock", trace, outputTail: "" });
-  }
-  static violation(trace) {
-    return new QuintMachineRunVerdict({ kind: "violation", trace, outputTail: "" });
-  }
-  static runFailed(outputTail) {
-    return new QuintMachineRunVerdict({ kind: "run-failed", trace: null, outputTail });
-  }
-  static clean() {
-    return new QuintMachineRunVerdict({ kind: "clean", trace: null, outputTail: "" });
-  }
-  abortsMachineTargets() {
-    return this.#kind === "timeout" || this.#kind === "run-failed";
-  }
-  skipsFor(targets, bounded) {
-    const kind = this.#kind;
-    if (kind === "timeout") {
-      return [...targets].map((target) => VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "machine invariant check exceeded its budget" }));
-    }
-    if (kind === "run-failed") {
-      const outputTail = this.#outputTail;
-      return [...targets].map((target) => VerificationSkipped.of({
-        target,
-        reason: SkipReason.of("unavailable"),
-        detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`
-      }));
-    }
-    return [];
-  }
-  isDeadlock() {
-    return this.#kind === "deadlock";
-  }
-  isViolation() {
-    return this.#kind === "violation";
-  }
-  witness() {
-    const trace = this.#trace;
-    return trace !== null ? VerificationWitness.trace(trace.toArray()) : VerificationWitness.model({});
-  }
-  finalState() {
-    return this.#trace?.finalState() ?? TraceState.empty();
-  }
-}
-// src/requirements/domain/quint-runs.ts
-class QuintRuns {
-  #machine;
-  #temporals;
-  #scenarios;
-  constructor(seed) {
-    this.#machine = seed.machine;
-    this.#temporals = seed.temporals;
-    this.#scenarios = seed.scenarios;
-  }
-  static of(seed) {
-    return new QuintRuns({
-      machine: seed.machine,
-      temporals: seed.temporals,
-      scenarios: seed.scenarios
-    });
-  }
-  machineRun() {
-    return this.#machine;
-  }
-  temporalOf(obligationId) {
-    return this.#temporals.get(obligationId);
-  }
-  scenarioOf(scenarioId) {
-    return this.#scenarios.get(scenarioId);
-  }
-}
-// src/requirements/domain/quint-scenario-verdict.ts
-class QuintScenarioVerdict {
-  #kind;
-  #violated;
-  #outputTail;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#violated = props.violated;
-    this.#outputTail = props.outputTail;
-  }
-  static timeout() {
-    return new QuintScenarioVerdict({ kind: "timeout", violated: false, outputTail: "" });
-  }
-  static runFailed(outputTail) {
-    return new QuintScenarioVerdict({ kind: "run-failed", violated: false, outputTail });
-  }
-  static evaluated(violated) {
-    return new QuintScenarioVerdict({ kind: "evaluated", violated, outputTail: "" });
-  }
-  skipFor(target) {
-    const kind = this.#kind;
-    if (kind === "timeout")
-      return VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "scenario evaluation exceeded its budget" });
-    if (kind === "run-failed")
-      return VerificationSkipped.of({ target, reason: SkipReason.of("unavailable"), detail: `quint run failed unexpectedly: ${this.#outputTail}` });
-    return null;
-  }
-  isViolated() {
-    return this.#kind === "evaluated" && this.#violated;
-  }
-}
-// src/requirements/domain/quint-temporal-verdict.ts
-class QuintTemporalVerdict {
-  #kind;
-  #trace;
-  #outputTail;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#trace = props.trace;
-    this.#outputTail = props.outputTail;
-  }
-  static timeout() {
-    return new QuintTemporalVerdict({ kind: "timeout", trace: null, outputTail: "" });
-  }
-  static runFailed(outputTail) {
-    return new QuintTemporalVerdict({ kind: "run-failed", trace: null, outputTail });
-  }
-  static violation(trace) {
-    return new QuintTemporalVerdict({ kind: "violation", trace, outputTail: "" });
-  }
-  static clean() {
-    return new QuintTemporalVerdict({ kind: "clean", trace: null, outputTail: "" });
-  }
-  skipFor(target) {
-    const kind = this.#kind;
-    if (kind === "timeout")
-      return VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "temporal check exceeded its budget" });
-    if (kind === "run-failed")
-      return VerificationSkipped.of({ target, reason: SkipReason.of("unavailable"), detail: `quint verify failed unexpectedly: ${this.#outputTail}` });
-    return null;
-  }
-  isViolation() {
-    return this.#kind === "violation";
-  }
-  witness() {
-    const trace = this.#trace;
-    return trace !== null ? VerificationWitness.trace(trace.toArray()) : VerificationWitness.model({});
-  }
-}
-// src/requirements/domain/ir-model-decl.ts
-class IrModelDecl {
-  #entities;
-  #obligations;
-  #scenarios;
-  #background;
-  constructor(seed) {
-    this.#entities = seed.entities;
-    this.#obligations = seed.obligations;
-    this.#scenarios = seed.scenarios;
-    this.#background = seed.background;
-  }
-  static of(seed) {
-    return new IrModelDecl(seed);
-  }
-  wellFormednessErrors() {
-    const errors = [];
-    const attrTypes = new Map;
-    const entityNames = new Set;
-    for (const ent of this.#entities) {
-      const entName = ent.name().asString();
-      if (entityNames.has(entName))
-        errors.push(`schema: duplicate entity "${entName}"`);
-      entityNames.add(entName);
-      ent.inspectAttributes((coord, attr, duplicated) => {
-        if (duplicated) {
-          errors.push(`schema: duplicate attribute "${coord}"`);
-        }
-        if (attr.boundsInverted()) {
-          errors.push(`schema: ${coord}: min > max`);
-        }
-        if (attr.boundsOutsideSafeRange()) {
-          errors.push(`schema: ${coord}: bounds must be safe integers`);
-        }
-        attrTypes.set(coord, attr);
-      });
-    }
-    const encoded = new Map;
-    for (const path of attrTypes.keys()) {
-      const key = path.replace(/\./g, "_");
-      const prior = encoded.get(key);
-      if (prior !== undefined) {
-        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
-      } else {
-        encoded.set(key, path);
-      }
-    }
-    const checkExpr = (e, where, primesAllowed) => {
-      ExpressionTree.of(e).walk((node) => {
-        if (node.op === "ref" && typeof node.path === "string") {
-          if (!attrTypes.has(node.path)) {
-            errors.push(`${where}: unresolvable reference "${node.path}"`);
-          }
-          if (node.prime === true && !primesAllowed) {
-            errors.push(`${where}: primed reference "${node.path}" is only legal in event effects and event-scenario expectations`);
-          }
-        }
-        if (node.op === "enum" && typeof node.value === "string") {
-          const known = [...attrTypes.values()].some((t) => t.admitsEnumLiteral(node.value));
-          if (!known) {
-            errors.push(`${where}: enum literal "${node.value}" is not a value of any declared enum attribute`);
-          }
-        }
-      });
-    };
-    const seenIds = new Set;
-    const dupCheck = (id, where) => {
-      if (seenIds.has(id))
-        errors.push(`${where}: duplicate id "${id}"`);
-      seenIds.add(id);
-    };
-    for (const ob of this.#obligations) {
-      const where = `obligation ${ob.id().asString()}`;
-      dupCheck(ob.id().asString(), where);
-      ob.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
-    }
-    for (const sc of this.#scenarios) {
-      const where = `scenario ${sc.id().asString()}`;
-      dupCheck(sc.id().asString(), where);
-      for (const [path, val] of sc.bindings()) {
-        const t = attrTypes.get(path);
-        if (!t) {
-          errors.push(`${where}: binding for unknown attribute "${path}"`);
-          continue;
-        }
-        if (!t.fitsBinding(val)) {
-          errors.push(`${where}: binding value ${JSON.stringify(val)} does not fit ${t.kindLabel()} attribute "${path}"`);
-        }
-      }
-      sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
-    }
-    for (const bg of this.#background) {
-      const where = `background ${bg.id().asString()}`;
-      dupCheck(bg.id().asString(), where);
-      bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
-    }
-    return errors;
-  }
-}
-// src/requirements/domain/ir-attribute-decl.ts
-class IrAttributeDecl {
-  #name;
-  #kind;
-  #values;
-  #min;
-  #max;
-  constructor(props) {
-    this.#name = props.name;
-    this.#kind = AttributeKind.of(props.kind);
-    this.#values = props.values;
-    this.#min = props.min;
-    this.#max = props.max;
-  }
-  static of(props) {
-    return new IrAttributeDecl(props);
-  }
-  name() {
-    return this.#name;
-  }
-  boundsInverted() {
-    return this.#kind.isInt() && this.#min !== undefined && this.#max !== undefined && this.#min.exceeds(this.#max);
-  }
-  boundsOutsideSafeRange() {
-    return this.#min !== undefined && !this.#min.isSafeInteger() || this.#max !== undefined && !this.#max.isSafeInteger();
-  }
-  admitsEnumLiteral(value) {
-    return this.#kind.isEnum() && (this.#values?.includes(value) ?? false);
-  }
-  fitsBinding(value) {
-    return this.#kind.isBool() && typeof value === "boolean" || this.#kind.isInt() && typeof value === "number" && Number.isSafeInteger(value) || this.#kind.isEnum() && typeof value === "string" && (this.#values?.includes(value) ?? false);
-  }
-  kindLabel() {
-    return this.#kind.asString();
-  }
-}
-// src/requirements/domain/ir-attribute-decls.ts
-class IrAttributeDecls {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new IrAttributeDecls([...values]);
-  }
-  add(value) {
-    return new IrAttributeDecls([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/ir-attribute-name.ts
-class IrAttributeName {
-  #value;
-  constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new IrAttributeName(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new IrAttributeName(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/requirements/domain/ir-background-decl.ts
-class IrBackgroundDecl {
-  #id;
-  #assert;
-  constructor(props) {
-    this.#id = props.id;
-    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
-  }
-  static of(props) {
-    return new IrBackgroundDecl(props);
-  }
-  id() {
-    return this.#id;
-  }
-  assertion() {
-    return this.#assert;
-  }
-  inspectExpressions(visitor) {
-    if (this.#assert !== undefined)
-      visitor(this.#assert, false);
-  }
-}
-// src/requirements/domain/ir-background-decls.ts
-class IrBackgroundDecls {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new IrBackgroundDecls([...values]);
-  }
-  add(value) {
-    return new IrBackgroundDecls([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/ir-binding-pairs.ts
-class IrBindingPairs {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new IrBindingPairs([...values]);
-  }
-  add(value) {
-    return new IrBindingPairs([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/ir-declared-values.ts
-class IrDeclaredValues {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new IrDeclaredValues([...values]);
-  }
-  add(value) {
-    return new IrDeclaredValues([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  includes(value) {
-    return this.#values.includes(value);
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/ir-entity-decl.ts
-class IrEntityDecl {
-  #name;
-  #attributes;
-  constructor(props) {
-    this.#name = props.name;
-    this.#attributes = props.attributes;
-  }
-  static of(props) {
-    return new IrEntityDecl(props);
-  }
-  name() {
-    return this.#name;
-  }
-  attributes() {
-    return this.#attributes;
-  }
-  inspectAttributes(visitor) {
-    const seen = new Set;
-    for (const attribute of this.#attributes) {
-      const attributeName = attribute.name().asString();
-      visitor(`${this.#name.asString()}.${attributeName}`, attribute, seen.has(attributeName));
-      seen.add(attributeName);
-    }
-  }
-}
-// src/requirements/domain/ir-entity-decls.ts
-class IrEntityDecls {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new IrEntityDecls([...values]);
-  }
-  add(value) {
-    return new IrEntityDecls([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/ir-entity-name.ts
-class IrEntityName {
-  #value;
-  constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new IrEntityName(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new IrEntityName(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-// src/requirements/domain/ir-obligation-decl.ts
-class IrObligationDecl {
-  #id;
-  #assert;
-  #guard;
-  #effect;
-  #temporal;
-  constructor(props) {
-    this.#id = props.id;
-    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
-    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
-    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
-    this.#temporal = props.temporal;
-  }
-  static of(props) {
-    return new IrObligationDecl(props);
-  }
-  id() {
-    return this.#id;
-  }
-  inspectExpressions(visitor) {
-    if (this.#assert !== undefined)
-      visitor(this.#assert, false);
-    if (this.#guard !== undefined)
-      visitor(this.#guard, false);
-    if (this.#effect !== undefined)
-      visitor(this.#effect, true);
-    this.#temporal?.inspectExpressions(visitor);
-  }
-}
-// src/requirements/domain/ir-obligation-decls.ts
-class IrObligationDecls {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new IrObligationDecls([...values]);
-  }
-  add(value) {
-    return new IrObligationDecls([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/ir-scenario-decl.ts
-class IrScenarioDecl {
-  #id;
-  #bindings;
-  #hasEvent;
-  #expect;
-  constructor(props) {
-    this.#id = props.id;
-    this.#bindings = props.bindings;
-    this.#hasEvent = props.hasEvent;
-    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
-  }
-  static of(props) {
-    return new IrScenarioDecl(props);
-  }
-  id() {
-    return this.#id;
-  }
-  bindings() {
-    return this.#bindings;
-  }
-  inspectExpectation(visitor) {
-    if (this.#expect !== undefined)
-      visitor(this.#expect, this.#hasEvent);
-  }
-}
-// src/requirements/domain/ir-scenario-decls.ts
-class IrScenarioDecls {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new IrScenarioDecls([...values]);
-  }
-  add(value) {
-    return new IrScenarioDecls([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/requirements/domain/ir-temporal-decl.ts
-class IrTemporalDecl {
-  #assert;
-  #from;
-  #to;
-  constructor(props) {
-    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
-    this.#from = props.from === undefined ? undefined : ExpressionTree.of(props.from).asExpression();
-    this.#to = props.to === undefined ? undefined : ExpressionTree.of(props.to).asExpression();
-  }
-  static of(props) {
-    return new IrTemporalDecl(props);
-  }
-  inspectExpressions(visitor) {
-    if (this.#assert !== undefined)
-      visitor(this.#assert, false);
-    if (this.#from !== undefined)
-      visitor(this.#from, false);
-    if (this.#to !== undefined)
-      visitor(this.#to, false);
-  }
-}
-// src/requirements/domain/fr-ref-claims.ts
-class FrRefClaims {
-  #values;
-  constructor(values) {
-    this.#values = values;
-  }
-  static of(values) {
-    return new FrRefClaims([...values]);
-  }
-  add(value) {
-    return new FrRefClaims([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  ownerDescriptions() {
-    return this.#values.map((claim) => claim.ownerDescription());
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-
-// src/requirements/domain/fr-reference-index.ts
-class FrReferenceIndex {
-  #ownersByRef;
-  constructor(ownersByRef) {
-    this.#ownersByRef = ownersByRef;
-  }
-  static of(claims) {
-    const ownersByRef = new Map;
-    for (const claim of claims)
-      claim.claimInto(ownersByRef);
-    return new FrReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.of(ref), FrRefClaims.of(owners)])));
-  }
-  referencedIds() {
-    return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
-  }
-  missingErrors(known) {
-    const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
-    return missing.map((id) => {
-      const owners = [...this.#ownersByRef.get(RequirementId.of(id))?.ownerDescriptions() ?? []].sort().join(", ");
-      return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
-    });
-  }
-}
-// src/requirements/domain/fr-ref-claim.ts
-class FrRefClaim {
-  #owner;
-  #frRefs;
-  constructor(owner, frRefs) {
-    this.#owner = owner;
-    this.#frRefs = frRefs;
-  }
-  static of(owner, frRefs) {
-    return new FrRefClaim(owner, frRefs);
-  }
-  ownerDescription() {
-    return this.#owner;
-  }
-  claimInto(ownersByRef) {
-    for (const ref of this.#frRefs) {
-      const owners = ownersByRef.get(ref.asString()) ?? [];
-      owners.push(this);
-      ownersByRef.set(ref.asString(), owners);
-    }
-  }
-}
-// src/requirements/domain/source-anchor.ts
-class SourceAnchor {
-  #declared;
-  #actual;
-  constructor(declared, actual) {
-    this.#declared = declared;
-    this.#actual = actual;
-  }
-  static of(declared, actual) {
-    return new SourceAnchor(declared, actual);
-  }
-  errors() {
-    if (this.#declared === null) {
-      return [
-        `IR has no sourceDigest \u2014 requirements drift would be undetectable; add "sourceDigest": "${this.#actual.asString()}" (sha256 of requirements.md) to the IR`
-      ];
-    }
-    if (!this.#declared.matches(this.#actual)) {
-      return [
-        `sourceDigest ${this.#declared.asString()} does not match requirements.md (sha256 ${this.#actual.asString()}) \u2014 the requirements changed since formalization; re-formalize against the current text and restamp the digest`
-      ];
-    }
-    return [];
-  }
-}
-// src/requirements/domain/requirements-source-id.ts
-class RequirementsSourceId {
-  #recordRoot;
-  constructor(recordRoot) {
-    this.#recordRoot = recordRoot;
-  }
-  static of(recordRoot) {
-    return new RequirementsSourceId(recordRoot);
-  }
-  equals(other) {
-    return this.#recordRoot.equals(other.#recordRoot);
-  }
-  recordRoot() {
-    return this.#recordRoot;
-  }
-}
-// src/requirements/domain/formal-model-id.ts
-class FormalModelId {
-  #path;
-  constructor(path) {
-    this.#path = path;
-  }
-  static of(path) {
-    return new FormalModelId(path);
-  }
-  equals(other) {
-    return this.#path.equals(other.#path);
-  }
-  artifactPath() {
-    return this.#path;
-  }
-}
-// src/requirements/domain/ir-validation-materials.ts
-class IrValidationMaterials {
-  #id;
-  #irVersion;
-  #schemaErrors;
-  #view;
-  #frClaims;
-  #declaredDigest;
-  #sourceId;
-  #sourceDocument;
-  constructor(seed) {
-    this.#id = seed.id;
-    this.#irVersion = seed.irVersion;
-    this.#schemaErrors = seed.schemaErrors;
-    this.#view = seed.view;
-    this.#frClaims = seed.frClaims;
-    this.#declaredDigest = seed.declaredDigest;
-    this.#sourceId = seed.sourceId;
-    this.#sourceDocument = new Uint8Array(seed.sourceDocument);
-  }
-  static of(seed) {
-    return new IrValidationMaterials(seed);
-  }
-  id() {
-    return this.#id;
-  }
-  irVersion() {
-    return this.#irVersion;
-  }
-  schemaErrors() {
-    return this.#schemaErrors;
-  }
-  view() {
-    return this.#view;
-  }
-  frReferenceIndex() {
-    return FrReferenceIndex.of(this.#frClaims.toArray());
-  }
-  declaredDigest() {
-    return this.#declaredDigest;
-  }
-  sourceId() {
-    return this.#sourceId;
-  }
-  sourceDocument() {
-    return new Uint8Array(this.#sourceDocument);
-  }
-}
-// src/requirements/domain/ir-validation-materials-id.ts
-class IrValidationMaterialsId {
-  #model;
-  constructor(model) {
-    this.#model = model;
-  }
-  static ofModel(model) {
-    return new IrValidationMaterialsId(model);
-  }
-  equals(other) {
-    return this.#model.equals(other.#model);
-  }
-  modelId() {
-    return this.#model;
-  }
-}
-// src/requirements/domain/requirements-source.ts
-class RequirementsSource {
-  #id;
-  #sourcePath;
-  #knownIds;
-  #digest;
-  #sourceDocument;
-  constructor(seed) {
-    this.#id = seed.id;
-    this.#sourcePath = seed.sourcePath;
-    this.#knownIds = seed.knownIds;
-    this.#digest = seed.digest;
-    this.#sourceDocument = new Uint8Array(seed.sourceDocument);
-  }
-  static of(seed) {
-    return new RequirementsSource(seed);
-  }
-  id() {
-    return this.#id;
-  }
-  sourcePath() {
-    return this.#sourcePath;
-  }
-  knownIds() {
-    return this.#knownIds;
-  }
-  digest() {
-    return this.#digest;
-  }
-  sourceDocument() {
-    return new Uint8Array(this.#sourceDocument);
-  }
-}
-// src/requirements/adapter/smt-plan.ts
-class CompileError extends Error {
-  constructor(message) {
-    super(message);
-  }
-}
-function enumCode(model, attrPath, value) {
-  const attr = model.attributeAt(attrPath);
-  const values = attr?.declaredValues();
-  if (!attr || !attr.isEnum() || !values) {
-    throw new CompileError(`"${attrPath}" is not an enum attribute`);
-  }
-  const idx = values.indexOf(value);
-  if (idx < 0)
-    throw new CompileError(`enum value "${value}" is not declared on "${attrPath}"`);
-  return idx;
-}
-function smtOf(model, e) {
-  const bin = (op) => {
-    const [a, b] = e.args ?? [];
-    if (!a || !b)
-      throw new CompileError(`operator "${e.op}" needs two arguments`);
-    const refArg = a.op === "ref" ? a : b.op === "ref" ? b : null;
-    const enumArg = a.op === "enum" ? a : b.op === "enum" ? b : null;
-    if (enumArg && refArg && typeof refArg.path === "string" && typeof enumArg.value === "string") {
-      const code = String(enumCode(model, refArg.path, enumArg.value));
-      const left = a === enumArg ? code : smtOf(model, a);
-      const right = b === enumArg ? code : smtOf(model, b);
-      return `(${op} ${left} ${right})`;
-    }
-    if (enumArg)
-      throw new CompileError("enum literal without a ref sibling has no resolvable encoding");
-    return `(${op} ${smtOf(model, a)} ${smtOf(model, b)})`;
-  };
-  switch (e.op) {
-    case "and":
-    case "or":
-      return `(${e.op} ${(e.args ?? []).map((a) => smtOf(model, a)).join(" ")})`;
-    case "not":
-      return `(not ${smtOf(model, (e.args ?? [])[0])})`;
-    case "implies":
-      return bin("=>");
-    case "iff":
-    case "eq":
-      return bin("=");
-    case "ne":
-      return `(not ${bin("=")})`;
-    case "lt":
-      return bin("<");
-    case "le":
-      return bin("<=");
-    case "gt":
-      return bin(">");
-    case "ge":
-      return bin(">=");
-    case "add":
-      return bin("+");
-    case "sub":
-      return bin("-");
-    case "mul":
-      return bin("*");
-    case "ref": {
-      if (typeof e.path !== "string" || model.attributeAt(e.path) === undefined) {
-        throw new CompileError(`unresolvable reference "${e.path ?? ""}"`);
-      }
-      return smtVar(e.path, e.prime === true);
-    }
-    case "bool":
-      return e.value === true ? "true" : "false";
-    case "int": {
-      const n = typeof e.value === "number" ? e.value : Number.NaN;
-      if (!Number.isInteger(n))
-        throw new CompileError("int literal is not an integer");
-      return smtLit(n);
-    }
-    case "enum":
-      throw new CompileError("enum literal without a ref sibling has no resolvable encoding");
-    default:
-      throw new CompileError(`unknown operator "${e.op}"`);
-  }
-}
-function decodeSolverModel(model, values) {
-  const out = {};
-  for (const attr of model.attributes().sortedByPath()) {
-    const raw = values[smtVar(attr.path().asString(), false)];
-    if (raw === undefined)
+function buildView(ir) {
+  const entities = [];
+  const schema = isObject(ir.schema) ? ir.schema : {};
+  for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
+    if (!isObject(ent) || typeof ent.name !== "string")
       continue;
-    if (attr.isBool()) {
-      out[attr.path().asString()] = raw === "true";
-    } else {
-      const n = smtIntOf(raw);
-      if (!Number.isSafeInteger(n)) {
-        const m = raw.match(/^\(-\s*(\d+)\)$/);
-        out[attr.path().asString()] = m ? `-${m[1]}` : raw;
-      } else if (attr.isEnum() && attr.declaredValues())
-        out[attr.path().asString()] = attr.declaredValues()?.valueAt(n) ?? n;
-      else
-        out[attr.path().asString()] = n;
-    }
-  }
-  return out;
-}
-function buildSmtPlan(model) {
-  const skipped = [];
-  const compiled = new Map;
-  const labelToTarget = new Map;
-  const decls = [];
-  const primedDecls = [];
-  for (const attr of model.attributes()) {
-    const sort = attr.isBool() ? "Bool" : "Int";
-    decls.push(`(declare-const ${smtVar(attr.path().asString(), false)} ${sort})`);
-    primedDecls.push(`(declare-const ${smtVar(attr.path().asString(), true)} ${sort})`);
-  }
-  const typeBounds = [];
-  const primedTypeBounds = [];
-  for (const attr of model.attributes()) {
-    const bounds = (primed) => {
-      const v = smtVar(attr.path().asString(), primed);
-      return attr.match({
-        enum: (values) => values ? `(and (>= ${v} 0) (<= ${v} ${values.count() - 1}))` : null,
-        int: (min, max) => {
-          if (min === undefined && max === undefined)
-            return null;
-          const parts = [];
-          if (min !== undefined)
-            parts.push(`(>= ${v} ${smtLit(min.asNumber())})`);
-          if (max !== undefined)
-            parts.push(`(<= ${v} ${smtLit(max.asNumber())})`);
-          return parts.length === 1 ? parts[0] ?? null : `(and ${parts.join(" ")})`;
-        },
-        bool: () => null
-      });
-    };
-    const cur = bounds(false);
-    if (cur)
-      typeBounds.push({ name: smtName("ty", attr.path().asString()), smt: cur });
-    const nxt = bounds(true);
-    if (nxt)
-      primedTypeBounds.push({ name: smtName("typ", attr.path().asString()), smt: nxt });
-  }
-  const bg = [];
-  for (const b of model.background()) {
-    try {
-      bg.push({ name: smtName("bg", b.id().asString()), smt: smtOf(model, b.assertion()) });
-      labelToTarget.set(smtName("bg", b.id().asString()), b.id().asString());
-    } catch (err2) {
-      if (!(err2 instanceof CompileError))
-        throw err2;
-    }
-  }
-  const invariants = [];
-  const invariantObs = [];
-  const events = [];
-  for (const ob of model.obligations()) {
-    if (ob.isInvariantLike()) {
-      const assertion = ob.assertion();
-      if (assertion === undefined) {
-        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "invariant obligation lacks an assert expression" }));
-        compiled.set(ob.id().asString(), false);
+    const name = IntermediateRepresentationEntityName.parse(ent.name);
+    if (!name.ok)
+      return err(JSON.stringify(name.error));
+    const attributes = [];
+    for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
+      if (!isObject(attr) || typeof attr.name !== "string")
         continue;
-      }
-      try {
-        invariants.push({ name: smtName("ob", ob.id().asString()), smt: smtOf(model, assertion) });
-        labelToTarget.set(smtName("ob", ob.id().asString()), ob.id().asString());
-        invariantObs.push(ob);
-        compiled.set(ob.id().asString(), true);
-      } catch (err2) {
-        if (!(err2 instanceof CompileError))
-          throw err2;
-        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err2 instanceof Error ? err2.message : String(err2) }));
-        compiled.set(ob.id().asString(), false);
-      }
-    } else if (ob.isEvent()) {
-      const event = ob.eventDefinition();
-      if (event === null) {
-        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "event obligation lacks trigger/guard/effect" }));
-        compiled.set(ob.id().asString(), false);
-        continue;
-      }
-      try {
-        if (ExpressionTree.of(event.guard).usesPrime())
-          throw new CompileError("guard must not use primed references");
-        smtOf(model, event.guard);
-        smtOf(model, event.effect);
-        events.push(ob);
-        compiled.set(ob.id().asString(), true);
-      } catch (err2) {
-        if (!(err2 instanceof CompileError))
-          throw err2;
-        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err2 instanceof Error ? err2.message : String(err2) }));
-        compiled.set(ob.id().asString(), false);
-      }
-    } else {
-      skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("capability"), detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend` }));
-      compiled.set(ob.id().asString(), false);
+      const t = isObject(attr.type) ? attr.type : {};
+      const kind = AttributeKind.parse(typeof t.kind === "string" ? t.kind : "");
+      if (!kind.ok)
+        return err(JSON.stringify(kind.error));
+      const name2 = IntermediateRepresentationAttributeName.parse(attr.name);
+      if (!name2.ok)
+        return err(JSON.stringify(name2.error));
+      const members = flatMapResult(traverseResult(Array.isArray(t.values) ? t.values.filter((v) => typeof v === "string") : [], EnumerationMember.parse), EnumerationMembers.parse);
+      if (!members.ok)
+        return err(JSON.stringify(members.error));
+      attributes.push(IntermediateRepresentationAttributeDeclaration.of({
+        name: name2.value,
+        kind: kind.value,
+        values: Array.isArray(t.values) ? members.value : undefined,
+        min: typeof t.min === "number" ? DeclaredBound.of(t.min) : undefined,
+        max: typeof t.max === "number" ? DeclaredBound.of(t.max) : undefined
+      }));
     }
+    entities.push(IntermediateRepresentationEntityDeclaration.of({
+      name: name.value,
+      attributes: IntermediateRepresentationAttributeDeclarations.of(attributes)
+    }));
   }
-  const baseScript = [
-    ...decls,
-    ...[...typeBounds, ...bg, ...invariants].flatMap((c) => [
-      `(declare-const ${c.name} Bool)`,
-      `(assert (=> ${c.name} ${c.smt}))`
-    ])
-  ].join(`
-`);
-  const baseAssumptions = [...typeBounds, ...bg, ...invariants].map((c) => c.name);
-  const modelVars = model.attributes().toArray().map((a) => ({
-    name: smtVar(a.path().asString(), false),
-    sort: a.isBool() ? "Bool" : "Int"
+  const obligations = [];
+  for (const ob of Array.isArray(ir.obligations) ? ir.obligations : []) {
+    if (!isObject(ob) || typeof ob.id !== "string")
+      continue;
+    const temporal = isObject(ob.temporal) ? ob.temporal : null;
+    const id = ObligationIdentifier.parse(ob.id);
+    if (!id.ok)
+      return err(JSON.stringify(id.error));
+    const constructed = IntermediateRepresentationObligationDeclaration.parse({
+      id: id.value,
+      assert: asExpression(ob.assert ?? null),
+      guard: asExpression(ob.guard ?? null),
+      effect: asExpression(ob.effect ?? null),
+      temporal: temporal === null ? undefined : IntermediateRepresentationTemporalDeclaration.of({
+        assert: asExpression(temporal.assert ?? null),
+        from: asExpression(temporal.from ?? null),
+        to: asExpression(temporal.to ?? null)
+      })
+    });
+    if (!constructed.ok)
+      return err(JSON.stringify(constructed.error));
+    obligations.push(constructed.value);
+  }
+  const scenarios = [];
+  for (const sc of Array.isArray(ir.scenarios) ? ir.scenarios : []) {
+    if (!isObject(sc) || typeof sc.id !== "string")
+      continue;
+    const bindings = decodeDeclaredBindings(isObject(sc.bindings) ? sc.bindings : {});
+    if (!bindings.ok)
+      return err(bindings.error);
+    const id = ScenarioIdentifier.parse(sc.id);
+    if (!id.ok)
+      return err(JSON.stringify(id.error));
+    const constructed = IntermediateRepresentationScenarioDeclaration.parse({
+      id: id.value,
+      bindings: bindings.value,
+      hasEvent: isObject(sc.event ?? null),
+      expect: asExpression(sc.expect ?? null)
+    });
+    if (!constructed.ok)
+      return err(JSON.stringify(constructed.error));
+    scenarios.push(constructed.value);
+  }
+  const background = [];
+  for (const bg of Array.isArray(ir.background) ? ir.background : []) {
+    if (!isObject(bg) || typeof bg.id !== "string")
+      continue;
+    const id = BackgroundAssumptionIdentifier.parse(bg.id);
+    if (!id.ok)
+      return err(JSON.stringify(id.error));
+    const constructed = IntermediateRepresentationBackgroundDeclaration.parse({
+      id: id.value,
+      assert: asExpression(bg.assert ?? null)
+    });
+    if (!constructed.ok)
+      return err(JSON.stringify(constructed.error));
+    background.push(constructed.value);
+  }
+  return ok(IntermediateRepresentationModelDeclaration.of({
+    entities: IntermediateRepresentationEntityDeclarations.of(entities),
+    obligations: IntermediateRepresentationObligationDeclarations.of(obligations),
+    scenarios: IntermediateRepresentationScenarioDeclarations.of(scenarios),
+    background: IntermediateRepresentationBackgroundDeclarations.of(background)
   }));
-  const queries = [];
-  queries.push({ id: "global", script: baseScript, assumptions: baseAssumptions, model: modelVars });
-  for (const ob of invariantObs) {
-    const ant = ob.vacuityAntecedent();
-    if (!ant)
-      continue;
-    try {
-      const name = smtName("ant", ob.id().asString());
-      const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${smtOf(model, ant)}))`].join(`
-`);
-      queries.push({ id: `vac:${ob.id().asString()}`, script, assumptions: [...baseAssumptions, name], model: [] });
-    } catch (error) {
-      if (!(error instanceof CompileError))
-        throw error;
-    }
-  }
-  const eventPairs = [];
-  const byTrigger = new Map;
-  for (const ev of events) {
-    const definition = ev.eventDefinition();
-    if (definition === null)
-      continue;
-    const key = definition.trigger.asString();
-    const list = byTrigger.get(key) ?? [];
-    list.push(ev);
-    byTrigger.set(key, list);
-  }
-  for (const trigger of [...byTrigger.keys()].sort()) {
-    const list = byTrigger.get(trigger) ?? [];
-    for (let i = 0;i < list.length; i++) {
-      for (let j = i + 1;j < list.length; j++) {
-        const a = list[i];
-        const b = list[j];
-        if (!a || !b)
-          continue;
-        const eventA = a.eventDefinition();
-        const eventB = b.eventDefinition();
-        if (eventA === null || eventB === null)
-          continue;
-        const ga = { name: smtName("g", a.id().asString()), smt: smtOf(model, eventA.guard) };
-        const gb = { name: smtName("g", b.id().asString()), smt: smtOf(model, eventB.guard) };
-        const ea = { name: smtName("e", a.id().asString()), smt: smtOf(model, eventA.effect) };
-        const eb = { name: smtName("e", b.id().asString()), smt: smtOf(model, eventB.effect) };
-        labelToTarget.set(ga.name, a.id().asString());
-        labelToTarget.set(gb.name, b.id().asString());
-        labelToTarget.set(ea.name, a.id().asString());
-        labelToTarget.set(eb.name, b.id().asString());
-        const overlapScript = [
-          baseScript,
-          ...[ga, gb].flatMap((c) => [`(declare-const ${c.name} Bool)`, `(assert (=> ${c.name} ${c.smt}))`])
-        ].join(`
-`);
-        const jointScript = [
-          baseScript,
-          ...primedDecls,
-          ...[...primedTypeBounds, ga, gb, ea, eb].flatMap((c) => [
-            `(declare-const ${c.name} Bool)`,
-            `(assert (=> ${c.name} ${c.smt}))`
-          ])
-        ].join(`
-`);
-        const qOverlap = `evo:${a.id().asString()}:${b.id().asString()}`;
-        const qJoint = `evj:${a.id().asString()}:${b.id().asString()}`;
-        queries.push({ id: qOverlap, script: overlapScript, assumptions: [...baseAssumptions, ga.name, gb.name], model: [] });
-        queries.push({
-          id: qJoint,
-          script: jointScript,
-          assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
-          model: []
-        });
-        eventPairs.push(SmtEventPairProbe.of({ qOverlap: QueryLabel.of(qOverlap), qJoint: QueryLabel.of(qJoint), a: a.id(), b: b.id(), trigger: TriggerName.of(trigger) }));
-      }
-    }
-  }
-  const gapTriggers = new Map;
-  for (const trigger of [...byTrigger.keys()].sort()) {
-    const list = byTrigger.get(trigger) ?? [];
-    const guards = list.flatMap((ev) => {
-      const definition = ev.eventDefinition();
-      return definition === null ? [] : [smtOf(model, definition.guard)];
-    });
-    const name = smtName("ng", trigger);
-    const noGuard = guards.length === 1 ? `(not ${guards[0]})` : `(not (or ${guards.join(" ")}))`;
-    const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${noGuard}))`].join(`
-`);
-    queries.push({ id: `gap:${trigger}`, script, assumptions: [...baseAssumptions, name], model: modelVars });
-    gapTriggers.set(trigger, list.map((ev) => ev.id()).sort((a, b) => a.compareTo(b)).map((id) => id.asString()));
-  }
-  const scenarioQueries = new Map;
-  for (const sc of model.scenarios()) {
-    if (sc.hasEvent()) {
-      skipped.push(VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("capability"), detail: "scenarios with a When-event are not checked by the SMT backend in v1" }));
-      continue;
-    }
-    try {
-      const name = smtName("sc", sc.id().asString());
-      const parts = [];
-      for (const [path, value] of sc.bindingEntriesCanonically()) {
-        const attr = model.attributeAt(path);
-        if (!attr)
-          throw new CompileError(`binding references unknown attribute "${path}"`);
-        const v = smtVar(path, false);
-        if (attr.isBool())
-          parts.push(`(= ${v} ${value === true})`);
-        else if (attr.isInt()) {
-          const n = typeof value === "number" ? value : Number.NaN;
-          if (!Number.isInteger(n))
-            throw new CompileError(`binding for int attribute "${path}" is not an integer`);
-          parts.push(`(= ${v} ${smtLit(n)})`);
-        } else
-          parts.push(`(= ${v} ${enumCode(model, path, String(value))})`);
-      }
-      const conj = parts.length === 1 ? parts[0] ?? "true" : `(and ${parts.join(" ")})`;
-      const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${conj}))`].join(`
-`);
-      const qid = `sc:${sc.id().asString()}`;
-      queries.push({ id: qid, script, assumptions: [...baseAssumptions, name], model: modelVars });
-      scenarioQueries.set(sc.id().asString(), qid);
-    } catch (err2) {
-      if (!(err2 instanceof CompileError))
-        throw err2;
-      skipped.push(VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err2 instanceof Error ? err2.message : String(err2) }));
-    }
-  }
-  return {
-    queries,
-    plan: SmtVerificationPlan.of({
-      compiled: KeySet.of([...compiled].filter(([, ok2]) => ok2).map(([id]) => ObligationId.of(id))),
-      skipped: VerificationSkips.of(skipped),
-      labelToTarget: KeyedIndex.of([...labelToTarget].filter(([, target]) => target.startsWith("OB-")).map(([label, target]) => [QueryLabel.of(label), TargetId.of(target)])),
-      eventPairs: SmtEventPairProbes.of(eventPairs),
-      gapTriggers: KeyedIndex.of([...gapTriggers].map(([trigger, ids]) => [TriggerName.of(trigger), TargetIds.of(Array.from(ids, (raw) => TargetId.of(raw)))])),
-      scenarioQueries: KeyedIndex.of([...scenarioQueries].map(([sc, qid]) => [ScenarioId.of(sc), QueryLabel.of(qid)]))
-    })
-  };
 }
-// src/requirements/adapter/z3-solver-client-impl.ts
-import { spawnSync } from "child_process";
-var CHILD_BUDGET_MS = 45000;
-var CHILD_WALL_TIMEOUT_MS = 55000;
-
-class Z3SolverClientImpl {
-  #config;
-  constructor(config) {
-    this.#config = config;
-  }
-  check(model) {
-    const plan = buildSmtPlan(model);
-    const outcome = this.#runChild(plan.queries);
-    if (outcome.unavailable !== undefined || !outcome.results) {
-      return {
-        plan: plan.plan,
-        result: { kind: "unavailable", reason: outcome.unavailable ?? "solver child produced no results" }
-      };
-    }
-    const verdicts = [];
-    for (const [id, r] of outcome.results) {
-      const parsed = combineResults({
-        label: QueryLabel.parse(id),
-        core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse)
-      });
+function collectFunctionalRequirementReferenceClaims(ir) {
+  const claims = [];
+  for (const section of ["obligations", "scenarios", "unformalized"]) {
+    const arr = Array.isArray(ir[section]) ? ir[section] : [];
+    for (const [i, entry] of arr.entries()) {
+      if (!isObject(entry))
+        continue;
+      const owner = typeof entry.id === "string" ? entry.id : `${section}[${i}]`;
+      const refs = entry.frRefs ?? null;
+      if (!Array.isArray(refs))
+        continue;
+      const parsed = flatMapResult(traverseResult(refs.filter((r) => typeof r === "string"), RequirementIdentifier.parse), FunctionalRequirementReferences.parse);
       if (!parsed.ok)
-        return { plan: plan.plan, result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` } };
-      verdicts.push([parsed.value.label, SmtQueryVerdict.of({
-        status: r.status,
-        decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
-        core: parsed.value.core?.map((label) => label.asString())
-      })]);
+        return err(JSON.stringify(parsed.error));
+      claims.push(FunctionalRequirementReferenceClaim.of(owner, parsed.value));
     }
-    return { plan: plan.plan, result: { kind: "solved", verdicts: SmtQueryVerdicts.of(KeyedIndex.of(verdicts)) } };
   }
-  #runChild(queries) {
-    const payload = JSON.stringify({ queries, timeoutMs: this.#config.perQueryTimeoutMs, budgetMs: CHILD_BUDGET_MS });
-    const runtimes = this.#config.runtimeOverride ? [this.#config.runtimeOverride] : ["node", "bun"];
-    const attempts = [];
-    for (const runtime of runtimes) {
-      const res = spawnSync(runtime, [this.#config.selfPath, "--smt-child"], {
-        input: payload,
-        encoding: "utf-8",
-        timeout: CHILD_WALL_TIMEOUT_MS,
-        cwd: this.#config.workingDirectory
-      });
-      if (res.error && res.error.code === "ENOENT") {
-        attempts.push(`${runtime}: not on PATH`);
-        continue;
-      }
-      if (res.error || res.status !== 0) {
-        const stderrTail = (res.stderr ?? "").trim().split(`
-`).slice(-2).join(" ").slice(0, 200);
-        attempts.push(`${runtime}: ${res.error ? String(res.error) : `exit ${res.status}`}${stderrTail ? ` (${stderrTail})` : ""}`);
-        continue;
-      }
-      try {
-        const parsed = JSON.parse((res.stdout ?? "").trim().split(`
-`).pop() ?? "");
-        if (typeof parsed.unavailable === "string")
-          return { unavailable: parsed.unavailable };
-        const map = new Map;
-        for (const r of parsed.results ?? [])
-          map.set(r.id, r);
-        return { results: map };
-      } catch {
-        attempts.push(`${runtime}: solver child produced unreadable output`);
-      }
-    }
-    return { unavailable: `no runtime could execute the z3 child process (${attempts.join("; ")})` };
-  }
-}
-// src/requirements/adapter/verification-report-serializer.ts
-function renderVerificationReportBytes(report) {
-  return `${JSON.stringify(report.toDocument(), null, 2)}
-`;
-}
-function parseSiblingReportDocument(directory, fileName, raw) {
-  const decoded = parseFindingsValues(raw);
-  if (!decoded.ok)
-    return decoded;
-  const doc = decoded.value;
-  if (`${doc.backend.asString()}.json` !== fileName)
-    return err("backend must match the report filename");
-  return ok(VerificationReport.of({
-    id: VerificationReportId.of(directory, doc.backend.asString()),
-    irVersion: doc.irVersion,
-    irHash: doc.irHash,
-    method: doc.method,
-    findings: VerificationFindings.of(doc.findings.map((entry) => VerificationFinding.of({
-      kind: entry.kind,
-      frRefs: entry.frRefs,
-      targets: entry.targets,
-      witness: VerificationWitness.of(entry.witness),
-      detail: entry.detail
-    }))),
-    skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.of(entry))),
-    crossChecked: doc.crossChecked === undefined ? null : CrossCheckedEntries.of(doc.crossChecked.map(CrossCheckedEntry.of)),
-    unavailableReason: doc.unavailable?.reason ?? null
-  }));
-}
-// src/requirements/adapter/verification-directory-repository-impl.ts
-import { existsSync, mkdirSync as mkdirSync3, readFileSync as readFileSync3, readdirSync, renameSync as renameSync3, rmSync as rmSync3 } from "fs";
-import { join as join3 } from "path";
-var CROSS_CHECK_BASENAME = "cross-check.json";
-var STALE_CROSS_CHECK_BASENAME = ".cross-check.stale";
-var VERIFICATION_LOCK_BASENAME = ".deep-spec-finalization.lock";
-var encoder = new TextEncoder;
-var UNPROBED_LIVENESS = {
-  self: () => 0,
-  statusOf: () => "unknown"
-};
-function causeOf2(e) {
-  return e instanceof Error ? e.message : String(e);
-}
-function lockCauseOf(outcome) {
-  return "cause" in outcome ? `${outcome.kind}: ${outcome.cause}` : outcome.kind;
-}
-function documentsByFileName(reports) {
-  const out = new Map;
-  for (const report of reports)
-    out.set(report.id().fileName(), JSON.stringify(report.toDocument()));
-  return out;
+  return ok(claims);
 }
 
-class VerificationDirectoryRepositoryImpl {
-  #lock;
-  constructor(lock = new DirectoryFinalizationLock(new SystemClock, UNPROBED_LIVENESS, VERIFICATION_LOCK_BASENAME)) {
-    this.#lock = lock;
+class IntermediateRepresentationValidationMaterialsRepositoryImplementation {
+  #schemaPath;
+  constructor(config) {
+    this.#schemaPath = config.schemaPath;
   }
-  findByDirectory(directory) {
-    const siblings = this.#siblingsOf(directory);
-    if (!siblings.ok)
-      return err(siblings.error);
-    const crossPath = join3(directory.asString(), CROSS_CHECK_BASENAME);
-    if (!existsSync(crossPath)) {
-      return ok(VerificationDirectory.of(directory, VerificationReports.of(siblings.value), null));
+  findById(id) {
+    const outputPath = id.modelId().artifactPath().asString();
+    if (basename2(outputPath) !== FORMAL_MODEL_BASENAME || !existsSync(outputPath)) {
+      return err({ kind: "not-found", path: outputPath });
     }
-    const crossCheck = this.#readReport(directory, CROSS_CHECK_BASENAME);
-    return ok(VerificationDirectory.of(directory, VerificationReports.of(siblings.value), crossCheck.ok ? crossCheck.value : null));
-  }
-  store(aggregate) {
-    const directory = aggregate.directory();
-    const directoryPath = directory.asString();
-    const candidate = aggregate.candidate();
-    if (candidate === null) {
-      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: "no finalization candidate" });
-    }
+    const corrupt = (cause) => err({ kind: "corrupt", path: outputPath, cause });
+    let bytes;
     try {
-      mkdirSync3(directoryPath, { recursive: true });
+      bytes = readFileSync3(outputPath);
     } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: causeOf2(e) });
+      return err({
+        kind: "io-failed",
+        operation: "read",
+        path: outputPath,
+        cause: e instanceof Error ? e.message : String(e)
+      });
     }
-    const lockPath = this.#lock.canonicalPathOf(directory);
-    const acquired = this.#lock.acquire(directory);
-    if (acquired.kind !== "acquired" && acquired.kind !== "recovered") {
-      return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(acquired) });
+    const md = bytes.toString("utf-8");
+    const fences = extractFences(md, "json").map((f) => f.body);
+    if (fences.length !== 1) {
+      return corrupt(`formal model must contain exactly one \`\`\`json fence (found ${fences.length})`);
     }
-    let outcome;
-    let released;
+    let ir;
     try {
-      outcome = this.#publish(aggregate, candidate, directory);
-    } finally {
-      released = this.#lock.release(directory);
-    }
-    if (released.kind !== "released" && outcome.ok) {
-      return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(released) });
-    }
-    return outcome;
-  }
-  #publish(aggregate, candidate, directory) {
-    const directoryPath = directory.asString();
-    const backendPath = join3(directoryPath, candidate.id().fileName());
-    const crossPath = join3(directoryPath, CROSS_CHECK_BASENAME);
-    const stalePath = join3(directoryPath, STALE_CROSS_CHECK_BASENAME);
-    const unchanged = this.#siblingsUnchanged(aggregate, candidate, directory);
-    if (!unchanged.ok)
-      return err(unchanged.error);
-    const crossCheck = aggregate.crossCheck();
-    const backendBytes = renderVerificationReportBytes(candidate);
-    const crossBytes = crossCheck === null ? null : renderVerificationReportBytes(crossCheck);
-    if (!this.#lock.holdsOwnership(directory))
-      return this.#fenced(directory, crossPath);
-    if (existsSync(crossPath)) {
-      try {
-        renameSync3(crossPath, stalePath);
-      } catch (e) {
-        return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
-      }
-    }
-    if (!this.#lock.holdsOwnership(directory))
-      return this.#fenced(directory, backendPath);
-    try {
-      writeFileAtomically(backendPath, encoder.encode(backendBytes));
+      ir = JSON.parse(fences[0] ?? "");
     } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path: backendPath, cause: causeOf2(e) });
+      return corrupt(`IR fence is not valid JSON: ${e instanceof Error ? e.message : String(e)}`);
     }
-    if (crossBytes !== null) {
-      if (!this.#lock.holdsOwnership(directory))
-        return this.#fenced(directory, crossPath);
-      try {
-        writeFileAtomically(crossPath, encoder.encode(crossBytes));
-      } catch (e) {
-        return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
-      }
+    if (!isObject(ir)) {
+      return corrupt("IR fence must contain a JSON object");
     }
-    try {
-      rmSync3(stalePath, { force: true });
-    } catch {}
-    return ok(undefined);
+    if (!existsSync(this.#schemaPath)) {
+      return corrupt(`IR schema not installed at ${this.#schemaPath} \u2014 run plugin sync`);
+    }
+    const schema = readContractSchema(this.#schemaPath);
+    if (!schema.ok) {
+      return corrupt(`IR schema unreadable: ${schema.error.cause}`);
+    }
+    const schemaErrors = [];
+    validateSchema(schema.value, schema.value, ir, "", schemaErrors);
+    const messages = flatMapResult(traverseResult(schemaErrors, ErrorMessage.parse), ErrorMessages.parse);
+    if (!messages.ok)
+      return corrupt(JSON.stringify(messages.error));
+    const recordRoot = ArtifactPath.of(dirname2(dirname2(dirname2(outputPath))));
+    const parsed = combineResults({
+      irVersion: IntermediateRepresentationVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : ""),
+      declaredDigest: typeof ir.sourceDigest === "string" ? DeclaredDigest.parse(ir.sourceDigest) : ok(null)
+    });
+    if (!parsed.ok)
+      return corrupt(JSON.stringify(parsed.error));
+    const view = buildView(ir);
+    if (!view.ok)
+      return corrupt(view.error);
+    const claims = collectFunctionalRequirementReferenceClaims(ir);
+    if (!claims.ok)
+      return corrupt(claims.error);
+    return ok(IntermediateRepresentationValidationMaterials.of({
+      id,
+      irVersion: parsed.value.irVersion,
+      schemaErrors: messages.value,
+      view: view.value,
+      functionalRequirementReferenceClaims: FunctionalRequirementReferenceClaims.of(claims.value),
+      declaredDigest: parsed.value.declaredDigest,
+      sourceId: RequirementsSourceIdentifier.of(recordRoot),
+      sourceDocument: new Uint8Array(bytes)
+    }));
   }
-  #siblingsUnchanged(aggregate, candidate, directory) {
-    const observed = this.#siblingsOf(directory);
-    if (!observed.ok)
-      return err(observed.error);
-    const candidateFileName = candidate.id().fileName();
-    const onDisk = documentsByFileName(observed.value.filter((r) => r.id().fileName() !== candidateFileName));
-    const loaded = documentsByFileName(aggregate.reports().toArray().filter((r) => r.id().fileName() !== candidateFileName));
-    let same = onDisk.size === loaded.size;
-    if (same) {
-      for (const [fileName, document] of loaded) {
-        if (onDisk.get(fileName) !== document) {
-          same = false;
-          break;
-        }
-      }
-    }
-    if (same)
+  store(materials) {
+    const outputPath = materials.id().modelId().artifactPath().asString();
+    const bytes = materials.sourceDocument();
+    try {
+      writeFileAtomically(outputPath, bytes);
       return ok(undefined);
-    return err({
-      kind: "io-failed",
-      operation: "write",
-      path: directory.asString(),
-      cause: "conflict: sibling set changed since load"
-    });
-  }
-  #siblingsOf(directory) {
-    if (!existsSync(directory.asString()))
-      return ok([]);
-    let entries;
-    try {
-      entries = readdirSync(directory.asString()).filter((f) => f.endsWith(".json") && f !== CROSS_CHECK_BASENAME).sort();
     } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: directory.asString(), cause: causeOf2(e) });
+      return err({
+        kind: "io-failed",
+        operation: "write",
+        path: outputPath,
+        cause: e instanceof Error ? e.message : String(e)
+      });
     }
-    const reports = [];
-    for (const file of entries) {
-      const report = this.#readReport(directory, file);
-      if (!report.ok)
-        return err(report.error);
-      reports.push(report.value);
-    }
-    return ok(reports);
-  }
-  #readReport(directory, fileName) {
-    const path = join3(directory.asString(), fileName);
-    let raw;
-    try {
-      raw = JSON.parse(readFileSync3(path, "utf-8"));
-    } catch (e) {
-      return err({ kind: "corrupt", path, cause: causeOf2(e) });
-    }
-    const parsed = parseSiblingReportDocument(directory, fileName, raw);
-    return parsed.ok ? ok(parsed.value) : err({ kind: "corrupt", path, cause: parsed.error });
-  }
-  #fenced(directory, path) {
-    return err({
-      kind: "io-failed",
-      operation: "write",
-      path,
-      cause: `lock-fenced: ${this.#lock.canonicalPathOf(directory)} is no longer held by this writer`
-    });
   }
 }
-// src/requirements/adapter/quint-compilation.ts
-class CompileError2 extends Error {
-  constructor(message) {
-    super(message);
+// src/requirements/adapter/itf-decoder.ts
+function decodeItfValue(v) {
+  if (isObject(v) && typeof v["#bigint"] === "string")
+    return Number.parseInt(v["#bigint"], 10);
+  return v;
+}
+function decodeItfTrace(itfText, varToPath) {
+  if (itfText.length > 16777216)
+    return err("ITF document exceeds the 16 Mi code-unit budget");
+  let doc;
+  try {
+    doc = JSON.parse(itfText);
+  } catch (error) {
+    if (!(error instanceof SyntaxError))
+      throw error;
+    return err(error.message);
   }
+  if (!isObject(doc) || !Array.isArray(doc.states))
+    return ok([]);
+  const trace = [];
+  for (const state of doc.states) {
+    if (!isObject(state))
+      continue;
+    const entries = [];
+    for (const key of Object.keys(state).sort()) {
+      if (key.startsWith("#"))
+        continue;
+      const path = varToPath.get(key) ?? key;
+      const attributePath = AttributePath.parse(path);
+      if (!attributePath.ok)
+        return err(JSON.stringify(attributePath.error));
+      const value = TraceValue.parse(decodeItfValue(state[key] ?? null));
+      if (!value.ok)
+        return err(JSON.stringify(value.error));
+      entries.push([attributePath.value, value.value]);
+    }
+    trace.push(TraceState.of(entries));
+  }
+  return ok(trace);
+}
+function itfStatus(itfText) {
+  try {
+    const doc = JSON.parse(itfText);
+    if (isObject(doc) && isObject(doc["#meta"]) && typeof doc["#meta"].status === "string") {
+      return doc["#meta"].status;
+    }
+  } catch {}
+  return "";
+}
+// src/requirements/adapter/quint-client-implementation.ts
+import { spawnSync } from "child_process";
+import { existsSync as existsSync2, mkdtempSync, readdirSync, readFileSync as readFileSync4, rmSync as rmSync3, writeFileSync as writeFileSync3 } from "fs";
+import { tmpdir } from "os";
+import { join as join3 } from "path";
+
+// src/requirements/adapter/quint-compilation.ts
+class CompileError extends Error {
 }
 function qVar(path) {
   return path.replace(/\./g, "_");
@@ -4456,7 +4572,7 @@ function quintOf(e, name) {
   const args = (e.args ?? []).map((a) => quintOf(a, name));
   const two = () => {
     if (args.length !== 2)
-      throw new CompileError2(`operator "${e.op}" needs two arguments`);
+      throw new CompileError(`operator "${e.op}" needs two arguments`);
     return [args[0] ?? "", args[1] ?? ""];
   };
   switch (e.op) {
@@ -4512,16 +4628,16 @@ function quintOf(e, name) {
     }
     case "ref":
       if (typeof e.path !== "string")
-        throw new CompileError2("ref without path");
+        throw new CompileError("ref without path");
       return name(e.path, e.prime === true);
     case "bool":
     case "int":
     case "enum":
       if (e.value === undefined)
-        throw new CompileError2(`${e.op} literal without value`);
+        throw new CompileError(`${e.op} literal without value`);
       return qLit(e.value);
     default:
-      throw new CompileError2(`unknown operator "${e.op}"`);
+      throw new CompileError(`unknown operator "${e.op}"`);
   }
 }
 function decomposeEffect(effect) {
@@ -4538,17 +4654,17 @@ function decomposeEffect(effect) {
   flatten(effect);
   for (const term of terms) {
     if (term.op !== "eq")
-      throw new CompileError2("effect must be a conjunction of primed assignments (eq(prime-ref, expr))");
+      throw new CompileError("effect must be a conjunction of primed assignments (eq(prime-ref, expr))");
     const [a, b] = term.args ?? [];
     const target = a?.op === "ref" && a.prime === true ? a : b?.op === "ref" && b.prime === true ? b : null;
     const rhs = target === a ? b : a;
     if (!target || !rhs || typeof target.path !== "string") {
-      throw new CompileError2("effect must be a conjunction of primed assignments (eq(prime-ref, expr))");
+      throw new CompileError("effect must be a conjunction of primed assignments (eq(prime-ref, expr))");
     }
     if (ExpressionTree.of(rhs).usesPrime())
-      throw new CompileError2("assignment right-hand side must not use primed references");
+      throw new CompileError("assignment right-hand side must not use primed references");
     if (assignments.has(target.path))
-      throw new CompileError2(`attribute "${target.path}" assigned twice in one effect`);
+      throw new CompileError(`attribute "${target.path}" assigned twice in one effect`);
     assignments.set(target.path, rhs);
   }
   return assignments;
@@ -4556,10 +4672,10 @@ function decomposeEffect(effect) {
 function domainOf(attr) {
   return attr.match({
     bool: () => "Set(true, false)",
-    enum: (values) => `Set(${(values?.toArray() ?? []).map((v) => JSON.stringify(v)).join(", ")})`,
+    enum: (values) => `Set(${(values?.toArray() ?? []).map((v) => JSON.stringify(v.asString())).join(", ")})`,
     int: (min, max) => {
       if (min === undefined || max === undefined) {
-        throw new CompileError2(`int attribute "${attr.path().asString()}" lacks min/max \u2014 bounded domains are required by the quint backend`);
+        throw new CompileError(`int attribute "${attr.path().asString()}" lacks min/max \u2014 bounded domains are required by the quint backend`);
       }
       return `(${min.asNumber()}).to(${max.asNumber()})`;
     }
@@ -4572,7 +4688,7 @@ function compileQuintMachine(model) {
   try {
     return { kind: "compiled", machine: compile(model) };
   } catch (err2) {
-    if (!(err2 instanceof CompileError2))
+    if (!(err2 instanceof CompileError))
       throw err2;
     return { kind: "uncompilable", error: err2 instanceof Error ? err2.message : String(err2) };
   }
@@ -4584,14 +4700,14 @@ function compile(model) {
   for (const attr of attrs) {
     const v = qVar(attr.path().asString());
     if (varToPath.has(v))
-      throw new CompileError2(`state variable name collision: "${v}"`);
+      throw new CompileError(`state variable name collision: "${v}"`);
     varToPath.set(v, attr.path().asString());
   }
   const stateName = (path, primed) => {
     if (model.attributeAt(path) === undefined)
-      throw new CompileError2(`unresolvable reference "${path}"`);
+      throw new CompileError(`unresolvable reference "${path}"`);
     if (primed)
-      throw new CompileError2("primed reference outside an effect");
+      throw new CompileError("primed reference outside an effect");
     return qVar(path);
   };
   for (const attr of attrs)
@@ -4643,9 +4759,9 @@ function compile(model) {
   }
   const initName = (path, primed) => {
     if (primed)
-      throw new CompileError2("primed reference outside an effect");
+      throw new CompileError("primed reference outside an effect");
     if (model.attributeAt(path) === undefined)
-      throw new CompileError2(`unresolvable reference "${path}"`);
+      throw new CompileError(`unresolvable reference "${path}"`);
     return `n_${qVar(path)}`;
   };
   const initConds = propDefs.map((c) => quintOf(c.expr, initName));
@@ -4665,12 +4781,16 @@ function compile(model) {
       continue;
     const event = ob.eventDefinition();
     if (event === null) {
-      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "event obligation lacks trigger/guard/effect" }));
+      compileSkips.push(VerificationSkipped.of({
+        target: ob.id().asTargetId(),
+        reason: SkipReason.of("compile-error"),
+        detail: "event obligation lacks trigger/guard/effect"
+      }));
       continue;
     }
     try {
       if (ExpressionTree.of(event.guard).usesPrime())
-        throw new CompileError2("guard must not use primed references");
+        throw new CompileError("guard must not use primed references");
       const guard = quintOf(event.guard, stateName);
       const assignments = decomposeEffect(event.effect);
       const action = qId("ev", ob.id().asString());
@@ -4683,9 +4803,13 @@ function compile(model) {
       actionNames.push(action);
       eventIds.push(ob.id());
     } catch (err2) {
-      if (!(err2 instanceof CompileError2))
+      if (!(err2 instanceof CompileError))
         throw err2;
-      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err2 instanceof Error ? err2.message : String(err2) }));
+      compileSkips.push(VerificationSkipped.of({
+        target: ob.id().asTargetId(),
+        reason: SkipReason.of("compile-error"),
+        detail: err2 instanceof Error ? err2.message : String(err2)
+      }));
     }
   }
   const idleParts = attrs.map((a) => `${qVar(a.path().asString())}' = ${qVar(a.path().asString())}`);
@@ -4705,9 +4829,13 @@ function compile(model) {
       lines.push(`  temporal ${qId("temp", ob.id().asString())} = always(${from} implies eventually(${to}))`);
       temporalNames.set(ob.id().asString(), qId("temp", ob.id().asString()));
     } catch (err2) {
-      if (!(err2 instanceof CompileError2))
+      if (!(err2 instanceof CompileError))
         throw err2;
-      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err2 instanceof Error ? err2.message : String(err2) }));
+      compileSkips.push(VerificationSkipped.of({
+        target: ob.id().asTargetId(),
+        reason: SkipReason.of("compile-error"),
+        detail: err2 instanceof Error ? err2.message : String(err2)
+      }));
     }
   }
   lines.push("");
@@ -4717,18 +4845,17 @@ function compile(model) {
     if (sc.hasEvent())
       continue;
     const bindings = sc.bindings();
-    const boundPaths = new Set(Object.keys(bindings));
-    if (attrs.some((a) => !boundPaths.has(a.path().asString())))
+    if (!bindings.covers(attrs.map((a) => a.path())))
       continue;
     const parts = [];
     let okAll = true;
     for (const attr of attrs) {
-      const value = bindings[attr.path().asString()];
-      if (value === undefined) {
+      const value = bindings.valueAt(attr.path());
+      if (value === null) {
         okAll = false;
         break;
       }
-      parts.push(`${qVar(attr.path().asString())}' = ${qLit(value)}`);
+      parts.push(`${qVar(attr.path().asString())}' = ${value.match({ bool: qLit, int: qLit, enum: qLit })}`);
     }
     if (!okAll)
       continue;
@@ -4744,7 +4871,7 @@ function compile(model) {
 `,
     plan: QuintMachinePlan.of({
       invariantComponents: QuintMachineComponents.of(invariantComponents),
-      eventIds: ObligationIds.of(eventIds),
+      eventIds: ObligationIdentifiers.of(eventIds),
       scenariosWithInit
     }),
     compileSkips,
@@ -4753,45 +4880,8 @@ function compile(model) {
     temporalNames
   };
 }
-// src/requirements/adapter/itf-decoder.ts
-function decodeItfValue(v) {
-  if (isObject(v) && typeof v["#bigint"] === "string")
-    return Number.parseInt(v["#bigint"], 10);
-  return v;
-}
-function decodeItfTrace(itfText, varToPath) {
-  const doc = JSON.parse(itfText);
-  if (!isObject(doc) || !Array.isArray(doc.states))
-    return [];
-  const trace = [];
-  for (const state of doc.states) {
-    if (!isObject(state))
-      continue;
-    const entries = [];
-    for (const key of Object.keys(state).sort()) {
-      if (key.startsWith("#"))
-        continue;
-      const path = varToPath.get(key) ?? key;
-      entries.push([AttributePath.of(path), TraceValue.of(decodeItfValue(state[key] ?? null))]);
-    }
-    trace.push(TraceState.of(entries));
-  }
-  return trace;
-}
-function itfStatus(itfText) {
-  try {
-    const doc = JSON.parse(itfText);
-    if (isObject(doc) && isObject(doc["#meta"]) && typeof doc["#meta"].status === "string") {
-      return doc["#meta"].status;
-    }
-  } catch {}
-  return "";
-}
-// src/requirements/adapter/quint-client-impl.ts
-import { spawnSync as spawnSync2 } from "child_process";
-import { existsSync as existsSync2, mkdtempSync, readFileSync as readFileSync4, readdirSync as readdirSync2, rmSync as rmSync4, writeFileSync as writeFileSync3 } from "fs";
-import { tmpdir } from "os";
-import { join as join4 } from "path";
+
+// src/requirements/adapter/quint-client-implementation.ts
 var SEED = "0x2a";
 var MAX_STEPS = 8;
 var MAX_SAMPLES = 200;
@@ -4799,13 +4889,13 @@ var RUN_TIMEOUT_MS = 30000;
 var VERIFY_TIMEOUT_MS = 45000;
 var SCENARIO_TIMEOUT_MS = 15000;
 
-class QuintClientImpl {
+class QuintClientImplementation {
   #config;
   constructor(config) {
     this.#config = config;
   }
   check(model) {
-    const probe = spawnSync2(this.#config.quintBin, ["--version"], { encoding: "utf-8", timeout: 15000 });
+    const probe = spawnSync(this.#config.quintBin, ["--version"], { encoding: "utf-8", timeout: 15000 });
     if (probe.error || probe.status !== 0) {
       return { kind: "cli-unavailable" };
     }
@@ -4816,13 +4906,13 @@ class QuintClientImpl {
       return { kind: "machine-uncompilable", method, error: compiled.error };
     }
     const machine = compiled.machine;
-    const work = mkdtempSync(join4(tmpdir(), "deep-spec-quint-"));
-    const modulePath = join4(work, "main.qnt");
+    const work = mkdtempSync(join3(tmpdir(), "deep-spec-quint-"));
+    const modulePath = join3(work, "main.qnt");
     writeFileSync3(modulePath, machine.moduleText, "utf-8");
     try {
       const machineRun = this.#runMachinePhase(machine, modulePath, bounded, work);
       const skipTargets = new Set(machine.compileSkips.map((s) => s.target().asString()));
-      if (machineRun !== null && machineRun.abortsMachineTargets()) {
+      if (machineRun?.abortsMachineTargets()) {
         for (const t of machine.plan.machineTargets()) {
           skipTargets.add(t.asString());
         }
@@ -4831,12 +4921,18 @@ class QuintClientImpl {
       const scenarios = this.#runScenarioPhase(machine, modulePath, work);
       const runs = QuintRuns.of({
         machine: machineRun,
-        temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationId.of(id), v])),
-        scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioId.of(id), v]))
+        temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationIdentifier.of(id), v])),
+        scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioIdentifier.of(id), v]))
       });
-      return { kind: "checked", method, plan: machine.plan, compileSkips: VerificationSkips.of(machine.compileSkips), runs };
+      return {
+        kind: "checked",
+        method,
+        plan: machine.plan,
+        compileSkips: VerificationSkips.of(machine.compileSkips),
+        runs
+      };
     } finally {
-      rmSync4(work, { recursive: true, force: true });
+      rmSync3(work, { recursive: true, force: true });
     }
   }
   #detectBoundedMode() {
@@ -4845,20 +4941,25 @@ class QuintClientImpl {
       return true;
     if (override === "simulation")
       return false;
-    const java = spawnSync2("java", ["-version"], { encoding: "utf-8", timeout: 1e4 });
+    const java = spawnSync("java", ["-version"], { encoding: "utf-8", timeout: 1e4 });
     if (java.error || java.status !== 0)
       return false;
     if (this.#config.apalacheDistSet)
       return true;
     try {
-      return readdirSync2(join4(this.#config.homeDirectory, ".quint")).some((f) => f.startsWith("apalache-dist-"));
+      return readdirSync(join3(this.#config.homeDirectory, ".quint")).some((f) => f.startsWith("apalache-dist-"));
     } catch {
       return false;
     }
   }
   #runQuint(args, itfPath, timeoutMs, cwd) {
     const budget = this.#config.timeoutOverrideMs ?? timeoutMs;
-    const res = spawnSync2(this.#config.quintBin, args, { encoding: "utf-8", timeout: budget, cwd, killSignal: "SIGINT" });
+    const res = spawnSync(this.#config.quintBin, args, {
+      encoding: "utf-8",
+      timeout: budget,
+      cwd,
+      killSignal: "SIGINT"
+    });
     const errorCode = res.error?.code;
     const timedOut = errorCode === "ETIMEDOUT" || res.signal === "SIGINT" || res.signal === "SIGTERM" || res.signal === "SIGKILL";
     const failed = !timedOut && (res.error !== undefined || res.status !== 0);
@@ -4881,8 +4982,15 @@ class QuintClientImpl {
 ${run.stderr}`.toLowerCase().includes("error");
   }
   #runMachinePhase(machine, modulePath, bounded, work) {
-    const itfPath = join4(work, "machine.itf.json");
-    const run = bounded ? this.#runQuint(["verify", modulePath, "--main=main", "--invariant=invAll", `--max-steps=${MAX_STEPS}`, `--out-itf=${itfPath}`], itfPath, VERIFY_TIMEOUT_MS, work) : this.#runQuint([
+    const itfPath = join3(work, "machine.itf.json");
+    const run = bounded ? this.#runQuint([
+      "verify",
+      modulePath,
+      "--main=main",
+      "--invariant=invAll",
+      `--max-steps=${MAX_STEPS}`,
+      `--out-itf=${itfPath}`
+    ], itfPath, VERIFY_TIMEOUT_MS, work) : this.#runQuint([
       "run",
       modulePath,
       "--main=main",
@@ -4896,11 +5004,15 @@ ${run.stderr}`.toLowerCase().includes("error");
       return QuintMachineRunVerdict.timeout();
     if (`${run.stdout}
 ${run.stderr}`.toLowerCase().includes("deadlock")) {
-      return QuintMachineRunVerdict.deadlock(run.itf ? TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)) : null);
+      if (!run.itf)
+        return QuintMachineRunVerdict.deadlock(null);
+      const trace = decodeItfTrace(run.itf, machine.varToPath);
+      return trace.ok ? QuintMachineRunVerdict.deadlock(TraceStates.of(trace.value)) : QuintMachineRunVerdict.runFailed(trace.error);
     }
     const violated = run.itf !== null && (itfStatus(run.itf) === "violation" || bounded && !!run.itf);
     if (violated && run.itf) {
-      return QuintMachineRunVerdict.violation(TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)));
+      const trace = decodeItfTrace(run.itf, machine.varToPath);
+      return trace.ok ? QuintMachineRunVerdict.violation(TraceStates.of(trace.value)) : QuintMachineRunVerdict.runFailed(trace.error);
     }
     if (!violated && run.itf === null && this.#didNotAnswer(run)) {
       return QuintMachineRunVerdict.runFailed(this.#outputTail(run));
@@ -4912,12 +5024,20 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
     for (const [obId, temporalName] of machine.temporalNames) {
       if (skipTargets.has(obId))
         continue;
-      const itfPath = join4(work, `${temporalName}.itf.json`);
-      const run = this.#runQuint(["verify", modulePath, "--main=main", `--temporal=${temporalName}`, `--max-steps=${MAX_STEPS}`, `--out-itf=${itfPath}`], itfPath, VERIFY_TIMEOUT_MS, work);
+      const itfPath = join3(work, `${temporalName}.itf.json`);
+      const run = this.#runQuint([
+        "verify",
+        modulePath,
+        "--main=main",
+        `--temporal=${temporalName}`,
+        `--max-steps=${MAX_STEPS}`,
+        `--out-itf=${itfPath}`
+      ], itfPath, VERIFY_TIMEOUT_MS, work);
       if (run.timedOut) {
         out.set(obId, QuintTemporalVerdict.timeout());
       } else if (run.itf) {
-        out.set(obId, QuintTemporalVerdict.violation(TraceStates.of(decodeItfTrace(run.itf, machine.varToPath))));
+        const trace = decodeItfTrace(run.itf, machine.varToPath);
+        out.set(obId, trace.ok ? QuintTemporalVerdict.violation(TraceStates.of(trace.value)) : QuintTemporalVerdict.runFailed(trace.error));
       } else if (this.#didNotAnswer(run)) {
         out.set(obId, QuintTemporalVerdict.runFailed(this.#outputTail(run)));
       } else {
@@ -4929,7 +5049,7 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
   #runScenarioPhase(machine, modulePath, work) {
     const out = new Map;
     for (const [scId, initAction] of machine.scenarioInitActions) {
-      const itfPath = join4(work, `${initAction.replace(/^scInit/, "sc")}.itf.json`);
+      const itfPath = join3(work, `${initAction.replace(/^scInit/, "sc")}.itf.json`);
       const run = this.#runQuint([
         "run",
         modulePath,
@@ -4953,198 +5073,19 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
     return out;
   }
 }
-// src/requirements/adapter/ir-validation-materials-repository-impl.ts
-import { existsSync as existsSync3, readFileSync as readFileSync5 } from "fs";
-import { basename as basename2, dirname as dirname2 } from "path";
-var FORMAL_MODEL_BASENAME = "deep-spec-analysis-formal-model.md";
-function asExpression(v) {
-  return isObject(v) ? v : undefined;
-}
-function buildView(ir) {
-  const entities = [];
-  const schema = isObject(ir.schema) ? ir.schema : {};
-  for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
-    if (!isObject(ent) || typeof ent.name !== "string")
-      continue;
-    const name = IrEntityName.parse(ent.name);
-    if (!name.ok)
-      return err(JSON.stringify(name.error));
-    const attributes = [];
-    for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
-      if (!isObject(attr) || typeof attr.name !== "string")
-        continue;
-      const t = isObject(attr.type) ? attr.type : {};
-      const name2 = IrAttributeName.parse(attr.name);
-      if (!name2.ok)
-        return err(JSON.stringify(name2.error));
-      attributes.push(IrAttributeDecl.of({
-        name: name2.value,
-        kind: typeof t.kind === "string" ? t.kind : "",
-        values: Array.isArray(t.values) ? IrDeclaredValues.of(t.values.filter((v) => typeof v === "string")) : undefined,
-        min: typeof t.min === "number" ? DeclaredBound.of(t.min) : undefined,
-        max: typeof t.max === "number" ? DeclaredBound.of(t.max) : undefined
-      }));
-    }
-    entities.push(IrEntityDecl.of({ name: name.value, attributes: IrAttributeDecls.of(attributes) }));
-  }
-  const obligations = [];
-  for (const ob of Array.isArray(ir.obligations) ? ir.obligations : []) {
-    if (!isObject(ob) || typeof ob.id !== "string")
-      continue;
-    const temporal = isObject(ob.temporal) ? ob.temporal : null;
-    const id = ObligationId.parse(ob.id);
-    if (!id.ok)
-      return err(JSON.stringify(id.error));
-    obligations.push(IrObligationDecl.of({
-      id: id.value,
-      assert: asExpression(ob.assert ?? null),
-      guard: asExpression(ob.guard ?? null),
-      effect: asExpression(ob.effect ?? null),
-      temporal: temporal === null ? undefined : IrTemporalDecl.of({
-        assert: asExpression(temporal.assert ?? null),
-        from: asExpression(temporal.from ?? null),
-        to: asExpression(temporal.to ?? null)
-      })
-    }));
-  }
-  const scenarios = [];
-  for (const sc of Array.isArray(ir.scenarios) ? ir.scenarios : []) {
-    if (!isObject(sc) || typeof sc.id !== "string")
-      continue;
-    const bindings = isObject(sc.bindings) ? sc.bindings : {};
-    const id = ScenarioId.parse(sc.id);
-    if (!id.ok)
-      return err(JSON.stringify(id.error));
-    scenarios.push(IrScenarioDecl.of({
-      id: id.value,
-      bindings: IrBindingPairs.of(Object.entries(bindings)),
-      hasEvent: isObject(sc.event ?? null),
-      expect: asExpression(sc.expect ?? null)
-    }));
-  }
-  const background = [];
-  for (const bg of Array.isArray(ir.background) ? ir.background : []) {
-    if (!isObject(bg) || typeof bg.id !== "string")
-      continue;
-    const id = BackgroundAssumptionId.parse(bg.id);
-    if (!id.ok)
-      return err(JSON.stringify(id.error));
-    background.push(IrBackgroundDecl.of({ id: id.value, assert: asExpression(bg.assert ?? null) }));
-  }
-  return ok(IrModelDecl.of({
-    entities: IrEntityDecls.of(entities),
-    obligations: IrObligationDecls.of(obligations),
-    scenarios: IrScenarioDecls.of(scenarios),
-    background: IrBackgroundDecls.of(background)
-  }));
-}
-function collectFrClaims(ir) {
-  const claims = [];
-  for (const section of ["obligations", "scenarios", "unformalized"]) {
-    const arr = Array.isArray(ir[section]) ? ir[section] : [];
-    for (const [i, entry] of arr.entries()) {
-      if (!isObject(entry))
-        continue;
-      const owner = typeof entry.id === "string" ? entry.id : `${section}[${i}]`;
-      const refs = entry.frRefs ?? null;
-      if (!Array.isArray(refs))
-        continue;
-      const parsed = traverseResult(refs.filter((r) => typeof r === "string"), RequirementId.parse);
-      if (!parsed.ok)
-        return err(JSON.stringify(parsed.error));
-      claims.push(FrRefClaim.of(owner, FrRefs.of(parsed.value)));
-    }
-  }
-  return ok(claims);
-}
-
-class IrValidationMaterialsRepositoryImpl {
-  #schemaPath;
-  constructor(config) {
-    this.#schemaPath = config.schemaPath;
-  }
-  findById(id) {
-    const outputPath = id.modelId().artifactPath().asString();
-    if (basename2(outputPath) !== FORMAL_MODEL_BASENAME || !existsSync3(outputPath)) {
-      return err({ kind: "not-found", path: outputPath });
-    }
-    const corrupt = (cause) => err({ kind: "corrupt", path: outputPath, cause });
-    let bytes;
-    try {
-      bytes = readFileSync5(outputPath);
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
-    }
-    const md = bytes.toString("utf-8");
-    const fences = extractFences(md, "json").map((f) => f.body);
-    if (fences.length !== 1) {
-      return corrupt(`formal model must contain exactly one \`\`\`json fence (found ${fences.length})`);
-    }
-    let ir;
-    try {
-      ir = JSON.parse(fences[0] ?? "");
-    } catch (e) {
-      return corrupt(`IR fence is not valid JSON: ${e instanceof Error ? e.message : String(e)}`);
-    }
-    if (!isObject(ir)) {
-      return corrupt("IR fence must contain a JSON object");
-    }
-    if (!existsSync3(this.#schemaPath)) {
-      return corrupt(`IR schema not installed at ${this.#schemaPath} \u2014 run plugin sync`);
-    }
-    const schema = readContractSchema(this.#schemaPath);
-    if (!schema.ok) {
-      return corrupt(`IR schema unreadable: ${schema.error.cause}`);
-    }
-    const schemaErrors = [];
-    validateSchema(schema.value, schema.value, ir, "", schemaErrors);
-    const recordRoot = ArtifactPath.of(dirname2(dirname2(dirname2(outputPath))));
-    const parsed = combineResults({
-      irVersion: IrVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : "")
-    });
-    if (!parsed.ok)
-      return corrupt(JSON.stringify(parsed.error));
-    const view = buildView(ir);
-    if (!view.ok)
-      return corrupt(view.error);
-    const claims = collectFrClaims(ir);
-    if (!claims.ok)
-      return corrupt(claims.error);
-    return ok(IrValidationMaterials.of({
-      id,
-      irVersion: parsed.value.irVersion,
-      schemaErrors: ErrorMessages.of(schemaErrors),
-      view: view.value,
-      frClaims: FrRefClaims.of(claims.value),
-      declaredDigest: typeof ir.sourceDigest === "string" ? DeclaredDigest.of(ir.sourceDigest) : null,
-      sourceId: RequirementsSourceId.of(recordRoot),
-      sourceDocument: new Uint8Array(bytes)
-    }));
-  }
-  store(materials) {
-    const outputPath = materials.id().modelId().artifactPath().asString();
-    const bytes = materials.sourceDocument();
-    try {
-      writeFileAtomically(outputPath, bytes);
-      return ok(undefined);
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
-    }
-  }
-}
-// src/requirements/adapter/requirements-source-repository-impl.ts
-import { existsSync as existsSync4, readFileSync as readFileSync6, readdirSync as readdirSync3 } from "fs";
-import { join as join5 } from "path";
+// src/requirements/adapter/requirements-source-repository-implementation.ts
+import { existsSync as existsSync3, readdirSync as readdirSync2, readFileSync as readFileSync5 } from "fs";
+import { join as join4 } from "path";
 function findRequirementsFile(recordDir) {
-  const direct = join5(recordDir, "inception", "requirements-analysis", "requirements.md");
-  if (existsSync4(direct))
+  const direct = join4(recordDir, "inception", "requirements-analysis", "requirements.md");
+  if (existsSync3(direct))
     return { kind: "found", path: direct };
-  if (!existsSync4(recordDir))
+  if (!existsSync3(recordDir))
     return { kind: "absent" };
   try {
-    for (const phase of readdirSync3(recordDir).sort()) {
-      const candidate = join5(recordDir, phase, "requirements-analysis", "requirements.md");
-      if (existsSync4(candidate))
+    for (const phase of readdirSync2(recordDir).sort()) {
+      const candidate = join4(recordDir, phase, "requirements-analysis", "requirements.md");
+      if (existsSync3(candidate))
         return { kind: "found", path: candidate };
     }
   } catch (e) {
@@ -5153,7 +5094,7 @@ function findRequirementsFile(recordDir) {
   return { kind: "absent" };
 }
 
-class RequirementsSourceRepositoryImpl {
+class RequirementsSourceRepositoryImplementation {
   findById(id) {
     const search = findRequirementsFile(id.recordRoot().asString());
     if (search.kind === "unreadable") {
@@ -5163,14 +5104,19 @@ class RequirementsSourceRepositoryImpl {
       return err({ kind: "not-found", path: id.recordRoot().asString() });
     let bytes;
     try {
-      bytes = readFileSync6(search.path);
+      bytes = readFileSync5(search.path);
     } catch (e) {
-      return err({ kind: "io-failed", operation: "read", path: search.path, cause: e instanceof Error ? e.message : String(e) });
+      return err({
+        kind: "io-failed",
+        operation: "read",
+        path: search.path,
+        cause: e instanceof Error ? e.message : String(e)
+      });
     }
     return ok(RequirementsSource.of({
       id,
       sourcePath: ArtifactPath.of(search.path),
-      knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
+      knownIds: RequirementIdentifiers.extractFrom(bytes.toString("utf-8")),
       digest: ContentHash.ofBytes(bytes),
       sourceDocument: new Uint8Array(bytes)
     }));
@@ -5184,6 +5130,778 @@ class RequirementsSourceRepositoryImpl {
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
     }
+  }
+}
+// src/requirements/adapter/satisfiability-modulo-theories-plan.ts
+class CompileError2 extends Error {
+}
+function enumCode(model, attrPath, value) {
+  const attr = model.attributeAt(attrPath);
+  const values = attr?.declaredValues();
+  if (!attr?.isEnum() || !values) {
+    throw new CompileError2(`"${attrPath}" is not an enum attribute`);
+  }
+  const idx = values.indexOf(value);
+  if (idx < 0)
+    throw new CompileError2(`enum value "${value}" is not declared on "${attrPath}"`);
+  return idx;
+}
+function smtOf(model, e) {
+  const bin = (op) => {
+    const [a, b] = e.args ?? [];
+    if (!a || !b)
+      throw new CompileError2(`operator "${e.op}" needs two arguments`);
+    const refArg = a.op === "ref" ? a : b.op === "ref" ? b : null;
+    const enumArg = a.op === "enum" ? a : b.op === "enum" ? b : null;
+    if (enumArg && refArg && typeof refArg.path === "string" && typeof enumArg.value === "string") {
+      const code = String(enumCode(model, refArg.path, enumArg.value));
+      const left = a === enumArg ? code : smtOf(model, a);
+      const right = b === enumArg ? code : smtOf(model, b);
+      return `(${op} ${left} ${right})`;
+    }
+    if (enumArg)
+      throw new CompileError2("enum literal without a ref sibling has no resolvable encoding");
+    return `(${op} ${smtOf(model, a)} ${smtOf(model, b)})`;
+  };
+  switch (e.op) {
+    case "and":
+    case "or":
+      return `(${e.op} ${(e.args ?? []).map((a) => smtOf(model, a)).join(" ")})`;
+    case "not":
+      return `(not ${smtOf(model, (e.args ?? [])[0])})`;
+    case "implies":
+      return bin("=>");
+    case "iff":
+    case "eq":
+      return bin("=");
+    case "ne":
+      return `(not ${bin("=")})`;
+    case "lt":
+      return bin("<");
+    case "le":
+      return bin("<=");
+    case "gt":
+      return bin(">");
+    case "ge":
+      return bin(">=");
+    case "add":
+      return bin("+");
+    case "sub":
+      return bin("-");
+    case "mul":
+      return bin("*");
+    case "ref": {
+      if (typeof e.path !== "string" || model.attributeAt(e.path) === undefined) {
+        throw new CompileError2(`unresolvable reference "${e.path ?? ""}"`);
+      }
+      return smtVar(e.path, e.prime === true);
+    }
+    case "bool":
+      return e.value === true ? "true" : "false";
+    case "int": {
+      const n = typeof e.value === "number" ? e.value : Number.NaN;
+      if (!Number.isInteger(n))
+        throw new CompileError2("int literal is not an integer");
+      return smtLit(n);
+    }
+    case "enum":
+      throw new CompileError2("enum literal without a ref sibling has no resolvable encoding");
+    default:
+      throw new CompileError2(`unknown operator "${e.op}"`);
+  }
+}
+function decodeSolverModel(model, values) {
+  const out = {};
+  for (const attr of model.attributes().sortedByPath()) {
+    const raw = values[smtVar(attr.path().asString(), false)];
+    if (raw === undefined)
+      continue;
+    if (attr.isBool()) {
+      out[attr.path().asString()] = raw === "true";
+    } else {
+      const n = smtIntOf(raw);
+      if (!Number.isSafeInteger(n)) {
+        const m = raw.match(/^\(-\s*(\d+)\)$/);
+        out[attr.path().asString()] = m ? `-${m[1]}` : raw;
+      } else if (attr.isEnum() && attr.declaredValues())
+        out[attr.path().asString()] = attr.declaredValues()?.valueAt(n)?.asString() ?? n;
+      else
+        out[attr.path().asString()] = n;
+    }
+  }
+  return out;
+}
+function buildSmtPlan(model) {
+  const skipped = [];
+  const compiled = new Map;
+  const labelToTarget = new Map;
+  const decls = [];
+  const primedDecls = [];
+  for (const attr of model.attributes()) {
+    const sort = attr.isBool() ? "Bool" : "Int";
+    decls.push(`(declare-const ${smtVar(attr.path().asString(), false)} ${sort})`);
+    primedDecls.push(`(declare-const ${smtVar(attr.path().asString(), true)} ${sort})`);
+  }
+  const typeBounds = [];
+  const primedTypeBounds = [];
+  for (const attr of model.attributes()) {
+    const bounds = (primed) => {
+      const v = smtVar(attr.path().asString(), primed);
+      return attr.match({
+        enum: (values) => values ? `(and (>= ${v} 0) (<= ${v} ${values.count() - 1}))` : null,
+        int: (min, max) => {
+          if (min === undefined && max === undefined)
+            return null;
+          const parts = [];
+          if (min !== undefined)
+            parts.push(`(>= ${v} ${smtLit(min.asNumber())})`);
+          if (max !== undefined)
+            parts.push(`(<= ${v} ${smtLit(max.asNumber())})`);
+          return parts.length === 1 ? parts[0] ?? null : `(and ${parts.join(" ")})`;
+        },
+        bool: () => null
+      });
+    };
+    const cur = bounds(false);
+    if (cur)
+      typeBounds.push({ name: smtName("ty", attr.path().asString()), smt: cur });
+    const nxt = bounds(true);
+    if (nxt)
+      primedTypeBounds.push({ name: smtName("typ", attr.path().asString()), smt: nxt });
+  }
+  const bg = [];
+  for (const b of model.background()) {
+    try {
+      bg.push({ name: smtName("bg", b.id().asString()), smt: smtOf(model, b.assertion()) });
+      labelToTarget.set(smtName("bg", b.id().asString()), b.id().asString());
+    } catch (err2) {
+      if (!(err2 instanceof CompileError2))
+        throw err2;
+    }
+  }
+  const invariants = [];
+  const invariantObs = [];
+  const events = [];
+  for (const ob of model.obligations()) {
+    if (ob.isInvariantLike()) {
+      const assertion = ob.assertion();
+      if (assertion === undefined) {
+        skipped.push(VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: "invariant obligation lacks an assert expression"
+        }));
+        compiled.set(ob.id().asString(), false);
+        continue;
+      }
+      try {
+        invariants.push({ name: smtName("ob", ob.id().asString()), smt: smtOf(model, assertion) });
+        labelToTarget.set(smtName("ob", ob.id().asString()), ob.id().asString());
+        invariantObs.push(ob);
+        compiled.set(ob.id().asString(), true);
+      } catch (err2) {
+        if (!(err2 instanceof CompileError2))
+          throw err2;
+        skipped.push(VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: err2 instanceof Error ? err2.message : String(err2)
+        }));
+        compiled.set(ob.id().asString(), false);
+      }
+    } else if (ob.isEvent()) {
+      const event = ob.eventDefinition();
+      if (event === null) {
+        skipped.push(VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: "event obligation lacks trigger/guard/effect"
+        }));
+        compiled.set(ob.id().asString(), false);
+        continue;
+      }
+      try {
+        if (ExpressionTree.of(event.guard).usesPrime())
+          throw new CompileError2("guard must not use primed references");
+        smtOf(model, event.guard);
+        smtOf(model, event.effect);
+        events.push(ob);
+        compiled.set(ob.id().asString(), true);
+      } catch (err2) {
+        if (!(err2 instanceof CompileError2))
+          throw err2;
+        skipped.push(VerificationSkipped.of({
+          target: ob.id().asTargetId(),
+          reason: SkipReason.of("compile-error"),
+          detail: err2 instanceof Error ? err2.message : String(err2)
+        }));
+        compiled.set(ob.id().asString(), false);
+      }
+    } else {
+      skipped.push(VerificationSkipped.of({
+        target: ob.id().asTargetId(),
+        reason: SkipReason.of("capability"),
+        detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend`
+      }));
+      compiled.set(ob.id().asString(), false);
+    }
+  }
+  const baseScript = [
+    ...decls,
+    ...[...typeBounds, ...bg, ...invariants].flatMap((c) => [
+      `(declare-const ${c.name} Bool)`,
+      `(assert (=> ${c.name} ${c.smt}))`
+    ])
+  ].join(`
+`);
+  const baseAssumptions = [...typeBounds, ...bg, ...invariants].map((c) => c.name);
+  const modelVars = model.attributes().toArray().map((a) => ({
+    name: smtVar(a.path().asString(), false),
+    sort: a.isBool() ? "Bool" : "Int"
+  }));
+  const queries = [];
+  queries.push({ id: "global", script: baseScript, assumptions: baseAssumptions, model: modelVars });
+  const vacuityQueries = [];
+  for (const ob of invariantObs) {
+    const ant = ob.vacuityAntecedent();
+    if (!ant)
+      continue;
+    try {
+      const name = smtName("ant", ob.id().asString());
+      const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${smtOf(model, ant)}))`].join(`
+`);
+      queries.push({ id: `vac:${ob.id().asString()}`, script, assumptions: [...baseAssumptions, name], model: [] });
+      vacuityQueries.push([ob.id(), QueryLabel.of(`vac:${ob.id().asString()}`)]);
+    } catch (error) {
+      if (!(error instanceof CompileError2))
+        throw error;
+    }
+  }
+  const eventPairs = [];
+  const byTrigger = new Map;
+  for (const ev of events) {
+    const definition = ev.eventDefinition();
+    if (definition === null)
+      continue;
+    const key = definition.trigger.asString();
+    const list = byTrigger.get(key) ?? [];
+    list.push(ev);
+    byTrigger.set(key, list);
+  }
+  for (const trigger of [...byTrigger.keys()].sort()) {
+    const list = byTrigger.get(trigger) ?? [];
+    for (let i = 0;i < list.length; i++) {
+      for (let j = i + 1;j < list.length; j++) {
+        const a = list[i];
+        const b = list[j];
+        if (!a || !b)
+          continue;
+        const eventA = a.eventDefinition();
+        const eventB = b.eventDefinition();
+        if (eventA === null || eventB === null)
+          continue;
+        const ga = { name: smtName("g", a.id().asString()), smt: smtOf(model, eventA.guard) };
+        const gb = { name: smtName("g", b.id().asString()), smt: smtOf(model, eventB.guard) };
+        const ea = { name: smtName("e", a.id().asString()), smt: smtOf(model, eventA.effect) };
+        const eb = { name: smtName("e", b.id().asString()), smt: smtOf(model, eventB.effect) };
+        labelToTarget.set(ga.name, a.id().asString());
+        labelToTarget.set(gb.name, b.id().asString());
+        labelToTarget.set(ea.name, a.id().asString());
+        labelToTarget.set(eb.name, b.id().asString());
+        const overlapScript = [
+          baseScript,
+          ...[ga, gb].flatMap((c) => [`(declare-const ${c.name} Bool)`, `(assert (=> ${c.name} ${c.smt}))`])
+        ].join(`
+`);
+        const jointScript = [
+          baseScript,
+          ...primedDecls,
+          ...[...primedTypeBounds, ga, gb, ea, eb].flatMap((c) => [
+            `(declare-const ${c.name} Bool)`,
+            `(assert (=> ${c.name} ${c.smt}))`
+          ])
+        ].join(`
+`);
+        const qOverlap = `evo:${a.id().asString()}:${b.id().asString()}`;
+        const qJoint = `evj:${a.id().asString()}:${b.id().asString()}`;
+        queries.push({
+          id: qOverlap,
+          script: overlapScript,
+          assumptions: [...baseAssumptions, ga.name, gb.name],
+          model: []
+        });
+        queries.push({
+          id: qJoint,
+          script: jointScript,
+          assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
+          model: []
+        });
+        eventPairs.push(SatisfiabilityModuloTheoriesEventPairProbe.of({
+          qOverlap: QueryLabel.of(qOverlap),
+          qJoint: QueryLabel.of(qJoint),
+          a: a.id(),
+          b: b.id(),
+          trigger: TriggerName.of(trigger)
+        }));
+      }
+    }
+  }
+  const gapTriggers = new Map;
+  for (const trigger of [...byTrigger.keys()].sort()) {
+    const list = byTrigger.get(trigger) ?? [];
+    const guards = list.flatMap((ev) => {
+      const definition = ev.eventDefinition();
+      return definition === null ? [] : [smtOf(model, definition.guard)];
+    });
+    const name = smtName("ng", trigger);
+    const noGuard = guards.length === 1 ? `(not ${guards[0]})` : `(not (or ${guards.join(" ")}))`;
+    const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${noGuard}))`].join(`
+`);
+    queries.push({ id: `gap:${trigger}`, script, assumptions: [...baseAssumptions, name], model: modelVars });
+    gapTriggers.set(trigger, list.map((ev) => ev.id()).sort((a, b) => a.compareTo(b)).map((id) => id.asString()));
+  }
+  const scenarioQueries = new Map;
+  for (const sc of model.scenarios()) {
+    if (sc.hasEvent()) {
+      skipped.push(VerificationSkipped.of({
+        target: sc.id().asTargetId(),
+        reason: SkipReason.of("capability"),
+        detail: "scenarios with a When-event are not checked by the SMT backend in v1"
+      }));
+      continue;
+    }
+    try {
+      const name = smtName("sc", sc.id().asString());
+      const parts = [];
+      for (const binding of sc.bindings().entriesCanonically()) {
+        const path = binding.path().asString();
+        const value = binding.value();
+        const attr = model.attributeAt(path);
+        if (!attr)
+          throw new CompileError2(`binding references unknown attribute "${path}"`);
+        const v = smtVar(path, false);
+        const literal = value.match({
+          bool: (b) => {
+            if (!attr.isBool())
+              throw new CompileError2(`binding type does not fit attribute "${path}"`);
+            return String(b);
+          },
+          int: (n) => {
+            if (!attr.isInt())
+              throw new CompileError2(`binding type does not fit attribute "${path}"`);
+            return smtLit(n);
+          },
+          enum: (s) => {
+            if (attr.isBool() || attr.isInt())
+              throw new CompileError2(`binding type does not fit attribute "${path}"`);
+            return String(enumCode(model, path, s));
+          }
+        });
+        parts.push(`(= ${v} ${literal})`);
+      }
+      const conj = parts.length === 1 ? parts[0] ?? "true" : `(and ${parts.join(" ")})`;
+      const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${conj}))`].join(`
+`);
+      const qid = `sc:${sc.id().asString()}`;
+      queries.push({ id: qid, script, assumptions: [...baseAssumptions, name], model: modelVars });
+      scenarioQueries.set(sc.id().asString(), qid);
+    } catch (err2) {
+      if (!(err2 instanceof CompileError2))
+        throw err2;
+      skipped.push(VerificationSkipped.of({
+        target: sc.id().asTargetId(),
+        reason: SkipReason.of("compile-error"),
+        detail: err2 instanceof Error ? err2.message : String(err2)
+      }));
+    }
+  }
+  return {
+    queries,
+    plan: SatisfiabilityModuloTheoriesVerificationPlan.of({
+      vacuityQueries: KeyedIndex.of(vacuityQueries),
+      compiled: KeySet.of([...compiled].filter(([, ok2]) => ok2).map(([id]) => ObligationIdentifier.of(id))),
+      skipped: VerificationSkips.of(skipped),
+      labelToTarget: KeyedIndex.of([...labelToTarget].filter(([, target]) => target.startsWith("OB-")).map(([label, target]) => [QueryLabel.of(label), TargetIdentifier.of(target)])),
+      eventPairs: SatisfiabilityModuloTheoriesEventPairProbes.of(eventPairs),
+      gapTriggers: KeyedIndex.of([...gapTriggers].map(([trigger, ids]) => [
+        TriggerName.of(trigger),
+        TargetIdentifiers.of(Array.from(ids, (raw) => TargetIdentifier.of(raw)))
+      ])),
+      scenarioQueries: KeyedIndex.of([...scenarioQueries].map(([sc, qid]) => [ScenarioIdentifier.of(sc), QueryLabel.of(qid)]))
+    })
+  };
+}
+// src/requirements/adapter/smt-child-results-parser.ts
+function parseSmtChildResults(raw, expectedIds) {
+  if (!isObject(raw) || !Array.isArray(raw.results))
+    return err("solver child response lacks a results array");
+  const expected = new Set(expectedIds);
+  const results = new Map;
+  for (const item of raw.results) {
+    if (!isObject(item) || typeof item.id !== "string")
+      return err("solver child result lacks a query id");
+    if (!expected.has(item.id))
+      return err(`solver child returned unexpected query ${item.id}`);
+    if (results.has(item.id))
+      return err(`solver child returned duplicate query ${item.id}`);
+    const status = item.status;
+    if (status !== "sat" && status !== "unsat" && status !== "unknown" && status !== "budget" && status !== "error") {
+      return err(`solver child returned an invalid status for query ${item.id}`);
+    }
+    if (item.model !== undefined && (!isObject(item.model) || !Object.values(item.model).every((value) => typeof value === "string"))) {
+      return err(`solver child returned an invalid model for query ${item.id}`);
+    }
+    if (item.core !== undefined && (!Array.isArray(item.core) || !item.core.every((value) => typeof value === "string"))) {
+      return err(`solver child returned an invalid core for query ${item.id}`);
+    }
+    if (item.error !== undefined && typeof item.error !== "string")
+      return err(`solver child returned an invalid error for query ${item.id}`);
+    results.set(item.id, {
+      id: item.id,
+      status,
+      ...item.model !== undefined ? { model: item.model } : {},
+      ...item.core !== undefined ? { core: item.core } : {},
+      ...item.error !== undefined ? { error: item.error } : {}
+    });
+  }
+  const missing = expectedIds.filter((id) => !results.has(id));
+  if (missing.length > 0)
+    return err(`solver child omitted query results: ${missing.join(", ")}`);
+  if (results.size !== expectedIds.length)
+    return err("solver query ids are not unique");
+  return ok(results);
+}
+// src/requirements/adapter/verification-directory-repository-implementation.ts
+import { existsSync as existsSync4, mkdirSync as mkdirSync3, readdirSync as readdirSync3, readFileSync as readFileSync6, renameSync as renameSync3, rmSync as rmSync4 } from "fs";
+import { join as join5 } from "path";
+
+// src/requirements/adapter/verification-report-serializer.ts
+function renderVerificationReportBytes(report) {
+  return `${JSON.stringify(report.toDocument(), null, 2)}
+`;
+}
+function parseSiblingReportDocument(directory, fileName, raw) {
+  const decoded = parseFindingsValues(raw);
+  if (!decoded.ok)
+    return decoded;
+  const doc = decoded.value;
+  if (`${doc.backend.asString()}.json` !== fileName)
+    return err("backend must match the report filename");
+  const findings = [];
+  for (const entry of doc.findings) {
+    const witness = VerificationWitness.parse(entry.witness);
+    if (!witness.ok)
+      return err(JSON.stringify(witness.error));
+    findings.push(VerificationFinding.of({
+      kind: entry.kind,
+      functionalRequirementReferences: entry.functionalRequirementReferences,
+      targets: entry.targets,
+      witness: witness.value,
+      detail: entry.detail
+    }));
+  }
+  return ok(VerificationReport.of({
+    id: VerificationReportIdentifier.of(directory, doc.backend.asString()),
+    irVersion: doc.irVersion,
+    irHash: doc.irHash,
+    method: doc.method,
+    findings: VerificationFindings.of(findings),
+    skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.of(entry))),
+    crossChecked: doc.crossChecked === undefined ? null : CrossCheckedEntries.of(doc.crossChecked.map(CrossCheckedEntry.of)),
+    unavailableReason: doc.unavailable?.reason ?? null
+  }));
+}
+
+// src/requirements/adapter/verification-directory-repository-implementation.ts
+var CROSS_CHECK_BASENAME = "cross-check.json";
+var STALE_CROSS_CHECK_BASENAME = ".cross-check.stale";
+var VERIFICATION_LOCK_BASENAME = ".deep-spec-finalization.lock";
+var encoder = new TextEncoder;
+var UNPROBED_LIVENESS = {
+  self: () => 0,
+  statusOf: () => "unknown"
+};
+function causeOf2(e) {
+  return e instanceof Error ? e.message : String(e);
+}
+function lockCauseOf(outcome) {
+  return "cause" in outcome ? `${outcome.kind}: ${outcome.cause}` : outcome.kind;
+}
+function documentsByFileName(reports) {
+  const out = new Map;
+  for (const report of reports)
+    out.set(report.id().fileName(), JSON.stringify(report.toDocument()));
+  return out;
+}
+
+class VerificationDirectoryRepositoryImplementation {
+  #lock;
+  constructor(lock = new DirectoryFinalizationLock(new SystemClock, UNPROBED_LIVENESS, VERIFICATION_LOCK_BASENAME)) {
+    this.#lock = lock;
+  }
+  findByDirectory(directory) {
+    const siblings = this.#siblingsOf(directory);
+    if (!siblings.ok)
+      return err(siblings.error);
+    const crossPath = join5(directory.asString(), CROSS_CHECK_BASENAME);
+    if (!existsSync4(crossPath)) {
+      return ok(VerificationDirectory.of(directory, VerificationReports.of(siblings.value), null));
+    }
+    const crossCheck = this.#readReport(directory, CROSS_CHECK_BASENAME);
+    return ok(VerificationDirectory.of(directory, VerificationReports.of(siblings.value), crossCheck.ok ? crossCheck.value : null));
+  }
+  store(aggregate) {
+    const directory = aggregate.directory();
+    const directoryPath = directory.asString();
+    const candidate = aggregate.candidate();
+    if (candidate === null) {
+      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: "no finalization candidate" });
+    }
+    try {
+      mkdirSync3(directoryPath, { recursive: true });
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: directoryPath, cause: causeOf2(e) });
+    }
+    const lockPath = this.#lock.canonicalPathOf(directory);
+    const acquired = this.#lock.acquire(directory);
+    if (acquired.kind !== "acquired" && acquired.kind !== "recovered") {
+      return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(acquired) });
+    }
+    let outcome;
+    let released;
+    try {
+      outcome = this.#publish(aggregate, candidate, directory);
+    } finally {
+      released = this.#lock.release(directory);
+    }
+    if (released.kind !== "released" && outcome.ok) {
+      return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(released) });
+    }
+    return outcome;
+  }
+  #publish(aggregate, candidate, directory) {
+    const directoryPath = directory.asString();
+    const backendPath = join5(directoryPath, candidate.id().fileName());
+    const crossPath = join5(directoryPath, CROSS_CHECK_BASENAME);
+    const stalePath = join5(directoryPath, STALE_CROSS_CHECK_BASENAME);
+    const unchanged = this.#siblingsUnchanged(aggregate, candidate, directory);
+    if (!unchanged.ok)
+      return err(unchanged.error);
+    const crossCheck = aggregate.crossCheck();
+    const backendBytes = renderVerificationReportBytes(candidate);
+    const crossBytes = crossCheck === null ? null : renderVerificationReportBytes(crossCheck);
+    if (!this.#lock.holdsOwnership(directory))
+      return this.#fenced(directory, crossPath);
+    if (existsSync4(crossPath)) {
+      try {
+        renameSync3(crossPath, stalePath);
+      } catch (e) {
+        return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
+      }
+    }
+    if (!this.#lock.holdsOwnership(directory))
+      return this.#fenced(directory, backendPath);
+    try {
+      writeFileAtomically(backendPath, encoder.encode(backendBytes));
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "write", path: backendPath, cause: causeOf2(e) });
+    }
+    if (crossBytes !== null) {
+      if (!this.#lock.holdsOwnership(directory))
+        return this.#fenced(directory, crossPath);
+      try {
+        writeFileAtomically(crossPath, encoder.encode(crossBytes));
+      } catch (e) {
+        return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
+      }
+    }
+    try {
+      rmSync4(stalePath, { force: true });
+    } catch {}
+    return ok(undefined);
+  }
+  #siblingsUnchanged(aggregate, candidate, directory) {
+    const observed = this.#siblingsOf(directory);
+    if (!observed.ok)
+      return err(observed.error);
+    const candidateFileName = candidate.id().fileName();
+    const onDisk = documentsByFileName(observed.value.filter((r) => r.id().fileName() !== candidateFileName));
+    const loaded = documentsByFileName(aggregate.reports().toArray().filter((r) => r.id().fileName() !== candidateFileName));
+    let same = onDisk.size === loaded.size;
+    if (same) {
+      for (const [fileName, document] of loaded) {
+        if (onDisk.get(fileName) !== document) {
+          same = false;
+          break;
+        }
+      }
+    }
+    if (same)
+      return ok(undefined);
+    return err({
+      kind: "io-failed",
+      operation: "write",
+      path: directory.asString(),
+      cause: "conflict: sibling set changed since load"
+    });
+  }
+  #siblingsOf(directory) {
+    if (!existsSync4(directory.asString()))
+      return ok([]);
+    let entries;
+    try {
+      entries = readdirSync3(directory.asString()).filter((f) => f.endsWith(".json") && f !== CROSS_CHECK_BASENAME).sort();
+    } catch (e) {
+      return err({ kind: "io-failed", operation: "read", path: directory.asString(), cause: causeOf2(e) });
+    }
+    const reports = [];
+    for (const file of entries) {
+      const report = this.#readReport(directory, file);
+      if (!report.ok)
+        return err(report.error);
+      reports.push(report.value);
+    }
+    return ok(reports);
+  }
+  #readReport(directory, fileName) {
+    const path = join5(directory.asString(), fileName);
+    let raw;
+    try {
+      raw = JSON.parse(readFileSync6(path, "utf-8"));
+    } catch (e) {
+      return err({ kind: "corrupt", path, cause: causeOf2(e) });
+    }
+    const parsed = parseSiblingReportDocument(directory, fileName, raw);
+    return parsed.ok ? ok(parsed.value) : err({ kind: "corrupt", path, cause: parsed.error });
+  }
+  #fenced(directory, path) {
+    return err({
+      kind: "io-failed",
+      operation: "write",
+      path,
+      cause: `lock-fenced: ${this.#lock.canonicalPathOf(directory)} is no longer held by this writer`
+    });
+  }
+}
+// src/requirements/adapter/z3-solver-client-implementation.ts
+import { spawnSync as spawnSync2 } from "child_process";
+var CHILD_BUDGET_MS = 45000;
+var CHILD_WALL_TIMEOUT_MS = 55000;
+
+class Z3SolverClientImplementation {
+  #config;
+  constructor(config) {
+    this.#config = config;
+  }
+  check(model) {
+    const plan = buildSmtPlan(model);
+    const outcome = this.#runChild(plan.queries);
+    if (outcome.unavailable !== undefined || !outcome.results) {
+      return {
+        plan: plan.plan,
+        result: { kind: "unavailable", reason: outcome.unavailable ?? "solver child produced no results" }
+      };
+    }
+    const verdicts = [];
+    for (const [id, r] of outcome.results) {
+      const parsed = combineResults({
+        label: QueryLabel.parse(id),
+        core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse)
+      });
+      if (!parsed.ok)
+        return {
+          plan: plan.plan,
+          result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` }
+        };
+      verdicts.push([
+        parsed.value.label,
+        SatisfiabilityModuloTheoriesQueryVerdict.of({
+          status: r.status,
+          decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
+          core: parsed.value.core?.map((label) => label.asString())
+        })
+      ]);
+    }
+    return {
+      plan: plan.plan,
+      result: { kind: "solved", verdicts: SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.of(verdicts)) }
+    };
+  }
+  #runChild(queries) {
+    const payload = JSON.stringify({ queries, timeoutMs: this.#config.perQueryTimeoutMs, budgetMs: CHILD_BUDGET_MS });
+    const runtimes = this.#config.runtimeOverride ? [this.#config.runtimeOverride] : ["node", "bun"];
+    const attempts = [];
+    for (const runtime of runtimes) {
+      const res = spawnSync2(runtime, [this.#config.selfPath, "--smt-child"], {
+        input: payload,
+        encoding: "utf-8",
+        timeout: CHILD_WALL_TIMEOUT_MS,
+        cwd: this.#config.workingDirectory
+      });
+      if (res.error && res.error.code === "ENOENT") {
+        attempts.push(`${runtime}: not on PATH`);
+        continue;
+      }
+      if (res.error || res.status !== 0) {
+        const stderrTail = (res.stderr ?? "").trim().split(`
+`).slice(-2).join(" ").slice(0, 200);
+        attempts.push(`${runtime}: ${res.error ? String(res.error) : `exit ${res.status}`}${stderrTail ? ` (${stderrTail})` : ""}`);
+        continue;
+      }
+      let raw;
+      try {
+        raw = JSON.parse((res.stdout ?? "").trim().split(`
+`).pop() ?? "");
+      } catch {
+        attempts.push(`${runtime}: solver child produced unreadable output`);
+        continue;
+      }
+      if (isObject(raw) && typeof raw.unavailable === "string")
+        return { unavailable: raw.unavailable };
+      const parsed = parseSmtChildResults(raw, queries.map((query) => query.id));
+      if (!parsed.ok) {
+        attempts.push(`${runtime}: ${parsed.error}`);
+        continue;
+      }
+      return { results: parsed.value };
+    }
+    return { unavailable: `no runtime could execute the z3 child process (${attempts.join("; ")})` };
+  }
+}
+// src/requirements/usecase/validate-intermediate-representation-usecase.ts
+class ValidateIntermediateRepresentationUseCase {
+  #irValidationMaterialsRepository;
+  #requirementsSourceRepository;
+  constructor(irValidationMaterialsRepository, requirementsSourceRepository) {
+    this.#irValidationMaterialsRepository = irValidationMaterialsRepository;
+    this.#requirementsSourceRepository = requirementsSourceRepository;
+  }
+  execute(modelId) {
+    const found = this.#irValidationMaterialsRepository.findById(IntermediateRepresentationValidationMaterialsIdentifier.of(modelId));
+    if (!found.ok) {
+      if (found.error.kind === "not-found")
+        return { kind: "not-applicable" };
+      return { kind: "verdict", pass: false, errors: [found.error.cause] };
+    }
+    const materials = found.value;
+    const errors = [];
+    const major = materials.irVersion().majorVersion();
+    if (Number.isInteger(major) && major !== SUPPORTED_IR_MAJOR) {
+      errors.push(`irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`);
+    }
+    errors.push(...materials.schemaErrors().toArray().map((message) => message.asString()));
+    if (errors.length === 0) {
+      errors.push(...materials.view().wellFormednessErrors());
+      const index = materials.functionalRequirementReferenceIndex();
+      const source = this.#requirementsSourceRepository.findById(materials.sourceId());
+      if (!source.ok) {
+        errors.push("requirements.md not found under this intent record \u2014 frRefs cannot be reverse-verified");
+      } else {
+        errors.push(...index.missingErrors(source.value.knownIds()));
+        errors.push(...SourceAnchor.of(materials.declaredDigest(), source.value.digest()).errors());
+      }
+    }
+    return { kind: "verdict", pass: errors.length === 0, errors };
   }
 }
 // src/requirements/usecase/verification-report-finalizer.ts
@@ -5213,75 +5931,18 @@ class VerificationReportFinalizer {
       return err(stored.error);
     const published = aggregate.candidate();
     if (published === null) {
-      return err({ kind: "io-failed", operation: "write", path: report.id().fileName(), cause: "no finalization candidate" });
+      return err({
+        kind: "io-failed",
+        operation: "write",
+        path: report.id().fileName(),
+        cause: "no finalization candidate"
+      });
     }
     return ok(published);
   }
 }
-// src/requirements/usecase/verify-requirements-smt-usecase.ts
-var BACKEND = "smt";
-
-class VerifyRequirementsSmtUseCase {
-  #formalModelRepository;
-  #z3SolverClient;
-  #finalizer;
-  constructor(formalModelRepository, verificationDirectoryRepository, findingsSchema, z3SolverClient) {
-    this.#formalModelRepository = formalModelRepository;
-    this.#z3SolverClient = z3SolverClient;
-    this.#finalizer = new VerificationReportFinalizer(verificationDirectoryRepository, findingsSchema);
-  }
-  execute(input) {
-    const id = VerificationReportId.of(input.verifyDirectory, BACKEND);
-    const acquired = this.#formalModelRepository.findById(input.modelId);
-    if (!acquired.ok) {
-      if (acquired.error.kind === "not-found")
-        return { kind: "not-applicable" };
-      if (acquired.error.kind === "io-failed")
-        return { kind: "acquisition-failed", error: acquired.error };
-      const saved = this.#finalizer.finalizeIrUnreadable(VerificationReport.irUnreadable(id, "exhaustive", acquired.error.cause));
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "model-unreadable" };
-    }
-    const model = acquired.value;
-    const irHash = model.irHash();
-    if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
-      const saved = this.#finalizer.finalize(VerificationReport.versionMismatch(id, model, irHash, "exhaustive"), model);
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "version-mismatch" };
-    }
-    const run = this.#z3SolverClient.check(model);
-    if (run.result.kind === "unavailable") {
-      const unavailable = VerificationReport.solverUnavailable(id, model, irHash, run.plan.planSkipped(), run.result.reason);
-      const saved = this.#finalizer.finalize(unavailable, model);
-      if (!saved.ok)
-        return { kind: "save-failed", error: saved.error };
-      return { kind: "solver-unavailable" };
-    }
-    const interpreted = run.plan.interpret(model, run.result.verdicts);
-    const report = VerificationReport.compose({
-      id,
-      irVersion: model.irVersion(),
-      irHash,
-      method: "exhaustive",
-      findings: interpreted.findings,
-      skipped: interpreted.skipped
-    });
-    const finalized = this.#finalizer.finalize(report, model);
-    if (!finalized.ok)
-      return { kind: "save-failed", error: finalized.error };
-    const published = finalized.value;
-    return {
-      kind: "verified",
-      pass: published.passes(),
-      findingsCount: published.findingsCount(),
-      skippedCount: published.skippedCount()
-    };
-  }
-}
 // src/requirements/usecase/verify-requirements-quint-usecase.ts
-var BACKEND2 = "quint";
+var BACKEND = "quint";
 
 class VerifyRequirementsQuintUseCase {
   #formalModelRepository;
@@ -5293,7 +5954,7 @@ class VerifyRequirementsQuintUseCase {
     this.#finalizer = new VerificationReportFinalizer(verificationDirectoryRepository, findingsSchema);
   }
   execute(input) {
-    const id = VerificationReportId.of(input.verifyDirectory, BACKEND2);
+    const id = VerificationReportIdentifier.of(input.verifyDirectory, BACKEND);
     const acquired = this.#formalModelRepository.findById(input.modelId);
     if (!acquired.ok) {
       if (acquired.error.kind === "not-found")
@@ -5349,40 +6010,66 @@ class VerifyRequirementsQuintUseCase {
     };
   }
 }
-// src/requirements/usecase/validate-ir-usecase.ts
-class ValidateIrUseCase {
-  #irValidationMaterialsRepository;
-  #requirementsSourceRepository;
-  constructor(irValidationMaterialsRepository, requirementsSourceRepository) {
-    this.#irValidationMaterialsRepository = irValidationMaterialsRepository;
-    this.#requirementsSourceRepository = requirementsSourceRepository;
+// src/requirements/usecase/verify-requirements-satisfiability-modulo-theories-usecase.ts
+var BACKEND2 = "smt";
+
+class VerifyRequirementsSatisfiabilityModuloTheoriesUseCase {
+  #formalModelRepository;
+  #z3SolverClient;
+  #finalizer;
+  constructor(formalModelRepository, verificationDirectoryRepository, findingsSchema, z3SolverClient) {
+    this.#formalModelRepository = formalModelRepository;
+    this.#z3SolverClient = z3SolverClient;
+    this.#finalizer = new VerificationReportFinalizer(verificationDirectoryRepository, findingsSchema);
   }
-  execute(modelId) {
-    const found = this.#irValidationMaterialsRepository.findById(IrValidationMaterialsId.ofModel(modelId));
-    if (!found.ok) {
-      if (found.error.kind === "not-found")
+  execute(input) {
+    const id = VerificationReportIdentifier.of(input.verifyDirectory, BACKEND2);
+    const acquired = this.#formalModelRepository.findById(input.modelId);
+    if (!acquired.ok) {
+      if (acquired.error.kind === "not-found")
         return { kind: "not-applicable" };
-      return { kind: "verdict", pass: false, errors: [found.error.cause] };
+      if (acquired.error.kind === "io-failed")
+        return { kind: "acquisition-failed", error: acquired.error };
+      const saved = this.#finalizer.finalizeIrUnreadable(VerificationReport.irUnreadable(id, "exhaustive", acquired.error.cause));
+      if (!saved.ok)
+        return { kind: "save-failed", error: saved.error };
+      return { kind: "model-unreadable" };
     }
-    const materials = found.value;
-    const errors = [];
-    const major = materials.irVersion().majorVersion();
-    if (Number.isInteger(major) && major !== SUPPORTED_IR_MAJOR) {
-      errors.push(`irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`);
+    const model = acquired.value;
+    const irHash = model.irHash();
+    if (!model.supportsMajor(SUPPORTED_IR_MAJOR)) {
+      const saved = this.#finalizer.finalize(VerificationReport.versionMismatch(id, model, irHash, "exhaustive"), model);
+      if (!saved.ok)
+        return { kind: "save-failed", error: saved.error };
+      return { kind: "version-mismatch" };
     }
-    errors.push(...materials.schemaErrors());
-    if (errors.length === 0) {
-      errors.push(...materials.view().wellFormednessErrors());
-      const index = materials.frReferenceIndex();
-      const source = this.#requirementsSourceRepository.findById(materials.sourceId());
-      if (!source.ok) {
-        errors.push("requirements.md not found under this intent record \u2014 frRefs cannot be reverse-verified");
-      } else {
-        errors.push(...index.missingErrors(source.value.knownIds()));
-        errors.push(...SourceAnchor.of(materials.declaredDigest(), source.value.digest()).errors());
-      }
+    const run = this.#z3SolverClient.check(model);
+    if (run.result.kind === "unavailable") {
+      const unavailable = VerificationReport.solverUnavailable(id, model, irHash, run.plan.planSkipped(), run.result.reason);
+      const saved = this.#finalizer.finalize(unavailable, model);
+      if (!saved.ok)
+        return { kind: "save-failed", error: saved.error };
+      return { kind: "solver-unavailable" };
     }
-    return { kind: "verdict", pass: errors.length === 0, errors };
+    const interpreted = run.plan.interpret(model, run.result.verdicts);
+    const report = VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash,
+      method: "exhaustive",
+      findings: interpreted.findings,
+      skipped: interpreted.skipped
+    });
+    const finalized = this.#finalizer.finalize(report, model);
+    if (!finalized.ok)
+      return { kind: "save-failed", error: finalized.error };
+    const published = finalized.value;
+    return {
+      kind: "verified",
+      pass: published.passes(),
+      findingsCount: published.findingsCount(),
+      skippedCount: published.skippedCount()
+    };
   }
 }
 // src/entries/aidlc-sensor-deep-spec-ir-valid.ts
@@ -5396,8 +6083,8 @@ function main() {
     process.exit(1);
   }
   const schemaPath = join6(dirname3(fileURLToPath(import.meta.url)), "data", "deep-spec-ir-schema.json");
-  const useCase = new ValidateIrUseCase(new IrValidationMaterialsRepositoryImpl({ schemaPath }), new RequirementsSourceRepositoryImpl);
-  const outcome = useCase.execute(FormalModelId.of(target.value));
+  const useCase = new ValidateIntermediateRepresentationUseCase(new IntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath }), new RequirementsSourceRepositoryImplementation);
+  const outcome = useCase.execute(FormalModelIdentifier.of(target.value));
   if (outcome.kind === "not-applicable") {
     process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, errors: [], note: "not-applicable" })}
 `);

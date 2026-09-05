@@ -6,6 +6,15 @@
 // ディレクトリを掴んだまま ping には答えるので、静的検査は通るのに verify は
 // 必ず落ちる。stale をもう 1 つの面として持ち、hasApalache() は「在る かつ
 // 陳腐化していない」を答える。
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type SolverAvailabilityParam = {
+  z3Package: boolean;
+  nodeRuntime: boolean;
+  quintCli: boolean;
+  apalache: boolean;
+  apalacheServerStale: boolean;
+};
+
 export class SolverAvailability {
   readonly #z3Package: boolean;
   readonly #nodeRuntime: boolean;
@@ -13,7 +22,7 @@ export class SolverAvailability {
   readonly #apalache: boolean;
   readonly #apalacheServerStale: boolean;
 
-  private constructor(props: Parameters<typeof SolverAvailability.of>[0]) {
+  private constructor(props: SolverAvailabilityParam) {
     this.#z3Package = props.z3Package;
     this.#nodeRuntime = props.nodeRuntime;
     this.#quintCli = props.quintCli;
@@ -21,7 +30,7 @@ export class SolverAvailability {
     this.#apalacheServerStale = props.apalacheServerStale;
   }
 
-  static of(props: { z3Package: boolean; nodeRuntime: boolean; quintCli: boolean; apalache: boolean; apalacheServerStale: boolean }): SolverAvailability {
+  static of(props: SolverAvailabilityParam): SolverAvailability {
     return new SolverAvailability(props);
   }
 

@@ -21,7 +21,7 @@
 // present).
 //
 // 合成ルート：フラグ解釈・スキーマパスの解決・実装の結線・verdict 行の描画
-// だけを持つ。検査そのものは ValidateIrUseCase（requirements/usecase）と
+// だけを持つ。検査そのものは ValidateIntermediateRepresentationUseCase（requirements/usecase）と
 // well-formedness ドメイン（requirements/domain）にある。
 
 import { dirname, join } from "node:path";
@@ -29,11 +29,11 @@ import { fileURLToPath } from "node:url";
 import { parseFlags } from "@deep-spec/kernel-adapter";
 import { ArtifactPath } from "@deep-spec/kernel-domain";
 import {
-  IrValidationMaterialsRepositoryImpl,
-  RequirementsSourceRepositoryImpl,
+  IntermediateRepresentationValidationMaterialsRepositoryImplementation,
+  RequirementsSourceRepositoryImplementation,
 } from "@deep-spec/requirements-adapter";
-import { FormalModelId } from "@deep-spec/requirements-domain";
-import { ValidateIrUseCase } from "@deep-spec/requirements-usecase";
+import { FormalModelIdentifier } from "@deep-spec/requirements-domain";
+import { ValidateIntermediateRepresentationUseCase } from "@deep-spec/requirements-usecase";
 
 const MAX_REPORTED_ERRORS = 25;
 
@@ -46,12 +46,12 @@ function main(): void {
   }
 
   const schemaPath = join(dirname(fileURLToPath(import.meta.url)), "data", "deep-spec-ir-schema.json");
-  const useCase = new ValidateIrUseCase(
-    new IrValidationMaterialsRepositoryImpl({ schemaPath }),
-    new RequirementsSourceRepositoryImpl(),
+  const useCase = new ValidateIntermediateRepresentationUseCase(
+    new IntermediateRepresentationValidationMaterialsRepositoryImplementation({ schemaPath }),
+    new RequirementsSourceRepositoryImplementation(),
   );
 
-  const outcome = useCase.execute(FormalModelId.of(target.value));
+  const outcome = useCase.execute(FormalModelIdentifier.of(target.value));
   if (outcome.kind === "not-applicable") {
     process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, errors: [], note: "not-applicable" })}\n`);
     process.exit(0);

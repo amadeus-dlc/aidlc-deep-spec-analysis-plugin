@@ -6,11 +6,11 @@ export class LoweredObligations {
   readonly #values: readonly LoweredObligation[];
 
   private constructor(values: readonly LoweredObligation[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly LoweredObligation[]): LoweredObligations {
-    return new LoweredObligations([...values]);
+    return new LoweredObligations(values);
   }
 
   add(value: LoweredObligation): LoweredObligations {

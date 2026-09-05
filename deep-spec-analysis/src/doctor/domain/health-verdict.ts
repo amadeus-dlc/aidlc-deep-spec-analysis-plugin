@@ -6,11 +6,11 @@ export class HealthVerdict {
   readonly #values: readonly Check[];
 
   private constructor(values: readonly Check[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly Check[]): HealthVerdict {
-    return new HealthVerdict([...values]);
+    return new HealthVerdict(values);
   }
 
   add(value: Check): HealthVerdict {

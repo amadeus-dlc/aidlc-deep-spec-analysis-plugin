@@ -1,10 +1,12 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 export class BlockIndex {
   readonly #value: number;
 
   private constructor(raw: number) {
-    if (!Number.isInteger(raw) || raw < 1) throw new IllegalArgumentException({ kind: "non-positive-location", raw });
+    if (!Number.isSafeInteger(raw) || raw < 1)
+      throw new IllegalArgumentException({ kind: "non-positive-location", raw });
     this.#value = raw;
   }
 
@@ -12,7 +14,7 @@ export class BlockIndex {
     return new BlockIndex(raw);
   }
 
-  static parse(raw: number): Result<BlockIndex, IllegalArgumentException["problem"]> {
+  static parse(raw: number): Result<BlockIndex, ParseError> {
     return parseConstruction(() => new BlockIndex(raw));
   }
 

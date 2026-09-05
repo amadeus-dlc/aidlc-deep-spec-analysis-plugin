@@ -12,9 +12,9 @@
 
 import type { Result } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { ReferenceCheckReport, ReferenceCheckReportId } from "@deep-spec/refcheck-domain";
+import type { ReferenceCheckReport, ReferenceCheckReportIdentifier } from "@deep-spec/refcheck-domain";
 
 export interface ReferenceCheckReportRepository {
-  findById(aggregateId: ReferenceCheckReportId): Result<ReferenceCheckReport, RepositoryError>;
+  findById(aggregateId: ReferenceCheckReportIdentifier): Result<ReferenceCheckReport, RepositoryError>;
   store(report: ReferenceCheckReport): Result<void, RepositoryError>;
 }

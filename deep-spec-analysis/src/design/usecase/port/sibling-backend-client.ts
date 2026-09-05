@@ -8,9 +8,18 @@
 import type { DesignUnit, LoweredUnit, ReachabilityVerdict } from "@deep-spec/design-domain";
 import type { SiblingLoweredRun } from "./sibling-lowered-run.ts";
 
-
-
 export interface SiblingBackendClient {
-  runLowered(backend: "smt" | "quint", unit: DesignUnit, lowered: LoweredUnit, wallTimeoutMs: number): SiblingLoweredRun;
-  probeState(unit: DesignUnit, lowered: LoweredUnit, attrPath: string, state: string, wallTimeoutMs: number): ReachabilityVerdict;
+  runLowered(
+    backend: "smt" | "quint",
+    unit: DesignUnit,
+    lowered: LoweredUnit,
+    wallTimeoutMs: number,
+  ): SiblingLoweredRun;
+  probeState(
+    unit: DesignUnit,
+    lowered: LoweredUnit,
+    attrPath: string,
+    state: string,
+    wallTimeoutMs: number,
+  ): ReachabilityVerdict;
 }

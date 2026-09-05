@@ -5,11 +5,11 @@ export class DesignBackgroundAssumptions {
   readonly #values: readonly DesignBackgroundAssumption[];
 
   private constructor(values: readonly DesignBackgroundAssumption[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly DesignBackgroundAssumption[]): DesignBackgroundAssumptions {
-    return new DesignBackgroundAssumptions([...values]);
+    return new DesignBackgroundAssumptions(values);
   }
 
   add(value: DesignBackgroundAssumption): DesignBackgroundAssumptions {

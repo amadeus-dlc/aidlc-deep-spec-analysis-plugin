@@ -1,4 +1,4 @@
-import type { DesignArtifactRef } from "./design-artifact-ref.ts";
+import type { DesignArtifactReference } from "./design-artifact-reference.ts";
 import type { FunctionalTarget } from "./functional-target.ts";
 import type { VerificationTarget } from "./verification-target.ts";
 
@@ -10,6 +10,6 @@ export interface DoctorWorkspaceClient {
   verificationScopes(): readonly string[];
   functionalScopes(): readonly string[];
   verificationTargets(scopes: readonly string[]): readonly VerificationTarget[];
-  designArtifacts(): readonly DesignArtifactRef[];
+  designArtifacts(): readonly DesignArtifactReference[];
   functionalTargets(scopes: readonly string[]): readonly FunctionalTarget[];
 }

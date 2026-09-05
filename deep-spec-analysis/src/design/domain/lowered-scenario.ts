@@ -1,33 +1,52 @@
+import type {
+  Expression,
+  FunctionalRequirementReferences,
+  ScenarioBindings,
+  TriggerName,
+} from "@deep-spec/kernel-domain";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
-import type { Expression } from "@deep-spec/kernel-domain";
-import type { FrRefs } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-import type { LoweredId } from "./lowered-id.ts";
+import type { LoweredIdentifier } from "./lowered-identifier.ts";
 
 // lowered v1 シナリオ。accept / reject の区別と任意部（イベント・期待式）の
 // 有無はシナリオ自身の知識（#71 波20）。
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type LoweredScenarioParam = {
+  id: LoweredIdentifier;
+  kind: "accept" | "reject";
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  bindings: ScenarioBindings;
+  event?: { readonly trigger: TriggerName };
+  expect?: Expression;
+};
+
 export class LoweredScenario {
-  readonly #id: LoweredId;
+  readonly #id: LoweredIdentifier;
   readonly #kind: "accept" | "reject";
-  readonly #frRefs: FrRefs;
-  readonly #bindings: { readonly [path: string]: boolean | number | string };
-  readonly #event: { readonly trigger: string } | undefined;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
+  readonly #bindings: ScenarioBindings;
+  readonly #eventTrigger: TriggerName | undefined;
   readonly #expect: Expression | undefined;
 
-  private constructor(props: Parameters<typeof LoweredScenario.of>[0]) {
+  private constructor(props: LoweredScenarioParam) {
     this.#id = props.id;
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
-    this.#bindings = { ...props.bindings };
-    this.#event = props.event;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#bindings = props.bindings;
+    this.#eventTrigger = props.event?.trigger;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
-  static of(props: { id: LoweredId; kind: "accept" | "reject"; frRefs: FrRefs; bindings: { readonly [path: string]: boolean | number | string }; event?: { readonly trigger: string }; expect?: Expression }): LoweredScenario {
+  static parse(props: LoweredScenarioParam): Result<LoweredScenario, ParseError> {
+    return parseConstruction(() => new LoweredScenario(props));
+  }
+
+  static of(props: LoweredScenarioParam): LoweredScenario {
     return new LoweredScenario(props);
   }
 
-  id(): LoweredId {
+  id(): LoweredIdentifier {
     return this.#id;
   }
 
@@ -35,16 +54,16 @@ export class LoweredScenario {
     return this.#kind;
   }
 
-  frRefs(): FrRefs {
-    return this.#frRefs;
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
   }
 
-  bindings(): { readonly [path: string]: boolean | number | string } {
-    return { ...this.#bindings };
+  bindings(): ScenarioBindings {
+    return this.#bindings;
   }
 
   event(): { readonly trigger: string } | undefined {
-    return this.#event;
+    return this.#eventTrigger === undefined ? undefined : { trigger: this.#eventTrigger.asString() };
   }
 
   expectation(): Expression | undefined {

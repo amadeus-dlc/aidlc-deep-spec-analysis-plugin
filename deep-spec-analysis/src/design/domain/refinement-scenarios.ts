@@ -5,11 +5,11 @@ export class RefinementScenarios {
   readonly #values: readonly RefinementScenario[];
 
   private constructor(values: readonly RefinementScenario[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly RefinementScenario[]): RefinementScenarios {
-    return new RefinementScenarios([...values]);
+    return new RefinementScenarios(values);
   }
 
   add(value: RefinementScenario): RefinementScenarios {

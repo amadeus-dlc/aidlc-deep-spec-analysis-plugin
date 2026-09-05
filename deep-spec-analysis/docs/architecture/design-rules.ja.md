@@ -159,9 +159,9 @@
 
 `parse` は入力不正が起こりうる境界で使う。想定外の例外は捕捉して値へ変換せず、呼び出し側へ送出する。検証を迂回する `reconstitute` は設けない。正準化を行う `compose` や `SkipReason.timeout()` など意味のある生成操作も、最終的には同じコンストラクタを通る。
 
-`parse` の要否は回復可能な入力失敗があるかで決める。`RequirementId`・`BrRef`・`QueryLabel`・`DesignUnitId` は生値を解析する `parse` を持つ。すべての文字列を受理する正規化・宣言値や、内部で導出する個数に、形だけの失敗しない `parse` は追加しない。
+`parse` の要否は回復可能な入力失敗があるかで決める。`RequirementIdentifier`・`BusinessRuleReference`・`QueryLabel`・`DesignUnitIdentifier` は生値を解析する `parse` を持つ。すべての文字列を受理する正規化・宣言値や、内部で導出する個数に、形だけの失敗しない `parse` は追加しない。
 
-`ErrorMessages` の空配列は「エラーなし」を表す有効な状態であり、拒否しない。不正入力を診断するための `DeclaredBound`・`DeclaredDigest`・`DeclaredRuleId` は、検証済みの値とは別の宣言モデルとして保持する。
+`ErrorMessages` の空配列は「エラーなし」を表す有効な状態であり、拒否しない。不正入力を診断するための `DeclaredBound`・`DeclaredDigest`・`DeclaredRuleIdentifier` は、検証済みの値とは別の宣言モデルとして保持する。
 
 **検査**: `construction-contracts.test.ts`、`no-reconstitution-bypass`、TypeScriptの型検査。
 
@@ -205,7 +205,7 @@
 
 **なぜ**: Tell-Don't-Ask。判断が散らばると、規則を変えるときに全部の呼び出し側を探すことになる。
 
-**実例**: `AttrDecl.boundsInverted()` / `defaultBelowMin()`（宣言自身が自分の不整合を答える）、`Components.dependencyCycles()`、`ExpressionTree.usesPrime()`。
+**実例**: `AttributeDeclaration.boundsInverted()` / `defaultBelowMin()`（宣言自身が自分の不整合を答える）、`Components.dependencyCycles()`、`ExpressionTree.usesPrime()`。
 
 **このリポジトリでの逸脱**: `design/domain` に**外で分岐している箇所が 15 件**残っている（§8）。規則は規則として、達成度は 100% ではない。
 
@@ -263,9 +263,9 @@ JSON境界では、項目の省略・空配列・明示的なnullを契約に従
 
 **なぜ**: 手順を包んだ型は、周りのオブジェクトを貧血にする。判断が外に出た時点で、オブジェクトは「データ」に退化する。
 
-**実例**: `AttrDecl` が自分の境界の逆転を答え、`Components` が依存の循環と所有の衝突を答え、`DeclaredEntities` が参照の解決を答える。**「検査だけを包んだ型」を明示的にドメインサービスと名乗るものは 4 文脈とも 0 件。**
+**実例**: `AttributeDeclaration` が自分の境界の逆転を答え、`Components` が依存の循環と所有の衝突を答え、`DeclaredEntities` が参照の解決を答える。**「検査だけを包んだ型」を明示的にドメインサービスと名乗るものは 4 文脈とも 0 件。**
 
-**このリポジトリでの逸脱**: 検査の重心が「手順」にある型が数件ある（`DesignUnitDecl.wellFormednessErrors` 199 行、`UnitRefinementPlan.of` 178 行）。さらに `src/design/domain/index.ts` のコメントは、統合された 36 シンボルを「ドメインサービス群」と自称している（§8）。
+**このリポジトリでの逸脱**: 検査の重心が「手順」にある型が数件ある（`DesignUnitDeclaration.wellFormednessErrors` 199 行、`UnitRefinementPlan.of` 178 行）。さらに `src/design/domain/index.ts` のコメントは、統合された 36 シンボルを「ドメインサービス群」と自称している（§8）。
 
 **検査**: なし（レビュー）。
 
@@ -417,7 +417,7 @@ JSON境界では、項目の省略・空配列・明示的なnullを契約に従
 
 **なぜ**: 深い再帰的な変換（式木から SMT-LIB への compile など）では、途中で失敗を上まで返すより投げるほうが素直に書ける。しかしそれを外に漏らすと、呼び手は何が飛んでくるか型から読めなくなる。局所に閉じれば両方取れる。
 
-**実例（実測）**: `catch` の分布は adapter 92・entries 4・domain 0・usecase 0・infrastructure 0。`CompileError` / `SmtCompileError` / `YamlError` はいずれも export されないファイル内クラスで、同じファイルで捕まえて `{kind: "uncompilable"}` や `VerificationSkipped(reason: "compile-error")` に変換される。
+**実例（実測）**: `catch` の分布は adapter 92・entries 4・domain 0・usecase 0・infrastructure 0。`CompileError` / `SatisfiabilityModuloTheoriesCompileError` / `YamlError` はいずれも export されないファイル内クラスで、同じファイルで捕まえて `{kind: "uncompilable"}` や `VerificationSkipped(reason: "compile-error")` に変換される。
 
 **検査**: なし（レビュー）。
 
@@ -578,7 +578,7 @@ JSON境界では、項目の省略・空配列・明示的なnullを契約に従
 | 箇所 | 内容 |
 |---|---|
 | `design/domain` の 15 箇所 | domain の中で値を取り出して外で分岐している（D8 の未達） |
-| `src/design/domain/index.ts` のコメント | 統合された 36 シンボルを「ドメインサービス群」と自称。実体は集約・値オブジェクト・FCC だが、`UnitRefinementPlan.of`（178 行）や `DesignUnitDecl.wellFormednessErrors`（199 行）は手続きに重心がある（D12 の未達） |
+| `src/design/domain/index.ts` のコメント | 統合された 36 シンボルを「ドメインサービス群」と自称。実体は集約・値オブジェクト・FCC だが、`UnitRefinementPlan.of`（178 行）や `DesignUnitDeclaration.wellFormednessErrors`（199 行）は手続きに重心がある（D12 の未達） |
 | `refcheck/domain` の 7 型 | `#seed` にフィールドを一括で持つ書き方が、同じ層のフィールド分解型と混在。同じ型リテラルを 3 回書き写している |
 | `refcheck/domain` の `*Outcome` 5 型 | 同じ「到達不能な枝」の扱いが、3 型は `throw`、2 型は黙って別の枝へ落ちる、と割れている |
 | `SiblingUnitIndex` | 索引で唯一 `KeyedIndex` を使わず生の `ReadonlyMap` の入れ子を持つ |

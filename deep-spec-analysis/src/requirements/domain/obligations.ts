@@ -4,11 +4,11 @@ export class Obligations {
   readonly #values: readonly Obligation[];
 
   private constructor(values: readonly Obligation[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly Obligation[]): Obligations {
-    return new Obligations([...values]);
+    return new Obligations(values);
   }
 
   add(value: Obligation): Obligations {

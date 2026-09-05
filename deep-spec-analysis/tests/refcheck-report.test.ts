@@ -1,4 +1,12 @@
-import { TargetId, ContentHash, ArtifactPath, FindingKind, FindingsSchema, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+import {
+  ArtifactPath,
+  ContentHash,
+  FindingKind,
+  FindingsSchema,
+  FunctionalRequirementReferences,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec/kernel-domain";
 
 // ReferenceCheckReport 集約・serializer・Repository の契約テスト（PR2b、#15）。
 //
@@ -22,7 +30,8 @@ function ap(raw: string): ArtifactPath {
 }
 
 import {
-  ReferenceCheckReportRepositoryImpl,
+  parseContractsTable,
+  ReferenceCheckReportRepositoryImplementation,
   renderReportBytes,
 } from "@deep-spec/refcheck-adapter";
 
@@ -30,22 +39,50 @@ import {
   CheckFamilies,
   CheckFamily,
   Finding,
-  InputAnchor,
-  type Skipped,
   Findings,
+  InputAnchor,
   InputAnchors,
   ReferenceCheckReport,
-  ReferenceCheckReportId,
+  ReferenceCheckReportIdentifier,
+  type Skipped,
   Skips,
   UnitName,
-  WitnessRefs,
+  WitnessReferences,
 } from "@deep-spec/refcheck-domain";
 
 const schemaPath = join(
-  dirname(fileURLToPath(import.meta.url)), "..", "src", "entries", "data", "deep-spec-findings-schema.json",
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "src",
+  "entries",
+  "data",
+  "deep-spec-findings-schema.json",
 );
 const schemaFile = readContractSchema(schemaPath);
-const findingsSchema = schemaFile.ok ? FindingsSchema.of(schemaFile.value) : FindingsSchema.unreadable(schemaFile.error.cause);
+const findingsSchema = schemaFile.ok
+  ? FindingsSchema.of(schemaFile.value)
+  : FindingsSchema.unreadable(schemaFile.error.cause);
+
+test("oversized contract parties produce explicit parse-failure skips", () => {
+  const table = parseContractsTable(`| ID | Provider |\n| --- | --- |\n| 1 | ${"x".repeat(4097)} |`);
+  const report = ReferenceCheckReport.open(
+    ReferenceCheckReportIdentifier.of(ap("/verification"), "contract"),
+    CheckFamilies.of([]),
+  );
+  expect(table.check(report, null, ap("contract-summary.md"), ap("units.md"))).toBeNull();
+  expect(
+    report
+      .skipped()
+      .toArray()
+      .map((skip) => skip.target()),
+  ).toEqual(["check:CD-1", "check:CD-3"]);
+  expect(
+    report
+      .skipped()
+      .toArray()
+      .every((skip) => skip.detail()?.includes("contract-party-too-long")),
+  ).toBe(true);
+});
 
 // 書かれた真実の形で組む（serializer／Repository の契約はこの面を検証する）。
 function seed(
@@ -53,11 +90,13 @@ function seed(
   overrides: { inputs?: InputAnchor[]; checked?: string[]; findings?: Finding[]; skipped?: Skipped[] } = {},
 ) {
   return ReferenceCheckReport.of({
-    id: ReferenceCheckReportId.of(ap(directory), "components"),
+    id: ReferenceCheckReportIdentifier.of(ap(directory), "components"),
     inputs: InputAnchors.of(
-      overrides.inputs ?? [InputAnchor.of({ artifact: "inception/domain-design/components.md", sha256: ContentHash.of("a".repeat(64)) })],
+      overrides.inputs ?? [
+        InputAnchor.of({ artifact: "inception/domain-design/components.md", sha256: ContentHash.of("a".repeat(64)) }),
+      ],
     ),
-    checked: TargetIds.of(Array.from(overrides.checked ?? ["check:DD-0"], (raw) => TargetId.of(raw))),
+    checked: TargetIdentifiers.of(Array.from(overrides.checked ?? ["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
     findings: Findings.of(overrides.findings ?? []),
     skipped: Skips.of(overrides.skipped ?? []),
     unavailableReason: null,
@@ -68,12 +107,12 @@ function anchor(artifact: string, fill: string): InputAnchor {
   return InputAnchor.of({ artifact, sha256: ContentHash.of(fill.repeat(64)) });
 }
 
-describe("ReferenceCheckReportId", () => {
+describe("ReferenceCheckReportIdentifier", () => {
   test("equality is by directory and backend; boundaries derive the file identity", () => {
-    const a = ReferenceCheckReportId.of(ap("/tmp/x"), "components");
-    expect(a.equals(ReferenceCheckReportId.of(ap("/tmp/x"), "components"))).toBe(true);
-    expect(a.equals(ReferenceCheckReportId.of(ap("/tmp/y"), "components"))).toBe(false);
-    expect(a.equals(ReferenceCheckReportId.of(ap("/tmp/x"), "functional-design"))).toBe(false);
+    const a = ReferenceCheckReportIdentifier.of(ap("/tmp/x"), "components");
+    expect(a.equals(ReferenceCheckReportIdentifier.of(ap("/tmp/x"), "components"))).toBe(true);
+    expect(a.equals(ReferenceCheckReportIdentifier.of(ap("/tmp/y"), "components"))).toBe(false);
+    expect(a.equals(ReferenceCheckReportIdentifier.of(ap("/tmp/x"), "functional-design"))).toBe(false);
     expect(a.fileName()).toBe("components.json");
     expect(a.backendName().asString()).toBe("components");
   });
@@ -82,7 +121,7 @@ describe("ReferenceCheckReportId", () => {
 describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
   test("open starts with every family checked, in canonical order, and answers the verdict queries", () => {
     const report = ReferenceCheckReport.open(
-      ReferenceCheckReportId.of(ap("/tmp/r"), "components"),
+      ReferenceCheckReportIdentifier.of(ap("/tmp/r"), "components"),
       CheckFamilies.of(Array.from(["DD-1", "DD-0", "DD-1"], (raw) => CheckFamily.of(raw))),
     );
     report.input(anchor("b.md", "b"));
@@ -92,14 +131,19 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     expect(report.findingsCount()).toBe(0);
     expect(report.skippedCount()).toBe(0);
     expect(report.checked().toStrings()).toEqual(["check:DD-0", "check:DD-1"]);
-    expect(report.inputs().toArray().map((i) => i.artifact())).toEqual(["a.md", "b.md"]);
+    expect(
+      report
+        .inputs()
+        .toArray()
+        .map((i) => i.artifact()),
+    ).toEqual(["a.md", "b.md"]);
     expect(report.unavailableReason()).toBe(null);
     expect(report.id().backendName().asString()).toBe("components");
   });
 
   test("finding and skip remove their family from checked and render the frozen family prefixes", () => {
     const report = ReferenceCheckReport.open(
-      ReferenceCheckReportId.of(ap("/tmp/r"), "functional-design"),
+      ReferenceCheckReportIdentifier.of(ap("/tmp/r"), "functional-design"),
       CheckFamilies.of(Array.from(["A-1", "A-2", "A-3"], (raw) => CheckFamily.of(raw))),
       UnitName.of("u9"),
     );
@@ -119,18 +163,32 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
 
   test("a family failing twice leaves checked once; findings and skips keep the canonical order as they arrive", () => {
     const report = ReferenceCheckReport.open(
-      ReferenceCheckReportId.of(ap("/tmp/r"), "components"),
+      ReferenceCheckReportIdentifier.of(ap("/tmp/r"), "components"),
       CheckFamilies.of(Array.from(["DD-0", "DD-1", "DD-2"], (raw) => CheckFamily.of(raw))),
     );
     report.finding(CheckFamily.of("DD-1"), FindingKind.referenceBroken(), ["check:DD-1"], [], "second kind");
     report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "first kind");
-    report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "a earlier detail", ["FR-2", "FR-1", "FR-2"]);
+    report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "a earlier detail", [
+      "FR-2",
+      "FR-1",
+      "FR-2",
+    ]);
     report.skip(CheckFamily.of("DD-2"), "unrecognized-format", "later");
     report.skip(CheckFamily.of("DD-0"), "absent-input", "earlier");
-    expect(report.findings().toArray().map((f) => f.detail())).toEqual(["DD-1: a earlier detail", "DD-1: first kind", "DD-1: second kind"]);
-    expect(report.findings().toArray()[0]?.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
+    expect(
+      report
+        .findings()
+        .toArray()
+        .map((f) => f.detail()),
+    ).toEqual(["DD-1: a earlier detail", "DD-1: first kind", "DD-1: second kind"]);
+    expect(report.findings().toArray()[0]?.functionalRequirementReferences().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(report.findings().toArray()[0]?.unit()).toBe(undefined);
-    expect(report.skipped().toArray().map((s) => s.target())).toEqual(["check:DD-0", "check:DD-2"]);
+    expect(
+      report
+        .skipped()
+        .toArray()
+        .map((s) => s.target()),
+    ).toEqual(["check:DD-0", "check:DD-2"]);
     expect(report.checked().toStrings()).toEqual([]);
   });
 
@@ -150,16 +208,35 @@ describe("serializer (adapter owns the format knowledge)", () => {
     const report = seed("/tmp/r");
     expect(report.conformedTo(findingsSchema)).toBe(report);
     const doc = JSON.parse(renderReportBytes(report));
-    expect(Object.keys(doc)).toEqual(["backend", "irVersion", "irHash", "method", "inputs", "checked", "findings", "skipped"]);
+    expect(Object.keys(doc)).toEqual([
+      "backend",
+      "irVersion",
+      "irHash",
+      "method",
+      "inputs",
+      "checked",
+      "findings",
+      "skipped",
+    ]);
     expect(doc.method).toBe("static");
     expect(doc.irHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   test("a non-conforming document degrades with the frozen wording", () => {
-    const badFinding: Finding = Finding.of({ kind: FindingKind.conflict(), frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
-    const conformed = seed("/tmp/r", { findings: [badFinding] }).conformedTo(FindingsSchema.of({ type: "object", properties: { findings: { maxItems: 0 } } }));
+    const badFinding: Finding = Finding.of({
+      kind: FindingKind.conflict(),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+      witness: { refs: WitnessReferences.of([]) },
+      detail: "DD-0: x",
+    });
+    const conformed = seed("/tmp/r", { findings: [badFinding] }).conformedTo(
+      FindingsSchema.of({ type: "object", properties: { findings: { maxItems: 0 } } }),
+    );
     expect(conformed.isUnavailable()).toBe(true);
-    expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
+    expect(conformed.unavailableReason()).toStartWith(
+      "self-validation against deep-spec-findings-schema.json failed: ",
+    );
     expect(JSON.parse(renderReportBytes(conformed)).unavailable.reason).toStartWith("self-validation against ");
   });
 
@@ -173,7 +250,7 @@ describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", ()
   test("store then findById reconstitutes the written truth byte-for-byte", () => {
     const dir = mkdtempSync(join(tmpdir(), "refcheck-repo-"));
     try {
-      const repository = new ReferenceCheckReportRepositoryImpl();
+      const repository = new ReferenceCheckReportRepositoryImplementation();
       const report = seed(dir);
       expect(repository.store(report).ok).toBe(true);
       const found = repository.findById(report.id());
@@ -188,14 +265,17 @@ describe("ReferenceCheckReportRepository contract (real Impl over a tmpdir)", ()
   test("findById on an absent id is a not-found error, and corrupt bytes are a corrupt error", () => {
     const dir = mkdtempSync(join(tmpdir(), "refcheck-repo-"));
     try {
-      const repository = new ReferenceCheckReportRepositoryImpl();
-      const absent = repository.findById(ReferenceCheckReportId.of(ap(dir), "components"));
+      const repository = new ReferenceCheckReportRepositoryImplementation();
+      const absent = repository.findById(ReferenceCheckReportIdentifier.of(ap(dir), "components"));
       expect(!absent.ok && absent.error.kind).toBe("not-found");
       writeFileSync(join(dir, "components.json"), "not json at all");
-      const corrupt = repository.findById(ReferenceCheckReportId.of(ap(dir), "components"));
+      const corrupt = repository.findById(ReferenceCheckReportIdentifier.of(ap(dir), "components"));
       expect(!corrupt.ok && corrupt.error.kind).toBe("corrupt");
-      writeFileSync(join(dir, "components.json"), JSON.stringify({ backend: "other", inputs: [], checked: [], findings: [], skipped: [] }));
-      const mismatched = repository.findById(ReferenceCheckReportId.of(ap(dir), "components"));
+      writeFileSync(
+        join(dir, "components.json"),
+        JSON.stringify({ backend: "other", inputs: [], checked: [], findings: [], skipped: [] }),
+      );
+      const mismatched = repository.findById(ReferenceCheckReportIdentifier.of(ap(dir), "components"));
       expect(!mismatched.ok && mismatched.error.kind).toBe("corrupt");
     } finally {
       rmSync(dir, { recursive: true, force: true });

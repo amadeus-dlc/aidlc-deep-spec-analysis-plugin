@@ -1,56 +1,80 @@
+import type {
+  Expression,
+  FunctionalRequirementReferences,
+  ScenarioBindings,
+  TriggerName,
+} from "@deep-spec/kernel-domain";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
-import type { Expression } from "@deep-spec/kernel-domain";
-import type { FrRefs, TriggerName } from "@deep-spec/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // 受け入れ／拒否シナリオ。期待する充足可能性と binding の正準列挙を所有する。
 
-import { ScenarioId } from "./scenario-id.ts";
+import type { ScenarioIdentifier } from "./scenario-identifier.ts";
+
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type ScenarioParam = {
+  id: ScenarioIdentifier;
+  kind: "accept" | "reject";
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  bindings: ScenarioBindings;
+  event?: { readonly trigger: TriggerName };
+  expect?: Expression;
+};
 
 export class Scenario {
-  readonly #id: ScenarioId;
+  readonly #id: ScenarioIdentifier;
   readonly #kind: "accept" | "reject";
-  readonly #frRefs: FrRefs;
-  readonly #bindings: Readonly<Record<string, boolean | number | string>>;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
+  readonly #bindings: ScenarioBindings;
   readonly #eventTrigger: TriggerName | undefined;
   readonly #expect: Expression | undefined;
 
-  private constructor(props: Parameters<typeof Scenario.of>[0]) {
+  private constructor(props: ScenarioParam) {
     this.#id = props.id;
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
-    this.#bindings = { ...props.bindings };
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
-  static of(props: {
-    id: ScenarioId;
-    kind: "accept" | "reject";
-    frRefs: FrRefs;
-    bindings: Readonly<Record<string, boolean | number | string>>;
-    event?: { readonly trigger: TriggerName };
-    expect?: Expression;
-  }): Scenario {
+  static parse(props: ScenarioParam): Result<Scenario, ParseError> {
+    return parseConstruction(() => new Scenario(props));
+  }
+
+  static of(props: ScenarioParam): Scenario {
     return new Scenario(props);
   }
 
-  id(): ScenarioId { return this.#id; }
-  kind(): "accept" | "reject" { return this.#kind; }
-  frRefs(): FrRefs { return this.#frRefs; }
-  eventTrigger(): TriggerName | undefined { return this.#eventTrigger; }
-  expectation(): Expression | undefined { return this.#expect; }
-  isAccept(): boolean { return this.#kind === "accept"; }
-  isReject(): boolean { return this.#kind === "reject"; }
-  hasEvent(): boolean { return this.#eventTrigger !== undefined; }
+  id(): ScenarioIdentifier {
+    return this.#id;
+  }
+  kind(): "accept" | "reject" {
+    return this.#kind;
+  }
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
+  }
+  eventTrigger(): TriggerName | undefined {
+    return this.#eventTrigger;
+  }
+  expectation(): Expression | undefined {
+    return this.#expect;
+  }
+  isAccept(): boolean {
+    return this.#kind === "accept";
+  }
+  isReject(): boolean {
+    return this.#kind === "reject";
+  }
+  hasEvent(): boolean {
+    return this.#eventTrigger !== undefined;
+  }
 
   isViolatedBySatisfiability(satisfiable: boolean): boolean {
     return (this.isAccept() && !satisfiable) || (this.isReject() && satisfiable);
   }
 
-  bindingEntriesCanonically(): readonly (readonly [string, boolean | number | string])[] {
-    return Object.entries(this.#bindings).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  }
-
-  bindings(): Readonly<Record<string, boolean | number | string>> {
-    return { ...this.#bindings };
+  bindings(): ScenarioBindings {
+    return this.#bindings;
   }
 }

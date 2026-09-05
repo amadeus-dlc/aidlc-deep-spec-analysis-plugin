@@ -1,13 +1,13 @@
 // doctor/adapter の公開 facade — 明示列挙のみ（export * 禁止）。
 
-export { HarnessFileClientImpl } from "./harness-file-client-impl.ts";
-export { type SolverProbeClientConfig } from "./solver-probe-client-config.ts";
-export { SolverProbeClientImpl } from "./solver-probe-client-impl.ts";
-export { type RefcheckBackendClientConfig } from "./refcheck-backend-client-config.ts";
-export { RefcheckBackendClientImpl } from "./refcheck-backend-client-impl.ts";
-export { type DoctorWorkspaceClientConfig } from "./doctor-workspace-client-config.ts";
-export { DoctorWorkspaceClientImpl } from "./doctor-workspace-client-impl.ts";
-export { InstallationProvenanceClientImpl } from "./installation-provenance-client-impl.ts";
-export { type GitHubReleaseTagsClientConfig } from "./git-hub-release-tags-client-config.ts";
-export { GitHubReleaseTagsClientImpl } from "./git-hub-release-tags-client-impl.ts";
 export { DoctorPresenter } from "./doctor-presenter.ts";
+export type { DoctorWorkspaceClientConfiguration } from "./doctor-workspace-client-configuration.ts";
+export { DoctorWorkspaceClientImplementation } from "./doctor-workspace-client-implementation.ts";
+export type { GitHubReleaseTagsClientConfiguration } from "./git-hub-release-tags-client-configuration.ts";
+export { GitHubReleaseTagsClientImplementation } from "./git-hub-release-tags-client-implementation.ts";
+export { HarnessFileClientImplementation } from "./harness-file-client-implementation.ts";
+export { InstallationProvenanceClientImplementation } from "./installation-provenance-client-implementation.ts";
+export type { ReferenceCheckBackendClientConfiguration } from "./reference-check-backend-client-configuration.ts";
+export { ReferenceCheckBackendClientImplementation } from "./reference-check-backend-client-implementation.ts";
+export type { SolverProbeClientConfiguration } from "./solver-probe-client-configuration.ts";
+export { SolverProbeClientImplementation } from "./solver-probe-client-implementation.ts";

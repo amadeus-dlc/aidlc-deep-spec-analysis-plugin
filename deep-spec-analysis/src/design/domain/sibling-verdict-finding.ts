@@ -1,26 +1,35 @@
-import { type FrRefs, FindingKind } from "@deep-spec/kernel-domain";
+import { FindingKind, type FunctionalRequirementReferences } from "@deep-spec/kernel-domain";
 import type { DesignWitness } from "./design-witness.ts";
-import type { LoweredId } from "./lowered-id.ts";
+import type { LoweredIdentifier } from "./lowered-identifier.ts";
 
 // 兄弟バックエンドが返した finding 1 件——lowering 側の id で書かれている。
 // 判定の再割り当て（SiblingVerdictDocument.remapVerdicts）は種類を問い、対象を写像し、
 // witness の core 形を finding 自身に書き換えさせる（#71 波23）。
+// 未検証の構築引数。VO・エンティティ本体とは区別する。
+type SiblingVerdictFindingParam = {
+  kind: FindingKind;
+  functionalRequirementReferences: FunctionalRequirementReferences;
+  targets: readonly LoweredIdentifier[];
+  witness: DesignWitness;
+  detail: string;
+};
+
 export class SiblingVerdictFinding {
   readonly #kind: FindingKind;
-  readonly #frRefs: FrRefs;
-  readonly #targets: readonly LoweredId[];
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
+  readonly #targets: readonly LoweredIdentifier[];
   readonly #witness: DesignWitness;
   readonly #detail: string;
 
-  private constructor(props: Parameters<typeof SiblingVerdictFinding.of>[0]) {
+  private constructor(props: SiblingVerdictFindingParam) {
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
-    this.#targets = props.targets;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#targets = Object.freeze([...props.targets]);
     this.#witness = props.witness;
     this.#detail = props.detail;
   }
 
-  static of(props: { kind: FindingKind; frRefs: FrRefs; targets: readonly LoweredId[]; witness: DesignWitness; detail: string }): SiblingVerdictFinding {
+  static of(props: SiblingVerdictFindingParam): SiblingVerdictFinding {
     return new SiblingVerdictFinding(props);
   }
 
@@ -37,11 +46,11 @@ export class SiblingVerdictFinding {
     return parsed.ok && this.#kind.equals(parsed.value);
   }
 
-  frRefs(): FrRefs {
-    return this.#frRefs;
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
   }
 
-  targets(): readonly LoweredId[] {
+  targets(): readonly LoweredIdentifier[] {
     return this.#targets;
   }
 

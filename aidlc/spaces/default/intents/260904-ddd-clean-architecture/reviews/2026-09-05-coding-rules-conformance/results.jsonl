@@ -1,0 +1,5 @@
+{"id":"R1","issuedQueries":1,"childResults":0,"result":"solved","pass":true,"findings":0,"skipped":0,"controlCompleteUnsatFindings":1}
+{"id":"R2","scenario":{"input":"SC-invalid","parse":"ok","asTargetId":"IllegalArgumentException"},"input":"OB-invalid","parse":"ok","asTargetId":"IllegalArgumentException","modelParse":"ok","smtPlan":"IllegalArgumentException"}
+{"id":"R3","beforeBoundsInverted":false,"afterBoundsInverted":true,"missingAfterCallerMutation":["statement"],"bindingAfterCallerMutation":99}
+{"id":"R4","inputType":"bigint","construction":"accepted","diagnostic":"TypeError from JSON.stringify"}
+{"id":"O1","input":{"irVersion":"1.0.0"},"parse":"ok","obligations":0}

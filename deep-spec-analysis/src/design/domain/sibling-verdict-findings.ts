@@ -5,11 +5,11 @@ export class SiblingVerdictFindings {
   readonly #values: readonly SiblingVerdictFinding[];
 
   private constructor(values: readonly SiblingVerdictFinding[]) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly SiblingVerdictFinding[]): SiblingVerdictFindings {
-    return new SiblingVerdictFindings([...values]);
+    return new SiblingVerdictFindings(values);
   }
 
   add(value: SiblingVerdictFinding): SiblingVerdictFindings {
