@@ -2691,3 +2691,12 @@ Regression coverage is in `tests/verification-boundaries.test.ts`. Tests
 that required expression reference identity now require equal values and
 separate references. The previous malformed-document test now requires an
 explicit failure instead of filtering away invalid records.
+
+
+## Separate absence from reachability verdicts (2026-09-05)
+
+At the owner's request, `ReachabilityVerdict` replaces `boolean | null`. Named factories represent reached, not reached within the bound, and unverified; `match` requires all three handlers. `SiblingBackendClient.probeState` returns the same value, removing the nullable-boolean conversion and the redundant `ReachabilityProbe` port representation.
+
+`SiblingVerdictDocument` now stores a private discriminated union instead of independent nullable fields. The decoder requires `method` on decoded documents, so both readable and unavailable factories and their `match` handlers take `string`. Successful remapping also guarantees `method: string`; only an unreadable result can lack the method.
+
+Design rule D10 documents optional-field `undefined`, explicit aggregate absence as `null`, command success as `void`, failure as `Result`, and domain verdicts as value objects. JSON contracts and verdict behavior are unchanged. Regression tests cover all three verdicts through the use case and reject nullable or optional methods at the type boundary.

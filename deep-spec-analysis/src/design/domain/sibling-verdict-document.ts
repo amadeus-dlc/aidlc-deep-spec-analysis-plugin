@@ -8,6 +8,14 @@ import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
 import type { LoweredOrigin } from "./lowered-origin.ts";
 import type { LoweringIndex } from "./lowering-index.ts";
+import { ReachabilityVerdict } from "./reachability-verdict.ts";
+
+// 各変種が必要な材料だけを持つ。読めた文書の method は必須であり、
+// 無関係な変種のためにフィールドを nullable にしない。
+type SiblingVerdictState =
+  | { readonly kind: "unreadable" }
+  | { readonly kind: "unavailable"; readonly reason: string; readonly method: VerificationMethod }
+  | { readonly kind: "readable"; readonly method: VerificationMethod; readonly findings: SiblingVerdictFindings; readonly skipped: SiblingVerdictSkips };
 
 // v1 兄弟バックエンドの findings 文書の型付き判定面——読めなかった
 // （unreadable）、バックエンドが不能を申告した（unavailable）、読めた
@@ -17,68 +25,56 @@ import type { LoweringIndex } from "./lowering-index.ts";
 // ——variant を知っているのは文書自身だから（BR6.3、旧 remapUnitDocument →
 // LoweredUnit.remapVerdicts からの移管）。
 export class SiblingVerdictDocument {
-  readonly #kind: "unreadable" | "unavailable" | "readable";
-  readonly #reason: string | null;
-  readonly #method: VerificationMethod | null;
-  readonly #findings: SiblingVerdictFindings | null;
-  readonly #skipped: SiblingVerdictSkips | null;
+  readonly #state: SiblingVerdictState;
 
-  private constructor(props: {
-    kind: "unreadable" | "unavailable" | "readable";
-    reason: string | null;
-    method: string | null;
-    findings: SiblingVerdictFindings | null;
-    skipped: SiblingVerdictSkips | null;
-  }) {
-    this.#kind = props.kind;
-    this.#reason = props.reason;
-    this.#method = props.method === null ? null : VerificationMethod.reconstitute(props.method);
-    this.#findings = props.findings;
-    this.#skipped = props.skipped;
+  private constructor(state: SiblingVerdictState) {
+    this.#state = state;
   }
 
   static unreadable(): SiblingVerdictDocument {
-    return new SiblingVerdictDocument({ kind: "unreadable", reason: null, method: null, findings: null, skipped: null });
+    return new SiblingVerdictDocument({ kind: "unreadable" });
   }
 
-  static unavailable(reason: string, method: string | null): SiblingVerdictDocument {
-    return new SiblingVerdictDocument({ kind: "unavailable", reason, method, findings: null, skipped: null });
+  static unavailable(reason: string, method: string): SiblingVerdictDocument {
+    return new SiblingVerdictDocument({ kind: "unavailable", reason, method: VerificationMethod.reconstitute(method) });
   }
 
-  static readable(method: string | null, findings: SiblingVerdictFindings, skipped: SiblingVerdictSkips): SiblingVerdictDocument {
-    return new SiblingVerdictDocument({ kind: "readable", reason: null, method, findings, skipped });
+  static readable(method: string, findings: SiblingVerdictFindings, skipped: SiblingVerdictSkips): SiblingVerdictDocument {
+    return new SiblingVerdictDocument({ kind: "readable", method: VerificationMethod.reconstitute(method), findings, skipped });
   }
 
-  // バックエンドが申告した不能理由。不能申告でなければ null。
+  // バックエンドが申告した不能理由。不能申告でなければ不在。
   unavailableReason(): string | null {
-    return this.#kind === "unavailable" ? this.#reason : null;
+    return this.#state.kind === "unavailable" ? this.#state.reason : null;
   }
 
-  // null は未検証。到達の証跡は探索方法によらず有効だが、非到達を言えるのは
-  // bounded 探索が skip も中断の finding もなく完了した場合だけ。
-  reachabilityOf(attrPath: string, state: string): boolean | null {
-    return this.match<boolean | null>({
-      unreadable: () => null,
-      unavailable: () => null,
+  // 到達の証跡は探索方法によらず有効。非到達を言えるのは、bounded 探索が
+  // skip も中断の finding もなく完了した場合だけ。未検証も判定の一つである。
+  reachabilityOf(attrPath: string, state: string): ReachabilityVerdict {
+    return this.match({
+      unreadable: () => ReachabilityVerdict.unverified(),
+      unavailable: () => ReachabilityVerdict.unverified(),
       readable: (method, findings, skipped) => {
         for (const finding of findings) {
-          if (finding.provesReachabilityOf(attrPath, state)) return true;
+          if (finding.provesReachabilityOf(attrPath, state)) return ReachabilityVerdict.reached();
         }
-        if (method !== "bounded" || !skipped.isEmpty() || !findings.isEmpty()) return null;
-        return false;
+        if (method !== "bounded" || !skipped.isEmpty() || !findings.isEmpty()) return ReachabilityVerdict.unverified();
+        return ReachabilityVerdict.notReachedWithinBound();
       },
     });
   }
 
   match<T>(handlers: {
     unreadable: () => T;
-    unavailable: (reason: string, method: string | null) => T;
-    readable: (method: string | null, findings: SiblingVerdictFindings, skipped: SiblingVerdictSkips) => T;
+    unavailable: (reason: string, method: string) => T;
+    readable: (method: string, findings: SiblingVerdictFindings, skipped: SiblingVerdictSkips) => T;
   }): T {
-    if (this.#kind === "unreadable") return handlers.unreadable();
-    if (this.#kind === "unavailable") return handlers.unavailable(this.#reason ?? "", this.#method?.asString() ?? null);
-    if (this.#findings === null || this.#skipped === null) throw new Error("defect: a readable sibling document carries no verdicts");
-    return handlers.readable(this.#method?.asString() ?? null, this.#findings, this.#skipped);
+    const state = this.#state;
+    switch (state.kind) {
+      case "unreadable": return handlers.unreadable();
+      case "unavailable": return handlers.unavailable(state.reason, state.method.asString());
+      case "readable": return handlers.readable(state.method.asString(), state.findings, state.skipped);
+    }
   }
 
   // remap — lowered v1 判定を設計語彙（DOB/TR/SM/DSC id・unit 帰属）へ写す。
@@ -86,9 +82,10 @@ export class SiblingVerdictDocument {
   remapVerdicts(unit: DesignUnit, index: LoweringIndex): {
     readonly findings: DesignFindings;
     readonly skipped: DesignSkips;
-    unavailable: string | null;
-    method: string | null;
-  } {
+  } & (
+    | { readonly unavailable: null; readonly method: string }
+    | { readonly unavailable: string; readonly method: string | null }
+  ) {
     return this.match<ReturnType<SiblingVerdictDocument["remapVerdicts"]>>({
       unreadable: () => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: "sibling backend produced no findings document", method: null }),
       unavailable: (reason, method) => ({ findings: DesignFindings.of([]), skipped: DesignSkips.of([]), unavailable: reason, method }),
@@ -97,7 +94,7 @@ export class SiblingVerdictDocument {
   }
 
   // 読めた文書の再割り当て本体（旧 remapVerdicts の readable 分岐、逐語）。
-  #remapReadable(u: DesignUnit, index: LoweringIndex, method: string | null, docFindings: SiblingVerdictFindings, docSkipped: SiblingVerdictSkips): ReturnType<SiblingVerdictDocument["remapVerdicts"]> {
+  #remapReadable(u: DesignUnit, index: LoweringIndex, method: string, docFindings: SiblingVerdictFindings, docSkipped: SiblingVerdictSkips): Extract<ReturnType<SiblingVerdictDocument["remapVerdicts"]>, { unavailable: null }> {
     const mapTarget = (t: string): { design: string; entry: LoweredOrigin | null } => index.resolveDesignTarget(t);
     const rewriteLabel = (label: string): string => index.rewriteLoweredIdTokens(label);
     const remapDetail = (detail: string): string => index.rewriteLoweredIds(detail);

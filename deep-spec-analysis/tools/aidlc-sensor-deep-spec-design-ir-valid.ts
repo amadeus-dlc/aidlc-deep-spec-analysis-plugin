@@ -1342,6 +1342,35 @@ class DesignWitness {
     return this.#document;
   }
 }
+// src/design/domain/reachability-verdict.ts
+class ReachabilityVerdict {
+  #kind;
+  constructor(kind) {
+    this.#kind = kind;
+  }
+  static reached() {
+    return new ReachabilityVerdict("reached");
+  }
+  static notReachedWithinBound() {
+    return new ReachabilityVerdict("not-reached-within-bound");
+  }
+  static unverified() {
+    return new ReachabilityVerdict("unverified");
+  }
+  equals(other) {
+    return this.#kind === other.#kind;
+  }
+  match(handlers) {
+    switch (this.#kind) {
+      case "reached":
+        return handlers.reached();
+      case "not-reached-within-bound":
+        return handlers.notReachedWithinBound();
+      case "unverified":
+        return handlers.unverified();
+    }
+  }
+}
 // src/design/domain/lowered-obligation.ts
 class LoweredObligation {
   #id;
@@ -2877,53 +2906,47 @@ class DesignSkips {
 }
 // src/design/domain/sibling-verdict-document.ts
 class SiblingVerdictDocument {
-  #kind;
-  #reason;
-  #method;
-  #findings;
-  #skipped;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#reason = props.reason;
-    this.#method = props.method === null ? null : VerificationMethod.reconstitute(props.method);
-    this.#findings = props.findings;
-    this.#skipped = props.skipped;
+  #state;
+  constructor(state) {
+    this.#state = state;
   }
   static unreadable() {
-    return new SiblingVerdictDocument({ kind: "unreadable", reason: null, method: null, findings: null, skipped: null });
+    return new SiblingVerdictDocument({ kind: "unreadable" });
   }
   static unavailable(reason, method) {
-    return new SiblingVerdictDocument({ kind: "unavailable", reason, method, findings: null, skipped: null });
+    return new SiblingVerdictDocument({ kind: "unavailable", reason, method: VerificationMethod.reconstitute(method) });
   }
   static readable(method, findings, skipped) {
-    return new SiblingVerdictDocument({ kind: "readable", reason: null, method, findings, skipped });
+    return new SiblingVerdictDocument({ kind: "readable", method: VerificationMethod.reconstitute(method), findings, skipped });
   }
   unavailableReason() {
-    return this.#kind === "unavailable" ? this.#reason : null;
+    return this.#state.kind === "unavailable" ? this.#state.reason : null;
   }
   reachabilityOf(attrPath, state) {
     return this.match({
-      unreadable: () => null,
-      unavailable: () => null,
+      unreadable: () => ReachabilityVerdict.unverified(),
+      unavailable: () => ReachabilityVerdict.unverified(),
       readable: (method, findings, skipped) => {
         for (const finding of findings) {
           if (finding.provesReachabilityOf(attrPath, state))
-            return true;
+            return ReachabilityVerdict.reached();
         }
         if (method !== "bounded" || !skipped.isEmpty() || !findings.isEmpty())
-          return null;
-        return false;
+          return ReachabilityVerdict.unverified();
+        return ReachabilityVerdict.notReachedWithinBound();
       }
     });
   }
   match(handlers) {
-    if (this.#kind === "unreadable")
-      return handlers.unreadable();
-    if (this.#kind === "unavailable")
-      return handlers.unavailable(this.#reason ?? "", this.#method?.asString() ?? null);
-    if (this.#findings === null || this.#skipped === null)
-      throw new Error("defect: a readable sibling document carries no verdicts");
-    return handlers.readable(this.#method?.asString() ?? null, this.#findings, this.#skipped);
+    const state = this.#state;
+    switch (state.kind) {
+      case "unreadable":
+        return handlers.unreadable();
+      case "unavailable":
+        return handlers.unavailable(state.reason, state.method.asString());
+      case "readable":
+        return handlers.readable(state.method.asString(), state.findings, state.skipped);
+    }
   }
   remapVerdicts(unit, index) {
     return this.match({
@@ -8694,10 +8717,9 @@ class SiblingBackendClientImpl {
     const variant = reachabilityVariant(renderLoweredDocument(unit, lowered), attrPath, state);
     const run = this.#spawn("quint", variant, wallTimeoutMs);
     if (run.exit !== 0 || run.doc === null) {
-      return { kind: "failed" };
+      return ReachabilityVerdict.unverified();
     }
-    const reached = parseSiblingVerdictDocument(run.doc).reachabilityOf(attrPath, state);
-    return reached === null ? { kind: "failed" } : { kind: "probed", reached };
+    return parseSiblingVerdictDocument(run.doc).reachabilityOf(attrPath, state);
   }
   #spawn(backend, loweredDoc, wallTimeoutMs) {
     const tool = this.#config.siblingToolPaths[backend];
@@ -10088,20 +10110,22 @@ class VerifyDesignQuintUseCase {
           }
           probesUsed += 1;
           const probe = this.#siblingBackendClient.probeState(u, lowered, attrPath, state, probeRemaining);
-          if (probe.kind === "failed") {
-            leftover.push(state);
-            continue;
-          }
-          if (!probe.reached) {
-            findings.push(DesignFinding.of({
-              kind: FindingKind.unreachable(),
-              frRefs: FrRefs.reconstitute([]),
-              targets: TargetIds.reconstitute([sm.id().asString()]),
-              witness: DesignWitness.model({ [attrPath]: state }),
-              unit: u.name(),
-              detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state \u2014 it may be dead.`
-            }));
-          }
+          probe.match({
+            reached: () => {},
+            unverified: () => {
+              leftover.push(state);
+            },
+            notReachedWithinBound: () => {
+              findings.push(DesignFinding.of({
+                kind: FindingKind.unreachable(),
+                frRefs: FrRefs.reconstitute([]),
+                targets: TargetIds.reconstitute([sm.id().asString()]),
+                witness: DesignWitness.model({ [attrPath]: state }),
+                unit: u.name(),
+                detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state \u2014 it may be dead.`
+              }));
+            }
+          });
         }
         if (leftover.length > 0) {
           skipped.push(DesignSkipped.of({

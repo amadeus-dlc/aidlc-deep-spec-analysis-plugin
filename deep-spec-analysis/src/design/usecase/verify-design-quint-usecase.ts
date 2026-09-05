@@ -164,22 +164,20 @@ export class VerifyDesignQuintUseCase {
           }
           probesUsed += 1;
           const probe = this.#siblingBackendClient.probeState(u, lowered, attrPath, state, probeRemaining);
-          if (probe.kind === "failed") {
-            leftover.push(state);
-            continue;
-          }
-          if (!probe.reached) {
-            findings.push(
-              DesignFinding.of({
+          probe.match({
+            reached: () => {},
+            unverified: () => { leftover.push(state); },
+            notReachedWithinBound: () => {
+              findings.push(DesignFinding.of({
                 kind: FindingKind.unreachable(),
                 frRefs: FrRefs.reconstitute([]),
                 targets: TargetIds.reconstitute([sm.id().asString()]),
                 witness: DesignWitness.model({ [attrPath]: state }),
                 unit: u.name(),
                 detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state — it may be dead.`,
-              }),
-            );
-          }
+              }));
+            },
+          });
         }
         if (leftover.length > 0) {
           skipped.push(DesignSkipped.of({

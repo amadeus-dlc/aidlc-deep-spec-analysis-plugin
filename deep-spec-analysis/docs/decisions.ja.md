@@ -2344,3 +2344,12 @@ exit 1 し何も公開せず、design IR を読めなくすると凍結の降格
 回帰検証は `tests/verification-boundaries.test.ts`。既存テストのうち入力と
 式の参照同一性を要求していたものは、値の一致と参照の分離を確認するように
 変更した。不正文書の要素を削除して成功させる旧テストも、明示した失敗を要求する。
+
+
+## 不在と到達性判定を分ける（2026-09-05）
+
+オーナーの指示により、到達性の `boolean | null` を `ReachabilityVerdict` 値オブジェクトへ置き換えた。到達・検査範囲内で非到達・未検証は別々の名前つきファクトリで生成し、`match` は三つの処理を要求する。`SiblingBackendClient.probeState` もこの値を返すため、途中のnullableな真偽値やport固有の二重表現は不要になった。旧 `ReachabilityProbe` は削除した。
+
+`SiblingVerdictDocument` は独立したnullableフィールド群をやめ、クラス内部の判別共用体で変種と材料を束ねた。decoderが読めた文書は `method` が必須なので、readable／unavailableの生成口と `match` の引数は `string` とする。remapの成功結果も `method: string` に絞り、読めなかった結果だけがmethodの不在を表せる。
+
+省略項目の `undefined`、集約の明示的な不在の `null`、成功時の `void`、失敗の `Result`、業務判定の値オブジェクトを設計規則D10に明記した。既存のJSON契約と判定内容は変えない。回帰テストでは三つの到達性がusecaseまで区別されることと、読み取り成功の型がnull／undefinedのmethodを受け付けないことを確認する。

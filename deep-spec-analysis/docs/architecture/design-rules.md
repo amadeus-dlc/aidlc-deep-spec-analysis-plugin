@@ -234,6 +234,20 @@ A branch of a closed set additionally has its own named factory per branch (e.g.
 
 **Check**: None (review).
 
+**Absence and verdicts (2026-09-05)**: This repository distinguishes the meanings below. Do not allow both `null` and `undefined` for the same value without a semantic reason.
+
+| Meaning | Representation | Example |
+|---|---|---|
+| An optional input or document field was not supplied | `field?` / `undefined` | `FindingsDocument.inputs`, `skipped.detail` |
+| An explicitly absent part of an aggregate | `T \| null` | A verify directory's `crossCheck` |
+| A successful command has no return payload | `void` / `ok(undefined)` | Repository `store` |
+| An acquisition or operation failed | A failure type such as `Result` | `RepositoryError` |
+| A domain verdict | A value object with named variants | `ReachabilityVerdict`: reached, not reached within the bound, unverified |
+
+Do not use `boolean | null` to encode a third verdict such as unverified. Consumers handle all reachability variants through `ReachabilityVerdict.match`, and the port carries that same value. When variants require different payloads, keep a discriminated union inside the class. For example, the decoded variants of `SiblingVerdictDocument` require `method`; unrelated variants do not make it nullable.
+
+At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls according to the contract. An internal null is not necessarily emitted as JSON null: absent `crossChecked` is omitted, while an empty comparison remains `[]`.
+
 ### D11 — Aggregates protect boundary and invariant with commands, not comments
 
 **Rule**: An aggregate root carries an identity, what it holds within its boundary, and the invariants it protects. An operation that changes state is written as **a command on the aggregate itself**, and the invariant is re-established inside that command. An optional part is held by the aggregate itself (it is not absorbed by a Repository method variant).

@@ -40,6 +40,7 @@ import {
   DesignObligationOrigin,
   DesignScenarioId,
   DesignTransitionId,
+  ReachabilityVerdict,
   CheckedUnits,
   DesignFindings,
   DesignInputAnchors,
@@ -740,12 +741,12 @@ describe("report ordering, cross-check, and degradations", () => {
     const result = (findings: Json[], skipped: Json[] = [], method = "bounded") =>
       parseSiblingVerdictDocument({ backend: "quint", irVersion: "1.0.0", irHash: "a".repeat(64), findings, skipped, method }).reachabilityOf("T.s", "dead");
     const conflict = (witness: Json): Json => ({ kind: "conflict", targets: ["OB-9999"], frRefs: [], detail: "probe", witness });
-    expect(result([conflict({ trace: [{ "T.s": "alive" }, { "T.s": "dead" }] })])).toBe(true);
-    expect(result([conflict({ trace: [{ "T.s": "alive" }] })])).toBeNull();
-    expect(result([conflict({})])).toBeNull();
-    expect(result([])).toBe(false);
-    expect(result([], [{ target: "OB-9999", reason: "timeout" }])).toBeNull();
-    expect(result([], [], "simulation")).toBeNull();
+    expect(result([conflict({ trace: [{ "T.s": "alive" }, { "T.s": "dead" }] })]).equals(ReachabilityVerdict.reached())).toBe(true);
+    expect(result([conflict({ trace: [{ "T.s": "alive" }] })]).equals(ReachabilityVerdict.unverified())).toBe(true);
+    expect(result([conflict({})]).equals(ReachabilityVerdict.unverified())).toBe(true);
+    expect(result([]).equals(ReachabilityVerdict.notReachedWithinBound())).toBe(true);
+    expect(result([], [{ target: "OB-9999", reason: "timeout" }]).equals(ReachabilityVerdict.unverified())).toBe(true);
+    expect(result([], [], "simulation").equals(ReachabilityVerdict.unverified())).toBe(true);
   });
 });
 

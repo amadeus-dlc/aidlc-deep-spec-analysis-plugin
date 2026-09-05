@@ -20,6 +20,7 @@ import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
 import type { Clock, RepositoryError } from "@deep-spec/kernel-usecase";
 import { readContractSchema } from "@deep-spec/kernel-adapter";
 import {
+  ReachabilityVerdict,
   DesignReports,
   DesignVerifyDirectory,
   RefinementMaterials,
@@ -37,7 +38,6 @@ import {
   type DesignAcquisitionTerminal,
   type DesignModelRepository,
   type DesignVerifyDirectoryRepository,
-  type ReachabilityProbe,
   type RefinementCheck,
   type RefinementMaterialsRepository,
   type RefinementSolverClient,
@@ -114,8 +114,8 @@ class StubSiblingBackendClient implements SiblingBackendClient {
     return { exit: 0, doc: null, note: "stub sibling produced no findings document" };
   }
 
-  probeState(): ReachabilityProbe {
-    return { kind: "failed" };
+  probeState(): ReachabilityVerdict {
+    return ReachabilityVerdict.unverified();
   }
 }
 

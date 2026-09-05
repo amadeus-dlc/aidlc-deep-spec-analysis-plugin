@@ -502,7 +502,7 @@ describe("sibling verdict document and finding (the backend's answer owns its in
 
   test("only an unavailable document reports a reason", () => {
     expect(SiblingVerdictDocument.unreadable().unavailableReason()).toBe(null);
-    expect(SiblingVerdictDocument.unavailable("z3 missing", null).unavailableReason()).toBe("z3 missing");
+    expect(SiblingVerdictDocument.unavailable("z3 missing", "simulation").unavailableReason()).toBe("z3 missing");
     expect(readable.unavailableReason()).toBe(null);
   });
 

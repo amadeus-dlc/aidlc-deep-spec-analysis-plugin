@@ -13,7 +13,7 @@ import {
 import { FormalModelRepositoryImpl, VerificationDirectoryRepositoryImpl } from "@deep-spec/requirements-adapter";
 import {
   DesignFindings, DesignModelId, DesignReport, DesignReportId, DesignReports, DesignSkips,
-  DesignVerifyDirectory, RefinementMaterials, RefinementMaterialsId,
+  DesignVerifyDirectory, ReachabilityVerdict, RefinementMaterials, RefinementMaterialsId,
   SiblingVerdictDocument, SiblingVerdictFindings, SiblingVerdictSkip, SiblingVerdictSkips,
 } from "@deep-spec/design-domain";
 import {
@@ -77,23 +77,61 @@ class CapturedReports implements DesignVerifyDirectoryRepository {
 }
 const cleanSibling: SiblingBackendClient = {
   runLowered: () => ({ exit: 0, note: "", doc: SiblingVerdictDocument.readable("bounded", SiblingVerdictFindings.of([]), SiblingVerdictSkips.of([])) }),
-  probeState: () => ({ kind: "failed" }),
+  probeState: () => ReachabilityVerdict.unverified(),
 };
 
 describe("到達性は完了した検査または到達の証跡からだけ判断する", () => {
+  const verdictCases = [
+    { name: "到達", verdict: ReachabilityVerdict.reached(), findings: 0, skipped: 0 },
+    { name: "範囲内で非到達", verdict: ReachabilityVerdict.notReachedWithinBound(), findings: 2, skipped: 0 },
+    { name: "未検証", verdict: ReachabilityVerdict.unverified(), findings: 0, skipped: 1 },
+  ];
+  test.each(verdictCases)("$name をusecaseまで同じ判定として渡す", ({ verdict, findings, skipped }) => {
+    const ws = designWorkspace();
+    const reports = new CapturedReports();
+    const sibling: SiblingBackendClient = { ...cleanSibling, probeState: () => verdict };
+    const outcome = new VerifyDesignQuintUseCase(ws.models, reports, schema, sibling,
+      { findById: (id) => ok(RefinementMaterials.inactive(id)) }, { now: () => 0 }, 2).execute(ws.input);
+    expect(outcome.kind).toBe("verified");
+    expect(reports.document().findings).toHaveLength(findings);
+    expect(reports.document().skipped).toHaveLength(skipped);
+  });
+
+  test("到達性の値は生成したインスタンスによらず、三つの判定を区別する", () => {
+    const copies = [ReachabilityVerdict.reached(), ReachabilityVerdict.notReachedWithinBound(), ReachabilityVerdict.unverified()];
+    for (const [i, { verdict }] of verdictCases.entries()) {
+      for (const [j, copy] of copies.entries()) expect(verdict.equals(copy)).toBe(i === j);
+    }
+  });
+
+  test("読めた文書はmethodが必須で、matchとremapの成功先でも省略されない", () => {
+    // 型契約の検査。門が nullable / optional に戻ると、この代入がコンパイルで落ちる。
+    const acceptsNull: null extends Parameters<typeof SiblingVerdictDocument.readable>[0] ? true : false = false;
+    const acceptsUndefined: undefined extends Parameters<typeof SiblingVerdictDocument.readable>[0] ? true : false = false;
+    expect(acceptsNull || acceptsUndefined).toBe(false);
+    const ws = designWorkspace();
+    const readable = SiblingVerdictDocument.readable("bounded", SiblingVerdictFindings.of([]), SiblingVerdictSkips.of([]));
+    expect(readable.match({ unreadable: () => "unreadable", unavailable: (_reason, method) => method.toUpperCase(), readable: (method) => method.toUpperCase() })).toBe("BOUNDED");
+    const unit = ws.model.units().toArray()[0];
+    const remapped = readable.remapVerdicts(unit, unit.lowered({ synthetics: false }).index());
+    expect(remapped.unavailable).toBeNull();
+    if (remapped.unavailable === null) expect(remapped.method.toUpperCase()).toBe("BOUNDED");
+    expect(SiblingVerdictDocument.unavailable("timeout", "bounded").reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.unverified())).toBe(true);
+  });
+
   test.each(["timeout", "compile-error", "capability", "unavailable"])("%s を非到達へ変換しない", (reason) => {
     const document = parseSiblingVerdictDocument(reportDocument({ skipped: [{ target: "OB-9999", reason }] }));
-    expect(document.reachabilityOf("ticket.phase", "closed")).toBeNull();
+    expect(document.reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.unverified())).toBe(true);
   });
 
   test("不正文書・simulation・証跡のないconflictから非到達を導かない", () => {
     for (const raw of [[], reportDocument({ skipped: null }), reportDocument({ findings: [false] }), reportDocument({ method: "simulation" }),
       reportDocument({ findings: [{ kind: "conflict", targets: ["OB-9999"], frRefs: [], detail: "no trace", witness: {} }] })]) {
-      expect(parseSiblingVerdictDocument(raw).reachabilityOf("ticket.phase", "closed")).toBeNull();
+      expect(parseSiblingVerdictDocument(raw).reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.unverified())).toBe(true);
     }
-    expect(parseSiblingVerdictDocument(reportDocument()).reachabilityOf("ticket.phase", "closed")).toBe(false);
+    expect(parseSiblingVerdictDocument(reportDocument()).reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.notReachedWithinBound())).toBe(true);
     const proof = reportDocument({ method: "simulation", findings: [{ kind: "conflict", targets: ["OB-9999"], frRefs: [], detail: "trace", witness: { trace: [{ "ticket.phase": "closed" }] } }] });
-    expect(parseSiblingVerdictDocument(proof).reachabilityOf("ticket.phase", "closed")).toBe(true);
+    expect(parseSiblingVerdictDocument(proof).reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.reached())).toBe(true);
   });
 
   test("実adapterがtimeout文書を読んでも、usecaseは到達不能findingを保存しない", () => {

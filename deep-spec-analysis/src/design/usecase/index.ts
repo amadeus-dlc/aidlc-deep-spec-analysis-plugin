@@ -3,7 +3,6 @@
 export { type DesignModelRepository } from "./port/design-model-repository.ts";
 export { type DesignVerifyDirectoryRepository } from "./port/design-verify-directory-repository.ts";
 export { type SiblingBackendClient } from "./port/sibling-backend-client.ts";
-export { type ReachabilityProbe } from "./port/reachability-probe.ts";
 export { type SiblingLoweredRun } from "./port/sibling-lowered-run.ts";
 export { type RefinementMaterialsRepository } from "./port/refinement-materials-repository.ts";
 export { type RefinementSolverClient } from "./port/refinement-solver-client.ts";
