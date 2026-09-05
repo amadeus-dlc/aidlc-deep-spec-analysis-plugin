@@ -1,19 +1,20 @@
-import { TargetId } from "@deep-spec/kernel-domain";
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-
-type TokenError = { readonly kind: "empty-token"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, compareCanonically, type Result } from "@deep-spec/kernel-infrastructure";
 
 export class ComponentName {
   readonly #value: string;
-  private constructor(value: string) { this.#value = value; }
-  static parse(raw: string): Result<ComponentName, TokenError> {
-    if (raw === "") return err({ kind: "empty-token", raw });
-    return ok(new ComponentName(raw));
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-token", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw: string): ComponentName { return new ComponentName(raw); }
+  static of(raw: string): ComponentName {
+    return new ComponentName(raw);
+  }
+
+  static parse(raw: string): Result<ComponentName, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new ComponentName(raw));
+  }
   equals(other: ComponentName): boolean { return this.#value === other.#value; }
   // 正準順（裁定 1）——kernel の TargetId が所有する順序に従う。
-  compareTo(other: ComponentName): number { return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value)); }
+  compareTo(other: ComponentName): number { return compareCanonically(this.#value, other.#value); }
   asString(): string { return this.#value; }
 }

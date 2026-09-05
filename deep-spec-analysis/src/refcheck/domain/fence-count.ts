@@ -5,7 +5,7 @@
 export class FenceCount {
   readonly #value: number;
 
-  private constructor(value: number) {
+  private constructor(value: Parameters<typeof FenceCount.of>[0]) {
     this.#value = value;
   }
 

@@ -1,30 +1,22 @@
 import { type TargetId, SkipReason, UnitName } from "@deep-spec/kernel-domain";
 
-// 設計検証の skip（契約2 の設計版）——対象・理由・帰属ユニット・任意の説明。
-// 正準順（unit → target → reason）と「その対象の skip か」の判定は記録自身の
-// 知識（#71 波17）。reason は分類文字列、detail は prose（裁定の恒久除外）。
-// 門は 2 つ：of は検証済み SkipReason だけを受け取る正常生成口、reconstitute は
-// 生文字列を受ける寛容な hydration 口（書かれた文書の降格試験が未知の reason を
-// 運びうるため、内部で SkipReason.reconstitute する）。
+// 設計検証の skip。対象・理由・ユニットはそれぞれ型付きの値で受け取る。
+// 正準順（unit → target → reason）は記録自身の知識。
 export class DesignSkipped {
   readonly #target: TargetId;
   readonly #reason: SkipReason;
   readonly #unit: UnitName;
   readonly #detail: string | undefined;
 
-  private constructor(props: { target: TargetId; reason: SkipReason; unit: string; detail?: string }) {
+  private constructor(props: Parameters<typeof DesignSkipped.of>[0]) {
     this.#target = props.target;
     this.#reason = props.reason;
-    this.#unit = UnitName.reconstitute(props.unit);
+    this.#unit = props.unit;
     this.#detail = props.detail;
   }
 
-  static of(props: { target: TargetId; reason: SkipReason; unit: string; detail?: string }): DesignSkipped {
+  static of(props: { target: TargetId; reason: SkipReason; unit: UnitName; detail?: string }): DesignSkipped {
     return new DesignSkipped(props);
-  }
-
-  static reconstitute(props: { target: TargetId; reason: string; unit: string; detail?: string }): DesignSkipped {
-    return new DesignSkipped({ ...props, reason: SkipReason.reconstitute(props.reason) });
   }
 
   target(): TargetId {

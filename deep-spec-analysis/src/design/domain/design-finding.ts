@@ -15,19 +15,12 @@ export class DesignFinding {
   readonly #unit: UnitName;
   readonly #detail: string;
 
-  private constructor(props: {
-    kind: FindingKind;
-    frRefs: FrRefs;
-    targets: TargetIds;
-    witness: DesignWitness;
-    unit: string;
-    detail: string;
-  }) {
+  private constructor(props: Parameters<typeof DesignFinding.of>[0]) {
     this.#kind = props.kind;
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
     this.#witness = props.witness;
-    this.#unit = UnitName.reconstitute(props.unit);
+    this.#unit = props.unit;
     this.#detail = props.detail;
   }
 
@@ -38,23 +31,10 @@ export class DesignFinding {
     frRefs: FrRefs;
     targets: TargetIds;
     witness: DesignWitness;
-    unit: string;
+    unit: UnitName;
     detail: string;
   }): DesignFinding {
     return new DesignFinding(props);
-  }
-
-  // 書かれた文書からの寛容な hydration（tolerant hydration）——未知の kind も
-  // 逐語で運び、既知のどれよりも後ろへ並べて降格試験へ渡す（FR3.3／FR3.4）。
-  static reconstitute(props: {
-    kind: string;
-    frRefs: FrRefs;
-    targets: TargetIds;
-    witness: DesignWitness;
-    unit: string;
-    detail: string;
-  }): DesignFinding {
-    return new DesignFinding({ ...props, kind: FindingKind.reconstitute(props.kind) });
   }
 
   kind(): string {
@@ -89,7 +69,7 @@ export class DesignFinding {
   // refinement-violation へ昇格する（文言は golden 凍結）。conflict でないか
   // 要件 id に届かないときは null——後者は設計自身の conflict で、呼び手は
   // masked skip の勘定へ回す。
-  asRefinementViolation(reqIds: ReadonlySet<string>, unit: string): DesignFinding | null {
+  asRefinementViolation(reqIds: ReadonlySet<string>, unit: UnitName): DesignFinding | null {
     if (!this.#kind.isConflict()) return null;
     const reqHits = this.#targets.toArray().filter((t) => reqIds.has(t.asString()));
     if (reqHits.length === 0) return null;
@@ -99,7 +79,7 @@ export class DesignFinding {
       targets: TargetIds.of(reqHits),
       witness: this.#witness,
       unit,
-      detail: `The design machine of unit ${unit} reaches a state that violates requirements obligation ${reqHits.map((t) => t.asString()).join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,
+      detail: `The design machine of unit ${unit.asString()} reaches a state that violates requirements obligation ${reqHits.map((t) => t.asString()).join(", ")} under the refinement map (step trace attached): the design can execute its way out of the verified requirements.`,
     });
   }
 
@@ -116,7 +96,7 @@ export class DesignFinding {
       frRefs: this.#frRefs,
       targets: this.#targets,
       witness: this.#witness,
-      unit: this.#unit.asString(),
+      unit: this.#unit,
       detail,
     });
   }

@@ -15,7 +15,7 @@ export class EventMapping {
     this.#reason = props.reason;
   }
 
-  static reconstitute(props: { reqTrigger: TriggerName; transitions: TransitionRefs; waived?: { reason: string } }): EventMapping {
+  static of(props: { reqTrigger: TriggerName; transitions: TransitionRefs; waived?: { reason: string } }): EventMapping {
     return new EventMapping({ reqTrigger: props.reqTrigger, transitions: props.transitions, reason: props.waived?.reason ?? null });
   }
 

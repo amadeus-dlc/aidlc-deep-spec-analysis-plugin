@@ -15,6 +15,7 @@
 // で、門はそれらを凍結の順に呼び、読んだ文書を inputs に記録するだけ。
 
 import { ArtifactPath, type RequirementIds } from "@deep-spec/kernel-domain";
+import type { UnitName } from "@deep-spec/kernel-domain";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
 import { COMPONENT_FAMILIES } from "./component-check-families.ts";
 import { CONTRACT_FAMILIES } from "./contract-check-families.ts";
@@ -33,7 +34,6 @@ import type { InputAnchor } from "./input-anchor.ts";
 import type { InputAnchors } from "./input-anchors.ts";
 import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
 import type { SpecBlockAssessments } from "./spec-block-assessments.ts";
-import type { UnitName } from "@deep-spec/kernel-domain";
 
 // 検査の門が開かない理由：対象成果物がその検査の文書ではない。
 type CheckNotApplicable = { readonly kind: "not-applicable" };
@@ -49,11 +49,11 @@ export class DesignRecord {
   // 対象が components.md のときだけ載る視点。
   readonly #componentCatalog: ComponentCatalogOutcome | null;
   // 対象が contract-summary.md のときだけ載る視点。
-  readonly #contractSummary: Parameters<typeof DesignRecord.reconstitute>[0]["contractSummary"];
+  readonly #contractSummary: Parameters<typeof DesignRecord.of>[0]["contractSummary"];
   // 対象が functional-design 配下のときだけ載る視点。
-  readonly #functional: Parameters<typeof DesignRecord.reconstitute>[0]["functional"];
+  readonly #functional: Parameters<typeof DesignRecord.of>[0]["functional"];
 
-  private constructor(seed: Parameters<typeof DesignRecord.reconstitute>[0]) {
+  private constructor(seed: Parameters<typeof DesignRecord.of>[0]) {
     this.#id = seed.id;
     this.#target = seed.target;
     this.#sourceDocument = seed.sourceDocument;
@@ -63,7 +63,7 @@ export class DesignRecord {
   }
 
   // Repository の読出側だけが使う門。読み込まれた文書は (input, outcome) の対。
-  static reconstitute(seed: {
+  static of(seed: {
     readonly id: DesignRecordId;
     readonly target: InputAnchor;
     readonly sourceDocument: Uint8Array;
@@ -108,7 +108,7 @@ export class DesignRecord {
     const catalog = this.#componentCatalog;
     if (catalog === null) return err({ kind: "not-applicable" });
     const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(reportDirectory, "components"), COMPONENT_FAMILIES);
-    catalog.check(report, ArtifactPath.reconstitute(this.#target.artifact()));
+    catalog.check(report, ArtifactPath.of(this.#target.artifact()));
     report.input(this.#target);
     return ok(report);
   }
@@ -119,7 +119,7 @@ export class DesignRecord {
     const summary = this.#contractSummary;
     if (summary === null) return err({ kind: "not-applicable" });
     const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(reportDirectory, "contract-summary"), CONTRACT_FAMILIES);
-    const artifact = ArtifactPath.reconstitute(this.#target.artifact());
+    const artifact = ArtifactPath.of(this.#target.artifact());
     const depArtifact = summary.declaredUnits.artifactName;
     const units = (summary.declaredUnits.document === null ? DeclaredUnitsOutcome.absent() : summary.declaredUnits.document.outcome).check(report);
     const rows = summary.contractsTable.check(report, units, artifact, depArtifact);

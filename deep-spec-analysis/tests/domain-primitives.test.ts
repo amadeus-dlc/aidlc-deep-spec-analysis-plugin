@@ -1,14 +1,18 @@
-// strict creation（parse／名前付きファクトリ）と tolerant hydration
-// （reconstitute）の分離——VerificationMethod・SkipReason・FindingKind と、
-// FindingKind を持つ 3 つの finding 記録についての単体試験（種別規律の裁定
-// 3-2、2026-09-04）。
-//
-//   - BR3.1: strict creation は未知値を Result のエラーにし、domain object を
-//     生成しない（finding の正常生成口は検証済み FindingKind だけを受け取る——
-//     生の string は型で弾かれる。`@ts-expect-error` の検査は `bunx tsc
-//     --noEmit` が担い、口が緩めば未使用ディレクティブとして落ちる）
-//   - BR3.2: tolerant hydration は未知値を逐語保持し、既存どおり降格でき、
-//     例外を投げない
+import {
+  UnitName,
+  ArtifactPath,
+  FindingKind,
+  FindingsSchema,
+  FrRefs,
+  IrVersion,
+  ContentHash,
+  SkipReason,
+  TargetId,
+  TargetIds,
+  VerificationMethod,
+} from "@deep-spec/kernel-domain";
+
+// of は契約違反を送出し、parse は同じ違反を Result に変換する。
 
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -27,7 +31,7 @@ import {
   DesignVerifyDirectory,
   DesignWitness,
 } from "@deep-spec/design-domain";
-import { ArtifactPath, FindingKind, FindingsSchema, FrRefs, IrVersion, ContentHash, SkipReason, TargetId, TargetIds, VerificationMethod } from "@deep-spec/kernel-domain";
+
 import {
   VerificationDirectory,
   VerificationFinding,
@@ -65,7 +69,6 @@ const KNOWN_SKIP_REASONS = [
   "unrecognized-format",
 ];
 
-
 // テスト用: 設計 report の短縮構築（識別と method 以外は空）。
 function designPath(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -76,7 +79,7 @@ function designPath(raw: string): ArtifactPath {
 function reportOf(directory: ArtifactPath, backend: string, method = "exhaustive"): DesignReport {
   return DesignReport.compose({
     id: DesignReportId.of(directory, backend),
-    irVersion: IrVersion.reconstitute("1.0.0"),
+    irVersion: IrVersion.of("1.0.0"),
     irHash: ContentHash.ofText("ir"),
     method,
     findings: DesignFindings.of([]),
@@ -88,7 +91,7 @@ function designReportOf(findings: readonly DesignFinding[]): DesignReport {
   const directory = designPath("/records/deep-spec-design-verify");
   return DesignReport.compose({
     id: DesignReportId.of(directory, "smt"),
-    irVersion: IrVersion.reconstitute("1.0.0"),
+    irVersion: IrVersion.of("1.0.0"),
     irHash: ContentHash.ofText("ir"),
     method: "exhaustive",
     findings: DesignFindings.of(findings),
@@ -138,42 +141,33 @@ describe("strict creation rejects unknown closed-set values (BR3.1)", () => {
   });
 });
 
-describe("tolerant hydration preserves unknown values verbatim without throwing (BR3.2)", () => {
-  test("VerificationMethod.reconstitute never throws and keeps an unknown method verbatim", () => {
-    const method = VerificationMethod.reconstitute("no-such-method");
-    expect(method.asString()).toBe("no-such-method");
-    expect(method.equals(VerificationMethod.reconstitute("no-such-method"))).toBe(true);
-    expect(method.equals(VerificationMethod.reconstitute("exhaustive"))).toBe(false);
+describe("construction rejects invalid vocabulary from every source", () => {
+  test("VerificationMethod of rejects unknown values and retains the diagnostic input", () => {
+    const result = VerificationMethod.parse("no-such-method");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.raw).toBe("no-such-method");
   });
 
-  test("SkipReason.reconstitute never throws and keeps an unknown reason verbatim", () => {
-    const reason = SkipReason.reconstitute("no-such-reason");
-    expect(reason.asString()).toBe("no-such-reason");
-    expect(reason.compareTo(SkipReason.reconstitute("no-such-reason"))).toBe(0);
-    expect(reason.compareTo(SkipReason.reconstitute("zzz-after"))).toBeLessThan(0);
+  test("SkipReason of rejects unknown values and retains the diagnostic input", () => {
+    const result = SkipReason.parse("no-such-reason");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.raw).toBe("no-such-reason");
   });
 
-  test("DesignSkipped keeps degrading on an unrecognized reason through reconstitute (existing written-document behavior)", () => {
-    const degraded = DesignSkipped.reconstitute({
-      target: TargetId.reconstitute("TR-1"),
-      reason: "no-such-reason",
-      unit: "u1",
-      detail: "written by a future backend version",
-    });
-    expect(degraded.reason()).toBe("no-such-reason");
-    expect(degraded.unit()).toBe("u1");
-    expect(degraded.detail()).toBe("written by a future backend version");
+  test("a skip cannot acquire an invalid reason through a hydration bypass", () => {
+    const result = SkipReason.parse("no-such-reason");
+    expect(result.ok).toBe(false);
+    expect("reconstitute" in SkipReason).toBe(false);
+    expect("reconstitute" in DesignSkipped).toBe(false);
   });
 });
 
-// finding kind の strict creation / tolerant hydration（FR3.2／FR3.3／FR3.4）。
+// finding kind の生成契約。正常生成と文書の復元に同じ規則を適用する。
 //
 //   - BR3.1: 正常生成口（`DesignFinding.of` / `VerificationFinding.of` /
 //     refcheck `Finding.of`）は検証済みの `FindingKind` しか受け取らない——
 //     未知 kind は型で弾かれ、閉集合の門 `FindingKind.parse` は Result の
 //     error になる
-//   - BR3.2: 書かれた文書の未知 kind は adapter の hydration が逐語で運び、
-//     既知のどれよりも後ろへ並べたまま降格する（凍結挙動）
 describe("finding kind の strict creation は未知 kind を受け付けない (BR3.1)", () => {
   test("正常生成口は FindingKind しか受け取らず、閉集合の門は未知 kind を Result の error にする", () => {
     const unknown = FindingKind.parse("no-such-kind");
@@ -200,25 +194,25 @@ describe("finding kind の strict creation は未知 kind を受け付けない 
     for (const kind of factories) expect(FindingKind.parse(kind.asString()).ok).toBe(true);
 
     // 生の string は 3 クラスのどの正常生成口にも渡らない（型で弾かれる）。
-    const designProps = { frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["OB-1"]), witness: DesignWitness.core([]), unit: "u1", detail: "d" };
+    const designProps = { frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: DesignWitness.core([]), unit: UnitName.of("u1"), detail: "d" };
     // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
     DesignFinding.of({ kind: "no-such-kind", ...designProps });
     // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
-    VerificationFinding.of({ kind: "no-such-kind", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["OB-1"]), witness: VerificationWitness.core([]), detail: "d" });
+    VerificationFinding.of({ kind: "no-such-kind", frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: VerificationWitness.core([]), detail: "d" });
     // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
-    Finding.of({ kind: "no-such-kind", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["check:DD-0"]), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
+    Finding.of({ kind: "no-such-kind", frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
 
     // 検証済み kind を渡した正常生成は、その kind をそのまま持つ。
     expect(DesignFinding.of({ kind: FindingKind.conflict(), ...designProps }).kind()).toBe("conflict");
   });
 });
 
-describe("未知 kind を含む既存文書は hydration でき、既知 kind より後ろで降格する (BR3.2)", () => {
-  test("adapter が未知 kind を逐語で解き、正準順で末尾に置き、降格文言を保つ", () => {
+describe("未知 kind は既存文書からも生成できず、診断に原文を残す", () => {
+  test("adapter が未知 kind を取得失敗として返し、原文を診断に保つ", () => {
     const dir = mkdtempSync(join(tmpdir(), "refcheck-unknown-kind-"));
     try {
       // 未来のバックエンドが書いたつもりの文書——未知 kind が既知 kind に
-      // 混ざっている。adapter の Repository がこれを解く（tolerant hydration）。
+      // 混ざっている。adapter の Repository がこれを解く。
       writeFileSync(
         join(dir, "components.json"),
         JSON.stringify({
@@ -237,38 +231,20 @@ describe("未知 kind を含む既存文書は hydration でき、既知 kind �
       );
       const repository = new ReferenceCheckReportRepositoryImpl();
       const found = repository.findById(ReferenceCheckReportId.of(refcheckPath(dir), "components"));
-      expect(found.ok).toBe(true);
-      if (!found.ok) throw new Error("unreachable: the written document must hydrate");
-
-      // 逐語保持 + 正準順（未知 kind の順位は 99——既知のどれよりも後ろ）。
-      expect(found.value.findings().sortedCanonically().toArray().map((f) => f.kind()))
-        .toEqual(["structure-invalid", "no-such-kind"]);
-
-      // 降格：未知 kind の文書は契約適合に落ち、凍結文言の unavailable になる。
-      const schemaFile = readContractSchema(findingsSchemaPath);
-      const findingsSchema = schemaFile.ok ? FindingsSchema.of(schemaFile.value) : FindingsSchema.unreadable(schemaFile.error.cause);
-      const conformed = found.value.conformedTo(findingsSchema);
-      expect(conformed.isUnavailable()).toBe(true);
-      expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");
+      expect(found.ok).toBe(false);
+      if (!found.ok) {
+        expect(found.error.kind).toBe("corrupt");
+        expect("cause" in found.error && found.error.cause).toContain("no-such-kind");
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
 
-    // design／requirements 側の hydration も同じ順位規則で末尾へ落とす。
-    const designOrder = DesignFindings.of([
-      DesignFinding.reconstitute({ kind: "no-such-kind", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["OB-9"]), witness: DesignWitness.core([]), unit: "u1", detail: "z" }),
-      DesignFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["OB-1"]), witness: DesignWitness.core([]), unit: "u1", detail: "a" }),
-    ]).sortedCanonically().toArray().map((f) => f.kind());
-    expect(designOrder).toEqual(["conflict", "no-such-kind"]);
-
-    const verificationOrder = VerificationFindings.of([
-      VerificationFinding.reconstitute({ kind: "no-such-kind", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["OB-9"]), witness: VerificationWitness.core([]), detail: "z" }),
-      VerificationFinding.reconstitute({ kind: "conflict", frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(["OB-1"]), witness: VerificationWitness.core([]), detail: "a" }),
-    ]).sortedCanonically().toArray().map((f) => f.kind());
-    expect(verificationOrder).toEqual(["conflict", "no-such-kind"]);
+    expect(FindingKind.parse("no-such-kind").ok).toBe(false);
+    expect("reconstitute" in VerificationFinding).toBe(false);
+    expect("reconstitute" in DesignFinding).toBe(false);
   });
 });
-
 
 // --- 契約2 のスキーマ値（FindingsSchema）------------------------------------
 //
@@ -290,16 +266,16 @@ describe("FindingsSchema は契約2 の適合判定を値として持つ", () =>
     const file = readContractSchema(findingsSchemaPath);
     expect(file.ok).toBe(true);
     if (!file.ok) throw new Error("unreachable: the shipped contract schema must be readable");
-    const schema = FindingsSchema.of(file.value);
+    const schema = FindingsSchema.of({ type: "object", properties: { findings: { type: "array", maxItems: 0 } } });
 
-    // 未知 kind の finding を持つ文書は自己検証に落ちる。
+    // findings を許可しないスキーマで集約の適合処理を確認する。
     const violating = designReportOf([
-      DesignFinding.reconstitute({
-        kind: "no-such-kind",
-        frRefs: FrRefs.reconstitute([]),
-        targets: TargetIds.reconstitute(["OB-1"]),
+      DesignFinding.of({
+        kind: FindingKind.conflict(),
+        frRefs: FrRefs.of([]),
+        targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))),
         witness: DesignWitness.core([]),
-        unit: "u1",
+        unit: UnitName.of("u1"),
         detail: "from the future",
       }),
     ]);
@@ -320,29 +296,27 @@ describe("ReferenceCheckReport.conformedTo は契約2 の適合判定を集約�
     const file = readContractSchema(findingsSchemaPath);
     expect(file.ok).toBe(true);
     if (!file.ok) throw new Error("unreachable: the shipped contract schema must be readable");
-    const schema = FindingsSchema.of(file.value);
+    const schema = FindingsSchema.of({ type: "object", properties: { findings: { type: "array", maxItems: 0 } } });
 
-    const clean = ReferenceCheckReport.reconstitute({
+    const clean = ReferenceCheckReport.of({
       id: ReferenceCheckReportId.of(refcheckPath("/tmp/r"), "components"),
       inputs: InputAnchors.of([]),
-      checked: TargetIds.reconstitute(["check:DD-0"]),
+      checked: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))),
       findings: Findings.of([]),
       skipped: Skips.of([]),
       unavailableReason: null,
     });
     expect(clean.conformedTo(schema)).toBe(clean);
 
-    // 未知 kind は書かれた文書だけが運ぶ形（Finding.reconstitute）で組む——
-    // 正常生成口は検証済みの FindingKind しか受け取らない（BR3.1）。
-    const violating = ReferenceCheckReport.reconstitute({
+    const violating = ReferenceCheckReport.of({
       id: ReferenceCheckReportId.of(refcheckPath("/tmp/r"), "components"),
       inputs: InputAnchors.of([]),
-      checked: TargetIds.reconstitute([]),
+      checked: TargetIds.of([]),
       findings: Findings.of([
-        Finding.reconstitute({
-          kind: "no-such-kind",
-          frRefs: FrRefs.reconstitute([]),
-          targets: TargetIds.reconstitute(["check:DD-0"]),
+        Finding.of({
+          kind: FindingKind.conflict(),
+          frRefs: FrRefs.of([]),
+          targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))),
           witness: { refs: WitnessRefs.of([]) },
           detail: "DD-0: from the future",
         }),
@@ -410,7 +384,7 @@ describe("DesignVerifyDirectory は backend ごとに 1 report という不変�
 function verificationReportOf(directory: ArtifactPath, backend: string, method = "exhaustive"): VerificationReport {
   return VerificationReport.compose({
     id: VerificationReportId.of(directory, backend),
-    irVersion: IrVersion.reconstitute("1.0.0"),
+    irVersion: IrVersion.of("1.0.0"),
     irHash: ContentHash.ofText("ir"),
     method,
     findings: VerificationFindings.of([]),

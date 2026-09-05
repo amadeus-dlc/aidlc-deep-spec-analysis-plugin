@@ -13,7 +13,7 @@ export class SolverAvailability {
   readonly #apalache: boolean;
   readonly #apalacheServerStale: boolean;
 
-  private constructor(props: { z3Package: boolean; nodeRuntime: boolean; quintCli: boolean; apalache: boolean; apalacheServerStale: boolean }) {
+  private constructor(props: Parameters<typeof SolverAvailability.of>[0]) {
     this.#z3Package = props.z3Package;
     this.#nodeRuntime = props.nodeRuntime;
     this.#quintCli = props.quintCli;

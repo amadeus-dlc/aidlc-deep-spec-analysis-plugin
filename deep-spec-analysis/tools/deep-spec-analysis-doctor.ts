@@ -39,7 +39,7 @@ class Check {
     this.#fix = props.fix;
     this.#severity = props.severity;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new Check(props);
   }
   passes() {
@@ -150,9 +150,6 @@ class ExpressionTree {
     return canonicalKeyOf(this.#root) === canonicalKeyOf(other.#root);
   }
 }
-// src/kernel/domain/content-hash.ts
-import { createHash } from "crypto";
-
 // src/kernel/infrastructure/result.ts
 function ok(value) {
   return { ok: true, value };
@@ -281,61 +278,26 @@ function validateSchema(root, schema, value, path, errors) {
   }
   return errors.length === before;
 }
-// src/kernel/domain/content-hash.ts
-class ContentHash {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static parse(raw) {
-    if (!/^[0-9a-f]{64}$/.test(raw))
-      return err({ kind: "not-a-sha256-hex", raw });
-    return ok(new ContentHash(raw));
-  }
-  static reconstitute(raw) {
-    return new ContentHash(raw);
-  }
-  static ofText(text) {
-    return new ContentHash(createHash("sha256").update(text, "utf-8").digest("hex"));
-  }
-  static ofBytes(bytes) {
-    return new ContentHash(createHash("sha256").update(bytes).digest("hex"));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
+// src/kernel/infrastructure/illegal-argument-exception.ts
+class IllegalArgumentException extends Error {
+  problem;
+  constructor(problem) {
+    super(`Illegal argument: ${problem.kind}`);
+    this.name = "IllegalArgumentException";
+    this.problem = Object.freeze({ ...problem });
   }
 }
-// src/kernel/domain/ir-version.ts
-class IrVersion {
-  #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static parse(raw) {
-    if (!/^\d+\.\d+\.\d+$/.test(raw))
-      return err({ kind: "not-a-semver", raw });
-    return ok(new IrVersion(raw));
-  }
-  static reconstitute(raw) {
-    return new IrVersion(raw);
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  majorVersion() {
-    return Number.parseInt(this.#value.split(".")[0] ?? "", 10);
-  }
-  supportsMajor(major) {
-    return this.majorVersion() === major;
-  }
-  asString() {
-    return this.#value;
+// src/kernel/infrastructure/parse-construction.ts
+function parseConstruction(construct) {
+  try {
+    return ok(construct());
+  } catch (error) {
+    if (error instanceof IllegalArgumentException)
+      return err(error.problem);
+    throw error;
   }
 }
-// src/kernel/domain/canonical-order.ts
+// src/kernel/infrastructure/canonical-order.ts
 function numSegments(id) {
   return (id.match(/[0-9]+/g) ?? []).map((s) => Number.parseInt(s, 10));
 }
@@ -357,7 +319,78 @@ function compareCanonically(a, b) {
 function sortedUniqueCanonically(values) {
   return [...new Set(values)].sort(compareCanonically);
 }
+// src/kernel/domain/content-hash.ts
+import { createHash } from "crypto";
 
+class ContentHash {
+  #value;
+  constructor(raw) {
+    if (!/^[0-9a-f]{64}$/.test(raw))
+      throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ContentHash(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new ContentHash(raw));
+  }
+  static ofText(text) {
+    return new ContentHash(createHash("sha256").update(text, "utf-8").digest("hex"));
+  }
+  static ofBytes(bytes) {
+    return new ContentHash(createHash("sha256").update(bytes).digest("hex"));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/declared-digest.ts
+class DeclaredDigest {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static of(value) {
+    return new DeclaredDigest(value);
+  }
+  asString() {
+    return this.#value;
+  }
+  matches(actual) {
+    return this.#value === actual.asString();
+  }
+}
+// src/kernel/domain/ir-version.ts
+class IrVersion {
+  #value;
+  constructor(raw) {
+    if (!/^\d+\.\d+\.\d+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "not-a-semver", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new IrVersion(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new IrVersion(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  majorVersion() {
+    return Number.parseInt(this.#value.split(".")[0] ?? "", 10);
+  }
+  supportsMajor(major) {
+    return this.majorVersion() === major;
+  }
+  asString() {
+    return this.#value;
+  }
+}
 // src/kernel/domain/target-id.ts
 var TARGET_ID_PATTERNS = [
   /^(OB|SC)-[0-9]+$/,
@@ -368,16 +401,16 @@ var TARGET_ID_PATTERNS = [
 
 class TargetId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
+      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TargetId(raw);
   }
   static parse(raw) {
-    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
-      return err({ kind: "malformed-target-id", raw });
-    return ok(new TargetId(raw));
-  }
-  static reconstitute(raw) {
-    return new TargetId(raw);
+    return parseConstruction(() => new TargetId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -397,9 +430,6 @@ class TargetIds {
   }
   static of(values) {
     return new TargetIds([...values]);
-  }
-  static reconstitute(values) {
-    return new TargetIds(values.map((v) => TargetId.reconstitute(v)));
   }
   static safe(prefix, raw) {
     const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
@@ -424,7 +454,7 @@ class TargetIds {
     return new TargetIds([...this.#values].sort((a, b) => a.compareTo(b)));
   }
   sortedUniqueCanonically() {
-    return TargetIds.reconstitute(sortedUniqueCanonically(this.toStrings()));
+    return TargetIds.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetId.of(raw)));
   }
   joined(separator) {
     return this.toStrings().join(separator);
@@ -442,14 +472,14 @@ class RequirementId {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new RequirementId(raw);
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -465,9 +495,6 @@ class FrRefs {
   static of(values) {
     return new FrRefs([...values]);
   }
-  static reconstitute(raws) {
-    return new FrRefs(raws.map((raw) => RequirementId.reconstitute(raw)));
-  }
   add(value) {
     return new FrRefs([...this.#values, value]);
   }
@@ -478,7 +505,7 @@ class FrRefs {
     return this.#values.length === 0;
   }
   sortedUnique() {
-    return FrRefs.reconstitute(sortedUniqueCanonically(this.toStrings()));
+    return FrRefs.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => RequirementId.of(raw)));
   }
   toArray() {
     return this.#values;
@@ -490,16 +517,16 @@ class FrRefs {
 // src/kernel/domain/backend-name.ts
 class BackendName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-backend-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new BackendName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-backend-name", raw });
-    return ok(new BackendName(raw));
-  }
-  static reconstitute(raw) {
-    return new BackendName(raw);
+    return parseConstruction(() => new BackendName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -557,15 +584,12 @@ class RequirementIds {
   static extractFrom(text) {
     const ids = [];
     for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementId.reconstitute(m[0]));
+      ids.push(RequirementId.of(m[0]));
     }
     return new RequirementIds(KeySet.of(ids));
   }
   static of(values) {
     return new RequirementIds(KeySet.of(values));
-  }
-  static reconstitute(raws) {
-    return new RequirementIds(KeySet.of(raws.map((raw) => RequirementId.reconstitute(raw))));
   }
   add(value) {
     return new RequirementIds(this.#values.with(value));
@@ -602,16 +626,16 @@ class NormalizedName {
 // src/kernel/domain/artifact-path.ts
 class ArtifactPath {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-path" });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ArtifactPath(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-path" });
-    return ok(new ArtifactPath(raw));
-  }
-  static reconstitute(raw) {
-    return new ArtifactPath(raw);
+    return parseConstruction(() => new ArtifactPath(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -623,18 +647,18 @@ class ArtifactPath {
 // src/kernel/domain/attribute-bound.ts
 class AttributeBound {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!Number.isInteger(raw))
+      throw new IllegalArgumentException({ kind: "non-integer-bound", raw });
+    if (!Number.isSafeInteger(raw))
+      throw new IllegalArgumentException({ kind: "unsafe-bound", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new AttributeBound(raw);
   }
   static parse(raw) {
-    if (!Number.isInteger(raw))
-      return err({ kind: "non-integer-bound", raw });
-    if (!Number.isSafeInteger(raw))
-      return err({ kind: "unsafe-bound", raw });
-    return ok(new AttributeBound(raw));
-  }
-  static reconstitute(raw) {
-    return new AttributeBound(raw);
+    return parseConstruction(() => new AttributeBound(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -646,14 +670,33 @@ class AttributeBound {
     return this.#value > other.#value;
   }
 }
+// src/kernel/domain/declared-bound.ts
+class DeclaredBound {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static of(value) {
+    return new DeclaredBound(value);
+  }
+  asNumber() {
+    return this.#value;
+  }
+  isSafeInteger() {
+    return AttributeBound.parse(this.#value).ok;
+  }
+  exceeds(other) {
+    return this.#value > other.#value;
+  }
+}
 // src/kernel/domain/error-messages.ts
 class ErrorMessages {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ErrorMessages([...values]);
+    return new ErrorMessages(values);
   }
   add(value) {
     return new ErrorMessages([...this.#values, value]);
@@ -700,25 +743,22 @@ class FindingsSchema {
 // src/kernel/domain/trigger-name.ts
 class TriggerName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-trigger-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TriggerName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-trigger-name", raw });
-    return ok(new TriggerName(raw));
-  }
-  static reconstitute(raw) {
-    return new TriggerName(raw);
+    return parseConstruction(() => new TriggerName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   asString() {
     return this.#value;
-  }
-  isEmpty() {
-    return this.#value === "";
   }
 }
 // src/kernel/domain/keyed-index.ts
@@ -771,7 +811,7 @@ class QueryLabel {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new QueryLabel(raw);
   }
   equals(other) {
@@ -787,22 +827,22 @@ class QueryLabel {
 // src/kernel/domain/attribute-path.ts
 class AttributePath {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-attribute-path", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new AttributePath(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-attribute-path", raw });
-    return ok(new AttributePath(raw));
-  }
-  static reconstitute(raw) {
-    return new AttributePath(raw);
+    return parseConstruction(() => new AttributePath(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -811,16 +851,16 @@ class AttributePath {
 // src/kernel/domain/unit-name.ts
 class UnitName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-unit-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new UnitName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-unit-name", raw });
-    return ok(new UnitName(raw));
-  }
-  static reconstitute(raw) {
-    return new UnitName(raw);
+    return parseConstruction(() => new UnitName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -835,7 +875,7 @@ class ObligationNature {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new ObligationNature(raw);
   }
   equals(other) {
@@ -871,55 +911,52 @@ var KIND_RANK = {
   "consistency-mismatch": 9,
   "cross-check-disagreement": 10
 };
-function rankOf(kind) {
-  return Object.hasOwn(KIND_RANK, kind) ? KIND_RANK[kind] : 99;
-}
 
 class FindingKind {
   #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static parse(raw) {
+  constructor(raw) {
     if (!Object.hasOwn(KIND_RANK, raw))
-      return err({ kind: "unknown-finding-kind", raw });
-    return ok(new FindingKind(raw));
+      throw new IllegalArgumentException({ kind: "unknown-finding-kind", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new FindingKind(raw);
   }
+  static parse(raw) {
+    return parseConstruction(() => new FindingKind(raw));
+  }
   static conflict() {
-    return new FindingKind("conflict");
+    return FindingKind.of("conflict");
   }
   static completenessGap() {
-    return new FindingKind("completeness-gap");
+    return FindingKind.of("completeness-gap");
   }
   static scenarioViolation() {
-    return new FindingKind("scenario-violation");
+    return FindingKind.of("scenario-violation");
   }
   static unreachable() {
-    return new FindingKind("unreachable");
+    return FindingKind.of("unreachable");
   }
   static redundancy() {
-    return new FindingKind("redundancy");
+    return FindingKind.of("redundancy");
   }
   static refinementViolation() {
-    return new FindingKind("refinement-violation");
+    return FindingKind.of("refinement-violation");
   }
   static mappingGap() {
-    return new FindingKind("mapping-gap");
+    return FindingKind.of("mapping-gap");
   }
   static structureInvalid() {
-    return new FindingKind("structure-invalid");
+    return FindingKind.of("structure-invalid");
   }
   static referenceBroken() {
-    return new FindingKind("reference-broken");
+    return FindingKind.of("reference-broken");
   }
   static consistencyMismatch() {
-    return new FindingKind("consistency-mismatch");
+    return FindingKind.of("consistency-mismatch");
   }
   static crossCheckDisagreement() {
-    return new FindingKind("cross-check-disagreement");
+    return FindingKind.of("cross-check-disagreement");
   }
   static canonicalOrder() {
     return Object.keys(KIND_RANK);
@@ -928,7 +965,7 @@ class FindingKind {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return rankOf(this.#value) - rankOf(other.#value);
+    return KIND_RANK[this.#value] - KIND_RANK[other.#value];
   }
   isConflict() {
     return this.#value === "conflict";
@@ -942,16 +979,16 @@ var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
 
 class VerificationMethod {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!KNOWN_METHODS.has(raw))
+      throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new VerificationMethod(raw);
   }
   static parse(raw) {
-    if (!KNOWN_METHODS.has(raw))
-      return err({ kind: "unknown-verification-method", raw });
-    return ok(new VerificationMethod(raw));
-  }
-  static reconstitute(raw) {
-    return new VerificationMethod(raw);
+    return parseConstruction(() => new VerificationMethod(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -975,43 +1012,43 @@ var KNOWN_REASONS = new Set([
 
 class SkipReason {
   #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static parse(raw) {
+  constructor(raw) {
     if (!KNOWN_REASONS.has(raw))
-      return err({ kind: "unknown-skip-reason", raw });
-    return ok(new SkipReason(raw));
+      throw new IllegalArgumentException({ kind: "unknown-skip-reason", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new SkipReason(raw);
   }
+  static parse(raw) {
+    return parseConstruction(() => new SkipReason(raw));
+  }
   static unavailable() {
-    return new SkipReason("unavailable");
+    return SkipReason.of("unavailable");
   }
   static timeout() {
-    return new SkipReason("timeout");
+    return SkipReason.of("timeout");
   }
   static capability() {
-    return new SkipReason("capability");
+    return SkipReason.of("capability");
   }
   static compileError() {
-    return new SkipReason("compile-error");
+    return SkipReason.of("compile-error");
   }
   static waived() {
-    return new SkipReason("waived");
+    return SkipReason.of("waived");
   }
   static absentInput() {
-    return new SkipReason("absent-input");
+    return SkipReason.of("absent-input");
   }
   static staleInput() {
-    return new SkipReason("stale-input");
+    return SkipReason.of("stale-input");
   }
   static irVersionMismatch() {
-    return new SkipReason("ir-version-mismatch");
+    return SkipReason.of("ir-version-mismatch");
   }
   static unrecognizedFormat() {
-    return new SkipReason("unrecognized-format");
+    return SkipReason.of("unrecognized-format");
   }
   asString() {
     return this.#value;
@@ -1026,7 +1063,7 @@ class AttributeKind {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new AttributeKind(raw);
   }
   equals(other) {
@@ -1050,7 +1087,7 @@ class ManifestEntry {
   #rel;
   #severity;
   constructor(rel, severity) {
-    this.#rel = ArtifactPath.reconstitute(rel);
+    this.#rel = ArtifactPath.of(rel);
     this.#severity = severity;
   }
   static error(rel) {
@@ -1208,19 +1245,22 @@ class PluginVersion {
   #major;
   #minor;
   #patch;
-  constructor(major, minor, patch) {
-    this.#major = major;
-    this.#minor = minor;
-    this.#patch = patch;
-  }
-  static parse(raw) {
+  constructor(raw) {
     const match = raw.match(/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
     const major = match?.[1];
     const minor = match?.[2];
     const patch = match?.[3];
     if (major === undefined || minor === undefined || patch === undefined)
-      return null;
-    return new PluginVersion(BigInt(major), BigInt(minor), BigInt(patch));
+      throw new IllegalArgumentException({ kind: "invalid-plugin-version", raw });
+    this.#major = BigInt(major);
+    this.#minor = BigInt(minor);
+    this.#patch = BigInt(patch);
+  }
+  static of(raw) {
+    return new PluginVersion(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new PluginVersion(raw));
   }
   isOlderThan(other) {
     if (this.#major !== other.#major)
@@ -1300,9 +1340,10 @@ class CheckVersionAdvisoryUseCase {
       return VersionAdvisory.provenanceMissing();
     if (provenance.kind === "malformed")
       return VersionAdvisory.provenanceMalformed(provenance.reason);
-    const installed = PluginVersion.parse(provenance.version);
-    if (!installed)
+    const parsedVersion = PluginVersion.parse(provenance.version);
+    if (!parsedVersion.ok)
       return VersionAdvisory.provenanceMalformed("version is not a stable Semantic Version");
+    const installed = parsedVersion.value;
     const releaseTags = await this.#releaseTags.list();
     if (releaseTags.kind === "unavailable") {
       return VersionAdvisory.skipped({
@@ -1315,8 +1356,8 @@ class CheckVersionAdvisoryUseCase {
     let latest = null;
     for (const raw of releaseTags.tags) {
       const candidate = PluginVersion.parse(raw);
-      if (candidate && (!latest || latest.isOlderThan(candidate)))
-        latest = candidate;
+      if (candidate.ok && (!latest || latest.isOlderThan(candidate.value)))
+        latest = candidate.value;
     }
     if (!latest) {
       return VersionAdvisory.skipped({
@@ -1385,7 +1426,7 @@ class CoverageRow {
     this.#intent = props.intent;
     this.#state = props.state;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new CoverageRow(props);
   }
   intent() {
@@ -1411,12 +1452,12 @@ class CheckVerificationCoverageUseCase {
     const targets = this.#workspace.verificationTargets(scopes);
     for (const t of targets) {
       if (!t.hasModel || !t.hasFindings) {
-        problems.push(CoverageRow.reconstitute({ space: t.space, intent: t.intent, state: CoverageState.unverified() }));
+        problems.push(CoverageRow.of({ space: t.space, intent: t.intent, state: CoverageState.unverified() }));
         continue;
       }
       const stale = VerificationStaleness.of({ anchor: t.anchor }).isStale();
       if (stale)
-        problems.push(CoverageRow.reconstitute({ space: t.space, intent: t.intent, state: CoverageState.stale() }));
+        problems.push(CoverageRow.of({ space: t.space, intent: t.intent, state: CoverageState.stale() }));
     }
     return CoverageAssessment.of({ eligible: targets.length, problems, scopes });
   }
@@ -1433,7 +1474,7 @@ class DebtRow {
     this.#artifact = props.artifact;
     this.#findings = props.findings;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new DebtRow(props);
   }
   findingCount() {
@@ -1486,7 +1527,7 @@ class CheckStructuralDebtUseCase {
         continue;
       scanned += 1;
       if (findings > 0)
-        rows.push(DebtRow.reconstitute({ space: ref.space, intent: ref.intent, artifact: ref.label, findings }));
+        rows.push(DebtRow.of({ space: ref.space, intent: ref.intent, artifact: ref.label, findings }));
     }
     return StructuralDebt.of({ scanned, rows });
   }
@@ -1499,7 +1540,7 @@ class RefinementStaleRow {
     this.#space = space;
     this.#intent = intent;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new RefinementStaleRow(props.space, props.intent);
   }
   intent() {
@@ -1565,7 +1606,7 @@ class UnitCoverageRow {
     this.#unit = props.unit;
     this.#state = props.state;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new UnitCoverageRow(props);
   }
   intent() {
@@ -1596,15 +1637,15 @@ class CheckFunctionalCoverageUseCase {
       for (const unit of t.units) {
         eligible += 1;
         if (!modelUnits.has(unit.name) || !t.hasFindings || !completed.has(unit.name)) {
-          problems.push(UnitCoverageRow.reconstitute({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.unverified() }));
+          problems.push(UnitCoverageRow.of({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.unverified() }));
           continue;
         }
         if (unit.newestArtifactMtime > t.modelMtime) {
-          problems.push(UnitCoverageRow.reconstitute({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.stale() }));
+          problems.push(UnitCoverageRow.of({ space: t.space, intent: t.intent, unit: unit.name, state: CoverageState.stale() }));
         }
       }
       if (t.modelMtime > 0 && t.hasFindings && t.requirementsModelMtime !== null && t.requirementsModelMtime > t.modelMtime) {
-        refinementStale.push(RefinementStaleRow.reconstitute({ space: t.space, intent: t.intent }));
+        refinementStale.push(RefinementStaleRow.of({ space: t.space, intent: t.intent }));
       }
     }
     return UnitCoverage.of({ eligible, problems, refinementStale, scopes });
@@ -1811,7 +1852,7 @@ class DoctorWorkspaceClientImpl {
           intent,
           hasModel,
           hasFindings,
-          anchor: anchored ? DigestAnchor.of(ContentHash.reconstitute(anchored), ContentHash.ofBytes(readFileSync(requirements))) : null
+          anchor: anchored ? DigestAnchor.of(ContentHash.of(anchored), ContentHash.ofBytes(readFileSync(requirements))) : null
         });
       }
     }
@@ -2003,7 +2044,7 @@ class DoctorPresenter {
     this.#harnessDir = config.harnessDir;
   }
   installation(statuses) {
-    return statuses.map((s) => Check.reconstitute({
+    return statuses.map((s) => Check.of({
       pass: s.isPresent(),
       label: `deep-spec-analysis: ${s.entry().rel()} installed`,
       fix: `Run \`bun ${this.#harnessDir}/tools/aidlc-utility.ts plugin-sync\` (or re-run the plugin's \`hooks/compose.ts\`).`,
@@ -2012,29 +2053,29 @@ class DoctorPresenter {
   }
   version(advisory) {
     return advisory.match({
-      current: ({ installedVersion, latestVersion, source, ref }) => Check.reconstitute({
+      current: ({ installedVersion, latestVersion, source, ref }) => Check.of({
         pass: true,
         label: `deep-spec-analysis: version ${installedVersion} from ${source} ${ref} is current (latest stable tag: ${latestVersion})`,
         severity: CheckSeverity.advisory()
       }),
-      updateAvailable: ({ installedVersion, latestVersion, source, ref }) => Check.reconstitute({
+      updateAvailable: ({ installedVersion, latestVersion, source, ref }) => Check.of({
         pass: false,
         label: `deep-spec-analysis: update available \u2014 version ${installedVersion} from ${source} ${ref}; latest stable tag is ${latestVersion}`,
         fix: "Re-run the installer with `--project . --update` (and the same `--harness` selector used for this installation).",
         severity: CheckSeverity.advisory()
       }),
-      skipped: ({ installedVersion, source, ref, reason }) => Check.reconstitute({
+      skipped: ({ installedVersion, source, ref, reason }) => Check.of({
         pass: true,
         label: `deep-spec-analysis: version update check skipped for ${installedVersion} from ${source} ${ref} \u2014 ${reason}`,
         severity: CheckSeverity.advisory()
       }),
-      provenanceMissing: () => Check.reconstitute({
+      provenanceMissing: () => Check.of({
         pass: false,
         label: "deep-spec-analysis: version update check unavailable \u2014 installation provenance is missing",
         fix: `Re-run the installer normally (without \`--update\`) to create ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
         severity: CheckSeverity.advisory()
       }),
-      provenanceMalformed: (reason) => Check.reconstitute({
+      provenanceMalformed: (reason) => Check.of({
         pass: false,
         label: `deep-spec-analysis: version update check unavailable \u2014 installation provenance is malformed (${reason})`,
         fix: `Re-run the installer normally (without \`--update\`) to replace ${this.#harnessDir}/tools/data/deep-spec-analysis-install.json.`,
@@ -2044,25 +2085,25 @@ class DoctorPresenter {
   }
   solvers(availability) {
     return [
-      Check.reconstitute({
+      Check.of({
         pass: availability.hasZ3Package(),
         label: "deep-spec-analysis: z3-solver package present (SMT backend)",
         fix: "Run `bun add z3-solver` in the project root. Without it the SMT backend reports `unavailable` and skips its checks.",
         severity: CheckSeverity.advisory()
       }),
-      Check.reconstitute({
+      Check.of({
         pass: availability.hasNodeRuntime(),
         label: "deep-spec-analysis: node runtime on PATH (executes the z3 child process)",
         fix: "Install Node.js >= 23 (its TypeScript type-stripping runs the solver child). Without it the SMT backend falls back to bun, which currently aborts on z3's pthread build.",
         severity: CheckSeverity.advisory()
       }),
-      Check.reconstitute({
+      Check.of({
         pass: availability.hasQuintCli(),
         label: "deep-spec-analysis: quint CLI on PATH (Quint backend)",
         fix: "Run `npm i -g @informalsystems/quint`. Without it the Quint backend reports `unavailable` and skips its checks.",
         severity: CheckSeverity.advisory()
       }),
-      Check.reconstitute({
+      Check.of({
         pass: availability.hasApalache(),
         label: "deep-spec-analysis: Apalache available (quint verify, method: bounded)",
         fix: availability.apalacheServerIsStale() ? "An Apalache server is listening on localhost:8822 but cannot verify \u2014 typically an orphan that still holds a deleted working directory. Stop it (`lsof -nP -iTCP:8822 -sTCP:LISTEN` shows the PID, then `kill <pid>`); quint starts a fresh server on the next `quint verify`." : "Install a JDK (17+) and run any `quint verify` once so quint downloads its Apalache distribution into ~/.quint (or set APALACHE_DIST). Without it the Quint backend uses seeded simulation (method: simulation) and skips leads-to temporal obligations.",
@@ -2076,14 +2117,14 @@ class DoctorPresenter {
         unverified: () => "has requirements with no deep-spec verification",
         stale: () => "changed its requirements after the last deep-spec verification"
       });
-      return Check.reconstitute({
+      return Check.of({
         pass: false,
         label: `deep-spec-analysis: intent ${row.intentLabel()} ${noun}`,
         fix: `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` + "then run `/aidlc --stage deep-spec-analysis-verify --single` to verify its requirements without advancing the workflow.",
         severity: CheckSeverity.advisory()
       });
     });
-    rows.push(Check.reconstitute({
+    rows.push(Check.of({
       pass: assessment.isClean(),
       label: `deep-spec-analysis: verification coverage \u2014 ${assessment.verifiedCount()}/${assessment.eligibleCount()} ` + "eligible intents verified (scopes: " + assessment.scopes().join(", ") + ")",
       fix: "See the per-intent rows above for the exact command each unverified intent needs.",
@@ -2092,14 +2133,14 @@ class DoctorPresenter {
     return rows;
   }
   structuralDebt(debt) {
-    const rows = debt.rows().map((row) => Check.reconstitute({
+    const rows = debt.rows().map((row) => Check.of({
       pass: false,
       label: `deep-spec-analysis: ${row.locationLabel()} has ${row.findingCount()} reference-integrity finding(s)`,
       fix: "Open the artifact and fix (or record as an accepted risk) each finding; " + "the deep-spec-refcheck sensors re-check on every write and write the detail next to the artifact under deep-spec-refcheck/.",
       severity: CheckSeverity.advisory()
     }));
     if (debt.hasScans()) {
-      rows.push(Check.reconstitute({
+      rows.push(Check.of({
         pass: debt.totalFindings() === 0,
         label: `deep-spec-analysis: design refcheck \u2014 ${debt.totalFindings()} structural finding(s) across ${debt.scannedCount()} design artifact(s) scanned (report-only)`,
         fix: "See the per-artifact rows above.",
@@ -2109,7 +2150,7 @@ class DoctorPresenter {
     return rows;
   }
   functionalCoverage(coverage) {
-    const rows = coverage.refinementStale().map((row) => Check.reconstitute({
+    const rows = coverage.refinementStale().map((row) => Check.of({
       pass: false,
       label: `deep-spec-analysis: intent ${row.intentLabel()} re-verified its requirements after the last design verification (refinement evidence is stale)`,
       fix: `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` + "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to re-check the design against the current requirements.",
@@ -2120,7 +2161,7 @@ class DoctorPresenter {
         unverified: () => "has functional-design artifacts with no deep-spec design verification",
         stale: () => "changed its functional-design artifacts after the last design verification"
       });
-      rows.push(Check.reconstitute({
+      rows.push(Check.of({
         pass: false,
         label: `deep-spec-analysis: unit ${row.unitLabel()} ${noun}`,
         fix: `Make it the active intent (\`bun ${this.#harnessDir}/tools/aidlc-utility.ts intent ${row.intent()}\`), ` + "then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",
@@ -2128,7 +2169,7 @@ class DoctorPresenter {
       }));
     }
     if (coverage.hasEligible()) {
-      rows.push(Check.reconstitute({
+      rows.push(Check.of({
         pass: coverage.isClean(),
         label: `deep-spec-analysis: design verification coverage \u2014 ${coverage.verifiedCount()}/${coverage.eligibleCount()} ` + "eligible units verified (scopes: " + coverage.scopes().join(", ") + ")",
         fix: "See the per-unit rows above for the exact command each unverified unit needs.",

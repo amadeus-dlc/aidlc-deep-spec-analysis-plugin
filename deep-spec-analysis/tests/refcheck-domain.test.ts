@@ -1,12 +1,14 @@
+import { SkipReason, FindingKind, ContentHash, FrRefs, TargetId, TargetIds, RequirementId } from "@deep-spec/kernel-domain";
+
 // refcheck/domain の単体テスト（DDD 移行 PR2a、issue #15）。
 // カタログ順序は golden バイトを決める凍結挙動——順位・タイブレークを固定する。
 
 import { describe, expect, test } from "bun:test";
-import { ContentHash, FrRefs, TargetId, TargetIds, RequirementId } from "@deep-spec/kernel-domain";
+
 import { CATALOG_VERSION, Finding, Skipped, Findings, InputAnchors, Skips, WitnessRefs, UnitDecl, InputAnchor, WitnessRef, ComponentName, AllowedValue, AppliesTo, AttributeDefault, AttributeName, BusinessRuleId, CardinalityNotation, ElementPath, EntityName, MachineSpec, NumericBound, ReferenceTarget, RuleCategory, SourceId, StateName, TypeName, AllowedValues, AttrDecl, AttrDecls, AttributeNames, BlockIndex, CheckFamilies, CheckFamily, Component, ComponentEntities, ComponentEntity, ComponentRef, ComponentRefs, Components, ComponentShapeErrors, ComponentShapeError, ContractRow, EntityReference, SpecBlockAssessment, ShapeError, ContractId, ContractParty, ContractRows, EntityReferences, LineNumber, SpecBlockAssessments, UnitDecls, UnitName, UnitNames, DomainEntitySketch, DomainEntitySketches, EntityDecl, EntityDecls, RelDecl, RelDecls, RuleDecl, RuleDecls, ShapeErrors, SiblingUnitIndex, SourceIds, StateMachineSketch, StateMachineSketches, StateNames } from "@deep-spec/refcheck-domain";
 
 function finding(kind: string, targets: string[], detail: string): Finding {
-  return Finding.reconstitute({ kind, frRefs: FrRefs.reconstitute([]), targets: TargetIds.reconstitute(targets), witness: { refs: WitnessRefs.of([]) }, detail });
+  return Finding.of({ kind: FindingKind.of(kind), frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail });
 }
 
 describe("catalog-order", () => {
@@ -27,32 +29,28 @@ describe("catalog-order", () => {
     ]);
   });
 
-  test("an unknown kind ranks after every catalogued kind (fallback 99)", () => {
-    const sorted = Findings.of([finding("mystery-kind", ["X-1"], "m"), finding("cross-check-disagreement", ["SC-1"], "c")]).sortedCanonically().toArray();
-    expect(sorted[0]?.kind()).toBe("cross-check-disagreement");
+  test("unknown kinds fail construction without becoming findings", () => {
+    const result = FindingKind.parse("mystery-kind");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.raw).toBe("mystery-kind");
   });
 
-  test("a prototype-inherited name as kind falls back like any unknown kind (no NaN ranks)", () => {
-    const sorted = Findings.of([
-      finding("toString", ["X-1"], "t"),
-      finding("constructor", ["X-2"], "c"),
-      finding("conflict", ["OB-1"], "k"),
-    ]).sortedCanonically().toArray();
-    expect(sorted[0]?.kind()).toBe("conflict");
-    // 両者とも fallback 99 で同順位 → targets 文字列比較で "X-1" が先。
-    expect(sorted.slice(1).map((f) => f.kind())).toEqual(["toString", "constructor"]);
+  test("prototype names cannot enter the closed finding-kind vocabulary", () => {
+    for (const raw of ["toString", "constructor", "__proto__"]) {
+      expect(FindingKind.parse(raw).ok).toBe(false);
+    }
   });
 
   test("skips sort by id order on target, then by reason", () => {
     const skips: Skipped[] = [
-      Skipped.reconstitute({ target: "check:FD-E10", reason: "b" }),
-      Skipped.reconstitute({ target: "check:FD-E2", reason: "a" }),
-      Skipped.reconstitute({ target: "check:FD-E2", reason: "A" }),
+      Skipped.of({ target: TargetId.of("check:FD-E10"), reason: SkipReason.waived()}),
+      Skipped.of({ target: TargetId.of("check:FD-E2"), reason: SkipReason.timeout()}),
+      Skipped.of({ target: TargetId.of("check:FD-E2"), reason: SkipReason.capability()}),
     ];
     expect(Skips.of(skips).sortedCanonically().toArray().map((s) => `${s.target()}/${s.reason()}`)).toEqual([
-      "check:FD-E2/A",
-      "check:FD-E2/a",
-      "check:FD-E10/b",
+      "check:FD-E2/capability",
+      "check:FD-E2/timeout",
+      "check:FD-E10/waived",
     ]);
   });
 
@@ -61,12 +59,11 @@ describe("catalog-order", () => {
   });
 });
 
-// functional-design 語彙 DP — parse（strict 境界）と reconstitute（凍結再水和）
-// の二面性、および照合・描画の解釈語彙の分岐網羅。
+// of は契約違反を送出し、parse は同じ違反を Result に変換する。
 
 describe("functional-design vocabulary domain primitives", () => {
-  test("token DPs: parse rejects the empty string, reconstitute is verbatim, equals is by value", () => {
-    const cases: { parse: (raw: string) => { ok: boolean }; reconstitute: (raw: string) => { asString(): string } }[] = [
+  test("token DPs: parse rejects the empty string, of constructs valid values, equals is by value", () => {
+    const cases: { parse: (raw: string) => { ok: boolean } }[] = [
       EntityName, AttributeName, ElementPath, TypeName, AllowedValue,
       CardinalityNotation, RuleCategory, AppliesTo, SourceId, MachineSpec, StateName, ComponentName, ReferenceTarget,
     ];
@@ -75,62 +72,62 @@ describe("functional-design vocabulary domain primitives", () => {
       expect(bad.ok).toBe(false);
       const good = dp.parse("Order");
       expect(good.ok).toBe(true);
-      expect(dp.reconstitute("x").asString()).toBe("x");
+      expect(dp.parse("x").ok).toBe(true);
     }
-    expect(EntityName.reconstitute("A").equals(EntityName.reconstitute("A"))).toBe(true);
-    expect(AttributeName.reconstitute("a").equals(AttributeName.reconstitute("b"))).toBe(false);
-    expect(ElementPath.reconstitute("e[0]").equals(ElementPath.reconstitute("e[0]"))).toBe(true);
-    expect(TypeName.reconstitute("t").equals(TypeName.reconstitute("t"))).toBe(true);
-    expect(AllowedValue.reconstitute("v").equals(AllowedValue.reconstitute("w"))).toBe(false);
-    expect(CardinalityNotation.reconstitute("1:1").equals(CardinalityNotation.reconstitute("1:1"))).toBe(true);
-    expect(RuleCategory.reconstitute("c").equals(RuleCategory.reconstitute("c"))).toBe(true);
-    expect(AppliesTo.reconstitute("A").equals(AppliesTo.reconstitute("B"))).toBe(false);
-    expect(SourceId.reconstitute("FR-1").equals(SourceId.reconstitute("FR-1"))).toBe(true);
-    expect(StateName.reconstitute("s").equals(StateName.reconstitute("s"))).toBe(true);
-    expect(ComponentName.reconstitute("C").equals(ComponentName.reconstitute("D"))).toBe(false);
-    expect(ReferenceTarget.reconstitute("R").equals(ReferenceTarget.reconstitute("R"))).toBe(true);
-    expect(MachineSpec.reconstitute("m").equals(MachineSpec.reconstitute("m"))).toBe(true);
+    expect(EntityName.of("A").equals(EntityName.of("A"))).toBe(true);
+    expect(AttributeName.of("a").equals(AttributeName.of("b"))).toBe(false);
+    expect(ElementPath.of("e[0]").equals(ElementPath.of("e[0]"))).toBe(true);
+    expect(TypeName.of("t").equals(TypeName.of("t"))).toBe(true);
+    expect(AllowedValue.of("v").equals(AllowedValue.of("w"))).toBe(false);
+    expect(CardinalityNotation.of("1:1").equals(CardinalityNotation.of("1:1"))).toBe(true);
+    expect(RuleCategory.of("c").equals(RuleCategory.of("c"))).toBe(true);
+    expect(AppliesTo.of("A").equals(AppliesTo.of("B"))).toBe(false);
+    expect(SourceId.of("FR-1").equals(SourceId.of("FR-1"))).toBe(true);
+    expect(StateName.of("s").equals(StateName.of("s"))).toBe(true);
+    expect(ComponentName.of("C").equals(ComponentName.of("D"))).toBe(false);
+    expect(ReferenceTarget.of("R").equals(ReferenceTarget.of("R"))).toBe(true);
+    expect(MachineSpec.of("m").equals(MachineSpec.of("m"))).toBe(true);
   });
 
   test("interpretation vocabulary: normalization, shape, spec decomposition, defaults, bounds", () => {
-    expect(EntityName.reconstitute("Order Item").normalized().equals(StateName.reconstitute("order_item").normalized())).toBe(true);
-    expect(TypeName.reconstitute("Decimal").normalized()).toBe("decimal");
-    expect(CardinalityNotation.reconstitute(" 1 : n ").normalizedToken()).toBe("1:N");
-    expect(BusinessRuleId.reconstitute("BR1.2").matchesShape()).toBe(true);
-    expect(BusinessRuleId.reconstitute("BRX").matchesShape()).toBe(false);
+    expect(EntityName.of("Order Item").normalized().equals(StateName.of("order_item").normalized())).toBe(true);
+    expect(TypeName.of("Decimal").normalized()).toBe("decimal");
+    expect(CardinalityNotation.of(" 1 : n ").normalizedToken()).toBe("1:N");
+    expect(BusinessRuleId.of("BR1.2").matchesShape()).toBe(true);
+    expect(BusinessRuleId.parse("BRX").ok).toBe(false);
     expect(BusinessRuleId.parse("BR1.2").ok).toBe(true);
     expect(BusinessRuleId.parse("nope").ok).toBe(false);
-    expect(BusinessRuleId.reconstitute("BR1.2").equals(BusinessRuleId.reconstitute("BR1.2"))).toBe(true);
-    expect(BusinessRuleId.reconstitute("BR1.2").asString()).toBe("BR1.2");
-    expect(RuleCategory.reconstitute("Validation").normalized()).toBe("validation");
-    expect(AttributeName.reconstitute("Status").normalized().asString()).toBe("status");
-    expect(AllowedValue.reconstitute("Open").normalized().asString()).toBe("open");
+    expect(BusinessRuleId.of("BR1.2").equals(BusinessRuleId.of("BR1.2"))).toBe(true);
+    expect(BusinessRuleId.of("BR1.2").asString()).toBe("BR1.2");
+    expect(RuleCategory.of("Validation").normalized()).toBe("validation");
+    expect(AttributeName.of("Status").normalized().asString()).toBe("status");
+    expect(AllowedValue.of("Open").normalized().asString()).toBe("open");
 
-    const spec = MachineSpec.reconstitute("Order.status");
+    const spec = MachineSpec.of("Order.status");
     expect(spec.entityToken().asString()).toBe("Order");
     expect(spec.attributeToken()).toBe("status");
-    expect(MachineSpec.reconstitute("Order").attributeToken()).toBe(undefined);
+    expect(MachineSpec.of("Order").attributeToken()).toBe(undefined);
     expect(spec.asString()).toBe("Order.status");
 
-    const numDef = AttributeDefault.reconstitute(5);
+    const numDef = AttributeDefault.of(5);
     expect(numDef.isNumber()).toBe(true);
     expect(numDef.isString()).toBe(false);
     expect(numDef.asNumber()).toBe(5);
     expect(numDef.render()).toBe("5");
-    const strDef = AttributeDefault.reconstitute("open");
+    const strDef = AttributeDefault.of("open");
     expect(strDef.isString()).toBe(true);
     expect(strDef.asString()).toBe("open");
     expect(strDef.render()).toBe("open");
 
     expect(NumericBound.parse(3).ok).toBe(true);
     expect(NumericBound.parse(Number.NaN).ok).toBe(false);
-    expect(NumericBound.reconstitute(3).asNumber()).toBe(3);
-    expect(NumericBound.reconstitute(3).equals(NumericBound.reconstitute(3))).toBe(true);
-    expect(ReferenceTarget.reconstitute("Order.id").asString()).toBe("Order.id");
-    expect(ElementPath.reconstitute("entities[0]").asString()).toBe("entities[0]");
-    expect(SourceId.reconstitute("FR-1").asString()).toBe("FR-1");
-    expect(AppliesTo.reconstitute("Order").asString()).toBe("Order");
-    expect(ComponentName.reconstitute("Core").asString()).toBe("Core");
+    expect(NumericBound.of(3).asNumber()).toBe(3);
+    expect(NumericBound.of(3).equals(NumericBound.of(3))).toBe(true);
+    expect(ReferenceTarget.of("Order.id").asString()).toBe("Order.id");
+    expect(ElementPath.of("entities[0]").asString()).toBe("entities[0]");
+    expect(SourceId.of("FR-1").asString()).toBe("FR-1");
+    expect(AppliesTo.of("Order").asString()).toBe("Order");
+    expect(ComponentName.of("Core").asString()).toBe("Core");
   });
 });
 
@@ -138,13 +135,13 @@ describe("functional-design vocabulary domain primitives", () => {
 
 describe("first-class collections", () => {
   const attr = (name: string, allowed: string[] | null = null): AttrDecl =>
-    AttrDecl.reconstitute({
-      name: AttributeName.reconstitute(name),
-      element: ElementPath.reconstitute(`e.${name}`),
+    AttrDecl.of({
+      name: AttributeName.of(name),
+      element: ElementPath.of(`e.${name}`),
       type: null,
       uniqueIsTrue: false,
       references: null,
-      allowed: allowed === null ? null : AllowedValues.of(allowed.map((v) => AllowedValue.reconstitute(v))),
+      allowed: allowed === null ? null : AllowedValues.of(allowed.map((v) => AllowedValue.of(v))),
       def: null,
       minDeclared: false,
       maxDeclared: false,
@@ -152,9 +149,9 @@ describe("first-class collections", () => {
       max: null,
     });
   const entity = (name: string, attrs: AttrDecl[] = []): EntityDecl =>
-    EntityDecl.reconstitute({
-      name: EntityName.reconstitute(name),
-      element: ElementPath.reconstitute(`entities.${name}`),
+    EntityDecl.of({
+      name: EntityName.of(name),
+      element: ElementPath.of(`entities.${name}`),
       attrs: AttrDecls.of(attrs),
       rels: RelDecls.of([]),
     });
@@ -162,20 +159,20 @@ describe("first-class collections", () => {
   test("add is immutable append across every collection", () => {
     const names = AttributeNames.of([]);
     expect(names.count()).toBe(0);
-    expect(names.add(AttributeName.reconstitute("qty")).count()).toBe(1);
+    expect(names.add(AttributeName.of("qty")).count()).toBe(1);
     expect(names.count()).toBe(0);
 
-    expect([...AllowedValues.of([]).add(AllowedValue.reconstitute("open"))].length).toBe(1);
-    expect([...StateNames.of([]).add(StateName.reconstitute("open"))].length).toBe(1);
-    expect(SourceIds.of([]).add(SourceId.reconstitute("FR-1")).toArray().length).toBe(1);
+    expect([...AllowedValues.of([]).add(AllowedValue.of("open"))].length).toBe(1);
+    expect([...StateNames.of([]).add(StateName.of("open"))].length).toBe(1);
+    expect(SourceIds.of([]).add(SourceId.of("FR-1")).toArray().length).toBe(1);
     expect(AttrDecls.of([]).add(attr("a")).toArray().length).toBe(1);
     expect(EntityDecls.of([]).add(entity("Order")).toArray().length).toBe(1);
-    expect([...RelDecls.of([]).add(RelDecl.reconstitute({ element: ElementPath.reconstitute("r[0]"), from: null, to: null, cardinality: null, hasDirection: false }))].length).toBe(1);
-    expect(RuleDecls.of([]).add(RuleDecl.reconstitute({ id: null, element: ElementPath.reconstitute("rules[0]"), category: null, appliesTo: null, sourceIds: SourceIds.of([]), missing: [] })).toArray().length).toBe(1);
-    expect(ShapeErrors.of([]).add(ShapeError.reconstitute({ element: ElementPath.reconstitute("entities"), detail: "x" })).toArray().length).toBe(1);
-    const sketch = StateMachineSketch.reconstitute({ spec: MachineSpec.reconstitute("Order"), states: StateNames.of([]), fenceLine: LineNumber.reconstitute(1), unsupported: null });
+    expect([...RelDecls.of([]).add(RelDecl.of({ element: ElementPath.of("r[0]"), from: null, to: null, cardinality: null, hasDirection: false }))].length).toBe(1);
+    expect(RuleDecls.of([]).add(RuleDecl.of({ id: null, element: ElementPath.of("rules[0]"), category: null, appliesTo: null, sourceIds: SourceIds.of([]), missing: [] })).toArray().length).toBe(1);
+    expect(ShapeErrors.of([]).add(ShapeError.of({ element: ElementPath.of("entities"), detail: "x" })).toArray().length).toBe(1);
+    const sketch = StateMachineSketch.of({ spec: MachineSpec.of("Order"), states: StateNames.of([]), fenceLine: LineNumber.of(1), unsupported: null });
     expect(StateMachineSketches.of([]).add(sketch).isEmpty()).toBe(false);
-    const de = DomainEntitySketch.reconstitute({ name: EntityName.reconstitute("Order"), component: ComponentName.reconstitute("Core"), attributes: AttributeNames.of([]) });
+    const de = DomainEntitySketch.of({ name: EntityName.of("Order"), component: ComponentName.of("Core"), attributes: AttributeNames.of([]) });
     expect(DomainEntitySketches.of([]).add(de).toArray().length).toBe(1);
   });
 
@@ -188,13 +185,13 @@ describe("first-class collections", () => {
 
     const decls = EntityDecls.of([entity("Order"), entity("Order")]);
     expect(decls.duplicatesByName().length).toBe(1);
-    expect(decls.containsNamed(EntityName.reconstitute("Order"))).toBe(true);
-    expect(decls.containsNamed(EntityName.reconstitute("Ghost"))).toBe(false);
+    expect(decls.containsNamed(EntityName.of("Order"))).toBe(true);
+    expect(decls.containsNamed(EntityName.of("Ghost"))).toBe(false);
 
-    const rels = RelDecls.of([]).concat(RelDecls.of([RelDecl.reconstitute({ element: ElementPath.reconstitute("r[0]"), from: null, to: null, cardinality: null, hasDirection: true })]));
+    const rels = RelDecls.of([]).concat(RelDecls.of([RelDecl.of({ element: ElementPath.of("r[0]"), from: null, to: null, cardinality: null, hasDirection: true })]));
     expect(rels.toArray().length).toBe(1);
 
-    const index = SiblingUnitIndex.of(new Map([["u1", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: AttributeNames.of([AttributeName.reconstitute("qty")]) }]])]]));
+    const index = SiblingUnitIndex.of(new Map([["u1", new Map([["order", { name: EntityName.of("Order"), attrs: AttributeNames.of([AttributeName.of("qty")]) }]])]]));
     expect(index.hasAnyUnit()).toBe(true);
     expect(index.definersOf("order")).toEqual(["u1"]);
     expect(index.entityDeclaredIn("u1", "order")?.name.asString()).toBe("Order");
@@ -202,8 +199,8 @@ describe("first-class collections", () => {
     expect(SiblingUnitIndex.of(new Map()).hasAnyUnit()).toBe(false);
 
     const sketches = DomainEntitySketches.of([
-      DomainEntitySketch.reconstitute({ name: EntityName.reconstitute("Order"), component: ComponentName.reconstitute("Core"), attributes: AttributeNames.of([]) }),
-      DomainEntitySketch.reconstitute({ name: EntityName.reconstitute("order"), component: ComponentName.reconstitute("Core"), attributes: AttributeNames.of([]) }),
+      DomainEntitySketch.of({ name: EntityName.of("Order"), component: ComponentName.of("Core"), attributes: AttributeNames.of([]) }),
+      DomainEntitySketch.of({ name: EntityName.of("order"), component: ComponentName.of("Core"), attributes: AttributeNames.of([]) }),
     ]);
     expect(sketches.sortedDistinctByNormalizedName().length).toBe(1);
   });
@@ -215,13 +212,13 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     const dd = CheckFamily.parse("DD-1");
     if (!dd.ok) throw new Error("unreachable");
     expect(dd.value.asString()).toBe("DD-1");
-    expect(dd.value.equals(CheckFamily.reconstitute("DD-1"))).toBe(true);
+    expect(dd.value.equals(CheckFamily.of("DD-1"))).toBe(true);
     expect(dd.value.prefixedDetail("boom")).toBe("DD-1: boom");
     expect(dd.value.asCheckTarget()).toBe("check:DD-1");
   });
 
   test("CheckFamilies carries its check targets in declaration order under add", () => {
-    const fams = CheckFamilies.reconstitute(["A-1"]).add(CheckFamily.reconstitute("A-2")).add(CheckFamily.reconstitute("A-3"));
+    const fams = CheckFamilies.of(Array.from(["A-1"], (raw) => CheckFamily.of(raw))).add(CheckFamily.of("A-2")).add(CheckFamily.of("A-3"));
     expect([...fams].map((f) => f.asString())).toEqual(["A-1", "A-2", "A-3"]);
     expect(fams.toArray().length).toBe(3);
     expect(fams.checkTargets().toStrings()).toEqual(["check:A-1", "check:A-2", "check:A-3"]);
@@ -231,8 +228,8 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(UnitName.parse("").ok).toBe(false);
     const u = UnitName.parse("cart");
     if (!u.ok) throw new Error("unreachable");
-    expect(u.value.equals(UnitName.reconstitute("cart"))).toBe(true);
-    const names = UnitNames.reconstitute(["b"]).add(UnitName.reconstitute("a"));
+    expect(u.value.equals(UnitName.of("cart"))).toBe(true);
+    const names = UnitNames.of(Array.from(["b"], (raw) => UnitName.of(raw))).add(UnitName.of("a"));
     expect(names.declares("a")).toBe(true);
     expect(names.declares("z")).toBe(false);
     expect([...names.sortedByValue()].map((n) => n.asString())).toEqual(["a", "b"]);
@@ -245,27 +242,27 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     const ln = LineNumber.parse(7);
     if (!ln.ok) throw new Error("unreachable");
     expect(ln.value.asNumber()).toBe(7);
-    expect(ln.value.equals(LineNumber.reconstitute(7))).toBe(true);
+    expect(ln.value.equals(LineNumber.of(7))).toBe(true);
     const bi = BlockIndex.parse(2);
     if (!bi.ok) throw new Error("unreachable");
-    expect(bi.value.equals(BlockIndex.reconstitute(2))).toBe(true);
+    expect(bi.value.equals(BlockIndex.of(2))).toBe(true);
   });
 
   test("ContractId, ContractParty and ContractRows own the CD vocabulary", () => {
     expect(ContractId.parse("").ok).toBe(false);
     const cid = ContractId.parse("3");
     if (!cid.ok) throw new Error("unreachable");
-    expect(cid.value.equals(ContractId.reconstitute("3"))).toBe(true);
-    expect(ContractParty.reconstitute("").isBlank()).toBe(true);
-    expect(ContractParty.reconstitute("External: billing").declaresExternal()).toBe(true);
-    expect(ContractParty.reconstitute("cart").declaresExternal()).toBe(false);
-    expect(ContractParty.reconstitute("cart").equals(ContractParty.reconstitute("cart"))).toBe(true);
-    const row = ContractRow.reconstitute({
-      id: ContractId.reconstitute("1"),
-      provider: ContractParty.reconstitute("cart"),
-      consumer: ContractParty.reconstitute("billing"),
-      owner: ContractParty.reconstitute("cart"),
-      line: LineNumber.reconstitute(3),
+    expect(cid.value.equals(ContractId.of("3"))).toBe(true);
+    expect(ContractParty.of("").isBlank()).toBe(true);
+    expect(ContractParty.of("External: billing").declaresExternal()).toBe(true);
+    expect(ContractParty.of("cart").declaresExternal()).toBe(false);
+    expect(ContractParty.of("cart").equals(ContractParty.of("cart"))).toBe(true);
+    const row = ContractRow.of({
+      id: ContractId.of("1"),
+      provider: ContractParty.of("cart"),
+      consumer: ContractParty.of("billing"),
+      owner: ContractParty.of("cart"),
+      line: LineNumber.of(3),
     });
     expect(row.locationLabel()).toBe("contracts table row 1 (line 3)");
     expect(row.id().asString()).toBe("1");
@@ -278,8 +275,8 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
   });
 
   test("UnitDecls and SpecBlockAssessments hold declaration and assessment knowledge", () => {
-    const decl = UnitDecl.reconstitute({ name: UnitName.reconstitute("b"), dependsOn: UnitNames.reconstitute(["a", "ghost"]) });
-    const decls = UnitDecls.of([]).add(decl).add(UnitDecl.reconstitute({ name: UnitName.reconstitute("a"), dependsOn: UnitNames.reconstitute([]) }));
+    const decl = UnitDecl.of({ name: UnitName.of("b"), dependsOn: UnitNames.of(Array.from(["a", "ghost"], (raw) => UnitName.of(raw))) });
+    const decls = UnitDecls.of([]).add(decl).add(UnitDecl.of({ name: UnitName.of("a"), dependsOn: UnitNames.of([]) }));
     // 宣言済みの依存先だけを値順で（未宣言 "ghost" は落ちる）。
     expect(decl.declaredDependencies(decls).map((d) => d.asString())).toEqual(["a"]);
     expect(decl.dependsOn().toArray().length).toBe(2);
@@ -288,7 +285,7 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect([...decls.sortedByName()].map((d) => d.name().asString())).toEqual(["a", "b"]);
     expect(decls.names().declares("a")).toBe(true);
     expect(decls.toArray().length).toBe(2);
-    const block = SpecBlockAssessment.sound(BlockIndex.reconstitute(1), LineNumber.reconstitute(1));
+    const block = SpecBlockAssessment.sound(BlockIndex.of(1), LineNumber.of(1));
     expect(block.blockId()).toBe("contract:block-1");
     expect(block.locationLabel()).toBe("yaml fence #1 (line 1)");
     expect(block.matchIssue({ sound: () => "ok", unparseable: () => "u", notAMapping: () => "m", openapiWithoutPaths: () => "o" })).toBe("ok");
@@ -298,26 +295,26 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
   });
 
   test("component collections resolve names, symmetry and cycles as their own knowledge", () => {
-    const el = ElementPath.reconstitute("components[0]");
-    const aName = ComponentName.reconstitute("A");
-    const bName = ComponentName.reconstitute("B");
-    const refAtoB = ComponentRef.reconstitute({ component: bName, element: el });
-    const refBtoA = ComponentRef.reconstitute({ component: aName, element: el });
-    const entity = ComponentEntity.reconstitute({
-      name: EntityName.reconstitute("Order"),
+    const el = ElementPath.of("components[0]");
+    const aName = ComponentName.of("A");
+    const bName = ComponentName.of("B");
+    const refAtoB = ComponentRef.of({ component: bName, element: el });
+    const refBtoA = ComponentRef.of({ component: aName, element: el });
+    const entity = ComponentEntity.of({
+      name: EntityName.of("Order"),
       element: el,
-      identifier: AttributeName.reconstitute("id"),
-      references: EntityReferences.of([]).add(EntityReference.reconstitute({ entity: EntityName.reconstitute("Line"), ownedBy: bName, element: el })),
+      identifier: AttributeName.of("id"),
+      references: EntityReferences.of([]).add(EntityReference.of({ entity: EntityName.of("Line"), ownedBy: bName, element: el })),
     });
-    const a = Component.reconstitute({ name: aName, element: el, dependsOn: ComponentRefs.of([refAtoB]), dependents: ComponentRefs.of([refBtoA]), entities: ComponentEntities.of([entity]) });
-    const b = Component.reconstitute({ name: bName, element: el, dependsOn: ComponentRefs.of([refBtoA]), dependents: ComponentRefs.of([]), entities: ComponentEntities.of([]) });
+    const a = Component.of({ name: aName, element: el, dependsOn: ComponentRefs.of([refAtoB]), dependents: ComponentRefs.of([refBtoA]), entities: ComponentEntities.of([entity]) });
+    const b = Component.of({ name: bName, element: el, dependsOn: ComponentRefs.of([refBtoA]), dependents: ComponentRefs.of([]), entities: ComponentEntities.of([]) });
     const comps = Components.of([]).add(a).add(b);
     expect(comps.count()).toBe(2);
     expect([...comps].length).toBe(2);
     expect(comps.declares(aName)).toBe(true);
-    expect(comps.declares(ComponentName.reconstitute("Z"))).toBe(false);
+    expect(comps.declares(ComponentName.of("Z"))).toBe(false);
     expect(comps.byName(bName)).toBe(b);
-    expect(comps.byName(ComponentName.reconstitute("Z"))).toBe(null);
+    expect(comps.byName(ComponentName.of("Z"))).toBe(null);
     expect(a.name().asString()).toBe("A");
     expect(a.element().asString()).toBe("components[0]");
     expect(a.dependsOn().listsComponent(bName)).toBe(true);
@@ -325,8 +322,8 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect([...a.dependsOn()].length).toBe(1);
     expect(a.dependsOn().add(refBtoA).toArray().length).toBe(2);
     expect(a.dependents().toArray().length).toBe(1);
-    expect(a.entities().declaresEntity(EntityName.reconstitute("Order"))).toBe(true);
-    expect(a.entities().declaresEntity(EntityName.reconstitute("Ghost"))).toBe(false);
+    expect(a.entities().declaresEntity(EntityName.of("Order"))).toBe(true);
+    expect(a.entities().declaresEntity(EntityName.of("Ghost"))).toBe(false);
     expect([...a.entities()].length).toBe(1);
     expect(a.entities().add(entity).toArray().length).toBe(2);
     expect(entity.name().asString()).toBe("Order");
@@ -338,10 +335,10 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     // A -> B -> A の閉路は正準化されて 1 件。
     expect(comps.dependencyCycles()).toEqual([["A", "B"]]);
     // 重複名の byName は最後の宣言が勝つ（旧 name→Component Map の凍結挙動）。
-    const aDup = Component.reconstitute({ name: aName, element: ElementPath.reconstitute("components[9]"), dependsOn: ComponentRefs.of([]), dependents: ComponentRefs.of([]), entities: ComponentEntities.of([]) });
+    const aDup = Component.of({ name: aName, element: ElementPath.of("components[9]"), dependsOn: ComponentRefs.of([]), dependents: ComponentRefs.of([]), entities: ComponentEntities.of([]) });
     const withDup = comps.add(aDup);
     expect(withDup.byName(aName)?.element().asString()).toBe("components[9]");
-    const errs = ComponentShapeErrors.of([]).add(ComponentShapeError.reconstitute({ element: el, detail: "x" }));
+    const errs = ComponentShapeErrors.of([]).add(ComponentShapeError.of({ element: el, detail: "x" }));
     expect(errs.toArray()[0]?.detail()).toBe("x");
     expect(errs.toArray()[0]?.element().asString()).toBe(el.asString());
     expect(errs.count()).toBe(1);
@@ -349,11 +346,11 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
   });
 
   test("components own their shape checks: PascalCase, duplicates, self-dependency, ownership (wave 6)", () => {
-    const el = ElementPath.reconstitute("components[0]");
+    const el = ElementPath.of("components[0]");
     const bare = (name: string, element: string): Component =>
-      Component.reconstitute({
-        name: ComponentName.reconstitute(name),
-        element: ElementPath.reconstitute(element),
+      Component.of({
+        name: ComponentName.of(name),
+        element: ElementPath.of(element),
         dependsOn: ComponentRefs.of([]),
         dependents: ComponentRefs.of([]),
         entities: ComponentEntities.of([]),
@@ -372,14 +369,14 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
     expect(Components.of([bare("A", "components[0]"), bare("B", "components[1]")]).duplicateNamePairs()).toEqual([]);
 
     // DD-3: 自己参照は depends_on → dependents の走査順で届く。
-    const selfName = ComponentName.reconstitute("Self");
-    const self = Component.reconstitute({
+    const selfName = ComponentName.of("Self");
+    const self = Component.of({
       name: selfName,
       element: el,
-      dependsOn: ComponentRefs.of([ComponentRef.reconstitute({ component: selfName, element: ElementPath.reconstitute("components[0].depends_on[0].component") })]),
+      dependsOn: ComponentRefs.of([ComponentRef.of({ component: selfName, element: ElementPath.of("components[0].depends_on[0].component") })]),
       dependents: ComponentRefs.of([
-        ComponentRef.reconstitute({ component: ComponentName.reconstitute("Other"), element: el }),
-        ComponentRef.reconstitute({ component: selfName, element: ElementPath.reconstitute("components[0].dependents[1].component") }),
+        ComponentRef.of({ component: ComponentName.of("Other"), element: el }),
+        ComponentRef.of({ component: selfName, element: ElementPath.of("components[0].dependents[1].component") }),
       ]),
       entities: ComponentEntities.of([]),
     });
@@ -391,10 +388,10 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
 
     // DD-5: 識別子の有無はエンティティ自身の判定（未宣言・空文字は所有不能）。
     const entityOf = (identifier: string | null): ComponentEntity =>
-      ComponentEntity.reconstitute({
-        name: EntityName.reconstitute("Order"),
+      ComponentEntity.of({
+        name: EntityName.of("Order"),
         element: el,
-        identifier: identifier === null ? null : AttributeName.reconstitute(identifier),
+        identifier: identifier === null || identifier === "" ? null : AttributeName.of(identifier),
         references: EntityReferences.of([]),
       });
     expect(entityOf("id").hasIdentifier()).toBe(true);
@@ -403,18 +400,18 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
 
     // DD-5: 所有競合はエンティティ名昇順、所有側は宣言順——単一所有は届かない。
     const owner = (comp: string, element: string, entities: ComponentEntity[]): Component =>
-      Component.reconstitute({
-        name: ComponentName.reconstitute(comp),
-        element: ElementPath.reconstitute(element),
+      Component.of({
+        name: ComponentName.of(comp),
+        element: ElementPath.of(element),
         dependsOn: ComponentRefs.of([]),
         dependents: ComponentRefs.of([]),
         entities: ComponentEntities.of(entities),
       });
     const entityNamed = (name: string, element: string): ComponentEntity =>
-      ComponentEntity.reconstitute({
-        name: EntityName.reconstitute(name),
-        element: ElementPath.reconstitute(element),
-        identifier: AttributeName.reconstitute("id"),
+      ComponentEntity.of({
+        name: EntityName.of(name),
+        element: ElementPath.of(element),
+        identifier: AttributeName.of("id"),
         references: EntityReferences.of([]),
       });
     const conflicts = Components.of([
@@ -434,16 +431,16 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
 
 describe("refcheck payload collections (first-class operations)", () => {
   test("TargetIds, FrRefs, WitnessRefs, Findings, Skips, InputAnchors under add", () => {
-    const ids = TargetIds.reconstitute(["check:DD-1"]).add(TargetId.reconstitute("check:DD-0")).add(TargetId.reconstitute("check:DD-1"));
+    const ids = TargetIds.of(Array.from(["check:DD-1"], (raw) => TargetId.of(raw))).add(TargetId.of("check:DD-0")).add(TargetId.of("check:DD-1"));
     expect([...ids].map((t) => t.asString())).toEqual(["check:DD-1", "check:DD-0", "check:DD-1"]);
     expect(ids.count()).toBe(3);
     expect(ids.joined(",")).toBe("check:DD-1,check:DD-0,check:DD-1");
     expect(ids.sortedUniqueCanonically().toStrings()).toEqual(["check:DD-0", "check:DD-1"]);
 
-    const refs = FrRefs.reconstitute([]).add(RequirementId.reconstitute("FR-1"));
+    const refs = FrRefs.of([]).add(RequirementId.of("FR-1"));
     expect(refs.toStrings()).toEqual(["FR-1"]);
 
-    const wr = WitnessRef.reconstitute({ artifact: "a.md", element: "e" });
+    const wr = WitnessRef.of({ artifact: "a.md", element: "e" });
     const wrs = WitnessRefs.of([]).add(wr);
     expect([...wrs]).toEqual([wr]);
     expect(wrs.toArray()).toEqual([wr]);
@@ -455,13 +452,13 @@ describe("refcheck payload collections (first-class operations)", () => {
     expect(fs.isEmpty()).toBe(false);
     expect(Findings.of([]).isEmpty()).toBe(true);
 
-    const sk = Skipped.reconstitute({ target: "check:DD-1", reason: "waived" });
+    const sk = Skipped.of({ target: TargetId.of("check:DD-1"), reason: SkipReason.of("waived")});
     const sks = Skips.of([]).add(sk);
     expect([...sks]).toEqual([sk]);
     expect(sks.count()).toBe(1);
 
-    const ia = InputAnchor.reconstitute({ artifact: "b.md", sha256: ContentHash.reconstitute("a".repeat(64)) });
-    const ias = InputAnchors.of([]).add(ia).addAll([InputAnchor.reconstitute({ artifact: "a.md", sha256: ContentHash.reconstitute("b".repeat(64)) })]);
+    const ia = InputAnchor.of({ artifact: "b.md", sha256: ContentHash.of("a".repeat(64)) });
+    const ias = InputAnchors.of([]).add(ia).addAll([InputAnchor.of({ artifact: "a.md", sha256: ContentHash.of("b".repeat(64)) })]);
     expect([...ias].length).toBe(2);
     expect(ias.sortedByArtifact().toArray().map((i) => i.artifact())).toEqual(["a.md", "b.md"]);
   });
@@ -469,47 +466,47 @@ describe("refcheck payload collections (first-class operations)", () => {
 
 describe("value primitives own their matching logic (tell-don't-ask consolidation)", () => {
   test("ReferenceTarget owns the Entity(.attr) token shape and the loose lowercase mention", () => {
-    expect(ReferenceTarget.reconstitute("Ticket").entityToken()).toBe("Ticket");
-    expect(ReferenceTarget.reconstitute("Ticket.status").entityToken()).toBe("Ticket");
-    expect(ReferenceTarget.reconstitute("the Ticket entity").entityToken()).toBe(null);
-    expect(ReferenceTarget.reconstitute("see the TICKET flow").looselyMentions(EntityName.reconstitute("Ticket"))).toBe(true);
-    expect(ReferenceTarget.reconstitute("unrelated prose").looselyMentions(EntityName.reconstitute("Ticket"))).toBe(false);
+    expect(ReferenceTarget.of("Ticket").entityToken()).toBe("Ticket");
+    expect(ReferenceTarget.of("Ticket.status").entityToken()).toBe("Ticket");
+    expect(ReferenceTarget.of("the Ticket entity").entityToken()).toBe(null);
+    expect(ReferenceTarget.of("see the TICKET flow").looselyMentions(EntityName.of("Ticket"))).toBe(true);
+    expect(ReferenceTarget.of("unrelated prose").looselyMentions(EntityName.of("Ticket"))).toBe(false);
   });
 
   test("AppliesTo owns entity/attribute tokens; the attribute token is null without the dotted form", () => {
-    expect(AppliesTo.reconstitute("Ticket.status").entityToken()).toBe("Ticket");
-    expect(AppliesTo.reconstitute("Ticket.status").attributeToken()).toBe("status");
-    expect(AppliesTo.reconstitute("Ticket").attributeToken()).toBe(null);
-    expect(AppliesTo.reconstitute("free text target").entityToken()).toBe(null);
-    expect(AppliesTo.reconstitute("about the ticket").looselyMentions(EntityName.reconstitute("Ticket"))).toBe(true);
+    expect(AppliesTo.of("Ticket.status").entityToken()).toBe("Ticket");
+    expect(AppliesTo.of("Ticket.status").attributeToken()).toBe("status");
+    expect(AppliesTo.of("Ticket").attributeToken()).toBe(null);
+    expect(AppliesTo.of("free text target").entityToken()).toBe(null);
+    expect(AppliesTo.of("about the ticket").looselyMentions(EntityName.of("Ticket"))).toBe(true);
   });
 
   test("NumericBound owns the range-inversion comparison", () => {
-    expect(NumericBound.reconstitute(5).exceeds(NumericBound.reconstitute(3))).toBe(true);
-    expect(NumericBound.reconstitute(3).exceeds(NumericBound.reconstitute(3))).toBe(false);
+    expect(NumericBound.of(5).exceeds(NumericBound.of(3))).toBe(true);
+    expect(NumericBound.of(3).exceeds(NumericBound.of(3))).toBe(false);
   });
 
   test("AttributeDefault folds the numeric guard into the bound checks (non-numbers are in range)", () => {
-    expect(AttributeDefault.reconstitute(1).belowBound(NumericBound.reconstitute(2))).toBe(true);
-    expect(AttributeDefault.reconstitute(3).aboveBound(NumericBound.reconstitute(2))).toBe(true);
-    expect(AttributeDefault.reconstitute("open").belowBound(NumericBound.reconstitute(2))).toBe(false);
-    expect(AttributeDefault.reconstitute("open").aboveBound(NumericBound.reconstitute(2))).toBe(false);
+    expect(AttributeDefault.of(1).belowBound(NumericBound.of(2))).toBe(true);
+    expect(AttributeDefault.of(3).aboveBound(NumericBound.of(2))).toBe(true);
+    expect(AttributeDefault.of("open").belowBound(NumericBound.of(2))).toBe(false);
+    expect(AttributeDefault.of("open").aboveBound(NumericBound.of(2))).toBe(false);
   });
 
   test("AttributeName owns the lifecycle-name vocabulary and the empty-identifier check", () => {
-    expect(AttributeName.reconstitute("status").isLifecycleName()).toBe(true);
-    expect(AttributeName.reconstitute("state").isLifecycleName()).toBe(true);
-    expect(AttributeName.reconstitute("priority").isLifecycleName()).toBe(false);
-    expect(AttributeName.reconstitute("").isEmpty()).toBe(true);
-    expect(AttributeName.reconstitute("id").isEmpty()).toBe(false);
+    expect(AttributeName.of("status").isLifecycleName()).toBe(true);
+    expect(AttributeName.of("state").isLifecycleName()).toBe(true);
+    expect(AttributeName.of("priority").isLifecycleName()).toBe(false);
+    expect(AttributeName.parse("").ok).toBe(false);
+    expect(AttributeName.of("id").isEmpty()).toBe(false);
   });
 });
 
 describe("split-file coverage pins (one-public-type refactor)", () => {
   test("small collections keep of/add/iterator faces", () => {
-    const an = AttributeNames.of([AttributeName.reconstitute("a")]).add(AttributeName.reconstitute("b"));
+    const an = AttributeNames.of([AttributeName.of("a")]).add(AttributeName.of("b"));
     expect([...an].map((x) => x.asString())).toEqual(["a", "b"]);
-    const si = SourceIds.of([]).add(SourceId.reconstitute("FR-1"));
+    const si = SourceIds.of([]).add(SourceId.of("FR-1"));
     expect([...si].map((x) => x.asString())).toEqual(["FR-1"]);
   });
 });
@@ -517,19 +514,19 @@ describe("split-file coverage pins (one-public-type refactor)", () => {
 describe("sketch collection pins (one-public-type refactor)", () => {
   test("sketch collections keep iterator and frozen-order faces", () => {
     const de = (name: string) =>
-      DomainEntitySketch.reconstitute({
-        name: EntityName.reconstitute(name),
-        component: ComponentName.reconstitute("Core"),
+      DomainEntitySketch.of({
+        name: EntityName.of(name),
+        component: ComponentName.of("Core"),
         attributes: AttributeNames.of([]),
       });
     const des = DomainEntitySketches.of([de("B")]).add(de("A")).add(de("a"));
     expect([...des].length).toBe(3);
     // 名前昇順・正規化名の初出のみ（"a" は "A" の正規化重複で落ちる——凍結順）。
     expect(des.sortedDistinctByNormalizedName().map((d) => d.name().asString())).toEqual(["A", "B"]);
-    const sm = StateMachineSketch.reconstitute({
-      spec: MachineSpec.reconstitute("Order"),
+    const sm = StateMachineSketch.of({
+      spec: MachineSpec.of("Order"),
       states: StateNames.of([]),
-      fenceLine: LineNumber.reconstitute(1),
+      fenceLine: LineNumber.of(1),
       unsupported: null,
     });
     const sms = StateMachineSketches.of([]).add(sm);
@@ -540,8 +537,8 @@ describe("sketch collection pins (one-public-type refactor)", () => {
 
 describe("witness ref (a finding's evidence coordinate)", () => {
   test("round-trips its parts, carries an optional raw value, and answers pointsAt", () => {
-    const bare = WitnessRef.reconstitute({ artifact: "inception/domain-design/components.md", element: "components[0].name" });
-    const valued = WitnessRef.reconstitute({ artifact: "a.md", element: "entities[1]", value: "Order Item" });
+    const bare = WitnessRef.of({ artifact: "inception/domain-design/components.md", element: "components[0].name" });
+    const valued = WitnessRef.of({ artifact: "a.md", element: "entities[1]", value: "Order Item" });
     expect(bare.artifact()).toBe("inception/domain-design/components.md");
     expect(bare.element()).toBe("components[0].name");
     expect(bare.value()).toBeUndefined();
@@ -554,8 +551,8 @@ describe("witness ref (a finding's evidence coordinate)", () => {
 
 describe("component names order canonically (ruling 1: the id value object owns the order)", () => {
   test("numeric tails compare as numbers", () => {
-    expect(ComponentName.reconstitute("Svc2").compareTo(ComponentName.reconstitute("Svc10"))).toBeLessThan(0);
-    expect(ComponentName.reconstitute("Svc10").compareTo(ComponentName.reconstitute("Svc2"))).toBeGreaterThan(0);
-    expect(ComponentName.reconstitute("Svc").compareTo(ComponentName.reconstitute("Svc"))).toBe(0);
+    expect(ComponentName.of("Svc2").compareTo(ComponentName.of("Svc10"))).toBeLessThan(0);
+    expect(ComponentName.of("Svc10").compareTo(ComponentName.of("Svc2"))).toBeGreaterThan(0);
+    expect(ComponentName.of("Svc").compareTo(ComponentName.of("Svc"))).toBe(0);
   });
 });

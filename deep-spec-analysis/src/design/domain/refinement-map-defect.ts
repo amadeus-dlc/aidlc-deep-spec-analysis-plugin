@@ -1,5 +1,5 @@
-import type { TargetId } from "@deep-spec/kernel-domain";
-import { SkipReason } from "@deep-spec/kernel-domain";
+import { UnitName, type TargetId, SkipReason } from "@deep-spec/kernel-domain";
+
 import { DesignSkipped } from "@deep-spec/design-domain";
 import { AttributePath } from "@deep-spec/requirements-domain";
 
@@ -19,17 +19,17 @@ export class RefinementMapDefect {
 
   // 要件属性が attrMap に無い。
   static uncoveredAttribute(reqPath: string): RefinementMapDefect {
-    return new RefinementMapDefect("uncovered-attribute", AttributePath.reconstitute(reqPath));
+    return new RefinementMapDefect("uncovered-attribute", AttributePath.of(reqPath));
   }
 
   // enum 写像の属性が eq/ne の外で参照された。
   static enumMappingOutsideEquality(reqPath: string): RefinementMapDefect {
-    return new RefinementMapDefect("enum-mapping-outside-equality", AttributePath.reconstitute(reqPath));
+    return new RefinementMapDefect("enum-mapping-outside-equality", AttributePath.of(reqPath));
   }
 
   // attrMap の項目が式も enum 対応も持たない。
   static unspecifiedMapping(reqPath: string): RefinementMapDefect {
-    return new RefinementMapDefect("unspecified-mapping", AttributePath.reconstitute(reqPath));
+    return new RefinementMapDefect("unspecified-mapping", AttributePath.of(reqPath));
   }
 
   // 要件の効果が prime 代入の連言でない。
@@ -54,6 +54,6 @@ export class RefinementMapDefect {
 
   // 公開語彙への対応：compile-error skip（文言は golden 凍結）。
   asCompileErrorSkip(target: TargetId, unit: string): DesignSkipped {
-    return DesignSkipped.of({ target, reason: SkipReason.compileError(), unit, detail: `alpha substitution failed: ${this.message()}` });
+    return DesignSkipped.of({ target, reason: SkipReason.compileError(), unit: UnitName.of(unit), detail: `alpha substitution failed: ${this.message()}` });
   }
 }

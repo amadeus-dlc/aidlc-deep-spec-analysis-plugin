@@ -13,16 +13,11 @@ export class EntityDecl {
   readonly rels: RelDecls;
   };
 
-  private constructor(seed: {
-    readonly name: EntityName;
-    readonly element: ElementPath;
-    readonly attrs: AttrDecls;
-    readonly rels: RelDecls;
-  }) {
+  private constructor(seed: Parameters<typeof EntityDecl.of>[0]) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: {
+  static of(seed: {
     readonly name: EntityName;
     readonly element: ElementPath;
     readonly attrs: AttrDecls;

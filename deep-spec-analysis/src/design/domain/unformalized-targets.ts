@@ -14,10 +14,6 @@ export class UnformalizedTargets {
     return new UnformalizedTargets(KeySet.of(values));
   }
 
-  static reconstitute(raws: readonly string[]): UnformalizedTargets {
-    return new UnformalizedTargets(KeySet.of(raws.map((raw) => TargetId.reconstitute(raw))));
-  }
-
   add(value: TargetId): UnformalizedTargets {
     return new UnformalizedTargets(this.#values.with(value));
   }

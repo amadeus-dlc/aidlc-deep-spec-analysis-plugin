@@ -1,23 +1,21 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-import { TargetId } from "@deep-spec/kernel-domain";
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-type DesignMachineTokenError = { readonly kind: "empty-machine-token"; readonly raw: string };
+import { TargetId } from "@deep-spec/kernel-domain";
 
 export class DesignMachineId {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-machine-token", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<DesignMachineId, DesignMachineTokenError> {
-    if (raw === "") return err({ kind: "empty-machine-token", raw });
-    return ok(new DesignMachineId(raw));
-  }
-
-  static reconstitute(raw: string): DesignMachineId {
+  static of(raw: string): DesignMachineId {
     return new DesignMachineId(raw);
+  }
+
+  static parse(raw: string): Result<DesignMachineId, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new DesignMachineId(raw));
   }
 
   equals(other: DesignMachineId): boolean {
@@ -35,6 +33,6 @@ export class DesignMachineId {
 
   // 機械 id は検査対象 id でもある（skip の target 面）。
   asTargetId(): TargetId {
-    return TargetId.reconstitute(this.#value);
+    return TargetId.of(this.#value);
   }
 }

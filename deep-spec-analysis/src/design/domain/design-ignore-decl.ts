@@ -8,12 +8,12 @@ export class DesignIgnoreDecl {
   readonly #state: string;
   readonly #trigger: TriggerName;
 
-  private constructor(props: { state: string; trigger: TriggerName }) {
+  private constructor(props: Parameters<typeof DesignIgnoreDecl.of>[0]) {
     this.#state = props.state;
     this.#trigger = props.trigger;
   }
 
-  static reconstitute(props: { state: string; trigger: TriggerName }): DesignIgnoreDecl {
+  static of(props: { state: string; trigger: TriggerName }): DesignIgnoreDecl {
     return new DesignIgnoreDecl(props);
   }
 

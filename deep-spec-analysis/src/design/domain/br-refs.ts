@@ -1,6 +1,5 @@
 // BrRefs — 設計要素が指す業務規則 id の列（ファーストクラスコレクション）。
-// 要素は BrRef（裁定 3-1、2026-09-03）。of は DP の門、reconstitute は parser の
-// 生 id 材料から。
+// 要素は BrRef（裁定 3-1、2026-09-03）。of は型付きの BrRef を受け取る。
 
 import { BrRef } from "./br-ref.ts";
 
@@ -13,10 +12,6 @@ export class BrRefs {
 
   static of(values: readonly BrRef[]): BrRefs {
     return new BrRefs([...values]);
-  }
-
-  static reconstitute(raws: readonly string[]): BrRefs {
-    return new BrRefs(raws.map((raw) => BrRef.reconstitute(raw)));
   }
 
   add(value: BrRef): BrRefs {

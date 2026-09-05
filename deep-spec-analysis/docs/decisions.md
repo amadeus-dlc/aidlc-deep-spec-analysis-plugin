@@ -4,6 +4,12 @@ English | [日本語](decisions.ja.md)
 
 The record of implementation-time decisions, spike results, and deviations from the requirements draft (docs/TODO.md, 2026-08).
 
+## 2026-09-05 — Unify construction and restoration contracts
+
+This supersedes the earlier strict-parse / unchecked-reconstitute split. Constructors retain precise TypeScript parameter types, without added runtime type checks. They enforce value invariants once and throw `IllegalArgumentException`. `of` propagates the exception; `parse` converts only contract violations to `Result`. `PluginVersion.parse` follows the same rule.
+
+Restoration uses `of`. `DeclaredBound`, `DeclaredDigest`, and `DeclaredRuleId` preserve malformed declarations for diagnosis without bypassing validated-value invariants. Empty `ErrorMessages` means no errors and remains valid. Canonicalizing `compose` remains a meaningful separate operation.
+
 ## Spike results (verifying assumptions A1–A4)
 
 - **A1: does z3-solver (WASM) run under bun → NO (with a workaround)**

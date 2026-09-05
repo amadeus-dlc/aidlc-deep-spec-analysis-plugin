@@ -3,8 +3,9 @@
 // extractComponents の逐語移動。
 
 import { extractFences } from "@deep-spec/kernel-adapter";
-import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
 import { parseYamlSubset } from "@deep-spec/kernel-adapter";
+import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
+
 import {
   AttributeName,
   Component,
@@ -29,18 +30,18 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
   const shapeErrors: ComponentShapeError[] = [];
   const comps: Component[] = [];
   if (!isObject(value) || !Array.isArray(value.components)) {
-    shapeErrors.push(ComponentShapeError.reconstitute({ element: ElementPath.reconstitute("components"), detail: "top-level `components:` list is missing" }));
+    shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of("components"), detail: "top-level `components:` list is missing" }));
     return { comps: Components.of(comps), shapeErrors: ComponentShapeErrors.of(shapeErrors) };
   }
   value.components.forEach((raw, i) => {
     const element = `components[${i}]`;
     if (!isObject(raw)) {
-      shapeErrors.push(ComponentShapeError.reconstitute({ element: ElementPath.reconstitute(element), detail: "component entry is not a mapping" }));
+      shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(element), detail: "component entry is not a mapping" }));
       return;
     }
     const name = str(raw.name);
     if (name === null) {
-      shapeErrors.push(ComponentShapeError.reconstitute({ element: ElementPath.reconstitute(`${element}.name`), detail: "component has no string `name`" }));
+      shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "component has no string `name`" }));
       return;
     }
     const refs = (key: "depends_on" | "dependents"): ComponentRefs => {
@@ -49,7 +50,7 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
       (raw[key] as Json[]).forEach((entry, j) => {
         const el = `${element}.${key}[${j}].component`;
         const comp = isObject(entry) ? str(entry.component) : str(entry);
-        if (comp !== null) out.push(ComponentRef.reconstitute({ component: ComponentName.reconstitute(comp), element: ElementPath.reconstitute(el) }));
+        if (comp !== null) out.push(ComponentRef.of({ component: ComponentName.of(comp), element: ElementPath.of(el) }));
       });
       return ComponentRefs.of(out);
     };
@@ -66,26 +67,26 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
             const target = str(ref.entity);
             const ownedBy = str(ref.owned_by);
             if (target !== null && ownedBy !== null) {
-              references.push(EntityReference.reconstitute({
-                entity: EntityName.reconstitute(target),
-                ownedBy: ComponentName.reconstitute(ownedBy),
-                element: ElementPath.reconstitute(`${element}.entities[${j}].references[${k}]`),
+              references.push(EntityReference.of({
+                entity: EntityName.of(target),
+                ownedBy: ComponentName.of(ownedBy),
+                element: ElementPath.of(`${element}.entities[${j}].references[${k}]`),
               }));
             }
           });
         }
         const identifier = str(entry.identifier);
-        entities.push(ComponentEntity.reconstitute({
-          name: EntityName.reconstitute(ename),
-          element: ElementPath.reconstitute(`${element}.entities[${j}]`),
-          identifier: identifier === null ? null : AttributeName.reconstitute(identifier),
+        entities.push(ComponentEntity.of({
+          name: EntityName.of(ename),
+          element: ElementPath.of(`${element}.entities[${j}]`),
+          identifier: identifier === null || identifier === "" ? null : AttributeName.of(identifier),
           references: EntityReferences.of(references),
         }));
       });
     }
-    comps.push(Component.reconstitute({
-      name: ComponentName.reconstitute(name),
-      element: ElementPath.reconstitute(element),
+    comps.push(Component.of({
+      name: ComponentName.of(name),
+      element: ElementPath.of(element),
       dependsOn: refs("depends_on"),
       dependents: refs("dependents"),
       entities: ComponentEntities.of(entities),
@@ -101,7 +102,7 @@ export function parseComponentCatalog(md: string): ComponentCatalogOutcome {
   }
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
-    return ComponentCatalogOutcome.unparseable(LineNumber.reconstitute(fences[0]?.line ?? 0), parsed.error);
+    return ComponentCatalogOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
   }
   const { comps, shapeErrors } = extractComponents(parsed.value ?? null);
   return ComponentCatalogOutcome.extracted(comps, shapeErrors);

@@ -1,25 +1,22 @@
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // 位置語彙 — 成果物内の行番号（1-based）とフェンスブロック序数（1-based）の
 // ドメインプリミティブ。witness element の凍結文言（`(line N)` / `#N`）へ
 // 値を供給する側で、描画そのものは呼び手の凍結面に残る。
 
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-
-type LocationError = { readonly kind: "non-positive-location"; readonly raw: number };
-
 export class LineNumber {
   readonly #value: number;
 
-  private constructor(value: number) {
-    this.#value = value;
+  private constructor(raw: number) {
+    if (!Number.isInteger(raw) || raw < 1) throw new IllegalArgumentException({ kind: "non-positive-location", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: number): Result<LineNumber, LocationError> {
-    if (!Number.isInteger(raw) || raw < 1) return err({ kind: "non-positive-location", raw });
-    return ok(new LineNumber(raw));
-  }
-
-  static reconstitute(raw: number): LineNumber {
+  static of(raw: number): LineNumber {
     return new LineNumber(raw);
+  }
+
+  static parse(raw: number): Result<LineNumber, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new LineNumber(raw));
   }
 
   equals(other: LineNumber): boolean {

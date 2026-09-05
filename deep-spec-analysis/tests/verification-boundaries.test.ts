@@ -1,3 +1,13 @@
+import {
+  VerificationMethod,
+  SkipReason,
+  ArtifactPath,
+  ExpressionTree,
+  FindingsSchema,
+  FrRefs,
+  ObligationNature,
+} from "@deep-spec/kernel-domain";
+
 // 2026-09-05 の監査6件を、公開境界と保存結果で検証する回帰テスト。
 import { afterEach, describe, expect, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -5,7 +15,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Json, type Result, ok } from "@deep-spec/kernel-infrastructure";
-import { ArtifactPath, ExpressionTree, FindingsSchema, FrRefs, ObligationNature } from "@deep-spec/kernel-domain";
+
 import {
   FormalModelId, Obligation, ObligationId, VerificationDirectory, VerificationFindings,
   VerificationReport, VerificationReportId, VerificationReports, VerificationSkips,
@@ -29,7 +39,7 @@ const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const data = join(pluginRoot, "src/entries/data");
 const schema = FindingsSchema.of(JSON.parse(readFileSync(join(data, "deep-spec-findings-schema.json"), "utf-8")));
 const directories: string[] = [];
-const ap = (path: string) => ArtifactPath.reconstitute(path);
+const ap = (path: string) => ArtifactPath.of(path);
 function value<T, E>(result: Result<T, E>): T {
   if (!result.ok) throw new Error(`test setup: ${JSON.stringify(result.error)}`);
   return result.value;
@@ -76,7 +86,7 @@ class CapturedReports implements DesignVerifyDirectoryRepository {
   }
 }
 const cleanSibling: SiblingBackendClient = {
-  runLowered: () => ({ exit: 0, note: "", doc: SiblingVerdictDocument.readable("bounded", SiblingVerdictFindings.of([]), SiblingVerdictSkips.of([])) }),
+  runLowered: () => ({ exit: 0, note: "", doc: SiblingVerdictDocument.readable( VerificationMethod.of("bounded"), SiblingVerdictFindings.of([]), SiblingVerdictSkips.of([])) }),
   probeState: () => ReachabilityVerdict.unverified(),
 };
 
@@ -110,13 +120,13 @@ describe("到達性は完了した検査または到達の証跡からだけ判�
     const acceptsUndefined: undefined extends Parameters<typeof SiblingVerdictDocument.readable>[0] ? true : false = false;
     expect(acceptsNull || acceptsUndefined).toBe(false);
     const ws = designWorkspace();
-    const readable = SiblingVerdictDocument.readable("bounded", SiblingVerdictFindings.of([]), SiblingVerdictSkips.of([]));
+    const readable = SiblingVerdictDocument.readable( VerificationMethod.of("bounded"), SiblingVerdictFindings.of([]), SiblingVerdictSkips.of([]));
     expect(readable.match({ unreadable: () => "unreadable", unavailable: (_reason, method) => method.toUpperCase(), readable: (method) => method.toUpperCase() })).toBe("BOUNDED");
     const unit = ws.model.units().toArray()[0];
     const remapped = readable.remapVerdicts(unit, unit.lowered({ synthetics: false }).index());
     expect(remapped.unavailable).toBeNull();
     if (remapped.unavailable === null) expect(remapped.method.toUpperCase()).toBe("BOUNDED");
-    expect(SiblingVerdictDocument.unavailable("timeout", "bounded").reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.unverified())).toBe(true);
+    expect(SiblingVerdictDocument.unavailable("timeout", VerificationMethod.of("bounded")).reachabilityOf("ticket.phase", "closed").equals(ReachabilityVerdict.unverified())).toBe(true);
   });
 
   test.each(["timeout", "compile-error", "capability", "unavailable"])("%s を非到達へ変換しない", (reason) => {
@@ -138,7 +148,7 @@ describe("到達性は完了した検査または到達の証跡からだけ判�
     const ws = designWorkspace();
     const tool = join(ws.record, "probe.ts");
     writeFileSync(tool, `import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import {dirname, join} from 'node:path';
 const model = process.argv[process.argv.indexOf('--output-path') + 1];
 const dir = join(dirname(model), 'deep-spec-verify');
 mkdirSync(dir, { recursive: true });
@@ -166,8 +176,8 @@ describe("refinementの対象はfindingとskipの両方に写す", () => {
       runLowered: (_backend, _unit, lowered) => {
         calls++;
         const skips = calls === 1 ? [] : [...lowered.obligations()].map((o) =>
-          SiblingVerdictSkip.reconstitute({ target: o.id(), reason, detail: "regression" }));
-        return { exit: 0, note: "", doc: SiblingVerdictDocument.readable("simulation", SiblingVerdictFindings.of([]), SiblingVerdictSkips.of(skips)) };
+          SiblingVerdictSkip.of({ target: o.id(), reason: SkipReason.of(reason), detail: "regression" }));
+        return { exit: 0, note: "", doc: SiblingVerdictDocument.readable( VerificationMethod.of("simulation"), SiblingVerdictFindings.of([]), SiblingVerdictSkips.of(skips)) };
       },
     };
     const reports = new CapturedReports();
@@ -211,7 +221,7 @@ describe("式の所有権を集約の内側に閉じる", () => {
     const leaf = { op: "ref", path: "order.state" };
     const expression = { op: "eq", args: [leaf, { op: "enum", value: "done" }] };
     const tree = ExpressionTree.of(expression);
-    const obligation = Obligation.reconstitute({ id: ObligationId.reconstitute("OB-1"), nature: ObligationNature.reconstitute("invariant"), frRefs: FrRefs.of([]), assert: expression });
+    const obligation = Obligation.of({ id: ObligationId.of("OB-1"), nature: ObligationNature.of("invariant"), frRefs: FrRefs.of([]), assert: expression });
     leaf.path = "changed";
     expect(tree.referencedPaths()).toEqual(["order.state"]);
     expect(obligation.assertion()?.args?.[0].path).toBe("order.state");
@@ -278,26 +288,28 @@ describe("cross-checkの不変条件は呼び順に依存しない", () => {
     const directory = ap(temporaryDirectory());
     const report = (backend: string, method: string) => VerificationReport.compose({ id: VerificationReportId.of(directory, backend), irVersion: model.irVersion(), irHash: model.irHash(), method, findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
     const initial = VerificationDirectory.of(directory, VerificationReports.of([report("smt", "exhaustive")]), null);
-    const candidate = report("quint", "unknown");
-    const wrongOrder = initial.finalizing(candidate).crossChecked(model, model.irHash()).conformedTo(schema);
+    const candidate = report("quint", "simulation");
+    const limitedSchema = FindingsSchema.of({ type: "object", properties: { method: { const: "exhaustive" } } });
+    const wrongOrder = initial.finalizing(candidate).crossChecked(model, model.irHash()).conformedTo(limitedSchema);
     expect(wrongOrder.candidate()?.isUnavailable()).toBe(true);
     expect(wrongOrder.crossCheck()).toBeNull();
-    const prepared = initial.finalizedWith(candidate, model, schema);
+    const prepared = initial.finalizedWith(candidate, model, limitedSchema);
     expect(prepared.candidate()?.isUnavailable()).toBe(true);
     expect(prepared.crossCheck()?.toDocument().crossChecked).toEqual([]);
-    expect(initial.finalizedWith(candidate, null, schema).crossCheck()).toBeNull();
+    expect(initial.finalizedWith(candidate, null, limitedSchema).crossCheck()).toBeNull();
   });
   test("design: 候補の降格で古い導出物を捨て、一操作でも正しく準備できる", () => {
     const ws = designWorkspace();
     const directory = ws.input.verifyDirectory;
     const report = (backend: string, method: string) => DesignReport.compose({ id: DesignReportId.of(directory, backend), irVersion: ws.model.irVersion(), irHash: ws.model.irHash(), method, findings: DesignFindings.of([]), skipped: DesignSkips.of([]) });
     const initial = DesignVerifyDirectory.of(directory, DesignReports.of([report("smt", "exhaustive")]), null);
-    const candidate = report("quint", "unknown");
-    const wrongOrder = initial.finalizing(candidate).crossChecked(ws.model, ws.model.irHash()).conformedTo(schema);
+    const candidate = report("quint", "simulation");
+    const limitedSchema = FindingsSchema.of({ type: "object", properties: { method: { const: "exhaustive" } } });
+    const wrongOrder = initial.finalizing(candidate).crossChecked(ws.model, ws.model.irHash()).conformedTo(limitedSchema);
     expect(wrongOrder.candidate()?.isUnavailable()).toBe(true);
     expect(wrongOrder.crossCheck()).toBeNull();
-    const prepared = initial.finalizedWith(candidate, ws.model, schema);
+    const prepared = initial.finalizedWith(candidate, ws.model, limitedSchema);
     expect(prepared.crossCheck()?.toDocument().crossChecked).toEqual([]);
-    expect(initial.finalizedWith(candidate, null, schema).crossCheck()).toBeNull();
+    expect(initial.finalizedWith(candidate, null, limitedSchema).crossCheck()).toBeNull();
   });
 });

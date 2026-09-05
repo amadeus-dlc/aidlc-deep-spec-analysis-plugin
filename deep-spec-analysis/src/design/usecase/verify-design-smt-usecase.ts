@@ -1,3 +1,5 @@
+import { UnitName, SkipReason, VerificationMethod, type FindingsSchema } from "@deep-spec/kernel-domain";
+
 // deep-spec-design-verify-smt の interactor。Repository / Client / Clock を
 // 保持し、execute は設計形式モデルのパス（識別）から集約を解決して、
 // ユニットごとの lowering → v1 兄弟実行 → remap（Phase 1-2）、続いて
@@ -9,8 +11,6 @@
 // 予算・skip の凍結文言はフロー制御の一部としてここが逐語所有する
 // （文書系の detail はドメインのファクトリ／解釈が所有——分担は PR5 と同じ）。
 
-import { SkipReason, VerificationMethod } from "@deep-spec/kernel-domain";
-import type { FindingsSchema } from "@deep-spec/kernel-domain";
 import { unreachable } from "@deep-spec/kernel-infrastructure";
 import type { Clock } from "@deep-spec/kernel-usecase";
 import {
@@ -28,6 +28,7 @@ import {
 import {
   UnitRefinementPlan,
 } from "@deep-spec/design-domain";
+
 import type { DesignModelRepository } from "./port/design-model-repository.ts";
 import type { DesignVerifyDirectoryRepository } from "./port/design-verify-directory-repository.ts";
 import { type RefinementMaterialsRepository } from "./port/refinement-materials-repository.ts";
@@ -98,7 +99,7 @@ export class VerifyDesignSmtUseCase {
     for (const u of model.units()) {
       if (this.#clock.now() - started > RUN_BUDGET_MS) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run solver budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -108,7 +109,7 @@ export class VerifyDesignSmtUseCase {
       const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
       if (remaining < 3_000) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run solver budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run solver budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -123,14 +124,14 @@ export class VerifyDesignSmtUseCase {
       }
       if (run.doc === null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
         }
         continue;
       }
       const remapped = run.doc.remapVerdicts(u, lowered.index());
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: remapped.unavailable }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: remapped.unavailable }));
         }
         continue;
       }
@@ -151,7 +152,7 @@ export class VerifyDesignSmtUseCase {
       const reqTargets = req.allTargetIds();
       const skipAll = (reason: SkipReason, detail: string): void => {
         for (const u of model.units()) {
-          for (const t of reqTargets) skipped.push(DesignSkipped.of({ target: t, reason, unit: u.name(), detail }));
+          for (const t of reqTargets) skipped.push(DesignSkipped.of({ target: t, reason, unit: UnitName.of(u.name()), detail }));
         }
       };
       acq.match({
@@ -172,14 +173,14 @@ export class VerifyDesignSmtUseCase {
             const unitMap = map.unitMapOf(u.id());
             if (!unitMap) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: UnitName.of(u.name()), detail: `the refinement map has no entry for unit ${u.name()}` }));
               }
               continue;
             }
             const refRemaining = REFINEMENT_DEADLINE_MS - (this.#clock.now() - started);
             if (refRemaining < 5_000) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run solver budget was exhausted before the refinement pass" }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run solver budget was exhausted before the refinement pass" }));
               }
               continue;
             }
@@ -189,7 +190,7 @@ export class VerifyDesignSmtUseCase {
               // 旧挙動：unavailable のユニットは gap / status / compile skip を
               // 捨て、全要件対象を一括 unavailable として記録する。
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: check.result.reason }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: check.result.reason }));
               }
               continue;
             }
@@ -214,7 +215,7 @@ export class VerifyDesignSmtUseCase {
       findings: DesignFindings.of(findings),
       skipped: DesignSkips.of(skipped),
       ...(inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {}),
-      checked: CheckedUnits.reconstitute(checkedUnits),
+      checked: CheckedUnits.of(Array.from(checkedUnits, (raw) => UnitName.of(raw))),
       ...(!materials.ok ? { unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})` } : {}),
     });
     // 適合・両文書の公開・cleanup は Finalizer が一か所で持つ。兄弟が読めない・

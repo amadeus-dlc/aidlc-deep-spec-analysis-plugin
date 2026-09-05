@@ -6,11 +6,12 @@ export class ErrorMessages {
   readonly #values: readonly string[];
 
   private constructor(values: readonly string[]) {
-    this.#values = values;
+    // 空配列は「エラーなし」を表す有効な値。
+    this.#values = Object.freeze([...values]);
   }
 
   static of(values: readonly string[]): ErrorMessages {
-    return new ErrorMessages([...values]);
+    return new ErrorMessages(values);
   }
 
   add(value: string): ErrorMessages {

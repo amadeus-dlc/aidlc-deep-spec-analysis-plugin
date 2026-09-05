@@ -1,3 +1,15 @@
+import {
+  SkipReason,
+  RequirementId,
+  ContentHash,
+  FindingKind,
+  FrRefs,
+  TargetId,
+  TargetIds,
+  type FindingsSchema,
+  type UnitName,
+} from "@deep-spec/kernel-domain";
+
 // ReferenceCheckReport 集約 — 契約2 の refcheck 文書のドメイン表現。
 //
 // ドメインは型付きの語彙（findings / skipped / inputs / checked / 降格理由）
@@ -19,10 +31,8 @@
 //   - open         … 検査ファミリーで空の文書を開く（検査はコマンドで書き込む）
 //   - degraded     … 契約不適合と判定された文書の降格形（理由文言は emitter＝
 //                    アダプタが組んで渡す。inputs は保持、内容は空になる——凍結挙動）
-//   - reconstitute … 書かれた真実（アダプタが型付きに解いた状態）からの再構成
+//   - of … 書かれた真実（アダプタが型付きに解いた状態）からの再構成
 
-import { ContentHash, FindingKind, FrRefs, TargetId, TargetIds } from "@deep-spec/kernel-domain";
-import type { FindingsSchema } from "@deep-spec/kernel-domain";
 import { type Json, canonicalStringify } from "@deep-spec/kernel-infrastructure";
 import { CATALOG_VERSION } from "./catalog-version.ts";
 import type { CheckFamilies } from "./check-families.ts";
@@ -34,7 +44,7 @@ import { InputAnchors } from "./input-anchors.ts";
 import { ReferenceCheckReportId } from "./reference-check-report-id.ts";
 import { Skipped } from "./skipped.ts";
 import { Skips } from "./skips.ts";
-import type { UnitName } from "@deep-spec/kernel-domain";
+
 import type { WitnessRef } from "./witness-ref.ts";
 import { WitnessRefs } from "./witness-refs.ts";
 
@@ -87,7 +97,7 @@ export class ReferenceCheckReport {
 
   // 書かれた真実からの再構成（Repository の読出側だけが使う）。書込時に
   // 契約適合が保証されているため、並びも含め「書かれたまま」を保持する。
-  static reconstitute(seed: {
+  static of(seed: {
     readonly id: ReferenceCheckReportId;
     readonly inputs: InputAnchors;
     readonly checked: TargetIds;
@@ -108,30 +118,29 @@ export class ReferenceCheckReport {
     // family の finding を記録する。detail は family prefix 付きで描画され、
     // その family は checked から外れる。findings はカタログ順を保つ。
     // kind は検証済みの FindingKind——検査が自ら下す判定は正常生成経路であり、
-    // 任意の string を受け取らない（FR3.2）。書かれた文書の未知 kind は
-    // Finding.reconstitute（adapter の hydration）だけが運ぶ。
+    // 任意の string を受け取らない（FR3.2）。復元時も同じ契約が成立する。
     finding(family: CheckFamily, kind: FindingKind, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
       this.#findings = this.#findings.add(Finding.of({
         kind,
-        frRefs: FrRefs.reconstitute(frRefs).sortedUnique(),
-        targets: TargetIds.reconstitute(targets).sortedUniqueCanonically(),
+        frRefs: FrRefs.of(Array.from(frRefs, (raw) => RequirementId.of(raw))).sortedUnique(),
+        targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
         witness: { refs: WitnessRefs.of(refs) },
         detail: family.prefixedDetail(detail),
-        ...(this.#unit !== undefined ? { unit: this.#unit.asString() } : {}),
+        ...(this.#unit !== undefined ? { unit: this.#unit} : {}),
       })).sortedCanonically();
-      this.#checked = this.#checked.excluding(TargetId.reconstitute(family.asCheckTarget()));
+      this.#checked = this.#checked.excluding(TargetId.of(family.asCheckTarget()));
     }
 
     // family の skip を記録する。その family は checked から外れる。
     // skipped は target → reason の正準順を保つ。
     skip(family: CheckFamily, reason: string, detail: string): void {
-      this.#skipped = this.#skipped.add(Skipped.reconstitute({
-        target: family.asCheckTarget(),
-        reason,
+      this.#skipped = this.#skipped.add(Skipped.of({
+        target: TargetId.of(family.asCheckTarget()),
+        reason: SkipReason.of(reason),
         detail,
-        ...(this.#unit !== undefined ? { unit: this.#unit.asString() } : {}),
+        ...(this.#unit !== undefined ? { unit: this.#unit} : {}),
       })).sortedCanonically();
-      this.#checked = this.#checked.excluding(TargetId.reconstitute(family.asCheckTarget()));
+      this.#checked = this.#checked.excluding(TargetId.of(family.asCheckTarget()));
     }
 
     // 検査が読んだ文書をアンカーとして記録する。inputs は artifact 順を保つ

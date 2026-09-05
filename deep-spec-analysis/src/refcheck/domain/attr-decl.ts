@@ -24,23 +24,11 @@ export class AttrDecl {
   readonly max: NumericBound | null;
   };
 
-  private constructor(seed: {
-    readonly name: AttributeName;
-    readonly element: ElementPath;
-    readonly type: TypeName | null;
-    readonly uniqueIsTrue: boolean;
-    readonly references: ReferenceTarget | null;
-    readonly allowed: AllowedValues | null;
-    readonly def: AttributeDefault | null;
-    readonly minDeclared: boolean;
-    readonly maxDeclared: boolean;
-    readonly min: NumericBound | null;
-    readonly max: NumericBound | null;
-  }) {
+  private constructor(seed: Parameters<typeof AttrDecl.of>[0]) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: {
+  static of(seed: {
     readonly name: AttributeName;
     readonly element: ElementPath;
     readonly type: TypeName | null;

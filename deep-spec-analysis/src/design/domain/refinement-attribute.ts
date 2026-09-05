@@ -9,13 +9,13 @@ export class RefinementAttribute {
   readonly #kind: "bool" | "int" | "enum";
   readonly #values: ReqAttributeValues | undefined;
 
-  private constructor(props: { path: AttributePath; kind: "bool" | "int" | "enum"; values?: ReqAttributeValues }) {
+  private constructor(props: Parameters<typeof RefinementAttribute.of>[0]) {
     this.#path = props.path;
     this.#kind = props.kind;
     this.#values = props.values;
   }
 
-  static reconstitute(props: { path: AttributePath; kind: "bool" | "int" | "enum"; values?: ReqAttributeValues }): RefinementAttribute {
+  static of(props: { path: AttributePath; kind: "bool" | "int" | "enum"; values?: ReqAttributeValues }): RefinementAttribute {
     return new RefinementAttribute(props);
   }
 

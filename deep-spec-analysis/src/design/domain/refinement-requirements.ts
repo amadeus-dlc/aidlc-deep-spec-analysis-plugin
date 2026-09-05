@@ -1,4 +1,6 @@
 import { TargetIds } from "@deep-spec/kernel-domain";
+import type { ContentHash } from "@deep-spec/kernel-domain";
+import { FrRefs } from "@deep-spec/kernel-domain";
 // refinement が見る要件形式モデル（契約1）のビュー。requirements コンテキスト
 // とは別の寛容プロファイル（background / temporal / ears を運ばない・不在や
 // 不読は null）で、refinement 検査に必要な面だけを型で持つ。hash は生 IR の
@@ -6,21 +8,12 @@ import { TargetIds } from "@deep-spec/kernel-domain";
 // 識別材料。集まりはファーストクラスコレクションで運ぶ。
 
 import type { FormalModelId } from "@deep-spec/requirements-domain";
-import type { ContentHash } from "@deep-spec/kernel-domain";
+
 import { RefinementAttributes } from "./refinement-attributes.ts";
 import type { RefinementObligation } from "./refinement-obligation.ts";
 import { RefinementObligations } from "./refinement-obligations.ts";
 import type { RefinementScenario } from "./refinement-scenario.ts";
 import { RefinementScenarios } from "./refinement-scenarios.ts";
-import { FrRefs } from "@deep-spec/kernel-domain";
-
-
-
-
-
-
-
-
 
 export class RefinementRequirements {
   readonly #id: FormalModelId;
@@ -29,13 +22,7 @@ export class RefinementRequirements {
   readonly #obligations: RefinementObligations;
   readonly #scenarios: RefinementScenarios;
 
-  private constructor(seed: {
-    readonly id: FormalModelId;
-    readonly hash: ContentHash;
-    readonly attributes: RefinementAttributes;
-    readonly obligations: RefinementObligations;
-    readonly scenarios: RefinementScenarios;
-  }) {
+  private constructor(seed: Parameters<typeof RefinementRequirements.of>[0]) {
     this.#id = seed.id;
     this.#hash = seed.hash;
     this.#attributes = seed.attributes;
@@ -44,7 +31,7 @@ export class RefinementRequirements {
   }
 
   // アダプタのパーサが解いた型付き部品からの唯一の構築口。
-  static reconstitute(seed: {
+  static of(seed: {
     readonly id: FormalModelId;
     readonly hash: ContentHash;
     readonly attributes: RefinementAttributes;

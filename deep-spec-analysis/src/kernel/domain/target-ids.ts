@@ -1,10 +1,10 @@
 // finding / checked / crossChecked ペイロードが運ぶ target id 列のファースト
 // クラスコレクション。要素は TargetId（#71 波10——生 string の集合ではない）。
-// of は DP の門、reconstitute は凍結文書と生 id 材料からの逐語再構成。
+// of は型付きの TargetId を受け取る。
 // 名前空間付き id のサニタイズ（safe）は refcheck レポートの材料面として残る
 // （旧自由関数 safeTarget は TargetIds.safe に従属した——OOUI 裁定）。
 
-import { sortedUniqueCanonically } from "./canonical-order.ts";
+import { sortedUniqueCanonically } from "@deep-spec/kernel-infrastructure";
 import { TargetId } from "./target-id.ts";
 
 export class TargetIds {
@@ -19,10 +19,6 @@ export class TargetIds {
   }
 
   // 凍結文書・生 id 材料からの逐語再構成。
-  static reconstitute(values: readonly string[]): TargetIds {
-    return new TargetIds(values.map((v) => TargetId.reconstitute(v)));
-  }
-
   // Namespaced target ids (unit:…, component:…, entity:…) must satisfy the
   // findings schema's targetId pattern, but the raw names they are built from
   // come out of free-form artifact text (a markdown table cell, a yaml scalar)
@@ -63,7 +59,7 @@ export class TargetIds {
 
   // finding の targets 面の凍結正準形（一意化 + id 順）。
   sortedUniqueCanonically(): TargetIds {
-    return TargetIds.reconstitute(sortedUniqueCanonically(this.toStrings()));
+    return TargetIds.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetId.of(raw)));
   }
 
   joined(separator: string): string {

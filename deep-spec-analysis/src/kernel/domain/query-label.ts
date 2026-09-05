@@ -5,11 +5,11 @@
 export class QueryLabel {
   readonly #value: string;
 
-  private constructor(value: string) {
+  private constructor(value: Parameters<typeof QueryLabel.of>[0]) {
     this.#value = value;
   }
 
-  static reconstitute(raw: string): QueryLabel {
+  static of(raw: string): QueryLabel {
     return new QueryLabel(raw);
   }
 

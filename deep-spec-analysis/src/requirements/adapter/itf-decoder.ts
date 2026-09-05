@@ -21,7 +21,7 @@ export function decodeItfTrace(itfText: string, varToPath: Map<string, string>):
     for (const key of Object.keys(state).sort()) {
       if (key.startsWith("#")) continue;
       const path = varToPath.get(key) ?? key;
-      entries.push([AttributePath.reconstitute(path), TraceValue.of(decodeItfValue(state[key] ?? null))]);
+      entries.push([AttributePath.of(path), TraceValue.of(decodeItfValue(state[key] ?? null))]);
     }
     trace.push(TraceState.of(entries));
   }

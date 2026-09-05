@@ -10,3 +10,6 @@ export { type Ok } from "./ok.ts";
 export { type Json, isObject, strArr } from "./json.ts";
 export { type Schema, validateSchema } from "./schema.ts";
 export { canonicalStringify } from "./canonical-json.ts";
+export { IllegalArgumentException } from "./illegal-argument-exception.ts";
+export { parseConstruction } from "./parse-construction.ts";
+export { compareCanonically, sortedUniqueCanonically } from "./canonical-order.ts";

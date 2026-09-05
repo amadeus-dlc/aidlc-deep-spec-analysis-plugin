@@ -9,12 +9,12 @@ export class UnitDecl {
   readonly #name: UnitName;
   readonly #dependsOn: UnitNames;
 
-  private constructor(props: { name: UnitName; dependsOn: UnitNames }) {
+  private constructor(props: Parameters<typeof UnitDecl.of>[0]) {
     this.#name = props.name;
     this.#dependsOn = props.dependsOn;
   }
 
-  static reconstitute(props: { name: UnitName; dependsOn: UnitNames }): UnitDecl {
+  static of(props: { name: UnitName; dependsOn: UnitNames }): UnitDecl {
     return new UnitDecl(props);
   }
 

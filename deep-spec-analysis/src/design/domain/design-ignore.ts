@@ -11,12 +11,12 @@ export class DesignIgnore {
   readonly #state: string;
   readonly #trigger: TriggerName;
 
-  private constructor(props: { state: string; trigger: TriggerName }) {
+  private constructor(props: Parameters<typeof DesignIgnore.of>[0]) {
     this.#state = props.state;
     this.#trigger = props.trigger;
   }
 
-  static reconstitute(props: { state: string; trigger: TriggerName }): DesignIgnore {
+  static of(props: { state: string; trigger: TriggerName }): DesignIgnore {
     return new DesignIgnore(props);
   }
 
@@ -35,7 +35,7 @@ export class DesignIgnore {
 
   // compile-down された明示 no-op event 義務（帰属は宣言元の機械が答える）。
   loweredAs(id: LoweredId, attrPath: string): LoweredObligation {
-    return LoweredObligation.reconstitute({
+    return LoweredObligation.of({
       id,
       nature: "event",
       frRefs: FrRefs.of([]),

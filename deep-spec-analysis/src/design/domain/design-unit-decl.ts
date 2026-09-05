@@ -33,17 +33,7 @@ export class DesignUnitDecl {
   // construction/<unit>/functional-design/rules.md の本文。無ければ null。
   readonly #rulesMarkdown: string | null;
 
-  private constructor(props: {
-    unit: DesignUnitId;
-    entities: DesignEntityDecls;
-    obligations: DesignObligationDecls;
-    stateMachines: DesignMachineDecls;
-    scenarios: DesignScenarioDecls;
-    background: DesignBackgroundDecls;
-    unformalizedTargets: UnformalizedTargets;
-    directoryExists: boolean;
-    rulesMarkdown: string | null;
-  }) {
+  private constructor(props: Parameters<typeof DesignUnitDecl.of>[0]) {
     this.#unit = props.unit;
     this.#entities = props.entities;
     this.#obligations = props.obligations;
@@ -55,7 +45,7 @@ export class DesignUnitDecl {
     this.#rulesMarkdown = props.rulesMarkdown;
   }
 
-  static reconstitute(props: {
+  static of(props: {
     unit: DesignUnitId;
     entities: DesignEntityDecls;
     obligations: DesignObligationDecls;
@@ -300,11 +290,11 @@ export class DesignUnitDecl {
     } else {
       const known = BrReferenceIndex.fromRules(rulesMd);
       for (const br of [...brRefsUsed].sort()) {
-        if (!known.has(BrRef.reconstitute(br))) errors.push(where(`brRef "${br}" does not exist in rules.md`));
+        if (!known.has(BrRef.of(br))) errors.push(where(`brRef "${br}" does not exist in rules.md`));
       }
       const unformalizedTargets = this.#unformalizedTargets;
       for (const br of known.sortedIds()) {
-        if (!brRefsUsed.has(br) && !unformalizedTargets.covers(TargetId.reconstitute(br))) {
+        if (!brRefsUsed.has(br) && !unformalizedTargets.covers(TargetId.of(br))) {
           errors.push(
             where(`BR coverage: rule ${br} in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] — silence is a contract violation`),
           );

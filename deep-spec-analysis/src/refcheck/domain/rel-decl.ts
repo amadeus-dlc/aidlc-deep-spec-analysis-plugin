@@ -12,17 +12,11 @@ export class RelDecl {
   readonly hasDirection: boolean;
   };
 
-  private constructor(seed: {
-    readonly element: ElementPath;
-    readonly from: EntityName | null;
-    readonly to: EntityName | null;
-    readonly cardinality: CardinalityNotation | null;
-    readonly hasDirection: boolean;
-  }) {
+  private constructor(seed: Parameters<typeof RelDecl.of>[0]) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: {
+  static of(seed: {
     readonly element: ElementPath;
     readonly from: EntityName | null;
     readonly to: EntityName | null;

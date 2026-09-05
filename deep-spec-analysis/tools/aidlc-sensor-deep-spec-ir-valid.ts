@@ -149,6 +149,47 @@ function validateSchema(root, schema, value, path, errors) {
   }
   return errors.length === before;
 }
+// src/kernel/infrastructure/illegal-argument-exception.ts
+class IllegalArgumentException extends Error {
+  problem;
+  constructor(problem) {
+    super(`Illegal argument: ${problem.kind}`);
+    this.name = "IllegalArgumentException";
+    this.problem = Object.freeze({ ...problem });
+  }
+}
+// src/kernel/infrastructure/parse-construction.ts
+function parseConstruction(construct) {
+  try {
+    return ok(construct());
+  } catch (error) {
+    if (error instanceof IllegalArgumentException)
+      return err(error.problem);
+    throw error;
+  }
+}
+// src/kernel/infrastructure/canonical-order.ts
+function numSegments(id) {
+  return (id.match(/[0-9]+/g) ?? []).map((s) => Number.parseInt(s, 10));
+}
+function compareCanonically(a, b) {
+  const pa = a.replace(/[0-9.]/g, "");
+  const pb = b.replace(/[0-9.]/g, "");
+  if (pa !== pb)
+    return pa < pb ? -1 : 1;
+  const na = numSegments(a);
+  const nb = numSegments(b);
+  for (let i = 0;i < Math.max(na.length, nb.length); i++) {
+    const da = na[i] ?? -1;
+    const db = nb[i] ?? -1;
+    if (da !== db)
+      return da - db;
+  }
+  return 0;
+}
+function sortedUniqueCanonically(values) {
+  return [...new Set(values)].sort(compareCanonically);
+}
 // src/kernel/adapter/contract-schema.ts
 function readContractSchema(path) {
   try {
@@ -185,6 +226,11 @@ function decodeFindingsDocument(raw) {
     return err("crossChecked must be an array of backend comparisons");
   }
   return ok(raw);
+}
+// src/kernel/adapter/domain-decoding.ts
+function decodeDomainValues(build) {
+  const parsed = parseConstruction(build);
+  return parsed.ok ? parsed : err(JSON.stringify(parsed.error));
 }
 // src/kernel/adapter/fence.ts
 function extractFences(md, lang) {
@@ -491,18 +537,19 @@ class ExpressionTree {
 }
 // src/kernel/domain/content-hash.ts
 import { createHash } from "crypto";
+
 class ContentHash {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!/^[0-9a-f]{64}$/.test(raw))
+      throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ContentHash(raw);
   }
   static parse(raw) {
-    if (!/^[0-9a-f]{64}$/.test(raw))
-      return err({ kind: "not-a-sha256-hex", raw });
-    return ok(new ContentHash(raw));
-  }
-  static reconstitute(raw) {
-    return new ContentHash(raw);
+    return parseConstruction(() => new ContentHash(raw));
   }
   static ofText(text) {
     return new ContentHash(createHash("sha256").update(text, "utf-8").digest("hex"));
@@ -517,19 +564,35 @@ class ContentHash {
     return this.#value;
   }
 }
-// src/kernel/domain/ir-version.ts
-class IrVersion {
+// src/kernel/domain/declared-digest.ts
+class DeclaredDigest {
   #value;
   constructor(value) {
     this.#value = value;
   }
-  static parse(raw) {
-    if (!/^\d+\.\d+\.\d+$/.test(raw))
-      return err({ kind: "not-a-semver", raw });
-    return ok(new IrVersion(raw));
+  static of(value) {
+    return new DeclaredDigest(value);
   }
-  static reconstitute(raw) {
+  asString() {
+    return this.#value;
+  }
+  matches(actual) {
+    return this.#value === actual.asString();
+  }
+}
+// src/kernel/domain/ir-version.ts
+class IrVersion {
+  #value;
+  constructor(raw) {
+    if (!/^\d+\.\d+\.\d+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "not-a-semver", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
     return new IrVersion(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new IrVersion(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -544,29 +607,6 @@ class IrVersion {
     return this.#value;
   }
 }
-// src/kernel/domain/canonical-order.ts
-function numSegments(id) {
-  return (id.match(/[0-9]+/g) ?? []).map((s) => Number.parseInt(s, 10));
-}
-function compareCanonically(a, b) {
-  const pa = a.replace(/[0-9.]/g, "");
-  const pb = b.replace(/[0-9.]/g, "");
-  if (pa !== pb)
-    return pa < pb ? -1 : 1;
-  const na = numSegments(a);
-  const nb = numSegments(b);
-  for (let i = 0;i < Math.max(na.length, nb.length); i++) {
-    const da = na[i] ?? -1;
-    const db = nb[i] ?? -1;
-    if (da !== db)
-      return da - db;
-  }
-  return 0;
-}
-function sortedUniqueCanonically(values) {
-  return [...new Set(values)].sort(compareCanonically);
-}
-
 // src/kernel/domain/target-id.ts
 var TARGET_ID_PATTERNS = [
   /^(OB|SC)-[0-9]+$/,
@@ -577,16 +617,16 @@ var TARGET_ID_PATTERNS = [
 
 class TargetId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
+      throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TargetId(raw);
   }
   static parse(raw) {
-    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
-      return err({ kind: "malformed-target-id", raw });
-    return ok(new TargetId(raw));
-  }
-  static reconstitute(raw) {
-    return new TargetId(raw);
+    return parseConstruction(() => new TargetId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -606,9 +646,6 @@ class TargetIds {
   }
   static of(values) {
     return new TargetIds([...values]);
-  }
-  static reconstitute(values) {
-    return new TargetIds(values.map((v) => TargetId.reconstitute(v)));
   }
   static safe(prefix, raw) {
     const token = raw.replace(/[^A-Za-z0-9_./-]/g, "-");
@@ -633,7 +670,7 @@ class TargetIds {
     return new TargetIds([...this.#values].sort((a, b) => a.compareTo(b)));
   }
   sortedUniqueCanonically() {
-    return TargetIds.reconstitute(sortedUniqueCanonically(this.toStrings()));
+    return TargetIds.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => TargetId.of(raw)));
   }
   joined(separator) {
     return this.toStrings().join(separator);
@@ -651,14 +688,14 @@ class RequirementId {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new RequirementId(raw);
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -674,9 +711,6 @@ class FrRefs {
   static of(values) {
     return new FrRefs([...values]);
   }
-  static reconstitute(raws) {
-    return new FrRefs(raws.map((raw) => RequirementId.reconstitute(raw)));
-  }
   add(value) {
     return new FrRefs([...this.#values, value]);
   }
@@ -687,7 +721,7 @@ class FrRefs {
     return this.#values.length === 0;
   }
   sortedUnique() {
-    return FrRefs.reconstitute(sortedUniqueCanonically(this.toStrings()));
+    return FrRefs.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => RequirementId.of(raw)));
   }
   toArray() {
     return this.#values;
@@ -699,16 +733,16 @@ class FrRefs {
 // src/kernel/domain/backend-name.ts
 class BackendName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-backend-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new BackendName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-backend-name", raw });
-    return ok(new BackendName(raw));
-  }
-  static reconstitute(raw) {
-    return new BackendName(raw);
+    return parseConstruction(() => new BackendName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -766,15 +800,12 @@ class RequirementIds {
   static extractFrom(text) {
     const ids = [];
     for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementId.reconstitute(m[0]));
+      ids.push(RequirementId.of(m[0]));
     }
     return new RequirementIds(KeySet.of(ids));
   }
   static of(values) {
     return new RequirementIds(KeySet.of(values));
-  }
-  static reconstitute(raws) {
-    return new RequirementIds(KeySet.of(raws.map((raw) => RequirementId.reconstitute(raw))));
   }
   add(value) {
     return new RequirementIds(this.#values.with(value));
@@ -811,16 +842,16 @@ class NormalizedName {
 // src/kernel/domain/artifact-path.ts
 class ArtifactPath {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-path" });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ArtifactPath(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-path" });
-    return ok(new ArtifactPath(raw));
-  }
-  static reconstitute(raw) {
-    return new ArtifactPath(raw);
+    return parseConstruction(() => new ArtifactPath(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -832,18 +863,18 @@ class ArtifactPath {
 // src/kernel/domain/attribute-bound.ts
 class AttributeBound {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!Number.isInteger(raw))
+      throw new IllegalArgumentException({ kind: "non-integer-bound", raw });
+    if (!Number.isSafeInteger(raw))
+      throw new IllegalArgumentException({ kind: "unsafe-bound", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new AttributeBound(raw);
   }
   static parse(raw) {
-    if (!Number.isInteger(raw))
-      return err({ kind: "non-integer-bound", raw });
-    if (!Number.isSafeInteger(raw))
-      return err({ kind: "unsafe-bound", raw });
-    return ok(new AttributeBound(raw));
-  }
-  static reconstitute(raw) {
-    return new AttributeBound(raw);
+    return parseConstruction(() => new AttributeBound(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -855,14 +886,33 @@ class AttributeBound {
     return this.#value > other.#value;
   }
 }
+// src/kernel/domain/declared-bound.ts
+class DeclaredBound {
+  #value;
+  constructor(value) {
+    this.#value = value;
+  }
+  static of(value) {
+    return new DeclaredBound(value);
+  }
+  asNumber() {
+    return this.#value;
+  }
+  isSafeInteger() {
+    return AttributeBound.parse(this.#value).ok;
+  }
+  exceeds(other) {
+    return this.#value > other.#value;
+  }
+}
 // src/kernel/domain/error-messages.ts
 class ErrorMessages {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ErrorMessages([...values]);
+    return new ErrorMessages(values);
   }
   add(value) {
     return new ErrorMessages([...this.#values, value]);
@@ -909,25 +959,22 @@ class FindingsSchema {
 // src/kernel/domain/trigger-name.ts
 class TriggerName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-trigger-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new TriggerName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-trigger-name", raw });
-    return ok(new TriggerName(raw));
-  }
-  static reconstitute(raw) {
-    return new TriggerName(raw);
+    return parseConstruction(() => new TriggerName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   asString() {
     return this.#value;
-  }
-  isEmpty() {
-    return this.#value === "";
   }
 }
 // src/kernel/domain/keyed-index.ts
@@ -980,7 +1027,7 @@ class QueryLabel {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new QueryLabel(raw);
   }
   equals(other) {
@@ -996,22 +1043,22 @@ class QueryLabel {
 // src/kernel/domain/attribute-path.ts
 class AttributePath {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-attribute-path", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new AttributePath(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-attribute-path", raw });
-    return ok(new AttributePath(raw));
-  }
-  static reconstitute(raw) {
-    return new AttributePath(raw);
+    return parseConstruction(() => new AttributePath(raw));
   }
   equals(other) {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return TargetId.reconstitute(this.#value).compareTo(TargetId.reconstitute(other.#value));
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -1020,16 +1067,16 @@ class AttributePath {
 // src/kernel/domain/unit-name.ts
 class UnitName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-unit-name", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new UnitName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-unit-name", raw });
-    return ok(new UnitName(raw));
-  }
-  static reconstitute(raw) {
-    return new UnitName(raw);
+    return parseConstruction(() => new UnitName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1044,7 +1091,7 @@ class ObligationNature {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new ObligationNature(raw);
   }
   equals(other) {
@@ -1080,55 +1127,52 @@ var KIND_RANK = {
   "consistency-mismatch": 9,
   "cross-check-disagreement": 10
 };
-function rankOf(kind) {
-  return Object.hasOwn(KIND_RANK, kind) ? KIND_RANK[kind] : 99;
-}
 
 class FindingKind {
   #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static parse(raw) {
+  constructor(raw) {
     if (!Object.hasOwn(KIND_RANK, raw))
-      return err({ kind: "unknown-finding-kind", raw });
-    return ok(new FindingKind(raw));
+      throw new IllegalArgumentException({ kind: "unknown-finding-kind", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new FindingKind(raw);
   }
+  static parse(raw) {
+    return parseConstruction(() => new FindingKind(raw));
+  }
   static conflict() {
-    return new FindingKind("conflict");
+    return FindingKind.of("conflict");
   }
   static completenessGap() {
-    return new FindingKind("completeness-gap");
+    return FindingKind.of("completeness-gap");
   }
   static scenarioViolation() {
-    return new FindingKind("scenario-violation");
+    return FindingKind.of("scenario-violation");
   }
   static unreachable() {
-    return new FindingKind("unreachable");
+    return FindingKind.of("unreachable");
   }
   static redundancy() {
-    return new FindingKind("redundancy");
+    return FindingKind.of("redundancy");
   }
   static refinementViolation() {
-    return new FindingKind("refinement-violation");
+    return FindingKind.of("refinement-violation");
   }
   static mappingGap() {
-    return new FindingKind("mapping-gap");
+    return FindingKind.of("mapping-gap");
   }
   static structureInvalid() {
-    return new FindingKind("structure-invalid");
+    return FindingKind.of("structure-invalid");
   }
   static referenceBroken() {
-    return new FindingKind("reference-broken");
+    return FindingKind.of("reference-broken");
   }
   static consistencyMismatch() {
-    return new FindingKind("consistency-mismatch");
+    return FindingKind.of("consistency-mismatch");
   }
   static crossCheckDisagreement() {
-    return new FindingKind("cross-check-disagreement");
+    return FindingKind.of("cross-check-disagreement");
   }
   static canonicalOrder() {
     return Object.keys(KIND_RANK);
@@ -1137,7 +1181,7 @@ class FindingKind {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return rankOf(this.#value) - rankOf(other.#value);
+    return KIND_RANK[this.#value] - KIND_RANK[other.#value];
   }
   isConflict() {
     return this.#value === "conflict";
@@ -1151,16 +1195,16 @@ var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
 
 class VerificationMethod {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (!KNOWN_METHODS.has(raw))
+      throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new VerificationMethod(raw);
   }
   static parse(raw) {
-    if (!KNOWN_METHODS.has(raw))
-      return err({ kind: "unknown-verification-method", raw });
-    return ok(new VerificationMethod(raw));
-  }
-  static reconstitute(raw) {
-    return new VerificationMethod(raw);
+    return parseConstruction(() => new VerificationMethod(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1184,43 +1228,43 @@ var KNOWN_REASONS = new Set([
 
 class SkipReason {
   #value;
-  constructor(value) {
-    this.#value = value;
-  }
-  static parse(raw) {
+  constructor(raw) {
     if (!KNOWN_REASONS.has(raw))
-      return err({ kind: "unknown-skip-reason", raw });
-    return ok(new SkipReason(raw));
+      throw new IllegalArgumentException({ kind: "unknown-skip-reason", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new SkipReason(raw);
   }
+  static parse(raw) {
+    return parseConstruction(() => new SkipReason(raw));
+  }
   static unavailable() {
-    return new SkipReason("unavailable");
+    return SkipReason.of("unavailable");
   }
   static timeout() {
-    return new SkipReason("timeout");
+    return SkipReason.of("timeout");
   }
   static capability() {
-    return new SkipReason("capability");
+    return SkipReason.of("capability");
   }
   static compileError() {
-    return new SkipReason("compile-error");
+    return SkipReason.of("compile-error");
   }
   static waived() {
-    return new SkipReason("waived");
+    return SkipReason.of("waived");
   }
   static absentInput() {
-    return new SkipReason("absent-input");
+    return SkipReason.of("absent-input");
   }
   static staleInput() {
-    return new SkipReason("stale-input");
+    return SkipReason.of("stale-input");
   }
   static irVersionMismatch() {
-    return new SkipReason("ir-version-mismatch");
+    return SkipReason.of("ir-version-mismatch");
   }
   static unrecognizedFormat() {
-    return new SkipReason("unrecognized-format");
+    return SkipReason.of("unrecognized-format");
   }
   asString() {
     return this.#value;
@@ -1235,7 +1279,7 @@ class AttributeKind {
   constructor(value) {
     this.#value = value;
   }
-  static reconstitute(raw) {
+  static of(raw) {
     return new AttributeKind(raw);
   }
   equals(other) {
@@ -1268,7 +1312,7 @@ class AttributeDeclaration {
     this.#max = props.max;
     this.#values = props.values;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new AttributeDeclaration(props);
   }
   path() {
@@ -1385,7 +1429,7 @@ class Obligation {
       ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
     };
   }
-  static reconstitute(props) {
+  static of(props) {
     return new Obligation(props);
   }
   id() {
@@ -1425,7 +1469,7 @@ class Obligation {
     return this.#nature.isStateTemporal();
   }
   eventDefinition() {
-    if (!this.isEvent() || this.#trigger === undefined || this.#trigger.isEmpty() || this.#guard === undefined || this.#effect === undefined)
+    if (!this.isEvent() || this.#trigger === undefined || this.#guard === undefined || this.#effect === undefined)
       return null;
     return { trigger: this.#trigger, guard: this.#guard, effect: this.#effect };
   }
@@ -1450,16 +1494,16 @@ class Obligation {
 // src/requirements/domain/obligation-id.ts
 class ObligationId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-obligation-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ObligationId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-obligation-id", raw });
-    return ok(new ObligationId(raw));
-  }
-  static reconstitute(raw) {
-    return new ObligationId(raw);
+    return parseConstruction(() => new ObligationId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1471,7 +1515,7 @@ class ObligationId {
     return this.#value;
   }
   asTargetId() {
-    return TargetId.reconstitute(this.#value);
+    return TargetId.of(this.#value);
   }
 }
 // src/requirements/domain/obligation-ids.ts
@@ -1540,7 +1584,7 @@ class Scenario {
     this.#eventTrigger = props.event?.trigger;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new Scenario(props);
   }
   id() {
@@ -1580,16 +1624,16 @@ class Scenario {
 // src/requirements/domain/scenario-id.ts
 class ScenarioId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-scenario-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ScenarioId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-scenario-id", raw });
-    return ok(new ScenarioId(raw));
-  }
-  static reconstitute(raw) {
-    return new ScenarioId(raw);
+    return parseConstruction(() => new ScenarioId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1598,7 +1642,7 @@ class ScenarioId {
     return this.#value;
   }
   asTargetId() {
-    return TargetId.reconstitute(this.#value);
+    return TargetId.of(this.#value);
   }
 }
 // src/requirements/domain/scenarios.ts
@@ -1646,7 +1690,7 @@ class RequirementsModel {
     this.#scenarios = seed.scenarios;
     this.#background = seed.background;
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new RequirementsModel(seed);
   }
   id() {
@@ -1671,7 +1715,7 @@ class RequirementsModel {
     return this.#attributes;
   }
   attributeAt(path) {
-    return this.#attributes.byPath(AttributePath.reconstitute(path));
+    return this.#attributes.byPath(AttributePath.of(path));
   }
   obligations() {
     return this.#obligations;
@@ -1683,7 +1727,7 @@ class RequirementsModel {
     return this.#background;
   }
   allTargets() {
-    return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#scenarios.ids()]).sortedCanonically();
+    return TargetIds.of(Array.from([...this.#obligations.ids(), ...this.#scenarios.ids()], (raw) => TargetId.of(raw))).sortedCanonically();
   }
   frRefsOf(targets) {
     const refs = [];
@@ -1701,16 +1745,16 @@ class RequirementsModel {
 // src/requirements/domain/background-assumption-id.ts
 class BackgroundAssumptionId {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-background-id", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new BackgroundAssumptionId(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-background-id", raw });
-    return ok(new BackgroundAssumptionId(raw));
-  }
-  static reconstitute(raw) {
-    return new BackgroundAssumptionId(raw);
+    return parseConstruction(() => new BackgroundAssumptionId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1727,7 +1771,7 @@ class BackgroundAssumption {
     this.#id = id;
     this.#assert = ExpressionTree.of(assert).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new BackgroundAssumption(props.id, props.assert);
   }
   id() {
@@ -1772,9 +1816,6 @@ class VerificationFinding {
   }
   static of(props) {
     return new VerificationFinding(props);
-  }
-  static reconstitute(props) {
-    return new VerificationFinding({ ...props, kind: FindingKind.reconstitute(props.kind) });
   }
   kind() {
     return this.#kind.asString();
@@ -1851,14 +1892,14 @@ class VerificationSkipped {
     this.#reason = props.reason;
     this.#detail = props.detail;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new VerificationSkipped(props);
   }
   target() {
     return this.#target;
   }
   reason() {
-    return this.#reason;
+    return this.#reason.asString();
   }
   detail() {
     return this.#detail;
@@ -1870,7 +1911,7 @@ class VerificationSkipped {
     const c = this.#target.compareTo(other.#target);
     if (c !== 0)
       return c;
-    return this.#reason < other.#reason ? -1 : this.#reason > other.#reason ? 1 : 0;
+    return this.#reason.compareTo(other.#reason);
   }
 }
 // src/requirements/domain/verification-skips.ts
@@ -1908,26 +1949,26 @@ class VerificationSkips {
 // src/requirements/domain/verification-witness.ts
 class VerificationWitness {
   #document;
-  constructor(document) {
-    this.#document = document;
+  constructor(raw) {
+    this.#document = structuredClone(raw);
   }
   static core(labels) {
-    return new VerificationWitness({ core: [...labels] });
+    return VerificationWitness.of({ core: [...labels] });
   }
   static model(values) {
-    return new VerificationWitness({ model: values });
+    return VerificationWitness.of({ model: values });
   }
   static verdicts(byBackend) {
-    return new VerificationWitness({ verdicts: byBackend });
+    return VerificationWitness.of({ verdicts: byBackend });
   }
   static trace(states) {
-    return new VerificationWitness({ trace: states.map((state) => state.toDocument()) });
+    return VerificationWitness.of({ trace: states.map((state) => state.toDocument()) });
   }
-  static fromDocument(raw) {
-    return new VerificationWitness(raw ?? { core: [] });
+  static of(document) {
+    return new VerificationWitness(document);
   }
   toDocument() {
-    return this.#document;
+    return structuredClone(this.#document);
   }
 }
 // src/requirements/domain/verification-report-id.ts
@@ -1939,7 +1980,7 @@ class VerificationReportId {
     this.#backend = backend;
   }
   static of(directory, backend) {
-    return new VerificationReportId(directory, BackendName.reconstitute(backend));
+    return new VerificationReportId(directory, BackendName.of(backend));
   }
   equals(other) {
     return this.#directory.equals(other.#directory) && this.#backend.equals(other.#backend);
@@ -1970,7 +2011,7 @@ class VerificationReport {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#irHash = seed.irHash;
-    this.#method = VerificationMethod.reconstitute(seed.method);
+    this.#method = seed.method;
     this.#findings = seed.findings;
     this.#skipped = seed.skipped;
     this.#crossChecked = seed.crossChecked;
@@ -1979,7 +2020,7 @@ class VerificationReport {
   static irUnreadable(id, method, cause) {
     return VerificationReport.compose({
       id,
-      irVersion: IrVersion.reconstitute("0.0.0"),
+      irVersion: IrVersion.of("0.0.0"),
       irHash: ContentHash.ofText(""),
       method,
       findings: VerificationFindings.of([]),
@@ -1994,9 +2035,9 @@ class VerificationReport {
       irHash,
       method,
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.reconstitute({
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({
         target: t,
-        reason: "ir-version-mismatch",
+        reason: SkipReason.of("ir-version-mismatch"),
         detail: `IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_IR_MAJOR}.x.x)`
       })))
     });
@@ -2010,7 +2051,7 @@ class VerificationReport {
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
         ...planSkipped.toArray(),
-        ...[...model.allTargets()].filter((t) => !planSkipped.toArray().some((s) => s.isFor(t))).map((t) => VerificationSkipped.reconstitute({ target: t, reason: "unavailable", detail: "z3 could not be executed" }))
+        ...[...model.allTargets()].filter((t) => !planSkipped.toArray().some((s) => s.isFor(t))).map((t) => VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "z3 could not be executed" }))
       ]),
       unavailableReason: reason
     });
@@ -2022,7 +2063,7 @@ class VerificationReport {
       irHash,
       method: "simulation",
       findings: VerificationFindings.of([]),
-      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.reconstitute({ target: t, reason: "unavailable", detail: "quint CLI missing" }))),
+      skipped: VerificationSkips.of([...model.allTargets()].map((t) => VerificationSkipped.of({ target: t, reason: SkipReason.of("unavailable"), detail: "quint CLI missing" }))),
       unavailableReason: "quint CLI is not available (install: npm i -g @informalsystems/quint)"
     });
   }
@@ -2034,24 +2075,24 @@ class VerificationReport {
       method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([
-        ...model.obligations().toArray().map((ob) => VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: machineError })),
-        ...model.scenarios().toArray().map((sc) => VerificationSkipped.reconstitute({ target: sc.id().asTargetId(), reason: "compile-error", detail: machineError }))
+        ...model.obligations().toArray().map((ob) => VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: machineError })),
+        ...model.scenarios().toArray().map((sc) => VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: machineError }))
       ])
     });
   }
   static compose(input) {
-    return new VerificationReport({
+    return VerificationReport.of({
       id: input.id,
       irVersion: input.irVersion,
       irHash: input.irHash,
-      method: input.method,
+      method: VerificationMethod.of(input.method),
       findings: input.findings.sortedCanonically(),
       skipped: input.skipped.sortedCanonically(),
       crossChecked: input.crossChecked ?? null,
       unavailableReason: input.unavailableReason ?? null
     });
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new VerificationReport(seed);
   }
   degraded(reason) {
@@ -2059,7 +2100,7 @@ class VerificationReport {
       id: this.#id,
       irVersion: this.#irVersion,
       irHash: this.#irHash,
-      method: this.#method.asString(),
+      method: this.#method,
       findings: VerificationFindings.of([]),
       skipped: VerificationSkips.of([]),
       crossChecked: null,
@@ -2167,7 +2208,7 @@ class CrossCheckedEntry {
     this.#backend = props.backend;
     this.#targets = props.targets;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new CrossCheckedEntry(props);
   }
   backend() {
@@ -2237,7 +2278,7 @@ class VerificationReports {
         }
       }
     }
-    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => CrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(backend), targets: TargetIds.reconstitute([...targets]).sortedCanonically() })).sort((x, y) => x.compareByBackend(y));
+    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => CrossCheckedEntry.of({ backend: BackendName.of(backend), targets: TargetIds.of(Array.from([...targets], (raw) => TargetId.of(raw))).sortedCanonically() })).sort((x, y) => x.compareByBackend(y));
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
@@ -2330,9 +2371,9 @@ class SmtQueryVerdict {
   constructor(props) {
     this.#status = props.status;
     this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
-    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.reconstitute(label));
+    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
   }
-  static reconstitute(props) {
+  static of(props) {
     return new SmtQueryVerdict(props);
   }
   isSat() {
@@ -2423,10 +2464,10 @@ class SmtVerificationPlan {
     };
     const timeoutSkip = (targets, what) => {
       for (const t of targets) {
-        skipped.push(VerificationSkipped.reconstitute({ target: t, reason: "timeout", detail: `${what} exceeded the solver budget` }));
+        skipped.push(VerificationSkipped.of({ target: t, reason: SkipReason.of("timeout"), detail: `${what} exceeded the solver budget` }));
       }
     };
-    const global = results.verdictOf(QueryLabel.reconstitute("global"));
+    const global = results.verdictOf(QueryLabel.of("global"));
     let globallyUnsat = false;
     if (global?.isUnsat()) {
       globallyUnsat = true;
@@ -2436,7 +2477,7 @@ class SmtVerificationPlan {
     }
     if (!globallyUnsat) {
       for (const ob of model.obligations()) {
-        const r = results.verdictOf(QueryLabel.reconstitute(`vac:${ob.id().asString()}`));
+        const r = results.verdictOf(QueryLabel.of(`vac:${ob.id().asString()}`));
         if (!r)
           continue;
         if (r.isUnsat()) {
@@ -2460,7 +2501,7 @@ class SmtVerificationPlan {
     }
     for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0)) {
       const trigger = triggerName.asString();
-      const r = results.verdictOf(QueryLabel.reconstitute(`gap:${trigger}`));
+      const r = results.verdictOf(QueryLabel.of(`gap:${trigger}`));
       if (!r)
         continue;
       if (r.isSat()) {
@@ -2675,9 +2716,9 @@ class QuintMachinePlan {
     const machineRun = runs.machineRun();
     if (machineRun === null) {
       for (const target of machineTargets) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "unavailable",
+          reason: SkipReason.of("unavailable"),
           detail: "quint returned no machine run: the event machine was not decided"
         }));
       }
@@ -2711,18 +2752,18 @@ class QuintMachinePlan {
       if (skipped.some((s) => s.isFor(target)))
         continue;
       if (!bounded) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "capability",
+          reason: SkipReason.of("capability"),
           detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them"
         }));
         continue;
       }
       const r = runs.temporalOf(ob.id());
       if (!r) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "unavailable",
+          reason: SkipReason.of("unavailable"),
           detail: "quint returned no run for this temporal obligation"
         }));
         continue;
@@ -2743,22 +2784,22 @@ class QuintMachinePlan {
     for (const sc of model.scenarios()) {
       const target = sc.id().asTargetId();
       if (sc.hasEvent()) {
-        skipped.push(VerificationSkipped.reconstitute({ target, reason: "capability", detail: "scenarios with a When-event are not checked by the quint backend in v1" }));
+        skipped.push(VerificationSkipped.of({ target, reason: SkipReason.of("capability"), detail: "scenarios with a When-event are not checked by the quint backend in v1" }));
         continue;
       }
       if (!this.#hasInitFor(sc.id())) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "capability",
+          reason: SkipReason.of("capability"),
           detail: "quint scenario evaluation requires bindings for every declared attribute"
         }));
         continue;
       }
       const r = runs.scenarioOf(sc.id());
       if (!r) {
-        skipped.push(VerificationSkipped.reconstitute({
+        skipped.push(VerificationSkipped.of({
           target,
-          reason: "unavailable",
+          reason: SkipReason.of("unavailable"),
           detail: "quint returned no run for this scenario"
         }));
         continue;
@@ -2769,7 +2810,7 @@ class QuintMachinePlan {
         continue;
       }
       const bindings = sc.bindingEntriesCanonically();
-      const state = TraceState.of(bindings.map(([path, value]) => [AttributePath.reconstitute(path), TraceValue.of(value)]));
+      const state = TraceState.of(bindings.map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)]));
       const boundModel = {};
       for (const [path, value] of bindings)
         boundModel[path] = value;
@@ -2830,7 +2871,7 @@ function evaluate(e, state) {
     case "mul":
       return TraceValue.ofNumber(arg(0).asNumber() * arg(1).asNumber());
     case "ref":
-      return state.valueAt(AttributePath.reconstitute(e.path ?? ""));
+      return state.valueAt(AttributePath.of(e.path ?? ""));
     case "bool":
     case "int":
     case "enum":
@@ -2847,7 +2888,7 @@ class QuintMachineComponent {
     this.#id = props.id;
     this.#expression = ExpressionTree.of(props.expression).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new QuintMachineComponent(props);
   }
   id() {
@@ -2916,13 +2957,13 @@ class QuintMachineRunVerdict {
   skipsFor(targets, bounded) {
     const kind = this.#kind;
     if (kind === "timeout") {
-      return [...targets].map((target) => VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "machine invariant check exceeded its budget" }));
+      return [...targets].map((target) => VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "machine invariant check exceeded its budget" }));
     }
     if (kind === "run-failed") {
       const outputTail = this.#outputTail;
-      return [...targets].map((target) => VerificationSkipped.reconstitute({
+      return [...targets].map((target) => VerificationSkipped.of({
         target,
-        reason: "unavailable",
+        reason: SkipReason.of("unavailable"),
         detail: `quint ${bounded ? "verify" : "run"} failed unexpectedly: ${outputTail}`
       }));
     }
@@ -2991,9 +3032,9 @@ class QuintScenarioVerdict {
   skipFor(target) {
     const kind = this.#kind;
     if (kind === "timeout")
-      return VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "scenario evaluation exceeded its budget" });
+      return VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "scenario evaluation exceeded its budget" });
     if (kind === "run-failed")
-      return VerificationSkipped.reconstitute({ target, reason: "unavailable", detail: `quint run failed unexpectedly: ${this.#outputTail}` });
+      return VerificationSkipped.of({ target, reason: SkipReason.of("unavailable"), detail: `quint run failed unexpectedly: ${this.#outputTail}` });
     return null;
   }
   isViolated() {
@@ -3025,9 +3066,9 @@ class QuintTemporalVerdict {
   skipFor(target) {
     const kind = this.#kind;
     if (kind === "timeout")
-      return VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "temporal check exceeded its budget" });
+      return VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "temporal check exceeded its budget" });
     if (kind === "run-failed")
-      return VerificationSkipped.reconstitute({ target, reason: "unavailable", detail: `quint verify failed unexpectedly: ${this.#outputTail}` });
+      return VerificationSkipped.of({ target, reason: SkipReason.of("unavailable"), detail: `quint verify failed unexpectedly: ${this.#outputTail}` });
     return null;
   }
   isViolation() {
@@ -3050,7 +3091,7 @@ class IrModelDecl {
     this.#scenarios = seed.scenarios;
     this.#background = seed.background;
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new IrModelDecl(seed);
   }
   wellFormednessErrors() {
@@ -3146,12 +3187,12 @@ class IrAttributeDecl {
   #max;
   constructor(props) {
     this.#name = props.name;
-    this.#kind = AttributeKind.reconstitute(props.kind);
+    this.#kind = AttributeKind.of(props.kind);
     this.#values = props.values;
     this.#min = props.min;
     this.#max = props.max;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrAttributeDecl(props);
   }
   name() {
@@ -3161,7 +3202,7 @@ class IrAttributeDecl {
     return this.#kind.isInt() && this.#min !== undefined && this.#max !== undefined && this.#min.exceeds(this.#max);
   }
   boundsOutsideSafeRange() {
-    return this.#min !== undefined && !Number.isSafeInteger(this.#min.asNumber()) || this.#max !== undefined && !Number.isSafeInteger(this.#max.asNumber());
+    return this.#min !== undefined && !this.#min.isSafeInteger() || this.#max !== undefined && !this.#max.isSafeInteger();
   }
   admitsEnumLiteral(value) {
     return this.#kind.isEnum() && (this.#values?.includes(value) ?? false);
@@ -3195,16 +3236,16 @@ class IrAttributeDecls {
 // src/requirements/domain/ir-attribute-name.ts
 class IrAttributeName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new IrAttributeName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-ir-decl-token", raw });
-    return ok(new IrAttributeName(raw));
-  }
-  static reconstitute(raw) {
-    return new IrAttributeName(raw);
+    return parseConstruction(() => new IrAttributeName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -3221,7 +3262,7 @@ class IrBackgroundDecl {
     this.#id = props.id;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrBackgroundDecl(props);
   }
   id() {
@@ -3303,7 +3344,7 @@ class IrEntityDecl {
     this.#name = props.name;
     this.#attributes = props.attributes;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrEntityDecl(props);
   }
   name() {
@@ -3343,16 +3384,16 @@ class IrEntityDecls {
 // src/requirements/domain/ir-entity-name.ts
 class IrEntityName {
   #value;
-  constructor(value) {
-    this.#value = value;
+  constructor(raw) {
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new IrEntityName(raw);
   }
   static parse(raw) {
-    if (raw === "")
-      return err({ kind: "empty-ir-decl-token", raw });
-    return ok(new IrEntityName(raw));
-  }
-  static reconstitute(raw) {
-    return new IrEntityName(raw);
+    return parseConstruction(() => new IrEntityName(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -3375,7 +3416,7 @@ class IrObligationDecl {
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#temporal = props.temporal;
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrObligationDecl(props);
   }
   id() {
@@ -3422,7 +3463,7 @@ class IrScenarioDecl {
     this.#hasEvent = props.hasEvent;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrScenarioDecl(props);
   }
   id() {
@@ -3465,7 +3506,7 @@ class IrTemporalDecl {
     this.#from = props.from === undefined ? undefined : ExpressionTree.of(props.from).asExpression();
     this.#to = props.to === undefined ? undefined : ExpressionTree.of(props.to).asExpression();
   }
-  static reconstitute(props) {
+  static of(props) {
     return new IrTemporalDecl(props);
   }
   inspectExpressions(visitor) {
@@ -3475,48 +3516,6 @@ class IrTemporalDecl {
       visitor(this.#from, false);
     if (this.#to !== undefined)
       visitor(this.#to, false);
-  }
-}
-// src/requirements/domain/fr-reference-index.ts
-class FrReferenceIndex {
-  #ownersByRef;
-  constructor(ownersByRef) {
-    this.#ownersByRef = ownersByRef;
-  }
-  static of(claims) {
-    const ownersByRef = new Map;
-    for (const claim of claims)
-      claim.claimInto(ownersByRef);
-    return new FrReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.reconstitute(ref), TargetIds.reconstitute(owners)])));
-  }
-  referencedIds() {
-    return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
-  }
-  missingErrors(known) {
-    const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
-    return missing.map((id) => {
-      const owners = [...this.#ownersByRef.get(RequirementId.reconstitute(id))?.toStrings() ?? []].sort().join(", ");
-      return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
-    });
-  }
-}
-// src/requirements/domain/fr-ref-claim.ts
-class FrRefClaim {
-  #owner;
-  #frRefs;
-  constructor(owner, frRefs) {
-    this.#owner = owner;
-    this.#frRefs = frRefs;
-  }
-  static of(owner, frRefs) {
-    return new FrRefClaim(owner, frRefs);
-  }
-  claimInto(ownersByRef) {
-    for (const ref of this.#frRefs) {
-      const owners = ownersByRef.get(ref.asString()) ?? [];
-      owners.push(this.#owner);
-      ownersByRef.set(ref.asString(), owners);
-    }
   }
 }
 // src/requirements/domain/fr-ref-claims.ts
@@ -3534,8 +3533,57 @@ class FrRefClaims {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  ownerDescriptions() {
+    return this.#values.map((claim) => claim.ownerDescription());
+  }
   toArray() {
     return this.#values;
+  }
+}
+
+// src/requirements/domain/fr-reference-index.ts
+class FrReferenceIndex {
+  #ownersByRef;
+  constructor(ownersByRef) {
+    this.#ownersByRef = ownersByRef;
+  }
+  static of(claims) {
+    const ownersByRef = new Map;
+    for (const claim of claims)
+      claim.claimInto(ownersByRef);
+    return new FrReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.of(ref), FrRefClaims.of(owners)])));
+  }
+  referencedIds() {
+    return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
+  }
+  missingErrors(known) {
+    const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
+    return missing.map((id) => {
+      const owners = [...this.#ownersByRef.get(RequirementId.of(id))?.ownerDescriptions() ?? []].sort().join(", ");
+      return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
+    });
+  }
+}
+// src/requirements/domain/fr-ref-claim.ts
+class FrRefClaim {
+  #owner;
+  #frRefs;
+  constructor(owner, frRefs) {
+    this.#owner = owner;
+    this.#frRefs = frRefs;
+  }
+  static of(owner, frRefs) {
+    return new FrRefClaim(owner, frRefs);
+  }
+  ownerDescription() {
+    return this.#owner;
+  }
+  claimInto(ownersByRef) {
+    for (const ref of this.#frRefs) {
+      const owners = ownersByRef.get(ref.asString()) ?? [];
+      owners.push(this);
+      ownersByRef.set(ref.asString(), owners);
+    }
   }
 }
 // src/requirements/domain/source-anchor.ts
@@ -3543,8 +3591,8 @@ class SourceAnchor {
   #declared;
   #actual;
   constructor(declared, actual) {
-    this.#declared = declared === null ? null : ContentHash.reconstitute(declared);
-    this.#actual = ContentHash.reconstitute(actual);
+    this.#declared = declared;
+    this.#actual = actual;
   }
   static of(declared, actual) {
     return new SourceAnchor(declared, actual);
@@ -3555,7 +3603,7 @@ class SourceAnchor {
         `IR has no sourceDigest \u2014 requirements drift would be undetectable; add "sourceDigest": "${this.#actual.asString()}" (sha256 of requirements.md) to the IR`
       ];
     }
-    if (!this.#declared.equals(this.#actual)) {
+    if (!this.#declared.matches(this.#actual)) {
       return [
         `sourceDigest ${this.#declared.asString()} does not match requirements.md (sha256 ${this.#actual.asString()}) \u2014 the requirements changed since formalization; re-formalize against the current text and restamp the digest`
       ];
@@ -3611,11 +3659,11 @@ class IrValidationMaterials {
     this.#schemaErrors = seed.schemaErrors;
     this.#view = seed.view;
     this.#frClaims = seed.frClaims;
-    this.#declaredDigest = seed.declaredDigest === null ? null : ContentHash.reconstitute(seed.declaredDigest);
+    this.#declaredDigest = seed.declaredDigest;
     this.#sourceId = seed.sourceId;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new IrValidationMaterials(seed);
   }
   id() {
@@ -3634,7 +3682,7 @@ class IrValidationMaterials {
     return FrReferenceIndex.of(this.#frClaims.toArray());
   }
   declaredDigest() {
-    return this.#declaredDigest?.asString() ?? null;
+    return this.#declaredDigest;
   }
   sourceId() {
     return this.#sourceId;
@@ -3670,10 +3718,10 @@ class RequirementsSource {
     this.#id = seed.id;
     this.#sourcePath = seed.sourcePath;
     this.#knownIds = seed.knownIds;
-    this.#digest = ContentHash.reconstitute(seed.digest);
+    this.#digest = seed.digest;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
-  static reconstitute(seed) {
+  static of(seed) {
     return new RequirementsSource(seed);
   }
   id() {
@@ -3686,7 +3734,7 @@ class RequirementsSource {
     return this.#knownIds;
   }
   digest() {
-    return this.#digest.asString();
+    return this.#digest;
   }
   sourceDocument() {
     return new Uint8Array(this.#sourceDocument);
@@ -3846,7 +3894,7 @@ function buildSmtPlan(model) {
     if (ob.isInvariantLike()) {
       const assertion = ob.assertion();
       if (assertion === undefined) {
-        skipped.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: "invariant obligation lacks an assert expression" }));
+        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "invariant obligation lacks an assert expression" }));
         compiled.set(ob.id().asString(), false);
         continue;
       }
@@ -3856,13 +3904,13 @@ function buildSmtPlan(model) {
         invariantObs.push(ob);
         compiled.set(ob.id().asString(), true);
       } catch (err2) {
-        skipped.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err2 instanceof Error ? err2.message : String(err2) }));
+        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err2 instanceof Error ? err2.message : String(err2) }));
         compiled.set(ob.id().asString(), false);
       }
     } else if (ob.isEvent()) {
       const event = ob.eventDefinition();
       if (event === null) {
-        skipped.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" }));
+        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "event obligation lacks trigger/guard/effect" }));
         compiled.set(ob.id().asString(), false);
         continue;
       }
@@ -3874,11 +3922,11 @@ function buildSmtPlan(model) {
         events.push(ob);
         compiled.set(ob.id().asString(), true);
       } catch (err2) {
-        skipped.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err2 instanceof Error ? err2.message : String(err2) }));
+        skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err2 instanceof Error ? err2.message : String(err2) }));
         compiled.set(ob.id().asString(), false);
       }
     } else {
-      skipped.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "capability", detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend` }));
+      skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("capability"), detail: `nature "${ob.nature().asString()}" is checked by a state-machine backend, not the SMT backend` }));
       compiled.set(ob.id().asString(), false);
     }
   }
@@ -3962,7 +4010,7 @@ function buildSmtPlan(model) {
           assumptions: [...baseAssumptions, ...primedTypeBounds.map((c) => c.name), ga.name, gb.name, ea.name, eb.name],
           model: []
         });
-        eventPairs.push(SmtEventPairProbe.of({ qOverlap: QueryLabel.reconstitute(qOverlap), qJoint: QueryLabel.reconstitute(qJoint), a: a.id(), b: b.id(), trigger: TriggerName.reconstitute(trigger) }));
+        eventPairs.push(SmtEventPairProbe.of({ qOverlap: QueryLabel.of(qOverlap), qJoint: QueryLabel.of(qJoint), a: a.id(), b: b.id(), trigger: TriggerName.of(trigger) }));
       }
     }
   }
@@ -3983,7 +4031,7 @@ function buildSmtPlan(model) {
   const scenarioQueries = new Map;
   for (const sc of model.scenarios()) {
     if (sc.hasEvent()) {
-      skipped.push(VerificationSkipped.reconstitute({ target: sc.id().asTargetId(), reason: "capability", detail: "scenarios with a When-event are not checked by the SMT backend in v1" }));
+      skipped.push(VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("capability"), detail: "scenarios with a When-event are not checked by the SMT backend in v1" }));
       continue;
     }
     try {
@@ -4011,18 +4059,18 @@ function buildSmtPlan(model) {
       queries.push({ id: qid, script, assumptions: [...baseAssumptions, name], model: modelVars });
       scenarioQueries.set(sc.id().asString(), qid);
     } catch (err2) {
-      skipped.push(VerificationSkipped.reconstitute({ target: sc.id().asTargetId(), reason: "compile-error", detail: err2 instanceof Error ? err2.message : String(err2) }));
+      skipped.push(VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err2 instanceof Error ? err2.message : String(err2) }));
     }
   }
   return {
     queries,
     plan: SmtVerificationPlan.of({
-      compiled: KeySet.of([...compiled].filter(([, ok2]) => ok2).map(([id]) => ObligationId.reconstitute(id))),
+      compiled: KeySet.of([...compiled].filter(([, ok2]) => ok2).map(([id]) => ObligationId.of(id))),
       skipped: VerificationSkips.of(skipped),
-      labelToTarget: KeyedIndex.of([...labelToTarget].map(([label, target]) => [QueryLabel.reconstitute(label), TargetId.reconstitute(target)])),
+      labelToTarget: KeyedIndex.of([...labelToTarget].filter(([, target]) => target.startsWith("OB-")).map(([label, target]) => [QueryLabel.of(label), TargetId.of(target)])),
       eventPairs: SmtEventPairProbes.of(eventPairs),
-      gapTriggers: KeyedIndex.of([...gapTriggers].map(([trigger, ids]) => [TriggerName.reconstitute(trigger), TargetIds.reconstitute(ids)])),
-      scenarioQueries: KeyedIndex.of([...scenarioQueries].map(([sc, qid]) => [ScenarioId.reconstitute(sc), QueryLabel.reconstitute(qid)]))
+      gapTriggers: KeyedIndex.of([...gapTriggers].map(([trigger, ids]) => [TriggerName.of(trigger), TargetIds.of(Array.from(ids, (raw) => TargetId.of(raw)))])),
+      scenarioQueries: KeyedIndex.of([...scenarioQueries].map(([sc, qid]) => [ScenarioId.of(sc), QueryLabel.of(qid)]))
     })
   };
 }
@@ -4047,7 +4095,7 @@ class Z3SolverClientImpl {
     }
     const verdicts = [];
     for (const [id, r] of outcome.results) {
-      verdicts.push([QueryLabel.reconstitute(id), SmtQueryVerdict.reconstitute({
+      verdicts.push([QueryLabel.of(id), SmtQueryVerdict.of({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
         core: r.core
@@ -4098,30 +4146,34 @@ function renderVerificationReportBytes(report) {
 `;
 }
 function parseSiblingReportDocument(directory, fileName, raw) {
+  const decoded = decodeDomainValues(() => parseSiblingReportDocumentValue(directory, fileName, raw));
+  return decoded.ok ? decoded.value : err(decoded.error);
+}
+function parseSiblingReportDocumentValue(directory, fileName, raw) {
   const decoded = decodeFindingsDocument(raw);
   if (!decoded.ok)
     return err(decoded.error);
   const doc = decoded.value;
   if (`${doc.backend}.json` !== fileName)
     return err("backend must match the report filename");
-  return ok(VerificationReport.reconstitute({
+  return ok(VerificationReport.of({
     id: VerificationReportId.of(directory, doc.backend),
-    irVersion: IrVersion.reconstitute(doc.irVersion),
-    irHash: ContentHash.reconstitute(doc.irHash),
-    method: doc.method,
-    findings: VerificationFindings.of(doc.findings.map((entry) => VerificationFinding.reconstitute({
-      kind: entry.kind,
-      frRefs: FrRefs.reconstitute(entry.frRefs),
-      targets: TargetIds.reconstitute(entry.targets),
-      witness: VerificationWitness.fromDocument(entry.witness),
+    irVersion: IrVersion.of(doc.irVersion),
+    irHash: ContentHash.of(doc.irHash),
+    method: VerificationMethod.of(doc.method),
+    findings: VerificationFindings.of(doc.findings.map((entry) => VerificationFinding.of({
+      kind: FindingKind.of(entry.kind),
+      frRefs: FrRefs.of(Array.from(entry.frRefs, (raw2) => RequirementId.of(raw2))),
+      targets: TargetIds.of(Array.from(entry.targets, (raw2) => TargetId.of(raw2))),
+      witness: VerificationWitness.of(entry.witness),
       detail: entry.detail
     }))),
-    skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.reconstitute({
-      target: TargetId.reconstitute(entry.target),
-      reason: entry.reason,
+    skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.of({
+      target: TargetId.of(entry.target),
+      reason: SkipReason.of(entry.reason),
       ...entry.detail !== undefined ? { detail: entry.detail } : {}
     }))),
-    crossChecked: doc.crossChecked === undefined ? null : CrossCheckedEntries.of(doc.crossChecked.map((entry) => CrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(entry.backend), targets: TargetIds.reconstitute(entry.targets) }))),
+    crossChecked: doc.crossChecked === undefined ? null : CrossCheckedEntries.of(doc.crossChecked.map((entry) => CrossCheckedEntry.of({ backend: BackendName.of(entry.backend), targets: TargetIds.of(Array.from(entry.targets, (raw2) => TargetId.of(raw2))) }))),
     unavailableReason: doc.unavailable?.reason ?? null
   }));
 }
@@ -4474,12 +4526,12 @@ function compile(model) {
   for (const ob of model.obligations()) {
     const assertion = ob.assertion();
     if (ob.isInvariantLike() && assertion !== undefined) {
-      invariantComponents.push(QuintMachineComponent.reconstitute({ id: ob.id(), expression: assertion }));
+      invariantComponents.push(QuintMachineComponent.of({ id: ob.id(), expression: assertion }));
       propDefs.push({ id: ob.id().asString(), expr: assertion });
     }
     const temporal = ob.temporal();
     if (ob.isStateTemporal() && temporal?.pattern === "always" && temporal.assert !== undefined) {
-      invariantComponents.push(QuintMachineComponent.reconstitute({ id: ob.id(), expression: temporal.assert }));
+      invariantComponents.push(QuintMachineComponent.of({ id: ob.id(), expression: temporal.assert }));
       propDefs.push({ id: ob.id().asString(), expr: temporal.assert });
     }
   }
@@ -4534,7 +4586,7 @@ function compile(model) {
       continue;
     const event = ob.eventDefinition();
     if (event === null) {
-      compileSkips.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: "event obligation lacks trigger/guard/effect" }));
+      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: "event obligation lacks trigger/guard/effect" }));
       continue;
     }
     try {
@@ -4552,7 +4604,7 @@ function compile(model) {
       actionNames.push(action);
       eventIds.push(ob.id());
     } catch (err2) {
-      compileSkips.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err2 instanceof Error ? err2.message : String(err2) }));
+      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err2 instanceof Error ? err2.message : String(err2) }));
     }
   }
   const idleParts = attrs.map((a) => `${qVar(a.path().asString())}' = ${qVar(a.path().asString())}`);
@@ -4572,7 +4624,7 @@ function compile(model) {
       lines.push(`  temporal ${qId("temp", ob.id().asString())} = always(${from} implies eventually(${to}))`);
       temporalNames.set(ob.id().asString(), qId("temp", ob.id().asString()));
     } catch (err2) {
-      compileSkips.push(VerificationSkipped.reconstitute({ target: ob.id().asTargetId(), reason: "compile-error", detail: err2 instanceof Error ? err2.message : String(err2) }));
+      compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err2 instanceof Error ? err2.message : String(err2) }));
     }
   }
   lines.push("");
@@ -4637,7 +4689,7 @@ function decodeItfTrace(itfText, varToPath) {
       if (key.startsWith("#"))
         continue;
       const path = varToPath.get(key) ?? key;
-      entries.push([AttributePath.reconstitute(path), TraceValue.of(decodeItfValue(state[key] ?? null))]);
+      entries.push([AttributePath.of(path), TraceValue.of(decodeItfValue(state[key] ?? null))]);
     }
     trace.push(TraceState.of(entries));
   }
@@ -4696,8 +4748,8 @@ class QuintClientImpl {
       const scenarios = this.#runScenarioPhase(machine, modulePath, work);
       const runs = QuintRuns.of({
         machine: machineRun,
-        temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationId.reconstitute(id), v])),
-        scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioId.reconstitute(id), v]))
+        temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationId.of(id), v])),
+        scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioId.of(id), v]))
       });
       return { kind: "checked", method, plan: machine.plan, compileSkips: VerificationSkips.of(machine.compileSkips), runs };
     } finally {
@@ -4836,27 +4888,27 @@ function buildView(ir) {
       if (!isObject(attr) || typeof attr.name !== "string")
         continue;
       const t = isObject(attr.type) ? attr.type : {};
-      attributes.push(IrAttributeDecl.reconstitute({
-        name: IrAttributeName.reconstitute(attr.name),
+      attributes.push(IrAttributeDecl.of({
+        name: IrAttributeName.of(attr.name),
         kind: typeof t.kind === "string" ? t.kind : "",
         values: Array.isArray(t.values) ? IrDeclaredValues.of(t.values.filter((v) => typeof v === "string")) : undefined,
-        min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
-        max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined
+        min: typeof t.min === "number" ? DeclaredBound.of(t.min) : undefined,
+        max: typeof t.max === "number" ? DeclaredBound.of(t.max) : undefined
       }));
     }
-    entities.push(IrEntityDecl.reconstitute({ name: IrEntityName.reconstitute(ent.name), attributes: IrAttributeDecls.of(attributes) }));
+    entities.push(IrEntityDecl.of({ name: IrEntityName.of(ent.name), attributes: IrAttributeDecls.of(attributes) }));
   }
   const obligations = [];
   for (const ob of Array.isArray(ir.obligations) ? ir.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string")
       continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
-    obligations.push(IrObligationDecl.reconstitute({
-      id: ObligationId.reconstitute(ob.id),
+    obligations.push(IrObligationDecl.of({
+      id: ObligationId.of(ob.id),
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
       effect: asExpression(ob.effect ?? null),
-      temporal: temporal === null ? undefined : IrTemporalDecl.reconstitute({
+      temporal: temporal === null ? undefined : IrTemporalDecl.of({
         assert: asExpression(temporal.assert ?? null),
         from: asExpression(temporal.from ?? null),
         to: asExpression(temporal.to ?? null)
@@ -4868,8 +4920,8 @@ function buildView(ir) {
     if (!isObject(sc) || typeof sc.id !== "string")
       continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
-    scenarios.push(IrScenarioDecl.reconstitute({
-      id: ScenarioId.reconstitute(sc.id),
+    scenarios.push(IrScenarioDecl.of({
+      id: ScenarioId.of(sc.id),
       bindings: IrBindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null)
@@ -4879,9 +4931,9 @@ function buildView(ir) {
   for (const bg of Array.isArray(ir.background) ? ir.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string")
       continue;
-    background.push(IrBackgroundDecl.reconstitute({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: asExpression(bg.assert ?? null) }));
+    background.push(IrBackgroundDecl.of({ id: BackgroundAssumptionId.of(bg.id), assert: asExpression(bg.assert ?? null) }));
   }
-  return IrModelDecl.reconstitute({
+  return IrModelDecl.of({
     entities: IrEntityDecls.of(entities),
     obligations: IrObligationDecls.of(obligations),
     scenarios: IrScenarioDecls.of(scenarios),
@@ -4899,7 +4951,7 @@ function collectFrClaims(ir) {
       const refs = entry.frRefs ?? null;
       if (!Array.isArray(refs))
         return;
-      claims.push(FrRefClaim.of(owner, FrRefs.reconstitute(refs.filter((r) => typeof r === "string"))));
+      claims.push(FrRefClaim.of(owner, FrRefs.of(Array.from(refs.filter((r) => typeof r === "string"), (raw) => RequirementId.of(raw)))));
     });
   }
   return claims;
@@ -4911,6 +4963,10 @@ class IrValidationMaterialsRepositoryImpl {
     this.#schemaPath = config.schemaPath;
   }
   findById(id) {
+    const decoded = decodeDomainValues(() => this.#findById(id));
+    return decoded.ok ? decoded.value : err({ kind: "corrupt", path: id.modelId().artifactPath().asString(), cause: decoded.error });
+  }
+  #findById(id) {
     const outputPath = id.modelId().artifactPath().asString();
     if (basename2(outputPath) !== FORMAL_MODEL_BASENAME || !existsSync3(outputPath)) {
       return err({ kind: "not-found", path: outputPath });
@@ -4949,13 +5005,13 @@ class IrValidationMaterialsRepositoryImpl {
     if (!recordRoot.ok) {
       return corrupt("defect: record-root derivation produced an empty path");
     }
-    return ok(IrValidationMaterials.reconstitute({
+    return ok(IrValidationMaterials.of({
       id,
-      irVersion: IrVersion.reconstitute(typeof ir.irVersion === "string" ? ir.irVersion : ""),
+      irVersion: IrVersion.of(typeof ir.irVersion === "string" ? ir.irVersion : ""),
       schemaErrors: ErrorMessages.of(schemaErrors),
       view: buildView(ir),
       frClaims: FrRefClaims.of(collectFrClaims(ir)),
-      declaredDigest: typeof ir.sourceDigest === "string" ? ir.sourceDigest : null,
+      declaredDigest: typeof ir.sourceDigest === "string" ? DeclaredDigest.of(ir.sourceDigest) : null,
       sourceId: RequirementsSourceId.of(recordRoot.value),
       sourceDocument: new Uint8Array(bytes)
     }));
@@ -5001,11 +5057,11 @@ class RequirementsSourceRepositoryImpl {
       return err({ kind: "not-found", path: id.recordRoot().asString() });
     try {
       const bytes = readFileSync6(search.path);
-      return ok(RequirementsSource.reconstitute({
+      return ok(RequirementsSource.of({
         id,
-        sourcePath: ArtifactPath.reconstitute(search.path),
+        sourcePath: ArtifactPath.of(search.path),
         knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
-        digest: ContentHash.ofBytes(bytes).asString(),
+        digest: ContentHash.ofBytes(bytes),
         sourceDocument: new Uint8Array(bytes)
       }));
     } catch (e) {

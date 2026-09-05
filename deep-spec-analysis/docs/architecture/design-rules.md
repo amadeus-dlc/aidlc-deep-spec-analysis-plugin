@@ -146,25 +146,20 @@ These three things — **frozen output contracts**, **untrustworthy external pro
 
 **Check**: `private-constructor-in-domain`.
 
-### D4 — Creation gates split into three
+### D4 — Centralize contracts in constructors
 
-**Rule**: A creation gate — the static factory a value must pass through — is named according to its role.
+**Rule**: Keep precise constructor parameter types (`string`, `number`, typed elements). Do not repeat TypeScript's type checking at runtime. Constructors enforce value invariants such as non-emptiness, format, and range, throwing `IllegalArgumentException` on a violation.
 
-| Name | Input | Validation | Return value |
-|---|---|---|---|
-| `of` | An already-typed value | None (the type already guarantees it) | The value itself |
-| `parse` | An unvalidated raw value | **Yes** | `Result<T, E>` |
-| `reconstitute` | A raw value from a **written document** | **None** (carried verbatim) | The value itself |
+| Name | Responsibility | Return value |
+|---|---|---|
+| `of` | Call the constructor; propagate contract violations as caller defects | The value itself |
+| `parse` | Call the same constructor; convert only `IllegalArgumentException` to an error value | `Result<T, E>` |
 
-A branch of a closed set additionally has its own named factory per branch (e.g. `SkipReason.timeout()`).
+Use `parse` where invalid input is expected. Unexpected exceptions propagate. Do not introduce a bypassing `reconstitute` factory. Meaningful operations such as canonicalizing `compose` or `SkipReason.timeout()` must also reach the same constructor.
 
-**Why**: This is **the single most effective rule in this design**. Writing "strict creation" and "tolerant hydration" side by side, at the same location in the type, makes it obvious at a glance what happens when reading a broken document. Rejecting a broken value with `parse` means the check can no longer **report** that it's broken — so hydration carries it through verbatim, and leaves the judgment to the check.
+An empty `ErrorMessages` means no errors and is valid. `DeclaredBound`, `DeclaredDigest`, and `DeclaredRuleId` preserve declarations for diagnosis without representing them as validated values.
 
-**In this repository**: `SkipReason.parse` (a gate for a closed set of 9 values) and `SkipReason.reconstitute` (carries even unknown values verbatim) in `src/kernel/domain/skip-reason.ts`. `VerificationFinding.of` (accepts only an already-validated `FindingKind`) and `.reconstitute` (carries even an unknown kind as a string) in `src/requirements/domain/verification-finding.ts` — `src/refcheck/domain/finding.ts` has **a matching pair whose comment text is verbatim identical**.
-
-**Measured**: In the domain layer: `of` 137, `reconstitute` 143, `parse` 48.
-
-**Check**: None (review).
+**Check**: `construction-contracts.test.ts`, `no-reconstitution-bypass`, TypeScript checking.
 
 ### D5 — No data models in domain
 
@@ -372,15 +367,13 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 ## 4. Outside world — adapter and entry (A)
 
-### A1 — Tolerant hydration enters from adapter and chains inward through domain
+### A1 — Restoration obeys the construction contract
 
-**Rule**: The path that reads a written document into a domain value (`reconstitute`) starts at adapter. A domain type may call `reconstitute` in order to re-wrap its own fields into DPs. **The only place that calls the validating `parse` is the place first receiving an unvalidated raw value.**
+**Rule**: Adapters use existing document decoders to interpret external formats and construct domain objects from typed values. Restoration obeys the same invariants as `of` / `parse`. `decodeDomainValues` converts construction contract violations into decoding failures; implementation defects propagate.
 
-**Why**: Hydration is the operation of "loading a document's contents onto a type exactly as written." Inserting validation partway through means a broken document can no longer be reported as "broken."
+**Why**: Persistence does not exempt a value from its invariants. Keep raw declarations separate from validated values when malformed declarations must remain available for diagnosis.
 
-**In this repository (measured)**: Calls to `.reconstitute(` are: adapter 270, domain 201, usecase 11, entries 0. The domain-side calls take the shape of wrapping a raw `string` into a DP inside a `private constructor` or `static reconstitute` (e.g. `UnitName.reconstitute(props.unit)`).
-
-**Check**: None (review).
+**Check**: Malformed-document and Repository tests, `construction-contracts.test.ts`.
 
 ### A2 — domain owns the shape of the document; adapter only paints bytes
 
@@ -454,15 +447,13 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 **Check**: None (review).
 
-### F2 — `throw` is used only to detect a defect, and its message begins with `defect:`
+### F2 — Propagate contract violations as exceptions
 
-**Rule**: The only time domain or usecase may `throw` is when they detect that **a type's invariant has been broken — i.e., a defect in the program**. The message begins with `defect:`.
+**Rule**: A constructor throws `IllegalArgumentException` when an `of` argument violates a value invariant. Callers do not catch this as ordinary business control flow. Only `parse` and document-decoding boundaries convert this exception to `Result` when invalid input is recoverable.
 
-**Why**: Silently letting a "state that should be unreachable" through means a bug surfaces far away. Yet it is not a business failure, so making it a branch of `Result` would force every caller to write a meaningless branch. Fixing the prefix means `grep` alone tells you "this is defect detection."
+Other implementation defects, such as inconsistent closed states, continue to use exceptions with the `defect:` prefix. Do not catch unexpected exceptions broadly and reinterpret them as success or invalid input.
 
-**In this repository (measured)**: 7 instances in domain, 2 in usecase, **every one beginning with `defect:`**. Example: a guard for an unreachable case where `kind` is `extracted` but the payload is `null`.
-
-**Check**: None (review). But `grep -rn 'throw new' src | grep -v defect:` finds violations mechanically (adapter's local exceptions are A5's concern).
+**Check**: `construction-contracts.test.ts`.
 
 ### F3 — Let the compiler prove exhaustiveness
 
@@ -472,21 +463,16 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 **Check**: None (type checking covers it).
 
-### F4 — Split failure types into two tiers
+### F4 — Separate business failures from contract violations
 
-**Rule**: A type representing failure takes a different shape depending on whether it is **a business failure** or **a failure of a creation gate**.
+**Rule**: Failures named in business language remain domain error classes. Construction contract violations use the shared `IllegalArgumentException`, carrying a `kind` and diagnostic value; `parseConstruction` converts this information into a `Result` error.
 
-**(a) Domain error — a failure named in business language.** As a member of the ubiquitous language, it is written as a public class. It carries a closed variant in `#kind`, a named factory per variant, and knows for itself **how that failure appears to the outside** (frozen wording, mapping to public vocabulary). It travels as the value of a `Result`.
+Business errors own their interpretation and wording. Each constructor defines its preconditions once, without repeating validation rules in `parse`.
 
-**(b) Failure of a creation gate — what `parse` returns.** As a discriminated union of the shape `type XxxError = { readonly kind: "…"; readonly raw: … }`, it lives inside that same file and is **never exported**. It appears only as the type parameter of the `Result` that `parse` returns; nobody outside ever refers to it by name.
+**In this repository**: `RefinementMapDefect` is a business failure; a non-integer or unsafe `AttributeBound` violates a construction contract.
 
-**Why**: Giving these two the same shape shortchanges one of them. Turning a business failure into an anonymous `type` leaves nowhere to put its wording or its mapping to public vocabulary, and it scatters to the callers. Conversely, turning even a failure as small as "it was an empty string" into a class multiplies types that exist only to carry a name.
+**Check**: `construction-contracts.test.ts`.
 
-**In this repository**: (a) `RefinementMapDefect` in `src/design/domain/refinement-map-defect.ts` — 4 variants, 4 named factories, and the type itself carries the frozen wording and the mapping to the skip reason `compile-error`. It is exported from `index.ts`. (b) The domain layer has **46** local `type`s (`ObligationIdError`, `TokenError`, etc.). None of them are exported.
-
-**Deviation in this repository**: The names in (b) collide — `TokenError` (`kind: "empty-token"`) is defined separately across 12 files in refcheck, and one of them, `BusinessRuleId.parse`, is actually a format check yet still returns `empty-token` (§8).
-
-**Check**: None (review).
 
 ---
 
@@ -561,7 +547,7 @@ Apply these in order from the top, and stop at the first match.
 5. **Is it a unit a Repository moves in and out?** → an aggregate root. Decide its identity, boundary, and invariants, and make a state change a command (D11). The aggregate itself holds its mutable part.
 6. **Is it looked up from a collection by key?** → an entity (carries an identifier).
 7. **Do you want to hide an array or a set?** → a first-class collection (D9).
-8. **Is it a single scalar?** → a domain primitive. Decide its `of` / `parse` / `reconstitute` gates (D4).
+8. **Is it a single scalar?** → a domain primitive. Decide its `of` / `parse` gates (D4).
 9. **Is it "one of several possible shapes"?** → `#kind` plus named factories plus `match<T>` or predicates (D10).
 10. **Is it the immutable record of something that happened in the domain?** → a domain event.
 11. **Nothing above matched** → **bring it to a human ruling before building it.** Attach the measured problem, and why the existing 4 kinds can't express it. If it looks like "a type that wraps a procedure," first try moving that judgment to whichever side can state it — a declaration, a collection, an aggregate (D12).
@@ -590,9 +576,7 @@ Places where a rule is not being kept are recorded here as known. This is writte
 | 15 places in `design/domain` | Pull a value out and branch on it outside the type (D8 not achieved) |
 | The comment in `src/design/domain/index.ts` | Calls the 36 symbols it aggregates (in Japanese) "a set of domain services." In substance they are aggregates, value objects, and FCCs, but `UnitRefinementPlan.of` (178 lines) and `DesignUnitDecl.wellFormednessErrors` (199 lines) have their center of gravity in procedure (D12 not achieved) |
 | 7 types in `refcheck/domain` | The style of holding fields bundled together under `#seed` coexists with the field-decomposed style in the same layer. The same type literal is copied out 3 times |
-| `PluginVersion.parse` in `doctor/domain` | The only one of all 48 `parse`s that does not return `Result` (`PluginVersion \| null`). `doctor/domain` imports zero `kernel-infrastructure` |
 | 5 `*Outcome` types in `refcheck/domain` | Handling of the same "unreachable branch" case is split — 3 types `throw`, 2 types silently fall into another branch |
-| The `reason` on `VerificationSkipped` / `Skipped` | Both carry a raw `string`, even though kernel has a `SkipReason` DP (a closed set of 9 values) (D6 not achieved) |
 | `SiblingUnitIndex` | The only index that does not use `KeyedIndex`, and instead holds a raw nested `ReadonlyMap` |
 | `refcheck/domain/functional-design.ts` | An orphan file with only comments (zero exports, imported from nowhere) |
 | The public surface of a closed union | Split between `match<T>` (refcheck) and predicate groups (requirements' `*Verdict`) (D10 not achieved) |

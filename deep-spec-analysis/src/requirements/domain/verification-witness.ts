@@ -1,10 +1,7 @@
 import type { TraceState } from "./trace-state.ts";
 
-// 契約2 の witness——unsat core のラベル列、復号済み状態モデル、バックエンド別
-// 判定、ステップトレースのいずれか。findings 文書へは自分で降りる
-// （`toDocument`——中身は素通し値で逐語）。文書からの復元は旧実装の盲目
-// キャスト（欠けは空 core）を凍結面として保つ。中身を覗く読み手は無く、
-// 直列化と受け渡しだけが面（#71 波28）。
+// 検証結果の証拠。生成済みの型付き文書を保持し、
+// 入力と出力を複製して外側の変更が保存済みの証拠へ伝わるのを防ぐ。
 type WitnessDocument =
   | { readonly core: string[] }
   | { readonly model: { [path: string]: boolean | number | string } }
@@ -14,31 +11,30 @@ type WitnessDocument =
 export class VerificationWitness {
   readonly #document: WitnessDocument;
 
-  private constructor(document: WitnessDocument) {
-    this.#document = document;
+  private constructor(raw: WitnessDocument) {
+    this.#document = structuredClone(raw);
   }
 
   static core(labels: readonly string[]): VerificationWitness {
-    return new VerificationWitness({ core: [...labels] });
+    return VerificationWitness.of({ core: [...labels] });
   }
 
   static model(values: { [path: string]: boolean | number | string }): VerificationWitness {
-    return new VerificationWitness({ model: values });
+    return VerificationWitness.of({ model: values });
   }
 
   static verdicts(byBackend: { [backend: string]: "violated" | "clean" }): VerificationWitness {
-    return new VerificationWitness({ verdicts: byBackend });
+    return VerificationWitness.of({ verdicts: byBackend });
   }
 
   static trace(states: readonly TraceState[]): VerificationWitness {
-    return new VerificationWitness({ trace: states.map((state) => state.toDocument()) });
+    return VerificationWitness.of({ trace: states.map((state) => state.toDocument()) });
   }
 
-  static fromDocument(raw: unknown): VerificationWitness {
-    return new VerificationWitness((raw ?? { core: [] }) as WitnessDocument);
-  }
+  // 型付きの証拠を受け取る。型の実行時検査は行わない。
+  static of(document: WitnessDocument): VerificationWitness { return new VerificationWitness(document); }
 
   toDocument(): WitnessDocument {
-    return this.#document;
+    return structuredClone(this.#document);
   }
 }

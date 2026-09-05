@@ -13,7 +13,7 @@ export class BrReferenceIndex {
 
   static fromRules(rulesMarkdown: string): BrReferenceIndex {
     const ids: BrRef[] = [];
-    for (const m of rulesMarkdown.matchAll(/\bBR[0-9]+\.[0-9]+\b/g)) ids.push(BrRef.reconstitute(m[0]));
+    for (const m of rulesMarkdown.matchAll(/\bBR[0-9]+\.[0-9]+\b/g)) ids.push(BrRef.of(m[0]));
     return new BrReferenceIndex(KeySet.of(ids));
   }
 

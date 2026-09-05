@@ -14,7 +14,7 @@ export class VerificationFinding {
   readonly #witness: VerificationWitness;
   readonly #detail: string;
 
-  private constructor(props: { kind: FindingKind; frRefs: FrRefs; targets: TargetIds; witness: VerificationWitness; detail: string }) {
+  private constructor(props: Parameters<typeof VerificationFinding.of>[0]) {
     this.#kind = props.kind;
     this.#frRefs = props.frRefs;
     this.#targets = props.targets;
@@ -26,12 +26,6 @@ export class VerificationFinding {
   // domain／usecase が自ら下す判定はこの口を通る（FR3.2）。
   static of(props: { kind: FindingKind; frRefs: FrRefs; targets: TargetIds; witness: VerificationWitness; detail: string }): VerificationFinding {
     return new VerificationFinding(props);
-  }
-
-  // 書かれた文書からの寛容な hydration（tolerant hydration）——未知の kind も
-  // 逐語で運び、既知のどれよりも後ろへ並べて降格試験へ渡す（FR3.3／FR3.4）。
-  static reconstitute(props: { kind: string; frRefs: FrRefs; targets: TargetIds; witness: VerificationWitness; detail: string }): VerificationFinding {
-    return new VerificationFinding({ ...props, kind: FindingKind.reconstitute(props.kind) });
   }
 
   kind(): string {

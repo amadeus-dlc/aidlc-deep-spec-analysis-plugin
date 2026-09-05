@@ -22,7 +22,7 @@ export class SourceIds {
 
   // FD-R3: requirements.md に存在しない source id（値の昇順——凍結順）。
   valuesMissingFrom(known: RequirementIds): string[] {
-    return this.#values.map((id) => id.asString()).filter((id) => !known.has(RequirementId.reconstitute(id))).sort();
+    return this.#values.map((id) => id.asString()).filter((id) => !known.has(RequirementId.of(id))).sort();
   }
 
   toArray(): readonly SourceId[] {

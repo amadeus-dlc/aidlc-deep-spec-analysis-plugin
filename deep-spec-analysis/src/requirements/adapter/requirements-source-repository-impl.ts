@@ -50,11 +50,11 @@ export class RequirementsSourceRepositoryImpl implements RequirementsSourceRepos
     try {
       const bytes = readFileSync(search.path);
       return ok(
-        RequirementsSource.reconstitute({
+        RequirementsSource.of({
           id,
-          sourcePath: ArtifactPath.reconstitute(search.path),
+          sourcePath: ArtifactPath.of(search.path),
           knownIds: RequirementIds.extractFrom(bytes.toString("utf-8")),
-          digest: ContentHash.ofBytes(bytes).asString(),
+          digest: ContentHash.ofBytes(bytes),
           sourceDocument: new Uint8Array(bytes),
         }),
       );

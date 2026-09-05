@@ -1,6 +1,6 @@
 import type { RequirementIds } from "@deep-spec/kernel-domain";
 import { type AppliesTo } from "./applies-to.ts";
-import { type BusinessRuleId } from "./business-rule-id.ts";
+import { type DeclaredRuleId } from "./declared-rule-id.ts";
 import { type ElementPath } from "./element-path.ts";
 import { type RuleCategory } from "./rule-category.ts";
 import type { SourceIds } from "./source-ids.ts";
@@ -9,7 +9,7 @@ import type { SourceIds } from "./source-ids.ts";
 // フォールバック）・source id の逆検証・category の閉集合整合を所有する。
 export class RuleDecl {
   readonly #seed: {
-  readonly id: BusinessRuleId | null;
+  readonly id: DeclaredRuleId | null;
   readonly element: ElementPath;
   readonly category: RuleCategory | null;
   readonly appliesTo: AppliesTo | null;
@@ -18,20 +18,12 @@ export class RuleDecl {
   readonly missing: readonly string[];
   };
 
-  private constructor(seed: {
-    readonly id: BusinessRuleId | null;
-    readonly element: ElementPath;
-    readonly category: RuleCategory | null;
-    readonly appliesTo: AppliesTo | null;
-    readonly sourceIds: SourceIds;
-    // 欠落キー名の列（文言材料——語彙値ではない）。
-    readonly missing: readonly string[];
-  }) {
+  private constructor(seed: Parameters<typeof RuleDecl.of>[0]) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: {
-    readonly id: BusinessRuleId | null;
+  static of(seed: {
+    readonly id: DeclaredRuleId | null;
     readonly element: ElementPath;
     readonly category: RuleCategory | null;
     readonly appliesTo: AppliesTo | null;
@@ -42,7 +34,7 @@ export class RuleDecl {
     return new RuleDecl(seed);
   }
 
-  id(): BusinessRuleId | null {
+  id(): DeclaredRuleId | null {
     return this.#seed.id;
   }
 

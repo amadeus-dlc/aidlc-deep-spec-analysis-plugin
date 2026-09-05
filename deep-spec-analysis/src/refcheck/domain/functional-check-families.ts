@@ -5,22 +5,22 @@
 import { CheckFamily } from "./check-family.ts";
 import { CheckFamilies } from "./check-families.ts";
 
-export const FD_E1 = CheckFamily.reconstitute("FD-E1");
-export const FD_E2 = CheckFamily.reconstitute("FD-E2");
-export const FD_E3 = CheckFamily.reconstitute("FD-E3");
-export const FD_E4 = CheckFamily.reconstitute("FD-E4");
-export const FD_E5 = CheckFamily.reconstitute("FD-E5");
-export const FD_E6 = CheckFamily.reconstitute("FD-E6");
-export const FD_R1 = CheckFamily.reconstitute("FD-R1");
-export const FD_R2 = CheckFamily.reconstitute("FD-R2");
-export const FD_R3 = CheckFamily.reconstitute("FD-R3");
-export const FD_R4 = CheckFamily.reconstitute("FD-R4");
-export const FD_R5 = CheckFamily.reconstitute("FD-R5");
-export const FD_S1 = CheckFamily.reconstitute("FD-S1");
-export const FD_S2 = CheckFamily.reconstitute("FD-S2");
-export const XS_1 = CheckFamily.reconstitute("XS-1");
-export const XS_2 = CheckFamily.reconstitute("XS-2");
-export const XS_3 = CheckFamily.reconstitute("XS-3");
+export const FD_E1 = CheckFamily.of("FD-E1");
+export const FD_E2 = CheckFamily.of("FD-E2");
+export const FD_E3 = CheckFamily.of("FD-E3");
+export const FD_E4 = CheckFamily.of("FD-E4");
+export const FD_E5 = CheckFamily.of("FD-E5");
+export const FD_E6 = CheckFamily.of("FD-E6");
+export const FD_R1 = CheckFamily.of("FD-R1");
+export const FD_R2 = CheckFamily.of("FD-R2");
+export const FD_R3 = CheckFamily.of("FD-R3");
+export const FD_R4 = CheckFamily.of("FD-R4");
+export const FD_R5 = CheckFamily.of("FD-R5");
+export const FD_S1 = CheckFamily.of("FD-S1");
+export const FD_S2 = CheckFamily.of("FD-S2");
+export const XS_1 = CheckFamily.of("XS-1");
+export const XS_2 = CheckFamily.of("XS-2");
+export const XS_3 = CheckFamily.of("XS-3");
 
 export const FUNCTIONAL_FAMILIES = CheckFamilies.of([
   FD_E1, FD_E2, FD_E3, FD_E4, FD_E5, FD_E6,

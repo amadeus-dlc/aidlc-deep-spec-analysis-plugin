@@ -1,11 +1,11 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
+import type { Expression } from "@deep-spec/kernel-domain";
+import type { FrRefs, TriggerName } from "@deep-spec/kernel-domain";
+import { ObligationNature } from "@deep-spec/kernel-domain";
 // 義務（EARS nature 付き）。分類・event 完全性・式の役割は義務自身が所有し、
 // コンパイラは外部形式への射影だけを担う。
 
-import type { Expression } from "@deep-spec/kernel-domain";
-import type { FrRefs, TriggerName } from "@deep-spec/kernel-domain";
 import { ObligationId } from "./obligation-id.ts";
-import { ObligationNature } from "@deep-spec/kernel-domain";
 
 type TemporalExpressions = {
   readonly pattern: string;
@@ -25,17 +25,7 @@ export class Obligation {
   readonly #effect: Expression | undefined;
   readonly #temporal: TemporalExpressions | undefined;
 
-  private constructor(props: {
-    id: ObligationId;
-    nature: ObligationNature;
-    frRefs: FrRefs;
-    ears?: string;
-    assert?: Expression;
-    trigger?: TriggerName;
-    guard?: Expression;
-    effect?: Expression;
-    temporal?: TemporalExpressions;
-  }) {
+  private constructor(props: Parameters<typeof Obligation.of>[0]) {
     this.#id = props.id;
     this.#nature = props.nature;
     this.#frRefs = props.frRefs;
@@ -52,7 +42,7 @@ export class Obligation {
     };
   }
 
-  static reconstitute(props: {
+  static of(props: {
     id: ObligationId;
     nature: ObligationNature;
     frRefs: FrRefs;
@@ -89,7 +79,7 @@ export class Obligation {
   }
 
   eventDefinition(): { readonly trigger: TriggerName; readonly guard: Expression; readonly effect: Expression } | null {
-    if (!this.isEvent() || this.#trigger === undefined || this.#trigger.isEmpty() || this.#guard === undefined || this.#effect === undefined) return null;
+    if (!this.isEvent() || this.#trigger === undefined || this.#guard === undefined || this.#effect === undefined) return null;
     return { trigger: this.#trigger, guard: this.#guard, effect: this.#effect };
   }
 

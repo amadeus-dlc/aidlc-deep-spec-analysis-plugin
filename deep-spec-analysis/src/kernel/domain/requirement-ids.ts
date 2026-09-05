@@ -15,17 +15,13 @@ export class RequirementIds {
   static extractFrom(text: string): RequirementIds {
     const ids: RequirementId[] = [];
     for (const m of text.matchAll(/\b(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*\b/g)) {
-      ids.push(RequirementId.reconstitute(m[0]));
+      ids.push(RequirementId.of(m[0]));
     }
     return new RequirementIds(KeySet.of(ids));
   }
 
   static of(values: readonly RequirementId[]): RequirementIds {
     return new RequirementIds(KeySet.of(values));
-  }
-
-  static reconstitute(raws: readonly string[]): RequirementIds {
-    return new RequirementIds(KeySet.of(raws.map((raw) => RequirementId.reconstitute(raw))));
   }
 
   add(value: RequirementId): RequirementIds {

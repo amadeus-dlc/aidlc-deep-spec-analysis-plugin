@@ -17,9 +17,10 @@ export class CheckVersionAdvisoryUseCase {
     if (provenance.kind === "missing") return VersionAdvisory.provenanceMissing();
     if (provenance.kind === "malformed") return VersionAdvisory.provenanceMalformed(provenance.reason);
 
-    const installed = PluginVersion.parse(provenance.version);
-    if (!installed) return VersionAdvisory.provenanceMalformed("version is not a stable Semantic Version");
+    const parsedVersion = PluginVersion.parse(provenance.version);
+    if (!parsedVersion.ok) return VersionAdvisory.provenanceMalformed("version is not a stable Semantic Version");
 
+    const installed = parsedVersion.value;
     const releaseTags = await this.#releaseTags.list();
     if (releaseTags.kind === "unavailable") {
       return VersionAdvisory.skipped({
@@ -33,7 +34,7 @@ export class CheckVersionAdvisoryUseCase {
     let latest: PluginVersion | null = null;
     for (const raw of releaseTags.tags) {
       const candidate = PluginVersion.parse(raw);
-      if (candidate && (!latest || latest.isOlderThan(candidate))) latest = candidate;
+      if (candidate.ok && (!latest || latest.isOlderThan(candidate.value))) latest = candidate.value;
     }
     if (!latest) {
       return VersionAdvisory.skipped({

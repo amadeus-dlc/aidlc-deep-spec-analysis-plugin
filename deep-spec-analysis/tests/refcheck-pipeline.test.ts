@@ -1,3 +1,15 @@
+import {
+  TargetId,
+  FindingKind,
+  RequirementId,
+  RequirementIds,
+  ContentHash,
+  ArtifactPath,
+  FindingsSchema,
+  FrRefs,
+  TargetIds,
+} from "@deep-spec/kernel-domain";
+
 // レイヤード refcheck パイプラインの in-process 検証（PR2b/PR3 前段、#15）。
 //
 // 1) golden 同値：broken/clean fixture を tmp へ複製し、interactor 正形の
@@ -15,7 +27,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readContractSchema } from "@deep-spec/kernel-adapter";
-import { RequirementIds, ContentHash, ArtifactPath, FindingsSchema, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+
 // テスト用: 検証済みパス VO の短縮構築（fixture パスは常に非空）。
 function ap(raw: string): ArtifactPath {
   const parsed = ArtifactPath.parse(raw);
@@ -184,23 +196,23 @@ describe("in-process golden equivalence (interactor use cases over real Impls)",
 // --- 以下はドメイン検査の分岐固定（use case を介さない直接駆動） -------------
 
 describe("DesignRecord check gates (the aggregate owns its checks and its inputs)", () => {
-  const componentsRecord = () => DesignRecord.reconstitute({
+  const componentsRecord = () => DesignRecord.of({
     id: DesignRecordId.of(ap("/tmp/rec/inception/domain-design/components.md")),
-    target: InputAnchor.reconstitute({ artifact: "inception/domain-design/components.md", sha256: ContentHash.reconstitute("c".repeat(64)) }),
+    target: InputAnchor.of({ artifact: "inception/domain-design/components.md", sha256: ContentHash.of("c".repeat(64)) }),
     sourceDocument: new TextEncoder().encode("no fence at all"),
     componentCatalog: parseComponentCatalog("no fence at all"),
     contractSummary: null,
     functional: null,
   });
-  const contractRecord = () => DesignRecord.reconstitute({
+  const contractRecord = () => DesignRecord.of({
     id: DesignRecordId.of(ap("/tmp/rec/inception/contract-design/contract-summary.md")),
-    target: InputAnchor.reconstitute({ artifact: "inception/contract-design/contract-summary.md", sha256: ContentHash.reconstitute("d".repeat(64)) }),
+    target: InputAnchor.of({ artifact: "inception/contract-design/contract-summary.md", sha256: ContentHash.of("d".repeat(64)) }),
     sourceDocument: new TextEncoder().encode(""),
     componentCatalog: null,
     contractSummary: {
       contractsTable: ContractsTableOutcome.absent(),
       specBlocks: SpecBlockAssessments.of([]),
-      declaredUnits: { artifactName: ArtifactPath.reconstitute("inception/units-generation/unit-of-work-dependency.md"), document: null },
+      declaredUnits: { artifactName: ArtifactPath.of("inception/units-generation/unit-of-work-dependency.md"), document: null },
     },
     functional: null,
   });
@@ -239,7 +251,7 @@ describe("DesignRecord check gates (the aggregate owns its checks and its inputs
 // 検査は集約の門を通す（裁定 11〜13・16）——record を組んで門を開き、
 // 開いたレポートで分岐を固定する。
 function anchor(artifact: string): InputAnchor {
-  return InputAnchor.reconstitute({ artifact, sha256: ContentHash.reconstitute("a".repeat(64)) });
+  return InputAnchor.of({ artifact, sha256: ContentHash.of("a".repeat(64)) });
 }
 
 function opened(gate: Result<ReferenceCheckReport, { readonly kind: "not-applicable" }>): ReferenceCheckReport {
@@ -248,7 +260,7 @@ function opened(gate: Result<ReferenceCheckReport, { readonly kind: "not-applica
 }
 
 function componentsReport(md: string): ReferenceCheckReport {
-  return opened(DesignRecord.reconstitute({
+  return opened(DesignRecord.of({
     id: DesignRecordId.of(ap("/tmp/rec/inception/domain-design/components.md")),
     target: anchor("components.md"),
     sourceDocument: new TextEncoder().encode(md),
@@ -263,7 +275,7 @@ function contractReport(summary: {
   contractsTable: ContractsTableOutcome;
   specBlocks: SpecBlockAssessments;
 }): ReferenceCheckReport {
-  return opened(DesignRecord.reconstitute({
+  return opened(DesignRecord.of({
     id: DesignRecordId.of(ap("/tmp/rec/inception/contract-design/contract-summary.md")),
     target: anchor("contract-summary.md"),
     sourceDocument: new Uint8Array(),
@@ -272,7 +284,7 @@ function contractReport(summary: {
       contractsTable: summary.contractsTable,
       specBlocks: summary.specBlocks,
       declaredUnits: {
-        artifactName: ArtifactPath.reconstitute("unit-of-work-dependency.md"),
+        artifactName: ArtifactPath.of("unit-of-work-dependency.md"),
         document: summary.declaredUnits === null ? null : { input: anchor("unit-of-work-dependency.md"), outcome: summary.declaredUnits },
       },
     },
@@ -312,9 +324,9 @@ describe("skip branches the fixtures do not exercise", () => {
       declaredUnits: DeclaredUnitsOutcome.unrecognized("no yaml fence with a top-level `units:` list"),
       contractsTable: ContractsTableOutcome.rows(ContractRows.of([])),
       specBlocks: SpecBlockAssessments.of([
-        SpecBlockAssessment.openapiWithoutPaths(BlockIndex.reconstitute(1), LineNumber.reconstitute(1)),
-        SpecBlockAssessment.notAMapping(BlockIndex.reconstitute(2), LineNumber.reconstitute(5)),
-        SpecBlockAssessment.unparseable(BlockIndex.reconstitute(3), LineNumber.reconstitute(9), "line 1: x"),
+        SpecBlockAssessment.openapiWithoutPaths(BlockIndex.of(1), LineNumber.of(1)),
+        SpecBlockAssessment.notAMapping(BlockIndex.of(2), LineNumber.of(5)),
+        SpecBlockAssessment.unparseable(BlockIndex.of(3), LineNumber.of(9), "line 1: x"),
       ]),
     });
     const details = report.findings().toArray().map((f) => f.detail()).join("\n");
@@ -342,22 +354,22 @@ type FunctionalOverrides = {
 function functionalReport(overrides: FunctionalOverrides): ReferenceCheckReport {
   const doc = <T>(artifact: string, outcome: T | undefined): { input: InputAnchor; outcome: T } | null =>
     outcome === undefined ? null : { input: anchor(artifact), outcome };
-  return opened(DesignRecord.reconstitute({
+  return opened(DesignRecord.of({
     id: DesignRecordId.of(ap("/tmp/rec/construction/u1/functional-design/entities.md")),
     target: anchor("e.md"),
     sourceDocument: new Uint8Array(),
     componentCatalog: null,
     contractSummary: null,
     functional: {
-      unit: "unit" in overrides ? overrides.unit : UnitName.reconstitute("u1"),
-      entitiesArtifact: ArtifactPath.reconstitute("e.md"),
+      unit: "unit" in overrides ? overrides.unit : UnitName.of("u1"),
+      entitiesArtifact: ArtifactPath.of("e.md"),
       entities: doc("e.md", overrides.entities),
-      rulesArtifact: ArtifactPath.reconstitute("r.md"),
+      rulesArtifact: ArtifactPath.of("r.md"),
       rules: doc("r.md", overrides.rules),
-      specArtifact: ArtifactPath.reconstitute("s.md"),
+      specArtifact: ArtifactPath.of("s.md"),
       spec: doc("s.md", overrides.spec),
       requirements: doc("requirements.md", overrides.requirementIdsKnown ?? undefined),
-      componentsArtifact: ArtifactPath.reconstitute("components.md"),
+      componentsArtifact: ArtifactPath.of("components.md"),
       components: doc("components.md", overrides.domainEntities),
       siblingUnits: overrides.siblingUnits ?? SiblingUnitIndex.of(new Map()),
       siblingInputs: InputAnchors.of([]),
@@ -518,7 +530,7 @@ describe("functional branches the fixtures do not exercise", () => {
     const report = functionalReport({
       entities: parseEntitiesDocument(entitiesMd),
       rules: parseRulesDocument(rulesMd),
-      requirementIdsKnown: RequirementIds.reconstitute(["FR-1"]),
+      requirementIdsKnown: RequirementIds.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
     });
     const details = report.findings().toArray().map((f) => f.detail()).join("\n");
     expect(details).toContain('rule id "BR1.1" is declared more than once');
@@ -569,7 +581,7 @@ describe("functional branches the fixtures do not exercise", () => {
       entities: parseEntitiesDocument(entitiesMd),
       spec: parseFunctionalSpecDocument("# prose only, no machines\n"),
       domainEntities: parseDomainEntitiesDocument(componentsMd),
-      siblingUnits: SiblingUnitIndex.of(new Map([["u1", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: AttributeNames.of([AttributeName.reconstitute("status")]) }]])]])),
+      siblingUnits: SiblingUnitIndex.of(new Map([["u1", new Map([["order", { name: EntityName.of("Order"), attrs: AttributeNames.of([AttributeName.of("status")]) }]])]])),
     });
     const skipDetails = report.skipped().toArray().map((s) => s.detail() ?? "").join("\n");
     expect(skipDetails).toContain('no `### State Machine: Order` heading with a stateDiagram fence found');
@@ -582,24 +594,23 @@ describe("functional branches the fixtures do not exercise", () => {
     const report = functionalReport({
       unit: undefined,
       domainEntities: parseDomainEntitiesDocument(componentsMd),
-      siblingUnits: SiblingUnitIndex.of(new Map([["u2", new Map([["order", { name: EntityName.reconstitute("Order"), attrs: AttributeNames.of([AttributeName.reconstitute("qty")]) }]])]])),
+      siblingUnits: SiblingUnitIndex.of(new Map([["u2", new Map([["order", { name: EntityName.of("Order"), attrs: AttributeNames.of([AttributeName.of("qty")]) }]])]])),
     });
     const reasons = report.skipped().toArray().map((s) => `${s.target()}:${s.reason()}`);
     expect(reasons).toContain("check:XS-3:unrecognized-format");
   });
 
   test("a degraded conformance still renders a schema-valid unavailable document", () => {
-    // 未知 kind は「書かれた文書」だけが運ぶ——集約の正常生成口は検証済みの
-    // FindingKind しか受け取らないので、寛容な hydration の姿で組む。
-    const bad = ReferenceCheckReport.reconstitute({
+    // 正常な finding を厳しいスキーマに適合させ、降格文書の形を確認する。
+    const bad = ReferenceCheckReport.of({
       id: ReferenceCheckReportId.of(ap("/tmp/r"), "components"),
       inputs: InputAnchors.of([anchor("x.md")]),
-      checked: TargetIds.reconstitute([]),
+      checked: TargetIds.of([]),
       findings: Findings.of([
-        Finding.reconstitute({
-          kind: "no-such-kind",
-          frRefs: FrRefs.reconstitute([]),
-          targets: TargetIds.reconstitute(["check:DD-0"]),
+        Finding.of({
+          kind: FindingKind.conflict(),
+          frRefs: FrRefs.of([]),
+          targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))),
           witness: { refs: WitnessRefs.of([]) },
           detail: "DD-0: x",
         }),
@@ -607,7 +618,7 @@ describe("functional branches the fixtures do not exercise", () => {
       skipped: Skips.of([]),
       unavailableReason: null,
     });
-    const conformed = bad.conformedTo(findingsSchema);
+    const conformed = bad.conformedTo(FindingsSchema.of({ type: "object", properties: { findings: { maxItems: 0 } } }));
     expect(conformed.isUnavailable()).toBe(true);
     expect(JSON.parse(renderReportBytes(conformed)).unavailable.reason)
       .toStartWith("self-validation against deep-spec-findings-schema.json failed: ");

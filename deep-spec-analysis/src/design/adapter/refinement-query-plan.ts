@@ -1,4 +1,5 @@
-import { TargetId, KeyedIndex, QueryLabel, SkipReason } from "@deep-spec/kernel-domain";
+import { UnitName, TargetId, KeyedIndex, QueryLabel, SkipReason, type Expression } from "@deep-spec/kernel-domain";
+
 import type { RefinementAttr } from "./refinement-attr.ts";
 // refinement の SMT-LIB コンパイラ — v1（requirements/adapter/smt-plan）と
 // 統一しない**明示的な第 2 コンパイラ**（移行計画のアーキテクチャ判断 Q1 /
@@ -17,13 +18,9 @@ import {
   ScenarioId,
   type RefinementMapDefect,
 } from "@deep-spec/design-domain";
-import type { Expression } from "@deep-spec/kernel-domain";
-import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
 import { DesignSkips } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
 import { DesignSkipped } from "@deep-spec/design-domain";
-import type { RefinementChildQuery } from "./refinement-child-query.ts";
-import type { RefinementSmtContext } from "./refinement-smt-context.ts";
 import {
   type DesignEvent,
   RefinementProbe,
@@ -34,7 +31,10 @@ import {
   EffectAssignments,
 } from "@deep-spec/design-domain";
 
+import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
 
+import type { RefinementChildQuery } from "./refinement-child-query.ts";
+import type { RefinementSmtContext } from "./refinement-smt-context.ts";
 
 class SmtCompileError extends Error {
   constructor(message: string) {
@@ -128,7 +128,6 @@ export function smtOfExpr(ctx: RefinementSmtContext, e: Expression): string {
       throw new SmtCompileError(`unknown operator "${e.op}"`);
   }
 }
-
 
 interface NamedConstraint {
   name: string;
@@ -240,9 +239,9 @@ export function buildRefinementQueries(
   // 凍結文言の compile-error skip に落ちる。
   const alphaFail = (target: string, message: string): void => {
     compileSkips.push(DesignSkipped.of({
-      target: TargetId.reconstitute(target),
+      target: TargetId.of(target),
       reason: SkipReason.compileError(),
-      unit: u.name(),
+      unit: UnitName.of(u.name()),
       detail: `alpha substitution failed: ${message}`,
     }));
   };
@@ -263,7 +262,7 @@ export function buildRefinementQueries(
       try {
         const q = assembleQuery(`rv:${obId}`, pre.decls, [...pre.constraints, { name: smtName("neg", obId), smt: `(not ${smtOfExpr(ctx, alphaP.value)})` }], modelVars);
         queries.push(q);
-        pending.set(q.id, RefinementProbe.invariant(ObligationId.reconstitute(obId)));
+        pending.set(q.id, RefinementProbe.invariant(ObligationId.of(obId)));
       } catch (err) {
         alphaFail(obId, failureMessage(err));
       }
@@ -281,7 +280,7 @@ export function buildRefinementQueries(
         // enabledness：alpha(guard) は成り立つが、写像済み設計イベントが
         // ひとつも発火可能でない。
         const designGuards = mapped
-          .map((id) => catalog.eventOf(TargetId.reconstitute(id.asString())))
+          .map((id) => catalog.eventOf(TargetId.of(id.asString())))
           .filter((d): d is DesignEvent => d !== null)
           .map((d) => smtOfExpr(ctx, d.guard()));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
@@ -296,7 +295,7 @@ export function buildRefinementQueries(
           modelVars,
         );
         queries.push(qe);
-        pending.set(qe.id, RefinementProbe.enabledness(ObligationId.reconstitute(obId)));
+        pending.set(qe.id, RefinementProbe.enabledness(ObligationId.of(obId)));
 
         // 写像済み設計イベントごとのワンステップシミュレーション：alpha(guard)
         // が成り立つところで踏んだ 1 歩の抽象 post が、要件効果か抽象フレーム
@@ -322,7 +321,7 @@ export function buildRefinementQueries(
         const fBar = smtOfExpr(ctx, alphaF.value);
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
-          const ev = catalog.eventOf(TargetId.reconstitute(designId.asString()));
+          const ev = catalog.eventOf(TargetId.of(designId.asString()));
           if (!ev) continue;
           const stepParts: string[] = [smtOfExpr(ctx, ev.guard())];
           for (const attr of ctx.attrs) {
@@ -350,7 +349,7 @@ export function buildRefinementQueries(
             modelVarsBoth,
           );
           queries.push(qs);
-          pending.set(qs.id, RefinementProbe.simulation(ObligationId.reconstitute(obId), designId));
+          pending.set(qs.id, RefinementProbe.simulation(ObligationId.of(obId), designId));
         }
       } catch (err) {
         alphaFail(obId, failureMessage(err));
@@ -386,7 +385,7 @@ export function buildRefinementQueries(
         modelVars,
       );
       queries.push(q);
-      pending.set(q.id, RefinementProbe.scenario(ScenarioId.reconstitute(scId)));
+      pending.set(q.id, RefinementProbe.scenario(ScenarioId.of(scId)));
     } catch (err) {
       alphaFail(scId, failureMessage(err));
     }
@@ -394,7 +393,7 @@ export function buildRefinementQueries(
 
   return {
     queries,
-    plan: RefinementSolverPlan.of({ pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.reconstitute(id), probe] as const)), compileSkips: DesignSkips.of(compileSkips) }),
+    plan: RefinementSolverPlan.of({ pending: KeyedIndex.of([...pending].map(([id, probe]) => [QueryLabel.of(id), probe] as const)), compileSkips: DesignSkips.of(compileSkips) }),
     context: ctx,
   };
 }

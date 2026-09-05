@@ -11,13 +11,13 @@ export class LoweredOrigin {
   readonly #kind: LoweringKind;
   readonly #pair: readonly [LoweredOriginRef, LoweredOriginRef] | undefined;
 
-  private constructor(props: { design: LoweredOriginRef; kind: LoweringKind; pair?: readonly [LoweredOriginRef, LoweredOriginRef] }) {
+  private constructor(props: Parameters<typeof LoweredOrigin.of>[0]) {
     this.#design = props.design;
     this.#kind = props.kind;
     this.#pair = props.pair;
   }
 
-  static reconstitute(props: { design: LoweredOriginRef; kind: LoweringKind; pair?: readonly [LoweredOriginRef, LoweredOriginRef] }): LoweredOrigin {
+  static of(props: { design: LoweredOriginRef; kind: LoweringKind; pair?: readonly [LoweredOriginRef, LoweredOriginRef] }): LoweredOrigin {
     return new LoweredOrigin(props);
   }
 

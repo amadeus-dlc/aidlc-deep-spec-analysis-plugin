@@ -9,13 +9,13 @@ export class WitnessRef {
   readonly #element: ElementPath;
   readonly #value: string | undefined;
 
-  private constructor(props: { artifact: string; element: string; value?: string }) {
-    this.#artifact = ArtifactPath.reconstitute(props.artifact);
-    this.#element = ElementPath.reconstitute(props.element);
+  private constructor(props: Parameters<typeof WitnessRef.of>[0]) {
+    this.#artifact = ArtifactPath.of(props.artifact);
+    this.#element = ElementPath.of(props.element);
     this.#value = props.value;
   }
 
-  static reconstitute(props: { artifact: string; element: string; value?: string }): WitnessRef {
+  static of(props: { artifact: string; element: string; value?: string }): WitnessRef {
     return new WitnessRef(props);
   }
 
@@ -34,7 +34,6 @@ export class WitnessRef {
   pointsAt(artifact: string, element: string): boolean {
     return this.#artifact.asString() === artifact && this.#element.asString() === element;
   }
-
 
   // 検査が証拠の座標を指す門：成果物・要素パス・任意の生の値。
   static at(artifact: string, element: string, value?: string): WitnessRef {

@@ -1,5 +1,14 @@
-import { FindingKind, FrRefs, SkipReason, TargetIds, VerificationMethod } from "@deep-spec/kernel-domain";
-import type { FindingsSchema } from "@deep-spec/kernel-domain";
+import {
+  TargetId,
+  UnitName,
+  FindingKind,
+  FrRefs,
+  SkipReason,
+  TargetIds,
+  VerificationMethod,
+  type FindingsSchema,
+} from "@deep-spec/kernel-domain";
+
 // deep-spec-design-verify-quint の interactor。Phase 1-2（lowering → v1 quint
 // 兄弟 → remap）＋到達性プローブ（bounded のみ・RUN ごとの上限つき）＋
 // Phase 3（refinement の動的パス：alpha(P) が機械の不変量面に合流し、違反
@@ -26,10 +35,10 @@ import { DesignWitness,
   RefinementMaterialsId,
   LoweredId,
 } from "@deep-spec/design-domain";
-
 import {
   UnitRefinementPlan,
 } from "@deep-spec/design-domain";
+
 import type { DesignModelRepository } from "./port/design-model-repository.ts";
 import type { DesignVerifyDirectoryRepository } from "./port/design-verify-directory-repository.ts";
 import { type RefinementMaterialsRepository } from "./port/refinement-materials-repository.ts";
@@ -100,7 +109,7 @@ export class VerifyDesignQuintUseCase {
     for (const u of model.units()) {
       if (this.#clock.now() - started > RUN_BUDGET_MS) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run backend budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -109,7 +118,7 @@ export class VerifyDesignQuintUseCase {
       const mainRemaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS - (this.#clock.now() - started));
       if (mainRemaining < 3_000) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before this unit" }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run backend budget was exhausted before this unit" }));
         }
         continue;
       }
@@ -124,14 +133,14 @@ export class VerifyDesignQuintUseCase {
       }
       if (run.doc === null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: `lowered v1 backend produced no findings document (${run.note.slice(0, 160)})` }));
         }
         continue;
       }
       const remapped = run.doc.remapVerdicts(u, lowered.index());
       if (remapped.unavailable !== null) {
         for (const t of u.allTargets()) {
-          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: remapped.unavailable }));
+          skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: remapped.unavailable }));
         }
         continue;
       }
@@ -150,7 +159,7 @@ export class VerifyDesignQuintUseCase {
           skipped.push(DesignSkipped.of({
             target: sm.id().asTargetId(),
             reason: SkipReason.capability(),
-            unit: u.name(),
+            unit: UnitName.of(u.name()),
             detail: `unreachable-state detection for ${sm.id().asString()} requires bounded mode (quint verify with Apalache); simulation cannot decide it (states: ${candidates.join(", ")})`,
           }));
           continue;
@@ -170,10 +179,10 @@ export class VerifyDesignQuintUseCase {
             notReachedWithinBound: () => {
               findings.push(DesignFinding.of({
                 kind: FindingKind.unreachable(),
-                frRefs: FrRefs.reconstitute([]),
-                targets: TargetIds.reconstitute([sm.id().asString()]),
+                frRefs: FrRefs.of([]),
+                targets: TargetIds.of(Array.from([sm.id().asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.model({ [attrPath]: state }),
-                unit: u.name(),
+                unit: UnitName.of(u.name()),
                 detail: `State "${state}" of ${sm.id().asString()} (${attrPath}) is not reached by any execution within ${BOUND_STEPS} steps from any legal state — it may be dead.`,
               }));
             },
@@ -183,7 +192,7 @@ export class VerifyDesignQuintUseCase {
           skipped.push(DesignSkipped.of({
             target: sm.id().asTargetId(),
             reason: probesUsed >= this.#unreachCap ? SkipReason.timeout() : SkipReason.unavailable(),
-            unit: u.name(),
+            unit: UnitName.of(u.name()),
             detail: `unreachable-state detection skipped for state(s) ${leftover.join(", ")} of ${sm.id().asString()} (per-run cap ${this.#unreachCap} / budget reached, or the probe run failed)`,
           }));
         }
@@ -200,7 +209,7 @@ export class VerifyDesignQuintUseCase {
       const reqTargets = req.allTargetIds();
       const skipAll = (reason: SkipReason, detail: string): void => {
         for (const u of model.units()) {
-          for (const t of reqTargets) skipped.push(DesignSkipped.of({ target: t, reason, unit: u.name(), detail }));
+          for (const t of reqTargets) skipped.push(DesignSkipped.of({ target: t, reason, unit: UnitName.of(u.name()), detail }));
         }
       };
       acq.match({
@@ -221,7 +230,7 @@ export class VerifyDesignQuintUseCase {
             const unitMap = map.unitMapOf(u.id());
             if (!unitMap) {
               for (const t of reqTargets) {
-                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: u.name(), detail: `the refinement map has no entry for unit ${u.name()}` }));
+                skipped.push(DesignSkipped.of({ target: t, reason: SkipReason.absentInput(), unit: UnitName.of(u.name()), detail: `the refinement map has no entry for unit ${u.name()}` }));
               }
               continue;
             }
@@ -233,7 +242,7 @@ export class VerifyDesignQuintUseCase {
             const remaining = Math.min(UNIT_WALL_TIMEOUT_MS, RUN_BUDGET_MS + UNREACH_BUDGET_MS - (this.#clock.now() - started));
             if (remaining < 3_000) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.timeout(), unit: u.name(), detail: "the per-run backend budget was exhausted before the refinement pass" }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.timeout(), unit: UnitName.of(u.name()), detail: "the per-run backend budget was exhausted before the refinement pass" }));
               }
               continue;
             }
@@ -243,7 +252,7 @@ export class VerifyDesignQuintUseCase {
             let n = refinementObligations.count();
             for (const e of extras) {
               n += 1;
-              const lowId = LoweredId.reconstitute(`OB-${n}`);
+              const lowId = LoweredId.of(`OB-${n}`);
               refinementObligations = refinementObligations.add(e.loweredAs(lowId));
               refinementIndex = refinementIndex.withPassthrough(lowId.asString(), e.reqId().asString());
             }
@@ -251,14 +260,14 @@ export class VerifyDesignQuintUseCase {
             const run = this.#siblingBackendClient.runLowered("quint", u, lowered, remaining);
             if (run.exit !== 0 || run.doc === null) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: u.name(), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: `refinement pass could not run (${run.note.slice(0, 120)})` }));
               }
               continue;
             }
             const remapped = run.doc.remapVerdicts(u, lowered.index());
             if (remapped.unavailable !== null) {
               for (const e of extras) {
-                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: u.name(), detail: `refinement pass degraded: ${remapped.unavailable}` }));
+                skipped.push(DesignSkipped.of({ target: e.reqTarget(), reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: `refinement pass degraded: ${remapped.unavailable}` }));
               }
               continue;
             }
@@ -279,7 +288,7 @@ export class VerifyDesignQuintUseCase {
       findings: DesignFindings.of(findings),
       skipped: DesignSkips.of(skipped),
       ...(inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {}),
-      checked: CheckedUnits.reconstitute(checkedUnits),
+      checked: CheckedUnits.of(Array.from(checkedUnits, (raw) => UnitName.of(raw))),
       ...(!materials.ok ? { unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})` } : {}),
     });
     // 適合・両文書の公開・cleanup は Finalizer が一か所で持つ。兄弟が読めない・

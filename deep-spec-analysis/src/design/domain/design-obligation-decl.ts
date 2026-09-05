@@ -1,5 +1,6 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
+
 import { BrRefs } from "./br-refs.ts";
 import { type DesignObligationId } from "./design-obligation-id.ts";
 import { type DesignObligationOrigin } from "./design-obligation-origin.ts";
@@ -13,15 +14,7 @@ export class DesignObligationDecl {
   readonly #effect: Expression | undefined;
   readonly #temporal: { readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression } | undefined;
 
-  private constructor(props: {
-    id: DesignObligationId;
-    origin?: DesignObligationOrigin;
-    brRefs?: BrRefs;
-    assert?: Expression;
-    guard?: Expression;
-    effect?: Expression;
-    temporal?: { readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression };
-  }) {
+  private constructor(props: Parameters<typeof DesignObligationDecl.of>[0]) {
     this.#id = props.id;
     this.#origin = props.origin;
     this.#brRefs = props.brRefs;
@@ -36,7 +29,7 @@ export class DesignObligationDecl {
     };
   }
 
-  static reconstitute(props: {
+  static of(props: {
     id: DesignObligationId;
     origin?: DesignObligationOrigin;
     brRefs?: BrRefs;

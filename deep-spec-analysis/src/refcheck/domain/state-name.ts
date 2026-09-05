@@ -1,17 +1,19 @@
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 import { NormalizedName } from "@deep-spec/kernel-domain";
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-
-type TokenError = { readonly kind: "empty-token"; readonly raw: string };
 
 export class StateName {
   readonly #value: string;
-  private constructor(value: string) { this.#value = value; }
-  static parse(raw: string): Result<StateName, TokenError> {
-    if (raw === "") return err({ kind: "empty-token", raw });
-    return ok(new StateName(raw));
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-token", raw });
+    this.#value = raw;
   }
-  static reconstitute(raw: string): StateName { return new StateName(raw); }
+  static of(raw: string): StateName {
+    return new StateName(raw);
+  }
+
+  static parse(raw: string): Result<StateName, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new StateName(raw));
+  }
   equals(other: StateName): boolean { return this.#value === other.#value; }
   asString(): string { return this.#value; }
   normalized(): NormalizedName { return NormalizedName.of(this.#value); }

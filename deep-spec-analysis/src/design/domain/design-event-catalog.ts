@@ -6,6 +6,7 @@
 import { AttributePath, KeyedIndex, TargetId, type Expression } from "@deep-spec/kernel-domain";
 import { DesignMachines } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
+
 import { EffectAssignments } from "./effect-assignments.ts";
 import { DesignAssignments } from "./design-assignments.ts";
 import { DesignEvent } from "./design-event.ts";
@@ -30,7 +31,7 @@ export class DesignEventCatalog {
         const guard: Expression = tr.loweredGuard(attrPath);
         const effectAssign: (readonly [AttributePath, Expression])[] = [];
         const [statePath, stateRhs] = tr.stateAssignment(attrPath);
-        effectAssign.push([AttributePath.reconstitute(statePath), stateRhs]);
+        effectAssign.push([AttributePath.of(statePath), stateRhs]);
         const explicitEffect = tr.effect();
         if (explicitEffect !== undefined) {
           const assigned = EffectAssignments.ofEffect(explicitEffect);
@@ -41,7 +42,7 @@ export class DesignEventCatalog {
             }
           }
         }
-        out.push([TargetId.reconstitute(tr.id().asString()), DesignEvent.of(guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))]);
+        out.push([TargetId.of(tr.id().asString()), DesignEvent.of(guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))]);
       }
     }
     for (const ob of u.obligations()) {
@@ -54,7 +55,7 @@ export class DesignEventCatalog {
         const rhs = rhsOf(term);
         if (rhs) effectAssign.push([path, rhs]);
       }
-      out.push([TargetId.reconstitute(ob.id().asString()), DesignEvent.of(event.guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))]);
+      out.push([TargetId.of(ob.id().asString()), DesignEvent.of(event.guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))]);
     }
     return new DesignEventCatalog(KeyedIndex.of(out));
   }

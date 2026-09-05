@@ -1,23 +1,21 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-import { TargetId } from "@deep-spec/kernel-domain";
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
-type ScenarioIdError = { readonly kind: "empty-scenario-id"; readonly raw: string };
+import { TargetId } from "@deep-spec/kernel-domain";
 
 export class ScenarioId {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-scenario-id", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<ScenarioId, ScenarioIdError> {
-    if (raw === "") return err({ kind: "empty-scenario-id", raw });
-    return ok(new ScenarioId(raw));
-  }
-
-  static reconstitute(raw: string): ScenarioId {
+  static of(raw: string): ScenarioId {
     return new ScenarioId(raw);
+  }
+
+  static parse(raw: string): Result<ScenarioId, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new ScenarioId(raw));
   }
 
   equals(other: ScenarioId): boolean {
@@ -30,6 +28,6 @@ export class ScenarioId {
 
   // シナリオ id は検査対象 id でもある（finding の targets / skip の target 面）。
   asTargetId(): TargetId {
-    return TargetId.reconstitute(this.#value);
+    return TargetId.of(this.#value);
   }
 }

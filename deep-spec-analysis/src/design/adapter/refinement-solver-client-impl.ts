@@ -13,6 +13,7 @@ import type {
   UnitRefinementPlan,
 } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
+
 import type { RefinementCheck, RefinementSolverClient } from "@deep-spec/design-usecase";
 import { type RefinementChildQuery } from "./refinement-child-query.ts";
 import { buildRefinementQueries, decodeDesignModel } from "./refinement-query-plan.ts";
@@ -26,7 +27,6 @@ interface RefinementChildResult {
   core?: string[];
   error?: string;
 }
-
 
 export class RefinementSolverClientImpl implements RefinementSolverClient {
   readonly #config: RefinementSolverClientConfig;
@@ -46,7 +46,7 @@ export class RefinementSolverClientImpl implements RefinementSolverClient {
     }
     const verdicts: (readonly [QueryLabel, RefinementQueryVerdict])[] = [];
     for (const [queryId, r] of child.results) {
-      verdicts.push([QueryLabel.reconstitute(queryId), RefinementQueryVerdict.reconstitute({
+      verdicts.push([QueryLabel.of(queryId), RefinementQueryVerdict.of({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
         decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,

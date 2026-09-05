@@ -3,11 +3,11 @@
 export class ContractParty {
   readonly #value: string;
 
-  private constructor(value: string) {
+  private constructor(value: Parameters<typeof ContractParty.of>[0]) {
     this.#value = value;
   }
 
-  static reconstitute(raw: string): ContractParty {
+  static of(raw: string): ContractParty {
     return new ContractParty(raw);
   }
 

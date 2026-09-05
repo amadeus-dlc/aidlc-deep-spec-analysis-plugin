@@ -11,15 +11,11 @@ export class DomainEntitySketch {
   readonly attributes: AttributeNames;
   };
 
-  private constructor(seed: {
-    readonly name: EntityName;
-    readonly component: ComponentName;
-    readonly attributes: AttributeNames;
-  }) {
+  private constructor(seed: Parameters<typeof DomainEntitySketch.of>[0]) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: {
+  static of(seed: {
     readonly name: EntityName;
     readonly component: ComponentName;
     readonly attributes: AttributeNames;

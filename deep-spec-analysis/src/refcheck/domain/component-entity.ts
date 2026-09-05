@@ -11,19 +11,14 @@ export class ComponentEntity {
   readonly #identifier: AttributeName | null;
   readonly #references: EntityReferences;
 
-  private constructor(props: {
-    name: EntityName;
-    element: ElementPath;
-    identifier: AttributeName | null;
-    references: EntityReferences;
-  }) {
+  private constructor(props: Parameters<typeof ComponentEntity.of>[0]) {
     this.#name = props.name;
     this.#element = props.element;
     this.#identifier = props.identifier;
     this.#references = props.references;
   }
 
-  static reconstitute(props: {
+  static of(props: {
     name: EntityName;
     element: ElementPath;
     identifier: AttributeName | null;
@@ -46,6 +41,6 @@ export class ComponentEntity {
 
   // DD-5: 所有の要件たる識別子を持つか（未宣言・空文字は識別子なし——凍結条件）。
   hasIdentifier(): boolean {
-    return this.#identifier !== null && !this.#identifier.isEmpty();
+    return this.#identifier !== null;
   }
 }

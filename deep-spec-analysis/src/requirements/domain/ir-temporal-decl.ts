@@ -9,13 +9,13 @@ export class IrTemporalDecl {
   readonly #from: Expression | undefined;
   readonly #to: Expression | undefined;
 
-  private constructor(props: { assert?: Expression; from?: Expression; to?: Expression }) {
+  private constructor(props: Parameters<typeof IrTemporalDecl.of>[0]) {
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#from = props.from === undefined ? undefined : ExpressionTree.of(props.from).asExpression();
     this.#to = props.to === undefined ? undefined : ExpressionTree.of(props.to).asExpression();
   }
 
-  static reconstitute(props: { assert?: Expression; from?: Expression; to?: Expression }): IrTemporalDecl {
+  static of(props: { assert?: Expression; from?: Expression; to?: Expression }): IrTemporalDecl {
     return new IrTemporalDecl(props);
   }
 

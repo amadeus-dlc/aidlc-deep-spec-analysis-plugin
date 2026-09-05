@@ -1,3 +1,14 @@
+import {
+  TargetId,
+  AttributePath,
+  ExpressionTree,
+  FrRefs,
+  KeyedIndex,
+  TargetIds,
+  UnitName,
+  type Expression,
+} from "@deep-spec/kernel-domain";
+
 // 設計 IR の 1 ユニット。rawEntities は契約3 のエンティティスキーマ断片の
 // 素通し（lowering が契約1 文書へそのまま埋め込む）で、enum 値の照会だけを
 // ドメインが行う。allUnitTargets / enumValuesOf は旧自由関数のメソッド化。
@@ -16,8 +27,7 @@
 // OB-n / SC-n / BG-n の採番・整列順は文書バイト（子の処理順）に効く凍結面。
 
 import { DesignUnitId } from "./design-unit-id.ts";
-import { AttributePath, ExpressionTree, FrRefs, KeyedIndex, TargetIds, UnitName } from "@deep-spec/kernel-domain";
-import type { Expression } from "@deep-spec/kernel-domain";
+
 import { DesignMachines } from "./design-machines.ts";
 import { DesignObligations } from "./design-obligations.ts";
 import { DesignScenarios } from "./design-scenarios.ts";
@@ -51,15 +61,8 @@ export class DesignUnit {
   readonly #scenarios: DesignScenarios;
   readonly #background: DesignBackgroundAssumptions;
 
-  private constructor(seed: {
-    readonly unit: string;
-    readonly entities: DesignEntityDecls;
-    readonly obligations: DesignObligations;
-    readonly machines: DesignMachines;
-    readonly scenarios: DesignScenarios;
-    readonly background: DesignBackgroundAssumptions;
-  }) {
-    this.#unit = UnitName.reconstitute(seed.unit);
+  private constructor(seed: Parameters<typeof DesignUnit.of>[0]) {
+    this.#unit = UnitName.of(seed.unit);
     this.#entities = seed.entities;
     // 属性座標（`Entity.attr`）は宣言から導く——一意化し宣言順（凍結挙動）。
     const coordinates = new Set<string>();
@@ -74,7 +77,7 @@ export class DesignUnit {
   }
 
   // アダプタのパーサが解いた型付き部品からの唯一の構築口。
-  static reconstitute(seed: {
+  static of(seed: {
     readonly unit: string;
     readonly entities: DesignEntityDecls;
     readonly obligations: DesignObligations;
@@ -122,7 +125,7 @@ export class DesignUnit {
 
   // このユニットでバックエンドが検査し得る全対象（義務・遷移・シナリオ）。
   allTargets(): TargetIds {
-    return TargetIds.reconstitute([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()]).sortedUniqueCanonically();
+    return TargetIds.of(Array.from([...this.#obligations.ids(), ...this.#machines.transitionIds(), ...this.#scenarios.ids()], (raw) => TargetId.of(raw))).sortedUniqueCanonically();
   }
 
   // このユニットの lowering。synthetics は設計だけの 2 検査（到達不能・包摂）を
@@ -146,7 +149,7 @@ export class DesignUnit {
     let n = 0;
     const nextId = (): LoweredId => {
       n += 1;
-      return LoweredId.reconstitute(`OB-${n}`);
+      return LoweredId.of(`OB-${n}`);
     };
 
     // 1) 設計義務は素通し（frRefs は帰属のため保持。空の frRefs は lowered
@@ -165,7 +168,7 @@ export class DesignUnit {
     //    ignores → 明示 no-op event。降ろし方は遷移／ignore 自身が知っている。
     for (const sm of this.#machines.sortedCanonically()) {
       const attrPath = DesignMachines.attrPathOf(sm);
-      attrPathsByMachine.push([sm.id(), AttributePath.reconstitute(attrPath)]);
+      attrPathsByMachine.push([sm.id(), AttributePath.of(attrPath)]);
       for (const tr of sm.transitions().sortedCanonically()) {
         const id = nextId();
         obligations.push(tr.loweredAs(id, attrPath));
@@ -185,8 +188,8 @@ export class DesignUnit {
     if (opts.synthetics) {
       for (const c of candidates) {
         const id = nextId();
-        obligations.push(LoweredObligation.reconstitute({ id, nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
-        origins.push([id, LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(c.design), kind: "vac-dead" })]);
+        obligations.push(LoweredObligation.of({ id, nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
+        origins.push([id, LoweredOrigin.of({ design: LoweredOriginRef.of(c.design), kind: "vac-dead" })]);
       }
       const byTrigger = new Map<string, EventCandidate[]>();
       for (const c of candidates) {
@@ -203,7 +206,7 @@ export class DesignUnit {
             // (guardB and not guardA) の空虚性は guardB => guardA を証明する：
             // b は a に包摂される（同トリガ・証明可能に狭いガード・同一効果）。
             const id = nextId();
-            obligations.push(LoweredObligation.reconstitute({
+            obligations.push(LoweredObligation.of({
               id,
               nature: "invariant",
               frRefs: FrRefs.of([]),
@@ -212,10 +215,10 @@ export class DesignUnit {
                 args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }],
               },
             }));
-            origins.push([id, LoweredOrigin.reconstitute({
-              design: LoweredOriginRef.reconstitute(`${a.design}|${b.design}`),
+            origins.push([id, LoweredOrigin.of({
+              design: LoweredOriginRef.of(`${a.design}|${b.design}`),
               kind: "vac-shadow",
-              pair: [LoweredOriginRef.reconstitute(a.design), LoweredOriginRef.reconstitute(b.design)],
+              pair: [LoweredOriginRef.of(a.design), LoweredOriginRef.of(b.design)],
             })]);
           }
         }
@@ -228,7 +231,7 @@ export class DesignUnit {
     let scN = 0;
     for (const sc of this.#scenarios.sortedCanonically()) {
       scN += 1;
-      const id = LoweredId.reconstitute(`SC-${scN}`);
+      const id = LoweredId.of(`SC-${scN}`);
       scenarios.push(sc.loweredAs(id));
       scenarioDesignIds.push([id, sc.id()]);
     }
@@ -236,7 +239,7 @@ export class DesignUnit {
     let bgN = 0;
     for (const bg of this.#background.sortedCanonically()) {
       bgN += 1;
-      background.push(bg.loweredAs(LoweredId.reconstitute(`BG-${bgN}`)));
+      background.push(bg.loweredAs(LoweredId.of(`BG-${bgN}`)));
     }
 
     return LoweredUnit.of({

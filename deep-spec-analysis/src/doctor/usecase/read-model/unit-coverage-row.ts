@@ -16,7 +16,7 @@ export class UnitCoverageRow {
     this.#state = props.state;
   }
 
-  static reconstitute(props: { space: string; intent: string; unit: string; state: CoverageState }): UnitCoverageRow {
+  static of(props: { space: string; intent: string; unit: string; state: CoverageState }): UnitCoverageRow {
     return new UnitCoverageRow(props);
   }
 

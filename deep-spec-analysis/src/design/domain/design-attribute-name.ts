@@ -1,22 +1,19 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-
-type DesignMachineTokenError = { readonly kind: "empty-machine-token"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 export class DesignAttributeName {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-machine-token", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<DesignAttributeName, DesignMachineTokenError> {
-    if (raw === "") return err({ kind: "empty-machine-token", raw });
-    return ok(new DesignAttributeName(raw));
-  }
-
-  static reconstitute(raw: string): DesignAttributeName {
+  static of(raw: string): DesignAttributeName {
     return new DesignAttributeName(raw);
+  }
+
+  static parse(raw: string): Result<DesignAttributeName, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new DesignAttributeName(raw));
   }
 
   equals(other: DesignAttributeName): boolean {

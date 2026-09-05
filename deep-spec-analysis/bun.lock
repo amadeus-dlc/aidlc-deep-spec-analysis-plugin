@@ -49,6 +49,7 @@
         "@deep-spec/doctor-domain": "workspace:*",
         "@deep-spec/doctor-usecase": "workspace:*",
         "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
       },
     },
     "src/doctor/domain": {
@@ -56,6 +57,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@deep-spec/kernel-domain": "workspace:*",
+        "@deep-spec/kernel-infrastructure": "workspace:*",
       },
     },
     "src/doctor/usecase": {

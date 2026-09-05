@@ -5,11 +5,11 @@
 export class BrRef {
   readonly #value: string;
 
-  private constructor(value: string) {
+  private constructor(value: Parameters<typeof BrRef.of>[0]) {
     this.#value = value;
   }
 
-  static reconstitute(raw: string): BrRef {
+  static of(raw: string): BrRef {
     return new BrRef(raw);
   }
 

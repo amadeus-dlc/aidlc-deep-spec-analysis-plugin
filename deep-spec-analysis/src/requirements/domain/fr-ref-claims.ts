@@ -20,6 +20,8 @@ export class FrRefClaims {
     yield* this.#values;
   }
 
+  ownerDescriptions(): string[] { return this.#values.map((claim) => claim.ownerDescription()); }
+
   toArray(): readonly FrRefClaim[] {
     return this.#values;
   }

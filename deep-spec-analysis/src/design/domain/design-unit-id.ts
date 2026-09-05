@@ -6,7 +6,7 @@
 export class DesignUnitId {
   readonly #value: string;
 
-  private constructor(value: string) {
+  private constructor(value: Parameters<typeof DesignUnitId.of>[0]) {
     this.#value = value;
   }
 

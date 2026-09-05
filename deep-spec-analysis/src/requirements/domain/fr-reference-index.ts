@@ -1,21 +1,22 @@
+import { FrRefClaims } from "./fr-ref-claims.ts";
 // FrReferenceIndex — 義務・シナリオが指す要件 id → 指した側の id 列の索引
-//（逆引き検証の材料）。キーは RequirementId、値は TargetIds、内側は KeyedIndex
+//（逆引き検証の材料）。キーは RequirementId、値は FrRefClaims、内側は KeyedIndex
 //（裁定 3-1、2026-09-03）。claim の集約は構築の門で行い、索引は不変。
 
-import { KeyedIndex, RequirementId, type RequirementIds, TargetIds } from "@deep-spec/kernel-domain";
+import { KeyedIndex, RequirementId, type RequirementIds } from "@deep-spec/kernel-domain";
 import type { FrRefClaim } from "./fr-ref-claim.ts";
 
 export class FrReferenceIndex {
-  readonly #ownersByRef: KeyedIndex<RequirementId, TargetIds>;
+  readonly #ownersByRef: KeyedIndex<RequirementId, FrRefClaims>;
 
-  private constructor(ownersByRef: KeyedIndex<RequirementId, TargetIds>) {
+  private constructor(ownersByRef: KeyedIndex<RequirementId, FrRefClaims>) {
     this.#ownersByRef = ownersByRef;
   }
 
   static of(claims: readonly FrRefClaim[]): FrReferenceIndex {
-    const ownersByRef = new Map<string, string[]>();
+    const ownersByRef = new Map<string, FrRefClaim[]>();
     for (const claim of claims) claim.claimInto(ownersByRef);
-    return new FrReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.reconstitute(ref), TargetIds.reconstitute(owners)] as const)));
+    return new FrReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.of(ref), FrRefClaims.of(owners)] as const)));
   }
 
   // 境界: 参照された要件 id（描画順は索引の挿入順）。
@@ -27,7 +28,7 @@ export class FrReferenceIndex {
   missingErrors(known: RequirementIds): string[] {
     const missing = [...this.#ownersByRef.keys()].filter((ref) => !known.has(ref)).map((ref) => ref.asString()).sort();
     return missing.map((id) => {
-      const owners = [...(this.#ownersByRef.get(RequirementId.reconstitute(id))?.toStrings() ?? [])].sort().join(", ");
+      const owners = [...(this.#ownersByRef.get(RequirementId.of(id))?.ownerDescriptions() ?? [])].sort().join(", ");
       return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
     });
   }

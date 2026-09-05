@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import { SmtQueryVerdicts } from "@deep-spec/requirements-domain";
 import { SmtQueryVerdict } from "@deep-spec/requirements-domain";
 import type { RequirementsModel } from "@deep-spec/requirements-domain";
+
 import type { SmtCheck, Z3SolverClient } from "@deep-spec/requirements-usecase";
 import { type SmtChildQuery } from "./smt-child-query.ts";
 import { buildSmtPlan, decodeSolverModel } from "./smt-plan.ts";
@@ -19,7 +20,6 @@ import { KeyedIndex, QueryLabel } from "@deep-spec/kernel-domain";
 
 const CHILD_BUDGET_MS = 45_000;
 const CHILD_WALL_TIMEOUT_MS = 55_000;
-
 
 export class Z3SolverClientImpl implements Z3SolverClient {
   readonly #config: Z3SolverClientConfig;
@@ -39,7 +39,7 @@ export class Z3SolverClientImpl implements Z3SolverClient {
     }
     const verdicts: (readonly [QueryLabel, SmtQueryVerdict])[] = [];
     for (const [id, r] of outcome.results) {
-      verdicts.push([QueryLabel.reconstitute(id), SmtQueryVerdict.reconstitute({
+      verdicts.push([QueryLabel.of(id), SmtQueryVerdict.of({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeSolverModel(model, r.model ?? {}) : undefined,
         core: r.core,

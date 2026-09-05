@@ -15,11 +15,13 @@ export class FrRefClaim {
     return new FrRefClaim(owner, frRefs);
   }
 
+  ownerDescription(): string { return this.#owner; }
+
   // 参照する FR ごとに owner を積む（主張の宣言順）。
-  claimInto(ownersByRef: Map<string, string[]>): void {
+  claimInto(ownersByRef: Map<string, FrRefClaim[]>): void {
     for (const ref of this.#frRefs) {
       const owners = ownersByRef.get(ref.asString()) ?? [];
-      owners.push(this.#owner);
+      owners.push(this);
       ownersByRef.set(ref.asString(), owners);
     }
   }

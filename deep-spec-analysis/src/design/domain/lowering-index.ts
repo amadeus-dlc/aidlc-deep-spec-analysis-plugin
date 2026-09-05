@@ -22,12 +22,7 @@ export class LoweringIndex {
   readonly #machinesByTransition: KeyedIndex<DesignTransitionId, DesignMachine>;
   readonly #attrPathsByMachine: KeyedIndex<DesignMachineId, AttributePath>;
 
-  private constructor(props: {
-    origins: KeyedIndex<LoweredId, LoweredOrigin>;
-    scenarioDesignIds: KeyedIndex<LoweredId, DesignScenarioId>;
-    machinesByTransition: KeyedIndex<DesignTransitionId, DesignMachine>;
-    attrPathsByMachine: KeyedIndex<DesignMachineId, AttributePath>;
-  }) {
+  private constructor(props: Parameters<typeof LoweringIndex.of>[0]) {
     this.#origins = props.origins;
     this.#scenarioDesignIds = props.scenarioDesignIds;
     this.#machinesByTransition = props.machinesByTransition;
@@ -44,43 +39,43 @@ export class LoweringIndex {
   }
 
   originOf(loweredId: string): LoweredOrigin | null {
-    return this.#origins.get(LoweredId.reconstitute(loweredId)) ?? null;
+    return this.#origins.get(LoweredId.of(loweredId)) ?? null;
   }
 
   resolveDesignTarget(loweredId: string): { design: string; entry: LoweredOrigin | null } {
-    const entry = this.#origins.get(LoweredId.reconstitute(loweredId)) ?? null;
+    const entry = this.#origins.get(LoweredId.of(loweredId)) ?? null;
     if (entry) return { design: entry.design().asString(), entry };
-    const dsc = this.#scenarioDesignIds.get(LoweredId.reconstitute(loweredId));
+    const dsc = this.#scenarioDesignIds.get(LoweredId.of(loweredId));
     if (dsc) return { design: dsc.asString(), entry: null };
     return { design: loweredId, entry: null };
   }
 
   rewriteLoweredIds(text: string): string {
-    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(LoweredId.reconstitute(`OB-${num}`))?.design().asString() ?? m);
+    return text.replace(/\bOB-([0-9]+)\b/g, (m, num) => this.#origins.get(LoweredId.of(`OB-${num}`))?.design().asString() ?? m);
   }
 
   rewriteLoweredIdTokens(label: string): string {
     return label.replace(/OB_([0-9]+)/g, (m, num) => {
-      const entry = this.#origins.get(LoweredId.reconstitute(`OB-${num}`));
+      const entry = this.#origins.get(LoweredId.of(`OB-${num}`));
       return entry ? designToken(entry.design().asString()) : m;
     });
   }
 
   isTransition(designId: string): boolean {
-    return this.#machinesByTransition.has(DesignTransitionId.reconstitute(designId));
+    return this.#machinesByTransition.has(DesignTransitionId.of(designId));
   }
 
   machineOfTransition(designId: string): DesignMachine | null {
-    return this.#machinesByTransition.get(DesignTransitionId.reconstitute(designId)) ?? null;
+    return this.#machinesByTransition.get(DesignTransitionId.of(designId)) ?? null;
   }
 
   attrPathOfMachine(machineId: string): string | null {
-    return this.#attrPathsByMachine.get(DesignMachineId.reconstitute(machineId))?.asString() ?? null;
+    return this.#attrPathsByMachine.get(DesignMachineId.of(machineId))?.asString() ?? null;
   }
 
   withPassthrough(loweredId: string, designId: string): LoweringIndex {
     return new LoweringIndex({
-      origins: this.#origins.with(LoweredId.reconstitute(loweredId), LoweredOrigin.reconstitute({ design: LoweredOriginRef.reconstitute(designId), kind: "passthrough" })),
+      origins: this.#origins.with(LoweredId.of(loweredId), LoweredOrigin.of({ design: LoweredOriginRef.of(designId), kind: "passthrough" })),
       scenarioDesignIds: this.#scenarioDesignIds,
       machinesByTransition: this.#machinesByTransition,
       attrPathsByMachine: this.#attrPathsByMachine,

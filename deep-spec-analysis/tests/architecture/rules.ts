@@ -359,6 +359,16 @@ export function privateConstructorInDomain(relPath: string, rawSource: string): 
   return out;
 }
 
+// 復元専用の生成口を設けず、生成と復元の不変条件を一本化する。
+export function noReconstitutionBypass(relPath: string, rawSource: string): Violation[] {
+  const loc = locationOf(relPath);
+  if (loc === null || typeof loc === "string" || loc.layer !== "domain") return [];
+  if (/\bstatic\s+reconstitute\s*\(/.test(stripStrings(rawSource))) {
+    return [{ path: relPath, rule: "no-reconstitution-bypass", detail: "restoration must use the same constructor contract as of" }];
+  }
+  return [];
+}
+
 // ルール: get アクセサ禁止(house style は振る舞いメソッド——プロパティ風の
 // 露出はフィールド直触りの錯覚を生む)。
 export function noGetAccessors(relPath: string, rawSource: string): Violation[] {
@@ -862,6 +872,7 @@ export const ALL_RULES = [
   noExportStar,
   layerDirection,
   privateConstructorInDomain,
+  noReconstitutionBypass,
   noGetAccessors,
   noEnums,
   noNonNullAssertions,

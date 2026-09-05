@@ -16,7 +16,7 @@ export class ContractRow {
   readonly #owner: ContractParty;
   readonly #line: LineNumber;
 
-  private constructor(props: { id: ContractId; provider: ContractParty; consumer: ContractParty; owner: ContractParty; line: LineNumber }) {
+  private constructor(props: Parameters<typeof ContractRow.of>[0]) {
     this.#id = props.id;
     this.#provider = props.provider;
     this.#consumer = props.consumer;
@@ -24,7 +24,7 @@ export class ContractRow {
     this.#line = props.line;
   }
 
-  static reconstitute(props: { id: ContractId; provider: ContractParty; consumer: ContractParty; owner: ContractParty; line: LineNumber }): ContractRow {
+  static of(props: { id: ContractId; provider: ContractParty; consumer: ContractParty; owner: ContractParty; line: LineNumber }): ContractRow {
     return new ContractRow(props);
   }
 
@@ -44,7 +44,6 @@ export class ContractRow {
   locationLabel(): string {
     return `contracts table row ${this.#id.asString()} (line ${this.#line.asNumber()})`;
   }
-
 
   // CD-1 の不変条件（種別規律の裁定 12）: Provider／Consumer／Owner は宣言済み
   // ユニット（Consumer は `External: …` も可）。文言は golden 凍結。

@@ -9,6 +9,7 @@
   "dependencies": {
     "@deep-spec/doctor-domain": "workspace:*",
     "@deep-spec/doctor-usecase": "workspace:*",
-    "@deep-spec/kernel-domain": "workspace:*"
+    "@deep-spec/kernel-domain": "workspace:*",
+    "@deep-spec/kernel-infrastructure": "workspace:*"
   }
 }

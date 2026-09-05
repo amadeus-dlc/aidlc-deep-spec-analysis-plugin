@@ -24,7 +24,7 @@ function canonicalKeyOf(value: CanonicalNode): string {
 export class ExpressionTree {
   readonly #root: Expression;
 
-  private constructor(root: Expression) {
+  private constructor(root: Parameters<typeof ExpressionTree.of>[0]) {
     // 入力の所有権を引き取らず、独立した不変の木を持つ。寛容な復元が運ぶ
     // 未知のキーや不正な形も、正規化せずコピーする。
     const snapshot = structuredClone(root);

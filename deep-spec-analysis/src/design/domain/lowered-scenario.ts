@@ -1,7 +1,8 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
-import type { LoweredId } from "./lowered-id.ts";
 import type { FrRefs } from "@deep-spec/kernel-domain";
+
+import type { LoweredId } from "./lowered-id.ts";
 
 // lowered v1 シナリオ。accept / reject の区別と任意部（イベント・期待式）の
 // 有無はシナリオ自身の知識（#71 波20）。
@@ -13,7 +14,7 @@ export class LoweredScenario {
   readonly #event: { readonly trigger: string } | undefined;
   readonly #expect: Expression | undefined;
 
-  private constructor(props: { id: LoweredId; kind: "accept" | "reject"; frRefs: FrRefs; bindings: { readonly [path: string]: boolean | number | string }; event?: { readonly trigger: string }; expect?: Expression }) {
+  private constructor(props: Parameters<typeof LoweredScenario.of>[0]) {
     this.#id = props.id;
     this.#kind = props.kind;
     this.#frRefs = props.frRefs;
@@ -22,7 +23,7 @@ export class LoweredScenario {
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
-  static reconstitute(props: { id: LoweredId; kind: "accept" | "reject"; frRefs: FrRefs; bindings: { readonly [path: string]: boolean | number | string }; event?: { readonly trigger: string }; expect?: Expression }): LoweredScenario {
+  static of(props: { id: LoweredId; kind: "accept" | "reject"; frRefs: FrRefs; bindings: { readonly [path: string]: boolean | number | string }; event?: { readonly trigger: string }; expect?: Expression }): LoweredScenario {
     return new LoweredScenario(props);
   }
 

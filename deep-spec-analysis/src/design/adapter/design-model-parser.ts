@@ -1,3 +1,35 @@
+import { decodeDomainValues } from "@deep-spec/kernel-adapter";
+import { RequirementId, FrRefs, IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
+import {
+  BrRef,
+  BrRefs,
+  DesignBackgroundId,
+  DesignBackgroundAssumption,
+  DesignAttributeName,
+  DesignEntityName,
+  DesignMachineId,
+  DesignObligationId,
+  DesignObligationNature,
+  DesignObligationOrigin,
+  DesignScenarioId,
+  DesignTransitionId,
+  DesignIgnores,
+  DesignTransitions,
+  DesignUnits,
+  InitialStates,
+  DesignIgnore,
+  DesignBackgroundAssumptions,
+  DesignMachines,
+  DesignObligations,
+  DesignScenarios,
+  DesignMachine,
+  DesignObligation,
+  DesignScenario,
+  DesignTransition,
+  DesignUnit,
+  DesignModel,
+} from "@deep-spec/design-domain";
+
 // 契約3 設計 IR（生 Json）→ Parameters<typeof DesignModel.compose>[0] の寛容パース。欠損・型不一致
 // のエントリは黙って落とす（旧 parseDesignIr の凍結挙動——design-ir-valid
 // センサーが別途厳密検査を担う）。集約として成立しない形は凍結文言の文字列で
@@ -5,14 +37,15 @@
 // 旧 deep-spec-design-lib.ts の parseDesignIr からの逐語移植。
 
 import { type Json, isObject, strArr } from "@deep-spec/kernel-infrastructure";
-import { FrRefs, IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
-import { BrRefs, DesignBackgroundId, DesignBackgroundAssumption, DesignAttributeName, DesignEntityName, DesignMachineId, DesignObligationId, DesignObligationNature, DesignObligationOrigin, DesignScenarioId, DesignTransitionId, DesignIgnores, DesignTransitions, DesignUnits, InitialStates, DesignIgnore, DesignBackgroundAssumptions, DesignMachines, DesignObligations, DesignScenarios, DesignMachine, DesignObligation, DesignScenario, DesignTransition, DesignUnit,
-  DesignModel,
-} from "@deep-spec/design-domain";
+
 import { parseDesignEntities } from "./design-entities-parser.ts";
 
+export function parseDesignModel(raw: Json): ReturnType<typeof parseDesignModelValue> {
+  const decoded = decodeDomainValues(() => parseDesignModelValue(raw));
+  return decoded.ok ? decoded.value : decoded.error;
+}
 
-export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.compose>[0], "id" | "irHash" | "sourceDocument"> | string {
+function parseDesignModelValue(raw: Json): Omit<Parameters<typeof DesignModel.compose>[0], "id" | "irHash" | "sourceDocument"> | string {
   if (!isObject(raw)) return "design IR is not a JSON object";
   if (raw.irKind !== "design") return 'document is not a design IR (missing `"irKind": "design"`)';
   const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
@@ -26,14 +59,14 @@ export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.
     const obligations: DesignObligation[] = [];
     for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
-      obligations.push(DesignObligation.reconstitute({
-        id: DesignObligationId.reconstitute(ob.id),
-        nature: DesignObligationNature.reconstitute(ob.nature),
-        origin: DesignObligationOrigin.reconstitute(typeof ob.origin === "string" ? ob.origin : ""),
-        brRefs: BrRefs.reconstitute(strArr(ob.brRefs)),
-        frRefs: FrRefs.reconstitute(strArr(ob.frRefs)),
+      obligations.push(DesignObligation.of({
+        id: DesignObligationId.of(ob.id),
+        nature: DesignObligationNature.of(ob.nature),
+        origin: DesignObligationOrigin.of(typeof ob.origin === "string" ? ob.origin : ""),
+        brRefs: BrRefs.of(Array.from(strArr(ob.brRefs), (raw) => BrRef.of(raw))),
+        frRefs: FrRefs.of(Array.from(strArr(ob.frRefs), (raw) => RequirementId.of(raw))),
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
-        trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
+        trigger: typeof ob.trigger === "string" ? TriggerName.of(ob.trigger) : undefined,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
         effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
         temporal: isObject(ob.temporal) ? (ob.temporal as unknown as { pattern: string; assert?: Expression; from?: Expression; to?: Expression }) : undefined,
@@ -46,26 +79,26 @@ export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.
       for (const tr of Array.isArray(sm.transitions) ? sm.transitions : []) {
         if (!isObject(tr) || typeof tr.id !== "string") continue;
         if (typeof tr.from !== "string" || typeof tr.to !== "string" || typeof tr.trigger !== "string") continue;
-        transitions.push(DesignTransition.reconstitute({
-          id: DesignTransitionId.reconstitute(tr.id),
+        transitions.push(DesignTransition.of({
+          id: DesignTransitionId.of(tr.id),
           from: tr.from,
           to: tr.to,
-          trigger: TriggerName.reconstitute(tr.trigger),
+          trigger: TriggerName.of(tr.trigger),
           guard: isObject(tr.guard) ? (tr.guard as unknown as Expression) : undefined,
           effect: isObject(tr.effect) ? (tr.effect as unknown as Expression) : undefined,
-          brRefs: BrRefs.reconstitute(strArr(tr.brRefs)),
+          brRefs: BrRefs.of(Array.from(strArr(tr.brRefs), (raw) => BrRef.of(raw))),
         }));
       }
       const ignores: DesignIgnore[] = [];
       for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
         if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
-        ignores.push(DesignIgnore.reconstitute({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger) }));
+        ignores.push(DesignIgnore.of({ state: ig.state, trigger: TriggerName.of(ig.trigger) }));
       }
       machines.push(
-        DesignMachine.reconstitute({
-          id: DesignMachineId.reconstitute(sm.id),
-          entity: DesignEntityName.reconstitute(sm.entity),
-          attribute: DesignAttributeName.reconstitute(sm.attribute),
+        DesignMachine.of({
+          id: DesignMachineId.of(sm.id),
+          entity: DesignEntityName.of(sm.entity),
+          attribute: DesignAttributeName.of(sm.attribute),
           initial: InitialStates.of(strArr(sm.initial)),
           transitions: DesignTransitions.of(transitions),
           ignores: DesignIgnores.of(ignores),
@@ -82,23 +115,23 @@ export function parseDesignModel(raw: Json): Omit<Parameters<typeof DesignModel.
       for (const [k, v] of Object.entries(sc.bindings)) {
         if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
       }
-      scenarios.push(DesignScenario.reconstitute({
-        id: DesignScenarioId.reconstitute(sc.id),
+      scenarios.push(DesignScenario.of({
+        id: DesignScenarioId.of(sc.id),
         kind,
-        brRefs: BrRefs.reconstitute(strArr(sc.brRefs)),
-        frRefs: FrRefs.reconstitute(strArr(sc.frRefs)),
+        brRefs: BrRefs.of(Array.from(strArr(sc.brRefs), (raw) => BrRef.of(raw))),
+        frRefs: FrRefs.of(Array.from(strArr(sc.frRefs), (raw) => RequirementId.of(raw))),
         bindings,
-        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
+        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.of(sc.event.trigger) } : undefined,
         expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
       }));
     }
     const background: DesignBackgroundAssumption[] = [];
     for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
       if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
-      background.push(DesignBackgroundAssumption.reconstitute({ id: DesignBackgroundId.reconstitute(bg.id), assert: bg.assert as unknown as Expression }));
+      background.push(DesignBackgroundAssumption.of({ id: DesignBackgroundId.of(bg.id), assert: bg.assert as unknown as Expression }));
     }
     units.push(
-      DesignUnit.reconstitute({
+      DesignUnit.of({
         unit: rawUnit.unit,
         entities,
         obligations: DesignObligations.of(obligations),

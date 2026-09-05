@@ -4,6 +4,12 @@
 
 要件定義（docs/TODO.md, 2026-08）に対する実装時の判断・スパイク結果・逸脱の記録。
 
+## 2026-09-05 — 生成・復元の契約を一本化
+
+旧来の「parseは厳格、reconstituteは不変条件を免除」という判断を撤回する。コンストラクタは具体的なTypeScriptの引数型を維持し、実行時の型検査を追加しない。値の形式・範囲・非空などの不変条件を一度だけ検査して `IllegalArgumentException` を送出する。`of` はその例外を送出し、`parse` は契約違反だけを `Result` に変換する。`PluginVersion.parse` も同じ規則に従う。
+
+復元は `of` に統一する。壊れた入力を診断するために保持する宣言値は `DeclaredBound`・`DeclaredDigest`・`DeclaredRuleId` で表し、検証済み値の不変条件を迂回しない。`ErrorMessages` の空配列は有効な「エラーなし」であり、禁止しない。文書の正準化を担う `compose` は意味のある操作として維持する。
+
 ## スパイク結果（前提A1〜A4の検証）
 
 - **A1: z3-solver（WASM）はbunで動くか → 不成立（回避策あり）**

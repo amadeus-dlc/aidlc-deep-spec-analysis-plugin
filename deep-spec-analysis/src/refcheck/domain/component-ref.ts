@@ -7,12 +7,12 @@ export class ComponentRef {
   readonly #component: ComponentName;
   readonly #element: ElementPath;
 
-  private constructor(props: { component: ComponentName; element: ElementPath }) {
+  private constructor(props: Parameters<typeof ComponentRef.of>[0]) {
     this.#component = props.component;
     this.#element = props.element;
   }
 
-  static reconstitute(props: { component: ComponentName; element: ElementPath }): ComponentRef {
+  static of(props: { component: ComponentName; element: ElementPath }): ComponentRef {
     return new ComponentRef(props);
   }
 

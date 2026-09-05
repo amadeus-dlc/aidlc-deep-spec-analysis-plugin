@@ -9,7 +9,7 @@ export class RefinementStaleRow {
     this.#intent = intent;
   }
 
-  static reconstitute(props: { space: string; intent: string }): RefinementStaleRow {
+  static of(props: { space: string; intent: string }): RefinementStaleRow {
     return new RefinementStaleRow(props.space, props.intent);
   }
 

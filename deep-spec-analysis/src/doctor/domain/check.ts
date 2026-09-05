@@ -9,14 +9,14 @@ export class Check {
   readonly #fix: string | undefined;
   readonly #severity: CheckSeverity;
 
-  private constructor(props: { pass: boolean; label: string; fix?: string; severity: CheckSeverity }) {
+  private constructor(props: Parameters<typeof Check.of>[0]) {
     this.#pass = props.pass;
     this.#label = props.label;
     this.#fix = props.fix;
     this.#severity = props.severity;
   }
 
-  static reconstitute(props: { pass: boolean; label: string; fix?: string; severity: CheckSeverity }): Check {
+  static of(props: { pass: boolean; label: string; fix?: string; severity: CheckSeverity }): Check {
     return new Check(props);
   }
 

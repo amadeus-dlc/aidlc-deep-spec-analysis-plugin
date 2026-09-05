@@ -1,8 +1,8 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
-// 受け入れ／拒否シナリオ。期待する充足可能性と binding の正準列挙を所有する。
-
 import type { Expression } from "@deep-spec/kernel-domain";
 import type { FrRefs, TriggerName } from "@deep-spec/kernel-domain";
+// 受け入れ／拒否シナリオ。期待する充足可能性と binding の正準列挙を所有する。
+
 import { ScenarioId } from "./scenario-id.ts";
 
 export class Scenario {
@@ -13,14 +13,7 @@ export class Scenario {
   readonly #eventTrigger: TriggerName | undefined;
   readonly #expect: Expression | undefined;
 
-  private constructor(props: {
-    id: ScenarioId;
-    kind: "accept" | "reject";
-    frRefs: FrRefs;
-    bindings: Readonly<Record<string, boolean | number | string>>;
-    event?: { readonly trigger: TriggerName };
-    expect?: Expression;
-  }) {
+  private constructor(props: Parameters<typeof Scenario.of>[0]) {
     this.#id = props.id;
     this.#kind = props.kind;
     this.#frRefs = props.frRefs;
@@ -29,7 +22,7 @@ export class Scenario {
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
-  static reconstitute(props: {
+  static of(props: {
     id: ScenarioId;
     kind: "accept" | "reject";
     frRefs: FrRefs;

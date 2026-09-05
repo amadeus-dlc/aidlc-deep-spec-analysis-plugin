@@ -8,7 +8,7 @@ import type { DigestAnchor } from "./digest-anchor.ts";
 export class VerificationStaleness {
   readonly #anchor: DigestAnchor | null;
 
-  private constructor(props: { anchor: DigestAnchor | null }) {
+  private constructor(props: Parameters<typeof VerificationStaleness.of>[0]) {
     this.#anchor = props.anchor;
   }
 

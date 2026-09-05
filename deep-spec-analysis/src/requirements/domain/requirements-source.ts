@@ -7,7 +7,6 @@
 import { type ArtifactPath, type RequirementIds, ContentHash } from "@deep-spec/kernel-domain";
 import type { RequirementsSourceId } from "./requirements-source-id.ts";
 
-
 export class RequirementsSource {
   readonly #id: RequirementsSourceId;
   readonly #sourcePath: ArtifactPath;
@@ -15,26 +14,20 @@ export class RequirementsSource {
   readonly #digest: ContentHash;
   readonly #sourceDocument: Uint8Array;
 
-  private constructor(seed: {
-    readonly id: RequirementsSourceId;
-    readonly sourcePath: ArtifactPath;
-    readonly knownIds: RequirementIds;
-    readonly digest: string;
-    readonly sourceDocument: Uint8Array;
-  }) {
+  private constructor(seed: Parameters<typeof RequirementsSource.of>[0]) {
     this.#id = seed.id;
     this.#sourcePath = seed.sourcePath;
     this.#knownIds = seed.knownIds;
-    this.#digest = ContentHash.reconstitute(seed.digest);
+    this.#digest = seed.digest;
     this.#sourceDocument = new Uint8Array(seed.sourceDocument);
   }
 
   // アダプタの解決からの唯一の構築口。
-  static reconstitute(seed: {
+  static of(seed: {
     readonly id: RequirementsSourceId;
     readonly sourcePath: ArtifactPath;
     readonly knownIds: RequirementIds;
-    readonly digest: string;
+    readonly digest: ContentHash;
     readonly sourceDocument: Uint8Array;
   }): RequirementsSource {
     return new RequirementsSource(seed);
@@ -54,8 +47,8 @@ export class RequirementsSource {
   }
 
   // 境界: 凍結文言の source anchoring と照合されるダイジェスト。
-  digest(): string {
-    return this.#digest.asString();
+  digest(): ContentHash {
+    return this.#digest;
   }
 
   // 境界: store が書く原文（バイト逐語——防御コピー）。

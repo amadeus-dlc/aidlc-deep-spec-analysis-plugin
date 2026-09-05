@@ -17,7 +17,7 @@ export class DesignReportId {
 
   // of は識別組立ての門——backend 名は生語彙(ファイル名・CLI)から包む。
   static of(directory: ArtifactPath, backend: string): DesignReportId {
-    return new DesignReportId(directory, BackendName.reconstitute(backend));
+    return new DesignReportId(directory, BackendName.of(backend));
   }
 
   equals(other: DesignReportId): boolean {

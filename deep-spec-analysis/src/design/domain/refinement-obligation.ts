@@ -1,5 +1,6 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
+
 import type { ObligationId, ObligationNature } from "@deep-spec/requirements-domain";
 
 export class RefinementObligation {
@@ -11,7 +12,7 @@ export class RefinementObligation {
   readonly #guard: Expression | undefined;
   readonly #effect: Expression | undefined;
 
-  private constructor(props: { id: ObligationId; nature: ObligationNature; frRefs: FrRefs; assert?: Expression; trigger?: TriggerName; guard?: Expression; effect?: Expression }) {
+  private constructor(props: Parameters<typeof RefinementObligation.of>[0]) {
     this.#id = props.id;
     this.#nature = props.nature;
     this.#frRefs = props.frRefs;
@@ -21,7 +22,7 @@ export class RefinementObligation {
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
   }
 
-  static reconstitute(props: { id: ObligationId; nature: ObligationNature; frRefs: FrRefs; assert?: Expression; trigger?: TriggerName; guard?: Expression; effect?: Expression }): RefinementObligation {
+  static of(props: { id: ObligationId; nature: ObligationNature; frRefs: FrRefs; assert?: Expression; trigger?: TriggerName; guard?: Expression; effect?: Expression }): RefinementObligation {
     return new RefinementObligation(props);
   }
 
@@ -37,7 +38,7 @@ export class RefinementObligation {
   isStateTemporal(): boolean { return this.#nature.isStateTemporal(); }
 
   eventDefinition(): { readonly trigger: TriggerName; readonly guard: Expression; readonly effect: Expression } | null {
-    if (!this.#nature.isEvent() || this.#trigger === undefined || this.#trigger.isEmpty() || this.#guard === undefined || this.#effect === undefined) return null;
+    if (!this.#nature.isEvent() || this.#trigger === undefined || this.#guard === undefined || this.#effect === undefined) return null;
     return { trigger: this.#trigger, guard: this.#guard, effect: this.#effect };
   }
 }

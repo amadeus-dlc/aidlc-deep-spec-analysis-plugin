@@ -19,11 +19,11 @@ export class CheckVerificationCoverageUseCase {
     const targets = this.#workspace.verificationTargets(scopes);
     for (const t of targets) {
       if (!t.hasModel || !t.hasFindings) {
-        problems.push(CoverageRow.reconstitute({ space: t.space, intent: t.intent, state: CoverageState.unverified() }));
+        problems.push(CoverageRow.of({ space: t.space, intent: t.intent, state: CoverageState.unverified() }));
         continue;
       }
       const stale = VerificationStaleness.of({ anchor: t.anchor }).isStale();
-      if (stale) problems.push(CoverageRow.reconstitute({ space: t.space, intent: t.intent, state: CoverageState.stale() }));
+      if (stale) problems.push(CoverageRow.of({ space: t.space, intent: t.intent, state: CoverageState.stale() }));
     }
     return CoverageAssessment.of({ eligible: targets.length, problems, scopes });
   }

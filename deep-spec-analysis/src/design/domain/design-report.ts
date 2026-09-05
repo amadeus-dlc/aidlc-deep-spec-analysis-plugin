@@ -1,13 +1,13 @@
+import { UnitName, ContentHash, IrVersion, SkipReason, VerificationMethod, type FindingsSchema } from "@deep-spec/kernel-domain";
+
 // DesignReport 集約 — 設計バックエンド（smt / quint / cross-check）の検証結果
 // 文書（契約2 拡張：unit 帰属つき finding・inputs/checked 任意）のドメイン表現。
 // compose が正準ソート（findings/skipped の設計順・inputs の artifact 順・
-// checked の sortedUnique）を不変条件として一度だけ適用する。直列化（キー順・
-// 描画）はアダプタの serializer が持つ。degraded は契約適合の降格形
+// checked の sortedUnique）を適用する。文書のキー順は集約が、
+// JSON文字列への描画はアダプタの serializer が持つ。degraded は契約適合の降格形
 // （findings/skipped/inputs/checked/crossChecked を空にして unavailable 理由
 // だけ残す——旧 writeDesignDoc の自己検証降格と同じ姿）。
 
-import { ContentHash, IrVersion, SkipReason, VerificationMethod } from "@deep-spec/kernel-domain";
-import type { FindingsSchema } from "@deep-spec/kernel-domain";
 import type { Json } from "@deep-spec/kernel-infrastructure";
 import type { DesignModel } from "./design-model.ts";
 import { DesignFindings } from "./design-findings.ts";
@@ -32,22 +32,11 @@ export class DesignReport {
   readonly #crossChecked: DesignCrossCheckedEntries | null;
   readonly #unavailableReason: string | null;
 
-  private constructor(seed: {
-    readonly id: DesignReportId;
-    readonly irVersion: IrVersion;
-    readonly irHash: ContentHash;
-    readonly method: string;
-    readonly findings: DesignFindings;
-    readonly skipped: DesignSkips;
-    readonly inputs: DesignInputAnchors | null;
-    readonly checked: CheckedUnits | null;
-    readonly crossChecked: DesignCrossCheckedEntries | null;
-    readonly unavailableReason: string | null;
-  }) {
+  private constructor(seed: Parameters<typeof DesignReport.of>[0]) {
     this.#id = seed.id;
     this.#irVersion = seed.irVersion;
     this.#irHash = seed.irHash;
-    this.#method = VerificationMethod.reconstitute(seed.method);
+    this.#method = seed.method;
     this.#findings = seed.findings;
     this.#skipped = seed.skipped;
     this.#inputs = seed.inputs;
@@ -56,15 +45,13 @@ export class DesignReport {
     this.#unavailableReason = seed.unavailableReason;
   }
 
-  // 検査結果からの組成。正準ソートは集約の不変条件としてここで一度だけ適用する。
-
   // ---- 降格レポートの static ファクトリ（OOUI 裁定・文言は golden 凍結） ----
 
   // 設計 IR が読めない（fence 不正・JSON 不正・構造不正）。
   static irUnreadable(id: DesignReportId, method: string, cause: string): DesignReport {
     return DesignReport.compose({
       id,
-      irVersion: IrVersion.reconstitute("0.0.0"),
+      irVersion: IrVersion.of("0.0.0"),
       irHash: ContentHash.ofText(""),
       method,
       findings: DesignFindings.of([]),
@@ -85,7 +72,7 @@ export class DesignReport {
         [...u.allTargets()].map((t) => (DesignSkipped.of({
           target: t,
           reason: SkipReason.irVersionMismatch(),
-          unit: u.name(),
+          unit: UnitName.of(u.name()),
           detail: `design IR major version ${model.majorVersion()} is not supported by this backend (supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
         }))),
       )),
@@ -110,12 +97,13 @@ export class DesignReport {
       method,
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of(model.units().toArray().flatMap((u) =>
-        [...u.allTargets()].map((t) => (DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: u.name(), detail: skipDetail }))),
+        [...u.allTargets()].map((t) => (DesignSkipped.of({ target: t, reason: SkipReason.unavailable(), unit: UnitName.of(u.name()), detail: skipDetail }))),
       )),
       unavailableReason: reason,
     });
   }
 
+  // 検査結果の並びを正準化してから、共通の生成口へ渡す。
   static compose(input: {
     readonly id: DesignReportId;
     readonly irVersion: IrVersion;
@@ -128,11 +116,11 @@ export class DesignReport {
     readonly crossChecked?: DesignCrossCheckedEntries;
     readonly unavailableReason?: string;
   }): DesignReport {
-    return new DesignReport({
+    return DesignReport.of({
       id: input.id,
       irVersion: input.irVersion,
       irHash: input.irHash,
-      method: input.method,
+      method: VerificationMethod.of(input.method),
       findings: input.findings.sortedCanonically(),
       skipped: input.skipped.sortedCanonically(),
       inputs: input.inputs === undefined ? null : input.inputs.sortedByArtifact(),
@@ -142,12 +130,12 @@ export class DesignReport {
     });
   }
 
-  // 書かれた文書からの再構成（ソートしない——書かれた姿が正）。
-  static reconstitute(seed: {
+  // 型付きの文書を、要素の並びを保持して構築する。
+  static of(seed: {
     readonly id: DesignReportId;
     readonly irVersion: IrVersion;
     readonly irHash: ContentHash;
-    readonly method: string;
+    readonly method: VerificationMethod;
     readonly findings: DesignFindings;
     readonly skipped: DesignSkips;
     readonly inputs: DesignInputAnchors | null;
@@ -165,7 +153,7 @@ export class DesignReport {
       id: this.#id,
       irVersion: this.#irVersion,
       irHash: this.#irHash,
-      method: this.#method.asString(),
+      method: this.#method,
       findings: DesignFindings.of([]),
       skipped: DesignSkips.of([]),
       inputs: null,

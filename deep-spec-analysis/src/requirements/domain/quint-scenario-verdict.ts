@@ -1,4 +1,5 @@
-import type { TargetId } from "@deep-spec/kernel-domain";
+import { SkipReason, type TargetId } from "@deep-spec/kernel-domain";
+
 import { VerificationSkipped } from "./verification-skipped.ts";
 
 // シナリオフェーズ（全属性束縛・イベントなしの 1 ステップ評価）の判定。主従の
@@ -32,8 +33,8 @@ export class QuintScenarioVerdict {
   // 予算超過・実行失敗の skip（凍結文言）。evaluated は skip しない。
   skipFor(target: TargetId): VerificationSkipped | null {
     const kind = this.#kind;
-    if (kind === "timeout") return VerificationSkipped.reconstitute({ target, reason: "timeout", detail: "scenario evaluation exceeded its budget" });
-    if (kind === "run-failed") return VerificationSkipped.reconstitute({ target, reason: "unavailable", detail: `quint run failed unexpectedly: ${this.#outputTail}` });
+    if (kind === "timeout") return VerificationSkipped.of({ target, reason: SkipReason.of("timeout"), detail: "scenario evaluation exceeded its budget" });
+    if (kind === "run-failed") return VerificationSkipped.of({ target, reason: SkipReason.of("unavailable"), detail: `quint run failed unexpectedly: ${this.#outputTail}` });
     return null;
   }
 

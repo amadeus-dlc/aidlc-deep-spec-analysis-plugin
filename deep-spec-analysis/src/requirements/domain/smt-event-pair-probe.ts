@@ -12,7 +12,7 @@ export class SmtEventPairProbe {
   readonly #b: ObligationId;
   readonly #trigger: TriggerName;
 
-  private constructor(props: { qOverlap: QueryLabel; qJoint: QueryLabel; a: ObligationId; b: ObligationId; trigger: TriggerName }) {
+  private constructor(props: Parameters<typeof SmtEventPairProbe.of>[0]) {
     this.#qOverlap = props.qOverlap;
     this.#qJoint = props.qJoint;
     this.#a = props.a;

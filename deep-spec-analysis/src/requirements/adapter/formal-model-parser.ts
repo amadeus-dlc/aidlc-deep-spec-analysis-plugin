@@ -1,10 +1,13 @@
-// 契約1 IR（生 Json）→ Parameters<typeof RequirementsModel.reconstitute>[0] の寛容パース。欠損・型不一致の
+import { decodeDomainValues } from "@deep-spec/kernel-adapter";
+import { RequirementId, IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
+
+// 契約1 IR（生 Json）→ Parameters<typeof RequirementsModel.of>[0] の寛容パース。欠損・型不一致の
 // エントリは黙って落とす（旧 parseIr の凍結挙動——ir-valid センサーが別途
 // 厳密検査を担う）。集約として成立しない形は凍結文言の文字列で返す。
 // 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
 
 import { type Json, isObject, strArr } from "@deep-spec/kernel-infrastructure";
-import { IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
+
 import {
   AttributeBound,
   AttributePath,
@@ -27,7 +30,12 @@ import {
 
 // 恒等（FormalModelId）は Repository が findById の引数から注入する——
 // パーサは文書の中身しか知らない。
-export function parseFormalModel(raw: Json): Omit<Parameters<typeof RequirementsModel.reconstitute>[0], "id" | "irHash" | "sourceDocument"> | string {
+export function parseFormalModel(raw: Json): ReturnType<typeof parseFormalModelValue> {
+  const decoded = decodeDomainValues(() => parseFormalModelValue(raw));
+  return decoded.ok ? decoded.value : decoded.error;
+}
+
+function parseFormalModelValue(raw: Json): Omit<Parameters<typeof RequirementsModel.of>[0], "id" | "irHash" | "sourceDocument"> | string {
   if (!isObject(raw)) return "IR is not a JSON object";
   const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
   if (!irVersion.ok) return "IR lacks a semver irVersion";
@@ -40,11 +48,11 @@ export function parseFormalModel(raw: Json): Omit<Parameters<typeof Requirements
       const t = attr.type;
       const kind = t.kind;
       if (kind !== "bool" && kind !== "int" && kind !== "enum") continue;
-      attributes.push(AttributeDeclaration.reconstitute({
-        path: AttributePath.reconstitute(`${ent.name}.${attr.name}`),
+      attributes.push(AttributeDeclaration.of({
+        path: AttributePath.of(`${ent.name}.${attr.name}`),
         kind,
-        min: typeof t.min === "number" ? AttributeBound.reconstitute(t.min) : undefined,
-        max: typeof t.max === "number" ? AttributeBound.reconstitute(t.max) : undefined,
+        min: typeof t.min === "number" ? AttributeBound.of(t.min) : undefined,
+        max: typeof t.max === "number" ? AttributeBound.of(t.max) : undefined,
         values: Array.isArray(t.values) ? AttributeValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
       }));
     }
@@ -52,13 +60,13 @@ export function parseFormalModel(raw: Json): Omit<Parameters<typeof Requirements
   const obligations: Obligation[] = [];
   for (const ob of Array.isArray(raw.obligations) ? raw.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
-    obligations.push(Obligation.reconstitute({
-      id: ObligationId.reconstitute(ob.id),
-      nature: ObligationNature.reconstitute(ob.nature),
-      frRefs: FrRefs.reconstitute(strArr(ob.frRefs)),
+    obligations.push(Obligation.of({
+      id: ObligationId.of(ob.id),
+      nature: ObligationNature.of(ob.nature),
+      frRefs: FrRefs.of(Array.from(strArr(ob.frRefs), (raw) => RequirementId.of(raw))),
       ears: typeof ob.ears === "string" ? ob.ears : undefined,
       assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
-      trigger: typeof ob.trigger === "string" ? TriggerName.reconstitute(ob.trigger) : undefined,
+      trigger: typeof ob.trigger === "string" ? TriggerName.of(ob.trigger) : undefined,
       guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
       effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
       temporal: isObject(ob.temporal) ? (ob.temporal as unknown as { pattern: string; assert?: Expression; from?: Expression; to?: Expression }) : undefined,
@@ -73,19 +81,19 @@ export function parseFormalModel(raw: Json): Omit<Parameters<typeof Requirements
     for (const [k, v] of Object.entries(sc.bindings)) {
       if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
     }
-    scenarios.push(Scenario.reconstitute({
-      id: ScenarioId.reconstitute(sc.id),
+    scenarios.push(Scenario.of({
+      id: ScenarioId.of(sc.id),
       kind,
-      frRefs: FrRefs.reconstitute(strArr(sc.frRefs)),
+      frRefs: FrRefs.of(Array.from(strArr(sc.frRefs), (raw) => RequirementId.of(raw))),
       bindings,
-      event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined,
+      event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.of(sc.event.trigger) } : undefined,
       expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
     }));
   }
   const background: BackgroundAssumption[] = [];
   for (const bg of Array.isArray(raw.background) ? raw.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert)) continue;
-    background.push(BackgroundAssumption.reconstitute({ id: BackgroundAssumptionId.reconstitute(bg.id), assert: bg.assert as unknown as Expression }));
+    background.push(BackgroundAssumption.of({ id: BackgroundAssumptionId.of(bg.id), assert: bg.assert as unknown as Expression }));
   }
   return {
     irVersion: irVersion.value,

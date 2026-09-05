@@ -1,3 +1,4 @@
+
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -177,13 +178,13 @@ describe("doctor version advisory", () => {
   });
 
   test("PluginVersion は stable SemVer だけを受理し、大きな数値も精度を落とさず比較する", () => {
-    const current = PluginVersion.parse("v999999999999999999999.2.3");
-    const latest = PluginVersion.parse("999999999999999999999.2.4");
+    const current = PluginVersion.of("v999999999999999999999.2.3");
+    const latest = PluginVersion.of("999999999999999999999.2.4");
     expect(current?.asString()).toBe("999999999999999999999.2.3");
     expect(current?.asTag()).toBe("v999999999999999999999.2.3");
-    expect(current?.isOlderThan(latest as PluginVersion)).toBe(true);
-    expect(current?.equals(PluginVersion.parse("999999999999999999999.2.3") as PluginVersion)).toBe(true);
-    expect(PluginVersion.parse("01.2.3")).toBeNull();
-    expect(PluginVersion.parse("1.2.3-beta.1")).toBeNull();
+    expect(current?.isOlderThan(latest)).toBe(true);
+    expect(current?.equals(PluginVersion.of("999999999999999999999.2.3"))).toBe(true);
+    expect(PluginVersion.parse("01.2.3").ok).toBe(false);
+    expect(PluginVersion.parse("1.2.3-beta.1").ok).toBe(false);
   });
 });

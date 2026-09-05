@@ -1,24 +1,21 @@
-import { err, ok } from "@deep-spec/kernel-infrastructure";
-import type { Result } from "@deep-spec/kernel-infrastructure";
-
-type RefinementMapTokenError = { readonly kind: "empty-refinement-map-token"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 // unmapped[].target の宣言トークン——要件属性パス・義務 id・シナリオ id の
 // どれをも指しうる契約4 の waiver 語彙。
 export class UnmappedTargetRef {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (raw === "") throw new IllegalArgumentException({ kind: "empty-refinement-map-token", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<UnmappedTargetRef, RefinementMapTokenError> {
-    if (raw === "") return err({ kind: "empty-refinement-map-token", raw });
-    return ok(new UnmappedTargetRef(raw));
-  }
-
-  static reconstitute(raw: string): UnmappedTargetRef {
+  static of(raw: string): UnmappedTargetRef {
     return new UnmappedTargetRef(raw);
+  }
+
+  static parse(raw: string): Result<UnmappedTargetRef, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new UnmappedTargetRef(raw));
   }
 
   equals(other: UnmappedTargetRef): boolean {

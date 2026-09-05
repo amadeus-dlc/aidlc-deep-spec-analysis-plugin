@@ -1,14 +1,6 @@
-// 検査対象 id（target）の語彙。finding・skip・checked が集約をまたいで指す
-// id——要件の義務／シナリオ、設計の宣言、BR、名前空間付きトークン——で、
-// findings スキーマの targetId 定義が唯一の強い不変条件（parse が検証する）。
-// 凍結文書と生 id 材料の再構成は reconstitute（逐語）。正準順序（英字骨格→
-// 数値セグメント）は id 自身が所有する（#71 波10。比較器は kernel 非公開の
-// canonical-order へ降格——種別規律の裁定 1）。
-
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
-import { compareCanonically } from "./canonical-order.ts";
-
-type TargetIdError = { readonly kind: "malformed-target-id"; readonly raw: string };
+import { IllegalArgumentException, parseConstruction, type Result, compareCanonically } from "@deep-spec/kernel-infrastructure";
+// 検査対象 ID。生成時に findings スキーマの targetId 形式を保証する。
+// 正準順序は言語基盤の比較器を使い、ID 以外のトークンを ID に包まない。
 
 // deep-spec-findings-schema.json の definitions.targetId と同値。
 const TARGET_ID_PATTERNS: readonly RegExp[] = [
@@ -21,17 +13,17 @@ const TARGET_ID_PATTERNS: readonly RegExp[] = [
 export class TargetId {
   readonly #value: string;
 
-  private constructor(value: string) {
-    this.#value = value;
+  private constructor(raw: string) {
+    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw))) throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
+    this.#value = raw;
   }
 
-  static parse(raw: string): Result<TargetId, TargetIdError> {
-    if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw))) return err({ kind: "malformed-target-id", raw });
-    return ok(new TargetId(raw));
-  }
-
-  static reconstitute(raw: string): TargetId {
+  static of(raw: string): TargetId {
     return new TargetId(raw);
+  }
+
+  static parse(raw: string): Result<TargetId, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new TargetId(raw));
   }
 
   equals(other: TargetId): boolean {

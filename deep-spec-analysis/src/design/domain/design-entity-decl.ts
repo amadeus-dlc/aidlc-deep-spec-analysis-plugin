@@ -11,13 +11,13 @@ export class DesignEntityDecl {
   readonly #description: string | undefined;
   readonly #attributes: DesignAttributeDecls;
 
-  private constructor(props: { name: DesignEntityName; description?: string; attributes: DesignAttributeDecls }) {
+  private constructor(props: Parameters<typeof DesignEntityDecl.of>[0]) {
     this.#name = props.name;
     this.#description = props.description;
     this.#attributes = props.attributes;
   }
 
-  static reconstitute(props: { name: DesignEntityName; description?: string; attributes: DesignAttributeDecls }): DesignEntityDecl {
+  static of(props: { name: DesignEntityName; description?: string; attributes: DesignAttributeDecls }): DesignEntityDecl {
     return new DesignEntityDecl(props);
   }
 

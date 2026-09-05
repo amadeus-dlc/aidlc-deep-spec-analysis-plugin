@@ -13,14 +13,14 @@ export class SmtQueryVerdict {
   readonly #core: readonly QueryLabel[] | undefined;
 
   // ドアの引数は無名のインライン署名で運ぶ（主従の裁定・補遺）。
-  private constructor(props: { status: SmtQueryStatus; decodedModel?: { [path: string]: boolean | number | string }; core?: string[] }) {
+  private constructor(props: Parameters<typeof SmtQueryVerdict.of>[0]) {
     this.#status = props.status;
     // 判定の内部状態は外部と参照を共有しない（入出力ともにコピー）。
     this.#decodedModel = props.decodedModel === undefined ? undefined : { ...props.decodedModel };
-    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.reconstitute(label));
+    this.#core = props.core === undefined ? undefined : props.core.map((label) => QueryLabel.of(label));
   }
 
-  static reconstitute(props: { status: SmtQueryStatus; decodedModel?: { [path: string]: boolean | number | string }; core?: string[] }): SmtQueryVerdict {
+  static of(props: { status: SmtQueryStatus; decodedModel?: { [path: string]: boolean | number | string }; core?: string[] }): SmtQueryVerdict {
     return new SmtQueryVerdict(props);
   }
 

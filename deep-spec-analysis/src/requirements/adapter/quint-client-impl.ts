@@ -14,6 +14,7 @@ import { ScenarioId, ObligationId, QuintMachineRunVerdict, QuintRuns, QuintScena
 import type {
   RequirementsModel,
 } from "@deep-spec/requirements-domain";
+
 import type { QuintCheckResult, QuintClient } from "@deep-spec/requirements-usecase";
 import { decodeItfTrace, itfStatus } from "./itf-decoder.ts";
 import { type CompiledQuintMachine } from "./compiled-quint-machine.ts";
@@ -27,7 +28,6 @@ const MAX_SAMPLES = 200;
 const RUN_TIMEOUT_MS = 30_000;
 const VERIFY_TIMEOUT_MS = 45_000;
 const SCENARIO_TIMEOUT_MS = 15_000;
-
 
 interface QuintRun {
   timedOut: boolean;
@@ -79,8 +79,8 @@ export class QuintClientImpl implements QuintClient {
       const scenarios = this.#runScenarioPhase(machine, modulePath, work);
       const runs = QuintRuns.of({
         machine: machineRun,
-        temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationId.reconstitute(id), v] as const)),
-        scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioId.reconstitute(id), v] as const)),
+        temporals: KeyedIndex.of([...temporals].map(([id, v]) => [ObligationId.of(id), v] as const)),
+        scenarios: KeyedIndex.of([...scenarios].map(([id, v]) => [ScenarioId.of(id), v] as const)),
       });
       return { kind: "checked", method, plan: machine.plan, compileSkips: VerificationSkips.of(machine.compileSkips), runs };
     } finally {

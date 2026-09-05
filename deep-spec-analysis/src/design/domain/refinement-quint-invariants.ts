@@ -1,3 +1,4 @@
+import { UnitName, SkipReason } from "@deep-spec/kernel-domain";
 // Quint 側の refinement 追加不変量 — checkable な invariant/numeric 要件義務
 // ごとの alpha(P)。ユニットの lowering に追加不変量として合流し、違反成分が
 // これのトレースは「到達可能な refinement 破れ」になる。導出は
@@ -5,11 +6,10 @@
 // ファーストクラスコレクションだけを持つ。
 
 import type { RefinementQuintInvariant } from "./refinement-quint-invariant.ts";
-import { SkipReason } from "@deep-spec/kernel-domain";
+
 import { DesignFindings } from "./design-findings.ts";
 import { DesignSkips } from "./design-skips.ts";
 import { DesignSkipped } from "./design-skipped.ts";
-
 
 // 追加不変量のファーストクラスコレクション（義務 id の正準順で導出される）。
 export class RefinementQuintInvariants {
@@ -48,7 +48,7 @@ export class RefinementQuintInvariants {
     let designConflict = false;
     for (const finding of findings) {
       if (!finding.isConflict()) continue;
-      const violation = finding.asRefinementViolation(reqIds, unit);
+      const violation = finding.asRefinementViolation(reqIds, UnitName.of(unit));
       if (violation !== null) violations = violations.add(violation);
       else designConflict = true;
     }
@@ -56,7 +56,7 @@ export class RefinementQuintInvariants {
       for (const invariant of this.#values) {
         if ([...pending].some((s) => s.isFor(invariant.reqTarget()))) continue;
         pending = pending.add(DesignSkipped.of({
-          target: invariant.reqTarget(), reason: SkipReason.capability(), unit,
+          target: invariant.reqTarget(), reason: SkipReason.capability(), unit: UnitName.of(unit),
           detail: "the machine reachably violates its own design invariants first (see the design conflict findings) — refinement reachability is masked until those are resolved",
         }));
       }

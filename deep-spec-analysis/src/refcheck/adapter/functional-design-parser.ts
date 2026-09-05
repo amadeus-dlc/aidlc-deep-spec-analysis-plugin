@@ -4,15 +4,16 @@
 
 import { RequirementIds } from "@deep-spec/kernel-domain";
 import { extractFences } from "@deep-spec/kernel-adapter";
-import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
 import { parseYamlSubset } from "@deep-spec/kernel-adapter";
+import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
+
 import {
   AllowedValue,
   LineNumber,
   AppliesTo,
   AttributeDefault,
   AttributeName,
-  BusinessRuleId,
+  DeclaredRuleId,
   CardinalityNotation,
   ComponentName,
   ElementPath,
@@ -24,8 +25,6 @@ import {
   SourceId,
   StateName,
   TypeName,
-} from "@deep-spec/refcheck-domain";
-import {
   AllowedValues,
   AttrDecl,
   AttrDecls,
@@ -69,11 +68,11 @@ function extractRel(raw: Json, element: string, implicitFrom: string | null): Re
   const to = str(pick(raw, ["to", "target", "entity"]));
   const cardinality = str(pick(raw, ["cardinality"]));
   const hasDirection = (from !== null && to !== null) || str(pick(raw, ["direction"])) !== null;
-  return RelDecl.reconstitute({
-    element: ElementPath.reconstitute(element),
-    from: from === null ? null : EntityName.reconstitute(from),
-    to: to === null ? null : EntityName.reconstitute(to),
-    cardinality: cardinality === null ? null : CardinalityNotation.reconstitute(cardinality),
+  return RelDecl.of({
+    element: ElementPath.of(element),
+    from: from === null ? null : EntityName.of(from),
+    to: to === null ? null : EntityName.of(to),
+    cardinality: cardinality === null ? null : CardinalityNotation.of(cardinality),
     hasDirection,
   });
 }
@@ -82,8 +81,8 @@ function extractEntities(value: Json): DeclaredEntities {
   const collected: { entities: EntityDecl[]; rels: RelDecl[]; shapeErrors: ShapeError[] } = { entities: [], rels: [], shapeErrors: [] };
   const model = collected;
   if (!isObject(value) || !Array.isArray(value.entities)) {
-    model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute("entities"), detail: "top-level `entities:` list is missing" }));
-    return DeclaredEntities.reconstitute({
+    model.shapeErrors.push(ShapeError.of({ element: ElementPath.of("entities"), detail: "top-level `entities:` list is missing" }));
+    return DeclaredEntities.of({
       entities: EntityDecls.of(collected.entities),
       rels: RelDecls.of(collected.rels),
       shapeErrors: ShapeErrors.of(collected.shapeErrors),
@@ -92,12 +91,12 @@ function extractEntities(value: Json): DeclaredEntities {
   value.entities.forEach((raw, i) => {
     const element = `entities[${i}]`;
     if (!isObject(raw)) {
-      model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute(element), detail: "entity entry is not a mapping" }));
+      model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(element), detail: "entity entry is not a mapping" }));
       return;
     }
     const name = str(raw.name);
     if (name === null) {
-      model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute(`${element}.name`), detail: "entity has no string `name`" }));
+      model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "entity has no string `name`" }));
       return;
     }
     const attrs: AttrDecl[] = [];
@@ -105,17 +104,17 @@ function extractEntities(value: Json): DeclaredEntities {
       (raw.attributes as Json[]).forEach((a, j) => {
         const ael = `${element}.attributes[${j}]`;
         if (!isObject(a)) {
-          model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute(ael), detail: "attribute entry is not a mapping" }));
+          model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(ael), detail: "attribute entry is not a mapping" }));
           return;
         }
         const aname = str(a.name);
         if (aname === null) {
-          model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute(`${ael}.name`), detail: "attribute has no string `name`" }));
+          model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${ael}.name`), detail: "attribute has no string `name`" }));
           return;
         }
         const type = str(pick(a, ["type", "logical_type", "logical-type"]));
         if (type === null) {
-          model.shapeErrors.push(ShapeError.reconstitute({ element: ElementPath.reconstitute(`${ael}.type`), detail: `attribute "${name}.${aname}" has no logical type` }));
+          model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${ael}.type`), detail: `attribute "${name}.${aname}" has no logical type` }));
         }
         const allowedRaw = pick(a, ["allowed_values", "allowed-values", "allowed", "values"]);
         const allowed = Array.isArray(allowedRaw)
@@ -125,18 +124,18 @@ function extractEntities(value: Json): DeclaredEntities {
         const minRaw = pick(a, ["min"]);
         const maxRaw = pick(a, ["max"]);
         const references = str(pick(a, ["references", "reference", "ref"]));
-        attrs.push(AttrDecl.reconstitute({
-          name: AttributeName.reconstitute(aname),
-          element: ElementPath.reconstitute(ael),
-          type: type === null ? null : TypeName.reconstitute(type),
+        attrs.push(AttrDecl.of({
+          name: AttributeName.of(aname),
+          element: ElementPath.of(ael),
+          type: type === null ? null : TypeName.of(type),
           uniqueIsTrue: pick(a, ["unique"]) === true,
-          references: references === null ? null : ReferenceTarget.reconstitute(references),
-          allowed: allowed === null ? null : AllowedValues.of(allowed.map((v) => AllowedValue.reconstitute(v))),
-          def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.reconstitute(defRaw) : null,
+          references: references === null ? null : ReferenceTarget.of(references),
+          allowed: allowed === null ? null : AllowedValues.of(allowed.map((v) => AllowedValue.of(v))),
+          def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.of(defRaw) : null,
           minDeclared: minRaw !== null,
           maxDeclared: maxRaw !== null,
-          min: typeof minRaw === "number" ? NumericBound.reconstitute(minRaw) : null,
-          max: typeof maxRaw === "number" ? NumericBound.reconstitute(maxRaw) : null,
+          min: typeof minRaw === "number" ? NumericBound.of(minRaw) : null,
+          max: typeof maxRaw === "number" ? NumericBound.of(maxRaw) : null,
         }));
       });
     }
@@ -147,9 +146,9 @@ function extractEntities(value: Json): DeclaredEntities {
         if (rel) rels.push(rel);
       });
     }
-    model.entities.push(EntityDecl.reconstitute({
-      name: EntityName.reconstitute(name),
-      element: ElementPath.reconstitute(element),
+    model.entities.push(EntityDecl.of({
+      name: EntityName.of(name),
+      element: ElementPath.of(element),
       attrs: AttrDecls.of(attrs),
       rels: RelDecls.of(rels),
     }));
@@ -160,7 +159,7 @@ function extractEntities(value: Json): DeclaredEntities {
       if (rel) model.rels.push(rel);
     });
   }
-  return DeclaredEntities.reconstitute({
+  return DeclaredEntities.of({
     entities: EntityDecls.of(collected.entities),
     rels: RelDecls.of(collected.rels),
     shapeErrors: ShapeErrors.of(collected.shapeErrors),
@@ -173,7 +172,7 @@ export function parseEntitiesDocument(md: string | null): EntitiesOutcome {
   if (fences.length !== 1) return EntitiesOutcome.wrongFenceCount(fences.length);
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
-    return EntitiesOutcome.unparseable(LineNumber.reconstitute(fences[0]?.line ?? 0), parsed.error);
+    return EntitiesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
   }
   return EntitiesOutcome.extracted(extractEntities(parsed.value ?? null));
 }
@@ -184,14 +183,14 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
   if (fences.length !== 1) return RulesOutcome.wrongFenceCount(fences.length);
   const parsed = parseYamlSubset(fences[0]?.body ?? "");
   if (parsed.error !== undefined) {
-    return RulesOutcome.unparseable(LineNumber.reconstitute(fences[0]?.line ?? 0), parsed.error);
+    return RulesOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
   }
   const v = parsed.value ?? null;
   if (!isObject(v) || !Array.isArray(v.rules)) return RulesOutcome.noRulesList();
   const ruleList: RuleDecl[] = (v.rules as Json[]).map((raw, i) => {
     const element = `rules[${i}]`;
     if (!isObject(raw)) {
-      return RuleDecl.reconstitute({ id: null, element: ElementPath.reconstitute(element), category: null, appliesTo: null, sourceIds: SourceIds.of([]), missing: ["<entry is not a mapping>"] });
+      return RuleDecl.of({ id: null, element: ElementPath.of(element), category: null, appliesTo: null, sourceIds: SourceIds.of([]), missing: ["<entry is not a mapping>"] });
     }
     const missing = ["id", "statement", "category"].filter((k) => !(k in raw));
     if (!("source" in raw) && !("sources" in raw)) missing.push("source");
@@ -202,12 +201,12 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
     const id = str(raw.id);
     const category = str(raw.category);
     const appliesTo = str(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
-    return RuleDecl.reconstitute({
-      id: id === null ? null : BusinessRuleId.reconstitute(id),
-      element: ElementPath.reconstitute(element),
-      category: category === null ? null : RuleCategory.reconstitute(category),
-      appliesTo: appliesTo === null ? null : AppliesTo.reconstitute(appliesTo),
-      sourceIds: SourceIds.of([...RequirementIds.extractFrom(sourceText)].map((v) => SourceId.reconstitute(v.asString()))),
+    return RuleDecl.of({
+      id: id === null ? null : DeclaredRuleId.of(id),
+      element: ElementPath.of(element),
+      category: category === null ? null : RuleCategory.of(category),
+      appliesTo: appliesTo === null ? null : AppliesTo.of(appliesTo),
+      sourceIds: SourceIds.of([...RequirementIds.extractFrom(sourceText)].map((v) => SourceId.of(v.asString()))),
       missing,
     });
   });
@@ -247,10 +246,10 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecOu
           }
         }
       }
-      machines.push(StateMachineSketch.reconstitute({
-        spec: MachineSpec.reconstitute((h[1] ?? "").trim()),
-        states: StateNames.of([...states].sort().map((v) => StateName.reconstitute(v))),
-        fenceLine: LineNumber.reconstitute(j + 1),
+      machines.push(StateMachineSketch.of({
+        spec: MachineSpec.of((h[1] ?? "").trim()),
+        states: StateNames.of([...states].sort().map((v) => StateName.of(v))),
+        fenceLine: LineNumber.of(j + 1),
         unsupported,
       }));
       break;
@@ -275,10 +274,10 @@ export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOu
         const attributes = Array.isArray(e.attributes)
           ? (e.attributes as Json[]).filter((a): a is string => typeof a === "string")
           : [];
-        out.push(DomainEntitySketch.reconstitute({
-          name: EntityName.reconstitute(e.name),
-          component: ComponentName.reconstitute(raw.name),
-          attributes: AttributeNames.of(attributes.map((v) => AttributeName.reconstitute(v))),
+        out.push(DomainEntitySketch.of({
+          name: EntityName.of(e.name),
+          component: ComponentName.of(raw.name),
+          attributes: AttributeNames.of(attributes.map((v) => AttributeName.of(v))),
         }));
       }
     }

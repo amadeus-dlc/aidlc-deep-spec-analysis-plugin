@@ -10,7 +10,7 @@ import type { ArtifactPath } from "@deep-spec/kernel-domain";
 export class RequirementsSourceId {
   readonly #recordRoot: ArtifactPath;
 
-  private constructor(recordRoot: ArtifactPath) {
+  private constructor(recordRoot: Parameters<typeof RequirementsSourceId.of>[0]) {
     this.#recordRoot = recordRoot;
   }
 

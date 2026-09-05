@@ -1,3 +1,4 @@
+import { SkipReason } from "@deep-spec/kernel-domain";
 import { type LoweredId } from "./lowered-id.ts";
 
 // 兄弟バックエンドの v1 文書が運ぶ skip（lowered 語彙）。remap が設計語彙へ
@@ -5,16 +6,16 @@ import { type LoweredId } from "./lowered-id.ts";
 // 記録自身は自分の面を差し出すだけ（#71 波22）。
 export class SiblingVerdictSkip {
   readonly #target: LoweredId;
-  readonly #reason: string;
+  readonly #reason: SkipReason;
   readonly #detail: string | undefined;
 
-  private constructor(props: { target: LoweredId; reason: string; detail?: string }) {
+  private constructor(props: Parameters<typeof SiblingVerdictSkip.of>[0]) {
     this.#target = props.target;
     this.#reason = props.reason;
     this.#detail = props.detail;
   }
 
-  static reconstitute(props: { target: LoweredId; reason: string; detail?: string }): SiblingVerdictSkip {
+  static of(props: { target: LoweredId; reason: SkipReason; detail?: string }): SiblingVerdictSkip {
     return new SiblingVerdictSkip(props);
   }
 
@@ -23,7 +24,7 @@ export class SiblingVerdictSkip {
   }
 
   reason(): string {
-    return this.#reason;
+    return this.#reason.asString();
   }
 
   detail(): string | undefined {

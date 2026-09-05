@@ -5,9 +5,10 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import { type Json, canonicalStringify } from "@deep-spec/kernel-infrastructure";
 import { ContentHash } from "@deep-spec/kernel-domain";
 import { extractFences, writeFileAtomically } from "@deep-spec/kernel-adapter";
-import { type Json, canonicalStringify } from "@deep-spec/kernel-infrastructure";
+
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import { type FormalModelId, RequirementsModel } from "@deep-spec/requirements-domain";
 import type { FormalModelRepository } from "@deep-spec/requirements-usecase";
@@ -47,7 +48,7 @@ export class FormalModelRepositoryImpl implements FormalModelRepository {
     if (typeof seed === "string") {
       return err({ kind: "corrupt", path: modelPath, cause: seed });
     }
-    return ok(RequirementsModel.reconstitute({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), sourceDocument: new Uint8Array(bytes), ...seed }));
+    return ok(RequirementsModel.of({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), sourceDocument: new Uint8Array(bytes), ...seed }));
   }
 
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。

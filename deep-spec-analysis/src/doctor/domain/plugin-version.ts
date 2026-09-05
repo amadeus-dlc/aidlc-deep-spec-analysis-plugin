@@ -1,3 +1,5 @@
+import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
+
 // 配布プラグインの stable Semantic Version。Git tag の任意の `v` 接頭辞を
 // 入口で正規化し、比較判断を値オブジェクト自身に閉じる。
 export class PluginVersion {
@@ -5,19 +7,21 @@ export class PluginVersion {
   readonly #minor: bigint;
   readonly #patch: bigint;
 
-  private constructor(major: bigint, minor: bigint, patch: bigint) {
-    this.#major = major;
-    this.#minor = minor;
-    this.#patch = patch;
-  }
-
-  static parse(raw: string): PluginVersion | null {
+  private constructor(raw: string) {
     const match = raw.match(/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
     const major = match?.[1];
     const minor = match?.[2];
     const patch = match?.[3];
-    if (major === undefined || minor === undefined || patch === undefined) return null;
-    return new PluginVersion(BigInt(major), BigInt(minor), BigInt(patch));
+    if (major === undefined || minor === undefined || patch === undefined) throw new IllegalArgumentException({ kind: "invalid-plugin-version", raw });
+    this.#major = BigInt(major);
+    this.#minor = BigInt(minor);
+    this.#patch = BigInt(patch);
+  }
+
+  static of(raw: string): PluginVersion { return new PluginVersion(raw); }
+
+  static parse(raw: string): Result<PluginVersion, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new PluginVersion(raw));
   }
 
   isOlderThan(other: PluginVersion): boolean {

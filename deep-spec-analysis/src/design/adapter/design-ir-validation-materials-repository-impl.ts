@@ -1,28 +1,18 @@
-// 契約3 設計 IR の検査材料ゲートウェイ。markdown フェンスの抽出、JSON 解釈、
-// 契約スキーマの適用、生 Json の寛容な解体、そしてユニットごとの BR 材料
-// （construction ディレクトリの有無と rules.md 本文）の解決をここに閉じ込める。
-//
-// 旧 aidlc-sensor-deep-spec-design-ir-valid.ts の main 前半＋ semanticErrors の
-// 黙殺条件と記録ルート探索からの逐語移植。記録ルートが解決できないときは
-// ディレクトリ検査を出さない（directoryExists: true）——旧実装の
-// `recordRoot !== null &&` ガードの保存。
-
-import { existsSync, readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
-import { extractFences, findRecordRoot, readContractSchema, writeFileAtomically, readIfExists } from "@deep-spec/kernel-adapter";
-import { type Json, isObject, validateSchema } from "@deep-spec/kernel-infrastructure";
-import { ErrorMessages, IrVersion, TriggerName } from "@deep-spec/kernel-domain";
-import { type Result, ok } from "@deep-spec/kernel-infrastructure";
-import { err as repoErr } from "@deep-spec/kernel-infrastructure";
-import type { RepositoryError } from "@deep-spec/kernel-usecase";
-import type { Expression } from "@deep-spec/kernel-domain";
-import { DesignBackgroundDecl } from "@deep-spec/design-domain";
 import {
+  decodeDomainValues,
+  extractFences,
+  findRecordRoot,
+  readContractSchema,
+  writeFileAtomically,
+  readIfExists,
+} from "@deep-spec/kernel-adapter";
+import { TargetId, ErrorMessages, IrVersion, TriggerName, type Expression } from "@deep-spec/kernel-domain";
+import {
+  BrRef,
+  DesignBackgroundDecl,
   DesignIgnoreDecl,
   DesignMachineDecl,
   DesignUnitDecl,
-} from "@deep-spec/design-domain";
-import {
   DesignBackgroundId,
   DesignMachineId,
   DesignObligationId,
@@ -44,14 +34,34 @@ import {
   DesignUnitDecls,
   InitialStates,
   UnformalizedTargets,
+  DesignIrValidationMaterials,
+  DesignIrValidationMaterialsId,
+  SUPPORTED_DESIGN_IR_MAJOR,
 } from "@deep-spec/design-domain";
-import { DesignIrValidationMaterials, DesignIrValidationMaterialsId, SUPPORTED_DESIGN_IR_MAJOR } from "@deep-spec/design-domain";
+
+// 契約3 設計 IR の検査材料ゲートウェイ。markdown フェンスの抽出、JSON 解釈、
+// 契約スキーマの適用、生 Json の寛容な解体、そしてユニットごとの BR 材料
+// （construction ディレクトリの有無と rules.md 本文）の解決をここに閉じ込める。
+//
+// 旧 aidlc-sensor-deep-spec-design-ir-valid.ts の main 前半＋ semanticErrors の
+// 黙殺条件と記録ルート探索からの逐語移植。記録ルートが解決できないときは
+// ディレクトリ検査を出さない（directoryExists: true）——旧実装の
+// `recordRoot !== null &&` ガードの保存。
+
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
+
+import { type Json, isObject, validateSchema } from "@deep-spec/kernel-infrastructure";
+import { type Result, ok } from "@deep-spec/kernel-infrastructure";
+import { err as repoErr } from "@deep-spec/kernel-infrastructure";
+
+import type { RepositoryError } from "@deep-spec/kernel-usecase";
+
 import type { DesignIrValidationMaterialsRepository } from "@deep-spec/design-usecase";
 import type { DesignIrValidationMaterialsConfig } from "./design-ir-validation-materials-config.ts";
 import { parseDesignEntities } from "./design-entities-parser.ts";
 
 const DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
-
 
 function asExpression(v: Json): Expression | undefined {
   return isObject(v) ? (v as unknown as Expression) : undefined;
@@ -66,7 +76,7 @@ function strArrayOrUndefined(v: Json): string[] | undefined {
 // 宣言済みはコレクションで運ぶ。
 function brRefsOrUndefined(v: Json): BrRefs | undefined {
   const arr = strArrayOrUndefined(v);
-  return arr === undefined ? undefined : BrRefs.reconstitute(arr);
+  return arr === undefined ? undefined : BrRefs.of(Array.from(arr, (raw) => BrRef.of(raw)));
 }
 
 function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordRoot: string | null): DesignUnitDecl {
@@ -76,9 +86,9 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
   for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string") continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
-    obligations.push(DesignObligationDecl.reconstitute({
-      id: DesignObligationId.reconstitute(ob.id),
-      origin: typeof ob.origin === "string" ? DesignObligationOrigin.reconstitute(ob.origin) : undefined,
+    obligations.push(DesignObligationDecl.of({
+      id: DesignObligationId.of(ob.id),
+      origin: typeof ob.origin === "string" ? DesignObligationOrigin.of(ob.origin) : undefined,
       brRefs: brRefsOrUndefined(ob.brRefs ?? null),
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
@@ -102,11 +112,11 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     const transitions: DesignTransitionDecl[] = [];
     for (const tr of Array.isArray(sm.transitions) ? sm.transitions : []) {
       if (!isObject(tr) || typeof tr.id !== "string") continue;
-      transitions.push(DesignTransitionDecl.reconstitute({
-        id: DesignTransitionId.reconstitute(tr.id),
+      transitions.push(DesignTransitionDecl.of({
+        id: DesignTransitionId.of(tr.id),
         from: typeof tr.from === "string" ? tr.from : undefined,
         to: typeof tr.to === "string" ? tr.to : undefined,
-        trigger: typeof tr.trigger === "string" ? TriggerName.reconstitute(tr.trigger) : undefined,
+        trigger: typeof tr.trigger === "string" ? TriggerName.of(tr.trigger) : undefined,
         brRefs: brRefsOrUndefined(tr.brRefs ?? null),
         guard: asExpression(tr.guard ?? null),
         effect: asExpression(tr.effect ?? null),
@@ -115,17 +125,17 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     const ignores: DesignIgnoreDecl[] = [];
     for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
       if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
-      ignores.push(DesignIgnoreDecl.reconstitute({ state: ig.state, trigger: TriggerName.reconstitute(ig.trigger) }));
+      ignores.push(DesignIgnoreDecl.of({ state: ig.state, trigger: TriggerName.of(ig.trigger) }));
     }
-    stateMachines.push(DesignMachineDecl.reconstitute({ id: DesignMachineId.reconstitute(sm.id), attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
+    stateMachines.push(DesignMachineDecl.of({ id: DesignMachineId.of(sm.id), attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
   }
 
   const scenarios: DesignScenarioDecl[] = [];
   for (const sc of Array.isArray(rawUnit.scenarios) ? rawUnit.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
-    scenarios.push(DesignScenarioDecl.reconstitute({
-      id: DesignScenarioId.reconstitute(sc.id),
+    scenarios.push(DesignScenarioDecl.of({
+      id: DesignScenarioId.of(sc.id),
       bindings: BindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
@@ -136,7 +146,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
   const background: DesignBackgroundDecl[] = [];
   for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string") continue;
-    background.push(DesignBackgroundDecl.reconstitute({ id: DesignBackgroundId.reconstitute(bg.id), assert: asExpression(bg.assert ?? null) }));
+    background.push(DesignBackgroundDecl.of({ id: DesignBackgroundId.of(bg.id), assert: asExpression(bg.assert ?? null) }));
   }
 
   const unformalizedTargets: string[] = [];
@@ -151,14 +161,14 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
   const rulesPath = recordRoot === null ? null : join(recordRoot, "construction", unitName, "functional-design", "rules.md");
   const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
 
-  return DesignUnitDecl.reconstitute({
+  return DesignUnitDecl.of({
     unit: DesignUnitId.of(unitName),
     entities,
     obligations: DesignObligationDecls.of(obligations),
     stateMachines: DesignMachineDecls.of(stateMachines),
     scenarios: DesignScenarioDecls.of(scenarios),
     background: DesignBackgroundDecls.of(background),
-    unformalizedTargets: UnformalizedTargets.reconstitute(unformalizedTargets),
+    unformalizedTargets: UnformalizedTargets.of(Array.from(unformalizedTargets, (raw) => TargetId.of(raw))),
     directoryExists,
     rulesMarkdown,
   });
@@ -172,6 +182,11 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
   }
 
   findById(id: DesignIrValidationMaterialsId): Result<DesignIrValidationMaterials, RepositoryError> {
+    const decoded = decodeDomainValues(() => this.#findById(id));
+    return decoded.ok ? decoded.value : repoErr({ kind: "corrupt", path: id.modelId().artifactPath().asString(), cause: decoded.error });
+  }
+
+  #findById(id: DesignIrValidationMaterialsId): Result<DesignIrValidationMaterials, RepositoryError> {
     const outputPath = id.modelId().artifactPath().asString();
     // 機能形式モデル以外・不在はこの Repository の収蔵外（not-found——use case
     // が pass-through へ写像する旧 not-applicable の凍結挙動）。
@@ -238,9 +253,9 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
     }
 
     return ok(
-      DesignIrValidationMaterials.reconstitute({
+      DesignIrValidationMaterials.of({
         id,
-        irVersion: IrVersion.reconstitute(irVersion),
+        irVersion: IrVersion.of(irVersion),
         schemaErrors: ErrorMessages.of(schemaErrors),
         units: DesignUnitDecls.of(units),
         sourceDocument: new Uint8Array(bytes),

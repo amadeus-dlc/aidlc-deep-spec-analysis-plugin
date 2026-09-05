@@ -16,15 +16,11 @@ export class DeclaredEntities {
   readonly shapeErrors: ShapeErrors;
   };
 
-  private constructor(seed: {
-    readonly entities: EntityDecls;
-    readonly rels: RelDecls; // top-level relationships
-    readonly shapeErrors: ShapeErrors;
-  }) {
+  private constructor(seed: Parameters<typeof DeclaredEntities.of>[0]) {
     this.#seed = seed;
   }
 
-  static reconstitute(seed: {
+  static of(seed: {
     readonly entities: EntityDecls;
     readonly rels: RelDecls; // top-level relationships
     readonly shapeErrors: ShapeErrors;
@@ -46,7 +42,6 @@ export class DeclaredEntities {
     for (const e of this.#seed.entities) all = all.concat(e.rels());
     return all;
   }
-
 
   // FD-E1..FD-E6 の不変条件（種別規律の裁定 13）: 形の誤りと重複（E1）、型区分
   // の整合（E2）、範囲と既定値（E3）、関係の端点（E4）と多重度（E5）、参照の

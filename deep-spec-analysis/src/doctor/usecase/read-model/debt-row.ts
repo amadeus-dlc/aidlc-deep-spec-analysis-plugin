@@ -14,7 +14,7 @@ export class DebtRow {
     this.#findings = props.findings;
   }
 
-  static reconstitute(props: { space: string; intent: string; artifact: string; findings: number }): DebtRow {
+  static of(props: { space: string; intent: string; artifact: string; findings: number }): DebtRow {
     return new DebtRow(props);
   }
 

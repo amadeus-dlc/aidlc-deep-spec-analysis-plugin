@@ -1,11 +1,11 @@
 export class ObligationNature {
   readonly #value: string;
 
-  private constructor(value: string) {
+  private constructor(value: Parameters<typeof ObligationNature.of>[0]) {
     this.#value = value;
   }
 
-  static reconstitute(raw: string): ObligationNature {
+  static of(raw: string): ObligationNature {
     return new ObligationNature(raw);
   }
 

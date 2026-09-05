@@ -1,4 +1,4 @@
-import { type AttributeBound, AttributeKind } from "@deep-spec/kernel-domain";
+import { type DeclaredBound, AttributeKind } from "@deep-spec/kernel-domain";
 import { type IrAttributeName } from "./ir-attribute-name.ts";
 import type { IrDeclaredValues } from "./ir-declared-values.ts";
 
@@ -10,20 +10,20 @@ export class IrAttributeDecl {
   readonly #name: IrAttributeName;
   readonly #kind: AttributeKind;
   readonly #values: IrDeclaredValues | undefined;
-  readonly #min: AttributeBound | undefined;
-  readonly #max: AttributeBound | undefined;
+  readonly #min: DeclaredBound | undefined;
+  readonly #max: DeclaredBound | undefined;
 
   // ドアの引数は無名のインライン署名で運ぶ——名前付き getter-only 型
   //（データモデル）を domain 層に住まわせない（主従の裁定・補遺）。
-  private constructor(props: { name: IrAttributeName; kind: string; values?: IrDeclaredValues; min?: AttributeBound; max?: AttributeBound }) {
+  private constructor(props: Parameters<typeof IrAttributeDecl.of>[0]) {
     this.#name = props.name;
-    this.#kind = AttributeKind.reconstitute(props.kind);
+    this.#kind = AttributeKind.of(props.kind);
     this.#values = props.values;
     this.#min = props.min;
     this.#max = props.max;
   }
 
-  static reconstitute(props: { name: IrAttributeName; kind: string; values?: IrDeclaredValues; min?: AttributeBound; max?: AttributeBound }): IrAttributeDecl {
+  static of(props: { name: IrAttributeName; kind: string; values?: IrDeclaredValues; min?: DeclaredBound; max?: DeclaredBound }): IrAttributeDecl {
     return new IrAttributeDecl(props);
   }
 
@@ -38,8 +38,8 @@ export class IrAttributeDecl {
 
   boundsOutsideSafeRange(): boolean {
     return (
-      (this.#min !== undefined && !Number.isSafeInteger(this.#min.asNumber())) ||
-      (this.#max !== undefined && !Number.isSafeInteger(this.#max.asNumber()))
+      (this.#min !== undefined && !this.#min.isSafeInteger()) ||
+      (this.#max !== undefined && !this.#max.isSafeInteger())
     );
   }
 

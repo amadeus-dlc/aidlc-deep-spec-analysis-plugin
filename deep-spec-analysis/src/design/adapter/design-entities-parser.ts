@@ -6,7 +6,8 @@
 
 import type { Json } from "@deep-spec/kernel-infrastructure";
 import { isObject } from "@deep-spec/kernel-infrastructure";
-import { AttributeBound } from "@deep-spec/kernel-domain";
+
+import { DeclaredBound } from "@deep-spec/kernel-domain";
 import {
   DeclaredValues,
   DesignAttributeDecl,
@@ -25,17 +26,17 @@ export function parseDesignEntities(schema: { readonly [k: string]: Json }): Des
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string") continue;
       const t = isObject(attr.type) ? attr.type : {};
-      attributes.push(DesignAttributeDecl.reconstitute({
-        name: DesignAttributeName.reconstitute(attr.name),
+      attributes.push(DesignAttributeDecl.of({
+        name: DesignAttributeName.of(attr.name),
         kind: typeof t.kind === "string" ? t.kind : "",
         ...(typeof attr.description === "string" ? { description: attr.description } : {}),
         ...(Array.isArray(t.values) ? { values: DeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) } : {}),
-        ...(typeof t.min === "number" ? { min: AttributeBound.reconstitute(t.min) } : {}),
-        ...(typeof t.max === "number" ? { max: AttributeBound.reconstitute(t.max) } : {}),
+        ...(typeof t.min === "number" ? { min: DeclaredBound.of(t.min) } : {}),
+        ...(typeof t.max === "number" ? { max: DeclaredBound.of(t.max) } : {}),
       }));
     }
-    entities.push(DesignEntityDecl.reconstitute({
-      name: DesignEntityName.reconstitute(ent.name),
+    entities.push(DesignEntityDecl.of({
+      name: DesignEntityName.of(ent.name),
       ...(typeof ent.description === "string" ? { description: ent.description } : {}),
       attributes: DesignAttributeDecls.of(attributes),
     }));
