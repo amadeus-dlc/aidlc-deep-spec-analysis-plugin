@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
 // DesignModel内のユニット識別子。非空の名前を保持し、
 // 生値からの入力失敗はparse、内部の生成契約違反はofのpanicで扱う。
@@ -5,7 +6,9 @@ import { type Result, IllegalArgumentException, parseConstruction } from "@deep-
 export class DesignUnitId {
   readonly #value: string;
 
+  /** 識別名・ID・バージョンの処理予算。 単位はUTF-16コード単位。 */
   private constructor(value: string) {
+    if (value.length > 128) throw new IllegalArgumentException({ kind: "design-unit-id-too-long", raw: value.length });
     if (value === "") throw new IllegalArgumentException({ kind: "empty-design-unit-id", raw: value });
     this.#value = value;
   }
@@ -14,7 +17,7 @@ export class DesignUnitId {
     return new DesignUnitId(value);
   }
 
-  static parse(raw: string): Result<DesignUnitId, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<DesignUnitId, ParseError> {
     return parseConstruction(() => new DesignUnitId(raw));
   }
 

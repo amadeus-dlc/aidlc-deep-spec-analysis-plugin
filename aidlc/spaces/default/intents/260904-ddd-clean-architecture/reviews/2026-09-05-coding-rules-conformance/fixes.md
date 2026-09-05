@@ -1,5 +1,20 @@
 # 共有規則への適合監査 — 修正記録
 
+## 追補: VO・コレクション・解析エラーの横断是正
+
+2026-09-05の追加指示に基づき、[値の構築契約と横断是正](value-contracts.md)を実施した。以下のR1〜R4は最初の是正時点の記録として残す。特にR4のJsonによる束縛は、今回のドメイン固有型へ置き換えた。
+
+- 文字列VOは長さを先行検査し、式・宣言値・証拠はサイズ検査後にコピーする。型をunknownへ広げない。
+- ErrorMessagesをErrorMessageのコレクションに変更。列挙値・初期状態・属性パスも型付き要素へ移行し、プリミティブを許す7件の検査除外を削除した。
+- 束縛はBindingDeclaration/DeclaredBindingsとScenarioBinding/ScenarioBindingsへ移行し、シナリオ・lowering・SMT・Quint・直列化まで対応した。旧BindingPairs/IrBindingPairsは削除した。
+- FrRefsなど4型、メソッド、構築引数をFunctionalRequirementの正式名へ変更した。公開JSONのfrRefsキーは維持する。
+- parseの失敗は例外に依存しないParseError型とした。コンストラクタの契約違反だけを独立した不変値へ変換する。
+- 原理原則はClaude/Codex両方のknowledge/aidlc-sharedへ配置し、ユーザーの加筆も同期した。org.mdへの変更は残していない。
+
+最終のローカル検証: **787成功・1スキップ・0失敗、788テスト、39ファイル、終了コード0**。TypeScript型検査、生成14ファイルの同期、plugin validation、7ハーネスのビルドが成功した。validationには従来のcompose-hook-absent警告が1件ある。lcov合算line coverageは**99.87637671386828%（8887 / 8898）**で、しきい値と除外は変更していない。正常系golden、契約スキーマ、aidlc-workflows submoduleに差分はない。
+
+基線資料の実行環境は[再現手順](baseline-reproduction.md)で対象コミットへ固定する。監査シャードのHuman Turn見出しはツールの記録形式であり、Markdownの重複警告を解消する目的で過去のイベント見出しを改変しない。
+
 [監査結果](review.md)のR1〜R4を修正した。監査の基線は`26324f9`であり、[再現コード](reproduce.ts)と[結果](results.jsonl)は修正前の事実を保存している。修正後の期待動作は以下の回帰テストで検証する。
 
 ## 修正内容

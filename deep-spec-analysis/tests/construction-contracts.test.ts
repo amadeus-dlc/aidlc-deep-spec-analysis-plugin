@@ -1,3 +1,5 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
+import { ErrorMessage } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
 import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
 import {
@@ -69,7 +71,7 @@ import {
 function contract<R extends string | number, V>(factory: {
   readonly name: string;
   of(raw: R): V;
-  parse(raw: R): Result<V, IllegalArgumentException["problem"]>;
+  parse(raw: R): Result<V, ParseError>;
 }, valid: R, invalid: R): void {
   test(`${factory.name}: of throws a contract violation, parse returns the same problem`, () => {
     expect(factory.parse(valid).ok).toBe(true);
@@ -156,11 +158,25 @@ describe("domain construction contracts", () => {
     const empty = ErrorMessages.of([]);
     expect(empty.isEmpty()).toBe(true);
     const source = ["first"];
-    const messages = ErrorMessages.of(source);
+    const messages = ErrorMessages.of((source).map((value) => ErrorMessage.of(value)));
     source.push("outside");
-    expect(messages.toArray()).toEqual(["first"]);
+    expect(messages.toArray().map((value) => value.asString())).toEqual(["first"]);
     expect(Object.isFrozen(messages.toArray())).toBe(true);
-    expect(messages.add("second").toArray()).toEqual(["first", "second"]);
-    expect(messages.toArray()).toEqual(["first"]);
+    expect(messages.add(ErrorMessage.of("second")).toArray().map((value) => value.asString())).toEqual(["first", "second"]);
+    expect(messages.toArray().map((value) => value.asString())).toEqual(["first"]);
+  });
+
+  test("parse returns an independent ParseError value instead of an exception payload", () => {
+    const exception = new IllegalArgumentException({ kind: "example", raw: "invalid" });
+    const result = parseConstruction(() => { throw exception; });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toEqual({ kind: "example", raw: "invalid" });
+      expect(result.error).not.toBe(exception.problem);
+      expect(result.error).not.toBeInstanceOf(Error);
+      expect(Object.isFrozen(result.error)).toBe(true);
+    }
+    const absent = parseConstruction(() => { throw new IllegalArgumentException({ kind: "empty" }); });
+    expect(absent).toEqual({ ok: false, error: { kind: "empty" } });
   });
 });

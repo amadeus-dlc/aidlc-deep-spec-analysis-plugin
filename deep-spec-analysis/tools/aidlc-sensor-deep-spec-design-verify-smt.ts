@@ -204,8 +204,13 @@ function parseConstruction(construct) {
   try {
     return ok(construct());
   } catch (error) {
-    if (error instanceof IllegalArgumentException)
-      return err(error.problem);
+    if (error instanceof IllegalArgumentException) {
+      const failure = Object.freeze({
+        kind: error.problem.kind,
+        ...error.problem.raw === undefined ? {} : { raw: error.problem.raw }
+      });
+      return err(failure);
+    }
     throw error;
   }
 }
@@ -251,6 +256,42 @@ function traverseResult(values, parse) {
     parsed.push(result.value);
   }
   return ok(parsed);
+}
+// src/kernel/infrastructure/value-size.ts
+function assertValueSize(value, limits) {
+  let nodes = 0;
+  let total = 0;
+  const visit = (current, depth) => {
+    if (++nodes > limits.nodes || depth > limits.depth)
+      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+    if (typeof current === "string") {
+      if (current.length > limits.string)
+        throw new IllegalArgumentException({ kind: "value-string-too-long", raw: current.length });
+      total += current.length;
+    } else if (current !== null && typeof current === "object") {
+      if (Array.isArray(current)) {
+        if (current.length > limits.nodes - nodes)
+          throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+        for (const child of current)
+          visit(child, depth + 1);
+      } else {
+        const record = current;
+        for (const key in record) {
+          if (!Object.hasOwn(record, key))
+            continue;
+          if (key.length > limits.string)
+            throw new IllegalArgumentException({ kind: "value-key-too-long", raw: key.length });
+          total += key.length;
+          if (total > limits.total)
+            throw new IllegalArgumentException({ kind: "value-text-too-large" });
+          visit(record[key], depth + 1);
+        }
+      }
+    }
+    if (total > limits.total)
+      throw new IllegalArgumentException({ kind: "value-text-too-large" });
+  };
+  visit(value, 0);
 }
 // src/kernel/adapter/contract-schema.ts
 function readContractSchema(path) {
@@ -535,6 +576,18 @@ function canonicalKeyOf(value) {
 class ExpressionTree {
   #root;
   constructor(root) {
+    let nodes = 0;
+    const measure = (node, depth) => {
+      if (++nodes > 1e4 || depth > 128 || (node.args?.length ?? 0) > 1e4 - nodes) {
+        throw new IllegalArgumentException({ kind: "expression-too-large" });
+      }
+      if ((node.op?.length ?? 0) > 128 || (node.path?.length ?? 0) > 257 || typeof node.value === "string" && node.value.length > 4096) {
+        throw new IllegalArgumentException({ kind: "expression-token-too-long" });
+      }
+      for (const child of node.args ?? [])
+        measure(child, depth + 1);
+    };
+    measure(root, 0);
     const snapshot = structuredClone(root);
     const visited = new WeakSet;
     const freeze = (value) => {
@@ -552,6 +605,9 @@ class ExpressionTree {
   }
   static of(root) {
     return new ExpressionTree(root);
+  }
+  static parse(root) {
+    return parseConstruction(() => new ExpressionTree(root));
   }
   asExpression() {
     return this.#root;
@@ -598,7 +654,9 @@ import { createHash } from "crypto";
 class ContentHash {
   #value;
   constructor(raw) {
-    if (!/^[0-9a-f]{64}$/.test(raw))
+    if (raw.length !== 64)
+      throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
+    if (/[^0-9a-f]/.test(raw))
       throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
     this.#value = raw;
   }
@@ -625,7 +683,12 @@ class ContentHash {
 class DeclaredDigest {
   #value;
   constructor(value) {
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "declared-digest-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredDigest(value));
   }
   static of(value) {
     return new DeclaredDigest(value);
@@ -641,6 +704,8 @@ class DeclaredDigest {
 class IrVersion {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "ir-version-too-long", raw: raw.length });
     if (!/^\d+\.\d+\.\d+$/.test(raw))
       throw new IllegalArgumentException({ kind: "not-a-semver", raw });
     this.#value = raw;
@@ -675,6 +740,8 @@ var TARGET_ID_PATTERNS = [
 class TargetId {
   #value;
   constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
     if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
       throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
     this.#value = raw;
@@ -739,42 +806,19 @@ class TargetIds {
     return this.#values.map((v) => v.asString());
   }
 }
-// src/kernel/domain/requirement-id.ts
-class RequirementId {
-  #value;
-  constructor(value) {
-    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
-      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
-    this.#value = value;
-  }
-  static of(raw) {
-    return new RequirementId(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new RequirementId(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return compareCanonically(this.#value, other.#value);
-  }
-  asString() {
-    return this.#value;
-  }
-}
-
-// src/kernel/domain/fr-refs.ts
-class FrRefs {
+// src/kernel/domain/functional-requirement-references.ts
+class FunctionalRequirementReferences {
   #values;
   constructor(values) {
-    this.#values = values;
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new FrRefs([...values]);
+    return new FunctionalRequirementReferences(values);
   }
   add(value) {
-    return new FrRefs([...this.#values, value]);
+    return new FunctionalRequirementReferences([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -783,7 +827,8 @@ class FrRefs {
     return this.#values.length === 0;
   }
   sortedUnique() {
-    return FrRefs.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => RequirementId.of(raw)));
+    const unique = new Map(this.#values.map((value) => [value.asString(), value]));
+    return new FunctionalRequirementReferences([...unique.values()].sort((a, b) => a.compareTo(b)));
   }
   toArray() {
     return this.#values;
@@ -796,6 +841,8 @@ class FrRefs {
 class BackendName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "backend-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-backend-name", raw });
     this.#value = raw;
@@ -853,6 +900,33 @@ class KeySet {
   }
 }
 
+// src/kernel/domain/requirement-id.ts
+class RequirementId {
+  #value;
+  constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "requirement-id-too-long", raw: value.length });
+    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
+      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
+    this.#value = value;
+  }
+  static of(raw) {
+    return new RequirementId(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new RequirementId(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
 // src/kernel/domain/requirement-ids.ts
 class RequirementIds {
   #values;
@@ -889,10 +963,12 @@ class RequirementIds {
 class NormalizedName {
   #value;
   constructor(value) {
-    this.#value = value;
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "normalized-name-too-long", raw: value.length });
+    this.#value = value.toLowerCase().replace(/[^a-z0-9]/g, "");
   }
   static of(raw) {
-    return new NormalizedName(raw.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    return new NormalizedName(raw);
   }
   equals(other) {
     return this.#value === other.#value;
@@ -905,6 +981,8 @@ class NormalizedName {
 class ArtifactPath {
   #value;
   constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "artifact-path-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-path" });
     this.#value = raw;
@@ -971,6 +1049,8 @@ class DeclaredBound {
 class ErrorMessages {
   #values;
   constructor(values) {
+    if (values.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
   static of(values) {
@@ -1022,6 +1102,8 @@ class FindingsSchema {
 class TriggerName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "trigger-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-trigger-name", raw });
     this.#value = raw;
@@ -1087,6 +1169,8 @@ class KeyedIndex {
 class QueryLabel {
   #value;
   constructor(value) {
+    if (value.length > 2048)
+      throw new IllegalArgumentException({ kind: "query-label-too-long", raw: value.length });
     if (value === "")
       throw new IllegalArgumentException({ kind: "empty-query-label", raw: value });
     this.#value = value;
@@ -1111,6 +1195,8 @@ class QueryLabel {
 class AttributePath {
   #value;
   constructor(raw) {
+    if (raw.length > 257)
+      throw new IllegalArgumentException({ kind: "attribute-path-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-attribute-path", raw });
     this.#value = raw;
@@ -1131,10 +1217,56 @@ class AttributePath {
     return this.#value;
   }
 }
+// src/kernel/domain/binding-value.ts
+class BindingValue {
+  #value;
+  constructor(value) {
+    if (typeof value === "string" && value.length > 4096)
+      throw new IllegalArgumentException({ kind: "binding-literal-too-long", raw: value.length });
+    if (typeof value === "number" && !Number.isSafeInteger(value)) {
+      throw new IllegalArgumentException({ kind: "invalid-binding-integer", raw: value });
+    }
+    this.#value = value;
+  }
+  static of(value) {
+    return new BindingValue(value);
+  }
+  static resolve(declaration) {
+    return declaration.match({
+      literal: (value) => {
+        const result = parseConstruction(() => new BindingValue(value));
+        return result.ok ? result : err(JSON.stringify(result.error));
+      },
+      nonLiteral: () => err(`binding value ${declaration.describe()} is not a boolean, safe integer, or enum literal`)
+    });
+  }
+  toDocument() {
+    return this.#value;
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  match(cases) {
+    if (typeof this.#value === "boolean")
+      return cases.bool(this.#value);
+    if (typeof this.#value === "number")
+      return cases.int(this.#value);
+    return cases.enum(this.#value);
+  }
+  asExpression() {
+    return this.match({
+      bool: (value) => ({ op: "bool", value }),
+      int: (value) => ({ op: "int", value }),
+      enum: (value) => ({ op: "enum", value })
+    });
+  }
+}
 // src/kernel/domain/unit-name.ts
 class UnitName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "unit-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-unit-name", raw });
     this.#value = raw;
@@ -1156,7 +1288,12 @@ class UnitName {
 class ObligationNature {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "obligation-nature-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new ObligationNature(value));
   }
   static of(raw) {
     return new ObligationNature(raw);
@@ -1198,6 +1335,8 @@ var KIND_RANK = {
 class FindingKind {
   #value;
   constructor(raw) {
+    if (raw.length > 24)
+      throw new IllegalArgumentException({ kind: "finding-kind-too-long", raw: raw.length });
     if (!Object.hasOwn(KIND_RANK, raw))
       throw new IllegalArgumentException({ kind: "unknown-finding-kind", raw });
     this.#value = raw;
@@ -1263,6 +1402,8 @@ var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
 class VerificationMethod {
   #value;
   constructor(raw) {
+    if (raw.length > 10)
+      throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
     if (!KNOWN_METHODS.has(raw))
       throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
     this.#value = raw;
@@ -1296,6 +1437,8 @@ var KNOWN_REASONS = new Set([
 class SkipReason {
   #value;
   constructor(raw) {
+    if (raw.length > 19)
+      throw new IllegalArgumentException({ kind: "skip-reason-too-long", raw: raw.length });
     if (!KNOWN_REASONS.has(raw))
       throw new IllegalArgumentException({ kind: "unknown-skip-reason", raw });
     this.#value = raw;
@@ -1344,7 +1487,12 @@ class SkipReason {
 class AttributeKind {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "attribute-kind-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new AttributeKind(value));
   }
   static of(raw) {
     return new AttributeKind(raw);
@@ -1365,6 +1513,172 @@ class AttributeKind {
     return this.#value;
   }
 }
+// src/kernel/domain/declared-binding-value.ts
+class DeclaredBindingValue {
+  #value;
+  constructor(value) {
+    assertValueSize(value, { string: 4096, total: 65536, nodes: 4096, depth: 32 });
+    this.#value = structuredClone(value);
+  }
+  static of(value) {
+    return new DeclaredBindingValue(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredBindingValue(value));
+  }
+  fits(kind, admitsEnum) {
+    return kind.isBool() && typeof this.#value === "boolean" || kind.isInt() && typeof this.#value === "number" && Number.isSafeInteger(this.#value) || kind.isEnum() && typeof this.#value === "string" && admitsEnum(this.#value);
+  }
+  match(cases) {
+    if (typeof this.#value === "boolean" || typeof this.#value === "number" || typeof this.#value === "string")
+      return cases.literal(this.#value);
+    return cases.nonLiteral();
+  }
+  describe() {
+    return JSON.stringify(this.#value);
+  }
+}
+// src/kernel/domain/declared-bindings.ts
+class DeclaredBindings {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-binding-declarations", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new DeclaredBindings(values);
+  }
+  add(value) {
+    return new DeclaredBindings([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/kernel/domain/scenario-bindings.ts
+class ScenarioBindings {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-scenario-bindings", raw: values.length });
+    const paths = new Set;
+    for (const binding of values) {
+      const path = binding.path().asString();
+      if (paths.has(path))
+        throw new IllegalArgumentException({ kind: "duplicate-scenario-binding", raw: path });
+      paths.add(path);
+    }
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new ScenarioBindings(values);
+  }
+  add(value) {
+    return new ScenarioBindings([...this.#values, value]);
+  }
+  has(path) {
+    return this.#values.some((binding) => binding.isFor(path));
+  }
+  valueAt(path) {
+    return this.#values.find((binding) => binding.isFor(path))?.value() ?? null;
+  }
+  covers(paths) {
+    return paths.every((path) => this.has(path));
+  }
+  entriesCanonically() {
+    return [...this.#values].sort((a, b) => a.path().asString() < b.path().asString() ? -1 : a.path().asString() > b.path().asString() ? 1 : 0);
+  }
+  toDocument() {
+    return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
+  }
+}
+// src/kernel/domain/error-message.ts
+class ErrorMessage {
+  #value;
+  constructor(value) {
+    if (value.length > 65536)
+      throw new IllegalArgumentException({ kind: "error-message-too-long", raw: value.length });
+    if (value.length === 0)
+      throw new IllegalArgumentException({ kind: "empty-error-message" });
+    this.#value = value;
+  }
+  static of(value) {
+    return new ErrorMessage(value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/enum-member.ts
+class EnumMember {
+  #value;
+  constructor(value) {
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "enum-member-too-long", raw: value.length });
+    this.#value = value;
+  }
+  static of(value) {
+    return new EnumMember(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new EnumMember(value));
+  }
+  matchesLiteral(value) {
+    return this.#value === value;
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/scenario-binding.ts
+class ScenarioBinding {
+  #path;
+  #value;
+  constructor(path, value) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path, value) {
+    return new ScenarioBinding(path, value);
+  }
+  path() {
+    return this.#path;
+  }
+  value() {
+    return this.#value;
+  }
+  isFor(path) {
+    return this.#path.equals(path);
+  }
+}
+// src/kernel/domain/binding-declaration.ts
+class BindingDeclaration {
+  #path;
+  #value;
+  constructor(path, value) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path, value) {
+    return new BindingDeclaration(path, value);
+  }
+  path() {
+    return this.#path;
+  }
+  value() {
+    return this.#value;
+  }
+}
 // src/kernel/adapter/findings-values-parser.ts
 function parseFindingsValues(raw) {
   const decoded = decodeFindingsDocument(raw);
@@ -1379,13 +1693,13 @@ function parseFindingsValues(raw) {
     findings: traverseResult(doc.findings, (entry) => {
       const fields = combineResults({
         kind: FindingKind.parse(entry.kind),
-        frRefs: traverseResult(entry.frRefs, RequirementId.parse),
+        functionalRequirementReferences: traverseResult(entry.frRefs, RequirementId.parse),
         targets: traverseResult(entry.targets, TargetId.parse),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
       });
       if (!fields.ok)
         return fields;
-      return ok({ ...fields.value, frRefs: FrRefs.of(fields.value.frRefs), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
+      return ok({ ...fields.value, functionalRequirementReferences: FunctionalRequirementReferences.of(fields.value.functionalRequirementReferences), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
     }),
     skipped: traverseResult(doc.skipped, (entry) => {
       const fields = combineResults({
@@ -1412,10 +1726,40 @@ function parseFindingsValues(raw) {
     return err(JSON.stringify(parsed.error));
   return ok({ ...parsed.value, checked: doc.checked, unavailable: doc.unavailable });
 }
+// src/kernel/adapter/bindings-decoder.ts
+function decodeDeclaredBindings(raw) {
+  const values = [];
+  for (const [key, value] of Object.entries(raw)) {
+    const path = AttributePath.parse(key);
+    if (!path.ok)
+      return err(JSON.stringify(path.error));
+    const declared = DeclaredBindingValue.parse(value);
+    if (!declared.ok)
+      return err(JSON.stringify(declared.error));
+    values.push(BindingDeclaration.of(path.value, declared.value));
+  }
+  return ok(DeclaredBindings.of(values));
+}
+function decodeScenarioBindings(raw) {
+  const declarations = decodeDeclaredBindings(raw);
+  if (!declarations.ok)
+    return declarations;
+  const values = [];
+  for (const declaration of declarations.value) {
+    const path = declaration.path();
+    const declared = declaration.value();
+    const value = BindingValue.resolve(declared);
+    if (!value.ok)
+      return err(`${path.asString()}: ${value.error}`);
+    values.push(ScenarioBinding.of(path, value.value));
+  }
+  return ok(ScenarioBindings.of(values));
+}
 // src/design/domain/design-witness.ts
 class DesignWitness {
   #document;
   constructor(document) {
+    assertValueSize(document, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
     this.#document = structuredClone(document);
   }
   static core(labels) {
@@ -1492,7 +1836,7 @@ class ReachabilityVerdict {
 class LoweredObligation {
   #id;
   #nature;
-  #frRefs;
+  #functionalRequirementReferences;
   #assert;
   #trigger;
   #guard;
@@ -1501,7 +1845,7 @@ class LoweredObligation {
   constructor(props) {
     this.#id = props.id;
     this.#nature = ObligationNature.of(props.nature);
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger === undefined ? undefined : TriggerName.of(props.trigger);
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
@@ -1522,8 +1866,8 @@ class LoweredObligation {
   nature() {
     return this.#nature.asString();
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   assertion() {
     return this.#assert;
@@ -1576,6 +1920,8 @@ class LoweredOrigin {
 class LoweredOriginRef {
   #value;
   constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "lowered-origin-ref-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-lowered-token", raw });
     this.#value = raw;
@@ -1651,7 +1997,7 @@ class DesignTransition {
     return LoweredObligation.of({
       id,
       nature: "event",
-      frRefs: FrRefs.of([]),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       trigger: this.#trigger.asString(),
       guard: this.loweredGuard(attrPath),
       effect: this.loweredEffect(attrPath)
@@ -1668,6 +2014,8 @@ class DesignTransition {
 class DesignTransitionId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "design-transition-id-too-long", raw: raw.length });
     if (!/^TR-[0-9]+$/.test(raw))
       throw new IllegalArgumentException({ kind: "malformed-design-transition-id", raw });
     this.#value = raw;
@@ -1763,6 +2111,8 @@ class DesignMachine {
 class DesignAttributeName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "design-attribute-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-machine-token", raw });
     this.#value = raw;
@@ -1784,6 +2134,8 @@ class DesignAttributeName {
 class DesignEntityName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "design-entity-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-machine-token", raw });
     this.#value = raw;
@@ -1828,7 +2180,7 @@ class DesignIgnore {
     return LoweredObligation.of({
       id,
       nature: "event",
-      frRefs: FrRefs.of([]),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       trigger: this.#trigger.asString(),
       guard: this.loweredGuard(attrPath),
       effect: this.loweredEffect(attrPath)
@@ -1861,6 +2213,8 @@ class DesignIgnores {
 class DesignMachineId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "design-machine-id-too-long", raw: raw.length });
     if (!/^SM-[0-9]+$/.test(raw))
       throw new IllegalArgumentException({ kind: "malformed-design-machine-id", raw });
     this.#value = raw;
@@ -1921,7 +2275,7 @@ class DesignObligation {
   #nature;
   #origin;
   #brRefs;
-  #frRefs;
+  #functionalRequirementReferences;
   #assert;
   #trigger;
   #guard;
@@ -1932,7 +2286,7 @@ class DesignObligation {
     this.#nature = props.nature;
     this.#origin = props.origin;
     this.#brRefs = props.brRefs;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
@@ -1959,8 +2313,8 @@ class DesignObligation {
   brRefs() {
     return this.#brRefs;
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   assertion() {
     return this.#assert;
@@ -1995,7 +2349,7 @@ class DesignObligation {
     return { trigger: this.#trigger, ...behavior };
   }
   loweredAs(id) {
-    const lowered = { id, nature: this.#nature.asString(), frRefs: this.#frRefs };
+    const lowered = { id, nature: this.#nature.asString(), functionalRequirementReferences: this.#functionalRequirementReferences };
     const temporal = this.temporal();
     if (this.#assert !== undefined)
       lowered.assert = this.#assert;
@@ -2031,6 +2385,8 @@ class DesignObligation {
 class DesignObligationId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "design-obligation-id-too-long", raw: raw.length });
     if (!/^DOB-[0-9]+$/.test(raw))
       throw new IllegalArgumentException({ kind: "malformed-design-obligation-id", raw });
     this.#value = raw;
@@ -2055,7 +2411,12 @@ class DesignObligationId {
 class DesignObligationNature {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "design-obligation-nature-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new DesignObligationNature(value));
   }
   static of(raw) {
     return new DesignObligationNature(raw);
@@ -2083,7 +2444,12 @@ class DesignObligationNature {
 class DesignObligationOrigin {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "design-obligation-origin-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new DesignObligationOrigin(value));
   }
   static of(raw) {
     return new DesignObligationOrigin(raw);
@@ -2127,15 +2493,15 @@ class DesignObligations {
 class LoweredScenario {
   #id;
   #kind;
-  #frRefs;
+  #functionalRequirementReferences;
   #bindings;
   #event;
   #expect;
   constructor(props) {
     this.#id = props.id;
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
-    this.#bindings = { ...props.bindings };
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#bindings = props.bindings;
     this.#event = props.event;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
@@ -2148,11 +2514,11 @@ class LoweredScenario {
   kind() {
     return this.#kind;
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   bindings() {
-    return { ...this.#bindings };
+    return this.#bindings;
   }
   event() {
     return this.#event;
@@ -2170,7 +2536,7 @@ class DesignScenario {
   #id;
   #kind;
   #brRefs;
-  #frRefs;
+  #functionalRequirementReferences;
   #bindings;
   #eventTrigger;
   #expect;
@@ -2178,8 +2544,8 @@ class DesignScenario {
     this.#id = props.id;
     this.#kind = props.kind;
     this.#brRefs = props.brRefs;
-    this.#frRefs = props.frRefs;
-    this.#bindings = { ...props.bindings };
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
@@ -2195,8 +2561,8 @@ class DesignScenario {
   brRefs() {
     return this.#brRefs;
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   eventTrigger() {
     return this.#eventTrigger;
@@ -2216,18 +2582,15 @@ class DesignScenario {
   isViolatedBySatisfiability(satisfiable) {
     return this.isAccept() && !satisfiable || this.isReject() && satisfiable;
   }
-  bindingEntriesCanonically() {
-    return Object.entries(this.#bindings).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
-  }
   bindings() {
-    return { ...this.#bindings };
+    return this.#bindings;
   }
   loweredAs(id) {
     return LoweredScenario.of({
       id,
       kind: this.#kind,
-      frRefs: this.#frRefs,
-      bindings: { ...this.#bindings },
+      functionalRequirementReferences: this.#functionalRequirementReferences,
+      bindings: this.#bindings,
       ...this.#eventTrigger !== undefined ? { event: { trigger: this.#eventTrigger.asString() } } : {},
       ...this.#expect !== undefined ? { expect: this.#expect } : {}
     });
@@ -2237,6 +2600,8 @@ class DesignScenario {
 class DesignScenarioId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "design-scenario-id-too-long", raw: raw.length });
     if (!/^DSC-[0-9]+$/.test(raw))
       throw new IllegalArgumentException({ kind: "malformed-design-scenario-id", raw });
     this.#value = raw;
@@ -2286,6 +2651,8 @@ class DesignScenarios {
 class DesignUnitId {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "design-unit-id-too-long", raw: value.length });
     if (value === "")
       throw new IllegalArgumentException({ kind: "empty-design-unit-id", raw: value });
     this.#value = value;
@@ -2311,10 +2678,10 @@ class AttrPaths {
     this.#values = values;
   }
   static of(values) {
-    return new AttrPaths(new Set(values));
+    return new AttrPaths(KeySet.of(values));
   }
   add(value) {
-    return new AttrPaths(new Set([...this.#values, value]));
+    return new AttrPaths(this.#values.with(value));
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -2354,6 +2721,8 @@ class LoweredBackgrounds {
 class LoweredId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "lowered-id-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-lowered-token", raw });
     this.#value = raw;
@@ -2532,7 +2901,7 @@ class DesignUnit {
       for (const attr of ent.attributes())
         coordinates.add(`${ent.name().asString()}.${attr.name().asString()}`);
     }
-    this.#attrPaths = AttrPaths.of([...coordinates]);
+    this.#attrPaths = AttrPaths.of([...coordinates].map((path) => AttributePath.of(path)));
     this.#obligations = seed.obligations;
     this.#machines = seed.machines;
     this.#scenarios = seed.scenarios;
@@ -2607,7 +2976,7 @@ class DesignUnit {
     if (opts.synthetics) {
       for (const c of candidates) {
         const id = nextId();
-        obligations.push(LoweredObligation.of({ id, nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
+        obligations.push(LoweredObligation.of({ id, nature: "invariant", functionalRequirementReferences: FunctionalRequirementReferences.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
         origins.push([id, LoweredOrigin.of({ design: LoweredOriginRef.of(c.design), kind: "vac-dead" })]);
       }
       const byTrigger = new Map;
@@ -2628,7 +2997,7 @@ class DesignUnit {
             obligations.push(LoweredObligation.of({
               id,
               nature: "invariant",
-              frRefs: FrRefs.of([]),
+              functionalRequirementReferences: FunctionalRequirementReferences.of([]),
               assert: {
                 op: "implies",
                 args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }]
@@ -2681,7 +3050,7 @@ class DesignUnit {
   }
   declaredEnumValuesOf(attrPath) {
     const values = this.#attributeAt(attrPath)?.enumStates() ?? null;
-    return values === null ? null : [...values.toArray()];
+    return values === null ? null : values.toArray().map((member) => member.asString());
   }
   enumValuesOf(attrPath) {
     return this.declaredEnumValuesOf(attrPath) ?? [];
@@ -2756,6 +3125,8 @@ class DesignBackgroundAssumptions {
 class DesignBackgroundId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "design-background-id-too-long", raw: raw.length });
     if (!/^DBG-[0-9]+$/.test(raw))
       throw new IllegalArgumentException({ kind: "malformed-design-background-id", raw });
     this.#value = raw;
@@ -2843,14 +3214,14 @@ class DesignModel {
 // src/design/domain/design-finding.ts
 class DesignFinding {
   #kind;
-  #frRefs;
+  #functionalRequirementReferences;
   #targets;
   #witness;
   #unit;
   #detail;
   constructor(props) {
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#unit = props.unit;
@@ -2862,8 +3233,8 @@ class DesignFinding {
   kind() {
     return this.#kind.asString();
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   targets() {
     return this.#targets;
@@ -2888,7 +3259,7 @@ class DesignFinding {
       return null;
     return new DesignFinding({
       kind: FindingKind.refinementViolation(),
-      frRefs: this.#frRefs,
+      functionalRequirementReferences: this.#functionalRequirementReferences,
       targets: TargetIds.of(reqHits),
       witness: this.#witness,
       unit,
@@ -2901,7 +3272,7 @@ class DesignFinding {
   withDetail(detail) {
     return new DesignFinding({
       kind: this.#kind,
-      frRefs: this.#frRefs,
+      functionalRequirementReferences: this.#functionalRequirementReferences,
       targets: this.#targets,
       witness: this.#witness,
       unit: this.#unit,
@@ -3085,7 +3456,7 @@ class SiblingVerdictDocument {
     const shadowFindings = [];
     for (const f of docFindings) {
       const mapped = f.targets().map((t) => mapTarget(t.asString()));
-      const frRefs = f.frRefs();
+      const functionalRequirementReferences = f.functionalRequirementReferences();
       const detail = remapDetail(f.detail());
       const witness = f.witnessRemappedBy(rewriteLabel);
       const synth = mapped.find((m) => m.entry?.isSyntheticProbe());
@@ -3095,7 +3466,7 @@ class SiblingVerdictDocument {
         deadDesignIds.add(design);
         findings.push(DesignFinding.of({
           kind: FindingKind.unreachable(),
-          frRefs,
+          functionalRequirementReferences,
           targets: TargetIds.of(Array.from([design], (raw) => TargetId.of(raw))),
           witness,
           unit: UnitName.of(u.name()),
@@ -3109,7 +3480,7 @@ class SiblingVerdictDocument {
         shadowFindings.push({
           finding: DesignFinding.of({
             kind: FindingKind.redundancy(),
-            frRefs,
+            functionalRequirementReferences,
             targets: TargetIds.of(Array.from([pair[0], pair[1]], (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
             witness,
             unit: UnitName.of(u.name()),
@@ -3141,7 +3512,7 @@ class SiblingVerdictDocument {
           continue;
         }
       }
-      findings.push(DesignFinding.of({ kind: FindingKind.of(f.kind()), frRefs, targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))), witness, unit: UnitName.of(u.name()), detail }));
+      findings.push(DesignFinding.of({ kind: FindingKind.of(f.kind()), functionalRequirementReferences, targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))), witness, unit: UnitName.of(u.name()), detail }));
     }
     const liveShadows = shadowFindings.filter((s) => !deadDesignIds.has(s.subsumed) && !deadDesignIds.has(s.subsumer));
     const byPair = new Map;
@@ -3187,13 +3558,13 @@ class SiblingVerdictDocument {
 // src/design/domain/sibling-verdict-finding.ts
 class SiblingVerdictFinding {
   #kind;
-  #frRefs;
+  #functionalRequirementReferences;
   #targets;
   #witness;
   #detail;
   constructor(props) {
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#detail = props.detail;
@@ -3208,8 +3579,8 @@ class SiblingVerdictFinding {
     const parsed = FindingKind.parse(kind);
     return parsed.ok && this.#kind.equals(parsed.value);
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   targets() {
     return this.#targets;
@@ -3470,7 +3841,7 @@ class DesignReport {
     ordered.findings = this.#findings.toArray().map((f) => {
       const out = {
         kind: f.kind(),
-        frRefs: f.frRefs().toStrings(),
+        frRefs: f.functionalRequirementReferences().toStrings(),
         targets: f.targets().toStrings(),
         witness: f.witness().toDocument(),
         unit: f.unit(),
@@ -3656,7 +4027,7 @@ class DesignReports {
               verdicts[b.backend] = vb ? "violated" : "clean";
               findings.push(DesignFinding.of({
                 kind: FindingKind.crossCheckDisagreement(),
-                frRefs: FrRefs.of([...sc.frRefs()]).sortedUnique(),
+                functionalRequirementReferences: FunctionalRequirementReferences.of([...sc.functionalRequirementReferences()]).sortedUnique(),
                 targets: TargetIds.of(Array.from([sc.id().asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.verdicts(verdicts),
                 unit: UnitName.of(u.name()),
@@ -3752,29 +4123,12 @@ class DesignVerifyDirectory {
     return this.#crossCheck;
   }
 }
-// src/design/domain/binding-pairs.ts
-class BindingPairs {
-  #values;
-  constructor(values) {
-    this.#values = structuredClone(values);
-  }
-  static of(values) {
-    return new BindingPairs(values);
-  }
-  add(value) {
-    return new BindingPairs([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.toArray();
-  }
-  toArray() {
-    return structuredClone(this.#values);
-  }
-}
 // src/design/domain/br-ref.ts
 class BrRef {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "br-ref-too-long", raw: value.length });
     if (!/^BR[0-9]+\.[0-9]+$/.test(value))
       throw new IllegalArgumentException({ kind: "malformed-business-rule-reference", raw: value });
     this.#value = value;
@@ -3821,10 +4175,12 @@ class BrRefs {
 class DeclaredValues {
   #values;
   constructor(values) {
-    this.#values = values;
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new DeclaredValues([...values]);
+    return new DeclaredValues(values);
   }
   add(value) {
     return new DeclaredValues([...this.#values, value]);
@@ -3833,7 +4189,7 @@ class DeclaredValues {
     yield* this.#values;
   }
   includes(value) {
-    return this.#values.includes(value);
+    return this.#values.some((member) => member.matchesLiteral(value));
   }
   toArray() {
     return this.#values;
@@ -3849,7 +4205,7 @@ class DesignAttributeDecl {
   #max;
   constructor(props) {
     this.#name = props.name;
-    this.#kind = AttributeKind.of(props.kind);
+    this.#kind = props.kind;
     this.#description = props.description;
     this.#values = props.values;
     this.#min = props.min;
@@ -3877,7 +4233,7 @@ class DesignAttributeDecl {
     return this.#kind.isEnum() && (this.#values?.includes(value) ?? false);
   }
   fitsBinding(value) {
-    return this.#kind.isBool() && typeof value === "boolean" || this.#kind.isInt() && typeof value === "number" && Number.isSafeInteger(value) || this.#kind.isEnum() && typeof value === "string" && (this.#values?.includes(value) ?? false);
+    return value.fits(this.#kind, (literal) => this.admitsEnumLiteral(literal));
   }
   enumStates() {
     return this.#kind.isEnum() && this.#values !== undefined ? this.#values : null;
@@ -4081,7 +4437,7 @@ class DesignMachineDecl {
     return this.#ignores;
   }
   initialStatesOutside(states) {
-    return [...this.#initial].filter((state) => !states.includes(state));
+    return [...this.#initial].filter((state) => !states.includes(state.asString())).map((state) => state.asString());
   }
 }
 // src/design/domain/design-machine-decls.ts
@@ -4509,15 +4865,17 @@ class DesignUnitDecl {
       const ctx = `scenario ${sc.id().asString()}`;
       dup(sc.id().asString(), ctx);
       collectBr(sc.brRefs());
-      for (const [path, val] of sc.bindings()) {
-        const t = attrTypes.get(path);
+      for (const binding of sc.bindings()) {
+        const path = binding.path();
+        const val = binding.value();
+        const t = attrTypes.get(path.asString());
         if (!t) {
-          errors.push(where(`${ctx}: binding for unknown attribute "${path}"`));
+          errors.push(where(`${ctx}: binding for unknown attribute "${path.asString()}"`));
           continue;
         }
         const ok2 = t.fitsBinding(val);
         if (!ok2)
-          errors.push(where(`${ctx}: binding value ${JSON.stringify(val)} does not fit ${t.kindLabel()} attribute "${path}"`));
+          errors.push(where(`${ctx}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`));
       }
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
     }
@@ -4585,10 +4943,12 @@ class DesignUnitDecls {
 class InitialStates {
   #values;
   constructor(values) {
-    this.#values = values;
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-initial-states", raw: values.length });
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new InitialStates([...values]);
+    return new InitialStates(values);
   }
   add(value) {
     return new InitialStates([...this.#values, value]);
@@ -4597,7 +4957,7 @@ class InitialStates {
     yield* this.#values;
   }
   includes(value) {
-    return this.#values.includes(value);
+    return this.#values.some((state) => state.matchesName(value));
   }
   toArray() {
     return this.#values;
@@ -4750,8 +5110,8 @@ class RefinementRequirements {
   allTargetIds() {
     return TargetIds.of([...this.#obligations.toArray().map((o) => o.id().asTargetId()), ...this.#scenarios.toArray().map((s) => s.id().asTargetId())]);
   }
-  frRefsOf(id) {
-    return this.#obligations.byId(id)?.frRefs() ?? this.#scenarios.byId(id)?.frRefs() ?? FrRefs.of([]);
+  functionalRequirementReferencesOf(id) {
+    return this.#obligations.byId(id)?.functionalRequirementReferences() ?? this.#scenarios.byId(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]);
   }
 }
 // src/design/domain/refinement-attribute.ts
@@ -4822,7 +5182,7 @@ class RefinementAttributes {
 class RefinementObligation {
   #id;
   #nature;
-  #frRefs;
+  #functionalRequirementReferences;
   #assert;
   #trigger;
   #guard;
@@ -4830,7 +5190,7 @@ class RefinementObligation {
   constructor(props) {
     this.#id = props.id;
     this.#nature = props.nature;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
@@ -4845,8 +5205,8 @@ class RefinementObligation {
   nature() {
     return this.#nature;
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   assertion() {
     return this.#assert;
@@ -4909,14 +5269,14 @@ class RefinementObligations {
 class RefinementScenario {
   #id;
   #kind;
-  #frRefs;
+  #functionalRequirementReferences;
   #bindings;
   #eventTrigger;
   constructor(props) {
     this.#id = props.id;
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
-    this.#bindings = { ...props.bindings };
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
   }
   static of(props) {
@@ -4928,8 +5288,8 @@ class RefinementScenario {
   kind() {
     return this.#kind;
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   eventTrigger() {
     return this.#eventTrigger;
@@ -4944,10 +5304,7 @@ class RefinementScenario {
     return this.#eventTrigger !== undefined;
   }
   bindings() {
-    return { ...this.#bindings };
-  }
-  bindingEntriesCanonically() {
-    return Object.entries(this.#bindings).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    return this.#bindings;
   }
 }
 // src/design/domain/refinement-scenarios.ts
@@ -4981,10 +5338,12 @@ class RefinementScenarios {
 class ReqAttributeValues {
   #values;
   constructor(values) {
-    this.#values = values;
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new ReqAttributeValues([...values]);
+    return new ReqAttributeValues(values);
   }
   add(value) {
     return new ReqAttributeValues([...this.#values, value]);
@@ -4993,10 +5352,10 @@ class ReqAttributeValues {
     yield* this.#values;
   }
   includes(value) {
-    return this.#values.includes(value);
+    return this.#values.some((member) => member.matchesLiteral(value));
   }
   sortedUniqueCanonically() {
-    return new ReqAttributeValues([...new Set(this.#values)].sort(compareCanonically));
+    return new ReqAttributeValues([...new Map(this.#values.map((member) => [member.asString(), member])).values()].sort((a, b) => a.compareTo(b)));
   }
   toArray() {
     return this.#values;
@@ -5118,10 +5477,12 @@ class AttributeDeclarations {
 class AttributeValues {
   #values;
   constructor(values) {
-    this.#values = values;
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new AttributeValues([...values]);
+    return new AttributeValues(values);
   }
   add(value) {
     return new AttributeValues([...this.#values, value]);
@@ -5130,7 +5491,7 @@ class AttributeValues {
     yield* this.#values;
   }
   indexOf(value) {
-    return this.#values.indexOf(value);
+    return this.#values.findIndex((member) => member.matchesLiteral(value));
   }
   valueAt(index) {
     return this.#values[index];
@@ -5146,7 +5507,7 @@ class AttributeValues {
 class Obligation {
   #id;
   #nature;
-  #frRefs;
+  #functionalRequirementReferences;
   #ears;
   #assert;
   #trigger;
@@ -5156,7 +5517,7 @@ class Obligation {
   constructor(props) {
     this.#id = props.id;
     this.#nature = props.nature;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#ears = props.ears;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
@@ -5178,8 +5539,8 @@ class Obligation {
   nature() {
     return this.#nature;
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   ears() {
     return this.#ears;
@@ -5235,6 +5596,8 @@ class Obligation {
 class ObligationId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "obligation-id-too-long", raw: raw.length });
     if (!/^OB-[0-9]+$/.test(raw))
       throw new IllegalArgumentException({ kind: "malformed-obligation-id", raw });
     this.#value = raw;
@@ -5312,15 +5675,15 @@ class Obligations {
 class Scenario {
   #id;
   #kind;
-  #frRefs;
+  #functionalRequirementReferences;
   #bindings;
   #eventTrigger;
   #expect;
   constructor(props) {
     this.#id = props.id;
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
-    this.#bindings = { ...props.bindings };
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
@@ -5333,8 +5696,8 @@ class Scenario {
   kind() {
     return this.#kind;
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   eventTrigger() {
     return this.#eventTrigger;
@@ -5354,17 +5717,16 @@ class Scenario {
   isViolatedBySatisfiability(satisfiable) {
     return this.isAccept() && !satisfiable || this.isReject() && satisfiable;
   }
-  bindingEntriesCanonically() {
-    return Object.entries(this.#bindings).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
-  }
   bindings() {
-    return { ...this.#bindings };
+    return this.#bindings;
   }
 }
 // src/requirements/domain/scenario-id.ts
 class ScenarioId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "scenario-id-too-long", raw: raw.length });
     if (!/^SC-[0-9]+$/.test(raw))
       throw new IllegalArgumentException({ kind: "malformed-scenario-id", raw });
     this.#value = raw;
@@ -5469,23 +5831,25 @@ class RequirementsModel {
   allTargets() {
     return TargetIds.of(Array.from([...this.#obligations.ids(), ...this.#scenarios.ids()], (raw) => TargetId.of(raw))).sortedCanonically();
   }
-  frRefsOf(targets) {
+  functionalRequirementReferencesOf(targets) {
     const refs = [];
     for (const t of targets) {
       const ob = this.#obligations.byId(t.asString());
       if (ob)
-        refs.push(...ob.frRefs());
+        refs.push(...ob.functionalRequirementReferences());
       const sc = this.#scenarios.byId(t.asString());
       if (sc)
-        refs.push(...sc.frRefs());
+        refs.push(...sc.functionalRequirementReferences());
     }
-    return FrRefs.of(refs).sortedUnique();
+    return FunctionalRequirementReferences.of(refs).sortedUnique();
   }
 }
 // src/requirements/domain/background-assumption-id.ts
 class BackgroundAssumptionId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "background-assumption-id-too-long", raw: raw.length });
     if (!/^BG-[0-9]+$/.test(raw))
       throw new IllegalArgumentException({ kind: "malformed-background-assumption-id", raw });
     this.#value = raw;
@@ -5543,13 +5907,13 @@ class BackgroundAssumptions {
 // src/requirements/domain/verification-finding.ts
 class VerificationFinding {
   #kind;
-  #frRefs;
+  #functionalRequirementReferences;
   #targets;
   #witness;
   #detail;
   constructor(props) {
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#detail = props.detail;
@@ -5560,8 +5924,8 @@ class VerificationFinding {
   kind() {
     return this.#kind.asString();
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   targets() {
     return this.#targets;
@@ -5690,6 +6054,7 @@ class VerificationSkips {
 class VerificationWitness {
   #document;
   constructor(raw) {
+    assertValueSize(raw, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
     this.#document = structuredClone(raw);
   }
   static core(labels) {
@@ -5896,7 +6261,7 @@ class VerificationReport {
     ordered.findings = this.#findings.toArray().map((f) => {
       const out = {
         kind: f.kind(),
-        frRefs: f.frRefs().toStrings(),
+        frRefs: f.functionalRequirementReferences().toStrings(),
         targets: f.targets().toStrings(),
         witness: f.witness().toDocument(),
         detail: f.detail()
@@ -6009,7 +6374,7 @@ class VerificationReports {
             verdicts[b.backend] = vb ? "violated" : "clean";
             findings.push(VerificationFinding.of({
               kind: FindingKind.crossCheckDisagreement(),
-              frRefs: FrRefs.of([...scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? []]).sortedUnique(),
+              functionalRequirementReferences: FunctionalRequirementReferences.of([...scenarioById.get(sc.id().asString())?.functionalRequirementReferences().toArray() ?? []]).sortedUnique(),
               targets: TargetIds.of([sc.id().asTargetId()]),
               witness: VerificationWitness.verdicts(verdicts),
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`
@@ -6204,7 +6569,7 @@ class SmtVerificationPlan {
       conflictKeys.add(key);
       findings.push(VerificationFinding.of({
         kind: FindingKind.conflict(),
-        frRefs: model.frRefsOf(effective),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
         targets: effective,
         witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
         detail
@@ -6245,7 +6610,7 @@ class SmtVerificationPlan {
       if (r.isSat()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.completenessGap(),
-          frRefs: model.frRefsOf(eventIds),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventIds),
           targets: eventIds,
           witness: VerificationWitness.model(r.witnessModel()),
           detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`
@@ -6267,7 +6632,7 @@ class SmtVerificationPlan {
         const targets = TargetIds.of([sc.id().asTargetId(), ...coreToTargets([...r.coreLabels()])]).sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(targets),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
           targets,
           witness: VerificationWitness.core(r.sortedCore()),
           detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out \u2014 the requirements reject an example that should be accepted.`
@@ -6276,7 +6641,7 @@ class SmtVerificationPlan {
       if (sc.isReject() && r.isSat()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(TargetIds.of([sc.id().asTargetId()])),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([sc.id().asTargetId()])),
           targets: TargetIds.of([sc.id().asTargetId()]),
           witness: VerificationWitness.model(r.witnessModel()),
           detail: `Reject scenario ${sc.id().asString()} is still satisfiable \u2014 the requirements do not exclude an example that should be rejected (witness state attached).`
@@ -6345,10 +6710,14 @@ class SmtEventPairProbes {
 class TraceValue {
   #value;
   constructor(value) {
-    this.#value = value;
+    assertValueSize(value, { string: 65536, nodes: 1e5, depth: 128, total: 16777216 });
+    this.#value = structuredClone(value);
   }
   static of(value) {
     return new TraceValue(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new TraceValue(value));
   }
   static ofLiteral(value) {
     return new TraceValue(value ?? null);
@@ -6372,7 +6741,7 @@ class TraceValue {
     return JSON.stringify(this.#value) === JSON.stringify(other.#value);
   }
   toDocument() {
-    return this.#value;
+    return structuredClone(this.#value);
   }
 }
 
@@ -6464,7 +6833,7 @@ class QuintMachinePlan {
       if (machineRun.isDeadlock()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.completenessGap(),
-          frRefs: model.frRefsOf(eventTargets),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventTargets),
           targets: this.#eventIds.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
           witness: machineRun.witness(),
           detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified."
@@ -6474,7 +6843,7 @@ class QuintMachinePlan {
         const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.conflict(),
-          frRefs: model.frRefsOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
           targets,
           witness: machineRun.witness(),
           detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`
@@ -6510,7 +6879,7 @@ class QuintMachinePlan {
       } else if (r.isViolation()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.conflict(),
-          frRefs: model.frRefsOf(TargetIds.of([target])),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: r.witness(),
           detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`
@@ -6545,17 +6914,15 @@ class QuintMachinePlan {
         skipped.push(skip);
         continue;
       }
-      const bindings = sc.bindingEntriesCanonically();
-      const state = TraceState.of(bindings.map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)]));
-      const boundModel = {};
-      for (const [path, value] of bindings)
-        boundModel[path] = value;
+      const bindings = sc.bindings().entriesCanonically();
+      const state = TraceState.of(bindings.map((binding) => [binding.path(), TraceValue.of(binding.value().toDocument())]));
+      const boundModel = sc.bindings().toDocument();
       if (sc.isAccept() && r.isViolated()) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
         const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(targets),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
           targets,
           witness: VerificationWitness.model(boundModel),
           detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out \u2014 the requirements reject an example that should be accepted.`
@@ -6564,7 +6931,7 @@ class QuintMachinePlan {
       if (sc.isReject() && !r.isViolated()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(TargetIds.of([target])),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: VerificationWitness.model(boundModel),
           detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation \u2014 the requirements do not exclude an example that should be rejected.`
@@ -6894,14 +7261,16 @@ class IrModelDecl {
     for (const sc of this.#scenarios) {
       const where = `scenario ${sc.id().asString()}`;
       dupCheck(sc.id().asString(), where);
-      for (const [path, val] of sc.bindings()) {
-        const t = attrTypes.get(path);
+      for (const binding of sc.bindings()) {
+        const path = binding.path();
+        const val = binding.value();
+        const t = attrTypes.get(path.asString());
         if (!t) {
-          errors.push(`${where}: binding for unknown attribute "${path}"`);
+          errors.push(`${where}: binding for unknown attribute "${path.asString()}"`);
           continue;
         }
         if (!t.fitsBinding(val)) {
-          errors.push(`${where}: binding value ${JSON.stringify(val)} does not fit ${t.kindLabel()} attribute "${path}"`);
+          errors.push(`${where}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`);
         }
       }
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
@@ -6923,7 +7292,7 @@ class IrAttributeDecl {
   #max;
   constructor(props) {
     this.#name = props.name;
-    this.#kind = AttributeKind.of(props.kind);
+    this.#kind = props.kind;
     this.#values = props.values;
     this.#min = props.min;
     this.#max = props.max;
@@ -6944,7 +7313,7 @@ class IrAttributeDecl {
     return this.#kind.isEnum() && (this.#values?.includes(value) ?? false);
   }
   fitsBinding(value) {
-    return this.#kind.isBool() && typeof value === "boolean" || this.#kind.isInt() && typeof value === "number" && Number.isSafeInteger(value) || this.#kind.isEnum() && typeof value === "string" && (this.#values?.includes(value) ?? false);
+    return value.fits(this.#kind, (literal) => this.admitsEnumLiteral(literal));
   }
   kindLabel() {
     return this.#kind.asString();
@@ -6973,6 +7342,8 @@ class IrAttributeDecls {
 class IrAttributeName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "ir-attribute-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
     this.#value = raw;
@@ -7031,33 +7402,16 @@ class IrBackgroundDecls {
     return this.#values;
   }
 }
-// src/requirements/domain/ir-binding-pairs.ts
-class IrBindingPairs {
-  #values;
-  constructor(values) {
-    this.#values = structuredClone(values);
-  }
-  static of(values) {
-    return new IrBindingPairs(values);
-  }
-  add(value) {
-    return new IrBindingPairs([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.toArray();
-  }
-  toArray() {
-    return structuredClone(this.#values);
-  }
-}
 // src/requirements/domain/ir-declared-values.ts
 class IrDeclaredValues {
   #values;
   constructor(values) {
-    this.#values = values;
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new IrDeclaredValues([...values]);
+    return new IrDeclaredValues(values);
   }
   add(value) {
     return new IrDeclaredValues([...this.#values, value]);
@@ -7066,7 +7420,7 @@ class IrDeclaredValues {
     yield* this.#values;
   }
   includes(value) {
-    return this.#values.includes(value);
+    return this.#values.some((member) => member.matchesLiteral(value));
   }
   toArray() {
     return this.#values;
@@ -7121,6 +7475,8 @@ class IrEntityDecls {
 class IrEntityName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "ir-entity-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-ir-decl-token", raw });
     this.#value = raw;
@@ -7254,17 +7610,17 @@ class IrTemporalDecl {
       visitor(this.#to, false);
   }
 }
-// src/requirements/domain/fr-ref-claims.ts
-class FrRefClaims {
+// src/requirements/domain/functional-requirement-reference-claims.ts
+class FunctionalRequirementReferenceClaims {
   #values;
   constructor(values) {
     this.#values = values;
   }
   static of(values) {
-    return new FrRefClaims([...values]);
+    return new FunctionalRequirementReferenceClaims([...values]);
   }
   add(value) {
-    return new FrRefClaims([...this.#values, value]);
+    return new FunctionalRequirementReferenceClaims([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -7277,8 +7633,8 @@ class FrRefClaims {
   }
 }
 
-// src/requirements/domain/fr-reference-index.ts
-class FrReferenceIndex {
+// src/requirements/domain/functional-requirement-reference-index.ts
+class FunctionalRequirementReferenceIndex {
   #ownersByRef;
   constructor(ownersByRef) {
     this.#ownersByRef = ownersByRef;
@@ -7287,7 +7643,7 @@ class FrReferenceIndex {
     const ownersByRef = new Map;
     for (const claim of claims)
       claim.claimInto(ownersByRef);
-    return new FrReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.of(ref), FrRefClaims.of(owners)])));
+    return new FunctionalRequirementReferenceIndex(KeyedIndex.of([...ownersByRef].map(([ref, owners]) => [RequirementId.of(ref), FunctionalRequirementReferenceClaims.of(owners)])));
   }
   referencedIds() {
     return [...this.#ownersByRef.keys()].map((ref) => ref.asString());
@@ -7300,22 +7656,22 @@ class FrReferenceIndex {
     });
   }
 }
-// src/requirements/domain/fr-ref-claim.ts
-class FrRefClaim {
+// src/requirements/domain/functional-requirement-reference-claim.ts
+class FunctionalRequirementReferenceClaim {
   #owner;
-  #frRefs;
-  constructor(owner, frRefs) {
+  #functionalRequirementReferences;
+  constructor(owner, functionalRequirementReferences) {
     this.#owner = owner;
-    this.#frRefs = frRefs;
+    this.#functionalRequirementReferences = functionalRequirementReferences;
   }
-  static of(owner, frRefs) {
-    return new FrRefClaim(owner, frRefs);
+  static of(owner, functionalRequirementReferences) {
+    return new FunctionalRequirementReferenceClaim(owner, functionalRequirementReferences);
   }
   ownerDescription() {
     return this.#owner;
   }
   claimInto(ownersByRef) {
-    for (const ref of this.#frRefs) {
+    for (const ref of this.#functionalRequirementReferences) {
       const owners = ownersByRef.get(ref.asString()) ?? [];
       owners.push(this);
       ownersByRef.set(ref.asString(), owners);
@@ -7415,7 +7771,7 @@ class IrValidationMaterials {
     return this.#view;
   }
   frReferenceIndex() {
-    return FrReferenceIndex.of(this.#frClaims.toArray());
+    return FunctionalRequirementReferenceIndex.of(this.#frClaims.toArray());
   }
   declaredDigest() {
     return this.#declaredDigest;
@@ -7575,9 +7931,9 @@ class AttributeMapping {
   abstractFrameEquality() {
     const variant = this.#variant;
     if (variant.kind === "enum-cases") {
-      const values = ReqAttributeValues.of(Object.values(variant.cases)).sortedUniqueCanonically().toArray();
+      const values = ReqAttributeValues.of(Object.values(variant.cases).map((value) => EnumMember.of(value))).sortedUniqueCanonically().toArray();
       const classes = values.map((reqValue) => {
-        const members = Object.entries(variant.cases).filter(([, rv]) => rv === reqValue).map(([d]) => d).sort();
+        const members = Object.entries(variant.cases).filter(([, rv]) => reqValue.matchesLiteral(rv)).map(([d]) => d).sort();
         const inClass = (primed) => {
           const refNode = { op: "ref", path: variant.from, ...primed ? { prime: true } : {} };
           const eqs = members.map((d) => ({ op: "eq", args: [refNode, { op: "enum", value: d }] }));
@@ -7602,7 +7958,7 @@ class AttributeMapping {
     const variant = this.#variant;
     if (variant.kind !== "enum-cases")
       return [];
-    return ReqAttributeValues.of(Object.values(variant.cases).filter((rv) => !(reqValues?.includes(rv) ?? false))).sortedUniqueCanonically().toArray();
+    return ReqAttributeValues.of(Object.values(variant.cases).filter((rv) => !(reqValues?.includes(rv) ?? false)).map((value) => EnumMember.of(value))).sortedUniqueCanonically().toArray().map((member) => member.asString());
   }
   referencedPaths() {
     const variant = this.#variant;
@@ -7780,6 +8136,8 @@ class RefinementUnitMaps {
 class TransitionRef {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "transition-ref-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-refinement-map-token", raw });
     this.#value = raw;
@@ -7871,6 +8229,8 @@ class UnmappedDeclarations {
 class UnmappedTargetRef {
   #value;
   constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "unmapped-target-ref-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-refinement-map-token", raw });
     this.#value = raw;
@@ -7963,15 +8323,15 @@ class RefinementQuintInvariants {
 // src/design/domain/refinement-quint-invariant.ts
 class RefinementQuintInvariant {
   #reqId;
-  #frRefs;
+  #functionalRequirementReferences;
   #expr;
-  constructor(reqId, frRefs, expr) {
+  constructor(reqId, functionalRequirementReferences, expr) {
     this.#reqId = reqId;
-    this.#frRefs = frRefs;
+    this.#functionalRequirementReferences = functionalRequirementReferences;
     this.#expr = ExpressionTree.of(expr).asExpression();
   }
-  static of(reqId, frRefs, expr) {
-    return new RefinementQuintInvariant(reqId, frRefs, expr);
+  static of(reqId, functionalRequirementReferences, expr) {
+    return new RefinementQuintInvariant(reqId, functionalRequirementReferences, expr);
   }
   reqId() {
     return this.#reqId;
@@ -7980,7 +8340,7 @@ class RefinementQuintInvariant {
     return this.#reqId.asTargetId();
   }
   loweredAs(id) {
-    return LoweredObligation.of({ id, nature: "invariant", frRefs: this.#frRefs, assert: this.#expr });
+    return LoweredObligation.of({ id, nature: "invariant", functionalRequirementReferences: this.#functionalRequirementReferences, assert: this.#expr });
   }
 }
 
@@ -8042,10 +8402,10 @@ class UnitRefinementPlan {
   }
   static of(u, unitMap, req, mapArtifact) {
     const gaps = [];
-    const gap = (targets, detail, frRefs = FrRefs.of([])) => {
+    const gap = (targets, detail, functionalRequirementReferences = FunctionalRequirementReferences.of([])) => {
       gaps.push(DesignFinding.of({
         kind: FindingKind.mappingGap(),
-        frRefs: frRefs.sortedUnique(),
+        functionalRequirementReferences: functionalRequirementReferences.sortedUnique(),
         targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
         witness: DesignWitness.refs([{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }]),
         unit: UnitName.of(u.name()),
@@ -8070,7 +8430,7 @@ class UnitRefinementPlan {
         if (!reqAttr.isEnum()) {
           gap(gapTarget, `attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind()}`);
         }
-        if (!u.attrPaths().has(from)) {
+        if (!u.attrPaths().has(AttributePath.of(from))) {
           gap(gapTarget, `enumMap.from "${from}" is not a design attribute of unit ${u.name()}`);
           continue;
         }
@@ -8089,7 +8449,7 @@ class UnitRefinementPlan {
         }
       } else if (m.isExpression()) {
         for (const r of m.referencedPaths()) {
-          if (!u.attrPaths().has(r)) {
+          if (!u.attrPaths().has(AttributePath.of(r))) {
             gap(gapTarget, `attrMap expression for "${reqPath}" references "${r}", which is not a design attribute of unit ${u.name()}`);
           }
         }
@@ -8175,7 +8535,7 @@ class UnitRefinementPlan {
         scenarioStatus.set(sc.id().asString(), RefinementStatus.capability("event scenarios are not replayed in v1"));
         continue;
       }
-      const missing = Object.keys(sc.bindings()).filter((p) => !byReq.has(p)).sort();
+      const missing = sc.bindings().entriesCanonically().map((binding) => binding.path().asString()).filter((p) => !byReq.has(p)).sort();
       if (missing.length === 0)
         scenarioStatus.set(sc.id().asString(), RefinementStatus.checkable());
       else if (unmapped.coversAll(missing)) {
@@ -8187,13 +8547,13 @@ class UnitRefinementPlan {
     for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])))) {
       const gapDetail = st.gapDetail();
       if (gapDetail !== null) {
-        gap([id], `${id}: ${gapDetail}`, req.obligationById(id)?.frRefs() ?? FrRefs.of([]));
+        gap([id], `${id}: ${gapDetail}`, req.obligationById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
       }
     }
     for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])))) {
       const gapDetail = st.gapDetail();
       if (gapDetail !== null) {
-        gap([id], `${id}: ${gapDetail}`, req.scenarioById(id)?.frRefs() ?? FrRefs.of([]));
+        gap([id], `${id}: ${gapDetail}`, req.scenarioById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
       }
     }
     return new UnitRefinementPlan({
@@ -8279,7 +8639,7 @@ class UnitRefinementPlan {
         continue;
       const substituted = this.#mappings.substitute(assertion, false);
       if (substituted.ok)
-        out.push(RefinementQuintInvariant.of(ob.id(), ob.frRefs(), substituted.value));
+        out.push(RefinementQuintInvariant.of(ob.id(), ob.functionalRequirementReferences(), substituted.value));
     }
     return RefinementQuintInvariants.of(out);
   }
@@ -8427,7 +8787,7 @@ class RefinementSolverPlan {
   interpret(results, req, plan, unitName) {
     const findings = [];
     const skipped = [];
-    const frOf = (reqId) => req.frRefsOf(reqId).sortedUnique();
+    const frOf = (reqId) => req.functionalRequirementReferencesOf(reqId).sortedUnique();
     for (const [queryId, p] of this.#pending) {
       const r = results.verdictOf(queryId);
       if (!r || r.isUndecided()) {
@@ -8444,7 +8804,7 @@ class RefinementSolverPlan {
           if (r.isSat()) {
             findings.push(DesignFinding.of({
               kind: FindingKind.refinementViolation(),
-              frRefs: frOf(reqId.asString()),
+              functionalRequirementReferences: frOf(reqId.asString()),
               targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
               witness: DesignWitness.model(r.witnessModel()),
               unit: UnitName.of(unitName),
@@ -8457,7 +8817,7 @@ class RefinementSolverPlan {
           if (sc?.isAccept() === true && r.isUnsat()) {
             findings.push(DesignFinding.of({
               kind: FindingKind.refinementViolation(),
-              frRefs: frOf(reqId.asString()),
+              functionalRequirementReferences: frOf(reqId.asString()),
               targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
               witness: DesignWitness.core(r.sortedCore()),
               unit: UnitName.of(unitName),
@@ -8467,7 +8827,7 @@ class RefinementSolverPlan {
           if (sc?.isReject() === true && r.isSat()) {
             findings.push(DesignFinding.of({
               kind: FindingKind.refinementViolation(),
-              frRefs: frOf(reqId.asString()),
+              functionalRequirementReferences: frOf(reqId.asString()),
               targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
               witness: DesignWitness.model(r.witnessModel()),
               unit: UnitName.of(unitName),
@@ -8479,7 +8839,7 @@ class RefinementSolverPlan {
           if (r.isSat()) {
             findings.push(DesignFinding.of({
               kind: FindingKind.completenessGap(),
-              frRefs: frOf(reqId.asString()),
+              functionalRequirementReferences: frOf(reqId.asString()),
               targets: TargetIds.of(Array.from([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())], (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
               witness: DesignWitness.model(r.witnessModel()),
               unit: UnitName.of(unitName),
@@ -8491,7 +8851,7 @@ class RefinementSolverPlan {
           if (r.isSat()) {
             findings.push(DesignFinding.of({
               kind: FindingKind.refinementViolation(),
-              frRefs: frOf(reqId.asString()),
+              functionalRequirementReferences: frOf(reqId.asString()),
               targets: TargetIds.of(Array.from([reqId.asString(), designId.asString()].filter((t) => t !== ""), (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
               witness: DesignWitness.trace(r.witnessTrace()),
               unit: UnitName.of(unitName),
@@ -8658,6 +9018,27 @@ class RefinementMapAcquisition {
     if (this.#map === null || this.#mapArtifact === null)
       return handlers.absent(this.#error);
     return handlers.loaded(this.#map, this.#mapArtifact, this.#inputs);
+  }
+}
+// src/design/domain/initial-state.ts
+class InitialState {
+  #value;
+  constructor(value) {
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "initial-state-too-long", raw: value.length });
+    this.#value = value;
+  }
+  static of(value) {
+    return new InitialState(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new InitialState(value));
+  }
+  matchesName(value) {
+    return this.#value === value;
+  }
+  asString() {
+    return this.#value;
   }
 }
 // src/design/usecase/design-report-finalizer.ts
@@ -9014,7 +9395,7 @@ class VerifyDesignQuintUseCase {
             notReachedWithinBound: () => {
               findings.push(DesignFinding.of({
                 kind: FindingKind.unreachable(),
-                frRefs: FrRefs.of([]),
+                functionalRequirementReferences: FunctionalRequirementReferences.of([]),
                 targets: TargetIds.of(Array.from([sm.id().asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.model({ [attrPath]: state }),
                 unit: UnitName.of(u.name()),
@@ -9152,7 +9533,7 @@ class ValidateDesignIrUseCase {
     if (Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR) {
       errors.push(`irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`);
     }
-    errors.push(...materials.schemaErrors());
+    errors.push(...materials.schemaErrors().toArray().map((message) => message.asString()));
     if (errors.length === 0) {
       errors.push(...materials.units().wellFormednessErrors());
     }
@@ -9173,14 +9554,20 @@ function parseDesignEntities(schema) {
       if (!isObject(attr) || typeof attr.name !== "string")
         continue;
       const t = isObject(attr.type) ? attr.type : {};
+      const kind = AttributeKind.parse(typeof t.kind === "string" ? t.kind : "");
+      if (!kind.ok)
+        return kind;
       const name2 = DesignAttributeName.parse(attr.name);
       if (!name2.ok)
         return name2;
+      const members = traverseResult(Array.isArray(t.values) ? t.values.filter((v) => typeof v === "string") : [], EnumMember.parse);
+      if (!members.ok)
+        return members;
       attributes.push(DesignAttributeDecl.of({
         name: name2.value,
-        kind: typeof t.kind === "string" ? t.kind : "",
+        kind: kind.value,
         ...typeof attr.description === "string" ? { description: attr.description } : {},
-        ...Array.isArray(t.values) ? { values: DeclaredValues.of(t.values.filter((v) => typeof v === "string")) } : {},
+        ...Array.isArray(t.values) ? { values: DeclaredValues.of(members.value) } : {},
         ...typeof t.min === "number" ? { min: DeclaredBound.of(t.min) } : {},
         ...typeof t.max === "number" ? { max: DeclaredBound.of(t.max) } : {}
       }));
@@ -9213,7 +9600,7 @@ function renderDesignEntities(entities) {
         type.max = max.asNumber();
       const values = attr.enumStates();
       if (values !== null)
-        type.values = [...values.toArray()];
+        type.values = values.toArray().map((member) => member.asString());
       a.type = type;
       return a;
     });
@@ -9249,6 +9636,8 @@ function parseDesignModel(raw) {
         continue;
       const parsed = combineResults({
         id: DesignObligationId.parse(ob.id),
+        origin: DesignObligationOrigin.parse(typeof ob.origin === "string" ? ob.origin : ""),
+        nature: DesignObligationNature.parse(ob.nature),
         brRefs: traverseResult(strArr(ob.brRefs), BrRef.parse),
         frRefs: traverseResult(strArr(ob.frRefs), RequirementId.parse),
         trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined)
@@ -9257,10 +9646,10 @@ function parseDesignModel(raw) {
         return err(JSON.stringify(parsed.error));
       obligations.push(DesignObligation.of({
         id: parsed.value.id,
-        nature: DesignObligationNature.of(ob.nature),
-        origin: DesignObligationOrigin.of(typeof ob.origin === "string" ? ob.origin : ""),
+        nature: parsed.value.nature,
+        origin: parsed.value.origin,
         brRefs: BrRefs.of(parsed.value.brRefs),
-        frRefs: FrRefs.of(parsed.value.frRefs),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(parsed.value.frRefs),
         assert: isObject(ob.assert) ? ob.assert : undefined,
         trigger: parsed.value.trigger,
         guard: isObject(ob.guard) ? ob.guard : undefined,
@@ -9306,6 +9695,7 @@ function parseDesignModel(raw) {
       }
       const parsed = combineResults({
         id: DesignMachineId.parse(sm.id),
+        initial: traverseResult(strArr(sm.initial), InitialState.parse),
         entity: DesignEntityName.parse(sm.entity),
         attribute: DesignAttributeName.parse(sm.attribute)
       });
@@ -9315,7 +9705,7 @@ function parseDesignModel(raw) {
         id: parsed.value.id,
         entity: parsed.value.entity,
         attribute: parsed.value.attribute,
-        initial: InitialStates.of(strArr(sm.initial)),
+        initial: InitialStates.of(parsed.value.initial),
         transitions: DesignTransitions.of(transitions),
         ignores: DesignIgnores.of(ignores),
         deterministic: sm.deterministic !== false
@@ -9328,13 +9718,9 @@ function parseDesignModel(raw) {
       const kind = sc.kind === "accept" || sc.kind === "reject" ? sc.kind : null;
       if (kind === null || !isObject(sc.bindings))
         continue;
-      const bindings = {};
-      for (const [k, v] of Object.entries(sc.bindings)) {
-        if (typeof v === "boolean" || typeof v === "number" || typeof v === "string")
-          bindings[k] = v;
-      }
       const parsed = combineResults({
         id: DesignScenarioId.parse(sc.id),
+        bindings: decodeScenarioBindings(sc.bindings),
         brRefs: traverseResult(strArr(sc.brRefs), BrRef.parse),
         frRefs: traverseResult(strArr(sc.frRefs), RequirementId.parse),
         trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined)
@@ -9345,8 +9731,8 @@ function parseDesignModel(raw) {
         id: parsed.value.id,
         kind,
         brRefs: BrRefs.of(parsed.value.brRefs),
-        frRefs: FrRefs.of(parsed.value.frRefs),
-        bindings,
+        functionalRequirementReferences: FunctionalRequirementReferences.of(parsed.value.frRefs),
+        bindings: parsed.value.bindings,
         event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },
         expect: isObject(sc.expect) ? sc.expect : undefined
       }));
@@ -9422,7 +9808,7 @@ function renderLoweredDocument(u, low) {
     const out = {
       id: ob.id().asString(),
       nature: ob.nature(),
-      frRefs: ob.frRefs().toStrings()
+      frRefs: ob.functionalRequirementReferences().toStrings()
     };
     const assertion = ob.assertion();
     if (assertion)
@@ -9445,8 +9831,8 @@ function renderLoweredDocument(u, low) {
     const out = {
       id: sc.id().asString(),
       kind: sc.kind(),
-      frRefs: sc.frRefs().toStrings(),
-      bindings: sc.bindings()
+      frRefs: sc.functionalRequirementReferences().toStrings(),
+      bindings: sc.bindings().toDocument()
     };
     const event = sc.event();
     if (event)
@@ -9481,7 +9867,7 @@ function parseSiblingVerdictDocument(raw) {
     return SiblingVerdictDocument.unavailable(doc.unavailable.reason, doc.method);
   const findings = doc.findings.map((f) => SiblingVerdictFinding.of({
     kind: f.kind,
-    frRefs: f.frRefs,
+    functionalRequirementReferences: f.functionalRequirementReferences,
     targets: [...f.targets].map((target) => LoweredId.of(target.asString())),
     witness: DesignWitness.of(f.witness),
     detail: f.detail
@@ -9802,7 +10188,7 @@ function refinementSmtContext(u) {
         kind,
         ...min !== undefined ? { min: min.asNumber() } : {},
         ...max !== undefined ? { max: max.asNumber() } : {},
-        ...values !== null ? { values: [...values.toArray()] } : {}
+        ...values !== null ? { values: values.toArray().map((member) => member.asString()) } : {}
       });
     }
   }
@@ -10072,9 +10458,10 @@ function buildRefinementQueries(u, req, plan) {
     let defect = null;
     try {
       const parts = [];
-      for (const [path, value] of sc.bindingEntriesCanonically()) {
-        const lit = typeof value === "boolean" ? { op: "bool", value } : typeof value === "number" ? { op: "int", value } : { op: "enum", value };
-        const constraint = { op: "eq", args: [{ op: "ref", path }, lit] };
+      for (const binding of sc.bindings().entriesCanonically()) {
+        const path = binding.path();
+        const value = binding.value();
+        const constraint = { op: "eq", args: [{ op: "ref", path: path.asString() }, value.asExpression()] };
         const bound = mappings.substitute(constraint, false);
         if (!bound.ok) {
           defect = bound.error;
@@ -10168,14 +10555,15 @@ class RefinementMaterialsRepositoryImpl {
         if (t.kind !== "bool" && t.kind !== "int" && t.kind !== "enum")
           continue;
         const parsed = combineResults({
-          path: AttributePath.parse(`${ent.name}.${attr.name}`)
+          path: AttributePath.parse(`${ent.name}.${attr.name}`),
+          values: Array.isArray(t.values) ? traverseResult(strArr(t.values), EnumMember.parse) : ok(undefined)
         });
         if (!parsed.ok)
           return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
         attributes.push(RefinementAttribute.of({
           path: parsed.value.path,
           kind: t.kind,
-          values: Array.isArray(t.values) ? ReqAttributeValues.of(t.values.filter((v) => typeof v === "string")) : undefined
+          values: parsed.value.values === undefined ? undefined : ReqAttributeValues.of(parsed.value.values)
         }));
       }
     }
@@ -10185,6 +10573,7 @@ class RefinementMaterialsRepositoryImpl {
         continue;
       const parsed = combineResults({
         id: ObligationId.parse(ob.id),
+        nature: ObligationNature.parse(ob.nature),
         frRefs: traverseResult(strArr(ob.frRefs), RequirementId.parse),
         trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined)
       });
@@ -10192,8 +10581,8 @@ class RefinementMaterialsRepositoryImpl {
         return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
       obligations.push(RefinementObligation.of({
         id: parsed.value.id,
-        nature: ObligationNature.of(ob.nature),
-        frRefs: FrRefs.of(parsed.value.frRefs),
+        nature: parsed.value.nature,
+        functionalRequirementReferences: FunctionalRequirementReferences.of(parsed.value.frRefs),
         assert: isObject(ob.assert) ? ob.assert : undefined,
         trigger: parsed.value.trigger,
         guard: isObject(ob.guard) ? ob.guard : undefined,
@@ -10206,13 +10595,9 @@ class RefinementMaterialsRepositoryImpl {
         continue;
       if (sc.kind !== "accept" && sc.kind !== "reject")
         continue;
-      const bindings = {};
-      for (const [k, v] of Object.entries(sc.bindings)) {
-        if (typeof v === "boolean" || typeof v === "number" || typeof v === "string")
-          bindings[k] = v;
-      }
       const parsed = combineResults({
         id: ScenarioId.parse(sc.id),
+        bindings: decodeScenarioBindings(sc.bindings),
         frRefs: traverseResult(strArr(sc.frRefs), RequirementId.parse),
         trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined)
       });
@@ -10221,8 +10606,8 @@ class RefinementMaterialsRepositoryImpl {
       scenarios.push(RefinementScenario.of({
         id: parsed.value.id,
         kind: sc.kind,
-        frRefs: FrRefs.of(parsed.value.frRefs),
-        bindings,
+        functionalRequirementReferences: FunctionalRequirementReferences.of(parsed.value.frRefs),
+        bindings: parsed.value.bindings,
         event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger }
       }));
     }
@@ -10457,13 +10842,14 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
     const parsed = combineResults({
       id: DesignObligationId.parse(ob.id),
+      origin: typeof ob.origin === "string" ? DesignObligationOrigin.parse(ob.origin) : ok(undefined),
       brRefs: brRefsOrUndefined(ob.brRefs ?? null)
     });
     if (!parsed.ok)
       return err(JSON.stringify(parsed.error));
     obligations.push(DesignObligationDecl.of({
       id: parsed.value.id,
-      origin: typeof ob.origin === "string" ? DesignObligationOrigin.of(ob.origin) : undefined,
+      origin: parsed.value.origin,
       brRefs: parsed.value.brRefs,
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
@@ -10511,16 +10897,21 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
         return err(JSON.stringify(trigger.error));
       ignores.push(DesignIgnoreDecl.of({ state: ig.state, trigger: trigger.value }));
     }
+    const states = traverseResult(initial, InitialState.parse);
+    if (!states.ok)
+      return err(JSON.stringify(states.error));
     const id = DesignMachineId.parse(sm.id);
     if (!id.ok)
       return err(JSON.stringify(id.error));
-    stateMachines.push(DesignMachineDecl.of({ id: id.value, attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
+    stateMachines.push(DesignMachineDecl.of({ id: id.value, attrPath, initial: InitialStates.of(states.value), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
   }
   const scenarios = [];
   for (const sc of Array.isArray(rawUnit.scenarios) ? rawUnit.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string")
       continue;
-    const bindings = isObject(sc.bindings) ? sc.bindings : {};
+    const bindings = decodeDeclaredBindings(isObject(sc.bindings) ? sc.bindings : {});
+    if (!bindings.ok)
+      return err(bindings.error);
     const parsed = combineResults({
       id: DesignScenarioId.parse(sc.id),
       brRefs: brRefsOrUndefined(sc.brRefs ?? null)
@@ -10529,7 +10920,7 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
       return err(JSON.stringify(parsed.error));
     scenarios.push(DesignScenarioDecl.of({
       id: parsed.value.id,
-      bindings: BindingPairs.of(Object.entries(bindings)),
+      bindings: bindings.value,
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
       brRefs: parsed.value.brRefs
@@ -10632,7 +11023,7 @@ class DesignIrValidationMaterialsRepositoryImpl {
     return ok(DesignIrValidationMaterials.of({
       id,
       irVersion: irVersion.value,
-      schemaErrors: ErrorMessages.of(schemaErrors),
+      schemaErrors: ErrorMessages.of(schemaErrors.map((message) => ErrorMessage.of(message))),
       units: DesignUnitDecls.of(units),
       sourceDocument: new Uint8Array(bytes)
     }));

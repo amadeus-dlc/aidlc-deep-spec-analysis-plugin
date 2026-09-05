@@ -1,3 +1,5 @@
+import { EnumMember } from "@deep-spec/kernel-domain";
+import { scenarioBindings } from "./binding-fixtures.ts";
 import {
   SkipReason,
   RequirementId,
@@ -44,7 +46,7 @@ import {
   VerificationDirectoryRepositoryImpl,
   renderVerificationReportBytes,
 } from "@deep-spec/requirements-adapter";
-import { BackgroundAssumption, Scenario, Obligation, AttributeDeclaration, AttributeDeclarations, AttributeValues, FrRefs, ObligationId, ObligationNature, ScenarioId, Obligations, Scenarios, BackgroundAssumptions, RequirementsModel, QuintMachineComponents, QuintMachinePlan, QuintMachineComponent, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationReportId, VerificationSkips, FormalModelId, ObligationIds, VerificationSkipped, VerificationFinding, VerificationReport, AttributePath, TraceState, TraceValue } from "@deep-spec/requirements-domain";
+import { BackgroundAssumption, Scenario, Obligation, AttributeDeclaration, AttributeDeclarations, AttributeValues, FunctionalRequirementReferences, ObligationId, ObligationNature, ScenarioId, Obligations, Scenarios, BackgroundAssumptions, RequirementsModel, QuintMachineComponents, QuintMachinePlan, QuintMachineComponent, QuintMachineRunVerdict, QuintRuns, QuintScenarioVerdict, QuintTemporalVerdict, TraceStates, VerificationReportId, VerificationSkips, FormalModelId, ObligationIds, VerificationSkipped, VerificationFinding, VerificationReport, AttributePath, TraceState, TraceValue } from "@deep-spec/requirements-domain";
 import {
   type FormalModelRepository,
   type QuintCheckResult,
@@ -60,7 +62,7 @@ function st(values: { [path: string]: boolean | number | string }): TraceState {
 
 // 判定レコードは class（#71 波18）——期待値は平文へ射影して比較する（bun の toEqual は #private を見ない）。
 const plainFindings = (findings: Iterable<VerificationFinding>) =>
-  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toStrings(), targets: f.targets().toStrings(), witness: f.witness().toDocument(), detail: f.detail() }));
+  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.functionalRequirementReferences().toStrings(), targets: f.targets().toStrings(), witness: f.witness().toDocument(), detail: f.detail() }));
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(pluginRoot, "tests", "fixtures", "conformance");
@@ -71,8 +73,8 @@ const schema = schemaFile.ok ? FindingsSchema.of(schemaFile.value) : FindingsSch
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
 type RawAttributeDeclaration = Omit<Parameters<typeof AttributeDeclaration.of>[0], "values"> & { values?: string[] };
-type RawObligation = Omit<Parameters<typeof Obligation.of>[0], "frRefs" | "trigger"> & { frRefs: string[]; trigger?: string };
-type RawScenario = Omit<Parameters<typeof Scenario.of>[0], "frRefs"> & { frRefs: string[] };
+type RawObligation = Omit<Parameters<typeof Obligation.of>[0], "functionalRequirementReferences" | "trigger"> & { frRefs: string[]; trigger?: string };
+type RawScenario = Omit<Parameters<typeof Scenario.of>[0], "functionalRequirementReferences"> & { frRefs: string[] };
 function model(seed: {
   irVersion?: IrVersion;
   attributes?: RawAttributeDeclaration[];
@@ -86,10 +88,10 @@ function model(seed: {
     sourceDocument: new Uint8Array(),
     irVersion: seed.irVersion ?? IrVersion.of("1.0.0"),
     attributes: AttributeDeclarations.of(
-      (seed.attributes ?? []).map((a) => AttributeDeclaration.of({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
+      (seed.attributes ?? []).map((a) => AttributeDeclaration.of({ ...a, values: a.values === undefined ? undefined : AttributeValues.of((a.values).map((value) => EnumMember.of(value))) })),
     ),
-    obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.of({ ...o, frRefs: FrRefs.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))), trigger: o.trigger === undefined ? undefined : TriggerName.of(o.trigger) }))),
-    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.of({ ...s, frRefs: FrRefs.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))) }))),
+    obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.of({ ...o, functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))), trigger: o.trigger === undefined ? undefined : TriggerName.of(o.trigger) }))),
+    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.of({ ...s, functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))) }))),
     background: BackgroundAssumptions.of(seed.background ?? []),
   });
 }
@@ -194,7 +196,7 @@ describe("a quint that dies without saying 'error' is run-failed, never clean", 
       frRefs: [],
       assert: { op: "ne", args: [{ op: "ref", path: "order.state" }, { op: "enum", value: "closed" }] },
     }],
-    scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: { "order.state": "open" } }],
+    scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: scenarioBindings({ "order.state": "open" }) }],
   });
 
   test("simulation: the machine phase and the scenario phase both say unavailable, with the output tail", () => {
@@ -278,7 +280,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     const reports = new InMemoryVerificationDirectoryRepository();
     const m = model({
       obligations: [{ id: ObligationId.of("OB-1"), nature: ObligationNature.of("invariant"), frRefs: [] }],
-      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
+      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: scenarioBindings({}) }],
     });
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok(m)),
@@ -300,7 +302,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     const reports = new InMemoryVerificationDirectoryRepository();
     const m = model({
       obligations: [{ id: ObligationId.of("OB-1"), nature: ObligationNature.of("invariant"), frRefs: [] }],
-      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
+      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: scenarioBindings({}) }],
     });
     const outcome = new VerifyRequirementsQuintUseCase(
       formalModels(ok(m)),
@@ -321,7 +323,7 @@ describe("the verify-quint interactor over the InMemory double", () => {
     const reports = new InMemoryVerificationDirectoryRepository();
     const m = model({
       obligations: [{ id: ObligationId.of("OB-1"), nature: ObligationNature.of("invariant"), frRefs: ["FR-1"], assert: { op: "bool", value: true } }],
-      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: { "T.x": 1 } }],
+      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: scenarioBindings({ "T.x": 1 }) }],
     });
     const plan = QuintMachinePlan.of({
       invariantComponents: QuintMachineComponents.of([QuintMachineComponent.of({ id: ObligationId.of("OB-1"), expression: { op: "bool", value: true } })]),
@@ -360,9 +362,9 @@ describe("quint verdict interpretation", () => {
       { id: ObligationId.of("OB-3"), nature: ObligationNature.of("state-temporal"), frRefs: ["FR-3"], temporal: { pattern: "leads-to" } },
     ],
     scenarios: [
-      { id: ScenarioId.of("SC-1"), kind: "accept", frRefs: ["FR-1"], bindings: { "T.ok": false } },
-      { id: ScenarioId.of("SC-2"), kind: "reject", frRefs: ["FR-2"], bindings: { "T.ok": true } },
-      { id: ScenarioId.of("SC-3"), kind: "accept", frRefs: [], bindings: {}, event: { trigger: TriggerName.of("go") } },
+      { id: ScenarioId.of("SC-1"), kind: "accept", frRefs: ["FR-1"], bindings: scenarioBindings({ "T.ok": false }) },
+      { id: ScenarioId.of("SC-2"), kind: "reject", frRefs: ["FR-2"], bindings: scenarioBindings({ "T.ok": true }) },
+      { id: ScenarioId.of("SC-3"), kind: "accept", frRefs: [], bindings: scenarioBindings({}), event: { trigger: TriggerName.of("go") } },
     ],
   });
   const plan = QuintMachinePlan.of({
@@ -550,7 +552,7 @@ describe("quint degradation reports", () => {
   test("machineUncompilableReport spans obligations and scenarios under the detected method", () => {
     const m = model({
       obligations: [{ id: ObligationId.of("OB-2"), nature: ObligationNature.of("event"), frRefs: [] }],
-      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
+      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: scenarioBindings({}) }],
     });
     const r = VerificationReport.machineUncompilable(VerificationReportId.of(ap("/v"), "quint"), m, ContentHash.ofText("h"), "simulation", "boom");
     expect(r.method()).toBe("simulation");

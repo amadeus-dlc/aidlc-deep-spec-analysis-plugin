@@ -1,24 +1,26 @@
-// 検査エラー文言のファーストクラスコレクション。文言そのものは凍結 verdict の
-// 材料（#46 の宣言済み除外——文字列単位の DP 化はしない）だが、ドメイン層は
-// 配列を生で運ばない。宣言順を保持し、toArray() は境界専用の脱出口。
+import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
+import type { ErrorMessage } from "./error-message.ts";
+
+// 診断の発生順と所有権を保持する。文字列の構築契約はErrorMessageが担う。
 
 export class ErrorMessages {
-  readonly #values: readonly string[];
+  readonly #values: readonly ErrorMessage[];
 
-  private constructor(values: readonly string[]) {
+  private constructor(values: readonly ErrorMessage[]) {
+    if (values.length > 65_536) throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     // 空配列は「エラーなし」を表す有効な値。
     this.#values = Object.freeze([...values]);
   }
 
-  static of(values: readonly string[]): ErrorMessages {
+  static of(values: readonly ErrorMessage[]): ErrorMessages {
     return new ErrorMessages(values);
   }
 
-  add(value: string): ErrorMessages {
+  add(value: ErrorMessage): ErrorMessages {
     return new ErrorMessages([...this.#values, value]);
   }
 
-  *[Symbol.iterator](): Iterator<string> {
+  *[Symbol.iterator](): Iterator<ErrorMessage> {
     yield* this.#values;
   }
 
@@ -26,7 +28,7 @@ export class ErrorMessages {
     return this.#values.length === 0;
   }
 
-  toArray(): readonly string[] {
+  toArray(): readonly ErrorMessage[] {
     return this.#values;
   }
 }

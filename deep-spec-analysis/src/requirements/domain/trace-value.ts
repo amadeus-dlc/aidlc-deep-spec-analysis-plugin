@@ -1,8 +1,11 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 // TraceValue — 復号済みトレース（ITF）と scenario binding が運ぶ 1 つの値の
 // 値オブジェクト（種別規律の裁定 2、2026-09-03）。値の意味論——真偽（`true`
 // そのものだけが真）、数値化（number 以外は NaN）、等価（JSON の逐語比較）——は
 // 値自身の知識で、評価器（QuintMachineComponent）はこれを問うだけ。中身の形
 // は ITF が決める JSON 値で、文書へは `toDocument` で逐語に降りる。
+
+import { assertValueSize, parseConstruction, type Result, } from "@deep-spec/kernel-infrastructure";
 
 type Decoded = null | boolean | number | string | readonly Decoded[] | { readonly [k: string]: Decoded };
 
@@ -10,13 +13,17 @@ export class TraceValue {
   readonly #value: Decoded;
 
   private constructor(value: Parameters<typeof TraceValue.of>[0]) {
-    this.#value = value;
+    // 証拠値の処理予算: 100,000ノード、深さ128、文字列65,536、全テキスト16Miコード単位。
+    assertValueSize(value, { string: 65_536, nodes: 100_000, depth: 128, total: 16_777_216 });
+    this.#value = structuredClone(value);
   }
 
   // 復号器（adapter）と scenario binding からの門。
   static of(value: Decoded): TraceValue {
     return new TraceValue(value);
   }
+
+  static parse(value: Decoded): Result<TraceValue, ParseError> { return parseConstruction(() => new TraceValue(value)); }
 
   // 式のリテラル（`bool` / `int` / `enum`）——値が無ければ null（凍結挙動）。
   static ofLiteral(value: boolean | number | string | undefined): TraceValue {
@@ -53,6 +60,6 @@ export class TraceValue {
 
   // 境界: 文書（witness の trace／model）へ逐語で降りる。
   toDocument(): Decoded {
-    return this.#value;
+    return structuredClone(this.#value);
   }
 }

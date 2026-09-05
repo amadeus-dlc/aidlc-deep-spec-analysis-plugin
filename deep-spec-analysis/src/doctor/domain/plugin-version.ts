@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
 
 // 配布プラグインの stable Semantic Version。Git tag の任意の `v` 接頭辞を
@@ -7,7 +8,9 @@ export class PluginVersion {
   readonly #minor: bigint;
   readonly #patch: bigint;
 
+  /** バージョン本体128コード単位と任意のv接頭辞1文字。asTagの出力も再解析できる。 */
   private constructor(raw: string) {
+    if (raw.length > 129 || (raw.length === 129 && raw[0] !== "v")) throw new IllegalArgumentException({ kind: "plugin-version-too-long", raw: raw.length });
     const match = raw.match(/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
     const major = match?.[1];
     const minor = match?.[2];
@@ -20,7 +23,7 @@ export class PluginVersion {
 
   static of(raw: string): PluginVersion { return new PluginVersion(raw); }
 
-  static parse(raw: string): Result<PluginVersion, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<PluginVersion, ParseError> {
     return parseConstruction(() => new PluginVersion(raw));
   }
 

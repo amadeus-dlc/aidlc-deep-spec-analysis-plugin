@@ -3,7 +3,7 @@ import {
   ArtifactPath,
   FindingKind,
   FindingsSchema,
-  FrRefs,
+  FunctionalRequirementReferences,
   IrVersion,
   ContentHash,
   SkipReason,
@@ -194,13 +194,13 @@ describe("finding kind の strict creation は未知 kind を受け付けない 
     for (const kind of factories) expect(FindingKind.parse(kind.asString()).ok).toBe(true);
 
     // 生の string は 3 クラスのどの正常生成口にも渡らない（型で弾かれる）。
-    const designProps = { frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: DesignWitness.core([]), unit: UnitName.of("u1"), detail: "d" };
+    const designProps = { functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: DesignWitness.core([]), unit: UnitName.of("u1"), detail: "d" };
     // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
     DesignFinding.of({ kind: "no-such-kind", ...designProps });
     // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
-    VerificationFinding.of({ kind: "no-such-kind", frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: VerificationWitness.core([]), detail: "d" });
+    VerificationFinding.of({ kind: "no-such-kind", functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: VerificationWitness.core([]), detail: "d" });
     // @ts-expect-error 正常生成口は検証済みの FindingKind だけを受け取る
-    Finding.of({ kind: "no-such-kind", frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
+    Finding.of({ kind: "no-such-kind", functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
 
     // 検証済み kind を渡した正常生成は、その kind をそのまま持つ。
     expect(DesignFinding.of({ kind: FindingKind.conflict(), ...designProps }).kind()).toBe("conflict");
@@ -272,7 +272,7 @@ describe("FindingsSchema は契約2 の適合判定を値として持つ", () =>
     const violating = designReportOf([
       DesignFinding.of({
         kind: FindingKind.conflict(),
-        frRefs: FrRefs.of([]),
+        functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))),
         witness: DesignWitness.core([]),
         unit: UnitName.of("u1"),
@@ -315,7 +315,7 @@ describe("ReferenceCheckReport.conformedTo は契約2 の適合判定を集約�
       findings: Findings.of([
         Finding.of({
           kind: FindingKind.conflict(),
-          frRefs: FrRefs.of([]),
+          functionalRequirementReferences: FunctionalRequirementReferences.of([]),
           targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))),
           witness: { refs: WitnessRefs.of([]) },
           detail: "DD-0: from the future",

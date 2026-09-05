@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 export class NumericBound {
@@ -10,7 +11,7 @@ export class NumericBound {
     return new NumericBound(raw);
   }
 
-  static parse(raw: number): Result<NumericBound, IllegalArgumentException["problem"]> {
+  static parse(raw: number): Result<NumericBound, ParseError> {
     return parseConstruction(() => new NumericBound(raw));
   }
   equals(other: NumericBound): boolean { return this.#value === other.#value; }

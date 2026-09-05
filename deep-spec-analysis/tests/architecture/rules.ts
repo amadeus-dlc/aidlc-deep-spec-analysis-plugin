@@ -487,14 +487,7 @@ export const PUBLISHED_LANGUAGE: ReadonlyMap<string, { readonly name: string; re
   ["kernel/domain/expression.ts", { name: "Expression", reason: "契約1／契約3 の式ツリー——演算子の集合は契約スキーマの published language そのもの（既裁定）", layers: ["domain", "adapter"] }],
   ["kernel/domain/keyed-index.ts", { name: "KeyedIndex", reason: "DP をキーにする索引の表現プリミティブ——string キーの Map を持つ唯一の場所（裁定 3-1、2026-09-03）", layers: ["domain", "adapter"] }],
   ["kernel/domain/key-set.ts", { name: "KeySet", reason: "DP の集合の表現プリミティブ——KeyedIndex と同じ理屈（裁定 3-1、2026-09-03）", layers: ["domain", "adapter"] }],
-  ["kernel/domain/error-messages.ts", { name: "ErrorMessages", reason: "凍結 verdict 文言の列（prose——文字列単位の DP 化はしない、#46 の宣言済み除外）", layers: ["domain", "adapter"] }],
-  ["design/domain/attr-paths.ts", { name: "AttrPaths", reason: "設計属性パス集合（state トークン——enum 宣言値への参照と同じ扱い）", layers: ["domain"] }],
-  ["design/domain/declared-values.ts", { name: "DeclaredValues", reason: "enum 宣言値の集合（state トークン——序数符号化と文言順の凍結面）", layers: ["domain", "adapter"] }],
-  ["design/domain/initial-states.ts", { name: "InitialStates", reason: "機械の初期状態集合（state トークン）", layers: ["domain", "adapter"] }],
-  ["requirements/domain/attribute-values.ts", { name: "AttributeValues", reason: "enum 宣言値の集合（state トークン——SMT の序数符号化・Quint の集合リテラル順の凍結面）", layers: ["domain", "adapter"] }],
-  ["requirements/domain/ir-declared-values.ts", { name: "IrDeclaredValues", reason: "enum 属性の宣言値（state トークン——序数対応・文言順の凍結面）", layers: ["domain", "adapter"] }],
-  ["requirements/domain/fr-ref-claim.ts", { name: "FrRefClaim", reason: "frRefs の主張——owner は義務／シナリオ／unformalized の位置が混成する参照トークン", layers: ["domain", "adapter"] }],
-  ["design/domain/req-attribute-values.ts", { name: "ReqAttributeValues", reason: "enum 属性の宣言値（state トークン——decode の序数対応の凍結面）", layers: ["domain", "adapter"] }],
+  ["requirements/domain/functional-requirement-reference-claim.ts", { name: "FunctionalRequirementReferenceClaim", reason: "frRefs の主張——owner は義務／シナリオ／unformalized の位置が混成する参照トークン", layers: ["domain", "adapter"] }],
 ]);
 
 // ルール: domain 層にデータモデルを置かない（主従の裁定・MECE フェンス

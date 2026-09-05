@@ -1,9 +1,13 @@
+import { AttributeKind } from "@deep-spec/kernel-domain";
+import { InitialState } from "@deep-spec/design-domain";
+import { EnumMember } from "@deep-spec/kernel-domain";
+import { scenarioBindings } from "./binding-fixtures.ts";
 import {
   VerificationMethod,
   RequirementId,
   SkipReason,
   FindingKind,
-  FrRefs,
+  FunctionalRequirementReferences,
   TargetIds,
   TriggerName,
   type Expression,
@@ -26,7 +30,7 @@ describe("design obligation", () => {
       nature: DesignObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
       brRefs: BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))),
-      frRefs: FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
       assert: { op: "a" },
       trigger: TriggerName.of("submit"),
       guard: { op: "g" },
@@ -51,7 +55,7 @@ describe("design obligation", () => {
       nature: DesignObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
       brRefs: BrRefs.of([]),
-      frRefs: FrRefs.of([]),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       trigger: TriggerName.of("submit"),
       guard: lit(true),
       effect: lit(false),
@@ -63,7 +67,7 @@ describe("design obligation", () => {
         nature: DesignObligationNature.of("event"),
         origin: DesignObligationOrigin.of("rules"),
         brRefs: BrRefs.of([]),
-        frRefs: FrRefs.of([]),
+        functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         guard: lit(true),
         effect: lit(false),
       }).eventDefinition(),
@@ -76,7 +80,7 @@ describe("design obligation", () => {
       nature: DesignObligationNature.of("invariant"),
       origin: DesignObligationOrigin.of("rules"),
       brRefs: BrRefs.of(Array.from(["BR2.1"], (raw) => BrRef.of(raw))),
-      frRefs: FrRefs.of(Array.from(["FR-3"], (raw) => RequirementId.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-3"], (raw) => RequirementId.of(raw))),
       assert: lit(true),
       temporal: { pattern: "always", assert: lit(true) },
     });
@@ -84,7 +88,7 @@ describe("design obligation", () => {
     expect(obligation.nature().asString()).toBe("invariant");
     expect(obligation.origin().asString()).toBe("rules");
     expect(obligation.brRefs().toStrings()).toEqual(["BR2.1"]);
-    expect(obligation.frRefs().toStrings()).toEqual(["FR-3"]);
+    expect(obligation.functionalRequirementReferences().toStrings()).toEqual(["FR-3"]);
     expect(obligation.assertion()).toEqual(lit(true));
     expect(obligation.trigger()).toBeUndefined();
     expect(obligation.guard()).toBeUndefined();
@@ -103,8 +107,8 @@ describe("design scenario", () => {
       id: DesignScenarioId.of("DSC-1"),
       kind,
       brRefs: BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))),
-      frRefs: FrRefs.of([]),
-      bindings: {},
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      bindings: scenarioBindings({}),
     });
 
   test("isViolatedBySatisfiability is the accept/reject truth table", () => {
@@ -119,28 +123,28 @@ describe("design scenario", () => {
       id: DesignScenarioId.of("DSC-2"),
       kind: "reject",
       brRefs: BrRefs.of(Array.from(["BR7.1"], (raw) => BrRef.of(raw))),
-      frRefs: FrRefs.of(Array.from(["FR-4"], (raw) => RequirementId.of(raw))),
-      bindings: { b: 2, a: 1 },
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-4"], (raw) => RequirementId.of(raw))),
+      bindings: scenarioBindings({ b: 2, a: 1 }),
       event: { trigger: TriggerName.of("close") },
       expect: lit(true),
     });
     expect(withEvent.id().asString()).toBe("DSC-2");
     expect(withEvent.kind()).toBe("reject");
     expect(withEvent.brRefs().toStrings()).toEqual(["BR7.1"]);
-    expect(withEvent.frRefs().toStrings()).toEqual(["FR-4"]);
+    expect(withEvent.functionalRequirementReferences().toStrings()).toEqual(["FR-4"]);
     expect(withEvent.eventTrigger()?.asString()).toBe("close");
     expect(withEvent.expectation()).toEqual(lit(true));
     expect(withEvent.isAccept()).toBe(false);
     expect(withEvent.isReject()).toBe(true);
     expect(withEvent.hasEvent()).toBe(true);
     expect(scenario("accept").hasEvent()).toBe(false);
-    expect(withEvent.bindingEntriesCanonically()).toEqual([
+    expect(withEvent.bindings().entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()])).toEqual([
       ["a", 1],
       ["b", 2],
     ]);
-    const leaked = withEvent.bindings();
+    const leaked = withEvent.bindings().toDocument();
     (leaked as Record<string, number>).c = 3;
-    expect(withEvent.bindings()).toEqual({ b: 2, a: 1 });
+    expect(withEvent.bindings().toDocument()).toEqual({ b: 2, a: 1 });
   });
 });
 
@@ -279,7 +283,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
   const finding = (kind: string, targets: string[]) =>
     DesignFinding.of({
       kind: FindingKind.of(kind),
-      frRefs: FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
       targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))),
       witness: DesignWitness.trace([{ "T.s": "a" }]),
       unit: UnitName.of("u1"),
@@ -289,7 +293,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
   test("of round-trips every field through the accessors", () => {
     const f = finding("conflict", ["OB-9", "TR-1"]);
     expect(f.kind()).toBe("conflict");
-    expect(f.frRefs().toStrings()).toEqual(["FR-1"]);
+    expect(f.functionalRequirementReferences().toStrings()).toEqual(["FR-1"]);
     expect(f.targets().toStrings()).toEqual(["OB-9", "TR-1"]);
     expect(f.witness().toDocument()).toEqual({ trace: [{ "T.s": "a" }] });
     expect(f.unit()).toBe("u1");
@@ -302,7 +306,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
     const v = finding("conflict", ["OB-9", "TR-1"]).asRefinementViolation(new Set(["OB-9", "OB-10"]), UnitName.of("u1"));
     expect(v?.kind()).toBe("refinement-violation");
     expect(v?.targets().toStrings()).toEqual(["OB-9"]);
-    expect(v?.frRefs().toStrings()).toEqual(["FR-1"]);
+    expect(v?.functionalRequirementReferences().toStrings()).toEqual(["FR-1"]);
     expect(v?.witness().toDocument()).toEqual({ trace: [{ "T.s": "a" }] });
     expect(v?.unit()).toBe("u1");
     expect(v?.detail()).toBe(
@@ -318,7 +322,7 @@ describe("design finding (conflict reinterpretation owner)", () => {
   test("withDetail copies every field and replaces only the wording", () => {
     const copy = finding("redundancy", ["TR-1", "TR-2"]).withDetail("mutual");
     expect(copy.kind()).toBe("redundancy");
-    expect(copy.frRefs().toStrings()).toEqual(["FR-1"]);
+    expect(copy.functionalRequirementReferences().toStrings()).toEqual(["FR-1"]);
     expect(copy.targets().toStrings()).toEqual(["TR-1", "TR-2"]);
     expect(copy.witness().toDocument()).toEqual({ trace: [{ "T.s": "a" }] });
     expect(copy.unit()).toBe("u1");
@@ -332,7 +336,7 @@ describe("design machine (probe candidates and the deterministic waiver)", () =>
       id: DesignMachineId.of(id),
       entity: DesignEntityName.of("Ticket"),
       attribute: DesignAttributeName.of("status"),
-      initial: InitialStates.of(["open"]),
+      initial: InitialStates.of((["open"]).map((value) => InitialState.of(value))),
       transitions: DesignTransitions.of([
         DesignTransition.of({ id: DesignTransitionId.of("TR-1"), from: "open", to: "closed", trigger: TriggerName.of("close"), brRefs: BrRefs.of([]) }),
       ]),
@@ -364,7 +368,7 @@ describe("design machine (probe candidates and the deterministic waiver)", () =>
 });
 
 describe("design decls (well-formedness materials own their judgements)", () => {
-  const attr = (name: string) => DesignAttributeDecl.of({ name: DesignAttributeName.of(name), kind: "enum", values: DeclaredValues.of(["open", "closed"]) });
+  const attr = (name: string) => DesignAttributeDecl.of({ name: DesignAttributeName.of(name), kind: AttributeKind.of("enum"), values: DeclaredValues.of((["open", "closed"]).map((value) => EnumMember.of(value))) });
 
   test("entity decl visits attributes with their coordinate and flags a repeated name from its second occurrence", () => {
     const entity = DesignEntityDecl.of({
@@ -380,8 +384,8 @@ describe("design decls (well-formedness materials own their judgements)", () => 
 
   test("ignore decl knows whether its state belongs to the machine's state set and its transition cell key", () => {
     const ig = DesignIgnoreDecl.of({ state: "closed", trigger: TriggerName.of("close") });
-    expect(ig.isStateAmong(DeclaredValues.of(["open", "closed"]))).toBe(true);
-    expect(ig.isStateAmong(DeclaredValues.of(["open"]))).toBe(false);
+    expect(ig.isStateAmong(DeclaredValues.of((["open", "closed"]).map((value) => EnumMember.of(value))))).toBe(true);
+    expect(ig.isStateAmong(DeclaredValues.of((["open"]).map((value) => EnumMember.of(value))))).toBe(false);
     expect(ig.cellKey()).toBe("closed|close");
     expect(ig.state()).toBe("closed");
     expect(ig.trigger().asString()).toBe("close");
@@ -391,14 +395,14 @@ describe("design decls (well-formedness materials own their judgements)", () => 
     const sm = DesignMachineDecl.of({
       id: DesignMachineId.of("SM-1"),
       attrPath: "ticket.status",
-      initial: InitialStates.of(["ghost", "open", "phantom"]),
+      initial: InitialStates.of((["ghost", "open", "phantom"]).map((value) => InitialState.of(value))),
       transitions: DesignTransitionDecls.of([]),
       ignores: DesignIgnoreDecls.of([]),
     });
-    expect(sm.initialStatesOutside(DeclaredValues.of(["open", "closed"]))).toEqual(["ghost", "phantom"]);
+    expect(sm.initialStatesOutside(DeclaredValues.of((["open", "closed"]).map((value) => EnumMember.of(value))))).toEqual(["ghost", "phantom"]);
     expect(sm.id().asString()).toBe("SM-1");
     expect(sm.attrPath()).toBe("ticket.status");
-    expect([...sm.initial()]).toEqual(["ghost", "open", "phantom"]);
+    expect([...sm.initial()].map((state) => state.asString())).toEqual(["ghost", "open", "phantom"]);
     expect(sm.transitions().toArray()).toEqual([]);
     expect(sm.ignores().toArray()).toEqual([]);
   });
@@ -452,9 +456,9 @@ describe("design skipped (a skip record owns its identity and canonical order)",
 
 describe("lowered records (the v1 payload the sibling backends receive)", () => {
   test("obligation knows whether it is an event and carries its optional parts", () => {
-    const invariant = LoweredObligation.of({ id: LoweredId.of("OB-1"), nature: "invariant", frRefs: FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))), assert: { op: "bool", value: true } });
+    const invariant = LoweredObligation.of({ id: LoweredId.of("OB-1"), nature: "invariant", functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))), assert: { op: "bool", value: true } });
     const event = LoweredObligation.of({
-      id: LoweredId.of("OB-2"), nature: "event", frRefs: FrRefs.of([]), trigger: "close",
+      id: LoweredId.of("OB-2"), nature: "event", functionalRequirementReferences: FunctionalRequirementReferences.of([]), trigger: "close",
       guard: { op: "bool", value: true }, effect: { op: "bool", value: true },
       temporal: { pattern: "always", assert: { op: "bool", value: false } },
     });
@@ -462,7 +466,7 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     expect(event.isEvent()).toBe(true);
     expect(invariant.id().asString()).toBe("OB-1");
     expect(invariant.nature()).toBe("invariant");
-    expect(invariant.frRefs().toStrings()).toEqual(["FR-1"]);
+    expect(invariant.functionalRequirementReferences().toStrings()).toEqual(["FR-1"]);
     expect(invariant.assertion()).toEqual({ op: "bool", value: true });
     expect(invariant.trigger()).toBeUndefined();
     expect(event.trigger()).toBe("close");
@@ -472,14 +476,14 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
   });
 
   test("scenario knows accept from reject and carries its bindings, event, and expectation", () => {
-    const accept = LoweredScenario.of({ id: LoweredId.of("SC-1"), kind: "accept", frRefs: FrRefs.of(Array.from(["FR-2"], (raw) => RequirementId.of(raw))), bindings: { "T.x": 1 } });
-    const reject = LoweredScenario.of({ id: LoweredId.of("SC-2"), kind: "reject", frRefs: FrRefs.of([]), bindings: {}, event: { trigger: "go" }, expect: { op: "bool", value: true } });
+    const accept = LoweredScenario.of({ id: LoweredId.of("SC-1"), kind: "accept", functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-2"], (raw) => RequirementId.of(raw))), bindings: scenarioBindings({ "T.x": 1 }) });
+    const reject = LoweredScenario.of({ id: LoweredId.of("SC-2"), kind: "reject", functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: scenarioBindings({}), event: { trigger: "go" }, expect: { op: "bool", value: true } });
     expect(accept.isAccept()).toBe(true);
     expect(reject.isAccept()).toBe(false);
     expect(accept.id().asString()).toBe("SC-1");
     expect(accept.kind()).toBe("accept");
-    expect(accept.frRefs().toStrings()).toEqual(["FR-2"]);
-    expect(accept.bindings()).toEqual({ "T.x": 1 });
+    expect(accept.functionalRequirementReferences().toStrings()).toEqual(["FR-2"]);
+    expect(accept.bindings().toDocument()).toEqual({ "T.x": 1 });
     expect(accept.event()).toBeUndefined();
     expect(reject.event()).toEqual({ trigger: "go" });
     expect(reject.expectation()).toEqual({ op: "bool", value: true });
@@ -506,7 +510,7 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
 describe("sibling verdict document and finding (the backend's answer owns its interpretation)", () => {
   const finding = SiblingVerdictFinding.of({
     kind: FindingKind.of("conflict"),
-    frRefs: FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
+    functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
     targets: [LoweredId.of("OB-1")],
     witness: DesignWitness.of({ core: ["g_OB_1", 7] }),
     detail: "x",
@@ -535,15 +539,15 @@ describe("sibling verdict document and finding (the backend's answer owns its in
     expect(finding.isKind("conflict")).toBe(true);
     expect(finding.isKind("conflict")).toBe(true);
     expect(finding.isKind("gap")).toBe(false);
-    expect(finding.frRefs().toStrings()).toEqual(["FR-1"]);
+    expect(finding.functionalRequirementReferences().toStrings()).toEqual(["FR-1"]);
     expect(finding.targets().map((t) => t.asString())).toEqual(["OB-1"]);
     expect(finding.detail()).toBe("x");
     // core のラベルだけが書き換わり、文字列でない要素と core 以外の witness は逐語（凍結挙動）。
     const upper = (label: string): string => label.toUpperCase();
     expect(finding.witnessRemappedBy(upper).toDocument()).toEqual({ core: ["G_OB_1", 7] });
-    const model = SiblingVerdictFinding.of({ kind: FindingKind.of("completeness-gap"), frRefs: FrRefs.of([]), targets: [], witness: DesignWitness.model({ a: 1 }), detail: "" });
+    const model = SiblingVerdictFinding.of({ kind: FindingKind.of("completeness-gap"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: [], witness: DesignWitness.model({ a: 1 }), detail: "" });
     expect(model.witnessRemappedBy(upper).toDocument()).toEqual({ model: { a: 1 } });
-    const bare = SiblingVerdictFinding.of({ kind: FindingKind.of("completeness-gap"), frRefs: FrRefs.of([]), targets: [], witness: DesignWitness.of(null), detail: "" });
+    const bare = SiblingVerdictFinding.of({ kind: FindingKind.of("completeness-gap"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: [], witness: DesignWitness.of(null), detail: "" });
     expect(bare.witnessRemappedBy(upper).toDocument()).toBe(null);
     const emptyCore = DesignWitness.of({ core: null });
     expect(emptyCore.remapCore(upper).toDocument()).toEqual({ core: null });

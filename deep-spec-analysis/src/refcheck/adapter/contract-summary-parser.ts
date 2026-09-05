@@ -4,6 +4,7 @@
 import { extractFences } from "@deep-spec/kernel-adapter";
 import { parseMarkdownTables } from "@deep-spec/kernel-adapter";
 import { parseYamlSubset } from "@deep-spec/kernel-adapter";
+import { ErrorMessage } from "@deep-spec/kernel-domain";
 import { type Json, combineResults, traverseResult, isObject } from "@deep-spec/kernel-infrastructure";
 
 import {
@@ -59,20 +60,24 @@ export function parseContractsTable(md: string): ContractsTableOutcome {
   const pCol = col(/provider/i);
   const cCol = col(/consumer/i);
   const oCol = col(/owner/i);
-  return ContractsTableOutcome.rows(
-    ContractRows.of(
-      contractsTable.rows.map((r, i) => {
-        const first = cleanCell(r.cells[0] ?? "");
-        return ContractRow.of({
-          id: ContractId.of(/^[0-9]+$/.test(first) ? first : String(i + 1)),
-          provider: ContractParty.of(cleanCell(r.cells[pCol] ?? "")),
-          consumer: ContractParty.of(cCol >= 0 ? cleanCell(r.cells[cCol] ?? "") : ""),
-          owner: ContractParty.of(oCol >= 0 ? cleanCell(r.cells[oCol] ?? "") : ""),
-          line: LineNumber.of(r.line),
-        });
-      }),
-    ),
-  );
+  const rows: ContractRow[] = [];
+  for (const [i, row] of contractsTable.rows.entries()) {
+    const first = ContractId.parse(row.cells[0] || String(i + 1));
+    if (!first.ok) return ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(first.error)));
+    const token = cleanCell(first.value.asString());
+    const fields = combineResults({
+      provider: ContractParty.parse(row.cells[pCol] ?? ""),
+      consumer: ContractParty.parse(cCol >= 0 ? row.cells[cCol] ?? "" : ""),
+      owner: ContractParty.parse(oCol >= 0 ? row.cells[oCol] ?? "" : ""),
+    });
+    if (!fields.ok) return ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(fields.error)));
+    rows.push(ContractRow.of({
+      id: ContractId.of(/^[0-9]+$/.test(token) ? token : String(i + 1)),
+      ...fields.value,
+      line: LineNumber.of(row.line),
+    }));
+  }
+  return ContractsTableOutcome.rows(ContractRows.of(rows));
 }
 
 export function assessSpecBlocks(md: string): SpecBlockAssessments {

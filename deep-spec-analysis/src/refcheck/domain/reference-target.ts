@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 import { EntityName } from "./entity-name.ts";
@@ -5,7 +6,9 @@ import { EntityName } from "./entity-name.ts";
 // FD-E6 の参照先トークン（"Entity" / "Entity.attribute" / 自由文）。
 export class ReferenceTarget {
   readonly #value: string;
+  /** 自由文も含む参照宣言の処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 4096) throw new IllegalArgumentException({ kind: "reference-target-too-long", raw: raw.length });
     if (raw === "") throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
   }
@@ -13,7 +16,7 @@ export class ReferenceTarget {
     return new ReferenceTarget(raw);
   }
 
-  static parse(raw: string): Result<ReferenceTarget, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<ReferenceTarget, ParseError> {
     return parseConstruction(() => new ReferenceTarget(raw));
   }
   equals(other: ReferenceTarget): boolean { return this.#value === other.#value; }

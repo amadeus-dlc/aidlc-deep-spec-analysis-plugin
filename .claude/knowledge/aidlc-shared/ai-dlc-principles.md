@@ -8,6 +8,8 @@ Each agent carries context across stages because they are present throughout. Th
 
 ## Core Principles
 
+共通の設計原則: [セキュア・バイ・デザイン — VOの構築と検証順序](secure-by-design.md)。値のサイズ・字句・構文・意味をVOのコンストラクタで守る。チーム・プロジェクトの運用ルールとは区別する。
+
 1. **User decides, AI executes** — Every material decision goes through an approval gate where the user reviews, revises, or overrides.
 2. **Adaptive depth** — Simple projects skip heavyweight stages. Complex projects get full coverage. The workflow adapts to project needs.
 3. **Traceable artifacts** — Every stage produces versioned markdown documents in `aidlc-docs/`, creating a complete decision record.

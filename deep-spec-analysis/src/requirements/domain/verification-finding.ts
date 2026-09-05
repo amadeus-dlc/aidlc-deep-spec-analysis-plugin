@@ -1,4 +1,4 @@
-import { type FrRefs, type TargetId, type TargetIds, FindingKind } from "@deep-spec/kernel-domain";
+import { type FunctionalRequirementReferences, type TargetId, type TargetIds, FindingKind } from "@deep-spec/kernel-domain";
 import type { VerificationWitness } from "./verification-witness.ts";
 
 // v1 検証 finding（契約2）——kind・要件参照・対象・witness・説明。契約2 の
@@ -9,14 +9,14 @@ import type { VerificationWitness } from "./verification-witness.ts";
 // クロスチェック判定表・状態機械のステップトレース。
 export class VerificationFinding {
   readonly #kind: FindingKind;
-  readonly #frRefs: FrRefs;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #targets: TargetIds;
   readonly #witness: VerificationWitness;
   readonly #detail: string;
 
   private constructor(props: Parameters<typeof VerificationFinding.of>[0]) {
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#detail = props.detail;
@@ -24,7 +24,7 @@ export class VerificationFinding {
 
   // 正常生成（strict creation）——検証済みの FindingKind だけを受け取る。
   // domain／usecase が自ら下す判定はこの口を通る（FR3.2）。
-  static of(props: { kind: FindingKind; frRefs: FrRefs; targets: TargetIds; witness: VerificationWitness; detail: string }): VerificationFinding {
+  static of(props: { kind: FindingKind; functionalRequirementReferences: FunctionalRequirementReferences; targets: TargetIds; witness: VerificationWitness; detail: string }): VerificationFinding {
     return new VerificationFinding(props);
   }
 
@@ -32,8 +32,8 @@ export class VerificationFinding {
     return this.#kind.asString();
   }
 
-  frRefs(): FrRefs {
-    return this.#frRefs;
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
   }
 
   targets(): TargetIds {

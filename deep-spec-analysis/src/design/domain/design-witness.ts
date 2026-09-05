@@ -6,12 +6,16 @@
 // ラベル書き換え（lowered id → design id）は witness 自身の知識で、形の判定
 // （`core` を持つか、ラベルが文字列か）は値の内側にだけある。
 
+import { assertValueSize } from "@deep-spec/kernel-infrastructure";
+
 type WitnessDocument = null | boolean | number | string | readonly WitnessDocument[] | { readonly [k: string]: WitnessDocument };
 
 export class DesignWitness {
   readonly #document: WitnessDocument;
 
   private constructor(document: WitnessDocument) {
+    // 証拠文書の処理予算。サイズ計測をスナップショットのコピーに先行させる。
+    assertValueSize(document, { string: 65_536, nodes: 100_000, depth: 128, total: 16_777_216 });
     this.#document = structuredClone(document);
   }
 

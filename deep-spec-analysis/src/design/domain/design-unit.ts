@@ -2,7 +2,7 @@ import {
   TargetId,
   AttributePath,
   ExpressionTree,
-  FrRefs,
+  FunctionalRequirementReferences,
   KeyedIndex,
   TargetIds,
   UnitName,
@@ -69,7 +69,7 @@ export class DesignUnit {
     for (const ent of seed.entities) {
       for (const attr of ent.attributes()) coordinates.add(`${ent.name().asString()}.${attr.name().asString()}`);
     }
-    this.#attrPaths = AttrPaths.of([...coordinates]);
+    this.#attrPaths = AttrPaths.of([...coordinates].map((path) => AttributePath.of(path)));
     this.#obligations = seed.obligations;
     this.#machines = seed.machines;
     this.#scenarios = seed.scenarios;
@@ -188,7 +188,7 @@ export class DesignUnit {
     if (opts.synthetics) {
       for (const c of candidates) {
         const id = nextId();
-        obligations.push(LoweredObligation.of({ id, nature: "invariant", frRefs: FrRefs.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
+        obligations.push(LoweredObligation.of({ id, nature: "invariant", functionalRequirementReferences: FunctionalRequirementReferences.of([]), assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] } }));
         origins.push([id, LoweredOrigin.of({ design: LoweredOriginRef.of(c.design), kind: "vac-dead" })]);
       }
       const byTrigger = new Map<string, EventCandidate[]>();
@@ -209,7 +209,7 @@ export class DesignUnit {
             obligations.push(LoweredObligation.of({
               id,
               nature: "invariant",
-              frRefs: FrRefs.of([]),
+              functionalRequirementReferences: FunctionalRequirementReferences.of([]),
               assert: {
                 op: "implies",
                 args: [{ op: "and", args: [b.guard, { op: "not", args: [a.guard] }] }, { op: "bool", value: true }],
@@ -270,7 +270,7 @@ export class DesignUnit {
   // 自由関数 designEnumValues のメソッド化（OOUI 裁定）。判定は宣言に問う。
   declaredEnumValuesOf(attrPath: string): string[] | null {
     const values = this.#attributeAt(attrPath)?.enumStates() ?? null;
-    return values === null ? null : [...values.toArray()];
+    return values === null ? null : values.toArray().map((member) => member.asString());
   }
 
   // 属性パスの enum 宣言値（未宣言・非 enum は空）。旧 enumValuesOf の逐語移植。

@@ -1,7 +1,11 @@
+import { AttributeKind } from "@deep-spec/kernel-domain";
+import { InitialState } from "@deep-spec/design-domain";
+import { EnumMember } from "@deep-spec/kernel-domain";
+import { scenarioBindings } from "./binding-fixtures.ts";
 import {
   RequirementId,
   TriggerName,
-  FrRefs,
+  FunctionalRequirementReferences,
   ContentHash,
   ArtifactPath,
   FindingsSchema,
@@ -262,7 +266,7 @@ describe("SMT script characterization (the PR8 safety net)", () => {
 
 // テストの読みやすさのため素の配列・素の文字列で書き、ここで一括して DP と
 // コレクションに包む。
-type RawDesignObligation = Omit<Parameters<typeof DesignObligation.of>[0], "id" | "nature" | "origin" | "brRefs" | "frRefs"> & {
+type RawDesignObligation = Omit<Parameters<typeof DesignObligation.of>[0], "id" | "nature" | "origin" | "brRefs" | "functionalRequirementReferences"> & {
   id: string;
   nature: string;
   origin: string;
@@ -280,7 +284,7 @@ type RawDesignMachine = Omit<Parameters<typeof DesignMachine.of>[0], "id" | "ent
   transitions: RawDesignTransition[];
   ignores: RawDesignIgnore[];
 };
-type RawDesignScenario = Omit<Parameters<typeof DesignScenario.of>[0], "id" | "brRefs" | "frRefs"> & { id: string; brRefs: string[]; frRefs: string[] };
+type RawDesignScenario = Omit<Parameters<typeof DesignScenario.of>[0], "id" | "brRefs" | "functionalRequirementReferences"> & { id: string; brRefs: string[]; frRefs: string[] };
 
 // テスト用: 生の entities JSON と属性座標から型付き実体宣言を組む（裁定 2 で
 // DesignUnit は生 JSON を持たなくなった）。座標だけ与えられた属性は kind "" の
@@ -300,7 +304,7 @@ function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDecls {
   for (const [entity, attrs] of extra) {
     declared = declared.add(DesignEntityDecl.of({
       name: DesignEntityName.of(entity),
-      attributes: DesignAttributeDecls.of(attrs.map((a) => DesignAttributeDecl.of({ name: DesignAttributeName.of(a), kind: "" }))),
+      attributes: DesignAttributeDecls.of(attrs.map((a) => DesignAttributeDecl.of({ name: DesignAttributeName.of(a), kind: AttributeKind.of("") }))),
     }));
   }
   return declared;
@@ -325,7 +329,7 @@ function unit(seed: {
         nature: DesignObligationNature.of(o.nature),
         origin: DesignObligationOrigin.of(o.origin),
         brRefs: BrRefs.of(Array.from(o.brRefs, (raw) => BrRef.of(raw))),
-        frRefs: FrRefs.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))),
       })),
     ),
     machines: DesignMachines.of(
@@ -335,7 +339,7 @@ function unit(seed: {
           id: DesignMachineId.of(m.id),
           entity: DesignEntityName.of(m.entity),
           attribute: DesignAttributeName.of(m.attribute),
-          initial: InitialStates.of(m.initial),
+          initial: InitialStates.of((m.initial).map((value) => InitialState.of(value))),
           transitions: DesignTransitions.of(
             m.transitions.map((t) => DesignTransition.of({ ...t, id: DesignTransitionId.of(t.id), brRefs: BrRefs.of(Array.from(t.brRefs, (raw) => BrRef.of(raw))), trigger: TriggerName.of(t.trigger) })),
           ),
@@ -344,7 +348,7 @@ function unit(seed: {
       ),
     ),
     scenarios: DesignScenarios.of(
-      (seed.scenarios ?? []).map((s) => DesignScenario.of({ ...s, id: DesignScenarioId.of(s.id), brRefs: BrRefs.of(Array.from(s.brRefs, (raw) => BrRef.of(raw))), frRefs: FrRefs.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))) })),
+      (seed.scenarios ?? []).map((s) => DesignScenario.of({ ...s, id: DesignScenarioId.of(s.id), brRefs: BrRefs.of(Array.from(s.brRefs, (raw) => BrRef.of(raw))), functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))) })),
     ),
     background: DesignBackgroundAssumptions.of(
       (seed.background ?? []).map((b) => DesignBackgroundAssumption.of({ ...b, id: DesignBackgroundId.of(b.id) })),
@@ -355,8 +359,8 @@ function unit(seed: {
 // テストの読みやすさのため素の配列・素の id で書き、ここで一括して DP と
 // コレクションに包む（アダプタの門と同型）。
 type RawReqAttribute = { path: string; kind: "bool" | "int" | "enum"; min?: number; max?: number; values?: string[] };
-type RawReqObligation = Omit<Parameters<typeof RefinementObligation.of>[0], "id" | "nature" | "frRefs" | "trigger"> & { id: string; nature: string; frRefs: string[]; trigger?: string };
-type RawReqScenario = Omit<Parameters<typeof RefinementScenario.of>[0], "id" | "frRefs" | "event"> & { id: string; frRefs: string[]; event?: { trigger: string } };
+type RawReqObligation = Omit<Parameters<typeof RefinementObligation.of>[0], "id" | "nature" | "functionalRequirementReferences" | "trigger"> & { id: string; nature: string; frRefs: string[]; trigger?: string };
+type RawReqScenario = Omit<Parameters<typeof RefinementScenario.of>[0], "id" | "functionalRequirementReferences" | "event"> & { id: string; frRefs: string[]; event?: { trigger: string } };
 function requirements(seed: {
   attributes?: RawReqAttribute[];
   obligations?: RawReqObligation[];
@@ -369,7 +373,7 @@ function requirements(seed: {
       (seed.attributes ?? []).map((a) => RefinementAttribute.of({
         path: AttributePath.of(a.path),
         kind: a.kind,
-        values: a.values === undefined ? undefined : ReqAttributeValues.of(a.values),
+        values: a.values === undefined ? undefined : ReqAttributeValues.of((a.values).map((value) => EnumMember.of(value))),
       })),
     ),
     obligations: RefinementObligations.of(
@@ -377,7 +381,7 @@ function requirements(seed: {
         ...o,
         id: ObligationId.of(o.id),
         nature: ObligationNature.of(o.nature),
-        frRefs: FrRefs.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))),
         trigger: o.trigger === undefined ? undefined : TriggerName.of(o.trigger),
       })),
     ),
@@ -385,7 +389,7 @@ function requirements(seed: {
       (seed.scenarios ?? []).map((s) => RefinementScenario.of({
         ...s,
         id: ScenarioId.of(s.id),
-        frRefs: FrRefs.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))),
         event: s.event === undefined ? undefined : { trigger: TriggerName.of(s.event.trigger) },
       })),
     ),
@@ -546,10 +550,10 @@ describe("plan classification and gap findings", () => {
       { id: "OB-6", nature: "mystery", frRefs: [] },
     ],
     scenarios: [
-      { id: "SC-1", kind: "accept", frRefs: [], bindings: { "R.flag": true } },
-      { id: "SC-2", kind: "reject", frRefs: [], bindings: { "R.orphan": 1 } },
-      { id: "SC-3", kind: "accept", frRefs: [], bindings: {}, event: { trigger: "go" } },
-      { id: "SC-4", kind: "accept", frRefs: [], bindings: { "R.waived": 1 } },
+      { id: "SC-1", kind: "accept", frRefs: [], bindings: scenarioBindings({ "R.flag": true }) },
+      { id: "SC-2", kind: "reject", frRefs: [], bindings: scenarioBindings({ "R.orphan": 1 }) },
+      { id: "SC-3", kind: "accept", frRefs: [], bindings: scenarioBindings({}), event: { trigger: "go" } },
+      { id: "SC-4", kind: "accept", frRefs: [], bindings: scenarioBindings({ "R.waived": 1 }) },
     ],
   });
   const unitMap: RefinementUnitMap = refUnitMap({
@@ -716,8 +720,8 @@ describe("refinement verdict interpretation", () => {
       { id: "OB-2", nature: "event", frRefs: [], trigger: "go", guard: { op: "ref", path: "R.flag" }, effect: { op: "eq", args: [{ op: "ref", path: "R.flag", prime: true }, { op: "bool", value: true }] } },
     ],
     scenarios: [
-      { id: "SC-1", kind: "accept", frRefs: ["FR-3"], bindings: {} },
-      { id: "SC-2", kind: "reject", frRefs: [], bindings: {} },
+      { id: "SC-1", kind: "accept", frRefs: ["FR-3"], bindings: scenarioBindings({}) },
+      { id: "SC-2", kind: "reject", frRefs: [], bindings: scenarioBindings({}) },
     ],
   });
   // mappedTransitionsOf("OB-2") が ["TR-1", "TR-2"] になる実 plan を組む
@@ -774,7 +778,7 @@ describe("refinement verdict interpretation", () => {
       "completeness-gap:OB-2,TR-1,TR-2",
       "refinement-violation:OB-2,TR-1",
     ]);
-    expect(out.findings.toArray()[0]?.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
+    expect(out.findings.toArray()[0]?.functionalRequirementReferences().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(out.findings.toArray()[1]?.witness().toDocument()).toEqual({ core: ["inv_a", "inv_b"] });
     expect(out.findings.toArray()[4]?.witness().toDocument()).toEqual({ trace: [{ "D.s": "a" }, { "D.s": "b" }] });
     expect(out.findings.toArray()[0]?.detail()).toContain("The design admits what the verified requirements forbid.");
@@ -856,28 +860,28 @@ describe("refinement collections (first-class operations)", () => {
   });
 
   test("requirements-view collections own their index knowledge", () => {
-    const vals = ReqAttributeValues.of(["open"]).add("closed");
-    expect([...vals]).toEqual(["open", "closed"]);
+    const vals = ReqAttributeValues.of((["open"]).map((value) => EnumMember.of(value))).add(EnumMember.of("closed"));
+    expect([...vals].map((value) => value.asString())).toEqual(["open", "closed"]);
     expect(vals.includes("closed")).toBe(true);
     expect(vals.includes("ghost")).toBe(false);
-    expect(vals.toArray()).toEqual(["open", "closed"]);
+    expect(vals.toArray().map((value) => value.asString())).toEqual(["open", "closed"]);
 
     const apath = (raw: string): AttributePath => AttributePath.of(raw);
     const attrs = RefinementAttributes.of([RefinementAttribute.of({ path: apath("R.b"), kind: "bool" })])
       .add(RefinementAttribute.of({ path: apath("R.a"), kind: "int" }))
-      .add(RefinementAttribute.of({ path: apath("R.a"), kind: "bool", values: ReqAttributeValues.of(["x"]) }));
+      .add(RefinementAttribute.of({ path: apath("R.a"), kind: "bool", values: ReqAttributeValues.of((["x"]).map((value) => EnumMember.of(value))) }));
     expect([...attrs].length).toBe(3);
     expect(attrs.covers("R.a")).toBe(true);
     expect(attrs.covers("R.z")).toBe(false);
     // path 索引は最後の宣言が勝つ。
     expect(attrs.byPath("R.a")?.kind()).toBe("bool");
     expect(attrs.byPath("R.a")?.isEnum()).toBe(false);
-    expect(attrs.byPath("R.a")?.declaredValues()?.toArray()).toEqual(["x"]);
+    expect(attrs.byPath("R.a")?.declaredValues()?.toArray().map((value) => value.asString())).toEqual(["x"]);
     expect(attrs.byPath("R.b")?.isAt(apath("R.b"))).toBe(true);
     expect(attrs.byPath("R.z")).toBe(undefined);
     expect(attrs.sortedByPath().toArray().map((a) => a.path().asString())).toEqual(["R.a", "R.a", "R.b"]);
 
-    const rob = (id: string, nature: string) => RefinementObligation.of({ id: ObligationId.of(id), nature: ObligationNature.of(nature), frRefs: FrRefs.of([]) });
+    const rob = (id: string, nature: string) => RefinementObligation.of({ id: ObligationId.of(id), nature: ObligationNature.of(nature), functionalRequirementReferences: FunctionalRequirementReferences.of([]) });
     const obs = RefinementObligations.of([rob("OB-2", "invariant")])
       .add(rob("OB-1", "event"))
       .add(rob("OB-1", "numeric"));
@@ -886,7 +890,7 @@ describe("refinement collections (first-class operations)", () => {
     expect(obs.byId("OB-9")).toBe(undefined);
     expect(obs.sortedCanonically().toArray().map((o) => o.id().asString())).toEqual(["OB-1", "OB-1", "OB-2"]);
 
-    const rsc = (id: string, kind: "accept" | "reject") => RefinementScenario.of({ id: ScenarioId.of(id), kind, frRefs: FrRefs.of([]), bindings: {} });
+    const rsc = (id: string, kind: "accept" | "reject") => RefinementScenario.of({ id: ScenarioId.of(id), kind, functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: scenarioBindings({}) });
     const scs = RefinementScenarios.of([rsc("SC-2", "accept")])
       .add(rsc("SC-1", "reject"))
       .add(rsc("SC-1", "accept"));
@@ -897,7 +901,7 @@ describe("refinement collections (first-class operations)", () => {
   });
 
   test("quint invariant collection knows its req ids", () => {
-    const inv = RefinementQuintInvariants.of([]).add(RefinementQuintInvariant.of(ObligationId.of("OB-1"), FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))), { op: "bool", value: true }));
+    const inv = RefinementQuintInvariants.of([]).add(RefinementQuintInvariant.of(ObligationId.of("OB-1"), FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))), { op: "bool", value: true }));
     expect(inv.isEmpty()).toBe(false);
     expect([...inv].length).toBe(1);
     expect([...inv.reqIds()]).toEqual(["OB-1"]);

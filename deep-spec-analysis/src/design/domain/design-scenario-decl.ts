@@ -1,13 +1,13 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 
-import { BindingPairs } from "./binding-pairs.ts";
+import { DeclaredBindings } from "@deep-spec/kernel-domain";
 import { BrRefs } from "./br-refs.ts";
 import { type DesignScenarioId } from "./design-scenario-id.ts";
 
 export class DesignScenarioDecl {
   readonly #id: DesignScenarioId;
-  readonly #bindings: BindingPairs;
+  readonly #bindings: DeclaredBindings;
   readonly #hasEvent: boolean;
   readonly #expect: Expression | undefined;
   readonly #brRefs: BrRefs | undefined;
@@ -20,12 +20,12 @@ export class DesignScenarioDecl {
     this.#brRefs = props.brRefs;
   }
 
-  static of(props: { id: DesignScenarioId; bindings: BindingPairs; hasEvent: boolean; expect?: Expression; brRefs?: BrRefs }): DesignScenarioDecl {
+  static of(props: { id: DesignScenarioId; bindings: DeclaredBindings; hasEvent: boolean; expect?: Expression; brRefs?: BrRefs }): DesignScenarioDecl {
     return new DesignScenarioDecl(props);
   }
 
   id(): DesignScenarioId { return this.#id; }
-  bindings(): BindingPairs { return this.#bindings; }
+  bindings(): DeclaredBindings { return this.#bindings; }
   brRefs(): BrRefs | undefined { return this.#brRefs; }
 
   inspectExpectation(visitor: (expression: Expression, primesAllowed: boolean) => void): void {

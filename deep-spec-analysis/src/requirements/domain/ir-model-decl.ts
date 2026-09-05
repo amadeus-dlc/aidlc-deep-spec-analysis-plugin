@@ -117,14 +117,16 @@ export class IrModelDecl {
     for (const sc of this.#scenarios) {
       const where = `scenario ${sc.id().asString()}`;
       dupCheck(sc.id().asString(), where);
-      for (const [path, val] of sc.bindings()) {
-        const t = attrTypes.get(path);
+      for (const binding of sc.bindings()) {
+        const path = binding.path();
+        const val = binding.value();
+        const t = attrTypes.get(path.asString());
         if (!t) {
-          errors.push(`${where}: binding for unknown attribute "${path}"`);
+          errors.push(`${where}: binding for unknown attribute "${path.asString()}"`);
           continue;
         }
         if (!t.fitsBinding(val)) {
-          errors.push(`${where}: binding value ${JSON.stringify(val)} does not fit ${t.kindLabel()} attribute "${path}"`);
+          errors.push(`${where}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`);
         }
       }
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));

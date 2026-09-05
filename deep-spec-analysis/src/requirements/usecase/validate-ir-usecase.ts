@@ -42,7 +42,7 @@ export class ValidateIrUseCase {
         `irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_IR_MAJOR}.x.x)`,
       );
     }
-    errors.push(...materials.schemaErrors());
+    errors.push(...materials.schemaErrors().toArray().map((message) => message.asString()));
 
     // 意味検査とトレーサビリティはスキーマ妥当な IR にのみ意味がある。
     if (errors.length === 0) {

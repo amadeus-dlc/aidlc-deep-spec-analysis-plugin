@@ -1,4 +1,4 @@
-import { TargetId, ContentHash, ArtifactPath, FindingKind, FindingsSchema, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+import { TargetId, ContentHash, ArtifactPath, FindingKind, FindingsSchema, FunctionalRequirementReferences, TargetIds } from "@deep-spec/kernel-domain";
 
 // ReferenceCheckReport 集約・serializer・Repository の契約テスト（PR2b、#15）。
 //
@@ -24,6 +24,7 @@ function ap(raw: string): ArtifactPath {
 import {
   ReferenceCheckReportRepositoryImpl,
   renderReportBytes,
+  parseContractsTable,
 } from "@deep-spec/refcheck-adapter";
 
 import {
@@ -46,6 +47,14 @@ const schemaPath = join(
 );
 const schemaFile = readContractSchema(schemaPath);
 const findingsSchema = schemaFile.ok ? FindingsSchema.of(schemaFile.value) : FindingsSchema.unreadable(schemaFile.error.cause);
+
+test("oversized contract parties produce explicit parse-failure skips", () => {
+  const table = parseContractsTable(`| ID | Provider |\n| --- | --- |\n| 1 | ${"x".repeat(4097)} |`);
+  const report = ReferenceCheckReport.open(ReferenceCheckReportId.of(ap("/verification"), "contract"), CheckFamilies.of([]));
+  expect(table.check(report, null, ap("contract-summary.md"), ap("units.md"))).toBeNull();
+  expect(report.skipped().toArray().map((skip) => skip.target())).toEqual(["check:CD-1", "check:CD-3"]);
+  expect(report.skipped().toArray().every((skip) => skip.detail()?.includes("contract-party-too-long"))).toBe(true);
+});
 
 // 書かれた真実の形で組む（serializer／Repository の契約はこの面を検証する）。
 function seed(
@@ -128,7 +137,7 @@ describe("ReferenceCheckReport (domain, no serialization knowledge)", () => {
     report.skip(CheckFamily.of("DD-2"), "unrecognized-format", "later");
     report.skip(CheckFamily.of("DD-0"), "absent-input", "earlier");
     expect(report.findings().toArray().map((f) => f.detail())).toEqual(["DD-1: a earlier detail", "DD-1: first kind", "DD-1: second kind"]);
-    expect(report.findings().toArray()[0]?.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
+    expect(report.findings().toArray()[0]?.functionalRequirementReferences().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(report.findings().toArray()[0]?.unit()).toBe(undefined);
     expect(report.skipped().toArray().map((s) => s.target())).toEqual(["check:DD-0", "check:DD-2"]);
     expect(report.checked().toStrings()).toEqual([]);
@@ -156,7 +165,7 @@ describe("serializer (adapter owns the format knowledge)", () => {
   });
 
   test("a non-conforming document degrades with the frozen wording", () => {
-    const badFinding: Finding = Finding.of({ kind: FindingKind.conflict(), frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
+    const badFinding: Finding = Finding.of({ kind: FindingKind.conflict(), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail: "DD-0: x" });
     const conformed = seed("/tmp/r", { findings: [badFinding] }).conformedTo(FindingsSchema.of({ type: "object", properties: { findings: { maxItems: 0 } } }));
     expect(conformed.isUnavailable()).toBe(true);
     expect(conformed.unavailableReason()).toStartWith("self-validation against deep-spec-findings-schema.json failed: ");

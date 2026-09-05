@@ -89,7 +89,7 @@ export class SmtVerificationPlan {
       conflictKeys.add(key);
       findings.push(VerificationFinding.of({
         kind: FindingKind.conflict(),
-        frRefs: model.frRefsOf(effective),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
         targets: effective,
         witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
         detail,
@@ -153,7 +153,7 @@ export class SmtVerificationPlan {
       if (r.isSat()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.completenessGap(),
-          frRefs: model.frRefsOf(eventIds),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventIds),
           targets: eventIds,
           witness: VerificationWitness.model(r.witnessModel()),
           detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
@@ -176,7 +176,7 @@ export class SmtVerificationPlan {
         const targets = TargetIds.of([sc.id().asTargetId(), ...coreToTargets([...r.coreLabels()])]).sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(targets),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
           targets,
           witness: VerificationWitness.core(r.sortedCore()),
           detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`,
@@ -185,7 +185,7 @@ export class SmtVerificationPlan {
       if (sc.isReject() && r.isSat()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(TargetIds.of([sc.id().asTargetId()])),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([sc.id().asTargetId()])),
           targets: TargetIds.of([sc.id().asTargetId()]),
           witness: VerificationWitness.model(r.witnessModel()),
           detail: `Reject scenario ${sc.id().asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,

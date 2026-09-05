@@ -1,4 +1,6 @@
-import { RequirementId, FrRefs, TargetId, TargetIds, TriggerName, type Expression } from "@deep-spec/kernel-domain";
+import { AttributeKind } from "@deep-spec/kernel-domain";
+import { scenarioBindings } from "./binding-fixtures.ts";
+import { RequirementId, FunctionalRequirementReferences, TargetId, TargetIds, TriggerName, type Expression } from "@deep-spec/kernel-domain";
 
 // requirements/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
 
@@ -40,7 +42,7 @@ describe("obligation", () => {
     Obligation.of({
       id: ObligationId.of("OB-1"),
       nature: ObligationNature.of("event"),
-      frRefs: FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
       trigger: TriggerName.of("submit"),
       guard: lit(true),
       effect: lit(false),
@@ -59,7 +61,7 @@ describe("obligation", () => {
       Obligation.of({
         id: ObligationId.of("OB-2"),
         nature: ObligationNature.of("invariant"),
-        frRefs: FrRefs.of([]),
+        functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         assert: lit(true),
       }).eventDefinition(),
     ).toBeNull();
@@ -70,7 +72,7 @@ describe("obligation", () => {
     const implied = Obligation.of({
       id: ObligationId.of("OB-3"),
       nature: ObligationNature.of("invariant"),
-      frRefs: FrRefs.of([]),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       assert: { op: "implies", args: [antecedent, lit(false)] },
     });
     expect(implied.vacuityAntecedent()).toEqual(antecedent);
@@ -79,7 +81,7 @@ describe("obligation", () => {
       Obligation.of({
         id: ObligationId.of("OB-4"),
         nature: ObligationNature.of("invariant"),
-        frRefs: FrRefs.of([]),
+        functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         assert: lit(true),
       }).vacuityAntecedent(),
     ).toBeUndefined();
@@ -89,7 +91,7 @@ describe("obligation", () => {
     const obligation = Obligation.of({
       id: ObligationId.of("OB-5"),
       nature: ObligationNature.of("state-temporal"),
-      frRefs: FrRefs.of([]),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       assert: { op: "a" },
       guard: { op: "g" },
       effect: { op: "e" },
@@ -111,7 +113,7 @@ describe("obligation", () => {
     const obligation = Obligation.of({
       id: ObligationId.of("OB-6"),
       nature: ObligationNature.of("numeric"),
-      frRefs: FrRefs.of(Array.from(["FR-9"], (raw) => RequirementId.of(raw))),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-9"], (raw) => RequirementId.of(raw))),
       ears: "the system shall ...",
       assert: lit(true),
       trigger: TriggerName.of("tick"),
@@ -121,7 +123,7 @@ describe("obligation", () => {
     });
     expect(obligation.id().asString()).toBe("OB-6");
     expect(obligation.nature().asString()).toBe("numeric");
-    expect(obligation.frRefs().toStrings()).toEqual(["FR-9"]);
+    expect(obligation.functionalRequirementReferences().toStrings()).toEqual(["FR-9"]);
     expect(obligation.ears()).toBe("the system shall ...");
     expect(obligation.assertion()).toEqual(lit(true));
     expect(obligation.trigger()?.asString()).toBe("tick");
@@ -141,22 +143,22 @@ describe("scenario", () => {
     Scenario.of({
       id: ScenarioId.of("SC-1"),
       kind,
-      frRefs: FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
-      bindings: { b: 2, a: 1 },
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
+      bindings: scenarioBindings({ b: 2, a: 1 }),
     });
 
   test("of round-trips every field through the accessors", () => {
     const withEvent = Scenario.of({
       id: ScenarioId.of("SC-2"),
       kind: "accept",
-      frRefs: FrRefs.of(Array.from(["FR-1", "FR-2"], (raw) => RequirementId.of(raw))),
-      bindings: { a: 1 },
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(["FR-1", "FR-2"], (raw) => RequirementId.of(raw))),
+      bindings: scenarioBindings({ a: 1 }),
       event: { trigger: TriggerName.of("submit") },
       expect: lit(true),
     });
     expect(withEvent.id().asString()).toBe("SC-2");
     expect(withEvent.kind()).toBe("accept");
-    expect(withEvent.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
+    expect(withEvent.functionalRequirementReferences().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(withEvent.eventTrigger()?.asString()).toBe("submit");
     expect(withEvent.expectation()).toEqual(lit(true));
     expect(withEvent.isAccept()).toBe(true);
@@ -177,13 +179,13 @@ describe("scenario", () => {
   });
 
   test("bindingEntriesCanonically sorts by key and bindings() hands out a copy", () => {
-    expect(scenario("accept").bindingEntriesCanonically()).toEqual([
+    expect(scenario("accept").bindings().entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()])).toEqual([
       ["a", 1],
       ["b", 2],
     ]);
-    const out = scenario("accept").bindings();
+    const out = scenario("accept").bindings().toDocument();
     (out as Record<string, number>).c = 3;
-    expect(scenario("accept").bindings()).toEqual({ b: 2, a: 1 });
+    expect(scenario("accept").bindings().toDocument()).toEqual({ b: 2, a: 1 });
   });
 });
 
@@ -259,7 +261,7 @@ describe("quint machine run verdict", () => {
 
 describe("ir entity and temporal decls (well-formedness materials own their judgements)", () => {
   test("entity decl visits attributes with their coordinate and flags a repeated name from its second occurrence", () => {
-    const attr = (name: string) => IrAttributeDecl.of({ name: IrAttributeName.of(name), kind: "bool" });
+    const attr = (name: string) => IrAttributeDecl.of({ name: IrAttributeName.of(name), kind: AttributeKind.of("bool") });
     const entity = IrEntityDecl.of({ name: IrEntityName.of("order"), attributes: IrAttributeDecls.of([attr("qty"), attr("qty"), attr("paid")]) });
     const seen: [string, boolean][] = [];
     entity.inspectAttributes((coordinate, attribute, duplicated) => seen.push([`${coordinate}=${attribute.name().asString()}`, duplicated]));

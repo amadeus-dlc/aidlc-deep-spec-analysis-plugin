@@ -6,8 +6,8 @@
 // （原文材料——store の往復則 findById∘store がバイト恒等になる永続化面）。
 
 import { type ErrorMessages, type IrVersion, DeclaredDigest } from "@deep-spec/kernel-domain";
-import { FrReferenceIndex } from "./fr-reference-index.ts";
-import { FrRefClaims } from "./fr-ref-claims.ts";
+import { FunctionalRequirementReferenceIndex } from "./functional-requirement-reference-index.ts";
+import { FunctionalRequirementReferenceClaims } from "./functional-requirement-reference-claims.ts";
 import type { IrModelDecl } from "./ir-model-decl.ts";
 import type { RequirementsSourceId } from "./requirements-source-id.ts";
 import { IrValidationMaterialsId } from "./ir-validation-materials-id.ts";
@@ -17,7 +17,7 @@ export class IrValidationMaterials {
   readonly #irVersion: IrVersion;
   readonly #schemaErrors: ErrorMessages;
   readonly #view: IrModelDecl;
-  readonly #frClaims: FrRefClaims;
+  readonly #frClaims: FunctionalRequirementReferenceClaims;
   readonly #declaredDigest: DeclaredDigest | null;
   readonly #sourceId: RequirementsSourceId;
   readonly #sourceDocument: Uint8Array;
@@ -39,7 +39,7 @@ export class IrValidationMaterials {
     readonly irVersion: IrVersion;
     readonly schemaErrors: ErrorMessages;
     readonly view: IrModelDecl;
-    readonly frClaims: FrRefClaims;
+    readonly frClaims: FunctionalRequirementReferenceClaims;
     // IR の sourceDigest。文字列でなければ null（宣言なし）。
     readonly declaredDigest: DeclaredDigest | null;
     readonly sourceId: RequirementsSourceId;
@@ -65,8 +65,8 @@ export class IrValidationMaterials {
   }
 
   // 逆トレーサビリティ索引は集約自身が組む（Tell-Don't-Ask）。
-  frReferenceIndex(): FrReferenceIndex {
-    return FrReferenceIndex.of(this.#frClaims.toArray());
+  frReferenceIndex(): FunctionalRequirementReferenceIndex {
+    return FunctionalRequirementReferenceIndex.of(this.#frClaims.toArray());
   }
 
   declaredDigest(): DeclaredDigest | null {

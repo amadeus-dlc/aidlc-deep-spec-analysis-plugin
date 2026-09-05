@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // CheckFamily — 検査ファミリー識別子（DD-0 / CD-1 / FD-E1 / XS-1 …）の
 // ドメインプリミティブ。レポートの描画規約はファミリー自身の知識：finding detail
@@ -7,7 +8,9 @@ import { IllegalArgumentException, parseConstruction, type Result } from "@deep-
 export class CheckFamily {
   readonly #value: string;
 
+  /** 識別名・ID・バージョンの処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 128) throw new IllegalArgumentException({ kind: "check-family-too-long", raw: raw.length });
     if (raw === "") throw new IllegalArgumentException({ kind: "empty-family", raw });
     this.#value = raw;
   }
@@ -16,7 +19,7 @@ export class CheckFamily {
     return new CheckFamily(raw);
   }
 
-  static parse(raw: string): Result<CheckFamily, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<CheckFamily, ParseError> {
     return parseConstruction(() => new CheckFamily(raw));
   }
 

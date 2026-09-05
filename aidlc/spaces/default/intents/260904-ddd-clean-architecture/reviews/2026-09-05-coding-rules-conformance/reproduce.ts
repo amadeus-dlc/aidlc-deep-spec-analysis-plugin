@@ -1,4 +1,5 @@
 // 対象コミット26324f9の不具合をassertする基線資料。修正後の期待動作はtests/coding-rules-conformance.test.tsで確認する。
+// 実行先と依存解決を固定する手順は、同じディレクトリのbaseline-reproduction.mdを参照。
 // 型アサーションで不正な引数を作らず、公開APIが受け取る型だけで再現する。
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";

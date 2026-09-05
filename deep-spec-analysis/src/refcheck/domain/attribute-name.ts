@@ -1,9 +1,12 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 import { NormalizedName } from "@deep-spec/kernel-domain";
 
 export class AttributeName {
   readonly #value: string;
+  /** 識別名・ID・バージョンの処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 128) throw new IllegalArgumentException({ kind: "attribute-name-too-long", raw: raw.length });
     if (raw === "") throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
   }
@@ -11,7 +14,7 @@ export class AttributeName {
     return new AttributeName(raw);
   }
 
-  static parse(raw: string): Result<AttributeName, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<AttributeName, ParseError> {
     return parseConstruction(() => new AttributeName(raw));
   }
   equals(other: AttributeName): boolean { return this.#value === other.#value; }

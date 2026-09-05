@@ -1,4 +1,4 @@
-import { type FrRefs, type TargetIds, FindingKind, UnitName } from "@deep-spec/kernel-domain";
+import { type FunctionalRequirementReferences, type TargetIds, FindingKind, UnitName } from "@deep-spec/kernel-domain";
 import { type WitnessRefs } from "./witness-refs.ts";
 
 // refcheck finding（無沈黙台帳の 1 行）——kind・要件参照・対象・witness ref
@@ -7,7 +7,7 @@ import { type WitnessRefs } from "./witness-refs.ts";
 // detail は prose（裁定の恒久除外）。
 export class Finding {
   readonly #kind: FindingKind;
-  readonly #frRefs: FrRefs;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #targets: TargetIds;
   readonly #witness: WitnessRefs;
   readonly #unit: UnitName | undefined;
@@ -15,7 +15,7 @@ export class Finding {
 
   private constructor(props: Parameters<typeof Finding.of>[0]) {
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#targets = props.targets;
     this.#witness = props.witness.refs;
     this.#unit = props.unit;
@@ -24,7 +24,7 @@ export class Finding {
 
   // 正常生成（strict creation）——検証済みの FindingKind だけを受け取る。
   // 検査が自ら下す判定はこの口を通る（FR3.2）。
-  static of(props: { kind: FindingKind; frRefs: FrRefs; targets: TargetIds; witness: { refs: WitnessRefs }; unit?: UnitName; detail: string }): Finding {
+  static of(props: { kind: FindingKind; functionalRequirementReferences: FunctionalRequirementReferences; targets: TargetIds; witness: { refs: WitnessRefs }; unit?: UnitName; detail: string }): Finding {
     return new Finding(props);
   }
 
@@ -32,8 +32,8 @@ export class Finding {
     return this.#kind.asString();
   }
 
-  frRefs(): FrRefs {
-    return this.#frRefs;
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
   }
 
   targets(): TargetIds {

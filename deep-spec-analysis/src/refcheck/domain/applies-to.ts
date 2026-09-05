@@ -1,10 +1,13 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 import { EntityName } from "./entity-name.ts";
 
 export class AppliesTo {
   readonly #value: string;
+  /** 対象指定文の処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 4096) throw new IllegalArgumentException({ kind: "applies-to-too-long", raw: raw.length });
     if (raw === "") throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
   }
@@ -12,7 +15,7 @@ export class AppliesTo {
     return new AppliesTo(raw);
   }
 
-  static parse(raw: string): Result<AppliesTo, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<AppliesTo, ParseError> {
     return parseConstruction(() => new AppliesTo(raw));
   }
   equals(other: AppliesTo): boolean { return this.#value === other.#value; }

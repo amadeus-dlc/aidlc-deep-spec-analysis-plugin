@@ -6,7 +6,7 @@ import {
   ContentHash,
   ArtifactPath,
   FindingsSchema,
-  FrRefs,
+  FunctionalRequirementReferences,
   TargetIds,
 } from "@deep-spec/kernel-domain";
 
@@ -609,7 +609,7 @@ describe("functional branches the fixtures do not exercise", () => {
       findings: Findings.of([
         Finding.of({
           kind: FindingKind.conflict(),
-          frRefs: FrRefs.of([]),
+          functionalRequirementReferences: FunctionalRequirementReferences.of([]),
           targets: TargetIds.of(Array.from(["check:DD-0"], (raw) => TargetId.of(raw))),
           witness: { refs: WitnessRefs.of([]) },
           detail: "DD-0: x",

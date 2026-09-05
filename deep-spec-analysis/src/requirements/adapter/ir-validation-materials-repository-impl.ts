@@ -1,3 +1,7 @@
+import { AttributeKind } from "@deep-spec/kernel-domain";
+import { EnumMember } from "@deep-spec/kernel-domain";
+import { ErrorMessage } from "@deep-spec/kernel-domain";
+import { decodeDeclaredBindings } from "@deep-spec/kernel-adapter";
 import {
   DeclaredDigest,
   RequirementId,
@@ -25,14 +29,13 @@ import { type Result, combineResults, traverseResult, err, ok } from "@deep-spec
 
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import {
-  FrRefClaim,
+  FunctionalRequirementReferenceClaim,
   IrAttributeDecl,
   IrBackgroundDecl,
   IrEntityDecl,
-  FrRefs,
+  FunctionalRequirementReferences,
   IrAttributeDecls,
   IrBackgroundDecls,
-  IrBindingPairs,
   IrDeclaredValues,
   IrEntityDecls,
   IrModelDecl,
@@ -40,7 +43,7 @@ import {
   IrScenarioDecls,
   IrObligationDecl,
   IrScenarioDecl,
-  FrRefClaims,
+  FunctionalRequirementReferenceClaims,
   IrValidationMaterials,
   IrValidationMaterialsId,
   RequirementsSourceId,
@@ -69,12 +72,16 @@ function buildView(ir: { [k: string]: Json }): Result<IrModelDecl, string> {
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string") continue;
       const t = isObject(attr.type) ? attr.type : {};
+      const kind = AttributeKind.parse(typeof t.kind === "string" ? t.kind : "");
+      if (!kind.ok) return err(JSON.stringify(kind.error));
       const name = IrAttributeName.parse(attr.name);
       if (!name.ok) return err(JSON.stringify(name.error));
+      const members = traverseResult(Array.isArray(t.values) ? t.values.filter((v): v is string => typeof v === "string") : [], EnumMember.parse);
+      if (!members.ok) return err(JSON.stringify(members.error));
       attributes.push(IrAttributeDecl.of({
         name: name.value,
-        kind: typeof t.kind === "string" ? t.kind : "",
-        values: Array.isArray(t.values) ? IrDeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
+        kind: kind.value,
+        values: Array.isArray(t.values) ? IrDeclaredValues.of(members.value) : undefined,
         min: typeof t.min === "number" ? DeclaredBound.of(t.min) : undefined,
         max: typeof t.max === "number" ? DeclaredBound.of(t.max) : undefined,
       }));
@@ -107,12 +114,13 @@ function buildView(ir: { [k: string]: Json }): Result<IrModelDecl, string> {
   const scenarios: IrScenarioDecl[] = [];
   for (const sc of Array.isArray(ir.scenarios) ? ir.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
-    const bindings = isObject(sc.bindings) ? sc.bindings : {};
+    const bindings = decodeDeclaredBindings(isObject(sc.bindings) ? sc.bindings : {});
+    if (!bindings.ok) return err(bindings.error);
     const id = ScenarioId.parse(sc.id);
     if (!id.ok) return err(JSON.stringify(id.error));
     scenarios.push(IrScenarioDecl.of({
       id: id.value,
-      bindings: IrBindingPairs.of(Object.entries(bindings)),
+      bindings: bindings.value,
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
     }));
@@ -135,8 +143,8 @@ function buildView(ir: { [k: string]: Json }): Result<IrModelDecl, string> {
 }
 
 // owner は id、無ければ `<section>[<index>]`（旧 collectFrRefs の逐語）。
-function collectFrClaims(ir: { [k: string]: Json }): Result<FrRefClaim[], string> {
-  const claims: FrRefClaim[] = [];
+function collectFrClaims(ir: { [k: string]: Json }): Result<FunctionalRequirementReferenceClaim[], string> {
+  const claims: FunctionalRequirementReferenceClaim[] = [];
   for (const section of ["obligations", "scenarios", "unformalized"] as const) {
     const arr = Array.isArray(ir[section]) ? (ir[section] as Json[]) : [];
     for (const [i, entry] of arr.entries()) {
@@ -146,7 +154,7 @@ function collectFrClaims(ir: { [k: string]: Json }): Result<FrRefClaim[], string
       if (!Array.isArray(refs)) continue;
       const parsed = traverseResult(refs.filter((r): r is string => typeof r === "string"), RequirementId.parse);
       if (!parsed.ok) return err(JSON.stringify(parsed.error));
-      claims.push(FrRefClaim.of(owner, FrRefs.of(parsed.value)));
+      claims.push(FunctionalRequirementReferenceClaim.of(owner, FunctionalRequirementReferences.of(parsed.value)));
     }
   }
   return ok(claims);
@@ -209,6 +217,7 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
     const recordRoot = ArtifactPath.of(dirname(dirname(dirname(outputPath))));
     const parsed = combineResults({
       irVersion: IrVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : ""),
+      declaredDigest: typeof ir.sourceDigest === "string" ? DeclaredDigest.parse(ir.sourceDigest) : ok(null),
     });
     if (!parsed.ok) return corrupt(JSON.stringify(parsed.error));
     const view = buildView(ir);
@@ -220,10 +229,10 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
       IrValidationMaterials.of({
         id,
         irVersion: parsed.value.irVersion,
-        schemaErrors: ErrorMessages.of(schemaErrors),
+        schemaErrors: ErrorMessages.of(schemaErrors.map((message) => ErrorMessage.of(message))),
         view: view.value,
-        frClaims: FrRefClaims.of(claims.value),
-        declaredDigest: typeof ir.sourceDigest === "string" ? DeclaredDigest.of(ir.sourceDigest) : null,
+        frClaims: FunctionalRequirementReferenceClaims.of(claims.value),
+        declaredDigest: parsed.value.declaredDigest,
         sourceId: RequirementsSourceId.of(recordRoot),
         sourceDocument: new Uint8Array(bytes),
       }),

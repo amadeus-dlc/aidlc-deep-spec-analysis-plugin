@@ -208,8 +208,13 @@ function parseConstruction(construct) {
   try {
     return ok(construct());
   } catch (error) {
-    if (error instanceof IllegalArgumentException)
-      return err(error.problem);
+    if (error instanceof IllegalArgumentException) {
+      const failure = Object.freeze({
+        kind: error.problem.kind,
+        ...error.problem.raw === undefined ? {} : { raw: error.problem.raw }
+      });
+      return err(failure);
+    }
     throw error;
   }
 }
@@ -255,6 +260,42 @@ function traverseResult(values, parse) {
     parsed.push(result.value);
   }
   return ok(parsed);
+}
+// src/kernel/infrastructure/value-size.ts
+function assertValueSize(value, limits) {
+  let nodes = 0;
+  let total = 0;
+  const visit = (current, depth) => {
+    if (++nodes > limits.nodes || depth > limits.depth)
+      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+    if (typeof current === "string") {
+      if (current.length > limits.string)
+        throw new IllegalArgumentException({ kind: "value-string-too-long", raw: current.length });
+      total += current.length;
+    } else if (current !== null && typeof current === "object") {
+      if (Array.isArray(current)) {
+        if (current.length > limits.nodes - nodes)
+          throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+        for (const child of current)
+          visit(child, depth + 1);
+      } else {
+        const record = current;
+        for (const key in record) {
+          if (!Object.hasOwn(record, key))
+            continue;
+          if (key.length > limits.string)
+            throw new IllegalArgumentException({ kind: "value-key-too-long", raw: key.length });
+          total += key.length;
+          if (total > limits.total)
+            throw new IllegalArgumentException({ kind: "value-text-too-large" });
+          visit(record[key], depth + 1);
+        }
+      }
+    }
+    if (total > limits.total)
+      throw new IllegalArgumentException({ kind: "value-text-too-large" });
+  };
+  visit(value, 0);
 }
 // src/kernel/adapter/contract-schema.ts
 function readContractSchema(path) {
@@ -718,6 +759,18 @@ function canonicalKeyOf(value) {
 class ExpressionTree {
   #root;
   constructor(root) {
+    let nodes = 0;
+    const measure = (node, depth) => {
+      if (++nodes > 1e4 || depth > 128 || (node.args?.length ?? 0) > 1e4 - nodes) {
+        throw new IllegalArgumentException({ kind: "expression-too-large" });
+      }
+      if ((node.op?.length ?? 0) > 128 || (node.path?.length ?? 0) > 257 || typeof node.value === "string" && node.value.length > 4096) {
+        throw new IllegalArgumentException({ kind: "expression-token-too-long" });
+      }
+      for (const child of node.args ?? [])
+        measure(child, depth + 1);
+    };
+    measure(root, 0);
     const snapshot = structuredClone(root);
     const visited = new WeakSet;
     const freeze = (value) => {
@@ -735,6 +788,9 @@ class ExpressionTree {
   }
   static of(root) {
     return new ExpressionTree(root);
+  }
+  static parse(root) {
+    return parseConstruction(() => new ExpressionTree(root));
   }
   asExpression() {
     return this.#root;
@@ -781,7 +837,9 @@ import { createHash } from "crypto";
 class ContentHash {
   #value;
   constructor(raw) {
-    if (!/^[0-9a-f]{64}$/.test(raw))
+    if (raw.length !== 64)
+      throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
+    if (/[^0-9a-f]/.test(raw))
       throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
     this.#value = raw;
   }
@@ -808,7 +866,12 @@ class ContentHash {
 class DeclaredDigest {
   #value;
   constructor(value) {
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "declared-digest-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredDigest(value));
   }
   static of(value) {
     return new DeclaredDigest(value);
@@ -824,6 +887,8 @@ class DeclaredDigest {
 class IrVersion {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "ir-version-too-long", raw: raw.length });
     if (!/^\d+\.\d+\.\d+$/.test(raw))
       throw new IllegalArgumentException({ kind: "not-a-semver", raw });
     this.#value = raw;
@@ -858,6 +923,8 @@ var TARGET_ID_PATTERNS = [
 class TargetId {
   #value;
   constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
     if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
       throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
     this.#value = raw;
@@ -922,42 +989,19 @@ class TargetIds {
     return this.#values.map((v) => v.asString());
   }
 }
-// src/kernel/domain/requirement-id.ts
-class RequirementId {
-  #value;
-  constructor(value) {
-    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
-      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
-    this.#value = value;
-  }
-  static of(raw) {
-    return new RequirementId(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new RequirementId(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return compareCanonically(this.#value, other.#value);
-  }
-  asString() {
-    return this.#value;
-  }
-}
-
-// src/kernel/domain/fr-refs.ts
-class FrRefs {
+// src/kernel/domain/functional-requirement-references.ts
+class FunctionalRequirementReferences {
   #values;
   constructor(values) {
-    this.#values = values;
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new FrRefs([...values]);
+    return new FunctionalRequirementReferences(values);
   }
   add(value) {
-    return new FrRefs([...this.#values, value]);
+    return new FunctionalRequirementReferences([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -966,7 +1010,8 @@ class FrRefs {
     return this.#values.length === 0;
   }
   sortedUnique() {
-    return FrRefs.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => RequirementId.of(raw)));
+    const unique = new Map(this.#values.map((value) => [value.asString(), value]));
+    return new FunctionalRequirementReferences([...unique.values()].sort((a, b) => a.compareTo(b)));
   }
   toArray() {
     return this.#values;
@@ -979,6 +1024,8 @@ class FrRefs {
 class BackendName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "backend-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-backend-name", raw });
     this.#value = raw;
@@ -1036,6 +1083,33 @@ class KeySet {
   }
 }
 
+// src/kernel/domain/requirement-id.ts
+class RequirementId {
+  #value;
+  constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "requirement-id-too-long", raw: value.length });
+    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
+      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
+    this.#value = value;
+  }
+  static of(raw) {
+    return new RequirementId(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new RequirementId(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
 // src/kernel/domain/requirement-ids.ts
 class RequirementIds {
   #values;
@@ -1072,10 +1146,12 @@ class RequirementIds {
 class NormalizedName {
   #value;
   constructor(value) {
-    this.#value = value;
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "normalized-name-too-long", raw: value.length });
+    this.#value = value.toLowerCase().replace(/[^a-z0-9]/g, "");
   }
   static of(raw) {
-    return new NormalizedName(raw.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    return new NormalizedName(raw);
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1088,6 +1164,8 @@ class NormalizedName {
 class ArtifactPath {
   #value;
   constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "artifact-path-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-path" });
     this.#value = raw;
@@ -1154,6 +1232,8 @@ class DeclaredBound {
 class ErrorMessages {
   #values;
   constructor(values) {
+    if (values.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
   static of(values) {
@@ -1205,6 +1285,8 @@ class FindingsSchema {
 class TriggerName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "trigger-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-trigger-name", raw });
     this.#value = raw;
@@ -1270,6 +1352,8 @@ class KeyedIndex {
 class QueryLabel {
   #value;
   constructor(value) {
+    if (value.length > 2048)
+      throw new IllegalArgumentException({ kind: "query-label-too-long", raw: value.length });
     if (value === "")
       throw new IllegalArgumentException({ kind: "empty-query-label", raw: value });
     this.#value = value;
@@ -1294,6 +1378,8 @@ class QueryLabel {
 class AttributePath {
   #value;
   constructor(raw) {
+    if (raw.length > 257)
+      throw new IllegalArgumentException({ kind: "attribute-path-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-attribute-path", raw });
     this.#value = raw;
@@ -1314,10 +1400,56 @@ class AttributePath {
     return this.#value;
   }
 }
+// src/kernel/domain/binding-value.ts
+class BindingValue {
+  #value;
+  constructor(value) {
+    if (typeof value === "string" && value.length > 4096)
+      throw new IllegalArgumentException({ kind: "binding-literal-too-long", raw: value.length });
+    if (typeof value === "number" && !Number.isSafeInteger(value)) {
+      throw new IllegalArgumentException({ kind: "invalid-binding-integer", raw: value });
+    }
+    this.#value = value;
+  }
+  static of(value) {
+    return new BindingValue(value);
+  }
+  static resolve(declaration) {
+    return declaration.match({
+      literal: (value) => {
+        const result = parseConstruction(() => new BindingValue(value));
+        return result.ok ? result : err(JSON.stringify(result.error));
+      },
+      nonLiteral: () => err(`binding value ${declaration.describe()} is not a boolean, safe integer, or enum literal`)
+    });
+  }
+  toDocument() {
+    return this.#value;
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  match(cases) {
+    if (typeof this.#value === "boolean")
+      return cases.bool(this.#value);
+    if (typeof this.#value === "number")
+      return cases.int(this.#value);
+    return cases.enum(this.#value);
+  }
+  asExpression() {
+    return this.match({
+      bool: (value) => ({ op: "bool", value }),
+      int: (value) => ({ op: "int", value }),
+      enum: (value) => ({ op: "enum", value })
+    });
+  }
+}
 // src/kernel/domain/unit-name.ts
 class UnitName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "unit-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-unit-name", raw });
     this.#value = raw;
@@ -1339,7 +1471,12 @@ class UnitName {
 class ObligationNature {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "obligation-nature-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new ObligationNature(value));
   }
   static of(raw) {
     return new ObligationNature(raw);
@@ -1381,6 +1518,8 @@ var KIND_RANK = {
 class FindingKind {
   #value;
   constructor(raw) {
+    if (raw.length > 24)
+      throw new IllegalArgumentException({ kind: "finding-kind-too-long", raw: raw.length });
     if (!Object.hasOwn(KIND_RANK, raw))
       throw new IllegalArgumentException({ kind: "unknown-finding-kind", raw });
     this.#value = raw;
@@ -1446,6 +1585,8 @@ var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
 class VerificationMethod {
   #value;
   constructor(raw) {
+    if (raw.length > 10)
+      throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
     if (!KNOWN_METHODS.has(raw))
       throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
     this.#value = raw;
@@ -1479,6 +1620,8 @@ var KNOWN_REASONS = new Set([
 class SkipReason {
   #value;
   constructor(raw) {
+    if (raw.length > 19)
+      throw new IllegalArgumentException({ kind: "skip-reason-too-long", raw: raw.length });
     if (!KNOWN_REASONS.has(raw))
       throw new IllegalArgumentException({ kind: "unknown-skip-reason", raw });
     this.#value = raw;
@@ -1527,7 +1670,12 @@ class SkipReason {
 class AttributeKind {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "attribute-kind-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new AttributeKind(value));
   }
   static of(raw) {
     return new AttributeKind(raw);
@@ -1548,6 +1696,172 @@ class AttributeKind {
     return this.#value;
   }
 }
+// src/kernel/domain/declared-binding-value.ts
+class DeclaredBindingValue {
+  #value;
+  constructor(value) {
+    assertValueSize(value, { string: 4096, total: 65536, nodes: 4096, depth: 32 });
+    this.#value = structuredClone(value);
+  }
+  static of(value) {
+    return new DeclaredBindingValue(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredBindingValue(value));
+  }
+  fits(kind, admitsEnum) {
+    return kind.isBool() && typeof this.#value === "boolean" || kind.isInt() && typeof this.#value === "number" && Number.isSafeInteger(this.#value) || kind.isEnum() && typeof this.#value === "string" && admitsEnum(this.#value);
+  }
+  match(cases) {
+    if (typeof this.#value === "boolean" || typeof this.#value === "number" || typeof this.#value === "string")
+      return cases.literal(this.#value);
+    return cases.nonLiteral();
+  }
+  describe() {
+    return JSON.stringify(this.#value);
+  }
+}
+// src/kernel/domain/declared-bindings.ts
+class DeclaredBindings {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-binding-declarations", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new DeclaredBindings(values);
+  }
+  add(value) {
+    return new DeclaredBindings([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/kernel/domain/scenario-bindings.ts
+class ScenarioBindings {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-scenario-bindings", raw: values.length });
+    const paths = new Set;
+    for (const binding of values) {
+      const path = binding.path().asString();
+      if (paths.has(path))
+        throw new IllegalArgumentException({ kind: "duplicate-scenario-binding", raw: path });
+      paths.add(path);
+    }
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new ScenarioBindings(values);
+  }
+  add(value) {
+    return new ScenarioBindings([...this.#values, value]);
+  }
+  has(path) {
+    return this.#values.some((binding) => binding.isFor(path));
+  }
+  valueAt(path) {
+    return this.#values.find((binding) => binding.isFor(path))?.value() ?? null;
+  }
+  covers(paths) {
+    return paths.every((path) => this.has(path));
+  }
+  entriesCanonically() {
+    return [...this.#values].sort((a, b) => a.path().asString() < b.path().asString() ? -1 : a.path().asString() > b.path().asString() ? 1 : 0);
+  }
+  toDocument() {
+    return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
+  }
+}
+// src/kernel/domain/error-message.ts
+class ErrorMessage {
+  #value;
+  constructor(value) {
+    if (value.length > 65536)
+      throw new IllegalArgumentException({ kind: "error-message-too-long", raw: value.length });
+    if (value.length === 0)
+      throw new IllegalArgumentException({ kind: "empty-error-message" });
+    this.#value = value;
+  }
+  static of(value) {
+    return new ErrorMessage(value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/enum-member.ts
+class EnumMember {
+  #value;
+  constructor(value) {
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "enum-member-too-long", raw: value.length });
+    this.#value = value;
+  }
+  static of(value) {
+    return new EnumMember(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new EnumMember(value));
+  }
+  matchesLiteral(value) {
+    return this.#value === value;
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/scenario-binding.ts
+class ScenarioBinding {
+  #path;
+  #value;
+  constructor(path, value) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path, value) {
+    return new ScenarioBinding(path, value);
+  }
+  path() {
+    return this.#path;
+  }
+  value() {
+    return this.#value;
+  }
+  isFor(path) {
+    return this.#path.equals(path);
+  }
+}
+// src/kernel/domain/binding-declaration.ts
+class BindingDeclaration {
+  #path;
+  #value;
+  constructor(path, value) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path, value) {
+    return new BindingDeclaration(path, value);
+  }
+  path() {
+    return this.#path;
+  }
+  value() {
+    return this.#value;
+  }
+}
 // src/kernel/adapter/findings-values-parser.ts
 function parseFindingsValues(raw) {
   const decoded = decodeFindingsDocument(raw);
@@ -1562,13 +1876,13 @@ function parseFindingsValues(raw) {
     findings: traverseResult(doc.findings, (entry) => {
       const fields = combineResults({
         kind: FindingKind.parse(entry.kind),
-        frRefs: traverseResult(entry.frRefs, RequirementId.parse),
+        functionalRequirementReferences: traverseResult(entry.frRefs, RequirementId.parse),
         targets: traverseResult(entry.targets, TargetId.parse),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
       });
       if (!fields.ok)
         return fields;
-      return ok({ ...fields.value, frRefs: FrRefs.of(fields.value.frRefs), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
+      return ok({ ...fields.value, functionalRequirementReferences: FunctionalRequirementReferences.of(fields.value.functionalRequirementReferences), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
     }),
     skipped: traverseResult(doc.skipped, (entry) => {
       const fields = combineResults({
@@ -1601,6 +1915,8 @@ var CATALOG_VERSION = "1.0.0";
 class ElementPath {
   #value;
   constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "element-path-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -1670,14 +1986,14 @@ class WitnessRefs {
 // src/refcheck/domain/finding.ts
 class Finding {
   #kind;
-  #frRefs;
+  #functionalRequirementReferences;
   #targets;
   #witness;
   #unit;
   #detail;
   constructor(props) {
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#targets = props.targets;
     this.#witness = props.witness.refs;
     this.#unit = props.unit;
@@ -1689,8 +2005,8 @@ class Finding {
   kind() {
     return this.#kind.asString();
   }
-  frRefs() {
-    return this.#frRefs;
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
   }
   targets() {
     return this.#targets;
@@ -1877,10 +2193,10 @@ class ReferenceCheckReport {
   static of(seed) {
     return new ReferenceCheckReport(seed.id, seed.inputs, seed.checked, seed.findings, seed.skipped, seed.unavailableReason, undefined);
   }
-  finding(family, kind, targets, refs, detail, frRefs = []) {
+  finding(family, kind, targets, refs, detail, functionalRequirementReferences = []) {
     this.#findings = this.#findings.add(Finding.of({
       kind,
-      frRefs: FrRefs.of(Array.from(frRefs, (raw) => RequirementId.of(raw))).sortedUnique(),
+      functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(functionalRequirementReferences, (raw) => RequirementId.of(raw))).sortedUnique(),
       targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
       witness: { refs: WitnessRefs.of(refs) },
       detail: family.prefixedDetail(detail),
@@ -1953,7 +2269,7 @@ class ReferenceCheckReport {
       });
       const out = {
         kind: f.kind(),
-        frRefs: f.frRefs().toStrings(),
+        frRefs: f.functionalRequirementReferences().toStrings(),
         targets: f.targets().toStrings(),
         witness: { refs },
         detail: f.detail()
@@ -2008,6 +2324,8 @@ class ReferenceCheckReportId {
 class CheckFamily {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "check-family-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-family", raw });
     this.#value = raw;
@@ -2139,6 +2457,8 @@ class FenceCount {
 class ComponentName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "component-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -2164,6 +2484,8 @@ class ComponentName {
 class EntityName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "entity-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -2677,6 +2999,8 @@ class ContractRows {
 class ContractId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "contract-id-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-contract-id", raw });
     this.#value = raw;
@@ -2698,7 +3022,12 @@ class ContractId {
 class ContractParty {
   #value;
   constructor(value) {
-    this.#value = value;
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "contract-party-too-long", raw: value.length });
+    this.#value = value.replace(/[`*]/g, "").trim();
+  }
+  static parse(value) {
+    return parseConstruction(() => new ContractParty(value));
   }
   static of(raw) {
     return new ContractParty(raw);
@@ -2766,20 +3095,32 @@ class ContractRow {
 // src/refcheck/domain/contracts-table-outcome.ts
 class ContractsTableOutcome {
   #rows;
-  constructor(rows) {
+  #error;
+  constructor(rows, error) {
     this.#rows = rows;
+    this.#error = error;
   }
   static absent() {
-    return new ContractsTableOutcome(null);
+    return new ContractsTableOutcome(null, null);
   }
   static rows(rows) {
-    return new ContractsTableOutcome(rows);
+    return new ContractsTableOutcome(rows, null);
+  }
+  static unparseable(error) {
+    return new ContractsTableOutcome(null, error);
   }
   match(handlers) {
+    if (this.#error !== null)
+      return handlers.unparseable(this.#error);
     return this.#rows === null ? handlers.absent() : handlers.rows(this.#rows);
   }
   check(report, units, artifact, depArtifact) {
     return this.match({
+      unparseable: (error) => {
+        report.skip(CD_1, "unrecognized-format", error.asString());
+        report.skip(CD_3, "unrecognized-format", error.asString());
+        return null;
+      },
       absent: () => {
         if (units !== null)
           report.skip(CD_1, "unrecognized-format", "no markdown table with a Provider column found");
@@ -4048,6 +4389,8 @@ class DesignRecordId {
 class AllowedValue {
   #value;
   constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "allowed-value-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4102,6 +4445,8 @@ class AllowedValues {
 class AppliesTo {
   #value;
   constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "applies-to-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4134,7 +4479,12 @@ class AppliesTo {
 class AttributeDefault {
   #value;
   constructor(value) {
+    if (typeof value === "string" && value.length > 4096)
+      throw new IllegalArgumentException({ kind: "attribute-default-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new AttributeDefault(value));
   }
   static of(raw) {
     return new AttributeDefault(raw);
@@ -4165,6 +4515,8 @@ class AttributeDefault {
 class AttributeName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "attribute-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4220,6 +4572,8 @@ class AttributeNames {
 class BusinessRuleId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "business-rule-id-too-long", raw: raw.length });
     if (!/^BR[0-9]+\.[0-9]+$/.test(raw))
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4246,6 +4600,8 @@ var CARDINALITIES = new Set(["1:1", "1:N", "N:1", "N:M"]);
 class CardinalityNotation {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "cardinality-notation-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4273,6 +4629,8 @@ class CardinalityNotation {
 class MachineSpec {
   #value;
   constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "machine-spec-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4324,6 +4682,8 @@ class NumericBound {
 class ReferenceTarget {
   #value;
   constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "reference-target-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4354,6 +4714,8 @@ var CATEGORIES = new Set(["validation", "authorization", "constraint", "calculat
 class RuleCategory {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "rule-category-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4381,6 +4743,8 @@ class RuleCategory {
 class SourceId {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "source-id-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4427,6 +4791,8 @@ class SourceIds {
 class StateName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "state-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4475,6 +4841,8 @@ var BOOLISH = new Set(["bool", "boolean"]);
 class TypeName {
   #value;
   constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "type-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
@@ -4511,7 +4879,12 @@ class TypeName {
 class DeclaredRuleId {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "declared-rule-id-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredRuleId(value));
   }
   static of(value) {
     return new DeclaredRuleId(value);
@@ -4854,16 +5227,26 @@ function parseContractsTable(md) {
   const pCol = col(/provider/i);
   const cCol = col(/consumer/i);
   const oCol = col(/owner/i);
-  return ContractsTableOutcome.rows(ContractRows.of(contractsTable.rows.map((r, i) => {
-    const first = cleanCell(r.cells[0] ?? "");
-    return ContractRow.of({
-      id: ContractId.of(/^[0-9]+$/.test(first) ? first : String(i + 1)),
-      provider: ContractParty.of(cleanCell(r.cells[pCol] ?? "")),
-      consumer: ContractParty.of(cCol >= 0 ? cleanCell(r.cells[cCol] ?? "") : ""),
-      owner: ContractParty.of(oCol >= 0 ? cleanCell(r.cells[oCol] ?? "") : ""),
-      line: LineNumber.of(r.line)
+  const rows = [];
+  for (const [i, row] of contractsTable.rows.entries()) {
+    const first = ContractId.parse(row.cells[0] || String(i + 1));
+    if (!first.ok)
+      return ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(first.error)));
+    const token = cleanCell(first.value.asString());
+    const fields = combineResults({
+      provider: ContractParty.parse(row.cells[pCol] ?? ""),
+      consumer: ContractParty.parse(cCol >= 0 ? row.cells[cCol] ?? "" : ""),
+      owner: ContractParty.parse(oCol >= 0 ? row.cells[oCol] ?? "" : "")
     });
-  })));
+    if (!fields.ok)
+      return ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(fields.error)));
+    rows.push(ContractRow.of({
+      id: ContractId.of(/^[0-9]+$/.test(token) ? token : String(i + 1)),
+      ...fields.value,
+      line: LineNumber.of(row.line)
+    }));
+  }
+  return ContractsTableOutcome.rows(ContractRows.of(rows));
 }
 function assessSpecBlocks(md) {
   const blocks = extractFences(md, "yaml").map((fence, i) => {
@@ -4969,6 +5352,7 @@ function extractEntities(value) {
         const references = str2(pick(a, ["references", "reference", "ref"]));
         const fields = combineResults({
           name: AttributeName.parse(aname),
+          def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.parse(defRaw) : ok(null),
           type: type === null ? ok(null) : TypeName.parse(type),
           references: references === null ? ok(null) : ReferenceTarget.parse(references),
           allowed: allowed === null ? ok(null) : traverseResult(allowed, AllowedValue.parse),
@@ -4986,7 +5370,7 @@ function extractEntities(value) {
           uniqueIsTrue: pick(a, ["unique"]) === true,
           references: fields.value.references,
           allowed: fields.value.allowed === null ? null : AllowedValues.of(fields.value.allowed),
-          def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.of(defRaw) : null,
+          def: fields.value.def,
           minDeclared: minRaw !== null,
           maxDeclared: maxRaw !== null,
           min: fields.value.min,
@@ -5064,6 +5448,9 @@ function parseRulesDocument(md) {
     const id = str2(raw.id);
     const category = str2(raw.category);
     const appliesTo = str2(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
+    const parsedId = id === null ? ok(null) : DeclaredRuleId.parse(id);
+    if (!parsedId.ok)
+      missing.push("id");
     const parsedCategory = category === null ? ok(null) : RuleCategory.parse(category);
     const parsedAppliesTo = appliesTo === null ? ok(null) : AppliesTo.parse(appliesTo);
     if (!parsedCategory.ok)
@@ -5071,7 +5458,7 @@ function parseRulesDocument(md) {
     if (!parsedAppliesTo.ok)
       missing.push("applies_to");
     return RuleDecl.of({
-      id: id === null ? null : DeclaredRuleId.of(id),
+      id: parsedId.ok ? parsedId.value : null,
       element: ElementPath.of(element),
       category: parsedCategory.ok ? parsedCategory.value : null,
       appliesTo: parsedAppliesTo.ok ? parsedAppliesTo.value : null,

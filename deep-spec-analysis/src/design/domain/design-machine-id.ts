@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 import { TargetId } from "@deep-spec/kernel-domain";
@@ -5,7 +6,9 @@ import { TargetId } from "@deep-spec/kernel-domain";
 export class DesignMachineId {
   readonly #value: string;
 
+  /** 識別名・ID・バージョンの処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 128) throw new IllegalArgumentException({ kind: "design-machine-id-too-long", raw: raw.length });
     if (!/^SM-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-design-machine-id", raw });
     this.#value = raw;
   }
@@ -14,7 +17,7 @@ export class DesignMachineId {
     return new DesignMachineId(raw);
   }
 
-  static parse(raw: string): Result<DesignMachineId, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<DesignMachineId, ParseError> {
     return parseConstruction(() => new DesignMachineId(raw));
   }
 

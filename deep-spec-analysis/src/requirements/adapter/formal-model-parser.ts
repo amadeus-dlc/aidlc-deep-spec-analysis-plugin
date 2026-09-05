@@ -1,3 +1,5 @@
+import { EnumMember } from "@deep-spec/kernel-domain";
+import { decodeScenarioBindings } from "@deep-spec/kernel-adapter";
 import { RequirementId, IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
 
 // 契約1 IR（生 Json）→ Parameters<typeof RequirementsModel.of>[0] の寛容パース。欠損・型不一致の
@@ -12,7 +14,7 @@ import {
   AttributePath,
   AttributeValues,
   BackgroundAssumptionId,
-  FrRefs,
+  FunctionalRequirementReferences,
   ObligationId,
   ObligationNature,
   ScenarioId,
@@ -44,6 +46,7 @@ export function parseFormalModel(raw: Json): Result<Omit<Parameters<typeof Requi
       if (kind !== "bool" && kind !== "int" && kind !== "enum") continue;
       const parsed = combineResults({
         path: AttributePath.parse(`${ent.name}.${attr.name}`),
+        values: Array.isArray(t.values) ? traverseResult(strArr(t.values), EnumMember.parse) : ok(undefined),
         min: typeof t.min === "number" ? AttributeBound.parse(t.min) : ok(undefined),
         max: typeof t.max === "number" ? AttributeBound.parse(t.max) : ok(undefined),
       });
@@ -53,7 +56,7 @@ export function parseFormalModel(raw: Json): Result<Omit<Parameters<typeof Requi
         kind,
         min: parsed.value.min,
         max: parsed.value.max,
-        values: Array.isArray(t.values) ? AttributeValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
+        values: parsed.value.values === undefined ? undefined : AttributeValues.of(parsed.value.values),
       }));
     }
   }
@@ -62,14 +65,15 @@ export function parseFormalModel(raw: Json): Result<Omit<Parameters<typeof Requi
     if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
     const parsed = combineResults({
       id: ObligationId.parse(ob.id),
+        nature: ObligationNature.parse(ob.nature),
       frRefs: traverseResult(strArr(ob.frRefs), RequirementId.parse),
       trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined),
     });
     if (!parsed.ok) return err(JSON.stringify(parsed.error));
     obligations.push(Obligation.of({
       id: parsed.value.id,
-      nature: ObligationNature.of(ob.nature),
-      frRefs: FrRefs.of(parsed.value.frRefs),
+      nature: parsed.value.nature,
+      functionalRequirementReferences: FunctionalRequirementReferences.of(parsed.value.frRefs),
       ears: typeof ob.ears === "string" ? ob.ears : undefined,
       assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
       trigger: parsed.value.trigger,
@@ -83,12 +87,9 @@ export function parseFormalModel(raw: Json): Result<Omit<Parameters<typeof Requi
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const kind = sc.kind === "accept" || sc.kind === "reject" ? sc.kind : null;
     if (kind === null || !isObject(sc.bindings)) continue;
-    const bindings: Record<string, boolean | number | string> = {};
-    for (const [k, v] of Object.entries(sc.bindings)) {
-      if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
-    }
     const parsed = combineResults({
       id: ScenarioId.parse(sc.id),
+      bindings: decodeScenarioBindings(sc.bindings),
       frRefs: traverseResult(strArr(sc.frRefs), RequirementId.parse),
       trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined),
     });
@@ -96,8 +97,8 @@ export function parseFormalModel(raw: Json): Result<Omit<Parameters<typeof Requi
     scenarios.push(Scenario.of({
       id: parsed.value.id,
       kind,
-      frRefs: FrRefs.of(parsed.value.frRefs),
-      bindings,
+      functionalRequirementReferences: FunctionalRequirementReferences.of(parsed.value.frRefs),
+      bindings: parsed.value.bindings,
       event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },
       expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
     }));

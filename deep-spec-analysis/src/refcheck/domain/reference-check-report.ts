@@ -3,7 +3,7 @@ import {
   RequirementId,
   ContentHash,
   FindingKind,
-  FrRefs,
+  FunctionalRequirementReferences,
   TargetId,
   TargetIds,
   type FindingsSchema,
@@ -119,10 +119,10 @@ export class ReferenceCheckReport {
     // その family は checked から外れる。findings はカタログ順を保つ。
     // kind は検証済みの FindingKind——検査が自ら下す判定は正常生成経路であり、
     // 任意の string を受け取らない（FR3.2）。復元時も同じ契約が成立する。
-    finding(family: CheckFamily, kind: FindingKind, targets: string[], refs: WitnessRef[], detail: string, frRefs: string[] = []): void {
+    finding(family: CheckFamily, kind: FindingKind, targets: string[], refs: WitnessRef[], detail: string, functionalRequirementReferences: string[] = []): void {
       this.#findings = this.#findings.add(Finding.of({
         kind,
-        frRefs: FrRefs.of(Array.from(frRefs, (raw) => RequirementId.of(raw))).sortedUnique(),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(functionalRequirementReferences, (raw) => RequirementId.of(raw))).sortedUnique(),
         targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
         witness: { refs: WitnessRefs.of(refs) },
         detail: family.prefixedDetail(detail),
@@ -219,7 +219,7 @@ export class ReferenceCheckReport {
         });
         const out: { [k: string]: Json } = {
           kind: f.kind(),
-          frRefs: f.frRefs().toStrings() as unknown as Json,
+          frRefs: f.functionalRequirementReferences().toStrings() as unknown as Json,
           targets: f.targets().toStrings() as unknown as Json,
           witness: { refs },
           detail: f.detail(),

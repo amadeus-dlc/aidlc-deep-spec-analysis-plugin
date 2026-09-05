@@ -1,6 +1,6 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
-import type { FrRefs, TriggerName } from "@deep-spec/kernel-domain";
+import type { FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
 import { ObligationNature } from "@deep-spec/kernel-domain";
 // 義務（EARS nature 付き）。分類・event 完全性・式の役割は義務自身が所有し、
 // コンパイラは外部形式への射影だけを担う。
@@ -17,7 +17,7 @@ type TemporalExpressions = {
 export class Obligation {
   readonly #id: ObligationId;
   readonly #nature: ObligationNature;
-  readonly #frRefs: FrRefs;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #ears: string | undefined;
   readonly #assert: Expression | undefined;
   readonly #trigger: TriggerName | undefined;
@@ -28,7 +28,7 @@ export class Obligation {
   private constructor(props: Parameters<typeof Obligation.of>[0]) {
     this.#id = props.id;
     this.#nature = props.nature;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#ears = props.ears;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
@@ -45,7 +45,7 @@ export class Obligation {
   static of(props: {
     id: ObligationId;
     nature: ObligationNature;
-    frRefs: FrRefs;
+    functionalRequirementReferences: FunctionalRequirementReferences;
     ears?: string;
     assert?: Expression;
     trigger?: TriggerName;
@@ -58,7 +58,7 @@ export class Obligation {
 
   id(): ObligationId { return this.#id; }
   nature(): ObligationNature { return this.#nature; }
-  frRefs(): FrRefs { return this.#frRefs; }
+  functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
   ears(): string | undefined { return this.#ears; }
   assertion(): Expression | undefined { return this.#assert; }
   trigger(): TriggerName | undefined { return this.#trigger; }

@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
 // BrRef — 設計要素が指す業務規則 id（BR1.2 …）のドメインプリミティブ
 //（種別規律の裁定 3-1、2026-09-03）。並びは rules.md 側の凍結挙動どおり
@@ -6,7 +7,9 @@ import { type Result, IllegalArgumentException, parseConstruction } from "@deep-
 export class BrRef {
   readonly #value: string;
 
+  /** 識別名・ID・バージョンの処理予算。 単位はUTF-16コード単位。 */
   private constructor(value: string) {
+    if (value.length > 128) throw new IllegalArgumentException({ kind: "br-ref-too-long", raw: value.length });
     if (!/^BR[0-9]+\.[0-9]+$/.test(value)) throw new IllegalArgumentException({ kind: "malformed-business-rule-reference", raw: value });
     this.#value = value;
   }
@@ -15,7 +18,7 @@ export class BrRef {
     return new BrRef(raw);
   }
 
-  static parse(raw: string): Result<BrRef, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<BrRef, ParseError> {
     return parseConstruction(() => new BrRef(raw));
   }
 

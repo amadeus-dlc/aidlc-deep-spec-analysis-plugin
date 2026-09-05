@@ -1,4 +1,4 @@
-import { type FrRefs, FindingKind } from "@deep-spec/kernel-domain";
+import { type FunctionalRequirementReferences, FindingKind } from "@deep-spec/kernel-domain";
 import type { DesignWitness } from "./design-witness.ts";
 import type { LoweredId } from "./lowered-id.ts";
 
@@ -7,20 +7,20 @@ import type { LoweredId } from "./lowered-id.ts";
 // witness の core 形を finding 自身に書き換えさせる（#71 波23）。
 export class SiblingVerdictFinding {
   readonly #kind: FindingKind;
-  readonly #frRefs: FrRefs;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #targets: readonly LoweredId[];
   readonly #witness: DesignWitness;
   readonly #detail: string;
 
   private constructor(props: Parameters<typeof SiblingVerdictFinding.of>[0]) {
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#detail = props.detail;
   }
 
-  static of(props: { kind: FindingKind; frRefs: FrRefs; targets: readonly LoweredId[]; witness: DesignWitness; detail: string }): SiblingVerdictFinding {
+  static of(props: { kind: FindingKind; functionalRequirementReferences: FunctionalRequirementReferences; targets: readonly LoweredId[]; witness: DesignWitness; detail: string }): SiblingVerdictFinding {
     return new SiblingVerdictFinding(props);
   }
 
@@ -37,8 +37,8 @@ export class SiblingVerdictFinding {
     return parsed.ok && this.#kind.equals(parsed.value);
   }
 
-  frRefs(): FrRefs {
-    return this.#frRefs;
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
   }
 
   targets(): readonly LoweredId[] {

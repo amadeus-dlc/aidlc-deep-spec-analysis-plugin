@@ -1,6 +1,6 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
 import { type Expression, ObligationNature, TriggerName } from "@deep-spec/kernel-domain";
-import type { FrRefs } from "@deep-spec/kernel-domain";
+import type { FunctionalRequirementReferences } from "@deep-spec/kernel-domain";
 
 import type { LoweredId } from "./lowered-id.ts";
 
@@ -11,7 +11,7 @@ import type { LoweredId } from "./lowered-id.ts";
 export class LoweredObligation {
   readonly #id: LoweredId;
   readonly #nature: ObligationNature;
-  readonly #frRefs: FrRefs;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #assert: Expression | undefined;
   readonly #trigger: TriggerName | undefined;
   readonly #guard: Expression | undefined;
@@ -21,7 +21,7 @@ export class LoweredObligation {
   private constructor(props: Parameters<typeof LoweredObligation.of>[0]) {
     this.#id = props.id;
     this.#nature = ObligationNature.of(props.nature);
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger === undefined ? undefined : TriggerName.of(props.trigger);
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
@@ -37,7 +37,7 @@ export class LoweredObligation {
   static of(props: {
     id: LoweredId;
     nature: string;
-    frRefs: FrRefs;
+    functionalRequirementReferences: FunctionalRequirementReferences;
     assert?: Expression;
     trigger?: string;
     guard?: Expression;
@@ -55,8 +55,8 @@ export class LoweredObligation {
     return this.#nature.asString();
   }
 
-  frRefs(): FrRefs {
-    return this.#frRefs;
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
   }
 
   assertion(): Expression | undefined {

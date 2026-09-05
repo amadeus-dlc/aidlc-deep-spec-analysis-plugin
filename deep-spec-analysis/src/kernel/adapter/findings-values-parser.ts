@@ -1,5 +1,5 @@
 import {
-  ArtifactPath, BackendName, ContentHash, FindingKind, FrRefs, IrVersion,
+  ArtifactPath, BackendName, ContentHash, FindingKind, FunctionalRequirementReferences, IrVersion,
   RequirementId, SkipReason, TargetId, TargetIds, UnitName, VerificationMethod,
 } from "@deep-spec/kernel-domain";
 import { type Json, combineResults, traverseResult, err, ok } from "@deep-spec/kernel-infrastructure";
@@ -18,12 +18,12 @@ export function parseFindingsValues(raw: Json) {
     findings: traverseResult(doc.findings, (entry) => {
       const fields = combineResults({
         kind: FindingKind.parse(entry.kind),
-        frRefs: traverseResult(entry.frRefs, RequirementId.parse),
+        functionalRequirementReferences: traverseResult(entry.frRefs, RequirementId.parse),
         targets: traverseResult(entry.targets, TargetId.parse),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
       });
       if (!fields.ok) return fields;
-      return ok({ ...fields.value, frRefs: FrRefs.of(fields.value.frRefs), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
+      return ok({ ...fields.value, functionalRequirementReferences: FunctionalRequirementReferences.of(fields.value.functionalRequirementReferences), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
     }),
     skipped: traverseResult(doc.skipped, (entry) => {
       const fields = combineResults({

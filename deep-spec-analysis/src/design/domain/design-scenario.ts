@@ -1,5 +1,6 @@
+import type { ScenarioBindings } from "@deep-spec/kernel-domain";
 import { ExpressionTree } from "@deep-spec/kernel-domain";
-import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
+import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
 // 設計シナリオ。accept/reject の意味、binding の正準列挙、BR/FR 帰属を所有する。
 
 import { type BrRefs } from "./br-refs.ts";
@@ -11,8 +12,8 @@ export class DesignScenario {
   readonly #id: DesignScenarioId;
   readonly #kind: "accept" | "reject";
   readonly #brRefs: BrRefs;
-  readonly #frRefs: FrRefs;
-  readonly #bindings: Readonly<Record<string, boolean | number | string>>;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
+  readonly #bindings: ScenarioBindings;
   readonly #eventTrigger: TriggerName | undefined;
   readonly #expect: Expression | undefined;
 
@@ -20,8 +21,8 @@ export class DesignScenario {
     this.#id = props.id;
     this.#kind = props.kind;
     this.#brRefs = props.brRefs;
-    this.#frRefs = props.frRefs;
-    this.#bindings = { ...props.bindings };
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
     this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
@@ -30,8 +31,8 @@ export class DesignScenario {
     id: DesignScenarioId;
     kind: "accept" | "reject";
     brRefs: BrRefs;
-    frRefs: FrRefs;
-    bindings: Readonly<Record<string, boolean | number | string>>;
+    functionalRequirementReferences: FunctionalRequirementReferences;
+    bindings: ScenarioBindings;
     event?: { readonly trigger: TriggerName };
     expect?: Expression;
   }): DesignScenario {
@@ -41,7 +42,7 @@ export class DesignScenario {
   id(): DesignScenarioId { return this.#id; }
   kind(): "accept" | "reject" { return this.#kind; }
   brRefs(): BrRefs { return this.#brRefs; }
-  frRefs(): FrRefs { return this.#frRefs; }
+  functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
   eventTrigger(): TriggerName | undefined { return this.#eventTrigger; }
   expectation(): Expression | undefined { return this.#expect; }
   isAccept(): boolean { return this.#kind === "accept"; }
@@ -52,19 +53,16 @@ export class DesignScenario {
     return (this.isAccept() && !satisfiable) || (this.isReject() && satisfiable);
   }
 
-  bindingEntriesCanonically(): readonly (readonly [string, boolean | number | string])[] {
-    return Object.entries(this.#bindings).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  }
 
-  bindings(): Readonly<Record<string, boolean | number | string>> { return { ...this.#bindings }; }
+  bindings(): ScenarioBindings { return this.#bindings; }
 
   // 契約1 への lowering——任意部（イベント・期待式）の有無はシナリオ自身の知識。
   loweredAs(id: LoweredId): LoweredScenario {
     return LoweredScenario.of({
       id,
       kind: this.#kind,
-      frRefs: this.#frRefs,
-      bindings: { ...this.#bindings },
+      functionalRequirementReferences: this.#functionalRequirementReferences,
+      bindings: this.#bindings,
       ...(this.#eventTrigger !== undefined ? { event: { trigger: this.#eventTrigger.asString() } } : {}),
       ...(this.#expect !== undefined ? { expect: this.#expect } : {}),
     });

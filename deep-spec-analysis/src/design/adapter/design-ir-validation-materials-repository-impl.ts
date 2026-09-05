@@ -1,3 +1,6 @@
+import { InitialState } from "@deep-spec/design-domain";
+import { ErrorMessage } from "@deep-spec/kernel-domain";
+import { decodeDeclaredBindings } from "@deep-spec/kernel-adapter";
 import {
   extractFences,
   findRecordRoot,
@@ -22,7 +25,6 @@ import {
   DesignTransitionId,
   DesignTransitionDecl,
   DesignUnitId,
-  BindingPairs,
   BrRefs,
   DesignBackgroundDecls,
   DesignIgnoreDecls,
@@ -92,12 +94,13 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
     const parsed = combineResults({
       id: DesignObligationId.parse(ob.id),
+      origin: typeof ob.origin === "string" ? DesignObligationOrigin.parse(ob.origin) : ok(undefined),
       brRefs: brRefsOrUndefined(ob.brRefs ?? null),
     });
     if (!parsed.ok) return err(JSON.stringify(parsed.error));
     obligations.push(DesignObligationDecl.of({
       id: parsed.value.id,
-      origin: typeof ob.origin === "string" ? DesignObligationOrigin.of(ob.origin) : undefined,
+      origin: parsed.value.origin,
       brRefs: parsed.value.brRefs,
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
@@ -144,15 +147,18 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
       if (!trigger.ok) return err(JSON.stringify(trigger.error));
       ignores.push(DesignIgnoreDecl.of({ state: ig.state, trigger: trigger.value }));
     }
+    const states = traverseResult(initial, InitialState.parse);
+    if (!states.ok) return err(JSON.stringify(states.error));
     const id = DesignMachineId.parse(sm.id);
     if (!id.ok) return err(JSON.stringify(id.error));
-    stateMachines.push(DesignMachineDecl.of({ id: id.value, attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
+    stateMachines.push(DesignMachineDecl.of({ id: id.value, attrPath, initial: InitialStates.of(states.value), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
   }
 
   const scenarios: DesignScenarioDecl[] = [];
   for (const sc of Array.isArray(rawUnit.scenarios) ? rawUnit.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
-    const bindings = isObject(sc.bindings) ? sc.bindings : {};
+    const bindings = decodeDeclaredBindings(isObject(sc.bindings) ? sc.bindings : {});
+    if (!bindings.ok) return err(bindings.error);
     const parsed = combineResults({
       id: DesignScenarioId.parse(sc.id),
       brRefs: brRefsOrUndefined(sc.brRefs ?? null),
@@ -160,7 +166,7 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     if (!parsed.ok) return err(JSON.stringify(parsed.error));
     scenarios.push(DesignScenarioDecl.of({
       id: parsed.value.id,
-      bindings: BindingPairs.of(Object.entries(bindings)),
+      bindings: bindings.value,
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
       brRefs: parsed.value.brRefs,
@@ -282,7 +288,7 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
       DesignIrValidationMaterials.of({
         id,
         irVersion: irVersion.value,
-        schemaErrors: ErrorMessages.of(schemaErrors),
+        schemaErrors: ErrorMessages.of(schemaErrors.map((message) => ErrorMessage.of(message))),
         units: DesignUnitDecls.of(units),
         sourceDocument: new Uint8Array(bytes),
       }),

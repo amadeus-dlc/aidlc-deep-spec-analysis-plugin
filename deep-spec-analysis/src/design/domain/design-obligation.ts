@@ -1,5 +1,5 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
-import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
+import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
 // 設計義務。分類、rules 起源の参照要件、event 完全性、式の役割を所有する。
 
 import { type BrRefs } from "./br-refs.ts";
@@ -23,7 +23,7 @@ export class DesignObligation {
   readonly #nature: DesignObligationNature;
   readonly #origin: DesignObligationOrigin;
   readonly #brRefs: BrRefs;
-  readonly #frRefs: FrRefs;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #assert: Expression | undefined;
   readonly #trigger: TriggerName | undefined;
   readonly #guard: Expression | undefined;
@@ -35,7 +35,7 @@ export class DesignObligation {
     this.#nature = props.nature;
     this.#origin = props.origin;
     this.#brRefs = props.brRefs;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
@@ -53,7 +53,7 @@ export class DesignObligation {
     nature: DesignObligationNature;
     origin: DesignObligationOrigin;
     brRefs: BrRefs;
-    frRefs: FrRefs;
+    functionalRequirementReferences: FunctionalRequirementReferences;
     assert?: Expression;
     trigger?: TriggerName;
     guard?: Expression;
@@ -67,7 +67,7 @@ export class DesignObligation {
   nature(): DesignObligationNature { return this.#nature; }
   origin(): DesignObligationOrigin { return this.#origin; }
   brRefs(): BrRefs { return this.#brRefs; }
-  frRefs(): FrRefs { return this.#frRefs; }
+  functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
   assertion(): Expression | undefined { return this.#assert; }
   trigger(): TriggerName | undefined { return this.#trigger; }
   guard(): Expression | undefined { return this.#guard; }
@@ -90,7 +90,7 @@ export class DesignObligation {
   // 契約1 への素通し lowering——どの任意部を lowered 文書へ運ぶかは義務自身の
   // 知識（空の frRefs も帰属として運ぶ：v1 は不透明な文字列として扱う）。
   loweredAs(id: LoweredId): LoweredObligation {
-    const lowered: Parameters<typeof LoweredObligation.of>[0] = { id, nature: this.#nature.asString(), frRefs: this.#frRefs };
+    const lowered: Parameters<typeof LoweredObligation.of>[0] = { id, nature: this.#nature.asString(), functionalRequirementReferences: this.#functionalRequirementReferences };
     const temporal = this.temporal();
     if (this.#assert !== undefined) lowered.assert = this.#assert;
     if (this.#trigger !== undefined) lowered.trigger = this.#trigger.asString();

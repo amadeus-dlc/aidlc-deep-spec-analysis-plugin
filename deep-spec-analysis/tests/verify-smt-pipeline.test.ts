@@ -1,3 +1,5 @@
+import { EnumMember } from "@deep-spec/kernel-domain";
+import { scenarioBindings } from "./binding-fixtures.ts";
 import {
   VerificationMethod,
   SkipReason,
@@ -60,7 +62,7 @@ import {
   AttributeDeclaration,
   AttributeDeclarations,
   AttributeValues,
-  FrRefs,
+  FunctionalRequirementReferences,
   AttributeBound,
   AttributePath,
   BackgroundAssumptionId,
@@ -92,7 +94,7 @@ import { InMemoryVerificationDirectoryRepository } from "./doubles/in-memory-ver
 
 // 判定レコードは class（#71 波18）——期待値は平文へ射影して比較する（bun の toEqual は #private を見ない）。
 const plainFindings = (findings: Iterable<VerificationFinding>) =>
-  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.frRefs().toStrings(), targets: f.targets().toStrings(), witness: f.witness().toDocument(), detail: f.detail() }));
+  [...findings].map((f) => ({ kind: f.kind(), frRefs: f.functionalRequirementReferences().toStrings(), targets: f.targets().toStrings(), witness: f.witness().toDocument(), detail: f.detail() }));
 
 const pluginRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = join(pluginRoot, "tests", "fixtures", "conformance");
@@ -104,8 +106,8 @@ const sensorPath = join(pluginRoot, "tools", "aidlc-sensor-deep-spec-verify-smt.
 
 // テストの読みやすさのため素の配列で書き、ここで一括してコレクションに包む。
 type RawAttributeDeclaration = Omit<Parameters<typeof AttributeDeclaration.of>[0], "values"> & { values?: string[] };
-type RawObligation = Omit<Parameters<typeof Obligation.of>[0], "frRefs" | "trigger"> & { frRefs: string[]; trigger?: string };
-type RawScenario = Omit<Parameters<typeof Scenario.of>[0], "frRefs"> & { frRefs: string[] };
+type RawObligation = Omit<Parameters<typeof Obligation.of>[0], "functionalRequirementReferences" | "trigger"> & { frRefs: string[]; trigger?: string };
+type RawScenario = Omit<Parameters<typeof Scenario.of>[0], "functionalRequirementReferences"> & { frRefs: string[] };
 function model(seed: {
   irVersion?: IrVersion;
   attributes?: RawAttributeDeclaration[];
@@ -119,10 +121,10 @@ function model(seed: {
     sourceDocument: new Uint8Array(),
     irVersion: seed.irVersion ?? IrVersion.of("1.0.0"),
     attributes: AttributeDeclarations.of(
-      (seed.attributes ?? []).map((a) => AttributeDeclaration.of({ ...a, values: a.values === undefined ? undefined : AttributeValues.of(a.values) })),
+      (seed.attributes ?? []).map((a) => AttributeDeclaration.of({ ...a, values: a.values === undefined ? undefined : AttributeValues.of((a.values).map((value) => EnumMember.of(value))) })),
     ),
-    obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.of({ ...o, frRefs: FrRefs.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))), trigger: o.trigger === undefined ? undefined : TriggerName.of(o.trigger) }))),
-    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.of({ ...s, frRefs: FrRefs.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))) }))),
+    obligations: Obligations.of((seed.obligations ?? []).map((o) => Obligation.of({ ...o, functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))), trigger: o.trigger === undefined ? undefined : TriggerName.of(o.trigger) }))),
+    scenarios: Scenarios.of((seed.scenarios ?? []).map((s) => Scenario.of({ ...s, functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))) }))),
     background: BackgroundAssumptions.of(seed.background ?? []),
   });
 }
@@ -238,7 +240,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const m = model({
       irVersion: IrVersion.of("2.0.0"),
       obligations: [{ id: ObligationId.of("OB-1"), nature: ObligationNature.of("invariant"), frRefs: ["FR-1"] }],
-      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
+      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: scenarioBindings({}) }],
     });
     const outcome = new VerifyRequirementsSmtUseCase(
       formalModels(ok(m)),
@@ -286,7 +288,7 @@ describe("the verify-smt interactor over the InMemory double", () => {
     const reports = new InMemoryVerificationDirectoryRepository();
     const m = model({
       obligations: [{ id: ObligationId.of("OB-1"), nature: ObligationNature.of("invariant"), frRefs: ["FR-1"] }],
-      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: {} }],
+      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "reject", frRefs: ["FR-2"], bindings: scenarioBindings({}) }],
     });
     const plan = SmtVerificationPlan.of({
       ...EMPTY_PLAN,
@@ -327,8 +329,8 @@ describe("smt verdict interpretation", () => {
       { id: ObligationId.of("OB-4"), nature: ObligationNature.of("event"), frRefs: ["FR-4"] },
     ],
     scenarios: [
-      { id: ScenarioId.of("SC-1"), kind: "accept", frRefs: ["FR-1"], bindings: {} },
-      { id: ScenarioId.of("SC-2"), kind: "reject", frRefs: ["FR-2"], bindings: {} },
+      { id: ScenarioId.of("SC-1"), kind: "accept", frRefs: ["FR-1"], bindings: scenarioBindings({}) },
+      { id: ScenarioId.of("SC-2"), kind: "reject", frRefs: ["FR-2"], bindings: scenarioBindings({}) },
     ],
   });
   const plan = SmtVerificationPlan.of({
@@ -477,8 +479,8 @@ describe("smt verdict interpretation", () => {
 describe("cross-check computation", () => {
   const m = model({
     scenarios: [
-      { id: ScenarioId.of("SC-1"), kind: "accept", frRefs: ["FR-2", "FR-1"], bindings: {} },
-      { id: ScenarioId.of("SC-2"), kind: "reject", frRefs: [], bindings: {} },
+      { id: ScenarioId.of("SC-1"), kind: "accept", frRefs: ["FR-2", "FR-1"], bindings: scenarioBindings({}) },
+      { id: ScenarioId.of("SC-2"), kind: "reject", frRefs: [], bindings: scenarioBindings({}) },
     ],
   });
   const id = VerificationReportId.of(ap("/tmp/verify"), "cross-check");
@@ -495,7 +497,7 @@ describe("cross-check computation", () => {
       method: VerificationMethod.of("exhaustive"),
       findings: VerificationFindings.of((input.violated ?? []).map((t): VerificationFinding => (VerificationFinding.of({
         kind: FindingKind.of("scenario-violation"),
-        frRefs: FrRefs.of([]),
+        functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         targets: TargetIds.of(Array.from([t], (raw) => TargetId.of(raw))),
         witness: VerificationWitness.core([]),
         detail: "x",
@@ -559,7 +561,7 @@ describe("degradation reports and ordering", () => {
     const m = model({
       irVersion: IrVersion.of("3.1.4"),
       obligations: [{ id: ObligationId.of("OB-2"), nature: ObligationNature.of("invariant"), frRefs: [] }],
-      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: {} }],
+      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: [], bindings: scenarioBindings({}) }],
     });
     expect(m.supportsMajor(1)).toBe(false);
     expect(m.majorVersion()).toBe(3);
@@ -579,7 +581,7 @@ describe("degradation reports and ordering", () => {
   test("finding order: kind rank, then joined targets, then detail; invalid kinds are rejected", () => {
     const f = (kind: string, targets: string[], detail: string): VerificationFinding => (VerificationFinding.of({
       kind: FindingKind.of(kind),
-      frRefs: FrRefs.of([]),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))),
       witness: VerificationWitness.core([]),
       detail,
@@ -622,8 +624,8 @@ describe("degradation reports and ordering", () => {
       irHash: ContentHash.ofText("h"),
       method: "exhaustive",
       findings: VerificationFindings.of([
-        VerificationFinding.of({ kind: FindingKind.of("scenario-violation"), frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["SC-1"], (raw) => TargetId.of(raw))), witness: VerificationWitness.core([]), detail: "b" }),
-        VerificationFinding.of({ kind: FindingKind.of("conflict"), frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: VerificationWitness.core([]), detail: "a" }),
+        VerificationFinding.of({ kind: FindingKind.of("scenario-violation"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIds.of(Array.from(["SC-1"], (raw) => TargetId.of(raw))), witness: VerificationWitness.core([]), detail: "b" }),
+        VerificationFinding.of({ kind: FindingKind.of("conflict"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: VerificationWitness.core([]), detail: "a" }),
       ]),
       skipped: VerificationSkips.of([VerificationSkipped.of({ target: TargetId.of("OB-2"), reason: SkipReason.of("timeout")}), VerificationSkipped.of({ target: TargetId.of("OB-1"), reason: SkipReason.of("capability")})]),
     });
@@ -669,12 +671,12 @@ describe("degradation reports and ordering", () => {
         { id: ObligationId.of("OB-2"), nature: ObligationNature.of("invariant"), frRefs: ["FR-2"] },
         { id: ObligationId.of("OB-1"), nature: ObligationNature.of("event"), frRefs: ["FR-1", "FR-2"] },
       ],
-      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: ["FR-2"], bindings: {} }],
+      scenarios: [{ id: ScenarioId.of("SC-1"), kind: "accept", frRefs: ["FR-2"], bindings: scenarioBindings({}) }],
       background: [BackgroundAssumption.of({ id: BackgroundAssumptionId.of("BG-1"), assert: { op: "bool", value: true } })],
     });
     expect(m.allTargets().toStrings()).toEqual(["OB-1", "OB-2", "SC-1"]);
-    expect(m.frRefsOf(TargetIds.of(Array.from(["OB-1", "SC-1"], (raw) => TargetId.of(raw)))).toStrings()).toEqual(["FR-1", "FR-2"]);
-    expect(m.frRefsOf(TargetIds.of(Array.from(["OB-999"], (raw) => TargetId.of(raw)))).toArray()).toEqual([]);
+    expect(m.functionalRequirementReferencesOf(TargetIds.of(Array.from(["OB-1", "SC-1"], (raw) => TargetId.of(raw)))).toStrings()).toEqual(["FR-1", "FR-2"]);
+    expect(m.functionalRequirementReferencesOf(TargetIds.of(Array.from(["OB-999"], (raw) => TargetId.of(raw)))).toArray()).toEqual([]);
     expect(m.attributeAt("Ticket.priority")?.maxBound()?.asNumber()).toBe(3);
     expect(m.attributeAt("Ticket.priority")?.minBound()?.asNumber()).toBe(0);
     expect(m.attributeAt("Ticket.priority")?.isInt()).toBe(true);

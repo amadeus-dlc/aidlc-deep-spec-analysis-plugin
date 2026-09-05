@@ -1,4 +1,6 @@
-import { UnitName, RequirementId, FrRefs, IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
+import { InitialState } from "@deep-spec/design-domain";
+import { decodeScenarioBindings } from "@deep-spec/kernel-adapter";
+import { UnitName, RequirementId, FunctionalRequirementReferences, IrVersion, type Expression, TriggerName } from "@deep-spec/kernel-domain";
 import {
   BrRef,
   BrRefs,
@@ -57,6 +59,8 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
       const parsed = combineResults({
         id: DesignObligationId.parse(ob.id),
+        origin: DesignObligationOrigin.parse(typeof ob.origin === "string" ? ob.origin : ""),
+        nature: DesignObligationNature.parse(ob.nature),
         brRefs: traverseResult(strArr(ob.brRefs), BrRef.parse),
         frRefs: traverseResult(strArr(ob.frRefs), RequirementId.parse),
         trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined),
@@ -64,10 +68,10 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
       if (!parsed.ok) return err(JSON.stringify(parsed.error));
       obligations.push(DesignObligation.of({
         id: parsed.value.id,
-        nature: DesignObligationNature.of(ob.nature),
-        origin: DesignObligationOrigin.of(typeof ob.origin === "string" ? ob.origin : ""),
+        nature: parsed.value.nature,
+        origin: parsed.value.origin,
         brRefs: BrRefs.of(parsed.value.brRefs),
-        frRefs: FrRefs.of(parsed.value.frRefs),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(parsed.value.frRefs),
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
         trigger: parsed.value.trigger,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
@@ -107,6 +111,7 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
       }
       const parsed = combineResults({
         id: DesignMachineId.parse(sm.id),
+        initial: traverseResult(strArr(sm.initial), InitialState.parse),
         entity: DesignEntityName.parse(sm.entity),
         attribute: DesignAttributeName.parse(sm.attribute),
       });
@@ -116,7 +121,7 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
           id: parsed.value.id,
           entity: parsed.value.entity,
           attribute: parsed.value.attribute,
-          initial: InitialStates.of(strArr(sm.initial)),
+          initial: InitialStates.of(parsed.value.initial),
           transitions: DesignTransitions.of(transitions),
           ignores: DesignIgnores.of(ignores),
           deterministic: sm.deterministic !== false,
@@ -128,12 +133,9 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
       if (!isObject(sc) || typeof sc.id !== "string") continue;
       const kind = sc.kind === "accept" || sc.kind === "reject" ? sc.kind : null;
       if (kind === null || !isObject(sc.bindings)) continue;
-      const bindings: Record<string, boolean | number | string> = {};
-      for (const [k, v] of Object.entries(sc.bindings)) {
-        if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
-      }
       const parsed = combineResults({
         id: DesignScenarioId.parse(sc.id),
+      bindings: decodeScenarioBindings(sc.bindings),
         brRefs: traverseResult(strArr(sc.brRefs), BrRef.parse),
         frRefs: traverseResult(strArr(sc.frRefs), RequirementId.parse),
         trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined),
@@ -143,8 +145,8 @@ export function parseDesignModel(raw: Json): Result<Omit<Parameters<typeof Desig
         id: parsed.value.id,
         kind,
         brRefs: BrRefs.of(parsed.value.brRefs),
-        frRefs: FrRefs.of(parsed.value.frRefs),
-        bindings,
+        functionalRequirementReferences: FunctionalRequirementReferences.of(parsed.value.frRefs),
+        bindings: parsed.value.bindings,
         event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },
         expect: isObject(sc.expect) ? (sc.expect as unknown as Expression) : undefined,
       }));

@@ -18,3 +18,4 @@ export { DirectoryFinalizationLock } from "./directory-finalization-lock.ts";
 export { type DirectoryFinalizationLockOutcome } from "./directory-finalization-lock-outcome.ts";
 export { smtVar, smtName, smtLit, smtIntOf } from "./smt-symbols.ts";
 export { parseFindingsValues } from "./findings-values-parser.ts";
+export { decodeDeclaredBindings, decodeScenarioBindings } from "./bindings-decoder.ts";

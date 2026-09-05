@@ -1,3 +1,6 @@
+import { AttributeKind } from "@deep-spec/kernel-domain";
+import { InitialState } from "@deep-spec/design-domain";
+import { scenarioBindings } from "./binding-fixtures.ts";
 import {
   VerificationMethod,
   RequirementId,
@@ -5,7 +8,7 @@ import {
   SkipReason,
   FindingKind,
   TriggerName,
-  FrRefs,
+  FunctionalRequirementReferences,
   TargetId,
   TargetIds,
   ContentHash,
@@ -216,7 +219,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
 
 // テストの読みやすさのため素の配列・素の文字列で書き、ここで一括して DP と
 // コレクションに包む。
-type RawDesignObligation = Omit<Parameters<typeof DesignObligation.of>[0], "id" | "nature" | "origin" | "brRefs" | "frRefs" | "trigger"> & {
+type RawDesignObligation = Omit<Parameters<typeof DesignObligation.of>[0], "id" | "nature" | "origin" | "brRefs" | "functionalRequirementReferences" | "trigger"> & {
   id: string;
   nature: string;
   origin: string;
@@ -235,7 +238,7 @@ type RawDesignMachine = Omit<Parameters<typeof DesignMachine.of>[0], "id" | "ent
   transitions: RawDesignTransition[];
   ignores: RawDesignIgnore[];
 };
-type RawDesignScenario = Omit<Parameters<typeof DesignScenario.of>[0], "id" | "brRefs" | "frRefs" | "event"> & {
+type RawDesignScenario = Omit<Parameters<typeof DesignScenario.of>[0], "id" | "brRefs" | "functionalRequirementReferences" | "event"> & {
   id: string;
   brRefs: string[];
   frRefs: string[];
@@ -260,7 +263,7 @@ function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDecls {
   for (const [entity, attrs] of extra) {
     declared = declared.add(DesignEntityDecl.of({
       name: DesignEntityName.of(entity),
-      attributes: DesignAttributeDecls.of(attrs.map((a) => DesignAttributeDecl.of({ name: DesignAttributeName.of(a), kind: "" }))),
+      attributes: DesignAttributeDecls.of(attrs.map((a) => DesignAttributeDecl.of({ name: DesignAttributeName.of(a), kind: AttributeKind.of("") }))),
     }));
   }
   return declared;
@@ -285,7 +288,7 @@ function unit(seed: {
         nature: DesignObligationNature.of(o.nature),
         origin: DesignObligationOrigin.of(o.origin),
         brRefs: BrRefs.of(Array.from(o.brRefs, (raw) => BrRef.of(raw))),
-        frRefs: FrRefs.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(o.frRefs, (raw) => RequirementId.of(raw))),
         trigger: o.trigger === undefined ? undefined : TriggerName.of(o.trigger),
       })),
     ),
@@ -296,7 +299,7 @@ function unit(seed: {
           id: DesignMachineId.of(m.id),
           entity: DesignEntityName.of(m.entity),
           attribute: DesignAttributeName.of(m.attribute),
-          initial: InitialStates.of(m.initial),
+          initial: InitialStates.of((m.initial).map((value) => InitialState.of(value))),
           transitions: DesignTransitions.of(
             m.transitions.map((t) => DesignTransition.of({ ...t, id: DesignTransitionId.of(t.id), brRefs: BrRefs.of(Array.from(t.brRefs, (raw) => BrRef.of(raw))), trigger: TriggerName.of(t.trigger) })),
           ),
@@ -309,7 +312,7 @@ function unit(seed: {
         ...s,
         id: DesignScenarioId.of(s.id),
         brRefs: BrRefs.of(Array.from(s.brRefs, (raw) => BrRef.of(raw))),
-        frRefs: FrRefs.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))),
+        functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(s.frRefs, (raw) => RequirementId.of(raw))),
         event: s.event === undefined ? undefined : { trigger: TriggerName.of(s.event.trigger) },
       })),
     ),
@@ -361,7 +364,7 @@ describe("lowering (typed compile-down)", () => {
       },
     ],
     scenarios: [
-      { id: "DSC-1", kind: "accept", brRefs: [], frRefs: ["FR-2"], bindings: { "Ticket.status": "open" } },
+      { id: "DSC-1", kind: "accept", brRefs: [], frRefs: ["FR-2"], bindings: scenarioBindings({ "Ticket.status": "open" }) },
     ],
     background: [{ id: "DBG-1", assert: { op: "bool", value: true } }],
   });
@@ -426,8 +429,8 @@ describe("lowering (typed compile-down)", () => {
         { id: "SM-1", entity: "T", attribute: "a", initial: [], deterministic: true, ignores: [], transitions: [] },
       ],
       scenarios: [
-        { id: "DSC-2", kind: "reject", brRefs: [], frRefs: [], bindings: {} },
-        { id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} },
+        { id: "DSC-2", kind: "reject", brRefs: [], frRefs: [], bindings: scenarioBindings({}) },
+        { id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: scenarioBindings({}) },
       ],
       background: [
         { id: "DBG-2", assert: { op: "bool", value: true } },
@@ -486,7 +489,7 @@ describe("remap (design vocabulary attribution)", () => {
         ],
       },
     ],
-    scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} }],
+    scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: scenarioBindings({}) }],
   });
   const low = u.lowered({ synthetics: true });
   const doc = (input: {
@@ -495,7 +498,7 @@ describe("remap (design vocabulary attribution)", () => {
   }): SiblingVerdictDocument =>
     SiblingVerdictDocument.readable( VerificationMethod.of("exhaustive"),
       SiblingVerdictFindings.of(
-        (input.findings ?? []).map((f) => SiblingVerdictFinding.of({ ...f, kind: FindingKind.of(f.kind), witness: DesignWitness.of(f.witness), frRefs: FrRefs.of(Array.from(f.frRefs, (raw) => RequirementId.of(raw))), targets: f.targets.map((t) => LoweredId.of(t)) })),
+        (input.findings ?? []).map((f) => SiblingVerdictFinding.of({ ...f, kind: FindingKind.of(f.kind), witness: DesignWitness.of(f.witness), functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(f.frRefs, (raw) => RequirementId.of(raw))), targets: f.targets.map((t) => LoweredId.of(t)) })),
       ),
       SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.of({ ...k, reason: SkipReason.of(k.reason), target: LoweredId.of(k.target) }))),
     );
@@ -577,7 +580,7 @@ describe("report ordering, cross-check, and degradations", () => {
   const f = (kind: string, unitName: string, targets: string[], detail: string): DesignFinding =>
     DesignFinding.of({
       kind: FindingKind.of(kind),
-      frRefs: FrRefs.of([]),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))),
       witness: DesignWitness.core([]),
       unit: UnitName.of(unitName),
@@ -669,7 +672,7 @@ describe("report ordering, cross-check, and degradations", () => {
   });
 
   test("cross-check compares per (unit, scenario), honors skips, and freezes the design wording", () => {
-    const u1 = unit({ scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: ["FR-2", "FR-1"], bindings: {} }] });
+    const u1 = unit({ scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: ["FR-2", "FR-1"], bindings: scenarioBindings({}) }] });
     const m = model([u1]);
     const HASH = ContentHash.of("a".repeat(64));
     const sibling = (backend: string, violated: boolean, skipKey?: string): DesignReport =>
@@ -691,7 +694,7 @@ describe("report ordering, cross-check, and degradations", () => {
     ]).crossChecked(DesignReportId.of(ap("/v"), "cross-check"), m, HASH);
     const disagreement = report.findings().toArray()[0];
     expect(disagreement?.kind()).toBe("cross-check-disagreement");
-    expect(disagreement?.frRefs().toStrings()).toEqual(["FR-1", "FR-2"]);
+    expect(disagreement?.functionalRequirementReferences().toStrings()).toEqual(["FR-1", "FR-2"]);
     expect(disagreement?.targets().toStrings()).toEqual(["DSC-1"]);
     expect(disagreement?.witness().toDocument()).toEqual({ verdicts: { quint: "violated", smt: "clean" } });
     expect(disagreement?.unit()).toBe("u1");
@@ -714,7 +717,7 @@ describe("report ordering, cross-check, and degradations", () => {
     const u1 = unit({
       obligations: [{ id: "DOB-1", nature: "invariant", origin: "", brRefs: [], frRefs: [] }],
       machines: [{ id: "SM-1", entity: "T", attribute: "s", initial: [], deterministic: true, ignores: [], transitions: [{ id: "TR-1", from: "a", to: "b", trigger: "go", brRefs: [] }] }],
-      scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} }],
+      scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: scenarioBindings({}) }],
     });
     const m = model([u1], "2.0.0");
     expect(m.supportsMajor(1)).toBe(false);
@@ -774,12 +777,12 @@ describe("lowered collections and the lowering index (first-class operations)", 
   const base = u.lowered({ synthetics: false });
 
   test("of/add/iterator/count/toArray hold OB/SC/BG numbering order", () => {
-    const obs = base.obligations().add(LoweredObligation.of({ id: LoweredId.of("OB-99"), nature: "invariant", frRefs: FrRefs.of([]) }));
+    const obs = base.obligations().add(LoweredObligation.of({ id: LoweredId.of("OB-99"), nature: "invariant", functionalRequirementReferences: FunctionalRequirementReferences.of([]) }));
     expect(obs.count()).toBe(base.obligations().count() + 1);
     expect([...obs].at(-1)?.id().asString()).toBe("OB-99");
     expect(obs.toArray().at(-1)?.nature()).toBe("invariant");
 
-    const scs = base.scenarios().add(LoweredScenario.of({ id: LoweredId.of("SC-99"), kind: "accept", frRefs: FrRefs.of([]), bindings: {} }));
+    const scs = base.scenarios().add(LoweredScenario.of({ id: LoweredId.of("SC-99"), kind: "accept", functionalRequirementReferences: FunctionalRequirementReferences.of([]), bindings: scenarioBindings({}) }));
     expect(scs.count()).toBe(base.scenarios().count() + 1);
     expect([...scs].at(-1)?.id().asString()).toBe("SC-99");
     expect(scs.toArray().at(-1)?.kind()).toBe("accept");
@@ -804,7 +807,7 @@ describe("lowered collections and the lowering index (first-class operations)", 
   });
 
   test("sibling verdict collections keep document order under add", () => {
-    const finding = SiblingVerdictFinding.of({ kind: FindingKind.of("conflict"), frRefs: FrRefs.of([]), targets: [LoweredId.of("OB-1")], witness: DesignWitness.core([]), detail: "x" });
+    const finding = SiblingVerdictFinding.of({ kind: FindingKind.of("conflict"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: [LoweredId.of("OB-1")], witness: DesignWitness.core([]), detail: "x" });
     const findings = SiblingVerdictFindings.of([]).add(finding);
     expect([...findings]).toEqual([finding]);
     expect(findings.toArray()).toEqual([finding]);
@@ -920,8 +923,8 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
       },
     ],
     scenarios: [
-      { id: "DSC-2", kind: "reject", brRefs: [], frRefs: ["FR-3"], bindings: { "Order.amount": 3, "Order.phase": "new" }, event: { trigger: "ship" }, expect: { op: "bool", value: false } },
-      { id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} },
+      { id: "DSC-2", kind: "reject", brRefs: [], frRefs: ["FR-3"], bindings: scenarioBindings({ "Order.amount": 3, "Order.phase": "new" }), event: { trigger: "ship" }, expect: { op: "bool", value: false } },
+      { id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: scenarioBindings({}) },
     ],
     background: [
       { id: "DBG-2", assert: { op: "bool", value: false } },
@@ -938,7 +941,7 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
   }): SiblingVerdictDocument =>
     SiblingVerdictDocument.readable( VerificationMethod.of("exhaustive"),
       SiblingVerdictFindings.of(
-        (input.findings ?? []).map((f) => SiblingVerdictFinding.of({ ...f, kind: FindingKind.of(f.kind), witness: DesignWitness.of(f.witness), frRefs: FrRefs.of(Array.from(f.frRefs, (raw) => RequirementId.of(raw))), targets: f.targets.map((t) => LoweredId.of(t)) })),
+        (input.findings ?? []).map((f) => SiblingVerdictFinding.of({ ...f, kind: FindingKind.of(f.kind), witness: DesignWitness.of(f.witness), functionalRequirementReferences: FunctionalRequirementReferences.of(Array.from(f.frRefs, (raw) => RequirementId.of(raw))), targets: f.targets.map((t) => LoweredId.of(t)) })),
       ),
       SiblingVerdictSkips.of((input.skipped ?? []).map((k: { target: string; reason: string; detail?: string }) => SiblingVerdictSkip.of({ ...k, reason: SkipReason.of(k.reason), target: LoweredId.of(k.target) }))),
     );
@@ -957,7 +960,7 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
       method: out.method,
       findings: out.findings.toArray().map((f) => ({
         kind: f.kind(),
-        frRefs: f.frRefs().toStrings() as unknown as Json,
+        frRefs: f.functionalRequirementReferences().toStrings() as unknown as Json,
         targets: f.targets().toStrings() as unknown as Json,
         unit: f.unit(),
         detail: f.detail(),

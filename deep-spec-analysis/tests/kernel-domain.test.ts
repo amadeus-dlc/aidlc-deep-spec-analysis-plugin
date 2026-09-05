@@ -16,7 +16,7 @@ import {
 // ir-valid の errors[]・契約2 の unavailable.reason として golden バイトに
 // 現れるため、文言は「含む」ではなく完全一致で固定する。
 
-import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FrRefs, NormalizedName, KeyedIndex, KeySet, RequirementId, QueryLabel, AttributeKind, VerificationMethod, FindingKind } from "@deep-spec/kernel-domain";
+import { AttributeBound, ContentHash, RequirementIds, TargetId, TargetIds, FunctionalRequirementReferences, NormalizedName, KeyedIndex, KeySet, RequirementId, QueryLabel, AttributeKind, VerificationMethod, FindingKind } from "@deep-spec/kernel-domain";
 import { describe, expect, test } from "bun:test";
 import { extractFences, parseMarkdownTables, parseYamlSubset } from "@deep-spec/kernel-adapter";
 import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec/kernel-adapter";
@@ -88,7 +88,7 @@ describe("canonical id order (owned by the id value object, ruling 1)", () => {
 
   test("the collections deduplicate then sort canonically", () => {
     expect(TargetIds.of(Array.from(["OB-10", "OB-2", "OB-2"], (raw) => TargetId.of(raw))).sortedUniqueCanonically().toStrings()).toEqual(["OB-2", "OB-10"]);
-    expect(FrRefs.of(Array.from(["FR-10", "FR-2", "FR-2"], (raw) => RequirementId.of(raw))).sortedUnique().toStrings()).toEqual(["FR-2", "FR-10"]);
+    expect(FunctionalRequirementReferences.of(Array.from(["FR-10", "FR-2", "FR-2"], (raw) => RequirementId.of(raw))).sortedUnique().toStrings()).toEqual(["FR-2", "FR-10"]);
   });
 });
 

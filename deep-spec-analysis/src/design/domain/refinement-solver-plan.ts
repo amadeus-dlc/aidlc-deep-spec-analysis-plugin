@@ -1,4 +1,4 @@
-import { UnitName, TargetId, FindingKind, FrRefs, TargetIds, KeyedIndex, QueryLabel, SkipReason } from "@deep-spec/kernel-domain";
+import { UnitName, TargetId, FindingKind, FunctionalRequirementReferences, TargetIds, KeyedIndex, QueryLabel, SkipReason } from "@deep-spec/kernel-domain";
 
 // refinement ソルバ実行の型付き判定と計画（対応表）。SMT-LIB スクリプト・z3 の生
 // 表現はアダプタ（第 2 コンパイラ＋クライアント）が持ち、ドメインへは
@@ -55,7 +55,7 @@ export class RefinementSolverPlan {
   } {
     const findings: DesignFinding[] = [];
     const skipped: DesignSkipped[] = [];
-    const frOf = (reqId: string): FrRefs => req.frRefsOf(reqId).sortedUnique();
+    const frOf = (reqId: string): FunctionalRequirementReferences => req.functionalRequirementReferencesOf(reqId).sortedUnique();
 
     for (const [queryId, p] of this.#pending) {
       const r = results.verdictOf(queryId);
@@ -75,7 +75,7 @@ export class RefinementSolverPlan {
             findings.push(
               DesignFinding.of({
                 kind: FindingKind.refinementViolation(),
-                frRefs: frOf(reqId.asString()),
+                functionalRequirementReferences: frOf(reqId.asString()),
                 targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.model(r.witnessModel()),
                 unit: UnitName.of(unitName),
@@ -90,7 +90,7 @@ export class RefinementSolverPlan {
             findings.push(
               DesignFinding.of({
                 kind: FindingKind.refinementViolation(),
-                frRefs: frOf(reqId.asString()),
+                functionalRequirementReferences: frOf(reqId.asString()),
                 targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.core(r.sortedCore()),
                 unit: UnitName.of(unitName),
@@ -102,7 +102,7 @@ export class RefinementSolverPlan {
             findings.push(
               DesignFinding.of({
                 kind: FindingKind.refinementViolation(),
-                frRefs: frOf(reqId.asString()),
+                functionalRequirementReferences: frOf(reqId.asString()),
                 targets: TargetIds.of(Array.from([reqId.asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.model(r.witnessModel()),
                 unit: UnitName.of(unitName),
@@ -116,7 +116,7 @@ export class RefinementSolverPlan {
             findings.push(
               DesignFinding.of({
                 kind: FindingKind.completenessGap(),
-                frRefs: frOf(reqId.asString()),
+                functionalRequirementReferences: frOf(reqId.asString()),
                 targets: TargetIds.of(Array.from([reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())], (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
                 witness: DesignWitness.model(r.witnessModel()),
                 unit: UnitName.of(unitName),
@@ -130,7 +130,7 @@ export class RefinementSolverPlan {
             findings.push(
               DesignFinding.of({
                 kind: FindingKind.refinementViolation(),
-                frRefs: frOf(reqId.asString()),
+                functionalRequirementReferences: frOf(reqId.asString()),
                 // simulation probe の designId は構築時に必須——旧 `?? ""` +空除去は
                 // designId 未設定の防御で、必須化により恒等（挙動保存）。
                 targets: TargetIds.of(Array.from([reqId.asString(), designId.asString()].filter((t) => t !== ""), (raw) => TargetId.of(raw))).sortedUniqueCanonically(),

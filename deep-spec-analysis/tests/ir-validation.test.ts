@@ -1,3 +1,8 @@
+import { AttributeKind } from "@deep-spec/kernel-domain";
+import { ErrorMessage } from "@deep-spec/kernel-domain";
+import { InitialState } from "@deep-spec/design-domain";
+import { EnumMember } from "@deep-spec/kernel-domain";
+import { AttributePath, BindingDeclaration, DeclaredBindings, DeclaredBindingValue } from "@deep-spec/kernel-domain";
 import type { Json } from "@deep-spec/kernel-infrastructure";
 import {
   DeclaredDigest,
@@ -28,7 +33,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DesignIrValidationMaterialsRepositoryImpl, DesignModelRepositoryImpl } from "@deep-spec/design-adapter";
-import { BindingPairs, BrReferenceIndex, BrRefs, DeclaredValues, DesignBackgroundDecl, DesignAttributeDecl, DesignAttributeDecls, DesignBackgroundDecls, DesignEntityDecl, DesignEntityDecls, DesignIgnoreDecl, DesignIgnoreDecls, DesignMachineDecl, DesignMachineDecls, DesignModelId, DesignObligationDecl, DesignObligationDecls, DesignScenarioDecl, DesignScenarioDecls, DesignTransitionDecl, DesignTransitionDecls, DesignUnitDecl, DesignUnitDecls, InitialStates, UnformalizedTargets, DesignUnitId, DesignTransitionId, DesignScenarioId, DesignObligationOrigin, DesignObligationId, DesignMachineId, DesignEntityName, DesignBackgroundId, DesignAttributeName, DesignIrValidationMaterialsId, BrRef } from "@deep-spec/design-domain";
+import { BrReferenceIndex, BrRefs, DeclaredValues, DesignBackgroundDecl, DesignAttributeDecl, DesignAttributeDecls, DesignBackgroundDecls, DesignEntityDecl, DesignEntityDecls, DesignIgnoreDecl, DesignIgnoreDecls, DesignMachineDecl, DesignMachineDecls, DesignModelId, DesignObligationDecl, DesignObligationDecls, DesignScenarioDecl, DesignScenarioDecls, DesignTransitionDecl, DesignTransitionDecls, DesignUnitDecl, DesignUnitDecls, InitialStates, UnformalizedTargets, DesignUnitId, DesignTransitionId, DesignScenarioId, DesignObligationOrigin, DesignObligationId, DesignMachineId, DesignEntityName, DesignBackgroundId, DesignAttributeName, DesignIrValidationMaterialsId, BrRef } from "@deep-spec/design-domain";
 import { ValidateDesignIrUseCase, type ValidateDesignIrOutcome } from "@deep-spec/design-usecase";
 import {
   FormalModelRepositoryImpl,
@@ -37,15 +42,15 @@ import {
 } from "@deep-spec/requirements-adapter";
 import {
   FormalModelId,
-  FrReferenceIndex,
-  FrRefs,
+  FunctionalRequirementReferenceIndex,
+  FunctionalRequirementReferences,
   IrBackgroundDecl,
   IrObligationDecl,
   IrScenarioDecl,
   IrAttributeDecl,
   IrAttributeDecls,
   IrBackgroundDecls,
-  IrBindingPairs,
+
   IrDeclaredValues,
   IrEntityDecls,
   IrModelDecl,
@@ -59,8 +64,8 @@ import {
   IrAttributeName,
   BackgroundAssumptionId,
   IrValidationMaterialsId,
-  FrRefClaims,
-  FrRefClaim,
+  FunctionalRequirementReferenceClaims,
+  FunctionalRequirementReferenceClaim,
   IrEntityDecl,
   IrTemporalDecl,
 } from "@deep-spec/requirements-domain";
@@ -303,12 +308,12 @@ describe("ValidateDesignIrUseCase reproduces the design-ir-valid sensor byte-for
   });
 });
 
-describe("FrReferenceIndex", () => {
+describe("FunctionalRequirementReferenceIndex", () => {
   test("collects owners per frRef and reports the missing ones sorted", () => {
-    const index = FrReferenceIndex.of([
-      FrRefClaim.of("OB-2", FrRefs.of(Array.from(["FR-1", "FR-9"], (raw) => RequirementId.of(raw)))),
-      FrRefClaim.of("OB-1", FrRefs.of(Array.from(["FR-9"], (raw) => RequirementId.of(raw)))),
-      FrRefClaim.of("scenarios[3]", FrRefs.of([])),
+    const index = FunctionalRequirementReferenceIndex.of([
+      FunctionalRequirementReferenceClaim.of("OB-2", FunctionalRequirementReferences.of(Array.from(["FR-1", "FR-9"], (raw) => RequirementId.of(raw)))),
+      FunctionalRequirementReferenceClaim.of("OB-1", FunctionalRequirementReferences.of(Array.from(["FR-9"], (raw) => RequirementId.of(raw)))),
+      FunctionalRequirementReferenceClaim.of("scenarios[3]", FunctionalRequirementReferences.of([])),
     ]);
     expect(index.referencedIds().sort()).toEqual(["FR-1", "FR-9"]);
     expect(index.missingErrors(RequirementIds.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))))).toEqual([
@@ -387,10 +392,11 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
           attributes: IrAttributeDecls.of(
             e.attributes.map((a) => IrAttributeDecl.of({
               ...a,
+              kind: AttributeKind.of(a.kind),
               name: IrAttributeName.of(a.name),
               min: a.min === undefined ? undefined : DeclaredBound.of(a.min),
               max: a.max === undefined ? undefined : DeclaredBound.of(a.max),
-              values: a.values === undefined ? undefined : IrDeclaredValues.of(a.values),
+              values: a.values === undefined ? undefined : IrDeclaredValues.of((a.values).map((value) => EnumMember.of(value))),
             })),
           ),
         })),
@@ -399,7 +405,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
         (overrides.obligations ?? []).map((ob) => IrObligationDecl.of({ ...ob, id: ObligationId.of(ob.id), temporal: ob.temporal === undefined ? undefined : IrTemporalDecl.of(ob.temporal) })),
       ),
       scenarios: IrScenarioDecls.of(
-        (overrides.scenarios ?? []).map((sc) => IrScenarioDecl.of({ ...sc, id: ScenarioId.of(sc.id), bindings: IrBindingPairs.of(sc.bindings) })),
+        (overrides.scenarios ?? []).map((sc) => IrScenarioDecl.of({ ...sc, id: ScenarioId.of(sc.id), bindings: DeclaredBindings.of(sc.bindings.map(([path, value]) => BindingDeclaration.of(AttributePath.of(path), DeclaredBindingValue.of(value)))) })),
       ),
       background: IrBackgroundDecls.of(
         (overrides.background ?? []).map((bg) => IrBackgroundDecl.of({ ...bg, id: BackgroundAssumptionId.of(bg.id) })),
@@ -592,10 +598,11 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
           attributes: DesignAttributeDecls.of(
             e.attributes.map((a) => DesignAttributeDecl.of({
               ...a,
+              kind: AttributeKind.of(a.kind),
               name: DesignAttributeName.of(a.name),
               min: a.min === undefined ? undefined : DeclaredBound.of(a.min),
               max: a.max === undefined ? undefined : DeclaredBound.of(a.max),
-              values: a.values === undefined ? undefined : DeclaredValues.of(a.values),
+              values: a.values === undefined ? undefined : DeclaredValues.of((a.values).map((value) => EnumMember.of(value))),
             })),
           ),
         })),
@@ -612,7 +619,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
         (overrides.stateMachines ?? []).map((sm) => DesignMachineDecl.of({
           ...sm,
           id: DesignMachineId.of(sm.id),
-          initial: InitialStates.of(sm.initial),
+          initial: InitialStates.of((sm.initial).map((value) => InitialState.of(value))),
           transitions: DesignTransitionDecls.of(
             sm.transitions.map((tr) => DesignTransitionDecl.of({
               ...tr,
@@ -625,7 +632,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
         })),
       ),
       scenarios: DesignScenarioDecls.of(
-        (overrides.scenarios ?? []).map((sc) => DesignScenarioDecl.of({ ...sc, id: DesignScenarioId.of(sc.id), bindings: BindingPairs.of(sc.bindings), brRefs: brRefs(sc.brRefs) })),
+        (overrides.scenarios ?? []).map((sc) => DesignScenarioDecl.of({ ...sc, id: DesignScenarioId.of(sc.id), bindings: DeclaredBindings.of(sc.bindings.map(([path, value]) => BindingDeclaration.of(AttributePath.of(path), DeclaredBindingValue.of(value)))), brRefs: brRefs(sc.brRefs) })),
       ),
       background: DesignBackgroundDecls.of(
         (overrides.background ?? []).map((bg) => DesignBackgroundDecl.of({ ...bg, id: DesignBackgroundId.of(bg.id) })),
@@ -856,19 +863,19 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
 
 describe("design decl collections (first-class operations)", () => {
   test("of/add/iterator/toArray hold insertion order across the decl bundle", () => {
-    const values = DeclaredValues.of(["a"]).add("b");
-    expect([...values]).toEqual(["a", "b"]);
+    const values = DeclaredValues.of((["a"]).map((value) => EnumMember.of(value))).add(EnumMember.of("b"));
+    expect([...values].map((value) => value.asString())).toEqual(["a", "b"]);
     expect(values.includes("b")).toBe(true);
     expect(values.includes("c")).toBe(false);
-    expect(values.toArray()).toEqual(["a", "b"]);
+    expect(values.toArray().map((value) => value.asString())).toEqual(["a", "b"]);
 
     const refs = BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))).add(BrRef.of("BR1.2"));
     expect([...refs].map((r) => r.asString())).toEqual(["BR1.1", "BR1.2"]);
     expect(refs.toStrings()).toEqual(["BR1.1", "BR1.2"]);
 
-    const initial = InitialStates.of(["open"]).add("closed");
-    expect([...initial]).toEqual(["open", "closed"]);
-    expect(initial.toArray()).toEqual(["open", "closed"]);
+    const initial = InitialStates.of((["open"]).map((value) => InitialState.of(value))).add(InitialState.of("closed"));
+    expect([...initial].map((value) => value.asString())).toEqual(["open", "closed"]);
+    expect(initial.toArray().map((value) => value.asString())).toEqual(["open", "closed"]);
 
     const unformalized = UnformalizedTargets.of(Array.from(["BR2.1"], (raw) => TargetId.of(raw))).add(TargetId.of("BR2.2"));
     expect([...unformalized].map((t) => t.asString())).toEqual(["BR2.1", "BR2.2"]);
@@ -876,14 +883,14 @@ describe("design decl collections (first-class operations)", () => {
     expect(unformalized.covers(TargetId.of("BR9.9"))).toBe(false);
     expect(unformalized.toStrings()).toEqual(["BR2.1", "BR2.2"]);
 
-    const bindings = BindingPairs.of([["t.flag", true]]).add(["t.n", 1]);
-    expect([...bindings]).toEqual([
+    const bindings = DeclaredBindings.of([BindingDeclaration.of(AttributePath.of("t.flag"), DeclaredBindingValue.of(true))]).add(BindingDeclaration.of(AttributePath.of("t.n"), DeclaredBindingValue.of(1)));
+    expect([...bindings].map((binding) => [binding.path().asString(), JSON.parse(binding.value().describe())])).toEqual([
       ["t.flag", true],
       ["t.n", 1],
     ]);
     expect(bindings.toArray().length).toBe(2);
 
-    const attr = DesignAttributeDecl.of({ name: DesignAttributeName.of("state"), kind: "enum", values: DeclaredValues.of(["open"]) });
+    const attr = DesignAttributeDecl.of({ name: DesignAttributeName.of("state"), kind: AttributeKind.of("enum"), values: DeclaredValues.of((["open"]).map((value) => EnumMember.of(value))) });
     const attrs = DesignAttributeDecls.of([]).add(attr);
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
@@ -942,13 +949,13 @@ describe("design decl collections (first-class operations)", () => {
 
 describe("contract-1 decl collections (first-class operations)", () => {
   test("of/add/iterator/toArray hold declaration order across the Ir bundle", () => {
-    const values = IrDeclaredValues.of(["a"]).add("b");
-    expect([...values]).toEqual(["a", "b"]);
+    const values = IrDeclaredValues.of((["a"]).map((value) => EnumMember.of(value))).add(EnumMember.of("b"));
+    expect([...values].map((value) => value.asString())).toEqual(["a", "b"]);
     expect(values.includes("b")).toBe(true);
     expect(values.includes("z")).toBe(false);
-    expect(values.toArray()).toEqual(["a", "b"]);
+    expect(values.toArray().map((value) => value.asString())).toEqual(["a", "b"]);
 
-    const attr = IrAttributeDecl.of({ name: IrAttributeName.of("x"), kind: "bool" });
+    const attr = IrAttributeDecl.of({ name: IrAttributeName.of("x"), kind: AttributeKind.of("bool") });
     const attrs = IrAttributeDecls.of([]).add(attr);
     expect([...attrs]).toEqual([attr]);
     expect(attrs.toArray()).toEqual([attr]);
@@ -963,8 +970,8 @@ describe("contract-1 decl collections (first-class operations)", () => {
     expect([...obs]).toEqual([ob]);
     expect(obs.toArray()).toEqual([ob]);
 
-    const pairs = IrBindingPairs.of([["t.x", true]]).add(["t.y", 1]);
-    expect([...pairs]).toEqual([
+    const pairs = DeclaredBindings.of([BindingDeclaration.of(AttributePath.of("t.x"), DeclaredBindingValue.of(true))]).add(BindingDeclaration.of(AttributePath.of("t.y"), DeclaredBindingValue.of(1)));
+    expect([...pairs].map((binding) => [binding.path().asString(), JSON.parse(binding.value().describe())])).toEqual([
       ["t.x", true],
       ["t.y", 1],
     ]);
@@ -1005,11 +1012,11 @@ describe("decl name primitives and the shared bound (issue #46 wave 5c-2)", () =
 
 describe("materials aggregates and the persistence round-trip (repository ruling)", () => {
   test("ErrorMessages first-class collection", () => {
-    const msgs = ErrorMessages.of(["a"]).add("b");
-    expect([...msgs]).toEqual(["a", "b"]);
+    const msgs = ErrorMessages.of((["a"]).map((value) => ErrorMessage.of(value))).add(ErrorMessage.of("b"));
+    expect([...msgs].map((value) => value.asString())).toEqual(["a", "b"]);
     expect(msgs.isEmpty()).toBe(false);
     expect(ErrorMessages.of([]).isEmpty()).toBe(true);
-    expect(msgs.toArray()).toEqual(["a", "b"]);
+    expect(msgs.toArray().map((value) => value.asString())).toEqual(["a", "b"]);
   });
 
   test("IrValidationMaterialsId / DesignIrValidationMaterialsId anchor 1:1 to the model id", () => {
@@ -1058,10 +1065,10 @@ describe("materials aggregates and the persistence round-trip (repository ruling
     rmSync(record, { recursive: true, force: true });
   });
 
-  test("FrRefClaims first-class collection feeds the reverse index", () => {
-    const claims = FrRefClaims.of([]).add(FrRefClaim.of("OB-1", FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw)))));
+  test("FunctionalRequirementReferenceClaims first-class collection feeds the reverse index", () => {
+    const claims = FunctionalRequirementReferenceClaims.of([]).add(FunctionalRequirementReferenceClaim.of("OB-1", FunctionalRequirementReferences.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw)))));
     expect([...claims].length).toBe(1);
-    const owners = new Map<string, FrRefClaim[]>();
+    const owners = new Map<string, FunctionalRequirementReferenceClaim[]>();
     claims.toArray()[0]?.claimInto(owners);
     expect([...owners].map(([id, list]) => [id, list.map((claim) => claim.ownerDescription())])).toEqual([["FR-1", ["OB-1"]]]);
   });

@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 // unmapped[].target の宣言トークン——要件属性パス・義務 id・シナリオ id の
@@ -5,7 +6,9 @@ import { IllegalArgumentException, parseConstruction, type Result } from "@deep-
 export class UnmappedTargetRef {
   readonly #value: string;
 
+  /** 属性パスまたは対象IDを収める宣言参照の上限。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 1024) throw new IllegalArgumentException({ kind: "unmapped-target-ref-too-long", raw: raw.length });
     if (raw === "") throw new IllegalArgumentException({ kind: "empty-refinement-map-token", raw });
     this.#value = raw;
   }
@@ -14,7 +17,7 @@ export class UnmappedTargetRef {
     return new UnmappedTargetRef(raw);
   }
 
-  static parse(raw: string): Result<UnmappedTargetRef, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<UnmappedTargetRef, ParseError> {
     return parseConstruction(() => new UnmappedTargetRef(raw));
   }
 

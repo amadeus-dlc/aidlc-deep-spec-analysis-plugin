@@ -139,7 +139,7 @@ export function decodeSolverModel(
         //（凍結解除 #34 項 4。読めない生値はそのまま生値）。
         const m = raw.match(/^\(-\s*(\d+)\)$/);
         out[attr.path().asString()] = m ? `-${m[1]}` : raw;
-      } else if (attr.isEnum() && attr.declaredValues()) out[attr.path().asString()] = attr.declaredValues()?.valueAt(n) ?? n;
+      } else if (attr.isEnum() && attr.declaredValues()) out[attr.path().asString()] = attr.declaredValues()?.valueAt(n)?.asString() ?? n;
       else out[attr.path().asString()] = n;
     }
   }
@@ -358,16 +358,27 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
     try {
       const name = smtName("sc", sc.id().asString());
       const parts: string[] = [];
-      for (const [path, value] of sc.bindingEntriesCanonically()) {
+      for (const binding of sc.bindings().entriesCanonically()) {
+        const path = binding.path().asString();
+        const value = binding.value();
         const attr = model.attributeAt(path);
         if (!attr) throw new CompileError(`binding references unknown attribute "${path}"`);
         const v = smtVar(path, false);
-        if (attr.isBool()) parts.push(`(= ${v} ${value === true})`);
-        else if (attr.isInt()) {
-          const n = typeof value === "number" ? value : Number.NaN;
-          if (!Number.isInteger(n)) throw new CompileError(`binding for int attribute "${path}" is not an integer`);
-          parts.push(`(= ${v} ${smtLit(n)})`);
-        } else parts.push(`(= ${v} ${enumCode(model, path, String(value))})`);
+        const literal = value.match({
+          bool: (b) => {
+            if (!attr.isBool()) throw new CompileError(`binding type does not fit attribute "${path}"`);
+            return String(b);
+          },
+          int: (n) => {
+            if (!attr.isInt()) throw new CompileError(`binding type does not fit attribute "${path}"`);
+            return smtLit(n);
+          },
+          enum: (s) => {
+            if (attr.isBool() || attr.isInt()) throw new CompileError(`binding type does not fit attribute "${path}"`);
+            return String(enumCode(model, path, s));
+          },
+        });
+        parts.push(`(= ${v} ${literal})`);
       }
       const conj = parts.length === 1 ? (parts[0] ?? "true") : `(and ${parts.join(" ")})`;
       const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${conj}))`].join("\n");

@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 export class BlockIndex {
@@ -12,7 +13,7 @@ export class BlockIndex {
     return new BlockIndex(raw);
   }
 
-  static parse(raw: number): Result<BlockIndex, IllegalArgumentException["problem"]> {
+  static parse(raw: number): Result<BlockIndex, ParseError> {
     return parseConstruction(() => new BlockIndex(raw));
   }
 

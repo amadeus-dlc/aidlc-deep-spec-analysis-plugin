@@ -1,6 +1,7 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // int 属性の有界境界（Quint バックエンドの有限領域要件）。要件 IR と
-// 設計 IR の decl 束が共有する語彙のため kernel に置く（FrRefs と同じ扱い）。
+// 設計 IR の decl 束が共有する語彙のため kernel に置く（FunctionalRequirementReferences と同じ扱い）。
 
 export class AttributeBound {
   readonly #value: number;
@@ -16,7 +17,7 @@ export class AttributeBound {
     return new AttributeBound(raw);
   }
 
-  static parse(raw: number): Result<AttributeBound, IllegalArgumentException["problem"]> {
+  static parse(raw: number): Result<AttributeBound, ParseError> {
     return parseConstruction(() => new AttributeBound(raw));
   }
 

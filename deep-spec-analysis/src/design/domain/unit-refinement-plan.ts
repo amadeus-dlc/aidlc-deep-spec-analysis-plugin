@@ -4,7 +4,7 @@ import {
   KeyedIndex,
   AttributePath,
   FindingKind,
-  FrRefs,
+  FunctionalRequirementReferences,
   TargetIds,
   TargetId,
   SkipReason,
@@ -65,11 +65,11 @@ export class UnitRefinementPlan {
   // 旧 planUnitRefinement の逐語移植（構築ファクトリ）。
   static of(u: DesignUnit, unitMap: RefinementUnitMap, req: RefinementRequirements, mapArtifact: ArtifactPath): UnitRefinementPlan {
     const gaps: DesignFinding[] = [];
-    const gap = (targets: string[], detail: string, frRefs: FrRefs = FrRefs.of([])): void => {
+    const gap = (targets: string[], detail: string, functionalRequirementReferences: FunctionalRequirementReferences = FunctionalRequirementReferences.of([])): void => {
       gaps.push(
         DesignFinding.of({
           kind: FindingKind.mappingGap(),
-          frRefs: frRefs.sortedUnique(),
+          functionalRequirementReferences: functionalRequirementReferences.sortedUnique(),
           targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
           witness: DesignWitness.refs([{ artifact: mapArtifact.asString(), element: `units[${unitMap.unit().asString()}]` }]),
           unit: UnitName.of(u.name()),
@@ -96,7 +96,7 @@ export class UnitRefinementPlan {
         if (!reqAttr.isEnum()) {
           gap(gapTarget, `attrMap entry "${reqPath}" uses enumMap but the requirements attribute is ${reqAttr.kind()}`);
         }
-        if (!u.attrPaths().has(from)) {
+        if (!u.attrPaths().has(AttributePath.of(from))) {
           gap(gapTarget, `enumMap.from "${from}" is not a design attribute of unit ${u.name()}`);
           continue;
         }
@@ -115,7 +115,7 @@ export class UnitRefinementPlan {
         }
       } else if (m.isExpression()) {
         for (const r of m.referencedPaths()) {
-          if (!u.attrPaths().has(r)) {
+          if (!u.attrPaths().has(AttributePath.of(r))) {
             gap(gapTarget, `attrMap expression for "${reqPath}" references "${r}", which is not a design attribute of unit ${u.name()}`);
           }
         }
@@ -208,7 +208,7 @@ export class UnitRefinementPlan {
         scenarioStatus.set(sc.id().asString(), RefinementStatus.capability("event scenarios are not replayed in v1"));
         continue;
       }
-      const missing = Object.keys(sc.bindings())
+      const missing = sc.bindings().entriesCanonically().map((binding) => binding.path().asString())
         .filter((p) => !byReq.has(p))
         .sort();
       if (missing.length === 0) scenarioStatus.set(sc.id().asString(), RefinementStatus.checkable());
@@ -223,13 +223,13 @@ export class UnitRefinementPlan {
     for (const [id, st] of [...obligationStatus.entries()].sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])))) {
       const gapDetail = st.gapDetail();
         if (gapDetail !== null) {
-        gap([id], `${id}: ${gapDetail}`, req.obligationById(id)?.frRefs() ?? FrRefs.of([]));
+        gap([id], `${id}: ${gapDetail}`, req.obligationById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
       }
     }
     for (const [id, st] of [...scenarioStatus.entries()].sort((a, b) => TargetId.of(a[0]).compareTo(TargetId.of(b[0])))) {
       const gapDetail = st.gapDetail();
         if (gapDetail !== null) {
-        gap([id], `${id}: ${gapDetail}`, req.scenarioById(id)?.frRefs() ?? FrRefs.of([]));
+        gap([id], `${id}: ${gapDetail}`, req.scenarioById(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]));
       }
     }
 
@@ -329,7 +329,7 @@ export class UnitRefinementPlan {
       if (!ob.isInvariantLike() || assertion === undefined) continue;
       const substituted = this.#mappings.substitute(assertion, false);
       // 欠陥は quintStatusSkips が compile-error skip として記録する（SMT 側と対）。
-      if (substituted.ok) out.push(RefinementQuintInvariant.of(ob.id(), ob.frRefs(), substituted.value));
+      if (substituted.ok) out.push(RefinementQuintInvariant.of(ob.id(), ob.functionalRequirementReferences(), substituted.value));
     }
     return RefinementQuintInvariants.of(out);
   }

@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 // findings 文書の finding.kind。閉集合11種と正準順位を所有する。
@@ -23,7 +24,9 @@ const KIND_RANK: { readonly [k: string]: number } = {
 export class FindingKind {
   readonly #value: string;
 
+  /** 閉集合で最長の cross-check-disagreement の文字数。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 24) throw new IllegalArgumentException({ kind: "finding-kind-too-long", raw: raw.length });
     if (!Object.hasOwn(KIND_RANK, raw)) throw new IllegalArgumentException({ kind: "unknown-finding-kind", raw });
     this.#value = raw;
   }
@@ -32,7 +35,7 @@ export class FindingKind {
     return new FindingKind(raw);
   }
 
-  static parse(raw: string): Result<FindingKind, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<FindingKind, ParseError> {
     return parseConstruction(() => new FindingKind(raw));
   }
 

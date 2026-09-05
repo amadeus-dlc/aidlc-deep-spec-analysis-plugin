@@ -2,7 +2,7 @@ import {
   TargetId,
   UnitName,
   FindingKind,
-  FrRefs,
+  FunctionalRequirementReferences,
   SkipReason,
   TargetIds,
   VerificationMethod,
@@ -179,7 +179,7 @@ export class VerifyDesignQuintUseCase {
             notReachedWithinBound: () => {
               findings.push(DesignFinding.of({
                 kind: FindingKind.unreachable(),
-                frRefs: FrRefs.of([]),
+                functionalRequirementReferences: FunctionalRequirementReferences.of([]),
                 targets: TargetIds.of(Array.from([sm.id().asString()], (raw) => TargetId.of(raw))),
                 witness: DesignWitness.model({ [attrPath]: state }),
                 unit: UnitName.of(u.name()),

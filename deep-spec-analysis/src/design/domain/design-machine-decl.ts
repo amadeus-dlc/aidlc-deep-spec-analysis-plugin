@@ -49,6 +49,6 @@ export class DesignMachineDecl {
 
   // 初期状態のうち状態集合に属さないもの（宣言順——文言の発生順を決める凍結面）。
   initialStatesOutside(states: DeclaredValues): string[] {
-    return [...this.#initial].filter((state) => !states.includes(state));
+    return [...this.#initial].filter((state) => !states.includes(state.asString())).map((state) => state.asString());
   }
 }

@@ -1,8 +1,8 @@
-import { TargetId, type IrVersion, FrRefs, TargetIds, RequirementId, AttributePath, type ContentHash } from "@deep-spec/kernel-domain";
+import { TargetId, type IrVersion, FunctionalRequirementReferences, TargetIds, RequirementId, AttributePath, type ContentHash } from "@deep-spec/kernel-domain";
 
 // RequirementsModel 集約 — 検証済み要件の形式モデル（契約1）のドメイン表現。
 // 生 Json からの寛容な解体（欠損エントリの黙殺）はアダプタのパーサの責務で、
-// ここは型付き部品を組む。クエリ（allTargets / frRefsOf / attributeAt /
+// ここは型付き部品を組む。クエリ（allTargets / functionalRequirementReferencesOf / attributeAt /
 // supportsMajor）は旧センサーの自由関数群を集約メソッドへ移したもの。
 // 配列を生で運ばない：部品はファーストクラスコレクションで受け取り・返す。
 
@@ -105,14 +105,14 @@ export class RequirementsModel {
   }
 
   // 対象 id 列が指す義務・シナリオの FR 参照（一意・正準順）。
-  frRefsOf(targets: TargetIds): FrRefs {
+  functionalRequirementReferencesOf(targets: TargetIds): FunctionalRequirementReferences {
     const refs: RequirementId[] = [];
     for (const t of targets) {
       const ob = this.#obligations.byId(t.asString());
-      if (ob) refs.push(...ob.frRefs());
+      if (ob) refs.push(...ob.functionalRequirementReferences());
       const sc = this.#scenarios.byId(t.asString());
-      if (sc) refs.push(...sc.frRefs());
+      if (sc) refs.push(...sc.functionalRequirementReferences());
     }
-    return FrRefs.of(refs).sortedUnique();
+    return FunctionalRequirementReferences.of(refs).sortedUnique();
   }
 }

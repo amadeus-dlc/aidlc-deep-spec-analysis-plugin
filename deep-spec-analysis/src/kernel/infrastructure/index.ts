@@ -12,5 +12,7 @@ export { type Schema, validateSchema } from "./schema.ts";
 export { canonicalStringify } from "./canonical-json.ts";
 export { IllegalArgumentException } from "./illegal-argument-exception.ts";
 export { parseConstruction } from "./parse-construction.ts";
+export { type ParseError } from "./parse-error.ts";
 export { compareCanonically, sortedUniqueCanonically } from "./canonical-order.ts";
 export { combineResults, traverseResult } from "./result-composition.ts";
+export { assertValueSize } from "./value-size.ts";

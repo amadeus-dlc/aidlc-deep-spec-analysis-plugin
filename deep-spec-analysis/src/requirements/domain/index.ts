@@ -4,8 +4,8 @@ export { AttributeDeclaration, AttributeBound } from "./attribute-declaration.ts
 export { AttributeDeclarations } from "./attribute-declarations.ts";
 export { AttributePath } from "@deep-spec/kernel-domain";
 export { AttributeValues } from "./attribute-values.ts";
-// FrRefs は kernel 所有の共有語彙（requirements の facade からも見える）。
-export { FrRefs } from "@deep-spec/kernel-domain";
+// FunctionalRequirementReferences は kernel 所有の共有語彙（requirements の facade からも見える）。
+export { FunctionalRequirementReferences } from "@deep-spec/kernel-domain";
 export { Obligation } from "./obligation.ts";
 export { ObligationId } from "./obligation-id.ts";
 export { ObligationIds } from "./obligation-ids.ts";
@@ -50,7 +50,6 @@ export { IrAttributeDecls } from "./ir-attribute-decls.ts";
 export { IrAttributeName } from "./ir-attribute-name.ts";
 export { IrBackgroundDecl } from "./ir-background-decl.ts";
 export { IrBackgroundDecls } from "./ir-background-decls.ts";
-export { IrBindingPairs } from "./ir-binding-pairs.ts";
 export { IrDeclaredValues } from "./ir-declared-values.ts";
 export { IrEntityDecl } from "./ir-entity-decl.ts";
 export { IrEntityDecls } from "./ir-entity-decls.ts";
@@ -60,9 +59,9 @@ export { IrObligationDecls } from "./ir-obligation-decls.ts";
 export { IrScenarioDecl } from "./ir-scenario-decl.ts";
 export { IrScenarioDecls } from "./ir-scenario-decls.ts";
 export { IrTemporalDecl } from "./ir-temporal-decl.ts";
-export { FrReferenceIndex } from "./fr-reference-index.ts";
-export { FrRefClaim } from "./fr-ref-claim.ts";
-export { FrRefClaims } from "./fr-ref-claims.ts";
+export { FunctionalRequirementReferenceIndex } from "./functional-requirement-reference-index.ts";
+export { FunctionalRequirementReferenceClaim } from "./functional-requirement-reference-claim.ts";
+export { FunctionalRequirementReferenceClaims } from "./functional-requirement-reference-claims.ts";
 export { SourceAnchor } from "./source-anchor.ts";
 export { RequirementsSourceId } from "./requirements-source-id.ts";
 export { FormalModelId } from "./formal-model-id.ts";

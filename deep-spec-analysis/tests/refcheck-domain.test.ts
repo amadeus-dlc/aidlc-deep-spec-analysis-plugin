@@ -1,4 +1,4 @@
-import { SkipReason, FindingKind, ContentHash, FrRefs, TargetId, TargetIds, RequirementId } from "@deep-spec/kernel-domain";
+import { SkipReason, FindingKind, ContentHash, FunctionalRequirementReferences, TargetId, TargetIds, RequirementId } from "@deep-spec/kernel-domain";
 
 // refcheck/domain の単体テスト（DDD 移行 PR2a、issue #15）。
 // カタログ順序は golden バイトを決める凍結挙動——順位・タイブレークを固定する。
@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { CATALOG_VERSION, Finding, Skipped, Findings, InputAnchors, Skips, WitnessRefs, UnitDecl, InputAnchor, WitnessRef, ComponentName, AllowedValue, AppliesTo, AttributeDefault, AttributeName, BusinessRuleId, CardinalityNotation, ElementPath, EntityName, MachineSpec, NumericBound, ReferenceTarget, RuleCategory, SourceId, StateName, TypeName, AllowedValues, AttrDecl, AttrDecls, AttributeNames, BlockIndex, CheckFamilies, CheckFamily, Component, ComponentEntities, ComponentEntity, ComponentRef, ComponentRefs, Components, ComponentShapeErrors, ComponentShapeError, ContractRow, EntityReference, SpecBlockAssessment, ShapeError, ContractId, ContractParty, ContractRows, EntityReferences, LineNumber, SpecBlockAssessments, UnitDecls, UnitName, UnitNames, DomainEntitySketch, DomainEntitySketches, EntityDecl, EntityDecls, RelDecl, RelDecls, RuleDecl, RuleDecls, ShapeErrors, SiblingUnitIndex, SourceIds, StateMachineSketch, StateMachineSketches, StateNames } from "@deep-spec/refcheck-domain";
 
 function finding(kind: string, targets: string[], detail: string): Finding {
-  return Finding.of({ kind: FindingKind.of(kind), frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail });
+  return Finding.of({ kind: FindingKind.of(kind), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))), witness: { refs: WitnessRefs.of([]) }, detail });
 }
 
 describe("catalog-order", () => {
@@ -430,14 +430,14 @@ describe("refcheck thorough DP/collection surfaces (owner ruling)", () => {
 });
 
 describe("refcheck payload collections (first-class operations)", () => {
-  test("TargetIds, FrRefs, WitnessRefs, Findings, Skips, InputAnchors under add", () => {
+  test("TargetIds, FunctionalRequirementReferences, WitnessRefs, Findings, Skips, InputAnchors under add", () => {
     const ids = TargetIds.of(Array.from(["check:DD-1"], (raw) => TargetId.of(raw))).add(TargetId.of("check:DD-0")).add(TargetId.of("check:DD-1"));
     expect([...ids].map((t) => t.asString())).toEqual(["check:DD-1", "check:DD-0", "check:DD-1"]);
     expect(ids.count()).toBe(3);
     expect(ids.joined(",")).toBe("check:DD-1,check:DD-0,check:DD-1");
     expect(ids.sortedUniqueCanonically().toStrings()).toEqual(["check:DD-0", "check:DD-1"]);
 
-    const refs = FrRefs.of([]).add(RequirementId.of("FR-1"));
+    const refs = FunctionalRequirementReferences.of([]).add(RequirementId.of("FR-1"));
     expect(refs.toStrings()).toEqual(["FR-1"]);
 
     const wr = WitnessRef.of({ artifact: "a.md", element: "e" });

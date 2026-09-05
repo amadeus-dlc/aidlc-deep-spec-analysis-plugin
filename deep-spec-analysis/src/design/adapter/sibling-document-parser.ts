@@ -11,7 +11,7 @@ export function parseSiblingVerdictDocument(raw: Json): SiblingVerdictDocument {
   const doc = decoded.value;
   if (doc.unavailable !== undefined) return SiblingVerdictDocument.unavailable(doc.unavailable.reason, doc.method);
   const findings = doc.findings.map((f) => SiblingVerdictFinding.of({
-    kind: f.kind, frRefs: f.frRefs,
+    kind: f.kind, functionalRequirementReferences: f.functionalRequirementReferences,
     targets: [...f.targets].map((target) => LoweredId.of(target.asString())),
     witness: DesignWitness.of(f.witness), detail: f.detail,
   }));

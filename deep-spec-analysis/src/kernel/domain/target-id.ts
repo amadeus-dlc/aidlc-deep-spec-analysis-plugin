@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result, compareCanonically } from "@deep-spec/kernel-infrastructure";
 // 検査対象 ID。生成時に findings スキーマの targetId 形式を保証する。
 // 正準順序は言語基盤の比較器を使い、ID 以外のトークンを ID に包まない。
@@ -13,7 +14,9 @@ const TARGET_ID_PATTERNS: readonly RegExp[] = [
 export class TargetId {
   readonly #value: string;
 
+  /** 複合の検査対象ID。名前・属性パスと種別接頭辞を収める上限。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 1024) throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
     if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw))) throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
     this.#value = raw;
   }
@@ -22,7 +25,7 @@ export class TargetId {
     return new TargetId(raw);
   }
 
-  static parse(raw: string): Result<TargetId, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<TargetId, ParseError> {
     return parseConstruction(() => new TargetId(raw));
   }
 

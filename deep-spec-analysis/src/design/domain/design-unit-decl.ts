@@ -253,14 +253,16 @@ export class DesignUnitDecl {
       const ctx = `scenario ${sc.id().asString()}`;
       dup(sc.id().asString(), ctx);
       collectBr(sc.brRefs());
-      for (const [path, val] of sc.bindings()) {
-        const t = attrTypes.get(path);
+      for (const binding of sc.bindings()) {
+        const path = binding.path();
+        const val = binding.value();
+        const t = attrTypes.get(path.asString());
         if (!t) {
-          errors.push(where(`${ctx}: binding for unknown attribute "${path}"`));
+          errors.push(where(`${ctx}: binding for unknown attribute "${path.asString()}"`));
           continue;
         }
         const ok = t.fitsBinding(val);
-        if (!ok) errors.push(where(`${ctx}: binding value ${JSON.stringify(val)} does not fit ${t.kindLabel()} attribute "${path}"`));
+        if (!ok) errors.push(where(`${ctx}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`));
       }
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
     }

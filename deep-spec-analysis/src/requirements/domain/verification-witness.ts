@@ -1,4 +1,5 @@
 import type { TraceState } from "./trace-state.ts";
+import { assertValueSize } from "@deep-spec/kernel-infrastructure";
 
 // 検証結果の証拠。生成済みの型付き文書を保持し、
 // 入力と出力を複製して外側の変更が保存済みの証拠へ伝わるのを防ぐ。
@@ -12,6 +13,8 @@ export class VerificationWitness {
   readonly #document: WitnessDocument;
 
   private constructor(raw: WitnessDocument) {
+    // 証拠文書の処理予算。サイズ計測をスナップショットのコピーに先行させる。
+    assertValueSize(raw, { string: 65_536, nodes: 100_000, depth: 128, total: 16_777_216 });
     this.#document = structuredClone(raw);
   }
 

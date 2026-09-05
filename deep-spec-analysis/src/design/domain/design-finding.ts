@@ -4,12 +4,12 @@
 // 要件 id に届く conflict は refinement-violation へ昇格する——文言は凍結）
 // は finding 自身が所有する（#71 波7）。
 
-import { TargetIds, type FrRefs, FindingKind, UnitName } from "@deep-spec/kernel-domain";
+import { TargetIds, type FunctionalRequirementReferences, FindingKind, UnitName } from "@deep-spec/kernel-domain";
 import type { DesignWitness } from "./design-witness.ts";
 
 export class DesignFinding {
   readonly #kind: FindingKind;
-  readonly #frRefs: FrRefs;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #targets: TargetIds;
   readonly #witness: DesignWitness;
   readonly #unit: UnitName;
@@ -17,7 +17,7 @@ export class DesignFinding {
 
   private constructor(props: Parameters<typeof DesignFinding.of>[0]) {
     this.#kind = props.kind;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#targets = props.targets;
     this.#witness = props.witness;
     this.#unit = props.unit;
@@ -28,7 +28,7 @@ export class DesignFinding {
   // domain／usecase が自ら下す判定はこの口を通る（FR3.2）。
   static of(props: {
     kind: FindingKind;
-    frRefs: FrRefs;
+    functionalRequirementReferences: FunctionalRequirementReferences;
     targets: TargetIds;
     witness: DesignWitness;
     unit: UnitName;
@@ -41,8 +41,8 @@ export class DesignFinding {
     return this.#kind.asString();
   }
 
-  frRefs(): FrRefs {
-    return this.#frRefs;
+  functionalRequirementReferences(): FunctionalRequirementReferences {
+    return this.#functionalRequirementReferences;
   }
 
   targets(): TargetIds {
@@ -75,7 +75,7 @@ export class DesignFinding {
     if (reqHits.length === 0) return null;
     return new DesignFinding({
       kind: FindingKind.refinementViolation(),
-      frRefs: this.#frRefs,
+      functionalRequirementReferences: this.#functionalRequirementReferences,
       targets: TargetIds.of(reqHits),
       witness: this.#witness,
       unit,
@@ -93,7 +93,7 @@ export class DesignFinding {
   withDetail(detail: string): DesignFinding {
     return new DesignFinding({
       kind: this.#kind,
-      frRefs: this.#frRefs,
+      functionalRequirementReferences: this.#functionalRequirementReferences,
       targets: this.#targets,
       witness: this.#witness,
       unit: this.#unit,

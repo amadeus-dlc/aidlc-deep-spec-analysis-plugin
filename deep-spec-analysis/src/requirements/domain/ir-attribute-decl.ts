@@ -1,3 +1,4 @@
+import type { DeclaredBindingValue } from "@deep-spec/kernel-domain";
 import { type DeclaredBound, AttributeKind } from "@deep-spec/kernel-domain";
 import { type IrAttributeName } from "./ir-attribute-name.ts";
 import type { IrDeclaredValues } from "./ir-declared-values.ts";
@@ -17,13 +18,13 @@ export class IrAttributeDecl {
   //（データモデル）を domain 層に住まわせない（主従の裁定・補遺）。
   private constructor(props: Parameters<typeof IrAttributeDecl.of>[0]) {
     this.#name = props.name;
-    this.#kind = AttributeKind.of(props.kind);
+    this.#kind = props.kind;
     this.#values = props.values;
     this.#min = props.min;
     this.#max = props.max;
   }
 
-  static of(props: { name: IrAttributeName; kind: string; values?: IrDeclaredValues; min?: DeclaredBound; max?: DeclaredBound }): IrAttributeDecl {
+  static of(props: { name: IrAttributeName; kind: AttributeKind; values?: IrDeclaredValues; min?: DeclaredBound; max?: DeclaredBound }): IrAttributeDecl {
     return new IrAttributeDecl(props);
   }
 
@@ -48,12 +49,8 @@ export class IrAttributeDecl {
   }
 
   // scenario binding の適合（bool / 安全整数 int / 宣言済み enum 値）。
-  fitsBinding(value: unknown): boolean {
-    return (
-      (this.#kind.isBool() && typeof value === "boolean") ||
-      (this.#kind.isInt() && typeof value === "number" && Number.isSafeInteger(value)) ||
-      (this.#kind.isEnum() && typeof value === "string" && (this.#values?.includes(value) ?? false))
-    );
+  fitsBinding(value: DeclaredBindingValue): boolean {
+    return value.fits(this.#kind, (literal) => this.admitsEnumLiteral(literal));
   }
 
   // 文言材料（binding 不適合文言の "${kind} attribute" 描画点）。

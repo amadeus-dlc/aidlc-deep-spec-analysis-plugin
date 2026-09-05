@@ -3,13 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ArtifactPath, ContentHash, KeyedIndex, QueryLabel, TargetIds } from "@deep-spec/kernel-domain";
-import { type Json, IllegalArgumentException, isObject } from "@deep-spec/kernel-infrastructure";
+import { type Json, IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
 import {
   FormalModelId, RequirementsModel, ObligationId, ScenarioId, BackgroundAssumptionId,
-  IrBindingPairs, SmtQueryVerdict, SmtQueryVerdicts,
+  SmtQueryVerdict, SmtQueryVerdicts,
 } from "@deep-spec/requirements-domain";
 import {
-  LoweringIndex, BindingPairs, DesignObligationId, DesignScenarioId, DesignBackgroundId, DesignMachineId, DesignTransitionId,
+  LoweringIndex, DesignObligationId, DesignScenarioId, DesignBackgroundId, DesignMachineId, DesignTransitionId,
 } from "@deep-spec/design-domain";
 import { parseFormalModel, buildSmtPlan, parseSmtChildResults, Z3SolverClientImpl } from "@deep-spec/requirements-adapter";
 import {
@@ -183,40 +183,4 @@ describe("declarations own their state", () => {
     declaredSeed.entities = EntityDecls.of([EntityDecl.of({ name: EntityName.of("Order"), element: ElementPath.of("entities[0]"), attrs: AttrDecls.of([]), rels: RelDecls.of([]) })]);
     expect(declared.entities().toArray()).toEqual([]);
   });
-});
-
-for (const collection of [IrBindingPairs, BindingPairs]) {
-  describe(`${collection.name} JSON ownership`, () => {
-    test("construction and add copy tuples and nested JSON values", () => {
-      const payload = { values: [1] };
-      const entry: [string, Json] = ["nested", payload];
-      const bindings = collection.of([entry]);
-      const addition = { values: [2] };
-      const extended = bindings.add(["added", addition]);
-      entry[0] = "changed";
-      payload.values.push(9);
-      addition.values.push(9);
-      expect(bindings.toArray()).toEqual([["nested", { values: [1] }]]);
-      expect(extended.toArray()).toEqual([["nested", { values: [1] }], ["added", { values: [2] }]]);
-    });
-
-    test("readers cannot mutate stored JSON through toArray or iteration", () => {
-      const bindings = collection.of([["nested", { values: [1] }]]);
-      for (const entries of [bindings.toArray(), [...bindings]]) {
-        const value = entries[0]?.[1];
-        if (value !== undefined && isObject(value)) value.values = [99];
-      }
-      expect(bindings.toArray()).toEqual([["nested", { values: [1] }]]);
-    });
-  });
-}
-
-test("bindings reject non-JSON values through the TypeScript contract", () => {
-  type RequirementValue = Parameters<typeof IrBindingPairs.of>[0][number][1];
-  type DesignValue = Parameters<typeof BindingPairs.of>[0][number][1];
-  const requirementAcceptsBigint: bigint extends RequirementValue ? true : false = false;
-  const designAcceptsFunction: (() => void) extends DesignValue ? true : false = false;
-  const designAcceptsBigint: bigint extends DesignValue ? true : false = false;
-  const requirementAcceptsUndefined: undefined extends RequirementValue ? true : false = false;
-  expect([requirementAcceptsBigint, designAcceptsFunction, designAcceptsBigint, requirementAcceptsUndefined]).toEqual([false, false, false, false]);
 });

@@ -137,6 +137,7 @@ function extractEntities(value: Json): DeclaredEntities {
         const references = str(pick(a, ["references", "reference", "ref"]));
         const fields = combineResults({
           name: AttributeName.parse(aname),
+          def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.parse(defRaw) : ok(null),
           type: type === null ? ok(null) : TypeName.parse(type),
           references: references === null ? ok(null) : ReferenceTarget.parse(references),
           allowed: allowed === null ? ok(null) : traverseResult(allowed, AllowedValue.parse),
@@ -154,7 +155,7 @@ function extractEntities(value: Json): DeclaredEntities {
           uniqueIsTrue: pick(a, ["unique"]) === true,
           references: fields.value.references,
           allowed: fields.value.allowed === null ? null : AllowedValues.of(fields.value.allowed),
-          def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.of(defRaw) : null,
+          def: fields.value.def,
           minDeclared: minRaw !== null,
           maxDeclared: maxRaw !== null,
           min: fields.value.min,
@@ -226,12 +227,14 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
     const id = str(raw.id);
     const category = str(raw.category);
     const appliesTo = str(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
+    const parsedId = id === null ? ok(null) : DeclaredRuleId.parse(id);
+    if (!parsedId.ok) missing.push("id");
     const parsedCategory = category === null ? ok(null) : RuleCategory.parse(category);
     const parsedAppliesTo = appliesTo === null ? ok(null) : AppliesTo.parse(appliesTo);
     if (!parsedCategory.ok) missing.push("category");
     if (!parsedAppliesTo.ok) missing.push("applies_to");
     return RuleDecl.of({
-      id: id === null ? null : DeclaredRuleId.of(id),
+      id: parsedId.ok ? parsedId.value : null,
       element: ElementPath.of(element),
       category: parsedCategory.ok ? parsedCategory.value : null,
       appliesTo: parsedAppliesTo.ok ? parsedAppliesTo.value : null,

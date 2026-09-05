@@ -77,79 +77,6 @@ class HealthVerdict {
     return { checks: this.#values.map((c) => c.toDocument()) };
   }
 }
-// src/kernel/domain/expression-tree.ts
-function canonicalKeyOf(value) {
-  if (Array.isArray(value)) {
-    return `[${value.map(canonicalKeyOf).join(",")}]`;
-  }
-  if (typeof value === "object" && value !== null) {
-    const record = value;
-    const keys = Object.keys(record).sort();
-    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalKeyOf(record[k] ?? null)}`).join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-class ExpressionTree {
-  #root;
-  constructor(root) {
-    const snapshot = structuredClone(root);
-    const visited = new WeakSet;
-    const freeze = (value) => {
-      if (visited.has(value))
-        return;
-      visited.add(value);
-      for (const child of Object.values(value)) {
-        if (child !== null && typeof child === "object")
-          freeze(child);
-      }
-      Object.freeze(value);
-    };
-    freeze(snapshot);
-    this.#root = snapshot;
-  }
-  static of(root) {
-    return new ExpressionTree(root);
-  }
-  asExpression() {
-    return this.#root;
-  }
-  walk(visit) {
-    const go = (e) => {
-      visit(e);
-      for (const a of e.args ?? [])
-        go(a);
-    };
-    go(this.#root);
-  }
-  usesPrime() {
-    let found = false;
-    this.walk((node) => {
-      if (node.op === "ref" && node.prime === true)
-        found = true;
-    });
-    return found;
-  }
-  referencedPaths() {
-    const refs = new Set;
-    this.walk((node) => {
-      if (node.op === "ref" && typeof node.path === "string")
-        refs.add(node.path);
-    });
-    return [...refs].sort();
-  }
-  assignsPrimed(path) {
-    let assigned = false;
-    this.walk((node) => {
-      if (node.op === "ref" && node.prime === true && node.path === path)
-        assigned = true;
-    });
-    return assigned;
-  }
-  isCanonicallyEqual(other) {
-    return canonicalKeyOf(this.#root) === canonicalKeyOf(other.#root);
-  }
-}
 // src/kernel/infrastructure/result.ts
 function ok(value) {
   return { ok: true, value };
@@ -292,8 +219,13 @@ function parseConstruction(construct) {
   try {
     return ok(construct());
   } catch (error) {
-    if (error instanceof IllegalArgumentException)
-      return err(error.problem);
+    if (error instanceof IllegalArgumentException) {
+      const failure = Object.freeze({
+        kind: error.problem.kind,
+        ...error.problem.raw === undefined ? {} : { raw: error.problem.raw }
+      });
+      return err(failure);
+    }
     throw error;
   }
 }
@@ -319,13 +251,139 @@ function compareCanonically(a, b) {
 function sortedUniqueCanonically(values) {
   return [...new Set(values)].sort(compareCanonically);
 }
+// src/kernel/infrastructure/value-size.ts
+function assertValueSize(value, limits) {
+  let nodes = 0;
+  let total = 0;
+  const visit = (current, depth) => {
+    if (++nodes > limits.nodes || depth > limits.depth)
+      throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+    if (typeof current === "string") {
+      if (current.length > limits.string)
+        throw new IllegalArgumentException({ kind: "value-string-too-long", raw: current.length });
+      total += current.length;
+    } else if (current !== null && typeof current === "object") {
+      if (Array.isArray(current)) {
+        if (current.length > limits.nodes - nodes)
+          throw new IllegalArgumentException({ kind: "value-tree-too-large" });
+        for (const child of current)
+          visit(child, depth + 1);
+      } else {
+        const record = current;
+        for (const key in record) {
+          if (!Object.hasOwn(record, key))
+            continue;
+          if (key.length > limits.string)
+            throw new IllegalArgumentException({ kind: "value-key-too-long", raw: key.length });
+          total += key.length;
+          if (total > limits.total)
+            throw new IllegalArgumentException({ kind: "value-text-too-large" });
+          visit(record[key], depth + 1);
+        }
+      }
+    }
+    if (total > limits.total)
+      throw new IllegalArgumentException({ kind: "value-text-too-large" });
+  };
+  visit(value, 0);
+}
+// src/kernel/domain/expression-tree.ts
+function canonicalKeyOf(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalKeyOf).join(",")}]`;
+  }
+  if (typeof value === "object" && value !== null) {
+    const record = value;
+    const keys = Object.keys(record).sort();
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalKeyOf(record[k] ?? null)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+class ExpressionTree {
+  #root;
+  constructor(root) {
+    let nodes = 0;
+    const measure = (node, depth) => {
+      if (++nodes > 1e4 || depth > 128 || (node.args?.length ?? 0) > 1e4 - nodes) {
+        throw new IllegalArgumentException({ kind: "expression-too-large" });
+      }
+      if ((node.op?.length ?? 0) > 128 || (node.path?.length ?? 0) > 257 || typeof node.value === "string" && node.value.length > 4096) {
+        throw new IllegalArgumentException({ kind: "expression-token-too-long" });
+      }
+      for (const child of node.args ?? [])
+        measure(child, depth + 1);
+    };
+    measure(root, 0);
+    const snapshot = structuredClone(root);
+    const visited = new WeakSet;
+    const freeze = (value) => {
+      if (visited.has(value))
+        return;
+      visited.add(value);
+      for (const child of Object.values(value)) {
+        if (child !== null && typeof child === "object")
+          freeze(child);
+      }
+      Object.freeze(value);
+    };
+    freeze(snapshot);
+    this.#root = snapshot;
+  }
+  static of(root) {
+    return new ExpressionTree(root);
+  }
+  static parse(root) {
+    return parseConstruction(() => new ExpressionTree(root));
+  }
+  asExpression() {
+    return this.#root;
+  }
+  walk(visit) {
+    const go = (e) => {
+      visit(e);
+      for (const a of e.args ?? [])
+        go(a);
+    };
+    go(this.#root);
+  }
+  usesPrime() {
+    let found = false;
+    this.walk((node) => {
+      if (node.op === "ref" && node.prime === true)
+        found = true;
+    });
+    return found;
+  }
+  referencedPaths() {
+    const refs = new Set;
+    this.walk((node) => {
+      if (node.op === "ref" && typeof node.path === "string")
+        refs.add(node.path);
+    });
+    return [...refs].sort();
+  }
+  assignsPrimed(path) {
+    let assigned = false;
+    this.walk((node) => {
+      if (node.op === "ref" && node.prime === true && node.path === path)
+        assigned = true;
+    });
+    return assigned;
+  }
+  isCanonicallyEqual(other) {
+    return canonicalKeyOf(this.#root) === canonicalKeyOf(other.#root);
+  }
+}
 // src/kernel/domain/content-hash.ts
 import { createHash } from "crypto";
 
 class ContentHash {
   #value;
   constructor(raw) {
-    if (!/^[0-9a-f]{64}$/.test(raw))
+    if (raw.length !== 64)
+      throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
+    if (/[^0-9a-f]/.test(raw))
       throw new IllegalArgumentException({ kind: "not-a-sha256-hex", raw });
     this.#value = raw;
   }
@@ -352,7 +410,12 @@ class ContentHash {
 class DeclaredDigest {
   #value;
   constructor(value) {
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "declared-digest-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredDigest(value));
   }
   static of(value) {
     return new DeclaredDigest(value);
@@ -368,6 +431,8 @@ class DeclaredDigest {
 class IrVersion {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "ir-version-too-long", raw: raw.length });
     if (!/^\d+\.\d+\.\d+$/.test(raw))
       throw new IllegalArgumentException({ kind: "not-a-semver", raw });
     this.#value = raw;
@@ -402,6 +467,8 @@ var TARGET_ID_PATTERNS = [
 class TargetId {
   #value;
   constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "target-id-too-long", raw: raw.length });
     if (!TARGET_ID_PATTERNS.some((pattern) => pattern.test(raw)))
       throw new IllegalArgumentException({ kind: "malformed-target-id", raw });
     this.#value = raw;
@@ -466,42 +533,19 @@ class TargetIds {
     return this.#values.map((v) => v.asString());
   }
 }
-// src/kernel/domain/requirement-id.ts
-class RequirementId {
-  #value;
-  constructor(value) {
-    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
-      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
-    this.#value = value;
-  }
-  static of(raw) {
-    return new RequirementId(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new RequirementId(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  compareTo(other) {
-    return compareCanonically(this.#value, other.#value);
-  }
-  asString() {
-    return this.#value;
-  }
-}
-
-// src/kernel/domain/fr-refs.ts
-class FrRefs {
+// src/kernel/domain/functional-requirement-references.ts
+class FunctionalRequirementReferences {
   #values;
   constructor(values) {
-    this.#values = values;
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
+    this.#values = Object.freeze([...values]);
   }
   static of(values) {
-    return new FrRefs([...values]);
+    return new FunctionalRequirementReferences(values);
   }
   add(value) {
-    return new FrRefs([...this.#values, value]);
+    return new FunctionalRequirementReferences([...this.#values, value]);
   }
   *[Symbol.iterator]() {
     yield* this.#values;
@@ -510,7 +554,8 @@ class FrRefs {
     return this.#values.length === 0;
   }
   sortedUnique() {
-    return FrRefs.of(Array.from(sortedUniqueCanonically(this.toStrings()), (raw) => RequirementId.of(raw)));
+    const unique = new Map(this.#values.map((value) => [value.asString(), value]));
+    return new FunctionalRequirementReferences([...unique.values()].sort((a, b) => a.compareTo(b)));
   }
   toArray() {
     return this.#values;
@@ -523,6 +568,8 @@ class FrRefs {
 class BackendName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "backend-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-backend-name", raw });
     this.#value = raw;
@@ -580,6 +627,33 @@ class KeySet {
   }
 }
 
+// src/kernel/domain/requirement-id.ts
+class RequirementId {
+  #value;
+  constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "requirement-id-too-long", raw: value.length });
+    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
+      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
+    this.#value = value;
+  }
+  static of(raw) {
+    return new RequirementId(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new RequirementId(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
 // src/kernel/domain/requirement-ids.ts
 class RequirementIds {
   #values;
@@ -616,10 +690,12 @@ class RequirementIds {
 class NormalizedName {
   #value;
   constructor(value) {
-    this.#value = value;
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "normalized-name-too-long", raw: value.length });
+    this.#value = value.toLowerCase().replace(/[^a-z0-9]/g, "");
   }
   static of(raw) {
-    return new NormalizedName(raw.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    return new NormalizedName(raw);
   }
   equals(other) {
     return this.#value === other.#value;
@@ -632,6 +708,8 @@ class NormalizedName {
 class ArtifactPath {
   #value;
   constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "artifact-path-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-path" });
     this.#value = raw;
@@ -698,6 +776,8 @@ class DeclaredBound {
 class ErrorMessages {
   #values;
   constructor(values) {
+    if (values.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
     this.#values = Object.freeze([...values]);
   }
   static of(values) {
@@ -749,6 +829,8 @@ class FindingsSchema {
 class TriggerName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "trigger-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-trigger-name", raw });
     this.#value = raw;
@@ -814,6 +896,8 @@ class KeyedIndex {
 class QueryLabel {
   #value;
   constructor(value) {
+    if (value.length > 2048)
+      throw new IllegalArgumentException({ kind: "query-label-too-long", raw: value.length });
     if (value === "")
       throw new IllegalArgumentException({ kind: "empty-query-label", raw: value });
     this.#value = value;
@@ -838,6 +922,8 @@ class QueryLabel {
 class AttributePath {
   #value;
   constructor(raw) {
+    if (raw.length > 257)
+      throw new IllegalArgumentException({ kind: "attribute-path-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-attribute-path", raw });
     this.#value = raw;
@@ -858,10 +944,56 @@ class AttributePath {
     return this.#value;
   }
 }
+// src/kernel/domain/binding-value.ts
+class BindingValue {
+  #value;
+  constructor(value) {
+    if (typeof value === "string" && value.length > 4096)
+      throw new IllegalArgumentException({ kind: "binding-literal-too-long", raw: value.length });
+    if (typeof value === "number" && !Number.isSafeInteger(value)) {
+      throw new IllegalArgumentException({ kind: "invalid-binding-integer", raw: value });
+    }
+    this.#value = value;
+  }
+  static of(value) {
+    return new BindingValue(value);
+  }
+  static resolve(declaration) {
+    return declaration.match({
+      literal: (value) => {
+        const result = parseConstruction(() => new BindingValue(value));
+        return result.ok ? result : err(JSON.stringify(result.error));
+      },
+      nonLiteral: () => err(`binding value ${declaration.describe()} is not a boolean, safe integer, or enum literal`)
+    });
+  }
+  toDocument() {
+    return this.#value;
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  match(cases) {
+    if (typeof this.#value === "boolean")
+      return cases.bool(this.#value);
+    if (typeof this.#value === "number")
+      return cases.int(this.#value);
+    return cases.enum(this.#value);
+  }
+  asExpression() {
+    return this.match({
+      bool: (value) => ({ op: "bool", value }),
+      int: (value) => ({ op: "int", value }),
+      enum: (value) => ({ op: "enum", value })
+    });
+  }
+}
 // src/kernel/domain/unit-name.ts
 class UnitName {
   #value;
   constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "unit-name-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-unit-name", raw });
     this.#value = raw;
@@ -883,7 +1015,12 @@ class UnitName {
 class ObligationNature {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "obligation-nature-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new ObligationNature(value));
   }
   static of(raw) {
     return new ObligationNature(raw);
@@ -925,6 +1062,8 @@ var KIND_RANK = {
 class FindingKind {
   #value;
   constructor(raw) {
+    if (raw.length > 24)
+      throw new IllegalArgumentException({ kind: "finding-kind-too-long", raw: raw.length });
     if (!Object.hasOwn(KIND_RANK, raw))
       throw new IllegalArgumentException({ kind: "unknown-finding-kind", raw });
     this.#value = raw;
@@ -990,6 +1129,8 @@ var KNOWN_METHODS = new Set(["exhaustive", "bounded", "simulation", "static"]);
 class VerificationMethod {
   #value;
   constructor(raw) {
+    if (raw.length > 10)
+      throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
     if (!KNOWN_METHODS.has(raw))
       throw new IllegalArgumentException({ kind: "unknown-verification-method", raw });
     this.#value = raw;
@@ -1023,6 +1164,8 @@ var KNOWN_REASONS = new Set([
 class SkipReason {
   #value;
   constructor(raw) {
+    if (raw.length > 19)
+      throw new IllegalArgumentException({ kind: "skip-reason-too-long", raw: raw.length });
     if (!KNOWN_REASONS.has(raw))
       throw new IllegalArgumentException({ kind: "unknown-skip-reason", raw });
     this.#value = raw;
@@ -1071,7 +1214,12 @@ class SkipReason {
 class AttributeKind {
   #value;
   constructor(value) {
+    if (value.length > 128)
+      throw new IllegalArgumentException({ kind: "attribute-kind-too-long", raw: value.length });
     this.#value = value;
+  }
+  static parse(value) {
+    return parseConstruction(() => new AttributeKind(value));
   }
   static of(raw) {
     return new AttributeKind(raw);
@@ -1089,6 +1237,172 @@ class AttributeKind {
     return this.#value === "enum";
   }
   asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/declared-binding-value.ts
+class DeclaredBindingValue {
+  #value;
+  constructor(value) {
+    assertValueSize(value, { string: 4096, total: 65536, nodes: 4096, depth: 32 });
+    this.#value = structuredClone(value);
+  }
+  static of(value) {
+    return new DeclaredBindingValue(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredBindingValue(value));
+  }
+  fits(kind, admitsEnum) {
+    return kind.isBool() && typeof this.#value === "boolean" || kind.isInt() && typeof this.#value === "number" && Number.isSafeInteger(this.#value) || kind.isEnum() && typeof this.#value === "string" && admitsEnum(this.#value);
+  }
+  match(cases) {
+    if (typeof this.#value === "boolean" || typeof this.#value === "number" || typeof this.#value === "string")
+      return cases.literal(this.#value);
+    return cases.nonLiteral();
+  }
+  describe() {
+    return JSON.stringify(this.#value);
+  }
+}
+// src/kernel/domain/declared-bindings.ts
+class DeclaredBindings {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-binding-declarations", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new DeclaredBindings(values);
+  }
+  add(value) {
+    return new DeclaredBindings([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+// src/kernel/domain/scenario-bindings.ts
+class ScenarioBindings {
+  #values;
+  constructor(values) {
+    if (values.length > 1e4)
+      throw new IllegalArgumentException({ kind: "too-many-scenario-bindings", raw: values.length });
+    const paths = new Set;
+    for (const binding of values) {
+      const path = binding.path().asString();
+      if (paths.has(path))
+        throw new IllegalArgumentException({ kind: "duplicate-scenario-binding", raw: path });
+      paths.add(path);
+    }
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new ScenarioBindings(values);
+  }
+  add(value) {
+    return new ScenarioBindings([...this.#values, value]);
+  }
+  has(path) {
+    return this.#values.some((binding) => binding.isFor(path));
+  }
+  valueAt(path) {
+    return this.#values.find((binding) => binding.isFor(path))?.value() ?? null;
+  }
+  covers(paths) {
+    return paths.every((path) => this.has(path));
+  }
+  entriesCanonically() {
+    return [...this.#values].sort((a, b) => a.path().asString() < b.path().asString() ? -1 : a.path().asString() > b.path().asString() ? 1 : 0);
+  }
+  toDocument() {
+    return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
+  }
+}
+// src/kernel/domain/error-message.ts
+class ErrorMessage {
+  #value;
+  constructor(value) {
+    if (value.length > 65536)
+      throw new IllegalArgumentException({ kind: "error-message-too-long", raw: value.length });
+    if (value.length === 0)
+      throw new IllegalArgumentException({ kind: "empty-error-message" });
+    this.#value = value;
+  }
+  static of(value) {
+    return new ErrorMessage(value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/enum-member.ts
+class EnumMember {
+  #value;
+  constructor(value) {
+    if (value.length > 4096)
+      throw new IllegalArgumentException({ kind: "enum-member-too-long", raw: value.length });
+    this.#value = value;
+  }
+  static of(value) {
+    return new EnumMember(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new EnumMember(value));
+  }
+  matchesLiteral(value) {
+    return this.#value === value;
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  compareTo(other) {
+    return compareCanonically(this.#value, other.#value);
+  }
+  asString() {
+    return this.#value;
+  }
+}
+// src/kernel/domain/scenario-binding.ts
+class ScenarioBinding {
+  #path;
+  #value;
+  constructor(path, value) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path, value) {
+    return new ScenarioBinding(path, value);
+  }
+  path() {
+    return this.#path;
+  }
+  value() {
+    return this.#value;
+  }
+  isFor(path) {
+    return this.#path.equals(path);
+  }
+}
+// src/kernel/domain/binding-declaration.ts
+class BindingDeclaration {
+  #path;
+  #value;
+  constructor(path, value) {
+    this.#path = path;
+    this.#value = value;
+  }
+  static of(path, value) {
+    return new BindingDeclaration(path, value);
+  }
+  path() {
+    return this.#path;
+  }
+  value() {
     return this.#value;
   }
 }
@@ -1256,6 +1570,8 @@ class PluginVersion {
   #minor;
   #patch;
   constructor(raw) {
+    if (raw.length > 129 || raw.length === 129 && raw[0] !== "v")
+      throw new IllegalArgumentException({ kind: "plugin-version-too-long", raw: raw.length });
     const match = raw.match(/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
     const major = match?.[1];
     const minor = match?.[2];

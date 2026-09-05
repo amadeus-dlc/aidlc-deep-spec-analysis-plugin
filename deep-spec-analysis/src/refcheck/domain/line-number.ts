@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // 位置語彙 — 成果物内の行番号（1-based）とフェンスブロック序数（1-based）の
 // ドメインプリミティブ。witness element の凍結文言（`(line N)` / `#N`）へ
@@ -15,7 +16,7 @@ export class LineNumber {
     return new LineNumber(raw);
   }
 
-  static parse(raw: number): Result<LineNumber, IllegalArgumentException["problem"]> {
+  static parse(raw: number): Result<LineNumber, ParseError> {
     return parseConstruction(() => new LineNumber(raw));
   }
 

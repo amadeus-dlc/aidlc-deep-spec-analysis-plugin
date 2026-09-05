@@ -1,5 +1,5 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
-import { type Expression, FrRefs, type TriggerName } from "@deep-spec/kernel-domain";
+import { type Expression, FunctionalRequirementReferences, type TriggerName } from "@deep-spec/kernel-domain";
 // 状態機械の遷移（契約3）。id はドメインプリミティブで運ぶ。
 // compile-down の暗黙部（ガード = state==from ∧ 明示ガード、効果 = state'=to
 // ∧ 明示効果、代入表の state 遷移代入）は遷移自身が所有する——lowering と
@@ -66,7 +66,7 @@ export class DesignTransition {
     return LoweredObligation.of({
       id,
       nature: "event",
-      frRefs: FrRefs.of([]),
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       trigger: this.#trigger.asString(),
       guard: this.loweredGuard(attrPath),
       effect: this.loweredEffect(attrPath),

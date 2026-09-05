@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 
 const NUMERICISH = new Set(["int", "integer", "number", "decimal", "float", "double", "long"]);
@@ -10,7 +11,9 @@ const BOOLISH = new Set(["bool", "boolean"]);
 
 export class TypeName {
   readonly #value: string;
+  /** 複合型の宣言文の処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 4096) throw new IllegalArgumentException({ kind: "type-name-too-long", raw: raw.length });
     if (raw === "") throw new IllegalArgumentException({ kind: "empty-token", raw });
     this.#value = raw;
   }
@@ -18,7 +21,7 @@ export class TypeName {
     return new TypeName(raw);
   }
 
-  static parse(raw: string): Result<TypeName, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<TypeName, ParseError> {
     return parseConstruction(() => new TypeName(raw));
   }
   equals(other: TypeName): boolean { return this.#value === other.#value; }

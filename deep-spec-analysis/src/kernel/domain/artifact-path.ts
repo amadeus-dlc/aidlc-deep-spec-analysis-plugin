@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
 // ArtifactPath — 記録ワークスペース内の成果物・配置先を指すパスの語彙。
 // 全コンテキストが「成果物パス（識別）」として話すため kernel が所有する。
@@ -8,7 +9,9 @@ import { IllegalArgumentException, parseConstruction, type Result } from "@deep-
 export class ArtifactPath {
   readonly #value: string;
 
+  /** 成果物パスの処理予算。OS固有のバイト長上限とは別のUTF-16長制約。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 4096) throw new IllegalArgumentException({ kind: "artifact-path-too-long", raw: raw.length });
     if (raw === "") throw new IllegalArgumentException({ kind: "empty-path" });
     this.#value = raw;
   }
@@ -17,7 +20,7 @@ export class ArtifactPath {
     return new ArtifactPath(raw);
   }
 
-  static parse(raw: string): Result<ArtifactPath, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<ArtifactPath, ParseError> {
     return parseConstruction(() => new ArtifactPath(raw));
   }
 

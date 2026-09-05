@@ -109,7 +109,7 @@ export class SiblingVerdictDocument {
 
     for (const f of docFindings) {
       const mapped = f.targets().map((t) => mapTarget(t.asString()));
-      const frRefs = f.frRefs();
+      const functionalRequirementReferences = f.functionalRequirementReferences();
       const detail = remapDetail(f.detail());
       const witness = f.witnessRemappedBy(rewriteLabel);
 
@@ -121,7 +121,7 @@ export class SiblingVerdictDocument {
         findings.push(
           DesignFinding.of({
             kind: FindingKind.unreachable(),
-            frRefs,
+            functionalRequirementReferences: functionalRequirementReferences,
             targets: TargetIds.of(Array.from([design], (raw) => TargetId.of(raw))),
             witness,
             unit: UnitName.of(u.name()),
@@ -136,7 +136,7 @@ export class SiblingVerdictDocument {
         shadowFindings.push({
           finding: DesignFinding.of({
             kind: FindingKind.redundancy(),
-            frRefs,
+            functionalRequirementReferences: functionalRequirementReferences,
             targets: TargetIds.of(Array.from([pair[0], pair[1]], (raw) => TargetId.of(raw))).sortedUniqueCanonically(),
             witness,
             unit: UnitName.of(u.name()),
@@ -171,7 +171,7 @@ export class SiblingVerdictDocument {
         }
       }
       // 兄弟バックエンドの検証済み判定を設計側の座標へ写す。
-      findings.push(DesignFinding.of({ kind: FindingKind.of(f.kind()), frRefs, targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))), witness, unit: UnitName.of(u.name()), detail }));
+      findings.push(DesignFinding.of({ kind: FindingKind.of(f.kind()), functionalRequirementReferences: functionalRequirementReferences, targets: TargetIds.of(Array.from(targets, (raw) => TargetId.of(raw))), witness, unit: UnitName.of(u.name()), detail }));
     }
 
     // shadow の後段：死んだルール/遷移は既に unreachable——その空虚な包摂は何も

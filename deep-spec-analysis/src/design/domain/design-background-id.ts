@@ -1,9 +1,12 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, compareCanonically, type Result } from "@deep-spec/kernel-infrastructure";
 
 export class DesignBackgroundId {
   readonly #value: string;
 
+  /** 識別名・ID・バージョンの処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 128) throw new IllegalArgumentException({ kind: "design-background-id-too-long", raw: raw.length });
     if (!/^DBG-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-design-background-id", raw });
     this.#value = raw;
   }
@@ -12,7 +15,7 @@ export class DesignBackgroundId {
     return new DesignBackgroundId(raw);
   }
 
-  static parse(raw: string): Result<DesignBackgroundId, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<DesignBackgroundId, ParseError> {
     return parseConstruction(() => new DesignBackgroundId(raw));
   }
 

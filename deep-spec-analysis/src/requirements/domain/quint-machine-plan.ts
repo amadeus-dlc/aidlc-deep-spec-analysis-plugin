@@ -1,4 +1,4 @@
-import { SkipReason, FindingKind, TargetIds, KeySet, AttributePath } from "@deep-spec/kernel-domain";
+import { SkipReason, FindingKind, TargetIds, KeySet } from "@deep-spec/kernel-domain";
 
 // Quint 状態機械の計画——コンパイラが機械を組んだときの対応表で、形式
 // （Quint テキスト）を含まない面（種別規律の裁定 8——値オブジェクト）。旧名
@@ -97,7 +97,7 @@ export class QuintMachinePlan {
       if (machineRun.isDeadlock()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.completenessGap(),
-          frRefs: model.frRefsOf(eventTargets),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventTargets),
           targets: this.#eventIds.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
           witness: machineRun.witness(),
           detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
@@ -109,7 +109,7 @@ export class QuintMachinePlan {
           : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.conflict(),
-          frRefs: model.frRefsOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
           targets,
           witness: machineRun.witness(),
           detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`,
@@ -145,7 +145,7 @@ export class QuintMachinePlan {
       } else if (r.isViolation()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.conflict(),
-          frRefs: model.frRefsOf(TargetIds.of([target])),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: r.witness(),
           detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`,
@@ -182,16 +182,15 @@ export class QuintMachinePlan {
         skipped.push(skip);
         continue;
       }
-      const bindings = sc.bindingEntriesCanonically();
-      const state = TraceState.of(bindings.map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)] as const));
-      const boundModel: { [path: string]: boolean | number | string } = {};
-      for (const [path, value] of bindings) boundModel[path] = value;
+      const bindings = sc.bindings().entriesCanonically();
+      const state = TraceState.of(bindings.map((binding) => [binding.path(), TraceValue.of(binding.value().toDocument())] as const));
+      const boundModel = sc.bindings().toDocument();
       if (sc.isAccept() && r.isViolated()) {
         const violatedComponents = this.#invariantComponents.violatedBy(state);
         const targets = TargetIds.of([target, ...violatedComponents.ids().toTargetIds()]).sortedUniqueCanonically();
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(targets),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
           targets,
           witness: VerificationWitness.model(boundModel),
           detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out — the requirements reject an example that should be accepted.`,
@@ -200,7 +199,7 @@ export class QuintMachinePlan {
       if (sc.isReject() && !r.isViolated()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
-          frRefs: model.frRefsOf(TargetIds.of([target])),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIds.of([target])),
           targets: TargetIds.of([target]),
           witness: VerificationWitness.model(boundModel),
           detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation — the requirements do not exclude an example that should be rejected.`,

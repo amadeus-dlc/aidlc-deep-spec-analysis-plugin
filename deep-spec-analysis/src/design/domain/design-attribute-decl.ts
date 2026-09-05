@@ -1,3 +1,4 @@
+import type { DeclaredBindingValue } from "@deep-spec/kernel-domain";
 import { type DeclaredBound, AttributeKind } from "@deep-spec/kernel-domain";
 import type { DeclaredValues } from "./declared-values.ts";
 import { type DesignAttributeName } from "./design-attribute-name.ts";
@@ -21,14 +22,14 @@ export class DesignAttributeDecl {
   //（データモデル）を domain 層に住まわせない（主従の裁定・補遺）。
   private constructor(props: Parameters<typeof DesignAttributeDecl.of>[0]) {
     this.#name = props.name;
-    this.#kind = AttributeKind.of(props.kind);
+    this.#kind = props.kind;
     this.#description = props.description;
     this.#values = props.values;
     this.#min = props.min;
     this.#max = props.max;
   }
 
-  static of(props: { name: DesignAttributeName; kind: string; description?: string; values?: DeclaredValues; min?: DeclaredBound; max?: DeclaredBound }): DesignAttributeDecl {
+  static of(props: { name: DesignAttributeName; kind: AttributeKind; description?: string; values?: DeclaredValues; min?: DeclaredBound; max?: DeclaredBound }): DesignAttributeDecl {
     return new DesignAttributeDecl(props);
   }
 
@@ -62,12 +63,8 @@ export class DesignAttributeDecl {
   }
 
   // scenario binding の適合（bool / 安全整数 int / 宣言済み enum 値）。
-  fitsBinding(value: unknown): boolean {
-    return (
-      (this.#kind.isBool() && typeof value === "boolean") ||
-      (this.#kind.isInt() && typeof value === "number" && Number.isSafeInteger(value)) ||
-      (this.#kind.isEnum() && typeof value === "string" && (this.#values?.includes(value) ?? false))
-    );
+  fitsBinding(value: DeclaredBindingValue): boolean {
+    return value.fits(this.#kind, (literal) => this.admitsEnumLiteral(literal));
   }
 
   // machine の状態集合面——enum でなければ null（判事が凍結文言で報告する）。

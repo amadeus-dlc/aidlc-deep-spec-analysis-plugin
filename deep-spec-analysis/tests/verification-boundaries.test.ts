@@ -4,7 +4,7 @@ import {
   ArtifactPath,
   ExpressionTree,
   FindingsSchema,
-  FrRefs,
+  FunctionalRequirementReferences,
   ObligationNature,
 } from "@deep-spec/kernel-domain";
 
@@ -221,7 +221,7 @@ describe("式の所有権を集約の内側に閉じる", () => {
     const leaf = { op: "ref", path: "order.state" };
     const expression = { op: "eq", args: [leaf, { op: "enum", value: "done" }] };
     const tree = ExpressionTree.of(expression);
-    const obligation = Obligation.of({ id: ObligationId.of("OB-1"), nature: ObligationNature.of("invariant"), frRefs: FrRefs.of([]), assert: expression });
+    const obligation = Obligation.of({ id: ObligationId.of("OB-1"), nature: ObligationNature.of("invariant"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), assert: expression });
     leaf.path = "changed";
     expect(tree.referencedPaths()).toEqual(["order.state"]);
     expect(obligation.assertion()?.args?.[0].path).toBe("order.state");

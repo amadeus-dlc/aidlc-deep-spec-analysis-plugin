@@ -254,7 +254,7 @@ export class VerificationReport {
     ordered.findings = this.#findings.toArray().map((f) => {
       const out: { [k: string]: Json } = {
         kind: f.kind(),
-        frRefs: f.frRefs().toStrings() as unknown as Json,
+        frRefs: f.functionalRequirementReferences().toStrings() as unknown as Json,
         targets: f.targets().toStrings() as unknown as Json,
         witness: f.witness().toDocument() as unknown as Json,
         detail: f.detail(),

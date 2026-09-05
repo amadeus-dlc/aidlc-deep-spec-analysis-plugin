@@ -1,12 +1,12 @@
 import { ExpressionTree } from "@deep-spec/kernel-domain";
-import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
+import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec/kernel-domain";
 
 import type { ObligationId, ObligationNature } from "@deep-spec/requirements-domain";
 
 export class RefinementObligation {
   readonly #id: ObligationId;
   readonly #nature: ObligationNature;
-  readonly #frRefs: FrRefs;
+  readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #assert: Expression | undefined;
   readonly #trigger: TriggerName | undefined;
   readonly #guard: Expression | undefined;
@@ -15,20 +15,20 @@ export class RefinementObligation {
   private constructor(props: Parameters<typeof RefinementObligation.of>[0]) {
     this.#id = props.id;
     this.#nature = props.nature;
-    this.#frRefs = props.frRefs;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
   }
 
-  static of(props: { id: ObligationId; nature: ObligationNature; frRefs: FrRefs; assert?: Expression; trigger?: TriggerName; guard?: Expression; effect?: Expression }): RefinementObligation {
+  static of(props: { id: ObligationId; nature: ObligationNature; functionalRequirementReferences: FunctionalRequirementReferences; assert?: Expression; trigger?: TriggerName; guard?: Expression; effect?: Expression }): RefinementObligation {
     return new RefinementObligation(props);
   }
 
   id(): ObligationId { return this.#id; }
   nature(): ObligationNature { return this.#nature; }
-  frRefs(): FrRefs { return this.#frRefs; }
+  functionalRequirementReferences(): FunctionalRequirementReferences { return this.#functionalRequirementReferences; }
   assertion(): Expression | undefined { return this.#assert; }
   trigger(): TriggerName | undefined { return this.#trigger; }
   guard(): Expression | undefined { return this.#guard; }

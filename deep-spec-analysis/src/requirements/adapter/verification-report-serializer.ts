@@ -19,7 +19,7 @@ export function parseSiblingReportDocument(directory: ArtifactPath, fileName: st
     id: VerificationReportId.of(directory, doc.backend.asString()),
     irVersion: doc.irVersion, irHash: doc.irHash, method: doc.method,
     findings: VerificationFindings.of(doc.findings.map((entry) => VerificationFinding.of({
-      kind: entry.kind, frRefs: entry.frRefs, targets: entry.targets,
+      kind: entry.kind, functionalRequirementReferences: entry.functionalRequirementReferences, targets: entry.targets,
       witness: VerificationWitness.of(entry.witness as Parameters<typeof VerificationWitness.of>[0]), detail: entry.detail,
     }))),
     skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.of(entry))),

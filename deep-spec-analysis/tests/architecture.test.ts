@@ -276,8 +276,8 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(noPrimitiveFieldsInDomain("design/domain/foo.ts", "export interface Foo {\n  judge(): boolean;\n  readonly reason?: string;\n  readonly [k: string]: string;\n  readonly on: () => void;\n}")).toHaveLength(0);
     expect(noPrimitiveFieldsInDomain("kernel/domain/expression.ts", "export interface Expression {\n  readonly op: string;\n}")).toHaveLength(0);
     // 台帳は空（裁定 3-1〜3-4）: コレクション形の primitive も台帳の陰に隠れず違反になる。
-    expect(noPrimitiveFieldsInDomain("kernel/domain/fr-refs.ts", "export class FrRefs {\n  readonly #values: readonly string[];\n}")).toHaveLength(1);
-    expect(noPrimitiveFieldsInDomain("kernel/domain/fr-refs.ts", "export class FrRefs {\n  readonly #values: readonly string[];\n  readonly #newcomer: string;\n}")).toHaveLength(2);
+    expect(noPrimitiveFieldsInDomain("kernel/domain/functional-requirement-references.ts", "export class FunctionalRequirementReferences {\n  readonly #values: readonly string[];\n}")).toHaveLength(1);
+    expect(noPrimitiveFieldsInDomain("kernel/domain/functional-requirement-references.ts", "export class FunctionalRequirementReferences {\n  readonly #values: readonly string[];\n  readonly #newcomer: string;\n}")).toHaveLength(2);
     // prose の除外（裁定 3-2／3-3）: EARS 文と witness の原文トークン。
     expect(noPrimitiveFieldsInDomain("requirements/domain/foo.ts", "export class Foo {\n  readonly #ears: string | undefined;\n  readonly #value: string | undefined;\n  readonly #x: number;\n}")).toHaveLength(1);
     expect(noPrimitiveFieldsInDomain("design/adapter/foo.ts", "export class Foo {\n  readonly #name: string;\n}")).toHaveLength(0);
@@ -303,7 +303,7 @@ describe("rule red/green examples (detection power proof)", () => {
   test("published-language-layers confines every table entry to its layers", () => {
     expect(publishedLanguageLayers("design/usecase/foo.ts", 'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}')).toHaveLength(1);
     expect(publishedLanguageLayers("design/domain/foo.ts", 'import type { Expression } from "../../kernel/domain/index.ts";\nexport function f(e: Expression): void {}')).toHaveLength(0);
-    expect(publishedLanguageLayers("design/adapter/foo.ts", "const x: AttrPaths = y;")).toHaveLength(1);
+    expect(publishedLanguageLayers("design/adapter/foo.ts", "const x: AttrPaths = y;")).toHaveLength(0);
     expect(publishedLanguageLayers("design/domain/foo.ts", "const x: AttrPaths = y;")).toHaveLength(0);
     expect(publishedLanguageLayers("entries/aidlc-sensor-deep-spec-verify-smt.ts", "const k = KeyedIndex.empty();")).toHaveLength(1);
     // 文字列・コメントの中の名前には反応しない。
@@ -489,7 +489,7 @@ describe("the real src/ tree", () => {
 
   test("the published-language table is the only exemption: every entry exists, exports its name, and lives in the domain", () => {
     // 表の項目を足すのは裁定であって便宜ではない——件数を凍結しておく。
-    expect(PUBLISHED_LANGUAGE.size).toBe(11);
+    expect(PUBLISHED_LANGUAGE.size).toBe(4);
     // 表の項目はパス・理由・利用可能層を持ち、その名前の型をそのファイルが公開する。
     for (const [rel, entry] of PUBLISHED_LANGUAGE) {
       expect(files).toContain(rel);

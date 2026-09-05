@@ -13,7 +13,7 @@ export function renderLoweredDocument(u: DesignUnit, low: LoweredUnit): Json {
     const out: { [k: string]: Json } = {
       id: ob.id().asString(),
       nature: ob.nature(),
-      frRefs: ob.frRefs().toStrings() as unknown as Json,
+      frRefs: ob.functionalRequirementReferences().toStrings() as unknown as Json,
     };
     const assertion = ob.assertion();
     if (assertion) out.assert = assertion as unknown as Json;
@@ -31,8 +31,8 @@ export function renderLoweredDocument(u: DesignUnit, low: LoweredUnit): Json {
     const out: { [k: string]: Json } = {
       id: sc.id().asString(),
       kind: sc.kind(),
-      frRefs: sc.frRefs().toStrings() as unknown as Json,
-      bindings: sc.bindings() as unknown as Json,
+      frRefs: sc.functionalRequirementReferences().toStrings() as unknown as Json,
+      bindings: sc.bindings().toDocument(),
     };
     const event = sc.event();
     if (event) out.event = event as unknown as Json;

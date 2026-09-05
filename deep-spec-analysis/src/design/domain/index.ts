@@ -56,7 +56,6 @@ export { DesignInputAnchor } from "./design-input-anchor.ts";
 export { DesignInputAnchors } from "./design-input-anchors.ts";
 export { DesignReports } from "./design-reports.ts";
 export { DesignVerifyDirectory } from "./design-verify-directory.ts";
-export { BindingPairs } from "./binding-pairs.ts";
 export { BrRef } from "./br-ref.ts";
 export { BrRefs } from "./br-refs.ts";
 export { DeclaredValues } from "./declared-values.ts";
@@ -134,3 +133,4 @@ export { FormalModelId } from "@deep-spec/requirements-domain";
 
 // refinement の要件語彙は requirements の DP を再利用する。
 export { AttributeBound, AttributePath, ObligationId, ObligationNature, ScenarioId } from "@deep-spec/requirements-domain";
+export { InitialState } from "./initial-state.ts";

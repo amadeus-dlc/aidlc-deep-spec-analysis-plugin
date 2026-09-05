@@ -180,11 +180,14 @@ export class QuintClientImpl implements QuintClient {
         );
     if (run.timedOut) return QuintMachineRunVerdict.timeout();
     if (`${run.stdout}\n${run.stderr}`.toLowerCase().includes("deadlock")) {
-      return QuintMachineRunVerdict.deadlock(run.itf ? TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)) : null);
+      if (!run.itf) return QuintMachineRunVerdict.deadlock(null);
+      const trace = decodeItfTrace(run.itf, machine.varToPath);
+      return trace.ok ? QuintMachineRunVerdict.deadlock(TraceStates.of(trace.value)) : QuintMachineRunVerdict.runFailed(trace.error);
     }
     const violated = run.itf !== null && (itfStatus(run.itf) === "violation" || (bounded && !!run.itf));
     if (violated && run.itf) {
-      return QuintMachineRunVerdict.violation(TraceStates.of(decodeItfTrace(run.itf, machine.varToPath)));
+      const trace = decodeItfTrace(run.itf, machine.varToPath);
+      return trace.ok ? QuintMachineRunVerdict.violation(TraceStates.of(trace.value)) : QuintMachineRunVerdict.runFailed(trace.error);
     }
     if (!violated && run.itf === null && this.#didNotAnswer(run)) {
       return QuintMachineRunVerdict.runFailed(this.#outputTail(run));
@@ -213,7 +216,8 @@ export class QuintClientImpl implements QuintClient {
       if (run.timedOut) {
         out.set(obId, QuintTemporalVerdict.timeout());
       } else if (run.itf) {
-        out.set(obId, QuintTemporalVerdict.violation(TraceStates.of(decodeItfTrace(run.itf, machine.varToPath))));
+        const trace = decodeItfTrace(run.itf, machine.varToPath);
+        out.set(obId, trace.ok ? QuintTemporalVerdict.violation(TraceStates.of(trace.value)) : QuintTemporalVerdict.runFailed(trace.error));
       } else if (this.#didNotAnswer(run)) {
         // verify は違反時にだけ ITF を書くので、ITF 無しは clean か失敗かの二択。
         // プロセスの事実で見分ける——以前は無条件に clean だった。

@@ -34,7 +34,7 @@ export class ValidateDesignIrUseCase {
         `irVersion ${materials.irVersion().asString()}: unsupported major version (this validator supports ${SUPPORTED_DESIGN_IR_MAJOR}.x.x)`,
       );
     }
-    errors.push(...materials.schemaErrors());
+    errors.push(...materials.schemaErrors().toArray().map((message) => message.asString()));
 
     if (errors.length === 0) {
       errors.push(...materials.units().wellFormednessErrors());

@@ -143,7 +143,7 @@ function decomposeEffect(effect: Expression): Map<string, Expression> {
 function domainOf(attr: AttributeDeclaration): string {
   return attr.match({
     bool: () => "Set(true, false)",
-    enum: (values) => `Set(${(values?.toArray() ?? []).map((v) => JSON.stringify(v)).join(", ")})`,
+    enum: (values) => `Set(${(values?.toArray() ?? []).map((v) => JSON.stringify(v.asString())).join(", ")})`,
     int: (min, max) => {
       if (min === undefined || max === undefined) {
         throw new CompileError(`int attribute "${attr.path().asString()}" lacks min/max — bounded domains are required by the quint backend`);
@@ -309,17 +309,16 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
   for (const sc of model.scenarios()) {
     if (sc.hasEvent()) continue;
     const bindings = sc.bindings();
-    const boundPaths = new Set(Object.keys(bindings));
-    if (attrs.some((a) => !boundPaths.has(a.path().asString()))) continue;
+    if (!bindings.covers(attrs.map((a) => a.path()))) continue;
     const parts: string[] = [];
     let okAll = true;
     for (const attr of attrs) {
-      const value = bindings[attr.path().asString()];
-      if (value === undefined) {
+      const value = bindings.valueAt(attr.path());
+      if (value === null) {
         okAll = false;
         break;
       }
-      parts.push(`${qVar(attr.path().asString())}' = ${qLit(value)}`);
+      parts.push(`${qVar(attr.path().asString())}' = ${value.match({ bool: qLit, int: qLit, enum: qLit })}`);
     }
     if (!okAll) continue;
     const initAction = qId("scInit", sc.id().asString());

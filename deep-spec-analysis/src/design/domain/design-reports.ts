@@ -1,4 +1,4 @@
-import { UnitName, BackendName, ContentHash, FindingKind, FrRefs, TargetId, TargetIds } from "@deep-spec/kernel-domain";
+import { UnitName, BackendName, ContentHash, FindingKind, FunctionalRequirementReferences, TargetId, TargetIds } from "@deep-spec/kernel-domain";
 
 import { DesignCrossCheckedEntries } from "./design-cross-checked-entries.ts";
 import { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
@@ -72,7 +72,7 @@ export class DesignReports {
               findings.push(
                 DesignFinding.of({
                   kind: FindingKind.crossCheckDisagreement(),
-                  frRefs: FrRefs.of([...sc.frRefs()]).sortedUnique(),
+                  functionalRequirementReferences: FunctionalRequirementReferences.of([...sc.functionalRequirementReferences()]).sortedUnique(),
                   targets: TargetIds.of(Array.from([sc.id().asString()], (raw) => TargetId.of(raw))),
                   witness: DesignWitness.verdicts(verdicts),
                   unit: UnitName.of(u.name()),

@@ -1,3 +1,4 @@
+import type { ParseError } from "@deep-spec/kernel-infrastructure";
 import { IllegalArgumentException, parseConstruction, compareCanonically, type Result } from "@deep-spec/kernel-infrastructure";
 
 import { TargetId } from "@deep-spec/kernel-domain";
@@ -5,7 +6,9 @@ import { TargetId } from "@deep-spec/kernel-domain";
 export class ObligationId {
   readonly #value: string;
 
+  /** 識別名・ID・バージョンの処理予算。 単位はUTF-16コード単位。 */
   private constructor(raw: string) {
+    if (raw.length > 128) throw new IllegalArgumentException({ kind: "obligation-id-too-long", raw: raw.length });
     if (!/^OB-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-obligation-id", raw });
     this.#value = raw;
   }
@@ -14,7 +17,7 @@ export class ObligationId {
     return new ObligationId(raw);
   }
 
-  static parse(raw: string): Result<ObligationId, IllegalArgumentException["problem"]> {
+  static parse(raw: string): Result<ObligationId, ParseError> {
     return parseConstruction(() => new ObligationId(raw));
   }
 

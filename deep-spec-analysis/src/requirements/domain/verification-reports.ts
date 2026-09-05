@@ -1,4 +1,4 @@
-import { TargetId, BackendName, ContentHash, FindingKind, FrRefs, TargetIds } from "@deep-spec/kernel-domain";
+import { TargetId, BackendName, ContentHash, FindingKind, FunctionalRequirementReferences, TargetIds } from "@deep-spec/kernel-domain";
 
 import { CrossCheckedEntries } from "./cross-checked-entries.ts";
 import { CrossCheckedEntry } from "./cross-checked-entry.ts";
@@ -69,7 +69,7 @@ export class VerificationReports {
             verdicts[b.backend] = vb ? "violated" : "clean";
             findings.push(VerificationFinding.of({
               kind: FindingKind.crossCheckDisagreement(),
-              frRefs: FrRefs.of([...(scenarioById.get(sc.id().asString())?.frRefs().toArray() ?? [])]).sortedUnique(),
+              functionalRequirementReferences: FunctionalRequirementReferences.of([...(scenarioById.get(sc.id().asString())?.functionalRequirementReferences().toArray() ?? [])]).sortedUnique(),
               targets: TargetIds.of([sc.id().asTargetId()]),
               witness: VerificationWitness.verdicts(verdicts),
               detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,

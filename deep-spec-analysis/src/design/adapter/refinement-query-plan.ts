@@ -56,7 +56,7 @@ export function refinementSmtContext(u: DesignUnit): RefinementSmtContext {
         kind,
         ...(min !== undefined ? { min: min.asNumber() } : {}),
         ...(max !== undefined ? { max: max.asNumber() } : {}),
-        ...(values !== null ? { values: [...values.toArray()] } : {}),
+        ...(values !== null ? { values: values.toArray().map((member) => member.asString()) } : {}),
       });
     }
   }
@@ -368,9 +368,10 @@ export function buildRefinementQueries(
     let defect: RefinementMapDefect | null = null;
     try {
       const parts: string[] = [];
-      for (const [path, value] of sc.bindingEntriesCanonically()) {
-        const lit: Expression = typeof value === "boolean" ? { op: "bool", value } : typeof value === "number" ? { op: "int", value } : { op: "enum", value };
-        const constraint: Expression = { op: "eq", args: [{ op: "ref", path }, lit] };
+      for (const binding of sc.bindings().entriesCanonically()) {
+        const path = binding.path();
+        const value = binding.value();
+        const constraint: Expression = { op: "eq", args: [{ op: "ref", path: path.asString() }, value.asExpression()] };
         const bound = mappings.substitute(constraint, false);
         if (!bound.ok) {
           defect = bound.error;

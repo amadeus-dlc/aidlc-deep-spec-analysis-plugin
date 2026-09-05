@@ -1,28 +1,29 @@
+import { AttributePath, KeySet } from "@deep-spec/kernel-domain";
 // 設計属性パス集合のファーストクラスコレクション（lowering・alpha 置換の照会面）。
 export class AttrPaths {
-  readonly #values: ReadonlySet<string>;
+  readonly #values: KeySet<AttributePath>;
 
-  private constructor(values: ReadonlySet<string>) {
+  private constructor(values: KeySet<AttributePath>) {
     this.#values = values;
   }
 
-  static of(values: readonly string[]): AttrPaths {
-    return new AttrPaths(new Set(values));
+  static of(values: readonly AttributePath[]): AttrPaths {
+    return new AttrPaths(KeySet.of(values));
   }
 
-  add(value: string): AttrPaths {
-    return new AttrPaths(new Set([...this.#values, value]));
+  add(value: AttributePath): AttrPaths {
+    return new AttrPaths(this.#values.with(value));
   }
 
-  *[Symbol.iterator](): Iterator<string> {
+  *[Symbol.iterator](): Iterator<AttributePath> {
     yield* this.#values;
   }
 
-  has(value: string): boolean {
+  has(value: AttributePath): boolean {
     return this.#values.has(value);
   }
 
-  toArray(): readonly string[] {
+  toArray(): readonly AttributePath[] {
     return [...this.#values];
   }
 }
