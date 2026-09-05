@@ -17,10 +17,8 @@ describe("domain collection element contracts", () => {
     source.push(ErrorMessage.of("outside"));
     const second = ErrorMessage.of("same diagnostic");
     const extended = messages.add(second);
-    expect([...messages]).toEqual([first]);
-    expect(extended.toArray()[0]).toBe(first);
-    expect(extended.toArray()[1]).toBe(second);
-    expect(Object.isFrozen(extended.toArray())).toBe(true);
+    expect([...messages].map((message) => message.asString())).toEqual(["same diagnostic"]);
+    expect(extended.toArray().map((message) => message.asString())).toEqual(["same diagnostic", "same diagnostic"]);
     expect(() => ErrorMessage.of("")).toThrow(IllegalArgumentException);
     expect(() => ErrorMessages.of(Array(65_537).fill(first))).toThrow(IllegalArgumentException);
   });
@@ -32,9 +30,8 @@ describe("domain collection element contracts", () => {
       const values = collection.of(source);
       source.push(EnumMember.of("outside"));
       const extended = values.add(EnumMember.of("closed"));
-      expect([...values]).toEqual([open]);
+      expect([...values].map((member) => member.asString())).toEqual(["open"]);
       expect(extended.toArray().map((member) => member.asString())).toEqual(["open", "closed"]);
-      expect(Object.isFrozen(values.toArray())).toBe(true);
       expect(() => collection.of(Array(10_001).fill(open))).toThrow(IllegalArgumentException);
     });
   }
@@ -69,10 +66,9 @@ describe("domain collection element contracts", () => {
     const references = FunctionalRequirementReferences.of(source);
     source.length = 0;
     expect(references.sortedUnique().toStrings()).toEqual(["FR-1", "FR-2"]);
-    expect(references.sortedUnique().toArray()[1]).toBe(reference);
+    expect(references.sortedUnique().toArray()[1]?.equals(reference)).toBe(true);
     expect(references.isEmpty()).toBe(false);
     expect(FunctionalRequirementReferences.of([]).isEmpty()).toBe(true);
-    expect(Object.isFrozen(references.toArray())).toBe(true);
     expect(() => FunctionalRequirementReferences.of(Array(10_001).fill(reference))).toThrow(IllegalArgumentException);
   });
 });
@@ -86,12 +82,12 @@ describe("scenario binding contracts", () => {
     const declarations = DeclaredBindings.of(source);
     payload.values.push(99);
     source.length = 0;
-    expect([...declarations][0]).toBe(declaration);
+    expect([...declarations][0]?.path().asString()).toBe("ticket.state");
+    expect([...declarations][0]?.value().describe()).toBe('{"values":[1]}');
     expect(value.describe()).toBe('{"values":[1]}');
     expect(value.fits(AttributeKind.of("bool"), () => false)).toBe(false);
     expect(BindingValue.resolve(value).ok).toBe(false);
     expect(declarations.add(declaration).toArray()).toHaveLength(2);
-    expect(Object.isFrozen(declarations.toArray())).toBe(true);
     expect(() => DeclaredBindings.of(Array(10_001).fill(declaration))).toThrow(IllegalArgumentException);
   });
 

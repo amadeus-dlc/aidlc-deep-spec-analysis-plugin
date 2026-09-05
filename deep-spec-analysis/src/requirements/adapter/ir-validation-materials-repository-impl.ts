@@ -212,6 +212,8 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
 
     const schemaErrors: string[] = [];
     validateSchema(schema.value, schema.value, ir, "", schemaErrors);
+    const messages = traverseResult(schemaErrors, ErrorMessage.parse);
+    if (!messages.ok) return corrupt(JSON.stringify(messages.error));
 
     // dirnameで導出した非空パスは内部の組み立て。違反があればpanicとして伝播する。
     const recordRoot = ArtifactPath.of(dirname(dirname(dirname(outputPath))));
@@ -229,7 +231,7 @@ export class IrValidationMaterialsRepositoryImpl implements IrValidationMaterial
       IrValidationMaterials.of({
         id,
         irVersion: parsed.value.irVersion,
-        schemaErrors: ErrorMessages.of(schemaErrors.map((message) => ErrorMessage.of(message))),
+        schemaErrors: ErrorMessages.of(messages.value),
         view: view.value,
         frClaims: FunctionalRequirementReferenceClaims.of(claims.value),
         declaredDigest: parsed.value.declaredDigest,

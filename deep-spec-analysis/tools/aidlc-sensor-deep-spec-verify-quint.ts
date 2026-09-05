@@ -941,6 +941,9 @@ class NormalizedName {
   static of(raw) {
     return new NormalizedName(raw);
   }
+  static parse(raw) {
+    return parseConstruction(() => new NormalizedName(raw));
+  }
   equals(other) {
     return this.#value === other.#value;
   }
@@ -1005,6 +1008,9 @@ class DeclaredBound {
   }
   static of(value) {
     return new DeclaredBound(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredBound(value));
   }
   asNumber() {
     return this.#value;
@@ -1202,10 +1208,13 @@ class BindingValue {
   static of(value) {
     return new BindingValue(value);
   }
+  static parse(value) {
+    return parseConstruction(() => new BindingValue(value));
+  }
   static resolve(declaration) {
     return declaration.match({
       literal: (value) => {
-        const result = parseConstruction(() => new BindingValue(value));
+        const result = BindingValue.parse(value);
         return result.ok ? result : err(JSON.stringify(result.error));
       },
       nonLiteral: () => err(`binding value ${declaration.describe()} is not a boolean, safe integer, or enum literal`)
@@ -1579,6 +1588,9 @@ class ErrorMessage {
   }
   static of(value) {
     return new ErrorMessage(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new ErrorMessage(value));
   }
   asString() {
     return this.#value;
@@ -5875,6 +5887,9 @@ class IrValidationMaterialsRepositoryImpl {
     }
     const schemaErrors = [];
     validateSchema(schema.value, schema.value, ir, "", schemaErrors);
+    const messages = traverseResult(schemaErrors, ErrorMessage.parse);
+    if (!messages.ok)
+      return corrupt(JSON.stringify(messages.error));
     const recordRoot = ArtifactPath.of(dirname2(dirname2(dirname2(outputPath))));
     const parsed = combineResults({
       irVersion: IrVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : ""),
@@ -5891,7 +5906,7 @@ class IrValidationMaterialsRepositoryImpl {
     return ok(IrValidationMaterials.of({
       id,
       irVersion: parsed.value.irVersion,
-      schemaErrors: ErrorMessages.of(schemaErrors.map((message) => ErrorMessage.of(message))),
+      schemaErrors: ErrorMessages.of(messages.value),
       view: view.value,
       frClaims: FunctionalRequirementReferenceClaims.of(claims.value),
       declaredDigest: parsed.value.declaredDigest,

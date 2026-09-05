@@ -1,4 +1,4 @@
-import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 // 成果物横断の名前照合（XS 検査）に使う正規化名——小文字化し英数字以外を落とす
 // ので "OrderItem" と "order_item" は同じ名になる。正規化規則と同一性は
 // この DP が所有する（種別規律の裁定 3、2026-09-02——旧随伴 class `Names` を
@@ -15,6 +15,8 @@ export class NormalizedName {
   static of(raw: string): NormalizedName {
     return new NormalizedName(raw);
   }
+
+  static parse(raw: string): Result<NormalizedName, ParseError> { return parseConstruction(() => new NormalizedName(raw)); }
 
   equals(other: NormalizedName): boolean {
     return this.#value === other.#value;

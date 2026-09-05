@@ -11,7 +11,9 @@
 - parseの失敗は例外に依存しないParseError型とした。コンストラクタの契約違反だけを独立した不変値へ変換する。
 - 原理原則はClaude/Codex両方のknowledge/aidlc-sharedへ配置し、ユーザーの加筆も同期した。org.mdへの変更は残していない。
 
-最終のローカル検証: **787成功・1スキップ・0失敗、788テスト、39ファイル、終了コード0**。TypeScript型検査、生成14ファイルの同期、plugin validation、7ハーネスのビルドが成功した。validationには従来のcompose-hook-absent警告が1件ある。lcov合算line coverageは**99.87637671386828%（8887 / 8898）**で、しきい値と除外は変更していない。正常系golden、契約スキーマ、aidlc-workflows submoduleに差分はない。
+最終のローカル検証: **818成功・1スキップ・0失敗、819テスト、40ファイル、終了コード0**。TypeScript型検査、生成14ファイルの同期、plugin validation、7ハーネスのビルドが成功した。validationには従来のcompose-hook-absent警告が1件ある。lcov合算line coverageは**99.87648776105996%（8895 / 8906）**で、しきい値と除外は変更していない。正常系golden、契約スキーマ、aidlc-workflows submoduleに差分はない。
+
+追加の[5観点のテスト](validation-test-matrix.md)では、同じ契約違反入力に対するofのpanicとparseの非例外ParseErrorを対で検証した。LineNumber・BlockIndexの安全整数範囲外を受け入れる不備を検出し修正した。テストは公開APIの結果を観測し、非公開フィールド、Object.freezeの採用、契約外の参照一致に依存しない。
 
 基線資料の実行環境は[再現手順](baseline-reproduction.md)で対象コミットへ固定する。監査シャードのHuman Turn見出しはツールの記録形式であり、Markdownの重複警告を解消する目的で過去のイベント見出しを改変しない。
 

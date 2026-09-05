@@ -74,17 +74,16 @@ describe("value size contracts", () => {
     test(`${name} rejects oversized values before interpreting them`, () => {
       const raw = "!".repeat(limit + 1);
       expect(() => factory.of(raw)).toThrow(IllegalArgumentException);
-      if ("parse" in factory) {
-        const parsed = factory.parse(raw);
-        expect(parsed.ok).toBe(false);
-        if (!parsed.ok) {
-          if (name === "VerificationMethod") {
-            expect(parsed.error.kind).toBe("unknown-verification-method");
-            expect(parsed.error.raw).toBe(raw);
-          } else {
-            expect(parsed.error.kind).toEndWith("too-long");
-            expect(parsed.error.raw).toBe(raw.length);
-          }
+      const parsed = factory.parse(raw);
+      expect(parsed.ok).toBe(false);
+      if (!parsed.ok) {
+        expect(parsed.error).not.toBeInstanceOf(Error);
+        if (name === "VerificationMethod") {
+          expect(parsed.error.kind).toBe("unknown-verification-method");
+          expect(parsed.error.raw).toBe(raw);
+        } else {
+          expect(parsed.error.kind).toEndWith("too-long");
+          expect(parsed.error.raw).toBe(raw.length);
         }
       }
     });

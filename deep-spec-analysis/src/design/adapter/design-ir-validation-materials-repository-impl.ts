@@ -260,6 +260,8 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
 
     const schemaErrors: string[] = [];
     validateSchema(schema.value, schema.value, ir, "", schemaErrors);
+    const messages = traverseResult(schemaErrors, ErrorMessage.parse);
+    if (!messages.ok) return corrupt(JSON.stringify(messages.error));
 
     const irVersion = IrVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : "");
     if (!irVersion.ok) return corrupt(JSON.stringify(irVersion.error));
@@ -288,7 +290,7 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
       DesignIrValidationMaterials.of({
         id,
         irVersion: irVersion.value,
-        schemaErrors: ErrorMessages.of(schemaErrors.map((message) => ErrorMessage.of(message))),
+        schemaErrors: ErrorMessages.of(messages.value),
         units: DesignUnitDecls.of(units),
         sourceDocument: new Uint8Array(bytes),
       }),

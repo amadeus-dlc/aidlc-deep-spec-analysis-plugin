@@ -220,25 +220,28 @@ describe("式の所有権を集約の内側に閉じる", () => {
   test("入力、公開面、visitorのいずれからも式の木を書き換えられない", () => {
     const leaf = { op: "ref", path: "order.state" };
     const expression = { op: "eq", args: [leaf, { op: "enum", value: "done" }] };
+    const expected = structuredClone(expression);
     const tree = ExpressionTree.of(expression);
     const obligation = Obligation.of({ id: ObligationId.of("OB-1"), nature: ObligationNature.of("invariant"), functionalRequirementReferences: FunctionalRequirementReferences.of([]), assert: expression });
     leaf.path = "changed";
     expect(tree.referencedPaths()).toEqual(["order.state"]);
     expect(obligation.assertion()?.args?.[0].path).toBe("order.state");
-    expect(Reflect.set(tree.asExpression(), "op", "broken")).toBe(false);
-    tree.walk((node) => expect(Reflect.set(node, "op", "broken")).toBe(false));
-    obligation.inspectExpressions((node) => expect(Reflect.set(node, "op", "broken")).toBe(false));
+    Reflect.set(tree.asExpression(), "op", "broken");
+    tree.walk((node) => { Reflect.set(node, "op", "broken"); });
+    obligation.inspectExpressions((node) => { Reflect.set(node, "op", "broken"); });
+    expect(tree.asExpression()).toEqual(expected);
+    expect(obligation.assertion()).toEqual(expected);
   });
 
   test("実Repositoryのモデルを経由しても、内容とハッシュと原文の対応を壊せない", () => {
     const model = requirementsModel();
-    const before = model.obligations().toArray().map((o) => o.assertion());
+    const before = structuredClone(model.obligations().toArray().map((o) => o.assertion()));
     const hash = model.irHash();
     const bytes = model.sourceDocument();
     for (const ob of model.obligations()) {
       ob.inspectExpressions((expression) => {
-        expect(Reflect.set(expression, "op", "broken")).toBe(false);
-        if (expression.args) expect(Reflect.set(expression.args, "0", { op: "bool", value: false })).toBe(false);
+        Reflect.set(expression, "op", "broken");
+        if (expression.args) Reflect.set(expression.args, "0", { op: "bool", value: false });
       });
     }
     expect(model.obligations().toArray().map((o) => o.assertion())).toEqual(before);

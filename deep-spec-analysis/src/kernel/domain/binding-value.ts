@@ -1,4 +1,4 @@
-import { IllegalArgumentException, parseConstruction, err, type Result } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, err, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 import type { Expression } from "./expression.ts";
 import type { DeclaredBindingValue } from "./declared-binding-value.ts";
 
@@ -18,11 +18,15 @@ export class BindingValue {
     return new BindingValue(value);
   }
 
+  static parse(value: boolean | number | string): Result<BindingValue, ParseError> {
+    return parseConstruction(() => new BindingValue(value));
+  }
+
   // 束縛宣言を論理値に昇格する。文字列の別名ファクトリではなく、宣言の解決操作。
   static resolve(declaration: DeclaredBindingValue): Result<BindingValue, string> {
     return declaration.match<Result<BindingValue, string>>({
       literal: (value) => {
-        const result = parseConstruction(() => new BindingValue(value));
+        const result = BindingValue.parse(value);
         return result.ok ? result : err(JSON.stringify(result.error));
       },
       nonLiteral: () => err(`binding value ${declaration.describe()} is not a boolean, safe integer, or enum literal`),

@@ -1,4 +1,4 @@
-import { IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, type ParseError, type Result } from "@deep-spec/kernel-infrastructure";
 
 // 1件の検査診断。文言が同じ診断も別々の発生としてコレクションに保持する。
 export class ErrorMessage {
@@ -12,5 +12,6 @@ export class ErrorMessage {
   }
 
   static of(value: string): ErrorMessage { return new ErrorMessage(value); }
+  static parse(value: string): Result<ErrorMessage, ParseError> { return parseConstruction(() => new ErrorMessage(value)); }
   asString(): string { return this.#value; }
 }

@@ -697,6 +697,9 @@ class NormalizedName {
   static of(raw) {
     return new NormalizedName(raw);
   }
+  static parse(raw) {
+    return parseConstruction(() => new NormalizedName(raw));
+  }
   equals(other) {
     return this.#value === other.#value;
   }
@@ -761,6 +764,9 @@ class DeclaredBound {
   }
   static of(value) {
     return new DeclaredBound(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new DeclaredBound(value));
   }
   asNumber() {
     return this.#value;
@@ -958,10 +964,13 @@ class BindingValue {
   static of(value) {
     return new BindingValue(value);
   }
+  static parse(value) {
+    return parseConstruction(() => new BindingValue(value));
+  }
   static resolve(declaration) {
     return declaration.match({
       literal: (value) => {
-        const result = parseConstruction(() => new BindingValue(value));
+        const result = BindingValue.parse(value);
         return result.ok ? result : err(JSON.stringify(result.error));
       },
       nonLiteral: () => err(`binding value ${declaration.describe()} is not a boolean, safe integer, or enum literal`)
@@ -1335,6 +1344,9 @@ class ErrorMessage {
   }
   static of(value) {
     return new ErrorMessage(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new ErrorMessage(value));
   }
   asString() {
     return this.#value;
