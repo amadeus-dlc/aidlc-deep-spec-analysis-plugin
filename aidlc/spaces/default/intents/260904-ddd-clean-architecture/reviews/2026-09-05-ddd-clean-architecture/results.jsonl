@@ -1,0 +1,6 @@
+{"name":"mutable-expression","expressionChanged":true,"hashUnchanged":true,"sourceUnchanged":true}
+{"name":"corrupt-sibling","malformedObjectAccepted":true,"comparedBackends":["quint","smt"],"invalidComparisonPersisted":true,"nonObjectSilentlyDropped":true}
+{"name":"aggregate-order-dependency","candidateUnavailable":true,"storedComparisonBackends":2,"correctComparisonBackends":0}
+{"name":"refinement-timeout-lost","backendCalls":2,"skippedLoweredIds":["OB-1","OB-2","OB-3","OB-4"],"requirementOB1MissingFromSkips":true,"outcome":"verified"}
+{"name":"timeout-becomes-unreachable","probe":{"kind":"probed","reached":false},"falseUnreachableFindings":2}
+{"name":"materials-port-failure","corruptInputBecomesInactive":true,"thrownCode":"EISDIR"}
