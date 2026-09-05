@@ -21,3 +21,4 @@ export { type QuintClientConfig } from "./quint-client-config.ts";
 export { IrValidationMaterialsRepositoryImpl } from "./ir-validation-materials-repository-impl.ts";
 export { type IrValidationMaterialsConfig } from "./ir-validation-materials-config.ts";
 export { RequirementsSourceRepositoryImpl } from "./requirements-source-repository-impl.ts";
+export { parseSmtChildResults } from "./smt-child-results-parser.ts";

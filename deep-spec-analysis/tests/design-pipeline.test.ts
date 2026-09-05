@@ -363,7 +363,7 @@ describe("lowering (typed compile-down)", () => {
     scenarios: [
       { id: "DSC-1", kind: "accept", brRefs: [], frRefs: ["FR-2"], bindings: { "Ticket.status": "open" } },
     ],
-    background: [{ id: "BG-A", assert: { op: "bool", value: true } }],
+    background: [{ id: "DBG-1", assert: { op: "bool", value: true } }],
   });
 
   test("numbering, maps, and the implicit machine encoding are stable", () => {
@@ -430,8 +430,8 @@ describe("lowering (typed compile-down)", () => {
         { id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} },
       ],
       background: [
-        { id: "BG-B", assert: { op: "bool", value: true } },
-        { id: "BG-A", assert: { op: "bool", value: false } },
+        { id: "DBG-2", assert: { op: "bool", value: true } },
+        { id: "DBG-1", assert: { op: "bool", value: false } },
       ],
     });
     const low = multi.lowered({ synthetics: false });
@@ -748,7 +748,7 @@ describe("report ordering, cross-check, and degradations", () => {
         { id: "OB-2", nature: "event", frRefs: [], trigger: "go", guard: { op: "bool", value: true }, effect: { op: "bool", value: true } },
       ],
       scenarios: [{ id: "SC-1" }],
-      background: [{ id: "BG-1", assert: { op: "bool", value: true } }],
+      background: [{ id: "DBG-1", assert: { op: "bool", value: true } }],
     };
     const variant = reachabilityVariant(base, "T.s", "dead") as { [k: string]: Json };
     const obs = variant.obligations as Json[];
@@ -924,8 +924,8 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
       { id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: {} },
     ],
     background: [
-      { id: "BG-B", assert: { op: "bool", value: false } },
-      { id: "BG-A", assert: { op: "bool", value: true } },
+      { id: "DBG-2", assert: { op: "bool", value: false } },
+      { id: "DBG-1", assert: { op: "bool", value: true } },
     ],
   });
 

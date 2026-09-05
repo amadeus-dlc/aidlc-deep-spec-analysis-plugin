@@ -6,7 +6,7 @@ export class DesignMachineId {
   readonly #value: string;
 
   private constructor(raw: string) {
-    if (raw === "") throw new IllegalArgumentException({ kind: "empty-machine-token", raw });
+    if (!/^SM-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-design-machine-id", raw });
     this.#value = raw;
   }
 

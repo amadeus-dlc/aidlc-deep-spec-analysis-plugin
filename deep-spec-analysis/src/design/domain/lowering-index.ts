@@ -62,15 +62,18 @@ export class LoweringIndex {
   }
 
   isTransition(designId: string): boolean {
-    return this.#machinesByTransition.has(DesignTransitionId.of(designId));
+    const parsed = DesignTransitionId.parse(designId);
+    return parsed.ok && this.#machinesByTransition.has(parsed.value);
   }
 
   machineOfTransition(designId: string): DesignMachine | null {
-    return this.#machinesByTransition.get(DesignTransitionId.of(designId)) ?? null;
+    const parsed = DesignTransitionId.parse(designId);
+    return parsed.ok ? this.#machinesByTransition.get(parsed.value) ?? null : null;
   }
 
   attrPathOfMachine(machineId: string): string | null {
-    return this.#attrPathsByMachine.get(DesignMachineId.of(machineId))?.asString() ?? null;
+    const parsed = DesignMachineId.parse(machineId);
+    return parsed.ok ? this.#attrPathsByMachine.get(parsed.value)?.asString() ?? null : null;
   }
 
   withPassthrough(loweredId: string, designId: string): LoweringIndex {

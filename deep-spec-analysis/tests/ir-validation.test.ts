@@ -1,3 +1,4 @@
+import type { Json } from "@deep-spec/kernel-infrastructure";
 import {
   DeclaredDigest,
   ContentHash,
@@ -371,7 +372,7 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
   type RawIrAttr = { name: string; kind: string; values?: string[]; min?: number; max?: number };
   type RawIrEntity = { name: string; attributes: RawIrAttr[] };
   type RawIrObligation = Omit<Parameters<typeof IrObligationDecl.of>[0], "id" | "temporal"> & { id: string; temporal?: Parameters<typeof IrTemporalDecl.of>[0] };
-  type RawIrScenario = Omit<Parameters<typeof IrScenarioDecl.of>[0], "id" | "bindings"> & { id: string; bindings: (readonly [string, unknown])[] };
+  type RawIrScenario = Omit<Parameters<typeof IrScenarioDecl.of>[0], "id" | "bindings"> & { id: string; bindings: (readonly [string, Json])[] };
   type RawIrBackground = Omit<Parameters<typeof IrBackgroundDecl.of>[0], "id"> & { id: string };
   function irView(overrides: {
     entities?: RawIrEntity[];
@@ -497,16 +498,17 @@ describe("modelWellFormednessErrors (contract 1 domain branches)", () => {
     ).toEqual(['obligation OB-1: unresolvable reference "order.ghost"']);
   });
 
-  test("duplicate ids are reported across obligations, scenarios and background", () => {
+  test("duplicate ids are reported within each typed ID namespace", () => {
     expect(
       irView({
-        obligations: [{ id: "X-1" }],
-        scenarios: [{ id: "X-1", bindings: [], hasEvent: false }],
-        background: [{ id: "X-1" }],
+        obligations: [{ id: "OB-1" }, { id: "OB-1" }],
+        scenarios: [{ id: "SC-1", bindings: [], hasEvent: false }, { id: "SC-1", bindings: [], hasEvent: false }],
+        background: [{ id: "BG-1" }, { id: "BG-1" }],
       }).wellFormednessErrors(),
     ).toEqual([
-      'scenario X-1: duplicate id "X-1"',
-      'background X-1: duplicate id "X-1"',
+      'obligation OB-1: duplicate id "OB-1"',
+      'scenario SC-1: duplicate id "SC-1"',
+      'background BG-1: duplicate id "BG-1"',
     ]);
   });
 
@@ -566,7 +568,7 @@ describe("DesignUnitDecls.wellFormednessErrors (contract 3 domain branches)", ()
   };
   type RawScenario = Omit<Parameters<typeof DesignScenarioDecl.of>[0], "id" | "bindings" | "brRefs"> & {
     id: string;
-    bindings: (readonly [string, unknown])[];
+    bindings: (readonly [string, Json])[];
     brRefs?: string[];
   };
   type RawBackground = Omit<Parameters<typeof DesignBackgroundDecl.of>[0], "id"> & { id: string };

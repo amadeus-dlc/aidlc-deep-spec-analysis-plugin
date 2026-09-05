@@ -9,15 +9,16 @@ import { WitnessRef } from "./witness-ref.ts";
 
 // 状態機械の素描。自分の位置ラベル（凍結書式）と spec 分解を所有する。
 export class StateMachineSketch {
-  readonly #seed: {
-  readonly spec: MachineSpec; // "Entity" or "Entity.attribute" from the heading
-  readonly states: StateNames;
-  readonly fenceLine: LineNumber;
-  readonly unsupported: string | null; // 文言材料（理由のプローズ）
-  };
+  readonly #spec: MachineSpec;
+  readonly #states: StateNames;
+  readonly #fenceLine: LineNumber;
+  readonly #unsupported: string | null;
 
   private constructor(seed: Parameters<typeof StateMachineSketch.of>[0]) {
-    this.#seed = seed;
+    this.#spec = seed.spec;
+    this.#states = seed.states;
+    this.#fenceLine = seed.fenceLine;
+    this.#unsupported = seed.unsupported;
   }
 
   static of(seed: {
@@ -30,20 +31,20 @@ export class StateMachineSketch {
   }
 
   spec(): MachineSpec {
-    return this.#seed.spec;
+    return this.#spec;
   }
 
   states(): StateNames {
-    return this.#seed.states;
+    return this.#states;
   }
 
   unsupported(): string | null {
-    return this.#seed.unsupported;
+    return this.#unsupported;
   }
 
   // 境界: witness と skip 文言に載る位置ラベル（凍結書式）。
   locationLabel(): string {
-    return `State Machine: ${this.#seed.spec.asString()} (fence line ${this.#seed.fenceLine.asNumber()})`;
+    return `State Machine: ${this.#spec.asString()} (fence line ${this.#fenceLine.asNumber()})`;
   }
 
   // FD-S1／S2 の不変条件（種別規律の裁定 13）: 図の状態は実体のライフサイクル

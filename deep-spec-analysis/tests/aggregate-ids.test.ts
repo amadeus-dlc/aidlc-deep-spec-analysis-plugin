@@ -260,9 +260,9 @@ describe("requirements first-class collections", () => {
     expect(scs.byId("SC-1")?.kind()).toBe("accept");
     expect(scs.ids()).toEqual(["SC-1"]);
 
-    const bgs = BackgroundAssumptions.of([]).add(BackgroundAssumption.of({ id: BackgroundAssumptionId.of("B1"), assert: { op: "bool", value: true } }));
+    const bgs = BackgroundAssumptions.of([]).add(BackgroundAssumption.of({ id: BackgroundAssumptionId.of("BG-1"), assert: { op: "bool", value: true } }));
     expect([...bgs].length).toBe(1);
-    expect(bgs.toArray()[0]?.id().asString()).toBe("B1");
+    expect(bgs.toArray()[0]?.id().asString()).toBe("BG-1");
     expect(bgs.toArray()[0]?.assertion()).toEqual({ op: "bool", value: true });
 
     const finding = VerificationFinding.of({ kind: FindingKind.of("conflict"), frRefs: FrRefs.of([]), targets: TargetIds.of(Array.from(["OB-1"], (raw) => TargetId.of(raw))), witness: VerificationWitness.core([]), detail: "d" });
@@ -402,10 +402,10 @@ describe("requirements identity primitives (issue #46 wave 5a)", () => {
     expect(sc.value.equals(ScenarioId.of("SC-1"))).toBe(true);
 
     expect(BackgroundAssumptionId.parse("").ok).toBe(false);
-    const bg = BackgroundAssumptionId.parse("B1");
+    const bg = BackgroundAssumptionId.parse("BG-1");
     if (!bg.ok) throw new Error("unreachable");
-    expect(bg.value.equals(BackgroundAssumptionId.of("B1"))).toBe(true);
-    expect(bg.value.asString()).toBe("B1");
+    expect(bg.value.equals(BackgroundAssumptionId.of("BG-1"))).toBe(true);
+    expect(bg.value.asString()).toBe("BG-1");
 
     expect(AttributePath.parse("").ok).toBe(false);
     const ap2 = AttributePath.parse("T.x");
@@ -461,10 +461,10 @@ describe("design identity primitives (issue #46 wave 5b)", () => {
     expect(tr.value.asString()).toBe("TR-1");
 
     expect(DesignBackgroundId.parse("").ok).toBe(false);
-    const bg = DesignBackgroundId.parse("BG-1");
+    const bg = DesignBackgroundId.parse("DBG-1");
     if (!bg.ok) throw new Error("unreachable");
-    expect(bg.value.equals(DesignBackgroundId.of("BG-1"))).toBe(true);
-    expect(bg.value.asString()).toBe("BG-1");
+    expect(bg.value.equals(DesignBackgroundId.of("DBG-1"))).toBe(true);
+    expect(bg.value.asString()).toBe("DBG-1");
 
     expect(DesignMachineId.parse("").ok).toBe(false);
     const sm = DesignMachineId.parse("SM-1");

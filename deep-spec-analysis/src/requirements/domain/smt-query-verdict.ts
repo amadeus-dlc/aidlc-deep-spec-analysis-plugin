@@ -1,11 +1,13 @@
-import { QueryLabel } from "@deep-spec/kernel-domain";
+import { VerificationSkipped } from "./verification-skipped.ts";
+import { VerificationSkips } from "./verification-skips.ts";
+import { QueryLabel, type TargetIds, SkipReason } from "@deep-spec/kernel-domain";
 
 // SMT クエリ 1 件の判定。主従の裁定（#71 波2）: 判定は命令できる抽象データ型
-// ——interpret が吸い出していた status 分類（undecided の 3 状態は #34 項 3 の
+// ——interpret が吸い出していた status 分類（未決状態は #34 項 3 の
 // 三重バグの土壌だった）と witness 材料面を判定自身が所有する。
-// ソルバがクエリ 1 つに返す結果の種類——判定の内部表現（裁定 21）。外からは
+// 応答と未応答を区別したクエリの状態——判定の内部表現。外からは
 // isSat / isUnsat / isUndecided で問う。
-type SmtQueryStatus = "sat" | "unsat" | "unknown" | "budget" | "error";
+type SmtQueryStatus = "sat" | "unsat" | "unknown" | "budget" | "error" | "missing";
 
 export class SmtQueryVerdict {
   readonly #status: SmtQueryStatus;
@@ -24,6 +26,22 @@ export class SmtQueryVerdict {
     return new SmtQueryVerdict(props);
   }
 
+  static missing(): SmtQueryVerdict {
+    return new SmtQueryVerdict({ status: "missing" });
+  }
+
+  isMissing(): boolean {
+    return this.#status === "missing";
+  }
+
+  // 欠落は応答契約の不成立。実際に返った未決状態の既存文言とは区別する。
+  skipsFor(targets: TargetIds, what: string): VerificationSkips {
+    if (!this.isUndecided()) return VerificationSkips.of([]);
+    const reason = this.isMissing() ? SkipReason.unrecognizedFormat() : SkipReason.timeout();
+    const detail = this.isMissing() ? `${what} returned no solver result` : `${what} exceeded the solver budget`;
+    return VerificationSkips.of([...targets].map((target) => VerificationSkipped.of({ target, reason, detail })));
+  }
+
   isSat(): boolean {
     return this.#status === "sat";
   }
@@ -32,7 +50,7 @@ export class SmtQueryVerdict {
     return this.#status === "unsat";
   }
 
-  // 未決（unknown / budget / error）——timeout skip の唯一の判定面。
+  // 未決（unknown / budget / error / missing）。理由の違いはskipsForが所有する。
   isUndecided(): boolean {
     return this.#status !== "sat" && this.#status !== "unsat";
   }

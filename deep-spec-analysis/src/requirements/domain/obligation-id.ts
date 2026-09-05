@@ -1,4 +1,4 @@
-import { IllegalArgumentException, parseConstruction, type Result } from "@deep-spec/kernel-infrastructure";
+import { IllegalArgumentException, parseConstruction, compareCanonically, type Result } from "@deep-spec/kernel-infrastructure";
 
 import { TargetId } from "@deep-spec/kernel-domain";
 
@@ -6,7 +6,7 @@ export class ObligationId {
   readonly #value: string;
 
   private constructor(raw: string) {
-    if (raw === "") throw new IllegalArgumentException({ kind: "empty-obligation-id", raw });
+    if (!/^OB-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-obligation-id", raw });
     this.#value = raw;
   }
 
@@ -22,9 +22,9 @@ export class ObligationId {
     return this.#value === other.#value;
   }
 
-  // 正準順（英字骨格→数値セグメント）——kernel の TargetId が所有する順序に従う（裁定 1）。
+  // 正準順（英字骨格→数値セグメント）は共通の比較器で求める。
   compareTo(other: ObligationId): number {
-    return this.asTargetId().compareTo(other.asTargetId());
+    return compareCanonically(this.#value, other.#value);
   }
 
   asString(): string {

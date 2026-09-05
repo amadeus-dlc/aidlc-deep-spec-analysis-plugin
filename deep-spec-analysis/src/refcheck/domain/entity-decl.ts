@@ -6,15 +6,16 @@ import { RelDecls } from "./rel-decls.ts";
 
 // エンティティ宣言。属性の重複・選定・解決は属性コレクションに委ねる。
 export class EntityDecl {
-  readonly #seed: {
-  readonly name: EntityName;
-  readonly element: ElementPath;
-  readonly attrs: AttrDecls;
-  readonly rels: RelDecls;
-  };
+  readonly #name: EntityName;
+  readonly #element: ElementPath;
+  readonly #attrs: AttrDecls;
+  readonly #rels: RelDecls;
 
   private constructor(seed: Parameters<typeof EntityDecl.of>[0]) {
-    this.#seed = seed;
+    this.#name = seed.name;
+    this.#element = seed.element;
+    this.#attrs = seed.attrs;
+    this.#rels = seed.rels;
   }
 
   static of(seed: {
@@ -27,26 +28,26 @@ export class EntityDecl {
   }
 
   name(): EntityName {
-    return this.#seed.name;
+    return this.#name;
   }
 
   element(): ElementPath {
-    return this.#seed.element;
+    return this.#element;
   }
 
   attrs(): AttrDecls {
-    return this.#seed.attrs;
+    return this.#attrs;
   }
 
   rels(): RelDecls {
-    return this.#seed.rels;
+    return this.#rels;
   }
 
   lifecycleAttr(): AttrDecl | null {
-    return this.#seed.attrs.lifecycleAttr();
+    return this.#attrs.lifecycleAttr();
   }
 
   attrNamed(token: string): AttrDecl | null {
-    return this.#seed.attrs.named(token);
+    return this.#attrs.named(token);
   }
 }

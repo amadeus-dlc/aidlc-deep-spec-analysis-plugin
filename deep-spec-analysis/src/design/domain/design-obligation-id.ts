@@ -4,7 +4,7 @@ export class DesignObligationId {
   readonly #value: string;
 
   private constructor(raw: string) {
-    if (raw === "") throw new IllegalArgumentException({ kind: "empty-design-obligation-id", raw });
+    if (!/^DOB-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-design-obligation-id", raw });
     this.#value = raw;
   }
 

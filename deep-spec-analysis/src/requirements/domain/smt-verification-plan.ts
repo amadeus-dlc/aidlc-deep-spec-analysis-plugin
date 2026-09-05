@@ -1,4 +1,4 @@
-import { SkipReason, FindingKind, TargetIds, KeySet, KeyedIndex, QueryLabel, TargetId, TriggerName } from "@deep-spec/kernel-domain";
+import { FindingKind, TargetIds, KeySet, KeyedIndex, QueryLabel, TargetId, TriggerName } from "@deep-spec/kernel-domain";
 // SMT 検証計画——コンパイラが要件モデルを SMT クエリに変換したときの対応表
 // （形式 SMT-LIB を含まない面）。計画は値オブジェクト（種別規律の裁定 7、
 // 2026-09-02——「事実」の名はドメインイベントに取っておく）。
@@ -23,21 +23,16 @@ import type { ScenarioId } from "./scenario-id.ts";
 
 export class SmtVerificationPlan {
   readonly #compiled: KeySet<ObligationId>;
+  readonly #vacuityQueries: KeyedIndex<ObligationId, QueryLabel>;
   readonly #skipped: VerificationSkips;
   readonly #labelToTarget: KeyedIndex<QueryLabel, TargetId>;
   readonly #eventPairs: SmtEventPairProbes;
   readonly #gapTriggers: KeyedIndex<TriggerName, TargetIds>;
   readonly #scenarioQueries: KeyedIndex<ScenarioId, QueryLabel>;
 
-  private constructor(seed: {
-    readonly compiled: KeySet<ObligationId>;
-    readonly skipped: VerificationSkips;
-    readonly labelToTarget: KeyedIndex<QueryLabel, TargetId>;
-    readonly eventPairs: SmtEventPairProbes;
-    readonly gapTriggers: KeyedIndex<TriggerName, TargetIds>;
-    readonly scenarioQueries: KeyedIndex<ScenarioId, QueryLabel>;
-  }) {
+  private constructor(seed: Parameters<typeof SmtVerificationPlan.of>[0]) {
     this.#compiled = seed.compiled;
+    this.#vacuityQueries = seed.vacuityQueries;
     this.#skipped = seed.skipped;
     this.#labelToTarget = seed.labelToTarget;
     this.#eventPairs = seed.eventPairs;
@@ -47,20 +42,14 @@ export class SmtVerificationPlan {
 
   static of(seed: {
     readonly compiled: KeySet<ObligationId>;
+    readonly vacuityQueries: KeyedIndex<ObligationId, QueryLabel>;
     readonly skipped: VerificationSkips;
     readonly labelToTarget: KeyedIndex<QueryLabel, TargetId>;
     readonly eventPairs: SmtEventPairProbes;
     readonly gapTriggers: KeyedIndex<TriggerName, TargetIds>;
     readonly scenarioQueries: KeyedIndex<ScenarioId, QueryLabel>;
   }): SmtVerificationPlan {
-    return new SmtVerificationPlan({
-      compiled: seed.compiled,
-      skipped: seed.skipped,
-      labelToTarget: seed.labelToTarget,
-      eventPairs: seed.eventPairs,
-      gapTriggers: seed.gapTriggers,
-      scenarioQueries: seed.scenarioQueries,
-    });
+    return new SmtVerificationPlan(seed);
   }
 
   // ソルバ実行不能でも文書に載るコンパイル時 skip（unavailable 文書用）。
@@ -107,40 +96,33 @@ export class SmtVerificationPlan {
       }));
     };
 
-    const timeoutSkip = (targets: TargetIds, what: string): void => {
-      for (const t of targets) {
-        skipped.push(VerificationSkipped.of({ target: t, reason: SkipReason.of("timeout"), detail: `${what} exceeded the solver budget` }));
-      }
-    };
-
     // (a) 大域一貫性。
     const global = results.verdictOf(QueryLabel.of("global"));
     let globallyUnsat = false;
-    if (global?.isUnsat()) {
+    if (global.isUnsat()) {
       globallyUnsat = true;
       addConflict(
         coreToTargets([...global.coreLabels()]),
         [...global.coreLabels()],
         "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.",
       );
-    } else if (global?.isUndecided()) {
-      timeoutSkip(invariantIds, "global consistency check");
+    } else if (global.isUndecided()) {
+      skipped.push(...global.skipsFor(invariantIds, "global consistency check"));
     }
 
     // (a) 前件空虚（大域 unsat のときは冗長な派生なので黙る）。
     if (!globallyUnsat) {
-      for (const ob of model.obligations()) {
-        const r = results.verdictOf(QueryLabel.of(`vac:${ob.id().asString()}`));
-        if (!r) continue;
+      for (const [obligationId, queryId] of this.#vacuityQueries) {
+        const r = results.verdictOf(queryId);
         if (r.isUnsat()) {
-          const targets = TargetIds.of([...coreToTargets([...r.coreLabels()]), ob.id().asTargetId()]).sortedUniqueCanonically();
+          const targets = TargetIds.of([...coreToTargets([...r.coreLabels()]), obligationId.asTargetId()]).sortedUniqueCanonically();
           addConflict(
             targets,
             [...r.coreLabels()],
-            `The condition of obligation ${ob.id().asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
+            `The condition of obligation ${obligationId.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
           );
         } else if (r.isUndecided()) {
-          timeoutSkip(TargetIds.of([ob.id().asTargetId()]), `vacuity check for ${ob.id().asString()}`);
+          skipped.push(...r.skipsFor(TargetIds.of([obligationId.asTargetId()]), `vacuity check for ${obligationId.asString()}`));
         }
       }
     }
@@ -149,7 +131,6 @@ export class SmtVerificationPlan {
     for (const pair of this.#eventPairs) {
       const overlap = pair.overlapVerdictIn(results);
       const joint = pair.jointVerdictIn(results);
-      if (!overlap || !joint) continue;
       if (overlap.isSat() && joint.isUnsat()) {
         addConflict(
           pair.targets().sortedUniqueCanonically(),
@@ -160,7 +141,8 @@ export class SmtVerificationPlan {
         // 未決（unknown/budget/error）は skip——3 状態の列挙が interpret ごとに
         // 散在していたのが #34 項 3 の土壌で、判定面 isUndecided() に収束した
         //（主従の裁定 #71 波2）。
-        timeoutSkip(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`);
+        const pending = [overlap, joint].find((v) => v.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
+        skipped.push(...pending.skipsFor(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`));
       }
     }
 
@@ -168,7 +150,6 @@ export class SmtVerificationPlan {
     for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => (a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0))) {
       const trigger = triggerName.asString();
       const r = results.verdictOf(QueryLabel.of(`gap:${trigger}`));
-      if (!r) continue;
       if (r.isSat()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.completenessGap(),
@@ -178,7 +159,7 @@ export class SmtVerificationPlan {
           detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`,
         }));
       } else if (r.isUndecided()) {
-        timeoutSkip(eventIds, `completeness check for trigger "${trigger}"`);
+        skipped.push(...r.skipsFor(eventIds, `completeness check for trigger "${trigger}"`));
       }
     }
 
@@ -187,9 +168,8 @@ export class SmtVerificationPlan {
       const qid = this.#scenarioQueries.get(sc.id());
       if (!qid) continue;
       const r = results.verdictOf(qid);
-      if (!r) continue;
       if (r.isUndecided()) {
-        timeoutSkip(TargetIds.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`);
+        skipped.push(...r.skipsFor(TargetIds.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`));
         continue;
       }
       if (sc.isAccept() && r.isUnsat()) {

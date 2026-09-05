@@ -4,7 +4,7 @@ export class BackgroundAssumptionId {
   readonly #value: string;
 
   private constructor(raw: string) {
-    if (raw === "") throw new IllegalArgumentException({ kind: "empty-background-id", raw });
+    if (!/^BG-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-background-assumption-id", raw });
     this.#value = raw;
   }
 

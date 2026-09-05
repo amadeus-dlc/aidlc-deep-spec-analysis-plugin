@@ -22,7 +22,7 @@ const lit = (value: boolean): Expression => ({ op: "lit", value });
 describe("design obligation", () => {
   test("inspectExpressions visits every held expression, primes allowed only on the effect", () => {
     const obligation = DesignObligation.of({
-      id: DesignObligationId.of("DO-1"),
+      id: DesignObligationId.of("DOB-1"),
       nature: DesignObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
       brRefs: BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))),
@@ -47,7 +47,7 @@ describe("design obligation", () => {
 
   test("eventDefinition requires a non-empty trigger on top of a complete guarded effect", () => {
     const complete = DesignObligation.of({
-      id: DesignObligationId.of("DO-2"),
+      id: DesignObligationId.of("DOB-2"),
       nature: DesignObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
       brRefs: BrRefs.of([]),
@@ -59,7 +59,7 @@ describe("design obligation", () => {
     expect(complete.eventDefinition()?.trigger.asString()).toBe("submit");
     expect(
       DesignObligation.of({
-        id: DesignObligationId.of("DO-3"),
+        id: DesignObligationId.of("DOB-3"),
         nature: DesignObligationNature.of("event"),
         origin: DesignObligationOrigin.of("rules"),
         brRefs: BrRefs.of([]),
@@ -72,7 +72,7 @@ describe("design obligation", () => {
 
   test("of round-trips every field through the accessors, and temporal() hands out a copy", () => {
     const obligation = DesignObligation.of({
-      id: DesignObligationId.of("DO-4"),
+      id: DesignObligationId.of("DOB-4"),
       nature: DesignObligationNature.of("invariant"),
       origin: DesignObligationOrigin.of("rules"),
       brRefs: BrRefs.of(Array.from(["BR2.1"], (raw) => BrRef.of(raw))),
@@ -80,7 +80,7 @@ describe("design obligation", () => {
       assert: lit(true),
       temporal: { pattern: "always", assert: lit(true) },
     });
-    expect(obligation.id().asString()).toBe("DO-4");
+    expect(obligation.id().asString()).toBe("DOB-4");
     expect(obligation.nature().asString()).toBe("invariant");
     expect(obligation.origin().asString()).toBe("rules");
     expect(obligation.brRefs().toStrings()).toEqual(["BR2.1"]);
@@ -100,7 +100,7 @@ describe("design obligation", () => {
 describe("design scenario", () => {
   const scenario = (kind: "accept" | "reject") =>
     DesignScenario.of({
-      id: DesignScenarioId.of("DS-1"),
+      id: DesignScenarioId.of("DSC-1"),
       kind,
       brRefs: BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))),
       frRefs: FrRefs.of([]),
@@ -116,7 +116,7 @@ describe("design scenario", () => {
 
   test("of round-trips every field through the accessors and bindings() hands out a copy", () => {
     const withEvent = DesignScenario.of({
-      id: DesignScenarioId.of("DS-2"),
+      id: DesignScenarioId.of("DSC-2"),
       kind: "reject",
       brRefs: BrRefs.of(Array.from(["BR7.1"], (raw) => BrRef.of(raw))),
       frRefs: FrRefs.of(Array.from(["FR-4"], (raw) => RequirementId.of(raw))),
@@ -124,7 +124,7 @@ describe("design scenario", () => {
       event: { trigger: TriggerName.of("close") },
       expect: lit(true),
     });
-    expect(withEvent.id().asString()).toBe("DS-2");
+    expect(withEvent.id().asString()).toBe("DSC-2");
     expect(withEvent.kind()).toBe("reject");
     expect(withEvent.brRefs().toStrings()).toEqual(["BR7.1"]);
     expect(withEvent.frRefs().toStrings()).toEqual(["FR-4"]);
@@ -148,7 +148,7 @@ describe("design transition decl", () => {
   const primed: Expression = { op: "ref", path: "Ticket.state", prime: true };
   const decl = (overrides: { from?: string; trigger?: TriggerName; guard?: Expression; effect?: Expression } = {}) =>
     DesignTransitionDecl.of({
-      id: DesignTransitionId.of("T-1"),
+      id: DesignTransitionId.of("TR-1"),
       from: "open",
       to: "closed",
       trigger: TriggerName.of("close"),
@@ -193,14 +193,14 @@ describe("design transition decl", () => {
 
   test("of round-trips every field through the accessors", () => {
     const full = decl();
-    expect(full.id().asString()).toBe("T-1");
+    expect(full.id().asString()).toBe("TR-1");
     expect(full.fromState()).toBe("open");
     expect(full.toState()).toBe("closed");
     expect(full.trigger()?.asString()).toBe("close");
     expect(full.brRefs()?.toStrings()).toEqual(["BR1.1"]);
     expect(full.guard()).toEqual(lit(true));
     expect(full.effect()).toEqual(primed);
-    const bare = DesignTransitionDecl.of({ id: DesignTransitionId.of("T-2") });
+    const bare = DesignTransitionDecl.of({ id: DesignTransitionId.of("TR-2") });
     expect(bare.fromState()).toBeUndefined();
     expect(bare.toState()).toBeUndefined();
     expect(bare.trigger()).toBeUndefined();
@@ -558,14 +558,14 @@ describe("design background assumption (an assumption owns its identity and cano
   test("id, assertion and the numeric-tail order", () => {
     const bg = (id: string, value: boolean): DesignBackgroundAssumption =>
       DesignBackgroundAssumption.of({ id: DesignBackgroundId.of(id), assert: { op: "bool", value } });
-    const b10 = bg("BG-10", true);
-    const b2 = bg("BG-2", false);
-    expect(b10.id().asString()).toBe("BG-10");
+    const b10 = bg("DBG-10", true);
+    const b2 = bg("DBG-2", false);
+    expect(b10.id().asString()).toBe("DBG-10");
     expect(b2.assertion()).toEqual({ op: "bool", value: false });
     expect(b2.compareTo(b10)).toBeLessThan(0);
     expect(b10.compareTo(b2)).toBeGreaterThan(0);
-    expect(b2.compareTo(bg("BG-2", true))).toBe(0);
-    expect(DesignBackgroundAssumptions.of([b10, b2]).sortedCanonically().toArray().map((b) => b.id().asString())).toEqual(["BG-2", "BG-10"]);
+    expect(b2.compareTo(bg("DBG-2", true))).toBe(0);
+    expect(DesignBackgroundAssumptions.of([b10, b2]).sortedCanonically().toArray().map((b) => b.id().asString())).toEqual(["DBG-2", "DBG-10"]);
   });
 });
 

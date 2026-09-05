@@ -6,7 +6,7 @@ export class ScenarioId {
   readonly #value: string;
 
   private constructor(raw: string) {
-    if (raw === "") throw new IllegalArgumentException({ kind: "empty-scenario-id", raw });
+    if (!/^SC-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-scenario-id", raw });
     this.#value = raw;
   }
 

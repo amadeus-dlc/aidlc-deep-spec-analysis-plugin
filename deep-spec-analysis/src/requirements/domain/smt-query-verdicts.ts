@@ -2,7 +2,7 @@
 // KeyedIndex（裁定 3-1、2026-09-03）。
 
 import { KeyedIndex, type QueryLabel } from "@deep-spec/kernel-domain";
-import type { SmtQueryVerdict } from "./smt-query-verdict.ts";
+import { SmtQueryVerdict } from "./smt-query-verdict.ts";
 
 export class SmtQueryVerdicts {
   readonly #values: KeyedIndex<QueryLabel, SmtQueryVerdict>;
@@ -15,7 +15,7 @@ export class SmtQueryVerdicts {
     return new SmtQueryVerdicts(values);
   }
 
-  verdictOf(queryId: QueryLabel): SmtQueryVerdict | undefined {
-    return this.#values.get(queryId);
+  verdictOf(queryId: QueryLabel): SmtQueryVerdict {
+    return this.#values.get(queryId) ?? SmtQueryVerdict.missing();
   }
 }

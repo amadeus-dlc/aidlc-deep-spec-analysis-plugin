@@ -1668,8 +1668,8 @@ class DesignTransition {
 class DesignTransitionId {
   #value;
   constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-design-transition-id", raw });
+    if (!/^TR-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-design-transition-id", raw });
     this.#value = raw;
   }
   static of(raw) {
@@ -1861,8 +1861,8 @@ class DesignIgnores {
 class DesignMachineId {
   #value;
   constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-machine-token", raw });
+    if (!/^SM-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-design-machine-id", raw });
     this.#value = raw;
   }
   static of(raw) {
@@ -2031,8 +2031,8 @@ class DesignObligation {
 class DesignObligationId {
   #value;
   constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-design-obligation-id", raw });
+    if (!/^DOB-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-design-obligation-id", raw });
     this.#value = raw;
   }
   static of(raw) {
@@ -2237,8 +2237,8 @@ class DesignScenario {
 class DesignScenarioId {
   #value;
   constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-design-scenario-id", raw });
+    if (!/^DSC-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-design-scenario-id", raw });
     this.#value = raw;
   }
   static of(raw) {
@@ -2491,13 +2491,16 @@ class LoweringIndex {
     });
   }
   isTransition(designId) {
-    return this.#machinesByTransition.has(DesignTransitionId.of(designId));
+    const parsed = DesignTransitionId.parse(designId);
+    return parsed.ok && this.#machinesByTransition.has(parsed.value);
   }
   machineOfTransition(designId) {
-    return this.#machinesByTransition.get(DesignTransitionId.of(designId)) ?? null;
+    const parsed = DesignTransitionId.parse(designId);
+    return parsed.ok ? this.#machinesByTransition.get(parsed.value) ?? null : null;
   }
   attrPathOfMachine(machineId) {
-    return this.#attrPathsByMachine.get(DesignMachineId.of(machineId))?.asString() ?? null;
+    const parsed = DesignMachineId.parse(machineId);
+    return parsed.ok ? this.#attrPathsByMachine.get(parsed.value)?.asString() ?? null : null;
   }
   withPassthrough(loweredId, designId) {
     return new LoweringIndex({
@@ -2753,8 +2756,8 @@ class DesignBackgroundAssumptions {
 class DesignBackgroundId {
   #value;
   constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-design-background-id", raw });
+    if (!/^DBG-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-design-background-id", raw });
     this.#value = raw;
   }
   static of(raw) {
@@ -3753,19 +3756,19 @@ class DesignVerifyDirectory {
 class BindingPairs {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = structuredClone(values);
   }
   static of(values) {
-    return new BindingPairs([...values]);
+    return new BindingPairs(values);
   }
   add(value) {
     return new BindingPairs([...this.#values, value]);
   }
   *[Symbol.iterator]() {
-    yield* this.#values;
+    yield* this.toArray();
   }
   toArray() {
-    return this.#values;
+    return structuredClone(this.#values);
   }
 }
 // src/design/domain/br-ref.ts
@@ -5232,8 +5235,8 @@ class Obligation {
 class ObligationId {
   #value;
   constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-obligation-id", raw });
+    if (!/^OB-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-obligation-id", raw });
     this.#value = raw;
   }
   static of(raw) {
@@ -5246,7 +5249,7 @@ class ObligationId {
     return this.#value === other.#value;
   }
   compareTo(other) {
-    return this.asTargetId().compareTo(other.asTargetId());
+    return compareCanonically(this.#value, other.#value);
   }
   asString() {
     return this.#value;
@@ -5362,8 +5365,8 @@ class Scenario {
 class ScenarioId {
   #value;
   constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-scenario-id", raw });
+    if (!/^SC-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-scenario-id", raw });
     this.#value = raw;
   }
   static of(raw) {
@@ -5483,8 +5486,8 @@ class RequirementsModel {
 class BackgroundAssumptionId {
   #value;
   constructor(raw) {
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-background-id", raw });
+    if (!/^BG-[0-9]+$/.test(raw))
+      throw new IllegalArgumentException({ kind: "malformed-background-assumption-id", raw });
     this.#value = raw;
   }
   static of(raw) {
@@ -6113,6 +6116,19 @@ class SmtQueryVerdict {
   static of(props) {
     return new SmtQueryVerdict(props);
   }
+  static missing() {
+    return new SmtQueryVerdict({ status: "missing" });
+  }
+  isMissing() {
+    return this.#status === "missing";
+  }
+  skipsFor(targets, what) {
+    if (!this.isUndecided())
+      return VerificationSkips.of([]);
+    const reason = this.isMissing() ? SkipReason.unrecognizedFormat() : SkipReason.timeout();
+    const detail = this.isMissing() ? `${what} returned no solver result` : `${what} exceeded the solver budget`;
+    return VerificationSkips.of([...targets].map((target) => VerificationSkipped.of({ target, reason, detail })));
+  }
   isSat() {
     return this.#status === "sat";
   }
@@ -6142,12 +6158,13 @@ class SmtQueryVerdicts {
     return new SmtQueryVerdicts(values);
   }
   verdictOf(queryId) {
-    return this.#values.get(queryId);
+    return this.#values.get(queryId) ?? SmtQueryVerdict.missing();
   }
 }
 // src/requirements/domain/smt-verification-plan.ts
 class SmtVerificationPlan {
   #compiled;
+  #vacuityQueries;
   #skipped;
   #labelToTarget;
   #eventPairs;
@@ -6155,6 +6172,7 @@ class SmtVerificationPlan {
   #scenarioQueries;
   constructor(seed) {
     this.#compiled = seed.compiled;
+    this.#vacuityQueries = seed.vacuityQueries;
     this.#skipped = seed.skipped;
     this.#labelToTarget = seed.labelToTarget;
     this.#eventPairs = seed.eventPairs;
@@ -6162,14 +6180,7 @@ class SmtVerificationPlan {
     this.#scenarioQueries = seed.scenarioQueries;
   }
   static of(seed) {
-    return new SmtVerificationPlan({
-      compiled: seed.compiled,
-      skipped: seed.skipped,
-      labelToTarget: seed.labelToTarget,
-      eventPairs: seed.eventPairs,
-      gapTriggers: seed.gapTriggers,
-      scenarioQueries: seed.scenarioQueries
-    });
+    return new SmtVerificationPlan(seed);
   }
   planSkipped() {
     return this.#skipped;
@@ -6199,48 +6210,38 @@ class SmtVerificationPlan {
         detail
       }));
     };
-    const timeoutSkip = (targets, what) => {
-      for (const t of targets) {
-        skipped.push(VerificationSkipped.of({ target: t, reason: SkipReason.of("timeout"), detail: `${what} exceeded the solver budget` }));
-      }
-    };
     const global = results.verdictOf(QueryLabel.of("global"));
     let globallyUnsat = false;
-    if (global?.isUnsat()) {
+    if (global.isUnsat()) {
       globallyUnsat = true;
       addConflict(coreToTargets([...global.coreLabels()]), [...global.coreLabels()], "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.");
-    } else if (global?.isUndecided()) {
-      timeoutSkip(invariantIds, "global consistency check");
+    } else if (global.isUndecided()) {
+      skipped.push(...global.skipsFor(invariantIds, "global consistency check"));
     }
     if (!globallyUnsat) {
-      for (const ob of model.obligations()) {
-        const r = results.verdictOf(QueryLabel.of(`vac:${ob.id().asString()}`));
-        if (!r)
-          continue;
+      for (const [obligationId, queryId] of this.#vacuityQueries) {
+        const r = results.verdictOf(queryId);
         if (r.isUnsat()) {
-          const targets = TargetIds.of([...coreToTargets([...r.coreLabels()]), ob.id().asTargetId()]).sortedUniqueCanonically();
-          addConflict(targets, [...r.coreLabels()], `The condition of obligation ${ob.id().asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`);
+          const targets = TargetIds.of([...coreToTargets([...r.coreLabels()]), obligationId.asTargetId()]).sortedUniqueCanonically();
+          addConflict(targets, [...r.coreLabels()], `The condition of obligation ${obligationId.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`);
         } else if (r.isUndecided()) {
-          timeoutSkip(TargetIds.of([ob.id().asTargetId()]), `vacuity check for ${ob.id().asString()}`);
+          skipped.push(...r.skipsFor(TargetIds.of([obligationId.asTargetId()]), `vacuity check for ${obligationId.asString()}`));
         }
       }
     }
     for (const pair of this.#eventPairs) {
       const overlap = pair.overlapVerdictIn(results);
       const joint = pair.jointVerdictIn(results);
-      if (!overlap || !joint)
-        continue;
       if (overlap.isSat() && joint.isUnsat()) {
         addConflict(pair.targets().sortedUniqueCanonically(), [...joint.coreLabels()], `Events ${pair.a().asString()} and ${pair.b().asString()} for trigger "${pair.trigger().asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`);
       } else if (overlap.isUndecided() || joint.isUndecided()) {
-        timeoutSkip(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`);
+        const pending = [overlap, joint].find((v) => v.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
+        skipped.push(...pending.skipsFor(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`));
       }
     }
     for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0)) {
       const trigger = triggerName.asString();
       const r = results.verdictOf(QueryLabel.of(`gap:${trigger}`));
-      if (!r)
-        continue;
       if (r.isSat()) {
         findings.push(VerificationFinding.of({
           kind: FindingKind.completenessGap(),
@@ -6250,7 +6251,7 @@ class SmtVerificationPlan {
           detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`
         }));
       } else if (r.isUndecided()) {
-        timeoutSkip(eventIds, `completeness check for trigger "${trigger}"`);
+        skipped.push(...r.skipsFor(eventIds, `completeness check for trigger "${trigger}"`));
       }
     }
     for (const sc of model.scenarios()) {
@@ -6258,10 +6259,8 @@ class SmtVerificationPlan {
       if (!qid)
         continue;
       const r = results.verdictOf(qid);
-      if (!r)
-        continue;
       if (r.isUndecided()) {
-        timeoutSkip(TargetIds.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`);
+        skipped.push(...r.skipsFor(TargetIds.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`));
         continue;
       }
       if (sc.isAccept() && r.isUnsat()) {
@@ -7036,19 +7035,19 @@ class IrBackgroundDecls {
 class IrBindingPairs {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = structuredClone(values);
   }
   static of(values) {
-    return new IrBindingPairs([...values]);
+    return new IrBindingPairs(values);
   }
   add(value) {
     return new IrBindingPairs([...this.#values, value]);
   }
   *[Symbol.iterator]() {
-    yield* this.#values;
+    yield* this.toArray();
   }
   toArray() {
-    return this.#values;
+    return structuredClone(this.#values);
   }
 }
 // src/requirements/domain/ir-declared-values.ts

@@ -4,7 +4,7 @@ export class DesignScenarioId {
   readonly #value: string;
 
   private constructor(raw: string) {
-    if (raw === "") throw new IllegalArgumentException({ kind: "empty-design-scenario-id", raw });
+    if (!/^DSC-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-design-scenario-id", raw });
     this.#value = raw;
   }
 

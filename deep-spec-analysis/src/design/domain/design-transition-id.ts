@@ -4,7 +4,7 @@ export class DesignTransitionId {
   readonly #value: string;
 
   private constructor(raw: string) {
-    if (raw === "") throw new IllegalArgumentException({ kind: "empty-design-transition-id", raw });
+    if (!/^TR-[0-9]+$/.test(raw)) throw new IllegalArgumentException({ kind: "malformed-design-transition-id", raw });
     this.#value = raw;
   }
 

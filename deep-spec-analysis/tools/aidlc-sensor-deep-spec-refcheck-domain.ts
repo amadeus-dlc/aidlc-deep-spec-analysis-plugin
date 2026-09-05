@@ -2981,82 +2981,102 @@ class UnitDecls {
 }
 // src/refcheck/domain/attr-decl.ts
 class AttrDecl {
-  #seed;
+  #name;
+  #element;
+  #type;
+  #uniqueIsTrue;
+  #references;
+  #allowed;
+  #def;
+  #minDeclared;
+  #maxDeclared;
+  #min;
+  #max;
   constructor(seed) {
-    this.#seed = seed;
+    this.#name = seed.name;
+    this.#element = seed.element;
+    this.#type = seed.type;
+    this.#uniqueIsTrue = seed.uniqueIsTrue;
+    this.#references = seed.references;
+    this.#allowed = seed.allowed;
+    this.#def = seed.def;
+    this.#minDeclared = seed.minDeclared;
+    this.#maxDeclared = seed.maxDeclared;
+    this.#min = seed.min;
+    this.#max = seed.max;
   }
   static of(seed) {
     return new AttrDecl(seed);
   }
   name() {
-    return this.#seed.name;
+    return this.#name;
   }
   element() {
-    return this.#seed.element;
+    return this.#element;
   }
   references() {
-    return this.#seed.references;
+    return this.#references;
   }
   def() {
-    return this.#seed.def;
+    return this.#def;
   }
   min() {
-    return this.#seed.min;
+    return this.#min;
   }
   max() {
-    return this.#seed.max;
+    return this.#max;
   }
   hasAllowedValues() {
-    return this.#seed.allowed !== null;
+    return this.#allowed !== null;
   }
   typeToken() {
-    return this.#seed.type === null ? "" : this.#seed.type.normalized();
+    return this.#type === null ? "" : this.#type.normalized();
   }
   typeText() {
-    return this.#seed.type === null ? "null" : this.#seed.type.asString();
+    return this.#type === null ? "null" : this.#type.asString();
   }
   declaresAllowedValuesOnNonEnumerableType() {
-    const t = this.#seed.type;
-    if (t === null || this.#seed.allowed === null)
+    const t = this.#type;
+    if (t === null || this.#allowed === null)
       return false;
     return t.classifiesNumeric() || t.classifiesDate() || t.classifiesBool();
   }
   declaresBoundsOnNonNumericType() {
-    const t = this.#seed.type;
-    if (!(this.#seed.minDeclared || this.#seed.maxDeclared))
+    const t = this.#type;
+    if (!(this.#minDeclared || this.#maxDeclared))
       return false;
     if (t === null || t.normalized() === "")
       return false;
     return !t.classifiesNumeric() && !t.classifiesDate();
   }
   declaresUniqueOnCollectionType() {
-    return this.#seed.uniqueIsTrue && this.#seed.type !== null && this.#seed.type.classifiesCollection();
+    return this.#uniqueIsTrue && this.#type !== null && this.#type.classifiesCollection();
   }
   boundsInverted() {
-    return this.#seed.min !== null && this.#seed.max !== null && this.#seed.min.exceeds(this.#seed.max);
+    return this.#min !== null && this.#max !== null && this.#min.exceeds(this.#max);
   }
   defaultBelowMin() {
-    const d = this.#seed.def;
-    return d !== null && this.#seed.min !== null && d.belowBound(this.#seed.min);
+    const d = this.#def;
+    return d !== null && this.#min !== null && d.belowBound(this.#min);
   }
   defaultAboveMax() {
-    const d = this.#seed.def;
-    return d !== null && this.#seed.max !== null && d.aboveBound(this.#seed.max);
+    const d = this.#def;
+    return d !== null && this.#max !== null && d.aboveBound(this.#max);
   }
   defaultOutsideAllowed() {
-    const d = this.#seed.def;
-    if (this.#seed.allowed === null || d === null || !d.isString())
+    const d = this.#def;
+    if (this.#allowed === null || d === null || !d.isString())
       return false;
-    return !this.#seed.allowed.containsValue(d.asString());
+    return !this.#allowed.containsValue(d.asString());
   }
   bearsLifecycleName() {
-    return this.#seed.name.isLifecycleName();
+    return this.#name.isLifecycleName();
   }
   rogueDiagramStates(states) {
-    return this.#seed.allowed === null ? [] : this.#seed.allowed.rogueAmong(states);
+    return this.#allowed === null ? [] : this.#allowed.rogueAmong(states);
   }
   allowedValuesAbsentFrom(states) {
-    return this.#seed.allowed === null ? [] : this.#seed.allowed.absentFrom(states);
+    return this.#allowed === null ? [] : this.#allowed.absentFrom(states);
   }
 }
 // src/refcheck/domain/attr-decls.ts
@@ -3139,22 +3159,26 @@ var FUNCTIONAL_FAMILIES = CheckFamilies.of([
 
 // src/refcheck/domain/declared-entities.ts
 class DeclaredEntities {
-  #seed;
+  #entities;
+  #rels;
+  #shapeErrors;
   constructor(seed) {
-    this.#seed = seed;
+    this.#entities = seed.entities;
+    this.#rels = seed.rels;
+    this.#shapeErrors = seed.shapeErrors;
   }
   static of(seed) {
     return new DeclaredEntities(seed);
   }
   entities() {
-    return this.#seed.entities;
+    return this.#entities;
   }
   shapeErrors() {
-    return this.#seed.shapeErrors;
+    return this.#shapeErrors;
   }
   allRels() {
-    let all = this.#seed.rels;
-    for (const e of this.#seed.entities)
+    let all = this.#rels;
+    for (const e of this.#entities)
       all = all.concat(e.rels());
     return all;
   }
@@ -3266,21 +3290,25 @@ class DomainEntitiesOutcome {
 }
 // src/refcheck/domain/domain-entity-sketch.ts
 class DomainEntitySketch {
-  #seed;
+  #name;
+  #component;
+  #attributes;
   constructor(seed) {
-    this.#seed = seed;
+    this.#name = seed.name;
+    this.#component = seed.component;
+    this.#attributes = seed.attributes;
   }
   static of(seed) {
     return new DomainEntitySketch(seed);
   }
   name() {
-    return this.#seed.name;
+    return this.#name;
   }
   catalogLabel() {
-    return `entity ${this.#seed.name.asString()} (component ${this.#seed.component.asString()})`;
+    return `entity ${this.#name.asString()} (component ${this.#component.asString()})`;
   }
   attributesDroppedIn(unitAttrs) {
-    return this.#seed.attributes.toArray().filter((a) => !unitAttrs.coversNormalized(a)).map((a) => a.asString()).sort();
+    return this.#attributes.toArray().filter((a) => !unitAttrs.coversNormalized(a)).map((a) => a.asString()).sort();
   }
 }
 // src/refcheck/domain/domain-entity-sketches.ts
@@ -3411,30 +3439,36 @@ class EntitiesOutcome {
 }
 // src/refcheck/domain/entity-decl.ts
 class EntityDecl {
-  #seed;
+  #name;
+  #element;
+  #attrs;
+  #rels;
   constructor(seed) {
-    this.#seed = seed;
+    this.#name = seed.name;
+    this.#element = seed.element;
+    this.#attrs = seed.attrs;
+    this.#rels = seed.rels;
   }
   static of(seed) {
     return new EntityDecl(seed);
   }
   name() {
-    return this.#seed.name;
+    return this.#name;
   }
   element() {
-    return this.#seed.element;
+    return this.#element;
   }
   attrs() {
-    return this.#seed.attrs;
+    return this.#attrs;
   }
   rels() {
-    return this.#seed.rels;
+    return this.#rels;
   }
   lifecycleAttr() {
-    return this.#seed.attrs.lifecycleAttr();
+    return this.#attrs.lifecycleAttr();
   }
   attrNamed(token) {
-    return this.#seed.attrs.named(token);
+    return this.#attrs.named(token);
   }
 }
 // src/refcheck/domain/entity-decls.ts
@@ -3526,30 +3560,38 @@ class FunctionalSpecOutcome {
 }
 // src/refcheck/domain/rel-decl.ts
 class RelDecl {
-  #seed;
+  #element;
+  #from;
+  #to;
+  #cardinality;
+  #hasDirection;
   constructor(seed) {
-    this.#seed = seed;
+    this.#element = seed.element;
+    this.#from = seed.from;
+    this.#to = seed.to;
+    this.#cardinality = seed.cardinality;
+    this.#hasDirection = seed.hasDirection;
   }
   static of(seed) {
     return new RelDecl(seed);
   }
   element() {
-    return this.#seed.element;
+    return this.#element;
   }
   from() {
-    return this.#seed.from;
+    return this.#from;
   }
   to() {
-    return this.#seed.to;
+    return this.#to;
   }
   cardinality() {
-    return this.#seed.cardinality;
+    return this.#cardinality;
   }
   cardinalityOutsideClosedSet() {
-    return this.#seed.cardinality !== null && !this.#seed.cardinality.isInClosedSet();
+    return this.#cardinality !== null && !this.#cardinality.isInClosedSet();
   }
   cardinalityWithoutDirection() {
-    return this.#seed.cardinality !== null && !this.#seed.hasDirection;
+    return this.#cardinality !== null && !this.#hasDirection;
   }
 }
 // src/refcheck/domain/rel-decls.ts
@@ -3576,36 +3618,46 @@ class RelDecls {
 }
 // src/refcheck/domain/rule-decl.ts
 class RuleDecl {
-  #seed;
+  #id;
+  #element;
+  #category;
+  #appliesTo;
+  #sourceIds;
+  #missing;
   constructor(seed) {
-    this.#seed = seed;
+    this.#id = seed.id;
+    this.#element = seed.element;
+    this.#category = seed.category;
+    this.#appliesTo = seed.appliesTo;
+    this.#sourceIds = seed.sourceIds;
+    this.#missing = Object.freeze([...seed.missing]);
   }
   static of(seed) {
     return new RuleDecl(seed);
   }
   id() {
-    return this.#seed.id;
+    return this.#id;
   }
   element() {
-    return this.#seed.element;
+    return this.#element;
   }
   category() {
-    return this.#seed.category;
+    return this.#category;
   }
   appliesTo() {
-    return this.#seed.appliesTo;
+    return this.#appliesTo;
   }
   missing() {
-    return this.#seed.missing;
+    return this.#missing;
   }
   findingTarget(fallback) {
-    return this.#seed.id !== null && this.#seed.id.matchesShape() ? this.#seed.id.asString() : fallback;
+    return this.#id !== null && this.#id.matchesShape() ? this.#id.asString() : fallback;
   }
   sourceIdValuesMissingFrom(known) {
-    return this.#seed.sourceIds.valuesMissingFrom(known);
+    return this.#sourceIds.valuesMissingFrom(known);
   }
   categoryOutsideClosedSet() {
-    return this.#seed.category !== null && !this.#seed.category.isKnownCategory();
+    return this.#category !== null && !this.#category.isKnownCategory();
   }
 }
 // src/refcheck/domain/rule-decls.ts
@@ -3809,24 +3861,30 @@ class SiblingUnitIndex {
 }
 // src/refcheck/domain/state-machine-sketch.ts
 class StateMachineSketch {
-  #seed;
+  #spec;
+  #states;
+  #fenceLine;
+  #unsupported;
   constructor(seed) {
-    this.#seed = seed;
+    this.#spec = seed.spec;
+    this.#states = seed.states;
+    this.#fenceLine = seed.fenceLine;
+    this.#unsupported = seed.unsupported;
   }
   static of(seed) {
     return new StateMachineSketch(seed);
   }
   spec() {
-    return this.#seed.spec;
+    return this.#spec;
   }
   states() {
-    return this.#seed.states;
+    return this.#states;
   }
   unsupported() {
-    return this.#seed.unsupported;
+    return this.#unsupported;
   }
   locationLabel() {
-    return `State Machine: ${this.#seed.spec.asString()} (fence line ${this.#seed.fenceLine.asNumber()})`;
+    return `State Machine: ${this.#spec.asString()} (fence line ${this.#fenceLine.asNumber()})`;
   }
   check(report, specArtifact, entitiesArtifact, entities) {
     const specArt = specArtifact.asString();

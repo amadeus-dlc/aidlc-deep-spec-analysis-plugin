@@ -10,14 +10,14 @@ import { WitnessRef } from "./witness-ref.ts";
 // 選定はエンティティコレクションに委ね、最上位と各エンティティ配下の関係の
 // 合成順（凍結）を所有する。
 export class DeclaredEntities {
-  readonly #seed: {
-  readonly entities: EntityDecls;
-  readonly rels: RelDecls; // top-level relationships
-  readonly shapeErrors: ShapeErrors;
-  };
+  readonly #entities: EntityDecls;
+  readonly #rels: RelDecls;
+  readonly #shapeErrors: ShapeErrors;
 
   private constructor(seed: Parameters<typeof DeclaredEntities.of>[0]) {
-    this.#seed = seed;
+    this.#entities = seed.entities;
+    this.#rels = seed.rels;
+    this.#shapeErrors = seed.shapeErrors;
   }
 
   static of(seed: {
@@ -29,17 +29,17 @@ export class DeclaredEntities {
   }
 
   entities(): EntityDecls {
-    return this.#seed.entities;
+    return this.#entities;
   }
 
   shapeErrors(): ShapeErrors {
-    return this.#seed.shapeErrors;
+    return this.#shapeErrors;
   }
 
   // 最上位＋各エンティティ配下の全関係宣言（旧 allRels の合成順）。
   allRels(): RelDecls {
-    let all = this.#seed.rels;
-    for (const e of this.#seed.entities) all = all.concat(e.rels());
+    let all = this.#rels;
+    for (const e of this.#entities) all = all.concat(e.rels());
     return all;
   }
 

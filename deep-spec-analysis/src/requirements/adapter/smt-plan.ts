@@ -259,6 +259,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   // (a) 全 invariant/numeric 義務の大域一貫性。
   queries.push({ id: "global", script: baseScript, assumptions: baseAssumptions, model: modelVars });
 
+  const vacuityQueries: (readonly [ObligationId, QueryLabel])[] = [];
   // (a) implication 形不変量の前件空虚。
   for (const ob of invariantObs) {
     const ant = ob.vacuityAntecedent();
@@ -267,6 +268,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       const name = smtName("ant", ob.id().asString());
       const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${smtOf(model, ant)}))`].join("\n");
       queries.push({ id: `vac:${ob.id().asString()}`, script, assumptions: [...baseAssumptions, name], model: [] });
+      vacuityQueries.push([ob.id(), QueryLabel.of(`vac:${ob.id().asString()}`)]);
     } catch (error) {
       if (!(error instanceof CompileError)) throw error;
       // 前件は完全形 assert のコンパイルで一度通っている——到達不能。
@@ -381,6 +383,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
   return {
     queries,
     plan: SmtVerificationPlan.of({
+      vacuityQueries: KeyedIndex.of(vacuityQueries),
       compiled: KeySet.of([...compiled].filter(([, ok]) => ok).map(([id]) => ObligationId.of(id))),
       skipped: VerificationSkips.of(skipped),
       labelToTarget: KeyedIndex.of([...labelToTarget].filter(([, target]) => target.startsWith("OB-")).map(([label, target]) => [QueryLabel.of(label), TargetId.of(target)] as const)),

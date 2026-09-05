@@ -1,4 +1,5 @@
-import { combineResults, traverseResult, ok } from "@deep-spec/kernel-infrastructure";
+import { parseSmtChildResults } from "./smt-child-results-parser.ts";
+import { type Json, isObject, combineResults, traverseResult, ok } from "@deep-spec/kernel-infrastructure";
 // Z3SolverClient の実 Gateway 実装。計画を組み、自分自身のエントリ
 // （--smt-child）を node 優先・bun フォールバックで spawn して解かせ、
 // 生のテキストモデルを decode した型付き判定を返す。selfPath・タイムアウト・
@@ -74,15 +75,20 @@ export class Z3SolverClientImpl implements Z3SolverClient {
         attempts.push(`${runtime}: ${res.error ? String(res.error) : `exit ${res.status}`}${stderrTail ? ` (${stderrTail})` : ""}`);
         continue;
       }
+      let raw: Json;
       try {
-        const parsed = JSON.parse((res.stdout ?? "").trim().split("\n").pop() ?? "");
-        if (typeof parsed.unavailable === "string") return { unavailable: parsed.unavailable };
-        const map = new Map<string, SmtChildResult>();
-        for (const r of parsed.results ?? []) map.set(r.id, r);
-        return { results: map };
+        raw = JSON.parse((res.stdout ?? "").trim().split("\n").pop() ?? "");
       } catch {
         attempts.push(`${runtime}: solver child produced unreadable output`);
+        continue;
       }
+      if (isObject(raw) && typeof raw.unavailable === "string") return { unavailable: raw.unavailable };
+      const parsed = parseSmtChildResults(raw, queries.map((query) => query.id));
+      if (!parsed.ok) {
+        attempts.push(`${runtime}: ${parsed.error}`);
+        continue;
+      }
+      return { results: parsed.value };
     }
     return { unavailable: `no runtime could execute the z3 child process (${attempts.join("; ")})` };
   }
