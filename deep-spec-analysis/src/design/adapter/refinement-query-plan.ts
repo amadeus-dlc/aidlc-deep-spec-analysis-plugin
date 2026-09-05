@@ -158,7 +158,8 @@ export function designBase(
     for (const bg of u.background()) {
       try {
         constraints.push({ name: smtName("bg", bg.id().asString()), smt: smtOfExpr(ctx, bg.assertion()) });
-      } catch {
+      } catch (error) {
+        if (!(error instanceof SmtCompileError)) throw error;
         // コンパイルできない背景は落とす——設計パスが報告する。
       }
     }
@@ -167,7 +168,8 @@ export function designBase(
       if (ob.isInvariantLike() && assertion !== undefined) {
         try {
           constraints.push({ name: smtName("inv", ob.id().asString()), smt: smtOfExpr(ctx, assertion) });
-        } catch {
+        } catch (error) {
+          if (!(error instanceof SmtCompileError)) throw error;
           // 同上。
         }
       }
@@ -264,6 +266,7 @@ export function buildRefinementQueries(
         queries.push(q);
         pending.set(q.id, RefinementProbe.invariant(ObligationId.of(obId)));
       } catch (err) {
+        if (!(err instanceof SmtCompileError)) throw err;
         alphaFail(obId, failureMessage(err));
       }
       continue;
@@ -352,6 +355,7 @@ export function buildRefinementQueries(
           pending.set(qs.id, RefinementProbe.simulation(ObligationId.of(obId), designId));
         }
       } catch (err) {
+        if (!(err instanceof SmtCompileError)) throw err;
         alphaFail(obId, failureMessage(err));
       }
     }
@@ -387,6 +391,7 @@ export function buildRefinementQueries(
       queries.push(q);
       pending.set(q.id, RefinementProbe.scenario(ScenarioId.of(scId)));
     } catch (err) {
+      if (!(err instanceof SmtCompileError)) throw err;
       alphaFail(scId, failureMessage(err));
     }
   }

@@ -45,17 +45,18 @@ export class FormalModelRepositoryImpl implements FormalModelRepository {
       return err({ kind: "corrupt", path: modelPath, cause: "formal model does not contain exactly one readable ```json fence" });
     }
     const seed = parseFormalModel(rawIr);
-    if (typeof seed === "string") {
-      return err({ kind: "corrupt", path: modelPath, cause: seed });
+    if (!seed.ok) {
+      return err({ kind: "corrupt", path: modelPath, cause: seed.error });
     }
-    return ok(RequirementsModel.of({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), sourceDocument: new Uint8Array(bytes), ...seed }));
+    return ok(RequirementsModel.of({ id, irHash: ContentHash.ofText(canonicalStringify(rawIr)), sourceDocument: new Uint8Array(bytes), ...seed.value }));
   }
 
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
   store(model: RequirementsModel): Result<void, RepositoryError> {
     const modelPath = model.id().artifactPath().asString();
+    const bytes = model.sourceDocument();
     try {
-      writeFileAtomically(modelPath, model.sourceDocument());
+      writeFileAtomically(modelPath, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path: modelPath, cause: e instanceof Error ? e.message : String(e) });

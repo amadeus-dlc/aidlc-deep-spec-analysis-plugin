@@ -286,7 +286,9 @@ type RawDesignScenario = Omit<Parameters<typeof DesignScenario.of>[0], "id" | "b
 // DesignUnit は生 JSON を持たなくなった）。座標だけ与えられた属性は kind "" の
 // 宣言として補う——旧 attrPaths の役目。
 function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDecls {
-  let declared = parseDesignEntities({ entities: raw });
+  const parsed = parseDesignEntities({ entities: raw });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.error));
+  let declared = parsed.value;
   const covered = new Set<string>();
   for (const ent of declared) for (const attr of ent.attributes()) covered.add(`${ent.name().asString()}.${attr.name().asString()}`);
   const extra = new Map<string, string[]>();

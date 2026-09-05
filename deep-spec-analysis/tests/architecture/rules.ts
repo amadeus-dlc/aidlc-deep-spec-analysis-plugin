@@ -369,6 +369,17 @@ export function noReconstitutionBypass(relPath: string, rawSource: string): Viol
   return [];
 }
 
+// constructorの契約違反をResultへ変換できるのはドメインのparseだけ。
+// adapterに汎用の例外変換ラッパーを置くとofのpanicまで回復してしまう。
+export function constructionParsingInDomain(relPath: string, rawSource: string): Violation[] {
+  const loc = locationOf(relPath);
+  if (loc === null || typeof loc === "string" || loc.layer === "domain" || loc.layer === "infrastructure") return [];
+  if (/\bparseConstruction\b/.test(stripStrings(rawSource))) {
+    return [{ path: relPath, rule: "construction-parsing-in-domain", detail: "consume domain parse Results; do not catch construction panics" }];
+  }
+  return [];
+}
+
 // ルール: get アクセサ禁止(house style は振る舞いメソッド——プロパティ風の
 // 露出はフィールド直触りの錯覚を生む)。
 export function noGetAccessors(relPath: string, rawSource: string): Violation[] {
@@ -873,6 +884,7 @@ export const ALL_RULES = [
   layerDirection,
   privateConstructorInDomain,
   noReconstitutionBypass,
+  constructionParsingInDomain,
   noGetAccessors,
   noEnums,
   noNonNullAssertions,

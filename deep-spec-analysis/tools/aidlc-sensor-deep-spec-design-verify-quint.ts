@@ -231,6 +231,27 @@ function compareCanonically(a, b) {
 function sortedUniqueCanonically(values) {
   return [...new Set(values)].sort(compareCanonically);
 }
+// src/kernel/infrastructure/result-composition.ts
+function combineResults(fields) {
+  const values = {};
+  for (const key in fields) {
+    const field = fields[key];
+    if (!field.ok)
+      return err(field.error);
+    values[key] = field.value;
+  }
+  return ok(values);
+}
+function traverseResult(values, parse) {
+  const parsed = [];
+  for (const value of values) {
+    const result = parse(value);
+    if (!result.ok)
+      return err(result.error);
+    parsed.push(result.value);
+  }
+  return ok(parsed);
+}
 // src/kernel/adapter/contract-schema.ts
 function readContractSchema(path) {
   try {
@@ -267,11 +288,6 @@ function decodeFindingsDocument(raw) {
     return err("crossChecked must be an array of backend comparisons");
   }
   return ok(raw);
-}
-// src/kernel/adapter/domain-decoding.ts
-function decodeDomainValues(build) {
-  const parsed = parseConstruction(build);
-  return parsed.ok ? parsed : err(JSON.stringify(parsed.error));
 }
 // src/kernel/adapter/fence.ts
 function extractFences(md, lang) {
@@ -727,10 +743,15 @@ class TargetIds {
 class RequirementId {
   #value;
   constructor(value) {
+    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
+      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
     this.#value = value;
   }
   static of(raw) {
     return new RequirementId(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new RequirementId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1066,10 +1087,15 @@ class KeyedIndex {
 class QueryLabel {
   #value;
   constructor(value) {
+    if (value === "")
+      throw new IllegalArgumentException({ kind: "empty-query-label", raw: value });
     this.#value = value;
   }
   static of(raw) {
     return new QueryLabel(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new QueryLabel(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1338,6 +1364,53 @@ class AttributeKind {
   asString() {
     return this.#value;
   }
+}
+// src/kernel/adapter/findings-values-parser.ts
+function parseFindingsValues(raw) {
+  const decoded = decodeFindingsDocument(raw);
+  if (!decoded.ok)
+    return decoded;
+  const doc = decoded.value;
+  const parsed = combineResults({
+    backend: BackendName.parse(doc.backend),
+    irVersion: IrVersion.parse(doc.irVersion),
+    irHash: ContentHash.parse(doc.irHash),
+    method: VerificationMethod.parse(doc.method),
+    findings: traverseResult(doc.findings, (entry) => {
+      const fields = combineResults({
+        kind: FindingKind.parse(entry.kind),
+        frRefs: traverseResult(entry.frRefs, RequirementId.parse),
+        targets: traverseResult(entry.targets, TargetId.parse),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({ ...fields.value, frRefs: FrRefs.of(fields.value.frRefs), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
+    }),
+    skipped: traverseResult(doc.skipped, (entry) => {
+      const fields = combineResults({
+        target: TargetId.parse(entry.target),
+        reason: SkipReason.parse(entry.reason),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({ ...fields.value, detail: entry.detail });
+    }),
+    inputs: doc.inputs === undefined ? ok(undefined) : traverseResult(doc.inputs, (entry) => combineResults({
+      artifact: ArtifactPath.parse(entry.artifact),
+      sha256: ContentHash.parse(entry.sha256)
+    })),
+    crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
+      const fields = combineResults({ backend: BackendName.parse(entry.backend), targets: traverseResult(entry.targets, TargetId.parse) });
+      if (!fields.ok)
+        return fields;
+      return ok({ backend: fields.value.backend, targets: TargetIds.of(fields.value.targets) });
+    })
+  });
+  if (!parsed.ok)
+    return err(JSON.stringify(parsed.error));
+  return ok({ ...parsed.value, checked: doc.checked, unavailable: doc.unavailable });
 }
 // src/design/domain/design-witness.ts
 class DesignWitness {
@@ -2213,10 +2286,15 @@ class DesignScenarios {
 class DesignUnitId {
   #value;
   constructor(value) {
+    if (value === "")
+      throw new IllegalArgumentException({ kind: "empty-design-unit-id", raw: value });
     this.#value = value;
   }
   static of(value) {
     return new DesignUnitId(value);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new DesignUnitId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -3694,10 +3772,15 @@ class BindingPairs {
 class BrRef {
   #value;
   constructor(value) {
+    if (!/^BR[0-9]+\.[0-9]+$/.test(value))
+      throw new IllegalArgumentException({ kind: "malformed-business-rule-reference", raw: value });
     this.#value = value;
   }
   static of(raw) {
     return new BrRef(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new BrRef(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -9083,13 +9166,19 @@ function parseDesignEntities(schema) {
   for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
     if (!isObject(ent) || typeof ent.name !== "string")
       continue;
+    const name = DesignEntityName.parse(ent.name);
+    if (!name.ok)
+      return name;
     const attributes = [];
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string")
         continue;
       const t = isObject(attr.type) ? attr.type : {};
+      const name2 = DesignAttributeName.parse(attr.name);
+      if (!name2.ok)
+        return name2;
       attributes.push(DesignAttributeDecl.of({
-        name: DesignAttributeName.of(attr.name),
+        name: name2.value,
         kind: typeof t.kind === "string" ? t.kind : "",
         ...typeof attr.description === "string" ? { description: attr.description } : {},
         ...Array.isArray(t.values) ? { values: DeclaredValues.of(t.values.filter((v) => typeof v === "string")) } : {},
@@ -9098,12 +9187,12 @@ function parseDesignEntities(schema) {
       }));
     }
     entities.push(DesignEntityDecl.of({
-      name: DesignEntityName.of(ent.name),
+      name: name.value,
       ...typeof ent.description === "string" ? { description: ent.description } : {},
       attributes: DesignAttributeDecls.of(attributes)
     }));
   }
-  return DesignEntityDecls.of(entities);
+  return ok(DesignEntityDecls.of(entities));
 }
 function renderDesignEntities(entities) {
   return entities.toArray().map((ent) => {
@@ -9135,37 +9224,46 @@ function renderDesignEntities(entities) {
 
 // src/design/adapter/design-model-parser.ts
 function parseDesignModel(raw) {
-  const decoded = decodeDomainValues(() => parseDesignModelValue(raw));
-  return decoded.ok ? decoded.value : decoded.error;
-}
-function parseDesignModelValue(raw) {
   if (!isObject(raw))
-    return "design IR is not a JSON object";
+    return err("design IR is not a JSON object");
   if (raw.irKind !== "design")
-    return 'document is not a design IR (missing `"irKind": "design"`)';
+    return err('document is not a design IR (missing `"irKind": "design"`)');
   const irVersion = IrVersion.parse(typeof raw.irVersion === "string" ? raw.irVersion : "");
   if (!irVersion.ok)
-    return "design IR lacks a semver irVersion";
+    return err("design IR lacks a semver irVersion");
   if (!Array.isArray(raw.units) || raw.units.length === 0)
-    return "design IR carries no units[]";
+    return err("design IR carries no units[]");
   const units = [];
   for (const rawUnit of raw.units) {
     if (!isObject(rawUnit) || typeof rawUnit.unit !== "string")
       continue;
     const schema = isObject(rawUnit.schema) ? rawUnit.schema : {};
     const entities = parseDesignEntities(schema);
+    if (!entities.ok)
+      return err(JSON.stringify(entities.error));
+    const unit = UnitName.parse(rawUnit.unit);
+    if (!unit.ok)
+      return err(JSON.stringify(unit.error));
     const obligations = [];
     for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string")
         continue;
+      const parsed = combineResults({
+        id: DesignObligationId.parse(ob.id),
+        brRefs: traverseResult(strArr(ob.brRefs), BrRef.parse),
+        frRefs: traverseResult(strArr(ob.frRefs), RequirementId.parse),
+        trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined)
+      });
+      if (!parsed.ok)
+        return err(JSON.stringify(parsed.error));
       obligations.push(DesignObligation.of({
-        id: DesignObligationId.of(ob.id),
+        id: parsed.value.id,
         nature: DesignObligationNature.of(ob.nature),
         origin: DesignObligationOrigin.of(typeof ob.origin === "string" ? ob.origin : ""),
-        brRefs: BrRefs.of(Array.from(strArr(ob.brRefs), (raw2) => BrRef.of(raw2))),
-        frRefs: FrRefs.of(Array.from(strArr(ob.frRefs), (raw2) => RequirementId.of(raw2))),
+        brRefs: BrRefs.of(parsed.value.brRefs),
+        frRefs: FrRefs.of(parsed.value.frRefs),
         assert: isObject(ob.assert) ? ob.assert : undefined,
-        trigger: typeof ob.trigger === "string" ? TriggerName.of(ob.trigger) : undefined,
+        trigger: parsed.value.trigger,
         guard: isObject(ob.guard) ? ob.guard : undefined,
         effect: isObject(ob.effect) ? ob.effect : undefined,
         temporal: isObject(ob.temporal) ? ob.temporal : undefined
@@ -9181,26 +9279,43 @@ function parseDesignModelValue(raw) {
           continue;
         if (typeof tr.from !== "string" || typeof tr.to !== "string" || typeof tr.trigger !== "string")
           continue;
+        const parsed2 = combineResults({
+          id: DesignTransitionId.parse(tr.id),
+          trigger: TriggerName.parse(tr.trigger),
+          brRefs: traverseResult(strArr(tr.brRefs), BrRef.parse)
+        });
+        if (!parsed2.ok)
+          return err(JSON.stringify(parsed2.error));
         transitions.push(DesignTransition.of({
-          id: DesignTransitionId.of(tr.id),
+          id: parsed2.value.id,
           from: tr.from,
           to: tr.to,
-          trigger: TriggerName.of(tr.trigger),
+          trigger: parsed2.value.trigger,
           guard: isObject(tr.guard) ? tr.guard : undefined,
           effect: isObject(tr.effect) ? tr.effect : undefined,
-          brRefs: BrRefs.of(Array.from(strArr(tr.brRefs), (raw2) => BrRef.of(raw2)))
+          brRefs: BrRefs.of(parsed2.value.brRefs)
         }));
       }
       const ignores = [];
       for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
         if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string")
           continue;
-        ignores.push(DesignIgnore.of({ state: ig.state, trigger: TriggerName.of(ig.trigger) }));
+        const trigger = TriggerName.parse(ig.trigger);
+        if (!trigger.ok)
+          return err(JSON.stringify(trigger.error));
+        ignores.push(DesignIgnore.of({ state: ig.state, trigger: trigger.value }));
       }
+      const parsed = combineResults({
+        id: DesignMachineId.parse(sm.id),
+        entity: DesignEntityName.parse(sm.entity),
+        attribute: DesignAttributeName.parse(sm.attribute)
+      });
+      if (!parsed.ok)
+        return err(JSON.stringify(parsed.error));
       machines.push(DesignMachine.of({
-        id: DesignMachineId.of(sm.id),
-        entity: DesignEntityName.of(sm.entity),
-        attribute: DesignAttributeName.of(sm.attribute),
+        id: parsed.value.id,
+        entity: parsed.value.entity,
+        attribute: parsed.value.attribute,
         initial: InitialStates.of(strArr(sm.initial)),
         transitions: DesignTransitions.of(transitions),
         ignores: DesignIgnores.of(ignores),
@@ -9219,13 +9334,21 @@ function parseDesignModelValue(raw) {
         if (typeof v === "boolean" || typeof v === "number" || typeof v === "string")
           bindings[k] = v;
       }
+      const parsed = combineResults({
+        id: DesignScenarioId.parse(sc.id),
+        brRefs: traverseResult(strArr(sc.brRefs), BrRef.parse),
+        frRefs: traverseResult(strArr(sc.frRefs), RequirementId.parse),
+        trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined)
+      });
+      if (!parsed.ok)
+        return err(JSON.stringify(parsed.error));
       scenarios.push(DesignScenario.of({
-        id: DesignScenarioId.of(sc.id),
+        id: parsed.value.id,
         kind,
-        brRefs: BrRefs.of(Array.from(strArr(sc.brRefs), (raw2) => BrRef.of(raw2))),
-        frRefs: FrRefs.of(Array.from(strArr(sc.frRefs), (raw2) => RequirementId.of(raw2))),
+        brRefs: BrRefs.of(parsed.value.brRefs),
+        frRefs: FrRefs.of(parsed.value.frRefs),
         bindings,
-        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.of(sc.event.trigger) } : undefined,
+        event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },
         expect: isObject(sc.expect) ? sc.expect : undefined
       }));
     }
@@ -9233,11 +9356,14 @@ function parseDesignModelValue(raw) {
     for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
       if (!isObject(bg) || typeof bg.id !== "string" || !isObject(bg.assert))
         continue;
-      background.push(DesignBackgroundAssumption.of({ id: DesignBackgroundId.of(bg.id), assert: bg.assert }));
+      const id = DesignBackgroundId.parse(bg.id);
+      if (!id.ok)
+        return err(JSON.stringify(id.error));
+      background.push(DesignBackgroundAssumption.of({ id: id.value, assert: bg.assert }));
     }
     units.push(DesignUnit.of({
-      unit: rawUnit.unit,
-      entities,
+      unit: unit.value.asString(),
+      entities: entities.value,
       obligations: DesignObligations.of(obligations),
       machines: DesignMachines.of(machines),
       scenarios: DesignScenarios.of(scenarios),
@@ -9245,8 +9371,8 @@ function parseDesignModelValue(raw) {
     }));
   }
   if (units.length === 0)
-    return "design IR carries no parseable units";
-  return { irVersion: irVersion.value, units: DesignUnits.of(units) };
+    return err("design IR carries no parseable units");
+  return ok({ irVersion: irVersion.value, units: DesignUnits.of(units) });
 }
 // src/design/adapter/design-model-repository-impl.ts
 import { existsSync as existsSync3, readFileSync as readFileSync4 } from "fs";
@@ -9275,15 +9401,16 @@ class DesignModelRepositoryImpl {
       return err({ kind: "corrupt", path: modelPath, cause: "formal model does not contain exactly one readable ```json fence" });
     }
     const composition = parseDesignModel(raw);
-    if (typeof composition === "string") {
-      return err({ kind: "corrupt", path: modelPath, cause: composition });
+    if (!composition.ok) {
+      return err({ kind: "corrupt", path: modelPath, cause: composition.error });
     }
-    return ok(DesignModel.compose({ id, irHash: ContentHash.ofText(canonicalStringify(raw)), sourceDocument: new Uint8Array(bytes), ...composition }));
+    return ok(DesignModel.compose({ id, irHash: ContentHash.ofText(canonicalStringify(raw)), sourceDocument: new Uint8Array(bytes), ...composition.value }));
   }
   store(model) {
     const modelPath = model.id().artifactPath().asString();
+    const bytes = model.sourceDocument();
     try {
-      writeFileAtomically(modelPath, model.sourceDocument());
+      writeFileAtomically(modelPath, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path: modelPath, cause: e instanceof Error ? e.message : String(e) });
@@ -9347,29 +9474,25 @@ import { join as join4 } from "path";
 
 // src/design/adapter/sibling-document-parser.ts
 function parseSiblingVerdictDocument(raw) {
-  const decoded = decodeDomainValues(() => parseSiblingVerdictDocumentValue(raw));
-  return decoded.ok ? decoded.value : SiblingVerdictDocument.unreadable(decoded.error);
-}
-function parseSiblingVerdictDocumentValue(raw) {
-  const decoded = decodeFindingsDocument(raw);
+  const decoded = parseFindingsValues(raw);
   if (!decoded.ok)
-    return SiblingVerdictDocument.unreadable();
+    return SiblingVerdictDocument.unreadable(decoded.error);
   const doc = decoded.value;
   if (doc.unavailable !== undefined)
-    return SiblingVerdictDocument.unavailable(doc.unavailable.reason, VerificationMethod.of(doc.method));
+    return SiblingVerdictDocument.unavailable(doc.unavailable.reason, doc.method);
   const findings = doc.findings.map((f) => SiblingVerdictFinding.of({
-    kind: FindingKind.of(f.kind),
-    frRefs: FrRefs.of(Array.from(f.frRefs, (raw2) => RequirementId.of(raw2))),
-    targets: f.targets.map((t) => LoweredId.of(t)),
+    kind: f.kind,
+    frRefs: f.frRefs,
+    targets: [...f.targets].map((target) => LoweredId.of(target.asString())),
     witness: DesignWitness.of(f.witness),
     detail: f.detail
   }));
   const skipped = doc.skipped.map((s) => SiblingVerdictSkip.of({
-    target: LoweredId.of(s.target),
-    reason: SkipReason.of(s.reason),
-    ...s.detail !== undefined ? { detail: s.detail } : {}
+    target: LoweredId.of(s.target.asString()),
+    reason: s.reason,
+    detail: s.detail
   }));
-  return SiblingVerdictDocument.readable(VerificationMethod.of(doc.method), SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
+  return SiblingVerdictDocument.readable(doc.method, SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
 }
 
 // src/design/adapter/reachability-variant.ts
@@ -9453,38 +9576,37 @@ function renderDesignReportBytes(report) {
 `;
 }
 function parseSiblingDesignReportDocument(directory, fileName, raw) {
-  const decoded = decodeDomainValues(() => parseSiblingDesignReportDocumentValue(directory, fileName, raw));
-  return decoded.ok ? decoded.value : err(decoded.error);
-}
-function parseSiblingDesignReportDocumentValue(directory, fileName, raw) {
-  const decoded = decodeFindingsDocument(raw);
+  const decoded = parseFindingsValues(raw);
   if (!decoded.ok)
-    return err(decoded.error);
+    return decoded;
   const doc = decoded.value;
-  if (`${doc.backend}.json` !== fileName)
+  if (`${doc.backend.asString()}.json` !== fileName)
     return err("backend must match the report filename");
+  const findings = [];
+  for (const entry of doc.findings) {
+    if (entry.unit === undefined)
+      return err("design finding requires a unit");
+    findings.push(DesignFinding.of({ ...entry, unit: entry.unit, witness: DesignWitness.of(entry.witness) }));
+  }
+  const skipped = [];
+  for (const entry of doc.skipped) {
+    if (entry.unit === undefined)
+      return err("design skip requires a unit");
+    skipped.push(DesignSkipped.of({ ...entry, unit: entry.unit }));
+  }
+  const checked = doc.checked === undefined ? ok(undefined) : traverseResult(doc.checked, UnitName.parse);
+  if (!checked.ok)
+    return err(JSON.stringify(checked.error));
   return ok(DesignReport.of({
-    id: DesignReportId.of(directory, doc.backend),
-    irVersion: IrVersion.of(doc.irVersion),
-    irHash: ContentHash.of(doc.irHash),
-    method: VerificationMethod.of(doc.method),
-    findings: DesignFindings.of(doc.findings.map((entry) => DesignFinding.of({
-      kind: FindingKind.of(entry.kind),
-      frRefs: FrRefs.of(Array.from(entry.frRefs, (raw2) => RequirementId.of(raw2))),
-      targets: TargetIds.of(Array.from(entry.targets, (raw2) => TargetId.of(raw2))),
-      witness: DesignWitness.of(entry.witness),
-      detail: entry.detail,
-      unit: UnitName.of(entry.unit ?? "")
-    }))),
-    skipped: DesignSkips.of(doc.skipped.map((entry) => DesignSkipped.of({
-      target: TargetId.of(entry.target),
-      reason: SkipReason.of(entry.reason),
-      unit: UnitName.of(entry.unit ?? ""),
-      ...entry.detail !== undefined ? { detail: entry.detail } : {}
-    }))),
-    inputs: doc.inputs === undefined ? null : DesignInputAnchors.of(doc.inputs.map((entry) => DesignInputAnchor.of({ artifact: entry.artifact, sha256: ContentHash.of(entry.sha256) }))),
-    checked: doc.checked === undefined ? null : CheckedUnits.of(Array.from(doc.checked, (raw2) => UnitName.of(raw2))),
-    crossChecked: doc.crossChecked === undefined ? null : DesignCrossCheckedEntries.of(doc.crossChecked.map((entry) => DesignCrossCheckedEntry.of({ backend: BackendName.of(entry.backend), targets: TargetIds.of(Array.from(entry.targets, (raw2) => TargetId.of(raw2))) }))),
+    id: DesignReportId.of(directory, doc.backend.asString()),
+    irVersion: doc.irVersion,
+    irHash: doc.irHash,
+    method: doc.method,
+    findings: DesignFindings.of(findings),
+    skipped: DesignSkips.of(skipped),
+    inputs: doc.inputs === undefined ? null : DesignInputAnchors.of(doc.inputs.map((entry) => DesignInputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }))),
+    checked: checked.value === undefined ? null : CheckedUnits.of(checked.value),
+    crossChecked: doc.crossChecked === undefined ? null : DesignCrossCheckedEntries.of(doc.crossChecked.map(DesignCrossCheckedEntry.of)),
     unavailableReason: doc.unavailable?.reason ?? null
   }));
 }
@@ -9545,12 +9667,12 @@ class DesignVerifyDirectoryRepositoryImpl {
       return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(acquired) });
     }
     let outcome;
+    let released;
     try {
       outcome = this.#publish(aggregate, candidate, directory);
-    } catch (e) {
-      outcome = err({ kind: "io-failed", operation: "write", path: directoryPath, cause: causeOf2(e) });
+    } finally {
+      released = this.#lock.release(directory);
     }
-    const released = this.#lock.release(directory);
     if (released.kind !== "released" && outcome.ok) {
       return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(released) });
     }
@@ -9565,14 +9687,8 @@ class DesignVerifyDirectoryRepositoryImpl {
     if (!unchanged.ok)
       return err(unchanged.error);
     const crossCheck = aggregate.crossCheck();
-    let backendBytes;
-    let crossBytes;
-    try {
-      backendBytes = renderDesignReportBytes(candidate);
-      crossBytes = crossCheck === null ? null : renderDesignReportBytes(crossCheck);
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf2(e) });
-    }
+    const backendBytes = renderDesignReportBytes(candidate);
+    const crossBytes = crossCheck === null ? null : renderDesignReportBytes(crossCheck);
     if (!this.#lock.holdsOwnership(directory))
       return this.#fenced(directory, crossPath);
     if (existsSync4(crossPath)) {
@@ -9785,14 +9901,20 @@ function designBase(ctx, u, primed) {
     for (const bg of u.background()) {
       try {
         constraints.push({ name: smtName("bg", bg.id().asString()), smt: smtOfExpr(ctx, bg.assertion()) });
-      } catch {}
+      } catch (error) {
+        if (!(error instanceof SmtCompileError))
+          throw error;
+      }
     }
     for (const ob of u.obligations()) {
       const assertion = ob.assertion();
       if (ob.isInvariantLike() && assertion !== undefined) {
         try {
           constraints.push({ name: smtName("inv", ob.id().asString()), smt: smtOfExpr(ctx, assertion) });
-        } catch {}
+        } catch (error) {
+          if (!(error instanceof SmtCompileError))
+            throw error;
+        }
       }
     }
   }
@@ -9865,6 +9987,8 @@ function buildRefinementQueries(u, req, plan) {
         queries.push(q);
         pending.set(q.id, RefinementProbe.invariant(ObligationId.of(obId)));
       } catch (err2) {
+        if (!(err2 instanceof SmtCompileError))
+          throw err2;
         alphaFail(obId, failureMessage(err2));
       }
       continue;
@@ -9934,6 +10058,8 @@ function buildRefinementQueries(u, req, plan) {
           pending.set(qs.id, RefinementProbe.simulation(ObligationId.of(obId), designId));
         }
       } catch (err2) {
+        if (!(err2 instanceof SmtCompileError))
+          throw err2;
         alphaFail(obId, failureMessage(err2));
       }
     }
@@ -9965,6 +10091,8 @@ function buildRefinementQueries(u, req, plan) {
       queries.push(q);
       pending.set(q.id, RefinementProbe.scenario(ScenarioId.of(scId)));
     } catch (err2) {
+      if (!(err2 instanceof SmtCompileError))
+        throw err2;
       alphaFail(scId, failureMessage(err2));
     }
   }
@@ -9990,10 +10118,6 @@ class RefinementMaterialsRepositoryImpl {
     this.#mapSchemaPath = mapSchemaPath;
   }
   findById(id) {
-    const decoded = decodeDomainValues(() => this.#findById(id));
-    return decoded.ok ? decoded.value : err({ kind: "corrupt", path: id.modelArtifactPath().asString(), cause: decoded.error });
-  }
-  #findById(id) {
     const modelPath = id.modelArtifactPath().asString();
     const recordRoot = findRecordRoot(dirname3(modelPath));
     if (recordRoot === null)
@@ -10044,8 +10168,13 @@ class RefinementMaterialsRepositoryImpl {
         const t = attr.type;
         if (t.kind !== "bool" && t.kind !== "int" && t.kind !== "enum")
           continue;
+        const parsed = combineResults({
+          path: AttributePath.parse(`${ent.name}.${attr.name}`)
+        });
+        if (!parsed.ok)
+          return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
         attributes.push(RefinementAttribute.of({
-          path: AttributePath.of(`${ent.name}.${attr.name}`),
+          path: parsed.value.path,
           kind: t.kind,
           values: Array.isArray(t.values) ? ReqAttributeValues.of(t.values.filter((v) => typeof v === "string")) : undefined
         }));
@@ -10055,12 +10184,19 @@ class RefinementMaterialsRepositoryImpl {
     for (const ob of Array.isArray(raw.obligations) ? raw.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string")
         continue;
+      const parsed = combineResults({
+        id: ObligationId.parse(ob.id),
+        frRefs: traverseResult(strArr(ob.frRefs), RequirementId.parse),
+        trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined)
+      });
+      if (!parsed.ok)
+        return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
       obligations.push(RefinementObligation.of({
-        id: ObligationId.of(ob.id),
+        id: parsed.value.id,
         nature: ObligationNature.of(ob.nature),
-        frRefs: FrRefs.of(Array.from(strArr(ob.frRefs), (raw2) => RequirementId.of(raw2))),
+        frRefs: FrRefs.of(parsed.value.frRefs),
         assert: isObject(ob.assert) ? ob.assert : undefined,
-        trigger: typeof ob.trigger === "string" ? TriggerName.of(ob.trigger) : undefined,
+        trigger: parsed.value.trigger,
         guard: isObject(ob.guard) ? ob.guard : undefined,
         effect: isObject(ob.effect) ? ob.effect : undefined
       }));
@@ -10076,12 +10212,19 @@ class RefinementMaterialsRepositoryImpl {
         if (typeof v === "boolean" || typeof v === "number" || typeof v === "string")
           bindings[k] = v;
       }
+      const parsed = combineResults({
+        id: ScenarioId.parse(sc.id),
+        frRefs: traverseResult(strArr(sc.frRefs), RequirementId.parse),
+        trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined)
+      });
+      if (!parsed.ok)
+        return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
       scenarios.push(RefinementScenario.of({
-        id: ScenarioId.of(sc.id),
+        id: parsed.value.id,
         kind: sc.kind,
-        frRefs: FrRefs.of(Array.from(strArr(sc.frRefs), (raw2) => RequirementId.of(raw2))),
+        frRefs: FrRefs.of(parsed.value.frRefs),
         bindings,
-        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.of(sc.event.trigger) } : undefined
+        event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger }
       }));
     }
     const model = RefinementRequirements.of({
@@ -10116,10 +10259,6 @@ class RefinementMaterialsRepositoryImpl {
   }
 }
 function parseRefinementMapDocument(bytes, id, mapSchemaPath) {
-  const decoded = decodeDomainValues(() => parseRefinementMapDocumentValue(bytes, id, mapSchemaPath));
-  return decoded.ok ? decoded.value : { kind: "malformed", error: decoded.error };
-}
-function parseRefinementMapDocumentValue(bytes, id, mapSchemaPath) {
   const md = Buffer.from(bytes).toString("utf-8");
   const fence = extractSingleJsonFence(md);
   if (fence === null)
@@ -10148,48 +10287,69 @@ function parseRefinementMapDocumentValue(bytes, id, mapSchemaPath) {
     for (const m of Array.isArray(u.attrMap) ? u.attrMap : []) {
       if (!isObject(m) || typeof m.req !== "string")
         continue;
+      const req = AttributePath.parse(m.req);
+      if (!req.ok)
+        return { kind: "malformed", error: JSON.stringify(req.error) };
       if (isObject(m.enumMap) && typeof m.enumMap.from === "string" && isObject(m.enumMap.cases)) {
         const cases = {};
         for (const [k, v] of Object.entries(m.enumMap.cases)) {
           if (typeof v === "string")
             cases[k] = v;
         }
-        attrMap.push(AttributeMapping.enumCases(AttributePath.of(m.req), m.enumMap.from, cases));
+        attrMap.push(AttributeMapping.enumCases(req.value, m.enumMap.from, cases));
       } else if (isObject(m.expr)) {
-        attrMap.push(AttributeMapping.expression(AttributePath.of(m.req), m.expr));
+        attrMap.push(AttributeMapping.expression(req.value, m.expr));
       } else {
-        attrMap.push(AttributeMapping.unspecified(AttributePath.of(m.req)));
+        attrMap.push(AttributeMapping.unspecified(req.value));
       }
     }
     const eventMap = [];
     for (const e of Array.isArray(u.eventMap) ? u.eventMap : []) {
       if (!isObject(e) || typeof e.reqTrigger !== "string")
         continue;
+      const parsed = combineResults({
+        reqTrigger: TriggerName.parse(e.reqTrigger),
+        transitions: traverseResult(strArr(e.transitions), TransitionRef.parse)
+      });
+      if (!parsed.ok)
+        return { kind: "malformed", error: JSON.stringify(parsed.error) };
       eventMap.push(EventMapping.of({
-        reqTrigger: TriggerName.of(e.reqTrigger),
-        transitions: TransitionRefs.of(strArr(e.transitions).map((t) => TransitionRef.of(t))),
+        reqTrigger: parsed.value.reqTrigger,
+        transitions: TransitionRefs.of(parsed.value.transitions),
         waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined
       }));
     }
     const unmapped = [];
     for (const un of Array.isArray(u.unmapped) ? u.unmapped : []) {
       if (isObject(un) && typeof un.target === "string") {
-        unmapped.push(UnmappedTarget.of({ target: UnmappedTargetRef.of(un.target), reason: typeof un.reason === "string" ? un.reason : "" }));
+        const target = UnmappedTargetRef.parse(un.target);
+        if (!target.ok)
+          return { kind: "malformed", error: JSON.stringify(target.error) };
+        unmapped.push(UnmappedTarget.of({ target: target.value, reason: typeof un.reason === "string" ? un.reason : "" }));
       }
     }
+    const unit = DesignUnitId.parse(u.unit);
+    if (!unit.ok)
+      return { kind: "malformed", error: JSON.stringify(unit.error) };
     units.push(RefinementUnitMap.of({
-      unit: DesignUnitId.of(u.unit),
+      unit: unit.value,
       attrMap: AttributeMappings.of(attrMap),
       eventMap: EventMappings.of(eventMap),
       unmapped: UnmappedDeclarations.of(unmapped)
     }));
   }
+  const hashes = combineResults({
+    requirements: ContentHash.parse(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
+    design: ContentHash.parse(typeof doc.designIrHash === "string" ? doc.designIrHash : "")
+  });
+  if (!hashes.ok)
+    return { kind: "malformed", error: JSON.stringify(hashes.error) };
   return {
     kind: "parsed",
     map: RefinementMap.of({
       id,
-      requirementsIrHash: ContentHash.of(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
-      designIrHash: ContentHash.of(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
+      requirementsIrHash: hashes.value.requirements,
+      designIrHash: hashes.value.design,
       units: RefinementUnitMaps.of(units),
       sourceDocument: bytes
     })
@@ -10213,11 +10373,17 @@ class RefinementSolverClientImpl {
     }
     const verdicts = [];
     for (const [queryId, r] of child.results) {
-      verdicts.push([QueryLabel.of(queryId), RefinementQueryVerdict.of({
+      const parsed = combineResults({
+        label: QueryLabel.parse(queryId),
+        core: r.core === undefined ? ok(undefined) : traverseResult(r.core, QueryLabel.parse)
+      });
+      if (!parsed.ok)
+        return { plan: built.plan, result: { kind: "unavailable", reason: `invalid solver query label: ${JSON.stringify(parsed.error)}` } };
+      verdicts.push([parsed.value.label, RefinementQueryVerdict.of({
         status: r.status,
         decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
         decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
-        core: r.core
+        core: parsed.value.core?.map((label) => label.asString())
       })]);
     }
     return { plan: built.plan, result: { kind: "solved", verdicts: RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)) } };
@@ -10273,19 +10439,33 @@ function strArrayOrUndefined(v) {
 }
 function brRefsOrUndefined(v) {
   const arr = strArrayOrUndefined(v);
-  return arr === undefined ? undefined : BrRefs.of(Array.from(arr, (raw) => BrRef.of(raw)));
+  if (arr === undefined)
+    return ok(undefined);
+  const parsed = traverseResult(arr, BrRef.parse);
+  return parsed.ok ? ok(BrRefs.of(parsed.value)) : parsed;
 }
 function buildUnitView(rawUnit, unitName, recordRoot) {
+  const unit = DesignUnitId.parse(unitName);
+  if (!unit.ok)
+    return err(JSON.stringify(unit.error));
   const entities = parseDesignEntities(isObject(rawUnit.schema) ? rawUnit.schema : {});
+  if (!entities.ok)
+    return err(JSON.stringify(entities.error));
   const obligations = [];
   for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string")
       continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
+    const parsed = combineResults({
+      id: DesignObligationId.parse(ob.id),
+      brRefs: brRefsOrUndefined(ob.brRefs ?? null)
+    });
+    if (!parsed.ok)
+      return err(JSON.stringify(parsed.error));
     obligations.push(DesignObligationDecl.of({
-      id: DesignObligationId.of(ob.id),
+      id: parsed.value.id,
       origin: typeof ob.origin === "string" ? DesignObligationOrigin.of(ob.origin) : undefined,
-      brRefs: brRefsOrUndefined(ob.brRefs ?? null),
+      brRefs: parsed.value.brRefs,
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
       effect: asExpression(ob.effect ?? null),
@@ -10306,12 +10486,19 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
     for (const tr of Array.isArray(sm.transitions) ? sm.transitions : []) {
       if (!isObject(tr) || typeof tr.id !== "string")
         continue;
+      const parsed = combineResults({
+        id: DesignTransitionId.parse(tr.id),
+        trigger: typeof tr.trigger === "string" ? TriggerName.parse(tr.trigger) : ok(undefined),
+        brRefs: brRefsOrUndefined(tr.brRefs ?? null)
+      });
+      if (!parsed.ok)
+        return err(JSON.stringify(parsed.error));
       transitions.push(DesignTransitionDecl.of({
-        id: DesignTransitionId.of(tr.id),
+        id: parsed.value.id,
         from: typeof tr.from === "string" ? tr.from : undefined,
         to: typeof tr.to === "string" ? tr.to : undefined,
-        trigger: typeof tr.trigger === "string" ? TriggerName.of(tr.trigger) : undefined,
-        brRefs: brRefsOrUndefined(tr.brRefs ?? null),
+        trigger: parsed.value.trigger,
+        brRefs: parsed.value.brRefs,
         guard: asExpression(tr.guard ?? null),
         effect: asExpression(tr.effect ?? null)
       }));
@@ -10320,28 +10507,43 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
     for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
       if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string")
         continue;
-      ignores.push(DesignIgnoreDecl.of({ state: ig.state, trigger: TriggerName.of(ig.trigger) }));
+      const trigger = TriggerName.parse(ig.trigger);
+      if (!trigger.ok)
+        return err(JSON.stringify(trigger.error));
+      ignores.push(DesignIgnoreDecl.of({ state: ig.state, trigger: trigger.value }));
     }
-    stateMachines.push(DesignMachineDecl.of({ id: DesignMachineId.of(sm.id), attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
+    const id = DesignMachineId.parse(sm.id);
+    if (!id.ok)
+      return err(JSON.stringify(id.error));
+    stateMachines.push(DesignMachineDecl.of({ id: id.value, attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
   }
   const scenarios = [];
   for (const sc of Array.isArray(rawUnit.scenarios) ? rawUnit.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string")
       continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
+    const parsed = combineResults({
+      id: DesignScenarioId.parse(sc.id),
+      brRefs: brRefsOrUndefined(sc.brRefs ?? null)
+    });
+    if (!parsed.ok)
+      return err(JSON.stringify(parsed.error));
     scenarios.push(DesignScenarioDecl.of({
-      id: DesignScenarioId.of(sc.id),
+      id: parsed.value.id,
       bindings: BindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
-      brRefs: brRefsOrUndefined(sc.brRefs ?? null)
+      brRefs: parsed.value.brRefs
     }));
   }
   const background = [];
   for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string")
       continue;
-    background.push(DesignBackgroundDecl.of({ id: DesignBackgroundId.of(bg.id), assert: asExpression(bg.assert ?? null) }));
+    const id = DesignBackgroundId.parse(bg.id);
+    if (!id.ok)
+      return err(JSON.stringify(id.error));
+    background.push(DesignBackgroundDecl.of({ id: id.value, assert: asExpression(bg.assert ?? null) }));
   }
   const unformalizedTargets = [];
   for (const uf of Array.isArray(rawUnit.unformalized) ? rawUnit.unformalized : []) {
@@ -10355,17 +10557,20 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
   const directoryExists = recordRoot === null ? true : existsSync5(join7(recordRoot, "construction", unitName));
   const rulesPath = recordRoot === null ? null : join7(recordRoot, "construction", unitName, "functional-design", "rules.md");
   const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
-  return DesignUnitDecl.of({
-    unit: DesignUnitId.of(unitName),
-    entities,
+  const targets = traverseResult(unformalizedTargets, TargetId.parse);
+  if (!targets.ok)
+    return err(JSON.stringify(targets.error));
+  return ok(DesignUnitDecl.of({
+    unit: unit.value,
+    entities: entities.value,
     obligations: DesignObligationDecls.of(obligations),
     stateMachines: DesignMachineDecls.of(stateMachines),
     scenarios: DesignScenarioDecls.of(scenarios),
     background: DesignBackgroundDecls.of(background),
-    unformalizedTargets: UnformalizedTargets.of(Array.from(unformalizedTargets, (raw) => TargetId.of(raw))),
+    unformalizedTargets: UnformalizedTargets.of(targets.value),
     directoryExists,
     rulesMarkdown
-  });
+  }));
 }
 
 class DesignIrValidationMaterialsRepositoryImpl {
@@ -10374,10 +10579,6 @@ class DesignIrValidationMaterialsRepositoryImpl {
     this.#schemaPath = config.schemaPath;
   }
   findById(id) {
-    const decoded = decodeDomainValues(() => this.#findById(id));
-    return decoded.ok ? decoded.value : err({ kind: "corrupt", path: id.modelId().artifactPath().asString(), cause: decoded.error });
-  }
-  #findById(id) {
     const outputPath = id.modelId().artifactPath().asString();
     if (basename2(outputPath) !== DESIGN_MODEL_BASENAME || !existsSync5(outputPath)) {
       return err({ kind: "not-found", path: outputPath });
@@ -10412,8 +10613,10 @@ class DesignIrValidationMaterialsRepositoryImpl {
     }
     const schemaErrors = [];
     validateSchema(schema.value, schema.value, ir, "", schemaErrors);
-    const irVersion = typeof ir.irVersion === "string" ? ir.irVersion : "";
-    const major = Number.parseInt(irVersion.split(".")[0] ?? "", 10);
+    const irVersion = IrVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : "");
+    if (!irVersion.ok)
+      return corrupt(JSON.stringify(irVersion.error));
+    const major = irVersion.value.majorVersion();
     const semanticGateOpen = schemaErrors.length === 0 && !(Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR);
     const units = [];
     if (semanticGateOpen) {
@@ -10421,12 +10624,15 @@ class DesignIrValidationMaterialsRepositoryImpl {
       for (const rawUnit of Array.isArray(ir.units) ? ir.units : []) {
         if (!isObject(rawUnit) || typeof rawUnit.unit !== "string")
           continue;
-        units.push(buildUnitView(rawUnit, rawUnit.unit, recordRoot));
+        const parsed = buildUnitView(rawUnit, rawUnit.unit, recordRoot);
+        if (!parsed.ok)
+          return corrupt(parsed.error);
+        units.push(parsed.value);
       }
     }
     return ok(DesignIrValidationMaterials.of({
       id,
-      irVersion: IrVersion.of(irVersion),
+      irVersion: irVersion.value,
       schemaErrors: ErrorMessages.of(schemaErrors),
       units: DesignUnitDecls.of(units),
       sourceDocument: new Uint8Array(bytes)
@@ -10434,8 +10640,9 @@ class DesignIrValidationMaterialsRepositoryImpl {
   }
   store(materials) {
     const outputPath = materials.id().modelId().artifactPath().asString();
+    const bytes = materials.sourceDocument();
     try {
-      writeFileAtomically(outputPath, materials.sourceDocument());
+      writeFileAtomically(outputPath, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });
@@ -10466,8 +10673,9 @@ class RefinementMapRepositoryImpl {
   }
   store(map) {
     const path = map.id().artifactPath().asString();
+    const bytes = map.sourceDocument();
     try {
-      writeFileAtomically(path, map.sourceDocument());
+      writeFileAtomically(path, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });

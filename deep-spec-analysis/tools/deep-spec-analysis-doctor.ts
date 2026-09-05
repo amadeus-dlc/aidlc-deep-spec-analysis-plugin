@@ -470,10 +470,15 @@ class TargetIds {
 class RequirementId {
   #value;
   constructor(value) {
+    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
+      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
     this.#value = value;
   }
   static of(raw) {
     return new RequirementId(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new RequirementId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -809,10 +814,15 @@ class KeyedIndex {
 class QueryLabel {
   #value;
   constructor(value) {
+    if (value === "")
+      throw new IllegalArgumentException({ kind: "empty-query-label", raw: value });
     this.#value = value;
   }
   static of(raw) {
     return new QueryLabel(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new QueryLabel(raw));
   }
   equals(other) {
     return this.#value === other.#value;

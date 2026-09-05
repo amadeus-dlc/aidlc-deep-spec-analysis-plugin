@@ -217,7 +217,7 @@ describe("未知 kind は既存文書からも生成できず、診断に原文�
         join(dir, "components.json"),
         JSON.stringify({
           backend: "components",
-          irVersion: "x",
+          irVersion: "1.0.0",
           irHash: "0".repeat(64),
           method: "static",
           inputs: [],

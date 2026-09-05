@@ -246,7 +246,9 @@ type RawDesignScenario = Omit<Parameters<typeof DesignScenario.of>[0], "id" | "b
 // DesignUnit は生 JSON を持たなくなった）。座標だけ与えられた属性は kind "" の
 // 宣言として補う——旧 attrPaths の役目。
 function entitiesOf(raw: Json[], attrPaths: Set<string>): DesignEntityDecls {
-  let declared = parseDesignEntities({ entities: raw });
+  const parsed = parseDesignEntities({ entities: raw });
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.error));
+  let declared = parsed.value;
   const covered = new Set<string>();
   for (const ent of declared) for (const attr of ent.attributes()) covered.add(`${ent.name().asString()}.${attr.name().asString()}`);
   const extra = new Map<string, string[]>();
@@ -816,7 +818,10 @@ describe("lowered collections and the lowering index (first-class operations)", 
 
 describe("the typed entity projection reproduces the IR's schema.entities byte for byte (ruling 2)", () => {
   const roundTrip = (raw: Json[]): void => {
-    expect(JSON.stringify(renderDesignEntities(parseDesignEntities({ entities: raw })))).toBe(JSON.stringify(raw));
+    const parsed = parseDesignEntities({ entities: raw });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error(JSON.stringify(parsed.error));
+    expect(JSON.stringify(renderDesignEntities(parsed.value))).toBe(JSON.stringify(raw));
   };
 
   test("every design IR fixture", () => {
@@ -869,7 +874,7 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
       { name: "Order", attributes: [{ name: "phase", type: { kind: "enum", values: ["new", "done"] } }, { name: "amount", type: { kind: "int", min: 0, max: 9 } }] },
     ],
     obligations: [
-      { id: "DOB-2", nature: "invariant", origin: "rules", brRefs: ["BR-1"], frRefs: ["FR-2"], assert: { op: "bool", value: true } },
+      { id: "DOB-2", nature: "invariant", origin: "rules", brRefs: ["BR1.1"], frRefs: ["FR-2"], assert: { op: "bool", value: true } },
       {
         id: "DOB-1",
         nature: "event",

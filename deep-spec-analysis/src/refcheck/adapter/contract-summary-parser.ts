@@ -4,7 +4,7 @@
 import { extractFences } from "@deep-spec/kernel-adapter";
 import { parseMarkdownTables } from "@deep-spec/kernel-adapter";
 import { parseYamlSubset } from "@deep-spec/kernel-adapter";
-import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
+import { type Json, combineResults, traverseResult, isObject } from "@deep-spec/kernel-infrastructure";
 
 import {
   BlockIndex,
@@ -37,7 +37,9 @@ export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
       const dependsOn = Array.isArray(raw.depends_on)
         ? (raw.depends_on as Json[]).filter((d): d is string => typeof d === "string")
         : [];
-      units.push(UnitDecl.of({ name: UnitName.of(raw.name), dependsOn: UnitNames.of(Array.from(dependsOn, (raw) => UnitName.of(raw))) }));
+      const fields = combineResults({ name: UnitName.parse(raw.name), dependsOn: traverseResult(dependsOn, UnitName.parse) });
+      if (!fields.ok) return DeclaredUnitsOutcome.unrecognized(JSON.stringify(fields.error));
+      units.push(UnitDecl.of({ name: fields.value.name, dependsOn: UnitNames.of(fields.value.dependsOn) }));
     }
     if (units.length === 0) return DeclaredUnitsOutcome.unrecognized();
     return DeclaredUnitsOutcome.declared(UnitDecls.of(units));

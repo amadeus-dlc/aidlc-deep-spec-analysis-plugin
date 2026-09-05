@@ -1,5 +1,4 @@
 import {
-  decodeDomainValues,
   extractFences,
   findRecordRoot,
   readContractSchema,
@@ -52,7 +51,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 import { type Json, isObject, validateSchema } from "@deep-spec/kernel-infrastructure";
-import { type Result, ok } from "@deep-spec/kernel-infrastructure";
+import { type Result, combineResults, traverseResult, err, ok } from "@deep-spec/kernel-infrastructure";
 import { err as repoErr } from "@deep-spec/kernel-infrastructure";
 
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
@@ -74,22 +73,32 @@ function strArrayOrUndefined(v: Json): string[] | undefined {
 
 // brRefs は「配列でなければ未宣言」——宣言の有無を undefined で保存しつつ
 // 宣言済みはコレクションで運ぶ。
-function brRefsOrUndefined(v: Json): BrRefs | undefined {
+function brRefsOrUndefined(v: Json) {
   const arr = strArrayOrUndefined(v);
-  return arr === undefined ? undefined : BrRefs.of(Array.from(arr, (raw) => BrRef.of(raw)));
+  if (arr === undefined) return ok(undefined);
+  const parsed = traverseResult(arr, BrRef.parse);
+  return parsed.ok ? ok(BrRefs.of(parsed.value)) : parsed;
 }
 
-function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordRoot: string | null): DesignUnitDecl {
+function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordRoot: string | null): Result<DesignUnitDecl, string> {
+  const unit = DesignUnitId.parse(unitName);
+  if (!unit.ok) return err(JSON.stringify(unit.error));
   const entities = parseDesignEntities(isObject(rawUnit.schema) ? rawUnit.schema : {});
+  if (!entities.ok) return err(JSON.stringify(entities.error));
 
   const obligations: DesignObligationDecl[] = [];
   for (const ob of Array.isArray(rawUnit.obligations) ? rawUnit.obligations : []) {
     if (!isObject(ob) || typeof ob.id !== "string") continue;
     const temporal = isObject(ob.temporal) ? ob.temporal : null;
-    obligations.push(DesignObligationDecl.of({
-      id: DesignObligationId.of(ob.id),
-      origin: typeof ob.origin === "string" ? DesignObligationOrigin.of(ob.origin) : undefined,
+    const parsed = combineResults({
+      id: DesignObligationId.parse(ob.id),
       brRefs: brRefsOrUndefined(ob.brRefs ?? null),
+    });
+    if (!parsed.ok) return err(JSON.stringify(parsed.error));
+    obligations.push(DesignObligationDecl.of({
+      id: parsed.value.id,
+      origin: typeof ob.origin === "string" ? DesignObligationOrigin.of(ob.origin) : undefined,
+      brRefs: parsed.value.brRefs,
       assert: asExpression(ob.assert ?? null),
       guard: asExpression(ob.guard ?? null),
       effect: asExpression(ob.effect ?? null),
@@ -112,12 +121,18 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     const transitions: DesignTransitionDecl[] = [];
     for (const tr of Array.isArray(sm.transitions) ? sm.transitions : []) {
       if (!isObject(tr) || typeof tr.id !== "string") continue;
+      const parsed = combineResults({
+        id: DesignTransitionId.parse(tr.id),
+        trigger: typeof tr.trigger === "string" ? TriggerName.parse(tr.trigger) : ok(undefined),
+        brRefs: brRefsOrUndefined(tr.brRefs ?? null),
+      });
+      if (!parsed.ok) return err(JSON.stringify(parsed.error));
       transitions.push(DesignTransitionDecl.of({
-        id: DesignTransitionId.of(tr.id),
+        id: parsed.value.id,
         from: typeof tr.from === "string" ? tr.from : undefined,
         to: typeof tr.to === "string" ? tr.to : undefined,
-        trigger: typeof tr.trigger === "string" ? TriggerName.of(tr.trigger) : undefined,
-        brRefs: brRefsOrUndefined(tr.brRefs ?? null),
+        trigger: parsed.value.trigger,
+        brRefs: parsed.value.brRefs,
         guard: asExpression(tr.guard ?? null),
         effect: asExpression(tr.effect ?? null),
       }));
@@ -125,28 +140,39 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
     const ignores: DesignIgnoreDecl[] = [];
     for (const ig of Array.isArray(sm.ignores) ? sm.ignores : []) {
       if (!isObject(ig) || typeof ig.state !== "string" || typeof ig.trigger !== "string") continue;
-      ignores.push(DesignIgnoreDecl.of({ state: ig.state, trigger: TriggerName.of(ig.trigger) }));
+      const trigger = TriggerName.parse(ig.trigger);
+      if (!trigger.ok) return err(JSON.stringify(trigger.error));
+      ignores.push(DesignIgnoreDecl.of({ state: ig.state, trigger: trigger.value }));
     }
-    stateMachines.push(DesignMachineDecl.of({ id: DesignMachineId.of(sm.id), attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
+    const id = DesignMachineId.parse(sm.id);
+    if (!id.ok) return err(JSON.stringify(id.error));
+    stateMachines.push(DesignMachineDecl.of({ id: id.value, attrPath, initial: InitialStates.of(initial), transitions: DesignTransitionDecls.of(transitions), ignores: DesignIgnoreDecls.of(ignores) }));
   }
 
   const scenarios: DesignScenarioDecl[] = [];
   for (const sc of Array.isArray(rawUnit.scenarios) ? rawUnit.scenarios : []) {
     if (!isObject(sc) || typeof sc.id !== "string") continue;
     const bindings = isObject(sc.bindings) ? sc.bindings : {};
+    const parsed = combineResults({
+      id: DesignScenarioId.parse(sc.id),
+      brRefs: brRefsOrUndefined(sc.brRefs ?? null),
+    });
+    if (!parsed.ok) return err(JSON.stringify(parsed.error));
     scenarios.push(DesignScenarioDecl.of({
-      id: DesignScenarioId.of(sc.id),
+      id: parsed.value.id,
       bindings: BindingPairs.of(Object.entries(bindings)),
       hasEvent: isObject(sc.event ?? null),
       expect: asExpression(sc.expect ?? null),
-      brRefs: brRefsOrUndefined(sc.brRefs ?? null),
+      brRefs: parsed.value.brRefs,
     }));
   }
 
   const background: DesignBackgroundDecl[] = [];
   for (const bg of Array.isArray(rawUnit.background) ? rawUnit.background : []) {
     if (!isObject(bg) || typeof bg.id !== "string") continue;
-    background.push(DesignBackgroundDecl.of({ id: DesignBackgroundId.of(bg.id), assert: asExpression(bg.assert ?? null) }));
+    const id = DesignBackgroundId.parse(bg.id);
+    if (!id.ok) return err(JSON.stringify(id.error));
+    background.push(DesignBackgroundDecl.of({ id: id.value, assert: asExpression(bg.assert ?? null) }));
   }
 
   const unformalizedTargets: string[] = [];
@@ -161,17 +187,19 @@ function buildUnitView(rawUnit: { [k: string]: Json }, unitName: string, recordR
   const rulesPath = recordRoot === null ? null : join(recordRoot, "construction", unitName, "functional-design", "rules.md");
   const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
 
-  return DesignUnitDecl.of({
-    unit: DesignUnitId.of(unitName),
-    entities,
+  const targets = traverseResult(unformalizedTargets, TargetId.parse);
+  if (!targets.ok) return err(JSON.stringify(targets.error));
+  return ok(DesignUnitDecl.of({
+    unit: unit.value,
+    entities: entities.value,
     obligations: DesignObligationDecls.of(obligations),
     stateMachines: DesignMachineDecls.of(stateMachines),
     scenarios: DesignScenarioDecls.of(scenarios),
     background: DesignBackgroundDecls.of(background),
-    unformalizedTargets: UnformalizedTargets.of(Array.from(unformalizedTargets, (raw) => TargetId.of(raw))),
+    unformalizedTargets: UnformalizedTargets.of(targets.value),
     directoryExists,
     rulesMarkdown,
-  });
+  }));
 }
 
 export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValidationMaterialsRepository {
@@ -182,11 +210,6 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
   }
 
   findById(id: DesignIrValidationMaterialsId): Result<DesignIrValidationMaterials, RepositoryError> {
-    const decoded = decodeDomainValues(() => this.#findById(id));
-    return decoded.ok ? decoded.value : repoErr({ kind: "corrupt", path: id.modelId().artifactPath().asString(), cause: decoded.error });
-  }
-
-  #findById(id: DesignIrValidationMaterialsId): Result<DesignIrValidationMaterials, RepositoryError> {
     const outputPath = id.modelId().artifactPath().asString();
     // 機能形式モデル以外・不在はこの Repository の収蔵外（not-found——use case
     // が pass-through へ写像する旧 not-applicable の凍結挙動）。
@@ -232,7 +255,8 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
     const schemaErrors: string[] = [];
     validateSchema(schema.value, schema.value, ir, "", schemaErrors);
 
-    const irVersion = typeof ir.irVersion === "string" ? ir.irVersion : "";
+    const irVersion = IrVersion.parse(typeof ir.irVersion === "string" ? ir.irVersion : "");
+    if (!irVersion.ok) return corrupt(JSON.stringify(irVersion.error));
 
     // 旧 main は「バージョン一致かつスキーマ妥当」のときだけ semanticErrors を
     // 呼んだ——unit view の構築（construction/<unit>/ の existsSync と rules.md
@@ -240,7 +264,7 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
     // ユニット名がスキーマの ^[a-z0-9][a-z0-9-]{0,63}$ 制約を通過していない
     // 可能性があり、生の名前を join へ渡さない（レガシーの I/O プロファイルと
     // 経路制限の保存）。use case 側も errors 非空なら units を読まない。
-    const major = Number.parseInt(irVersion.split(".")[0] ?? "", 10);
+    const major = irVersion.value.majorVersion();
     const semanticGateOpen = schemaErrors.length === 0 && !(Number.isInteger(major) && major !== SUPPORTED_DESIGN_IR_MAJOR);
 
     const units: DesignUnitDecl[] = [];
@@ -248,14 +272,16 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
       const recordRoot = findRecordRoot(dirname(outputPath));
       for (const rawUnit of Array.isArray(ir.units) ? ir.units : []) {
         if (!isObject(rawUnit) || typeof rawUnit.unit !== "string") continue;
-        units.push(buildUnitView(rawUnit, rawUnit.unit, recordRoot));
+        const parsed = buildUnitView(rawUnit, rawUnit.unit, recordRoot);
+        if (!parsed.ok) return corrupt(parsed.error);
+        units.push(parsed.value);
       }
     }
 
     return ok(
       DesignIrValidationMaterials.of({
         id,
-        irVersion: IrVersion.of(irVersion),
+        irVersion: irVersion.value,
         schemaErrors: ErrorMessages.of(schemaErrors),
         units: DesignUnitDecls.of(units),
         sourceDocument: new Uint8Array(bytes),
@@ -266,8 +292,9 @@ export class DesignIrValidationMaterialsRepositoryImpl implements DesignIrValida
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
   store(materials: DesignIrValidationMaterials): Result<void, RepositoryError> {
     const outputPath = materials.id().modelId().artifactPath().asString();
+    const bytes = materials.sourceDocument();
     try {
-      writeFileAtomically(outputPath, materials.sourceDocument());
+      writeFileAtomically(outputPath, bytes);
       return ok(undefined);
     } catch (e) {
       return repoErr({ kind: "io-failed", operation: "write", path: outputPath, cause: e instanceof Error ? e.message : String(e) });

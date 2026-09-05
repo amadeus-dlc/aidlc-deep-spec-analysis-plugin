@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
 import {
+  DesignUnitId,
+  BrRef,
   DesignAttributeName,
   UnmappedTargetRef,
   DesignEntityName,
@@ -25,6 +27,7 @@ import {
   CheckFamily,
   ContractId,
   MachineSpec,
+  FenceCount,
   NumericBound,
   LineNumber,
   RuleCategory,
@@ -42,6 +45,8 @@ import {
   AllowedValue,
 } from "@deep-spec/refcheck-domain";
 import {
+  QueryLabel,
+  RequirementId,
   SkipReason,
   UnitName,
   ArtifactPath,
@@ -131,6 +136,15 @@ describe("domain construction contracts", () => {
   contract(TargetId, "OB-1", "");
   contract(TriggerName, "value", "");
   contract(PluginVersion, "1.2.3", "1.2");
+  contract(RequirementId, "FR-1", "FR-");
+  contract(BrRef, "BR1.1", "BR-1");
+  contract(QueryLabel, "global", "");
+  contract(DesignUnitId, "u1", "");
+
+  test("a derived fence count cannot be negative, fractional, or unsafe", () => {
+    expect(FenceCount.of(0).asNumber()).toBe(0);
+    for (const count of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1]) expect(() => FenceCount.of(count)).toThrow(IllegalArgumentException);
+  });
 
   test("parse does not swallow implementation defects", () => {
     for (const failure of [new Error("bug"), new TypeError("bug")]) {

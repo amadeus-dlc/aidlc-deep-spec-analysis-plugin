@@ -235,6 +235,27 @@ function compareCanonically(a, b) {
 function sortedUniqueCanonically(values) {
   return [...new Set(values)].sort(compareCanonically);
 }
+// src/kernel/infrastructure/result-composition.ts
+function combineResults(fields) {
+  const values = {};
+  for (const key in fields) {
+    const field = fields[key];
+    if (!field.ok)
+      return err(field.error);
+    values[key] = field.value;
+  }
+  return ok(values);
+}
+function traverseResult(values, parse) {
+  const parsed = [];
+  for (const value of values) {
+    const result = parse(value);
+    if (!result.ok)
+      return err(result.error);
+    parsed.push(result.value);
+  }
+  return ok(parsed);
+}
 // src/kernel/adapter/contract-schema.ts
 function readContractSchema(path) {
   try {
@@ -243,10 +264,34 @@ function readContractSchema(path) {
     return err({ cause: e instanceof Error ? e.message : String(e) });
   }
 }
-// src/kernel/adapter/domain-decoding.ts
-function decodeDomainValues(build) {
-  const parsed = parseConstruction(build);
-  return parsed.ok ? parsed : err(JSON.stringify(parsed.error));
+// src/kernel/adapter/findings-document.ts
+var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
+var optionalString = (value) => value === undefined || typeof value === "string";
+function decodeFindingsDocument(raw) {
+  if (!isObject(raw))
+    return err("findings document must be an object");
+  for (const field of ["backend", "irVersion", "irHash", "method"]) {
+    if (typeof raw[field] !== "string")
+      return err(`${field} must be a string`);
+  }
+  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
+    return err("findings must be an array of complete finding records");
+  }
+  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
+    return err("skipped must be an array of complete skip records");
+  }
+  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
+    return err("unavailable must carry a reason");
+  }
+  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
+    return err("inputs must be an array of input anchors");
+  }
+  if (raw.checked !== undefined && !strings(raw.checked))
+    return err("checked must be an array of strings");
+  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
+    return err("crossChecked must be an array of backend comparisons");
+  }
+  return ok(raw);
 }
 // src/kernel/adapter/yaml.ts
 class YamlError extends Error {
@@ -881,10 +926,15 @@ class TargetIds {
 class RequirementId {
   #value;
   constructor(value) {
+    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value))
+      throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
     this.#value = value;
   }
   static of(raw) {
     return new RequirementId(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new RequirementId(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1220,10 +1270,15 @@ class KeyedIndex {
 class QueryLabel {
   #value;
   constructor(value) {
+    if (value === "")
+      throw new IllegalArgumentException({ kind: "empty-query-label", raw: value });
     this.#value = value;
   }
   static of(raw) {
     return new QueryLabel(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new QueryLabel(raw));
   }
   equals(other) {
     return this.#value === other.#value;
@@ -1492,6 +1547,53 @@ class AttributeKind {
   asString() {
     return this.#value;
   }
+}
+// src/kernel/adapter/findings-values-parser.ts
+function parseFindingsValues(raw) {
+  const decoded = decodeFindingsDocument(raw);
+  if (!decoded.ok)
+    return decoded;
+  const doc = decoded.value;
+  const parsed = combineResults({
+    backend: BackendName.parse(doc.backend),
+    irVersion: IrVersion.parse(doc.irVersion),
+    irHash: ContentHash.parse(doc.irHash),
+    method: VerificationMethod.parse(doc.method),
+    findings: traverseResult(doc.findings, (entry) => {
+      const fields = combineResults({
+        kind: FindingKind.parse(entry.kind),
+        frRefs: traverseResult(entry.frRefs, RequirementId.parse),
+        targets: traverseResult(entry.targets, TargetId.parse),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({ ...fields.value, frRefs: FrRefs.of(fields.value.frRefs), targets: TargetIds.of(fields.value.targets), witness: entry.witness, detail: entry.detail });
+    }),
+    skipped: traverseResult(doc.skipped, (entry) => {
+      const fields = combineResults({
+        target: TargetId.parse(entry.target),
+        reason: SkipReason.parse(entry.reason),
+        unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
+      });
+      if (!fields.ok)
+        return fields;
+      return ok({ ...fields.value, detail: entry.detail });
+    }),
+    inputs: doc.inputs === undefined ? ok(undefined) : traverseResult(doc.inputs, (entry) => combineResults({
+      artifact: ArtifactPath.parse(entry.artifact),
+      sha256: ContentHash.parse(entry.sha256)
+    })),
+    crossChecked: doc.crossChecked === undefined ? ok(undefined) : traverseResult(doc.crossChecked, (entry) => {
+      const fields = combineResults({ backend: BackendName.parse(entry.backend), targets: traverseResult(entry.targets, TargetId.parse) });
+      if (!fields.ok)
+        return fields;
+      return ok({ backend: fields.value.backend, targets: TargetIds.of(fields.value.targets) });
+    })
+  });
+  if (!parsed.ok)
+    return err(JSON.stringify(parsed.error));
+  return ok({ ...parsed.value, checked: doc.checked, unavailable: doc.unavailable });
 }
 // src/refcheck/domain/catalog-version.ts
 var CATALOG_VERSION = "1.0.0";
@@ -2022,6 +2124,8 @@ class LineNumber {
 class FenceCount {
   #value;
   constructor(value) {
+    if (!Number.isSafeInteger(value) || value < 0)
+      throw new IllegalArgumentException({ kind: "invalid-fence-count", raw: value });
     this.#value = value;
   }
   static of(value) {
@@ -4252,7 +4356,10 @@ class SourceIds {
     yield* this.#values;
   }
   valuesMissingFrom(known) {
-    return this.#values.map((id) => id.asString()).filter((id) => !known.has(RequirementId.of(id))).sort();
+    return this.#values.map((id) => id.asString()).filter((id) => {
+      const parsed = RequirementId.parse(id);
+      return !parsed.ok || !known.has(parsed.value);
+    }).sort();
   }
   toArray() {
     return this.#values;
@@ -4461,63 +4568,45 @@ function renderReportBytes(report) {
 `;
 }
 function parseReportDocument(id, raw) {
-  const decoded = decodeDomainValues(() => parseReportDocumentValue(id, raw));
-  return decoded.ok ? decoded.value : { ok: false, error: { cause: decoded.error } };
-}
-function parseReportDocumentValue(id, raw) {
-  if (!isObject(raw))
-    return { ok: false, error: { cause: "document is not a JSON object" } };
-  if (raw.backend !== id.backendName().asString()) {
-    return { ok: false, error: { cause: `document backend "${String(raw.backend)}" does not match the id backend "${id.backendName().asString()}"` } };
+  const decoded = parseFindingsValues(raw);
+  if (!decoded.ok)
+    return err({ cause: decoded.error });
+  const doc = decoded.value;
+  if (!doc.backend.equals(id.backendName()))
+    return err({ cause: `document backend "${doc.backend.asString()}" does not match the id backend "${id.backendName().asString()}"` });
+  if (doc.inputs === undefined || doc.checked === undefined)
+    return err({ cause: "document lacks inputs/checked/findings/skipped arrays" });
+  const checked = traverseResult(doc.checked, TargetId.parse);
+  if (!checked.ok)
+    return err({ cause: JSON.stringify(checked.error) });
+  const findings = [];
+  for (const entry of doc.findings) {
+    const witness = isObject(entry.witness) ? entry.witness : {};
+    const refs = [];
+    for (const rawRef of Array.isArray(witness.refs) ? witness.refs : []) {
+      const ref = isObject(rawRef) ? rawRef : {};
+      const parsed = combineResults({
+        artifact: ArtifactPath.parse(typeof ref.artifact === "string" ? ref.artifact : ""),
+        element: ElementPath.parse(typeof ref.element === "string" ? ref.element : "")
+      });
+      if (!parsed.ok)
+        return err({ cause: JSON.stringify(parsed.error) });
+      refs.push(WitnessRef.of({
+        artifact: parsed.value.artifact.asString(),
+        element: parsed.value.element.asString(),
+        ...typeof ref.value === "string" ? { value: ref.value } : {}
+      }));
+    }
+    findings.push(Finding.of({ ...entry, witness: { refs: WitnessRefs.of(refs) } }));
   }
-  if (!Array.isArray(raw.findings) || !Array.isArray(raw.skipped) || !Array.isArray(raw.inputs) || !Array.isArray(raw.checked)) {
-    return { ok: false, error: { cause: "document lacks inputs/checked/findings/skipped arrays" } };
-  }
-  const unavailable = isObject(raw.unavailable) && typeof raw.unavailable.reason === "string" ? raw.unavailable.reason : null;
-  return {
-    ok: true,
-    value: ReferenceCheckReport.of({
-      id,
-      inputs: InputAnchors.of(raw.inputs.map((e) => {
-        const entry = isObject(e) ? e : {};
-        return InputAnchor.of({
-          artifact: typeof entry.artifact === "string" ? entry.artifact : "",
-          sha256: ContentHash.of(typeof entry.sha256 === "string" ? entry.sha256 : "")
-        });
-      })),
-      checked: TargetIds.of(Array.from(raw.checked.filter((c) => typeof c === "string"), (raw2) => TargetId.of(raw2))),
-      findings: Findings.of(raw.findings.map((e) => {
-        const entry = isObject(e) ? e : {};
-        const witness = isObject(entry.witness) ? entry.witness : {};
-        const refs = Array.isArray(witness.refs) ? witness.refs.map((r) => {
-          const rr = isObject(r) ? r : {};
-          return WitnessRef.of({
-            artifact: typeof rr.artifact === "string" ? rr.artifact : "",
-            element: typeof rr.element === "string" ? rr.element : "",
-            ...typeof rr.value === "string" ? { value: rr.value } : {}
-          });
-        }) : [];
-        return Finding.of({
-          kind: FindingKind.of(typeof entry.kind === "string" ? entry.kind : ""),
-          frRefs: FrRefs.of(Array.from(Array.isArray(entry.frRefs) ? entry.frRefs.filter((x) => typeof x === "string") : [], (raw2) => RequirementId.of(raw2))),
-          targets: TargetIds.of(Array.from(Array.isArray(entry.targets) ? entry.targets.filter((x) => typeof x === "string") : [], (raw2) => TargetId.of(raw2))),
-          witness: { refs: WitnessRefs.of(refs) },
-          detail: typeof entry.detail === "string" ? entry.detail : "",
-          ...typeof entry.unit === "string" ? { unit: UnitName.of(entry.unit) } : {}
-        });
-      })),
-      skipped: Skips.of(raw.skipped.map((e) => {
-        const entry = isObject(e) ? e : {};
-        return Skipped.of({
-          target: TargetId.of(typeof entry.target === "string" ? entry.target : ""),
-          reason: SkipReason.of(typeof entry.reason === "string" ? entry.reason : ""),
-          ...typeof entry.detail === "string" ? { detail: entry.detail } : {},
-          ...typeof entry.unit === "string" ? { unit: UnitName.of(entry.unit) } : {}
-        });
-      })),
-      unavailableReason: unavailable
-    })
-  };
+  return ok(ReferenceCheckReport.of({
+    id,
+    inputs: InputAnchors.of(doc.inputs.map((entry) => InputAnchor.of({ artifact: entry.artifact.asString(), sha256: entry.sha256 }))),
+    checked: TargetIds.of(checked.value),
+    findings: Findings.of(findings),
+    skipped: Skips.of(doc.skipped.map(Skipped.of)),
+    unavailableReason: doc.unavailable?.reason ?? null
+  }));
 }
 
 // src/refcheck/adapter/reference-check-report-repository-impl.ts
@@ -4543,8 +4632,9 @@ class ReferenceCheckReportRepositoryImpl {
   }
   store(report) {
     const path = join4(report.id().directory().asString(), report.id().fileName());
+    const bytes = encoder.encode(renderReportBytes(report));
     try {
-      writeFileAtomically(path, encoder.encode(renderReportBytes(report)));
+      writeFileAtomically(path, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
@@ -4573,6 +4663,11 @@ function extractComponents(value) {
       shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "component has no string `name`" }));
       return;
     }
+    const parsedName = ComponentName.parse(name);
+    if (!parsedName.ok) {
+      shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(`${element}.name`), detail: JSON.stringify(parsedName.error) }));
+      return;
+    }
     const refs = (key) => {
       const out = [];
       if (!Array.isArray(raw[key]))
@@ -4580,8 +4675,14 @@ function extractComponents(value) {
       raw[key].forEach((entry, j) => {
         const el = `${element}.${key}[${j}].component`;
         const comp = isObject(entry) ? str(entry.component) : str(entry);
-        if (comp !== null)
-          out.push(ComponentRef.of({ component: ComponentName.of(comp), element: ElementPath.of(el) }));
+        if (comp === null)
+          return;
+        const component = ComponentName.parse(comp);
+        if (!component.ok) {
+          shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(el), detail: JSON.stringify(component.error) }));
+          return;
+        }
+        out.push(ComponentRef.of({ component: component.value, element: ElementPath.of(el) }));
       });
       return ComponentRefs.of(out);
     };
@@ -4593,6 +4694,11 @@ function extractComponents(value) {
         const ename = str(entry.name);
         if (ename === null)
           return;
+        const entity = EntityName.parse(ename);
+        if (!entity.ok) {
+          shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(`${element}.entities[${j}].name`), detail: JSON.stringify(entity.error) }));
+          return;
+        }
         const references = [];
         if (Array.isArray(entry.references)) {
           entry.references.forEach((ref, k) => {
@@ -4601,25 +4707,35 @@ function extractComponents(value) {
             const target = str(ref.entity);
             const ownedBy = str(ref.owned_by);
             if (target !== null && ownedBy !== null) {
+              const fields = combineResults({ entity: EntityName.parse(target), ownedBy: ComponentName.parse(ownedBy) });
+              if (!fields.ok) {
+                shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(`${element}.entities[${j}].references[${k}]`), detail: JSON.stringify(fields.error) }));
+                return;
+              }
               references.push(EntityReference.of({
-                entity: EntityName.of(target),
-                ownedBy: ComponentName.of(ownedBy),
+                entity: fields.value.entity,
+                ownedBy: fields.value.ownedBy,
                 element: ElementPath.of(`${element}.entities[${j}].references[${k}]`)
               }));
             }
           });
         }
         const identifier = str(entry.identifier);
+        const parsedIdentifier = identifier === null || identifier === "" ? ok(null) : AttributeName.parse(identifier);
+        if (!parsedIdentifier.ok) {
+          shapeErrors.push(ComponentShapeError.of({ element: ElementPath.of(`${element}.entities[${j}].identifier`), detail: JSON.stringify(parsedIdentifier.error) }));
+          return;
+        }
         entities.push(ComponentEntity.of({
-          name: EntityName.of(ename),
+          name: entity.value,
           element: ElementPath.of(`${element}.entities[${j}]`),
-          identifier: identifier === null || identifier === "" ? null : AttributeName.of(identifier),
+          identifier: parsedIdentifier.value,
           references: EntityReferences.of(references)
         }));
       });
     }
     comps.push(Component.of({
-      name: ComponentName.of(name),
+      name: parsedName.value,
       element: ElementPath.of(element),
       dependsOn: refs("depends_on"),
       dependents: refs("dependents"),
@@ -4657,7 +4773,10 @@ function parseDeclaredUnits(depMd) {
       if (!isObject(raw) || typeof raw.name !== "string")
         continue;
       const dependsOn = Array.isArray(raw.depends_on) ? raw.depends_on.filter((d) => typeof d === "string") : [];
-      units.push(UnitDecl.of({ name: UnitName.of(raw.name), dependsOn: UnitNames.of(Array.from(dependsOn, (raw2) => UnitName.of(raw2))) }));
+      const fields = combineResults({ name: UnitName.parse(raw.name), dependsOn: traverseResult(dependsOn, UnitName.parse) });
+      if (!fields.ok)
+        return DeclaredUnitsOutcome.unrecognized(JSON.stringify(fields.error));
+      units.push(UnitDecl.of({ name: fields.value.name, dependsOn: UnitNames.of(fields.value.dependsOn) }));
     }
     if (units.length === 0)
       return DeclaredUnitsOutcome.unrecognized();
@@ -4720,18 +4839,25 @@ function pick(v, keys) {
 }
 function extractRel(raw, element, implicitFrom) {
   if (!isObject(raw))
-    return null;
+    return ok(null);
   const from = str2(pick(raw, ["from", "source"])) ?? implicitFrom;
   const to = str2(pick(raw, ["to", "target", "entity"]));
   const cardinality = str2(pick(raw, ["cardinality"]));
   const hasDirection = from !== null && to !== null || str2(pick(raw, ["direction"])) !== null;
-  return RelDecl.of({
-    element: ElementPath.of(element),
-    from: from === null ? null : EntityName.of(from),
-    to: to === null ? null : EntityName.of(to),
-    cardinality: cardinality === null ? null : CardinalityNotation.of(cardinality),
-    hasDirection
+  const fields = combineResults({
+    from: from === null ? ok(null) : EntityName.parse(from),
+    to: to === null ? ok(null) : EntityName.parse(to),
+    cardinality: cardinality === null ? ok(null) : CardinalityNotation.parse(cardinality)
   });
+  if (!fields.ok)
+    return err(JSON.stringify(fields.error));
+  return ok(RelDecl.of({
+    element: ElementPath.of(element),
+    from: fields.value.from,
+    to: fields.value.to,
+    cardinality: fields.value.cardinality,
+    hasDirection
+  }));
 }
 function extractEntities(value) {
   const collected = { entities: [], rels: [], shapeErrors: [] };
@@ -4753,6 +4879,11 @@ function extractEntities(value) {
     const name = str2(raw.name);
     if (name === null) {
       model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "entity has no string `name`" }));
+      return;
+    }
+    const entity = EntityName.parse(name);
+    if (!entity.ok) {
+      model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: JSON.stringify(entity.error) }));
       return;
     }
     const attrs = [];
@@ -4778,18 +4909,30 @@ function extractEntities(value) {
         const minRaw = pick(a, ["min"]);
         const maxRaw = pick(a, ["max"]);
         const references = str2(pick(a, ["references", "reference", "ref"]));
+        const fields = combineResults({
+          name: AttributeName.parse(aname),
+          type: type === null ? ok(null) : TypeName.parse(type),
+          references: references === null ? ok(null) : ReferenceTarget.parse(references),
+          allowed: allowed === null ? ok(null) : traverseResult(allowed, AllowedValue.parse),
+          min: typeof minRaw === "number" ? NumericBound.parse(minRaw) : ok(null),
+          max: typeof maxRaw === "number" ? NumericBound.parse(maxRaw) : ok(null)
+        });
+        if (!fields.ok) {
+          model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(ael), detail: JSON.stringify(fields.error) }));
+          return;
+        }
         attrs.push(AttrDecl.of({
-          name: AttributeName.of(aname),
+          name: fields.value.name,
           element: ElementPath.of(ael),
-          type: type === null ? null : TypeName.of(type),
+          type: fields.value.type,
           uniqueIsTrue: pick(a, ["unique"]) === true,
-          references: references === null ? null : ReferenceTarget.of(references),
-          allowed: allowed === null ? null : AllowedValues.of(allowed.map((v) => AllowedValue.of(v))),
+          references: fields.value.references,
+          allowed: fields.value.allowed === null ? null : AllowedValues.of(fields.value.allowed),
           def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.of(defRaw) : null,
           minDeclared: minRaw !== null,
           maxDeclared: maxRaw !== null,
-          min: typeof minRaw === "number" ? NumericBound.of(minRaw) : null,
-          max: typeof maxRaw === "number" ? NumericBound.of(maxRaw) : null
+          min: fields.value.min,
+          max: fields.value.max
         }));
       });
     }
@@ -4797,12 +4940,14 @@ function extractEntities(value) {
     if (Array.isArray(raw.relationships)) {
       raw.relationships.forEach((r, j) => {
         const rel = extractRel(r, `${element}.relationships[${j}]`, name);
-        if (rel)
-          rels.push(rel);
+        if (!rel.ok)
+          model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.relationships[${j}]`), detail: rel.error }));
+        else if (rel.value !== null)
+          rels.push(rel.value);
       });
     }
     model.entities.push(EntityDecl.of({
-      name: EntityName.of(name),
+      name: entity.value,
       element: ElementPath.of(element),
       attrs: AttrDecls.of(attrs),
       rels: RelDecls.of(rels)
@@ -4811,8 +4956,10 @@ function extractEntities(value) {
   if (Array.isArray(value.relationships)) {
     value.relationships.forEach((r, j) => {
       const rel = extractRel(r, `relationships[${j}]`, null);
-      if (rel)
-        model.rels.push(rel);
+      if (!rel.ok)
+        model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`relationships[${j}]`), detail: rel.error }));
+      else if (rel.value !== null)
+        model.rels.push(rel.value);
     });
   }
   return DeclaredEntities.of({
@@ -4859,11 +5006,17 @@ function parseRulesDocument(md) {
     const id = str2(raw.id);
     const category = str2(raw.category);
     const appliesTo = str2(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
+    const parsedCategory = category === null ? ok(null) : RuleCategory.parse(category);
+    const parsedAppliesTo = appliesTo === null ? ok(null) : AppliesTo.parse(appliesTo);
+    if (!parsedCategory.ok)
+      missing.push("category");
+    if (!parsedAppliesTo.ok)
+      missing.push("applies_to");
     return RuleDecl.of({
       id: id === null ? null : DeclaredRuleId.of(id),
       element: ElementPath.of(element),
-      category: category === null ? null : RuleCategory.of(category),
-      appliesTo: appliesTo === null ? null : AppliesTo.of(appliesTo),
+      category: parsedCategory.ok ? parsedCategory.value : null,
+      appliesTo: parsedAppliesTo.ok ? parsedAppliesTo.value : null,
       sourceIds: SourceIds.of([...RequirementIds.extractFrom(sourceText)].map((v2) => SourceId.of(v2.asString()))),
       missing
     });
@@ -4879,6 +5032,9 @@ function parseFunctionalSpecDocument(md) {
   for (let i = 0;i < lines.length; i++) {
     const h = (lines[i] ?? "").match(/^#{2,4}\s+State Machine:\s*(.+?)\s*$/i);
     if (!h)
+      continue;
+    const spec = MachineSpec.parse((h[1] ?? "").trim());
+    if (!spec.ok)
       continue;
     for (let j = i + 1;j < lines.length; j++) {
       if (/^#{1,4}\s/.test(lines[j] ?? ""))
@@ -4913,7 +5069,7 @@ function parseFunctionalSpecDocument(md) {
         }
       }
       machines.push(StateMachineSketch.of({
-        spec: MachineSpec.of((h[1] ?? "").trim()),
+        spec: spec.value,
         states: StateNames.of([...states].sort().map((v) => StateName.of(v))),
         fenceLine: LineNumber.of(j + 1),
         unsupported
@@ -4942,10 +5098,13 @@ function parseDomainEntitiesDocument(md) {
         if (!isObject(e) || typeof e.name !== "string")
           continue;
         const attributes = Array.isArray(e.attributes) ? e.attributes.filter((a) => typeof a === "string") : [];
+        const fields = combineResults({ name: EntityName.parse(e.name), component: ComponentName.parse(raw.name), attributes: traverseResult(attributes, AttributeName.parse) });
+        if (!fields.ok)
+          return DomainEntitiesOutcome.unusable(JSON.stringify(fields.error));
         out.push(DomainEntitySketch.of({
-          name: EntityName.of(e.name),
-          component: ComponentName.of(raw.name),
-          attributes: AttributeNames.of(attributes.map((v) => AttributeName.of(v)))
+          name: fields.value.name,
+          component: fields.value.component,
+          attributes: AttributeNames.of(fields.value.attributes)
         }));
       }
     }
@@ -4975,10 +5134,6 @@ import { readFileSync as readFileSync5 } from "fs";
 import { basename as basename2, dirname as dirname3, join as join5 } from "path";
 class DesignRecordRepositoryImpl {
   findById(id) {
-    const decoded = decodeDomainValues(() => this.#findById(id));
-    return decoded.ok ? decoded.value : err({ kind: "corrupt", path: id.artifactPath().asString(), cause: decoded.error });
-  }
-  #findById(id) {
     const artifactPath = id.artifactPath().asString();
     let sourceBytes;
     try {
@@ -5005,8 +5160,9 @@ class DesignRecordRepositoryImpl {
   }
   store(record) {
     const path = record.id().artifactPath().asString();
+    const bytes = record.sourceDocument();
     try {
-      writeFileAtomically(path, record.sourceDocument());
+      writeFileAtomically(path, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });

@@ -103,14 +103,13 @@ export class VerificationDirectoryRepositoryImpl implements VerificationDirector
       return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(acquired) });
     }
     let outcome: Result<void, RepositoryError>;
+    let released: DirectoryFinalizationLockOutcome;
     try {
       outcome = this.#publish(aggregate, candidate, directory);
-    } catch (e) {
-      outcome = err({ kind: "io-failed", operation: "write", path: directoryPath, cause: causeOf(e) });
+    } finally {
+      // panicも伝播させたままロックを解放する。成功結果へ変換しない。
+      released = this.#lock.release(directory);
     }
-    // 成功・失敗のどちらの経路も必ずここを通る。cleanup の失敗は成功を上書き
-    // する（公開と cleanup が揃って初めて成功）。
-    const released = this.#lock.release(directory);
     if (released.kind !== "released" && outcome.ok) {
       return err({ kind: "io-failed", operation: "write", path: lockPath, cause: lockCauseOf(released) });
     }
@@ -132,14 +131,8 @@ export class VerificationDirectoryRepositoryImpl implements VerificationDirector
     if (!unchanged.ok) return err(unchanged.error);
     // 公開する文書を render する。ここまでの失敗では公開ファイルを変えない。
     const crossCheck = aggregate.crossCheck();
-    let backendBytes: string;
-    let crossBytes: string | null;
-    try {
-      backendBytes = renderVerificationReportBytes(candidate);
-      crossBytes = crossCheck === null ? null : renderVerificationReportBytes(crossCheck);
-    } catch (e) {
-      return err({ kind: "io-failed", operation: "write", path: crossPath, cause: causeOf(e) });
-    }
+    const backendBytes = renderVerificationReportBytes(candidate);
+    const crossBytes = crossCheck === null ? null : renderVerificationReportBytes(crossCheck);
     // 既存 cross-check を public path から先に外す。
     if (!this.#lock.holdsOwnership(directory)) return this.#fenced(directory, crossPath);
     if (existsSync(crossPath)) {

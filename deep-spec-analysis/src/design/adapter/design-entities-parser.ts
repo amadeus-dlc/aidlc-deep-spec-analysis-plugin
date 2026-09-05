@@ -4,8 +4,8 @@
 // を組む——キー順は執筆ガイドの順（name / description / attributes、type は
 // kind / min / max / values）で、整形された IR とはバイト同一（tests が固定）。
 
-import type { Json } from "@deep-spec/kernel-infrastructure";
-import { isObject } from "@deep-spec/kernel-infrastructure";
+import type { Json, Result, IllegalArgumentException } from "@deep-spec/kernel-infrastructure";
+import { isObject, ok } from "@deep-spec/kernel-infrastructure";
 
 import { DeclaredBound } from "@deep-spec/kernel-domain";
 import {
@@ -18,16 +18,20 @@ import {
   DesignEntityName,
 } from "@deep-spec/design-domain";
 
-export function parseDesignEntities(schema: { readonly [k: string]: Json }): DesignEntityDecls {
+export function parseDesignEntities(schema: { readonly [k: string]: Json }): Result<DesignEntityDecls, IllegalArgumentException["problem"]> {
   const entities: DesignEntityDecl[] = [];
   for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
     if (!isObject(ent) || typeof ent.name !== "string") continue;
+    const name = DesignEntityName.parse(ent.name);
+    if (!name.ok) return name;
     const attributes: DesignAttributeDecl[] = [];
     for (const attr of Array.isArray(ent.attributes) ? ent.attributes : []) {
       if (!isObject(attr) || typeof attr.name !== "string") continue;
       const t = isObject(attr.type) ? attr.type : {};
+      const name = DesignAttributeName.parse(attr.name);
+      if (!name.ok) return name;
       attributes.push(DesignAttributeDecl.of({
-        name: DesignAttributeName.of(attr.name),
+        name: name.value,
         kind: typeof t.kind === "string" ? t.kind : "",
         ...(typeof attr.description === "string" ? { description: attr.description } : {}),
         ...(Array.isArray(t.values) ? { values: DeclaredValues.of(t.values.filter((v) => typeof v === "string") as string[]) } : {}),
@@ -36,12 +40,12 @@ export function parseDesignEntities(schema: { readonly [k: string]: Json }): Des
       }));
     }
     entities.push(DesignEntityDecl.of({
-      name: DesignEntityName.of(ent.name),
+      name: name.value,
       ...(typeof ent.description === "string" ? { description: ent.description } : {}),
       attributes: DesignAttributeDecls.of(attributes),
     }));
   }
-  return DesignEntityDecls.of(entities);
+  return ok(DesignEntityDecls.of(entities));
 }
 
 export function renderDesignEntities(entities: DesignEntityDecls): Json {

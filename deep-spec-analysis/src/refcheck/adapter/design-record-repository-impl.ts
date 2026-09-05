@@ -1,5 +1,4 @@
 import {
-  decodeDomainValues,
   findRecordRoot,
   listSubdirectories,
   readIfExists,
@@ -35,11 +34,6 @@ import { buildSiblingUnitEntities, parseDomainEntitiesDocument, parseEntitiesDoc
 
 export class DesignRecordRepositoryImpl implements DesignRecordRepository {
   findById(id: DesignRecordId): Result<DesignRecord, RepositoryError> {
-    const decoded = decodeDomainValues(() => this.#findById(id));
-    return decoded.ok ? decoded.value : err({ kind: "corrupt", path: id.artifactPath().asString(), cause: decoded.error });
-  }
-
-  #findById(id: DesignRecordId): Result<DesignRecord, RepositoryError> {
     const artifactPath = id.artifactPath().asString();
     // 錨成果物は生バイト列で一度だけ読む（UTF-8 復号は解析・ダイジェスト専用。
     // 旧 readIfExists と同じく読めない対象は理由を問わず not-found）。
@@ -73,8 +67,9 @@ export class DesignRecordRepositoryImpl implements DesignRecordRepository {
   // 往復則: findById が読んだ錨成果物の原文をバイト逐語で書き戻す。
   store(record: DesignRecord): Result<void, RepositoryError> {
     const path = record.id().artifactPath().asString();
+    const bytes = record.sourceDocument();
     try {
-      writeFileAtomically(path, record.sourceDocument());
+      writeFileAtomically(path, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });

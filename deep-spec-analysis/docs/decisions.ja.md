@@ -4,6 +4,12 @@
 
 要件定義（docs/TODO.md, 2026-08）に対する実装時の判断・スパイク結果・逸脱の記録。
 
+## 2026-09-05 — ofのpanicを入力エラーへ変換しない
+
+入力境界で `of` を呼び、その例外をまとめて `Result` へ変換する方式を撤回する。各DPの `parse` が自分のコンストラクタを呼んで契約違反を変換し、adapterはそのResultを明示的に処理する。`of` の例外は常にpanicとして伝播させる。汎用の `decodeDomainValues` を削除し、Repositoryの生成・描画をI/Oのcatchから外した。公開処理のロック解放はfinallyで保証する。コンパイラも想定したコンパイルエラーだけを処理する。
+
+生値を受け取るIDの不足を補い、RequirementId・BrRef・QueryLabel・DesignUnitIdに生成時の契約とparseを追加した。FenceCountは内部で導出する安全な非負整数を要求する。正規化名や診断対象の宣言値は、すべての入力が有効な契約であるためparseを強制しない。
+
 ## 2026-09-05 — 生成・復元の契約を一本化
 
 旧来の「parseは厳格、reconstituteは不変条件を免除」という判断を撤回する。コンストラクタは具体的なTypeScriptの引数型を維持し、実行時の型検査を追加しない。値の形式・範囲・非空などの不変条件を一度だけ検査して `IllegalArgumentException` を送出する。`of` はその例外を送出し、`parse` は契約違反だけを `Result` に変換する。`PluginVersion.parse` も同じ規則に従う。

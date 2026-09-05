@@ -165,6 +165,7 @@ export function compileQuintMachine(model: RequirementsModel): QuintCompilation 
   try {
     return { kind: "compiled", machine: compile(model) };
   } catch (err) {
+    if (!(err instanceof CompileError)) throw err;
     return { kind: "uncompilable", error: err instanceof Error ? err.message : String(err) };
   }
 }
@@ -275,6 +276,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       actionNames.push(action);
       eventIds.push(ob.id());
     } catch (err) {
+      if (!(err instanceof CompileError)) throw err;
       compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
     }
   }
@@ -295,6 +297,7 @@ function compile(model: RequirementsModel): CompiledQuintMachine {
       lines.push(`  temporal ${qId("temp", ob.id().asString())} = always(${from} implies eventually(${to}))`);
       temporalNames.set(ob.id().asString(), qId("temp", ob.id().asString()));
     } catch (err) {
+      if (!(err instanceof CompileError)) throw err;
       compileSkips.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
     }
   }

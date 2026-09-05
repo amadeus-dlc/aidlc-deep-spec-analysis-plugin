@@ -1,4 +1,4 @@
-import { decodeDomainValues, extractFences, findRecordRoot, relArtifact } from "@deep-spec/kernel-adapter";
+import { extractFences, findRecordRoot, relArtifact } from "@deep-spec/kernel-adapter";
 import { RequirementId, ArtifactPath, ContentHash, FrRefs, TriggerName, type Expression } from "@deep-spec/kernel-domain";
 
 // RefinementMaterialsRepository の実 Gateway 実装。レコードルート歩行・要件形式
@@ -8,7 +8,7 @@ import { RequirementId, ArtifactPath, ContentHash, FrRefs, TriggerName, type Exp
 // 旧 refinement-lib の loadRequirementsIr / loadRefinementMap と旧 entry の
 // inputs 組成からの逐語移植。
 
-import { type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import { type Result, combineResults, traverseResult, err, ok } from "@deep-spec/kernel-infrastructure";
 import { type Json, isObject, validateSchema, strArr, canonicalStringify } from "@deep-spec/kernel-infrastructure";
 import type { RepositoryError } from "@deep-spec/kernel-usecase";
 import type { RefinementMaterialsId } from "@deep-spec/design-domain";
@@ -67,11 +67,6 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
   }
 
   findById(id: RefinementMaterialsId): Result<RefinementMaterials, RepositoryError> {
-    const decoded = decodeDomainValues(() => this.#findById(id));
-    return decoded.ok ? decoded.value : err({ kind: "corrupt", path: id.modelArtifactPath().asString(), cause: decoded.error });
-  }
-
-  #findById(id: RefinementMaterialsId): Result<RefinementMaterials, RepositoryError> {
     const modelPath = id.modelArtifactPath().asString();
     const recordRoot = findRecordRoot(dirname(modelPath));
     if (recordRoot === null) return ok(RefinementMaterials.inactive(id));
@@ -117,8 +112,12 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
         if (!isObject(attr) || typeof attr.name !== "string" || !isObject(attr.type)) continue;
         const t = attr.type;
         if (t.kind !== "bool" && t.kind !== "int" && t.kind !== "enum") continue;
+        const parsed = combineResults({
+          path: AttributePath.parse(`${ent.name}.${attr.name}`),
+        });
+        if (!parsed.ok) return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
         attributes.push(RefinementAttribute.of({
-          path: AttributePath.of(`${ent.name}.${attr.name}`),
+          path: parsed.value.path,
           kind: t.kind,
           values: Array.isArray(t.values) ? ReqAttributeValues.of(t.values.filter((v) => typeof v === "string") as string[]) : undefined,
         }));
@@ -127,12 +126,18 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
     const obligations: RefinementObligation[] = [];
     for (const ob of Array.isArray(raw.obligations) ? raw.obligations : []) {
       if (!isObject(ob) || typeof ob.id !== "string" || typeof ob.nature !== "string") continue;
+      const parsed = combineResults({
+        id: ObligationId.parse(ob.id),
+        frRefs: traverseResult(strArr(ob.frRefs), RequirementId.parse),
+        trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined),
+      });
+      if (!parsed.ok) return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
       obligations.push(RefinementObligation.of({
-        id: ObligationId.of(ob.id),
+        id: parsed.value.id,
         nature: ObligationNature.of(ob.nature),
-        frRefs: FrRefs.of(Array.from(strArr(ob.frRefs), (raw) => RequirementId.of(raw))),
+        frRefs: FrRefs.of(parsed.value.frRefs),
         assert: isObject(ob.assert) ? (ob.assert as unknown as Expression) : undefined,
-        trigger: typeof ob.trigger === "string" ? TriggerName.of(ob.trigger) : undefined,
+        trigger: parsed.value.trigger,
         guard: isObject(ob.guard) ? (ob.guard as unknown as Expression) : undefined,
         effect: isObject(ob.effect) ? (ob.effect as unknown as Expression) : undefined,
       }));
@@ -145,12 +150,18 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
       for (const [k, v] of Object.entries(sc.bindings)) {
         if (typeof v === "boolean" || typeof v === "number" || typeof v === "string") bindings[k] = v;
       }
+      const parsed = combineResults({
+        id: ScenarioId.parse(sc.id),
+        frRefs: traverseResult(strArr(sc.frRefs), RequirementId.parse),
+        trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined),
+      });
+      if (!parsed.ok) return err({ kind: "corrupt", path, cause: JSON.stringify(parsed.error) });
       scenarios.push(RefinementScenario.of({
-        id: ScenarioId.of(sc.id),
+        id: parsed.value.id,
         kind: sc.kind,
-        frRefs: FrRefs.of(Array.from(strArr(sc.frRefs), (raw) => RequirementId.of(raw))),
+        frRefs: FrRefs.of(parsed.value.frRefs),
         bindings,
-        event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.of(sc.event.trigger) } : undefined,
+        event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },
       }));
     }
     const model = RefinementRequirements.of({
@@ -185,12 +196,7 @@ export class RefinementMaterialsRepositoryImpl implements RefinementMaterialsRep
 
 }
 
-export function parseRefinementMapDocument(bytes: Uint8Array, id: RefinementMapId, mapSchemaPath: string): ReturnType<typeof parseRefinementMapDocumentValue> {
-  const decoded = decodeDomainValues(() => parseRefinementMapDocumentValue(bytes, id, mapSchemaPath));
-  return decoded.ok ? decoded.value : { kind: "malformed", error: decoded.error };
-}
-
-function parseRefinementMapDocumentValue(bytes: Uint8Array, id: RefinementMapId, mapSchemaPath: string): RefinementMapParse {
+export function parseRefinementMapDocument(bytes: Uint8Array, id: RefinementMapId, mapSchemaPath: string): RefinementMapParse {
   const md = Buffer.from(bytes).toString("utf-8");
   const fence = extractSingleJsonFence(md);
   if (fence === null) return { kind: "malformed", error: "refinement map does not contain exactly one ```json fence" };
@@ -215,47 +221,63 @@ function parseRefinementMapDocumentValue(bytes: Uint8Array, id: RefinementMapId,
     const attrMap: AttributeMapping[] = [];
     for (const m of Array.isArray(u.attrMap) ? u.attrMap : []) {
       if (!isObject(m) || typeof m.req !== "string") continue;
+      const req = AttributePath.parse(m.req);
+      if (!req.ok) return { kind: "malformed", error: JSON.stringify(req.error) };
       // enumMap が成立するときは enumMap が勝つ（旧実装の分岐順の保存）。
       if (isObject(m.enumMap) && typeof m.enumMap.from === "string" && isObject(m.enumMap.cases)) {
         const cases: { [k: string]: string } = {};
         for (const [k, v] of Object.entries(m.enumMap.cases)) {
           if (typeof v === "string") cases[k] = v;
         }
-        attrMap.push(AttributeMapping.enumCases(AttributePath.of(m.req), m.enumMap.from, cases));
+        attrMap.push(AttributeMapping.enumCases(req.value, m.enumMap.from, cases));
       } else if (isObject(m.expr)) {
-        attrMap.push(AttributeMapping.expression(AttributePath.of(m.req), m.expr as unknown as Expression));
+        attrMap.push(AttributeMapping.expression(req.value, m.expr as unknown as Expression));
       } else {
-        attrMap.push(AttributeMapping.unspecified(AttributePath.of(m.req)));
+        attrMap.push(AttributeMapping.unspecified(req.value));
       }
     }
     const eventMap: EventMapping[] = [];
     for (const e of Array.isArray(u.eventMap) ? u.eventMap : []) {
       if (!isObject(e) || typeof e.reqTrigger !== "string") continue;
+      const parsed = combineResults({
+        reqTrigger: TriggerName.parse(e.reqTrigger),
+        transitions: traverseResult(strArr(e.transitions), TransitionRef.parse),
+      });
+      if (!parsed.ok) return { kind: "malformed", error: JSON.stringify(parsed.error) };
       eventMap.push(EventMapping.of({
-        reqTrigger: TriggerName.of(e.reqTrigger),
-        transitions: TransitionRefs.of(strArr(e.transitions).map((t) => TransitionRef.of(t))),
+        reqTrigger: parsed.value.reqTrigger,
+        transitions: TransitionRefs.of(parsed.value.transitions),
         waived: isObject(e.waived) && typeof e.waived.reason === "string" ? { reason: e.waived.reason } : undefined,
       }));
     }
     const unmapped: UnmappedTarget[] = [];
     for (const un of Array.isArray(u.unmapped) ? u.unmapped : []) {
       if (isObject(un) && typeof un.target === "string") {
-        unmapped.push(UnmappedTarget.of({ target: UnmappedTargetRef.of(un.target), reason: typeof un.reason === "string" ? un.reason : "" }));
+        const target = UnmappedTargetRef.parse(un.target);
+        if (!target.ok) return { kind: "malformed", error: JSON.stringify(target.error) };
+        unmapped.push(UnmappedTarget.of({ target: target.value, reason: typeof un.reason === "string" ? un.reason : "" }));
       }
     }
+    const unit = DesignUnitId.parse(u.unit);
+    if (!unit.ok) return { kind: "malformed", error: JSON.stringify(unit.error) };
     units.push(RefinementUnitMap.of({
-      unit: DesignUnitId.of(u.unit),
+      unit: unit.value,
       attrMap: AttributeMappings.of(attrMap),
       eventMap: EventMappings.of(eventMap),
       unmapped: UnmappedDeclarations.of(unmapped),
     }));
   }
+  const hashes = combineResults({
+    requirements: ContentHash.parse(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
+    design: ContentHash.parse(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
+  });
+  if (!hashes.ok) return { kind: "malformed", error: JSON.stringify(hashes.error) };
   return {
     kind: "parsed",
     map: RefinementMap.of({
       id,
-      requirementsIrHash: ContentHash.of(typeof doc.requirementsIrHash === "string" ? doc.requirementsIrHash : ""),
-      designIrHash: ContentHash.of(typeof doc.designIrHash === "string" ? doc.designIrHash : ""),
+      requirementsIrHash: hashes.value.requirements,
+      designIrHash: hashes.value.design,
       units: RefinementUnitMaps.of(units),
       sourceDocument: bytes,
     }),

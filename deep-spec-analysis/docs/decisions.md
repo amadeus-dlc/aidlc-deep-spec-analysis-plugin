@@ -4,6 +4,12 @@ English | [日本語](decisions.ja.md)
 
 The record of implementation-time decisions, spike results, and deviations from the requirements draft (docs/TODO.md, 2026-08).
 
+## 2026-09-05 — Never convert of panics into input errors
+
+This supersedes the exception wrapper around `of` at input boundaries. Each DP’s own `parse` invokes its constructor and returns contract failures as Result; adapters consume those Results explicitly. Exceptions from `of` always propagate as panics. Removed `decodeDomainValues`, moved domain construction and rendering outside I/O catches, and guaranteed publication lock release with finally. Compiler handlers process only expected compilation errors.
+
+Added missing constructor contracts and parse factories to RequirementId, BrRef, QueryLabel, and DesignUnitId. Internally derived FenceCount requires a nonnegative safe integer. Total normalization and unrestricted declaration values do not need artificial parse failures.
+
 ## 2026-09-05 — Unify construction and restoration contracts
 
 This supersedes the earlier strict-parse / unchecked-reconstitute split. Constructors retain precise TypeScript parameter types, without added runtime type checks. They enforce value invariants once and throw `IllegalArgumentException`. `of` propagates the exception; `parse` converts only contract violations to `Result`. `PluginVersion.parse` follows the same rule.

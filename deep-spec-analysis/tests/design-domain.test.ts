@@ -25,7 +25,7 @@ describe("design obligation", () => {
       id: DesignObligationId.of("DO-1"),
       nature: DesignObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
-      brRefs: BrRefs.of(Array.from(["BR-1"], (raw) => BrRef.of(raw))),
+      brRefs: BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))),
       frRefs: FrRefs.of(Array.from(["FR-1"], (raw) => RequirementId.of(raw))),
       assert: { op: "a" },
       trigger: TriggerName.of("submit"),
@@ -75,7 +75,7 @@ describe("design obligation", () => {
       id: DesignObligationId.of("DO-4"),
       nature: DesignObligationNature.of("invariant"),
       origin: DesignObligationOrigin.of("rules"),
-      brRefs: BrRefs.of(Array.from(["BR-2"], (raw) => BrRef.of(raw))),
+      brRefs: BrRefs.of(Array.from(["BR2.1"], (raw) => BrRef.of(raw))),
       frRefs: FrRefs.of(Array.from(["FR-3"], (raw) => RequirementId.of(raw))),
       assert: lit(true),
       temporal: { pattern: "always", assert: lit(true) },
@@ -83,7 +83,7 @@ describe("design obligation", () => {
     expect(obligation.id().asString()).toBe("DO-4");
     expect(obligation.nature().asString()).toBe("invariant");
     expect(obligation.origin().asString()).toBe("rules");
-    expect(obligation.brRefs().toStrings()).toEqual(["BR-2"]);
+    expect(obligation.brRefs().toStrings()).toEqual(["BR2.1"]);
     expect(obligation.frRefs().toStrings()).toEqual(["FR-3"]);
     expect(obligation.assertion()).toEqual(lit(true));
     expect(obligation.trigger()).toBeUndefined();
@@ -102,7 +102,7 @@ describe("design scenario", () => {
     DesignScenario.of({
       id: DesignScenarioId.of("DS-1"),
       kind,
-      brRefs: BrRefs.of(Array.from(["BR-1"], (raw) => BrRef.of(raw))),
+      brRefs: BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))),
       frRefs: FrRefs.of([]),
       bindings: {},
     });
@@ -118,7 +118,7 @@ describe("design scenario", () => {
     const withEvent = DesignScenario.of({
       id: DesignScenarioId.of("DS-2"),
       kind: "reject",
-      brRefs: BrRefs.of(Array.from(["BR-7"], (raw) => BrRef.of(raw))),
+      brRefs: BrRefs.of(Array.from(["BR7.1"], (raw) => BrRef.of(raw))),
       frRefs: FrRefs.of(Array.from(["FR-4"], (raw) => RequirementId.of(raw))),
       bindings: { b: 2, a: 1 },
       event: { trigger: TriggerName.of("close") },
@@ -126,7 +126,7 @@ describe("design scenario", () => {
     });
     expect(withEvent.id().asString()).toBe("DS-2");
     expect(withEvent.kind()).toBe("reject");
-    expect(withEvent.brRefs().toStrings()).toEqual(["BR-7"]);
+    expect(withEvent.brRefs().toStrings()).toEqual(["BR7.1"]);
     expect(withEvent.frRefs().toStrings()).toEqual(["FR-4"]);
     expect(withEvent.eventTrigger()?.asString()).toBe("close");
     expect(withEvent.expectation()).toEqual(lit(true));
@@ -152,7 +152,7 @@ describe("design transition decl", () => {
       from: "open",
       to: "closed",
       trigger: TriggerName.of("close"),
-      brRefs: BrRefs.of(Array.from(["BR-1"], (raw) => BrRef.of(raw))),
+      brRefs: BrRefs.of(Array.from(["BR1.1"], (raw) => BrRef.of(raw))),
       guard: lit(true),
       effect: primed,
       ...overrides,
@@ -197,7 +197,7 @@ describe("design transition decl", () => {
     expect(full.fromState()).toBe("open");
     expect(full.toState()).toBe("closed");
     expect(full.trigger()?.asString()).toBe("close");
-    expect(full.brRefs()?.toStrings()).toEqual(["BR-1"]);
+    expect(full.brRefs()?.toStrings()).toEqual(["BR1.1"]);
     expect(full.guard()).toEqual(lit(true));
     expect(full.effect()).toEqual(primed);
     const bare = DesignTransitionDecl.of({ id: DesignTransitionId.of("T-2") });
@@ -240,7 +240,7 @@ describe("design transition and ignore (compile-down owners)", () => {
       trigger: TriggerName.of("close"),
       guard: withExprs ? lit(true) : undefined,
       effect: withExprs ? primed : undefined,
-      brRefs: BrRefs.of(Array.from(["BR-9"], (raw) => BrRef.of(raw))),
+      brRefs: BrRefs.of(Array.from(["BR9.1"], (raw) => BrRef.of(raw))),
     });
 
   test("of round-trips every field through the accessors", () => {
@@ -251,7 +251,7 @@ describe("design transition and ignore (compile-down owners)", () => {
     expect(tr.trigger().asString()).toBe("close");
     expect(tr.guard()).toEqual(lit(true));
     expect(tr.effect()).toEqual(primed);
-    expect(tr.brRefs().toStrings()).toEqual(["BR-9"]);
+    expect(tr.brRefs().toStrings()).toEqual(["BR9.1"]);
     expect(transition(false).guard()).toBeUndefined();
     expect(transition(false).effect()).toBeUndefined();
   });

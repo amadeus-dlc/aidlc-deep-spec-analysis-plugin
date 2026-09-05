@@ -1,17 +1,21 @@
-// DesignUnitId — DesignModel 集約内のエンティティ DesignUnit の識別子。
-// 恒等はユニット名（construction ディレクトリ名）。名前の正当性検証
-// （スキーマの ^[a-z0-9][a-z0-9-]{0,63}$）は凍結封鎖中の UnitName DP の
-// 責務であり、この ID は恒等だけを運ぶ。
+import { type Result, IllegalArgumentException, parseConstruction } from "@deep-spec/kernel-infrastructure";
+// DesignModel内のユニット識別子。非空の名前を保持し、
+// 生値からの入力失敗はparse、内部の生成契約違反はofのpanicで扱う。
 
 export class DesignUnitId {
   readonly #value: string;
 
-  private constructor(value: Parameters<typeof DesignUnitId.of>[0]) {
+  private constructor(value: string) {
+    if (value === "") throw new IllegalArgumentException({ kind: "empty-design-unit-id", raw: value });
     this.#value = value;
   }
 
   static of(value: string): DesignUnitId {
     return new DesignUnitId(value);
+  }
+
+  static parse(raw: string): Result<DesignUnitId, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new DesignUnitId(raw));
   }
 
   equals(other: DesignUnitId): boolean {

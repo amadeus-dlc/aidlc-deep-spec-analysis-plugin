@@ -157,6 +157,8 @@ These three things — **frozen output contracts**, **untrustworthy external pro
 
 Use `parse` where invalid input is expected. Unexpected exceptions propagate. Do not introduce a bypassing `reconstitute` factory. Meaningful operations such as canonicalizing `compose` or `SkipReason.timeout()` must also reach the same constructor.
 
+Add `parse` where input failure is recoverable. `RequirementId`, `BrRef`, `QueryLabel`, and `DesignUnitId` provide it. Total normalization, unrestricted declaration values, and internally derived counts do not need a failure-free `parse` merely for naming uniformity.
+
 An empty `ErrorMessages` means no errors and is valid. `DeclaredBound`, `DeclaredDigest`, and `DeclaredRuleId` preserve declarations for diagnosis without representing them as validated values.
 
 **Check**: `construction-contracts.test.ts`, `no-reconstitution-bypass`, TypeScript checking.
@@ -369,7 +371,7 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 ### A1 — Restoration obeys the construction contract
 
-**Rule**: Adapters use existing document decoders to interpret external formats and construct domain objects from typed values. Restoration obeys the same invariants as `of` / `parse`. `decodeDomainValues` converts construction contract violations into decoding failures; implementation defects propagate.
+**Rule**: Adapters use existing document decoders to interpret external formats and construct domain objects from typed values. Restoration obeys the same invariants as `of` / `parse`. Pass raw values to each DP’s `parse` and consume its `Result` before assembling aggregates with `of`. Never wrap `of` in an exception-to-Result converter.
 
 **Why**: Persistence does not exempt a value from its invariants. Keep raw declarations separate from validated values when malformed declarations must remain available for diagnosis.
 
@@ -449,7 +451,7 @@ At JSON boundaries, distinguish omitted fields, empty arrays and explicit nulls 
 
 ### F2 — Propagate contract violations as exceptions
 
-**Rule**: A constructor throws `IllegalArgumentException` when an `of` argument violates a value invariant. Callers do not catch this as ordinary business control flow. Only `parse` and document-decoding boundaries convert this exception to `Result` when invalid input is recoverable.
+**Rule**: A constructor throws `IllegalArgumentException` when an `of` argument violates a value invariant. Callers do not catch this as ordinary business control flow. Only a DP’s own `parse` converts violations from its constructor to `Result`. Exceptions from `of` are panics: adapters and repositories must propagate them. Limit I/O and compilation handlers to the expected operations or exception classes.
 
 Other implementation defects, such as inconsistent closed states, continue to use exceptions with the `defect:` prefix. Do not catch unexpected exceptions broadly and reinterpret them as success or invalid input.
 

@@ -1,4 +1,4 @@
-import { compareCanonically } from "@deep-spec/kernel-infrastructure";
+import { type Result, IllegalArgumentException, parseConstruction, compareCanonically } from "@deep-spec/kernel-infrastructure";
 
 // RequirementId — 要件 id（FR-1 / NFR-2 …）のドメインプリミティブ。requirements.md
 // が宣言する id（RequirementIds）と、義務・シナリオ・規則がそれを指す参照
@@ -7,12 +7,17 @@ import { compareCanonically } from "@deep-spec/kernel-infrastructure";
 export class RequirementId {
   readonly #value: string;
 
-  private constructor(value: Parameters<typeof RequirementId.of>[0]) {
+  private constructor(value: string) {
+    if (!/^(?:FR|NFR)-?[0-9]+(?:\.[0-9]+)*$/.test(value)) throw new IllegalArgumentException({ kind: "malformed-requirement-id", raw: value });
     this.#value = value;
   }
 
   static of(raw: string): RequirementId {
     return new RequirementId(raw);
+  }
+
+  static parse(raw: string): Result<RequirementId, IllegalArgumentException["problem"]> {
+    return parseConstruction(() => new RequirementId(raw));
   }
 
   equals(other: RequirementId): boolean {

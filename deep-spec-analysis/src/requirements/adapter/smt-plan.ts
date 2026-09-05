@@ -188,6 +188,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       bg.push({ name: smtName("bg", b.id().asString()), smt: smtOf(model, b.assertion()) });
       labelToTarget.set(smtName("bg", b.id().asString()), b.id().asString());
     } catch (err) {
+      if (!(err instanceof CompileError)) throw err;
       // コンパイルできない背景仮定は全クエリから落ちる。OB/SC の id を持たない
       // ため skipped[] を占められず、不変量の detail 経由でだけ観測される。
       void err;
@@ -211,6 +212,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         invariantObs.push(ob);
         compiled.set(ob.id().asString(), true);
       } catch (err) {
+        if (!(err instanceof CompileError)) throw err;
         skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
         compiled.set(ob.id().asString(), false);
       }
@@ -228,6 +230,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
         events.push(ob);
         compiled.set(ob.id().asString(), true);
       } catch (err) {
+        if (!(err instanceof CompileError)) throw err;
         skipped.push(VerificationSkipped.of({ target: ob.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
         compiled.set(ob.id().asString(), false);
       }
@@ -264,7 +267,8 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       const name = smtName("ant", ob.id().asString());
       const script = [baseScript, `(declare-const ${name} Bool)`, `(assert (=> ${name} ${smtOf(model, ant)}))`].join("\n");
       queries.push({ id: `vac:${ob.id().asString()}`, script, assumptions: [...baseAssumptions, name], model: [] });
-    } catch {
+    } catch (error) {
+      if (!(error instanceof CompileError)) throw error;
       // 前件は完全形 assert のコンパイルで一度通っている——到達不能。
     }
   }
@@ -369,6 +373,7 @@ export function buildSmtPlan(model: RequirementsModel): SmtPlan {
       queries.push({ id: qid, script, assumptions: [...baseAssumptions, name], model: modelVars });
       scenarioQueries.set(sc.id().asString(), qid);
     } catch (err) {
+      if (!(err instanceof CompileError)) throw err;
       skipped.push(VerificationSkipped.of({ target: sc.id().asTargetId(), reason: SkipReason.of("compile-error"), detail: err instanceof Error ? err.message : String(err) }));
     }
   }

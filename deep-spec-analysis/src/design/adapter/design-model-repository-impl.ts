@@ -40,17 +40,18 @@ export class DesignModelRepositoryImpl implements DesignModelRepository {
       return err({ kind: "corrupt", path: modelPath, cause: "formal model does not contain exactly one readable ```json fence" });
     }
     const composition = parseDesignModel(raw);
-    if (typeof composition === "string") {
-      return err({ kind: "corrupt", path: modelPath, cause: composition });
+    if (!composition.ok) {
+      return err({ kind: "corrupt", path: modelPath, cause: composition.error });
     }
-    return ok(DesignModel.compose({ id, irHash: ContentHash.ofText(canonicalStringify(raw)), sourceDocument: new Uint8Array(bytes), ...composition }));
+    return ok(DesignModel.compose({ id, irHash: ContentHash.ofText(canonicalStringify(raw)), sourceDocument: new Uint8Array(bytes), ...composition.value }));
   }
 
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
   store(model: DesignModel): Result<void, RepositoryError> {
     const modelPath = model.id().artifactPath().asString();
+    const bytes = model.sourceDocument();
     try {
-      writeFileAtomically(modelPath, model.sourceDocument());
+      writeFileAtomically(modelPath, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path: modelPath, cause: e instanceof Error ? e.message : String(e) });

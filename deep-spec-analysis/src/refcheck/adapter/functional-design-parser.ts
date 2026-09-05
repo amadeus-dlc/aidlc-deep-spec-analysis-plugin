@@ -5,7 +5,7 @@
 import { RequirementIds } from "@deep-spec/kernel-domain";
 import { extractFences } from "@deep-spec/kernel-adapter";
 import { parseYamlSubset } from "@deep-spec/kernel-adapter";
-import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
+import { type Json, type Result, combineResults, traverseResult, err, ok, isObject } from "@deep-spec/kernel-infrastructure";
 
 import {
   AllowedValue,
@@ -62,19 +62,25 @@ function pick(v: { [k: string]: Json }, keys: string[]): Json {
   return null;
 }
 
-function extractRel(raw: Json, element: string, implicitFrom: string | null): RelDecl | null {
-  if (!isObject(raw)) return null;
+function extractRel(raw: Json, element: string, implicitFrom: string | null): Result<RelDecl | null, string> {
+  if (!isObject(raw)) return ok(null);
   const from = str(pick(raw, ["from", "source"])) ?? implicitFrom;
   const to = str(pick(raw, ["to", "target", "entity"]));
   const cardinality = str(pick(raw, ["cardinality"]));
   const hasDirection = (from !== null && to !== null) || str(pick(raw, ["direction"])) !== null;
-  return RelDecl.of({
-    element: ElementPath.of(element),
-    from: from === null ? null : EntityName.of(from),
-    to: to === null ? null : EntityName.of(to),
-    cardinality: cardinality === null ? null : CardinalityNotation.of(cardinality),
-    hasDirection,
+  const fields = combineResults({
+    from: from === null ? ok(null) : EntityName.parse(from),
+    to: to === null ? ok(null) : EntityName.parse(to),
+    cardinality: cardinality === null ? ok(null) : CardinalityNotation.parse(cardinality),
   });
+  if (!fields.ok) return err(JSON.stringify(fields.error));
+  return ok(RelDecl.of({
+    element: ElementPath.of(element),
+    from: fields.value.from,
+    to: fields.value.to,
+    cardinality: fields.value.cardinality,
+    hasDirection,
+  }));
 }
 
 function extractEntities(value: Json): DeclaredEntities {
@@ -97,6 +103,11 @@ function extractEntities(value: Json): DeclaredEntities {
     const name = str(raw.name);
     if (name === null) {
       model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: "entity has no string `name`" }));
+      return;
+    }
+    const entity = EntityName.parse(name);
+    if (!entity.ok) {
+      model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.name`), detail: JSON.stringify(entity.error) }));
       return;
     }
     const attrs: AttrDecl[] = [];
@@ -124,18 +135,30 @@ function extractEntities(value: Json): DeclaredEntities {
         const minRaw = pick(a, ["min"]);
         const maxRaw = pick(a, ["max"]);
         const references = str(pick(a, ["references", "reference", "ref"]));
+        const fields = combineResults({
+          name: AttributeName.parse(aname),
+          type: type === null ? ok(null) : TypeName.parse(type),
+          references: references === null ? ok(null) : ReferenceTarget.parse(references),
+          allowed: allowed === null ? ok(null) : traverseResult(allowed, AllowedValue.parse),
+          min: typeof minRaw === "number" ? NumericBound.parse(minRaw) : ok(null),
+          max: typeof maxRaw === "number" ? NumericBound.parse(maxRaw) : ok(null),
+        });
+        if (!fields.ok) {
+          model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(ael), detail: JSON.stringify(fields.error) }));
+          return;
+        }
         attrs.push(AttrDecl.of({
-          name: AttributeName.of(aname),
+          name: fields.value.name,
           element: ElementPath.of(ael),
-          type: type === null ? null : TypeName.of(type),
+          type: fields.value.type,
           uniqueIsTrue: pick(a, ["unique"]) === true,
-          references: references === null ? null : ReferenceTarget.of(references),
-          allowed: allowed === null ? null : AllowedValues.of(allowed.map((v) => AllowedValue.of(v))),
+          references: fields.value.references,
+          allowed: fields.value.allowed === null ? null : AllowedValues.of(fields.value.allowed),
           def: typeof defRaw === "number" || typeof defRaw === "string" ? AttributeDefault.of(defRaw) : null,
           minDeclared: minRaw !== null,
           maxDeclared: maxRaw !== null,
-          min: typeof minRaw === "number" ? NumericBound.of(minRaw) : null,
-          max: typeof maxRaw === "number" ? NumericBound.of(maxRaw) : null,
+          min: fields.value.min,
+          max: fields.value.max,
         }));
       });
     }
@@ -143,11 +166,12 @@ function extractEntities(value: Json): DeclaredEntities {
     if (Array.isArray(raw.relationships)) {
       (raw.relationships as Json[]).forEach((r, j) => {
         const rel = extractRel(r, `${element}.relationships[${j}]`, name);
-        if (rel) rels.push(rel);
+        if (!rel.ok) model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`${element}.relationships[${j}]`), detail: rel.error }));
+        else if (rel.value !== null) rels.push(rel.value);
       });
     }
     model.entities.push(EntityDecl.of({
-      name: EntityName.of(name),
+      name: entity.value,
       element: ElementPath.of(element),
       attrs: AttrDecls.of(attrs),
       rels: RelDecls.of(rels),
@@ -156,7 +180,8 @@ function extractEntities(value: Json): DeclaredEntities {
   if (Array.isArray(value.relationships)) {
     (value.relationships as Json[]).forEach((r, j) => {
       const rel = extractRel(r, `relationships[${j}]`, null);
-      if (rel) model.rels.push(rel);
+      if (!rel.ok) model.shapeErrors.push(ShapeError.of({ element: ElementPath.of(`relationships[${j}]`), detail: rel.error }));
+      else if (rel.value !== null) model.rels.push(rel.value);
     });
   }
   return DeclaredEntities.of({
@@ -201,11 +226,15 @@ export function parseRulesDocument(md: string | null): RulesOutcome {
     const id = str(raw.id);
     const category = str(raw.category);
     const appliesTo = str(pick(raw, ["applies_to", "applies-to", "applies to", "appliesTo"]));
+    const parsedCategory = category === null ? ok(null) : RuleCategory.parse(category);
+    const parsedAppliesTo = appliesTo === null ? ok(null) : AppliesTo.parse(appliesTo);
+    if (!parsedCategory.ok) missing.push("category");
+    if (!parsedAppliesTo.ok) missing.push("applies_to");
     return RuleDecl.of({
       id: id === null ? null : DeclaredRuleId.of(id),
       element: ElementPath.of(element),
-      category: category === null ? null : RuleCategory.of(category),
-      appliesTo: appliesTo === null ? null : AppliesTo.of(appliesTo),
+      category: parsedCategory.ok ? parsedCategory.value : null,
+      appliesTo: parsedAppliesTo.ok ? parsedAppliesTo.value : null,
       sourceIds: SourceIds.of([...RequirementIds.extractFrom(sourceText)].map((v) => SourceId.of(v.asString()))),
       missing,
     });
@@ -220,6 +249,8 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecOu
   for (let i = 0; i < lines.length; i++) {
     const h = (lines[i] ?? "").match(/^#{2,4}\s+State Machine:\s*(.+?)\s*$/i);
     if (!h) continue;
+    const spec = MachineSpec.parse((h[1] ?? "").trim());
+    if (!spec.ok) continue; // 名前のない見出しは状態機械の宣言ではない。
     // Find the next mermaid fence before the next heading of same/higher level.
     for (let j = i + 1; j < lines.length; j++) {
       if (/^#{1,4}\s/.test(lines[j] ?? "")) break;
@@ -247,7 +278,7 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecOu
         }
       }
       machines.push(StateMachineSketch.of({
-        spec: MachineSpec.of((h[1] ?? "").trim()),
+        spec: spec.value,
         states: StateNames.of([...states].sort().map((v) => StateName.of(v))),
         fenceLine: LineNumber.of(j + 1),
         unsupported,
@@ -274,10 +305,12 @@ export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOu
         const attributes = Array.isArray(e.attributes)
           ? (e.attributes as Json[]).filter((a): a is string => typeof a === "string")
           : [];
+        const fields = combineResults({ name: EntityName.parse(e.name), component: ComponentName.parse(raw.name), attributes: traverseResult(attributes, AttributeName.parse) });
+        if (!fields.ok) return DomainEntitiesOutcome.unusable(JSON.stringify(fields.error));
         out.push(DomainEntitySketch.of({
-          name: EntityName.of(e.name),
-          component: ComponentName.of(raw.name),
-          attributes: AttributeNames.of(attributes.map((v) => AttributeName.of(v))),
+          name: fields.value.name,
+          component: fields.value.component,
+          attributes: AttributeNames.of(fields.value.attributes),
         }));
       }
     }

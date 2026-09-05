@@ -40,8 +40,9 @@ export class ReferenceCheckReportRepositoryImpl implements ReferenceCheckReportR
   // トリの一時ファイルへ書いてから rename で公開する（部分書き込み防止）。
   store(report: ReferenceCheckReport): Result<void, RepositoryError> {
     const path = join(report.id().directory().asString(), report.id().fileName());
+    const bytes = encoder.encode(renderReportBytes(report));
     try {
-      writeFileAtomically(path, encoder.encode(renderReportBytes(report)));
+      writeFileAtomically(path, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });

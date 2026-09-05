@@ -34,8 +34,9 @@ export class RefinementMapRepositoryImpl implements RefinementMapRepository {
   // 往復則: findById が読んだ原文をバイト逐語で書き戻す（findById∘store 恒等）。
   store(map: RefinementMap): Result<void, RepositoryError> {
     const path = map.id().artifactPath().asString();
+    const bytes = map.sourceDocument();
     try {
-      writeFileAtomically(path, map.sourceDocument());
+      writeFileAtomically(path, bytes);
       return ok(undefined);
     } catch (e) {
       return err({ kind: "io-failed", operation: "write", path, cause: e instanceof Error ? e.message : String(e) });
