@@ -15440,3 +15440,10 @@
 **Context**: reviews > 2026-09-05-usecase-responsibility > implementation.md
 
 ---
+
+## Human Turn
+**Timestamp**: 2026-09-05T14:31:25Z
+**Event**: HUMAN_TURN
+**Session**: 01a06eef-773a-7662-96e7-8f5f21c306b8
+
+---
