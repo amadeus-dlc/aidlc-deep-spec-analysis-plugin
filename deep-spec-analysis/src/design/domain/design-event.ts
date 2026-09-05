@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import type { DesignAssignments } from "./design-assignments.ts";
 import { AttributePath } from "@deep-spec/kernel-domain";
@@ -10,7 +11,7 @@ export class DesignEvent {
   readonly #effectAssign: DesignAssignments;
 
   private constructor(guard: Expression, effectAssign: DesignAssignments) {
-    this.#guard = guard;
+    this.#guard = ExpressionTree.of(guard).asExpression();
     this.#effectAssign = effectAssign;
   }
 

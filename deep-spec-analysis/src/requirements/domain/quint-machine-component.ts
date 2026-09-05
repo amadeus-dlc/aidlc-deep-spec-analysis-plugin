@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import type { ObligationId } from "./obligation-id.ts";
 import { AttributePath } from "@deep-spec/kernel-domain";
@@ -61,7 +62,7 @@ export class QuintMachineComponent {
 
   private constructor(props: { id: ObligationId; expression: Expression }) {
     this.#id = props.id;
-    this.#expression = props.expression;
+    this.#expression = ExpressionTree.of(props.expression).asExpression();
   }
 
   static reconstitute(props: { id: ObligationId; expression: Expression }): QuintMachineComponent {

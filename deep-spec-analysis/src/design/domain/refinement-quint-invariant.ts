@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression, FrRefs, TargetId } from "@deep-spec/kernel-domain";
 import type { ObligationId } from "@deep-spec/requirements-domain";
 import { LoweredObligation, type LoweredId } from "@deep-spec/design-domain";
@@ -13,7 +14,7 @@ export class RefinementQuintInvariant {
   private constructor(reqId: ObligationId, frRefs: FrRefs, expr: Expression) {
     this.#reqId = reqId;
     this.#frRefs = frRefs;
-    this.#expr = expr;
+    this.#expr = ExpressionTree.of(expr).asExpression();
   }
 
   static of(reqId: ObligationId, frRefs: FrRefs, expr: Expression): RefinementQuintInvariant {

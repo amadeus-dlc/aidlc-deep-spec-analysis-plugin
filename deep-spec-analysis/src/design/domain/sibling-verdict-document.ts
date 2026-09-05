@@ -54,6 +54,22 @@ export class SiblingVerdictDocument {
     return this.#kind === "unavailable" ? this.#reason : null;
   }
 
+  // null は未検証。到達の証跡は探索方法によらず有効だが、非到達を言えるのは
+  // bounded 探索が skip も中断の finding もなく完了した場合だけ。
+  reachabilityOf(attrPath: string, state: string): boolean | null {
+    return this.match<boolean | null>({
+      unreadable: () => null,
+      unavailable: () => null,
+      readable: (method, findings, skipped) => {
+        for (const finding of findings) {
+          if (finding.provesReachabilityOf(attrPath, state)) return true;
+        }
+        if (method !== "bounded" || !skipped.isEmpty() || !findings.isEmpty()) return null;
+        return false;
+      },
+    });
+  }
+
   match<T>(handlers: {
     unreadable: () => T;
     unavailable: (reason: string, method: string | null) => T;

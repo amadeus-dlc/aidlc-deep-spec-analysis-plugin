@@ -12,7 +12,7 @@ export {
   renderDesignReportBytes,
 } from "./design-report-serializer.ts";
 export { DesignVerifyDirectoryRepositoryImpl } from "./design-verify-directory-repository-impl.ts";
-export { probeReached, reachabilityVariant } from "./reachability-variant.ts";
+export { reachabilityVariant } from "./reachability-variant.ts";
 export { type RefinementChildQuery } from "./refinement-child-query.ts";
 export { type RefinementQueryPlan, assembleQuery, buildRefinementQueries, decodeDesignModel, designBase, refinementSmtContext, smtOfExpr } from "./refinement-query-plan.ts";
 export { type RefinementSmtContext } from "./refinement-smt-context.ts";

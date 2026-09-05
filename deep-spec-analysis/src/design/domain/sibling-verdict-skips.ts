@@ -20,6 +20,10 @@ export class SiblingVerdictSkips {
     yield* this.#values;
   }
 
+  isEmpty(): boolean {
+    return this.#values.length === 0;
+  }
+
   toArray(): readonly SiblingVerdictSkip[] {
     return this.#values;
   }

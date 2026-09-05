@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import type { IrTemporalDecl } from "./ir-temporal-decl.ts";
 import { type ObligationId } from "./obligation-id.ts";
@@ -11,9 +12,9 @@ export class IrObligationDecl {
 
   private constructor(props: { id: ObligationId; assert?: Expression; guard?: Expression; effect?: Expression; temporal?: IrTemporalDecl }) {
     this.#id = props.id;
-    this.#assert = props.assert;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#temporal = props.temporal;
   }
 

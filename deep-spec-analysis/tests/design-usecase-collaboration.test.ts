@@ -120,8 +120,8 @@ class StubSiblingBackendClient implements SiblingBackendClient {
 }
 
 class InactiveMaterialsRepository implements RefinementMaterialsRepository {
-  findById(id: RefinementMaterialsId): RefinementMaterials {
-    return RefinementMaterials.inactive(id);
+  findById(id: RefinementMaterialsId): Result<RefinementMaterials, RepositoryError> {
+    return ok(RefinementMaterials.inactive(id));
   }
 }
 

@@ -52,6 +52,16 @@ export class DesignWitness {
     return this;
   }
 
+  // 到達の証拠はトレースの末尾にある。欠けた証拠から到達・非到達を推測しない。
+  reachesState(attrPath: string, state: string): boolean {
+    const document = this.#document;
+    if (document === null || typeof document !== "object" || !("trace" in document)) return false;
+    const trace = document.trace;
+    if (!Array.isArray(trace)) return false;
+    const last = trace[trace.length - 1];
+    return last !== null && typeof last === "object" && !Array.isArray(last) && last[attrPath] === state;
+  }
+
   // 境界: findings 文書へ逐語に降りる。
   toDocument(): WitnessDocument {
     return this.#document;

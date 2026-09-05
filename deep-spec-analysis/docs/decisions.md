@@ -2656,3 +2656,38 @@ requirements had also folded a zero-Unit fix for the AI-DLC engine
 Test that `aidlc-workflows/` is not a development target of this
 repository and must not be modified, so that work was reverted to the
 engine's HEAD and is not part of this record.
+
+## Boundary information loss and aggregate invariants — six audit fixes (2026-09-05)
+
+The owner selected implementation of all six audit findings. Normal contract
+1–4 formats and golden outputs are preserved; the affected failure paths are:
+
+- `SiblingVerdictDocument.reachabilityOf` owns reachability. A final-state
+  witness proves reachability in any mode; only a completed bounded search
+  can establish non-reachability. Timeouts, compilation failures and missing
+  evidence remain undecided.
+- `RefinementQuintInvariants.interpret` maps findings and skips together,
+  retaining unverified additional requirements instead of letting the use
+  case collect only conflicts.
+- `decodeFindingsDocument` shares structural decoding across adapters.
+  Missing or malformed fields produce `corrupt`, never empty successful
+  results. Unknown vocabulary is preserved verbatim; conformance remains
+  domain-owned.
+- `Expression` is recursively readonly. Domain objects own deeply copied,
+  frozen trees through `ExpressionTree`. Inputs, accessors and visitors
+  cannot change the model while leaving its hash unchanged. Traversals that
+  index nodes by reference share one immutable tree.
+- `RefinementMaterialsRepository` returns
+  `Result<RefinementMaterials, RepositoryError>`. Only absence is inapplicable;
+  corrupt existing input and I/O failures are explicit. Use cases save the
+  already completed design checks before returning acquisition failure.
+  Requirements and map provenance hashes use the bytes already read.
+- Both verify-directory aggregates expose `finalizedWith`, which conforms
+  the candidate and derives its cross-check in one operation. Individual
+  `conformedTo` calls also invalidate the old cross-check when changing the
+  candidate. The finalizer no longer compensates for an unsafe call order.
+
+Regression coverage is in `tests/verification-boundaries.test.ts`. Tests
+that required expression reference identity now require equal values and
+separate references. The previous malformed-document test now requires an
+explicit failure instead of filtering away invalid records.

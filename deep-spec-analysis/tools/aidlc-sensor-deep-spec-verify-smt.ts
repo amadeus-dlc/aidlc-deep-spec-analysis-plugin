@@ -171,6 +171,35 @@ function readContractSchema(path) {
     return err({ cause: e instanceof Error ? e.message : String(e) });
   }
 }
+// src/kernel/adapter/findings-document.ts
+var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
+var optionalString = (value) => value === undefined || typeof value === "string";
+function decodeFindingsDocument(raw) {
+  if (!isObject(raw))
+    return err("findings document must be an object");
+  for (const field of ["backend", "irVersion", "irHash", "method"]) {
+    if (typeof raw[field] !== "string")
+      return err(`${field} must be a string`);
+  }
+  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
+    return err("findings must be an array of complete finding records");
+  }
+  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
+    return err("skipped must be an array of complete skip records");
+  }
+  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
+    return err("unavailable must carry a reason");
+  }
+  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
+    return err("inputs must be an array of input anchors");
+  }
+  if (raw.checked !== undefined && !strings(raw.checked))
+    return err("checked must be an array of strings");
+  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
+    return err("crossChecked must be an array of backend comparisons");
+  }
+  return ok(raw);
+}
 // src/kernel/adapter/fence.ts
 function extractFences(md, lang) {
   const fences = [];
@@ -417,7 +446,20 @@ function canonicalKeyOf(value) {
 class ExpressionTree {
   #root;
   constructor(root) {
-    this.#root = root;
+    const snapshot = structuredClone(root);
+    const visited = new WeakSet;
+    const freeze = (value) => {
+      if (visited.has(value))
+        return;
+      visited.add(value);
+      for (const child of Object.values(value)) {
+        if (child !== null && typeof child === "object")
+          freeze(child);
+      }
+      Object.freeze(value);
+    };
+    freeze(snapshot);
+    this.#root = snapshot;
   }
   static of(root) {
     return new ExpressionTree(root);
@@ -1346,11 +1388,16 @@ class Obligation {
     this.#nature = props.nature;
     this.#frRefs = props.frRefs;
     this.#ears = props.ears;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal === undefined ? undefined : { ...props.temporal };
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
+      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
+      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
+    };
   }
   static reconstitute(props) {
     return new Obligation(props);
@@ -1505,7 +1552,7 @@ class Scenario {
     this.#frRefs = props.frRefs;
     this.#bindings = { ...props.bindings };
     this.#eventTrigger = props.event?.trigger;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
   static reconstitute(props) {
     return new Scenario(props);
@@ -1692,7 +1739,7 @@ class BackgroundAssumption {
   #assert;
   constructor(id, assert) {
     this.#id = id;
-    this.#assert = assert;
+    this.#assert = ExpressionTree.of(assert).asExpression();
   }
   static reconstitute(props) {
     return new BackgroundAssumption(props.id, props.assert);
@@ -2254,6 +2301,13 @@ class VerificationDirectory {
     }
     return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, null);
   }
+  finalizedWith(candidate, model, schema) {
+    const staged = this.finalizing(candidate.conformedTo(schema));
+    if (model === null)
+      return staged;
+    const derived = staged.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
+    return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
+  }
   crossChecked(model, irHash) {
     const derived = this.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
     return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, derived);
@@ -2265,7 +2319,7 @@ class VerificationDirectory {
     const candidate = this.#candidate;
     const crossCheck = this.#crossCheck;
     const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
-    const conformedCrossCheck = crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck === null ? null : crossCheck.conformedTo(schema);
     const reports = conformedCandidate === null ? this.#reports : VerificationReports.of(this.#reports.toArray().map((r) => r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
     return new VerificationDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
   }
@@ -2805,7 +2859,7 @@ class QuintMachineComponent {
   #expression;
   constructor(props) {
     this.#id = props.id;
-    this.#expression = props.expression;
+    this.#expression = ExpressionTree.of(props.expression).asExpression();
   }
   static reconstitute(props) {
     return new QuintMachineComponent(props);
@@ -3179,7 +3233,7 @@ class IrBackgroundDecl {
   #assert;
   constructor(props) {
     this.#id = props.id;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
   }
   static reconstitute(props) {
     return new IrBackgroundDecl(props);
@@ -3330,9 +3384,9 @@ class IrObligationDecl {
   #temporal;
   constructor(props) {
     this.#id = props.id;
-    this.#assert = props.assert;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#temporal = props.temporal;
   }
   static reconstitute(props) {
@@ -3380,7 +3434,7 @@ class IrScenarioDecl {
     this.#id = props.id;
     this.#bindings = props.bindings;
     this.#hasEvent = props.hasEvent;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
   static reconstitute(props) {
     return new IrScenarioDecl(props);
@@ -3421,9 +3475,9 @@ class IrTemporalDecl {
   #from;
   #to;
   constructor(props) {
-    this.#assert = props.assert;
-    this.#from = props.from;
-    this.#to = props.to;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#from = props.from === undefined ? undefined : ExpressionTree.of(props.from).asExpression();
+    this.#to = props.to === undefined ? undefined : ExpressionTree.of(props.to).asExpression();
   }
   static reconstitute(props) {
     return new IrTemporalDecl(props);
@@ -3661,20 +3715,19 @@ class VerificationReportFinalizer {
     this.#findingsSchema = findingsSchema;
   }
   finalize(report, model) {
-    return this.#finalizing(report, (staged) => staged.crossChecked(model, report.irHash()).conformedTo(this.#findingsSchema));
+    return this.#finalizing(report, model);
   }
   finalizeIrUnreadable(report) {
-    const finalized = this.#finalizing(report, (staged) => staged.withoutCrossCheck());
+    const finalized = this.#finalizing(report, null);
     if (!finalized.ok)
       return err(finalized.error);
     return ok(undefined);
   }
-  #finalizing(report, resolveCrossCheck) {
+  #finalizing(report, model) {
     const loaded = this.#repository.findByDirectory(report.id().directory());
     if (!loaded.ok)
       return err(loaded.error);
-    const staged = loaded.value.finalizing(report).conformedTo(this.#findingsSchema);
-    const aggregate = resolveCrossCheck(staged).conformedTo(this.#findingsSchema);
+    const aggregate = loaded.value.finalizedWith(report, model, this.#findingsSchema);
     const stored = this.#repository.store(aggregate);
     if (!stored.ok)
       return err(stored.error);
@@ -4451,41 +4504,32 @@ function renderVerificationReportBytes(report) {
 `;
 }
 function parseSiblingReportDocument(directory, fileName, raw) {
-  if (!isObject(raw))
-    return null;
-  const backend = typeof raw.backend === "string" ? raw.backend : fileName.replace(/\.json$/, "");
-  return reconstituteFromRaw(VerificationReportId.of(directory, backend), raw);
-}
-function reconstituteFromRaw(id, raw) {
-  const skipped = (Array.isArray(raw.skipped) ? raw.skipped : []).filter((s) => isObject(s) && typeof s.target === "string");
-  return VerificationReport.reconstitute({
-    id,
-    irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
-    irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
-    method: typeof raw.method === "string" ? raw.method : "",
-    findings: VerificationFindings.of((Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []).map((e) => {
-      const entry = e;
-      return VerificationFinding.reconstitute({
-        kind: typeof entry.kind === "string" ? entry.kind : "",
-        frRefs: FrRefs.reconstitute(Array.isArray(entry.frRefs) ? entry.frRefs.filter((x) => typeof x === "string") : []),
-        targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? entry.targets.filter((x) => typeof x === "string") : []),
-        witness: VerificationWitness.fromDocument(entry.witness),
-        detail: typeof entry.detail === "string" ? entry.detail : ""
-      });
-    })),
-    skipped: VerificationSkips.of(skipped.map((entry) => {
-      return VerificationSkipped.reconstitute({
-        target: TargetId.reconstitute(typeof entry.target === "string" ? entry.target : ""),
-        reason: typeof entry.reason === "string" ? entry.reason : "",
-        ...typeof entry.detail === "string" ? { detail: entry.detail } : {}
-      });
-    })),
-    crossChecked: Array.isArray(raw.crossChecked) ? CrossCheckedEntries.of(raw.crossChecked.filter(isObject).map((e) => CrossCheckedEntry.reconstitute({
-      backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
-      targets: TargetIds.reconstitute(Array.isArray(e.targets) ? e.targets.filter((t) => typeof t === "string") : [])
-    }))) : null,
-    unavailableReason: isObject(raw.unavailable) ? typeof raw.unavailable.reason === "string" ? raw.unavailable.reason : "" : null
-  });
+  const decoded = decodeFindingsDocument(raw);
+  if (!decoded.ok)
+    return err(decoded.error);
+  const doc = decoded.value;
+  if (`${doc.backend}.json` !== fileName)
+    return err("backend must match the report filename");
+  return ok(VerificationReport.reconstitute({
+    id: VerificationReportId.of(directory, doc.backend),
+    irVersion: IrVersion.reconstitute(doc.irVersion),
+    irHash: ContentHash.reconstitute(doc.irHash),
+    method: doc.method,
+    findings: VerificationFindings.of(doc.findings.map((entry) => VerificationFinding.reconstitute({
+      kind: entry.kind,
+      frRefs: FrRefs.reconstitute(entry.frRefs),
+      targets: TargetIds.reconstitute(entry.targets),
+      witness: VerificationWitness.fromDocument(entry.witness),
+      detail: entry.detail
+    }))),
+    skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.reconstitute({
+      target: TargetId.reconstitute(entry.target),
+      reason: entry.reason,
+      ...entry.detail !== undefined ? { detail: entry.detail } : {}
+    }))),
+    crossChecked: doc.crossChecked === undefined ? null : CrossCheckedEntries.of(doc.crossChecked.map((entry) => CrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(entry.backend), targets: TargetIds.reconstitute(entry.targets) }))),
+    unavailableReason: doc.unavailable?.reason ?? null
+  }));
 }
 // src/requirements/adapter/verification-directory-repository-impl.ts
 import { existsSync as existsSync2, mkdirSync as mkdirSync3, readFileSync as readFileSync5, readdirSync, renameSync as renameSync3, rmSync as rmSync3 } from "fs";
@@ -4642,8 +4686,7 @@ class VerificationDirectoryRepositoryImpl {
       const report = this.#readReport(directory, file);
       if (!report.ok)
         return err(report.error);
-      if (report.value !== null)
-        reports.push(report.value);
+      reports.push(report.value);
     }
     return ok(reports);
   }
@@ -4655,7 +4698,8 @@ class VerificationDirectoryRepositoryImpl {
     } catch (e) {
       return err({ kind: "corrupt", path, cause: causeOf2(e) });
     }
-    return ok(parseSiblingReportDocument(directory, fileName, raw));
+    const parsed = parseSiblingReportDocument(directory, fileName, raw);
+    return parsed.ok ? ok(parsed.value) : err({ kind: "corrupt", path, cause: parsed.error });
   }
   #fenced(directory, path) {
     return err({

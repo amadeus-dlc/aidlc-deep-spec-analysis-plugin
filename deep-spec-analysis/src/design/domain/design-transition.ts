@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 // 状態機械の遷移（契約3）。id はドメインプリミティブで運ぶ。
 // compile-down の暗黙部（ガード = state==from ∧ 明示ガード、効果 = state'=to
 // ∧ 明示効果、代入表の state 遷移代入）は遷移自身が所有する——lowering と
@@ -25,8 +26,8 @@ export class DesignTransition {
     this.#from = props.from;
     this.#to = props.to;
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#brRefs = props.brRefs;
   }
 

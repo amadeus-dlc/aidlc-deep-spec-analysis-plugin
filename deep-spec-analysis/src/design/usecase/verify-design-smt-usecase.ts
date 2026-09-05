@@ -142,9 +142,10 @@ export class VerifyDesignSmtUseCase {
     // --- Phase 3: 検証済み要件 IR に対する refinement ------------------------
     // 要件形式モデルの存在で発火。欠落・陳腐化・ユニット欠けの map は明示 skip
     // を生む——沈黙しない。
-    const context = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
+    const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
     let inputs: readonly DesignInputAnchor[] | undefined;
-    if (context.isActive()) {
+    if (materials.ok && materials.value.isActive()) {
+      const context = materials.value;
       const req = context.requirements();
       const acq = context.mapAcquisition();
       const reqTargets = req.allTargetIds();
@@ -214,11 +215,13 @@ export class VerifyDesignSmtUseCase {
       skipped: DesignSkips.of(skipped),
       ...(inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {}),
       checked: CheckedUnits.reconstitute(checkedUnits),
+      ...(!materials.ok ? { unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})` } : {}),
     });
     // 適合・両文書の公開・cleanup は Finalizer が一か所で持つ。兄弟が読めない・
     // クロスチェックが書けないときは verified を返さず失敗を運ぶ（BR1.2）。
     const finalized = this.#finalizer.finalize(report, model);
     if (!finalized.ok) return { kind: "save-failed", error: finalized.error };
+    if (!materials.ok) return { kind: "acquisition-failed", error: materials.error };
     return finalized.value;
   }
 }

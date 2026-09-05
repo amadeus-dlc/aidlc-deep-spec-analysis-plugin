@@ -191,9 +191,10 @@ describe("SMT script characterization (the PR8 safety net)", () => {
   test("the second (refinement) compiler emits byte-identical scripts for the refinement fixture", () => {
     const modelPath = join(fixtures, "record", ...MODEL_RELPATH);
     const acquired = new DesignModelRepositoryImpl().findById(DesignModelId.of(ap(modelPath)));
-    const context = new RefinementMaterialsRepositoryImpl(mapSchemaPath).findById(RefinementMaterialsId.ofModel(DesignModelId.of(ap(modelPath))));
-    expect(acquired.ok && context.isActive()).toBe(true);
-    if (!acquired.ok || !context.isActive()) return;
+    const materials = new RefinementMaterialsRepositoryImpl(mapSchemaPath).findById(RefinementMaterialsId.ofModel(DesignModelId.of(ap(modelPath))));
+    expect(acquired.ok && materials.ok && materials.value.isActive()).toBe(true);
+    if (!acquired.ok || !materials.ok || !materials.value.isActive()) return;
+    const context = materials.value;
     const acq = context.mapAcquisition();
     const req = context.requirements();
     expect(req.id().artifactPath().asString().endsWith("deep-spec-analysis-formal-model.md")).toBe(true);

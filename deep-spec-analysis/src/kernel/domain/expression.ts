@@ -3,10 +3,9 @@
 // 持つ。requirements と design の両コンテキストが消費するため kernel が所有する。
 
 export interface Expression {
-  op: string;
-  args?: Expression[];
-  path?: string;
-  prime?: boolean;
-  value?: boolean | number | string;
+  readonly op: string;
+  readonly args?: readonly Expression[];
+  readonly path?: string;
+  readonly prime?: boolean;
+  readonly value?: boolean | number | string;
 }
-

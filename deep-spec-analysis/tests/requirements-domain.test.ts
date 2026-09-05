@@ -70,7 +70,8 @@ describe("obligation", () => {
       frRefs: FrRefs.reconstitute([]),
       assert: { op: "implies", args: [antecedent, lit(false)] },
     });
-    expect(implied.vacuityAntecedent()).toBe(antecedent);
+    expect(implied.vacuityAntecedent()).toEqual(antecedent);
+    expect(implied.vacuityAntecedent()).not.toBe(antecedent);
     expect(
       Obligation.reconstitute({
         id: ObligationId.reconstitute("OB-4"),

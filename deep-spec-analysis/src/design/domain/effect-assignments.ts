@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 // EffectAssignments — 効果式（prime 代入の連言）を属性パス → 代入項の索引に
 // 解いたもの。キーは AttributePath、内側は KeyedIndex（裁定 3-1、2026-09-03）。
 // 連言でない・代入でない効果は RefinementMapDefect として Result で返す
@@ -12,7 +13,7 @@ export class EffectAssignments {
   readonly #values: KeyedIndex<AttributePath, Expression>;
 
   private constructor(values: KeyedIndex<AttributePath, Expression>) {
-    this.#values = values;
+    this.#values = KeyedIndex.of([...values].map(([path, expression]) => [path, ExpressionTree.of(expression).asExpression()] as const));
   }
 
   static ofEffect(effect: Expression): Result<EffectAssignments, RefinementMapDefect> {

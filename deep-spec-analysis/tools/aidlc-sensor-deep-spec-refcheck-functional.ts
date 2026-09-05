@@ -627,7 +627,20 @@ function canonicalKeyOf(value) {
 class ExpressionTree {
   #root;
   constructor(root) {
-    this.#root = root;
+    const snapshot = structuredClone(root);
+    const visited = new WeakSet;
+    const freeze = (value) => {
+      if (visited.has(value))
+        return;
+      visited.add(value);
+      for (const child of Object.values(value)) {
+        if (child !== null && typeof child === "object")
+          freeze(child);
+      }
+      Object.freeze(value);
+    };
+    freeze(snapshot);
+    this.#root = snapshot;
   }
   static of(root) {
     return new ExpressionTree(root);

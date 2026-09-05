@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import { type Expression, ObligationNature, TriggerName } from "@deep-spec/kernel-domain";
 import type { LoweredId } from "./lowered-id.ts";
 import type { FrRefs } from "@deep-spec/kernel-domain";
@@ -29,11 +30,16 @@ export class LoweredObligation {
     this.#id = props.id;
     this.#nature = ObligationNature.reconstitute(props.nature);
     this.#frRefs = props.frRefs;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger === undefined ? undefined : TriggerName.reconstitute(props.trigger);
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...(props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {}),
+      ...(props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {}),
+      ...(props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}),
+    };
   }
 
   static reconstitute(props: {
@@ -78,7 +84,7 @@ export class LoweredObligation {
   }
 
   temporal(): { readonly pattern: string; readonly assert?: Expression; readonly from?: Expression; readonly to?: Expression } | undefined {
-    return this.#temporal;
+    return this.#temporal === undefined ? undefined : { ...this.#temporal };
   }
 
   isEvent(): boolean {

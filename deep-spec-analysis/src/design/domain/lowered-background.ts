@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import type { LoweredId } from "./lowered-id.ts";
 
@@ -8,7 +9,7 @@ export class LoweredBackground {
 
   private constructor(props: { id: LoweredId; assert: Expression }) {
     this.#id = props.id;
-    this.#assert = props.assert;
+    this.#assert = ExpressionTree.of(props.assert).asExpression();
   }
 
   static reconstitute(props: { id: LoweredId; assert: Expression }): LoweredBackground {

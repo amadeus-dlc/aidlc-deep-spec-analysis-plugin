@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
 import type { ObligationId, ObligationNature } from "@deep-spec/requirements-domain";
 
@@ -14,10 +15,10 @@ export class RefinementObligation {
     this.#id = props.id;
     this.#nature = props.nature;
     this.#frRefs = props.frRefs;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
   }
 
   static reconstitute(props: { id: ObligationId; nature: ObligationNature; frRefs: FrRefs; assert?: Expression; trigger?: TriggerName; guard?: Expression; effect?: Expression }): RefinementObligation {

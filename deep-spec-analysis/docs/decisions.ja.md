@@ -2314,3 +2314,33 @@ exit 1 し何も公開せず、design IR を読めなくすると凍結の降格
 途中でオーナーが「`aidlc-workflows/` はこのリポジトリの開発対象ではなく、
 変更してはならない」と裁定したため、その作業はエンジンの HEAD へ戻し、
 本記録には含めない。
+
+## 境界の情報欠落と集約の不変条件 — 監査6件の修正（2026-09-05）
+
+オーナーが監査結果6件の修正を選択したことを受け、誤判定・検査記録の欠落と
+公開APIの不変条件を修正した。正常な契約1〜4とgoldenの出力形式は維持する。
+変更対象となる異常系は、以下の各項目に対応する。
+
+- 到達性は `SiblingVerdictDocument.reachabilityOf` が判断する。到達の証跡は
+  検査方法によらず有効だが、非到達を言えるのはbounded探索が中断なく完了した
+  場合だけ。timeout・compile-error・証跡不足は未検証として返す。
+- `RefinementQuintInvariants.interpret` が要件へのfindingとskipを一緒に写す。
+  usecaseがfindingだけを回収していた経路をなくし、追加要件の未検証記録を残す。
+- 検証結果文書の復号は `decodeFindingsDocument` に集約する。欠落や型不一致を
+  空配列へ補完せず、Repositoryは `corrupt` を返す。未知の語彙の逐語保持と、
+  domainが契約適合を判断する分担は維持する。
+- `Expression` は再帰的にreadonlyとする。各ドメインオブジェクトは
+  `ExpressionTree` を通じて独立した深いコピーを凍結して所有し、入力・公開面・
+  visitorからの変更でモデルの内容とハッシュが食い違わないようにする。
+  ノード参照を索引に使う走査は、一つの不変な木を共有する。
+- `RefinementMaterialsRepository` も `Result<RefinementMaterials, RepositoryError>`
+  を返す。不在だけが適用外となり、既存入力の不正・I/O失敗は明示する。
+  usecaseは既に完了した設計検査を保存してから取得失敗を返す。読み込んだ要件・
+  mapの原文を入力ハッシュにも使い、同じファイルを読み直して証跡を作らない。
+- `VerificationDirectory` と `DesignVerifyDirectory` の `finalizedWith` が候補の
+  適合とcross-check導出を一操作で完了する。個別の `conformedTo` でも候補を
+  変更したら以前のcross-checkを破棄し、Finalizerの呼び順に不変条件を依存させない。
+
+回帰検証は `tests/verification-boundaries.test.ts`。既存テストのうち入力と
+式の参照同一性を要求していたものは、値の一致と参照の分離を確認するように
+変更した。不正文書の要素を削除して成功させる旧テストも、明示した失敗を要求する。

@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import { BrRefs } from "./br-refs.ts";
 import { type DesignObligationId } from "./design-obligation-id.ts";
@@ -24,10 +25,15 @@ export class DesignObligationDecl {
     this.#id = props.id;
     this.#origin = props.origin;
     this.#brRefs = props.brRefs;
-    this.#assert = props.assert;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal === undefined ? undefined : { ...props.temporal };
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...(props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {}),
+      ...(props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {}),
+      ...(props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}),
+    };
   }
 
   static reconstitute(props: {

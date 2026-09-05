@@ -6,6 +6,7 @@ export { findRecordRoot, relArtifact } from "./record-root.ts";
 export { readIfExists } from "./read-if-exists.ts";
 export { type SchemaUnreadable } from "./schema-unreadable.ts";
 export { readContractSchema } from "./contract-schema.ts";
+export { type FindingsDocument, decodeFindingsDocument } from "./findings-document.ts";
 export { type Yaml, parseYamlSubset } from "./yaml.ts";
 export { type Fence, extractFences } from "./fence.ts";
 export { type MdTable, parseMarkdownTables } from "./md-table.ts";

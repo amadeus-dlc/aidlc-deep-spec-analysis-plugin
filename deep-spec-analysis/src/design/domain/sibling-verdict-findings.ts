@@ -20,6 +20,10 @@ export class SiblingVerdictFindings {
     yield* this.#values;
   }
 
+  isEmpty(): boolean {
+    return this.#values.length === 0;
+  }
+
   toArray(): readonly SiblingVerdictFinding[] {
     return this.#values;
   }

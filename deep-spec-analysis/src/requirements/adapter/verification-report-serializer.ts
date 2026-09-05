@@ -1,83 +1,34 @@
-// VerificationReport の描画と解体 — 形式（JSON）の走査はここに封じる。文書の
-// キー順は契約2 の知識なので集約が `toDocument()` で所有し、本モジュールが持つ
-// のは `JSON.stringify(・, null, 2) + "\n"` の描画（golden 凍結）と、書かれた
-// 文書を集約へ戻す寛容な解体だけ。契約適合（自己検証と降格文言）は値オブジェ
-// クト FindingsSchema と集約の `conformedTo` が持つ。
+// 描画は JSON.stringify だけ。復号では形の不正を失敗として返し、
+// 未知の語彙は逐語で保持する。契約適合の判断は集約と FindingsSchema が所有する。
+import { BackendName, ContentHash, FrRefs, IrVersion, TargetIds, type ArtifactPath, TargetId } from "@deep-spec/kernel-domain";
+import { type Json, type Result, err, ok } from "@deep-spec/kernel-infrastructure";
+import { decodeFindingsDocument } from "@deep-spec/kernel-adapter";
+import { VerificationReport, VerificationReportId, VerificationFinding, VerificationFindings, VerificationSkipped, VerificationSkips, VerificationWitness, CrossCheckedEntries, CrossCheckedEntry } from "@deep-spec/requirements-domain";
 
-import { BackendName, ContentHash, FrRefs, IrVersion, TargetId, TargetIds, type ArtifactPath } from "@deep-spec/kernel-domain";
-import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
-import {
-  CrossCheckedEntries,
-  VerificationFindings,
-  VerificationSkips,
-  VerificationSkipped,
-  VerificationWitness,
-  VerificationReport,
-  VerificationReportId,
-  VerificationFinding,
-  CrossCheckedEntry,
-} from "@deep-spec/requirements-domain";
-
-// 境界: 永続化される正確なバイト列（golden 凍結の描画形式）。
 export function renderVerificationReportBytes(report: VerificationReport): string {
   return `${JSON.stringify(report.toDocument(), null, 2)}\n`;
 }
 
-// クロスチェックの取得規則で使う寛容形——backend フィールドが欠けた文書は
-// ファイル名から補う（旧 recomputeCrossCheck の読込と同値）。読めない形は
-// null（呼び手が黙って除く）。
-export function parseSiblingReportDocument(
-  directory: ArtifactPath,
-  fileName: string,
-  raw: Json,
-): VerificationReport | null {
-  if (!isObject(raw)) return null;
-  const backend = typeof raw.backend === "string" ? raw.backend : fileName.replace(/\.json$/, "");
-  return reconstituteFromRaw(VerificationReportId.of(directory, backend), raw);
-}
-
-function reconstituteFromRaw(id: VerificationReportId, raw: { [k: string]: Json }): VerificationReport {
-  const skipped = (Array.isArray(raw.skipped) ? raw.skipped : []).filter(
-    (s): s is { [k: string]: Json } => isObject(s) && typeof s.target === "string",
-  );
-  return VerificationReport.reconstitute({
-    id,
-    irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
-    irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
-    method: typeof raw.method === "string" ? raw.method : "",
-    findings: VerificationFindings.of(
-      (Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []).map((e) => {
-        const entry = e as { [k: string]: Json };
-        return VerificationFinding.reconstitute({
-          kind: typeof entry.kind === "string" ? entry.kind : "",
-          frRefs: FrRefs.reconstitute(Array.isArray(entry.frRefs) ? (entry.frRefs.filter((x) => typeof x === "string") as string[]) : []),
-          targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? (entry.targets.filter((x) => typeof x === "string") as string[]) : []),
-          witness: VerificationWitness.fromDocument(entry.witness),
-          detail: typeof entry.detail === "string" ? entry.detail : "",
-        });
-      }),
-    ),
-    skipped: VerificationSkips.of(
-      skipped.map((entry) => {
-        return VerificationSkipped.reconstitute({
-          target: TargetId.reconstitute(typeof entry.target === "string" ? entry.target : ""),
-          reason: typeof entry.reason === "string" ? entry.reason : "",
-          ...(typeof entry.detail === "string" ? { detail: entry.detail } : {}),
-        });
-      }),
-    ),
-    crossChecked: Array.isArray(raw.crossChecked)
-      ? CrossCheckedEntries.of(
-          (raw.crossChecked as Json[]).filter(isObject).map((e) => CrossCheckedEntry.reconstitute({
-            backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
-            targets: TargetIds.reconstitute(Array.isArray(e.targets) ? (e.targets.filter((t) => typeof t === "string") as string[]) : []),
-          })),
-        )
-      : null,
-    unavailableReason: isObject(raw.unavailable)
-      ? typeof raw.unavailable.reason === "string"
-        ? raw.unavailable.reason
-        : ""
-      : null,
-  });
+export function parseSiblingReportDocument(directory: ArtifactPath, fileName: string, raw: Json): Result<VerificationReport, string> {
+  const decoded = decodeFindingsDocument(raw);
+  if (!decoded.ok) return err(decoded.error);
+  const doc = decoded.value;
+  if (`${doc.backend}.json` !== fileName) return err("backend must match the report filename");
+  return ok(VerificationReport.reconstitute({
+    id: VerificationReportId.of(directory, doc.backend),
+    irVersion: IrVersion.reconstitute(doc.irVersion),
+    irHash: ContentHash.reconstitute(doc.irHash),
+    method: doc.method,
+    findings: VerificationFindings.of(doc.findings.map((entry) => VerificationFinding.reconstitute({
+      kind: entry.kind, frRefs: FrRefs.reconstitute(entry.frRefs), targets: TargetIds.reconstitute(entry.targets),
+      witness: VerificationWitness.fromDocument(entry.witness), detail: entry.detail,
+    }))),
+    skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.reconstitute({
+      target: TargetId.reconstitute(entry.target), reason: entry.reason,
+      ...(entry.detail !== undefined ? { detail: entry.detail } : {}),
+    }))),
+    crossChecked: doc.crossChecked === undefined ? null : CrossCheckedEntries.of(doc.crossChecked.map((entry) =>
+      CrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(entry.backend), targets: TargetIds.reconstitute(entry.targets) }))),
+    unavailableReason: doc.unavailable?.reason ?? null,
+  }));
 }

@@ -158,7 +158,8 @@ export class DesignUnitDecl {
       // unit (a "closed" literal on ticket.channel must not legalize
       // "closed" against ticket.status).
       const boundEnum = new Map<Expression, string>();
-      ExpressionTree.of(e).walk((node) => {
+      const tree = ExpressionTree.of(e);
+      tree.walk((node) => {
         const args = node.args ?? [];
         if (args.length === 2) {
           const ref = args.find((a) => a.op === "ref" && typeof a.path === "string");
@@ -166,7 +167,7 @@ export class DesignUnitDecl {
           if (ref && en) boundEnum.set(en, ref.path as string);
         }
       });
-      ExpressionTree.of(e).walk((node) => {
+      tree.walk((node) => {
         if (node.op === "ref" && typeof node.path === "string") {
           if (!attrTypes.has(node.path)) errors.push(where(`${ctx}: unresolvable reference "${node.path}"`));
           if (node.prime === true && !primesAllowed) {

@@ -198,6 +198,35 @@ function readContractSchema(path) {
     return err({ cause: e instanceof Error ? e.message : String(e) });
   }
 }
+// src/kernel/adapter/findings-document.ts
+var strings = (value) => Array.isArray(value) && value.every((v) => typeof v === "string");
+var optionalString = (value) => value === undefined || typeof value === "string";
+function decodeFindingsDocument(raw) {
+  if (!isObject(raw))
+    return err("findings document must be an object");
+  for (const field of ["backend", "irVersion", "irHash", "method"]) {
+    if (typeof raw[field] !== "string")
+      return err(`${field} must be a string`);
+  }
+  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
+    return err("findings must be an array of complete finding records");
+  }
+  if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
+    return err("skipped must be an array of complete skip records");
+  }
+  if (raw.unavailable !== undefined && (!isObject(raw.unavailable) || typeof raw.unavailable.reason !== "string")) {
+    return err("unavailable must carry a reason");
+  }
+  if (raw.inputs !== undefined && (!Array.isArray(raw.inputs) || !raw.inputs.every((i) => isObject(i) && typeof i.artifact === "string" && typeof i.sha256 === "string"))) {
+    return err("inputs must be an array of input anchors");
+  }
+  if (raw.checked !== undefined && !strings(raw.checked))
+    return err("checked must be an array of strings");
+  if (raw.crossChecked !== undefined && (!Array.isArray(raw.crossChecked) || !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))) {
+    return err("crossChecked must be an array of backend comparisons");
+  }
+  return ok(raw);
+}
 // src/kernel/adapter/fence.ts
 function extractFences(md, lang) {
   const fences = [];
@@ -444,7 +473,20 @@ function canonicalKeyOf(value) {
 class ExpressionTree {
   #root;
   constructor(root) {
-    this.#root = root;
+    const snapshot = structuredClone(root);
+    const visited = new WeakSet;
+    const freeze = (value) => {
+      if (visited.has(value))
+        return;
+      visited.add(value);
+      for (const child of Object.values(value)) {
+        if (child !== null && typeof child === "object")
+          freeze(child);
+      }
+      Object.freeze(value);
+    };
+    freeze(snapshot);
+    this.#root = snapshot;
   }
   static of(root) {
     return new ExpressionTree(root);
@@ -1286,6 +1328,16 @@ class DesignWitness {
     }
     return this;
   }
+  reachesState(attrPath, state) {
+    const document = this.#document;
+    if (document === null || typeof document !== "object" || !("trace" in document))
+      return false;
+    const trace = document.trace;
+    if (!Array.isArray(trace))
+      return false;
+    const last = trace[trace.length - 1];
+    return last !== null && typeof last === "object" && !Array.isArray(last) && last[attrPath] === state;
+  }
   toDocument() {
     return this.#document;
   }
@@ -1304,11 +1356,16 @@ class LoweredObligation {
     this.#id = props.id;
     this.#nature = ObligationNature.reconstitute(props.nature);
     this.#frRefs = props.frRefs;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger === undefined ? undefined : TriggerName.reconstitute(props.trigger);
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
+      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
+      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
+    };
   }
   static reconstitute(props) {
     return new LoweredObligation(props);
@@ -1335,7 +1392,7 @@ class LoweredObligation {
     return this.#effect;
   }
   temporal() {
-    return this.#temporal;
+    return this.#temporal === undefined ? undefined : { ...this.#temporal };
   }
   isEvent() {
     return this.#trigger !== undefined;
@@ -1405,8 +1462,8 @@ class DesignTransition {
     this.#from = props.from;
     this.#to = props.to;
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#brRefs = props.brRefs;
   }
   static reconstitute(props) {
@@ -1730,11 +1787,16 @@ class DesignObligation {
     this.#origin = props.origin;
     this.#brRefs = props.brRefs;
     this.#frRefs = props.frRefs;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal === undefined ? undefined : { ...props.temporal };
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
+      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
+      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
+    };
   }
   static reconstitute(props) {
     return new DesignObligation(props);
@@ -1929,7 +1991,7 @@ class LoweredScenario {
     this.#frRefs = props.frRefs;
     this.#bindings = { ...props.bindings };
     this.#event = props.event;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
   static reconstitute(props) {
     return new LoweredScenario(props);
@@ -1973,7 +2035,7 @@ class DesignScenario {
     this.#frRefs = props.frRefs;
     this.#bindings = { ...props.bindings };
     this.#eventTrigger = props.event?.trigger;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
   static reconstitute(props) {
     return new DesignScenario(props);
@@ -2477,7 +2539,7 @@ class LoweredBackground {
   #assert;
   constructor(props) {
     this.#id = props.id;
-    this.#assert = props.assert;
+    this.#assert = ExpressionTree.of(props.assert).asExpression();
   }
   static reconstitute(props) {
     return new LoweredBackground(props);
@@ -2496,7 +2558,7 @@ class DesignBackgroundAssumption {
   #assert;
   constructor(id, assert) {
     this.#id = id;
-    this.#assert = assert;
+    this.#assert = ExpressionTree.of(assert).asExpression();
   }
   static reconstitute(props) {
     return new DesignBackgroundAssumption(props.id, props.assert);
@@ -2839,6 +2901,21 @@ class SiblingVerdictDocument {
   unavailableReason() {
     return this.#kind === "unavailable" ? this.#reason : null;
   }
+  reachabilityOf(attrPath, state) {
+    return this.match({
+      unreadable: () => null,
+      unavailable: () => null,
+      readable: (method, findings, skipped) => {
+        for (const finding of findings) {
+          if (finding.provesReachabilityOf(attrPath, state))
+            return true;
+        }
+        if (method !== "bounded" || !skipped.isEmpty() || !findings.isEmpty())
+          return null;
+        return false;
+      }
+    });
+  }
   match(handlers) {
     if (this.#kind === "unreadable")
       return handlers.unreadable();
@@ -2998,6 +3075,9 @@ class SiblingVerdictFinding {
   detail() {
     return this.#detail;
   }
+  provesReachabilityOf(attrPath, state) {
+    return this.isKind("conflict") && this.#witness.reachesState(attrPath, state);
+  }
   witnessRemappedBy(rewrite) {
     return this.#witness.remapCore(rewrite);
   }
@@ -3016,6 +3096,9 @@ class SiblingVerdictFindings {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
   toArray() {
     return this.#values;
@@ -3058,6 +3141,9 @@ class SiblingVerdictSkips {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
   toArray() {
     return this.#values;
@@ -3492,6 +3578,13 @@ class DesignVerifyDirectory {
     }
     return new DesignVerifyDirectory(this.#directory, DesignReports.of(merged), candidate, null);
   }
+  finalizedWith(candidate, model, schema) {
+    const staged = this.finalizing(candidate.conformedTo(schema));
+    if (model === null)
+      return staged;
+    const derived = staged.#reports.crossChecked(DesignReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, candidate.irHash());
+    return new DesignVerifyDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
+  }
   crossChecked(model, irHash) {
     const derived = this.#reports.crossChecked(DesignReportId.of(this.#directory, CROSS_CHECK_BACKEND), model, irHash);
     return new DesignVerifyDirectory(this.#directory, this.#reports, this.#candidate, derived);
@@ -3503,7 +3596,7 @@ class DesignVerifyDirectory {
     const candidate = this.#candidate;
     const crossCheck = this.#crossCheck;
     const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
-    const conformedCrossCheck = crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck === null ? null : crossCheck.conformedTo(schema);
     const reports = conformedCandidate === null ? this.#reports : DesignReports.of(this.#reports.toArray().map((r) => r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
     return new DesignVerifyDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
   }
@@ -3686,7 +3779,7 @@ class DesignBackgroundDecl {
   #assert;
   constructor(props) {
     this.#id = props.id;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
   }
   static reconstitute(props) {
     return new DesignBackgroundDecl(props);
@@ -3882,10 +3975,15 @@ class DesignObligationDecl {
     this.#id = props.id;
     this.#origin = props.origin;
     this.#brRefs = props.brRefs;
-    this.#assert = props.assert;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal === undefined ? undefined : { ...props.temporal };
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
+      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
+      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
+    };
   }
   static reconstitute(props) {
     return new DesignObligationDecl(props);
@@ -3944,7 +4042,7 @@ class DesignScenarioDecl {
     this.#id = props.id;
     this.#bindings = props.bindings;
     this.#hasEvent = props.hasEvent;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
     this.#brRefs = props.brRefs;
   }
   static reconstitute(props) {
@@ -3998,8 +4096,8 @@ class DesignTransitionDecl {
     this.#to = props.to;
     this.#trigger = props.trigger;
     this.#brRefs = props.brRefs;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
   }
   static reconstitute(props) {
     return new DesignTransitionDecl(props);
@@ -4165,7 +4263,8 @@ class DesignUnitDecl {
     }
     const checkExpr = (e, ctx, primesAllowed) => {
       const boundEnum = new Map;
-      ExpressionTree.of(e).walk((node) => {
+      const tree = ExpressionTree.of(e);
+      tree.walk((node) => {
         const args = node.args ?? [];
         if (args.length === 2) {
           const ref = args.find((a) => a.op === "ref" && typeof a.path === "string");
@@ -4174,7 +4273,7 @@ class DesignUnitDecl {
             boundEnum.set(en, ref.path);
         }
       });
-      ExpressionTree.of(e).walk((node) => {
+      tree.walk((node) => {
         if (node.op === "ref" && typeof node.path === "string") {
           if (!attrTypes.has(node.path))
             errors.push(where(`${ctx}: unresolvable reference "${node.path}"`));
@@ -4594,10 +4693,10 @@ class RefinementObligation {
     this.#id = props.id;
     this.#nature = props.nature;
     this.#frRefs = props.frRefs;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
   }
   static reconstitute(props) {
     return new RefinementObligation(props);
@@ -4921,11 +5020,16 @@ class Obligation {
     this.#nature = props.nature;
     this.#frRefs = props.frRefs;
     this.#ears = props.ears;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
     this.#trigger = props.trigger;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
-    this.#temporal = props.temporal === undefined ? undefined : { ...props.temporal };
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
+      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
+      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
+    };
   }
   static reconstitute(props) {
     return new Obligation(props);
@@ -5080,7 +5184,7 @@ class Scenario {
     this.#frRefs = props.frRefs;
     this.#bindings = { ...props.bindings };
     this.#eventTrigger = props.event?.trigger;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
   static reconstitute(props) {
     return new Scenario(props);
@@ -5267,7 +5371,7 @@ class BackgroundAssumption {
   #assert;
   constructor(id, assert) {
     this.#id = id;
-    this.#assert = assert;
+    this.#assert = ExpressionTree.of(assert).asExpression();
   }
   static reconstitute(props) {
     return new BackgroundAssumption(props.id, props.assert);
@@ -5829,6 +5933,13 @@ class VerificationDirectory {
     }
     return new VerificationDirectory(this.#directory, VerificationReports.of(merged), candidate, null);
   }
+  finalizedWith(candidate, model, schema) {
+    const staged = this.finalizing(candidate.conformedTo(schema));
+    if (model === null)
+      return staged;
+    const derived = staged.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND2), model, candidate.irHash());
+    return new VerificationDirectory(this.#directory, staged.#reports, staged.#candidate, derived.conformedTo(schema));
+  }
   crossChecked(model, irHash) {
     const derived = this.#reports.crossChecked(VerificationReportId.of(this.#directory, CROSS_CHECK_BACKEND2), model, irHash);
     return new VerificationDirectory(this.#directory, this.#reports, this.#candidate, derived);
@@ -5840,7 +5951,7 @@ class VerificationDirectory {
     const candidate = this.#candidate;
     const crossCheck = this.#crossCheck;
     const conformedCandidate = candidate === null ? null : candidate.conformedTo(schema);
-    const conformedCrossCheck = crossCheck === null ? null : crossCheck.conformedTo(schema);
+    const conformedCrossCheck = conformedCandidate !== candidate || crossCheck === null ? null : crossCheck.conformedTo(schema);
     const reports = conformedCandidate === null ? this.#reports : VerificationReports.of(this.#reports.toArray().map((r) => r.id().fileName() === conformedCandidate.id().fileName() ? conformedCandidate : r));
     return new VerificationDirectory(this.#directory, reports, conformedCandidate, conformedCrossCheck);
   }
@@ -6380,7 +6491,7 @@ class QuintMachineComponent {
   #expression;
   constructor(props) {
     this.#id = props.id;
-    this.#expression = props.expression;
+    this.#expression = ExpressionTree.of(props.expression).asExpression();
   }
   static reconstitute(props) {
     return new QuintMachineComponent(props);
@@ -6754,7 +6865,7 @@ class IrBackgroundDecl {
   #assert;
   constructor(props) {
     this.#id = props.id;
-    this.#assert = props.assert;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
   }
   static reconstitute(props) {
     return new IrBackgroundDecl(props);
@@ -6905,9 +7016,9 @@ class IrObligationDecl {
   #temporal;
   constructor(props) {
     this.#id = props.id;
-    this.#assert = props.assert;
-    this.#guard = props.guard;
-    this.#effect = props.effect;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#temporal = props.temporal;
   }
   static reconstitute(props) {
@@ -6955,7 +7066,7 @@ class IrScenarioDecl {
     this.#id = props.id;
     this.#bindings = props.bindings;
     this.#hasEvent = props.hasEvent;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
   static reconstitute(props) {
     return new IrScenarioDecl(props);
@@ -6996,9 +7107,9 @@ class IrTemporalDecl {
   #from;
   #to;
   constructor(props) {
-    this.#assert = props.assert;
-    this.#from = props.from;
-    this.#to = props.to;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#from = props.from === undefined ? undefined : ExpressionTree.of(props.from).asExpression();
+    this.#to = props.to === undefined ? undefined : ExpressionTree.of(props.to).asExpression();
   }
   static reconstitute(props) {
     return new IrTemporalDecl(props);
@@ -7280,7 +7391,7 @@ class AttributeMapping {
     this.#variant = variant;
   }
   static expression(req, expr) {
-    return new AttributeMapping(req, { kind: "expression", expr });
+    return new AttributeMapping(req, { kind: "expression", expr: ExpressionTree.of(expr).asExpression() });
   }
   static enumCases(req, from, cases) {
     return new AttributeMapping(req, { kind: "enum-cases", from, cases: { ...cases } });
@@ -7678,6 +7789,34 @@ class RefinementQuintInvariants {
   reqIds() {
     return new Set(this.#values.map((e) => e.reqId().asString()));
   }
+  interpret(findings, skipped, unit) {
+    const reqIds = this.reqIds();
+    let violations = DesignFindings.of([]);
+    let pending = DesignSkips.of([...skipped].filter((s) => reqIds.has(s.target().asString())));
+    let designConflict = false;
+    for (const finding of findings) {
+      if (!finding.isConflict())
+        continue;
+      const violation = finding.asRefinementViolation(reqIds, unit);
+      if (violation !== null)
+        violations = violations.add(violation);
+      else
+        designConflict = true;
+    }
+    if (violations.isEmpty() && designConflict) {
+      for (const invariant of this.#values) {
+        if ([...pending].some((s) => s.isFor(invariant.reqTarget())))
+          continue;
+        pending = pending.add(DesignSkipped.of({
+          target: invariant.reqTarget(),
+          reason: SkipReason.capability(),
+          unit,
+          detail: "the machine reachably violates its own design invariants first (see the design conflict findings) \u2014 refinement reachability is masked until those are resolved"
+        }));
+      }
+    }
+    return { findings: violations, skipped: pending };
+  }
   toArray() {
     return this.#values;
   }
@@ -7691,7 +7830,7 @@ class RefinementQuintInvariant {
   constructor(reqId, frRefs, expr) {
     this.#reqId = reqId;
     this.#frRefs = frRefs;
-    this.#expr = expr;
+    this.#expr = ExpressionTree.of(expr).asExpression();
   }
   static of(reqId, frRefs, expr) {
     return new RefinementQuintInvariant(reqId, frRefs, expr);
@@ -8011,7 +8150,7 @@ class UnitRefinementPlan {
 class EffectAssignments {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = KeyedIndex.of([...values].map(([path, expression]) => [path, ExpressionTree.of(expression).asExpression()]));
   }
   static ofEffect(effect) {
     const assignments = [];
@@ -8046,7 +8185,7 @@ class EffectAssignments {
 class DesignAssignments {
   #values;
   constructor(values) {
-    this.#values = values;
+    this.#values = KeyedIndex.of([...values].map(([path, expression]) => [path, ExpressionTree.of(expression).asExpression()]));
   }
   static of(values) {
     return new DesignAssignments(values);
@@ -8061,7 +8200,7 @@ class DesignEvent {
   #guard;
   #effectAssign;
   constructor(guard, effectAssign) {
-    this.#guard = guard;
+    this.#guard = ExpressionTree.of(guard).asExpression();
     this.#effectAssign = effectAssign;
   }
   static of(guard, effectAssign) {
@@ -8392,20 +8531,19 @@ class DesignReportFinalizer {
     this.#findingsSchema = findingsSchema;
   }
   finalize(report, model) {
-    return this.#finalizing(report, (staged) => staged.crossChecked(model, report.irHash()).conformedTo(this.#findingsSchema));
+    return this.#finalizing(report, model);
   }
   finalizeIrUnreadable(report) {
-    const finalized = this.#finalizing(report, (staged) => staged.withoutCrossCheck());
+    const finalized = this.#finalizing(report, null);
     if (!finalized.ok)
       return err(finalized.error);
     return ok(undefined);
   }
-  #finalizing(report, resolveCrossCheck) {
+  #finalizing(report, model) {
     const loaded = this.#repository.findByDirectory(report.id().directory());
     if (!loaded.ok)
       return err(loaded.error);
-    const staged = loaded.value.finalizing(report).conformedTo(this.#findingsSchema);
-    const aggregate = resolveCrossCheck(staged).conformedTo(this.#findingsSchema);
+    const aggregate = loaded.value.finalizedWith(report, model, this.#findingsSchema);
     const stored = this.#repository.store(aggregate);
     if (!stored.ok)
       return err(stored.error);
@@ -8541,9 +8679,10 @@ class VerifyDesignSmtUseCase {
       skipped.push(...remapped.skipped);
       checkedUnits.push(`unit:${u.name()}`);
     }
-    const context = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
+    const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
     let inputs;
-    if (context.isActive()) {
+    if (materials.ok && materials.value.isActive()) {
+      const context = materials.value;
       const req = context.requirements();
       const acq = context.mapAcquisition();
       const reqTargets = req.allTargetIds();
@@ -8610,11 +8749,14 @@ class VerifyDesignSmtUseCase {
       findings: DesignFindings.of(findings),
       skipped: DesignSkips.of(skipped),
       ...inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {},
-      checked: CheckedUnits.reconstitute(checkedUnits)
+      checked: CheckedUnits.reconstitute(checkedUnits),
+      ...!materials.ok ? { unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})` } : {}
     });
     const finalized = this.#finalizer.finalize(report, model);
     if (!finalized.ok)
       return { kind: "save-failed", error: finalized.error };
+    if (!materials.ok)
+      return { kind: "acquisition-failed", error: materials.error };
     return finalized.value;
   }
 }
@@ -8751,9 +8893,10 @@ class VerifyDesignQuintUseCase {
         }
       }
     }
-    const context = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
+    const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
     let inputs;
-    if (context.isActive()) {
+    if (materials.ok && materials.value.isActive()) {
+      const context = materials.value;
       const req = context.requirements();
       const acq = context.mapAcquisition();
       const reqTargets = req.allTargetIds();
@@ -8823,30 +8966,9 @@ class VerifyDesignQuintUseCase {
               }
               continue;
             }
-            const reqIdSet = extras.reqIds();
-            let hitExtra = false;
-            let designConflict = false;
-            for (const f of remapped.findings) {
-              if (!f.isConflict())
-                continue;
-              const violation = f.asRefinementViolation(reqIdSet, u.name());
-              if (violation !== null) {
-                hitExtra = true;
-                findings.push(violation);
-              } else {
-                designConflict = true;
-              }
-            }
-            if (!hitExtra && designConflict) {
-              for (const e of extras) {
-                skipped.push(DesignSkipped.of({
-                  target: e.reqTarget(),
-                  reason: SkipReason.capability(),
-                  unit: u.name(),
-                  detail: "the machine reachably violates its own design invariants first (see the design conflict findings) \u2014 refinement reachability is masked until those are resolved"
-                }));
-              }
-            }
+            const interpreted = extras.interpret(remapped.findings, remapped.skipped, u.name());
+            findings.push(...interpreted.findings);
+            skipped.push(...interpreted.skipped);
           }
         }
       });
@@ -8860,11 +8982,14 @@ class VerifyDesignQuintUseCase {
       findings: DesignFindings.of(findings),
       skipped: DesignSkips.of(skipped),
       ...inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {},
-      checked: CheckedUnits.reconstitute(checkedUnits)
+      checked: CheckedUnits.reconstitute(checkedUnits),
+      ...!materials.ok ? { unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})` } : {}
     });
     const finalized = this.#finalizer.finalize(report, model);
     if (!finalized.ok)
       return { kind: "save-failed", error: finalized.error };
+    if (!materials.ok)
+      return { kind: "acquisition-failed", error: materials.error };
     return finalized.value;
   }
 }
@@ -9160,34 +9285,25 @@ import { join as join4 } from "path";
 
 // src/design/adapter/sibling-document-parser.ts
 function parseSiblingVerdictDocument(raw) {
-  if (!isObject(raw))
+  const decoded = decodeFindingsDocument(raw);
+  if (!decoded.ok)
     return SiblingVerdictDocument.unreadable();
-  if (isObject(raw.unavailable) && typeof raw.unavailable.reason === "string") {
-    return SiblingVerdictDocument.unavailable(raw.unavailable.reason, typeof raw.method === "string" ? raw.method : null);
-  }
-  const findings = [];
-  for (const f of Array.isArray(raw.findings) ? raw.findings : []) {
-    if (!isObject(f) || typeof f.kind !== "string" || !Array.isArray(f.targets))
-      continue;
-    findings.push(SiblingVerdictFinding.reconstitute({
-      kind: f.kind,
-      frRefs: FrRefs.reconstitute(strArr(f.frRefs)),
-      targets: f.targets.filter((t) => typeof t === "string").map((t) => LoweredId.reconstitute(t)),
-      witness: DesignWitness.fromDocument(f.witness ?? null),
-      detail: typeof f.detail === "string" ? f.detail : ""
-    }));
-  }
-  const skipped = [];
-  for (const s of Array.isArray(raw.skipped) ? raw.skipped : []) {
-    if (!isObject(s) || typeof s.target !== "string" || typeof s.reason !== "string")
-      continue;
-    skipped.push(SiblingVerdictSkip.reconstitute({
-      target: LoweredId.reconstitute(s.target),
-      reason: s.reason,
-      ...typeof s.detail === "string" ? { detail: s.detail } : {}
-    }));
-  }
-  return SiblingVerdictDocument.readable(typeof raw.method === "string" ? raw.method : null, SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
+  const doc = decoded.value;
+  if (doc.unavailable !== undefined)
+    return SiblingVerdictDocument.unavailable(doc.unavailable.reason, doc.method);
+  const findings = doc.findings.map((f) => SiblingVerdictFinding.reconstitute({
+    kind: f.kind,
+    frRefs: FrRefs.reconstitute(f.frRefs),
+    targets: f.targets.map((t) => LoweredId.reconstitute(t)),
+    witness: DesignWitness.fromDocument(f.witness),
+    detail: f.detail
+  }));
+  const skipped = doc.skipped.map((s) => SiblingVerdictSkip.reconstitute({
+    target: LoweredId.reconstitute(s.target),
+    reason: s.reason,
+    ...s.detail !== undefined ? { detail: s.detail } : {}
+  }));
+  return SiblingVerdictDocument.readable(doc.method, SiblingVerdictFindings.of(findings), SiblingVerdictSkips.of(skipped));
 }
 
 // src/design/adapter/reachability-variant.ts
@@ -9210,22 +9326,6 @@ function reachabilityVariant(base, attrPath, state) {
     background: Array.isArray(base.background) ? base.background : []
   };
 }
-function probeReached(doc, attrPath, state) {
-  if (!isObject(doc) || !Array.isArray(doc.findings))
-    return false;
-  for (const f of doc.findings) {
-    if (!isObject(f) || f.kind !== "conflict")
-      continue;
-    const witness = isObject(f.witness) ? f.witness : {};
-    const trace = Array.isArray(witness.trace) ? witness.trace : null;
-    if (trace === null)
-      return true;
-    const last = trace[trace.length - 1];
-    if (isObject(last) && last[attrPath] === state)
-      return true;
-  }
-  return false;
-}
 
 // src/design/adapter/sibling-backend-client-impl.ts
 class SiblingBackendClientImpl {
@@ -9244,10 +9344,11 @@ class SiblingBackendClientImpl {
   probeState(unit, lowered, attrPath, state, wallTimeoutMs) {
     const variant = reachabilityVariant(renderLoweredDocument(unit, lowered), attrPath, state);
     const run = this.#spawn("quint", variant, wallTimeoutMs);
-    if (run.exit !== 0 || run.doc === null || isObject(run.doc) && isObject(run.doc.unavailable)) {
+    if (run.exit !== 0 || run.doc === null) {
       return { kind: "failed" };
     }
-    return { kind: "probed", reached: probeReached(run.doc, attrPath, state) };
+    const reached = parseSiblingVerdictDocument(run.doc).reachabilityOf(attrPath, state);
+    return reached === null ? { kind: "failed" } : { kind: "probed", reached };
   }
   #spawn(backend, loweredDoc, wallTimeoutMs) {
     const tool = this.#config.siblingToolPaths[backend];
@@ -9287,48 +9388,36 @@ function renderDesignReportBytes(report) {
 `;
 }
 function parseSiblingDesignReportDocument(directory, fileName, raw) {
-  if (!isObject(raw))
-    return null;
-  const backend = typeof raw.backend === "string" ? raw.backend : fileName.replace(/\.json$/, "");
-  const skipped = (Array.isArray(raw.skipped) ? raw.skipped : []).filter((s) => isObject(s) && typeof s.target === "string");
-  return DesignReport.reconstitute({
-    id: DesignReportId.of(directory, backend),
-    irVersion: IrVersion.reconstitute(typeof raw.irVersion === "string" ? raw.irVersion : ""),
-    irHash: ContentHash.reconstitute(typeof raw.irHash === "string" ? raw.irHash : ""),
-    method: typeof raw.method === "string" ? raw.method : "",
-    findings: DesignFindings.of((Array.isArray(raw.findings) ? raw.findings.filter(isObject) : []).map((e) => {
-      const entry = e;
-      return DesignFinding.reconstitute({
-        kind: typeof entry.kind === "string" ? entry.kind : "",
-        frRefs: FrRefs.reconstitute(Array.isArray(entry.frRefs) ? entry.frRefs.filter((x) => typeof x === "string") : []),
-        targets: TargetIds.reconstitute(Array.isArray(entry.targets) ? entry.targets.filter((x) => typeof x === "string") : []),
-        witness: DesignWitness.fromDocument(entry.witness ?? null),
-        unit: typeof entry.unit === "string" ? entry.unit : "",
-        detail: typeof entry.detail === "string" ? entry.detail : ""
-      });
-    })),
-    skipped: DesignSkips.of(skipped.map((entry) => {
-      return DesignSkipped.reconstitute({
-        target: TargetId.reconstitute(typeof entry.target === "string" ? entry.target : ""),
-        reason: typeof entry.reason === "string" ? entry.reason : "",
-        unit: typeof entry.unit === "string" ? entry.unit : "",
-        ...typeof entry.detail === "string" ? { detail: entry.detail } : {}
-      });
-    })),
-    inputs: Array.isArray(raw.inputs) ? DesignInputAnchors.of(raw.inputs.map((e) => {
-      const entry = isObject(e) ? e : {};
-      return DesignInputAnchor.reconstitute({
-        artifact: typeof entry.artifact === "string" ? entry.artifact : "",
-        sha256: ContentHash.reconstitute(typeof entry.sha256 === "string" ? entry.sha256 : "")
-      });
-    })) : null,
-    checked: Array.isArray(raw.checked) ? CheckedUnits.reconstitute(raw.checked.filter((c) => typeof c === "string")) : null,
-    crossChecked: Array.isArray(raw.crossChecked) ? DesignCrossCheckedEntries.of(raw.crossChecked.filter(isObject).map((e) => DesignCrossCheckedEntry.reconstitute({
-      backend: BackendName.reconstitute(typeof e.backend === "string" ? e.backend : ""),
-      targets: TargetIds.reconstitute(Array.isArray(e.targets) ? e.targets.filter((t) => typeof t === "string") : [])
-    }))) : null,
-    unavailableReason: isObject(raw.unavailable) ? typeof raw.unavailable.reason === "string" ? raw.unavailable.reason : "" : null
-  });
+  const decoded = decodeFindingsDocument(raw);
+  if (!decoded.ok)
+    return err(decoded.error);
+  const doc = decoded.value;
+  if (`${doc.backend}.json` !== fileName)
+    return err("backend must match the report filename");
+  return ok(DesignReport.reconstitute({
+    id: DesignReportId.of(directory, doc.backend),
+    irVersion: IrVersion.reconstitute(doc.irVersion),
+    irHash: ContentHash.reconstitute(doc.irHash),
+    method: doc.method,
+    findings: DesignFindings.of(doc.findings.map((entry) => DesignFinding.reconstitute({
+      kind: entry.kind,
+      frRefs: FrRefs.reconstitute(entry.frRefs),
+      targets: TargetIds.reconstitute(entry.targets),
+      witness: DesignWitness.fromDocument(entry.witness),
+      detail: entry.detail,
+      unit: entry.unit ?? ""
+    }))),
+    skipped: DesignSkips.of(doc.skipped.map((entry) => DesignSkipped.reconstitute({
+      target: TargetId.reconstitute(entry.target),
+      reason: entry.reason,
+      unit: entry.unit ?? "",
+      ...entry.detail !== undefined ? { detail: entry.detail } : {}
+    }))),
+    inputs: doc.inputs === undefined ? null : DesignInputAnchors.of(doc.inputs.map((entry) => DesignInputAnchor.reconstitute({ artifact: entry.artifact, sha256: ContentHash.reconstitute(entry.sha256) }))),
+    checked: doc.checked === undefined ? null : CheckedUnits.reconstitute(doc.checked),
+    crossChecked: doc.crossChecked === undefined ? null : DesignCrossCheckedEntries.of(doc.crossChecked.map((entry) => DesignCrossCheckedEntry.reconstitute({ backend: BackendName.reconstitute(entry.backend), targets: TargetIds.reconstitute(entry.targets) }))),
+    unavailableReason: doc.unavailable?.reason ?? null
+  }));
 }
 // src/design/adapter/design-verify-directory-repository-impl.ts
 import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync6, readdirSync, renameSync as renameSync3, rmSync as rmSync4 } from "fs";
@@ -9484,8 +9573,7 @@ class DesignVerifyDirectoryRepositoryImpl {
       const report = this.#readReport(directory, file);
       if (!report.ok)
         return err(report.error);
-      if (report.value !== null)
-        reports.push(report.value);
+      reports.push(report.value);
     }
     return ok(reports);
   }
@@ -9497,7 +9585,8 @@ class DesignVerifyDirectoryRepositoryImpl {
     } catch (e) {
       return err({ kind: "corrupt", path, cause: causeOf2(e) });
     }
-    return ok(parseSiblingDesignReportDocument(directory, fileName, raw));
+    const parsed = parseSiblingDesignReportDocument(directory, fileName, raw);
+    return parsed.ok ? ok(parsed.value) : err({ kind: "corrupt", path, cause: parsed.error });
   }
   #fenced(directory, path) {
     return err({
@@ -9817,7 +9906,7 @@ function buildRefinementQueries(u, req, plan) {
   };
 }
 // src/design/adapter/refinement-materials-repository-impl.ts
-import { existsSync as existsSync5, readFileSync as readFileSync7 } from "fs";
+import { readFileSync as readFileSync7 } from "fs";
 import { dirname as dirname3, join as join6 } from "path";
 var REFINEMENT_MAP_BASENAME = "deep-spec-analysis-refinement-map.md";
 var REQUIREMENTS_MODEL_RELPATH = ["inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md"];
@@ -9834,30 +9923,43 @@ class RefinementMaterialsRepositoryImpl {
   findById(id) {
     const modelPath = id.modelArtifactPath().asString();
     const recordRoot = findRecordRoot(dirname3(modelPath));
-    const requirements = recordRoot === null ? null : this.#loadRequirements(recordRoot);
-    if (recordRoot === null || requirements === null)
-      return RefinementMaterials.inactive(id);
-    const stageDir = dirname3(modelPath);
-    return RefinementMaterials.active(id, requirements, this.#loadMap(recordRoot, stageDir, modelPath));
+    if (recordRoot === null)
+      return ok(RefinementMaterials.inactive(id));
+    const requirements = this.#loadRequirements(recordRoot);
+    if (!requirements.ok) {
+      return requirements.error.kind === "not-found" ? ok(RefinementMaterials.inactive(id)) : err(requirements.error);
+    }
+    const map = this.#loadMap(recordRoot, dirname3(modelPath), modelPath, requirements.value.bytes);
+    if (!map.ok)
+      return err(map.error);
+    return ok(RefinementMaterials.active(id, requirements.value.model, map.value));
+  }
+  #read(path) {
+    try {
+      return ok(new Uint8Array(readFileSync7(path)));
+    } catch (e) {
+      if (e.code === "ENOENT")
+        return err({ kind: "not-found", path });
+      return err({ kind: "io-failed", operation: "read", path, cause: e instanceof Error ? e.message : String(e) });
+    }
   }
   #loadRequirements(recordRoot) {
     const path = join6(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
-    const idPath = ArtifactPath.parse(path);
-    if (!idPath.ok)
-      return null;
-    if (!existsSync5(path))
-      return null;
-    const fence = extractSingleJsonFence(readFileSync7(path, "utf-8"));
+    const bytes = this.#read(path);
+    if (!bytes.ok)
+      return err(bytes.error);
+    const fence = extractSingleJsonFence(Buffer.from(bytes.value).toString("utf-8"));
     if (fence === null)
-      return null;
+      return err({ kind: "corrupt", path, cause: "requirements model must contain exactly one JSON fence" });
     let raw;
     try {
       raw = JSON.parse(fence);
-    } catch {
-      return null;
+    } catch (e) {
+      return err({ kind: "corrupt", path, cause: e instanceof Error ? e.message : String(e) });
     }
-    if (!isObject(raw))
-      return null;
+    if (!isObject(raw) || typeof raw.irVersion !== "string" || !isObject(raw.schema) || !Array.isArray(raw.schema.entities) || !Array.isArray(raw.obligations) || !Array.isArray(raw.scenarios)) {
+      return err({ kind: "corrupt", path, cause: "requirements model lacks its version, schema, obligations or scenarios" });
+    }
     const attributes = [];
     const schema = isObject(raw.schema) ? raw.schema : {};
     for (const ent of Array.isArray(schema.entities) ? schema.entities : []) {
@@ -9909,33 +10011,35 @@ class RefinementMaterialsRepositoryImpl {
         event: isObject(sc.event) && typeof sc.event.trigger === "string" ? { trigger: TriggerName.reconstitute(sc.event.trigger) } : undefined
       }));
     }
-    return RefinementRequirements.reconstitute({
-      id: FormalModelId.of(idPath.value),
+    const model = RefinementRequirements.reconstitute({
+      id: FormalModelId.of(ArtifactPath.reconstitute(path)),
       hash: ContentHash.ofText(canonicalStringify(raw)),
       attributes: RefinementAttributes.of(attributes),
       obligations: RefinementObligations.of(obligations),
       scenarios: RefinementScenarios.of(scenarios)
     });
+    return ok({ model, bytes: bytes.value });
   }
-  #loadMap(recordRoot, stageDir, modelPath) {
+  #loadMap(recordRoot, stageDir, modelPath, requirementsBytes) {
     const path = join6(stageDir, REFINEMENT_MAP_BASENAME);
-    if (!existsSync5(path))
-      return RefinementMapAcquisition.absent(null);
-    const mapPath = ArtifactPath.parse(path);
-    if (!mapPath.ok)
-      return RefinementMapAcquisition.absent("defect: refinement map path derivation produced an empty path");
-    const parsed = parseRefinementMapDocument(new Uint8Array(readFileSync7(path)), RefinementMapId.of(mapPath.value), this.#mapSchemaPath);
+    const bytes = this.#read(path);
+    if (!bytes.ok) {
+      return bytes.error.kind === "not-found" ? ok(RefinementMapAcquisition.absent(null)) : err(bytes.error);
+    }
+    const parsed = parseRefinementMapDocument(bytes.value, RefinementMapId.of(ArtifactPath.reconstitute(path)), this.#mapSchemaPath);
     if (parsed.kind === "malformed")
-      return RefinementMapAcquisition.absent(parsed.error);
-    const map = parsed.map;
+      return ok(RefinementMapAcquisition.absent(parsed.error));
+    const modelBytes = this.#read(modelPath);
+    if (!modelBytes.ok)
+      return err(modelBytes.error);
     const reqModelPath = join6(recordRoot, ...REQUIREMENTS_MODEL_RELPATH);
     const mapArtifact = relArtifact(recordRoot, path);
     const inputs = [
-      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, modelPath), sha256: ContentHash.ofText(readFileSync7(modelPath, "utf-8")) }),
-      DesignInputAnchor.reconstitute({ artifact: mapArtifact, sha256: ContentHash.ofText(readFileSync7(path, "utf-8")) }),
-      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, reqModelPath), sha256: ContentHash.ofText(readFileSync7(reqModelPath, "utf-8")) })
+      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, modelPath), sha256: ContentHash.ofText(Buffer.from(modelBytes.value).toString("utf-8")) }),
+      DesignInputAnchor.reconstitute({ artifact: mapArtifact, sha256: ContentHash.ofText(Buffer.from(bytes.value).toString("utf-8")) }),
+      DesignInputAnchor.reconstitute({ artifact: relArtifact(recordRoot, reqModelPath), sha256: ContentHash.ofText(Buffer.from(requirementsBytes).toString("utf-8")) })
     ];
-    return RefinementMapAcquisition.loaded(map, ArtifactPath.reconstitute(mapArtifact), inputs);
+    return ok(RefinementMapAcquisition.loaded(parsed.map, ArtifactPath.reconstitute(mapArtifact), inputs));
   }
 }
 function parseRefinementMapDocument(bytes, id, mapSchemaPath) {
@@ -10081,7 +10185,7 @@ class RefinementSolverClientImpl {
   }
 }
 // src/design/adapter/design-ir-validation-materials-repository-impl.ts
-import { existsSync as existsSync6, readFileSync as readFileSync8 } from "fs";
+import { existsSync as existsSync5, readFileSync as readFileSync8 } from "fs";
 import { basename as basename2, dirname as dirname4, join as join7 } from "path";
 var DESIGN_MODEL_BASENAME = "deep-spec-analysis-functional-formal-model.md";
 function asExpression(v) {
@@ -10171,7 +10275,7 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
         unformalizedTargets.push(t);
     }
   }
-  const directoryExists = recordRoot === null ? true : existsSync6(join7(recordRoot, "construction", unitName));
+  const directoryExists = recordRoot === null ? true : existsSync5(join7(recordRoot, "construction", unitName));
   const rulesPath = recordRoot === null ? null : join7(recordRoot, "construction", unitName, "functional-design", "rules.md");
   const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
   return DesignUnitDecl.reconstitute({
@@ -10194,7 +10298,7 @@ class DesignIrValidationMaterialsRepositoryImpl {
   }
   findById(id) {
     const outputPath = id.modelId().artifactPath().asString();
-    if (basename2(outputPath) !== DESIGN_MODEL_BASENAME || !existsSync6(outputPath)) {
+    if (basename2(outputPath) !== DESIGN_MODEL_BASENAME || !existsSync5(outputPath)) {
       return err({ kind: "not-found", path: outputPath });
     }
     const corrupt = (cause) => err({ kind: "corrupt", path: outputPath, cause });
@@ -10218,7 +10322,7 @@ class DesignIrValidationMaterialsRepositoryImpl {
     if (!isObject(ir)) {
       return corrupt("design IR fence must contain a JSON object");
     }
-    if (!existsSync6(this.#schemaPath)) {
+    if (!existsSync5(this.#schemaPath)) {
       return corrupt(`design IR schema not installed at ${this.#schemaPath} \u2014 run plugin sync`);
     }
     const schema = readContractSchema(this.#schemaPath);
@@ -10258,7 +10362,7 @@ class DesignIrValidationMaterialsRepositoryImpl {
   }
 }
 // src/design/adapter/refinement-map-repository-impl.ts
-import { existsSync as existsSync7, readFileSync as readFileSync9 } from "fs";
+import { existsSync as existsSync6, readFileSync as readFileSync9 } from "fs";
 class RefinementMapRepositoryImpl {
   #mapSchemaPath;
   constructor(mapSchemaPath) {
@@ -10266,7 +10370,7 @@ class RefinementMapRepositoryImpl {
   }
   findById(id) {
     const path = id.artifactPath().asString();
-    if (!existsSync7(path))
+    if (!existsSync6(path))
       return err({ kind: "not-found", path });
     let bytes;
     try {

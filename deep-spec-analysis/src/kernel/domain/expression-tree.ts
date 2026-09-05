@@ -25,7 +25,20 @@ export class ExpressionTree {
   readonly #root: Expression;
 
   private constructor(root: Expression) {
-    this.#root = root;
+    // 入力の所有権を引き取らず、独立した不変の木を持つ。寛容な復元が運ぶ
+    // 未知のキーや不正な形も、正規化せずコピーする。
+    const snapshot = structuredClone(root);
+    const visited = new WeakSet<object>();
+    const freeze = (value: object): void => {
+      if (visited.has(value)) return;
+      visited.add(value);
+      for (const child of Object.values(value)) {
+        if (child !== null && typeof child === "object") freeze(child);
+      }
+      Object.freeze(value);
+    };
+    freeze(snapshot);
+    this.#root = snapshot;
   }
 
   static of(root: Expression): ExpressionTree {

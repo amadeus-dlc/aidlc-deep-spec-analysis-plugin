@@ -10,13 +10,13 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Json, isObject } from "@deep-spec/kernel-infrastructure";
+import { type Json } from "@deep-spec/kernel-infrastructure";
 import { LoweredUnit } from "@deep-spec/design-domain";
 import type { DesignUnit } from "@deep-spec/design-domain";
 import type { ReachabilityProbe, SiblingBackendClient, SiblingLoweredRun } from "@deep-spec/design-usecase";
 import { renderLoweredDocument } from "./lowered-document-serializer.ts";
 import { parseSiblingVerdictDocument } from "./sibling-document-parser.ts";
-import { probeReached, reachabilityVariant } from "./reachability-variant.ts";
+import { reachabilityVariant } from "./reachability-variant.ts";
 import type { SiblingBackendClientConfig } from "./sibling-backend-client-config.ts";
 
 
@@ -39,10 +39,11 @@ export class SiblingBackendClientImpl implements SiblingBackendClient {
   probeState(unit: DesignUnit, lowered: LoweredUnit, attrPath: string, state: string, wallTimeoutMs: number): ReachabilityProbe {
     const variant = reachabilityVariant(renderLoweredDocument(unit, lowered), attrPath, state);
     const run = this.#spawn("quint", variant, wallTimeoutMs);
-    if (run.exit !== 0 || run.doc === null || (isObject(run.doc) && isObject(run.doc.unavailable))) {
+    if (run.exit !== 0 || run.doc === null) {
       return { kind: "failed" };
     }
-    return { kind: "probed", reached: probeReached(run.doc, attrPath, state) };
+    const reached = parseSiblingVerdictDocument(run.doc).reachabilityOf(attrPath, state);
+    return reached === null ? { kind: "failed" } : { kind: "probed", reached };
   }
 
   #spawn(backend: "smt" | "quint", loweredDoc: Json, wallTimeoutMs: number): { exit: number | null; doc: Json | null; note: string } {

@@ -128,7 +128,7 @@
 
 ### D2 — フィールドは `#private` だけ
 
-**規則**: domain のクラスのインスタンスフィールドは JavaScript の `#` プライベートフィールドで宣言する。TypeScript の `private` / `protected` / `public` 修飾子は使わない（`private constructor` を除く）。原則として `readonly` を付ける。
+**規則**: domain のクラスのインスタンスフィールドは JavaScript の `#` プライベートフィールドで宣言する。TypeScript の `private` / `protected` / `public` 修飾子は使わない（`private constructor` を除く）。原則として `readonly` を付ける。参照先の可変性は別に防ぐ。共有する式の木は `ExpressionTree` が入力をコピーして深い階層まで凍結し、`Expression` の型も再帰的にreadonlyにする。
 
 **なぜ**: TS の `private` は型検査だけで、実行時には素通りする。`#` は言語が守る。「見えない」ことを本当に保証すると、外から中身を取り出して外で判断する道が塞がる。
 
@@ -240,7 +240,7 @@
 
 **なぜ**: 「保存の直前に整える」ようにすると、整える前の状態が外に漏れる。コマンドの中で守れば、集約はいつ見ても正しい。
 
-**実例**: `src/design/domain/design-verify-directory.ts` の `DesignVerifyDirectory`——恒等は verify ディレクトリのパス、境界には backend ごとの report・候補・cross-check を抱え、不変条件は「backend ごとに report は 1 つ」「cross-check は不在か、いまの reports から導いたもの」。コマンドは `finalizing` / `crossChecked` / `withoutCrossCheck` / `conformedTo` で、`finalizing` は候補を差し替えると同時に cross-check を落とす。可変部は `DesignReport | null`（`Option` 型は使わない）。`src/requirements/domain/verification-directory.ts` に同型がある。
+**実例**: `src/design/domain/design-verify-directory.ts` の `DesignVerifyDirectory`——恒等は verify ディレクトリのパス、境界には backend ごとの report・候補・cross-check を抱え、不変条件は「backend ごとに report は 1 つ」「cross-check は不在か、いまの reports から導いたもの」。公開準備は `finalizedWith(candidate, model, schema)` が候補の適合とcross-check導出をまとめて行う。個別操作でも、`finalizing` と候補を変更する `conformedTo` は古いcross-checkを落とす。可変部は `DesignReport | null`（`Option` 型は使わない）。`src/requirements/domain/verification-directory.ts` に同型がある。
 
 **検査**: なし（レビュー）。
 
@@ -276,9 +276,9 @@
 
 **なぜ**: Repository は集約を出し入れする口であって、業務の語彙を持つ場所ではない。ここに語彙が増えるのは、たいてい**集約の設計が間違っている**という信号である。「保存のしかたが 2 通り要る」と思ったら、その差は集約自身が持つべき状態である。
 
-**実例（実測）**: Repository の interface は 11 個あり、**例外なく** `findById`（または `findByDirectory`）と `store` の 2 メソッドだけ。`store` の引数は集約そのもの。
+**実例（実測）**: Repositoryのinterfaceは11個。`RefinementMaterialsRepository` は読取専用で `findById` のみ。他の10個は取得と `store` を持ち、`store` の引数は集約そのもの。
 
-**このリポジトリでの逸脱**: `RefinementMaterialsRepository.findById` だけが `Result` で包まず生の集約を返す（§8）。
+**失敗契約**: 全Repositoryの取得は `Result<集約, RepositoryError>` を返す。refinementの適用外（要件モデルの不在）と、存在する入力の不正・I/O失敗を混同しない。
 
 **検査**: `ports-live-in-port-dir`（命名）、`commands-return-void`（`store` の戻り値）。
 
@@ -387,6 +387,8 @@
 **実例**: schema 検査の結果は `ErrorMessages` として集約に渡り、判定は集約が下す。JSON の parse 失敗・フェンス数の不一致は `err({kind: "corrupt", …})` として Repository の境界で返る。
 
 **検査**: なし（レビュー）。
+
+**補足（2026-09-05）**: 検証結果文書の欠落や型不一致を空のfindings／skippedへ補完してはならない。adapterの `decodeFindingsDocument` は復号できない形を失敗にし、未知の語彙は逐語で運ぶ。到達性の判定とrefinementの対象別結果の解釈はドメイン側が所有する。
 
 ### A4 — 書き込みは atomic に、読み書きは往復させる
 
@@ -577,7 +579,6 @@
 | `doctor/domain` の `PluginVersion.parse` | 全 48 個の `parse` で唯一 `Result` を返さない（`PluginVersion \| null`）。doctor/domain は `kernel-infrastructure` を 1 件も import しない |
 | `refcheck/domain` の `*Outcome` 5 型 | 同じ「到達不能な枝」の扱いが、3 型は `throw`、2 型は黙って別の枝へ落ちる、と割れている |
 | `VerificationSkipped` / `Skipped` の `reason` | kernel に `SkipReason` DP（閉集合 9 値）があるのに、両方とも生の `string` で運ぶ（D6 の未達） |
-| `RefinementMaterialsRepository.findById` | 11 個の Repository で唯一 `Result` を返さない（P2 の未達） |
 | `SiblingUnitIndex` | 索引で唯一 `KeyedIndex` を使わず生の `ReadonlyMap` の入れ子を持つ |
 | `refcheck/domain/functional-design.ts` | コメントだけの孤児ファイル（export 0、どこからも import されない） |
 | 閉じた union の公開面 | `match<T>`（refcheck）と述語群（requirements の `*Verdict`）に割れている（D10 の未達） |

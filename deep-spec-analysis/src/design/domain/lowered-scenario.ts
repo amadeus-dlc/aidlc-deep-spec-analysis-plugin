@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import type { LoweredId } from "./lowered-id.ts";
 import type { FrRefs } from "@deep-spec/kernel-domain";
@@ -18,7 +19,7 @@ export class LoweredScenario {
     this.#frRefs = props.frRefs;
     this.#bindings = { ...props.bindings };
     this.#event = props.event;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
   static reconstitute(props: { id: LoweredId; kind: "accept" | "reject"; frRefs: FrRefs; bindings: { readonly [path: string]: boolean | number | string }; event?: { readonly trigger: string }; expect?: Expression }): LoweredScenario {

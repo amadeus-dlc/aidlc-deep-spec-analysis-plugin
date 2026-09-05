@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import { BindingPairs } from "./binding-pairs.ts";
 import { BrRefs } from "./br-refs.ts";
@@ -14,7 +15,7 @@ export class DesignScenarioDecl {
     this.#id = props.id;
     this.#bindings = props.bindings;
     this.#hasEvent = props.hasEvent;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
     this.#brRefs = props.brRefs;
   }
 

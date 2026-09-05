@@ -622,7 +622,8 @@ describe("degradation reports and ordering", () => {
     expect(ExpressionTree.of({ op: "ref", path: "a", prime: true }).assignsPrimed("a")).toBe(true);
     expect(ExpressionTree.of({ op: "ref", path: "a" }).assignsPrimed("a")).toBe(false);
     const e = { op: "int", value: 1 };
-    expect(ExpressionTree.of(e).asExpression()).toBe(e);
+    expect(ExpressionTree.of(e).asExpression()).toEqual(e);
+    expect(ExpressionTree.of(e).asExpression()).not.toBe(e);
   });
 
   test("the model resolves targets, references, and attributes as the old free functions did", () => {
@@ -663,17 +664,13 @@ describe("smt plan collections (first-class operations)", () => {
 });
 
 describe("sibling-document hardening pin (thaw #34 item 2 — resolved by the wave-4b explicit mappings)", () => {
-  test("a malformed sibling parses with elements filtered, never throwing", () => {
+  test("a malformed sibling is rejected without dropping invalid elements", () => {
     const report = parseSiblingReportDocument(ArtifactPath.reconstitute("/tmp/x"), "smt.json", {
       backend: "smt",
       findings: [42, { kind: "conflict", frRefs: "nope", targets: 7, detail: 3 }],
       skipped: ["junk", { target: 1 }],
       crossChecked: [null, { backend: 5, targets: "x" }],
     });
-    expect(report).not.toBeNull();
-    expect(plainFindings(report?.findings().toArray() ?? [])).toEqual([
-      { kind: "conflict", frRefs: ([]), targets: ([]), witness: { core: [] }, detail: "" },
-    ]);
-    expect(report?.skipped().toArray()).toEqual([]);
+    expect(report.ok).toBe(false);
   });
 });

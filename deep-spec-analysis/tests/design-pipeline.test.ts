@@ -89,7 +89,7 @@ import {
   DesignModelRepositoryImpl,
   DesignVerifyDirectoryRepositoryImpl,
   SiblingBackendClientImpl,
-  probeReached,
+  parseSiblingVerdictDocument,
   reachabilityVariant,
   parseDesignEntities,
   renderDesignEntities,
@@ -719,7 +719,7 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(down.skipped().toArray().every((s) => s.reason() === "unavailable" && s.detail() === "quint CLI missing")).toBe(true);
   });
 
-  test("the reachability variant keeps only events plus the single probe, and probeReached demands the final state", () => {
+  test("the reachability variant keeps only events plus the single probe, and reachability requires a completed search or a final-state witness", () => {
     const base: Json = {
       irVersion: "1.0.0",
       schema: { entities: [] },
@@ -737,13 +737,15 @@ describe("report ordering, cross-check, and degradations", () => {
     expect(variant.scenarios).toEqual([]);
     expect((variant.background as Json[]).length).toBe(1);
 
-    const reachedDoc: Json = { findings: [{ kind: "conflict", witness: { trace: [{ "T.s": "alive" }, { "T.s": "dead" }] } }] };
-    expect(probeReached(reachedDoc, "T.s", "dead")).toBe(true);
-    const notReached: Json = { findings: [{ kind: "conflict", witness: { trace: [{ "T.s": "alive" }] } }] };
-    expect(probeReached(notReached, "T.s", "dead")).toBe(false);
-    const noTrace: Json = { findings: [{ kind: "conflict", witness: {} }] };
-    expect(probeReached(noTrace, "T.s", "dead")).toBe(true);
-    expect(probeReached({ findings: [] }, "T.s", "dead")).toBe(false);
+    const result = (findings: Json[], skipped: Json[] = [], method = "bounded") =>
+      parseSiblingVerdictDocument({ backend: "quint", irVersion: "1.0.0", irHash: "a".repeat(64), findings, skipped, method }).reachabilityOf("T.s", "dead");
+    const conflict = (witness: Json): Json => ({ kind: "conflict", targets: ["OB-9999"], frRefs: [], detail: "probe", witness });
+    expect(result([conflict({ trace: [{ "T.s": "alive" }, { "T.s": "dead" }] })])).toBe(true);
+    expect(result([conflict({ trace: [{ "T.s": "alive" }] })])).toBeNull();
+    expect(result([conflict({})])).toBeNull();
+    expect(result([])).toBe(false);
+    expect(result([], [{ target: "OB-9999", reason: "timeout" }])).toBeNull();
+    expect(result([], [], "simulation")).toBeNull();
   });
 });
 

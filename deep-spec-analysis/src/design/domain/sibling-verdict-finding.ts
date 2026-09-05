@@ -49,6 +49,10 @@ export class SiblingVerdictFinding {
     return this.#detail;
   }
 
+  provesReachabilityOf(attrPath: string, state: string): boolean {
+    return this.isKind("conflict") && this.#witness.reachesState(attrPath, state);
+  }
+
   // core のラベル（lowered id）を design id へ書き換えた witness——形の判定は
   // witness 自身が行う（裁定 2、2026-09-03）。
   witnessRemappedBy(rewrite: (label: string) => string): DesignWitness {

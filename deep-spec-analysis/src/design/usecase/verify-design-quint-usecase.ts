@@ -193,9 +193,10 @@ export class VerifyDesignQuintUseCase {
     }
 
     // --- Phase 3（動的）：alpha(P) が機械の不変量面に合流する -----------------
-    const context = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
+    const materials = this.#refinementMaterialsRepository.findById(RefinementMaterialsId.ofModel(input.modelId));
     let inputs: readonly DesignInputAnchor[] | undefined;
-    if (context.isActive()) {
+    if (materials.ok && materials.value.isActive()) {
+      const context = materials.value;
       const req = context.requirements();
       const acq = context.mapAcquisition();
       const reqTargets = req.allTargetIds();
@@ -263,31 +264,9 @@ export class VerifyDesignQuintUseCase {
               }
               continue;
             }
-            const reqIdSet = extras.reqIds();
-            let hitExtra = false;
-            let designConflict = false;
-            // conflict 判定の再解釈（要件 id に届くかの判定と昇格文言）は
-            // finding 自身へ命じる（波7）。
-            for (const f of remapped.findings) {
-              if (!f.isConflict()) continue;
-              const violation = f.asRefinementViolation(reqIdSet, u.name());
-              if (violation !== null) {
-                hitExtra = true;
-                findings.push(violation);
-              } else {
-                designConflict = true;
-              }
-            }
-            if (!hitExtra && designConflict) {
-              for (const e of extras) {
-                skipped.push(DesignSkipped.of({
-                  target: e.reqTarget(),
-                  reason: SkipReason.capability(),
-                  unit: u.name(),
-                  detail: "the machine reachably violates its own design invariants first (see the design conflict findings) — refinement reachability is masked until those are resolved",
-                }));
-              }
-            }
+            const interpreted = extras.interpret(remapped.findings, remapped.skipped, u.name());
+            findings.push(...interpreted.findings);
+            skipped.push(...interpreted.skipped);
           }
         },
       });
@@ -303,11 +282,13 @@ export class VerifyDesignQuintUseCase {
       skipped: DesignSkips.of(skipped),
       ...(inputs !== undefined ? { inputs: DesignInputAnchors.of(inputs) } : {}),
       checked: CheckedUnits.reconstitute(checkedUnits),
+      ...(!materials.ok ? { unavailableReason: `refinement input could not be acquired: ${materials.error.path} (${materials.error.kind})` } : {}),
     });
     // 適合・両文書の公開・cleanup は Finalizer が一か所で持つ。兄弟が読めない・
     // クロスチェックが書けないときは verified を返さず失敗を運ぶ（BR1.2）。
     const finalized = this.#finalizer.finalize(report, model);
     if (!finalized.ok) return { kind: "save-failed", error: finalized.error };
+    if (!materials.ok) return { kind: "acquisition-failed", error: materials.error };
     return finalized.value;
   }
 }

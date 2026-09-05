@@ -128,7 +128,7 @@ These three things — **frozen output contracts**, **untrustworthy external pro
 
 ### D2 — Fields are `#private` only
 
-**Rule**: Instance fields on domain classes are declared with JavaScript's `#` private fields. TypeScript's `private` / `protected` / `public` modifiers are not used (except `private constructor`). `readonly` is applied as a rule.
+**Rule**: Instance fields on domain classes are declared with JavaScript's `#` private fields. TypeScript's `private` / `protected` / `public` modifiers are not used (except `private constructor`). `readonly` is applied as a rule. Mutable referents need separate protection: `ExpressionTree` copies and deeply freezes expression trees, and `Expression` is recursively readonly.
 
 **Why**: TypeScript's `private` is type-checking only and passes straight through at runtime. `#` is enforced by the language. Truly guaranteeing "invisible" blocks the path of pulling the contents out and judging them from outside.
 
@@ -240,7 +240,7 @@ A branch of a closed set additionally has its own named factory per branch (e.g.
 
 **Why**: "Straighten it up right before saving" lets the not-yet-straightened state leak outside. Protecting it inside the command means the aggregate is correct whenever it is looked at.
 
-**In this repository**: `DesignVerifyDirectory` in `src/design/domain/design-verify-directory.ts` — its identity is the verify directory's path, its boundary holds a report per backend, candidates, and a cross-check, and its invariants are "at most one report per backend" and "the cross-check is either absent or derived from the current reports." Its commands are `finalizing` / `crossChecked` / `withoutCrossCheck` / `conformedTo`, and `finalizing` drops the cross-check at the same time it replaces the candidates. The mutable part is `DesignReport | null` (no `Option` type is used). `src/requirements/domain/verification-directory.ts` has the same shape.
+**In this repository**: `DesignVerifyDirectory` in `src/design/domain/design-verify-directory.ts` — its identity is the verify directory's path, its boundary holds a report per backend, candidates, and a cross-check, and its invariants are "at most one report per backend" and "the cross-check is either absent or derived from the current reports." `finalizedWith(candidate, model, schema)` owns candidate conformance and cross-check derivation as one operation. Individual operations also preserve the invariant: `finalizing`, and `conformedTo` when it changes the candidate, invalidate the previous cross-check. The mutable part is `DesignReport | null` (no `Option` type is used). `src/requirements/domain/verification-directory.ts` has the same shape.
 
 **Check**: None (review).
 
@@ -276,9 +276,9 @@ A branch of a closed set additionally has its own named factory per branch (e.g.
 
 **Why**: A Repository is a port for moving aggregates in and out, not a place to hold business vocabulary. Growth of vocabulary here is usually a signal that **the aggregate itself is designed wrong**. If it feels like "saving needs two forms," that difference is state the aggregate itself should hold.
 
-**In this repository (measured)**: There are 11 Repository interfaces, and **without exception** each has only the two methods `findById` (or `findByDirectory`) and `store`. The argument to `store` is always the aggregate itself.
+**In this repository (measured)**: There are 11 Repository interfaces. `RefinementMaterialsRepository` is read-only and has only `findById`; the other 10 have lookup and `store`. The argument to `store` is always the aggregate itself.
 
-**Deviation in this repository**: `RefinementMaterialsRepository.findById` alone returns the raw aggregate without wrapping it in `Result` (§8).
+**Failure contract**: Every repository lookup returns `Result<Aggregate, RepositoryError>`. An absent requirements model makes refinement inapplicable; corrupt existing input and I/O failure remain distinct failures.
 
 **Check**: `ports-live-in-port-dir` (naming), `commands-return-void` (`store`'s return value).
 
@@ -387,6 +387,8 @@ A branch of a closed set additionally has its own named factory per branch (e.g.
 **In this repository**: The result of a schema check reaches an aggregate as `ErrorMessages`, and the aggregate itself renders the verdict. A JSON parse failure, or a mismatched fence count, comes back at the Repository boundary as `err({kind: "corrupt", …})`.
 
 **Check**: None (review).
+
+**Addendum (2026-09-05)**: Missing or malformed findings/skipped fields must not become empty successful results. The adapter decoder `decodeFindingsDocument` rejects malformed shapes while preserving unknown vocabulary verbatim. Reachability judgments and per-target refinement result interpretation belong to the domain.
 
 ### A4 — Writes are atomic, and reads and writes round-trip
 
@@ -577,7 +579,6 @@ Places where a rule is not being kept are recorded here as known. This is writte
 | `PluginVersion.parse` in `doctor/domain` | The only one of all 48 `parse`s that does not return `Result` (`PluginVersion \| null`). `doctor/domain` imports zero `kernel-infrastructure` |
 | 5 `*Outcome` types in `refcheck/domain` | Handling of the same "unreachable branch" case is split — 3 types `throw`, 2 types silently fall into another branch |
 | The `reason` on `VerificationSkipped` / `Skipped` | Both carry a raw `string`, even though kernel has a `SkipReason` DP (a closed set of 9 values) (D6 not achieved) |
-| `RefinementMaterialsRepository.findById` | The only one of 11 Repositories that does not return `Result` (P2 not achieved) |
 | `SiblingUnitIndex` | The only index that does not use `KeyedIndex`, and instead holds a raw nested `ReadonlyMap` |
 | `refcheck/domain/functional-design.ts` | An orphan file with only comments (zero exports, imported from nowhere) |
 | The public surface of a closed union | Split between `match<T>` (refcheck) and predicate groups (requirements' `*Verdict`) (D10 not achieved) |

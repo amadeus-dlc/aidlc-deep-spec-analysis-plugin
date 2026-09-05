@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 // 設計シナリオ。accept/reject の意味、binding の正準列挙、BR/FR 帰属を所有する。
 
 import type { Expression, FrRefs, TriggerName } from "@deep-spec/kernel-domain";
@@ -30,7 +31,7 @@ export class DesignScenario {
     this.#frRefs = props.frRefs;
     this.#bindings = { ...props.bindings };
     this.#eventTrigger = props.event?.trigger;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
   static reconstitute(props: {

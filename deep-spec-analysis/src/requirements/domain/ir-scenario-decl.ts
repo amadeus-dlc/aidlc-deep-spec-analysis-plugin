@@ -1,3 +1,4 @@
+import { ExpressionTree } from "@deep-spec/kernel-domain";
 import type { Expression } from "@deep-spec/kernel-domain";
 import { IrBindingPairs } from "./ir-binding-pairs.ts";
 import { type ScenarioId } from "./scenario-id.ts";
@@ -12,7 +13,7 @@ export class IrScenarioDecl {
     this.#id = props.id;
     this.#bindings = props.bindings;
     this.#hasEvent = props.hasEvent;
-    this.#expect = props.expect;
+    this.#expect = props.expect === undefined ? undefined : ExpressionTree.of(props.expect).asExpression();
   }
 
   static reconstitute(props: { id: ScenarioId; bindings: IrBindingPairs; hasEvent: boolean; expect?: Expression }): IrScenarioDecl {
