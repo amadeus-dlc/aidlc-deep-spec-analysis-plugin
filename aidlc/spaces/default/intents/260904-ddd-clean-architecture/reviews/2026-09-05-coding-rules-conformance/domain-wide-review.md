@@ -26,10 +26,12 @@ ErrorMessages、FunctionalRequirementReferences、BusinessRuleReferences、Enume
 
 ## 検証
 
+CI本体はファイルごとの関数カバレッジも検査する。ebd1590のCIでRefinementMapDefectが85.71%となったため、効果式の不適合をcompile-errorのskipへ変換する公開APIのテストを追加した。CIと同じ`bun test --coverage`で終了コード0を確認し、同ファイルは関数・行とも100%となった。しきい値・除外は変更していない。
+
 - 公開APIを使うDeclaration/所有権のテスト、コレクション生成のテスト、30種類の委譲された生成失敗のテストを追加した。
-- 全体: **872成功、1スキップ、0失敗。873テスト、43ファイル、終了コード0**。
+- 全体: **873成功、1スキップ、0失敗。874テスト、43ファイル、終了コード0**。
 - TypeScript型検査と生成14ファイルの同期に成功。
-- lcov合算line coverage: **99.86654804270462%（8980 / 8992）**。しきい値・除外は変更していない。
+- lcov合算line coverage: **99.86654804270462%（8980 / 8992、ebd1590時点）**。しきい値・除外は変更していない。
 - 発生源の認証をVO単体で行ったことにはしない。内容一致と送信元の正当性を区別する。
 - 正常系golden、公開契約スキーマ、aidlc-workflows submoduleを変更していない。
 

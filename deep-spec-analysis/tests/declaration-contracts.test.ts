@@ -4,7 +4,8 @@ import {
   FunctionalRequirementReferences, ScenarioBindings, TriggerName, FindingKind,
 } from "@deep-spec/kernel-domain";
 import { TraceValue, VerificationWitness } from "@deep-spec/requirements-domain";
-import { AttributeMapping, DesignWitness, LoweredScenario, LoweredIdentifier, SiblingVerdictFinding } from "@deep-spec/design-domain";
+import { AttributeMapping, DesignWitness, LoweredScenario, LoweredIdentifier, SiblingVerdictFinding, RefinementMapDefect } from "@deep-spec/design-domain";
+import { TargetIdentifier } from "@deep-spec/kernel-domain";
 import { IllegalArgumentException, type Json, err, ok, flatMapResult } from "@deep-spec/kernel-infrastructure";
 
 function rejects(value: Json): void {
@@ -152,4 +153,13 @@ test("lowered event data and sibling targets do not retain mutable argument cont
   const finding = SiblingVerdictFinding.of({ kind: FindingKind.conflict(), functionalRequirementReferences: FunctionalRequirementReferences.of([]), targets, witness: DesignWitness.core([]), detail: "fixture" });
   targets.push(LoweredIdentifier.of("OB-2"));
   expect(finding.targets().map((target) => target.asString())).toEqual(["OB-1"]);
+});
+
+test("an unsupported effect is reported as a domain compile-error skip", () => {
+  const defect = RefinementMapDefect.effectNotAssignmentConjunction();
+  expect(defect.message()).toBe("requirements effect is not a conjunction of primed assignments");
+  const skip = defect.asCompileErrorSkip(TargetIdentifier.of("OB-1"), "unit-one");
+  expect(skip.target().asString()).toBe("OB-1");
+  expect(skip.reason()).toBe("compile-error");
+  expect(skip.detail()).toBe("alpha substitution failed: requirements effect is not a conjunction of primed assignments");
 });
