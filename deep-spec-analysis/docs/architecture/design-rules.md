@@ -2,6 +2,8 @@
 
 English | [日本語](design-rules.ja.md)
 
+Companion guide: [shared coding rules](../../../aidlc/spaces/default/knowledge/aidlc-shared/coding-rules/README.md). CQS is adopted; CQRS is not (confirmed 2026-09-05).
+
 This document was written by reading every file of `deep-spec-analysis/src/` (6 contexts, 489 files, 26,007 lines) — it records the design rules **actually in force right now**. Rather than starting from "how it should be," it first pinned down "how it is written," and extracted the norms from that.
 
 It is written so the same shape can be used by other AI-DLC plugins. §9 covers how to port it; §8 covers the deviations still remaining in this repository.
