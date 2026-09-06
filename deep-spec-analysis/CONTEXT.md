@@ -50,6 +50,12 @@ _Distinguish from_: query string. The meaning of a query and its notation are se
 **Query verdict entry**:
 A query label paired with its verdict. Selecting verdicts preserves their association with the queries that produced them.
 
+**Trace state**:
+The mapping from attribute paths to observed values at one step. Two states are equivalent when they contain the same paths and equivalent values, regardless of the order in which paths are listed.
+
+**Trace**:
+An ordered sequence of observed states. Reordering its steps changes the trace.
+
 **Trace state entry**:
 An attribute path paired with its observed value in one trace state. The path is part of the entry, so values of different attributes remain distinguishable.
 

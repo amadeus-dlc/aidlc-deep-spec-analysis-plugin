@@ -1,17 +1,22 @@
 // ITF（Informal Trace Format）の decode — 形式知識はここに封じ、ドメインへは
 // 「属性パス → 復号済み値」のトレース状態だけを渡す。#bigint は数値へ、
 // # 始まりのメタキーは落とし、変数名は varToPath で属性パスへ戻す。
-// 旧 decodeItfValue / decodeItfTrace / itfStatus からの逐語移植。
 
 import { err, isObject, type Json, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
-import { AttributePath, TraceState, TraceStateEntry, TraceValue } from "@deep-spec-analysis/requirements-domain";
+import {
+  AttributePath,
+  TraceState,
+  TraceStateEntry,
+  TraceStates,
+  TraceValue,
+} from "@deep-spec-analysis/requirements-domain";
 
 function decodeItfValue(v: Json): Json {
   if (isObject(v) && typeof v["#bigint"] === "string") return Number.parseInt(v["#bigint"], 10);
   return v;
 }
 
-export function decodeItfTrace(itfText: string, varToPath: Map<string, string>): Result<TraceState[], string> {
+export function decodeItfTrace(itfText: string, varToPath: Map<string, string>): Result<TraceStates, string> {
   if (itfText.length > 16_777_216) return err("ITF document exceeds the 16 Mi code-unit budget");
   let doc: Json;
   try {
@@ -20,9 +25,9 @@ export function decodeItfTrace(itfText: string, varToPath: Map<string, string>):
     if (!(error instanceof SyntaxError)) throw error;
     return err(error.message);
   }
-  if (!isObject(doc) || !Array.isArray(doc.states)) return ok([]);
+  const states = isObject(doc) && Array.isArray(doc.states) ? doc.states : [];
   const trace: TraceState[] = [];
-  for (const state of doc.states) {
+  for (const state of states) {
     if (!isObject(state)) continue;
     const entries: TraceStateEntry[] = [];
     for (const key of Object.keys(state).sort()) {
@@ -34,9 +39,12 @@ export function decodeItfTrace(itfText: string, varToPath: Map<string, string>):
       if (!value.ok) return err(JSON.stringify(value.error));
       entries.push(TraceStateEntry.of(attributePath.value, value.value));
     }
-    trace.push(TraceState.of(entries));
+    const parsedState = TraceState.parse(entries);
+    if (!parsedState.ok) return err(JSON.stringify(parsedState.error));
+    trace.push(parsedState.value);
   }
-  return ok(trace);
+  const parsedTrace = TraceStates.parse(trace);
+  return parsedTrace.ok ? ok(parsedTrace.value) : err(JSON.stringify(parsedTrace.error));
 }
 
 export function itfStatus(itfText: string): string {

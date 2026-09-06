@@ -2730,3 +2730,13 @@ The 112 existing collections implement the contract through shared operation bas
 Constructors own cardinality and snapshot validation. The common ceiling is 65,536 elements; narrower domain budgets remain in effect. Snapshot creation checks both array length and actual iteration, and `add` cannot bypass the constructor. Expected input failures use typed `parse` results; `of` panics propagate. Requirement-ID extraction belongs to the adapter and uses the identifier and collection parsers.
 
 Moving rejection to input boundaries exposed an existing success report for unreadable models. The four requirements/design verification entries now return `pass: false` for `model-unreadable`, while preserving the saved unavailable diagnostic. This also prevents oversized models rejected before solver execution from being reported as successful checks.
+
+## Trace-state equality and decoding boundaries (2026-09-07)
+
+A trace state represents a mapping from attribute paths to observed values. Equality compares membership and each value's existing equality; insertion order affects iteration and document output, not state identity. Missing paths remain different from paths explicitly holding null. Trace steps remain ordered. Duplicate paths retain the last value at their first insertion position.
+
+This supersedes the positional comparison added with the common collection operations. Canonicalizing every state by sorting would also make comparison independent of input order, but would change observable output order. The state therefore preserves iteration and existing document order while resolving equality by key. JSON objects retain their standard property-order rules: integer-index keys are emitted in numeric order. Nested trace-value equality keeps its existing contract.
+
+Every accepted attribute key must survive document construction, including names that coincide with properties of JavaScript's object prototype. Document construction must create data properties without interpreting keys as prototype setters.
+
+The ITF decoder returns a validated `TraceStates` in its Result. Both each state's attribute count and the whole trace's step count are validated with their collection parsers. Deadlock, invariant-violation, and temporal-verification paths consume that collection directly and report decoding failures through the existing unavailable diagnostics. They do not reconstruct externally supplied arrays with `of` or catch constructor panics. The existing document-size and collection-size budgets are unchanged.

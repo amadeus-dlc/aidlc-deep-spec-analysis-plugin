@@ -4270,22 +4270,17 @@ class TraceStateEntry {
 
 // src/requirements/domain/trace-state.ts
 class TraceState extends FirstClassCollectionBase {
-  #values;
   #entries;
   constructor(entries) {
     super();
     const snapshot = boundedCollectionSnapshot(entries, 65536, "too-many-trace-state-entries");
-    const byPath = new Map;
-    for (const entry of snapshot)
-      byPath.set(entry.path().asString(), entry);
-    this.#entries = Object.freeze([...byPath.values()]);
-    this.#values = KeyedIndex.of(this.#entries.map((entry) => [entry.path(), entry.value()]));
+    this.#entries = KeyedIndex.of(snapshot.map((entry) => [entry.path(), entry]));
   }
   rebuild(values) {
     return TraceState.of(values);
   }
   *[Symbol.iterator]() {
-    yield* this.#entries;
+    yield* this.#entries.values();
   }
   static empty() {
     return new TraceState([]);
@@ -4300,21 +4295,23 @@ class TraceState extends FirstClassCollectionBase {
     return new TraceState(entries);
   }
   valueAt(path) {
-    return this.#values.get(path) ?? TraceValue.absent();
+    return this.#entries.get(path)?.value() ?? TraceValue.absent();
   }
   toDocument() {
-    const out = {};
-    for (const [path, value] of this.#values)
-      out[path.asString()] = value.toDocument();
-    return out;
+    return Object.fromEntries([...this.#entries].map(([path, entry]) => [path.asString(), entry.value().toDocument()]));
   }
   equals(other) {
-    const entries = this.toArray();
-    const otherEntries = other.toArray();
-    return entries.length === otherEntries.length && entries.every((entry, index) => entry.equals(otherEntries[index]));
+    if (this.#entries.size() !== other.#entries.size())
+      return false;
+    for (const [path, entry] of this.#entries) {
+      const otherEntry = other.#entries.get(path);
+      if (otherEntry === undefined || !entry.value().equals(otherEntry.value()))
+        return false;
+    }
+    return true;
   }
   toArray() {
-    return [...this];
+    return [...this.#entries.values()];
   }
 }
 
@@ -5977,10 +5974,9 @@ function decodeItfTrace(itfText, varToPath) {
       throw error;
     return err(error.message);
   }
-  if (!isObject(doc) || !Array.isArray(doc.states))
-    return ok([]);
+  const states = isObject(doc) && Array.isArray(doc.states) ? doc.states : [];
   const trace = [];
-  for (const state of doc.states) {
+  for (const state of states) {
     if (!isObject(state))
       continue;
     const entries = [];
@@ -5996,9 +5992,13 @@ function decodeItfTrace(itfText, varToPath) {
         return err(JSON.stringify(value.error));
       entries.push(TraceStateEntry.of(attributePath.value, value.value));
     }
-    trace.push(TraceState.of(entries));
+    const parsedState = TraceState.parse(entries);
+    if (!parsedState.ok)
+      return err(JSON.stringify(parsedState.error));
+    trace.push(parsedState.value);
   }
-  return ok(trace);
+  const parsedTrace = TraceStates.parse(trace);
+  return parsedTrace.ok ? ok(parsedTrace.value) : err(JSON.stringify(parsedTrace.error));
 }
 function itfStatus(itfText) {
   try {
@@ -6474,12 +6474,12 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
       if (!run.itf)
         return QuintMachineRunVerdict.deadlock(null);
       const trace = decodeItfTrace(run.itf, machine.varToPath);
-      return trace.ok ? QuintMachineRunVerdict.deadlock(TraceStates.of(trace.value)) : QuintMachineRunVerdict.runFailed(trace.error);
+      return trace.ok ? QuintMachineRunVerdict.deadlock(trace.value) : QuintMachineRunVerdict.runFailed(trace.error);
     }
     const violated = run.itf !== null && (itfStatus(run.itf) === "violation" || bounded && !!run.itf);
     if (violated && run.itf) {
       const trace = decodeItfTrace(run.itf, machine.varToPath);
-      return trace.ok ? QuintMachineRunVerdict.violation(TraceStates.of(trace.value)) : QuintMachineRunVerdict.runFailed(trace.error);
+      return trace.ok ? QuintMachineRunVerdict.violation(trace.value) : QuintMachineRunVerdict.runFailed(trace.error);
     }
     if (!violated && run.itf === null && this.#didNotAnswer(run)) {
       return QuintMachineRunVerdict.runFailed(this.#outputTail(run));
@@ -6504,7 +6504,7 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
         out.set(obId, QuintTemporalVerdict.timeout());
       } else if (run.itf) {
         const trace = decodeItfTrace(run.itf, machine.varToPath);
-        out.set(obId, trace.ok ? QuintTemporalVerdict.violation(TraceStates.of(trace.value)) : QuintTemporalVerdict.runFailed(trace.error));
+        out.set(obId, trace.ok ? QuintTemporalVerdict.violation(trace.value) : QuintTemporalVerdict.runFailed(trace.error));
       } else if (this.#didNotAnswer(run)) {
         out.set(obId, QuintTemporalVerdict.runFailed(this.#outputTail(run)));
       } else {

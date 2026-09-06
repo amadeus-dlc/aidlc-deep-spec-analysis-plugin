@@ -3880,22 +3880,17 @@ class TraceStateEntry {
 
 // src/requirements/domain/trace-state.ts
 class TraceState extends FirstClassCollectionBase {
-  #values;
   #entries;
   constructor(entries) {
     super();
     const snapshot = boundedCollectionSnapshot(entries, 65536, "too-many-trace-state-entries");
-    const byPath = new Map;
-    for (const entry of snapshot)
-      byPath.set(entry.path().asString(), entry);
-    this.#entries = Object.freeze([...byPath.values()]);
-    this.#values = KeyedIndex.of(this.#entries.map((entry) => [entry.path(), entry.value()]));
+    this.#entries = KeyedIndex.of(snapshot.map((entry) => [entry.path(), entry]));
   }
   rebuild(values) {
     return TraceState.of(values);
   }
   *[Symbol.iterator]() {
-    yield* this.#entries;
+    yield* this.#entries.values();
   }
   static empty() {
     return new TraceState([]);
@@ -3910,21 +3905,23 @@ class TraceState extends FirstClassCollectionBase {
     return new TraceState(entries);
   }
   valueAt(path) {
-    return this.#values.get(path) ?? TraceValue.absent();
+    return this.#entries.get(path)?.value() ?? TraceValue.absent();
   }
   toDocument() {
-    const out = {};
-    for (const [path, value] of this.#values)
-      out[path.asString()] = value.toDocument();
-    return out;
+    return Object.fromEntries([...this.#entries].map(([path, entry]) => [path.asString(), entry.value().toDocument()]));
   }
   equals(other) {
-    const entries = this.toArray();
-    const otherEntries = other.toArray();
-    return entries.length === otherEntries.length && entries.every((entry, index) => entry.equals(otherEntries[index]));
+    if (this.#entries.size() !== other.#entries.size())
+      return false;
+    for (const [path, entry] of this.#entries) {
+      const otherEntry = other.#entries.get(path);
+      if (otherEntry === undefined || !entry.value().equals(otherEntry.value()))
+        return false;
+    }
+    return true;
   }
   toArray() {
-    return [...this];
+    return [...this.#entries.values()];
   }
 }
 
