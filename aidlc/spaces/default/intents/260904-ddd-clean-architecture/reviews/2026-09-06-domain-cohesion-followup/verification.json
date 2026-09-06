@@ -1,0 +1,41 @@
+{
+  "source": "67c8736afee7706ca7b7fc6a5779a13d0efd65c0",
+  "command": "bun test tests/refcheck-domain.test.ts tests/refcheck-pipeline.test.ts tests/ir-validation.test.ts tests/design-pipeline.test.ts tests/verify-smt-pipeline.test.ts tests/refinement-pipeline.test.ts tests/rule-subsumption.test.ts",
+  "exitCode": 0,
+  "pass": 193,
+  "fail": 0,
+  "expectCalls": 1018,
+  "files": 7,
+  "elapsedSeconds": 3.35,
+  "scope": "既存の関連テスト。再現ケースはprobe.tsに分離。全スイートとCIの再実行は行っていない。",
+  "probe": {
+    "command": "bun aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-domain-cohesion-followup/probe.ts",
+    "exitCode": 0,
+    "observations": [
+      "machineConstruction",
+      "partialMachineCoverage",
+      "siblingIndexOwnership",
+      "refinementInputOwnership"
+    ],
+    "typeCheck": {
+      "exitCode": 0,
+      "configuration": "probe.tsconfig.json（既存tsconfigを継承。型情報の二重読込を避け、realpathのworktreeから実行。）"
+    }
+  },
+  "historyComparison": {
+    "from": "87f1517",
+    "to": "67c8736afee7706ca7b7fc6a5779a13d0efd65c0",
+    "exitCode": 0,
+    "unchangedPaths": [
+      "src/refcheck/domain/machine-specification.ts",
+      "src/refcheck/domain/state-machine-sketch.ts",
+      "src/refcheck/domain/state-machine-sketches.ts",
+      "src/refcheck/domain/sibling-unit-index.ts",
+      "src/design/domain/refinement-map-acquisition.ts",
+      "src/refcheck/adapter/functional-design-parser.ts",
+      "src/design/domain/design-reports.ts",
+      "src/requirements/domain/verification-reports.ts",
+      "src/refcheck/domain/rule-declarations.ts"
+    ]
+  }
+}

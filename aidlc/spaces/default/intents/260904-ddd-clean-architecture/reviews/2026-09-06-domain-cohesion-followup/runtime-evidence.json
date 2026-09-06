@@ -1,0 +1,70 @@
+{
+  "source": "67c8736afee7706ca7b7fc6a5779a13d0efd65c0",
+  "machineConstruction": [
+    {
+      "nameLength": 128,
+      "label": "E × 128",
+      "parseOk": true,
+      "failure": null
+    },
+    {
+      "nameLength": 129,
+      "label": "E × 129",
+      "parseOk": true,
+      "failure": {
+        "name": "IllegalArgumentException",
+        "message": "Illegal argument: entity-name-too-long"
+      }
+    },
+    {
+      "nameLength": 6,
+      "label": ".state",
+      "parseOk": true,
+      "failure": {
+        "name": "IllegalArgumentException",
+        "message": "Illegal argument: empty-token"
+      }
+    }
+  ],
+  "partialMachineCoverage": {
+    "entities": [
+      "Order",
+      "Invoice"
+    ],
+    "noDiagram": {
+      "checked": [],
+      "skipped": [
+        "no `### State Machine: Order` heading with a stateDiagram fence found for lifecycle entity \"Order\"",
+        "no `### State Machine: Invoice` heading with a stateDiagram fence found for lifecycle entity \"Invoice\"",
+        "no `### State Machine: Order` heading with a stateDiagram fence found for lifecycle entity \"Order\"",
+        "no `### State Machine: Invoice` heading with a stateDiagram fence found for lifecycle entity \"Invoice\""
+      ],
+      "findings": 0
+    },
+    "orderOnly": {
+      "checked": [
+        "check:FD-S1",
+        "check:FD-S2"
+      ],
+      "skipped": [],
+      "findings": 0
+    }
+  },
+  "siblingIndexOwnership": {
+    "original": [],
+    "afterInputMapDeletion": [
+      "XS-2: domain entity \"Order\" is defined in no unit's entities.md — it was dropped on the way to functional design"
+    ],
+    "afterReturnedRowMutation": [
+      "XS-3: domain-design declares attribute(s) qty on \"Order\" that this unit's entities.md does not carry"
+    ]
+  },
+  "refinementInputOwnership": {
+    "anchorsBefore": [
+      "original.md"
+    ],
+    "anchorsAfter": [
+      "replacement.md"
+    ]
+  }
+}
