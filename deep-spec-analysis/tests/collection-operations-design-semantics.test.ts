@@ -117,8 +117,14 @@ import {
   AttributeKind,
   AttributePath,
   BackendName,
+  BindingValue,
   ContentHash,
+  Declaration,
   DeclaredBindings,
+  DeclaredBindingValue,
+  DeclaredBound,
+  EnumerationMember,
+  EnumerationMembers,
   ExpressionTree,
   FindingKind,
   FindingTargets,
@@ -126,6 +132,7 @@ import {
   ObligationNature,
   QueryLabel,
   RequirementIdentifier,
+  ScenarioBinding,
   ScenarioBindings,
   ScenarioExpectation,
   SkipReason,
@@ -814,10 +821,10 @@ test("designの全FCCは公開factoryのparseとtail/filterを保ち、予算超
   const unit = DesignUnit.of({
     unit: unitName,
     catalog: DesignAttributeCatalog.of(entities),
-    obligations: DesignObligations.of([]),
-    machines: DesignMachines.of([]),
-    scenarios: DesignScenarios.of([]),
-    background: DesignBackgroundAssumptions.of([]),
+    obligations: DesignObligations.of([obligation]),
+    machines: DesignMachines.of([machine]),
+    scenarios: DesignScenarios.of([scenario]),
+    background: DesignBackgroundAssumptions.of([background]),
   });
   const unitDeclaration = DesignUnitDeclaration.of({
     unit: DesignUnitIdentifier.of("u1"),
@@ -981,10 +988,10 @@ test("designの全FCCは公開factoryのparseとtail/filterを保ち、予算超
   const equivalentUnit = DesignUnit.of({
     unit: UnitName.of("u1"),
     catalog: DesignAttributeCatalog.of(entities),
-    obligations: DesignObligations.of([]),
-    machines: DesignMachines.of([]),
-    scenarios: DesignScenarios.of([]),
-    background: DesignBackgroundAssumptions.of([]),
+    obligations: DesignObligations.of([obligation]),
+    machines: DesignMachines.of([machine]),
+    scenarios: DesignScenarios.of([scenario]),
+    background: DesignBackgroundAssumptions.of([background]),
   });
   expect(unit.equals(equivalentUnit)).toBe(true);
   expect(
@@ -992,10 +999,10 @@ test("designの全FCCは公開factoryのparseとtail/filterを保ち、予算超
       DesignUnit.of({
         unit: UnitName.of("u2"),
         catalog: DesignAttributeCatalog.of(entities),
-        obligations: DesignObligations.of([]),
-        machines: DesignMachines.of([]),
-        scenarios: DesignScenarios.of([]),
-        background: DesignBackgroundAssumptions.of([]),
+        obligations: DesignObligations.of([obligation]),
+        machines: DesignMachines.of([machine]),
+        scenarios: DesignScenarios.of([scenario]),
+        background: DesignBackgroundAssumptions.of([background]),
       }),
     ),
   ).toBe(false);
@@ -1448,6 +1455,200 @@ test("designの全FCCは公開factoryのparseとtail/filterを保ち、予算超
   expect(reachabilityPlan.tail().isEmpty()).toBe(true);
   expect(reachabilityPlan.filter(() => true).isEmpty()).toBe(false);
   expect(ReachabilityPlan.parse([reachability]).ok).toBe(true);
+});
+
+test("designのequalsは非空optional面を同じ公開値で比較する", () => {
+  const path = AttributePath.of("Ticket.status");
+  const enumValues = EnumerationMembers.of([EnumerationMember.of("open"), EnumerationMember.of("closed")]);
+  const enumAttribute = DesignAttributeDeclaration.of({
+    name: DesignAttributeName.of("status"),
+    kind: AttributeKind.of("enum"),
+    description: "ticket state",
+    values: enumValues,
+    min: DeclaredBound.of(0),
+    max: DeclaredBound.of(1),
+  });
+  const equivalentEnumAttribute = DesignAttributeDeclaration.of({
+    name: DesignAttributeName.of("status"),
+    kind: AttributeKind.of("enum"),
+    description: "ticket state",
+    values: EnumerationMembers.of([EnumerationMember.of("open"), EnumerationMember.of("closed")]),
+    min: DeclaredBound.of(0),
+    max: DeclaredBound.of(1),
+  });
+  expect(enumAttribute.equals(equivalentEnumAttribute)).toBe(true);
+  expect(
+    enumAttribute.equals(
+      DesignAttributeDeclaration.of({
+        name: DesignAttributeName.of("status"),
+        kind: AttributeKind.of("enum"),
+        description: "ticket state",
+        values: EnumerationMembers.of([EnumerationMember.of("closed"), EnumerationMember.of("open")]),
+        min: DeclaredBound.of(0),
+        max: DeclaredBound.of(1),
+      }),
+    ),
+  ).toBe(false);
+  expect(enumAttribute.isEnum()).toBe(true);
+  expect(enumAttribute.admitsEnumLiteral("open")).toBe(true);
+  expect(enumAttribute.admitsEnumLiteral("missing")).toBe(false);
+  expect(enumAttribute.fitsBinding(DeclaredBindingValue.of(Declaration.of("open")))).toBe(true);
+  expect(enumAttribute.enumStates()?.head().asString()).toBe("open");
+  expect(enumAttribute.kindLabel()).toBe("enum");
+  expect(enumAttribute.description()).toBe("ticket state");
+  expect(enumAttribute.minBound()?.asNumber()).toBe(0);
+  expect(enumAttribute.maxBound()?.asNumber()).toBe(1);
+  const boundedInt = DesignAttributeDeclaration.of({
+    name: DesignAttributeName.of("count"),
+    kind: AttributeKind.of("int"),
+    min: DeclaredBound.of(0),
+    max: DeclaredBound.of(10),
+  });
+  expect(boundedInt.lacksIntBounds()).toBe(false);
+  expect(boundedInt.boundsInverted()).toBe(false);
+  expect(boundedInt.boundsOutsideSafeRange()).toBe(false);
+
+  const nonEmptyBindings = ScenarioBindings.of([ScenarioBinding.of(path, BindingValue.of("open"))]);
+  const loweredA = LoweredScenario.of({
+    id: LoweredIdentifier.of("SC-1"),
+    origin: DesignScenarioIdentifier.of("DSC-1"),
+    expectation: ScenarioExpectation.of("accept"),
+    functionalRequirementReferences: frRefs,
+    bindings: nonEmptyBindings,
+    event: { trigger },
+    expect: { op: "bool", value: true },
+  });
+  const loweredB = LoweredScenario.of({
+    id: LoweredIdentifier.of("SC-1"),
+    origin: DesignScenarioIdentifier.of("DSC-1"),
+    expectation: ScenarioExpectation.of("accept"),
+    functionalRequirementReferences: FunctionalRequirementReferences.of([RequirementIdentifier.of("FR-1")]),
+    bindings: ScenarioBindings.of([ScenarioBinding.of(AttributePath.of("Ticket.status"), BindingValue.of("open"))]),
+    event: { trigger: TriggerName.of("submit") },
+    expect: { op: "bool", value: true },
+  });
+  expect(loweredA.equals(loweredB)).toBe(true);
+  expect(loweredA.event()?.trigger).toBe("submit");
+  expect(loweredA.expectedExpression()?.op).toBe("bool");
+  expect(loweredA.isAccept()).toBe(true);
+  expect(loweredA.origin().equals(DesignScenarioIdentifier.of("DSC-1"))).toBe(true);
+  expect(loweredA.id().equals(LoweredIdentifier.of("SC-1"))).toBe(true);
+  expect(loweredA.functionalRequirementReferences().head().asString()).toBe("FR-1");
+  expect(loweredA.bindings().head().path().asString()).toBe("Ticket.status");
+  expect(
+    loweredA.equals(
+      LoweredScenario.of({
+        id: LoweredIdentifier.of("SC-1"),
+        origin: DesignScenarioIdentifier.of("DSC-1"),
+        expectation: ScenarioExpectation.of("accept"),
+        functionalRequirementReferences: frRefs,
+        bindings: nonEmptyBindings,
+        event: { trigger: TriggerName.of("other") },
+        expect: { op: "bool", value: true },
+      }),
+    ),
+  ).toBe(false);
+
+  const refinementEnumA = RefinementAttribute.of({ path, kind: "enum", values: enumValues });
+  const refinementEnumB = RefinementAttribute.of({
+    path: AttributePath.of("Ticket.status"),
+    kind: "enum",
+    values: EnumerationMembers.of([EnumerationMember.of("open"), EnumerationMember.of("closed")]),
+  });
+  expect(refinementEnumA.equals(refinementEnumB)).toBe(true);
+  expect(refinementEnumA.isAt(path)).toBe(true);
+  expect(refinementEnumA.isAt("Ticket.status")).toBe(true);
+  expect(refinementEnumA.kind()).toBe("enum");
+  expect(refinementEnumA.isEnum()).toBe(true);
+  expect(refinementEnumA.declaredValues()?.head().asString()).toBe("open");
+  expect(
+    refinementEnumA.equals(
+      RefinementAttribute.of({
+        path,
+        kind: "enum",
+        values: EnumerationMembers.of([EnumerationMember.of("closed"), EnumerationMember.of("open")]),
+      }),
+    ),
+  ).toBe(false);
+
+  const refinementScenarioA = RefinementScenario.of({
+    id: ScenarioIdentifier.of("SC-1"),
+    expectation: ScenarioExpectation.of("accept"),
+    functionalRequirementReferences: frRefs,
+    bindings: nonEmptyBindings,
+    event: { trigger },
+  });
+  const refinementScenarioB = RefinementScenario.of({
+    id: ScenarioIdentifier.of("SC-1"),
+    expectation: ScenarioExpectation.of("accept"),
+    functionalRequirementReferences: FunctionalRequirementReferences.of([RequirementIdentifier.of("FR-1")]),
+    bindings: ScenarioBindings.of([ScenarioBinding.of(path, BindingValue.of("open"))]),
+    event: { trigger: TriggerName.of("submit") },
+  });
+  expect(refinementScenarioA.equals(refinementScenarioB)).toBe(true);
+  expect(refinementScenarioA.id().equals(ScenarioIdentifier.of("SC-1"))).toBe(true);
+  expect(refinementScenarioA.kind()).toBe("accept");
+  expect(refinementScenarioA.functionalRequirementReferences().head().asString()).toBe("FR-1");
+  expect(refinementScenarioA.isAccept()).toBe(true);
+  expect(refinementScenarioA.isViolatedBySatisfiability(false)).toBe(true);
+  expect(refinementScenarioA.isViolatedBySatisfiability(true)).toBe(false);
+  expect(refinementScenarioA.hasEventRule()).toBe(true);
+  expect(refinementScenarioA.bindings().head().path().equals(path)).toBe(true);
+  expect(
+    refinementScenarioA.equals(
+      RefinementScenario.of({
+        id: ScenarioIdentifier.of("SC-1"),
+        expectation: ScenarioExpectation.of("accept"),
+        functionalRequirementReferences: frRefs,
+        bindings: nonEmptyBindings,
+        event: { trigger: TriggerName.of("other") },
+      }),
+    ),
+  ).toBe(false);
+
+  const eventMapping = EventMapping.of({
+    reqTrigger: trigger,
+    transitions: TransitionReferences.of([TransitionReference.of("TR-1")]),
+  });
+  const unmapped = UnmappedTarget.of({ target: UnmappedTargetReference.of("OB-1"), reason: "deferred" });
+  const mapA = RefinementUnitMap.of({
+    unit: DesignUnitIdentifier.of("u1"),
+    attrMap: AttributeMappings.of([
+      AttributeMapping.of(path, { kind: "expression", expr: { op: "bool", value: true } }),
+    ]),
+    eventMap: EventMappings.of([eventMapping]),
+    unmapped: UnmappedDeclarations.of([unmapped]),
+  });
+  const mapB = RefinementUnitMap.of({
+    unit: DesignUnitIdentifier.of("u1"),
+    attrMap: AttributeMappings.of([
+      AttributeMapping.of(AttributePath.of("Ticket.status"), { kind: "expression", expr: { op: "bool", value: true } }),
+    ]),
+    eventMap: EventMappings.of([
+      EventMapping.of({
+        reqTrigger: TriggerName.of("submit"),
+        transitions: TransitionReferences.of([TransitionReference.of("TR-1")]),
+      }),
+    ]),
+    unmapped: UnmappedDeclarations.of([
+      UnmappedTarget.of({ target: UnmappedTargetReference.of("OB-1"), reason: "deferred" }),
+    ]),
+  });
+  expect(mapA.equals(mapB)).toBe(true);
+  expect(mapA.isForUnit(DesignUnitIdentifier.of("u1"))).toBe(true);
+  expect(mapA.attrMap().head().req().equals(path)).toBe(true);
+  expect(mapA.eventMappingOf(TriggerName.of("submit"))?.equals(eventMapping)).toBe(true);
+  expect(mapA.unmapped().head().equals(unmapped)).toBe(true);
+  expect(
+    mapA.equals(
+      RefinementUnitMap.of({
+        unit: DesignUnitIdentifier.of("u1"),
+        attrMap: AttributeMappings.of([]),
+        eventMap: EventMappings.of([eventMapping]),
+        unmapped: UnmappedDeclarations.of([unmapped]),
+      }),
+    ),
+  ).toBe(false);
 });
 
 function exerciseArrayCollection<E>(

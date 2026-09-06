@@ -128,8 +128,10 @@ export function failedTestCount(output: string): number {
   return match ? Number(match[1]) : 0;
 }
 
-/** 指定リポジトリルートの deep-spec-analysis/ で bun test を走らせ、lcov から
- *  line coverage % を返す。テストの失敗と lcov の欠落は例外にする。 */
+/** 指定リポジトリルートでLCOVを出力し、子プロセスの終了・テスト失敗・
+ * 出力の欠落を検査してから行カバレッジを返す。Bunの通常レポーターによる
+ * ファイル単位の関数・行カバレッジ判定とは別に、LCOVのLF/LHを計測対象全体で
+ * 合算し、行カバレッジの絶対・相対ゲートに使う。 */
 export function measureWithBun(repoRoot: string, run: CommandRunner = defaultRunner): number {
   const packageDir = join(repoRoot, PACKAGE_DIR);
   const coverageDir = mkdtempSync(join(tmpdir(), "deep-spec-coverage-"));
@@ -142,6 +144,10 @@ export function measureWithBun(repoRoot: string, run: CommandRunner = defaultRun
     if (result.error) throw new Error(`bun test を起動できません (${packageDir}): ${result.error.message}`);
     const failed = failedTestCount(`${result.stdout}\n${result.stderr}`);
     if (failed > 0) throw new Error(`テストが ${failed} 件失敗しました (${packageDir})。カバレッジは判定しません`);
+    if (result.status !== 0)
+      throw new Error(
+        `bun test が終了コード ${String(result.status)} で終了しました (${packageDir})。カバレッジは判定しません`,
+      );
     const lcovPath = join(coverageDir, "lcov.info");
     if (!existsSync(lcovPath))
       throw new Error(`lcov.info が書かれていません (${lcovPath}): ${describeFailure(result)}`);

@@ -350,6 +350,51 @@ test("requirements要素のequalsは独立instanceの意味値を比較する", 
   expect(eventPairProbe().equals(eventPairProbe("cancel"))).toBe(false);
   expect(queryEntry().equals(queryEntry())).toBe(true);
   expect(queryEntry().equals(queryEntry("unsat"))).toBe(false);
+  const richVerdict = SatisfiabilityModuloTheoriesQueryVerdict.of({
+    status: "sat",
+    decodedModel: { "Account.active": true, "Account.count": 1 },
+    core: ["q:z", "q:a"],
+  });
+  const sameRichVerdict = SatisfiabilityModuloTheoriesQueryVerdict.of({
+    status: "sat",
+    decodedModel: { "Account.active": true, "Account.count": 1 },
+    core: ["q:z", "q:a"],
+  });
+  expect(richVerdict.equals(sameRichVerdict)).toBe(true);
+  expect(
+    richVerdict.equals(
+      SatisfiabilityModuloTheoriesQueryVerdict.of({
+        status: "sat",
+        decodedModel: { "Account.active": false, "Account.count": 1 },
+        core: ["q:z", "q:a"],
+      }),
+    ),
+  ).toBe(false);
+  expect(richVerdict.coreLabels().map((label) => label.asString())).toEqual(["q:z", "q:a"]);
+  expect(richVerdict.sortedCore()).toEqual(["q:a", "q:z"]);
+  expect(richVerdict.witnessModel()).toEqual({ "Account.active": true, "Account.count": 1 });
+  expect(richVerdict.isSat()).toBe(true);
+  expect(richVerdict.isUnsat()).toBe(false);
+  expect(richVerdict.skipsFor(TargetIdentifiers.of([TargetIdentifier.of("OB-1")]), "query").isEmpty()).toBe(true);
+  const unsat = SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "unsat" });
+  expect(unsat.isUnsat()).toBe(true);
+  expect(unsat.isUndecided()).toBe(false);
+  const unknown = SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "unknown" });
+  expect(unknown.isUndecided()).toBe(true);
+  expect(
+    unknown
+      .skipsFor(TargetIdentifiers.of([TargetIdentifier.of("OB-1")]), "query")
+      .head()
+      .reason(),
+  ).toBe("timeout");
+  const missing = SatisfiabilityModuloTheoriesQueryVerdict.missing();
+  expect(missing.isMissing()).toBe(true);
+  expect(
+    missing
+      .skipsFor(TargetIdentifiers.of([TargetIdentifier.of("OB-1")]), "query")
+      .head()
+      .reason(),
+  ).toBe("unrecognized-format");
   expect(TraceState.of([traceEntry()]).equals(TraceState.of([traceEntry()]))).toBe(true);
   expect(TraceState.of([traceEntry()]).equals(TraceState.of([traceEntry(false)]))).toBe(false);
   expect(finding().equals(finding())).toBe(true);
@@ -365,6 +410,13 @@ test("requirements要素のequalsは独立instanceの意味値を比較する", 
 });
 
 test("bounded constructorはofで例外、parseでResultを返し、上限内は成功する", () => {
+  expect(
+    SatisfiabilityModuloTheoriesQueryVerdict.parse({
+      status: "sat",
+      decodedModel: { "Account.active": true },
+      core: ["q:one"],
+    }).ok,
+  ).toBe(true);
   expect(CrossCheckedEntries.parse([crossChecked()]).ok).toBe(true);
   expect(ObligationIdentifiers.parse([ObligationIdentifier.of("OB-1")]).ok).toBe(true);
   expect(QuintMachineComponents.parse([machineComponent()]).ok).toBe(true);
