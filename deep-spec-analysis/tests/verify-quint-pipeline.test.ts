@@ -264,13 +264,9 @@ describe("the machine phase over the real quint CLI, run out of budget", () => {
 });
 
 // 答えられなかった実行は clean ではない（#132 の CI が同一コミットで赤→緑になった
-// 件の根本原因）。#runQuint は timedOut と出力と ITF しか持ち帰らず、spawn 失敗
-// （CI 負荷下の EAGAIN）も非ゼロ終了も捨てていた。その上で各フェーズは「ITF が
-// 無く、出力に小文字の "error" も無い」を clean と読んだ——OOM の "FATAL ERROR"、
-// Node の "TypeError"、出力の無い fork 失敗はどれも小文字の "error" を含まない
-// ので「違反なし」に化け、simulation の findings が 0 件になって golden 比較が
-// 気まぐれに落ちた。健全な quint は clean でも violation でも ITF を書き、clean
-// は 0 で終わる（実測、quint 0.32）。だから ITF 無しはプロセスの事実で見分ける。
+// 件の根本原因）。#runQuint は timedOut とプロセスの失敗事実を持ち帰り、各フェーズは
+// 非ゼロ終了・spawn失敗・シグナル死だけを run-failed と読む。bounded の正常終了は
+// 違反が無ければITFを書かないことがあるため、ITFの有無やログのerror語では分類しない。
 describe("a quint that dies without saying 'error' is run-failed, never clean", () => {
   const tail = "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory";
   const fakeQuint = (dir: string): string => {
@@ -351,8 +347,8 @@ describe("a quint that dies without saying 'error' is run-failed, never clean", 
   }, 30_000);
 
   // temporal は bounded（実 Apalache）でしか実 CLI を踏めないので、値オブジェクトの
-  // 側で「失敗は unavailable」を固定する。adapter 側の分岐は machine / scenario と
-  // 同じ #didNotAnswer なので、その述語の検出力は上のテストが担う。
+  // 側で「失敗は unavailable」を固定する。adapter 側も machine / scenario と同じ
+  // プロセス失敗事実で分類する。
   test("bounded: a temporal run that failed is unavailable with the verify wording, never clean", () => {
     const failed = QuintTemporalVerdict.runFailed(tail);
     expect(failed.isViolation()).toBe(false);

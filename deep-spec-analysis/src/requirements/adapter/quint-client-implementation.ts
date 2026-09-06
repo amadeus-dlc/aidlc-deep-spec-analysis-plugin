@@ -39,9 +39,8 @@ interface QuintRun {
   timedOut: boolean;
   // 予算内で「答えられなかった」証拠: spawn そのものの失敗（ETIMEDOUT 以外の
   // res.error——CI 負荷下の EAGAIN 等）、非ゼロ終了、予算外のシグナル死。違反時も
-  // quint は非ゼロで終わるので、各フェーズは ITF の有無を先に見て、ITF が無い
-  // ときにだけこれを使う。健全な run は clean でも violation でも ITF を書き、
-  // clean は 0 で終わる（実測、quint 0.32）。
+  // quint は非ゼロで終わるので、各フェーズはITFの有無を先に見て反例を復号し、
+  // ITFが無いときだけこの事実を使う。boundedの正常cleanはITFを書かないことがある。
   failed: boolean;
   stdout: string;
   stderr: string;
@@ -128,9 +127,8 @@ export class QuintClientImplementation implements QuintClient {
   // すべてその孤児に接続して `<消えた cwd>/_apalache-out/server/…/log2.smt
   // (No such file or directory)` で落ちる（実測、issue #128）。SIGINT なら
   // quint 自身の後始末が走り、サーバごと終わる。
-  // タイムアウト判定は res.error.code === "ETIMEDOUT" を第一の証拠にする——
-  // SIGINT を受けた quint は後始末のあと自分で exit するので res.signal は
-  // null になりうる（bun でも node でも実測）。signal 判定は退避経路。
+  // タイムアウト判定は res.error.code === "ETIMEDOUT" だけを証拠にする。
+  // 子プロセス自身の SIGTERM / SIGKILL は status が0でない事実から failed へ送る。
   #runQuint(args: string[], itfPath: string | null, timeoutMs: number, cwd: string): QuintRun {
     const budget = this.#config.timeoutOverrideMs ?? timeoutMs;
     const res = spawnSync(this.#config.quintBin, args, {
@@ -140,8 +138,7 @@ export class QuintClientImplementation implements QuintClient {
       killSignal: "SIGINT",
     });
     const errorCode = (res.error as { code?: unknown } | undefined)?.code;
-    const timedOut =
-      errorCode === "ETIMEDOUT" || res.signal === "SIGINT" || res.signal === "SIGTERM" || res.signal === "SIGKILL";
+    const timedOut = errorCode === "ETIMEDOUT";
     // status は正常終了でだけ数値になる。シグナル死（SIGSEGV 等）は null なので
     // 「0 でない」に含まれる。
     const failed = !timedOut && (res.error !== undefined || res.status !== 0);
@@ -158,15 +155,6 @@ export class QuintClientImplementation implements QuintClient {
 
   #outputTail(run: QuintRun): string {
     return `${run.stderr}${run.stdout}`.trim().split("\n").pop()?.slice(0, 200) ?? "";
-  }
-
-  // 「答えられなかった」の判定。プロセスの事実（spawn 失敗・非ゼロ終了・シグナル
-  // 死）を第一の証拠にし、出力中の error 語は大文字小文字を問わず拾う——OOM の
-  // "FATAL ERROR" も Node の "TypeError" も小文字の "error" は含まない。以前は
-  // 小文字の "error" だけを見ていたので、それらは ITF 無しのまま clean に化け、
-  // simulation の findings が 0 件になって golden 比較が気まぐれに落ちていた。
-  #didNotAnswer(run: QuintRun): boolean {
-    return run.failed || `${run.stdout}\n${run.stderr}`.toLowerCase().includes("error");
   }
 
   // 1) イベント機械下の到達可能な不変量違反・デッドロック。
@@ -220,7 +208,7 @@ export class QuintClientImplementation implements QuintClient {
       const trace = decodeItfTrace(run.itf, machine.varToPath);
       return trace.ok ? QuintMachineRunVerdict.violation(trace.value) : QuintMachineRunVerdict.runFailed(trace.error);
     }
-    if (!violated && run.itf === null && this.#didNotAnswer(run)) {
+    if (!violated && run.itf === null && run.failed) {
       return QuintMachineRunVerdict.runFailed(this.#outputTail(run));
     }
     return QuintMachineRunVerdict.clean();
@@ -259,7 +247,7 @@ export class QuintClientImplementation implements QuintClient {
           obId,
           trace.ok ? QuintTemporalVerdict.violation(trace.value) : QuintTemporalVerdict.runFailed(trace.error),
         );
-      } else if (this.#didNotAnswer(run)) {
+      } else if (run.failed) {
         // verify は違反時にだけ ITF を書くので、ITF 無しは clean か失敗かの二択。
         // プロセスの事実で見分ける——以前は無条件に clean だった。
         out.set(obId, QuintTemporalVerdict.runFailed(this.#outputTail(run)));
@@ -298,7 +286,7 @@ export class QuintClientImplementation implements QuintClient {
       );
       if (run.timedOut) {
         out.set(scId, QuintScenarioVerdict.timeout());
-      } else if (!run.itf && this.#didNotAnswer(run)) {
+      } else if (!run.itf && run.failed) {
         out.set(scId, QuintScenarioVerdict.runFailed(this.#outputTail(run)));
       } else {
         out.set(scId, QuintScenarioVerdict.evaluated(run.itf !== null && itfStatus(run.itf) === "violation"));

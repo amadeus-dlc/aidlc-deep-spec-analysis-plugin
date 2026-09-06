@@ -1,0 +1,332 @@
+{
+  "baseline": "20d768cb457f90c45751b7da83f687fe7835393f",
+  "pr160": "eee3b3a36bf3b9d607a3004fbf636110504c37c0",
+  "runtime": {
+    "bun": "1.3.13",
+    "node": "24.19.0",
+    "quint": "0.32.0",
+    "java": "26.0.2",
+    "apalache": "0.56.1"
+  },
+  "quint_method": "bounded",
+  "reachability_cap": 16,
+  "original_default_cap": 2,
+  "raw_quint_success": {
+    "exit": 0,
+    "itf_created": false,
+    "stdout": [
+      "The outcome is: NoError",
+      "[ok] No violation found"
+    ],
+    "stderr_warning_fragment": "throw an error instead"
+  },
+  "comparisons": [
+    {
+      "left": "baseline",
+      "right": "updated",
+      "files": 15,
+      "different": []
+    },
+    {
+      "left": "candidate",
+      "right": "recovered",
+      "files": 15,
+      "different": []
+    },
+    {
+      "left": "fixed-fresh",
+      "right": "fixed-repeat",
+      "files": 15,
+      "different": []
+    },
+    {
+      "left": "fixed-upgrade",
+      "right": "candidate",
+      "files": 15,
+      "different": []
+    },
+    {
+      "left": "fixed-upgrade",
+      "right": "fixed-fresh",
+      "files": 15,
+      "different": []
+    },
+    {
+      "left": "fresh",
+      "right": "fixed-fresh",
+      "files": 15,
+      "different": [
+        "design/construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/quint.json"
+      ]
+    },
+    {
+      "left": "updated",
+      "right": "fresh",
+      "files": 15,
+      "different": []
+    }
+  ],
+  "candidate_reports": [
+    {
+      "case": "requirements",
+      "file": "inception/deep-spec-analysis-verify/deep-spec-verify/cross-check.json",
+      "sha256": "200f4f46a8f6ddd0dd0d7b2be12bcd60e0855d55e12333a4e3cf8deefe4621cb",
+      "method": "exhaustive",
+      "findings": 0,
+      "checked": 0,
+      "kinds": []
+    },
+    {
+      "case": "requirements",
+      "file": "inception/deep-spec-analysis-verify/deep-spec-verify/quint.json",
+      "sha256": "8b903f35cce3df4d0f6db8b6e7b9786961fd0ea00ba4a6da97ae318193f55d84",
+      "method": "bounded",
+      "findings": 2,
+      "checked": 0,
+      "kinds": [
+        "conflict",
+        "scenario-violation"
+      ]
+    },
+    {
+      "case": "requirements",
+      "file": "inception/deep-spec-analysis-verify/deep-spec-verify/smt.json",
+      "sha256": "89fccdeee569e03421637de5875bdc948b41bd92ea52e13b59552999b2ad6def",
+      "method": "exhaustive",
+      "findings": 5,
+      "checked": 0,
+      "kinds": [
+        "completeness-gap",
+        "conflict",
+        "scenario-violation"
+      ]
+    },
+    {
+      "case": "refcheck",
+      "file": "construction/u1-orders/functional-design/deep-spec-refcheck/functional-design.json",
+      "sha256": "6737726e5700c312b2d64cdfff4c795f738bff458a1088477f4777d425a7da52",
+      "method": "static",
+      "findings": 15,
+      "checked": 2,
+      "kinds": [
+        "consistency-mismatch",
+        "reference-broken",
+        "structure-invalid"
+      ]
+    },
+    {
+      "case": "refcheck",
+      "file": "inception/contract-design/deep-spec-refcheck/contract-summary.json",
+      "sha256": "2deb25b64aaa612acfc7a1063fddabb2edc475ad713a5ae1d485b36a88aed000",
+      "method": "static",
+      "findings": 4,
+      "checked": 0,
+      "kinds": [
+        "consistency-mismatch",
+        "reference-broken",
+        "structure-invalid"
+      ]
+    },
+    {
+      "case": "refcheck",
+      "file": "inception/domain-design/deep-spec-refcheck/components.json",
+      "sha256": "c99041baec90414b979392847fad2c4e0d5388124eec8feda7c170916bf60996",
+      "method": "static",
+      "findings": 9,
+      "checked": 1,
+      "kinds": [
+        "reference-broken",
+        "structure-invalid"
+      ]
+    },
+    {
+      "case": "design",
+      "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/cross-check.json",
+      "sha256": "52e43b33d6c12d4f8421665d29fba1ec3d5d6ed17cfb3186f563797322333576",
+      "method": "exhaustive",
+      "findings": 0,
+      "checked": 0,
+      "kinds": []
+    },
+    {
+      "case": "design",
+      "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/quint.json",
+      "sha256": "176a383971d3e64d15ec767a6e9ee59078a941ab083a277609f2023a3cfa4a5b",
+      "method": "bounded",
+      "findings": 2,
+      "checked": 1,
+      "kinds": [
+        "conflict",
+        "unreachable"
+      ]
+    },
+    {
+      "case": "design",
+      "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/smt.json",
+      "sha256": "d6f16144eedf9aba9cfaf8279a606cb09d143ef9f4cfe616f525c708e9fc13b3",
+      "method": "exhaustive",
+      "findings": 7,
+      "checked": 1,
+      "kinds": [
+        "completeness-gap",
+        "conflict",
+        "redundancy",
+        "unreachable"
+      ]
+    },
+    {
+      "case": "refinement",
+      "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/cross-check.json",
+      "sha256": "feb9e70ae2c3f0a8288c5a266b13a8e9b6608691e7aac64fa92c2de83a00213e",
+      "method": "exhaustive",
+      "findings": 0,
+      "checked": 0,
+      "kinds": []
+    },
+    {
+      "case": "refinement",
+      "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/quint.json",
+      "sha256": "8384972a4fbc088d455c2ef4fade7defee8e3886ca23ebbb410e6b813a3180c9",
+      "method": "bounded",
+      "findings": 3,
+      "checked": 1,
+      "kinds": [
+        "completeness-gap",
+        "mapping-gap",
+        "refinement-violation"
+      ]
+    },
+    {
+      "case": "refinement",
+      "file": "construction/deep-spec-analysis-functional-verify/deep-spec-design-verify/smt.json",
+      "sha256": "4be9788fc123039f3c3b76b578029e19c5554a2807d54a633edbdfa518f8a43f",
+      "method": "exhaustive",
+      "findings": 6,
+      "checked": 1,
+      "kinds": [
+        "completeness-gap",
+        "mapping-gap",
+        "refinement-violation"
+      ]
+    },
+    {
+      "case": "refinement",
+      "file": "inception/deep-spec-analysis-verify/deep-spec-verify/cross-check.json",
+      "sha256": "d7757bec3040579791668c7cada06577188145960bed50ac2e467ba1c7393ec8",
+      "method": "exhaustive",
+      "findings": 0,
+      "checked": 0,
+      "kinds": []
+    },
+    {
+      "case": "refinement",
+      "file": "inception/deep-spec-analysis-verify/deep-spec-verify/quint.json",
+      "sha256": "dc7fb7c36ca735acce34bb6f846a73dc58b5e17f46dedc0f3cc1e8876a27af2a",
+      "method": "bounded",
+      "findings": 1,
+      "checked": 0,
+      "kinds": [
+        "conflict"
+      ]
+    },
+    {
+      "case": "refinement",
+      "file": "inception/deep-spec-analysis-verify/deep-spec-verify/smt.json",
+      "sha256": "755d3c951ba04134fcf23c975ec8c73bc382b64e797148c87e7a6be5eb9e39b0",
+      "method": "exhaustive",
+      "findings": 1,
+      "checked": 0,
+      "kinds": [
+        "completeness-gap"
+      ]
+    }
+  ],
+  "fault_cases": [
+    {
+      "case": "duplicate-design-id",
+      "exit": 0,
+      "verdict": {
+        "pass": false,
+        "findings_count": 0,
+        "skipped_count": 0,
+        "note": "ir-unreadable"
+      }
+    },
+    {
+      "case": "oversized-state-machines",
+      "exit": 0,
+      "skipped": [
+        {
+          "target": "check:FD-S1",
+          "reason": "unrecognized-format",
+          "detail": "functional-spec.md is unusable ({\"kind\":\"too-many-state-machine-sketches\",\"raw\":65537})",
+          "unit": "u1-orders"
+        },
+        {
+          "target": "check:FD-S2",
+          "reason": "unrecognized-format",
+          "detail": "functional-spec.md is unusable ({\"kind\":\"too-many-state-machine-sketches\",\"raw\":65537})",
+          "unit": "u1-orders"
+        }
+      ]
+    },
+    {
+      "case": "yaml-special-key",
+      "exit": 0,
+      "ghost_entity_in_report": false
+    },
+    {
+      "case": "invalid-directory",
+      "exit": 1,
+      "doctor": [
+        {
+          "pass": false,
+          "label": "deep-spec-analysis: unit default/260906-index-sandbox-refcheck/<invalid-unit-name> has an invalid functional-design unit name ({\"kind\":\"unit-name-too-long\",\"raw\":129})",
+          "fix": "Make it the active intent (`bun .claude/tools/aidlc-utility.ts intent 260906-index-sandbox-refcheck`), then run `/aidlc --stage deep-spec-analysis-functional-verify --single` to verify its functional design without advancing the workflow.",
+          "severity": "advisory"
+        }
+      ]
+    },
+    {
+      "case": "malformed-solver-response",
+      "exit": 127,
+      "unavailable": {
+        "reason": "no runtime could execute the z3 child process (<sandbox>/malformed-solver-runtime: solver child result lacks a query id)"
+      }
+    }
+  ],
+  "recovery": {
+    "restored_report_files": 15,
+    "different": [],
+    "lock_temp_stale_residue": []
+  },
+  "payload_sha256": {
+    "aidlc-sensor-deep-spec-design-ir-valid.ts": "919eb133c434f5f8a91695219d8c98a89d60934161bb2187eaf3a0ece52eb9bc",
+    "aidlc-sensor-deep-spec-design-verify-quint.ts": "482ad6edfdddc45622dbcdb438447b0cf38c996ffa4bc13b7b199a497f364d2e",
+    "aidlc-sensor-deep-spec-design-verify-smt.ts": "760f8d10cfebec9c07399a165a7db685d99ca2cd23270a5cc877a6567ecfd3c5",
+    "aidlc-sensor-deep-spec-ir-valid.ts": "4cfe85178d0757d427d85a39ab6a201eaed8fc486985621706bc13e45a949548",
+    "aidlc-sensor-deep-spec-refcheck-contract.ts": "8340ef284ce42900f781edb0de293d298b737a1dab4dd518cd34aeea5283cbfd",
+    "aidlc-sensor-deep-spec-refcheck-domain.ts": "75dab9efff095deffc18f1c549808e57c4ad96db4ecb351f6722148635662d42",
+    "aidlc-sensor-deep-spec-refcheck-functional.ts": "187bfec4fae762dd8828c93f17a59d80ae3748efadfac534a9843fd71a03df0f",
+    "aidlc-sensor-deep-spec-verify-quint.ts": "770d032ec38dcfd36cfa56432da86fec818382c1ee6a656c44f2f87036fc406b",
+    "aidlc-sensor-deep-spec-verify-smt.ts": "cca5843477e4c79c6c0e994c33f09c0bcbd3695833950495173b9fcb0b0342fd",
+    "data/deep-spec-design-ir-schema.json": "3e2f76ce4292de1efc9ed73be03af36adfd445cb1e59ecf787ccb6a14509bab6",
+    "data/deep-spec-findings-schema.json": "2cf9ff662fcd9e01ee05bd1da7c327c57f5afa2de6f223401da329c32f0f065c",
+    "data/deep-spec-ir-schema.json": "5151cd0eef2c80fdf996640947edae4d76f5240698c6b8be31ba45f9d49b782a",
+    "data/deep-spec-refinement-map-schema.json": "334cd00873cfea5b9a8c74f96de177d54d6cfe5fa2829a943f9dcefc71531199",
+    "deep-spec-analysis-doctor.ts": "5ae7b055e03d5edf159e5bd8c8793dd9be5a07607a0424949eedb44b008d4248"
+  },
+  "all_three_installed_payloads_match": true,
+  "same_source_update": {
+    "changed": 0,
+    "provenance_bytes_and_mtime_unchanged": true
+  },
+  "real_temporal_and_scenario_report": {
+    "backend": "quint",
+    "irVersion": "1.0.0",
+    "irHash": "0e6d6f8febd6c9fe54fe219b24203cac6d1e74ffcb6cdf421eae89794cfbcfa3",
+    "method": "bounded",
+    "findings": [],
+    "skipped": []
+  }
+}
