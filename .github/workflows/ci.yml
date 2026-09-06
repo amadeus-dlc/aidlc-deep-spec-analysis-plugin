@@ -41,6 +41,9 @@ jobs:
       - name: Install pinned dev dependencies
         run: bun install --frozen-lockfile
 
+      - name: Prepare pinned Quint Rust evaluator
+        run: bun scripts/prepare-quint-evaluator.ts
+
       - name: Format, lint, imports, and usecase boundaries
         run: bun run check
 
@@ -102,6 +105,9 @@ jobs:
 
       - name: Install pinned dev dependencies (solvers, types, tsc)
         run: bun install --frozen-lockfile
+
+      - name: Prepare pinned Quint Rust evaluator
+        run: bun scripts/prepare-quint-evaluator.ts
 
       - name: Run coverage gate (pull_request — absolute + relative)
         if: github.event_name == 'pull_request'
