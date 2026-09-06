@@ -218,6 +218,35 @@ export class AttributeDeclaration {
     return this.#element;
   }
 
+  equals(other: AttributeDeclaration): boolean {
+    const optionalEqual = <T extends { equals(value: T): boolean }>(left: T | null, right: T | null): boolean =>
+      left === null ? right === null : right !== null && left.equals(right);
+    const allowedEqual =
+      this.#allowed === null
+        ? other.#allowed === null
+        : other.#allowed !== null &&
+          this.#allowed.toArray().length === other.#allowed.toArray().length &&
+          this.#allowed
+            .toArray()
+            .every((value, index) => value.equals(other.#allowed?.toArray()[index] as typeof value));
+    const defaultsEqual = optionalEqual(this.#def, other.#def);
+    const boundEqual = (left: NumericBound | null, right: NumericBound | null): boolean =>
+      left === null ? right === null : right !== null && left.equals(right);
+    return (
+      this.#name.equals(other.#name) &&
+      this.#element.equals(other.#element) &&
+      optionalEqual(this.#type, other.#type) &&
+      this.#uniqueIsTrue === other.#uniqueIsTrue &&
+      optionalEqual(this.#references, other.#references) &&
+      allowedEqual &&
+      defaultsEqual &&
+      this.#minDeclared === other.#minDeclared &&
+      this.#maxDeclared === other.#maxDeclared &&
+      boundEqual(this.#min, other.#min) &&
+      boundEqual(this.#max, other.#max)
+    );
+  }
+
   hasAllowedValues(): boolean {
     return this.#allowed !== null;
   }

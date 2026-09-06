@@ -23,4 +23,8 @@ export class ManifestEntry {
   severity(): CheckSeverity {
     return this.#severity;
   }
+
+  equals(other: ManifestEntry): boolean {
+    return this.#rel.equals(other.#rel) && this.#severity.equals(other.#severity);
+  }
 }

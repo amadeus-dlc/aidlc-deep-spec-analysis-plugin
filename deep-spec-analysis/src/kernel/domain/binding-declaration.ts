@@ -18,4 +18,8 @@ export class BindingDeclaration {
   value(): DeclaredBindingValue {
     return this.#value;
   }
+
+  equals(other: BindingDeclaration): boolean {
+    return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
 }

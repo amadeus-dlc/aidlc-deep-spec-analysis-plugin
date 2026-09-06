@@ -1,6 +1,13 @@
 import { parseFindingsValues } from "@deep-spec-analysis/kernel-adapter";
 import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
-import { err, type Json, ok, type Result, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  combineResults,
+  err,
+  type Json,
+  ok,
+  type Result,
+  traverseResult,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import {
   CrossCheckedEntries,
   CrossCheckedEntry,
@@ -49,15 +56,21 @@ export function parseSiblingReportDocument(
           return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
         });
   if (!comparisons.ok) return comparisons;
+  const collections = combineResults({
+    findings: VerificationFindings.parse(findings),
+    skipped: VerificationSkips.parse(doc.skipped.map((entry) => VerificationSkipped.of(entry))),
+    crossChecked: comparisons.value === null ? ok(null) : CrossCheckedEntries.parse(comparisons.value),
+  });
+  if (!collections.ok) return err(JSON.stringify(collections.error));
   return ok(
     VerificationReport.of({
       id: VerificationReportIdentifier.of(directory, doc.backend.asString()),
       irVersion: doc.irVersion,
       irHash: doc.irHash,
       method: doc.method,
-      findings: VerificationFindings.of(findings),
-      skipped: VerificationSkips.of(doc.skipped.map((entry) => VerificationSkipped.of(entry))),
-      crossChecked: comparisons.value === null ? null : CrossCheckedEntries.of(comparisons.value),
+      findings: collections.value.findings,
+      skipped: collections.value.skipped,
+      crossChecked: collections.value.crossChecked,
       unavailableReason: doc.unavailable?.reason ?? null,
     }),
   );

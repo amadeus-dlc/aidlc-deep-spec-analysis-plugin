@@ -20,6 +20,7 @@ import { describe, expect, test } from "bun:test";
 import {
   extractFences,
   parseMarkdownTables,
+  parseRequirementIdentifiers,
   parseYamlSubset,
   smtIntOf,
   smtLit,
@@ -384,8 +385,8 @@ describe("target id (the target vocabulary's primitive)", () => {
     expect(ids.toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect(ids.count()).toBe(3);
     expect(ids.toArray().length).toBe(3);
-    expect(ids.includes(TargetIdentifier.of("OB-2"))).toBe(true);
-    expect(ids.includes(TargetIdentifier.of("OB-3"))).toBe(false);
+    expect(ids.include(TargetIdentifier.of("OB-2"))).toBe(true);
+    expect(ids.include(TargetIdentifier.of("OB-3"))).toBe(false);
     expect(ids.excluding(TargetIdentifier.of("OB-2")).toStrings()).toEqual(["OB-10"]);
     expect(ids.excluding(TargetIdentifier.of("OB-3")).toStrings()).toEqual(["OB-10", "OB-2", "OB-2"]);
     expect([...ids].map((t) => t.asString())).toEqual(["OB-10", "OB-2", "OB-2"]);
@@ -411,11 +412,9 @@ describe("target-ids / requirement-ids / names", () => {
   });
 
   test("requirementIds finds FR/NFR ids with optional dash and dotted segments", () => {
-    expect(
-      [...RequirementIdentifiers.extractFrom("FR-1 covers NFR2.1 but FRX-9 does not; FR-1 repeats")]
-        .map((id) => id.asString())
-        .sort(),
-    ).toEqual(["FR-1", "NFR2.1"]);
+    const parsed = parseRequirementIdentifiers("FR-1 covers NFR2.1 but FRX-9 does not; FR-1 repeats");
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect([...parsed.value].map((id) => id.asString()).sort()).toEqual(["FR-1", "NFR2.1"]);
   });
 
   test("normalizeName casefolds and strips non-alphanumerics", () => {

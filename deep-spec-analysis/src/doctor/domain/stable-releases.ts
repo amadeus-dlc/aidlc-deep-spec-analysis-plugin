@@ -1,6 +1,6 @@
-import { ErrorMessage, type FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { ErrorMessage, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
@@ -10,13 +10,20 @@ import type { PluginVersion } from "./plugin-version.ts";
 import { VersionAdvisory } from "./version-advisory.ts";
 
 // stable版だけを内包する。文字列tagの解釈は取得adapter、最新版の選択はこの集合が所有。
-export class StableReleases implements FirstClassCollection {
+export class StableReleases extends FirstClassCollectionBase<PluginVersion, StableReleases> {
   readonly #versions: readonly PluginVersion[];
   /** GitHub取得ポートの上限100ページ×100件と同じ10,000版。 */
   private constructor(versions: readonly PluginVersion[]) {
-    if (versions.length > 10_000)
-      throw new IllegalArgumentException({ kind: "too-many-stable-releases", raw: versions.length });
-    this.#versions = Object.freeze([...versions]);
+    super();
+    this.#versions = boundedCollectionSnapshot(versions, 10_000, "too-many-stable-releases");
+  }
+
+  protected rebuild(values: readonly PluginVersion[]): StableReleases {
+    return new StableReleases(values);
+  }
+
+  *[Symbol.iterator](): Iterator<PluginVersion> {
+    yield* this.#versions;
   }
   static of(versions: readonly PluginVersion[]): StableReleases {
     return new StableReleases(versions);
@@ -30,9 +37,5 @@ export class StableReleases implements FirstClassCollection {
     return latest === null
       ? VersionAdvisory.skipped(installed, ErrorMessage.of("GitHub returned no stable Semantic Versioning tag"))
       : installed.assessLatest(latest);
-  }
-
-  isEmpty(): boolean {
-    return this.#versions.length === 0;
   }
 }

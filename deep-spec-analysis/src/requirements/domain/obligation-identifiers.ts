@@ -1,16 +1,37 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type FirstClassCollection,
+  FirstClassCollectionBase,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 
 // 義務のファーストクラスコレクション。id 検索と id 列の導出を所有する。
 // 義務 id のファーストクラスコレクション(plan のイベント義務面など、
 // 部分集合の id 列を運ぶ)。宣言順を保持し、toStrings() は境界(照会 API・
 // TargetIdentifiers/functionalRequirementReferencesOf の生 id 材料)専用の脱出口。
-export class ObligationIdentifiers implements FirstClassCollection, IterableFirstClassCollection<ObligationIdentifier> {
+export class ObligationIdentifiers
+  extends FirstClassCollectionBase<ObligationIdentifier, ObligationIdentifiers>
+  implements FirstClassCollection<ObligationIdentifier>
+{
   readonly #values: readonly ObligationIdentifier[];
 
   private constructor(values: readonly ObligationIdentifier[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-obligation-identifiers");
+  }
+
+  protected rebuild(values: readonly ObligationIdentifier[]): ObligationIdentifiers {
+    return new ObligationIdentifiers(values);
+  }
+
+  static parse(values: readonly ObligationIdentifier[]): Result<ObligationIdentifiers, ParseError> {
+    return parseConstruction(() => new ObligationIdentifiers(values));
   }
 
   static of(values: readonly ObligationIdentifier[]): ObligationIdentifiers {
@@ -23,10 +44,6 @@ export class ObligationIdentifiers implements FirstClassCollection, IterableFirs
 
   *[Symbol.iterator](): Iterator<ObligationIdentifier> {
     yield* this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 
   toStrings(): string[] {

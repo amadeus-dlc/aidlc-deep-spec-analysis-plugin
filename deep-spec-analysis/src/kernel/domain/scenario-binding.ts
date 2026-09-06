@@ -21,4 +21,8 @@ export class ScenarioBinding {
   isFor(path: AttributePath): boolean {
     return this.#path.equals(path);
   }
+
+  equals(other: ScenarioBinding): boolean {
+    return this.#path.equals(other.#path) && this.#value.equals(other.#value);
+  }
 }

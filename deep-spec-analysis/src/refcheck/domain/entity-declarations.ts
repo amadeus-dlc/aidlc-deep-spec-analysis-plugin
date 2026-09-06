@@ -3,12 +3,18 @@ import {
   FindingKind,
   FindingTargets,
   type FirstClassCollection,
-  type IterableFirstClassCollection,
+  FirstClassCollectionBase,
   KeySet,
   type NormalizedName,
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { AppliesTo } from "./applies-to.ts";
 import { AttributeName } from "./attribute-name.ts";
 import type { EntityDeclaration } from "./entity-declaration.ts";
@@ -20,13 +26,25 @@ import { WitnessReference } from "./witness-reference.ts";
 
 // エンティティ宣言のコレクション。重複・所属・正規化名解決・ライフサイクル
 // 対象の選定・あいまい照合という集合の知識を所有する。
-export class EntityDeclarations implements FirstClassCollection, IterableFirstClassCollection<EntityDeclaration> {
+export class EntityDeclarations
+  extends FirstClassCollectionBase<EntityDeclaration, EntityDeclarations>
+  implements FirstClassCollection<EntityDeclaration>
+{
   readonly #values: readonly EntityDeclaration[];
   readonly #names: KeySet<EntityName>;
 
   private constructor(values: readonly EntityDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-entity-declarations");
     this.#names = KeySet.of(this.#values.map((e) => e.name()));
+  }
+
+  protected rebuild(values: readonly EntityDeclaration[]): EntityDeclarations {
+    return new EntityDeclarations(values);
+  }
+
+  static parse(values: readonly EntityDeclaration[]): Result<EntityDeclarations, ParseError> {
+    return parseConstruction(() => new EntityDeclarations(values));
   }
 
   static of(values: readonly EntityDeclaration[]): EntityDeclarations {
@@ -107,9 +125,5 @@ export class EntityDeclarations implements FirstClassCollection, IterableFirstCl
 
   toArray(): readonly EntityDeclaration[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

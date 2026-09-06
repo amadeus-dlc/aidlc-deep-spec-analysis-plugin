@@ -14,6 +14,7 @@ export { FunctionalRequirementReferenceIndex } from "./functional-requirement-re
 export { IntermediateRepresentationAttributeCatalog } from "./intermediate-representation-attribute-catalog.ts";
 export { IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
 export { IntermediateRepresentationAttributeDeclarations } from "./intermediate-representation-attribute-declarations.ts";
+export { IntermediateRepresentationAttributeEntry } from "./intermediate-representation-attribute-entry.ts";
 export { IntermediateRepresentationAttributeName } from "./intermediate-representation-attribute-name.ts";
 export { IntermediateRepresentationBackgroundDeclaration } from "./intermediate-representation-background-declaration.ts";
 export { IntermediateRepresentationBackgroundDeclarations } from "./intermediate-representation-background-declarations.ts";
@@ -50,6 +51,7 @@ export { SatisfiabilityModuloTheoriesCheck } from "./satisfiability-modulo-theor
 export { SatisfiabilityModuloTheoriesEventPairProbe } from "./satisfiability-modulo-theories-event-pair-probe.ts";
 export { SatisfiabilityModuloTheoriesEventPairProbes } from "./satisfiability-modulo-theories-event-pair-probes.ts";
 export { SatisfiabilityModuloTheoriesQueryVerdict } from "./satisfiability-modulo-theories-query-verdict.ts";
+export { SatisfiabilityModuloTheoriesQueryVerdictEntry } from "./satisfiability-modulo-theories-query-verdict-entry.ts";
 export { SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability-modulo-theories-query-verdicts.ts";
 export { SatisfiabilityModuloTheoriesVerificationPlan } from "./satisfiability-modulo-theories-verification-plan.ts";
 export { Scenario } from "./scenario.ts";
@@ -57,6 +59,7 @@ export { ScenarioIdentifier } from "./scenario-identifier.ts";
 export { Scenarios } from "./scenarios.ts";
 export { SourceAnchor } from "./source-anchor.ts";
 export { TraceState } from "./trace-state.ts";
+export { TraceStateEntry } from "./trace-state-entry.ts";
 export { TraceStates } from "./trace-states.ts";
 export { TraceValue } from "./trace-value.ts";
 export { VerificationDirectory } from "./verification-directory.ts";

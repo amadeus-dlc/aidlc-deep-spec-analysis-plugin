@@ -9,10 +9,17 @@ import {
   FindingKind,
   FindingTargets,
   type FirstClassCollection,
-  type IterableFirstClassCollection,
+  FirstClassCollectionBase,
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { Component } from "./component.ts";
 import { DD_1, DD_4, DD_5, DD_7 } from "./component-check-families.ts";
 import type { ComponentEntity } from "./component-entity.ts";
@@ -22,11 +29,23 @@ import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { WitnessReference } from "./witness-reference.ts";
 
 // 宣言済みコンポーネントの集まり——名前解決・依存グラフの知識を持つ。
-export class Components implements FirstClassCollection, IterableFirstClassCollection<Component> {
+export class Components
+  extends FirstClassCollectionBase<Component, Components>
+  implements FirstClassCollection<Component>
+{
   readonly #values: readonly Component[];
 
   private constructor(values: readonly Component[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-components");
+  }
+
+  protected rebuild(values: readonly Component[]): Components {
+    return new Components(values);
+  }
+
+  static parse(values: readonly Component[]): Result<Components, ParseError> {
+    return parseConstruction(() => new Components(values));
   }
 
   static of(values: readonly Component[]): Components {
@@ -254,9 +273,5 @@ export class Components implements FirstClassCollection, IterableFirstClassColle
         `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`,
       );
     }
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

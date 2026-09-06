@@ -65,17 +65,17 @@ export class DesignVerifyDirectoryRepositoryImplementation implements DesignVeri
   findByDirectory(directory: ArtifactPath): Result<DesignVerifyDirectory, RepositoryError> {
     const siblings = this.#siblingsOf(directory);
     if (!siblings.ok) return err(siblings.error);
+    const reports = DesignReports.parse(siblings.value);
+    if (!reports.ok) return err({ kind: "corrupt", path: directory.asString(), cause: JSON.stringify(reports.error) });
     const crossPath = join(directory.asString(), CROSS_CHECK_BASENAME);
     if (!existsSync(crossPath)) {
-      return ok(DesignVerifyDirectory.of(directory, DesignReports.of(siblings.value), null));
+      return ok(DesignVerifyDirectory.of(directory, reports.value, null));
     }
     // 公開済みクロスチェックは導出物であって入力ではない：読めなければ不在と
     // して扱い、次の成功実行に組み直させる（BR2.5）。型のある失敗にするのは
     // 比較へ参加する兄弟 backend 文書だけ（BR2.7）。
     const crossCheck = this.#readReport(directory, CROSS_CHECK_BASENAME);
-    return ok(
-      DesignVerifyDirectory.of(directory, DesignReports.of(siblings.value), crossCheck.ok ? crossCheck.value : null),
-    );
+    return ok(DesignVerifyDirectory.of(directory, reports.value, crossCheck.ok ? crossCheck.value : null));
   }
 
   store(aggregate: DesignVerifyDirectory): Result<void, RepositoryError> {

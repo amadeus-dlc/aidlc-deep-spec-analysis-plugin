@@ -1,13 +1,28 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { Finding } from "./finding.ts";
 
 // finding のファーストクラスコレクション。正準ソート（kind 順位 → targets →
 // detail）は要素の `compareTo` に問う（kind 順位は kernel の FindingKind）。
-export class Findings implements FirstClassCollection, IterableFirstClassCollection<Finding> {
+export class Findings extends FirstClassCollectionBase<Finding, Findings> implements FirstClassCollection<Finding> {
   readonly #values: readonly Finding[];
 
   private constructor(values: readonly Finding[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-findings");
+  }
+
+  protected rebuild(values: readonly Finding[]): Findings {
+    return new Findings(values);
+  }
+
+  static parse(values: readonly Finding[]): Result<Findings, ParseError> {
+    return parseConstruction(() => new Findings(values));
   }
 
   static of(values: readonly Finding[]): Findings {
@@ -24,10 +39,6 @@ export class Findings implements FirstClassCollection, IterableFirstClassCollect
 
   count(): number {
     return this.#values.length;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 
   sortedCanonically(): Findings {

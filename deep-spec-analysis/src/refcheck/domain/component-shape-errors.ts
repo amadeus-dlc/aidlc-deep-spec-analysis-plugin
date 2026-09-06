@@ -1,11 +1,29 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { ComponentShapeError } from "./component-shape-error.ts";
 
-export class ComponentShapeErrors implements FirstClassCollection, IterableFirstClassCollection<ComponentShapeError> {
+export class ComponentShapeErrors
+  extends FirstClassCollectionBase<ComponentShapeError, ComponentShapeErrors>
+  implements FirstClassCollection<ComponentShapeError>
+{
   readonly #values: readonly ComponentShapeError[];
 
   private constructor(values: readonly ComponentShapeError[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-component-shape-errors");
+  }
+
+  protected rebuild(values: readonly ComponentShapeError[]): ComponentShapeErrors {
+    return new ComponentShapeErrors(values);
+  }
+
+  static parse(values: readonly ComponentShapeError[]): Result<ComponentShapeErrors, ParseError> {
+    return parseConstruction(() => new ComponentShapeErrors(values));
   }
 
   static of(values: readonly ComponentShapeError[]): ComponentShapeErrors {
@@ -26,9 +44,5 @@ export class ComponentShapeErrors implements FirstClassCollection, IterableFirst
 
   toArray(): readonly ComponentShapeError[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

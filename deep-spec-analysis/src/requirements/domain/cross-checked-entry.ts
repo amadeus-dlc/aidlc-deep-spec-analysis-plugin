@@ -40,6 +40,16 @@ export class CrossCheckedEntry {
     return this.#targets;
   }
 
+  equals(other: CrossCheckedEntry): boolean {
+    const targets = this.#targets.toArray();
+    const otherTargets = other.#targets.toArray();
+    return (
+      this.#backend.equals(other.#backend) &&
+      targets.length === otherTargets.length &&
+      targets.every((target, index) => target.equals(otherTargets[index] as (typeof targets)[number]))
+    );
+  }
+
   compareByBackend(other: CrossCheckedEntry): number {
     const a = this.#backend.asString();
     const b = other.#backend.asString();

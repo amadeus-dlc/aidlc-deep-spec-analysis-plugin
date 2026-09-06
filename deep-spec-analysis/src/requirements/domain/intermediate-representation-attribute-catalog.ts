@@ -1,4 +1,3 @@
-import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   AttributePath,
   type DeclaredBindings,
@@ -6,38 +5,63 @@ import {
   ErrorMessages,
   type Expression,
   ExpressionTree,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
   KeyedIndex,
 } from "@deep-spec-analysis/kernel-domain";
 import {
+  boundedCollectionSnapshot,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
+import { IntermediateRepresentationAttributeEntry } from "./intermediate-representation-attribute-entry.ts";
 import type { IntermediateRepresentationEntityDeclarations } from "./intermediate-representation-entity-declarations.ts";
 
-export class IntermediateRepresentationAttributeCatalog implements FirstClassCollection {
+export class IntermediateRepresentationAttributeCatalog
+  extends FirstClassCollectionBase<IntermediateRepresentationAttributeEntry, IntermediateRepresentationAttributeCatalog>
+  implements FirstClassCollection<IntermediateRepresentationAttributeEntry>
+{
+  readonly #declarations: IntermediateRepresentationEntityDeclarations;
+  readonly #entries: readonly IntermediateRepresentationAttributeEntry[];
   readonly #byPath: KeyedIndex<AttributePath, IntermediateRepresentationAttributeDeclaration>;
-  private constructor(declarations: IntermediateRepresentationEntityDeclarations) {
-    let count = 0;
-    for (const entity of declarations) {
-      if (++count > 65_536) throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
-      entity.inspectAttributes(() => {
+  private constructor(
+    declarations: IntermediateRepresentationEntityDeclarations,
+    entries?: readonly IntermediateRepresentationAttributeEntry[],
+  ) {
+    super();
+    this.#declarations = declarations;
+    const derived: IntermediateRepresentationAttributeEntry[] = [];
+    if (entries === undefined) {
+      let count = 0;
+      for (const entity of declarations) {
         if (++count > 65_536) throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
-      });
+        entity.inspectAttributes((_path, attribute) => {
+          if (++count > 65_536) throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+          derived.push(IntermediateRepresentationAttributeEntry.of(entity.name(), attribute));
+        });
+      }
+      if (declarations.hasAmbiguousAttributes())
+        throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
     }
-    if (declarations.hasAmbiguousAttributes())
-      throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
+    this.#entries = boundedCollectionSnapshot(entries ?? derived, 65_536, "attribute-catalog-too-large");
+    this.#byPath = KeyedIndex.of(this.#entries.map((entry) => [entry.path(), entry.attribute()] as const));
+  }
 
-    const attributes = new Map<string, IntermediateRepresentationAttributeDeclaration>();
-    for (const entity of declarations)
-      entity.inspectAttributes((path, attribute) => {
-        attributes.set(path, attribute);
-      });
-    this.#byPath = KeyedIndex.of(
-      [...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute] as const),
-    );
+  protected rebuild(
+    values: readonly IntermediateRepresentationAttributeEntry[],
+  ): IntermediateRepresentationAttributeCatalog {
+    return new IntermediateRepresentationAttributeCatalog(this.#declarations, values);
+  }
+
+  *[Symbol.iterator](): Iterator<IntermediateRepresentationAttributeEntry> {
+    yield* this.#entries;
+  }
+
+  toArray(): readonly IntermediateRepresentationAttributeEntry[] {
+    return this.#entries;
   }
   #attributeAt(path: string): IntermediateRepresentationAttributeDeclaration | undefined {
     const parsed = AttributePath.parse(path);
@@ -101,9 +125,5 @@ export class IntermediateRepresentationAttributeCatalog implements FirstClassCol
         );
     }
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
-  }
-
-  isEmpty(): boolean {
-    return this.#byPath.isEmpty();
   }
 }

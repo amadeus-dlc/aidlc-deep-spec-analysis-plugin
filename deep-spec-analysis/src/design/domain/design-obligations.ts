@@ -1,16 +1,31 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignObligation } from "./design-obligation.ts";
 
 // 設計義務のファーストクラスコレクション。id 列の導出を所有する。
-export class DesignObligations implements FirstClassCollection, IterableFirstClassCollection<DesignObligation> {
+export class DesignObligations extends FirstClassCollectionBase<DesignObligation, DesignObligations> {
   readonly #values: readonly DesignObligation[];
 
   private constructor(values: readonly DesignObligation[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-obligations");
+  }
+
+  protected rebuild(values: readonly DesignObligation[]): DesignObligations {
+    return new DesignObligations(values);
   }
 
   static of(values: readonly DesignObligation[]): DesignObligations {
     return new DesignObligations(values);
+  }
+
+  static parse(values: readonly DesignObligation[]): Result<DesignObligations, ParseError> {
+    return parseConstruction(() => new DesignObligations(values));
   }
 
   add(value: DesignObligation): DesignObligations {
@@ -32,9 +47,5 @@ export class DesignObligations implements FirstClassCollection, IterableFirstCla
 
   toArray(): readonly DesignObligation[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

@@ -1,4 +1,5 @@
 import { FindingTargets } from "@deep-spec-analysis/kernel-domain";
+import { SatisfiabilityModuloTheoriesQueryVerdictEntry } from "@deep-spec-analysis/requirements-domain";
 import { requireSuccess } from "./result-fixtures.ts";
 
 const comparisonHash = ContentHash.ofText("fixture-model");
@@ -257,7 +258,9 @@ function verdictsOf(
   entries: readonly (readonly [string, SatisfiabilityModuloTheoriesQueryVerdict])[],
 ): SatisfiabilityModuloTheoriesQueryVerdicts {
   return SatisfiabilityModuloTheoriesQueryVerdicts.of(
-    KeyedIndex.of(entries.map(([id, v]) => [QueryLabel.of(id), v] as const)),
+    entries
+      .map(([id, v]) => [QueryLabel.of(id), v] as const)
+      .map(([query, verdict]) => SatisfiabilityModuloTheoriesQueryVerdictEntry.of(query, verdict)),
   );
 }
 

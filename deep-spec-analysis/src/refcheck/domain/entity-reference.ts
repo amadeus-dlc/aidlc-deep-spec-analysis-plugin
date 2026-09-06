@@ -33,4 +33,10 @@ export class EntityReference {
   element(): ElementPath {
     return this.#element;
   }
+
+  equals(other: EntityReference): boolean {
+    return (
+      this.#entity.equals(other.#entity) && this.#ownedBy.equals(other.#ownedBy) && this.#element.equals(other.#element)
+    );
+  }
 }

@@ -53,6 +53,25 @@ export class RuleDeclaration {
     return this.#id?.matchesShape() ? this.#id : null;
   }
 
+  equals(other: RuleDeclaration): boolean {
+    const optionalEqual = <T extends { equals(value: T): boolean }>(left: T | null, right: T | null): boolean =>
+      left === null ? right === null : right !== null && left.equals(right);
+    const sourceIds = this.#sourceIds.toArray();
+    const otherSourceIds = other.#sourceIds.toArray();
+    const sourceIdsEqual =
+      sourceIds.length === otherSourceIds.length &&
+      sourceIds.every((sourceId, index) => sourceId.equals(otherSourceIds[index] as (typeof sourceIds)[number]));
+    return (
+      (this.#id === null ? other.#id === null : other.#id !== null && this.#id.asString() === other.#id.asString()) &&
+      this.#element.equals(other.#element) &&
+      optionalEqual(this.#category, other.#category) &&
+      optionalEqual(this.#appliesTo, other.#appliesTo) &&
+      sourceIdsEqual &&
+      this.#missing.length === other.#missing.length &&
+      this.#missing.every((missing, index) => missing === other.#missing[index])
+    );
+  }
+
   #findingTarget(fallback: string): string {
     return this.identifierForUniqueness()?.asString() ?? fallback;
   }

@@ -1,5 +1,11 @@
-import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { ErrorMessage, ErrorMessages, KeySet, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
+import {
+  ErrorMessage,
+  ErrorMessages,
+  FirstClassCollectionBase,
+  KeySet,
+  TargetIdentifier,
+} from "@deep-spec-analysis/kernel-domain";
+import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
 import type { UnformalizedTargets } from "./unformalized-targets.ts";
 // BusinessRuleReferenceIndex — rules.md が宣言する業務規則 id の集合（brRef の逆引き
@@ -7,15 +13,31 @@ import type { UnformalizedTargets } from "./unformalized-targets.ts";
 
 import type { BusinessRuleReference } from "./business-rule-reference.ts";
 
-export class BusinessRuleReferenceIndex implements FirstClassCollection {
+export class BusinessRuleReferenceIndex extends FirstClassCollectionBase<
+  BusinessRuleReference,
+  BusinessRuleReferenceIndex
+> {
   readonly #ids: KeySet<BusinessRuleReference>;
 
   private constructor(ids: KeySet<BusinessRuleReference>) {
+    super();
     this.#ids = ids;
+  }
+
+  protected rebuild(values: readonly BusinessRuleReference[]): BusinessRuleReferenceIndex {
+    return new BusinessRuleReferenceIndex(KeySet.of(values));
+  }
+
+  *[Symbol.iterator](): Iterator<BusinessRuleReference> {
+    yield* this.#ids;
   }
 
   static of(ids: BusinessRuleReferences): BusinessRuleReferenceIndex {
     return new BusinessRuleReferenceIndex(KeySet.of(ids));
+  }
+
+  static parse(ids: BusinessRuleReferences): Result<BusinessRuleReferenceIndex, ParseError> {
+    return parseConstruction(() => new BusinessRuleReferenceIndex(KeySet.of(ids)));
   }
 
   diagnostics(used: KeySet<BusinessRuleReference>, unformalized: UnformalizedTargets): ErrorMessages {
@@ -46,9 +68,5 @@ export class BusinessRuleReferenceIndex implements FirstClassCollection {
       .toArray()
       .map((id) => id.asString())
       .sort();
-  }
-
-  isEmpty(): boolean {
-    return this.#ids.isEmpty();
   }
 }

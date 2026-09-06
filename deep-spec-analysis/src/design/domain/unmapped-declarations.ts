@@ -1,22 +1,33 @@
-import type {
-  AttributePath,
-  FirstClassCollection,
-  IterableFirstClassCollection,
-} from "@deep-spec-analysis/kernel-domain";
+import { type AttributePath, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { ObligationIdentifier, ScenarioIdentifier } from "@deep-spec-analysis/requirements-domain";
 import type { UnmappedTarget } from "./unmapped-target.ts";
 
 // unmapped[]（写像しないことの明示宣言＝waiver）のコレクション。理由の索引は
 // 旧 new Map(...) の凍結挙動どおり重複 target は最後の宣言が勝つ。
-export class UnmappedDeclarations implements FirstClassCollection, IterableFirstClassCollection<UnmappedTarget> {
+export class UnmappedDeclarations extends FirstClassCollectionBase<UnmappedTarget, UnmappedDeclarations> {
   readonly #values: readonly UnmappedTarget[];
 
   private constructor(values: readonly UnmappedTarget[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-unmapped-declarations");
+  }
+
+  protected rebuild(values: readonly UnmappedTarget[]): UnmappedDeclarations {
+    return new UnmappedDeclarations(values);
   }
 
   static of(values: readonly UnmappedTarget[]): UnmappedDeclarations {
     return new UnmappedDeclarations(values);
+  }
+
+  static parse(values: readonly UnmappedTarget[]): Result<UnmappedDeclarations, ParseError> {
+    return parseConstruction(() => new UnmappedDeclarations(values));
   }
 
   add(value: UnmappedTarget): UnmappedDeclarations {
@@ -43,9 +54,5 @@ export class UnmappedDeclarations implements FirstClassCollection, IterableFirst
 
   toArray(): readonly UnmappedTarget[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

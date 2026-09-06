@@ -39,6 +39,7 @@ import { LoweredObligations } from "./lowered-obligations.ts";
 import type { LoweredScenario } from "./lowered-scenario.ts";
 import { LoweredScenarios } from "./lowered-scenarios.ts";
 import { LoweredUnit } from "./lowered-unit.ts";
+import { sameIterable } from "./value-equality.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignUnitParam = {
@@ -83,6 +84,17 @@ export class DesignUnit {
 
   static of(seed: DesignUnitParam): DesignUnit {
     return new DesignUnit(seed);
+  }
+
+  equals(other: DesignUnit): boolean {
+    return (
+      this.#unit.equals(other.#unit) &&
+      sameIterable(this.#catalog, other.#catalog, (left, right) => left.equals(right)) &&
+      sameIterable(this.#obligations, other.#obligations, (left, right) => left.equals(right)) &&
+      sameIterable(this.#machines, other.#machines, (left, right) => left.equals(right)) &&
+      sameIterable(this.#scenarios, other.#scenarios, (left, right) => left.equals(right)) &&
+      sameIterable(this.#background, other.#background, (left, right) => left.equals(right))
+    );
   }
 
   id(): DesignUnitIdentifier {

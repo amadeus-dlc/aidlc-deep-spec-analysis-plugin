@@ -11,6 +11,7 @@ import { type ParseError, parseConstruction, type Result } from "@deep-spec-anal
 import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
+import { sameExpression, sameIterable, sameOptional } from "./value-equality.ts";
 
 // lowered v1 シナリオ。accept / reject の区別と任意部（イベント・期待式）の
 // 有無はシナリオ自身の知識（#71 波20）。
@@ -50,6 +51,20 @@ export class LoweredScenario {
 
   static of(props: LoweredScenarioParam): LoweredScenario {
     return new LoweredScenario(props);
+  }
+
+  equals(other: LoweredScenario): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      this.#origin.equals(other.#origin) &&
+      this.#expectation.asString() === other.#expectation.asString() &&
+      sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) =>
+        left.equals(right),
+      ) &&
+      sameIterable(this.#bindings, other.#bindings, (left, right) => left.equals(right)) &&
+      sameOptional(this.#eventTrigger, other.#eventTrigger, (left, right) => left.equals(right)) &&
+      sameExpression(this.#expect, other.#expect)
+    );
   }
 
   origin(): DesignScenarioIdentifier {

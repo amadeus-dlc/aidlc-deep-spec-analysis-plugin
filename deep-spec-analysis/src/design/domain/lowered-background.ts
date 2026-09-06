@@ -3,6 +3,7 @@ import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
+import { sameExpression } from "./value-equality.ts";
 
 // lowered v1 背景制約（#71 波20）。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
@@ -23,6 +24,10 @@ export class LoweredBackground {
 
   static of(props: LoweredBackgroundParam): LoweredBackground {
     return new LoweredBackground(props);
+  }
+
+  equals(other: LoweredBackground): boolean {
+    return this.#id.equals(other.#id) && sameExpression(this.#assert, other.#assert);
   }
 
   id(): LoweredIdentifier {

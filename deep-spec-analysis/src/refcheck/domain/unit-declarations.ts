@@ -3,10 +3,16 @@ import {
   FindingKind,
   FindingTargets,
   type FirstClassCollection,
-  type IterableFirstClassCollection,
+  FirstClassCollectionBase,
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { CD_3 } from "./contract-check-families.ts";
 import type { ContractRows } from "./contract-rows.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
@@ -15,11 +21,23 @@ import { UnitNames } from "./unit-names.ts";
 import { WitnessReference } from "./witness-reference.ts";
 
 // units エッジブロックの宣言面——CD-1 の照合と CD-3 の走査順を知識に持つ。
-export class UnitDeclarations implements FirstClassCollection, IterableFirstClassCollection<UnitDeclaration> {
+export class UnitDeclarations
+  extends FirstClassCollectionBase<UnitDeclaration, UnitDeclarations>
+  implements FirstClassCollection<UnitDeclaration>
+{
   readonly #values: readonly UnitDeclaration[];
 
   private constructor(values: readonly UnitDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-unit-declarations");
+  }
+
+  protected rebuild(values: readonly UnitDeclaration[]): UnitDeclarations {
+    return new UnitDeclarations(values);
+  }
+
+  static parse(values: readonly UnitDeclaration[]): Result<UnitDeclarations, ParseError> {
+    return parseConstruction(() => new UnitDeclarations(values));
   }
 
   static of(values: readonly UnitDeclaration[]): UnitDeclarations {
@@ -82,9 +100,5 @@ export class UnitDeclarations implements FirstClassCollection, IterableFirstClas
         }
       }
     }
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

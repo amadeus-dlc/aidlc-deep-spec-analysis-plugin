@@ -121,4 +121,8 @@ export class ExpressionTree {
   isCanonicallyEqual(other: ExpressionTree): boolean {
     return canonicalStringify(this.#root) === canonicalStringify(other.#root);
   }
+
+  equals(other: ExpressionTree): boolean {
+    return this.isCanonicallyEqual(other);
+  }
 }

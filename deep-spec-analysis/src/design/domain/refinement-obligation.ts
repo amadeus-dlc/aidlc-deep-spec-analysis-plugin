@@ -21,6 +21,7 @@ import type { DesignUnit } from "./design-unit.ts";
 import { RefinementStatus } from "./refinement-status.ts";
 import type { RefinementUnitMap } from "./refinement-unit-map.ts";
 import { TransitionReferences } from "./transition-references.ts";
+import { sameExpression, sameIterable, sameOptional } from "./value-equality.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type RefinementObligationParam = {
@@ -58,6 +59,20 @@ export class RefinementObligation {
 
   static of(props: RefinementObligationParam): RefinementObligation {
     return new RefinementObligation(props);
+  }
+
+  equals(other: RefinementObligation): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      this.#nature.equals(other.#nature) &&
+      sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) =>
+        left.equals(right),
+      ) &&
+      sameExpression(this.#assert, other.#assert) &&
+      sameOptional(this.#trigger, other.#trigger, (left, right) => left.equals(right)) &&
+      sameExpression(this.#guard, other.#guard) &&
+      sameExpression(this.#effect, other.#effect)
+    );
   }
 
   #coverage(

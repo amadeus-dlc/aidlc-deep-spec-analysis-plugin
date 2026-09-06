@@ -45,6 +45,7 @@ import {
   RefinementMapIdentifier,
   RefinementMaterialsIdentifier,
 } from "@deep-spec-analysis/design-domain";
+import { parseRequirementIdentifiers } from "@deep-spec-analysis/kernel-adapter";
 import {
   ArtifactPath,
   BackendName,
@@ -264,10 +265,9 @@ describe("requirements first-class collections", () => {
         id.asString(),
       ),
     ).toEqual(["FR-1"]);
-    expect([...RequirementIdentifiers.extractFrom("- FR-1 と NFR-2.1").toStrings()].sort()).toEqual([
-      "FR-1",
-      "NFR-2.1",
-    ]);
+    const parsed = parseRequirementIdentifiers("- FR-1 と NFR-2.1");
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect([...parsed.value].map((id) => id.asString()).sort()).toEqual(["FR-1", "NFR-2.1"]);
 
     const attrs = RequirementAttributeDeclarations.of([]).add(
       RequirementAttributeDeclaration.of({

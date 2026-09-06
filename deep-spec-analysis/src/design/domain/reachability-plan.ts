@@ -1,6 +1,11 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { AttributePath, EnumerationMember, type VerificationMethod } from "@deep-spec-analysis/kernel-domain";
 import {
+  AttributePath,
+  EnumerationMember,
+  FirstClassCollectionBase,
+  type VerificationMethod,
+} from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -13,20 +18,23 @@ import { MachineReachability } from "./machine-reachability.ts";
 import { ReachabilityProbe } from "./reachability-probe.ts";
 
 // 機械順・初期状態除外・検査手法の適用可能性は計画の責務。
-export class ReachabilityPlan implements FirstClassCollection, IterableFirstClassCollection<MachineReachability> {
+export class ReachabilityPlan extends FirstClassCollectionBase<MachineReachability, ReachabilityPlan> {
   readonly #machines: readonly MachineReachability[];
 
   /** 1ユニットで65,536機械・総計65,536候補。多段集合で上限を乗算しない。 */
   private constructor(machines: readonly MachineReachability[]) {
-    if (machines.length > 65_536)
-      throw new IllegalArgumentException({ kind: "too-many-reachability-machines", raw: machines.length });
-    const owned = [...machines];
+    super();
+    const owned = boundedCollectionSnapshot(machines, 65_536, "too-many-reachability-machines");
     let probes = 0;
     for (const machine of owned) {
       probes += machine.probeCount();
       if (probes > 65_536) throw new IllegalArgumentException({ kind: "too-many-reachability-probes", raw: probes });
     }
     this.#machines = owned;
+  }
+
+  protected rebuild(values: readonly MachineReachability[]): ReachabilityPlan {
+    return new ReachabilityPlan(values);
   }
 
   static of(machines: readonly MachineReachability[]): ReachabilityPlan {
@@ -61,9 +69,5 @@ export class ReachabilityPlan implements FirstClassCollection, IterableFirstClas
 
   *[Symbol.iterator](): Iterator<MachineReachability> {
     yield* this.#machines;
-  }
-
-  isEmpty(): boolean {
-    return this.#machines.length === 0;
   }
 }

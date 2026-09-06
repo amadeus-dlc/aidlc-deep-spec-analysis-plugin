@@ -1,16 +1,31 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { TransitionReference } from "./transition-reference.ts";
 
 // eventMap の transitions（写像先の設計 遷移/義務 id）のコレクション。
-export class TransitionReferences implements FirstClassCollection, IterableFirstClassCollection<TransitionReference> {
+export class TransitionReferences extends FirstClassCollectionBase<TransitionReference, TransitionReferences> {
   readonly #values: readonly TransitionReference[];
 
   private constructor(values: readonly TransitionReference[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-transition-references");
+  }
+
+  protected rebuild(values: readonly TransitionReference[]): TransitionReferences {
+    return new TransitionReferences(values);
   }
 
   static of(values: readonly TransitionReference[]): TransitionReferences {
     return new TransitionReferences(values);
+  }
+
+  static parse(values: readonly TransitionReference[]): Result<TransitionReferences, ParseError> {
+    return parseConstruction(() => new TransitionReferences(values));
   }
 
   add(value: TransitionReference): TransitionReferences {
@@ -19,10 +34,6 @@ export class TransitionReferences implements FirstClassCollection, IterableFirst
 
   *[Symbol.iterator](): Iterator<TransitionReference> {
     yield* this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 
   // 宣言に無い設計 id（gap 文言用の辞書順——旧 .sort() の凍結挙動）。

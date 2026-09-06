@@ -1,16 +1,34 @@
 import {
   type FirstClassCollection,
-  type IterableFirstClassCollection,
+  FirstClassCollectionBase,
   RequirementIdentifier,
   type RequirementIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { SourceIdentifier } from "./source-identifier.ts";
 
-export class SourceIdentifiers implements FirstClassCollection, IterableFirstClassCollection<SourceIdentifier> {
+export class SourceIdentifiers
+  extends FirstClassCollectionBase<SourceIdentifier, SourceIdentifiers>
+  implements FirstClassCollection<SourceIdentifier>
+{
   readonly #values: readonly SourceIdentifier[];
 
   private constructor(values: readonly SourceIdentifier[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-source-identifiers");
+  }
+
+  protected rebuild(values: readonly SourceIdentifier[]): SourceIdentifiers {
+    return new SourceIdentifiers(values);
+  }
+
+  static parse(values: readonly SourceIdentifier[]): Result<SourceIdentifiers, ParseError> {
+    return parseConstruction(() => new SourceIdentifiers(values));
   }
 
   static of(values: readonly SourceIdentifier[]): SourceIdentifiers {
@@ -38,9 +56,5 @@ export class SourceIdentifiers implements FirstClassCollection, IterableFirstCla
 
   toArray(): readonly SourceIdentifier[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

@@ -25,6 +25,7 @@ import type { BusinessRuleReferences } from "./business-rule-references.ts";
 import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredScenario } from "./lowered-scenario.ts";
+import { sameExpression, sameIterable } from "./value-equality.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignScenarioParam = {
@@ -62,6 +63,22 @@ export class DesignScenario {
 
   static of(props: DesignScenarioParam): DesignScenario {
     return new DesignScenario(props);
+  }
+
+  equals(other: DesignScenario): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      this.#expectation.asString() === other.#expectation.asString() &&
+      sameIterable(this.#businessRuleReferences, other.#businessRuleReferences, (left, right) => left.equals(right)) &&
+      sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) =>
+        left.equals(right),
+      ) &&
+      sameIterable(this.#bindings, other.#bindings, (left, right) => left.equals(right)) &&
+      (this.#eventTrigger === undefined || other.#eventTrigger === undefined
+        ? this.#eventTrigger === other.#eventTrigger
+        : this.#eventTrigger.equals(other.#eventTrigger)) &&
+      sameExpression(this.#expect, other.#expect)
+    );
   }
 
   crossCheckFinding(unit: UnitName, comparison: ScenarioComparison): DesignFinding | null {

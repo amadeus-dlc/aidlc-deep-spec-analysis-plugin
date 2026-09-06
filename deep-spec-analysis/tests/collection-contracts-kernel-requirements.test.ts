@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { Equatable } from "@deep-spec-analysis/kernel-domain";
 import {
   ArtifactPath,
   AttributeKind,
@@ -41,7 +42,9 @@ import {
   RequirementsModel,
   SatisfiabilityModuloTheoriesCheck,
   SatisfiabilityModuloTheoriesQueryVerdict,
+  SatisfiabilityModuloTheoriesQueryVerdictEntry,
   SatisfiabilityModuloTheoriesVerificationPlan,
+  TraceStateEntry,
   VerificationReportIdentifier,
 } from "@deep-spec-analysis/requirements-domain";
 import { DeclaredBindings } from "../src/kernel/domain/declared-bindings.ts";
@@ -100,96 +103,111 @@ import { VerificationSkips } from "../src/requirements/domain/verification-skips
 import { VerificationWitness } from "../src/requirements/domain/verification-witness.ts";
 
 const factories = [
-  DeclaredBindings satisfies FirstClassCollectionFactory<Parameters<typeof DeclaredBindings.of>, DeclaredBindings>,
-  EnumerationMembers satisfies FirstClassCollectionFactory<
+  DeclaredBindings satisfies FallibleFirstClassCollectionFactory<
+    Parameters<typeof DeclaredBindings.of>,
+    DeclaredBindings
+  >,
+  EnumerationMembers satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof EnumerationMembers.of>,
     EnumerationMembers
   >,
-  ErrorMessages satisfies FirstClassCollectionFactory<Parameters<typeof ErrorMessages.of>, ErrorMessages>,
-  FunctionalRequirementReferences satisfies FirstClassCollectionFactory<
+  ErrorMessages satisfies FallibleFirstClassCollectionFactory<Parameters<typeof ErrorMessages.of>, ErrorMessages>,
+  FunctionalRequirementReferences satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof FunctionalRequirementReferences.of>,
     FunctionalRequirementReferences
   >,
-  RequirementIdentifiers satisfies FirstClassCollectionFactory<
+  RequirementIdentifiers satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof RequirementIdentifiers.of>,
     RequirementIdentifiers
   >,
-  ScenarioBindings satisfies FirstClassCollectionFactory<Parameters<typeof ScenarioBindings.of>, ScenarioBindings>,
-  ScenarioVerdicts satisfies FirstClassCollectionFactory<Parameters<typeof ScenarioVerdicts.of>, ScenarioVerdicts>,
-  TargetIdentifiers satisfies FirstClassCollectionFactory<Parameters<typeof TargetIdentifiers.of>, TargetIdentifiers>,
-  BackgroundAssumptions satisfies FirstClassCollectionFactory<
+  ScenarioBindings satisfies FallibleFirstClassCollectionFactory<
+    Parameters<typeof ScenarioBindings.of>,
+    ScenarioBindings
+  >,
+  ScenarioVerdicts satisfies FallibleFirstClassCollectionFactory<
+    Parameters<typeof ScenarioVerdicts.of>,
+    ScenarioVerdicts
+  >,
+  TargetIdentifiers satisfies FallibleFirstClassCollectionFactory<
+    Parameters<typeof TargetIdentifiers.of>,
+    TargetIdentifiers
+  >,
+  BackgroundAssumptions satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof BackgroundAssumptions.of>,
     BackgroundAssumptions
   >,
-  CrossCheckedEntries satisfies FirstClassCollectionFactory<
+  CrossCheckedEntries satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof CrossCheckedEntries.of>,
     CrossCheckedEntries
   >,
-  FunctionalRequirementReferenceClaims satisfies FirstClassCollectionFactory<
+  FunctionalRequirementReferenceClaims satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof FunctionalRequirementReferenceClaims.of>,
     FunctionalRequirementReferenceClaims
   >,
-  FunctionalRequirementReferenceIndex satisfies FirstClassCollectionFactory<
+  FunctionalRequirementReferenceIndex satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof FunctionalRequirementReferenceIndex.of>,
     FunctionalRequirementReferenceIndex
   >,
-  IntermediateRepresentationAttributeCatalog satisfies FirstClassCollectionFactory<
+  IntermediateRepresentationAttributeCatalog satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof IntermediateRepresentationAttributeCatalog.of>,
     IntermediateRepresentationAttributeCatalog
   >,
-  IntermediateRepresentationAttributeDeclarations satisfies FirstClassCollectionFactory<
+  IntermediateRepresentationAttributeDeclarations satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof IntermediateRepresentationAttributeDeclarations.of>,
     IntermediateRepresentationAttributeDeclarations
   >,
-  IntermediateRepresentationBackgroundDeclarations satisfies FirstClassCollectionFactory<
+  IntermediateRepresentationBackgroundDeclarations satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof IntermediateRepresentationBackgroundDeclarations.of>,
     IntermediateRepresentationBackgroundDeclarations
   >,
-  IntermediateRepresentationEntityDeclarations satisfies FirstClassCollectionFactory<
+  IntermediateRepresentationEntityDeclarations satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof IntermediateRepresentationEntityDeclarations.of>,
     IntermediateRepresentationEntityDeclarations
   >,
-  IntermediateRepresentationObligationDeclarations satisfies FirstClassCollectionFactory<
+  IntermediateRepresentationObligationDeclarations satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof IntermediateRepresentationObligationDeclarations.of>,
     IntermediateRepresentationObligationDeclarations
   >,
-  IntermediateRepresentationScenarioDeclarations satisfies FirstClassCollectionFactory<
+  IntermediateRepresentationScenarioDeclarations satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof IntermediateRepresentationScenarioDeclarations.of>,
     IntermediateRepresentationScenarioDeclarations
   >,
-  ObligationIdentifiers satisfies FirstClassCollectionFactory<
+  ObligationIdentifiers satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof ObligationIdentifiers.of>,
     ObligationIdentifiers
   >,
-  Obligations satisfies FirstClassCollectionFactory<Parameters<typeof Obligations.of>, Obligations>,
-  QuintMachineComponents satisfies FirstClassCollectionFactory<
+  Obligations satisfies FallibleFirstClassCollectionFactory<Parameters<typeof Obligations.of>, Obligations>,
+  QuintMachineComponents satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof QuintMachineComponents.of>,
     QuintMachineComponents
   >,
-  RequirementAttributeDeclarations satisfies FirstClassCollectionFactory<
+  RequirementAttributeDeclarations satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof RequirementAttributeDeclarations.of>,
     RequirementAttributeDeclarations
   >,
-  SatisfiabilityModuloTheoriesEventPairProbes satisfies FirstClassCollectionFactory<
+  SatisfiabilityModuloTheoriesEventPairProbes satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof SatisfiabilityModuloTheoriesEventPairProbes.of>,
     SatisfiabilityModuloTheoriesEventPairProbes
   >,
-  SatisfiabilityModuloTheoriesQueryVerdicts satisfies FirstClassCollectionFactory<
+  SatisfiabilityModuloTheoriesQueryVerdicts satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof SatisfiabilityModuloTheoriesQueryVerdicts.of>,
     SatisfiabilityModuloTheoriesQueryVerdicts
   >,
-  Scenarios satisfies FirstClassCollectionFactory<Parameters<typeof Scenarios.of>, Scenarios>,
-  TraceState satisfies FirstClassCollectionFactory<Parameters<typeof TraceState.of>, TraceState>,
-  TraceStates satisfies FirstClassCollectionFactory<Parameters<typeof TraceStates.of>, TraceStates>,
-  VerificationFindings satisfies FirstClassCollectionFactory<
+  Scenarios satisfies FallibleFirstClassCollectionFactory<Parameters<typeof Scenarios.of>, Scenarios>,
+  TraceState satisfies FallibleFirstClassCollectionFactory<Parameters<typeof TraceState.of>, TraceState>,
+  TraceStates satisfies FallibleFirstClassCollectionFactory<Parameters<typeof TraceStates.of>, TraceStates>,
+  VerificationFindings satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof VerificationFindings.of>,
     VerificationFindings
   >,
-  VerificationReports satisfies FirstClassCollectionFactory<
+  VerificationReports satisfies FallibleFirstClassCollectionFactory<
     Parameters<typeof VerificationReports.of>,
     VerificationReports
   >,
-  VerificationSkips satisfies FirstClassCollectionFactory<Parameters<typeof VerificationSkips.of>, VerificationSkips>,
+  VerificationSkips satisfies FallibleFirstClassCollectionFactory<
+    Parameters<typeof VerificationSkips.of>,
+    VerificationSkips
+  >,
 ];
 const fallibleFactories = [
   FindingTargets satisfies NonEmptyFirstClassCollectionFactory<TargetIdentifier, FindingTargets>,
@@ -222,7 +240,7 @@ const fallibleFactories = [
 void factories;
 void fallibleFactories;
 
-const emptyCollections: readonly (readonly [string, () => FirstClassCollection])[] = [
+const emptyCollections: readonly (readonly [string, () => Pick<FirstClassCollection<never>, "isEmpty">])[] = [
   ["DeclaredBindings", () => DeclaredBindings.of([])],
   ["EnumerationMembers", () => EnumerationMembers.of([])],
   ["ErrorMessages", () => ErrorMessages.of([])],
@@ -249,7 +267,7 @@ const emptyCollections: readonly (readonly [string, () => FirstClassCollection])
   ["QuintMachineComponents", () => QuintMachineComponents.of([])],
   ["RequirementAttributeDeclarations", () => RequirementAttributeDeclarations.of([])],
   ["SatisfiabilityModuloTheoriesEventPairProbes", () => SatisfiabilityModuloTheoriesEventPairProbes.of([])],
-  ["SatisfiabilityModuloTheoriesQueryVerdicts", () => SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.empty())],
+  ["SatisfiabilityModuloTheoriesQueryVerdicts", () => SatisfiabilityModuloTheoriesQueryVerdicts.of([])],
   ["Scenarios", () => Scenarios.of([])],
   ["TraceState", () => TraceState.of([])],
   ["TraceStates", () => TraceStates.of([])],
@@ -258,7 +276,7 @@ const emptyCollections: readonly (readonly [string, () => FirstClassCollection])
   ["VerificationSkips", () => VerificationSkips.of([])],
 ];
 
-function retainedSingleton<T extends object, C extends FirstClassCollection>(
+function retainedSingleton<T extends Equatable<T>, C extends FirstClassCollection<T>>(
   factory: FirstClassCollectionFactory<[readonly T[]], C>,
   element: T,
 ): C {
@@ -279,7 +297,7 @@ const entityDeclaration = IntermediateRepresentationEntityDeclaration.of({
   attributes: IntermediateRepresentationAttributeDeclarations.of([attributeDeclaration]),
 });
 
-const singletonCollections: readonly (readonly [string, () => FirstClassCollection])[] = [
+const singletonCollections: readonly (readonly [string, () => Pick<FirstClassCollection<never>, "isEmpty">])[] = [
   [
     "DeclaredBindings",
     () =>
@@ -426,7 +444,10 @@ const singletonCollections: readonly (readonly [string, () => FirstClassCollecti
         }),
       ),
   ],
-  ["TraceState", () => retainedSingleton(TraceState, [AttributePath.of("Ticket.open"), TraceValue.absent()] as const)],
+  [
+    "TraceState",
+    () => retainedSingleton(TraceState, TraceStateEntry.of(AttributePath.of("Ticket.open"), TraceValue.absent())),
+  ],
   ["TraceStates", () => retainedSingleton(TraceStates, TraceState.empty())],
   [
     "VerificationFindings",
@@ -472,9 +493,12 @@ const singletonCollections: readonly (readonly [string, () => FirstClassCollecti
   [
     "SatisfiabilityModuloTheoriesQueryVerdicts",
     () =>
-      SatisfiabilityModuloTheoriesQueryVerdicts.of(
-        KeyedIndex.of([[QueryLabel.of("global"), SatisfiabilityModuloTheoriesQueryVerdict.missing()]]),
-      ),
+      SatisfiabilityModuloTheoriesQueryVerdicts.of([
+        SatisfiabilityModuloTheoriesQueryVerdictEntry.of(
+          QueryLabel.of("global"),
+          SatisfiabilityModuloTheoriesQueryVerdict.missing(),
+        ),
+      ]),
   ],
 ];
 
@@ -504,11 +528,11 @@ describe("kernel / requirements のコレクション契約", () => {
     input.length = 0;
     expect(verdicts.isEmpty()).toBe(false);
     expect([...verdicts.comparisons()]).toEqual([]);
-    expect(Symbol.iterator in verdicts).toBe(false);
+    expect([...verdicts]).toHaveLength(1);
   });
 
   test("TraceState の空は値の欠落ではなく所有する属性数で決まる", () => {
-    const state = TraceState.of([[AttributePath.of("Ticket.open"), TraceValue.absent()]]);
+    const state = TraceState.of([TraceStateEntry.of(AttributePath.of("Ticket.open"), TraceValue.absent())]);
     expect(state.isEmpty()).toBe(false);
     expect(state.toDocument()).toEqual({ "Ticket.open": null });
   });
@@ -520,8 +544,8 @@ describe("FindingTargets の非空契約", () => {
     expect(targets.count()).toBe(1);
     expect(targets.toStrings()).toEqual(["OB-1"]);
     expect([...targets].map((target) => target.asString())).toEqual(["OB-1"]);
-    expect(targets.includes(TargetIdentifier.of("OB-1"))).toBe(true);
-    expect(targets.includes(TargetIdentifier.of("OB-2"))).toBe(false);
+    expect(targets.include(TargetIdentifier.of("OB-1"))).toBe(true);
+    expect(targets.include(TargetIdentifier.of("OB-2"))).toBe(false);
     expect(FindingTargets.parse(TargetIdentifier.of("OB-1"), []).ok).toBe(true);
   });
 
@@ -650,12 +674,16 @@ describe("対象を持たない診断をレポートの成功へ変換しない"
       gapTriggers: KeyedIndex.of([[trigger, TargetIdentifiers.of([])]]),
       scenarioQueries: KeyedIndex.empty(),
     });
-    const verdicts = SatisfiabilityModuloTheoriesQueryVerdicts.of(
-      KeyedIndex.of([
-        [QueryLabel.of("global"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })],
-        [QueryLabel.of("gap:submit"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })],
-      ]),
-    );
+    const verdicts = SatisfiabilityModuloTheoriesQueryVerdicts.of([
+      SatisfiabilityModuloTheoriesQueryVerdictEntry.of(
+        QueryLabel.of("global"),
+        SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" }),
+      ),
+      SatisfiabilityModuloTheoriesQueryVerdictEntry.of(
+        QueryLabel.of("gap:submit"),
+        SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" }),
+      ),
+    ]);
     const interpreted = plan.interpret(model, verdicts);
     expect(interpreted.ok).toBe(false);
     if (!interpreted.ok) expect(interpreted.error.kind).toBe("missing-finding-targets");
@@ -677,28 +705,22 @@ describe("対象を持たない診断をレポートの成功へ変換しない"
       KeyedIndex.empty(),
     ).interpret(
       emptyRequirementsModel(),
-      SatisfiabilityModuloTheoriesQueryVerdicts.of(
-        KeyedIndex.of([
-          [QueryLabel.of("global"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "unsat", core: [] })],
-        ]),
-      ),
+      SatisfiabilityModuloTheoriesQueryVerdicts.of([
+        SatisfiabilityModuloTheoriesQueryVerdictEntry.of(
+          QueryLabel.of("global"),
+          SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "unsat", core: [] }),
+        ),
+      ]),
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("missing-finding-targets");
   });
 
-  test("通常ドメイン処理の対象超過はpanicではなくParseErrorになる", () => {
-    const targets = TargetIdentifiers.of(Array.from({ length: 65_537 }, () => TargetIdentifier.of("OB-1")));
-    const verdicts = SatisfiabilityModuloTheoriesQueryVerdicts.of(
-      KeyedIndex.of([[QueryLabel.of("gap:submit"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })]]),
-    );
-    const result = SatisfiabilityModuloTheoriesProbe.completeness(TriggerName.of("submit"), targets).interpret(
-      emptyRequirementsModel(),
-      verdicts,
-    );
+  test("通常ドメイン処理の対象超過は対象集合のparseで非例外のParseErrorになる", () => {
+    const result = TargetIdentifiers.parse(Array.from({ length: 65_537 }, () => TargetIdentifier.of("OB-1")));
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error.kind).toBe("too-many-finding-targets");
+      expect(result.error.kind).toBe("too-many-target-identifiers");
       expect(result.error).not.toBeInstanceOf(Error);
     }
   });

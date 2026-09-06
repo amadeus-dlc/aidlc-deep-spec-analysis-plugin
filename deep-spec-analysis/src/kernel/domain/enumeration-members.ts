@@ -1,21 +1,30 @@
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { EnumerationMember } from "./enumeration-member.ts";
 import type { FirstClassCollection } from "./first-class-collection.ts";
-import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
+import { FirstClassCollectionBase } from "./first-class-collection-base.ts";
+
+const MAX_ENUMERATION_MEMBERS = 10_000;
+
 // enum 宣言値のファーストクラスコレクション。宣言順＝SMT の序数符号化・
 // Quint の集合リテラル順という凍結面なので順序を所有する。
-export class EnumerationMembers implements FirstClassCollection, IterableFirstClassCollection<EnumerationMember> {
+export class EnumerationMembers
+  extends FirstClassCollectionBase<EnumerationMember, EnumerationMembers>
+  implements FirstClassCollection<EnumerationMember>
+{
   readonly #values: readonly EnumerationMember[];
 
   private constructor(values: readonly EnumerationMember[]) {
-    if (values.length > 10_000)
-      throw new IllegalArgumentException({ kind: "too-many-enum-members", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_ENUMERATION_MEMBERS, "too-many-enum-members");
+  }
+
+  protected rebuild(values: readonly EnumerationMember[]): EnumerationMembers {
+    return new EnumerationMembers(values);
   }
 
   static parse(values: readonly EnumerationMember[]): Result<EnumerationMembers, ParseError> {

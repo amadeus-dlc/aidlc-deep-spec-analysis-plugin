@@ -1,24 +1,30 @@
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import { ErrorMessage } from "./error-message.ts";
 import type { FirstClassCollection } from "./first-class-collection.ts";
-import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
+import { FirstClassCollectionBase } from "./first-class-collection-base.ts";
 
 // 診断の発生順と所有権を保持する。文字列の構築契約はErrorMessageが担う。
 const MAX_MESSAGES = 65_536;
 
-export class ErrorMessages implements FirstClassCollection, IterableFirstClassCollection<ErrorMessage> {
+export class ErrorMessages
+  extends FirstClassCollectionBase<ErrorMessage, ErrorMessages>
+  implements FirstClassCollection<ErrorMessage>
+{
   readonly #values: readonly ErrorMessage[];
 
   private constructor(values: readonly ErrorMessage[]) {
-    if (values.length > MAX_MESSAGES)
-      throw new IllegalArgumentException({ kind: "too-many-error-messages", raw: values.length });
+    super();
     // 空配列は「エラーなし」を表す有効な値。
-    this.#values = Object.freeze([...values]);
+    this.#values = boundedCollectionSnapshot(values, MAX_MESSAGES, "too-many-error-messages");
+  }
+
+  protected rebuild(values: readonly ErrorMessage[]): ErrorMessages {
+    return new ErrorMessages(values);
   }
 
   static parse(values: readonly ErrorMessage[]): Result<ErrorMessages, ParseError> {

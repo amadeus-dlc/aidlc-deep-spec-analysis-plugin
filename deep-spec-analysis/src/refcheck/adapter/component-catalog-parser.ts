@@ -4,7 +4,7 @@ import { FenceCount } from "@deep-spec-analysis/refcheck-domain";
 // extractComponents の逐語移動。
 
 import { extractFences, parseYamlSubset } from "@deep-spec-analysis/kernel-adapter";
-import { combineResults, isObject, type Json, ok } from "@deep-spec-analysis/kernel-infrastructure";
+import { combineResults, err, isObject, type Json, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   AttributeName,
   Component,
@@ -28,7 +28,7 @@ function str(v: Json): string | null {
   return typeof v === "string" ? v : null;
 }
 
-function extractComponents(value: Json): { comps: Components; shapeErrors: ComponentShapeErrors } {
+function extractComponents(value: Json): Result<{ comps: Components; shapeErrors: ComponentShapeErrors }, string> {
   const shapeErrors: ComponentShapeError[] = [];
   const comps: Component[] = [];
   if (!isObject(value) || !Array.isArray(value.components)) {
@@ -38,15 +38,19 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
         detail: "top-level `components:` list is missing",
       }),
     );
-    return { comps: Components.of(comps), shapeErrors: ComponentShapeErrors.of(shapeErrors) };
+    const parsed = combineResults({
+      comps: Components.parse(comps),
+      shapeErrors: ComponentShapeErrors.parse(shapeErrors),
+    });
+    return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
   }
-  value.components.forEach((raw, i) => {
+  for (const [i, raw] of value.components.entries()) {
     const element = `components[${i}]`;
     if (!isObject(raw)) {
       shapeErrors.push(
         ComponentShapeError.of({ element: ElementPath.of(element), detail: "component entry is not a mapping" }),
       );
-      return;
+      continue;
     }
     const name = str(raw.name);
     if (name === null) {
@@ -56,7 +60,7 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
           detail: "component has no string `name`",
         }),
       );
-      return;
+      continue;
     }
     const parsedName = ComponentName.parse(name);
     if (!parsedName.ok) {
@@ -66,11 +70,14 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
           detail: JSON.stringify(parsedName.error),
         }),
       );
-      return;
+      continue;
     }
-    const refs = (key: "depends_on" | "dependents"): ComponentReferences => {
+    const refs = (key: "depends_on" | "dependents"): Result<ComponentReferences, string> => {
       const out: ComponentReference[] = [];
-      if (!Array.isArray(raw[key])) return ComponentReferences.of(out);
+      if (!Array.isArray(raw[key])) {
+        const parsed = ComponentReferences.parse(out);
+        return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
+      }
       (raw[key] as Json[]).forEach((entry, j) => {
         const el = `${element}.${key}[${j}].component`;
         const comp = isObject(entry) ? str(entry.component) : str(entry);
@@ -84,14 +91,15 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
         }
         out.push(ComponentReference.of({ component: component.value, element: ElementPath.of(el) }));
       });
-      return ComponentReferences.of(out);
+      const parsed = ComponentReferences.parse(out);
+      return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
     };
     const entities: ComponentEntity[] = [];
     if (Array.isArray(raw.entities)) {
-      (raw.entities as Json[]).forEach((entry, j) => {
-        if (!isObject(entry)) return;
+      for (const [j, entry] of (raw.entities as Json[]).entries()) {
+        if (!isObject(entry)) continue;
         const ename = str(entry.name);
-        if (ename === null) return;
+        if (ename === null) continue;
         const entity = EntityName.parse(ename);
         if (!entity.ok) {
           shapeErrors.push(
@@ -100,7 +108,7 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
               detail: JSON.stringify(entity.error),
             }),
           );
-          return;
+          continue;
         }
         const references: EntityReference[] = [];
         if (Array.isArray(entry.references)) {
@@ -141,29 +149,41 @@ function extractComponents(value: Json): { comps: Components; shapeErrors: Compo
               detail: JSON.stringify(parsedIdentifier.error),
             }),
           );
-          return;
+          continue;
         }
+        const parsedReferences = EntityReferences.parse(references);
+        if (!parsedReferences.ok) return err(JSON.stringify(parsedReferences.error));
         entities.push(
           ComponentEntity.of({
             name: entity.value,
             element: ElementPath.of(`${element}.entities[${j}]`),
             identifier: parsedIdentifier.value,
-            references: EntityReferences.of(references),
+            references: parsedReferences.value,
           }),
         );
-      });
+      }
     }
+    const dependsOn = refs("depends_on");
+    if (!dependsOn.ok) return err(dependsOn.error);
+    const dependents = refs("dependents");
+    if (!dependents.ok) return err(dependents.error);
+    const parsedEntities = ComponentEntities.parse(entities);
+    if (!parsedEntities.ok) return err(JSON.stringify(parsedEntities.error));
     comps.push(
       Component.of({
         name: parsedName.value,
         element: ElementPath.of(element),
-        dependsOn: refs("depends_on"),
-        dependents: refs("dependents"),
-        entities: ComponentEntities.of(entities),
+        dependsOn: dependsOn.value,
+        dependents: dependents.value,
+        entities: parsedEntities.value,
       }),
     );
+  }
+  const parsed = combineResults({
+    comps: Components.parse(comps),
+    shapeErrors: ComponentShapeErrors.parse(shapeErrors),
   });
-  return { comps: Components.of(comps), shapeErrors: ComponentShapeErrors.of(shapeErrors) };
+  return parsed.ok ? ok(parsed.value) : err(JSON.stringify(parsed.error));
 }
 
 export function parseComponentCatalog(md: string): ComponentCatalogOutcome {
@@ -175,6 +195,8 @@ export function parseComponentCatalog(md: string): ComponentCatalogOutcome {
   if (parsed.error !== undefined) {
     return ComponentCatalogOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), parsed.error);
   }
-  const { comps, shapeErrors } = extractComponents(parsed.value ?? null);
-  return ComponentCatalogOutcome.extracted(comps, shapeErrors);
+  const extracted = extractComponents(parsed.value ?? null);
+  return extracted.ok
+    ? ComponentCatalogOutcome.extracted(extracted.value.comps, extracted.value.shapeErrors)
+    : ComponentCatalogOutcome.unparseable(LineNumber.of(fences[0]?.line ?? 0), extracted.error);
 }

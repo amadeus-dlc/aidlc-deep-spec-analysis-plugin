@@ -1,4 +1,10 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { ObligationIdentifiers } from "./obligation-identifiers.ts";
 import type { QuintMachineComponent } from "./quint-machine-component.ts";
 import type { TraceState } from "./trace-state.ts";
@@ -6,12 +12,22 @@ import type { TraceState } from "./trace-state.ts";
 // 不変量成分のファーストクラスコレクション。帰属評価（どの成分が最終状態で
 // 破れているか）は成分集合自身の知識で、個々の破れは成分に問う。
 export class QuintMachineComponents
-  implements FirstClassCollection, IterableFirstClassCollection<QuintMachineComponent>
+  extends FirstClassCollectionBase<QuintMachineComponent, QuintMachineComponents>
+  implements FirstClassCollection<QuintMachineComponent>
 {
   readonly #values: readonly QuintMachineComponent[];
 
   private constructor(values: readonly QuintMachineComponent[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-quint-machine-components");
+  }
+
+  protected rebuild(values: readonly QuintMachineComponent[]): QuintMachineComponents {
+    return new QuintMachineComponents(values);
+  }
+
+  static parse(values: readonly QuintMachineComponent[]): Result<QuintMachineComponents, ParseError> {
+    return parseConstruction(() => new QuintMachineComponents(values));
   }
 
   static of(values: readonly QuintMachineComponent[]): QuintMachineComponents {
@@ -24,10 +40,6 @@ export class QuintMachineComponents
 
   *[Symbol.iterator](): Iterator<QuintMachineComponent> {
     yield* this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 
   ids(): ObligationIdentifiers {

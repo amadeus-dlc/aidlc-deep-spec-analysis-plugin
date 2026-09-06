@@ -64,6 +64,15 @@ export class DesignEventRule {
   static parse(props: DesignEventRuleParam): Result<DesignEventRule, ParseError> {
     return parseConstruction(() => new DesignEventRule(props));
   }
+
+  equals(other: DesignEventRule): boolean {
+    return (
+      this.#reference.asString() === other.#reference.asString() &&
+      this.#trigger.equals(other.#trigger) &&
+      this.#guard.equals(other.#guard) &&
+      this.#effect.equals(other.#effect)
+    );
+  }
   trigger(): TriggerName {
     return this.#trigger;
   }

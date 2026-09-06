@@ -1,12 +1,27 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { Scenario } from "./scenario.ts";
 
 // シナリオのファーストクラスコレクション。id 検索と id 列の導出を所有する。
-export class Scenarios implements FirstClassCollection, IterableFirstClassCollection<Scenario> {
+export class Scenarios extends FirstClassCollectionBase<Scenario, Scenarios> implements FirstClassCollection<Scenario> {
   readonly #values: readonly Scenario[];
 
   private constructor(values: readonly Scenario[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-scenarios");
+  }
+
+  protected rebuild(values: readonly Scenario[]): Scenarios {
+    return new Scenarios(values);
+  }
+
+  static parse(values: readonly Scenario[]): Result<Scenarios, ParseError> {
+    return parseConstruction(() => new Scenarios(values));
   }
 
   static of(values: readonly Scenario[]): Scenarios {
@@ -31,9 +46,5 @@ export class Scenarios implements FirstClassCollection, IterableFirstClassCollec
 
   toArray(): readonly Scenario[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

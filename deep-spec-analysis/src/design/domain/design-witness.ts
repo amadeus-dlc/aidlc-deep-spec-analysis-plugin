@@ -6,20 +6,16 @@
 // ラベル書き換え（lowered id → design id）は witness 自身の知識で、形の判定
 // （`core` を持つか、ラベルが文字列か）は値の内側にだけある。
 
+import type { Json } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   boundedValueSnapshot,
+  jsonEquals,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 
-type WitnessDocument =
-  | null
-  | boolean
-  | number
-  | string
-  | readonly WitnessDocument[]
-  | { readonly [k: string]: WitnessDocument };
+type WitnessDocument = Json;
 
 export class DesignWitness {
   readonly #document: WitnessDocument;
@@ -30,7 +26,7 @@ export class DesignWitness {
   }
 
   static core(labels: readonly string[]): DesignWitness {
-    return new DesignWitness({ core: labels });
+    return new DesignWitness({ core: [...labels] });
   }
 
   static model(values: { readonly [path: string]: boolean | number | string }): DesignWitness {
@@ -42,11 +38,11 @@ export class DesignWitness {
   }
 
   static trace(states: readonly { readonly [path: string]: boolean | number | string }[]): DesignWitness {
-    return new DesignWitness({ trace: states });
+    return new DesignWitness({ trace: states.map((state) => ({ ...state })) });
   }
 
   static refs(entries: readonly { readonly artifact: string; readonly element: string }[]): DesignWitness {
-    return new DesignWitness({ refs: entries });
+    return new DesignWitness({ refs: entries.map((entry) => ({ ...entry })) });
   }
 
   // 兄弟文書と生成済みレポートから型付きの証拠を構築する。
@@ -56,6 +52,10 @@ export class DesignWitness {
 
   static of(raw: WitnessDocument): DesignWitness {
     return new DesignWitness(raw);
+  }
+
+  equals(other: DesignWitness): boolean {
+    return jsonEquals(this.#document, other.#document);
   }
 
   // unsat core（`{ core: [...] }`）の形なら core のラベルだけを書き換えて返し、

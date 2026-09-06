@@ -108,7 +108,7 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
         const scope = this.#scopeOf(record);
         if (!scope) continue;
         const parsedScope = StageScope.parse(scope);
-        if (!parsedScope.ok || !scopes.includes(parsedScope.value)) continue;
+        if (!parsedScope.ok || !scopes.include(parsedScope.value)) continue;
         const requirements = join(record, "inception", "requirements-analysis", "requirements.md");
         if (!existsSync(requirements)) continue;
         const model = join(record, "inception", "deep-spec-analysis-verify", "deep-spec-analysis-formal-model.md");
@@ -212,7 +212,7 @@ export class DoctorWorkspaceClientImplementation implements DoctorWorkspaceClien
         const scope = this.#scopeOf(record);
         if (!scope) continue;
         const parsedScope = StageScope.parse(scope);
-        if (!parsedScope.ok || !scopes.includes(parsedScope.value)) continue;
+        if (!parsedScope.ok || !scopes.include(parsedScope.value)) continue;
         const constructionDir = join(record, "construction");
         let unitDirs: string[] = [];
         try {

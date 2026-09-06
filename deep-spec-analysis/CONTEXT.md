@@ -13,6 +13,9 @@ A declaration of an attribute belonging to an entity, including its name, type, 
 A collection that uniquely identifies a declared attribute from an entity name and attribute name.
 _Distinguish from_: attribute mapping. A mapping defines correspondence between requirement and design attributes.
 
+**Attribute catalog entry**:
+An attribute declaration together with its owning entity. Its full attribute path is derived from that owner and the attribute name. Filtering a catalog preserves this association.
+
 **Design event rule**:
 A design rule defining applicability conditions and effects for an input trigger. It includes state-transition and event-type obligations.
 _Avoid calling it_: event. This avoids confusing a declaration with an event that actually occurred.
@@ -44,11 +47,20 @@ _Distinguish from_: expectation expression. An expectation expression states a p
 A unit of verification whose purpose, target, and verdict meaning are defined.
 _Distinguish from_: query string. The meaning of a query and its notation are separate.
 
+**Query verdict entry**:
+A query label paired with its verdict. Selecting verdicts preserves their association with the queries that produced them.
+
+**Trace state entry**:
+An attribute path paired with its observed value in one trace state. The path is part of the entry, so values of different attributes remain distinguishable.
+
 **Lifecycle target coverage**:
 For an entity, the lifecycle attribute selected with explicit attributes taking priority is checked by a state diagram. A diagram for another entity or one whose attribute cannot be resolved does not provide coverage.
 
 **Sibling unit declaration index**:
 A collection that holds entities and attributes declared by adjacent units as information from the same acquisition point. It is used to compare ownership duplicates or omissions and attribute coverage.
+
+**Sibling unit index entry**:
+One unit name paired with all its entity declarations. A unit without entity declarations still occupies one entry in the index.
 
 **Scenario verdict comparison**:
 Checking agreement among verdicts returned by different backends for the same target. A design scenario target includes unit ownership; unchecked or unavailable results do not count as verified.

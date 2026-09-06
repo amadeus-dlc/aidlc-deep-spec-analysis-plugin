@@ -16,6 +16,7 @@ import {
   TriggerName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
+import { TraceStateEntry } from "@deep-spec-analysis/requirements-domain";
 import { scenarioBindings } from "./binding-fixtures.ts";
 import { requireSuccess } from "./result-fixtures.ts";
 
@@ -95,7 +96,7 @@ import { InMemoryVerificationDirectoryRepository } from "./doubles/in-memory-ver
 // テスト用: 平文の状態 → TraceState（裁定 2 で値オブジェクトになった）。
 function st(values: { [path: string]: boolean | number | string }): TraceState {
   return TraceState.of(
-    Object.entries(values).map(([path, value]) => [AttributePath.of(path), TraceValue.of(value)] as const),
+    Object.entries(values).map(([path, value]) => TraceStateEntry.of(AttributePath.of(path), TraceValue.of(value))),
   );
 }
 

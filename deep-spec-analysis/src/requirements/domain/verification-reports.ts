@@ -1,13 +1,15 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   type BackendName,
   type ContentHash,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
   KeyedIndex,
   ScenarioVerdicts,
   type TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
+import { boundedCollectionSnapshot, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import { CrossCheckedEntries } from "./cross-checked-entries.ts";
 import { CrossCheckedEntry } from "./cross-checked-entry.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
@@ -17,11 +19,23 @@ import { VerificationReport } from "./verification-report.ts";
 import type { VerificationReportIdentifier } from "./verification-report-identifier.ts";
 import { VerificationSkips } from "./verification-skips.ts";
 
-export class VerificationReports implements FirstClassCollection, IterableFirstClassCollection<VerificationReport> {
+export class VerificationReports
+  extends FirstClassCollectionBase<VerificationReport, VerificationReports>
+  implements FirstClassCollection<VerificationReport>
+{
   readonly #values: readonly VerificationReport[];
 
   private constructor(values: readonly VerificationReport[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-verification-reports");
+  }
+
+  protected rebuild(values: readonly VerificationReport[]): VerificationReports {
+    return new VerificationReports(values);
+  }
+
+  static parse(values: readonly VerificationReport[]): Result<VerificationReports, ParseError> {
+    return parseConstruction(() => new VerificationReports(values));
   }
 
   static of(values: readonly VerificationReport[]): VerificationReports {
@@ -81,9 +95,5 @@ export class VerificationReports implements FirstClassCollection, IterableFirstC
     return failure === null
       ? report
       : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

@@ -47,6 +47,16 @@ export class ContractRow {
     return this.#id;
   }
 
+  equals(other: ContractRow): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      this.#provider.equals(other.#provider) &&
+      this.#consumer.equals(other.#consumer) &&
+      this.#owner.equals(other.#owner) &&
+      this.#line.equals(other.#line)
+    );
+  }
+
   // 行が (from, to) の辺をどちらの向きでも結ぶか。
   connects(from: string, to: string): boolean {
     return (

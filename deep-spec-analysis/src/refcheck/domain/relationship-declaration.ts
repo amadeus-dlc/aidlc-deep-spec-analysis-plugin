@@ -78,4 +78,16 @@ export class RelationshipDeclaration {
   cardinalityWithoutDirection(): boolean {
     return this.#cardinality !== null && !this.#hasDirection;
   }
+
+  equals(other: RelationshipDeclaration): boolean {
+    const optionalEqual = <T extends { equals(value: T): boolean }>(left: T | null, right: T | null): boolean =>
+      left === null ? right === null : right !== null && left.equals(right);
+    return (
+      this.#element.equals(other.#element) &&
+      optionalEqual(this.#from, other.#from) &&
+      optionalEqual(this.#to, other.#to) &&
+      optionalEqual(this.#cardinality, other.#cardinality) &&
+      this.#hasDirection === other.#hasDirection
+    );
+  }
 }

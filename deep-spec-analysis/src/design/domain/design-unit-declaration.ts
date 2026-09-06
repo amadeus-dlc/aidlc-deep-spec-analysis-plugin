@@ -10,6 +10,7 @@ import type { DesignObligationDeclarations } from "./design-obligation-declarati
 import type { DesignScenarioDeclarations } from "./design-scenario-declarations.ts";
 import type { DesignUnitIdentifier } from "./design-unit-identifier.ts";
 import type { UnformalizedTargets } from "./unformalized-targets.ts";
+import { sameIterable } from "./value-equality.ts";
 
 // 設計ユニットの入力宣言。属性と状態機械の診断を各所有者へ依頼し、
 // ユニット内の識別子、成果物の存在、業務規則の被覆を合わせて評価する。
@@ -54,6 +55,22 @@ export class DesignUnitDeclaration {
 
   static of(props: DesignUnitDeclarationParam): DesignUnitDeclaration {
     return new DesignUnitDeclaration(props);
+  }
+
+  equals(other: DesignUnitDeclaration): boolean {
+    return (
+      this.#unit.equals(other.#unit) &&
+      sameIterable(this.#entities, other.#entities, (left, right) => left.equals(right)) &&
+      sameIterable(this.#obligations, other.#obligations, (left, right) => left.equals(right)) &&
+      sameIterable(this.#stateMachines, other.#stateMachines, (left, right) => left.equals(right)) &&
+      sameIterable(this.#scenarios, other.#scenarios, (left, right) => left.equals(right)) &&
+      sameIterable(this.#background, other.#background, (left, right) => left.equals(right)) &&
+      sameIterable(this.#unformalizedTargets, other.#unformalizedTargets, (left, right) => left.equals(right)) &&
+      this.#directoryExists === other.#directoryExists &&
+      (this.#rules === null || other.#rules === null
+        ? this.#rules === other.#rules
+        : sameIterable(this.#rules, other.#rules, (left, right) => left.equals(right)))
+    );
   }
 
   unit(): DesignUnitIdentifier {

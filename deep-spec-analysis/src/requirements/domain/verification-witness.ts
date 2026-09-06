@@ -1,5 +1,6 @@
 import {
   boundedValueSnapshot,
+  canonicalStringify,
   type ParseError,
   parseConstruction,
   type Result,
@@ -49,5 +50,9 @@ export class VerificationWitness {
 
   toDocument(): WitnessDocument {
     return structuredClone(this.#document);
+  }
+
+  equals(other: VerificationWitness): boolean {
+    return canonicalStringify(this.#document) === canonicalStringify(other.#document);
   }
 }

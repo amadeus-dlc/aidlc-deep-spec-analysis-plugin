@@ -80,6 +80,12 @@ test("adapters consume parse Results instead of catching constructor panics", ()
       "static parse(raw: string) { return parseConstruction(() => new Foo(raw)); }",
     ),
   ).toHaveLength(0);
+  expect(
+    constructionParsingInDomain(
+      "kernel/domain/foo.ts",
+      "static parse(raw: string) { return parseConstruction(() => Foo.of(raw)); }",
+    ),
+  ).toHaveLength(1);
   expect(constructionParsingInDomain("kernel/adapter/decoder.ts", "// parseConstruction is prohibited")).toHaveLength(
     0,
   );
@@ -269,6 +275,19 @@ describe("rule red/green examples (detection power proof)", () => {
     expect(
       privateConstructorInDomain("kernel/adapter/x.ts", "export class Impl {\n  constructor() {}\n}"),
     ).toHaveLength(0);
+  });
+
+  test("abstract domain bases require protected construction while concrete types remain private", () => {
+    expect(
+      privateConstructorInDomain("kernel/domain/base.ts", "export abstract class Base { protected constructor() {} }"),
+    ).toHaveLength(0);
+    expect(
+      privateConstructorInDomain("kernel/domain/base.ts", "export abstract class Base { constructor() {} }"),
+    ).toHaveLength(1);
+    expect(privateConstructorInDomain("kernel/domain/base.ts", "export abstract class Base {} ")).toHaveLength(1);
+    expect(
+      privateConstructorInDomain("kernel/domain/base.ts", "export class Base { protected constructor() {} }"),
+    ).toHaveLength(1);
   });
 
   test("no-get-accessors flags a getter, passes a method and a string mentioning get", () => {
@@ -906,7 +925,8 @@ describe("the real src/ tree", () => {
         "kernel/domain/fallible-first-class-collection-factory.ts:FallibleFirstClassCollectionFactory",
         "kernel/domain/first-class-collection-factory.ts:FirstClassCollectionFactory",
         "kernel/domain/first-class-collection.ts:FirstClassCollection",
-        "kernel/domain/iterable-first-class-collection.ts:IterableFirstClassCollection",
+        "kernel/domain/non-empty-first-class-collection.ts:NonEmptyFirstClassCollection",
+        "kernel/domain/equatable.ts:Equatable",
         "kernel/domain/non-empty-first-class-collection-factory.ts:NonEmptyFirstClassCollectionFactory",
       ].sort(),
     );
@@ -989,6 +1009,25 @@ describe("construction audit detection examples", () => {
     expect(missingConstructionParsers(new Map([["kernel/domain/snapshot.ts", source]]))).toEqual([
       "kernel/domain/snapshot.ts",
     ]);
+  });
+  test("collection snapshot bounds and delegating constructors require parse", () => {
+    const source =
+      "export class Elements { private constructor(values: readonly Element[]) { this.values = boundedCollectionSnapshot(values, 65536, 'too-many-elements'); } }";
+    const delegating =
+      "export class Owner { private constructor(values: readonly Element[]) { this.values = Elements.of(values); } }";
+    expect(
+      missingConstructionParsers(
+        new Map([
+          ["kernel/domain/elements.ts", source],
+          ["kernel/domain/owner.ts", delegating],
+        ]),
+      ),
+    ).toEqual(["kernel/domain/elements.ts", "kernel/domain/owner.ts"]);
+    const parsed = source.replace(
+      "private constructor",
+      "\nstatic parse(values: readonly Element[]) { return parseConstruction(() => new Elements(values)); }\nprivate constructor",
+    );
+    expect(missingConstructionParsers(new Map([["kernel/domain/elements.ts", parsed]]))).toEqual([]);
   });
   test("type-name checks distinguish shortened words from complete terms and proper names", () => {
     expect(

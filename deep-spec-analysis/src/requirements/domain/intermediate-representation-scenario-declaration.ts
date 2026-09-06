@@ -48,4 +48,25 @@ export class IntermediateRepresentationScenarioDeclaration {
   id(): ScenarioIdentifier {
     return this.#id;
   }
+
+  equals(other: IntermediateRepresentationScenarioDeclaration): boolean {
+    const expressionEqual =
+      this.#expect === undefined
+        ? other.#expect === undefined
+        : other.#expect !== undefined &&
+          ExpressionTree.of(this.#expect).isCanonicallyEqual(ExpressionTree.of(other.#expect));
+    const bindings = this.#bindings.toArray();
+    const otherBindings = other.#bindings.toArray();
+    const bindingsEqual =
+      bindings.length === otherBindings.length &&
+      bindings.every((binding, index) => {
+        const otherBinding = otherBindings[index];
+        return (
+          otherBinding !== undefined &&
+          binding.path().equals(otherBinding.path()) &&
+          binding.value().describe() === otherBinding.value().describe()
+        );
+      });
+    return this.#id.equals(other.#id) && this.#hasEvent === other.#hasEvent && bindingsEqual && expressionEqual;
+  }
 }

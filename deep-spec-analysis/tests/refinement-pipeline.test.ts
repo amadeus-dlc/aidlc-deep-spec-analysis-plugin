@@ -54,6 +54,7 @@ import {
   RefinementObligations,
   RefinementProbe,
   RefinementQueryVerdict,
+  RefinementQueryVerdictEntry,
   RefinementQueryVerdicts,
   RefinementQuintInvariant,
   RefinementQuintInvariants,
@@ -561,7 +562,7 @@ describe("attribute mapping totality", () => {
     // from の宣言値に "toString" があっても、cases の own mapping が無ければ欠けとして報告する。
     expect(mapping.missingCasesOver(["draft", "toString"])).toEqual(["toString"]);
     expect(mapping.missingCasesOver(["draft"])).toEqual([]);
-    expect(mapping.producedValuesOutside({ includes: (v: string) => v === "open" })).toEqual([]);
+    expect(mapping.producedValuesOutside(EnumerationMembers.of([EnumerationMember.of("open")]))).toEqual([]);
     expect(
       AttributeMapping.of(AttributePath.of("R.x"), {
         kind: "expression",
@@ -1120,7 +1121,7 @@ describe("refinement verdict interpretation", () => {
   const run = (f: RefinementSolverPlan, results: [string, Parameters<typeof RefinementQueryVerdict.of>[0]][]) =>
     f.interpret(
       RefinementQueryVerdicts.of(
-        KeyedIndex.of(results.map(([id, v]) => [QueryLabel.of(id), RefinementQueryVerdict.of(v)] as const)),
+        results.map(([id, v]) => RefinementQueryVerdictEntry.of(QueryLabel.of(id), RefinementQueryVerdict.of(v))),
       ),
     );
 

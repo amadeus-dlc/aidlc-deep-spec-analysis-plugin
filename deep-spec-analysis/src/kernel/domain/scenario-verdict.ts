@@ -78,6 +78,16 @@ export class ScenarioVerdict {
   agreesWith(other: ScenarioVerdict): boolean {
     return this.#state === other.#state;
   }
+
+  equals(other: ScenarioVerdict): boolean {
+    return (
+      this.#backend.equals(other.#backend) &&
+      this.#modelHash.equals(other.#modelHash) &&
+      this.#state === other.#state &&
+      this.#target.equals(other.#target) &&
+      (this.#unit === null ? other.#unit === null : other.#unit !== null && this.#unit.equals(other.#unit))
+    );
+  }
   // 判定表の表示語彙。未検査を判定表へ載せる呼び出しは契約違反。
   verdictLabel(): "clean" | "violated" {
     if (this.#state !== "clean" && this.#state !== "violated")

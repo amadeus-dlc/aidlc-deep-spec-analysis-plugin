@@ -9,10 +9,15 @@ import { combineResults, ok, traverseResult } from "@deep-spec-analysis/kernel-i
 
 import { spawnSync } from "node:child_process";
 import type { UnitRefinementPlan } from "@deep-spec-analysis/design-domain";
-import { RefinementCheck, RefinementQueryVerdict, RefinementQueryVerdicts } from "@deep-spec-analysis/design-domain";
+import {
+  RefinementCheck,
+  RefinementQueryVerdict,
+  RefinementQueryVerdictEntry,
+  RefinementQueryVerdicts,
+} from "@deep-spec-analysis/design-domain";
 
 import type { RefinementSolverClient } from "@deep-spec-analysis/design-usecase";
-import { ErrorMessage, KeyedIndex, QueryLabel } from "@deep-spec-analysis/kernel-domain";
+import { ErrorMessage, QueryLabel } from "@deep-spec-analysis/kernel-domain";
 import type { RefinementChildQuery } from "./refinement-child-query.ts";
 import { buildRefinementQueries, decodeDesignModel } from "./refinement-query-plan.ts";
 import type { RefinementSolverClientConfiguration } from "./refinement-solver-client-configuration.ts";
@@ -45,7 +50,7 @@ export class RefinementSolverClientImplementation implements RefinementSolverCli
         reason.ok ? reason.value : ErrorMessage.of("z3 child reported an invalid unavailable reason"),
       );
     }
-    const verdicts: (readonly [QueryLabel, RefinementQueryVerdict])[] = [];
+    const verdicts: RefinementQueryVerdictEntry[] = [];
     for (const [queryId, r] of child.results) {
       const parsed = combineResults({
         label: QueryLabel.parse(queryId),
@@ -56,17 +61,25 @@ export class RefinementSolverClientImplementation implements RefinementSolverCli
           built.plan,
           ErrorMessage.of(`invalid solver query label: ${JSON.stringify(parsed.error)}`),
         );
-      verdicts.push([
-        parsed.value.label,
-        RefinementQueryVerdict.of({
-          status: r.status,
-          decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
-          decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
-          core: parsed.value.core?.map((label) => label.asString()),
-        }),
-      ]);
+      verdicts.push(
+        RefinementQueryVerdictEntry.of(
+          parsed.value.label,
+          RefinementQueryVerdict.of({
+            status: r.status,
+            decodedModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, false) : undefined,
+            decodedPostModel: r.status === "sat" ? decodeDesignModel(built.context, r.model ?? {}, true) : undefined,
+            core: parsed.value.core?.map((label) => label.asString()),
+          }),
+        ),
+      );
     }
-    return RefinementCheck.solved(built.plan, RefinementQueryVerdicts.of(KeyedIndex.of(verdicts)));
+    const collected = RefinementQueryVerdicts.parse(verdicts);
+    if (!collected.ok)
+      return RefinementCheck.unavailable(
+        built.plan,
+        ErrorMessage.of(`invalid solver verdict collection: ${JSON.stringify(collected.error)}`),
+      );
+    return RefinementCheck.solved(built.plan, collected.value);
   }
 
   #runChild(

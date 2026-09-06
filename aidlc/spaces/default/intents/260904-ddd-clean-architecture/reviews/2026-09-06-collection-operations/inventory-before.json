@@ -1,0 +1,2939 @@
+{
+  "generatedAt": "2026-09-06T12:16:47.307Z",
+  "gitHead": "928dd730b66261c5e798aef58f96c11739395f30",
+  "sourceFingerprint": "5afed451935f39905b873533fa9ff056fb5dee215be2f9e38bf0125fc1b28489",
+  "scope": {
+    "sourceRoot": "/Users/j5ik2o/Sources/j5ik2o.github.com/j5ik2o/deep-spec-analysis/deep-spec-analysis",
+    "sourceFiles": 504,
+    "collectionCount": 112,
+    "sourceInventory": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-collection-contracts/inventory.json",
+    "implementationAudit": "aidlc/spaces/default/intents/260904-ddd-clean-architecture/reviews/2026-09-06-collection-contracts/implementation-audit.json",
+    "method": "既存一覧＋TypeScript 7 unstable/async/ast（通常createSourceFile APIは使用しない）＋必要なドメイン実装の読み取り",
+    "sourceDomainFiles": 372,
+    "sourceDomainFingerprint": "06ea930e4406c31fa9a2f02f064d9af9a777b01476ee994ef5fb1a7726938ef9",
+    "sourceFilesNote": "sourceFiles=504はAST class index対象、sourceDomainFiles/fingerprintはimplementation-auditのドメイン走査と同一条件",
+    "sourceDomainFingerprintMatchesAudit": false
+  },
+  "summary": {
+    "classifications": {
+      "ordered-sequence": 97,
+      "unique-set": 5,
+      "keyed-index": 10
+    },
+    "equalityBases": {
+      "none/structural": 64,
+      "VO-value": 22,
+      "entity-identifier": 26
+    },
+    "nonEmptyContracts": {
+      "FindingTargets": "of/parse(head: TargetIdentifier, tail: readonly TargetIdentifier[])。tailを含む総数65,536件上限、順序・重複保持、ofはIllegalArgumentException、parseはParseError、isEmptyなし",
+      "InstallationManifest": "standard()のみ。ManifestEntry 26件の固定標準台帳を固定順にObject.freezeし、空判定なし。一般要素配列factoryはない"
+    },
+    "sourceSnapshot": "main 928dd730b66261c5e798aef58f96c11739395f30（AST再走査）",
+    "classificationNotes": {
+      "ordered-sequence": "readonly配列を保持し宣言順を意味として扱う。重複可否は各constructorの不変条件に従う",
+      "unique-set": "KeySetまたは一意性台帳が主表現。順序は挿入順でも重複を保持しない/拒否",
+      "keyed-index": "KeyedIndexのキー→値。キーと値の組が論理要素で、値配列だけではキーを復元できない",
+      "context付き集合": "owner/unit/modelHash/target/参照元などの文脈を要素外またはネスト索引として保持"
+    },
+    "currentApiConflictSummary": {
+      "exactConflicts": 0,
+      "nearIncludes": [
+        "FindingTargets",
+        "InitialStates",
+        "EnumerationMembers",
+        "StageScopes",
+        "TargetIdentifiers"
+      ],
+      "nearMapOf": [
+        "RefinementUnitMaps"
+      ],
+      "note": "at/head/tail/include/filter/map/existsの完全一致public APIは112型に現時点で0件。includes/mapOfは名前または引数の移行衝突候補。"
+    },
+    "nonIterable15": [
+      "BusinessRuleReferenceIndex",
+      "DesignAssignments",
+      "DesignAttributeCatalog",
+      "IssuedLoweredIdentifiers",
+      "RefinementQueryVerdicts",
+      "RuleSubsumptions",
+      "StableReleases",
+      "StructuralDebt",
+      "ScenarioBindings",
+      "ScenarioVerdicts",
+      "SiblingUnitIndex",
+      "FunctionalRequirementReferenceIndex",
+      "IntermediateRepresentationAttributeCatalog",
+      "SatisfiabilityModuloTheoriesQueryVerdicts",
+      "TraceState"
+    ],
+    "equalitySummary": {
+      "voValue": 22,
+      "entityIdOnly": 26,
+      "noneOrStructural": 64,
+      "knownHazard": "TraceValue.equalsはJSON.stringify。共通include/filterの標準実装へ流用不可。entity id-only型はid()キー比較を個別に定義するかequals導入が必要。",
+      "validPrimitiveOrFieldEquals": 21,
+      "jsonStringifyEquals": 1,
+      "note": "VO-value 22件中 TraceValueだけはJSON.stringifyであり、値VO equalsの共通実装としては不適格。残り21件は値フィールド/VOの値同値。",
+      "selectedPolicy": "E/Uはequalsを持つドメイン型に限定（ユーザー裁定）"
+    },
+    "criticalConstraints": [
+      "map<U>の生成先引数なしでも、context付き型のmap/filterは同じcontext・キーの再構成規則が必要。単純array cloneではcatalog/index/stateの意味を失う。",
+      "NonEmptyのtail()はsingletonから空になり得るため、戻り型はFirstClassCollection<E>（空許容）とする。filterも結果空を許す。ScenarioVerdictsはfilterで空になり得る。",
+      "KeyedIndexのlogical elementをvalueだけにするか[key,value] entryにするかは型設計上の要注意点。Query verdict/catalog/index/stateで顕著。"
+    ],
+    "externalContextRequired": [
+      {
+        "name": "DesignAttributeCatalog",
+        "inputs": [
+          "DesignEntityDeclarations"
+        ],
+        "why": "属性の完全座標と#declarationsをentity所有者から再導出"
+      },
+      {
+        "name": "DesignEventRuleCatalog",
+        "inputs": [
+          "DesignUnit"
+        ],
+        "why": "obligation/machine/transitionからeventを導出し所属・順序を保持"
+      },
+      {
+        "name": "ReachabilityPlan",
+        "inputs": [
+          "forUnit: DesignUnit, LoweredUnit, VerificationMethod"
+        ],
+        "why": "of/parseは配列で足りるがforUnitはunit/lowered/methodが必要"
+      },
+      {
+        "name": "SiblingUnitIndex",
+        "inputs": [
+          "KeyedIndex<UnitName, EntityDeclarations>"
+        ],
+        "why": "unit所有者と正規化名の二重キーが必要"
+      },
+      {
+        "name": "IntermediateRepresentationAttributeCatalog",
+        "inputs": [
+          "IntermediateRepresentationEntityDeclarations"
+        ],
+        "why": "entity所有者・属性座標・曖昧性検査を再導出"
+      }
+    ],
+    "keyAssociationOrInvariantRequired": [
+      {
+        "name": "BusinessRuleReferenceIndex",
+        "inputs": [
+          "BusinessRuleReference.asString()"
+        ],
+        "why": "BusinessRuleReferencesをKeySet化して存在判定"
+      },
+      {
+        "name": "DesignAssignments",
+        "inputs": [
+          "DesignAssignment.target(): AttributePath"
+        ],
+        "why": "KeyedIndexのキーを各要素のtargetから再導出。重複target後勝ち"
+      },
+      {
+        "name": "EffectAssignments",
+        "inputs": [
+          "EffectAssignment.target(): AttributePath"
+        ],
+        "why": "KeyedIndexのキーを各要素のtargetから再導出。fromEffectはExpressionTreeのassignment解釈も必要"
+      },
+      {
+        "name": "IssuedLoweredIdentifiers",
+        "inputs": [
+          "LoweredIdentifier.asString()"
+        ],
+        "why": "KeySet化と重複拒否を再適用"
+      },
+      {
+        "name": "RefinementQueryVerdicts",
+        "inputs": [
+          "KeyedIndex<QueryLabel, RefinementQueryVerdict>"
+        ],
+        "why": "Verdict本体にQueryLabelがなく、キーを値配列から導出できない"
+      },
+      {
+        "name": "ScenarioBindings",
+        "inputs": [
+          "ScenarioBinding.path()"
+        ],
+        "why": "path一意制約を再適用"
+      },
+      {
+        "name": "ScenarioVerdicts",
+        "inputs": [
+          "ScenarioVerdict.modelHash/target/unit/backend"
+        ],
+        "why": "同一subject・backend一意・比較可能のみの不変条件を再適用"
+      },
+      {
+        "name": "EntityDeclarations",
+        "inputs": [
+          "EntityDeclaration.name()"
+        ],
+        "why": "#namesを要素配列から再導出。重複名は診断のため配列に保持"
+      },
+      {
+        "name": "FunctionalRequirementReferenceIndex",
+        "inputs": [
+          "FunctionalRequirementReferenceClaim.owner＋参照ID"
+        ],
+        "why": "claimIntoでRequirementIdentifier→owner群へ再集約"
+      },
+      {
+        "name": "RequirementAttributeDeclarations",
+        "inputs": [
+          "RequirementAttributeDeclaration.path()"
+        ],
+        "why": "#byPathを要素配列から再導出。重複pathはindex後勝ち、配列順は保持"
+      },
+      {
+        "name": "SatisfiabilityModuloTheoriesQueryVerdicts",
+        "inputs": [
+          "KeyedIndex<QueryLabel, SatisfiabilityModuloTheoriesQueryVerdict>"
+        ],
+        "why": "QueryVerdict本体にQueryLabelがなく、missing sentinelのキー解決が必要"
+      },
+      {
+        "name": "TraceState",
+        "inputs": [
+          "Iterable<[AttributePath, TraceValue]> または ScenarioBindings"
+        ],
+        "why": "TraceValue単体からAttributePathキーとtoDocument順を復元できない"
+      }
+    ],
+    "factoryShapeCounts": {
+      "arrayOnly": 94,
+      "externalContext": 5,
+      "keyAssociation": 12,
+      "fixedOrSpecial": 10,
+      "elementArrayFactoryCount": 102,
+      "noElementArray": 10,
+      "noElementArrayTypes": [
+        "BusinessRuleReferenceIndex",
+        "DesignAttributeCatalog",
+        "DesignEventRuleCatalog",
+        "RefinementQueryVerdicts",
+        "InstallationManifest",
+        "SiblingUnitIndex",
+        "IntermediateRepresentationAttributeCatalog",
+        "SatisfiabilityModuloTheoriesQueryVerdicts",
+        "TraceState",
+        "FindingTargets"
+      ]
+    },
+    "nonIterableReasons": {
+      "BusinessRuleReferenceIndex": "KeySet<BusinessRuleReference>をhas/diagnostics/sortedIdsだけ公開し、現在iteratorなし。論理要素は参照ID集合。",
+      "DesignAssignments": "KeyedIndex<AttributePath, DesignAssignment>をrhsOfだけ公開し、targetキーとassignment値のentryを公開しない。",
+      "DesignAttributeCatalog": "#declarationsと#byPathを持つcatalog。paths/declares/diagnosticsだけで属性要素のiteratorなし。",
+      "IssuedLoweredIdentifiers": "KeySet<LoweredIdentifier>を発行済み台帳として保持し、availableObligationsのみ公開。",
+      "RefinementQueryVerdicts": "KeyedIndex<QueryLabel, RefinementQueryVerdict>をverdictOfだけ公開。VerdictにQueryLabelがない。",
+      "RuleSubsumptions": "RuleSubsumption配列をfindingsExceptの内部材料だけとして保持。",
+      "StableReleases": "PluginVersion配列をadviseの最新版選択へ閉じ込め、版列を公開しない。",
+      "StructuralDebt": "StructuralObservation配列を走査数/負債行集計へ閉じ込め、rowsは負債だけを返す。",
+      "ScenarioBindings": "ScenarioBinding配列をpath/valueAt/covers/toDocumentへ閉じ込め、binding列iteratorなし。",
+      "ScenarioVerdicts": "ScenarioVerdict配列を比較生成へ閉じ込め、comparisonsだけ公開。比較不能/重複backend/異なるsubjectを内部で除外・拒否。",
+      "SiblingUnitIndex": "UnitName→(NormalizedName→EntityDeclaration)二重KeyedIndexをdefinersOf/entityDeclaredInへ閉じ込める。",
+      "FunctionalRequirementReferenceIndex": "RequirementIdentifier→FunctionalRequirementReferenceClaims逆引きをreferencedIds/missingErrorsへ閉じ込める。valuesだけ反復すると一つのclaimが参照数分重複し得る。",
+      "IntermediateRepresentationAttributeCatalog": "IR EntityDeclarationsから派生したAttributePath→IR AttributeDeclaration catalog。pathキー/owner座標を隠蔽。",
+      "SatisfiabilityModuloTheoriesQueryVerdicts": "QueryLabel→SMT Verdict keyed indexをverdictOfへ閉じ込める。missing sentinelもlookup時に生成。",
+      "TraceState": "AttributePath→TraceValue状態snapshotをvalueAt/toDocumentへ閉じ込める。値だけではpath対応がない。"
+    },
+    "genericImplementationImplications": [
+      "非iterable15型は共通基盤の反復hookなしにat/head/tail/filter/existsを実装できない。特にKeyedIndex型はvaluesではなくkey付きentryの論理要素を選ぶ必要がある。",
+      "map<U>は生成先factory引数を受けないため、array-backed型はtransform結果を汎用FirstClassCollectionへ包めても、domain型へ再構築するfilter/tailとcontext付き型のkey/owner保持は別hookが必要。",
+      "include/filter/mapのE/Uはequalsを持つドメイン型に限定する裁定済み。ただし既存要素のうちVO equalsは22（TraceValueはJSON.stringify依存の要是正）、entityはid()のみ26、構造型はequals/idなし64で、型制約だけでは全112型をそのまま適合させられない。",
+      "TraceValue.equalsのJSON.stringify、entity/構造型の参照比較は同値実装として採用不可。"
+    ],
+    "contextualCollectionCount": 12,
+    "contextualCollections": [
+      "BusinessRuleReferenceIndex",
+      "DesignAttributeCatalog",
+      "DesignEventRuleCatalog",
+      "ReachabilityPlan",
+      "RefinementQueryVerdicts",
+      "InstallationManifest",
+      "ScenarioVerdicts",
+      "SiblingUnitIndex",
+      "FunctionalRequirementReferenceIndex",
+      "IntermediateRepresentationAttributeCatalog",
+      "SatisfiabilityModuloTheoriesQueryVerdicts",
+      "TraceState"
+    ],
+    "collectionCount": 112,
+    "sourceDomainFingerprint": "06ea930e4406c31fa9a2f02f064d9af9a777b01476ee994ef5fb1a7726938ef9"
+  },
+  "entries": [
+    {
+      "name": "AttributeMappings",
+      "path": "src/design/domain/attribute-mappings.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "AttributeMapping",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "AttributeMapping",
+        "source": "src/design/domain/attribute-mapping.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "AttributePaths",
+      "path": "src/design/domain/attribute-paths.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "AttributePath",
+      "keyType": null,
+      "storage": "KeySet",
+      "primaryClassification": "unique-set",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "AttributePath",
+        "source": "src/kernel/domain/attribute-path.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": "重複はKeySetで一意化され入力順の重複を保持しない。"
+      }
+    },
+    {
+      "name": "BusinessRuleReferenceIndex",
+      "path": "src/design/domain/business-rule-reference-index.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "BusinessRuleReference",
+      "keyType": null,
+      "storage": "KeySet",
+      "primaryClassification": "unique-set",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "BusinessRuleReference",
+        "source": "src/design/domain/business-rule-reference.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "BusinessRuleReferences"
+        ],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "inputs": [
+            "BusinessRuleReference.asString()"
+          ],
+          "why": "BusinessRuleReferencesをKeySet化して存在判定"
+        },
+        "semanticLossIfNaiveArrayClone": "ofはBusinessRuleReferencesをKeySet化する。生の配列だけなら既存のof型に届かず、KeySetの存在判定とsortedIdsの集合意味を再構成する必要がある。"
+      }
+    },
+    {
+      "name": "BusinessRuleReferences",
+      "path": "src/design/domain/business-rule-references.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "BusinessRuleReference",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "BusinessRuleReference",
+        "source": "src/design/domain/business-rule-reference.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "CheckedUnits",
+      "path": "src/design/domain/checked-units.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "UnitName",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "UnitName",
+        "source": "src/kernel/domain/unit-name.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignAssignments",
+      "path": "src/design/domain/design-assignments.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignAssignment",
+      "keyType": "<AttributePath",
+      "storage": "KeyedIndex",
+      "primaryClassification": "keyed-index",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignAssignment",
+        "source": "src/design/domain/design-assignment.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "inputs": [
+            "DesignAssignment.target(): AttributePath"
+          ],
+          "why": "KeyedIndexのキーを各要素のtargetから再導出。重複target後勝ち"
+        },
+        "semanticLossIfNaiveArrayClone": "配列要素をAttributePathキーでKeyedIndex化し、重複targetは後の値で上書き（位置はMap規則）。配列cloneだけでは重複要素列を意味として保持できない。"
+      }
+    },
+    {
+      "name": "DesignAttributeCatalog",
+      "path": "src/design/domain/design-attribute-catalog.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignAttributeDeclaration",
+      "keyType": "<AttributePath",
+      "storage": "KeyedIndex",
+      "primaryClassification": "keyed-index",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignAttributeDeclaration",
+        "source": "src/design/domain/design-attribute-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "DesignEntityDeclarations（entity所有者・属性宣言順）"
+        ],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": "DesignAttributeDeclaration配列だけではentity名を含む属性パス、#declarations、曖昧属性検査を復元できない。単純cloneはpaths/diagnostics/binding解決を壊す。"
+      }
+    },
+    {
+      "name": "DesignAttributeDeclarations",
+      "path": "src/design/domain/design-attribute-declarations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignAttributeDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignAttributeDeclaration",
+        "source": "src/design/domain/design-attribute-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignBackgroundAssumptions",
+      "path": "src/design/domain/design-background-assumptions.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignBackgroundAssumption",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignBackgroundAssumption",
+        "source": "src/design/domain/design-background-assumption.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignBackgroundDeclarations",
+      "path": "src/design/domain/design-background-declarations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignBackgroundDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignBackgroundDeclaration",
+        "source": "src/design/domain/design-background-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignCrossCheckedEntries",
+      "path": "src/design/domain/design-cross-checked-entries.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignCrossCheckedEntry",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignCrossCheckedEntry",
+        "source": "src/design/domain/design-cross-checked-entry.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignEntityDeclarations",
+      "path": "src/design/domain/design-entity-declarations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignEntityDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignEntityDeclaration",
+        "source": "src/design/domain/design-entity-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignEventRuleCatalog",
+      "path": "src/design/domain/design-event-rule-catalog.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignEventRule",
+      "keyType": "<TargetIdentifier",
+      "storage": "KeyedIndex",
+      "primaryClassification": "keyed-index",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignEventRule",
+        "source": "src/design/domain/design-event-rule.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "DesignUnit（obligation/machine/transitionの所属と順序）"
+        ],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": "DesignEventRule配列だけではunitからのobligation/machine/transition導出、sorted順、machine属性パスを再適用できない。event key重複時のKeyedIndex上書きも必要。"
+      }
+    },
+    {
+      "name": "DesignFindings",
+      "path": "src/design/domain/design-findings.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignFinding",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignFinding",
+        "source": "src/design/domain/design-finding.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignIgnoreDeclarations",
+      "path": "src/design/domain/design-ignore-declarations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignIgnoreDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignIgnoreDeclaration",
+        "source": "src/design/domain/design-ignore-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignIgnores",
+      "path": "src/design/domain/design-ignores.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignIgnore",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignIgnore",
+        "source": "src/design/domain/design-ignore.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignInputAnchors",
+      "path": "src/design/domain/design-input-anchors.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignInputAnchor",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignInputAnchor",
+        "source": "src/design/domain/design-input-anchor.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignMachineDeclarations",
+      "path": "src/design/domain/design-machine-declarations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignMachineDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignMachineDeclaration",
+        "source": "src/design/domain/design-machine-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignMachines",
+      "path": "src/design/domain/design-machines.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignMachine",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignMachine",
+        "source": "src/design/domain/design-machine.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignObligationDeclarations",
+      "path": "src/design/domain/design-obligation-declarations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignObligationDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignObligationDeclaration",
+        "source": "src/design/domain/design-obligation-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignObligations",
+      "path": "src/design/domain/design-obligations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignObligation",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignObligation",
+        "source": "src/design/domain/design-obligation.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignReports",
+      "path": "src/design/domain/design-reports.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignReport",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignReport",
+        "source": "src/design/domain/design-report.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignScenarioDeclarations",
+      "path": "src/design/domain/design-scenario-declarations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignScenarioDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignScenarioDeclaration",
+        "source": "src/design/domain/design-scenario-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignScenarios",
+      "path": "src/design/domain/design-scenarios.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignScenario",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignScenario",
+        "source": "src/design/domain/design-scenario.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignSkips",
+      "path": "src/design/domain/design-skips.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignSkipped",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignSkipped",
+        "source": "src/design/domain/design-skipped.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignTransitionDeclarations",
+      "path": "src/design/domain/design-transition-declarations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignTransitionDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignTransitionDeclaration",
+        "source": "src/design/domain/design-transition-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignTransitions",
+      "path": "src/design/domain/design-transitions.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignTransition",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignTransition",
+        "source": "src/design/domain/design-transition.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignUnitDeclarations",
+      "path": "src/design/domain/design-unit-declarations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignUnitDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignUnitDeclaration",
+        "source": "src/design/domain/design-unit-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignUnits",
+      "path": "src/design/domain/design-units.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "DesignUnit",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "DesignUnit",
+        "source": "src/design/domain/design-unit.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "EffectAssignments",
+      "path": "src/design/domain/effect-assignments.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "EffectAssignment",
+      "keyType": "<AttributePath",
+      "storage": "KeyedIndex",
+      "primaryClassification": "keyed-index",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "EffectAssignment",
+        "source": "src/design/domain/effect-assignment.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "fromEffectではExpressionTree（andのflattenとassignment解釈）"
+        ],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "inputs": [
+            "EffectAssignment.target(): AttributePath"
+          ],
+          "why": "KeyedIndexのキーを各要素のtargetから再導出。fromEffectはExpressionTreeのassignment解釈も必要"
+        },
+        "semanticLossIfNaiveArrayClone": "target(AttributePath)を失った右辺/等式の単純配列化では復元できない。重複targetはKeyedIndexで後勝ち、元の等式表記もEffectAssignment内に保持する。"
+      }
+    },
+    {
+      "name": "EventMappings",
+      "path": "src/design/domain/event-mappings.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "EventMapping",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "EventMapping",
+        "source": "src/design/domain/event-mapping.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "InitialStates",
+      "path": "src/design/domain/initial-states.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "InitialState",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "InitialState",
+        "source": "src/design/domain/initial-state.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "IssuedLoweredIdentifiers",
+      "path": "src/design/domain/issued-lowered-identifiers.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "LoweredIdentifier",
+      "keyType": null,
+      "storage": "KeySet",
+      "primaryClassification": "unique-set",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "LoweredIdentifier",
+        "source": "src/design/domain/lowered-identifier.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "inputs": [
+            "LoweredIdentifier.asString()"
+          ],
+          "why": "KeySet化と重複拒否を再適用"
+        },
+        "semanticLossIfNaiveArrayClone": "配列cloneはofで再構成できるが、KeySet化と重複拒否を必ず再適用する。重複を黙ってset化すると発行済み台帳とavailableObligationsの予算が変わる。"
+      }
+    },
+    {
+      "name": "LoweredBackgrounds",
+      "path": "src/design/domain/lowered-backgrounds.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "LoweredBackground",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "LoweredBackground",
+        "source": "src/design/domain/lowered-background.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "LoweredObligations",
+      "path": "src/design/domain/lowered-obligations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "LoweredObligation",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "LoweredObligation",
+        "source": "src/design/domain/lowered-obligation.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "LoweredScenarios",
+      "path": "src/design/domain/lowered-scenarios.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "LoweredScenario",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "LoweredScenario",
+        "source": "src/design/domain/lowered-scenario.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "ReachabilityPlan",
+      "path": "src/design/domain/reachability-plan.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "MachineReachability",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "MachineReachability",
+        "source": "src/design/domain/machine-reachability.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "forUnitではDesignUnit・LoweredUnit・VerificationMethod"
+        ],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": "of/parseはMachineReachability配列だけで復元可能だが、forUnitの追加スコープを配列cloneで代用できない。machine順とprobe予算の検査を再適用する。"
+      }
+    },
+    {
+      "name": "RefinementAttributes",
+      "path": "src/design/domain/refinement-attributes.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "RefinementAttribute",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "RefinementAttribute",
+        "source": "src/design/domain/refinement-attribute.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "RefinementObligations",
+      "path": "src/design/domain/refinement-obligations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "RefinementObligation",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "RefinementObligation",
+        "source": "src/design/domain/refinement-obligation.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "RefinementQueryVerdicts",
+      "path": "src/design/domain/refinement-query-verdicts.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "RefinementQueryVerdict",
+      "keyType": "<QueryLabel",
+      "storage": "KeyedIndex",
+      "primaryClassification": "keyed-index",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "RefinementQueryVerdict",
+        "source": "src/design/domain/refinement-query-verdict.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "KeyedIndex<QueryLabel, RefinementQueryVerdict>（query label）"
+        ],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "kind": "key-association",
+          "inputs": [
+            "KeyedIndex<QueryLabel, RefinementQueryVerdict>"
+          ],
+          "why": "Verdict本体にQueryLabelがなく、キーを値配列から導出できない"
+        },
+        "semanticLossIfNaiveArrayClone": "Verdict本体にquery labelがないためvalues配列だけではキーを復元できない。単純array cloneはverdictOf(queryId)を壊す。"
+      }
+    },
+    {
+      "name": "RefinementQuintInvariants",
+      "path": "src/design/domain/refinement-quint-invariants.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "RefinementQuintInvariant",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "RefinementQuintInvariant",
+        "source": "src/design/domain/refinement-quint-invariant.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "RefinementScenarios",
+      "path": "src/design/domain/refinement-scenarios.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "RefinementScenario",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "RefinementScenario",
+        "source": "src/design/domain/refinement-scenario.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "RefinementUnitMaps",
+      "path": "src/design/domain/refinement-unit-maps.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "RefinementUnitMap",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "RefinementUnitMap",
+        "source": "src/design/domain/refinement-unit-map.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "RuleSubsumptions",
+      "path": "src/design/domain/rule-subsumptions.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "RuleSubsumption",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "RuleSubsumption",
+        "source": "src/design/domain/rule-subsumption.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "SiblingVerdictFindings",
+      "path": "src/design/domain/sibling-verdict-findings.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "SiblingVerdictFinding",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "SiblingVerdictFinding",
+        "source": "src/design/domain/sibling-verdict-finding.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "SiblingVerdictSkips",
+      "path": "src/design/domain/sibling-verdict-skips.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "SiblingVerdictSkip",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "SiblingVerdictSkip",
+        "source": "src/design/domain/sibling-verdict-skip.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "TransitionReferences",
+      "path": "src/design/domain/transition-references.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "TransitionReference",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "TransitionReference",
+        "source": "src/design/domain/transition-reference.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "UnformalizedTargets",
+      "path": "src/design/domain/unformalized-targets.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "TargetIdentifier",
+      "keyType": null,
+      "storage": "KeySet",
+      "primaryClassification": "unique-set",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "TargetIdentifier",
+        "source": "src/kernel/domain/target-identifier.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "UnmappedDeclarations",
+      "path": "src/design/domain/unmapped-declarations.ts",
+      "group": "design",
+      "nonEmpty": false,
+      "elementType": "UnmappedTarget",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "UnmappedTarget",
+        "source": "src/design/domain/unmapped-target.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DesignArtifacts",
+      "path": "src/doctor/domain/design-artifacts.ts",
+      "group": "doctor",
+      "nonEmpty": false,
+      "elementType": "DesignArtifactReference",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DesignArtifactReference",
+        "source": "src/doctor/domain/design-artifact-reference.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "HealthVerdict",
+      "path": "src/doctor/domain/health-verdict.ts",
+      "group": "doctor",
+      "nonEmpty": false,
+      "elementType": "Check",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "Check",
+        "source": "src/doctor/domain/check.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "InstallationManifest",
+      "path": "src/doctor/domain/installation-manifest.ts",
+      "group": "doctor",
+      "nonEmpty": true,
+      "elementType": "ManifestEntry",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "ManifestEntry",
+        "source": "src/doctor/domain/manifest-entry.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [
+          "standard()内の固定26相対パス・順序・ManifestEntry.severity"
+        ],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": "任意要素配列で再構築すると標準出荷台帳の固定性・順序・error severityを失う。factoryはstandard()のみ。"
+      }
+    },
+    {
+      "name": "StableReleases",
+      "path": "src/doctor/domain/stable-releases.ts",
+      "group": "doctor",
+      "nonEmpty": false,
+      "elementType": "PluginVersion",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "PluginVersion",
+        "source": "src/doctor/domain/plugin-version.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "StageScopes",
+      "path": "src/doctor/domain/stage-scopes.ts",
+      "group": "doctor",
+      "nonEmpty": false,
+      "elementType": "StageScope",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "StageScope",
+        "source": "src/doctor/domain/stage-scope.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "StructuralDebt",
+      "path": "src/doctor/domain/structural-debt.ts",
+      "group": "doctor",
+      "nonEmpty": false,
+      "elementType": "StructuralObservation",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "StructuralObservation",
+        "source": "src/doctor/domain/structural-observation.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DeclaredBindings",
+      "path": "src/kernel/domain/declared-bindings.ts",
+      "group": "kernel",
+      "nonEmpty": false,
+      "elementType": "BindingDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "BindingDeclaration",
+        "source": "src/kernel/domain/binding-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "EnumerationMembers",
+      "path": "src/kernel/domain/enumeration-members.ts",
+      "group": "kernel",
+      "nonEmpty": false,
+      "elementType": "EnumerationMember",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "EnumerationMember",
+        "source": "src/kernel/domain/enumeration-member.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "ErrorMessages",
+      "path": "src/kernel/domain/error-messages.ts",
+      "group": "kernel",
+      "nonEmpty": false,
+      "elementType": "ErrorMessage",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "ErrorMessage",
+        "source": "src/kernel/domain/error-message.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "FunctionalRequirementReferences",
+      "path": "src/kernel/domain/functional-requirement-references.ts",
+      "group": "kernel",
+      "nonEmpty": false,
+      "elementType": "RequirementIdentifier",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "RequirementIdentifier",
+        "source": "src/kernel/domain/requirement-identifier.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "RequirementIdentifiers",
+      "path": "src/kernel/domain/requirement-identifiers.ts",
+      "group": "kernel",
+      "nonEmpty": false,
+      "elementType": "RequirementIdentifier",
+      "keyType": null,
+      "storage": "KeySet",
+      "primaryClassification": "unique-set",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "RequirementIdentifier",
+        "source": "src/kernel/domain/requirement-identifier.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "ScenarioBindings",
+      "path": "src/kernel/domain/scenario-bindings.ts",
+      "group": "kernel",
+      "nonEmpty": false,
+      "elementType": "ScenarioBinding",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "ScenarioBinding",
+        "source": "src/kernel/domain/scenario-binding.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "inputs": [
+            "ScenarioBinding.path()"
+          ],
+          "why": "path一意制約を再適用"
+        },
+        "semanticLossIfNaiveArrayClone": "要素配列だけで復元できるが、path一意制約を再検査する必要がある。Bindingにequalsがないため、参照等価でinclude/filterを実装してはならない。"
+      }
+    },
+    {
+      "name": "ScenarioVerdicts",
+      "path": "src/kernel/domain/scenario-verdicts.ts",
+      "group": "kernel",
+      "nonEmpty": false,
+      "elementType": "ScenarioVerdict",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "ScenarioVerdict",
+        "source": "src/kernel/domain/scenario-verdict.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "各ScenarioVerdict内のmodelHash/target/unitがsubject context"
+        ],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "inputs": [
+            "ScenarioVerdict.modelHash/target/unit/backend"
+          ],
+          "why": "同一subject・backend一意・比較可能のみの不変条件を再適用"
+        },
+        "semanticLossIfNaiveArrayClone": "単純array cloneではconstructorの比較可能判定の除外、同一subject検査、backend重複検査、128件上限を迂回し得る。filter/map後はsubject/backend不変条件をどう保つか未確定。"
+      }
+    },
+    {
+      "name": "TargetIdentifiers",
+      "path": "src/kernel/domain/target-identifiers.ts",
+      "group": "kernel",
+      "nonEmpty": false,
+      "elementType": "TargetIdentifier",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "TargetIdentifier",
+        "source": "src/kernel/domain/target-identifier.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "AllowedValues",
+      "path": "src/refcheck/domain/allowed-values.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "AllowedValue",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "AllowedValue",
+        "source": "src/refcheck/domain/allowed-value.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "AttributeDeclarations",
+      "path": "src/refcheck/domain/attribute-declarations.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "AttributeDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "AttributeDeclaration",
+        "source": "src/refcheck/domain/attribute-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "AttributeNames",
+      "path": "src/refcheck/domain/attribute-names.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "AttributeName",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "AttributeName",
+        "source": "src/refcheck/domain/attribute-name.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "CheckFamilies",
+      "path": "src/refcheck/domain/check-families.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "CheckFamily",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "CheckFamily",
+        "source": "src/refcheck/domain/check-family.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "ComponentEntities",
+      "path": "src/refcheck/domain/component-entities.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "ComponentEntity",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "ComponentEntity",
+        "source": "src/refcheck/domain/component-entity.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "ComponentReferences",
+      "path": "src/refcheck/domain/component-references.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "ComponentReference",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "ComponentReference",
+        "source": "src/refcheck/domain/component-reference.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "ComponentShapeErrors",
+      "path": "src/refcheck/domain/component-shape-errors.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "ComponentShapeError",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "ComponentShapeError",
+        "source": "src/refcheck/domain/component-shape-error.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "Components",
+      "path": "src/refcheck/domain/components.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "Component",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "Component",
+        "source": "src/refcheck/domain/component.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "ContractRows",
+      "path": "src/refcheck/domain/contract-rows.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "ContractRow",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "ContractRow",
+        "source": "src/refcheck/domain/contract-row.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "DomainEntitySketches",
+      "path": "src/refcheck/domain/domain-entity-sketches.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "DomainEntitySketch",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "DomainEntitySketch",
+        "source": "src/refcheck/domain/domain-entity-sketch.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "EntityDeclarations",
+      "path": "src/refcheck/domain/entity-declarations.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "EntityDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "EntityDeclaration",
+        "source": "src/refcheck/domain/entity-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "inputs": [
+            "EntityDeclaration.name()"
+          ],
+          "why": "#namesを要素配列から再導出。重複名は診断のため配列に保持"
+        },
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "EntityReferences",
+      "path": "src/refcheck/domain/entity-references.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "EntityReference",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "EntityReference",
+        "source": "src/refcheck/domain/entity-reference.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "Findings",
+      "path": "src/refcheck/domain/findings.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "Finding",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "Finding",
+        "source": "src/refcheck/domain/finding.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "InputAnchors",
+      "path": "src/refcheck/domain/input-anchors.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "InputAnchor",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "InputAnchor",
+        "source": "src/refcheck/domain/input-anchor.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "RelationshipDeclarations",
+      "path": "src/refcheck/domain/relationship-declarations.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "RelationshipDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "RelationshipDeclaration",
+        "source": "src/refcheck/domain/relationship-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "RuleDeclarations",
+      "path": "src/refcheck/domain/rule-declarations.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "RuleDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "RuleDeclaration",
+        "source": "src/refcheck/domain/rule-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "ShapeErrors",
+      "path": "src/refcheck/domain/shape-errors.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "ShapeError",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "ShapeError",
+        "source": "src/refcheck/domain/shape-error.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "SiblingUnitIndex",
+      "path": "src/refcheck/domain/sibling-unit-index.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "EntityDeclaration",
+      "keyType": "UnitName (outer), NormalizedName (inner)",
+      "storage": "KeyedIndex",
+      "primaryClassification": "keyed-index",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "EntityDeclaration",
+        "source": "src/refcheck/domain/entity-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "KeyedIndex<UnitName, EntityDeclarations>（unit owner）"
+        ],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": "EntityDeclaration配列だけでは所属UnitNameと正規化名キーを復元できない。unitを落とすarray cloneはdefinersOf/entityDeclaredInの結果を誤る。"
+      }
+    },
+    {
+      "name": "Skips",
+      "path": "src/refcheck/domain/skips.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "Skipped",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "Skipped",
+        "source": "src/refcheck/domain/skipped.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "SourceIdentifiers",
+      "path": "src/refcheck/domain/source-identifiers.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "SourceIdentifier",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "SourceIdentifier",
+        "source": "src/refcheck/domain/source-identifier.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "SpecificationBlockAssessments",
+      "path": "src/refcheck/domain/specification-block-assessments.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "SpecificationBlockAssessment",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "SpecificationBlockAssessment",
+        "source": "src/refcheck/domain/specification-block-assessment.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "StateMachineSketches",
+      "path": "src/refcheck/domain/state-machine-sketches.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "StateMachineSketch",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "StateMachineSketch",
+        "source": "src/refcheck/domain/state-machine-sketch.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "StateNames",
+      "path": "src/refcheck/domain/state-names.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "StateName",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "StateName",
+        "source": "src/refcheck/domain/state-name.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "UnitDeclarations",
+      "path": "src/refcheck/domain/unit-declarations.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "UnitDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "UnitDeclaration",
+        "source": "src/refcheck/domain/unit-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "UnitNames",
+      "path": "src/refcheck/domain/unit-names.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "UnitName",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "UnitName",
+        "source": "src/kernel/domain/unit-name.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "WitnessReferences",
+      "path": "src/refcheck/domain/witness-references.ts",
+      "group": "refcheck",
+      "nonEmpty": false,
+      "elementType": "WitnessReference",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "WitnessReference",
+        "source": "src/refcheck/domain/witness-reference.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "BackgroundAssumptions",
+      "path": "src/requirements/domain/background-assumptions.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "BackgroundAssumption",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "BackgroundAssumption",
+        "source": "src/requirements/domain/background-assumption.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "CrossCheckedEntries",
+      "path": "src/requirements/domain/cross-checked-entries.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "CrossCheckedEntry",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "CrossCheckedEntry",
+        "source": "src/requirements/domain/cross-checked-entry.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "FunctionalRequirementReferenceClaims",
+      "path": "src/requirements/domain/functional-requirement-reference-claims.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "FunctionalRequirementReferenceClaim",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "FunctionalRequirementReferenceClaim",
+        "source": "src/requirements/domain/functional-requirement-reference-claim.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "FunctionalRequirementReferenceIndex",
+      "path": "src/requirements/domain/functional-requirement-reference-index.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "FunctionalRequirementReferenceClaim",
+      "keyType": "<RequirementIdentifier",
+      "storage": "KeyedIndex",
+      "primaryClassification": "keyed-index",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "FunctionalRequirementReferenceClaim",
+        "source": "src/requirements/domain/functional-requirement-reference-claim.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "FunctionalRequirementReferenceClaim（owner＋参照IDを要素内に保持）"
+        ],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "inputs": [
+            "FunctionalRequirementReferenceClaim.owner＋参照ID"
+          ],
+          "why": "claimIntoでRequirementIdentifier→owner群へ再集約"
+        },
+        "semanticLossIfNaiveArrayClone": "claims配列から再構成は可能だがclaimIntoでRequirementIdentifier→ownersを再集約する必要がある。索引のvalues配列cloneだけでは所有者グループとmissingErrorsの文脈を失う。"
+      }
+    },
+    {
+      "name": "IntermediateRepresentationAttributeCatalog",
+      "path": "src/requirements/domain/intermediate-representation-attribute-catalog.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationAttributeDeclaration",
+      "keyType": "<AttributePath",
+      "storage": "KeyedIndex",
+      "primaryClassification": "keyed-index",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "IntermediateRepresentationAttributeDeclaration",
+        "source": "src/requirements/domain/intermediate-representation-attribute-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "IntermediateRepresentationEntityDeclarations（entity所有者・属性順）"
+        ],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": "属性宣言配列だけではentity座標・ambiguous検査・catalog由来の解決を復元できない。#byPathだけのcloneはdiagnostics/bindingDiagnosticsを壊す。"
+      }
+    },
+    {
+      "name": "IntermediateRepresentationAttributeDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-attribute-declarations.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationAttributeDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "IntermediateRepresentationAttributeDeclaration",
+        "source": "src/requirements/domain/intermediate-representation-attribute-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "IntermediateRepresentationBackgroundDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-background-declarations.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationBackgroundDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "IntermediateRepresentationBackgroundDeclaration",
+        "source": "src/requirements/domain/intermediate-representation-background-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "IntermediateRepresentationEntityDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-entity-declarations.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationEntityDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "IntermediateRepresentationEntityDeclaration",
+        "source": "src/requirements/domain/intermediate-representation-entity-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "IntermediateRepresentationObligationDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-obligation-declarations.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationObligationDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "IntermediateRepresentationObligationDeclaration",
+        "source": "src/requirements/domain/intermediate-representation-obligation-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "IntermediateRepresentationScenarioDeclarations",
+      "path": "src/requirements/domain/intermediate-representation-scenario-declarations.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "IntermediateRepresentationScenarioDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "IntermediateRepresentationScenarioDeclaration",
+        "source": "src/requirements/domain/intermediate-representation-scenario-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "ObligationIdentifiers",
+      "path": "src/requirements/domain/obligation-identifiers.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "ObligationIdentifier",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "ObligationIdentifier",
+        "source": "src/requirements/domain/obligation-identifier.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "Obligations",
+      "path": "src/requirements/domain/obligations.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "Obligation",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "Obligation",
+        "source": "src/requirements/domain/obligation.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "QuintMachineComponents",
+      "path": "src/requirements/domain/quint-machine-components.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "QuintMachineComponent",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "QuintMachineComponent",
+        "source": "src/requirements/domain/quint-machine-component.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "RequirementAttributeDeclarations",
+      "path": "src/requirements/domain/requirement-attribute-declarations.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "RequirementAttributeDeclaration",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "RequirementAttributeDeclaration",
+        "source": "src/requirements/domain/requirement-attribute-declaration.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "inputs": [
+            "RequirementAttributeDeclaration.path()"
+          ],
+          "why": "#byPathを要素配列から再導出。重複pathはindex後勝ち、配列順は保持"
+        },
+        "semanticLossIfNaiveArrayClone": "要素配列から#byPathは再構成できるが、重複pathは配列順を保ちつつindex側が後勝ちする。indexだけのcloneは重複診断と宣言順を失う。"
+      }
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesEventPairProbes",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-event-pair-probes.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "SatisfiabilityModuloTheoriesEventPairProbe",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "SatisfiabilityModuloTheoriesEventPairProbe",
+        "source": "src/requirements/domain/satisfiability-modulo-theories-event-pair-probe.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "SatisfiabilityModuloTheoriesQueryVerdicts",
+      "path": "src/requirements/domain/satisfiability-modulo-theories-query-verdicts.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "SatisfiabilityModuloTheoriesQueryVerdict",
+      "keyType": "<QueryLabel",
+      "storage": "KeyedIndex",
+      "primaryClassification": "keyed-index",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "SatisfiabilityModuloTheoriesQueryVerdict",
+        "source": "src/requirements/domain/satisfiability-modulo-theories-query-verdict.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "KeyedIndex<QueryLabel, SatisfiabilityModuloTheoriesQueryVerdict>（query label）"
+        ],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "kind": "key-association",
+          "inputs": [
+            "KeyedIndex<QueryLabel, SatisfiabilityModuloTheoriesQueryVerdict>"
+          ],
+          "why": "QueryVerdict本体にQueryLabelがなく、missing sentinelのキー解決が必要"
+        },
+        "semanticLossIfNaiveArrayClone": "QueryVerdict本体はquery labelを持たない。values配列cloneではverdictOf(queryId)とmissing sentinelの契約が復元不能。"
+      }
+    },
+    {
+      "name": "Scenarios",
+      "path": "src/requirements/domain/scenarios.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "Scenario",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "Scenario",
+        "source": "src/requirements/domain/scenario.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "TraceState",
+      "path": "src/requirements/domain/trace-state.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "TraceValue",
+      "keyType": "<AttributePath",
+      "storage": "KeyedIndex",
+      "primaryClassification": "keyed-index",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "TraceValue",
+        "source": "src/requirements/domain/trace-value.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": true,
+        "additionalContext": [
+          "ofはIterable<[AttributePath, TraceValue]>、fromBindingsはScenarioBindings"
+        ],
+        "requiresKeyAssociation": true,
+        "keyAssociation": {
+          "kind": "key-association",
+          "inputs": [
+            "Iterable<[AttributePath, TraceValue]> または ScenarioBindings"
+          ],
+          "why": "TraceValue単体からAttributePathキーとtoDocument順を復元できない"
+        },
+        "semanticLossIfNaiveArrayClone": "TraceValue配列だけではAttributePathキーを失う。entriesのキー順とabsent/null、toDocumentのpath→value対応を保持するにはentry対が必要。"
+      }
+    },
+    {
+      "name": "TraceStates",
+      "path": "src/requirements/domain/trace-states.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "TraceState",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "TraceState",
+        "source": "src/requirements/domain/trace-state.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "VerificationFindings",
+      "path": "src/requirements/domain/verification-findings.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "VerificationFinding",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "VerificationFinding",
+        "source": "src/requirements/domain/verification-finding.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "VerificationReports",
+      "path": "src/requirements/domain/verification-reports.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "VerificationReport",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "entity-identifier (id()のみ、equalsなし)",
+        "type": "VerificationReport",
+        "source": "src/requirements/domain/verification-report.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "VerificationSkips",
+      "path": "src/requirements/domain/verification-skips.ts",
+      "group": "requirements",
+      "nonEmpty": false,
+      "elementType": "VerificationSkipped",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": false,
+        "basis": "none/structural",
+        "type": "VerificationSkipped",
+        "source": "src/requirements/domain/verification-skipped.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": null
+      }
+    },
+    {
+      "name": "FindingTargets",
+      "path": "src/kernel/domain/finding-targets.ts",
+      "group": "kernel",
+      "nonEmpty": true,
+      "elementType": "TargetIdentifier",
+      "keyType": null,
+      "storage": "readonly-array",
+      "primaryClassification": "ordered-sequence",
+      "elementEquality": {
+        "available": true,
+        "basis": "VO-value",
+        "type": "TargetIdentifier",
+        "source": "src/kernel/domain/target-identifier.ts"
+      },
+      "reconstruction": {
+        "requiresAdditionalContext": false,
+        "additionalContext": [
+          "of/parse(head: TargetIdentifier, tail: readonly TargetIdentifier[])"
+        ],
+        "requiresKeyAssociation": false,
+        "keyAssociation": null,
+        "semanticLossIfNaiveArrayClone": "headをnullable/配列任意にすると非空契約を失う。tail込み総数65,536上限、宣言順・重複を保持し、ofは例外、parseはParseError。"
+      }
+    }
+  ],
+  "projectionNote": "基線コミットの型名・要素・集合分類・等価性・再構築文脈を保持。コード本文と既存APIの全文複製は除き、元コードはgitHeadで参照する。"
+}

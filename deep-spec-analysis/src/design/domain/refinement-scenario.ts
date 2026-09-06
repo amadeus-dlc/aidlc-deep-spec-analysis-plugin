@@ -8,6 +8,7 @@ import type { ScenarioIdentifier } from "@deep-spec-analysis/requirements-domain
 import { AttributePaths } from "./attribute-paths.ts";
 import { RefinementStatus } from "./refinement-status.ts";
 import type { RefinementUnitMap } from "./refinement-unit-map.ts";
+import { sameIterable, sameOptional } from "./value-equality.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type RefinementScenarioParam = {
@@ -35,6 +36,18 @@ export class RefinementScenario {
 
   static of(props: RefinementScenarioParam): RefinementScenario {
     return new RefinementScenario(props);
+  }
+
+  equals(other: RefinementScenario): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      this.#expectation.asString() === other.#expectation.asString() &&
+      sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) =>
+        left.equals(right),
+      ) &&
+      sameIterable(this.#bindings, other.#bindings, (left, right) => left.equals(right)) &&
+      sameOptional(this.#eventTrigger, other.#eventTrigger, (left, right) => left.equals(right))
+    );
   }
 
   coverageIn(map: RefinementUnitMap): RefinementStatus {

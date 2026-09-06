@@ -1,13 +1,40 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationBackgroundDeclaration } from "./intermediate-representation-background-declaration.ts";
 
 export class IntermediateRepresentationBackgroundDeclarations
-  implements FirstClassCollection, IterableFirstClassCollection<IntermediateRepresentationBackgroundDeclaration>
+  extends FirstClassCollectionBase<
+    IntermediateRepresentationBackgroundDeclaration,
+    IntermediateRepresentationBackgroundDeclarations
+  >
+  implements FirstClassCollection<IntermediateRepresentationBackgroundDeclaration>
 {
   readonly #values: readonly IntermediateRepresentationBackgroundDeclaration[];
 
   private constructor(values: readonly IntermediateRepresentationBackgroundDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(
+      values,
+      65_536,
+      "too-many-intermediate-representation-background-declarations",
+    );
+  }
+
+  protected rebuild(
+    values: readonly IntermediateRepresentationBackgroundDeclaration[],
+  ): IntermediateRepresentationBackgroundDeclarations {
+    return new IntermediateRepresentationBackgroundDeclarations(values);
+  }
+
+  static parse(
+    values: readonly IntermediateRepresentationBackgroundDeclaration[],
+  ): Result<IntermediateRepresentationBackgroundDeclarations, ParseError> {
+    return parseConstruction(() => new IntermediateRepresentationBackgroundDeclarations(values));
   }
 
   static of(
@@ -26,9 +53,5 @@ export class IntermediateRepresentationBackgroundDeclarations
 
   toArray(): readonly IntermediateRepresentationBackgroundDeclaration[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

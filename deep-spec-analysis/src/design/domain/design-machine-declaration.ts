@@ -6,6 +6,7 @@ import type { DesignIgnoreDeclarations } from "./design-ignore-declarations.ts";
 import type { DesignMachineIdentifier } from "./design-machine-identifier.ts";
 import type { DesignTransitionDeclarations } from "./design-transition-declarations.ts";
 import type { InitialStates } from "./initial-states.ts";
+import { sameIterable } from "./value-equality.ts";
 
 // 契約3 設計 IR の状態機械宣言（well-formedness 検査材料）。初期状態のうち
 // 状態集合に属さないものの選別は宣言自身の知識（#71 波13）。attrPath は
@@ -37,6 +38,16 @@ export class DesignMachineDeclaration {
 
   static of(props: DesignMachineDeclarationParam): DesignMachineDeclaration {
     return new DesignMachineDeclaration(props);
+  }
+
+  equals(other: DesignMachineDeclaration): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      this.#attrPath === other.#attrPath &&
+      sameIterable(this.#initial, other.#initial, (left, right) => left.equals(right)) &&
+      sameIterable(this.#transitions, other.#transitions, (left, right) => left.equals(right)) &&
+      sameIterable(this.#ignores, other.#ignores, (left, right) => left.equals(right))
+    );
   }
 
   id(): DesignMachineIdentifier {
@@ -80,7 +91,7 @@ export class DesignMachineDeclaration {
     for (const tr of this.transitions()) {
       const tctx = `transition ${tr.id().asString()}`;
       for (const [k, v] of tr.stateEntries()) {
-        if (v !== undefined && !states.includes(v)) {
+        if (v !== undefined && !states.exists((state) => state.matchesLiteral(v))) {
           errors.push(`${tctx}: ${k} state "${v}" is not a value of ${attrPath}`);
         }
       }
@@ -109,6 +120,8 @@ export class DesignMachineDeclaration {
 
   // 初期状態のうち状態集合に属さないもの（宣言順——文言の発生順を決める凍結面）。
   initialStatesOutside(states: EnumerationMembers): string[] {
-    return [...this.#initial].filter((state) => !states.includes(state.asString())).map((state) => state.asString());
+    return [...this.#initial]
+      .filter((state) => !states.exists((declared) => declared.matchesLiteral(state.asString())))
+      .map((state) => state.asString());
   }
 }

@@ -30,4 +30,8 @@ export class DeclaredBindingValue {
   describe(): string {
     return this.#value.describe();
   }
+
+  equals(other: DeclaredBindingValue): boolean {
+    return this.#value.equals(other.#value);
+  }
 }

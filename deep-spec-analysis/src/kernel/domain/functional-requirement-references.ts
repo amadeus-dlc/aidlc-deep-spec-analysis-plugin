@@ -1,28 +1,38 @@
 import type { FirstClassCollection } from "./first-class-collection.ts";
-import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
+import { FirstClassCollectionBase } from "./first-class-collection-base.ts";
 // FunctionalRequirementReferences — 義務・シナリオ・finding が指す要件 id の列（ファーストクラス
 // コレクション）。要素は RequirementIdentifier（裁定 3-1、2026-09-03——生 string の列
 // ではない）。of は型付きの要素を受け取る。
 // 正準一意化（`sortedUnique`）は finding の frRefs 面の凍結正準形。
 
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { RequirementIdentifier } from "./requirement-identifier.ts";
 
+const MAX_FUNCTIONAL_REQUIREMENT_REFERENCES = 10_000;
+
 export class FunctionalRequirementReferences
-  implements FirstClassCollection, IterableFirstClassCollection<RequirementIdentifier>
+  extends FirstClassCollectionBase<RequirementIdentifier, FunctionalRequirementReferences>
+  implements FirstClassCollection<RequirementIdentifier>
 {
   readonly #values: readonly RequirementIdentifier[];
 
   private constructor(values: readonly RequirementIdentifier[]) {
+    super();
     // 1要素が持つ要件参照の処理予算は10,000件。コピーの前に確認する。
-    if (values.length > 10_000)
-      throw new IllegalArgumentException({ kind: "too-many-functional-requirement-references", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    this.#values = boundedCollectionSnapshot(
+      values,
+      MAX_FUNCTIONAL_REQUIREMENT_REFERENCES,
+      "too-many-functional-requirement-references",
+    );
+  }
+
+  protected rebuild(values: readonly RequirementIdentifier[]): FunctionalRequirementReferences {
+    return new FunctionalRequirementReferences(values);
   }
 
   static parse(values: readonly RequirementIdentifier[]): Result<FunctionalRequirementReferences, ParseError> {

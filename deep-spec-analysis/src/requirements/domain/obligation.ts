@@ -124,6 +124,38 @@ export class Obligation {
   id(): ObligationIdentifier {
     return this.#id;
   }
+
+  equals(other: Obligation): boolean {
+    const expressionEqual = (left: Expression | undefined, right: Expression | undefined): boolean =>
+      left === undefined
+        ? right === undefined
+        : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    const refs = this.#functionalRequirementReferences.toArray();
+    const otherRefs = other.#functionalRequirementReferences.toArray();
+    const temporalEqual = (left: TemporalExpressions | undefined, right: TemporalExpressions | undefined): boolean => {
+      if (left === undefined || right === undefined) return left === right;
+      return (
+        left.pattern === right.pattern &&
+        expressionEqual(left.assert, right.assert) &&
+        expressionEqual(left.from, right.from) &&
+        expressionEqual(left.to, right.to)
+      );
+    };
+    return (
+      this.#id.equals(other.#id) &&
+      this.#nature.equals(other.#nature) &&
+      refs.length === otherRefs.length &&
+      refs.every((ref, index) => ref.equals(otherRefs[index] as (typeof refs)[number])) &&
+      this.#ears === other.#ears &&
+      expressionEqual(this.#assert, other.#assert) &&
+      (this.#trigger === undefined
+        ? other.#trigger === undefined
+        : other.#trigger !== undefined && this.#trigger.equals(other.#trigger)) &&
+      expressionEqual(this.#guard, other.#guard) &&
+      expressionEqual(this.#effect, other.#effect) &&
+      temporalEqual(this.#temporal, other.#temporal)
+    );
+  }
   nature(): ObligationNature {
     return this.#nature;
   }

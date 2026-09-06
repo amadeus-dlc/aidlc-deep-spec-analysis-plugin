@@ -1,5 +1,10 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { type AttributePath, type Expression, ExpressionTree, KeyedIndex } from "@deep-spec-analysis/kernel-domain";
+import {
+  type AttributePath,
+  type Expression,
+  ExpressionTree,
+  FirstClassCollectionBase,
+  KeyedIndex,
+} from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
   type ParseError,
@@ -9,10 +14,11 @@ import {
 import { EffectAssignment } from "./effect-assignment.ts";
 
 /** 効果の代入集合。同じ属性は後の代入を採用し、最初の出現位置を保つ。 */
-export class EffectAssignments implements FirstClassCollection, IterableFirstClassCollection<EffectAssignment> {
+export class EffectAssignments extends FirstClassCollectionBase<EffectAssignment, EffectAssignments> {
   readonly #values: KeyedIndex<AttributePath, EffectAssignment>;
 
   private constructor(values: readonly EffectAssignment[]) {
+    super();
     if (values.length > 10_000) throw new IllegalArgumentException({ kind: "expression-too-large" });
     let nodes = 0;
     const entries: (readonly [AttributePath, EffectAssignment])[] = [];
@@ -23,6 +29,10 @@ export class EffectAssignments implements FirstClassCollection, IterableFirstCla
       entries.push([assignment.target(), assignment]);
     }
     this.#values = KeyedIndex.of(entries);
+  }
+
+  protected rebuild(values: readonly EffectAssignment[]): EffectAssignments {
+    return new EffectAssignments(values);
   }
 
   static of(values: readonly EffectAssignment[]): EffectAssignments {
@@ -55,9 +65,5 @@ export class EffectAssignments implements FirstClassCollection, IterableFirstCla
 
   *[Symbol.iterator](): Iterator<EffectAssignment> {
     yield* this.#values.values();
-  }
-
-  isEmpty(): boolean {
-    return this.#values.isEmpty();
   }
 }

@@ -1,19 +1,46 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { IntermediateRepresentationScenarioDeclaration } from "./intermediate-representation-scenario-declaration.ts";
 
 export class IntermediateRepresentationScenarioDeclarations
-  implements FirstClassCollection, IterableFirstClassCollection<IntermediateRepresentationScenarioDeclaration>
+  extends FirstClassCollectionBase<
+    IntermediateRepresentationScenarioDeclaration,
+    IntermediateRepresentationScenarioDeclarations
+  >
+  implements FirstClassCollection<IntermediateRepresentationScenarioDeclaration>
 {
   readonly #values: readonly IntermediateRepresentationScenarioDeclaration[];
 
   private constructor(values: readonly IntermediateRepresentationScenarioDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(
+      values,
+      65_536,
+      "too-many-intermediate-representation-scenario-declarations",
+    );
+  }
+
+  protected rebuild(
+    values: readonly IntermediateRepresentationScenarioDeclaration[],
+  ): IntermediateRepresentationScenarioDeclarations {
+    return new IntermediateRepresentationScenarioDeclarations(values);
   }
 
   static of(
     values: readonly IntermediateRepresentationScenarioDeclaration[],
   ): IntermediateRepresentationScenarioDeclarations {
     return new IntermediateRepresentationScenarioDeclarations(values);
+  }
+
+  static parse(
+    values: readonly IntermediateRepresentationScenarioDeclaration[],
+  ): Result<IntermediateRepresentationScenarioDeclarations, ParseError> {
+    return parseConstruction(() => new IntermediateRepresentationScenarioDeclarations(values));
   }
 
   add(value: IntermediateRepresentationScenarioDeclaration): IntermediateRepresentationScenarioDeclarations {
@@ -26,9 +53,5 @@ export class IntermediateRepresentationScenarioDeclarations
 
   toArray(): readonly IntermediateRepresentationScenarioDeclaration[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

@@ -1,14 +1,32 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { AttributeDeclaration } from "./attribute-declaration.ts";
 import type { AttributeName } from "./attribute-name.ts";
 
 // 属性宣言のコレクション。重複検出・ライフサイクル属性の選定・名前解決という
 // 集合の知識を所有する。
-export class AttributeDeclarations implements FirstClassCollection, IterableFirstClassCollection<AttributeDeclaration> {
+export class AttributeDeclarations
+  extends FirstClassCollectionBase<AttributeDeclaration, AttributeDeclarations>
+  implements FirstClassCollection<AttributeDeclaration>
+{
   readonly #values: readonly AttributeDeclaration[];
 
   private constructor(values: readonly AttributeDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-attribute-declarations");
+  }
+
+  protected rebuild(values: readonly AttributeDeclaration[]): AttributeDeclarations {
+    return new AttributeDeclarations(values);
+  }
+
+  static parse(values: readonly AttributeDeclaration[]): Result<AttributeDeclarations, ParseError> {
+    return parseConstruction(() => new AttributeDeclarations(values));
   }
 
   static of(values: readonly AttributeDeclaration[]): AttributeDeclarations {
@@ -53,9 +71,5 @@ export class AttributeDeclarations implements FirstClassCollection, IterableFirs
 
   toArray(): readonly AttributeDeclaration[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

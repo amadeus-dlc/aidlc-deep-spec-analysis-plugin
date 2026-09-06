@@ -39,6 +39,15 @@ export class Check {
     return this.#severity;
   }
 
+  equals(other: Check): boolean {
+    return (
+      this.#pass === other.#pass &&
+      this.#label === other.#label &&
+      this.#fix === other.#fix &&
+      this.#severity.equals(other.#severity)
+    );
+  }
+
   // 判定書の 1 行（凍結のプロパティ順）。
   toDocument(): { pass: boolean; label: string; fix?: string; severity: "error" | "advisory" } {
     return {

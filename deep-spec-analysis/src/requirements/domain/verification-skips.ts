@@ -1,15 +1,33 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { VerificationSkipped } from "./verification-skipped.ts";
 
 function sortVerificationSkipped(skipped: readonly VerificationSkipped[]): VerificationSkipped[] {
   return [...skipped].sort((a, b) => a.compareTo(b));
 }
 
-export class VerificationSkips implements FirstClassCollection, IterableFirstClassCollection<VerificationSkipped> {
+export class VerificationSkips
+  extends FirstClassCollectionBase<VerificationSkipped, VerificationSkips>
+  implements FirstClassCollection<VerificationSkipped>
+{
   readonly #values: readonly VerificationSkipped[];
 
   private constructor(values: readonly VerificationSkipped[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-verification-skips");
+  }
+
+  protected rebuild(values: readonly VerificationSkipped[]): VerificationSkips {
+    return new VerificationSkips(values);
+  }
+
+  static parse(values: readonly VerificationSkipped[]): Result<VerificationSkips, ParseError> {
+    return parseConstruction(() => new VerificationSkips(values));
   }
 
   static of(values: readonly VerificationSkipped[]): VerificationSkips {
@@ -38,9 +56,5 @@ export class VerificationSkips implements FirstClassCollection, IterableFirstCla
 
   toArray(): readonly VerificationSkipped[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

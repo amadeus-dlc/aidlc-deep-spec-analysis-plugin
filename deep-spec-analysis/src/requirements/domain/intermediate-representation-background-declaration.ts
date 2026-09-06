@@ -43,4 +43,13 @@ export class IntermediateRepresentationBackgroundDeclaration {
   id(): BackgroundAssumptionIdentifier {
     return this.#id;
   }
+
+  equals(other: IntermediateRepresentationBackgroundDeclaration): boolean {
+    const assertionsEqual =
+      this.#assert === undefined
+        ? other.#assert === undefined
+        : other.#assert !== undefined &&
+          ExpressionTree.of(this.#assert).isCanonicallyEqual(ExpressionTree.of(other.#assert));
+    return this.#id.equals(other.#id) && assertionsEqual;
+  }
 }

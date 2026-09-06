@@ -29,6 +29,10 @@ export class DesignIgnore {
     return new DesignIgnore(props);
   }
 
+  equals(other: DesignIgnore): boolean {
+    return this.#state === other.#state && this.#trigger.equals(other.#trigger);
+  }
+
   state(): string {
     return this.#state;
   }

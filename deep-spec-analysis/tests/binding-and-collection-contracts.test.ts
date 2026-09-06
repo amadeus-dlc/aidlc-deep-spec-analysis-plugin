@@ -50,8 +50,8 @@ describe("domain collection element contracts", () => {
   test("initial states and attribute paths carry domain elements", () => {
     const state = InitialState.of("open");
     const states = InitialStates.of([state]);
-    expect(states.includes("open")).toBe(true);
-    expect(states.includes("closed")).toBe(false);
+    expect(states.include(InitialState.of("open"))).toBe(true);
+    expect(states.include(InitialState.of("closed"))).toBe(false);
     expect(() => InitialStates.of(Array(10_001).fill(state))).toThrow(IllegalArgumentException);
     const path = AttributePath.of("ticket.state");
     const paths = AttributePaths.of([path]).add(AttributePath.of("ticket.state"));

@@ -6,6 +6,7 @@ import type { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 // 無prime）は宣言自身が所有する——波3の義務／シナリオと同じ裁定（#71 波4）。
 
 import type { DesignBackgroundIdentifier } from "./design-background-identifier.ts";
+import { sameExpression } from "./value-equality.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignBackgroundDeclarationParam = { id: DesignBackgroundIdentifier; assert?: Expression };
@@ -25,6 +26,10 @@ export class DesignBackgroundDeclaration {
 
   static of(props: DesignBackgroundDeclarationParam): DesignBackgroundDeclaration {
     return new DesignBackgroundDeclaration(props);
+  }
+
+  equals(other: DesignBackgroundDeclaration): boolean {
+    return this.#id.equals(other.#id) && sameExpression(this.#assert, other.#assert);
   }
 
   diagnostics(catalog: DesignAttributeCatalog): ErrorMessages {

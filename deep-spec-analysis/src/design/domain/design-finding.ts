@@ -12,6 +12,7 @@ import {
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 import type { DesignWitness } from "./design-witness.ts";
+import { sameArray } from "./value-equality.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignFindingParam = {
@@ -46,6 +47,21 @@ export class DesignFinding {
     return new DesignFinding(props);
   }
 
+  equals(other: DesignFinding): boolean {
+    return (
+      this.#kind.equals(other.#kind) &&
+      this.#unit.equals(other.#unit) &&
+      this.#detail === other.#detail &&
+      sameArray(
+        this.#functionalRequirementReferences.toStrings(),
+        other.#functionalRequirementReferences.toStrings(),
+        (left, right) => left === right,
+      ) &&
+      sameArray(this.#targets.toArray(), other.#targets.toArray(), (left, right) => left.equals(right)) &&
+      this.#witness.equals(other.#witness)
+    );
+  }
+
   kind(): string {
     return this.#kind.asString();
   }
@@ -72,7 +88,7 @@ export class DesignFinding {
 
   violatesScenario(unit: UnitName, target: TargetIdentifier): boolean {
     return (
-      this.#kind.equals(FindingKind.scenarioViolation()) && this.#unit.equals(unit) && this.#targets.includes(target)
+      this.#kind.equals(FindingKind.scenarioViolation()) && this.#unit.equals(unit) && this.#targets.include(target)
     );
   }
 

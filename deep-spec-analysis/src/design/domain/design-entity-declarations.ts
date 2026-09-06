@@ -1,19 +1,34 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { ErrorMessage, ErrorMessages } from "@deep-spec-analysis/kernel-domain";
+import { ErrorMessage, ErrorMessages, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
 import type { DesignEntityDeclaration } from "./design-entity-declaration.ts";
 
-export class DesignEntityDeclarations
-  implements FirstClassCollection, IterableFirstClassCollection<DesignEntityDeclaration>
-{
+export class DesignEntityDeclarations extends FirstClassCollectionBase<
+  DesignEntityDeclaration,
+  DesignEntityDeclarations
+> {
   readonly #values: readonly DesignEntityDeclaration[];
 
   private constructor(values: readonly DesignEntityDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-entity-declarations");
+  }
+
+  protected rebuild(values: readonly DesignEntityDeclaration[]): DesignEntityDeclarations {
+    return new DesignEntityDeclarations(values);
   }
 
   static of(values: readonly DesignEntityDeclaration[]): DesignEntityDeclarations {
     return new DesignEntityDeclarations(values);
+  }
+
+  static parse(values: readonly DesignEntityDeclaration[]): Result<DesignEntityDeclarations, ParseError> {
+    return parseConstruction(() => new DesignEntityDeclarations(values));
   }
 
   add(value: DesignEntityDeclaration): DesignEntityDeclarations {
@@ -69,9 +84,5 @@ export class DesignEntityDeclarations
 
   toArray(): readonly DesignEntityDeclaration[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

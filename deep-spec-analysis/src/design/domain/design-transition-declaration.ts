@@ -2,6 +2,7 @@ import { type Expression, ExpressionTree, type TriggerName } from "@deep-spec-an
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
 import type { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
+import { sameExpression, sameIterable, sameOptional } from "./value-equality.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignTransitionDeclarationParam = {
@@ -39,6 +40,20 @@ export class DesignTransitionDeclaration {
 
   static of(props: DesignTransitionDeclarationParam): DesignTransitionDeclaration {
     return new DesignTransitionDeclaration(props);
+  }
+
+  equals(other: DesignTransitionDeclaration): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      this.#from === other.#from &&
+      this.#to === other.#to &&
+      sameOptional(this.#trigger, other.#trigger, (left, right) => left.equals(right)) &&
+      sameOptional(this.#businessRuleReferences, other.#businessRuleReferences, (left, right) =>
+        sameIterable(left, right, (a, b) => a.equals(b)),
+      ) &&
+      sameExpression(this.#guard, other.#guard) &&
+      sameExpression(this.#effect, other.#effect)
+    );
   }
 
   id(): DesignTransitionIdentifier {

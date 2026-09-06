@@ -9,6 +9,7 @@ import {
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import type { LoweredOrigin } from "./lowered-origin.ts";
+import { sameExpression, sameIterable, sameOptional } from "./value-equality.ts";
 
 // lowered v1 義務（兄弟バックエンドへ渡す契約1 の形）。id は lowered 語彙
 // （OB-n）、nature は分類文字列、trigger は lowered 文書の生トリガ名。ペイロード
@@ -75,6 +76,32 @@ export class LoweredObligation {
 
   static of(props: LoweredObligationParam): LoweredObligation {
     return new LoweredObligation(props);
+  }
+
+  equals(other: LoweredObligation): boolean {
+    const kinds = ["passthrough", "ignore", "vac-dead", "vac-shadow", "transition"] as const;
+    return (
+      this.#id.equals(other.#id) &&
+      this.#origin.design().equals(other.#origin.design()) &&
+      kinds.every((kind) => this.#origin.isKind(kind) === other.#origin.isKind(kind)) &&
+      this.#nature.equals(other.#nature) &&
+      sameIterable(this.#functionalRequirementReferences, other.#functionalRequirementReferences, (left, right) =>
+        left.equals(right),
+      ) &&
+      sameExpression(this.#assert, other.#assert) &&
+      sameOptional(this.#trigger, other.#trigger, (left, right) => left.equals(right)) &&
+      sameExpression(this.#guard, other.#guard) &&
+      sameExpression(this.#effect, other.#effect) &&
+      sameOptional(
+        this.#temporal,
+        other.#temporal,
+        (left, right) =>
+          left.pattern === right.pattern &&
+          sameExpression(left.assert, right.assert) &&
+          sameExpression(left.from, right.from) &&
+          sameExpression(left.to, right.to),
+      )
+    );
   }
 
   origin(): LoweredOrigin {

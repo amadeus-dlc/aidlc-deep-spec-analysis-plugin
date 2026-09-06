@@ -1,6 +1,6 @@
-import type { FirstClassCollection, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase, type TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
@@ -9,12 +9,19 @@ import type { DesignFinding } from "./design-finding.ts";
 import { DesignFindings } from "./design-findings.ts";
 import type { RuleSubsumption } from "./rule-subsumption.ts";
 
-export class RuleSubsumptions implements FirstClassCollection {
+export class RuleSubsumptions extends FirstClassCollectionBase<RuleSubsumption, RuleSubsumptions> {
   readonly #values: readonly RuleSubsumption[];
   private constructor(values: readonly RuleSubsumption[]) {
-    if (values.length > 65_536)
-      throw new IllegalArgumentException({ kind: "too-many-subsumptions", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-subsumptions");
+  }
+
+  protected rebuild(values: readonly RuleSubsumption[]): RuleSubsumptions {
+    return new RuleSubsumptions(values);
+  }
+
+  *[Symbol.iterator](): Iterator<RuleSubsumption> {
+    yield* this.#values;
   }
   static of(values: readonly RuleSubsumption[]): RuleSubsumptions {
     return new RuleSubsumptions(values);
@@ -39,9 +46,5 @@ export class RuleSubsumptions implements FirstClassCollection {
         findings.push(group.some((other) => first.isReverseOf(other)) ? first.equivalenceFinding() : first.finding());
     }
     return DesignFindings.of(findings);
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

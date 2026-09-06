@@ -1,17 +1,33 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignMachineDeclaration } from "./design-machine-declaration.ts";
 
-export class DesignMachineDeclarations
-  implements FirstClassCollection, IterableFirstClassCollection<DesignMachineDeclaration>
-{
+export class DesignMachineDeclarations extends FirstClassCollectionBase<
+  DesignMachineDeclaration,
+  DesignMachineDeclarations
+> {
   readonly #values: readonly DesignMachineDeclaration[];
 
   private constructor(values: readonly DesignMachineDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-machine-declarations");
+  }
+
+  protected rebuild(values: readonly DesignMachineDeclaration[]): DesignMachineDeclarations {
+    return new DesignMachineDeclarations(values);
   }
 
   static of(values: readonly DesignMachineDeclaration[]): DesignMachineDeclarations {
     return new DesignMachineDeclarations(values);
+  }
+
+  static parse(values: readonly DesignMachineDeclaration[]): Result<DesignMachineDeclarations, ParseError> {
+    return parseConstruction(() => new DesignMachineDeclarations(values));
   }
 
   add(value: DesignMachineDeclaration): DesignMachineDeclarations {
@@ -24,9 +40,5 @@ export class DesignMachineDeclarations
 
   toArray(): readonly DesignMachineDeclaration[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

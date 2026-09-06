@@ -1,8 +1,8 @@
 import {
   boundedValueSnapshot,
-  canonicalStringify,
   IllegalArgumentException,
   type Json,
+  jsonEquals,
   type ParseError,
   parseConstruction,
   type Result,
@@ -47,7 +47,7 @@ export class Declaration {
   }
 
   equals(other: Declaration): boolean {
-    return canonicalStringify(this.#value) === canonicalStringify(other.#value);
+    return jsonEquals(this.#value, other.#value);
   }
   describe(): string {
     return JSON.stringify(this.#value);

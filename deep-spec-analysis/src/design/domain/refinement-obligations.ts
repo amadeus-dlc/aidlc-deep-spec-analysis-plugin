@@ -1,17 +1,32 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { RefinementObligation } from "./refinement-obligation.ts";
 
 // 要件義務のファーストクラスコレクション。id 索引は最後の宣言が勝つ
 // （旧 new Map(...) の凍結挙動）。
-export class RefinementObligations implements FirstClassCollection, IterableFirstClassCollection<RefinementObligation> {
+export class RefinementObligations extends FirstClassCollectionBase<RefinementObligation, RefinementObligations> {
   readonly #values: readonly RefinementObligation[];
 
   private constructor(values: readonly RefinementObligation[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-refinement-obligations");
+  }
+
+  protected rebuild(values: readonly RefinementObligation[]): RefinementObligations {
+    return new RefinementObligations(values);
   }
 
   static of(values: readonly RefinementObligation[]): RefinementObligations {
     return new RefinementObligations(values);
+  }
+
+  static parse(values: readonly RefinementObligation[]): Result<RefinementObligations, ParseError> {
+    return parseConstruction(() => new RefinementObligations(values));
   }
 
   add(value: RefinementObligation): RefinementObligations {
@@ -36,9 +51,5 @@ export class RefinementObligations implements FirstClassCollection, IterableFirs
 
   toArray(): readonly RefinementObligation[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

@@ -82,6 +82,13 @@ export class QuintMachineComponent {
     return this.#id;
   }
 
+  equals(other: QuintMachineComponent): boolean {
+    return (
+      this.#id.equals(other.#id) &&
+      ExpressionTree.of(this.#expression).isCanonicallyEqual(ExpressionTree.of(other.#expression))
+    );
+  }
+
   isViolatedIn(state: TraceState): boolean {
     return !evaluate(this.#expression, state).isTrue();
   }

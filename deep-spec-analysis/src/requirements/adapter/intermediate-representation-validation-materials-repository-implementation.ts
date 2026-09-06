@@ -108,10 +108,12 @@ function buildView(ir: { [k: string]: Json }): Result<IntermediateRepresentation
         }),
       );
     }
+    const parsedAttributes = IntermediateRepresentationAttributeDeclarations.parse(attributes);
+    if (!parsedAttributes.ok) return err(JSON.stringify(parsedAttributes.error));
     entities.push(
       IntermediateRepresentationEntityDeclaration.of({
         name: name.value,
-        attributes: IntermediateRepresentationAttributeDeclarations.of(attributes),
+        attributes: parsedAttributes.value,
       }),
     );
   }
@@ -170,12 +172,19 @@ function buildView(ir: { [k: string]: Json }): Result<IntermediateRepresentation
     background.push(constructed.value);
   }
 
+  const collections = combineResults({
+    entities: IntermediateRepresentationEntityDeclarations.parse(entities),
+    obligations: IntermediateRepresentationObligationDeclarations.parse(obligations),
+    scenarios: IntermediateRepresentationScenarioDeclarations.parse(scenarios),
+    background: IntermediateRepresentationBackgroundDeclarations.parse(background),
+  });
+  if (!collections.ok) return err(JSON.stringify(collections.error));
   return ok(
     IntermediateRepresentationModelDeclaration.of({
-      entities: IntermediateRepresentationEntityDeclarations.of(entities),
-      obligations: IntermediateRepresentationObligationDeclarations.of(obligations),
-      scenarios: IntermediateRepresentationScenarioDeclarations.of(scenarios),
-      background: IntermediateRepresentationBackgroundDeclarations.of(background),
+      entities: collections.value.entities,
+      obligations: collections.value.obligations,
+      scenarios: collections.value.scenarios,
+      background: collections.value.background,
     }),
   );
 }
@@ -282,13 +291,15 @@ export class IntermediateRepresentationValidationMaterialsRepositoryImplementati
     const claims = collectFunctionalRequirementReferenceClaims(ir);
     if (!claims.ok) return corrupt(claims.error);
 
+    const claimsCollection = FunctionalRequirementReferenceClaims.parse(claims.value);
+    if (!claimsCollection.ok) return corrupt(JSON.stringify(claimsCollection.error));
     return ok(
       IntermediateRepresentationValidationMaterials.of({
         id,
         irVersion: parsed.value.irVersion,
         schemaErrors: messages.value,
         view: view.value,
-        functionalRequirementReferenceClaims: FunctionalRequirementReferenceClaims.of(claims.value),
+        functionalRequirementReferenceClaims: claimsCollection.value,
         declaredDigest: parsed.value.declaredDigest,
         sourceId: RequirementsSourceIdentifier.of(recordRoot),
         sourceDocument: new Uint8Array(bytes),

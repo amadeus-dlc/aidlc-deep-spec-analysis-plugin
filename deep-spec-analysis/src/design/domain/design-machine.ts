@@ -48,6 +48,27 @@ export class DesignMachine {
     return new DesignMachine(props);
   }
 
+  equals(other: DesignMachine): boolean {
+    const initial = [...this.#initial];
+    const otherInitial = [...other.#initial];
+    const transitions = [...this.#transitions];
+    const otherTransitions = [...other.#transitions];
+    const ignores = [...this.#ignores];
+    const otherIgnores = [...other.#ignores];
+    return (
+      this.#id.equals(other.#id) &&
+      this.#entity.equals(other.#entity) &&
+      this.#attribute.equals(other.#attribute) &&
+      this.#deterministic === other.#deterministic &&
+      initial.length === otherInitial.length &&
+      initial.every((state, index) => state.equals(otherInitial[index] as typeof state)) &&
+      transitions.length === otherTransitions.length &&
+      transitions.every((transition, index) => transition.equals(otherTransitions[index] as typeof transition)) &&
+      ignores.length === otherIgnores.length &&
+      ignores.every((ignore, index) => ignore.equals(otherIgnores[index] as typeof ignore))
+    );
+  }
+
   ownsTransition(reference: LoweredOriginReference): boolean {
     return [...this.#transitions].some((transition) => transition.id().asString() === reference.asString());
   }
@@ -84,7 +105,7 @@ export class DesignMachine {
   // 到達不能プローブの候補：enum 宣言値のうち初期状態でないもの（昇順——
   // capability skip 文言の states 列挙順もこの順に従う凍結面）。
   nonInitialCandidates(values: readonly string[]): string[] {
-    return values.filter((s) => !this.#initial.includes(s)).sort();
+    return values.filter((s) => !this.#initial.exists((state) => state.matchesName(s))).sort();
   }
 
   // deterministic:false waiver —— conflict の対象がすべてこの機械の遷移で

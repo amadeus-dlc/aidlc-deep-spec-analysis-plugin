@@ -66,7 +66,10 @@ test("兄弟ユニットの索引は構築後に呼出元の入力を変更し�
 });
 
 test("XSの走査予算違反はofで例外、parseで非例外のParseErrorになる", () => {
-  const input = KeyedIndex.of([[unit, EntityDeclarations.of(Array.from({ length: 65_537 }, () => entity))]]);
+  const input = KeyedIndex.of([
+    [unit, EntityDeclarations.of(Array.from({ length: 65_536 }, () => entity))],
+    [UnitName.of("second"), EntityDeclarations.of([entity])],
+  ]);
   expect(() => SiblingUnitIndex.of(input)).toThrow(IllegalArgumentException);
   const parsed = SiblingUnitIndex.parse(input);
   expect(parsed).toEqual({ ok: false, error: { kind: "too-many-sibling-entities", raw: 65_537 } });

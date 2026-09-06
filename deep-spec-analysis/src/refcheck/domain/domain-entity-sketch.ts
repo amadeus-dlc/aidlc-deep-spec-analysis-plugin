@@ -94,6 +94,17 @@ export class DomainEntitySketch {
     return this.#name;
   }
 
+  equals(other: DomainEntitySketch): boolean {
+    const attributes = this.#attributes.toArray();
+    const otherAttributes = other.#attributes.toArray();
+    return (
+      this.#name.equals(other.#name) &&
+      this.#component.equals(other.#component) &&
+      attributes.length === otherAttributes.length &&
+      attributes.every((attribute, index) => attribute.equals(otherAttributes[index] as (typeof attributes)[number]))
+    );
+  }
+
   // 境界: witness に載るカタログ位置ラベル（凍結書式）。
   catalogLabel(): string {
     return `entity ${this.#name.asString()} (component ${this.#component.asString()})`;

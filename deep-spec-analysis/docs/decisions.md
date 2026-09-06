@@ -2718,3 +2718,15 @@ Design rule D10 documents optional-field `undefined`, explicit aggregate absence
 The package scope was unified onto `@deep-spec-analysis`, matching the project name. The 18 packages' name/dependencies, imports, Bun lockfile, and boundary checks were all changed together. The L7 rule — a scoped reference to another package's public facade, a relative reference within the same package — was applied, correcting the 12 cases that had referenced their own package's internals by scope name. The old scope is rejected both at runtime and at type-checking time; no compatibility alias is provided.
 
 The old scope that appears in the historical records above reflects the name in use at that time. See [the package-name explanation](architecture/package-namespace.md) for the current rule and the steps to update an existing checkout.
+
+## Typed first-class collection operations (2026-09-06)
+
+The common collection contract now expresses element operations, following the owner's requested Scala-like interface. `NonEmptyFirstClassCollection<E>` defines iteration, `at`, `head`, `tail`, `include`, `exists`, `filter`, and `map`. `FirstClassCollection<E>` extends it with `isEmpty`. This inheritance shares operations; concrete construction contracts establish non-emptiness. `FindingTargets.of(head, tail)` and the fixed standard installation manifest retain their non-empty construction rules.
+
+Elements and mapped results implement `Equatable`. Membership delegates to domain equality, including ownership and value content where required. `exists` stops at the first match. `tail` and `filter` preserve the concrete collection when its invariants permit; operations that can empty a non-empty collection return an empty-capable collection. `map` returns `FirstClassCollection<U>` without requiring callers to supply a destination factory.
+
+The 112 existing collections implement the contract through shared operation bases. `ImmutableFirstClassCollection` supplies the generic result of mapping. Attribute catalogs, query verdicts, trace states, and sibling-unit indexes use domain entry objects to retain keys and ownership. The obsolete iterable marker is removed. Trace-state and query-verdict factories accept typed entries; their previous tuple and KeyedIndex inputs are removed.
+
+Constructors own cardinality and snapshot validation. The common ceiling is 65,536 elements; narrower domain budgets remain in effect. Snapshot creation checks both array length and actual iteration, and `add` cannot bypass the constructor. Expected input failures use typed `parse` results; `of` panics propagate. Requirement-ID extraction belongs to the adapter and uses the identifier and collection parsers.
+
+Moving rejection to input boundaries exposed an existing success report for unreadable models. The four requirements/design verification entries now return `pass: false` for `model-unreadable`, while preserving the saved unavailable diagnostic. This also prevents oversized models rejected before solver execution from being reported as successful checks.

@@ -81,6 +81,17 @@ export class EntityDeclaration {
     return this.#element;
   }
 
+  equals(other: EntityDeclaration): boolean {
+    const sameValues = <T extends { equals(value: T): boolean }>(left: readonly T[], right: readonly T[]): boolean =>
+      left.length === right.length && left.every((value, index) => value.equals(right[index] as T));
+    return (
+      this.#name.equals(other.#name) &&
+      this.#element.equals(other.#element) &&
+      sameValues(this.#attrs.toArray(), other.#attrs.toArray()) &&
+      sameValues(this.#rels.toArray(), other.#rels.toArray())
+    );
+  }
+
   attributeNames(): AttributeNames {
     return AttributeNames.of(this.#attrs.names());
   }

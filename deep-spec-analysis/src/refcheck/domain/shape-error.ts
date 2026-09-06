@@ -19,6 +19,10 @@ export class ShapeError {
     return new ShapeError(props.element, props.detail);
   }
 
+  equals(other: ShapeError): boolean {
+    return this.#element.equals(other.#element) && this.#detail === other.#detail;
+  }
+
   recordIn(family: CheckFamily, report: ReferenceCheckReport, artifact: ArtifactPath): void {
     report.finding(
       family,

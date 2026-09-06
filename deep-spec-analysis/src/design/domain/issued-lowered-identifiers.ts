@@ -1,6 +1,6 @@
-import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { KeySet } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase, KeySet } from "@deep-spec-analysis/kernel-domain";
 import {
+  boundedCollectionSnapshot,
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
@@ -9,21 +9,23 @@ import {
 import { LoweredIdentifier } from "./lowered-identifier.ts";
 
 // 一つのloweringで発行した識別子。一意性と衝突しない追加採番を所有する。
-export class IssuedLoweredIdentifiers implements FirstClassCollection {
+export class IssuedLoweredIdentifiers extends FirstClassCollectionBase<LoweredIdentifier, IssuedLoweredIdentifiers> {
   readonly #values: KeySet<LoweredIdentifier>;
   /** 一つの変換文書の識別子予算は65,536件。 */
   private constructor(values: readonly LoweredIdentifier[]) {
-    if (values.length > 65_536)
-      throw new IllegalArgumentException({ kind: "too-many-lowered-identifiers", raw: values.length });
-    const snapshot: LoweredIdentifier[] = [];
-    for (const value of values) {
-      if (snapshot.length === 65_536)
-        throw new IllegalArgumentException({ kind: "too-many-lowered-identifiers", raw: snapshot.length + 1 });
-      snapshot.push(value);
-    }
+    super();
+    const snapshot = boundedCollectionSnapshot(values, 65_536, "too-many-lowered-identifiers");
     this.#values = KeySet.of(snapshot);
     if (this.#values.size() !== snapshot.length)
       throw new IllegalArgumentException({ kind: "duplicate-lowered-identifier" });
+  }
+
+  protected rebuild(values: readonly LoweredIdentifier[]): IssuedLoweredIdentifiers {
+    return new IssuedLoweredIdentifiers(values);
+  }
+
+  *[Symbol.iterator](): Iterator<LoweredIdentifier> {
+    yield* this.#values;
   }
   static of(values: readonly LoweredIdentifier[]): IssuedLoweredIdentifiers {
     return new IssuedLoweredIdentifiers(values);
@@ -39,9 +41,5 @@ export class IssuedLoweredIdentifiers implements FirstClassCollection {
       remaining--;
       yield id;
     }
-  }
-
-  isEmpty(): boolean {
-    return this.#values.isEmpty();
   }
 }

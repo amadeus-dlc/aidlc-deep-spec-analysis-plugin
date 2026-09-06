@@ -19,6 +19,10 @@ export class DesignIgnoreDeclaration {
     return new DesignIgnoreDeclaration(props);
   }
 
+  equals(other: DesignIgnoreDeclaration): boolean {
+    return this.#state === other.#state && this.#trigger.equals(other.#trigger);
+  }
+
   state(): string {
     return this.#state;
   }
@@ -29,7 +33,7 @@ export class DesignIgnoreDeclaration {
 
   // 状態が機械の状態集合（enum 宣言値）に属するか。
   isStateAmong(states: EnumerationMembers): boolean {
-    return states.includes(this.#state);
+    return states.exists((state) => state.matchesLiteral(this.#state));
   }
 
   // 遷移セルとの衝突判定に使う (state, trigger) キー——DesignTransitionDeclaration.cellKey と同じ形。

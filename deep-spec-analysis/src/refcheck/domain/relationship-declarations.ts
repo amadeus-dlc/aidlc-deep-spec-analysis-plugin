@@ -1,13 +1,29 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { RelationshipDeclaration } from "./relationship-declaration.ts";
 
 export class RelationshipDeclarations
-  implements FirstClassCollection, IterableFirstClassCollection<RelationshipDeclaration>
+  extends FirstClassCollectionBase<RelationshipDeclaration, RelationshipDeclarations>
+  implements FirstClassCollection<RelationshipDeclaration>
 {
   readonly #values: readonly RelationshipDeclaration[];
 
   private constructor(values: readonly RelationshipDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-relationship-declarations");
+  }
+
+  protected rebuild(values: readonly RelationshipDeclaration[]): RelationshipDeclarations {
+    return new RelationshipDeclarations(values);
+  }
+
+  static parse(values: readonly RelationshipDeclaration[]): Result<RelationshipDeclarations, ParseError> {
+    return parseConstruction(() => new RelationshipDeclarations(values));
   }
 
   static of(values: readonly RelationshipDeclaration[]): RelationshipDeclarations {
@@ -28,9 +44,5 @@ export class RelationshipDeclarations
 
   toArray(): readonly RelationshipDeclaration[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

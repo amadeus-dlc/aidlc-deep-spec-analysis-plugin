@@ -1,11 +1,26 @@
-import type { FirstClassCollection, IterableFirstClassCollection, UnitName } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase, type UnitName } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 // unit 名のファーストクラスコレクション（depends_on の並びなど宣言順を保持）。
-export class UnitNames implements FirstClassCollection, IterableFirstClassCollection<UnitName> {
+export class UnitNames extends FirstClassCollectionBase<UnitName, UnitNames> implements FirstClassCollection<UnitName> {
   readonly #values: readonly UnitName[];
 
   private constructor(values: readonly UnitName[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-unit-names");
+  }
+
+  protected rebuild(values: readonly UnitName[]): UnitNames {
+    return new UnitNames(values);
+  }
+
+  static parse(values: readonly UnitName[]): Result<UnitNames, ParseError> {
+    return parseConstruction(() => new UnitNames(values));
   }
 
   static of(values: readonly UnitName[]): UnitNames {
@@ -31,9 +46,5 @@ export class UnitNames implements FirstClassCollection, IterableFirstClassCollec
 
   toArray(): readonly UnitName[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

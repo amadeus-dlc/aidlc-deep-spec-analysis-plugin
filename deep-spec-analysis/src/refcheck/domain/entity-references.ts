@@ -1,11 +1,29 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { EntityReference } from "./entity-reference.ts";
 
-export class EntityReferences implements FirstClassCollection, IterableFirstClassCollection<EntityReference> {
+export class EntityReferences
+  extends FirstClassCollectionBase<EntityReference, EntityReferences>
+  implements FirstClassCollection<EntityReference>
+{
   readonly #values: readonly EntityReference[];
 
   private constructor(values: readonly EntityReference[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-entity-references");
+  }
+
+  protected rebuild(values: readonly EntityReference[]): EntityReferences {
+    return new EntityReferences(values);
+  }
+
+  static parse(values: readonly EntityReference[]): Result<EntityReferences, ParseError> {
+    return parseConstruction(() => new EntityReferences(values));
   }
 
   static of(values: readonly EntityReference[]): EntityReferences {
@@ -22,9 +40,5 @@ export class EntityReferences implements FirstClassCollection, IterableFirstClas
 
   toArray(): readonly EntityReference[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

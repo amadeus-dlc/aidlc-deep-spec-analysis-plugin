@@ -1,19 +1,34 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignSkipped } from "./design-skipped.ts";
 
 function sortDesignSkipped(skipped: readonly DesignSkipped[]): DesignSkipped[] {
   return [...skipped].sort((a, b) => a.compareTo(b));
 }
 
-export class DesignSkips implements FirstClassCollection, IterableFirstClassCollection<DesignSkipped> {
+export class DesignSkips extends FirstClassCollectionBase<DesignSkipped, DesignSkips> {
   readonly #values: readonly DesignSkipped[];
 
   private constructor(values: readonly DesignSkipped[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-skips");
+  }
+
+  protected rebuild(values: readonly DesignSkipped[]): DesignSkips {
+    return new DesignSkips(values);
   }
 
   static of(values: readonly DesignSkipped[]): DesignSkips {
     return new DesignSkips(values);
+  }
+
+  static parse(values: readonly DesignSkipped[]): Result<DesignSkips, ParseError> {
+    return parseConstruction(() => new DesignSkips(values));
   }
 
   add(value: DesignSkipped): DesignSkips {
@@ -38,9 +53,5 @@ export class DesignSkips implements FirstClassCollection, IterableFirstClassColl
 
   toArray(): readonly DesignSkipped[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

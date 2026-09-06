@@ -1,17 +1,32 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignIgnore } from "./design-ignore.ts";
 
 // ignores 宣言のファーストクラスコレクション。lowering の (state, trigger)
 // 文字列順という凍結順を所有する。
-export class DesignIgnores implements FirstClassCollection, IterableFirstClassCollection<DesignIgnore> {
+export class DesignIgnores extends FirstClassCollectionBase<DesignIgnore, DesignIgnores> {
   readonly #values: readonly DesignIgnore[];
 
   private constructor(values: readonly DesignIgnore[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-ignores");
+  }
+
+  protected rebuild(values: readonly DesignIgnore[]): DesignIgnores {
+    return new DesignIgnores(values);
   }
 
   static of(values: readonly DesignIgnore[]): DesignIgnores {
     return new DesignIgnores(values);
+  }
+
+  static parse(values: readonly DesignIgnore[]): Result<DesignIgnores, ParseError> {
+    return parseConstruction(() => new DesignIgnores(values));
   }
 
   add(value: DesignIgnore): DesignIgnores {
@@ -37,9 +52,5 @@ export class DesignIgnores implements FirstClassCollection, IterableFirstClassCo
 
   toArray(): readonly DesignIgnore[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

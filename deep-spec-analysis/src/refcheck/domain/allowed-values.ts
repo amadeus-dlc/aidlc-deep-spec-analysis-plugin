@@ -1,12 +1,30 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { AllowedValue } from "./allowed-value.ts";
 import type { StateNames } from "./state-names.ts";
 
-export class AllowedValues implements FirstClassCollection, IterableFirstClassCollection<AllowedValue> {
+export class AllowedValues
+  extends FirstClassCollectionBase<AllowedValue, AllowedValues>
+  implements FirstClassCollection<AllowedValue>
+{
   readonly #values: readonly AllowedValue[];
 
   private constructor(values: readonly AllowedValue[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-allowed-values");
+  }
+
+  protected rebuild(values: readonly AllowedValue[]): AllowedValues {
+    return new AllowedValues(values);
+  }
+
+  static parse(values: readonly AllowedValue[]): Result<AllowedValues, ParseError> {
+    return parseConstruction(() => new AllowedValues(values));
   }
 
   static of(values: readonly AllowedValue[]): AllowedValues {
@@ -46,9 +64,5 @@ export class AllowedValues implements FirstClassCollection, IterableFirstClassCo
 
   toArray(): readonly AllowedValue[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

@@ -1,72 +1,77 @@
 import * as Doctor from "@deep-spec-analysis/doctor-domain";
 import type {
   FallibleFirstClassCollectionFactory,
-  FirstClassCollectionFactory,
-  IterableFirstClassCollection,
   KeyedIndex,
+  NonEmptyFirstClassCollection,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 import * as Refcheck from "@deep-spec-analysis/refcheck-domain";
 
-Refcheck.AllowedValues satisfies FirstClassCollectionFactory<
+Refcheck.AllowedValues satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.AllowedValue[]],
   Refcheck.AllowedValues
 >;
-Refcheck.AttributeDeclarations satisfies FirstClassCollectionFactory<
+Refcheck.AttributeDeclarations satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.AttributeDeclaration[]],
   Refcheck.AttributeDeclarations
 >;
-Refcheck.AttributeNames satisfies FirstClassCollectionFactory<
+Refcheck.AttributeNames satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.AttributeName[]],
   Refcheck.AttributeNames
 >;
-Refcheck.CheckFamilies satisfies FirstClassCollectionFactory<
+Refcheck.CheckFamilies satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.CheckFamily[]],
   Refcheck.CheckFamilies
 >;
-Refcheck.ComponentEntities satisfies FirstClassCollectionFactory<
+Refcheck.ComponentEntities satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.ComponentEntity[]],
   Refcheck.ComponentEntities
 >;
-Refcheck.ComponentReferences satisfies FirstClassCollectionFactory<
+Refcheck.ComponentReferences satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.ComponentReference[]],
   Refcheck.ComponentReferences
 >;
-Refcheck.ComponentShapeErrors satisfies FirstClassCollectionFactory<
+Refcheck.ComponentShapeErrors satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.ComponentShapeError[]],
   Refcheck.ComponentShapeErrors
 >;
-Refcheck.Components satisfies FirstClassCollectionFactory<[values: readonly Refcheck.Component[]], Refcheck.Components>;
-Refcheck.ContractRows satisfies FirstClassCollectionFactory<
+Refcheck.Components satisfies FallibleFirstClassCollectionFactory<
+  [values: readonly Refcheck.Component[]],
+  Refcheck.Components
+>;
+Refcheck.ContractRows satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.ContractRow[]],
   Refcheck.ContractRows
 >;
-Refcheck.DomainEntitySketches satisfies FirstClassCollectionFactory<
+Refcheck.DomainEntitySketches satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.DomainEntitySketch[]],
   Refcheck.DomainEntitySketches
 >;
-Refcheck.EntityDeclarations satisfies FirstClassCollectionFactory<
+Refcheck.EntityDeclarations satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.EntityDeclaration[]],
   Refcheck.EntityDeclarations
 >;
-Refcheck.EntityReferences satisfies FirstClassCollectionFactory<
+Refcheck.EntityReferences satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.EntityReference[]],
   Refcheck.EntityReferences
 >;
-Refcheck.Findings satisfies FirstClassCollectionFactory<[values: readonly Refcheck.Finding[]], Refcheck.Findings>;
-Refcheck.InputAnchors satisfies FirstClassCollectionFactory<
+Refcheck.Findings satisfies FallibleFirstClassCollectionFactory<
+  [values: readonly Refcheck.Finding[]],
+  Refcheck.Findings
+>;
+Refcheck.InputAnchors satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.InputAnchor[]],
   Refcheck.InputAnchors
 >;
-Refcheck.RelationshipDeclarations satisfies FirstClassCollectionFactory<
+Refcheck.RelationshipDeclarations satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.RelationshipDeclaration[]],
   Refcheck.RelationshipDeclarations
 >;
-Refcheck.RuleDeclarations satisfies FirstClassCollectionFactory<
+Refcheck.RuleDeclarations satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.RuleDeclaration[]],
   Refcheck.RuleDeclarations
 >;
-Refcheck.ShapeErrors satisfies FirstClassCollectionFactory<
+Refcheck.ShapeErrors satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.ShapeError[]],
   Refcheck.ShapeErrors
 >;
@@ -74,26 +79,29 @@ Refcheck.SiblingUnitIndex satisfies FallibleFirstClassCollectionFactory<
   [units: KeyedIndex<UnitName, Refcheck.EntityDeclarations>],
   Refcheck.SiblingUnitIndex
 >;
-Refcheck.Skips satisfies FirstClassCollectionFactory<[values: readonly Refcheck.Skipped[]], Refcheck.Skips>;
-Refcheck.SourceIdentifiers satisfies FirstClassCollectionFactory<
+Refcheck.Skips satisfies FallibleFirstClassCollectionFactory<[values: readonly Refcheck.Skipped[]], Refcheck.Skips>;
+Refcheck.SourceIdentifiers satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.SourceIdentifier[]],
   Refcheck.SourceIdentifiers
 >;
-Refcheck.SpecificationBlockAssessments satisfies FirstClassCollectionFactory<
+Refcheck.SpecificationBlockAssessments satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.SpecificationBlockAssessment[]],
   Refcheck.SpecificationBlockAssessments
 >;
-Refcheck.StateMachineSketches satisfies FirstClassCollectionFactory<
+Refcheck.StateMachineSketches satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.StateMachineSketch[]],
   Refcheck.StateMachineSketches
 >;
-Refcheck.StateNames satisfies FirstClassCollectionFactory<[values: readonly Refcheck.StateName[]], Refcheck.StateNames>;
-Refcheck.UnitDeclarations satisfies FirstClassCollectionFactory<
+Refcheck.StateNames satisfies FallibleFirstClassCollectionFactory<
+  [values: readonly Refcheck.StateName[]],
+  Refcheck.StateNames
+>;
+Refcheck.UnitDeclarations satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.UnitDeclaration[]],
   Refcheck.UnitDeclarations
 >;
-Refcheck.UnitNames satisfies FirstClassCollectionFactory<[values: readonly UnitName[]], Refcheck.UnitNames>;
-Refcheck.WitnessReferences satisfies FirstClassCollectionFactory<
+Refcheck.UnitNames satisfies FallibleFirstClassCollectionFactory<[values: readonly UnitName[]], Refcheck.UnitNames>;
+Refcheck.WitnessReferences satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Refcheck.WitnessReference[]],
   Refcheck.WitnessReferences
 >;
@@ -101,8 +109,11 @@ Doctor.DesignArtifacts satisfies FallibleFirstClassCollectionFactory<
   [values: readonly Doctor.DesignArtifactReference[]],
   Doctor.DesignArtifacts
 >;
-Doctor.HealthVerdict satisfies FirstClassCollectionFactory<[values: readonly Doctor.Check[]], Doctor.HealthVerdict>;
-Doctor.InstallationManifest satisfies { standard(): IterableFirstClassCollection<Doctor.ManifestEntry> };
+Doctor.HealthVerdict satisfies FallibleFirstClassCollectionFactory<
+  [values: readonly Doctor.Check[]],
+  Doctor.HealthVerdict
+>;
+Doctor.InstallationManifest satisfies { standard(): NonEmptyFirstClassCollection<Doctor.ManifestEntry> };
 Doctor.StableReleases satisfies FallibleFirstClassCollectionFactory<
   [versions: readonly Doctor.PluginVersion[]],
   Doctor.StableReleases

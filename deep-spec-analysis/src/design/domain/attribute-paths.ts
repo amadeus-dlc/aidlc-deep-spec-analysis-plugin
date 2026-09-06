@@ -1,19 +1,34 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
-import { type AttributePath, KeySet } from "@deep-spec-analysis/kernel-domain";
+import { type AttributePath, FirstClassCollectionBase, KeySet } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 // 設計属性パス集合のファーストクラスコレクション（lowering・alpha 置換の照会面）。
-export class AttributePaths implements FirstClassCollection, IterableFirstClassCollection<AttributePath> {
+export class AttributePaths extends FirstClassCollectionBase<AttributePath, AttributePaths> {
   readonly #values: KeySet<AttributePath>;
 
-  private constructor(values: KeySet<AttributePath>) {
-    this.#values = values;
+  private constructor(values: readonly AttributePath[]) {
+    super();
+    this.#values = KeySet.of(boundedCollectionSnapshot(values, 65_536, "too-many-attribute-paths"));
+  }
+
+  protected rebuild(values: readonly AttributePath[]): AttributePaths {
+    return new AttributePaths(values);
   }
 
   static of(values: readonly AttributePath[]): AttributePaths {
-    return new AttributePaths(KeySet.of(values));
+    return new AttributePaths(values);
+  }
+
+  static parse(values: readonly AttributePath[]): Result<AttributePaths, ParseError> {
+    return parseConstruction(() => new AttributePaths(values));
   }
 
   add(value: AttributePath): AttributePaths {
-    return new AttributePaths(this.#values.with(value));
+    if (this.#values.has(value)) return this;
+    return new AttributePaths([...this.#values, value]);
   }
 
   *[Symbol.iterator](): Iterator<AttributePath> {
@@ -26,9 +41,5 @@ export class AttributePaths implements FirstClassCollection, IterableFirstClassC
 
   toArray(): readonly AttributePath[] {
     return [...this.#values];
-  }
-
-  isEmpty(): boolean {
-    return this.#values.isEmpty();
   }
 }

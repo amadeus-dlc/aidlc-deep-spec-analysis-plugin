@@ -15,6 +15,7 @@ import {
   StructuralDebt,
   StructuralObservation,
 } from "@deep-spec-analysis/doctor-domain";
+import type { Equatable } from "@deep-spec-analysis/kernel-domain";
 import {
   ArtifactPath,
   ContentHash,
@@ -23,7 +24,6 @@ import {
   FindingTargets,
   type FirstClassCollection,
   FunctionalRequirementReferences,
-  type IterableFirstClassCollection,
   KeyedIndex,
   SkipReason,
   TargetIdentifier,
@@ -32,9 +32,9 @@ import {
 import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
 import * as Refcheck from "@deep-spec-analysis/refcheck-domain";
 
-function iterableContract<Element extends object>(
+function iterableContract<Element extends Equatable<Element>>(
   name: string,
-  create: (values: readonly Element[]) => FirstClassCollection & IterableFirstClassCollection<Element>,
+  create: (values: readonly Element[]) => FirstClassCollection<Element>,
   element: Element,
 ): void {
   test(`${name}: 空・単要素の判定は所有要素数を表し、入力配列の変更から独立する`, () => {

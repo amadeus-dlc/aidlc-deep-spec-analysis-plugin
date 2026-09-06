@@ -1,21 +1,32 @@
-import type {
-  FirstClassCollection,
-  IterableFirstClassCollection,
-  TriggerName,
-} from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase, type TriggerName } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { EventMapping } from "./event-mapping.ts";
 
 // eventMap 宣言のファーストクラスコレクション。トリガ索引は旧
 // new Map(...) の凍結挙動どおり重複トリガは最後の宣言が勝つ。
-export class EventMappings implements FirstClassCollection, IterableFirstClassCollection<EventMapping> {
+export class EventMappings extends FirstClassCollectionBase<EventMapping, EventMappings> {
   readonly #values: readonly EventMapping[];
 
   private constructor(values: readonly EventMapping[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-event-mappings");
+  }
+
+  protected rebuild(values: readonly EventMapping[]): EventMappings {
+    return new EventMappings(values);
   }
 
   static of(values: readonly EventMapping[]): EventMappings {
     return new EventMappings(values);
+  }
+
+  static parse(values: readonly EventMapping[]): Result<EventMappings, ParseError> {
+    return parseConstruction(() => new EventMappings(values));
   }
 
   add(value: EventMapping): EventMappings {
@@ -36,9 +47,5 @@ export class EventMappings implements FirstClassCollection, IterableFirstClassCo
 
   toArray(): readonly EventMapping[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

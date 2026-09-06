@@ -29,6 +29,18 @@ export class IntermediateRepresentationTemporalDeclaration {
     return new IntermediateRepresentationTemporalDeclaration(props);
   }
 
+  equals(other: IntermediateRepresentationTemporalDeclaration): boolean {
+    const expressionEqual = (left: Expression | undefined, right: Expression | undefined): boolean =>
+      left === undefined
+        ? right === undefined
+        : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    return (
+      expressionEqual(this.#assert, other.#assert) &&
+      expressionEqual(this.#from, other.#from) &&
+      expressionEqual(this.#to, other.#to)
+    );
+  }
+
   // assert → from → to の順に、存在する式だけを訪ねる（凍結順）。
   inspectExpressions(visitor: (expression: Expression, primesAllowed: boolean) => void): void {
     if (this.#assert !== undefined) visitor(this.#assert, false);

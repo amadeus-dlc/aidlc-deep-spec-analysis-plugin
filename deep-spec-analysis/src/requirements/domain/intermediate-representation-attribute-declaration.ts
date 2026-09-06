@@ -69,4 +69,22 @@ export class IntermediateRepresentationAttributeDeclaration {
   kindLabel(): string {
     return this.#kind.asString();
   }
+
+  equals(other: IntermediateRepresentationAttributeDeclaration): boolean {
+    const values = this.#values?.toArray();
+    const otherValues = other.#values?.toArray();
+    const valuesEqual =
+      values === undefined
+        ? otherValues === undefined
+        : otherValues !== undefined &&
+          values.length === otherValues.length &&
+          values.every((value, index) => value.equals(otherValues[index] as (typeof values)[number]));
+    return (
+      this.#name.equals(other.#name) &&
+      this.#kind.equals(other.#kind) &&
+      valuesEqual &&
+      this.#min?.asNumber() === other.#min?.asNumber() &&
+      this.#max?.asNumber() === other.#max?.asNumber()
+    );
+  }
 }

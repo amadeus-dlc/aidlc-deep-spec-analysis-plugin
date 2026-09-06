@@ -26,4 +26,8 @@ export class ErrorMessage {
   asString(): string {
     return this.#value;
   }
+
+  equals(other: ErrorMessage): boolean {
+    return this.#value === other.#value;
+  }
 }

@@ -98,7 +98,9 @@ export function missingConstructionParsers(sources: ReadonlyMap<string, string>)
     });
   }
   const fallible = new Set(
-    constructors.filter((entry) => /\bthrow\b|\bboundedValueSnapshot\s*\(/.test(entry.body)).map((entry) => entry.name),
+    constructors
+      .filter((entry) => /\bthrow\b|\bbounded(?:Value|Collection)Snapshot\s*\(/.test(entry.body))
+      .map((entry) => entry.name),
   );
   let changed = true;
   while (changed) {

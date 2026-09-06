@@ -1,23 +1,43 @@
 import type { FirstClassCollection } from "./first-class-collection.ts";
-import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
+import { FirstClassCollectionBase } from "./first-class-collection-base.ts";
 // finding / checked / crossChecked ペイロードが運ぶ target id 列のファースト
 // クラスコレクション。要素は TargetIdentifier（#71 波10——生 string の集合ではない）。
 // of は型付きの TargetIdentifier を受け取る。
 // 名前空間付き id のサニタイズ（safe）は refcheck レポートの材料面として残る
 // （旧自由関数 safeTarget は TargetIdentifiers.safe に従属した——OOUI 裁定）。
 
-import { sortedUniqueCanonically } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+  sortedUniqueCanonically,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import { TargetIdentifier } from "./target-identifier.ts";
 
-export class TargetIdentifiers implements FirstClassCollection, IterableFirstClassCollection<TargetIdentifier> {
+const MAX_TARGET_IDENTIFIERS = 65_536;
+
+export class TargetIdentifiers
+  extends FirstClassCollectionBase<TargetIdentifier, TargetIdentifiers>
+  implements FirstClassCollection<TargetIdentifier>
+{
   readonly #values: readonly TargetIdentifier[];
 
   private constructor(values: readonly TargetIdentifier[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, MAX_TARGET_IDENTIFIERS, "too-many-target-identifiers");
+  }
+
+  protected rebuild(values: readonly TargetIdentifier[]): TargetIdentifiers {
+    return new TargetIdentifiers(values);
   }
 
   static of(values: readonly TargetIdentifier[]): TargetIdentifiers {
     return new TargetIdentifiers(values);
+  }
+
+  static parse(values: readonly TargetIdentifier[]): Result<TargetIdentifiers, ParseError> {
+    return parseConstruction(() => new TargetIdentifiers(values));
   }
 
   // 凍結文書・生 id 材料からの逐語再構成。
@@ -42,10 +62,6 @@ export class TargetIdentifiers implements FirstClassCollection, IterableFirstCla
 
   count(): number {
     return this.#values.length;
-  }
-
-  includes(value: TargetIdentifier): boolean {
-    return this.#values.some((v) => v.equals(value));
   }
 
   // value と等しい id を除いた列（順序は保つ）。refcheck レポートが

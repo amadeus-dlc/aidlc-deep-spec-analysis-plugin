@@ -83,6 +83,29 @@ export class Scenario {
   id(): ScenarioIdentifier {
     return this.#id;
   }
+
+  equals(other: Scenario): boolean {
+    const expressionEqual = (left: Expression | undefined, right: Expression | undefined): boolean =>
+      left === undefined
+        ? right === undefined
+        : right !== undefined && ExpressionTree.of(left).isCanonicallyEqual(ExpressionTree.of(right));
+    const refs = this.#functionalRequirementReferences.toArray();
+    const otherRefs = other.#functionalRequirementReferences.toArray();
+    const bindings = [...this.#bindings];
+    const otherBindings = [...other.#bindings];
+    return (
+      this.#id.equals(other.#id) &&
+      this.#expectation.asString() === other.#expectation.asString() &&
+      refs.length === otherRefs.length &&
+      refs.every((ref, index) => ref.equals(otherRefs[index] as (typeof refs)[number])) &&
+      bindings.length === otherBindings.length &&
+      bindings.every((binding, index) => binding.equals(otherBindings[index] as (typeof bindings)[number])) &&
+      (this.#eventTrigger === undefined
+        ? other.#eventTrigger === undefined
+        : other.#eventTrigger !== undefined && this.#eventTrigger.equals(other.#eventTrigger)) &&
+      expressionEqual(this.#expect, other.#expect)
+    );
+  }
   kind(): "accept" | "reject" {
     return this.#expectation.asString();
   }

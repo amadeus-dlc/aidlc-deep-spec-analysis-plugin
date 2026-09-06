@@ -1,18 +1,25 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
 import {
-  IllegalArgumentException,
+  boundedCollectionSnapshot,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { StageScope } from "./stage-scope.ts";
 
-export class StageScopes implements FirstClassCollection, IterableFirstClassCollection<StageScope> {
+export class StageScopes
+  extends FirstClassCollectionBase<StageScope, StageScopes>
+  implements FirstClassCollection<StageScope>
+{
   readonly #values: readonly StageScope[];
-  /** stage宣言の処理予算は1,024スコープ。コピーより先に確認する。 */
+  /** stage宣言の処理予算は1,024スコープ。 */
   private constructor(values: readonly StageScope[]) {
-    if (values.length > 1024) throw new IllegalArgumentException({ kind: "too-many-stage-scopes", raw: values.length });
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 1_024, "too-many-stage-scopes");
+  }
+
+  protected rebuild(values: readonly StageScope[]): StageScopes {
+    return new StageScopes(values);
   }
   static of(values: readonly StageScope[]): StageScopes {
     return new StageScopes(values);
@@ -20,14 +27,7 @@ export class StageScopes implements FirstClassCollection, IterableFirstClassColl
   static parse(values: readonly StageScope[]): Result<StageScopes, ParseError> {
     return parseConstruction(() => new StageScopes(values));
   }
-  includes(scope: StageScope): boolean {
-    return this.#values.some((value) => value.equals(scope));
-  }
   *[Symbol.iterator](): Iterator<StageScope> {
     yield* this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

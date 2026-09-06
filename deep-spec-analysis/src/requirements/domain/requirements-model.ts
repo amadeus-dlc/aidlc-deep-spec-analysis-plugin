@@ -3,7 +3,7 @@ import {
   type ContentHash,
   FunctionalRequirementReferences,
   type IntermediateRepresentationVersion,
-  type IterableFirstClassCollection,
+  type NonEmptyFirstClassCollection,
   type RequirementIdentifier,
   TargetIdentifier,
   TargetIdentifiers,
@@ -133,7 +133,7 @@ export class RequirementsModel {
 
   // 対象 id 列が指す義務・シナリオの FR 参照（一意・正準順）。
   functionalRequirementReferencesOf(
-    targets: IterableFirstClassCollection<TargetIdentifier>,
+    targets: NonEmptyFirstClassCollection<TargetIdentifier>,
   ): FunctionalRequirementReferences {
     const refs: RequirementIdentifier[] = [];
     for (const t of targets) {

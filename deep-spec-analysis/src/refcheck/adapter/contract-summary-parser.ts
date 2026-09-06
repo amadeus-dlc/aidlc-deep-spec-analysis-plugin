@@ -3,7 +3,14 @@
 
 import { extractFences, parseMarkdownTables, parseYamlSubset } from "@deep-spec-analysis/kernel-adapter";
 import { ErrorMessage } from "@deep-spec-analysis/kernel-domain";
-import { combineResults, isObject, type Json, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  combineResults,
+  isObject,
+  type Json,
+  type ParseError,
+  type Result,
+  traverseResult,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 import {
   BlockIndex,
@@ -41,10 +48,15 @@ export function parseDeclaredUnits(depMd: string | null): DeclaredUnitsOutcome {
         dependsOn: traverseResult(dependsOn, UnitName.parse),
       });
       if (!fields.ok) return DeclaredUnitsOutcome.unrecognized(JSON.stringify(fields.error));
-      units.push(UnitDeclaration.of({ name: fields.value.name, dependsOn: UnitNames.of(fields.value.dependsOn) }));
+      const parsedDependsOn = UnitNames.parse(fields.value.dependsOn);
+      if (!parsedDependsOn.ok) return DeclaredUnitsOutcome.unrecognized(JSON.stringify(parsedDependsOn.error));
+      units.push(UnitDeclaration.of({ name: fields.value.name, dependsOn: parsedDependsOn.value }));
     }
     if (units.length === 0) return DeclaredUnitsOutcome.unrecognized();
-    return DeclaredUnitsOutcome.declared(UnitDeclarations.of(units));
+    const parsedUnits = UnitDeclarations.parse(units);
+    return parsedUnits.ok
+      ? DeclaredUnitsOutcome.declared(parsedUnits.value)
+      : DeclaredUnitsOutcome.unrecognized(JSON.stringify(parsedUnits.error));
   }
   return DeclaredUnitsOutcome.unrecognized("no yaml fence with a top-level `units:` list");
 }
@@ -80,10 +92,13 @@ export function parseContractsTable(md: string): ContractsTableOutcome {
       }),
     );
   }
-  return ContractsTableOutcome.rows(ContractRows.of(rows));
+  const parsedRows = ContractRows.parse(rows);
+  return parsedRows.ok
+    ? ContractsTableOutcome.rows(parsedRows.value)
+    : ContractsTableOutcome.unparseable(ErrorMessage.of(JSON.stringify(parsedRows.error)));
 }
 
-export function assessSpecBlocks(md: string): SpecificationBlockAssessments {
+export function assessSpecBlocks(md: string): Result<SpecificationBlockAssessments, ParseError> {
   const blocks: SpecificationBlockAssessment[] = extractFences(md, "yaml").map((fence, i) => {
     const index = BlockIndex.of(i + 1);
     const line = LineNumber.of(fence.line);
@@ -101,5 +116,5 @@ export function assessSpecBlocks(md: string): SpecificationBlockAssessments {
     // asyncapi and shared-schema blocks: parseability is the check.
     return SpecificationBlockAssessment.sound(index, line);
   });
-  return SpecificationBlockAssessments.of(blocks);
+  return SpecificationBlockAssessments.parse(blocks);
 }

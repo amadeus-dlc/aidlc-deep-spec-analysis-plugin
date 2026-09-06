@@ -1,11 +1,29 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { type FirstClassCollection, FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { StateName } from "./state-name.ts";
 
-export class StateNames implements FirstClassCollection, IterableFirstClassCollection<StateName> {
+export class StateNames
+  extends FirstClassCollectionBase<StateName, StateNames>
+  implements FirstClassCollection<StateName>
+{
   readonly #values: readonly StateName[];
 
   private constructor(values: readonly StateName[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-state-names");
+  }
+
+  protected rebuild(values: readonly StateName[]): StateNames {
+    return new StateNames(values);
+  }
+
+  static parse(values: readonly StateName[]): Result<StateNames, ParseError> {
+    return parseConstruction(() => new StateNames(values));
   }
 
   static of(values: readonly StateName[]): StateNames {
@@ -22,9 +40,5 @@ export class StateNames implements FirstClassCollection, IterableFirstClassColle
 
   toArray(): readonly StateName[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

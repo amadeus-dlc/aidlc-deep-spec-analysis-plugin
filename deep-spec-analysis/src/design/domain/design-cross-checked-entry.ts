@@ -34,6 +34,17 @@ export class DesignCrossCheckedEntry {
     return parseConstruction(() => new DesignCrossCheckedEntry(props));
   }
 
+  equals(other: DesignCrossCheckedEntry): boolean {
+    const left = [...this.#targets].map((target) => target.asString());
+    const right = [...other.#targets].map((target) => target.asString());
+    return (
+      this.#backend.equals(other.#backend) &&
+      this.#unit.equals(other.#unit) &&
+      left.length === right.length &&
+      left.every((target, index) => target === right[index])
+    );
+  }
+
   unit(): UnitName {
     return this.#unit;
   }

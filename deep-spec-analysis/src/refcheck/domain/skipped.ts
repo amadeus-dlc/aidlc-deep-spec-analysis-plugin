@@ -40,6 +40,17 @@ export class Skipped {
     return this.#detail;
   }
 
+  equals(other: Skipped): boolean {
+    return (
+      this.#target.equals(other.#target) &&
+      this.#reason.asString() === other.#reason.asString() &&
+      (this.#unit === undefined
+        ? other.#unit === undefined
+        : other.#unit !== undefined && this.#unit.equals(other.#unit)) &&
+      this.#detail === other.#detail
+    );
+  }
+
   // 正準順: target の id 順、次いで reason の辞書順。
   compareTo(other: Skipped): number {
     const c = this.#target.compareTo(other.#target);

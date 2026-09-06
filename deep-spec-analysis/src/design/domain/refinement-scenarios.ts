@@ -1,16 +1,31 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { RefinementScenario } from "./refinement-scenario.ts";
 
 // 要件シナリオのファーストクラスコレクション。id 索引は最後の宣言が勝つ。
-export class RefinementScenarios implements FirstClassCollection, IterableFirstClassCollection<RefinementScenario> {
+export class RefinementScenarios extends FirstClassCollectionBase<RefinementScenario, RefinementScenarios> {
   readonly #values: readonly RefinementScenario[];
 
   private constructor(values: readonly RefinementScenario[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-refinement-scenarios");
+  }
+
+  protected rebuild(values: readonly RefinementScenario[]): RefinementScenarios {
+    return new RefinementScenarios(values);
   }
 
   static of(values: readonly RefinementScenario[]): RefinementScenarios {
     return new RefinementScenarios(values);
+  }
+
+  static parse(values: readonly RefinementScenario[]): Result<RefinementScenarios, ParseError> {
+    return parseConstruction(() => new RefinementScenarios(values));
   }
 
   add(value: RefinementScenario): RefinementScenarios {
@@ -37,9 +52,5 @@ export class RefinementScenarios implements FirstClassCollection, IterableFirstC
 
   toArray(): readonly RefinementScenario[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

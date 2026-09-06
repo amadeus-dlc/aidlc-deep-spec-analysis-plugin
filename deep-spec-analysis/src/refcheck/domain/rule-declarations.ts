@@ -1,19 +1,37 @@
-import type {
-  ArtifactPath,
-  FirstClassCollection,
-  IterableFirstClassCollection,
-  RequirementIdentifiers,
+import {
+  type ArtifactPath,
+  type FirstClassCollection,
+  FirstClassCollectionBase,
+  type RequirementIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DeclaredEntities } from "./declared-entities.ts";
 import { FD_R3, FD_R4 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { RuleDeclaration } from "./rule-declaration.ts";
 
-export class RuleDeclarations implements FirstClassCollection, IterableFirstClassCollection<RuleDeclaration> {
+export class RuleDeclarations
+  extends FirstClassCollectionBase<RuleDeclaration, RuleDeclarations>
+  implements FirstClassCollection<RuleDeclaration>
+{
   readonly #values: readonly RuleDeclaration[];
 
   private constructor(values: readonly RuleDeclaration[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-rule-declarations");
+  }
+
+  protected rebuild(values: readonly RuleDeclaration[]): RuleDeclarations {
+    return new RuleDeclarations(values);
+  }
+
+  static parse(values: readonly RuleDeclaration[]): Result<RuleDeclarations, ParseError> {
+    return parseConstruction(() => new RuleDeclarations(values));
   }
 
   static of(values: readonly RuleDeclaration[]): RuleDeclarations {
@@ -59,9 +77,5 @@ export class RuleDeclarations implements FirstClassCollection, IterableFirstClas
       report.skip(FD_R4, "absent-input", "entities.md is unavailable — applies-to cannot be resolved");
     else for (const rule of this) rule.checkApplicability(entities.entities(), report, artifact);
     for (const rule of this) rule.checkCategory(report, artifact);
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

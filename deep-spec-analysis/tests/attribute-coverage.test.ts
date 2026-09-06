@@ -42,13 +42,14 @@ test("coverage rejects extraneous members and size overflow before classifying t
   expect(
     AttributeCoverage.parse({ required: paths("R.a"), mapped: paths("R.a", "R.b"), waived: paths(), missing: paths() }),
   ).toEqual({ ok: false, error: { kind: "attribute-coverage-outside-subject" } });
-  const tooMany = AttributePaths.of(Array.from({ length: 65_537 }, (_, i) => AttributePath.of(`R.a${i}`)));
-  const input = { required: tooMany, mapped: paths(), waived: paths(), missing: paths() };
-  expect(() => AttributeCoverage.of(input)).toThrow(IllegalArgumentException);
-  expect(AttributeCoverage.parse(input)).toEqual({
-    ok: false,
-    error: { kind: "attribute-coverage-too-large", raw: 65_537 },
-  });
+  const tooMany = Array.from({ length: 65_537 }, (_, i) => AttributePath.of(`R.a${i}`));
+  expect(() => AttributePaths.of(tooMany)).toThrow(IllegalArgumentException);
+  const parsed = AttributePaths.parse(tooMany);
+  expect(parsed.ok).toBe(false);
+  if (!parsed.ok) {
+    expect(parsed.error.kind).toBe("too-many-attribute-paths");
+    expect(parsed.error).not.toBeInstanceOf(Error);
+  }
 });
 
 test("coverage preserves event numeric order and scenario lexical order", () => {

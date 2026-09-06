@@ -22,6 +22,18 @@ export class RefinementAttribute {
     return new RefinementAttribute(props);
   }
 
+  equals(other: RefinementAttribute): boolean {
+    const left = this.#values?.toArray().map((value) => value.asString()) ?? null;
+    const right = other.#values?.toArray().map((value) => value.asString()) ?? null;
+    return (
+      this.#path.asString() === other.#path.asString() &&
+      this.#kind === other.#kind &&
+      (left === null || right === null
+        ? left === right
+        : left.length === right.length && left.every((value, index) => value === right[index]))
+    );
+  }
+
   path(): AttributePath {
     return this.#path;
   }

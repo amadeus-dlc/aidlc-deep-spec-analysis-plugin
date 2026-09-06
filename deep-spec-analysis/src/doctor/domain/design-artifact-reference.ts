@@ -35,4 +35,14 @@ export class DesignArtifactReference {
   relativePath(): ArtifactPath {
     return this.#relativePath;
   }
+
+  equals(other: DesignArtifactReference): boolean {
+    return (
+      this.#location.space().equals(other.#location.space()) &&
+      this.#location.intent().equals(other.#location.intent()) &&
+      this.#tool.equals(other.#tool) &&
+      this.#artifactPath.equals(other.#artifactPath) &&
+      this.#relativePath.equals(other.#relativePath)
+    );
+  }
 }

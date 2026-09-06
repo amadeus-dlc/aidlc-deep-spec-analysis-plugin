@@ -1,18 +1,34 @@
-import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
+import { FirstClassCollectionBase } from "@deep-spec-analysis/kernel-domain";
+import {
+  boundedCollectionSnapshot,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignCrossCheckedEntry } from "./design-cross-checked-entry.ts";
 
 // クロスチェック判定表のファーストクラスコレクション。
-export class DesignCrossCheckedEntries
-  implements FirstClassCollection, IterableFirstClassCollection<DesignCrossCheckedEntry>
-{
+export class DesignCrossCheckedEntries extends FirstClassCollectionBase<
+  DesignCrossCheckedEntry,
+  DesignCrossCheckedEntries
+> {
   readonly #values: readonly DesignCrossCheckedEntry[];
 
   private constructor(values: readonly DesignCrossCheckedEntry[]) {
-    this.#values = Object.freeze([...values]);
+    super();
+    this.#values = boundedCollectionSnapshot(values, 65_536, "too-many-design-cross-checked-entries");
+  }
+
+  protected rebuild(values: readonly DesignCrossCheckedEntry[]): DesignCrossCheckedEntries {
+    return new DesignCrossCheckedEntries(values);
   }
 
   static of(values: readonly DesignCrossCheckedEntry[]): DesignCrossCheckedEntries {
     return new DesignCrossCheckedEntries(values);
+  }
+
+  static parse(values: readonly DesignCrossCheckedEntry[]): Result<DesignCrossCheckedEntries, ParseError> {
+    return parseConstruction(() => new DesignCrossCheckedEntries(values));
   }
 
   add(value: DesignCrossCheckedEntry): DesignCrossCheckedEntries {
@@ -25,9 +41,5 @@ export class DesignCrossCheckedEntries
 
   toArray(): readonly DesignCrossCheckedEntry[] {
     return this.#values;
-  }
-
-  isEmpty(): boolean {
-    return this.#values.length === 0;
   }
 }

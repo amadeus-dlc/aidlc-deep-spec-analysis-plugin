@@ -101,6 +101,32 @@ export class Component {
     return this.#element;
   }
 
+  equals(other: Component): boolean {
+    const sameReferences = (left: ComponentReferences, right: ComponentReferences): boolean => {
+      const leftValues = left.toArray();
+      const rightValues = right.toArray();
+      return (
+        leftValues.length === rightValues.length &&
+        leftValues.every((value, index) => value.equals(rightValues[index] as (typeof leftValues)[number]))
+      );
+    };
+    const sameEntities = (left: ComponentEntities, right: ComponentEntities): boolean => {
+      const leftValues = left.toArray();
+      const rightValues = right.toArray();
+      return (
+        leftValues.length === rightValues.length &&
+        leftValues.every((value, index) => value.equals(rightValues[index] as (typeof leftValues)[number]))
+      );
+    };
+    return (
+      this.#name.equals(other.#name) &&
+      this.#element.equals(other.#element) &&
+      sameReferences(this.#dependsOn, other.#dependsOn) &&
+      sameReferences(this.#dependents, other.#dependents) &&
+      sameEntities(this.#entities, other.#entities)
+    );
+  }
+
   dependsOn(): ComponentReferences {
     return this.#dependsOn;
   }
