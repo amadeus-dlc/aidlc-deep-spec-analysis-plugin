@@ -28,7 +28,8 @@ export class CheckFunctionalDesignUseCase {
 
   execute(input: CheckFunctionalDesignInput): CheckOutcome {
     return matchResult(this.#designRecordRepository.findById(input.recordId), {
-      err: (): CheckOutcome => ({ kind: "not-applicable" }),
+      err: (error): CheckOutcome =>
+        error.kind === "not-found" ? { kind: "not-applicable" } : { kind: "acquisition-failed", error },
       ok: (record): CheckOutcome =>
         matchResult(record.checkFunctionalDesign(input.reportDirectory), {
           err: (): CheckOutcome => ({ kind: "not-applicable" }),

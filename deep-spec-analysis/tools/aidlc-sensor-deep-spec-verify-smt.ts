@@ -6604,7 +6604,7 @@ class QuintClientImplementation {
       killSignal: "SIGINT"
     });
     const errorCode = res.error?.code;
-    const timedOut = errorCode === "ETIMEDOUT" || res.signal === "SIGINT" || res.signal === "SIGTERM" || res.signal === "SIGKILL";
+    const timedOut = errorCode === "ETIMEDOUT";
     const failed = !timedOut && (res.error !== undefined || res.status !== 0);
     let itf = null;
     if (itfPath && existsSync3(itfPath)) {
@@ -6619,10 +6619,6 @@ class QuintClientImplementation {
   #outputTail(run) {
     return `${run.stderr}${run.stdout}`.trim().split(`
 `).pop()?.slice(0, 200) ?? "";
-  }
-  #didNotAnswer(run) {
-    return run.failed || `${run.stdout}
-${run.stderr}`.toLowerCase().includes("error");
   }
   #runMachinePhase(machine, modulePath, bounded, work) {
     const itfPath = join3(work, "machine.itf.json");
@@ -6657,7 +6653,7 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
       const trace = decodeItfTrace(run.itf, machine.varToPath);
       return trace.ok ? QuintMachineRunVerdict.violation(trace.value) : QuintMachineRunVerdict.runFailed(trace.error);
     }
-    if (!violated && run.itf === null && this.#didNotAnswer(run)) {
+    if (!violated && run.itf === null && run.failed) {
       return QuintMachineRunVerdict.runFailed(this.#outputTail(run));
     }
     return QuintMachineRunVerdict.clean();
@@ -6681,7 +6677,7 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
       } else if (run.itf) {
         const trace = decodeItfTrace(run.itf, machine.varToPath);
         out.set(obId, trace.ok ? QuintTemporalVerdict.violation(trace.value) : QuintTemporalVerdict.runFailed(trace.error));
-      } else if (this.#didNotAnswer(run)) {
+      } else if (run.failed) {
         out.set(obId, QuintTemporalVerdict.runFailed(this.#outputTail(run)));
       } else {
         out.set(obId, QuintTemporalVerdict.clean());
@@ -6707,7 +6703,7 @@ ${run.stderr}`.toLowerCase().includes("deadlock")) {
       ], itfPath, SCENARIO_TIMEOUT_MS, work);
       if (run.timedOut) {
         out.set(scId, QuintScenarioVerdict.timeout());
-      } else if (!run.itf && this.#didNotAnswer(run)) {
+      } else if (!run.itf && run.failed) {
         out.set(scId, QuintScenarioVerdict.runFailed(this.#outputTail(run)));
       } else {
         out.set(scId, QuintScenarioVerdict.evaluated(run.itf !== null && itfStatus(run.itf) === "violation"));

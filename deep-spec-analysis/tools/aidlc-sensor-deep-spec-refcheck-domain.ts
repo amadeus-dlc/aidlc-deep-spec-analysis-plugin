@@ -6931,7 +6931,7 @@ class CheckContractSummaryUseCase {
   }
   execute(input) {
     return matchResult(this.#designRecordRepository.findById(input.recordId), {
-      err: () => ({ kind: "not-applicable" }),
+      err: (error) => error.kind === "not-found" ? { kind: "not-applicable" } : { kind: "acquisition-failed", error },
       ok: (record) => matchResult(record.checkContracts(input.reportDirectory), {
         err: () => ({ kind: "not-applicable" }),
         ok: (report) => {
@@ -6959,7 +6959,7 @@ class CheckDomainComponentsUseCase {
   }
   execute(input) {
     return matchResult(this.#designRecordRepository.findById(input.recordId), {
-      err: () => ({ kind: "not-applicable" }),
+      err: (error) => error.kind === "not-found" ? { kind: "not-applicable" } : { kind: "acquisition-failed", error },
       ok: (record) => matchResult(record.checkComponents(input.reportDirectory), {
         err: () => ({ kind: "not-applicable" }),
         ok: (report) => {
@@ -6987,7 +6987,7 @@ class CheckFunctionalDesignUseCase {
   }
   execute(input) {
     return matchResult(this.#designRecordRepository.findById(input.recordId), {
-      err: () => ({ kind: "not-applicable" }),
+      err: (error) => error.kind === "not-found" ? { kind: "not-applicable" } : { kind: "acquisition-failed", error },
       ok: (record) => matchResult(record.checkFunctionalDesign(input.reportDirectory), {
         err: () => ({ kind: "not-applicable" }),
         ok: (report) => {
@@ -7026,6 +7026,11 @@ function main() {
     reportDirectory: reportLocation.value,
     mode: flags.reportOnly ? "report-only" : "persist"
   });
+  if (outcome.kind === "acquisition-failed") {
+    process.stderr.write(`deep-spec-refcheck-domain: failed to read ${outcome.error.path}: ${outcome.error.kind}${"cause" in outcome.error ? ` (${outcome.error.cause})` : ""}
+`);
+    process.exit(1);
+  }
   if (outcome.kind === "not-applicable") {
     process.stdout.write(`${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}
 `);

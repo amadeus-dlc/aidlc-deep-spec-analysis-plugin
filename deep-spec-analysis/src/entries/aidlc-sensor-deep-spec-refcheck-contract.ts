@@ -15,7 +15,7 @@
 // Sensor contract: parses --stage / --output-path (+ --report-only);
 // pass-through on writes that are not contract-summary.md. Verdicts (including
 // not-applicable) emit one JSON line on stdout and exit 0. A missing/invalid
-// --output-path or report save failure emits a diagnostic on stderr, no verdict,
+// --output-path, acquisition failure, or report save failure emits a diagnostic on stderr, no verdict,
 // and exits 1.
 
 import { basename, dirname, join } from "node:path";
@@ -62,6 +62,12 @@ function main(): void {
     mode: flags.reportOnly ? "report-only" : "persist",
   });
 
+  if (outcome.kind === "acquisition-failed") {
+    process.stderr.write(
+      `deep-spec-refcheck-contract: failed to read ${outcome.error.path}: ${outcome.error.kind}${"cause" in outcome.error ? ` (${outcome.error.cause})` : ""}\n`,
+    );
+    process.exit(1);
+  }
   if (outcome.kind === "not-applicable") {
     process.stdout.write(
       `${JSON.stringify({ pass: true, findings_count: 0, skipped_count: 0, note: "not-applicable" })}\n`,
