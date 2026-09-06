@@ -1,0 +1,11 @@
+{
+  "sourceBaseline": "87f151776ef13dd2f564c2a60ff0d4f5968eab65",
+  "command": "bun test tests/ir-validation.test.ts tests/refinement-pipeline.test.ts tests/design-pipeline.test.ts tests/refcheck-domain.test.ts tests/refcheck-pipeline.test.ts tests/verify-smt-pipeline.test.ts tests/verify-quint-pipeline.test.ts",
+  "pass": 210,
+  "fail": 0,
+  "testFiles": 7,
+  "expectCalls": 1100,
+  "durationSeconds": 5.18,
+  "exitCode": 0,
+  "applicationSourceChanges": false
+}
