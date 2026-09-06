@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignObligation } from "./design-obligation.ts";
 
 // 設計義務のファーストクラスコレクション。id 列の導出を所有する。
-export class DesignObligations {
+export class DesignObligations implements FirstClassCollection, IterableFirstClassCollection<DesignObligation> {
   readonly #values: readonly DesignObligation[];
 
   private constructor(values: readonly DesignObligation[]) {
@@ -31,5 +32,9 @@ export class DesignObligations {
 
   toArray(): readonly DesignObligation[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

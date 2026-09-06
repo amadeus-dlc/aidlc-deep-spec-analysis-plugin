@@ -3,7 +3,6 @@ import {
   type Expression,
   ExpressionTree,
   FunctionalRequirementReferences,
-  KeyedIndex,
   ObligationNature,
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
@@ -13,6 +12,7 @@ import {
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
+import type { DesignAssignment } from "./design-assignment.ts";
 import { DesignAssignments } from "./design-assignments.ts";
 import type { DesignObligationIdentifier } from "./design-obligation-identifier.ts";
 import type { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
@@ -47,20 +47,16 @@ export class DesignEventRule {
     this.#trigger = props.trigger;
     this.#guard = ExpressionTree.of(props.guard);
     this.#effect = ExpressionTree.of(effect);
-    const terms: (readonly [AttributePath, Expression])[] = [];
+    const assignments: DesignAssignment[] = [];
     let interpretable = false;
     for (const part of [props.implicitEffect, props.effect]) {
       if (part === undefined) continue;
-      const parsed = EffectAssignments.parse(part);
+      const parsed = EffectAssignments.fromEffect(ExpressionTree.of(part));
       if (!parsed.ok) continue;
       interpretable = true;
-      for (const [path, term] of parsed.value) {
-        const [a, b] = term.args ?? [];
-        const rhs = a?.op === "ref" && a.prime === true ? b : a;
-        if (rhs !== undefined) terms.push([path, rhs]);
-      }
+      for (const assignment of parsed.value) assignments.push(assignment.asDesignAssignment());
     }
-    this.#assignments = interpretable ? DesignAssignments.of(KeyedIndex.of(terms)) : null;
+    this.#assignments = interpretable ? DesignAssignments.of(assignments) : null;
   }
   static of(props: DesignEventRuleParam): DesignEventRule {
     return new DesignEventRule(props);

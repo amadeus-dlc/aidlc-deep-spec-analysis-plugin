@@ -1,4 +1,4 @@
-import type { TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import type { FindingTargets, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
   type ParseError,
@@ -30,7 +30,7 @@ export class RuleSubsumption {
   mentionsAny(dead: TargetIdentifiers): boolean {
     return this.#probe.mentionsAny(dead);
   }
-  targets(): TargetIdentifiers {
+  targets(): FindingTargets {
     return this.#probe.targets();
   }
   finding(): DesignFinding {

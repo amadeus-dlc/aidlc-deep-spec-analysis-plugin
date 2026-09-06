@@ -1,9 +1,13 @@
-import type { ArtifactPath } from "@deep-spec-analysis/kernel-domain";
+import type {
+  ArtifactPath,
+  FirstClassCollection,
+  IterableFirstClassCollection,
+} from "@deep-spec-analysis/kernel-domain";
 import type { DeclaredEntities } from "./declared-entities.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { StateMachineSketch } from "./state-machine-sketch.ts";
 
-export class StateMachineSketches {
+export class StateMachineSketches implements FirstClassCollection, IterableFirstClassCollection<StateMachineSketch> {
   readonly #values: readonly StateMachineSketch[];
 
   private constructor(values: readonly StateMachineSketch[]) {

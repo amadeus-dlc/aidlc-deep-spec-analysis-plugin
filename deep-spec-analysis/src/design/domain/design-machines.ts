@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignMachine } from "./design-machine.ts";
 
 // 状態機械のファーストクラスコレクション。全遷移 id の導出を所有する。
-export class DesignMachines {
+export class DesignMachines implements FirstClassCollection, IterableFirstClassCollection<DesignMachine> {
   readonly #values: readonly DesignMachine[];
 
   private constructor(values: readonly DesignMachine[]) {
@@ -42,5 +43,9 @@ export class DesignMachines {
 
   toArray(): readonly DesignMachine[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

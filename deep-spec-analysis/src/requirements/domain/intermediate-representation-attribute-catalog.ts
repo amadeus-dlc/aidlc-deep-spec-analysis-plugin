@@ -1,3 +1,4 @@
+import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   AttributePath,
   type DeclaredBindings,
@@ -16,7 +17,7 @@ import {
 import type { IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
 import type { IntermediateRepresentationEntityDeclarations } from "./intermediate-representation-entity-declarations.ts";
 
-export class IntermediateRepresentationAttributeCatalog {
+export class IntermediateRepresentationAttributeCatalog implements FirstClassCollection {
   readonly #byPath: KeyedIndex<AttributePath, IntermediateRepresentationAttributeDeclaration>;
   private constructor(declarations: IntermediateRepresentationEntityDeclarations) {
     let count = 0;
@@ -100,5 +101,9 @@ export class IntermediateRepresentationAttributeCatalog {
         );
     }
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+
+  isEmpty(): boolean {
+    return this.#byPath.isEmpty();
   }
 }

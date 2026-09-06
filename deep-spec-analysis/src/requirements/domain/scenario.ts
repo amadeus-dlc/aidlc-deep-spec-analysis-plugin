@@ -2,6 +2,7 @@ import {
   type Expression,
   ExpressionTree,
   FindingKind,
+  FindingTargets,
   type FunctionalRequirementReferences,
   type ScenarioBindings,
   type ScenarioComparison,
@@ -12,6 +13,7 @@ import {
 } from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
+  ok,
   type ParseError,
   parseConstruction,
   type Result,
@@ -72,7 +74,7 @@ export class Scenario {
     return VerificationFinding.of({
       kind: FindingKind.crossCheckDisagreement(),
       functionalRequirementReferences: this.#functionalRequirementReferences.sortedUnique(),
-      targets: TargetIdentifiers.of([this.#id.asTargetId()]),
+      targets: FindingTargets.of(this.#id.asTargetId(), []),
       witness: VerificationWitness.verdicts(comparison.toVerdictTable()),
       detail: `${comparison.description()} disagree on scenario ${this.#id.asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
     });
@@ -112,7 +114,7 @@ export class Scenario {
     verdict: QuintScenarioVerdict | undefined,
     hasInitialState: boolean,
     components: QuintMachineComponents,
-  ): { findings: VerificationFindings; skipped: VerificationSkips } {
+  ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
     const target = this.#id.asTargetId();
     let skip: VerificationSkipped | null = null;
     if (this.hasEventRule())
@@ -134,15 +136,17 @@ export class Scenario {
         detail: "quint returned no run for this scenario",
       });
     else skip = verdict.skipFor(target);
-    if (skip !== null) return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) };
+    if (skip !== null) return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) });
     if (verdict === undefined || !this.isViolatedBySatisfiability(!verdict.isViolated()))
-      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) };
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
     const accept = this.isAccept();
     const violated = accept
       ? components.violatedBy(TraceState.fromBindings(this.#bindings)).ids().toTargetIds()
       : TargetIdentifiers.of([]);
-    const targets = TargetIdentifiers.of([target, ...violated]).sortedUniqueCanonically();
-    return {
+    const parsedTargets = FindingTargets.parse(target, [...violated]);
+    if (!parsedTargets.ok) return parsedTargets;
+    const targets = parsedTargets.value.sortedUniqueCanonically();
+    return ok({
       findings: VerificationFindings.of([
         VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
@@ -155,26 +159,26 @@ export class Scenario {
         }),
       ]),
       skipped: VerificationSkips.of([]),
-    };
+    });
   }
 
   interpretSatisfiability(
     model: RequirementsModel,
     verdict: SatisfiabilityModuloTheoriesQueryVerdict,
     coreTargets: TargetIdentifiers,
-  ): { findings: VerificationFindings; skipped: VerificationSkips } {
+  ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
     const target = this.#id.asTargetId();
     if (verdict.isUndecided())
-      return {
+      return ok({
         findings: VerificationFindings.of([]),
         skipped: verdict.skipsFor(TargetIdentifiers.of([target]), `scenario check for ${this.#id.asString()}`),
-      };
+      });
     if (!this.isViolatedBySatisfiability(verdict.isSat()))
-      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) };
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
     const accept = this.isAccept();
-    const targets = accept
-      ? TargetIdentifiers.of([target, ...coreTargets]).sortedUniqueCanonically()
-      : TargetIdentifiers.of([target]);
+    const parsedTargets = FindingTargets.parse(target, accept ? [...coreTargets] : []);
+    if (!parsedTargets.ok) return parsedTargets;
+    const targets = accept ? parsedTargets.value.sortedUniqueCanonically() : parsedTargets.value;
     const finding = VerificationFinding.of({
       kind: FindingKind.scenarioViolation(),
       functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
@@ -186,7 +190,7 @@ export class Scenario {
         ? `Accept scenario ${this.#id.asString()} describes a state the obligations in the witness core rule out — the requirements reject an example that should be accepted.`
         : `Reject scenario ${this.#id.asString()} is still satisfiable — the requirements do not exclude an example that should be rejected (witness state attached).`,
     });
-    return { findings: VerificationFindings.of([finding]), skipped: VerificationSkips.of([]) };
+    return ok({ findings: VerificationFindings.of([finding]), skipped: VerificationSkips.of([]) });
   }
 
   bindings(): ScenarioBindings {

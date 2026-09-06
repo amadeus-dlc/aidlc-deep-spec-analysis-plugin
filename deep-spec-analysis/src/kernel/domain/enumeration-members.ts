@@ -5,9 +5,11 @@ import {
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { EnumerationMember } from "./enumeration-member.ts";
+import type { FirstClassCollection } from "./first-class-collection.ts";
+import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
 // enum 宣言値のファーストクラスコレクション。宣言順＝SMT の序数符号化・
 // Quint の集合リテラル順という凍結面なので順序を所有する。
-export class EnumerationMembers {
+export class EnumerationMembers implements FirstClassCollection, IterableFirstClassCollection<EnumerationMember> {
   readonly #values: readonly EnumerationMember[];
 
   private constructor(values: readonly EnumerationMember[]) {
@@ -55,5 +57,9 @@ export class EnumerationMembers {
 
   toArray(): readonly EnumerationMember[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

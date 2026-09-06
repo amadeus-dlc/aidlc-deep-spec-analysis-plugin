@@ -70,6 +70,7 @@ import {
   ScenarioIdentifier,
   VerificationReportIdentifier,
 } from "@deep-spec-analysis/requirements-domain";
+import { requireSuccess } from "./result-fixtures.ts";
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
@@ -187,7 +188,9 @@ describe("SMT response completeness", () => {
     const input = model();
     const plan = buildSmtPlan(input);
     expect(plan.queries.map((q) => q.id)).toEqual(["global"]);
-    const result = plan.plan.interpret(input, SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.empty()));
+    const result = requireSuccess(
+      plan.plan.interpret(input, SatisfiabilityModuloTheoriesQueryVerdicts.of(KeyedIndex.empty())),
+    );
     expect(result.findings.toArray()).toHaveLength(0);
     expect(result.skipped.toArray().map((s) => ({ target: s.target().asString(), reason: s.reason() }))).toEqual([
       { target: "OB-1", reason: "unrecognized-format" },
@@ -204,10 +207,12 @@ describe("SMT response completeness", () => {
     });
     const plan = buildSmtPlan(input);
     expect(plan.queries.map((q) => q.id)).toEqual(["global", "vac:OB-1"]);
-    const result = plan.plan.interpret(
-      input,
-      SatisfiabilityModuloTheoriesQueryVerdicts.of(
-        KeyedIndex.of([[QueryLabel.of("global"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })]]),
+    const result = requireSuccess(
+      plan.plan.interpret(
+        input,
+        SatisfiabilityModuloTheoriesQueryVerdicts.of(
+          KeyedIndex.of([[QueryLabel.of("global"), SatisfiabilityModuloTheoriesQueryVerdict.of({ status: "sat" })]]),
+        ),
       ),
     );
     expect(result.skipped.toArray().map((s) => s.detail())).toEqual([

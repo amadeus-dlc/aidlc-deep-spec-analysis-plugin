@@ -1,3 +1,4 @@
+import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { ErrorMessage, ErrorMessages, KeySet, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
 import type { UnformalizedTargets } from "./unformalized-targets.ts";
@@ -6,7 +7,7 @@ import type { UnformalizedTargets } from "./unformalized-targets.ts";
 
 import type { BusinessRuleReference } from "./business-rule-reference.ts";
 
-export class BusinessRuleReferenceIndex {
+export class BusinessRuleReferenceIndex implements FirstClassCollection {
   readonly #ids: KeySet<BusinessRuleReference>;
 
   private constructor(ids: KeySet<BusinessRuleReference>) {
@@ -45,5 +46,9 @@ export class BusinessRuleReferenceIndex {
       .toArray()
       .map((id) => id.asString())
       .sort();
+  }
+
+  isEmpty(): boolean {
+    return this.#ids.isEmpty();
   }
 }

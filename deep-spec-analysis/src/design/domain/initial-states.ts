@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
   type ParseError,
@@ -5,7 +6,7 @@ import {
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { InitialState } from "./initial-state.ts";
-export class InitialStates {
+export class InitialStates implements FirstClassCollection, IterableFirstClassCollection<InitialState> {
   readonly #values: readonly InitialState[];
 
   private constructor(values: readonly InitialState[]) {
@@ -36,5 +37,9 @@ export class InitialStates {
 
   toArray(): readonly InitialState[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

@@ -1,9 +1,10 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { AttributeDeclaration } from "./attribute-declaration.ts";
 import type { AttributeName } from "./attribute-name.ts";
 
 // 属性宣言のコレクション。重複検出・ライフサイクル属性の選定・名前解決という
 // 集合の知識を所有する。
-export class AttributeDeclarations {
+export class AttributeDeclarations implements FirstClassCollection, IterableFirstClassCollection<AttributeDeclaration> {
   readonly #values: readonly AttributeDeclaration[];
 
   private constructor(values: readonly AttributeDeclaration[]) {
@@ -52,5 +53,9 @@ export class AttributeDeclarations {
 
   toArray(): readonly AttributeDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

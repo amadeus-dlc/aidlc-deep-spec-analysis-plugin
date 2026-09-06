@@ -1,3 +1,4 @@
+import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { FunctionalRequirementReferenceClaims } from "./functional-requirement-reference-claims.ts";
 // FunctionalRequirementReferenceIndex — 義務・シナリオが指す要件 id → 指した側の id 列の索引
 //（逆引き検証の材料）。キーは RequirementIdentifier、値は FunctionalRequirementReferenceClaims、内側は KeyedIndex
@@ -6,7 +7,7 @@ import { FunctionalRequirementReferenceClaims } from "./functional-requirement-r
 import { KeyedIndex, RequirementIdentifier, type RequirementIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import type { FunctionalRequirementReferenceClaim } from "./functional-requirement-reference-claim.ts";
 
-export class FunctionalRequirementReferenceIndex {
+export class FunctionalRequirementReferenceIndex implements FirstClassCollection {
   readonly #ownersByRef: KeyedIndex<RequirementIdentifier, FunctionalRequirementReferenceClaims>;
 
   private constructor(ownersByRef: KeyedIndex<RequirementIdentifier, FunctionalRequirementReferenceClaims>) {
@@ -42,5 +43,9 @@ export class FunctionalRequirementReferenceIndex {
         .join(", ");
       return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
     });
+  }
+
+  isEmpty(): boolean {
+    return this.#ownersByRef.isEmpty();
   }
 }

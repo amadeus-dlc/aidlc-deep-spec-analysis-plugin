@@ -1,4 +1,4 @@
-import type { ErrorMessage } from "@deep-spec-analysis/kernel-domain";
+import { type ErrorMessage, VerificationMethod } from "@deep-spec-analysis/kernel-domain";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability-modulo-theories-query-verdicts.ts";
 import type { SatisfiabilityModuloTheoriesVerificationPlan } from "./satisfiability-modulo-theories-verification-plan.ts";
@@ -31,13 +31,20 @@ export class SatisfiabilityModuloTheoriesCheck {
       return VerificationReport.solverUnavailable(id, model, this.#plan.planSkipped(), this.#result.reason.asString());
     }
     const interpreted = this.#plan.interpret(model, this.#result.verdicts);
+    if (!interpreted.ok)
+      return VerificationReport.interpretationUnavailable(
+        id,
+        model,
+        VerificationMethod.of("exhaustive"),
+        interpreted.error,
+      );
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
       irHash: model.irHash(),
       method: "exhaustive",
-      findings: interpreted.findings,
-      skipped: interpreted.skipped,
+      findings: interpreted.value.findings,
+      skipped: interpreted.value.skipped,
     });
   }
 

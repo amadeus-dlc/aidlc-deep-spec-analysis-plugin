@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { AllowedValue } from "./allowed-value.ts";
 import type { StateNames } from "./state-names.ts";
 
-export class AllowedValues {
+export class AllowedValues implements FirstClassCollection, IterableFirstClassCollection<AllowedValue> {
   readonly #values: readonly AllowedValue[];
 
   private constructor(values: readonly AllowedValue[]) {
@@ -45,5 +46,9 @@ export class AllowedValues {
 
   toArray(): readonly AllowedValue[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

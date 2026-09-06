@@ -1,11 +1,13 @@
 import {
   FindingKind,
+  FindingTargets,
   type KeyedIndex,
   QueryLabel,
   type TargetIdentifier,
   TargetIdentifiers,
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
+import { err, ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
 import type { SatisfiabilityModuloTheoriesQueryVerdicts } from "./satisfiability-modulo-theories-query-verdicts.ts";
@@ -70,7 +72,7 @@ export class SatisfiabilityModuloTheoriesProbe {
   interpret(
     model: RequirementsModel,
     results: SatisfiabilityModuloTheoriesQueryVerdicts,
-  ): { findings: VerificationFindings; skipped: VerificationSkips } {
+  ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
     const verdict = results.verdictOf(this.#query);
     const state = this.#subject;
     if (state.kind === "scenario")
@@ -88,19 +90,24 @@ export class SatisfiabilityModuloTheoriesProbe {
           ? `vacuity check for ${state.subject.asString()}`
           : `completeness check for trigger "${state.trigger.asString()}"`;
     if (verdict.isUndecided())
-      return {
+      return ok({
         findings: VerificationFindings.of([]),
         skipped: verdict.skipsFor(targets, context),
-      };
+      });
     let finding: VerificationFinding | null = null;
-    if (state.kind === "completeness" && verdict.isSat())
+    if (state.kind === "completeness" && verdict.isSat()) {
+      const [head, ...tail] = targets;
+      if (head === undefined) return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok) return parsedTargets;
       finding = VerificationFinding.of({
         kind: FindingKind.completenessGap(),
         functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
-        targets,
+        targets: parsedTargets.value,
         witness: VerificationWitness.model(verdict.witnessModel()),
         detail: `No rule for trigger "${state.trigger.asString()}" applies to the witness state: the behavior of this input region is unspecified.`,
       });
+    }
     if (state.kind !== "completeness" && verdict.isUnsat()) {
       const core = this.#coreTargets([...verdict.coreLabels()]);
       const effective =
@@ -109,18 +116,24 @@ export class SatisfiabilityModuloTheoriesProbe {
           : core.count() > 0
             ? core
             : state.fallback;
-      if (effective.count() > 0)
-        finding = VerificationFinding.of({
-          kind: FindingKind.conflict(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
-          targets: effective,
-          witness: VerificationWitness.core(verdict.sortedCore()),
-          detail:
-            state.kind === "consistency"
-              ? "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them."
-              : `The condition of obligation ${state.subject.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
-        });
+      const [head, ...tail] = effective;
+      if (head === undefined) return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok) return parsedTargets;
+      finding = VerificationFinding.of({
+        kind: FindingKind.conflict(),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
+        targets: parsedTargets.value,
+        witness: VerificationWitness.core(verdict.sortedCore()),
+        detail:
+          state.kind === "consistency"
+            ? "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them."
+            : `The condition of obligation ${state.subject.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`,
+      });
     }
-    return { findings: VerificationFindings.of(finding === null ? [] : [finding]), skipped: VerificationSkips.of([]) };
+    return ok({
+      findings: VerificationFindings.of(finding === null ? [] : [finding]),
+      skipped: VerificationSkips.of([]),
+    });
   }
 }

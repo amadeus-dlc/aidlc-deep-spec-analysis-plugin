@@ -1,3 +1,5 @@
+import type { FirstClassCollection } from "./first-class-collection.ts";
+import type { IterableFirstClassCollection } from "./iterable-first-class-collection.ts";
 // FunctionalRequirementReferences — 義務・シナリオ・finding が指す要件 id の列（ファーストクラス
 // コレクション）。要素は RequirementIdentifier（裁定 3-1、2026-09-03——生 string の列
 // ではない）。of は型付きの要素を受け取る。
@@ -11,7 +13,9 @@ import {
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { RequirementIdentifier } from "./requirement-identifier.ts";
 
-export class FunctionalRequirementReferences {
+export class FunctionalRequirementReferences
+  implements FirstClassCollection, IterableFirstClassCollection<RequirementIdentifier>
+{
   readonly #values: readonly RequirementIdentifier[];
 
   private constructor(values: readonly RequirementIdentifier[]) {

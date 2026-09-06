@@ -1,10 +1,15 @@
-import { TargetIdentifier, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type FirstClassCollection,
+  type IterableFirstClassCollection,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 
 import type { CheckFamily } from "./check-family.ts";
 
 // 検査ファミリー面のファーストクラスコレクション（宣言順を保持）。レポートは
 // これを開いた時点の checked とし、finding／skip が family を外していく。
-export class CheckFamilies {
+export class CheckFamilies implements FirstClassCollection, IterableFirstClassCollection<CheckFamily> {
   readonly #values: readonly CheckFamily[];
 
   private constructor(values: readonly CheckFamily[]) {
@@ -36,5 +41,9 @@ export class CheckFamilies {
 
   toArray(): readonly CheckFamily[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

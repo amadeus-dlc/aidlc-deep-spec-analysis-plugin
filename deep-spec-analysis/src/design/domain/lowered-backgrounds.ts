@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { LoweredBackground } from "./lowered-background.ts";
 
 // lowered 背景のファーストクラスコレクション（BG-n 採番順を保持）。
-export class LoweredBackgrounds {
+export class LoweredBackgrounds implements FirstClassCollection, IterableFirstClassCollection<LoweredBackground> {
   readonly #values: readonly LoweredBackground[];
 
   private constructor(values: readonly LoweredBackground[]) {
@@ -26,5 +27,9 @@ export class LoweredBackgrounds {
 
   toArray(): readonly LoweredBackground[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

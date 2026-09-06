@@ -1,4 +1,11 @@
-import { FindingKind, SkipReason, TargetIdentifiers, type VerificationMethod } from "@deep-spec-analysis/kernel-domain";
+import {
+  FindingKind,
+  FindingTargets,
+  SkipReason,
+  TargetIdentifiers,
+  type VerificationMethod,
+} from "@deep-spec-analysis/kernel-domain";
+import { err, ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ObligationIdentifiers } from "./obligation-identifiers.ts";
 import type { QuintMachineComponents } from "./quint-machine-components.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
@@ -107,7 +114,7 @@ export class QuintMachineRunVerdict {
     components: QuintMachineComponents,
     events: ObligationIdentifiers,
     method: VerificationMethod,
-  ): { findings: VerificationFindings; skipped: VerificationSkips } {
+  ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
     const findings: VerificationFinding[] = [];
     const machineTargets = TargetIdentifiers.of([
       ...components.ids().toTargetIds(),
@@ -115,11 +122,15 @@ export class QuintMachineRunVerdict {
     ]).sortedUniqueCanonically();
     const eventTargets = events.toTargetIds();
     if (this.isDeadlock()) {
+      const [head, ...tail] = events.isEmpty() ? machineTargets : eventTargets.sortedCanonically();
+      if (head === undefined) return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok) return parsedTargets;
       findings.push(
         VerificationFinding.of({
           kind: FindingKind.completenessGap(),
           functionalRequirementReferences: model.functionalRequirementReferencesOf(eventTargets),
-          targets: events.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
+          targets: parsedTargets.value,
           witness: this.witness(),
           detail:
             "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified.",
@@ -130,22 +141,26 @@ export class QuintMachineRunVerdict {
       const targets = violatedComponents.isEmpty()
         ? eventTargets.sortedCanonically()
         : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
+      const [head, ...tail] = targets;
+      if (head === undefined) return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok) return parsedTargets;
       findings.push(
         VerificationFinding.of({
           kind: FindingKind.conflict(),
           functionalRequirementReferences: model.functionalRequirementReferencesOf(
             TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically(),
           ),
-          targets,
+          targets: parsedTargets.value,
           witness: this.witness(),
           detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`,
         }),
       );
     }
-    return {
+    return ok({
       findings: VerificationFindings.of(findings),
       skipped: VerificationSkips.of(this.skipsFor(machineTargets, method.isBounded())),
-    };
+    });
   }
 
   isDeadlock(): boolean {

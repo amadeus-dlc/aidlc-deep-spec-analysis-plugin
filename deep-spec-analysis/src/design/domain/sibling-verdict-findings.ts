@@ -1,7 +1,10 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { SiblingVerdictFinding } from "./sibling-verdict-finding.ts";
 
 // 兄弟バックエンド判定 finding のファーストクラスコレクション（文書順を保持）。
-export class SiblingVerdictFindings {
+export class SiblingVerdictFindings
+  implements FirstClassCollection, IterableFirstClassCollection<SiblingVerdictFinding>
+{
   readonly #values: readonly SiblingVerdictFinding[];
 
   private constructor(values: readonly SiblingVerdictFinding[]) {

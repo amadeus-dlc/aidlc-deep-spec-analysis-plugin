@@ -1,3 +1,5 @@
+import { FindingTargets } from "@deep-spec-analysis/kernel-domain";
+
 const comparisonHash = ContentHash.ofText("fixture-model");
 
 import {
@@ -77,7 +79,6 @@ import {
   ScenarioVerdict,
   SkipReason,
   TargetIdentifier,
-  TargetIdentifiers,
   TriggerName,
   UnitName,
   VerificationMethod,
@@ -761,11 +762,19 @@ describe("remap (design vocabulary attribution)", () => {
 });
 
 describe("report ordering, cross-check, and degradations", () => {
-  const f = (kind: string, unitName: string, targets: string[], detail: string): DesignFinding =>
+  const f = (
+    kind: string,
+    unitName: string,
+    [head, ...tail]: readonly [string, ...string[]],
+    detail: string,
+  ): DesignFinding =>
     DesignFinding.of({
       kind: FindingKind.of(kind),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(
+        TargetIdentifier.of(head),
+        tail.map((raw) => TargetIdentifier.of(raw)),
+      ),
       witness: DesignWitness.core([]),
       unit: UnitName.of(unitName),
       detail,
@@ -1530,7 +1539,7 @@ test("設計クロスチェックは同じシナリオIDをユニットごとに
       DesignFinding.of({
         kind: FindingKind.scenarioViolation(),
         unit: UnitName.of("u1"),
-        targets: TargetIdentifiers.of([TargetIdentifier.of("DSC-1")]),
+        targets: FindingTargets.of(TargetIdentifier.of("DSC-1"), []),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         witness: DesignWitness.core([]),
         detail: "fixture",

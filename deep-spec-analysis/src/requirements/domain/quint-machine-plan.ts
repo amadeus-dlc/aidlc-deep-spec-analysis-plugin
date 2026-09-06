@@ -1,4 +1,5 @@
 import { KeySet, TargetIdentifiers, type VerificationMethod } from "@deep-spec-analysis/kernel-domain";
+import { ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 
 // 機械成分・イベント義務・初期化可能シナリオを保持する検証計画。
 // 判定の意味は機械結果、義務、シナリオが所有する。計画は実行順と
@@ -59,27 +60,33 @@ export class QuintMachinePlan {
     compileSkips: VerificationSkips,
     method: VerificationMethod,
     runs: QuintRuns,
-  ): { findings: VerificationFindings; skipped: VerificationSkips } {
+  ): Result<{ findings: VerificationFindings; skipped: VerificationSkips }, ParseError> {
     const findings: VerificationFinding[] = [];
     const skipped: VerificationSkipped[] = [...compileSkips];
     const collect = (evidence: { findings: VerificationFindings; skipped: VerificationSkips }): void => {
       findings.push(...evidence.findings);
       skipped.push(...evidence.skipped);
     };
-    collect(runs.machineRun().interpret(model, this.#invariantComponents, this.#eventIds, method));
+    const machine = runs.machineRun().interpret(model, this.#invariantComponents, this.#eventIds, method);
+    if (!machine.ok) return machine;
+    collect(machine.value);
     for (const obligation of model.obligations()) {
-      if (!skipped.some((skip) => skip.isFor(obligation.id().asTargetId())))
-        collect(obligation.interpretQuintTemporal(method, runs.temporalOf(obligation.id())));
+      if (!skipped.some((skip) => skip.isFor(obligation.id().asTargetId()))) {
+        const temporal = obligation.interpretQuintTemporal(method, runs.temporalOf(obligation.id()));
+        if (!temporal.ok) return temporal;
+        collect(temporal.value);
+      }
     }
-    for (const scenario of model.scenarios())
-      collect(
-        scenario.interpretQuint(
-          model,
-          runs.scenarioOf(scenario.id()),
-          this.#hasInitFor(scenario.id()),
-          this.#invariantComponents,
-        ),
+    for (const scenario of model.scenarios()) {
+      const interpreted = scenario.interpretQuint(
+        model,
+        runs.scenarioOf(scenario.id()),
+        this.#hasInitFor(scenario.id()),
+        this.#invariantComponents,
       );
-    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
+      if (!interpreted.ok) return interpreted;
+      collect(interpreted.value);
+    }
+    return ok({ findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) });
   }
 }

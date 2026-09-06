@@ -1,6 +1,7 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { EntityReference } from "./entity-reference.ts";
 
-export class EntityReferences {
+export class EntityReferences implements FirstClassCollection, IterableFirstClassCollection<EntityReference> {
   readonly #values: readonly EntityReference[];
 
   private constructor(values: readonly EntityReference[]) {
@@ -21,5 +22,9 @@ export class EntityReferences {
 
   toArray(): readonly EntityReference[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

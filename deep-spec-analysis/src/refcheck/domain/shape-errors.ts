@@ -1,6 +1,7 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { ShapeError } from "./shape-error.ts";
 
-export class ShapeErrors {
+export class ShapeErrors implements FirstClassCollection, IterableFirstClassCollection<ShapeError> {
   readonly #values: readonly ShapeError[];
 
   private constructor(values: readonly ShapeError[]) {
@@ -21,5 +22,9 @@ export class ShapeErrors {
 
   toArray(): readonly ShapeError[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

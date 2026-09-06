@@ -47,9 +47,11 @@ import {
   VerifyDesignQuintUseCase,
   VerifyDesignSatisfiabilityModuloTheoriesUseCase,
 } from "@deep-spec-analysis/design-usecase";
+import { parseFindingsValues } from "@deep-spec-analysis/kernel-adapter";
 import {
   ArtifactPath,
   AttributePath,
+  ContentHash,
   EnumerationMember,
   ErrorMessage,
   ErrorMessages,
@@ -1001,3 +1003,21 @@ function fixtureSubject<T>(subject: T | undefined): T {
   if (subject === undefined) throw new Error("fixture subject is absent");
   return subject;
 }
+
+test("finding対象の件数超過を要素の読取・VO生成より前に拒否する", () => {
+  const targets: string[] = Array(65_537).fill("OB-1");
+  Object.defineProperty(targets, 0, {
+    get: () => {
+      throw new Error("oversized targets must not be inspected");
+    },
+  });
+  const parsed = parseFindingsValues({
+    backend: "smt",
+    irVersion: "1.0.0",
+    irHash: ContentHash.ofText("fixture").asString(),
+    method: "static",
+    findings: [{ kind: "conflict", frRefs: [], targets, witness: { core: [] }, detail: "x" }],
+    skipped: [],
+  });
+  expect(parsed).toEqual({ ok: false, error: "findings must be an array of complete finding records" });
+});

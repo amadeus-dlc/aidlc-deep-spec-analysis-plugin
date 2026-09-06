@@ -4,7 +4,15 @@
 // 運ぶ。DD-1 の重複検出・DD-5 の所有競合・DD-7 の閉路検出は集まり＝
 // Components の知識。
 
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  type FirstClassCollection,
+  type IterableFirstClassCollection,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import type { Component } from "./component.ts";
 import { DD_1, DD_4, DD_5, DD_7 } from "./component-check-families.ts";
 import type { ComponentEntity } from "./component-entity.ts";
@@ -14,7 +22,7 @@ import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import { WitnessReference } from "./witness-reference.ts";
 
 // 宣言済みコンポーネントの集まり——名前解決・依存グラフの知識を持つ。
-export class Components {
+export class Components implements FirstClassCollection, IterableFirstClassCollection<Component> {
   readonly #values: readonly Component[];
 
   private constructor(values: readonly Component[]) {
@@ -153,7 +161,7 @@ export class Components {
       report.finding(
         DD_1,
         FindingKind.structureInvalid(),
-        [TargetIdentifiers.safe("component", cName)],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", cName)), []),
         [
           WitnessReference.at(art, `${prior.element().asString()}.name`, cName),
           WitnessReference.at(art, `${current.element().asString()}.name`, cName),
@@ -174,10 +182,9 @@ export class Components {
           report.finding(
             DD_4,
             FindingKind.structureInvalid(),
-            [
-              TargetIdentifiers.safe("component", c.name().asString()),
-              TargetIdentifiers.safe("component", r.component().asString()),
-            ],
+            FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", c.name().asString())), [
+              TargetIdentifier.of(TargetIdentifiers.safe("component", r.component().asString())),
+            ]),
             [
               WitnessReference.at(art, r.element().asString(), r.component().asString()),
               WitnessReference.at(art, `${other.element().asString()}.dependents`, c.name().asString()),
@@ -193,10 +200,9 @@ export class Components {
           report.finding(
             DD_4,
             FindingKind.structureInvalid(),
-            [
-              TargetIdentifiers.safe("component", c.name().asString()),
-              TargetIdentifiers.safe("component", r.component().asString()),
-            ],
+            FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("component", c.name().asString())), [
+              TargetIdentifier.of(TargetIdentifiers.safe("component", r.component().asString())),
+            ]),
             [
               WitnessReference.at(art, r.element().asString(), r.component().asString()),
               WitnessReference.at(art, `${other.element().asString()}.depends_on`, c.name().asString()),
@@ -215,7 +221,7 @@ export class Components {
       report.finding(
         DD_5,
         FindingKind.structureInvalid(),
-        [TargetIdentifiers.safe("entity", name)],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", name)), []),
         conflict.owners.map((o) =>
           WitnessReference.at(art, o.entity.element().asString(), o.component.name().asString()),
         ),
@@ -228,11 +234,16 @@ export class Components {
     const art = artifact.asString();
     // --- DD-7: acyclic depends_on graph -------------------------------------
     // Self-loops are DD-3's finding; DD-7 reports only genuine multi-node cycles.
-    for (const cycle of this.dependencyCycles().filter((c) => c.length > 1)) {
+    for (const cycle of this.dependencyCycles()) {
+      const [head, ...tail] = cycle;
+      if (head === undefined || tail.length === 0) continue;
       report.finding(
         DD_7,
         FindingKind.structureInvalid(),
-        cycle.map((n) => TargetIdentifiers.safe("component", n)),
+        FindingTargets.of(
+          TargetIdentifier.of(TargetIdentifiers.safe("component", head)),
+          tail.map((name) => TargetIdentifier.of(TargetIdentifiers.safe("component", name))),
+        ),
         cycle.map((n, i) =>
           WitnessReference.at(
             art,
@@ -243,5 +254,9 @@ export class Components {
         `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`,
       );
     }
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

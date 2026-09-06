@@ -1,6 +1,7 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { WitnessReference } from "./witness-reference.ts";
 
-export class WitnessReferences {
+export class WitnessReferences implements FirstClassCollection, IterableFirstClassCollection<WitnessReference> {
   readonly #values: readonly WitnessReference[];
 
   private constructor(values: readonly WitnessReference[]) {
@@ -21,5 +22,9 @@ export class WitnessReferences {
 
   toArray(): readonly WitnessReference[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

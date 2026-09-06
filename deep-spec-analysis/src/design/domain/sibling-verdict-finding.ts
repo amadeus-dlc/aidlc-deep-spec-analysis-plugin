@@ -1,9 +1,9 @@
 import {
   FindingKind,
+  FindingTargets,
   type FunctionalRequirementReferences,
   SkipReason,
   TargetIdentifier,
-  TargetIdentifiers,
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
 import { type ParseError, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
@@ -71,7 +71,7 @@ export class SiblingVerdictFinding {
         finding: DesignFinding.of({
           kind: FindingKind.unreachable(),
           functionalRequirementReferences: this.#functionalRequirementReferences,
-          targets: TargetIdentifiers.of([target]),
+          targets: FindingTargets.of(target, []),
           witness,
           unit,
           detail: `The guard of ${design} can never hold under the entity constraints and invariants (witness core attached): the ${index.isTransition(design) ? "transition" : "rule"} is dead.`,
@@ -84,10 +84,12 @@ export class SiblingVerdictFinding {
       return relation.ok ? { kind: "subsumption", relation: relation.value } : { kind: "ignored" };
     }
     if (synthetic !== undefined) return { kind: "ignored" };
-    const targets = TargetIdentifiers.of(
-      mapped.map((target) => TargetIdentifier.of(target.design.asString())),
-    ).sortedUniqueCanonically();
-    if (this.isKind("conflict") && targets.count() > 0) {
+    const [head, ...tail] = mapped.map((target) => TargetIdentifier.of(target.design.asString()));
+    if (head === undefined) return { kind: "invalid", error: { kind: "empty-finding-targets" } };
+    const parsedTargets = FindingTargets.parse(head, tail);
+    if (!parsedTargets.ok) return { kind: "invalid", error: parsedTargets.error };
+    const targets = parsedTargets.value.sortedUniqueCanonically();
+    if (this.isKind("conflict")) {
       const machines = [...targets].map((target) => index.machineOfTransition(target.asString()));
       const machine = machines[0];
       if (machine?.waivesOverlapOf(machines))

@@ -1,8 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { TraceState } from "./trace-state.ts";
 
 // 復号済みトレースのファーストクラスコレクション（ステップ順を保持——
 // witness の trace ペイロードへ toArray() で降りる）。
-export class TraceStates {
+export class TraceStates implements FirstClassCollection, IterableFirstClassCollection<TraceState> {
   readonly #values: readonly TraceState[];
 
   private constructor(values: readonly TraceState[]) {
@@ -28,5 +29,9 @@ export class TraceStates {
 
   toArray(): TraceState[] {
     return [...this.#values];
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

@@ -1,6 +1,7 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { StateName } from "./state-name.ts";
 
-export class StateNames {
+export class StateNames implements FirstClassCollection, IterableFirstClassCollection<StateName> {
   readonly #values: readonly StateName[];
 
   private constructor(values: readonly StateName[]) {
@@ -21,5 +22,9 @@ export class StateNames {
 
   toArray(): readonly StateName[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

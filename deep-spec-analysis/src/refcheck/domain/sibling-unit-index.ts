@@ -1,4 +1,9 @@
-import { KeyedIndex, type NormalizedName, type UnitName } from "@deep-spec-analysis/kernel-domain";
+import {
+  type FirstClassCollection,
+  KeyedIndex,
+  type NormalizedName,
+  type UnitName,
+} from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
   type ParseError,
@@ -10,7 +15,7 @@ import type { EntityDeclarations } from "./entity-declarations.ts";
 import { UnitNames } from "./unit-names.ts";
 
 // ユニットごとの宣言を保持し、正規化名から所有元と宣言を解決する。
-export class SiblingUnitIndex {
+export class SiblingUnitIndex implements FirstClassCollection {
   readonly #units: KeyedIndex<UnitName, KeyedIndex<NormalizedName, EntityDeclaration>>;
 
   /** XS一実行の予算はユニット数・実体宣言数それぞれ65,536件。索引化より先に検査する。 */
@@ -48,6 +53,10 @@ export class SiblingUnitIndex {
 
   entityDeclaredIn(unit: UnitName, normalizedName: NormalizedName): EntityDeclaration | undefined {
     return this.#units.get(unit)?.get(normalizedName);
+  }
+
+  isEmpty(): boolean {
+    return this.#units.isEmpty();
   }
 
   hasAnyUnit(): boolean {

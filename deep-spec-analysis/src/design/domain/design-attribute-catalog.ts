@@ -1,3 +1,4 @@
+import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   AttributePath,
   type DeclaredBindings,
@@ -18,7 +19,7 @@ import { AttributePaths } from "./attribute-paths.ts";
 import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
 import type { DesignEntityDeclarations } from "./design-entity-declarations.ts";
 
-export class DesignAttributeCatalog {
+export class DesignAttributeCatalog implements FirstClassCollection {
   readonly #declarations: DesignEntityDeclarations;
   readonly #byPath: KeyedIndex<AttributePath, DesignAttributeDeclaration>;
 
@@ -125,5 +126,9 @@ export class DesignAttributeCatalog {
         );
     }
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+
+  isEmpty(): boolean {
+    return this.#byPath.isEmpty();
   }
 }

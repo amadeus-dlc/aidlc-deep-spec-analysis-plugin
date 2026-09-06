@@ -1,10 +1,15 @@
-import type { ArtifactPath, RequirementIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import type {
+  ArtifactPath,
+  FirstClassCollection,
+  IterableFirstClassCollection,
+  RequirementIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import type { DeclaredEntities } from "./declared-entities.ts";
 import { FD_R3, FD_R4 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { RuleDeclaration } from "./rule-declaration.ts";
 
-export class RuleDeclarations {
+export class RuleDeclarations implements FirstClassCollection, IterableFirstClassCollection<RuleDeclaration> {
   readonly #values: readonly RuleDeclaration[];
 
   private constructor(values: readonly RuleDeclaration[]) {
@@ -54,5 +59,9 @@ export class RuleDeclarations {
       report.skip(FD_R4, "absent-input", "entities.md is unavailable — applies-to cannot be resolved");
     else for (const rule of this) rule.checkApplicability(entities.entities(), report, artifact);
     for (const rule of this) rule.checkCategory(report, artifact);
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

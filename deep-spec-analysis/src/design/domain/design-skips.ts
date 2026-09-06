@@ -1,10 +1,11 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignSkipped } from "./design-skipped.ts";
 
 function sortDesignSkipped(skipped: readonly DesignSkipped[]): DesignSkipped[] {
   return [...skipped].sort((a, b) => a.compareTo(b));
 }
 
-export class DesignSkips {
+export class DesignSkips implements FirstClassCollection, IterableFirstClassCollection<DesignSkipped> {
   readonly #values: readonly DesignSkipped[];
 
   private constructor(values: readonly DesignSkipped[]) {
@@ -37,5 +38,9 @@ export class DesignSkips {
 
   toArray(): readonly DesignSkipped[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

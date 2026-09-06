@@ -3,6 +3,7 @@ import {
   ContentHash,
   FindingKind,
   FindingsSchema,
+  FindingTargets,
   FunctionalRequirementReferences,
   TargetIdentifier,
   TargetIdentifiers,
@@ -146,7 +147,13 @@ describe("ReferenceCheckReport domain contract", () => {
       CheckFamilies.of(Array.from(["A-1", "A-2", "A-3"], (raw) => CheckFamily.of(raw))),
       UnitName.of("u9"),
     );
-    report.finding(CheckFamily.of("A-1"), FindingKind.structureInvalid(), ["check:A-1"], [], "boom");
+    report.finding(
+      CheckFamily.of("A-1"),
+      FindingKind.structureInvalid(),
+      FindingTargets.of(TargetIdentifier.of("check:A-1"), []),
+      [],
+      "boom",
+    );
     report.skip(CheckFamily.of("A-2"), "absent-input", "gone");
     expect(report.findings().toArray()[0]?.detail()).toBe("A-1: boom");
     expect(report.findings().toArray()[0]?.unit()).toBe("u9");
@@ -165,13 +172,28 @@ describe("ReferenceCheckReport domain contract", () => {
       ReferenceCheckReportIdentifier.of(ap("/tmp/r"), "components"),
       CheckFamilies.of(Array.from(["DD-0", "DD-1", "DD-2"], (raw) => CheckFamily.of(raw))),
     );
-    report.finding(CheckFamily.of("DD-1"), FindingKind.referenceBroken(), ["check:DD-1"], [], "second kind");
-    report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "first kind");
-    report.finding(CheckFamily.of("DD-1"), FindingKind.structureInvalid(), ["check:DD-1"], [], "a earlier detail", [
-      "FR-2",
-      "FR-1",
-      "FR-2",
-    ]);
+    report.finding(
+      CheckFamily.of("DD-1"),
+      FindingKind.referenceBroken(),
+      FindingTargets.of(TargetIdentifier.of("check:DD-1"), []),
+      [],
+      "second kind",
+    );
+    report.finding(
+      CheckFamily.of("DD-1"),
+      FindingKind.structureInvalid(),
+      FindingTargets.of(TargetIdentifier.of("check:DD-1"), []),
+      [],
+      "first kind",
+    );
+    report.finding(
+      CheckFamily.of("DD-1"),
+      FindingKind.structureInvalid(),
+      FindingTargets.of(TargetIdentifier.of("check:DD-1"), []),
+      [],
+      "a earlier detail",
+      ["FR-2", "FR-1", "FR-2"],
+    );
     report.skip(CheckFamily.of("DD-2"), "unrecognized-format", "later");
     report.skip(CheckFamily.of("DD-0"), "absent-input", "earlier");
     expect(
@@ -225,7 +247,7 @@ describe("serializer renders the domain report document", () => {
     const badFinding: Finding = Finding.of({
       kind: FindingKind.conflict(),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      targets: TargetIdentifiers.of(Array.from(["check:DD-0"], (raw) => TargetIdentifier.of(raw))),
+      targets: FindingTargets.of(TargetIdentifier.of("check:DD-0"), []),
       witness: { refs: WitnessReferences.of([]) },
       detail: "DD-0: x",
     });

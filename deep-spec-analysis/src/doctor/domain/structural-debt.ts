@@ -1,3 +1,4 @@
+import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
   type ParseError,
@@ -7,7 +8,7 @@ import {
 import type { StructuralObservation } from "./structural-observation.ts";
 
 // 診断観測から母数と負債を算定する。取得不能は未走査として保持する。
-export class StructuralDebt {
+export class StructuralDebt implements FirstClassCollection {
   readonly #observations: readonly StructuralObservation[];
   /** doctor一回の走査予算は65,536成果物。 */
   private constructor(observations: readonly StructuralObservation[]) {
@@ -32,5 +33,9 @@ export class StructuralDebt {
   }
   rows(): readonly StructuralObservation[] {
     return this.#observations.filter((observation) => observation.hasDebt());
+  }
+
+  isEmpty(): boolean {
+    return this.#observations.length === 0;
   }
 }

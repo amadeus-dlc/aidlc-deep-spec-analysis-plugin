@@ -2,12 +2,12 @@ import {
   type Expression,
   ExpressionTree,
   FindingKind,
+  FindingTargets,
   type FunctionalRequirementReferences,
   type ScenarioBindings,
   type ScenarioComparison,
   type ScenarioExpectation,
   TargetIdentifier,
-  TargetIdentifiers,
   type TriggerName,
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
@@ -71,7 +71,7 @@ export class DesignScenario {
     return DesignFinding.of({
       kind: FindingKind.crossCheckDisagreement(),
       functionalRequirementReferences: this.#functionalRequirementReferences.sortedUnique(),
-      targets: TargetIdentifiers.of([TargetIdentifier.of(this.#id.asString())]),
+      targets: FindingTargets.of(TargetIdentifier.of(this.#id.asString()), []),
       witness: DesignWitness.verdicts(comparison.toVerdictTable()),
       unit,
       detail: `${comparison.description()} disagree on scenario ${this.#id.asString()} of unit ${unit.asString()}. This signals a defect in the formalization or in a backend compiler, not in the design itself.`,

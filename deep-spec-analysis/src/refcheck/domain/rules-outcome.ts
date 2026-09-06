@@ -1,4 +1,10 @@
-import { type ArtifactPath, FindingKind, type RequirementIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  type RequirementIdentifiers,
+  TargetIdentifier,
+} from "@deep-spec-analysis/kernel-domain";
 import type { DeclaredEntities } from "./declared-entities.ts";
 import { FenceCount } from "./fence-count.ts";
 import { FD_R1, FD_R2, FD_R3, FD_R4, FD_R5 } from "./functional-check-families.ts";
@@ -95,7 +101,7 @@ export class RulesOutcome {
         report.finding(
           FD_R1,
           FindingKind.structureInvalid(),
-          [FD_R1.asCheckTarget()],
+          FindingTargets.of(TargetIdentifier.of(FD_R1.asCheckTarget()), []),
           [WitnessReference.at(art, "yaml fence")],
           `rules.md must carry exactly one fenced yaml source-of-truth block (found ${found})`,
         );
@@ -105,7 +111,7 @@ export class RulesOutcome {
         report.finding(
           FD_R1,
           FindingKind.structureInvalid(),
-          [FD_R1.asCheckTarget()],
+          FindingTargets.of(TargetIdentifier.of(FD_R1.asCheckTarget()), []),
           [WitnessReference.at(art, `yaml fence (line ${line.asNumber()})`)],
           `yaml block does not parse in the supported subset: ${error}`,
         );
@@ -115,7 +121,7 @@ export class RulesOutcome {
         report.finding(
           FD_R1,
           FindingKind.structureInvalid(),
-          [FD_R1.asCheckTarget()],
+          FindingTargets.of(TargetIdentifier.of(FD_R1.asCheckTarget()), []),
           [WitnessReference.at(art, "rules")],
           "top-level `rules:` list is missing",
         );

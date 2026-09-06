@@ -1,4 +1,4 @@
-import { ErrorMessage } from "@deep-spec-analysis/kernel-domain";
+import { ErrorMessage, type FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import {
   IllegalArgumentException,
   type ParseError,
@@ -10,7 +10,7 @@ import type { PluginVersion } from "./plugin-version.ts";
 import { VersionAdvisory } from "./version-advisory.ts";
 
 // stable版だけを内包する。文字列tagの解釈は取得adapter、最新版の選択はこの集合が所有。
-export class StableReleases {
+export class StableReleases implements FirstClassCollection {
   readonly #versions: readonly PluginVersion[];
   /** GitHub取得ポートの上限100ページ×100件と同じ10,000版。 */
   private constructor(versions: readonly PluginVersion[]) {
@@ -30,5 +30,9 @@ export class StableReleases {
     return latest === null
       ? VersionAdvisory.skipped(installed, ErrorMessage.of("GitHub returned no stable Semantic Versioning tag"))
       : installed.assessLatest(latest);
+  }
+
+  isEmpty(): boolean {
+    return this.#versions.length === 0;
   }
 }

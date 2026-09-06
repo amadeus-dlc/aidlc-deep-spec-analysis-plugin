@@ -115,12 +115,27 @@ rejects(Design.LoweredScenario, {
   expect: badExpression,
 });
 rejects(Design.LoweredBackground, { id: Design.LoweredIdentifier.of("BG-1"), assert: badExpression });
-rejects(Design.DesignAssignments, Kernel.KeyedIndex.of([[Kernel.AttributePath.of("ticket.state"), badExpression]]));
+rejects(
+  Design.DesignAssignments,
+  Array.from({ length: 10_001 }, () =>
+    Design.DesignAssignment.of(
+      Kernel.AttributePath.of("ticket.state"),
+      Kernel.ExpressionTree.of({ op: "bool", value: true }),
+    ),
+  ),
+);
 rejects(ReferenceCheck.InputAnchor, { artifact: "", sha256: Kernel.ContentHash.ofText("fixture") });
 rejects(Design.DesignInputAnchor, { artifact: "", sha256: Kernel.ContentHash.ofText("fixture") });
 rejects(ReferenceCheck.WitnessReference, { artifact: "", element: "field" });
 
-rejects(Design.EffectAssignments, { op: "or", args: [] });
+test("代入要素の構築契約はofでpanic、parseで非例外エラーになる", () => {
+  const target = Kernel.AttributePath.of("ticket.state");
+  const equation = Kernel.ExpressionTree.of({ op: "or", args: [] });
+  expect(() => Design.EffectAssignment.of(target, equation)).toThrow(IllegalArgumentException);
+  const parsed = Design.EffectAssignment.parse(target, equation);
+  expect(parsed.ok).toBe(false);
+  if (!parsed.ok) expect(parsed.error).not.toBeInstanceOf(Error);
+});
 
 rejects(
   {

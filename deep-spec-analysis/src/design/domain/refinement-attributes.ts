@@ -1,9 +1,10 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { AttributePath } from "@deep-spec-analysis/requirements-domain";
 import type { RefinementAttribute } from "./refinement-attribute.ts";
 
 // 要件属性のファーストクラスコレクション。path 索引は旧 new Map(...) の
 // 凍結挙動どおり重複 path は最後の宣言が勝つ。
-export class RefinementAttributes {
+export class RefinementAttributes implements FirstClassCollection, IterableFirstClassCollection<RefinementAttribute> {
   readonly #values: readonly RefinementAttribute[];
 
   private constructor(values: readonly RefinementAttribute[]) {
@@ -47,5 +48,9 @@ export class RefinementAttributes {
 
   toArray(): readonly RefinementAttribute[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

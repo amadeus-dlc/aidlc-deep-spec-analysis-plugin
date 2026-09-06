@@ -1,7 +1,8 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { SiblingVerdictSkip } from "./sibling-verdict-skip.ts";
 
 // 兄弟バックエンド判定 skip のファーストクラスコレクション（文書順を保持）。
-export class SiblingVerdictSkips {
+export class SiblingVerdictSkips implements FirstClassCollection, IterableFirstClassCollection<SiblingVerdictSkip> {
   readonly #values: readonly SiblingVerdictSkip[];
 
   private constructor(values: readonly SiblingVerdictSkip[]) {

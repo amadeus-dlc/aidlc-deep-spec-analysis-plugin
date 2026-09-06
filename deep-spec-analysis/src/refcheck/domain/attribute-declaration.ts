@@ -1,4 +1,10 @@
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import type { AllowedValues } from "./allowed-values.ts";
 import type { AttributeDefault } from "./attribute-default.ts";
 import type { AttributeName } from "./attribute-name.ts";
@@ -75,7 +81,7 @@ export class AttributeDeclaration {
     report.finding(
       family,
       kind,
-      [TargetIdentifiers.safe("attr", label)],
+      FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("attr", label)), []),
       [WitnessReference.at(artifact.asString(), this.#element.asString(), value)],
       detail,
     );
@@ -97,7 +103,7 @@ export class AttributeDeclaration {
       report.finding(
         FD_S1,
         FindingKind.consistencyMismatch(),
-        [attrId],
+        FindingTargets.of(TargetIdentifier.of(attrId), []),
         rogue.map((v) => WitnessReference.at(specArt, el, v)),
         `diagram state(s) ${rogue.join(", ")} are not allowed values of ${entity.asString()}.${this.#name.asString()} in entities.md`,
       );
@@ -107,7 +113,7 @@ export class AttributeDeclaration {
       report.finding(
         FD_S2,
         FindingKind.consistencyMismatch(),
-        [attrId],
+        FindingTargets.of(TargetIdentifier.of(attrId), []),
         dangling.map((v) => WitnessReference.at(entitiesArt, this.#element.asString(), v)),
         `allowed value(s) ${dangling.join(", ")} of ${entity.asString()}.${this.#name.asString()} appear in no diagram state`,
       );

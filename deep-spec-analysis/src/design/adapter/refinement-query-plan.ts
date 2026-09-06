@@ -13,6 +13,7 @@ import {
 } from "@deep-spec-analysis/design-domain";
 import {
   type Expression,
+  ExpressionTree,
   KeyedIndex,
   QueryLabel,
   SkipReason,
@@ -340,7 +341,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
         // が成り立つところで踏んだ 1 歩の抽象 post が、要件効果か抽象フレーム
         // （Q2：未代入の要件属性は抽象値を保つ。unmapped 属性のフレーム等式は
         // 検査不能なので省く）に反する。
-        const decomposed = EffectAssignments.parse(event.effect);
+        const decomposed = EffectAssignments.fromEffect(ExpressionTree.of(event.effect));
         if (!decomposed.ok) {
           alphaFail(
             obId,

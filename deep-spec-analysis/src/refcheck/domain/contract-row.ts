@@ -1,4 +1,10 @@
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  FindingKind,
+  FindingTargets,
+  TargetIdentifier,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import { CD_1 } from "./contract-check-families.ts";
 import type { ContractIdentifier } from "./contract-identifier.ts";
 import type { ContractParty } from "./contract-party.ts";
@@ -69,7 +75,9 @@ export class ContractRow {
       report.finding(
         CD_1,
         FindingKind.referenceBroken(),
-        [`contract:${this.#id.asString()}`, TargetIdentifiers.safe("unit", this.#provider.asString())],
+        FindingTargets.of(TargetIdentifier.of(`contract:${this.#id.asString()}`), [
+          TargetIdentifier.of(TargetIdentifiers.safe("unit", this.#provider.asString())),
+        ]),
         [WitnessReference.at(art, el, this.#provider.asString()), WitnessReference.at(depArt, "units")],
         `Provider Unit "${this.#provider.asString()}" is not a declared unit`,
       );
@@ -82,7 +90,9 @@ export class ContractRow {
       report.finding(
         CD_1,
         FindingKind.referenceBroken(),
-        [`contract:${this.#id.asString()}`, TargetIdentifiers.safe("unit", this.#consumer.asString())],
+        FindingTargets.of(TargetIdentifier.of(`contract:${this.#id.asString()}`), [
+          TargetIdentifier.of(TargetIdentifiers.safe("unit", this.#consumer.asString())),
+        ]),
         [WitnessReference.at(art, el, this.#consumer.asString()), WitnessReference.at(depArt, "units")],
         `Consumer "${this.#consumer.asString()}" is neither a declared unit nor \`External: …\``,
       );
@@ -91,7 +101,9 @@ export class ContractRow {
       report.finding(
         CD_1,
         FindingKind.referenceBroken(),
-        [`contract:${this.#id.asString()}`, TargetIdentifiers.safe("unit", this.#owner.asString())],
+        FindingTargets.of(TargetIdentifier.of(`contract:${this.#id.asString()}`), [
+          TargetIdentifier.of(TargetIdentifiers.safe("unit", this.#owner.asString())),
+        ]),
         [WitnessReference.at(art, el, this.#owner.asString()), WitnessReference.at(depArt, "units")],
         `Owner "${this.#owner.asString()}" is not a declared unit`,
       );

@@ -1,3 +1,4 @@
+import type { FirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { type AttributePath, KeyedIndex, type ScenarioBindings } from "@deep-spec-analysis/kernel-domain";
 // TraceState — トレースの 1 状態（属性パス → 値）の値オブジェクト（種別規律の
 // 裁定 2、2026-09-03）。参照の解決（`valueAt`——無い参照は absent）は状態自身
@@ -6,7 +7,7 @@ import { type AttributePath, KeyedIndex, type ScenarioBindings } from "@deep-spe
 
 import { TraceValue } from "./trace-value.ts";
 
-export class TraceState {
+export class TraceState implements FirstClassCollection {
   readonly #values: KeyedIndex<AttributePath, TraceValue>;
 
   private constructor(values: KeyedIndex<AttributePath, TraceValue>) {
@@ -39,5 +40,9 @@ export class TraceState {
     const out: { [path: string]: ReturnType<TraceValue["toDocument"]> } = {};
     for (const [path, value] of this.#values) out[path.asString()] = value.toDocument();
     return out;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.isEmpty();
   }
 }

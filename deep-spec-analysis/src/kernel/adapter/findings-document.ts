@@ -1,5 +1,6 @@
 // JSON の形を復号する境界。欠損・型不一致を空の検査結果へ補完しない。
 // kind / method / reason の語彙の適合はドメイン側に残し、未知の文字列も逐語で運ぶ。
+import { MAX_FINDING_TARGETS } from "@deep-spec-analysis/kernel-domain";
 import { err, isObject, type Json, ok, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 
 export interface FindingsDocument {
@@ -29,6 +30,9 @@ export function decodeFindingsDocument(raw: Json): Result<FindingsDocument, stri
       (f) =>
         isObject(f) &&
         typeof f.kind === "string" &&
+        Array.isArray(f.targets) &&
+        f.targets.length > 0 &&
+        f.targets.length <= MAX_FINDING_TARGETS &&
         strings(f.frRefs) &&
         strings(f.targets) &&
         isObject(f.witness) &&

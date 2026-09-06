@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { VerificationFinding } from "./verification-finding.ts";
 
 // 診断の正準順とconflictの重複排除はコレクションが所有する。
@@ -5,7 +6,7 @@ function sortVerificationFindings(findings: readonly VerificationFinding[]): Ver
   return [...findings].sort((a, b) => a.compareTo(b));
 }
 
-export class VerificationFindings {
+export class VerificationFindings implements FirstClassCollection, IterableFirstClassCollection<VerificationFinding> {
   readonly #values: readonly VerificationFinding[];
 
   private constructor(values: readonly VerificationFinding[]) {

@@ -1,6 +1,7 @@
 import {
   ContentHash,
   FindingKind,
+  FindingTargets,
   FunctionalRequirementReferences,
   KeyedIndex,
   NormalizedName,
@@ -86,11 +87,14 @@ import {
   WitnessReferences,
 } from "@deep-spec-analysis/refcheck-domain";
 
-function finding(kind: string, targets: string[], detail: string): Finding {
+function finding(kind: string, [head, ...tail]: readonly [string, ...string[]], detail: string): Finding {
   return Finding.of({
     kind: FindingKind.of(kind),
     functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-    targets: TargetIdentifiers.of(Array.from(targets, (raw) => TargetIdentifier.of(raw))),
+    targets: FindingTargets.of(
+      TargetIdentifier.of(head),
+      tail.map((raw) => TargetIdentifier.of(raw)),
+    ),
     witness: { refs: WitnessReferences.of([]) },
     detail,
   });
@@ -781,7 +785,7 @@ describe("witness ref (a finding's evidence coordinate)", () => {
 });
 
 describe("component names order canonically (ruling 1: the id value object owns the order)", () => {
-  test("numeric tails compare as numbers", () => {
+  test("numeric suffixes compare as numbers", () => {
     expect(ComponentName.of("Svc2").compareTo(ComponentName.of("Svc10"))).toBeLessThan(0);
     expect(ComponentName.of("Svc10").compareTo(ComponentName.of("Svc2"))).toBeGreaterThan(0);
     expect(ComponentName.of("Svc").compareTo(ComponentName.of("Svc"))).toBe(0);

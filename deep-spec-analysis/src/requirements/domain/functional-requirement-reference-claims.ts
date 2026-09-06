@@ -1,7 +1,10 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { FunctionalRequirementReferenceClaim } from "./functional-requirement-reference-claim.ts";
 
 // 主張のファーストクラスコレクション（宣言順を保持——索引の owner 列順に効く）。
-export class FunctionalRequirementReferenceClaims {
+export class FunctionalRequirementReferenceClaims
+  implements FirstClassCollection, IterableFirstClassCollection<FunctionalRequirementReferenceClaim>
+{
   readonly #values: readonly FunctionalRequirementReferenceClaim[];
 
   private constructor(values: readonly FunctionalRequirementReferenceClaim[]) {
@@ -26,5 +29,9 @@ export class FunctionalRequirementReferenceClaims {
 
   toArray(): readonly FunctionalRequirementReferenceClaim[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

@@ -1,6 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { IntermediateRepresentationObligationDeclaration } from "./intermediate-representation-obligation-declaration.ts";
 
-export class IntermediateRepresentationObligationDeclarations {
+export class IntermediateRepresentationObligationDeclarations
+  implements FirstClassCollection, IterableFirstClassCollection<IntermediateRepresentationObligationDeclaration>
+{
   readonly #values: readonly IntermediateRepresentationObligationDeclaration[];
 
   private constructor(values: readonly IntermediateRepresentationObligationDeclaration[]) {
@@ -23,5 +26,9 @@ export class IntermediateRepresentationObligationDeclarations {
 
   toArray(): readonly IntermediateRepresentationObligationDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

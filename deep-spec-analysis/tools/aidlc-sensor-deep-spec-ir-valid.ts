@@ -614,6 +614,9 @@ class DeclaredBindings {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/kernel/domain/declared-bound.ts
 class DeclaredBound {
@@ -723,6 +726,9 @@ class EnumerationMembers {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/error-message.ts
@@ -956,6 +962,56 @@ class FindingKind {
   }
   asString() {
     return this.#value;
+  }
+}
+// src/kernel/domain/finding-targets.ts
+var MAX_FINDING_TARGETS = 65536;
+
+class FindingTargets {
+  #values;
+  constructor(head, tail) {
+    if (tail.length >= MAX_FINDING_TARGETS)
+      throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: tail.length + 1 });
+    const snapshot = [head];
+    for (const value of tail) {
+      if (snapshot.length === MAX_FINDING_TARGETS)
+        throw new IllegalArgumentException({ kind: "too-many-finding-targets", raw: snapshot.length + 1 });
+      snapshot.push(value);
+    }
+    this.#values = Object.freeze(snapshot);
+  }
+  static of(head, tail) {
+    return new FindingTargets(head, tail);
+  }
+  static parse(head, tail) {
+    return parseConstruction(() => new FindingTargets(head, tail));
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  count() {
+    return this.#values.length;
+  }
+  includes(value) {
+    return this.#values.some((target) => target.equals(value));
+  }
+  sortedCanonically() {
+    const [head, ...tail] = [...this.#values].sort((a, b) => a.compareTo(b));
+    return new FindingTargets(head, tail);
+  }
+  sortedUniqueCanonically() {
+    const unique = new Map(this.#values.map((target) => [target.asString(), target]));
+    const [head, ...tail] = [...unique.values()].sort((a, b) => a.compareTo(b));
+    return new FindingTargets(head, tail);
+  }
+  joined(separator) {
+    return this.toStrings().join(separator);
+  }
+  toArray() {
+    return this.#values;
+  }
+  toStrings() {
+    return this.#values.map((target) => target.asString());
   }
 }
 // src/kernel/domain/findings-schema.ts
@@ -1273,6 +1329,9 @@ class RequirementIdentifiers {
   toStrings() {
     return this.#values.toArray().map((v) => v.asString());
   }
+  isEmpty() {
+    return this.#values.isEmpty();
+  }
 }
 // src/kernel/domain/scenario-binding.ts
 class ScenarioBinding {
@@ -1333,6 +1392,9 @@ class ScenarioBindings {
   }
   toDocument() {
     return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/scenario-comparison.ts
@@ -1484,6 +1546,9 @@ class ScenarioVerdicts {
         yield comparison.value;
       }
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/kernel/domain/skip-reason.ts
 var KNOWN_REASONS = new Set([
@@ -1625,6 +1690,9 @@ class TargetIdentifiers {
   }
   toStrings() {
     return this.#values.map((v) => v.asString());
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/kernel/domain/trigger-name.ts
@@ -1943,7 +2011,7 @@ function decodeFindingsDocument(raw) {
     if (typeof raw[field] !== "string")
       return err(`${field} must be a string`);
   }
-  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
+  if (!Array.isArray(raw.findings) || !raw.findings.every((f) => isObject(f) && typeof f.kind === "string" && Array.isArray(f.targets) && f.targets.length > 0 && f.targets.length <= MAX_FINDING_TARGETS && strings(f.frRefs) && strings(f.targets) && isObject(f.witness) && typeof f.detail === "string" && optionalString(f.unit))) {
     return err("findings must be an array of complete finding records");
   }
   if (!Array.isArray(raw.skipped) || !raw.skipped.every((s) => isObject(s) && typeof s.target === "string" && typeof s.reason === "string" && optionalString(s.detail) && optionalString(s.unit))) {
@@ -1977,7 +2045,10 @@ function parseFindingsValues(raw) {
       const fields = combineResults({
         kind: FindingKind.parse(entry.kind),
         functionalRequirementReferences: flatMapResult(traverseResult(entry.frRefs, RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
-        targets: traverseResult(entry.targets, TargetIdentifier.parse),
+        targets: flatMapResult(traverseResult(entry.targets, TargetIdentifier.parse), (targets) => {
+          const [head, ...tail] = targets;
+          return head === undefined ? err({ kind: "empty-finding-targets" }) : FindingTargets.parse(head, tail);
+        }),
         unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit)
       });
       if (!fields.ok)
@@ -1985,7 +2056,7 @@ function parseFindingsValues(raw) {
       return ok({
         ...fields.value,
         functionalRequirementReferences: fields.value.functionalRequirementReferences,
-        targets: TargetIdentifiers.of(fields.value.targets),
+        targets: fields.value.targets,
         witness: entry.witness,
         detail: entry.detail
       });
@@ -2122,6 +2193,9 @@ class BackgroundAssumptions {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/cross-checked-entries.ts
 class CrossCheckedEntries {
@@ -2140,6 +2214,9 @@ class CrossCheckedEntries {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/cross-checked-entry.ts
@@ -2230,6 +2307,9 @@ class FunctionalRequirementReferenceClaims {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/functional-requirement-reference-index.ts
 class FunctionalRequirementReferenceIndex {
@@ -2252,6 +2332,9 @@ class FunctionalRequirementReferenceIndex {
       const owners = [...this.#ownersByRef.get(RequirementIdentifier.of(id))?.ownerDescriptions() ?? []].sort().join(", ");
       return `frRef "${id}" (used by ${owners}) does not exist in requirements.md`;
     });
+  }
+  isEmpty() {
+    return this.#ownersByRef.isEmpty();
   }
 }
 // src/requirements/domain/intermediate-representation-attribute-catalog.ts
@@ -2329,6 +2412,9 @@ class IntermediateRepresentationAttributeCatalog {
     }
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
+  isEmpty() {
+    return this.#byPath.isEmpty();
+  }
 }
 // src/requirements/domain/intermediate-representation-attribute-declaration.ts
 class IntermediateRepresentationAttributeDeclaration {
@@ -2383,6 +2469,9 @@ class IntermediateRepresentationAttributeDeclarations {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-attribute-name.ts
@@ -2451,6 +2540,9 @@ class IntermediateRepresentationBackgroundDeclarations {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-entity-declaration.ts
@@ -2529,6 +2621,9 @@ class IntermediateRepresentationEntityDeclarations {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-entity-name.ts
@@ -2670,6 +2765,9 @@ class IntermediateRepresentationObligationDeclarations {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/intermediate-representation-scenario-declaration.ts
 class IntermediateRepresentationScenarioDeclaration {
@@ -2720,6 +2818,9 @@ class IntermediateRepresentationScenarioDeclarations {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/intermediate-representation-temporal-declaration.ts
@@ -2912,6 +3013,9 @@ class VerificationSkips {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 
 // src/requirements/domain/verification-report.ts
@@ -3023,6 +3127,17 @@ class VerificationReport {
       unavailableReason: input.unavailableReason ?? null
     });
   }
+  static interpretationUnavailable(id, model, method, error) {
+    return VerificationReport.compose({
+      id,
+      irVersion: model.irVersion(),
+      irHash: model.irHash(),
+      method: method.asString(),
+      findings: VerificationFindings.of([]),
+      skipped: VerificationSkips.of([]),
+      unavailableReason: `verification evidence could not be represented: ${JSON.stringify(error)}`
+    });
+  }
   static of(seed) {
     return new VerificationReport(seed);
   }
@@ -3078,7 +3193,7 @@ class VerificationReport {
     return this.#unavailableReason !== null;
   }
   passes() {
-    return this.#findings.isEmpty();
+    return !this.isUnavailable() && this.#findings.isEmpty();
   }
   findingsCount() {
     return this.#findings.count();
@@ -3273,7 +3388,7 @@ class Obligation {
   }
   interpretQuintTemporal(method, verdict) {
     if (!this.isStateTemporal() || this.#temporal?.pattern !== "leads-to")
-      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) };
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
     const target = this.#id.asTargetId();
     let skip = null;
     if (!method.isBounded())
@@ -3291,15 +3406,18 @@ class Obligation {
     else
       skip = verdict.skipFor(target);
     if (skip !== null)
-      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) };
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) });
     const finding = verdict?.isViolation() ? VerificationFinding.of({
       kind: FindingKind.conflict(),
       functionalRequirementReferences: this.#functionalRequirementReferences.sortedUnique(),
-      targets: TargetIdentifiers.of([target]),
+      targets: FindingTargets.of(target, []),
       witness: verdict.witness(),
       detail: `Temporal obligation ${this.#id.asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`
     }) : null;
-    return { findings: VerificationFindings.of(finding === null ? [] : [finding]), skipped: VerificationSkips.of([]) };
+    return ok({
+      findings: VerificationFindings.of(finding === null ? [] : [finding]),
+      skipped: VerificationSkips.of([])
+    });
   }
   id() {
     return this.#id;
@@ -3441,6 +3559,9 @@ class Obligations {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/quint-check-result.ts
 class QuintCheckResult {
@@ -3460,13 +3581,15 @@ class QuintCheckResult {
         return VerificationReport.machineUncompilable(id, model, result.method.asString(), result.error.asString());
       case "checked": {
         const interpreted = result.plan.interpret(model, result.compileSkips, result.method, result.runs);
+        if (!interpreted.ok)
+          return VerificationReport.interpretationUnavailable(id, model, result.method, interpreted.error);
         return VerificationReport.compose({
           id,
           irVersion: model.irVersion(),
           irHash: model.irHash(),
           method: result.method.asString(),
-          findings: interpreted.findings,
-          skipped: interpreted.skipped
+          findings: interpreted.value.findings,
+          skipped: interpreted.value.skipped
         });
       }
     }
@@ -3635,14 +3758,25 @@ class QuintMachinePlan {
       findings.push(...evidence.findings);
       skipped.push(...evidence.skipped);
     };
-    collect(runs.machineRun().interpret(model, this.#invariantComponents, this.#eventIds, method));
+    const machine = runs.machineRun().interpret(model, this.#invariantComponents, this.#eventIds, method);
+    if (!machine.ok)
+      return machine;
+    collect(machine.value);
     for (const obligation of model.obligations()) {
-      if (!skipped.some((skip) => skip.isFor(obligation.id().asTargetId())))
-        collect(obligation.interpretQuintTemporal(method, runs.temporalOf(obligation.id())));
+      if (!skipped.some((skip) => skip.isFor(obligation.id().asTargetId()))) {
+        const temporal = obligation.interpretQuintTemporal(method, runs.temporalOf(obligation.id()));
+        if (!temporal.ok)
+          return temporal;
+        collect(temporal.value);
+      }
     }
-    for (const scenario of model.scenarios())
-      collect(scenario.interpretQuint(model, runs.scenarioOf(scenario.id()), this.#hasInitFor(scenario.id()), this.#invariantComponents));
-    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
+    for (const scenario of model.scenarios()) {
+      const interpreted = scenario.interpretQuint(model, runs.scenarioOf(scenario.id()), this.#hasInitFor(scenario.id()), this.#invariantComponents);
+      if (!interpreted.ok)
+        return interpreted;
+      collect(interpreted.value);
+    }
+    return ok({ findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) });
   }
 }
 // src/requirements/domain/trace-state.ts
@@ -3668,6 +3802,9 @@ class TraceState {
     for (const [path, value] of this.#values)
       out[path.asString()] = value.toDocument();
     return out;
+  }
+  isEmpty() {
+    return this.#values.isEmpty();
   }
 }
 
@@ -3764,28 +3901,40 @@ class QuintMachineRunVerdict {
     ]).sortedUniqueCanonically();
     const eventTargets = events.toTargetIds();
     if (this.isDeadlock()) {
+      const [head, ...tail] = events.isEmpty() ? machineTargets : eventTargets.sortedCanonically();
+      if (head === undefined)
+        return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok)
+        return parsedTargets;
       findings.push(VerificationFinding.of({
         kind: FindingKind.completenessGap(),
         functionalRequirementReferences: model.functionalRequirementReferencesOf(eventTargets),
-        targets: events.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
+        targets: parsedTargets.value,
         witness: this.witness(),
         detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified."
       }));
     } else if (this.isViolation()) {
       const violatedComponents = components.violatedBy(this.finalState());
       const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
+      const [head, ...tail] = targets;
+      if (head === undefined)
+        return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok)
+        return parsedTargets;
       findings.push(VerificationFinding.of({
         kind: FindingKind.conflict(),
         functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
-        targets,
+        targets: parsedTargets.value,
         witness: this.witness(),
         detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`
       }));
     }
-    return {
+    return ok({
       findings: VerificationFindings.of(findings),
       skipped: VerificationSkips.of(this.skipsFor(machineTargets, method.isBounded()))
-    };
+    });
   }
   isDeadlock() {
     return this.#kind === "deadlock";
@@ -3988,6 +4137,9 @@ class RequirementAttributeDeclarations {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/requirements-model.ts
 class RequirementsModel {
@@ -4129,13 +4281,15 @@ class SatisfiabilityModuloTheoriesCheck {
       return VerificationReport.solverUnavailable(id, model, this.#plan.planSkipped(), this.#result.reason.asString());
     }
     const interpreted = this.#plan.interpret(model, this.#result.verdicts);
+    if (!interpreted.ok)
+      return VerificationReport.interpretationUnavailable(id, model, VerificationMethod.of("exhaustive"), interpreted.error);
     return VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
       irHash: model.irHash(),
       method: "exhaustive",
-      findings: interpreted.findings,
-      skipped: interpreted.skipped
+      findings: interpreted.value.findings,
+      skipped: interpreted.value.skipped
     });
   }
   match(cases) {
@@ -4163,8 +4317,8 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
     const overlap = this.#overlapVerdictIn(results);
     const joint = this.#jointVerdictIn(results);
     if (overlap.isSat() && joint.isUnsat()) {
-      const targets = this.targets().sortedUniqueCanonically();
-      return {
+      const targets = FindingTargets.of(this.#a.asTargetId(), [this.#b.asTargetId()]).sortedUniqueCanonically();
+      return ok({
         findings: VerificationFindings.of([
           VerificationFinding.of({
             kind: FindingKind.conflict(),
@@ -4175,13 +4329,13 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
           })
         ]),
         skipped: VerificationSkips.of([])
-      };
+      });
     }
     const pending = [overlap, joint].find((verdict) => verdict.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
-    return {
+    return ok({
       findings: VerificationFindings.of([]),
       skipped: overlap.isUndecided() || joint.isUndecided() ? pending.skipsFor(this.targets(), `event-pair check for trigger "${this.#trigger.asString()}"`) : VerificationSkips.of([])
-    };
+    });
   }
   targets() {
     return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
@@ -4210,6 +4364,9 @@ class SatisfiabilityModuloTheoriesEventPairProbes {
   }
   toArray() {
     return this.#values;
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/satisfiability-modulo-theories-query-verdict.ts
@@ -4272,6 +4429,9 @@ class SatisfiabilityModuloTheoriesQueryVerdicts {
   verdictOf(queryId) {
     return this.#values.get(queryId) ?? SatisfiabilityModuloTheoriesQueryVerdict.missing();
   }
+  isEmpty() {
+    return this.#values.isEmpty();
+  }
 }
 // src/requirements/domain/satisfiability-modulo-theories-probe.ts
 class SatisfiabilityModuloTheoriesProbe {
@@ -4314,32 +4474,47 @@ class SatisfiabilityModuloTheoriesProbe {
     const targets = state.kind === "consistency" ? state.fallback : state.kind === "vacuity" ? TargetIdentifiers.of([state.subject.asTargetId()]) : state.targets;
     const context = state.kind === "consistency" ? "global consistency check" : state.kind === "vacuity" ? `vacuity check for ${state.subject.asString()}` : `completeness check for trigger "${state.trigger.asString()}"`;
     if (verdict.isUndecided())
-      return {
+      return ok({
         findings: VerificationFindings.of([]),
         skipped: verdict.skipsFor(targets, context)
-      };
+      });
     let finding = null;
-    if (state.kind === "completeness" && verdict.isSat())
+    if (state.kind === "completeness" && verdict.isSat()) {
+      const [head, ...tail] = targets;
+      if (head === undefined)
+        return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok)
+        return parsedTargets;
       finding = VerificationFinding.of({
         kind: FindingKind.completenessGap(),
         functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
-        targets,
+        targets: parsedTargets.value,
         witness: VerificationWitness.model(verdict.witnessModel()),
         detail: `No rule for trigger "${state.trigger.asString()}" applies to the witness state: the behavior of this input region is unspecified.`
       });
+    }
     if (state.kind !== "completeness" && verdict.isUnsat()) {
       const core = this.#coreTargets([...verdict.coreLabels()]);
       const effective = state.kind === "vacuity" ? TargetIdentifiers.of([...core, state.subject.asTargetId()]).sortedUniqueCanonically() : core.count() > 0 ? core : state.fallback;
-      if (effective.count() > 0)
-        finding = VerificationFinding.of({
-          kind: FindingKind.conflict(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
-          targets: effective,
-          witness: VerificationWitness.core(verdict.sortedCore()),
-          detail: state.kind === "consistency" ? "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them." : `The condition of obligation ${state.subject.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`
-        });
+      const [head, ...tail] = effective;
+      if (head === undefined)
+        return err({ kind: "missing-finding-targets" });
+      const parsedTargets = FindingTargets.parse(head, tail);
+      if (!parsedTargets.ok)
+        return parsedTargets;
+      finding = VerificationFinding.of({
+        kind: FindingKind.conflict(),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
+        targets: parsedTargets.value,
+        witness: VerificationWitness.core(verdict.sortedCore()),
+        detail: state.kind === "consistency" ? "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them." : `The condition of obligation ${state.subject.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`
+      });
     }
-    return { findings: VerificationFindings.of(finding === null ? [] : [finding]), skipped: VerificationSkips.of([]) };
+    return ok({
+      findings: VerificationFindings.of(finding === null ? [] : [finding]),
+      skipped: VerificationSkips.of([])
+    });
   }
 }
 
@@ -4370,25 +4545,32 @@ class SatisfiabilityModuloTheoriesVerificationPlan {
   interpret(model, results) {
     const findings = [];
     const skipped = [...this.#skipped];
-    const collect = (evidence) => {
-      findings.push(...evidence.findings);
-      skipped.push(...evidence.skipped);
-    };
+    for (const result of this.#interpretProbes(model, results)) {
+      if (!result.ok)
+        return result;
+      findings.push(...result.value.findings);
+      skipped.push(...result.value.skipped);
+    }
+    return ok({
+      findings: VerificationFindings.of(findings).distinctConflicts(),
+      skipped: VerificationSkips.of(skipped)
+    });
+  }
+  *#interpretProbes(model, results) {
     const consistency = SatisfiabilityModuloTheoriesProbe.consistency(model.obligations().compiledInvariantTargets(this.#compiled), this.#labelToTarget);
-    collect(consistency.interpret(model, results));
+    yield consistency.interpret(model, results);
     if (consistency.allowsVacuityChecks(results))
       for (const [subject, query] of this.#vacuityQueries)
-        collect(SatisfiabilityModuloTheoriesProbe.vacuity(query, subject, this.#labelToTarget).interpret(model, results));
+        yield SatisfiabilityModuloTheoriesProbe.vacuity(query, subject, this.#labelToTarget).interpret(model, results);
     for (const pair of this.#eventPairs)
-      collect(pair.interpret(model, results));
+      yield pair.interpret(model, results);
     for (const [trigger, targets] of [...this.#gapTriggers].sort((a, b) => a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0))
-      collect(SatisfiabilityModuloTheoriesProbe.completeness(trigger, targets).interpret(model, results));
+      yield SatisfiabilityModuloTheoriesProbe.completeness(trigger, targets).interpret(model, results);
     for (const scenario of model.scenarios()) {
       const query = this.#scenarioQueries.get(scenario.id());
       if (query !== undefined)
-        collect(SatisfiabilityModuloTheoriesProbe.scenario(query, scenario, this.#labelToTarget).interpret(model, results));
+        yield SatisfiabilityModuloTheoriesProbe.scenario(query, scenario, this.#labelToTarget).interpret(model, results);
     }
-    return { findings: VerificationFindings.of(findings).distinctConflicts(), skipped: VerificationSkips.of(skipped) };
   }
 }
 // src/requirements/domain/scenario.ts
@@ -4421,7 +4603,7 @@ class Scenario {
     return VerificationFinding.of({
       kind: FindingKind.crossCheckDisagreement(),
       functionalRequirementReferences: this.#functionalRequirementReferences.sortedUnique(),
-      targets: TargetIdentifiers.of([this.#id.asTargetId()]),
+      targets: FindingTargets.of(this.#id.asTargetId(), []),
       witness: VerificationWitness.verdicts(comparison.toVerdictTable()),
       detail: `${comparison.description()} disagree on scenario ${this.#id.asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`
     });
@@ -4477,13 +4659,16 @@ class Scenario {
     else
       skip = verdict.skipFor(target);
     if (skip !== null)
-      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) };
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) });
     if (verdict === undefined || !this.isViolatedBySatisfiability(!verdict.isViolated()))
-      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) };
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
     const accept = this.isAccept();
     const violated = accept ? components.violatedBy(TraceState.fromBindings(this.#bindings)).ids().toTargetIds() : TargetIdentifiers.of([]);
-    const targets = TargetIdentifiers.of([target, ...violated]).sortedUniqueCanonically();
-    return {
+    const parsedTargets = FindingTargets.parse(target, [...violated]);
+    if (!parsedTargets.ok)
+      return parsedTargets;
+    const targets = parsedTargets.value.sortedUniqueCanonically();
+    return ok({
       findings: VerificationFindings.of([
         VerificationFinding.of({
           kind: FindingKind.scenarioViolation(),
@@ -4494,19 +4679,22 @@ class Scenario {
         })
       ]),
       skipped: VerificationSkips.of([])
-    };
+    });
   }
   interpretSatisfiability(model, verdict, coreTargets) {
     const target = this.#id.asTargetId();
     if (verdict.isUndecided())
-      return {
+      return ok({
         findings: VerificationFindings.of([]),
         skipped: verdict.skipsFor(TargetIdentifiers.of([target]), `scenario check for ${this.#id.asString()}`)
-      };
+      });
     if (!this.isViolatedBySatisfiability(verdict.isSat()))
-      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) };
+      return ok({ findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) });
     const accept = this.isAccept();
-    const targets = accept ? TargetIdentifiers.of([target, ...coreTargets]).sortedUniqueCanonically() : TargetIdentifiers.of([target]);
+    const parsedTargets = FindingTargets.parse(target, accept ? [...coreTargets] : []);
+    if (!parsedTargets.ok)
+      return parsedTargets;
+    const targets = accept ? parsedTargets.value.sortedUniqueCanonically() : parsedTargets.value;
     const finding = VerificationFinding.of({
       kind: FindingKind.scenarioViolation(),
       functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
@@ -4514,7 +4702,7 @@ class Scenario {
       witness: accept ? VerificationWitness.core(verdict.sortedCore()) : VerificationWitness.model(verdict.witnessModel()),
       detail: accept ? `Accept scenario ${this.#id.asString()} describes a state the obligations in the witness core rule out \u2014 the requirements reject an example that should be accepted.` : `Reject scenario ${this.#id.asString()} is still satisfiable \u2014 the requirements do not exclude an example that should be rejected (witness state attached).`
     });
-    return { findings: VerificationFindings.of([finding]), skipped: VerificationSkips.of([]) };
+    return ok({ findings: VerificationFindings.of([finding]), skipped: VerificationSkips.of([]) });
   }
   bindings() {
     return this.#bindings;
@@ -4570,6 +4758,9 @@ class Scenarios {
   toArray() {
     return this.#values;
   }
+  isEmpty() {
+    return this.#values.length === 0;
+  }
 }
 // src/requirements/domain/trace-states.ts
 class TraceStates {
@@ -4591,6 +4782,9 @@ class TraceStates {
   }
   toArray() {
     return [...this.#values];
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 // src/requirements/domain/verification-report-identifier.ts
@@ -4674,6 +4868,9 @@ class VerificationReports {
       crossChecked: CrossCheckedEntries.of(crossChecked)
     });
     return failure === null ? report : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
+  }
+  isEmpty() {
+    return this.#values.length === 0;
   }
 }
 

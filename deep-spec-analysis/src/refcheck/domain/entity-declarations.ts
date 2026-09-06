@@ -1,8 +1,12 @@
 import {
   type ArtifactPath,
   FindingKind,
+  FindingTargets,
+  type FirstClassCollection,
+  type IterableFirstClassCollection,
   KeySet,
   type NormalizedName,
+  TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
 import type { AppliesTo } from "./applies-to.ts";
@@ -16,7 +20,7 @@ import { WitnessReference } from "./witness-reference.ts";
 
 // エンティティ宣言のコレクション。重複・所属・正規化名解決・ライフサイクル
 // 対象の選定・あいまい照合という集合の知識を所有する。
-export class EntityDeclarations {
+export class EntityDeclarations implements FirstClassCollection, IterableFirstClassCollection<EntityDeclaration> {
   readonly #values: readonly EntityDeclaration[];
   readonly #names: KeySet<EntityName>;
 
@@ -52,7 +56,7 @@ export class EntityDeclarations {
       report.finding(
         FD_E1,
         FindingKind.structureInvalid(),
-        [TargetIdentifiers.safe("entity", duplicate.name().asString())],
+        FindingTargets.of(TargetIdentifier.of(TargetIdentifiers.safe("entity", duplicate.name().asString())), []),
         [
           WitnessReference.at(
             artifact.asString(),
@@ -103,5 +107,9 @@ export class EntityDeclarations {
 
   toArray(): readonly EntityDeclaration[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

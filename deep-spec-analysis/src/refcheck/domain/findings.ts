@@ -1,8 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { Finding } from "./finding.ts";
 
 // finding のファーストクラスコレクション。正準ソート（kind 順位 → targets →
 // detail）は要素の `compareTo` に問う（kind 順位は kernel の FindingKind）。
-export class Findings {
+export class Findings implements FirstClassCollection, IterableFirstClassCollection<Finding> {
   readonly #values: readonly Finding[];
 
   private constructor(values: readonly Finding[]) {

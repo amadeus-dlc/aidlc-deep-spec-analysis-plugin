@@ -1,3 +1,4 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import { KeyedIndex, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignEventRule } from "./design-event-rule.ts";
@@ -5,7 +6,7 @@ import { DesignMachines } from "./design-machines.ts";
 import type { DesignUnit } from "./design-unit.ts";
 import { RuleSubsumptionProbe } from "./rule-subsumption-probe.ts";
 
-export class DesignEventRuleCatalog {
+export class DesignEventRuleCatalog implements FirstClassCollection, IterableFirstClassCollection<DesignEventRule> {
   readonly #events: KeyedIndex<TargetIdentifier, DesignEventRule>;
   private constructor(unit: DesignUnit) {
     const events: DesignEventRule[] = [];
@@ -51,5 +52,9 @@ export class DesignEventRuleCatalog {
           if (parsed.ok) probes.push(parsed.value);
         }
     return probes;
+  }
+
+  isEmpty(): boolean {
+    return this.#events.isEmpty();
   }
 }

@@ -1,10 +1,11 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { VerificationSkipped } from "./verification-skipped.ts";
 
 function sortVerificationSkipped(skipped: readonly VerificationSkipped[]): VerificationSkipped[] {
   return [...skipped].sort((a, b) => a.compareTo(b));
 }
 
-export class VerificationSkips {
+export class VerificationSkips implements FirstClassCollection, IterableFirstClassCollection<VerificationSkipped> {
   readonly #values: readonly VerificationSkipped[];
 
   private constructor(values: readonly VerificationSkipped[]) {
@@ -37,5 +38,9 @@ export class VerificationSkips {
 
   toArray(): readonly VerificationSkipped[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }

@@ -1,8 +1,9 @@
+import type { FirstClassCollection, IterableFirstClassCollection } from "@deep-spec-analysis/kernel-domain";
 import type { DesignIgnore } from "./design-ignore.ts";
 
 // ignores 宣言のファーストクラスコレクション。lowering の (state, trigger)
 // 文字列順という凍結順を所有する。
-export class DesignIgnores {
+export class DesignIgnores implements FirstClassCollection, IterableFirstClassCollection<DesignIgnore> {
   readonly #values: readonly DesignIgnore[];
 
   private constructor(values: readonly DesignIgnore[]) {
@@ -36,5 +37,9 @@ export class DesignIgnores {
 
   toArray(): readonly DesignIgnore[] {
     return this.#values;
+  }
+
+  isEmpty(): boolean {
+    return this.#values.length === 0;
   }
 }
