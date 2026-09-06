@@ -117,7 +117,7 @@ rejects(Design.DesignInputAnchor, { artifact: "", sha256: Kernel.ContentHash.ofT
 rejects(ReferenceCheck.WitnessReference, { artifact: "", element: "field" });
 rejects(Design.DesignUnit, {
   unit: "",
-  entities: Design.DesignEntityDeclarations.of([]),
+  catalog: Design.DesignAttributeCatalog.of(Design.DesignEntityDeclarations.of([])),
   obligations: Design.DesignObligations.of([]),
   machines: Design.DesignMachines.of([]),
   scenarios: Design.DesignScenarios.of([]),

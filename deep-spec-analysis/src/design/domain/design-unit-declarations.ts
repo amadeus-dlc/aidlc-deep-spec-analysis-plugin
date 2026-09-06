@@ -1,3 +1,4 @@
+import { ErrorMessage, ErrorMessages } from "@deep-spec-analysis/kernel-domain";
 import type { DesignUnitDeclaration } from "./design-unit-declaration.ts";
 
 export class DesignUnitDeclarations {
@@ -21,16 +22,16 @@ export class DesignUnitDeclarations {
 
   // ユニット横断の不変条件（ユニット名の一意性）と、各ユニット自身の整合性を
   // 宣言順に集める（裁定 6）。重複ユニットの文言はユニットの文言に先立つ（凍結）。
-  wellFormednessErrors(): string[] {
+  diagnostics(): ErrorMessages {
     const errors: string[] = [];
     const unitNames = new Set<string>();
     for (const unit of this.#values) {
       const unitName = unit.unit().asString();
       if (unitNames.has(unitName)) errors.push(`duplicate unit "${unitName}"`);
       unitNames.add(unitName);
-      errors.push(...unit.wellFormednessErrors());
+      for (const message of unit.diagnostics()) errors.push(message.asString());
     }
-    return errors;
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 
   toArray(): readonly DesignUnitDeclaration[] {

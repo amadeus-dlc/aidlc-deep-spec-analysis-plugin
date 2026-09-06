@@ -20,6 +20,7 @@ export { BusinessRuleReferenceIndex } from "./business-rule-reference-index.ts";
 export { BusinessRuleReferences } from "./business-rule-references.ts";
 export { CheckedUnits } from "./checked-units.ts";
 export { DesignAssignments } from "./design-assignments.ts";
+export { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 export { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
 export { DesignAttributeDeclarations } from "./design-attribute-declarations.ts";
 export { DesignAttributeName } from "./design-attribute-name.ts";

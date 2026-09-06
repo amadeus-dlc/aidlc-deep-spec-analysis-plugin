@@ -1,4 +1,5 @@
-import { InitialState } from "@deep-spec-analysis/design-domain";
+import { parseBusinessRuleReferenceIndex } from "@deep-spec-analysis/design-adapter";
+import { type BusinessRuleReferenceIndex, InitialState } from "@deep-spec-analysis/design-domain";
 import {
   AttributeKind,
   EnumerationMember,
@@ -558,7 +559,7 @@ describe("design decls (well-formedness materials own their judgements)", () => 
         background: DesignBackgroundDeclarations.of([]),
         unformalizedTargets: UnformalizedTargets.of(Array.from(["BR1.1"], (raw) => TargetIdentifier.of(raw))),
         directoryExists,
-        rulesMarkdown: "# rules",
+        rules: ruleIndex("# rules"),
       });
     expect(build(false).lacksConstructionDirectory()).toBe(true);
     const present = build(true);
@@ -570,7 +571,6 @@ describe("design decls (well-formedness materials own their judgements)", () => 
     expect(present.scenarios().toArray()).toEqual([]);
     expect(present.background().toArray()).toEqual([]);
     expect(present.unformalizedTargets().toStrings()).toEqual(["BR1.1"]);
-    expect(present.rulesMarkdown()).toBe("# rules");
   });
 });
 
@@ -810,3 +810,9 @@ describe("the design-side primitives of ruling 3-1 (BusinessRuleReference, Busin
     expect(targets.add(TargetIdentifier.of("BR1.1")).toStrings()).toEqual(["BR1.1"]);
   });
 });
+
+function ruleIndex(markdown: string): BusinessRuleReferenceIndex {
+  const parsed = parseBusinessRuleReferenceIndex(markdown);
+  if (!parsed.ok) throw new Error(JSON.stringify(parsed.error));
+  return parsed.value;
+}

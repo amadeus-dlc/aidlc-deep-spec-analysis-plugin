@@ -786,6 +786,24 @@ class ExpressionTree {
     };
     go(this.#root);
   }
+  inspectTerms(handlers) {
+    const compared = new Map;
+    this.walk((node) => {
+      const args = node.args ?? [];
+      if (args.length !== 2)
+        return;
+      const reference = args.find((arg) => arg.op === "ref" && typeof arg.path === "string");
+      const literal = args.find((arg) => arg.op === "enum");
+      if (reference?.path !== undefined && literal !== undefined)
+        compared.set(literal, reference.path);
+    });
+    this.walk((node) => {
+      if (node.op === "ref" && typeof node.path === "string")
+        handlers.reference(node.path, node.prime === true);
+      if (node.op === "enum" && typeof node.value === "string")
+        handlers.enumLiteral(node.value, compared.get(node));
+    });
+  }
   usesPrime() {
     let found = false;
     this.walk((node) => {
@@ -1847,6 +1865,39 @@ class IntermediateRepresentationEntityDeclarations {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  #inspect(entityFound, attributeFound) {
+    const names = new Set;
+    for (const entity of this.#values) {
+      const name = entity.name().asString();
+      entityFound(entity, names.has(name));
+      names.add(name);
+      entity.inspectAttributes(attributeFound);
+    }
+  }
+  hasAmbiguousAttributes() {
+    let ambiguous = false;
+    this.#inspect((_entity, duplicate) => {
+      ambiguous ||= duplicate;
+    }, (_path, _attribute, duplicate) => {
+      ambiguous ||= duplicate;
+    });
+    return ambiguous;
+  }
+  diagnostics() {
+    const messages = [];
+    this.#inspect((entity, duplicate) => {
+      if (duplicate)
+        messages.push(`schema: duplicate entity "${entity.name().asString()}"`);
+    }, (coordinate, attribute, duplicate) => {
+      if (duplicate)
+        messages.push(`schema: duplicate attribute "${coordinate}"`);
+      if (attribute.boundsInverted())
+        messages.push(`schema: ${coordinate}: min > max`);
+      if (attribute.boundsOutsideSafeRange())
+        messages.push(`schema: ${coordinate}: bounds must be safe integers`);
+    });
+    return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+  }
   toArray() {
     return this.#values;
   }
@@ -1874,6 +1925,79 @@ class IntermediateRepresentationEntityName {
     return this.#value;
   }
 }
+// src/requirements/domain/intermediate-representation-attribute-catalog.ts
+class IntermediateRepresentationAttributeCatalog {
+  #byPath;
+  constructor(declarations) {
+    let count = 0;
+    for (const entity of declarations) {
+      if (++count > 65536)
+        throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+      entity.inspectAttributes(() => {
+        if (++count > 65536)
+          throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+      });
+    }
+    if (declarations.hasAmbiguousAttributes())
+      throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
+    const attributes = new Map;
+    for (const entity of declarations)
+      entity.inspectAttributes((path, attribute) => {
+        attributes.set(path, attribute);
+      });
+    this.#byPath = KeyedIndex.of([...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute]));
+  }
+  static of(declarations) {
+    return new IntermediateRepresentationAttributeCatalog(declarations);
+  }
+  static parse(declarations) {
+    return parseConstruction(() => new IntermediateRepresentationAttributeCatalog(declarations));
+  }
+  diagnostics() {
+    const errors = [];
+    const encoded = new Map;
+    for (const coordinate of this.#byPath.keys()) {
+      const path = coordinate.asString();
+      const key = path.replace(/\./g, "_");
+      const prior = encoded.get(key);
+      if (prior !== undefined) {
+        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
+      } else {
+        encoded.set(key, path);
+      }
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  expressionDiagnostics(expression, where, primesAllowed) {
+    const errors = [];
+    ExpressionTree.of(expression).inspectTerms({
+      reference: (path, primed) => {
+        if (!this.#byPath.has(AttributePath.of(path)))
+          errors.push(`${where}: unresolvable reference "${path}"`);
+        if (primed && !primesAllowed)
+          errors.push(`${where}: primed reference "${path}" is only legal in event effects and event-scenario expectations`);
+      },
+      enumLiteral: (value) => {
+        if (![...this.#byPath.values()].some((attribute) => attribute.admitsEnumLiteral(value)))
+          errors.push(`${where}: enum literal "${value}" is not a value of any declared enum attribute`);
+      }
+    });
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  bindingDiagnostics(bindings, context) {
+    const errors = [];
+    for (const binding of bindings) {
+      const path = binding.path().asString();
+      const attribute = this.#byPath.get(AttributePath.of(path));
+      if (!attribute)
+        errors.push(`${context}: binding for unknown attribute "${path}"`);
+      else if (!attribute.fitsBinding(binding.value()))
+        errors.push(`${context}: binding value ${binding.value().describe()} does not fit ${attribute.kindLabel()} attribute "${path}"`);
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+}
+
 // src/requirements/domain/intermediate-representation-model-declaration.ts
 class IntermediateRepresentationModelDeclaration {
   #entities;
@@ -1889,55 +2013,21 @@ class IntermediateRepresentationModelDeclaration {
   static of(seed) {
     return new IntermediateRepresentationModelDeclaration(seed);
   }
-  wellFormednessErrors() {
+  diagnostics() {
     const errors = [];
-    const attrTypes = new Map;
-    const entityNames = new Set;
-    for (const ent of this.#entities) {
-      const entName = ent.name().asString();
-      if (entityNames.has(entName))
-        errors.push(`schema: duplicate entity "${entName}"`);
-      entityNames.add(entName);
-      ent.inspectAttributes((coord, attr, duplicated) => {
-        if (duplicated) {
-          errors.push(`schema: duplicate attribute "${coord}"`);
-        }
-        if (attr.boundsInverted()) {
-          errors.push(`schema: ${coord}: min > max`);
-        }
-        if (attr.boundsOutsideSafeRange()) {
-          errors.push(`schema: ${coord}: bounds must be safe integers`);
-        }
-        attrTypes.set(coord, attr);
-      });
-    }
-    const encoded = new Map;
-    for (const path of attrTypes.keys()) {
-      const key = path.replace(/\./g, "_");
-      const prior = encoded.get(key);
-      if (prior !== undefined) {
-        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
-      } else {
-        encoded.set(key, path);
-      }
-    }
-    const checkExpr = (e, where, primesAllowed) => {
-      ExpressionTree.of(e).walk((node) => {
-        if (node.op === "ref" && typeof node.path === "string") {
-          if (!attrTypes.has(node.path)) {
-            errors.push(`${where}: unresolvable reference "${node.path}"`);
-          }
-          if (node.prime === true && !primesAllowed) {
-            errors.push(`${where}: primed reference "${node.path}" is only legal in event effects and event-scenario expectations`);
-          }
-        }
-        if (node.op === "enum" && typeof node.value === "string") {
-          const known = [...attrTypes.values()].some((t) => t.admitsEnumLiteral(node.value));
-          if (!known) {
-            errors.push(`${where}: enum literal "${node.value}" is not a value of any declared enum attribute`);
-          }
-        }
-      });
+    for (const message of this.#entities.diagnostics())
+      errors.push(message.asString());
+    const parsed = IntermediateRepresentationAttributeCatalog.parse(this.#entities);
+    const catalog = parsed.ok ? parsed.value : null;
+    if (!parsed.ok && parsed.error.kind !== "ambiguous-requirement-attributes")
+      errors.push(`schema: attribute catalog: ${parsed.error.kind}`);
+    if (catalog !== null)
+      for (const message of catalog.diagnostics())
+        errors.push(message.asString());
+    const checkExpr = (expression, where, primesAllowed) => {
+      if (catalog !== null)
+        for (const message of catalog.expressionDiagnostics(expression, where, primesAllowed))
+          errors.push(message.asString());
     };
     const seenIds = new Set;
     const dupCheck = (id, where) => {
@@ -1953,18 +2043,9 @@ class IntermediateRepresentationModelDeclaration {
     for (const sc of this.#scenarios) {
       const where = `scenario ${sc.id().asString()}`;
       dupCheck(sc.id().asString(), where);
-      for (const binding of sc.bindings()) {
-        const path = binding.path();
-        const val = binding.value();
-        const t = attrTypes.get(path.asString());
-        if (!t) {
-          errors.push(`${where}: binding for unknown attribute "${path.asString()}"`);
-          continue;
-        }
-        if (!t.fitsBinding(val)) {
-          errors.push(`${where}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`);
-        }
-      }
+      if (catalog !== null)
+        for (const message of catalog.bindingDiagnostics(sc.bindings(), where))
+          errors.push(message.asString());
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
     }
     for (const bg of this.#background) {
@@ -1972,7 +2053,7 @@ class IntermediateRepresentationModelDeclaration {
       dupCheck(bg.id().asString(), where);
       bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
     }
-    return errors;
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 }
 // src/requirements/domain/intermediate-representation-obligation-declaration.ts
@@ -2143,8 +2224,8 @@ class RequirementsSourceValidation {
     return ValidationAssessment.of(ErrorMessages.collect(this.#diagnostics(source)));
   }
   *#diagnostics(source) {
-    for (const message of this.#view.wellFormednessErrors())
-      yield ErrorMessage.parse(message);
+    for (const message of this.#view.diagnostics())
+      yield ok(message);
     if (source === null) {
       yield ErrorMessage.parse("requirements.md not found under this intent record \u2014 frRefs cannot be reverse-verified");
     } else {
@@ -4364,10 +4445,7 @@ class BusinessRuleReferenceIndex {
   constructor(ids) {
     this.#ids = ids;
   }
-  static fromRules(rulesMarkdown) {
-    const ids = [];
-    for (const m of rulesMarkdown.matchAll(/\bBR[0-9]+\.[0-9]+\b/g))
-      ids.push(BusinessRuleReference.of(m[0]));
+  static of(ids) {
     return new BusinessRuleReferenceIndex(KeySet.of(ids));
   }
   has(br) {
@@ -4446,6 +4524,101 @@ class DesignAssignments {
   }
   rhsOf(path) {
     return this.#values.get(path);
+  }
+}
+// src/design/domain/design-attribute-catalog.ts
+class DesignAttributeCatalog {
+  #declarations;
+  #byPath;
+  constructor(declarations) {
+    let count = 0;
+    for (const entity of declarations) {
+      if (++count > 65536)
+        throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+      entity.inspectAttributes(() => {
+        if (++count > 65536)
+          throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+      });
+    }
+    if (declarations.hasAmbiguousAttributes())
+      throw new IllegalArgumentException({ kind: "ambiguous-design-attributes" });
+    const attributes = new Map;
+    for (const entity of declarations)
+      entity.inspectAttributes((path, attribute) => {
+        attributes.set(path, attribute);
+      });
+    for (const path of attributes.keys())
+      AttributePath.of(path);
+    this.#declarations = declarations;
+    this.#byPath = KeyedIndex.of([...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute]));
+  }
+  static of(declarations) {
+    return new DesignAttributeCatalog(declarations);
+  }
+  static parse(declarations) {
+    return parseConstruction(() => new DesignAttributeCatalog(declarations));
+  }
+  declarations() {
+    return this.#declarations;
+  }
+  paths() {
+    return AttributePaths.of([...this.#byPath.keys()]);
+  }
+  enumValuesAt(path) {
+    return this.#byPath.get(AttributePath.of(path))?.enumStates() ?? null;
+  }
+  declares(path) {
+    return this.#byPath.has(AttributePath.of(path));
+  }
+  encodingDiagnostics() {
+    const errors = [];
+    const encoded = new Map;
+    for (const coordinate of this.#byPath.keys()) {
+      const path = coordinate.asString();
+      const key = path.replace(/\./g, "_");
+      const prior = encoded.get(key);
+      if (prior !== undefined) {
+        errors.push(`attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
+      } else {
+        encoded.set(key, path);
+      }
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  expressionDiagnostics(e, ctx, primesAllowed) {
+    const errors = [];
+    ExpressionTree.of(e).inspectTerms({
+      reference: (path, primed) => {
+        if (!this.#byPath.has(AttributePath.of(path)))
+          errors.push(`${ctx}: unresolvable reference "${path}"`);
+        if (primed && !primesAllowed)
+          errors.push(`${ctx}: primed reference "${path}" is only legal in effects and event-scenario expectations`);
+      },
+      enumLiteral: (value, sibling) => {
+        const attribute = sibling === undefined ? undefined : this.#byPath.get(AttributePath.of(sibling));
+        if (attribute !== undefined) {
+          if (!attribute.isEnum())
+            errors.push(`${ctx}: enum literal "${value}" is compared against non-enum attribute "${sibling}"`);
+          else if (!attribute.admitsEnumLiteral(value))
+            errors.push(`${ctx}: enum literal "${value}" is not a value of "${sibling}"`);
+        } else if (sibling === undefined && ![...this.#byPath.values()].some((attribute2) => attribute2.admitsEnumLiteral(value))) {
+          errors.push(`${ctx}: enum literal "${value}" is not a value of any declared enum attribute`);
+        }
+      }
+    });
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  bindingDiagnostics(bindings, context) {
+    const errors = [];
+    for (const binding of bindings) {
+      const path = binding.path().asString();
+      const attribute = this.#byPath.get(AttributePath.of(path));
+      if (!attribute)
+        errors.push(`${context}: binding for unknown attribute "${path}"`);
+      else if (!attribute.fitsBinding(binding.value()))
+        errors.push(`${context}: binding value ${binding.value().describe()} does not fit ${attribute.kindLabel()} attribute "${path}"`);
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 }
 // src/design/domain/design-attribute-declaration.ts
@@ -4774,6 +4947,41 @@ class DesignEntityDeclarations {
   }
   *[Symbol.iterator]() {
     yield* this.#values;
+  }
+  #inspect(entityFound, attributeFound) {
+    const names = new Set;
+    for (const entity of this.#values) {
+      const name = entity.name().asString();
+      entityFound(entity, names.has(name));
+      names.add(name);
+      entity.inspectAttributes(attributeFound);
+    }
+  }
+  hasAmbiguousAttributes() {
+    let ambiguous = false;
+    this.#inspect((_entity, duplicate) => {
+      ambiguous ||= duplicate;
+    }, (_path, _attribute, duplicate) => {
+      ambiguous ||= duplicate;
+    });
+    return ambiguous;
+  }
+  diagnostics() {
+    const messages = [];
+    this.#inspect((entity, duplicate) => {
+      if (duplicate)
+        messages.push(`duplicate entity "${entity.name().asString()}"`);
+    }, (coordinate, attribute, duplicate) => {
+      if (duplicate)
+        messages.push(`duplicate attribute "${coordinate}"`);
+      if (attribute.lacksIntBounds())
+        messages.push(`${coordinate}: int attributes require min and max \u2014 the Quint backend needs bounded domains`);
+      if (attribute.boundsInverted())
+        messages.push(`${coordinate}: min > max`);
+      if (attribute.boundsOutsideSafeRange())
+        messages.push(`${coordinate}: bounds must be safe integers`);
+    });
+    return ErrorMessages.collect(messages.map(ErrorMessage.parse));
   }
   toArray() {
     return this.#values;
@@ -5826,8 +6034,8 @@ class DesignIntermediateRepresentationValidationMaterials {
     for (const error of this.#schemaErrors)
       yield ok(error);
     if (supported && this.#schemaErrors.isEmpty()) {
-      for (const error of this.#units.wellFormednessErrors())
-        yield ErrorMessage.parse(error);
+      for (const error of this.#units.diagnostics())
+        yield ok(error);
     }
   }
   sourceDocument() {
@@ -5978,6 +6186,52 @@ class DesignMachineDeclaration {
   }
   ignores() {
     return this.#ignores;
+  }
+  diagnostics(catalog) {
+    const errors = [];
+    const ctx = `machine ${this.#id.asString()}`;
+    const attrPath = this.attrPath();
+    const attr = catalog.declares(attrPath);
+    if (!attr) {
+      errors.push(`${ctx}: lifecycle attribute "${attrPath}" is not declared`);
+      return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+    }
+    const states = catalog.enumValuesAt(attrPath);
+    if (states === null) {
+      errors.push(`${ctx}: lifecycle attribute "${attrPath}" is not an enum \u2014 its values are the state set`);
+      return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+    }
+    for (const s of this.initialStatesOutside(states)) {
+      errors.push(`${ctx}: initial state "${s}" is not a value of ${attrPath}`);
+    }
+    const transitionCells = new Set;
+    for (const tr of this.transitions()) {
+      const tctx = `transition ${tr.id().asString()}`;
+      for (const [k, v] of tr.stateEntries()) {
+        if (v !== undefined && !states.includes(v)) {
+          errors.push(`${tctx}: ${k} state "${v}" is not a value of ${attrPath}`);
+        }
+      }
+      const cellKey = tr.cellKey();
+      if (cellKey !== null)
+        transitionCells.add(cellKey);
+      tr.inspectExpressions((expression, primesAllowed) => {
+        for (const message of catalog.expressionDiagnostics(expression, tctx, primesAllowed))
+          errors.push(message.asString());
+      });
+      if (tr.assignsPrimedReferenceTo(attrPath)) {
+        errors.push(`${tctx}: the effect assigns the machine's own attribute "${attrPath}" \u2014 state' = to is implicit`);
+      }
+    }
+    for (const ig of this.ignores()) {
+      if (!ig.isStateAmong(states)) {
+        errors.push(`${ctx}: ignores state "${ig.state()}" is not a value of ${attrPath}`);
+      }
+      if (transitionCells.has(ig.cellKey())) {
+        errors.push(`${ctx}: ignores (${ig.state()}, ${ig.trigger().asString()}) collides with a declared transition for the same (state, trigger)`);
+      }
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
   initialStatesOutside(states) {
     return [...this.#initial].filter((state) => !states.includes(state.asString())).map((state) => state.asString());
@@ -7147,21 +7401,14 @@ class LoweringIndex {
 // src/design/domain/design-unit.ts
 class DesignUnit {
   #unit;
-  #entities;
-  #attrPaths;
+  #catalog;
   #obligations;
   #machines;
   #scenarios;
   #background;
   constructor(seed) {
     this.#unit = UnitName.of(seed.unit);
-    this.#entities = seed.entities;
-    const coordinates = new Set;
-    for (const ent of seed.entities) {
-      for (const attr of ent.attributes())
-        coordinates.add(`${ent.name().asString()}.${attr.name().asString()}`);
-    }
-    this.#attrPaths = AttributePaths.of([...coordinates].map((path) => AttributePath.of(path)));
+    this.#catalog = seed.catalog;
     this.#obligations = seed.obligations;
     this.#machines = seed.machines;
     this.#scenarios = seed.scenarios;
@@ -7180,10 +7427,10 @@ class DesignUnit {
     return this.#unit.asString();
   }
   entities() {
-    return this.#entities;
+    return this.#catalog.declarations();
   }
   attrPaths() {
-    return this.#attrPaths;
+    return this.#catalog.paths();
   }
   obligations() {
     return this.#obligations;
@@ -7323,17 +7570,8 @@ class DesignUnit {
       })
     });
   }
-  #attributeAt(attrPath) {
-    for (const ent of this.#entities) {
-      for (const attr of ent.attributes()) {
-        if (`${ent.name().asString()}.${attr.name().asString()}` === attrPath)
-          return attr;
-      }
-    }
-    return null;
-  }
   declaredEnumValuesOf(attrPath) {
-    const values = this.#attributeAt(attrPath)?.enumStates() ?? null;
+    const values = this.#catalog.enumValuesAt(attrPath);
     return values === null ? null : values.toArray().map((member) => member.asString());
   }
   enumValuesOf(attrPath) {
@@ -7350,7 +7588,7 @@ class DesignUnitDeclaration {
   #background;
   #unformalizedTargets;
   #directoryExists;
-  #rulesMarkdown;
+  #rules;
   constructor(props) {
     this.#unit = props.unit;
     this.#entities = props.entities;
@@ -7360,7 +7598,7 @@ class DesignUnitDeclaration {
     this.#background = props.background;
     this.#unformalizedTargets = props.unformalizedTargets;
     this.#directoryExists = props.directoryExists;
-    this.#rulesMarkdown = props.rulesMarkdown;
+    this.#rules = props.rules;
   }
   static of(props) {
     return new DesignUnitDeclaration(props);
@@ -7389,76 +7627,23 @@ class DesignUnitDeclaration {
   lacksConstructionDirectory() {
     return !this.#directoryExists;
   }
-  rulesMarkdown() {
-    return this.#rulesMarkdown;
-  }
-  wellFormednessErrors() {
+  diagnostics() {
     const errors = [];
     const unitName = this.#unit.asString();
     const where = (s) => `unit ${unitName}: ${s}`;
-    const attrTypes = new Map;
-    for (const ent of this.#entities) {
-      ent.inspectAttributes((coord, attr, duplicated) => {
-        if (duplicated)
-          errors.push(where(`duplicate attribute "${coord}"`));
-        if (attr.lacksIntBounds()) {
-          errors.push(where(`${coord}: int attributes require min and max \u2014 the Quint backend needs bounded domains`));
-        }
-        if (attr.boundsInverted()) {
-          errors.push(where(`${coord}: min > max`));
-        }
-        if (attr.boundsOutsideSafeRange()) {
-          errors.push(where(`${coord}: bounds must be safe integers`));
-        }
-        attrTypes.set(coord, attr);
-      });
-    }
-    const encoded = new Map;
-    for (const path of attrTypes.keys()) {
-      const key = path.replace(/\./g, "_");
-      const prior = encoded.get(key);
-      if (prior !== undefined) {
-        errors.push(where(`attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`));
-      } else {
-        encoded.set(key, path);
-      }
-    }
-    const checkExpr = (e, ctx, primesAllowed) => {
-      const boundEnum = new Map;
-      const tree = ExpressionTree.of(e);
-      tree.walk((node) => {
-        const args = node.args ?? [];
-        if (args.length === 2) {
-          const ref = args.find((a) => a.op === "ref" && typeof a.path === "string");
-          const en = args.find((a) => a.op === "enum");
-          if (ref && en)
-            boundEnum.set(en, ref.path);
-        }
-      });
-      tree.walk((node) => {
-        if (node.op === "ref" && typeof node.path === "string") {
-          if (!attrTypes.has(node.path))
-            errors.push(where(`${ctx}: unresolvable reference "${node.path}"`));
-          if (node.prime === true && !primesAllowed) {
-            errors.push(where(`${ctx}: primed reference "${node.path}" is only legal in effects and event-scenario expectations`));
-          }
-        }
-        if (node.op === "enum" && typeof node.value === "string") {
-          const sibling = boundEnum.get(node);
-          const siblingType = sibling === undefined ? undefined : attrTypes.get(sibling);
-          if (siblingType !== undefined) {
-            if (!siblingType.isEnum()) {
-              errors.push(where(`${ctx}: enum literal "${node.value}" is compared against non-enum attribute "${sibling}"`));
-            } else if (!siblingType.admitsEnumLiteral(node.value)) {
-              errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of "${sibling}"`));
-            }
-          } else if (sibling === undefined) {
-            const known = [...attrTypes.values()].some((t) => t.admitsEnumLiteral(node.value));
-            if (!known)
-              errors.push(where(`${ctx}: enum literal "${node.value}" is not a value of any declared enum attribute`));
-          }
-        }
-      });
+    for (const message of this.#entities.diagnostics())
+      errors.push(where(message.asString()));
+    const parsedCatalog = DesignAttributeCatalog.parse(this.#entities);
+    const catalog = parsedCatalog.ok ? parsedCatalog.value : null;
+    if (!parsedCatalog.ok && parsedCatalog.error.kind !== "ambiguous-design-attributes")
+      errors.push(where(`attribute catalog: ${parsedCatalog.error.kind}`));
+    if (catalog !== null)
+      for (const message of catalog.encodingDiagnostics())
+        errors.push(where(message.asString()));
+    const checkExpr = (expression, context, primesAllowed) => {
+      if (catalog !== null)
+        for (const message of catalog.expressionDiagnostics(expression, context, primesAllowed))
+          errors.push(where(message.asString()));
     };
     const seenIds = new Set;
     const dup = (id, ctx) => {
@@ -7485,63 +7670,21 @@ class DesignUnitDeclaration {
     for (const sm of this.#stateMachines) {
       const ctx = `machine ${sm.id().asString()}`;
       dup(sm.id().asString(), ctx);
-      const attrPath = sm.attrPath();
-      const attr = attrTypes.get(attrPath);
-      if (!attr) {
-        errors.push(where(`${ctx}: lifecycle attribute "${attrPath}" is not declared`));
-        continue;
-      }
-      const states = attr.enumStates();
-      if (states === null) {
-        errors.push(where(`${ctx}: lifecycle attribute "${attrPath}" is not an enum \u2014 its values are the state set`));
-        continue;
-      }
-      for (const s of sm.initialStatesOutside(states)) {
-        errors.push(where(`${ctx}: initial state "${s}" is not a value of ${attrPath}`));
-      }
-      const transitionCells = new Set;
       for (const tr of sm.transitions()) {
-        const tctx = `transition ${tr.id().asString()}`;
-        dup(tr.id().asString(), tctx);
+        dup(tr.id().asString(), `transition ${tr.id().asString()}`);
         collectBr(tr.businessRuleReferences());
-        for (const [k, v] of tr.stateEntries()) {
-          if (v !== undefined && !states.includes(v)) {
-            errors.push(where(`${tctx}: ${k} state "${v}" is not a value of ${attrPath}`));
-          }
-        }
-        const cellKey = tr.cellKey();
-        if (cellKey !== null)
-          transitionCells.add(cellKey);
-        tr.inspectExpressions((expression, primesAllowed) => checkExpr(expression, tctx, primesAllowed));
-        if (tr.assignsPrimedReferenceTo(attrPath)) {
-          errors.push(where(`${tctx}: the effect assigns the machine's own attribute "${attrPath}" \u2014 state' = to is implicit`));
-        }
       }
-      for (const ig of sm.ignores()) {
-        if (!ig.isStateAmong(states)) {
-          errors.push(where(`${ctx}: ignores state "${ig.state()}" is not a value of ${attrPath}`));
-        }
-        if (transitionCells.has(ig.cellKey())) {
-          errors.push(where(`${ctx}: ignores (${ig.state()}, ${ig.trigger().asString()}) collides with a declared transition for the same (state, trigger)`));
-        }
-      }
+      if (catalog !== null)
+        for (const message of sm.diagnostics(catalog))
+          errors.push(where(message.asString()));
     }
     for (const sc of this.#scenarios) {
       const ctx = `scenario ${sc.id().asString()}`;
       dup(sc.id().asString(), ctx);
       collectBr(sc.businessRuleReferences());
-      for (const binding of sc.bindings()) {
-        const path = binding.path();
-        const val = binding.value();
-        const t = attrTypes.get(path.asString());
-        if (!t) {
-          errors.push(where(`${ctx}: binding for unknown attribute "${path.asString()}"`));
-          continue;
-        }
-        const ok2 = t.fitsBinding(val);
-        if (!ok2)
-          errors.push(where(`${ctx}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`));
-      }
+      if (catalog !== null)
+        for (const message of catalog.bindingDiagnostics(sc.bindings(), ctx))
+          errors.push(where(message.asString()));
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
     }
     for (const bg of this.#background) {
@@ -7552,13 +7695,12 @@ class DesignUnitDeclaration {
     if (this.lacksConstructionDirectory()) {
       errors.push(where(`no construction/${unitName}/ directory exists under this record \u2014 the unit name matches no unit-of-work, so BR coverage cannot be verified`));
     }
-    const rulesMd = this.#rulesMarkdown;
-    if (rulesMd === null) {
+    const known = this.#rules;
+    if (known === null) {
       if (businessRuleReferencesUsed.size > 0) {
         errors.push(where(`brRefs are used but construction/${unitName}/functional-design/rules.md was not found \u2014 they cannot be reverse-verified`));
       }
     } else {
-      const known = BusinessRuleReferenceIndex.fromRules(rulesMd);
       for (const br of [...businessRuleReferencesUsed].sort()) {
         if (!known.has(BusinessRuleReference.of(br)))
           errors.push(where(`brRef "${br}" does not exist in rules.md`));
@@ -7570,7 +7712,7 @@ class DesignUnitDeclaration {
         }
       }
     }
-    return errors;
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 }
 // src/design/domain/design-unit-declarations.ts
@@ -7588,7 +7730,7 @@ class DesignUnitDeclarations {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
-  wellFormednessErrors() {
+  diagnostics() {
     const errors = [];
     const unitNames = new Set;
     for (const unit of this.#values) {
@@ -7596,9 +7738,10 @@ class DesignUnitDeclarations {
       if (unitNames.has(unitName))
         errors.push(`duplicate unit "${unitName}"`);
       unitNames.add(unitName);
-      errors.push(...unit.wellFormednessErrors());
+      for (const message of unit.diagnostics())
+        errors.push(message.asString());
     }
-    return errors;
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
   toArray() {
     return this.#values;
@@ -9992,6 +10135,14 @@ class SystemClock {
     return Date.now();
   }
 }
+// src/design/adapter/parse-business-rule-reference-index.ts
+function parseBusinessRuleReferenceIndex(markdown) {
+  return flatMapResult(traverseResult([...markdown.matchAll(/\bBR[0-9]+\.[0-9]+\b/g)], (match) => BusinessRuleReference.parse(match[0])), (values) => flatMapResult(BusinessRuleReferences.parse(values), (references) => ({
+    ok: true,
+    value: BusinessRuleReferenceIndex.of(references)
+  })));
+}
+
 // src/design/adapter/design-intermediate-representation-validation-materials-repository-implementation.ts
 import { existsSync as existsSync3, readFileSync as readFileSync4 } from "fs";
 import { basename as basename2, dirname as dirname3, join as join4 } from "path";
@@ -10146,6 +10297,9 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
   const directoryExists = recordRoot === null ? true : existsSync3(join4(recordRoot, "construction", unitName));
   const rulesPath = recordRoot === null ? null : join4(recordRoot, "construction", unitName, "functional-design", "rules.md");
   const rulesMarkdown = rulesPath === null ? null : readIfExists(rulesPath);
+  const rules = rulesMarkdown === null ? ok(null) : parseBusinessRuleReferenceIndex(rulesMarkdown);
+  if (!rules.ok)
+    return err(JSON.stringify(rules.error));
   const targets = traverseResult(unformalizedTargets, TargetIdentifier.parse);
   if (!targets.ok)
     return err(JSON.stringify(targets.error));
@@ -10158,7 +10312,7 @@ function buildUnitView(rawUnit, unitName, recordRoot) {
     background: DesignBackgroundDeclarations.of(background),
     unformalizedTargets: UnformalizedTargets.of(targets.value),
     directoryExists,
-    rulesMarkdown
+    rules: rules.value
   }));
 }
 

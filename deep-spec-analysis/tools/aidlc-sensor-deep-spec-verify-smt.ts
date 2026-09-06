@@ -807,6 +807,24 @@ class ExpressionTree {
     };
     go(this.#root);
   }
+  inspectTerms(handlers) {
+    const compared = new Map;
+    this.walk((node) => {
+      const args = node.args ?? [];
+      if (args.length !== 2)
+        return;
+      const reference = args.find((arg) => arg.op === "ref" && typeof arg.path === "string");
+      const literal = args.find((arg) => arg.op === "enum");
+      if (reference?.path !== undefined && literal !== undefined)
+        compared.set(literal, reference.path);
+    });
+    this.walk((node) => {
+      if (node.op === "ref" && typeof node.path === "string")
+        handlers.reference(node.path, node.prime === true);
+      if (node.op === "enum" && typeof node.value === "string")
+        handlers.enumLiteral(node.value, compared.get(node));
+    });
+  }
   usesPrime() {
     let found = false;
     this.walk((node) => {
@@ -2229,6 +2247,39 @@ class IntermediateRepresentationEntityDeclarations {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  #inspect(entityFound, attributeFound) {
+    const names = new Set;
+    for (const entity of this.#values) {
+      const name = entity.name().asString();
+      entityFound(entity, names.has(name));
+      names.add(name);
+      entity.inspectAttributes(attributeFound);
+    }
+  }
+  hasAmbiguousAttributes() {
+    let ambiguous = false;
+    this.#inspect((_entity, duplicate) => {
+      ambiguous ||= duplicate;
+    }, (_path, _attribute, duplicate) => {
+      ambiguous ||= duplicate;
+    });
+    return ambiguous;
+  }
+  diagnostics() {
+    const messages = [];
+    this.#inspect((entity, duplicate) => {
+      if (duplicate)
+        messages.push(`schema: duplicate entity "${entity.name().asString()}"`);
+    }, (coordinate, attribute, duplicate) => {
+      if (duplicate)
+        messages.push(`schema: duplicate attribute "${coordinate}"`);
+      if (attribute.boundsInverted())
+        messages.push(`schema: ${coordinate}: min > max`);
+      if (attribute.boundsOutsideSafeRange())
+        messages.push(`schema: ${coordinate}: bounds must be safe integers`);
+    });
+    return ErrorMessages.collect(messages.map(ErrorMessage.parse));
+  }
   toArray() {
     return this.#values;
   }
@@ -2256,6 +2307,79 @@ class IntermediateRepresentationEntityName {
     return this.#value;
   }
 }
+// src/requirements/domain/intermediate-representation-attribute-catalog.ts
+class IntermediateRepresentationAttributeCatalog {
+  #byPath;
+  constructor(declarations) {
+    let count = 0;
+    for (const entity of declarations) {
+      if (++count > 65536)
+        throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+      entity.inspectAttributes(() => {
+        if (++count > 65536)
+          throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+      });
+    }
+    if (declarations.hasAmbiguousAttributes())
+      throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
+    const attributes = new Map;
+    for (const entity of declarations)
+      entity.inspectAttributes((path, attribute) => {
+        attributes.set(path, attribute);
+      });
+    this.#byPath = KeyedIndex.of([...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute]));
+  }
+  static of(declarations) {
+    return new IntermediateRepresentationAttributeCatalog(declarations);
+  }
+  static parse(declarations) {
+    return parseConstruction(() => new IntermediateRepresentationAttributeCatalog(declarations));
+  }
+  diagnostics() {
+    const errors = [];
+    const encoded = new Map;
+    for (const coordinate of this.#byPath.keys()) {
+      const path = coordinate.asString();
+      const key = path.replace(/\./g, "_");
+      const prior = encoded.get(key);
+      if (prior !== undefined) {
+        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
+      } else {
+        encoded.set(key, path);
+      }
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  expressionDiagnostics(expression, where, primesAllowed) {
+    const errors = [];
+    ExpressionTree.of(expression).inspectTerms({
+      reference: (path, primed) => {
+        if (!this.#byPath.has(AttributePath.of(path)))
+          errors.push(`${where}: unresolvable reference "${path}"`);
+        if (primed && !primesAllowed)
+          errors.push(`${where}: primed reference "${path}" is only legal in event effects and event-scenario expectations`);
+      },
+      enumLiteral: (value) => {
+        if (![...this.#byPath.values()].some((attribute) => attribute.admitsEnumLiteral(value)))
+          errors.push(`${where}: enum literal "${value}" is not a value of any declared enum attribute`);
+      }
+    });
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  bindingDiagnostics(bindings, context) {
+    const errors = [];
+    for (const binding of bindings) {
+      const path = binding.path().asString();
+      const attribute = this.#byPath.get(AttributePath.of(path));
+      if (!attribute)
+        errors.push(`${context}: binding for unknown attribute "${path}"`);
+      else if (!attribute.fitsBinding(binding.value()))
+        errors.push(`${context}: binding value ${binding.value().describe()} does not fit ${attribute.kindLabel()} attribute "${path}"`);
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+}
+
 // src/requirements/domain/intermediate-representation-model-declaration.ts
 class IntermediateRepresentationModelDeclaration {
   #entities;
@@ -2271,55 +2395,21 @@ class IntermediateRepresentationModelDeclaration {
   static of(seed) {
     return new IntermediateRepresentationModelDeclaration(seed);
   }
-  wellFormednessErrors() {
+  diagnostics() {
     const errors = [];
-    const attrTypes = new Map;
-    const entityNames = new Set;
-    for (const ent of this.#entities) {
-      const entName = ent.name().asString();
-      if (entityNames.has(entName))
-        errors.push(`schema: duplicate entity "${entName}"`);
-      entityNames.add(entName);
-      ent.inspectAttributes((coord, attr, duplicated) => {
-        if (duplicated) {
-          errors.push(`schema: duplicate attribute "${coord}"`);
-        }
-        if (attr.boundsInverted()) {
-          errors.push(`schema: ${coord}: min > max`);
-        }
-        if (attr.boundsOutsideSafeRange()) {
-          errors.push(`schema: ${coord}: bounds must be safe integers`);
-        }
-        attrTypes.set(coord, attr);
-      });
-    }
-    const encoded = new Map;
-    for (const path of attrTypes.keys()) {
-      const key = path.replace(/\./g, "_");
-      const prior = encoded.get(key);
-      if (prior !== undefined) {
-        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
-      } else {
-        encoded.set(key, path);
-      }
-    }
-    const checkExpr = (e, where, primesAllowed) => {
-      ExpressionTree.of(e).walk((node) => {
-        if (node.op === "ref" && typeof node.path === "string") {
-          if (!attrTypes.has(node.path)) {
-            errors.push(`${where}: unresolvable reference "${node.path}"`);
-          }
-          if (node.prime === true && !primesAllowed) {
-            errors.push(`${where}: primed reference "${node.path}" is only legal in event effects and event-scenario expectations`);
-          }
-        }
-        if (node.op === "enum" && typeof node.value === "string") {
-          const known = [...attrTypes.values()].some((t) => t.admitsEnumLiteral(node.value));
-          if (!known) {
-            errors.push(`${where}: enum literal "${node.value}" is not a value of any declared enum attribute`);
-          }
-        }
-      });
+    for (const message of this.#entities.diagnostics())
+      errors.push(message.asString());
+    const parsed = IntermediateRepresentationAttributeCatalog.parse(this.#entities);
+    const catalog = parsed.ok ? parsed.value : null;
+    if (!parsed.ok && parsed.error.kind !== "ambiguous-requirement-attributes")
+      errors.push(`schema: attribute catalog: ${parsed.error.kind}`);
+    if (catalog !== null)
+      for (const message of catalog.diagnostics())
+        errors.push(message.asString());
+    const checkExpr = (expression, where, primesAllowed) => {
+      if (catalog !== null)
+        for (const message of catalog.expressionDiagnostics(expression, where, primesAllowed))
+          errors.push(message.asString());
     };
     const seenIds = new Set;
     const dupCheck = (id, where) => {
@@ -2335,18 +2425,9 @@ class IntermediateRepresentationModelDeclaration {
     for (const sc of this.#scenarios) {
       const where = `scenario ${sc.id().asString()}`;
       dupCheck(sc.id().asString(), where);
-      for (const binding of sc.bindings()) {
-        const path = binding.path();
-        const val = binding.value();
-        const t = attrTypes.get(path.asString());
-        if (!t) {
-          errors.push(`${where}: binding for unknown attribute "${path.asString()}"`);
-          continue;
-        }
-        if (!t.fitsBinding(val)) {
-          errors.push(`${where}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`);
-        }
-      }
+      if (catalog !== null)
+        for (const message of catalog.bindingDiagnostics(sc.bindings(), where))
+          errors.push(message.asString());
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
     }
     for (const bg of this.#background) {
@@ -2354,7 +2435,7 @@ class IntermediateRepresentationModelDeclaration {
       dupCheck(bg.id().asString(), where);
       bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
     }
-    return errors;
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 }
 // src/requirements/domain/intermediate-representation-obligation-declaration.ts
@@ -2525,8 +2606,8 @@ class RequirementsSourceValidation {
     return ValidationAssessment.of(ErrorMessages.collect(this.#diagnostics(source)));
   }
   *#diagnostics(source) {
-    for (const message of this.#view.wellFormednessErrors())
-      yield ErrorMessage.parse(message);
+    for (const message of this.#view.diagnostics())
+      yield ok(message);
     if (source === null) {
       yield ErrorMessage.parse("requirements.md not found under this intent record \u2014 frRefs cannot be reverse-verified");
     } else {

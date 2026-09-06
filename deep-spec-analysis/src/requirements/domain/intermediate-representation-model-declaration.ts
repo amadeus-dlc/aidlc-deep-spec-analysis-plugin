@@ -10,8 +10,8 @@
 // ときの黙殺条件（isObject / typeof チェック）はパーサ側へ移り、ここに来る
 // 時点で型は確定している。
 
-import { type Expression, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
-import type { IntermediateRepresentationAttributeDeclaration } from "./intermediate-representation-attribute-declaration.ts";
+import { ErrorMessage, ErrorMessages, type Expression } from "@deep-spec-analysis/kernel-domain";
+import { IntermediateRepresentationAttributeCatalog } from "./intermediate-representation-attribute-catalog.ts";
 import type { IntermediateRepresentationBackgroundDeclarations } from "./intermediate-representation-background-declarations.ts";
 import type { IntermediateRepresentationEntityDeclarations } from "./intermediate-representation-entity-declarations.ts";
 import type { IntermediateRepresentationObligationDeclarations } from "./intermediate-representation-obligation-declarations.ts";
@@ -45,68 +45,18 @@ export class IntermediateRepresentationModelDeclaration {
 
   // ModelWellFormedness — スキーマを超えた意味的整合性（旧
   // modelWellFormednessErrors の逐語移植）。
-  wellFormednessErrors(): string[] {
+  diagnostics(): ErrorMessages {
     const errors: string[] = [];
-    // 主従の裁定（#71 波1）: カタログは宣言そのものを保持し、判断は宣言へ
-    // 命じる——判事は文言（凍結面）だけを所有する。
-    const attrTypes = new Map<string, IntermediateRepresentationAttributeDeclaration>();
-
-    const entityNames = new Set<string>();
-    for (const ent of this.#entities) {
-      const entName = ent.name().asString();
-      if (entityNames.has(entName)) errors.push(`schema: duplicate entity "${entName}"`);
-      entityNames.add(entName);
-      // 座標と重複はエンティティ宣言に問う（#71 波14）。
-      ent.inspectAttributes((coord, attr, duplicated) => {
-        if (duplicated) {
-          errors.push(`schema: duplicate attribute "${coord}"`);
-        }
-        if (attr.boundsInverted()) {
-          errors.push(`schema: ${coord}: min > max`);
-        }
-        if (attr.boundsOutsideSafeRange()) {
-          errors.push(`schema: ${coord}: bounds must be safe integers`);
-        }
-        attrTypes.set(coord, attr);
-      });
-    }
-
-    // SMT 変数符号化はドットを下線に潰すため、下線を含む識別子どうしで
-    // パスが衝突しうる（"a.b_c" と "a_b.c"）。衝突は検証器の変数を混線させる
-    // ので well-formedness で弾く（凍結解除 #34 項 1——特殊文字はスキーマの
-    // identifier パターンが既に締めており、衝突だけが生き残っていた）。
-    const encoded = new Map<string, string>();
-    for (const path of attrTypes.keys()) {
-      const key = path.replace(/\./g, "_");
-      const prior = encoded.get(key);
-      if (prior !== undefined) {
-        errors.push(
-          `schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`,
-        );
-      } else {
-        encoded.set(key, path);
-      }
-    }
-
-    const checkExpr = (e: Expression, where: string, primesAllowed: boolean): void => {
-      ExpressionTree.of(e).walk((node) => {
-        if (node.op === "ref" && typeof node.path === "string") {
-          if (!attrTypes.has(node.path)) {
-            errors.push(`${where}: unresolvable reference "${node.path}"`);
-          }
-          if (node.prime === true && !primesAllowed) {
-            errors.push(
-              `${where}: primed reference "${node.path}" is only legal in event effects and event-scenario expectations`,
-            );
-          }
-        }
-        if (node.op === "enum" && typeof node.value === "string") {
-          const known = [...attrTypes.values()].some((t) => t.admitsEnumLiteral(node.value as string));
-          if (!known) {
-            errors.push(`${where}: enum literal "${node.value}" is not a value of any declared enum attribute`);
-          }
-        }
-      });
+    for (const message of this.#entities.diagnostics()) errors.push(message.asString());
+    const parsed = IntermediateRepresentationAttributeCatalog.parse(this.#entities);
+    const catalog = parsed.ok ? parsed.value : null;
+    if (!parsed.ok && parsed.error.kind !== "ambiguous-requirement-attributes")
+      errors.push(`schema: attribute catalog: ${parsed.error.kind}`);
+    if (catalog !== null) for (const message of catalog.diagnostics()) errors.push(message.asString());
+    const checkExpr = (expression: Expression, where: string, primesAllowed: boolean): void => {
+      if (catalog !== null)
+        for (const message of catalog.expressionDiagnostics(expression, where, primesAllowed))
+          errors.push(message.asString());
     };
 
     const seenIds = new Set<string>();
@@ -124,20 +74,8 @@ export class IntermediateRepresentationModelDeclaration {
     for (const sc of this.#scenarios) {
       const where = `scenario ${sc.id().asString()}`;
       dupCheck(sc.id().asString(), where);
-      for (const binding of sc.bindings()) {
-        const path = binding.path();
-        const val = binding.value();
-        const t = attrTypes.get(path.asString());
-        if (!t) {
-          errors.push(`${where}: binding for unknown attribute "${path.asString()}"`);
-          continue;
-        }
-        if (!t.fitsBinding(val)) {
-          errors.push(
-            `${where}: binding value ${val.describe()} does not fit ${t.kindLabel()} attribute "${path.asString()}"`,
-          );
-        }
-      }
+      if (catalog !== null)
+        for (const message of catalog.bindingDiagnostics(sc.bindings(), where)) errors.push(message.asString());
       sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
     }
 
@@ -147,6 +85,6 @@ export class IntermediateRepresentationModelDeclaration {
       bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
     }
 
-    return errors;
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 }

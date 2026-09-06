@@ -2,6 +2,7 @@ import {
   BusinessRuleReference,
   BusinessRuleReferences,
   CheckedUnits,
+  DesignAttributeCatalog,
   DesignAttributeDeclaration,
   DesignAttributeDeclarations,
   DesignAttributeName,
@@ -286,7 +287,7 @@ function unit(seed: {
 }): DesignUnit {
   return DesignUnit.of({
     unit: seed.unit ?? "u1",
-    entities: entitiesOf(seed.rawEntities ?? [], seed.attrPaths ?? new Set<string>()),
+    catalog: DesignAttributeCatalog.of(entitiesOf(seed.rawEntities ?? [], seed.attrPaths ?? new Set<string>())),
     obligations: DesignObligations.of(
       (seed.obligations ?? []).map((o) =>
         DesignObligation.of({

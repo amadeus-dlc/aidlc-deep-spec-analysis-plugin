@@ -71,6 +71,24 @@ export class ExpressionTree {
     go(this.#root);
   }
 
+  inspectTerms(handlers: {
+    reference: (path: string, primed: boolean) => void;
+    enumLiteral: (value: string, comparedAttribute: string | undefined) => void;
+  }): void {
+    const compared = new Map<Expression, string>();
+    this.walk((node) => {
+      const args = node.args ?? [];
+      if (args.length !== 2) return;
+      const reference = args.find((arg) => arg.op === "ref" && typeof arg.path === "string");
+      const literal = args.find((arg) => arg.op === "enum");
+      if (reference?.path !== undefined && literal !== undefined) compared.set(literal, reference.path);
+    });
+    this.walk((node) => {
+      if (node.op === "ref" && typeof node.path === "string") handlers.reference(node.path, node.prime === true);
+      if (node.op === "enum" && typeof node.value === "string") handlers.enumLiteral(node.value, compared.get(node));
+    });
+  }
+
   // prime 参照（`x'`）をどこかに含むか。
   usesPrime(): boolean {
     let found = false;

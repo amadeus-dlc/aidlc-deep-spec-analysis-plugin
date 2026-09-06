@@ -27,8 +27,8 @@ import { type ParseError, parseConstruction, type Result } from "@deep-spec-anal
 // 合成不変量はトートロジーなので、大域・gap・シナリオの判定を変えない。
 // OB-n / SC-n / BG-n の採番・整列順は文書バイト（子の処理順）に効く凍結面。
 
-import { AttributePaths } from "./attribute-paths.ts";
-import type { DesignAttributeDeclaration } from "./design-attribute-declaration.ts";
+import type { AttributePaths } from "./attribute-paths.ts";
+import type { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 import type { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
 import type { DesignEntityDeclarations } from "./design-entity-declarations.ts";
 import type { DesignMachine } from "./design-machine.ts";
@@ -54,7 +54,7 @@ import { LoweringIndex } from "./lowering-index.ts";
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignUnitParam = {
   readonly unit: string;
-  readonly entities: DesignEntityDeclarations;
+  readonly catalog: DesignAttributeCatalog;
   readonly obligations: DesignObligations;
   readonly machines: DesignMachines;
   readonly scenarios: DesignScenarios;
@@ -64,8 +64,7 @@ type DesignUnitParam = {
 export class DesignUnit {
   readonly #unit: UnitName;
   // 契約3 の実体宣言（型付き）。属性座標と enum 宣言値はここから答える。
-  readonly #entities: DesignEntityDeclarations;
-  readonly #attrPaths: AttributePaths;
+  readonly #catalog: DesignAttributeCatalog;
   readonly #obligations: DesignObligations;
   readonly #machines: DesignMachines;
   readonly #scenarios: DesignScenarios;
@@ -73,13 +72,7 @@ export class DesignUnit {
 
   private constructor(seed: DesignUnitParam) {
     this.#unit = UnitName.of(seed.unit);
-    this.#entities = seed.entities;
-    // 属性座標（`Entity.attr`）は宣言から導く——一意化し宣言順（凍結挙動）。
-    const coordinates = new Set<string>();
-    for (const ent of seed.entities) {
-      for (const attr of ent.attributes()) coordinates.add(`${ent.name().asString()}.${attr.name().asString()}`);
-    }
-    this.#attrPaths = AttributePaths.of([...coordinates].map((path) => AttributePath.of(path)));
+    this.#catalog = seed.catalog;
     this.#obligations = seed.obligations;
     this.#machines = seed.machines;
     this.#scenarios = seed.scenarios;
@@ -107,11 +100,11 @@ export class DesignUnit {
   // 境界: lowering が契約1 文書の schema.entities へ逐語で埋め込む断片。
   // 境界: lowered 文書の描画と refinement の SMT 文脈（adapter）が読む。
   entities(): DesignEntityDeclarations {
-    return this.#entities;
+    return this.#catalog.declarations();
   }
 
   attrPaths(): AttributePaths {
-    return this.#attrPaths;
+    return this.#catalog.paths();
   }
 
   obligations(): DesignObligations {
@@ -291,21 +284,11 @@ export class DesignUnit {
     });
   }
 
-  // 属性座標の宣言を引く（最初に一致した宣言——凍結挙動）。
-  #attributeAt(attrPath: string): DesignAttributeDeclaration | null {
-    for (const ent of this.#entities) {
-      for (const attr of ent.attributes()) {
-        if (`${ent.name().asString()}.${attr.name().asString()}` === attrPath) return attr;
-      }
-    }
-    return null;
-  }
-
   // 属性パスの enum 宣言値——null は「属性が見つからない／enum でない」の区別
   // （空配列と混ぜない——refinement の gap 文言の分岐が異なる）。旧 refinement
   // 自由関数 designEnumValues のメソッド化（OOUI 裁定）。判定は宣言に問う。
   declaredEnumValuesOf(attrPath: string): string[] | null {
-    const values = this.#attributeAt(attrPath)?.enumStates() ?? null;
+    const values = this.#catalog.enumValuesAt(attrPath);
     return values === null ? null : values.toArray().map((member) => member.asString());
   }
 

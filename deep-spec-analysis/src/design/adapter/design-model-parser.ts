@@ -1,6 +1,7 @@
 import {
   BusinessRuleReference,
   BusinessRuleReferences,
+  DesignAttributeCatalog,
   DesignAttributeName,
   DesignBackgroundAssumption,
   DesignBackgroundAssumptions,
@@ -71,6 +72,8 @@ export function parseDesignModel(
     const schema = isObject(rawUnit.schema) ? rawUnit.schema : {};
     const entities = parseDesignEntities(schema);
     if (!entities.ok) return err(JSON.stringify(entities.error));
+    const catalog = DesignAttributeCatalog.parse(entities.value);
+    if (!catalog.ok) return err(JSON.stringify(catalog.error));
     const unit = UnitName.parse(rawUnit.unit);
     if (!unit.ok) return err(JSON.stringify(unit.error));
     const obligations: DesignObligation[] = [];
@@ -217,7 +220,7 @@ export function parseDesignModel(
     units.push(
       DesignUnit.of({
         unit: unit.value.asString(),
-        entities: entities.value,
+        catalog: catalog.value,
         obligations: DesignObligations.of(obligations),
         machines: DesignMachines.of(machines),
         scenarios: DesignScenarios.of(scenarios),

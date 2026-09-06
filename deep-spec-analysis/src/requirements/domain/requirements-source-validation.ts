@@ -5,6 +5,7 @@ import {
   ValidationAssessment,
 } from "@deep-spec-analysis/kernel-domain";
 import type { ParseError, Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { ok } from "@deep-spec-analysis/kernel-infrastructure";
 import type { FunctionalRequirementReferenceIndex } from "./functional-requirement-reference-index.ts";
 import type { IntermediateRepresentationModelDeclaration } from "./intermediate-representation-model-declaration.ts";
 import type { RequirementsSource } from "./requirements-source.ts";
@@ -39,7 +40,7 @@ export class RequirementsSourceValidation {
   }
 
   *#diagnostics(source: RequirementsSource | null): Iterable<Result<ErrorMessage, ParseError>> {
-    for (const message of this.#view.wellFormednessErrors()) yield ErrorMessage.parse(message);
+    for (const message of this.#view.diagnostics()) yield ok(message);
     if (source === null) {
       yield ErrorMessage.parse(
         "requirements.md not found under this intent record — frRefs cannot be reverse-verified",

@@ -1,4 +1,4 @@
-import { InitialState } from "@deep-spec-analysis/design-domain";
+import { DesignAttributeCatalog, InitialState } from "@deep-spec-analysis/design-domain";
 import {
   ArtifactPath,
   BackendName,
@@ -431,7 +431,7 @@ describe("design first-class collections", () => {
 
     const u = DesignUnit.of({
       unit: "u2",
-      entities: DesignEntityDeclarations.of([]),
+      catalog: DesignAttributeCatalog.of(DesignEntityDeclarations.of([])),
       obligations: DesignObligations.of([ob]),
       machines: DesignMachines.of([machine]),
       scenarios: DesignScenarios.of([]),

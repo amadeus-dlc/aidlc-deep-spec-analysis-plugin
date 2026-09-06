@@ -1,8 +1,9 @@
+import type { BusinessRuleReferences } from "./business-rule-references.ts";
 // BusinessRuleReferenceIndex — rules.md が宣言する業務規則 id の集合（brRef の逆引き
 // 検証の材料）。要素は BusinessRuleReference、内側は KeySet（裁定 3-1、2026-09-03）。
 
 import { KeySet } from "@deep-spec-analysis/kernel-domain";
-import { BusinessRuleReference } from "./business-rule-reference.ts";
+import type { BusinessRuleReference } from "./business-rule-reference.ts";
 
 export class BusinessRuleReferenceIndex {
   readonly #ids: KeySet<BusinessRuleReference>;
@@ -11,9 +12,7 @@ export class BusinessRuleReferenceIndex {
     this.#ids = ids;
   }
 
-  static fromRules(rulesMarkdown: string): BusinessRuleReferenceIndex {
-    const ids: BusinessRuleReference[] = [];
-    for (const m of rulesMarkdown.matchAll(/\bBR[0-9]+\.[0-9]+\b/g)) ids.push(BusinessRuleReference.of(m[0]));
+  static of(ids: BusinessRuleReferences): BusinessRuleReferenceIndex {
     return new BusinessRuleReferenceIndex(KeySet.of(ids));
   }
 
