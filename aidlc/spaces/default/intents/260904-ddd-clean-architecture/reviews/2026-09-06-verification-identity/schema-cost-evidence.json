@@ -1,0 +1,154 @@
+{
+  "source": "b33e6878e14652570e111815d8daaf2e4e1bf88b",
+  "command": "python3 run-schema-cost.py; per-process timeout=3 seconds",
+  "rows": [
+    {
+      "depth": 4,
+      "repetition": 1,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 4,
+          "nodes": 5,
+          "bytes": 114,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.31079200000000284
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 1.439582999999999,
+          "errors": []
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "depth": 4,
+      "repetition": 2,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 4,
+          "nodes": 5,
+          "bytes": 114,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.31854099999999974
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 1.8659999999999997,
+          "errors": []
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "depth": 8,
+      "repetition": 1,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 8,
+          "nodes": 9,
+          "bytes": 202,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.2761250000000004
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 29.328500000000002,
+          "errors": []
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "depth": 8,
+      "repetition": 2,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 8,
+          "nodes": 9,
+          "bytes": 202,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.2746249999999968
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 29.936542,
+          "errors": []
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "depth": 12,
+      "repetition": 1,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 12,
+          "nodes": 13,
+          "bytes": 290,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.2611669999999968
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 1774.0066250000002,
+          "errors": []
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "depth": 12,
+      "repetition": 2,
+      "exitCode": 0,
+      "result": [
+        {
+          "depth": 12,
+          "nodes": 13,
+          "bytes": 290,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.2113340000000008
+        },
+        {
+          "schemaAccepted": true,
+          "schemaMilliseconds": 1786.215292,
+          "errors": []
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "depth": 16,
+      "repetition": 1,
+      "timedOutSeconds": 3,
+      "result": [
+        {
+          "depth": 16,
+          "nodes": 17,
+          "bytes": 378,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.2409169999999996
+        }
+      ]
+    },
+    {
+      "depth": 16,
+      "repetition": 2,
+      "timedOutSeconds": 3,
+      "result": [
+        {
+          "depth": 16,
+          "nodes": 17,
+          "bytes": 378,
+          "expressionAccepted": true,
+          "expressionMilliseconds": 0.4082089999999994
+        }
+      ]
+    }
+  ]
+}

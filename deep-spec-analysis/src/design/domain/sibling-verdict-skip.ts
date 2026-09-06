@@ -1,4 +1,5 @@
 import { type SkipReason, TargetIdentifier, type UnitName } from "@deep-spec-analysis/kernel-domain";
+import { ok, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import { DesignSkipped } from "./design-skipped.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import type { LoweringIndex } from "./lowering-index.ts";
@@ -22,14 +23,18 @@ export class SiblingVerdictSkip {
     return new SiblingVerdictSkip(props);
   }
 
-  remap(unit: UnitName, index: LoweringIndex): DesignSkipped | null {
-    const mapped = index.resolveDesignTarget(this.#target.asString());
-    if (mapped.entry?.isSyntheticProbe()) return null;
-    return DesignSkipped.of({
-      target: TargetIdentifier.of(mapped.design),
-      reason: this.#reason,
-      unit,
-      ...(this.#detail !== undefined ? { detail: index.rewriteLoweredIds(this.#detail) } : {}),
-    });
+  remap(unit: UnitName, index: LoweringIndex): Result<DesignSkipped | null, ParseError> {
+    const resolved = index.resolveDesignTarget(this.#target);
+    if (!resolved.ok) return resolved;
+    const mapped = resolved.value;
+    if (mapped.entry?.isSyntheticProbe()) return ok(null);
+    return ok(
+      DesignSkipped.of({
+        target: TargetIdentifier.of(mapped.design.asString()),
+        reason: this.#reason,
+        unit,
+        ...(this.#detail !== undefined ? { detail: index.rewriteLoweredIds(this.#detail) } : {}),
+      }),
+    );
   }
 }

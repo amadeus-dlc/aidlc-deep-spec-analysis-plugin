@@ -6,6 +6,7 @@ import {
   TargetIdentifiers,
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
+import { type ParseError, traverseResult } from "@deep-spec-analysis/kernel-infrastructure";
 import { DesignFinding } from "./design-finding.ts";
 import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
@@ -54,8 +55,11 @@ export class SiblingVerdictFinding {
     | { kind: "unreachable"; finding: DesignFinding; target: TargetIdentifier }
     | { kind: "subsumption"; relation: RuleSubsumption }
     | { kind: "waived"; skipped: DesignSkips }
-    | { kind: "ignored" } {
-    const mapped = this.#targets.map((target) => index.resolveDesignTarget(target.asString()));
+    | { kind: "ignored" }
+    | { kind: "invalid"; error: ParseError } {
+    const resolved = traverseResult(this.#targets, (target) => index.resolveDesignTarget(target));
+    if (!resolved.ok) return { kind: "invalid", error: resolved.error };
+    const mapped = resolved.value;
     const witness = this.witnessRemappedBy((label) => index.rewriteLoweredIdTokens(label));
     const synthetic = mapped.find((target) => target.entry?.isSyntheticProbe());
     if (synthetic?.entry?.isKind("vac-dead") && this.isKind("conflict")) {
@@ -81,7 +85,7 @@ export class SiblingVerdictFinding {
     }
     if (synthetic !== undefined) return { kind: "ignored" };
     const targets = TargetIdentifiers.of(
-      mapped.map((target) => TargetIdentifier.of(target.design)),
+      mapped.map((target) => TargetIdentifier.of(target.design.asString())),
     ).sortedUniqueCanonically();
     if (this.isKind("conflict") && targets.count() > 0) {
       const machines = [...targets].map((target) => index.machineOfTransition(target.asString()));

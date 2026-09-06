@@ -9,6 +9,7 @@ import {
   DesignObligationIdentifier,
   DesignScenarioIdentifier,
   DesignTransitionIdentifier,
+  LoweredBackgrounds,
   LoweredObligations,
   LoweredScenarios,
   LoweringIndex,
@@ -245,7 +246,12 @@ describe("ID construction contracts match their schema", () => {
   }
 
   test("mixed design targets are queried through parse instead of forging a transition ID", () => {
-    const index = LoweringIndex.fromLowered(LoweredObligations.of([]), LoweredScenarios.of([]), DesignMachines.of([]));
+    const index = LoweringIndex.of(
+      LoweredObligations.of([]),
+      LoweredScenarios.of([]),
+      DesignMachines.of([]),
+      LoweredBackgrounds.of([]),
+    );
     expect(index.isTransition("DOB-1")).toBe(false);
     expect(index.machineOfTransition("DOB-1")).toBeNull();
     expect(index.attrPathOfMachine("TR-1")).toBeNull();

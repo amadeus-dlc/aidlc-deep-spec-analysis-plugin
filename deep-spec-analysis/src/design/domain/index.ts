@@ -87,6 +87,7 @@ export { EventMapping } from "./event-mapping.ts";
 export { EventMappings } from "./event-mappings.ts";
 export { InitialState } from "./initial-state.ts";
 export { InitialStates } from "./initial-states.ts";
+export { IssuedLoweredIdentifiers } from "./issued-lowered-identifiers.ts";
 export { LoweredBackground } from "./lowered-background.ts";
 export { LoweredBackgrounds } from "./lowered-backgrounds.ts";
 export { LoweredIdentifier } from "./lowered-identifier.ts";

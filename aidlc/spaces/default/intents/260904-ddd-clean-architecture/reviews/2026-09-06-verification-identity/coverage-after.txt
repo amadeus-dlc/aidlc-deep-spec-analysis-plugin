@@ -1,0 +1,7 @@
+==> head の line coverage を計測中 (/private/tmp/deep-spec-verification-identity-fix-20260906)
+head line coverage: 99.89%
+[PASS] absolute gate: head (99.89%) >= threshold (90%)
+==> base (origin/main) を一時 worktree にチェックアウト中
+==> base の line coverage を計測中 (/var/folders/3s/p2xl_vd524b4lk78cb6fz5nh0000gn/T/deep-spec-coverage-base-yLpCXH)
+base (origin/main) line coverage: 99.89%
+[PASS] relative gate: head (99.89%) >= base (99.89%) - tolerance (0.01)

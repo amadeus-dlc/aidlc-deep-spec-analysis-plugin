@@ -1,3 +1,5 @@
+const comparisonHash = ContentHash.ofText("fixture-model");
+
 import {
   ArtifactPath,
   BackendName,
@@ -798,8 +800,8 @@ describe("cross-check computation", () => {
     const scenario = [...m.scenarios()][0];
     const other = TargetIdentifier.of("SC-9");
     const comparison = ScenarioComparison.of(
-      ScenarioVerdict.clean(BackendName.of("smt"), other, null),
-      ScenarioVerdict.violated(BackendName.of("quint"), other, null),
+      ScenarioVerdict.clean(BackendName.of("smt"), comparisonHash, other, null),
+      ScenarioVerdict.violated(BackendName.of("quint"), comparisonHash, other, null),
     );
     expect(() => scenario.crossCheckFinding(comparison)).toThrow("different-cross-check-subject");
   });

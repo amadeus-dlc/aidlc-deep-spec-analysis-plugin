@@ -251,7 +251,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
       sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool",
     })),
   ];
-  const catalog = DesignEventRuleCatalog.of(u);
+  const catalog = DesignEventRuleCatalog.parse(u);
   const queries: RefinementChildQuery[] = [];
   const pending = new Map<string, RefinementProbe>();
   const compileSkips: DesignSkipped[] = [];
@@ -270,7 +270,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
   const failureMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
   const mappings = plan.attributeMappings();
-  for (const [obId, st] of plan.sortedObligationStatuses()) {
+  obligations: for (const [obId, st] of plan.sortedObligationStatuses()) {
     if (!st.isCheckable()) continue;
     const ob = req.obligationById(obId);
     if (!ob) continue;
@@ -299,6 +299,10 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
     const event = ob.eventDefinition();
     if (event !== null) {
       const mapped = plan.mappedTransitionsOf(obId);
+      if (!catalog.ok) {
+        alphaFail(obId, `design event catalog could not be constructed: ${catalog.error.kind}`);
+        continue;
+      }
       const alphaG = mappings.substitute(event.guard, false);
       if (!alphaG.ok) {
         alphaFail(obId, alphaG.error.message());
@@ -308,7 +312,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
         // enabledness：alpha(guard) は成り立つが、写像済み設計イベントが
         // ひとつも発火可能でない。
         const designGuards = mapped
-          .map((id) => catalog.eventOf(TargetIdentifier.of(id.asString())))
+          .map((id) => catalog.value.eventOf(TargetIdentifier.of(id.asString())))
           .filter((d): d is DesignEventRule => d !== null)
           .map((d) => smtOfExpr(ctx, d.guard()));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
@@ -351,7 +355,11 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
         for (const a of req.attributes().sortedByPath()) {
           if (assigned.covers(a.path())) continue;
           const eq = mappings.equalityFor(a.path().asString());
-          if (eq !== null) frameParts.push(smtOfExpr(ctx, eq));
+          if (!eq.ok) {
+            alphaFail(obId, eq.error.message());
+            continue obligations;
+          }
+          if (eq.value !== null) frameParts.push(smtOfExpr(ctx, eq.value));
         }
         const alphaF = mappings.substitute(event.effect, false);
         if (!alphaF.ok) {
@@ -361,7 +369,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
         const fBar = smtOfExpr(ctx, alphaF.value);
         const postCond = frameParts.length === 0 ? fBar : `(and ${fBar} ${frameParts.join(" ")})`;
         for (const designId of mapped) {
-          const ev = catalog.eventOf(TargetIdentifier.of(designId.asString()));
+          const ev = catalog.value.eventOf(TargetIdentifier.of(designId.asString()));
           if (!ev) continue;
           const stepParts: string[] = [smtOfExpr(ctx, ev.guard())];
           for (const attr of ctx.attrs) {

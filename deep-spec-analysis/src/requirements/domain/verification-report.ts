@@ -228,12 +228,14 @@ export class VerificationReport {
 
   scenarioVerdictFor(target: TargetIdentifier, irHash: ContentHash): ScenarioVerdict {
     const backend = this.#id.backendName();
-    if (!this.#irHash.equals(irHash) || this.isUnavailable()) return ScenarioVerdict.unavailable(backend, target, null);
-    for (const skip of this.#skipped) if (skip.isFor(target)) return ScenarioVerdict.skipped(backend, target, null);
+    if (!this.#irHash.equals(irHash) || this.isUnavailable())
+      return ScenarioVerdict.unavailable(backend, this.#irHash, target, null);
+    for (const skip of this.#skipped)
+      if (skip.isFor(target)) return ScenarioVerdict.skipped(backend, this.#irHash, target, null);
     for (const finding of this.#findings)
       if (finding.isKind("scenario-violation") && finding.implicates(target))
-        return ScenarioVerdict.violated(backend, target, null);
-    return ScenarioVerdict.clean(backend, target, null);
+        return ScenarioVerdict.violated(backend, this.#irHash, target, null);
+    return ScenarioVerdict.clean(backend, this.#irHash, target, null);
   }
 
   id(): VerificationReportIdentifier {

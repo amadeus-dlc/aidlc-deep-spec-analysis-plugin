@@ -75,10 +75,15 @@ export function parseFindingsValues(raw: Json) {
         : traverseResult(doc.crossChecked, (entry) => {
             const fields = combineResults({
               backend: BackendName.parse(entry.backend),
+              unit: entry.unit === undefined ? ok(undefined) : UnitName.parse(entry.unit),
               targets: traverseResult(entry.targets, TargetIdentifier.parse),
             });
             if (!fields.ok) return fields;
-            return ok({ backend: fields.value.backend, targets: TargetIdentifiers.of(fields.value.targets) });
+            return ok({
+              backend: fields.value.backend,
+              unit: fields.value.unit,
+              targets: TargetIdentifiers.of(fields.value.targets),
+            });
           }),
   });
   if (!parsed.ok) return err(JSON.stringify(parsed.error));

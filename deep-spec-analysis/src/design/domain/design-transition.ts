@@ -107,8 +107,8 @@ export class DesignTransition {
   }
 
   // compile-down された event 義務そのもの（暗黙ガード・効果つき）。
-  loweredAs(id: LoweredIdentifier, attrPath: string, machine: DesignMachine): LoweredObligation {
-    return LoweredObligation.of({
+  loweredAs(id: LoweredIdentifier, attrPath: string, machine: DesignMachine): Result<LoweredObligation, ParseError> {
+    return LoweredObligation.parse({
       id,
       origin: this.loweredOrigin(machine, AttributePath.of(attrPath)),
       nature: ObligationNature.of("event"),

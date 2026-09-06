@@ -1,0 +1,9 @@
+{
+  "pullRequest": "https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/pull/155",
+  "comment": "https://github.com/amadeus-dlc/aidlc-deep-spec-analysis-plugin/pull/155#discussion_r3942967998",
+  "author": "coderabbitai",
+  "submittedAt": "2026-09-06T04:47:05Z",
+  "claim": "crossCheckedの記録が別ユニットの同名シナリオを統合し、比較被覆を区別できない。",
+  "confirmedBy": "probe.ts / crossCheckedScopeLoss",
+  "resolutionChanged": false
+}

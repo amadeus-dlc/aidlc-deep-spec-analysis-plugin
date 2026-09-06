@@ -12,7 +12,7 @@ export interface FindingsDocument {
   unavailable?: { reason: string };
   inputs?: { artifact: string; sha256: string }[];
   checked?: string[];
-  crossChecked?: { backend: string; targets: string[] }[];
+  crossChecked?: { backend: string; unit?: string; targets: string[] }[];
 }
 
 const strings = (value: Json | undefined): boolean => Array.isArray(value) && value.every((v) => typeof v === "string");
@@ -65,7 +65,13 @@ export function decodeFindingsDocument(raw: Json): Result<FindingsDocument, stri
   if (
     raw.crossChecked !== undefined &&
     (!Array.isArray(raw.crossChecked) ||
-      !raw.crossChecked.every((c) => isObject(c) && typeof c.backend === "string" && strings(c.targets)))
+      !raw.crossChecked.every(
+        (c) =>
+          isObject(c) &&
+          typeof c.backend === "string" &&
+          (c.unit === undefined || typeof c.unit === "string") &&
+          strings(c.targets),
+      ))
   ) {
     return err("crossChecked must be an array of backend comparisons");
   }

@@ -1,3 +1,5 @@
+const comparisonHash = ContentHash.ofText("fixture-model");
+
 import {
   BusinessRuleReference,
   BusinessRuleReferences,
@@ -80,8 +82,8 @@ import {
   UnitName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
-
 import { scenarioBindings } from "./binding-fixtures.ts";
+import { requireSuccess } from "./result-fixtures.ts";
 
 // レイヤード design パイプラインの in-process 検証（PR5、#18）。
 //
@@ -184,7 +186,7 @@ describe("in-process golden equivalence (domain/adapter chain over real v1 sibli
           VerificationMethod.of(backend === "smt" ? "exhaustive" : "simulation"),
         );
         for (const unit of model) {
-          const lowered = unit.lowered({ synthetics: backend === "smt" });
+          const lowered = requireSuccess(unit.lowered({ synthetics: backend === "smt" }));
           const run = sibling.runLowered(backend, unit, lowered, 55_000);
           expect(run.isBackendUnavailable()).toBe(false);
           expect(run.canInspectReachability()).toBe(true);
@@ -425,7 +427,7 @@ describe("lowering (typed compile-down)", () => {
   });
 
   test("numbering, maps, and the implicit machine encoding are stable", () => {
-    const low = machineUnit.lowered({ synthetics: false });
+    const low = requireSuccess(machineUnit.lowered({ synthetics: false }));
     // 義務は id の正準順（DOB-1 が DOB-2 の前）→ OB-1=DOB-1(event)、
     // OB-2=DOB-2(invariant)、以後 TR-1/TR-2/ignore。
     expect(
@@ -442,7 +444,9 @@ describe("lowering (typed compile-down)", () => {
       "SM-1",
       "ignore",
     ]);
-    expect(low.index().resolveDesignTarget("SC-1").design).toBe("DSC-1");
+    expect(requireSuccess(low.index().resolveDesignTarget(LoweredIdentifier.of("SC-1"))).design.asString()).toBe(
+      "DSC-1",
+    );
     expect(low.background().toArray()[0]?.id().asString()).toBe("BG-1");
     expect(low.index().attrPathOfMachine("SM-1")).toBe("Ticket.status");
     expect(low.index().machineOfTransition("TR-1")?.id().asString()).toBe("SM-1");
@@ -458,7 +462,7 @@ describe("lowering (typed compile-down)", () => {
   });
 
   test("synthetics add one vac-dead per candidate and shadow pairs for canonically equal effects", () => {
-    const low = machineUnit.lowered({ synthetics: true });
+    const low = requireSuccess(machineUnit.lowered({ synthetics: true }));
     const kinds = low
       .index()
       .toOriginEntries()
@@ -514,11 +518,15 @@ describe("lowering (typed compile-down)", () => {
         { id: "DBG-1", assert: { op: "bool", value: false } },
       ],
     });
-    const low = multi.lowered({ synthetics: false });
+    const low = requireSuccess(multi.lowered({ synthetics: false }));
     // ignores は state/trigger 文字列順（x が y の前）、機械は id 順。
     expect(["SM-1", "SM-2"].map((id) => low.index().attrPathOfMachine(id))).toEqual(["T.a", "T.b"]);
-    expect(low.index().resolveDesignTarget("SC-1").design).toBe("DSC-1");
-    expect(low.index().resolveDesignTarget("SC-2").design).toBe("DSC-2");
+    expect(requireSuccess(low.index().resolveDesignTarget(LoweredIdentifier.of("SC-1"))).design.asString()).toBe(
+      "DSC-1",
+    );
+    expect(requireSuccess(low.index().resolveDesignTarget(LoweredIdentifier.of("SC-2"))).design.asString()).toBe(
+      "DSC-2",
+    );
     expect(
       low
         .background()
@@ -610,7 +618,7 @@ describe("remap (design vocabulary attribution)", () => {
     ],
     scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: [], bindings: scenarioBindings({}) }],
   });
-  const low = u.lowered({ synthetics: true });
+  const low = requireSuccess(u.lowered({ synthetics: true }));
   const doc = (input: {
     findings?: { kind: string; frRefs: string[]; targets: string[]; witness: Json; detail: string }[];
     skipped?: { target: string; reason: string; detail?: string }[];
@@ -1049,7 +1057,7 @@ describe("report ordering, cross-check, and degradations", () => {
 
 describe("lowered collections and the lowering index (first-class operations)", () => {
   const u = unit({});
-  const base = u.lowered({ synthetics: false });
+  const base = requireSuccess(u.lowered({ synthetics: false }));
 
   test("of/add/iterator/count/toArray hold OB/SC/BG numbering order", () => {
     const obs = base.obligations().add(
@@ -1325,8 +1333,8 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
     ],
   });
 
-  const plain = fr6.lowered({ synthetics: false });
-  const synth = fr6.lowered({ synthetics: true });
+  const plain = requireSuccess(fr6.lowered({ synthetics: false }));
+  const synth = requireSuccess(fr6.lowered({ synthetics: true }));
 
   const siblingDoc = (input: {
     findings?: { kind: string; frRefs: string[]; targets: string[]; witness: Json; detail: string }[];
@@ -1553,8 +1561,8 @@ test("設計クロスチェックは同じシナリオIDをユニットごとに
   expect(duplicate.isUnavailable()).toBe(true);
   expect(duplicate.findingsCount()).toBe(0);
   const comparison = ScenarioComparison.of(
-    ScenarioVerdict.clean(BackendName.of("a"), TargetIdentifier.of("DSC-1"), UnitName.of("u2")),
-    ScenarioVerdict.violated(BackendName.of("b"), TargetIdentifier.of("DSC-1"), UnitName.of("u2")),
+    ScenarioVerdict.clean(BackendName.of("a"), comparisonHash, TargetIdentifier.of("DSC-1"), UnitName.of("u2")),
+    ScenarioVerdict.violated(BackendName.of("b"), comparisonHash, TargetIdentifier.of("DSC-1"), UnitName.of("u2")),
   );
   expect(() => [...first.scenarios()][0].crossCheckFinding(UnitName.of("u1"), comparison)).toThrow(
     "different-cross-check-subject",
