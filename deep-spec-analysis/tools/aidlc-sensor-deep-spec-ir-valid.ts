@@ -1306,6 +1306,45 @@ class ScenarioBindings {
     return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
   }
 }
+// src/kernel/domain/scenario-comparison.ts
+class ScenarioComparison {
+  #first;
+  #second;
+  constructor(first, second) {
+    if (!first.sameSubjectAs(second))
+      throw new IllegalArgumentException({ kind: "different-comparison-subjects" });
+    if (!first.isComparable() || !second.isComparable())
+      throw new IllegalArgumentException({ kind: "uncomparable-scenario-verdict" });
+    if (first.backend().equals(second.backend()))
+      throw new IllegalArgumentException({ kind: "same-comparison-backend" });
+    this.#first = first;
+    this.#second = second;
+  }
+  static of(first, second) {
+    return new ScenarioComparison(first, second);
+  }
+  static parse(first, second) {
+    return parseConstruction(() => new ScenarioComparison(first, second));
+  }
+  isFor(target, unit) {
+    return this.#first.isFor(target, unit);
+  }
+  disagrees() {
+    return !this.#first.agreesWith(this.#second);
+  }
+  backends() {
+    return [this.#first.backend(), this.#second.backend()];
+  }
+  description() {
+    return `Backends "${this.#first.backend().asString()}" and "${this.#second.backend().asString()}"`;
+  }
+  toVerdictTable() {
+    return Object.fromEntries([
+      [this.#first.backend().asString(), this.#first.verdictLabel()],
+      [this.#second.backend().asString(), this.#second.verdictLabel()]
+    ]);
+  }
+}
 // src/kernel/domain/scenario-expectation.ts
 class ScenarioExpectation {
   #kind;
@@ -1333,6 +1372,86 @@ class ScenarioExpectation {
   }
   asString() {
     return this.#kind;
+  }
+}
+// src/kernel/domain/scenario-verdict.ts
+class ScenarioVerdict {
+  #backend;
+  #state;
+  #target;
+  #unit;
+  constructor(backend, target, unit, state) {
+    this.#backend = backend;
+    this.#state = state;
+    this.#target = target;
+    this.#unit = unit;
+  }
+  static clean(backend, target, unit) {
+    return new ScenarioVerdict(backend, target, unit, "clean");
+  }
+  static violated(backend, target, unit) {
+    return new ScenarioVerdict(backend, target, unit, "violated");
+  }
+  static skipped(backend, target, unit) {
+    return new ScenarioVerdict(backend, target, unit, "skipped");
+  }
+  static unavailable(backend, target, unit) {
+    return new ScenarioVerdict(backend, target, unit, "unavailable");
+  }
+  backend() {
+    return this.#backend;
+  }
+  isComparable() {
+    return this.#state === "clean" || this.#state === "violated";
+  }
+  isFor(target, unit) {
+    return this.#target.equals(target) && (this.#unit === null ? unit === null : unit !== null && this.#unit.equals(unit));
+  }
+  sameSubjectAs(other) {
+    return this.isFor(other.#target, other.#unit);
+  }
+  agreesWith(other) {
+    return this.#state === other.#state;
+  }
+  verdictLabel() {
+    if (this.#state !== "clean" && this.#state !== "violated")
+      throw new Error("defect: an unverified scenario has no verdict label");
+    return this.#state;
+  }
+}
+// src/kernel/domain/scenario-verdicts.ts
+class ScenarioVerdicts {
+  #values;
+  constructor(values) {
+    if (values.length > 128)
+      throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: values.length });
+    const snapshot = [];
+    for (const value of values) {
+      if (snapshot.length === 128)
+        throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: snapshot.length + 1 });
+      snapshot.push(value);
+    }
+    if (snapshot.some((value) => !value.sameSubjectAs(snapshot[0])))
+      throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
+    const comparable = snapshot.filter((value) => value.isComparable());
+    if (KeySet.of(comparable.map((value) => value.backend())).size() !== comparable.length)
+      throw new IllegalArgumentException({ kind: "duplicate-scenario-backend" });
+    this.#values = [...comparable];
+  }
+  static of(values) {
+    return new ScenarioVerdicts(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ScenarioVerdicts(values));
+  }
+  *comparisons() {
+    for (let i = 0;i < this.#values.length; i++)
+      for (let j = i + 1;j < this.#values.length; j++) {
+        const comparison = ScenarioComparison.parse(this.#values[i], this.#values[j]);
+        if (!comparison.ok)
+          throw new Error(`defect: validated scenario verdicts cannot be compared (${comparison.error.kind})`);
+        yield comparison.value;
+      }
   }
 }
 // src/kernel/domain/skip-reason.ts
@@ -2261,15 +2380,16 @@ class IntermediateRepresentationBackgroundDeclaration {
   static of(props) {
     return new IntermediateRepresentationBackgroundDeclaration(props);
   }
+  diagnostics(catalog) {
+    const context = `background ${this.#id.asString()}`;
+    const errors = [];
+    if (this.#assert !== undefined)
+      for (const message of catalog.expressionDiagnostics(this.#assert, context, false))
+        errors.push(message.asString());
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
   id() {
     return this.#id;
-  }
-  assertion() {
-    return this.#assert;
-  }
-  inspectExpressions(visitor) {
-    if (this.#assert !== undefined)
-      visitor(this.#assert, false);
   }
 }
 // src/requirements/domain/intermediate-representation-background-declarations.ts
@@ -2418,11 +2538,6 @@ class IntermediateRepresentationModelDeclaration {
     if (catalog !== null)
       for (const message of catalog.diagnostics())
         errors.push(message.asString());
-    const checkExpr = (expression, where, primesAllowed) => {
-      if (catalog !== null)
-        for (const message of catalog.expressionDiagnostics(expression, where, primesAllowed))
-          errors.push(message.asString());
-    };
     const seenIds = new Set;
     const dupCheck = (id, where) => {
       if (seenIds.has(id))
@@ -2432,20 +2547,23 @@ class IntermediateRepresentationModelDeclaration {
     for (const ob of this.#obligations) {
       const where = `obligation ${ob.id().asString()}`;
       dupCheck(ob.id().asString(), where);
-      ob.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
+      if (catalog !== null)
+        for (const message of ob.diagnostics(catalog))
+          errors.push(message.asString());
     }
     for (const sc of this.#scenarios) {
       const where = `scenario ${sc.id().asString()}`;
       dupCheck(sc.id().asString(), where);
       if (catalog !== null)
-        for (const message of catalog.bindingDiagnostics(sc.bindings(), where))
+        for (const message of sc.diagnostics(catalog))
           errors.push(message.asString());
-      sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
     }
     for (const bg of this.#background) {
       const where = `background ${bg.id().asString()}`;
       dupCheck(bg.id().asString(), where);
-      bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, where, primesAllowed));
+      if (catalog !== null)
+        for (const message of bg.diagnostics(catalog))
+          errors.push(message.asString());
     }
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
@@ -2470,10 +2588,19 @@ class IntermediateRepresentationObligationDeclaration {
   static of(props) {
     return new IntermediateRepresentationObligationDeclaration(props);
   }
+  diagnostics(catalog) {
+    const context = `obligation ${this.#id.asString()}`;
+    const errors = [];
+    this.#inspectExpressions((expression, primesAllowed) => {
+      for (const message of catalog.expressionDiagnostics(expression, context, primesAllowed))
+        errors.push(message.asString());
+    });
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
   id() {
     return this.#id;
   }
-  inspectExpressions(visitor) {
+  #inspectExpressions(visitor) {
     if (this.#assert !== undefined)
       visitor(this.#assert, false);
     if (this.#guard !== undefined)
@@ -2520,15 +2647,18 @@ class IntermediateRepresentationScenarioDeclaration {
   static of(props) {
     return new IntermediateRepresentationScenarioDeclaration(props);
   }
+  diagnostics(catalog) {
+    const context = `scenario ${this.#id.asString()}`;
+    const errors = [];
+    for (const message of catalog.bindingDiagnostics(this.#bindings, context))
+      errors.push(message.asString());
+    if (this.#expect !== undefined)
+      for (const message of catalog.expressionDiagnostics(this.#expect, context, this.#hasEvent))
+        errors.push(message.asString());
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
   id() {
     return this.#id;
-  }
-  bindings() {
-    return this.#bindings;
-  }
-  inspectExpectation(visitor) {
-    if (this.#expect !== undefined)
-      visitor(this.#expect, this.#hasEvent);
   }
 }
 // src/requirements/domain/intermediate-representation-scenario-declarations.ts
@@ -2865,6 +2995,18 @@ class VerificationReport {
       crossChecked: null,
       unavailableReason: reason
     });
+  }
+  scenarioVerdictFor(target, irHash) {
+    const backend = this.#id.backendName();
+    if (!this.#irHash.equals(irHash) || this.isUnavailable())
+      return ScenarioVerdict.unavailable(backend, target, null);
+    for (const skip of this.#skipped)
+      if (skip.isFor(target))
+        return ScenarioVerdict.skipped(backend, target, null);
+    for (const finding of this.#findings)
+      if (finding.isKind("scenario-violation") && finding.implicates(target))
+        return ScenarioVerdict.violated(backend, target, null);
+    return ScenarioVerdict.clean(backend, target, null);
   }
   id() {
     return this.#id;
@@ -4229,6 +4371,19 @@ class Scenario {
   static of(props) {
     return new Scenario(props);
   }
+  crossCheckFinding(comparison) {
+    if (!comparison.isFor(this.#id.asTargetId(), null))
+      throw new IllegalArgumentException({ kind: "different-cross-check-subject" });
+    if (!comparison.disagrees())
+      return null;
+    return VerificationFinding.of({
+      kind: FindingKind.crossCheckDisagreement(),
+      functionalRequirementReferences: this.#functionalRequirementReferences.sortedUnique(),
+      targets: TargetIdentifiers.of([this.#id.asTargetId()]),
+      witness: VerificationWitness.verdicts(comparison.toVerdictTable()),
+      detail: `${comparison.description()} disagree on scenario ${this.#id.asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`
+    });
+  }
   id() {
     return this.#id;
   }
@@ -4440,49 +4595,34 @@ class VerificationReports {
     return this.#values;
   }
   crossChecked(id, model, irHash) {
-    const docs = this.toArray().filter((s) => s.irHash().equals(irHash) && !s.isUnavailable()).map((s) => ({
-      backend: s.id().backendName().asString(),
-      findings: s.findings().toArray(),
-      skippedTargets: new Set(s.skipped().toArray().map((e) => e.target().asString()))
-    }));
-    const scenarioById = new Map(model.scenarios().toArray().map((s) => [s.id().asString(), s]));
     const findings = [];
-    const comparedByBackend = new Map;
-    for (let i = 0;i < docs.length; i++) {
-      for (let j = i + 1;j < docs.length; j++) {
-        const a = docs[i];
-        const b = docs[j];
-        if (!a || !b)
-          continue;
-        for (const sc of model.scenarios()) {
-          if (a.skippedTargets.has(sc.id().asString()) || b.skippedTargets.has(sc.id().asString()))
-            continue;
-          const va = a.findings.some((f) => f.isKind("scenario-violation") && f.implicates(sc.id().asTargetId()));
-          const vb = b.findings.some((f) => f.isKind("scenario-violation") && f.implicates(sc.id().asTargetId()));
-          (comparedByBackend.get(a.backend) ?? comparedByBackend.set(a.backend, new Set).get(a.backend))?.add(sc.id().asString());
-          (comparedByBackend.get(b.backend) ?? comparedByBackend.set(b.backend, new Set).get(b.backend))?.add(sc.id().asString());
-          if (va !== vb) {
-            const verdicts = {};
-            verdicts[a.backend] = va ? "violated" : "clean";
-            verdicts[b.backend] = vb ? "violated" : "clean";
-            findings.push(VerificationFinding.of({
-              kind: FindingKind.crossCheckDisagreement(),
-              functionalRequirementReferences: FunctionalRequirementReferences.of([
-                ...scenarioById.get(sc.id().asString())?.functionalRequirementReferences().toArray() ?? []
-              ]).sortedUnique(),
-              targets: TargetIdentifiers.of([sc.id().asTargetId()]),
-              witness: VerificationWitness.verdicts(verdicts),
-              detail: `Backends "${a.backend}" and "${b.backend}" disagree on scenario ${sc.id().asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`
-            }));
-          }
+    let compared = KeyedIndex.empty();
+    let failure = null;
+    for (const scenario of model.scenarios()) {
+      const target = scenario.id().asTargetId();
+      const verdicts = ScenarioVerdicts.parse(this.#values.map((report2) => report2.scenarioVerdictFor(target, irHash)));
+      if (!verdicts.ok) {
+        failure = verdicts.error;
+        break;
+      }
+      for (const comparison of verdicts.value.comparisons()) {
+        for (const backend of comparison.backends()) {
+          const targets = compared.get(backend);
+          if (targets === undefined)
+            compared = compared.with(backend, [target]);
+          else
+            targets.push(target);
         }
+        const finding = scenario.crossCheckFinding(comparison);
+        if (finding !== null)
+          findings.push(finding);
       }
     }
-    const crossChecked = [...comparedByBackend.entries()].map(([backend, targets]) => CrossCheckedEntry.of({
-      backend: BackendName.of(backend),
-      targets: TargetIdentifiers.of(Array.from([...targets], (raw) => TargetIdentifier.of(raw))).sortedCanonically()
-    })).sort((x, y) => x.compareByBackend(y));
-    return VerificationReport.compose({
+    const crossChecked = [...compared].map(([backend, targets]) => CrossCheckedEntry.of({
+      backend,
+      targets: TargetIdentifiers.of(targets).sortedUniqueCanonically()
+    })).sort((a, b) => a.compareByBackend(b));
+    const report = VerificationReport.compose({
       id,
       irVersion: model.irVersion(),
       irHash,
@@ -4491,6 +4631,7 @@ class VerificationReports {
       skipped: VerificationSkips.of([]),
       crossChecked: CrossCheckedEntries.of(crossChecked)
     });
+    return failure === null ? report : report.degraded(`scenario cross-check could not be constructed: ${failure.kind}`);
   }
 }
 

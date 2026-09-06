@@ -1,0 +1,50 @@
+{
+  "source": "76f83b5c71c510bc3b3f545dc0cd29fe9e617e95",
+  "checks": {
+    "biome": {
+      "exitCode": 0,
+      "files": 615
+    },
+    "typecheck": {
+      "exitCode": 0
+    },
+    "usecaseBoundaryLint": {
+      "exitCode": 0,
+      "files": 60,
+      "violations": 0
+    },
+    "generatedTools": {
+      "exitCode": 0,
+      "files": 14
+    },
+    "coverage": {
+      "exitCode": 0,
+      "command": "bun scripts/coverage.ts --base origin/main",
+      "headPercent": 99.89,
+      "basePercent": 99.89,
+      "base": "67c8736afee7706ca7b7fc6a5779a13d0efd65c0",
+      "tolerance": 0.01,
+      "fullSuiteSucceeded": true
+    },
+    "pluginValidation": {
+      "exitCode": 0,
+      "errors": 0,
+      "warnings": [
+        "compose hook is injected by build (既定動作)"
+      ]
+    },
+    "harnessBuilds": {
+      "exitCode": 0,
+      "harnesses": [
+        "claude",
+        "codex",
+        "copilot",
+        "cursor",
+        "kiro",
+        "kiro-ide",
+        "opencode"
+      ]
+    }
+  },
+  "note": "coverageコマンド内で最終ソースの全テストを実行し、終了コード0を確認。テスト件数は出力しないためここでは計上しない。以前の979成功ログは最終変更前の履歴であり、最終件数には流用しない。"
+}

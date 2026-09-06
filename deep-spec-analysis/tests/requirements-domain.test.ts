@@ -9,6 +9,10 @@ import {
   TargetIdentifiers,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
+import {
+  IntermediateRepresentationAttributeCatalog,
+  IntermediateRepresentationEntityDeclarations,
+} from "@deep-spec-analysis/requirements-domain";
 import { scenarioBindings } from "./binding-fixtures.ts";
 
 // requirements/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
@@ -214,22 +218,20 @@ describe("scenario", () => {
 });
 
 describe("ir background decl", () => {
-  test("inspectExpressions visits the assertion with primes forbidden, and silence when absent", () => {
-    const withAssert = IntermediateRepresentationBackgroundDeclaration.of({
+  test("背景仮定が参照先を検査し、式がない場合は診断を出さない", () => {
+    const catalog = IntermediateRepresentationAttributeCatalog.of(IntermediateRepresentationEntityDeclarations.of([]));
+    const declared = IntermediateRepresentationBackgroundDeclaration.of({
       id: BackgroundAssumptionIdentifier.of("BG-1"),
       assert: { op: "ref", path: "a.b" },
     });
-    const seen: [string, boolean][] = [];
-    withAssert.inspectExpressions((expression, primesAllowed) => seen.push([expression.op, primesAllowed]));
-    expect(seen).toEqual([["ref", false]]);
-    expect(withAssert.id().asString()).toBe("BG-1");
-    expect(withAssert.assertion()).toEqual({ op: "ref", path: "a.b" });
-
+    expect(
+      declared
+        .diagnostics(catalog)
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual(['background BG-1: unresolvable reference "a.b"']);
     const bare = IntermediateRepresentationBackgroundDeclaration.of({ id: BackgroundAssumptionIdentifier.of("BG-2") });
-    const none: unknown[] = [];
-    bare.inspectExpressions((expression, primesAllowed) => none.push([expression.op, primesAllowed]));
-    expect(none).toEqual([]);
-    expect(bare.assertion()).toBeUndefined();
+    expect(bare.diagnostics(catalog).isEmpty()).toBe(true);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
 import type { AppliesTo } from "./applies-to.ts";
+import { AttributeName } from "./attribute-name.ts";
 import type { EntityDeclaration } from "./entity-declaration.ts";
 import { EntityName } from "./entity-name.ts";
 import { FD_E1 } from "./functional-check-families.ts";
@@ -21,7 +22,7 @@ export class EntityDeclarations {
 
   private constructor(values: readonly EntityDeclaration[]) {
     this.#values = Object.freeze([...values]);
-    this.#names = KeySet.of(values.map((e) => e.name()));
+    this.#names = KeySet.of(this.#values.map((e) => e.name()));
   }
 
   static of(values: readonly EntityDeclaration[]): EntityDeclarations {
@@ -72,14 +73,17 @@ export class EntityDeclarations {
   }
 
   lifecycleOnly(): EntityDeclaration[] {
-    return this.#values.filter((e) => e.lifecycleAttr() !== null);
+    return this.#values.filter((e) => e.hasLifecycle());
   }
 
   // FD-E6: Entity / Entity.attr 形はエンティティ名の厳密照合、自由文は
   // 小文字包含の緩い照合（凍結挙動）。
   resolvesReference(reference: ReferenceTarget): boolean {
     const token = reference.entityToken();
-    if (token !== null) return this.#names.has(EntityName.of(token));
+    if (token !== null) {
+      const parsed = EntityName.parse(token);
+      return parsed.ok && this.#names.has(parsed.value);
+    }
     return this.#values.some((d) => reference.looselyMentions(d.name()));
   }
 
@@ -89,7 +93,10 @@ export class EntityDeclarations {
     if (token !== null) {
       const ent = this.#values.find((e) => e.name().asString() === token);
       const attr = target.attributeToken();
-      return ent !== undefined && (attr === null || ent.attrNamed(attr) !== null);
+      if (ent === undefined) return false;
+      if (attr === null) return true;
+      const parsed = AttributeName.parse(attr);
+      return parsed.ok && ent.attrNamed(parsed.value) !== null;
     }
     return this.#values.some((e) => target.looselyMentions(e.name()));
   }

@@ -60,6 +60,7 @@ import {
 import {
   ArtifactPath,
   AttributeKind,
+  BackendName,
   ContentHash,
   type Expression,
   ExpressionTree,
@@ -69,7 +70,9 @@ import {
   IntermediateRepresentationVersion,
   ObligationNature,
   RequirementIdentifier,
+  ScenarioComparison,
   ScenarioExpectation,
+  ScenarioVerdict,
   SkipReason,
   TargetIdentifier,
   TargetIdentifiers,
@@ -1491,4 +1494,69 @@ describe("lowering and remap stay byte-identical after the ownership move (FR6)"
       ),
     ).toBe(FR6_UNAVAILABLE);
   });
+});
+
+test("設計クロスチェックは同じシナリオIDをユニットごとに区別する", () => {
+  const first = unit({
+    unit: "u1",
+    scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: ["FR-1"], bindings: scenarioBindings({}) }],
+  });
+  const second = unit({
+    unit: "u2",
+    scenarios: [{ id: "DSC-1", kind: "accept", brRefs: [], frRefs: ["FR-2"], bindings: scenarioBindings({}) }],
+  });
+  const input = model([first, second]);
+  const hash = input.irHash();
+  const report = (backend: string, findings: DesignFindings, skipped: DesignSkips) =>
+    DesignReport.compose({
+      id: DesignReportIdentifier.of(ap("/v"), backend),
+      irVersion: input.irVersion(),
+      irHash: hash,
+      method: "exhaustive",
+      findings,
+      skipped,
+    });
+  const a = report(
+    "quint",
+    DesignFindings.of([
+      DesignFinding.of({
+        kind: FindingKind.scenarioViolation(),
+        unit: UnitName.of("u1"),
+        targets: TargetIdentifiers.of([TargetIdentifier.of("DSC-1")]),
+        functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+        witness: DesignWitness.core([]),
+        detail: "fixture",
+      }),
+    ]),
+    DesignSkips.of([]),
+  );
+  const b = report(
+    "smt",
+    DesignFindings.of([]),
+    DesignSkips.of([
+      DesignSkipped.of({
+        unit: UnitName.of("u2"),
+        target: TargetIdentifier.of("DSC-1"),
+        reason: SkipReason.capability(),
+      }),
+    ]),
+  );
+  const id = DesignReportIdentifier.of(ap("/v"), "cross-check");
+  const compared = DesignReports.of([a, b]).crossChecked(id, input, hash);
+  expect(
+    compared
+      .findings()
+      .toArray()
+      .map((finding) => ({ unit: finding.unit(), references: finding.functionalRequirementReferences().toStrings() })),
+  ).toEqual([{ unit: "u1", references: ["FR-1"] }]);
+  const duplicate = DesignReports.of([a, a]).crossChecked(id, input, hash);
+  expect(duplicate.isUnavailable()).toBe(true);
+  expect(duplicate.findingsCount()).toBe(0);
+  const comparison = ScenarioComparison.of(
+    ScenarioVerdict.clean(BackendName.of("a"), TargetIdentifier.of("DSC-1"), UnitName.of("u2")),
+    ScenarioVerdict.violated(BackendName.of("b"), TargetIdentifier.of("DSC-1"), UnitName.of("u2")),
+  );
+  expect(() => [...first.scenarios()][0].crossCheckFinding(UnitName.of("u1"), comparison)).toThrow(
+    "different-cross-check-subject",
+  );
 });

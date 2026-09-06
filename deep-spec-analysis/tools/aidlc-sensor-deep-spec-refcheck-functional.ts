@@ -1306,6 +1306,45 @@ class ScenarioBindings {
     return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
   }
 }
+// src/kernel/domain/scenario-comparison.ts
+class ScenarioComparison {
+  #first;
+  #second;
+  constructor(first, second) {
+    if (!first.sameSubjectAs(second))
+      throw new IllegalArgumentException({ kind: "different-comparison-subjects" });
+    if (!first.isComparable() || !second.isComparable())
+      throw new IllegalArgumentException({ kind: "uncomparable-scenario-verdict" });
+    if (first.backend().equals(second.backend()))
+      throw new IllegalArgumentException({ kind: "same-comparison-backend" });
+    this.#first = first;
+    this.#second = second;
+  }
+  static of(first, second) {
+    return new ScenarioComparison(first, second);
+  }
+  static parse(first, second) {
+    return parseConstruction(() => new ScenarioComparison(first, second));
+  }
+  isFor(target, unit) {
+    return this.#first.isFor(target, unit);
+  }
+  disagrees() {
+    return !this.#first.agreesWith(this.#second);
+  }
+  backends() {
+    return [this.#first.backend(), this.#second.backend()];
+  }
+  description() {
+    return `Backends "${this.#first.backend().asString()}" and "${this.#second.backend().asString()}"`;
+  }
+  toVerdictTable() {
+    return Object.fromEntries([
+      [this.#first.backend().asString(), this.#first.verdictLabel()],
+      [this.#second.backend().asString(), this.#second.verdictLabel()]
+    ]);
+  }
+}
 // src/kernel/domain/scenario-expectation.ts
 class ScenarioExpectation {
   #kind;
@@ -1333,6 +1372,86 @@ class ScenarioExpectation {
   }
   asString() {
     return this.#kind;
+  }
+}
+// src/kernel/domain/scenario-verdict.ts
+class ScenarioVerdict {
+  #backend;
+  #state;
+  #target;
+  #unit;
+  constructor(backend, target, unit, state) {
+    this.#backend = backend;
+    this.#state = state;
+    this.#target = target;
+    this.#unit = unit;
+  }
+  static clean(backend, target, unit) {
+    return new ScenarioVerdict(backend, target, unit, "clean");
+  }
+  static violated(backend, target, unit) {
+    return new ScenarioVerdict(backend, target, unit, "violated");
+  }
+  static skipped(backend, target, unit) {
+    return new ScenarioVerdict(backend, target, unit, "skipped");
+  }
+  static unavailable(backend, target, unit) {
+    return new ScenarioVerdict(backend, target, unit, "unavailable");
+  }
+  backend() {
+    return this.#backend;
+  }
+  isComparable() {
+    return this.#state === "clean" || this.#state === "violated";
+  }
+  isFor(target, unit) {
+    return this.#target.equals(target) && (this.#unit === null ? unit === null : unit !== null && this.#unit.equals(unit));
+  }
+  sameSubjectAs(other) {
+    return this.isFor(other.#target, other.#unit);
+  }
+  agreesWith(other) {
+    return this.#state === other.#state;
+  }
+  verdictLabel() {
+    if (this.#state !== "clean" && this.#state !== "violated")
+      throw new Error("defect: an unverified scenario has no verdict label");
+    return this.#state;
+  }
+}
+// src/kernel/domain/scenario-verdicts.ts
+class ScenarioVerdicts {
+  #values;
+  constructor(values) {
+    if (values.length > 128)
+      throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: values.length });
+    const snapshot = [];
+    for (const value of values) {
+      if (snapshot.length === 128)
+        throw new IllegalArgumentException({ kind: "too-many-scenario-verdicts", raw: snapshot.length + 1 });
+      snapshot.push(value);
+    }
+    if (snapshot.some((value) => !value.sameSubjectAs(snapshot[0])))
+      throw new IllegalArgumentException({ kind: "different-scenario-subjects" });
+    const comparable = snapshot.filter((value) => value.isComparable());
+    if (KeySet.of(comparable.map((value) => value.backend())).size() !== comparable.length)
+      throw new IllegalArgumentException({ kind: "duplicate-scenario-backend" });
+    this.#values = [...comparable];
+  }
+  static of(values) {
+    return new ScenarioVerdicts(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new ScenarioVerdicts(values));
+  }
+  *comparisons() {
+    for (let i = 0;i < this.#values.length; i++)
+      for (let j = i + 1;j < this.#values.length; j++) {
+        const comparison = ScenarioComparison.parse(this.#values[i], this.#values[j]);
+        if (!comparison.ok)
+          throw new Error(`defect: validated scenario verdicts cannot be compared (${comparison.error.kind})`);
+        yield comparison.value;
+      }
   }
 }
 // src/kernel/domain/skip-reason.ts
@@ -2376,6 +2495,19 @@ class AttributeDeclaration {
     const label = `${entity.asString()}.${this.#name.asString()}`;
     report.finding(family, kind, [TargetIdentifiers.safe("attr", label)], [WitnessReference.at(artifact.asString(), this.#element.asString(), value)], detail);
   }
+  checkDiagramStates(states, report, entity, specArtifact, entitiesArtifact, el) {
+    const specArt = specArtifact.asString();
+    const entitiesArt = entitiesArtifact.asString();
+    const attrId = TargetIdentifiers.safe("attr", `${entity.asString()}.${this.#name.asString()}`);
+    const rogue = this.rogueDiagramStates(states);
+    if (rogue.length > 0) {
+      report.finding(FD_S1, FindingKind.consistencyMismatch(), [attrId], rogue.map((v) => WitnessReference.at(specArt, el, v)), `diagram state(s) ${rogue.join(", ")} are not allowed values of ${entity.asString()}.${this.#name.asString()} in entities.md`);
+    }
+    const dangling = this.allowedValuesAbsentFrom(states);
+    if (dangling.length > 0) {
+      report.finding(FD_S2, FindingKind.consistencyMismatch(), [attrId], dangling.map((v) => WitnessReference.at(entitiesArt, this.#element.asString(), v)), `allowed value(s) ${dangling.join(", ")} of ${entity.asString()}.${this.#name.asString()} appear in no diagram state`);
+    }
+  }
   checkType(report, entity, artifact) {
     const label = `${entity.asString()}.${this.#name.asString()}`;
     if (this.declaresAllowedValuesOnNonEnumerableType())
@@ -2492,8 +2624,8 @@ class AttributeDeclarations {
     const withAllowed = this.#values.filter((a) => a.hasAllowedValues());
     return withAllowed.length === 1 ? withAllowed[0] ?? null : null;
   }
-  named(token) {
-    return this.#values.find((a) => a.name().asString() === token) ?? null;
+  named(name) {
+    return this.#values.find((a) => a.name().equals(name)) ?? null;
   }
   names() {
     return this.#values.map((a) => a.name());
@@ -3538,7 +3670,12 @@ class DomainEntitiesOutcome {
         }
       },
       extracted: (domainEntities) => {
-        domainEntities.check(report, componentsArtifact, siblingUnits, unit);
+        if (!siblingUnits.ok) {
+          for (const family of [XS_1, XS_2, XS_3])
+            report.skip(family, "unrecognized-format", `sibling unit index is unusable (${siblingUnits.error.kind})`);
+          return;
+        }
+        domainEntities.check(report, componentsArtifact, siblingUnits.value, unit);
       }
     });
   }
@@ -4166,6 +4303,28 @@ class DomainEntitySketch {
   static of(seed) {
     return new DomainEntitySketch(seed);
   }
+  checkAgainst(unitEntities, unit, report, componentsArtifact) {
+    const compArt = componentsArtifact.asString();
+    const key = this.#name.normalized();
+    const definers = unitEntities.definersOf(key).toArray();
+    if (definers.length >= 2) {
+      report.finding(XS_1, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", this.#name.asString())], [
+        WitnessReference.at(compArt, this.catalogLabel()),
+        ...definers.map((u) => WitnessReference.at(`construction/${u.asString()}/functional-design/entities.md`, `entity ${this.#name.asString()}`))
+      ], `domain entity "${this.#name.asString()}" is defined in ${definers.length} units (${definers.map((unit2) => unit2.asString()).join(", ")}) \u2014 ownership is duplicated`);
+    } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
+      report.finding(XS_2, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", this.#name.asString())], [WitnessReference.at(compArt, this.catalogLabel())], `domain entity "${this.#name.asString()}" is defined in no unit's entities.md \u2014 it was dropped on the way to functional design`);
+    }
+    if (unit !== undefined) {
+      const mine = unitEntities.entityDeclaredIn(unit, key);
+      if (mine) {
+        const dropped = this.attributesDroppedIn(mine.attributeNames());
+        if (dropped.length > 0) {
+          report.finding(XS_3, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", this.#name.asString())], dropped.map((a) => WitnessReference.at(compArt, `entity ${this.#name.asString()}.attributes`, a)), `domain-design declares attribute(s) ${dropped.join(", ")} on "${this.#name.asString()}" that this unit's entities.md does not carry`);
+        }
+      }
+    }
+  }
   name() {
     return this.#name;
   }
@@ -4208,28 +4367,8 @@ class DomainEntitySketches {
     return this.#values;
   }
   check(report, componentsArtifact, unitEntities, unit) {
-    const compArt = componentsArtifact.asString();
-    for (const de of this.sortedDistinctByNormalizedName()) {
-      const key = de.name().normalized().asString();
-      const definers = unitEntities.definersOf(key);
-      if (definers.length >= 2) {
-        report.finding(XS_1, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", de.name().asString())], [
-          WitnessReference.at(compArt, de.catalogLabel()),
-          ...definers.map((u) => WitnessReference.at(`construction/${u}/functional-design/entities.md`, `entity ${de.name().asString()}`))
-        ], `domain entity "${de.name().asString()}" is defined in ${definers.length} units (${definers.join(", ")}) \u2014 ownership is duplicated`);
-      } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
-        report.finding(XS_2, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", de.name().asString())], [WitnessReference.at(compArt, de.catalogLabel())], `domain entity "${de.name().asString()}" is defined in no unit's entities.md \u2014 it was dropped on the way to functional design`);
-      }
-      if (unit !== undefined) {
-        const mine = unitEntities.entityDeclaredIn(unit.asString(), key);
-        if (mine) {
-          const dropped = de.attributesDroppedIn(mine.attrs);
-          if (dropped.length > 0) {
-            report.finding(XS_3, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", de.name().asString())], dropped.map((a) => WitnessReference.at(compArt, `entity ${de.name().asString()}.attributes`, a)), `domain-design declares attribute(s) ${dropped.join(", ")} on "${de.name().asString()}" that this unit's entities.md does not carry`);
-          }
-        }
-      }
-    }
+    for (const declaration of this.sortedDistinctByNormalizedName())
+      declaration.checkAgainst(unitEntities, unit, report, componentsArtifact);
     if (unit === undefined) {
       report.skip(XS_3, "unrecognized-format", "the unit for this functional-design record could not be determined from its path");
     }
@@ -4269,17 +4408,31 @@ class EntityDeclaration {
   element() {
     return this.#element;
   }
+  attributeNames() {
+    return AttributeNames.of(this.#attrs.names());
+  }
   attrs() {
     return this.#attrs;
   }
   rels() {
     return this.#rels;
   }
-  lifecycleAttr() {
-    return this.#attrs.lifecycleAttr();
+  lifecycleIsNamedBy(entity, attribute) {
+    const lifecycle = this.lifecycleAttribute(attribute);
+    return this.#name.normalized().equals(entity.normalized()) && lifecycle?.hasAllowedValues() === true;
   }
-  attrNamed(token) {
-    return this.#attrs.named(token);
+  reportMissingLifecycleIn(report) {
+    for (const family of [FD_S1, FD_S2])
+      report.skip(family, "unrecognized-format", `no \`### State Machine: ${this.#name.asString()}\` heading with a stateDiagram fence found for lifecycle entity "${this.#name.asString()}"`);
+  }
+  lifecycleAttribute(attribute) {
+    return attribute === null ? this.#attrs.lifecycleAttr() : this.#attrs.named(attribute);
+  }
+  hasLifecycle() {
+    return this.#attrs.lifecycleAttr() !== null;
+  }
+  attrNamed(name) {
+    return this.#attrs.named(name);
   }
 }
 // src/refcheck/domain/entity-declarations.ts
@@ -4288,7 +4441,7 @@ class EntityDeclarations {
   #names;
   constructor(values) {
     this.#values = Object.freeze([...values]);
-    this.#names = KeySet.of(values.map((e) => e.name()));
+    this.#names = KeySet.of(this.#values.map((e) => e.name()));
   }
   static of(values) {
     return new EntityDeclarations(values);
@@ -4322,12 +4475,14 @@ class EntityDeclarations {
     return this.#values.find((e) => e.name().normalized().equals(normalized));
   }
   lifecycleOnly() {
-    return this.#values.filter((e) => e.lifecycleAttr() !== null);
+    return this.#values.filter((e) => e.hasLifecycle());
   }
   resolvesReference(reference) {
     const token = reference.entityToken();
-    if (token !== null)
-      return this.#names.has(EntityName.of(token));
+    if (token !== null) {
+      const parsed = EntityName.parse(token);
+      return parsed.ok && this.#names.has(parsed.value);
+    }
     return this.#values.some((d) => reference.looselyMentions(d.name()));
   }
   resolvesAppliesTo(target) {
@@ -4335,7 +4490,12 @@ class EntityDeclarations {
     if (token !== null) {
       const ent = this.#values.find((e) => e.name().asString() === token);
       const attr = target.attributeToken();
-      return ent !== undefined && (attr === null || ent.attrNamed(attr) !== null);
+      if (ent === undefined)
+        return false;
+      if (attr === null)
+        return true;
+      const parsed = AttributeName.parse(attr);
+      return parsed.ok && ent.attrNamed(parsed.value) !== null;
     }
     return this.#values.some((e) => target.looselyMentions(e.name()));
   }
@@ -4435,11 +4595,20 @@ class LineNumber {
 // src/refcheck/domain/machine-specification.ts
 class MachineSpecification {
   #value;
+  #entity;
+  #attribute;
   constructor(raw) {
     if (raw.length > 4096)
       throw new IllegalArgumentException({ kind: "machine-spec-too-long", raw: raw.length });
     if (raw === "")
       throw new IllegalArgumentException({ kind: "empty-token", raw });
+    if (!raw.isWellFormed() || /\p{Cc}/u.test(raw))
+      throw new IllegalArgumentException({ kind: "invalid-machine-spec-characters" });
+    const parts = raw.split(".");
+    if (parts.length > 2 || parts.some((part) => part.length === 0 || part.trim() !== part))
+      throw new IllegalArgumentException({ kind: "invalid-machine-spec-syntax" });
+    this.#entity = EntityName.of(parts[0]);
+    this.#attribute = parts[1] === undefined ? null : AttributeName.of(parts[1]);
     this.#value = raw;
   }
   static of(raw) {
@@ -4455,10 +4624,10 @@ class MachineSpecification {
     return this.#value;
   }
   entityToken() {
-    return EntityName.of(this.#value.split(".")[0] ?? "");
+    return this.#entity;
   }
   attributeToken() {
-    return this.#value.split(".")[1];
+    return this.#attribute;
   }
 }
 // src/refcheck/domain/numeric-bound.ts
@@ -4621,29 +4790,46 @@ class RuleDeclaration {
   static of(seed) {
     return new RuleDeclaration(seed);
   }
-  id() {
-    return this.#id;
+  identifierForUniqueness() {
+    return this.#id?.matchesShape() ? this.#id : null;
   }
-  element() {
-    return this.#element;
+  #findingTarget(fallback) {
+    return this.identifierForUniqueness()?.asString() ?? fallback;
   }
-  category() {
-    return this.#category;
+  checkRequiredKeys(report, artifact) {
+    if (this.#missing.length === 0)
+      return;
+    report.finding(FD_R1, FindingKind.structureInvalid(), [this.#findingTarget("check:FD-R1")], [WitnessReference.at(artifact.asString(), this.#element.asString())], `rule is missing required key(s): ${this.#missing.join(", ")}`);
   }
-  appliesTo() {
-    return this.#appliesTo;
+  checkIdentifier(report, artifact) {
+    const id = this.#id;
+    if (id === null || id.matchesShape())
+      return;
+    report.finding(FD_R2, FindingKind.structureInvalid(), [FD_R2.asCheckTarget()], [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.id`, id.asString())], `rule id "${id.asString()}" does not match BR{group}.{seq}`);
   }
-  missing() {
-    return this.#missing;
+  reportDuplicateIdentifier(report, artifact) {
+    const id = this.identifierForUniqueness();
+    if (id === null)
+      throw new Error("defect: a malformed rule identifier cannot be a duplicate identifier");
+    report.finding(FD_R2, FindingKind.structureInvalid(), [id.asString()], [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.id`, id.asString())], `rule id "${id.asString()}" is declared more than once`);
   }
-  findingTarget(fallback) {
-    return this.#id?.matchesShape() ? this.#id.asString() : fallback;
+  checkSource(known, report, artifact) {
+    const missing = this.#sourceIds.valuesMissingFrom(known);
+    if (missing.length === 0)
+      return;
+    report.finding(FD_R3, FindingKind.referenceBroken(), [this.#findingTarget("check:FD-R3")], missing.map((id) => WitnessReference.at(artifact.asString(), `${this.#element.asString()}.source`, id)), `source id(s) ${missing.join(", ")} do not exist in requirements.md`, missing);
   }
-  sourceIdValuesMissingFrom(known) {
-    return this.#sourceIds.valuesMissingFrom(known);
+  checkApplicability(entities, report, artifact) {
+    const target = this.#appliesTo;
+    if (target === null || entities.resolvesAppliesTo(target))
+      return;
+    report.finding(FD_R4, FindingKind.referenceBroken(), [this.#findingTarget("check:FD-R4")], [WitnessReference.at(artifact.asString(), this.#element.asString(), target.asString())], `applies-to "${target.asString()}" does not resolve to a declared entity or entity.attribute`);
   }
-  categoryOutsideClosedSet() {
-    return this.#category !== null && !this.#category.isKnownCategory();
+  checkCategory(report, artifact) {
+    const category = this.#category;
+    if (category === null || category.isKnownCategory())
+      return;
+    report.finding(FD_R5, FindingKind.structureInvalid(), [this.#findingTarget("check:FD-R5")], [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.category`, category.asString())], `category "${category.asString()}" is not one of validation | authorization | constraint | calculation | policy`);
   }
 }
 // src/refcheck/domain/rule-declarations.ts
@@ -4665,53 +4851,30 @@ class RuleDeclarations {
     return this.#values;
   }
   check(report, artifact, requirementIdsKnown, entities) {
-    const art = artifact.asString();
-    for (const r of this) {
-      if (r.missing().length > 0) {
-        report.finding(FD_R1, FindingKind.structureInvalid(), [r.findingTarget("check:FD-R1")], [WitnessReference.at(art, r.element().asString())], `rule is missing required key(s): ${r.missing().join(", ")}`);
-      }
-    }
-    const seenIds = new Set;
-    for (const r of this) {
-      const id = r.id();
+    for (const rule of this)
+      rule.checkRequiredKeys(report, artifact);
+    const seen = new Set;
+    for (const rule of this) {
+      rule.checkIdentifier(report, artifact);
+      const id = rule.identifierForUniqueness();
       if (id === null)
         continue;
-      if (!id.matchesShape()) {
-        report.finding(FD_R2, FindingKind.structureInvalid(), [FD_R2.asCheckTarget()], [WitnessReference.at(art, `${r.element().asString()}.id`, id.asString())], `rule id "${id.asString()}" does not match BR{group}.{seq}`);
-        continue;
-      }
-      if (seenIds.has(id.asString())) {
-        report.finding(FD_R2, FindingKind.structureInvalid(), [id.asString()], [WitnessReference.at(art, `${r.element().asString()}.id`, id.asString())], `rule id "${id.asString()}" is declared more than once`);
-      }
-      seenIds.add(id.asString());
+      if (seen.has(id.asString()))
+        rule.reportDuplicateIdentifier(report, artifact);
+      seen.add(id.asString());
     }
-    if (requirementIdsKnown === null) {
+    if (requirementIdsKnown === null)
       report.skip(FD_R3, "absent-input", "requirements.md not found under this intent record \u2014 source ids cannot be reverse-verified");
-    } else {
-      for (const r of this) {
-        const missing = r.sourceIdValuesMissingFrom(requirementIdsKnown);
-        if (missing.length > 0) {
-          report.finding(FD_R3, FindingKind.referenceBroken(), [r.findingTarget("check:FD-R3")], missing.map((id) => WitnessReference.at(art, `${r.element().asString()}.source`, id)), `source id(s) ${missing.join(", ")} do not exist in requirements.md`, missing);
-        }
-      }
-    }
-    if (entities === null) {
+    else
+      for (const rule of this)
+        rule.checkSource(requirementIdsKnown, report, artifact);
+    if (entities === null)
       report.skip(FD_R4, "absent-input", "entities.md is unavailable \u2014 applies-to cannot be resolved");
-    } else {
-      for (const r of this) {
-        const appliesTo = r.appliesTo();
-        if (appliesTo === null)
-          continue;
-        if (!entities.entities().resolvesAppliesTo(appliesTo)) {
-          report.finding(FD_R4, FindingKind.referenceBroken(), [r.findingTarget("check:FD-R4")], [WitnessReference.at(art, r.element().asString(), appliesTo.asString())], `applies-to "${appliesTo.asString()}" does not resolve to a declared entity or entity.attribute`);
-        }
-      }
-    }
-    for (const r of this) {
-      if (r.categoryOutsideClosedSet()) {
-        report.finding(FD_R5, FindingKind.structureInvalid(), [r.findingTarget("check:FD-R5")], [WitnessReference.at(art, `${r.element().asString()}.category`, r.category()?.asString() ?? "")], `category "${r.category()?.asString()}" is not one of validation | authorization | constraint | calculation | policy`);
-      }
-    }
+    else
+      for (const rule of this)
+        rule.checkApplicability(entities.entities(), report, artifact);
+    for (const rule of this)
+      rule.checkCategory(report, artifact);
   }
 }
 // src/refcheck/domain/shape-error.ts
@@ -4748,23 +4911,62 @@ class ShapeErrors {
     return this.#values;
   }
 }
+// src/refcheck/domain/unit-names.ts
+class UnitNames {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new UnitNames(values);
+  }
+  add(value) {
+    return new UnitNames([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  declares(value) {
+    return this.#values.some((v) => v.asString() === value);
+  }
+  sortedByValue() {
+    return new UnitNames([...this.#values].sort((a, b) => a.asString() < b.asString() ? -1 : 1));
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
 // src/refcheck/domain/sibling-unit-index.ts
 class SiblingUnitIndex {
   #units;
   constructor(units) {
-    this.#units = units;
+    if (units.size() > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-sibling-units", raw: units.size() });
+    let count = 0;
+    for (const declarations of units.values())
+      for (const _entity of declarations)
+        if (++count > 65536)
+          throw new IllegalArgumentException({ kind: "too-many-sibling-entities", raw: count });
+    this.#units = KeyedIndex.of([...units].map(([unit, declarations]) => [
+      unit,
+      KeyedIndex.of([...declarations].map((entity) => [entity.name().normalized(), entity]))
+    ]));
   }
   static of(units) {
-    return new SiblingUnitIndex(new Map(units));
+    return new SiblingUnitIndex(units);
+  }
+  static parse(units) {
+    return parseConstruction(() => new SiblingUnitIndex(units));
   }
   definersOf(normalizedName) {
-    return [...this.#units.entries()].filter(([, m]) => m.has(normalizedName)).map(([u]) => u);
+    return UnitNames.of([...this.#units].filter(([, declarations]) => declarations.has(normalizedName)).map(([unit]) => unit));
   }
   entityDeclaredIn(unit, normalizedName) {
     return this.#units.get(unit)?.get(normalizedName);
   }
   hasAnyUnit() {
-    return this.#units.size > 0;
+    return !this.#units.isEmpty();
   }
 }
 // src/refcheck/domain/source-identifier.ts
@@ -4898,41 +5100,41 @@ class SpecificationBlockAssessments {
 }
 // src/refcheck/domain/state-machine-sketch.ts
 class StateMachineSketch {
-  #spec;
-  #states;
-  #fenceLine;
-  #unsupported;
-  constructor(seed) {
-    this.#spec = seed.spec;
-    this.#states = seed.states;
-    this.#fenceLine = seed.fenceLine;
-    this.#unsupported = seed.unsupported;
+  #state;
+  constructor(state) {
+    this.#state = state.kind === "declared" ? { kind: "declared", declaration: { ...state.declaration } } : { ...state };
   }
   static of(seed) {
-    return new StateMachineSketch(seed);
+    return new StateMachineSketch({ kind: "declared", declaration: seed });
   }
-  spec() {
-    return this.#spec;
+  static unrecognized(line, reason) {
+    return new StateMachineSketch({ kind: "unrecognized", line, reason });
   }
-  states() {
-    return this.#states;
-  }
-  unsupported() {
-    return this.#unsupported;
+  coversLifecycleOf(entity) {
+    if (this.#state.kind === "unrecognized")
+      return false;
+    const specification = this.#state.declaration.spec;
+    return entity.lifecycleIsNamedBy(specification.entityToken(), specification.attributeToken());
   }
   locationLabel() {
-    return `State Machine: ${this.#spec.asString()} (fence line ${this.#fenceLine.asNumber()})`;
+    const state = this.#state;
+    return state.kind === "unrecognized" ? `State Machine heading (line ${state.line.asNumber()})` : `State Machine: ${state.declaration.spec.asString()} (fence line ${state.declaration.fenceLine.asNumber()})`;
   }
   check(report, specArtifact, entitiesArtifact, entities) {
+    if (this.#state.kind === "unrecognized") {
+      for (const family of [FD_S1, FD_S2])
+        report.skip(family, "unrecognized-format", `${this.locationLabel()}: ${this.#state.reason.asString()}`);
+      return;
+    }
+    const declaration = this.#state.declaration;
     const specArt = specArtifact.asString();
-    const entitiesArt = entitiesArtifact.asString();
-    const entity = this.spec().entityToken();
+    const entity = declaration.spec.entityToken();
     const entName = entity.asString();
-    const attrName = this.spec().attributeToken();
+    const attrName = declaration.spec.attributeToken();
     const el = this.locationLabel();
-    if (this.unsupported() !== null) {
-      report.skip(FD_S1, "unrecognized-format", `${el}: ${this.unsupported()}`);
-      report.skip(FD_S2, "unrecognized-format", `${el}: ${this.unsupported()}`);
+    if (declaration.unsupported !== null) {
+      report.skip(FD_S1, "unrecognized-format", `${el}: ${declaration.unsupported}`);
+      report.skip(FD_S2, "unrecognized-format", `${el}: ${declaration.unsupported}`);
       return;
     }
     const ent = entities.entities().byNormalizedName(entity.normalized());
@@ -4940,21 +5142,13 @@ class StateMachineSketch {
       report.finding(FD_S1, FindingKind.consistencyMismatch(), [TargetIdentifiers.safe("entity", entName)], [WitnessReference.at(specArt, el, entName)], `state machine names entity "${entName}" which is not declared in entities.md`);
       return;
     }
-    const attr = attrName !== undefined ? ent.attrNamed(attrName) : ent.lifecycleAttr();
+    const attr = ent.lifecycleAttribute(attrName);
     if (!attr?.hasAllowedValues()) {
       report.skip(FD_S1, "unrecognized-format", `${el}: no lifecycle attribute with allowed values could be determined for entity "${ent.name().asString()}"`);
       report.skip(FD_S2, "unrecognized-format", `${el}: no lifecycle attribute with allowed values could be determined for entity "${ent.name().asString()}"`);
       return;
     }
-    const attrId = TargetIdentifiers.safe("attr", `${ent.name().asString()}.${attr.name().asString()}`);
-    const rogue = attr.rogueDiagramStates(this.states());
-    if (rogue.length > 0) {
-      report.finding(FD_S1, FindingKind.consistencyMismatch(), [attrId], rogue.map((v) => WitnessReference.at(specArt, el, v)), `diagram state(s) ${rogue.join(", ")} are not allowed values of ${ent.name().asString()}.${attr.name().asString()} in entities.md`);
-    }
-    const dangling = attr.allowedValuesAbsentFrom(this.states());
-    if (dangling.length > 0) {
-      report.finding(FD_S2, FindingKind.consistencyMismatch(), [attrId], dangling.map((v) => WitnessReference.at(entitiesArt, attr.element().asString(), v)), `allowed value(s) ${dangling.join(", ")} of ${ent.name().asString()}.${attr.name().asString()} appear in no diagram state`);
-    }
+    attr.checkDiagramStates(declaration.states, report, ent.name(), specArtifact, entitiesArtifact, el);
   }
 }
 // src/refcheck/domain/state-machine-sketches.ts
@@ -4979,12 +5173,9 @@ class StateMachineSketches {
     return this.#values;
   }
   check(report, specArtifact, entitiesArtifact, entities) {
-    if (this.isEmpty()) {
-      for (const e of entities.entities().lifecycleOnly()) {
-        report.skip(FD_S1, "unrecognized-format", `no \`### State Machine: ${e.name().asString()}\` heading with a stateDiagram fence found for lifecycle entity "${e.name().asString()}"`);
-        report.skip(FD_S2, "unrecognized-format", `no \`### State Machine: ${e.name().asString()}\` heading with a stateDiagram fence found for lifecycle entity "${e.name().asString()}"`);
-      }
-    }
+    for (const entity of entities.entities().lifecycleOnly())
+      if (!this.#values.some((machine) => machine.coversLifecycleOf(entity)))
+        entity.reportMissingLifecycleIn(report);
     for (const m of this) {
       m.check(report, specArtifact, entitiesArtifact, entities);
     }
@@ -5099,32 +5290,6 @@ class UnitDeclaration {
     return [...this.#dependsOn.sortedByValue()].filter((dep) => declared.declares(dep.asString()));
   }
 }
-// src/refcheck/domain/unit-names.ts
-class UnitNames {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new UnitNames(values);
-  }
-  add(value) {
-    return new UnitNames([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  declares(value) {
-    return this.#values.some((v) => v.asString() === value);
-  }
-  sortedByValue() {
-    return new UnitNames([...this.#values].sort((a, b) => a.asString() < b.asString() ? -1 : 1));
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-
 // src/refcheck/domain/unit-declarations.ts
 class UnitDeclarations {
   #values;
@@ -5614,12 +5779,14 @@ function parseFunctionalSpecDocument(md) {
   const lines = md.split(`
 `);
   for (let i = 0;i < lines.length; i++) {
-    const h = (lines[i] ?? "").match(/^#{2,4}\s+State Machine:\s*(.+?)\s*$/i);
+    const h = (lines[i] ?? "").match(/^#{2,4}\s+State Machine:\s*(.*?)\s*$/i);
     if (!h)
       continue;
     const spec = MachineSpecification.parse((h[1] ?? "").trim());
-    if (!spec.ok)
+    if (!spec.ok) {
+      machines.push(StateMachineSketch.unrecognized(LineNumber.of(i + 1), ErrorMessage.of(`invalid state machine specification: ${spec.error.kind}`)));
       continue;
+    }
     for (let j = i + 1;j < lines.length; j++) {
       if (/^#{1,4}\s/.test(lines[j] ?? ""))
         break;
@@ -5652,9 +5819,14 @@ function parseFunctionalSpecDocument(md) {
           }
         }
       }
+      const parsedStates = traverseResult([...states].sort(), StateName.parse);
+      if (!parsedStates.ok) {
+        machines.push(StateMachineSketch.unrecognized(LineNumber.of(j + 1), ErrorMessage.of(`invalid diagram state: ${parsedStates.error.kind}`)));
+        break;
+      }
       machines.push(StateMachineSketch.of({
         spec: spec.value,
-        states: StateNames.of([...states].sort().map((v) => StateName.of(v))),
+        states: StateNames.of(parsedStates.value),
         fenceLine: LineNumber.of(j + 1),
         unsupported
       }));
@@ -5700,7 +5872,7 @@ function parseDomainEntitiesDocument(md) {
   return DomainEntitiesOutcome.extracted(DomainEntitySketches.of(out));
 }
 function buildSiblingUnitEntities(texts) {
-  const unitEntities = new Map;
+  const unitEntities = [];
   for (const { unit, text } of texts) {
     const fence = extractFences(text, "yaml")[0];
     if (fence === undefined)
@@ -5709,13 +5881,12 @@ function buildSiblingUnitEntities(texts) {
     if (parsed.error !== undefined)
       continue;
     const model = extractEntities(parsed.value ?? null);
-    const map = new Map;
-    for (const e of model.entities()) {
-      map.set(e.name().normalized().asString(), { name: e.name(), attrs: AttributeNames.of(e.attrs().names()) });
-    }
-    unitEntities.set(unit, map);
+    const name = UnitName.parse(unit);
+    if (!name.ok)
+      return name;
+    unitEntities.push([name.value, model.entities()]);
   }
-  return SiblingUnitIndex.of(unitEntities);
+  return SiblingUnitIndex.parse(KeyedIndex.of(unitEntities));
 }
 
 // src/refcheck/adapter/design-record-repository-implementation.ts

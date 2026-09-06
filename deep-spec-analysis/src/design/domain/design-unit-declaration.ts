@@ -1,4 +1,4 @@
-import { ErrorMessage, ErrorMessages, type Expression, KeySet } from "@deep-spec-analysis/kernel-domain";
+import { ErrorMessage, ErrorMessages, KeySet } from "@deep-spec-analysis/kernel-domain";
 import type { BusinessRuleReference } from "./business-rule-reference.ts";
 import type { BusinessRuleReferenceIndex } from "./business-rule-reference-index.ts";
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
@@ -100,12 +100,6 @@ export class DesignUnitDeclaration {
     if (!parsedCatalog.ok && parsedCatalog.error.kind !== "ambiguous-design-attributes")
       errors.push(where(`attribute catalog: ${parsedCatalog.error.kind}`));
     if (catalog !== null) for (const message of catalog.encodingDiagnostics()) errors.push(where(message.asString()));
-    const checkExpr = (expression: Expression, context: string, primesAllowed: boolean): void => {
-      if (catalog !== null)
-        for (const message of catalog.expressionDiagnostics(expression, context, primesAllowed))
-          errors.push(where(message.asString()));
-    };
-
     const seenIds = new Set<string>();
     const dup = (id: string, ctx: string): void => {
       if (seenIds.has(id)) errors.push(where(`${ctx}: duplicate id "${id}"`));
@@ -121,10 +115,7 @@ export class DesignUnitDeclaration {
       const ctx = `obligation ${ob.id().asString()}`;
       dup(ob.id().asString(), ctx);
       collectBr(ob.businessRuleReferences());
-      if (ob.missesRequiredBusinessRuleReferences()) {
-        errors.push(where(`${ctx}: origin "rules" requires brRefs`));
-      }
-      ob.inspectExpressions((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
+      for (const message of ob.diagnostics(catalog)) errors.push(where(message.asString()));
     }
 
     for (const sm of this.#stateMachines) {
@@ -141,15 +132,13 @@ export class DesignUnitDeclaration {
       const ctx = `scenario ${sc.id().asString()}`;
       dup(sc.id().asString(), ctx);
       collectBr(sc.businessRuleReferences());
-      if (catalog !== null)
-        for (const message of catalog.bindingDiagnostics(sc.bindings(), ctx)) errors.push(where(message.asString()));
-      sc.inspectExpectation((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
+      if (catalog !== null) for (const message of sc.diagnostics(catalog)) errors.push(where(message.asString()));
     }
 
     for (const bg of this.#background) {
       const ctx = `background ${bg.id().asString()}`;
       dup(bg.id().asString(), ctx);
-      bg.inspectExpressions((expression, primesAllowed) => checkExpr(expression, ctx, primesAllowed));
+      if (catalog !== null) for (const message of bg.diagnostics(catalog)) errors.push(where(message.asString()));
     }
 
     // brRefs reverse-verification + BR coverage against this unit's rules.md.

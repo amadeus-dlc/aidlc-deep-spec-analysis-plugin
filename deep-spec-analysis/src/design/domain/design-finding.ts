@@ -7,6 +7,7 @@
 import {
   FindingKind,
   type FunctionalRequirementReferences,
+  type TargetIdentifier,
   TargetIdentifiers,
   type UnitName,
 } from "@deep-spec-analysis/kernel-domain";
@@ -67,6 +68,12 @@ export class DesignFinding {
 
   detail(): string {
     return this.#detail;
+  }
+
+  violatesScenario(unit: UnitName, target: TargetIdentifier): boolean {
+    return (
+      this.#kind.equals(FindingKind.scenarioViolation()) && this.#unit.equals(unit) && this.#targets.includes(target)
+    );
   }
 
   isConflict(): boolean {

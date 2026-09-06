@@ -4,13 +4,14 @@ import { FenceCount } from "@deep-spec-analysis/refcheck-domain";
 // 型付き宣言と解析結果へ変換する。宣言間の意味的な整合性はドメインが検査する。
 
 import { extractFences, parseYamlSubset } from "@deep-spec-analysis/kernel-adapter";
-import { RequirementIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import { ErrorMessage, KeyedIndex, RequirementIdentifiers, UnitName } from "@deep-spec-analysis/kernel-domain";
 import {
   combineResults,
   err,
   isObject,
   type Json,
   ok,
+  type ParseError,
   type Result,
   traverseResult,
 } from "@deep-spec-analysis/kernel-infrastructure";
@@ -302,10 +303,18 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecif
   const machines: StateMachineSketch[] = [];
   const lines = md.split("\n");
   for (let i = 0; i < lines.length; i++) {
-    const h = (lines[i] ?? "").match(/^#{2,4}\s+State Machine:\s*(.+?)\s*$/i);
+    const h = (lines[i] ?? "").match(/^#{2,4}\s+State Machine:\s*(.*?)\s*$/i);
     if (!h) continue;
     const spec = MachineSpecification.parse((h[1] ?? "").trim());
-    if (!spec.ok) continue; // 名前のない見出しは状態機械の宣言ではない。
+    if (!spec.ok) {
+      machines.push(
+        StateMachineSketch.unrecognized(
+          LineNumber.of(i + 1),
+          ErrorMessage.of(`invalid state machine specification: ${spec.error.kind}`),
+        ),
+      );
+      continue;
+    }
     // Find the next mermaid fence before the next heading of same/higher level.
     for (let j = i + 1; j < lines.length; j++) {
       if (/^#{1,4}\s/.test(lines[j] ?? "")) break;
@@ -333,10 +342,20 @@ export function parseFunctionalSpecDocument(md: string | null): FunctionalSpecif
           }
         }
       }
+      const parsedStates = traverseResult([...states].sort(), StateName.parse);
+      if (!parsedStates.ok) {
+        machines.push(
+          StateMachineSketch.unrecognized(
+            LineNumber.of(j + 1),
+            ErrorMessage.of(`invalid diagram state: ${parsedStates.error.kind}`),
+          ),
+        );
+        break;
+      }
       machines.push(
         StateMachineSketch.of({
           spec: spec.value,
-          states: StateNames.of([...states].sort().map((v) => StateName.of(v))),
+          states: StateNames.of(parsedStates.value),
           fenceLine: LineNumber.of(j + 1),
           unsupported,
         }),
@@ -384,19 +403,19 @@ export function parseDomainEntitiesDocument(md: string | null): DomainEntitiesOu
 
 // 兄弟ユニットの entities.md 群を XS 用の索引へ。fence 無し・解析不能な
 // ユニットは黙って除外する（そのユニット自身の実行が解析エラーを報告する）。
-export function buildSiblingUnitEntities(texts: readonly { unit: string; text: string }[]): SiblingUnitIndex {
-  const unitEntities = new Map<string, Map<string, { name: EntityName; attrs: AttributeNames }>>();
+export function buildSiblingUnitEntities(
+  texts: readonly { unit: string; text: string }[],
+): Result<SiblingUnitIndex, ParseError> {
+  const unitEntities: (readonly [UnitName, EntityDeclarations])[] = [];
   for (const { unit, text } of texts) {
     const fence = extractFences(text, "yaml")[0];
     if (fence === undefined) continue;
     const parsed = parseYamlSubset(fence.body);
     if (parsed.error !== undefined) continue; // its own unit's run reports the parse error
     const model = extractEntities(parsed.value ?? null);
-    const map = new Map<string, { name: EntityName; attrs: AttributeNames }>();
-    for (const e of model.entities()) {
-      map.set(e.name().normalized().asString(), { name: e.name(), attrs: AttributeNames.of(e.attrs().names()) });
-    }
-    unitEntities.set(unit, map);
+    const name = UnitName.parse(unit);
+    if (!name.ok) return name;
+    unitEntities.push([name.value, model.entities()]);
   }
-  return SiblingUnitIndex.of(unitEntities);
+  return SiblingUnitIndex.parse(KeyedIndex.of(unitEntities));
 }

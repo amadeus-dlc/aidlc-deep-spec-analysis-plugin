@@ -1,10 +1,12 @@
 import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import type { AttributeDeclaration } from "./attribute-declaration.ts";
 import type { AttributeDeclarations } from "./attribute-declarations.ts";
+import type { AttributeName } from "./attribute-name.ts";
+import { AttributeNames } from "./attribute-names.ts";
 import type { ElementPath } from "./element-path.ts";
 import type { EntityDeclarations } from "./entity-declarations.ts";
 import type { EntityName } from "./entity-name.ts";
-import { FD_E1 } from "./functional-check-families.ts";
+import { FD_E1, FD_S1, FD_S2 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { RelationshipDeclarations } from "./relationship-declarations.ts";
 import { WitnessReference } from "./witness-reference.ts";
@@ -68,6 +70,10 @@ export class EntityDeclaration {
     return this.#element;
   }
 
+  attributeNames(): AttributeNames {
+    return AttributeNames.of(this.#attrs.names());
+  }
+
   attrs(): AttributeDeclarations {
     return this.#attrs;
   }
@@ -76,11 +82,29 @@ export class EntityDeclaration {
     return this.#rels;
   }
 
-  lifecycleAttr(): AttributeDeclaration | null {
-    return this.#attrs.lifecycleAttr();
+  lifecycleIsNamedBy(entity: EntityName, attribute: AttributeName | null): boolean {
+    const lifecycle = this.lifecycleAttribute(attribute);
+    return this.#name.normalized().equals(entity.normalized()) && lifecycle?.hasAllowedValues() === true;
   }
 
-  attrNamed(token: string): AttributeDeclaration | null {
-    return this.#attrs.named(token);
+  reportMissingLifecycleIn(report: ReferenceCheckReport): void {
+    for (const family of [FD_S1, FD_S2])
+      report.skip(
+        family,
+        "unrecognized-format",
+        `no \`### State Machine: ${this.#name.asString()}\` heading with a stateDiagram fence found for lifecycle entity "${this.#name.asString()}"`,
+      );
+  }
+
+  lifecycleAttribute(attribute: AttributeName | null): AttributeDeclaration | null {
+    return attribute === null ? this.#attrs.lifecycleAttr() : this.#attrs.named(attribute);
+  }
+
+  hasLifecycle(): boolean {
+    return this.#attrs.lifecycleAttr() !== null;
+  }
+
+  attrNamed(name: AttributeName): AttributeDeclaration | null {
+    return this.#attrs.named(name);
   }
 }

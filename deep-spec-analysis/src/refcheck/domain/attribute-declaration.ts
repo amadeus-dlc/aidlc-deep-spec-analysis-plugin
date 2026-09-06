@@ -6,7 +6,7 @@ import type { CheckFamily } from "./check-family.ts";
 import type { ElementPath } from "./element-path.ts";
 import type { EntityDeclarations } from "./entity-declarations.ts";
 import type { EntityName } from "./entity-name.ts";
-import { FD_E2, FD_E3, FD_E6 } from "./functional-check-families.ts";
+import { FD_E2, FD_E3, FD_E6, FD_S1, FD_S2 } from "./functional-check-families.ts";
 import type { NumericBound } from "./numeric-bound.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { ReferenceTarget } from "./reference-target.ts";
@@ -79,6 +79,39 @@ export class AttributeDeclaration {
       [WitnessReference.at(artifact.asString(), this.#element.asString(), value)],
       detail,
     );
+  }
+
+  checkDiagramStates(
+    states: StateNames,
+    report: ReferenceCheckReport,
+    entity: EntityName,
+    specArtifact: ArtifactPath,
+    entitiesArtifact: ArtifactPath,
+    el: string,
+  ): void {
+    const specArt = specArtifact.asString();
+    const entitiesArt = entitiesArtifact.asString();
+    const attrId = TargetIdentifiers.safe("attr", `${entity.asString()}.${this.#name.asString()}`);
+    const rogue = this.rogueDiagramStates(states);
+    if (rogue.length > 0) {
+      report.finding(
+        FD_S1,
+        FindingKind.consistencyMismatch(),
+        [attrId],
+        rogue.map((v) => WitnessReference.at(specArt, el, v)),
+        `diagram state(s) ${rogue.join(", ")} are not allowed values of ${entity.asString()}.${this.#name.asString()} in entities.md`,
+      );
+    }
+    const dangling = this.allowedValuesAbsentFrom(states);
+    if (dangling.length > 0) {
+      report.finding(
+        FD_S2,
+        FindingKind.consistencyMismatch(),
+        [attrId],
+        dangling.map((v) => WitnessReference.at(entitiesArt, this.#element.asString(), v)),
+        `allowed value(s) ${dangling.join(", ")} of ${entity.asString()}.${this.#name.asString()} appear in no diagram state`,
+      );
+    }
   }
 
   checkType(report: ReferenceCheckReport, entity: EntityName, artifact: ArtifactPath): void {

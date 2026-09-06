@@ -4,6 +4,7 @@ import {
   type BusinessRuleReferenceIndex,
   BusinessRuleReferences,
   CheckedUnits,
+  DesignAttributeCatalog,
   DesignAttributeDeclaration,
   DesignAttributeDeclarations,
   DesignAttributeName,
@@ -286,22 +287,20 @@ describe("design transition decl", () => {
 });
 
 describe("design background decl", () => {
-  test("inspectExpressions visits the assertion with primes forbidden, and silence when absent", () => {
-    const withAssert = DesignBackgroundDeclaration.of({
+  test("背景仮定が参照先を検査し、式がない場合は診断を出さない", () => {
+    const catalog = DesignAttributeCatalog.of(DesignEntityDeclarations.of([]));
+    const declared = DesignBackgroundDeclaration.of({
       id: DesignBackgroundIdentifier.of("DBG-1"),
       assert: { op: "ref", path: "t.x" },
     });
-    const seen: [string, boolean][] = [];
-    withAssert.inspectExpressions((expression, primesAllowed) => seen.push([expression.op, primesAllowed]));
-    expect(seen).toEqual([["ref", false]]);
-    expect(withAssert.id().asString()).toBe("DBG-1");
-    expect(withAssert.assertion()).toEqual({ op: "ref", path: "t.x" });
-
+    expect(
+      declared
+        .diagnostics(catalog)
+        .toArray()
+        .map((message) => message.asString()),
+    ).toEqual(['background DBG-1: unresolvable reference "t.x"']);
     const bare = DesignBackgroundDeclaration.of({ id: DesignBackgroundIdentifier.of("DBG-2") });
-    const none: unknown[] = [];
-    bare.inspectExpressions((expression, primesAllowed) => none.push([expression.op, primesAllowed]));
-    expect(none).toEqual([]);
-    expect(bare.assertion()).toBeUndefined();
+    expect(bare.diagnostics(catalog).isEmpty()).toBe(true);
   });
 });
 

@@ -2,7 +2,9 @@ import {
   ContentHash,
   type FindingsSchema,
   IntermediateRepresentationVersion,
+  ScenarioVerdict,
   SkipReason,
+  type TargetIdentifier,
   UnitName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
@@ -282,6 +284,16 @@ export class DesignReport {
       crossChecked: null,
       unavailableReason: reason,
     });
+  }
+
+  scenarioVerdictFor(unit: UnitName, target: TargetIdentifier, irHash: ContentHash): ScenarioVerdict {
+    const backend = this.#id.backendName();
+    if (!this.#irHash.equals(irHash) || this.isUnavailable()) return ScenarioVerdict.unavailable(backend, target, unit);
+    for (const skip of this.#skipped)
+      if (skip.appliesTo(unit, target)) return ScenarioVerdict.skipped(backend, target, unit);
+    for (const finding of this.#findings)
+      if (finding.violatesScenario(unit, target)) return ScenarioVerdict.violated(backend, target, unit);
+    return ScenarioVerdict.clean(backend, target, unit);
   }
 
   id(): DesignReportIdentifier {
