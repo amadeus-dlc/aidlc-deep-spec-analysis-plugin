@@ -1,3 +1,4 @@
+import { TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   compareCanonically,
@@ -32,6 +33,10 @@ export class TransitionReference {
   // 正準順（英字骨格→数値セグメント）——kernel の TargetIdentifier が所有する順序に従う（裁定 1）。
   compareTo(other: TransitionReference): number {
     return compareCanonically(this.#value, other.#value);
+  }
+
+  asTargetId(): TargetIdentifier {
+    return TargetIdentifier.of(this.#value);
   }
 
   asString(): string {

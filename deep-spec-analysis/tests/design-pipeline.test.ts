@@ -69,6 +69,7 @@ import {
   FunctionalRequirementReferences,
   IntermediateRepresentationVersion,
   RequirementIdentifier,
+  ScenarioExpectation,
   SkipReason,
   TargetIdentifier,
   TargetIdentifiers,
@@ -238,13 +239,8 @@ type RawDesignMachine = Omit<
 };
 type RawDesignScenario = Omit<
   Parameters<typeof DesignScenario.of>[0],
-  "id" | "businessRuleReferences" | "functionalRequirementReferences" | "event"
-> & {
-  id: string;
-  brRefs: string[];
-  frRefs: string[];
-  event?: { trigger: string };
-};
+  "id" | "businessRuleReferences" | "functionalRequirementReferences" | "event" | "expectation"
+> & { kind: "accept" | "reject"; id: string; brRefs: string[]; frRefs: string[]; event?: { trigger: string } };
 
 // テスト用: 生の entities JSON と属性座標から型付き実体宣言を組む（裁定 2 で
 // DesignUnit は生 JSON を持たなくなった）。座標だけ与えられた属性は kind "" の
@@ -336,6 +332,7 @@ function unit(seed: {
       (seed.scenarios ?? []).map((s) =>
         DesignScenario.of({
           ...s,
+          expectation: ScenarioExpectation.of(s.kind),
           id: DesignScenarioIdentifier.of(s.id),
           businessRuleReferences: BusinessRuleReferences.of(
             Array.from(s.brRefs, (raw) => BusinessRuleReference.of(raw)),
@@ -1067,7 +1064,7 @@ describe("lowered collections and the lowering index (first-class operations)", 
       LoweredScenario.of({
         origin: DesignScenarioIdentifier.of("DSC-1"),
         id: LoweredIdentifier.of("SC-99"),
-        kind: "accept",
+        expectation: ScenarioExpectation.of("accept"),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         bindings: scenarioBindings({}),
       }),

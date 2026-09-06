@@ -2,6 +2,7 @@ import type {
   Expression,
   FunctionalRequirementReferences,
   ScenarioBindings,
+  ScenarioExpectation,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
@@ -16,7 +17,7 @@ import { LoweredScenario } from "./lowered-scenario.ts";
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignScenarioParam = {
   id: DesignScenarioIdentifier;
-  kind: "accept" | "reject";
+  expectation: ScenarioExpectation;
   businessRuleReferences: BusinessRuleReferences;
   functionalRequirementReferences: FunctionalRequirementReferences;
   bindings: ScenarioBindings;
@@ -26,7 +27,7 @@ type DesignScenarioParam = {
 
 export class DesignScenario {
   readonly #id: DesignScenarioIdentifier;
-  readonly #kind: "accept" | "reject";
+  readonly #expectation: ScenarioExpectation;
   readonly #businessRuleReferences: BusinessRuleReferences;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #bindings: ScenarioBindings;
@@ -35,7 +36,7 @@ export class DesignScenario {
 
   private constructor(props: DesignScenarioParam) {
     this.#id = props.id;
-    this.#kind = props.kind;
+    this.#expectation = props.expectation;
     this.#businessRuleReferences = props.businessRuleReferences;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#bindings = props.bindings;
@@ -55,7 +56,7 @@ export class DesignScenario {
     return this.#id;
   }
   kind(): "accept" | "reject" {
-    return this.#kind;
+    return this.#expectation.asString();
   }
   businessRuleReferences(): BusinessRuleReferences {
     return this.#businessRuleReferences;
@@ -66,21 +67,21 @@ export class DesignScenario {
   eventTrigger(): TriggerName | undefined {
     return this.#eventTrigger;
   }
-  expectation(): Expression | undefined {
+  expectedExpression(): Expression | undefined {
     return this.#expect;
   }
   isAccept(): boolean {
-    return this.#kind === "accept";
+    return this.#expectation.isAccept();
   }
   isReject(): boolean {
-    return this.#kind === "reject";
+    return this.#expectation.isReject();
   }
   hasEvent(): boolean {
     return this.#eventTrigger !== undefined;
   }
 
   isViolatedBySatisfiability(satisfiable: boolean): boolean {
-    return (this.isAccept() && !satisfiable) || (this.isReject() && satisfiable);
+    return this.#expectation.isViolatedBySatisfiability(satisfiable);
   }
 
   bindings(): ScenarioBindings {
@@ -92,7 +93,7 @@ export class DesignScenario {
     return LoweredScenario.of({
       id,
       origin: this.#id,
-      kind: this.#kind,
+      expectation: this.#expectation,
       functionalRequirementReferences: this.#functionalRequirementReferences,
       bindings: this.#bindings,
       ...(this.#eventTrigger !== undefined ? { event: { trigger: this.#eventTrigger } } : {}),

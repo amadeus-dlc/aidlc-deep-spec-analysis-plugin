@@ -1307,6 +1307,35 @@ class ScenarioBindings {
     return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
   }
 }
+// src/kernel/domain/scenario-expectation.ts
+class ScenarioExpectation {
+  #kind;
+  constructor(value) {
+    if (value.length > 6)
+      throw new IllegalArgumentException({ kind: "scenario-expectation-too-long", raw: value.length });
+    if (value !== "accept" && value !== "reject")
+      throw new IllegalArgumentException({ kind: "unknown-scenario-expectation", raw: value });
+    this.#kind = value;
+  }
+  static of(value) {
+    return new ScenarioExpectation(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new ScenarioExpectation(value));
+  }
+  isAccept() {
+    return this.#kind === "accept";
+  }
+  isReject() {
+    return this.#kind === "reject";
+  }
+  isViolatedBySatisfiability(satisfiable) {
+    return this.#kind === "accept" ? !satisfiable : satisfiable;
+  }
+  asString() {
+    return this.#kind;
+  }
+}
 // src/kernel/domain/skip-reason.ts
 var KNOWN_REASONS = new Set([
   "unavailable",
@@ -1397,6 +1426,9 @@ class TargetIdentifier {
   }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
+  }
+  isRequirementObligation() {
+    return this.#value.startsWith("OB-");
   }
   asString() {
     return this.#value;
@@ -1525,6 +1557,9 @@ class VerificationMethod {
   }
   static parse(raw) {
     return parseConstruction(() => new VerificationMethod(raw));
+  }
+  isBounded() {
+    return this.#value === "bounded";
   }
   equals(other) {
     return this.#value === other.#value;
@@ -2648,6 +2683,18 @@ class VerificationFindings {
   isEmpty() {
     return this.#values.length === 0;
   }
+  distinctConflicts() {
+    const seen = new Set;
+    return new VerificationFindings(this.#values.filter((finding) => {
+      if (!finding.isConflict())
+        return true;
+      const key = finding.targets().joined(",");
+      if (seen.has(key))
+        return false;
+      seen.add(key);
+      return true;
+    }));
+  }
   toArray() {
     return this.#values;
   }
@@ -2977,6 +3024,60 @@ class IntermediateRepresentationValidationMaterialsIdentifier {
     return this.#model;
   }
 }
+// src/requirements/domain/verification-finding.ts
+class VerificationFinding {
+  #kind;
+  #functionalRequirementReferences;
+  #targets;
+  #witness;
+  #detail;
+  constructor(props) {
+    this.#kind = props.kind;
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#targets = props.targets;
+    this.#witness = props.witness;
+    this.#detail = props.detail;
+  }
+  static of(props) {
+    return new VerificationFinding(props);
+  }
+  isConflict() {
+    return this.#kind.asString() === "conflict";
+  }
+  kind() {
+    return this.#kind.asString();
+  }
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
+  }
+  targets() {
+    return this.#targets;
+  }
+  witness() {
+    return this.#witness;
+  }
+  detail() {
+    return this.#detail;
+  }
+  isKind(kind) {
+    const parsed = FindingKind.parse(kind);
+    return parsed.ok && this.#kind.equals(parsed.value);
+  }
+  implicates(target) {
+    return this.#targets.includes(target);
+  }
+  compareTo(other) {
+    const kr = this.#kind.compareTo(other.#kind);
+    if (kr !== 0)
+      return kr;
+    const ta = this.#targets.joined(",");
+    const tb = other.#targets.joined(",");
+    if (ta !== tb)
+      return ta < tb ? -1 : 1;
+    return this.#detail < other.#detail ? -1 : this.#detail > other.#detail ? 1 : 0;
+  }
+}
+
 // src/requirements/domain/obligation.ts
 class Obligation {
   #id;
@@ -3009,6 +3110,36 @@ class Obligation {
   }
   static of(props) {
     return new Obligation(props);
+  }
+  interpretQuintTemporal(method, verdict) {
+    if (!this.isStateTemporal() || this.#temporal?.pattern !== "leads-to")
+      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) };
+    const target = this.#id.asTargetId();
+    let skip = null;
+    if (!method.isBounded())
+      skip = VerificationSkipped.of({
+        target,
+        reason: SkipReason.capability(),
+        detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them"
+      });
+    else if (verdict === undefined)
+      skip = VerificationSkipped.of({
+        target,
+        reason: SkipReason.unavailable(),
+        detail: "quint returned no run for this temporal obligation"
+      });
+    else
+      skip = verdict.skipFor(target);
+    if (skip !== null)
+      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) };
+    const finding = verdict?.isViolation() ? VerificationFinding.of({
+      kind: FindingKind.conflict(),
+      functionalRequirementReferences: this.#functionalRequirementReferences.sortedUnique(),
+      targets: TargetIdentifiers.of([target]),
+      witness: verdict.witness(),
+      detail: `Temporal obligation ${this.#id.asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`
+    }) : null;
+    return { findings: VerificationFindings.of(finding === null ? [] : [finding]), skipped: VerificationSkips.of([]) };
   }
   id() {
     return this.#id;
@@ -3138,6 +3269,9 @@ class Obligations {
   *[Symbol.iterator]() {
     yield* this.#values;
   }
+  compiledInvariantTargets(compiled) {
+    return TargetIdentifiers.of(this.#values.filter((obligation) => obligation.isInvariantLike() && compiled.has(obligation.id())).map((obligation) => obligation.id().asTargetId()));
+  }
   byId(id) {
     return this.#values.find((o) => o.id().asString() === id);
   }
@@ -3165,7 +3299,7 @@ class QuintCheckResult {
       case "machine-uncompilable":
         return VerificationReport.machineUncompilable(id, model, result.method.asString(), result.error.asString());
       case "checked": {
-        const interpreted = result.plan.interpret(model, result.compileSkips, result.method.asString(), result.runs);
+        const interpreted = result.plan.interpret(model, result.compileSkips, result.method, result.runs);
         return VerificationReport.compose({
           id,
           irVersion: model.irVersion(),
@@ -3308,6 +3442,49 @@ class QuintMachineComponents {
     return this.#values;
   }
 }
+// src/requirements/domain/quint-machine-plan.ts
+class QuintMachinePlan {
+  #invariantComponents;
+  #eventIds;
+  #scenariosWithInit;
+  constructor(props) {
+    this.#invariantComponents = props.invariantComponents;
+    this.#eventIds = props.eventIds;
+    this.#scenariosWithInit = props.scenariosWithInit;
+  }
+  static of(seed) {
+    return new QuintMachinePlan({
+      invariantComponents: seed.invariantComponents,
+      eventIds: seed.eventIds,
+      scenariosWithInit: KeySet.of(seed.scenariosWithInit)
+    });
+  }
+  machineTargets() {
+    return TargetIdentifiers.of([
+      ...this.#invariantComponents.ids().toTargetIds(),
+      ...this.#eventIds.toTargetIds()
+    ]).sortedUniqueCanonically();
+  }
+  #hasInitFor(id) {
+    return this.#scenariosWithInit.has(id);
+  }
+  interpret(model, compileSkips, method, runs) {
+    const findings = [];
+    const skipped = [...compileSkips];
+    const collect = (evidence) => {
+      findings.push(...evidence.findings);
+      skipped.push(...evidence.skipped);
+    };
+    collect(runs.machineRun().interpret(model, this.#invariantComponents, this.#eventIds, method));
+    for (const obligation of model.obligations()) {
+      if (!skipped.some((skip) => skip.isFor(obligation.id().asTargetId())))
+        collect(obligation.interpretQuintTemporal(method, runs.temporalOf(obligation.id())));
+    }
+    for (const scenario of model.scenarios())
+      collect(scenario.interpretQuint(model, runs.scenarioOf(scenario.id()), this.#hasInitFor(scenario.id()), this.#invariantComponents));
+    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
+  }
+}
 // src/requirements/domain/trace-state.ts
 class TraceState {
   #values;
@@ -3316,6 +3493,9 @@ class TraceState {
   }
   static empty() {
     return new TraceState(KeyedIndex.empty());
+  }
+  static fromBindings(bindings) {
+    return TraceState.of(bindings.entriesCanonically().map((binding) => [binding.path(), TraceValue.of(binding.value().toDocument())]));
   }
   static of(entries) {
     return new TraceState(KeyedIndex.of(entries));
@@ -3328,57 +3508,6 @@ class TraceState {
     for (const [path, value] of this.#values)
       out[path.asString()] = value.toDocument();
     return out;
-  }
-}
-
-// src/requirements/domain/verification-finding.ts
-class VerificationFinding {
-  #kind;
-  #functionalRequirementReferences;
-  #targets;
-  #witness;
-  #detail;
-  constructor(props) {
-    this.#kind = props.kind;
-    this.#functionalRequirementReferences = props.functionalRequirementReferences;
-    this.#targets = props.targets;
-    this.#witness = props.witness;
-    this.#detail = props.detail;
-  }
-  static of(props) {
-    return new VerificationFinding(props);
-  }
-  kind() {
-    return this.#kind.asString();
-  }
-  functionalRequirementReferences() {
-    return this.#functionalRequirementReferences;
-  }
-  targets() {
-    return this.#targets;
-  }
-  witness() {
-    return this.#witness;
-  }
-  detail() {
-    return this.#detail;
-  }
-  isKind(kind) {
-    const parsed = FindingKind.parse(kind);
-    return parsed.ok && this.#kind.equals(parsed.value);
-  }
-  implicates(target) {
-    return this.#targets.includes(target);
-  }
-  compareTo(other) {
-    const kr = this.#kind.compareTo(other.#kind);
-    if (kr !== 0)
-      return kr;
-    const ta = this.#targets.joined(",");
-    const tb = other.#targets.joined(",");
-    if (ta !== tb)
-      return ta < tb ? -1 : 1;
-    return this.#detail < other.#detail ? -1 : this.#detail > other.#detail ? 1 : 0;
   }
 }
 
@@ -3411,168 +3540,6 @@ class VerificationWitness {
   }
 }
 
-// src/requirements/domain/quint-machine-plan.ts
-class QuintMachinePlan {
-  #invariantComponents;
-  #eventIds;
-  #scenariosWithInit;
-  constructor(props) {
-    this.#invariantComponents = props.invariantComponents;
-    this.#eventIds = props.eventIds;
-    this.#scenariosWithInit = props.scenariosWithInit;
-  }
-  static of(seed) {
-    return new QuintMachinePlan({
-      invariantComponents: seed.invariantComponents,
-      eventIds: seed.eventIds,
-      scenariosWithInit: KeySet.of(seed.scenariosWithInit)
-    });
-  }
-  machineTargets() {
-    return TargetIdentifiers.of([
-      ...this.#invariantComponents.ids().toTargetIds(),
-      ...this.#eventIds.toTargetIds()
-    ]).sortedUniqueCanonically();
-  }
-  #hasInitFor(id) {
-    return this.#scenariosWithInit.has(id);
-  }
-  interpret(model, compileSkips, method, runs) {
-    const bounded = method === "bounded";
-    const findings = [];
-    const skipped = [...compileSkips.toArray()];
-    const machineTargets = this.machineTargets();
-    const eventTargets = this.#eventIds.toTargetIds();
-    const machineRun = runs.machineRun();
-    if (machineRun === null) {
-      for (const target of machineTargets) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("unavailable"),
-          detail: "quint returned no machine run: the event machine was not decided"
-        }));
-      }
-    }
-    if (machineRun !== null) {
-      skipped.push(...machineRun.skipsFor(machineTargets, bounded));
-      if (machineRun.isDeadlock()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.completenessGap(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventTargets),
-          targets: this.#eventIds.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
-          witness: machineRun.witness(),
-          detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified."
-        }));
-      } else if (machineRun.isViolation()) {
-        const violatedComponents = this.#invariantComponents.violatedBy(machineRun.finalState());
-        const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.conflict(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
-          targets,
-          witness: machineRun.witness(),
-          detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`
-        }));
-      }
-    }
-    for (const ob of model.obligations()) {
-      if (!ob.isStateTemporal() || ob.temporal()?.pattern !== "leads-to")
-        continue;
-      const target = ob.id().asTargetId();
-      if (skipped.some((s) => s.isFor(target)))
-        continue;
-      if (!bounded) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("capability"),
-          detail: "leads-to temporal properties require bounded mode (quint verify with Apalache); simulation cannot decide them"
-        }));
-        continue;
-      }
-      const r = runs.temporalOf(ob.id());
-      if (!r) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("unavailable"),
-          detail: "quint returned no run for this temporal obligation"
-        }));
-        continue;
-      }
-      const skip = r.skipFor(target);
-      if (skip !== null) {
-        skipped.push(skip);
-      } else if (r.isViolation()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.conflict(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([target])),
-          targets: TargetIdentifiers.of([target]),
-          witness: r.witness(),
-          detail: `Temporal obligation ${ob.id().asString()} (leads-to) is violated: the attached trace reaches the "from" condition but never the "to" condition.`
-        }));
-      }
-    }
-    for (const sc of model.scenarios()) {
-      const target = sc.id().asTargetId();
-      if (sc.hasEvent()) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("capability"),
-          detail: "scenarios with a When-event are not checked by the quint backend in v1"
-        }));
-        continue;
-      }
-      if (!this.#hasInitFor(sc.id())) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("capability"),
-          detail: "quint scenario evaluation requires bindings for every declared attribute"
-        }));
-        continue;
-      }
-      const r = runs.scenarioOf(sc.id());
-      if (!r) {
-        skipped.push(VerificationSkipped.of({
-          target,
-          reason: SkipReason.of("unavailable"),
-          detail: "quint returned no run for this scenario"
-        }));
-        continue;
-      }
-      const skip = r.skipFor(target);
-      if (skip !== null) {
-        skipped.push(skip);
-        continue;
-      }
-      const bindings = sc.bindings().entriesCanonically();
-      const state = TraceState.of(bindings.map((binding) => [binding.path(), TraceValue.of(binding.value().toDocument())]));
-      const boundModel = sc.bindings().toDocument();
-      if (sc.isAccept() && r.isViolated()) {
-        const violatedComponents = this.#invariantComponents.violatedBy(state);
-        const targets = TargetIdentifiers.of([
-          target,
-          ...violatedComponents.ids().toTargetIds()
-        ]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
-          targets,
-          witness: VerificationWitness.model(boundModel),
-          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations rule out \u2014 the requirements reject an example that should be accepted.`
-        }));
-      }
-      if (sc.isReject() && !r.isViolated()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([target])),
-          targets: TargetIdentifiers.of([target]),
-          witness: VerificationWitness.model(boundModel),
-          detail: `Reject scenario ${sc.id().asString()} is accepted by every obligation \u2014 the requirements do not exclude an example that should be rejected.`
-        }));
-      }
-    }
-    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
-  }
-}
 // src/requirements/domain/quint-machine-run-verdict.ts
 class QuintMachineRunVerdict {
   #kind;
@@ -3582,6 +3549,9 @@ class QuintMachineRunVerdict {
     this.#kind = props.kind;
     this.#trace = props.trace;
     this.#outputTail = props.outputTail;
+  }
+  static missing() {
+    return new QuintMachineRunVerdict({ kind: "missing", trace: null, outputTail: "" });
   }
   static timeout() {
     return new QuintMachineRunVerdict({ kind: "timeout", trace: null, outputTail: "" });
@@ -3603,6 +3573,12 @@ class QuintMachineRunVerdict {
   }
   skipsFor(targets, bounded) {
     const kind = this.#kind;
+    if (kind === "missing")
+      return [...targets].map((target) => VerificationSkipped.of({
+        target,
+        reason: SkipReason.unavailable(),
+        detail: "quint returned no machine run: the event machine was not decided"
+      }));
     if (kind === "timeout") {
       return [...targets].map((target) => VerificationSkipped.of({
         target,
@@ -3619,6 +3595,37 @@ class QuintMachineRunVerdict {
       }));
     }
     return [];
+  }
+  interpret(model, components, events, method) {
+    const findings = [];
+    const machineTargets = TargetIdentifiers.of([
+      ...components.ids().toTargetIds(),
+      ...events.toTargetIds()
+    ]).sortedUniqueCanonically();
+    const eventTargets = events.toTargetIds();
+    if (this.isDeadlock()) {
+      findings.push(VerificationFinding.of({
+        kind: FindingKind.completenessGap(),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(eventTargets),
+        targets: events.isEmpty() ? machineTargets : eventTargets.sortedCanonically(),
+        witness: this.witness(),
+        detail: "The event machine reaches a legal state where no event rule applies (deadlock): the behavior of that state is unspecified."
+      }));
+    } else if (this.isViolation()) {
+      const violatedComponents = components.violatedBy(this.finalState());
+      const targets = violatedComponents.isEmpty() ? eventTargets.sortedCanonically() : violatedComponents.ids().toTargetIds().sortedUniqueCanonically();
+      findings.push(VerificationFinding.of({
+        kind: FindingKind.conflict(),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([...targets, ...eventTargets]).sortedUniqueCanonically()),
+        targets,
+        witness: this.witness(),
+        detail: `The event machine can reach a state that violates ${targets.joined(", ")} (step trace attached): the event rules do not preserve the obligation.`
+      }));
+    }
+    return {
+      findings: VerificationFindings.of(findings),
+      skipped: VerificationSkips.of(this.skipsFor(machineTargets, method.isBounded()))
+    };
   }
   isDeadlock() {
     return this.#kind === "deadlock";
@@ -3640,7 +3647,7 @@ class QuintRuns {
   #temporals;
   #scenarios;
   constructor(seed) {
-    this.#machine = seed.machine;
+    this.#machine = seed.machine ?? QuintMachineRunVerdict.missing();
     this.#temporals = seed.temporals;
     this.#scenarios = seed.scenarios;
   }
@@ -3992,6 +3999,30 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
   static of(props) {
     return new SatisfiabilityModuloTheoriesEventPairProbe(props);
   }
+  interpret(model, results) {
+    const overlap = this.overlapVerdictIn(results);
+    const joint = this.jointVerdictIn(results);
+    if (overlap.isSat() && joint.isUnsat()) {
+      const targets = this.targets().sortedUniqueCanonically();
+      return {
+        findings: VerificationFindings.of([
+          VerificationFinding.of({
+            kind: FindingKind.conflict(),
+            functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+            targets,
+            witness: VerificationWitness.core(joint.sortedCore()),
+            detail: `Events ${this.#a.asString()} and ${this.#b.asString()} for trigger "${this.#trigger.asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`
+          })
+        ]),
+        skipped: VerificationSkips.of([])
+      };
+    }
+    const pending = [overlap, joint].find((verdict) => verdict.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
+    return {
+      findings: VerificationFindings.of([]),
+      skipped: overlap.isUndecided() || joint.isUndecided() ? pending.skipsFor(this.targets(), `event-pair check for trigger "${this.#trigger.asString()}"`) : VerificationSkips.of([])
+    };
+  }
   a() {
     return this.#a;
   }
@@ -4091,6 +4122,76 @@ class SatisfiabilityModuloTheoriesQueryVerdicts {
     return this.#values.get(queryId) ?? SatisfiabilityModuloTheoriesQueryVerdict.missing();
   }
 }
+// src/requirements/domain/satisfiability-modulo-theories-probe.ts
+class SatisfiabilityModuloTheoriesProbe {
+  #query;
+  #subject;
+  constructor(query, subject) {
+    this.#query = query;
+    this.#subject = { ...subject };
+  }
+  static consistency(fallback, labels) {
+    return new SatisfiabilityModuloTheoriesProbe(QueryLabel.of("global"), { kind: "consistency", fallback, labels });
+  }
+  static vacuity(query, subject, labels) {
+    return new SatisfiabilityModuloTheoriesProbe(query, { kind: "vacuity", subject, labels });
+  }
+  static completeness(trigger, targets) {
+    return new SatisfiabilityModuloTheoriesProbe(QueryLabel.of(`gap:${trigger.asString()}`), {
+      kind: "completeness",
+      trigger,
+      targets
+    });
+  }
+  static scenario(query, subject, labels) {
+    return new SatisfiabilityModuloTheoriesProbe(query, { kind: "scenario", subject, labels });
+  }
+  allowsVacuityChecks(results) {
+    return this.#subject.kind === "consistency" && !results.verdictOf(this.#query).isUnsat();
+  }
+  #coreTargets(labels) {
+    const state = this.#subject;
+    if (state.kind === "completeness")
+      return TargetIdentifiers.of([]);
+    return TargetIdentifiers.of(labels.map((label) => state.labels.get(label)).filter((target) => target?.isRequirementObligation() ?? false)).sortedUniqueCanonically();
+  }
+  interpret(model, results) {
+    const verdict = results.verdictOf(this.#query);
+    const state = this.#subject;
+    if (state.kind === "scenario")
+      return state.subject.interpretSatisfiability(model, verdict, this.#coreTargets([...verdict.coreLabels()]));
+    const targets = state.kind === "consistency" ? state.fallback : state.kind === "vacuity" ? TargetIdentifiers.of([state.subject.asTargetId()]) : state.targets;
+    const context = state.kind === "consistency" ? "global consistency check" : state.kind === "vacuity" ? `vacuity check for ${state.subject.asString()}` : `completeness check for trigger "${state.trigger.asString()}"`;
+    if (verdict.isUndecided())
+      return {
+        findings: VerificationFindings.of([]),
+        skipped: verdict.skipsFor(targets, context)
+      };
+    let finding = null;
+    if (state.kind === "completeness" && verdict.isSat())
+      finding = VerificationFinding.of({
+        kind: FindingKind.completenessGap(),
+        functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+        targets,
+        witness: VerificationWitness.model(verdict.witnessModel()),
+        detail: `No rule for trigger "${state.trigger.asString()}" applies to the witness state: the behavior of this input region is unspecified.`
+      });
+    if (state.kind !== "completeness" && verdict.isUnsat()) {
+      const core = this.#coreTargets([...verdict.coreLabels()]);
+      const effective = state.kind === "vacuity" ? TargetIdentifiers.of([...core, state.subject.asTargetId()]).sortedUniqueCanonically() : core.count() > 0 ? core : state.fallback;
+      if (effective.count() > 0)
+        finding = VerificationFinding.of({
+          kind: FindingKind.conflict(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
+          targets: effective,
+          witness: VerificationWitness.core(verdict.sortedCore()),
+          detail: state.kind === "consistency" ? "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them." : `The condition of obligation ${state.subject.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`
+        });
+    }
+    return { findings: VerificationFindings.of(finding === null ? [] : [finding]), skipped: VerificationSkips.of([]) };
+  }
+}
+
 // src/requirements/domain/satisfiability-modulo-theories-verification-plan.ts
 class SatisfiabilityModuloTheoriesVerificationPlan {
   #compiled;
@@ -4117,122 +4218,39 @@ class SatisfiabilityModuloTheoriesVerificationPlan {
   }
   interpret(model, results) {
     const findings = [];
-    const skipped = [...this.#skipped.toArray()];
-    const conflictKeys = new Set;
-    const invariantIds = TargetIdentifiers.of(model.obligations().toArray().filter((o) => o.isInvariantLike() && this.#compiled.has(o.id())).map((o) => o.id().asTargetId()));
-    const coreToTargets = (core) => {
-      const targets = core.map((label) => this.#labelToTarget.get(label)).filter((t) => t?.asString().startsWith("OB-") ?? false);
-      return TargetIdentifiers.of(targets).sortedUniqueCanonically();
+    const skipped = [...this.#skipped];
+    const collect = (evidence) => {
+      findings.push(...evidence.findings);
+      skipped.push(...evidence.skipped);
     };
-    const addConflict = (targets, core, detail) => {
-      const effective = targets.count() > 0 ? targets : invariantIds;
-      if (effective.count() === 0)
-        return;
-      const key = effective.joined(",");
-      if (conflictKeys.has(key))
-        return;
-      conflictKeys.add(key);
-      findings.push(VerificationFinding.of({
-        kind: FindingKind.conflict(),
-        functionalRequirementReferences: model.functionalRequirementReferencesOf(effective),
-        targets: effective,
-        witness: VerificationWitness.core(core.map((label) => label.asString()).sort()),
-        detail
-      }));
-    };
-    const global = results.verdictOf(QueryLabel.of("global"));
-    let globallyUnsat = false;
-    if (global.isUnsat()) {
-      globallyUnsat = true;
-      addConflict(coreToTargets([...global.coreLabels()]), [...global.coreLabels()], "These obligations (with the background and type bounds in the witness core) are jointly unsatisfiable: no state can satisfy all of them.");
-    } else if (global.isUndecided()) {
-      skipped.push(...global.skipsFor(invariantIds, "global consistency check"));
+    const consistency = SatisfiabilityModuloTheoriesProbe.consistency(model.obligations().compiledInvariantTargets(this.#compiled), this.#labelToTarget);
+    collect(consistency.interpret(model, results));
+    if (consistency.allowsVacuityChecks(results))
+      for (const [subject, query] of this.#vacuityQueries)
+        collect(SatisfiabilityModuloTheoriesProbe.vacuity(query, subject, this.#labelToTarget).interpret(model, results));
+    for (const pair of this.#eventPairs)
+      collect(pair.interpret(model, results));
+    for (const [trigger, targets] of [...this.#gapTriggers].sort((a, b) => a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0))
+      collect(SatisfiabilityModuloTheoriesProbe.completeness(trigger, targets).interpret(model, results));
+    for (const scenario of model.scenarios()) {
+      const query = this.#scenarioQueries.get(scenario.id());
+      if (query !== undefined)
+        collect(SatisfiabilityModuloTheoriesProbe.scenario(query, scenario, this.#labelToTarget).interpret(model, results));
     }
-    if (!globallyUnsat) {
-      for (const [obligationId, queryId] of this.#vacuityQueries) {
-        const r = results.verdictOf(queryId);
-        if (r.isUnsat()) {
-          const targets = TargetIdentifiers.of([
-            ...coreToTargets([...r.coreLabels()]),
-            obligationId.asTargetId()
-          ]).sortedUniqueCanonically();
-          addConflict(targets, [...r.coreLabels()], `The condition of obligation ${obligationId.asString()} can never hold: the obligations in the witness core annihilate it. Rules that conflict on a shared condition, or a dead requirement branch.`);
-        } else if (r.isUndecided()) {
-          skipped.push(...r.skipsFor(TargetIdentifiers.of([obligationId.asTargetId()]), `vacuity check for ${obligationId.asString()}`));
-        }
-      }
-    }
-    for (const pair of this.#eventPairs) {
-      const overlap = pair.overlapVerdictIn(results);
-      const joint = pair.jointVerdictIn(results);
-      if (overlap.isSat() && joint.isUnsat()) {
-        addConflict(pair.targets().sortedUniqueCanonically(), [...joint.coreLabels()], `Events ${pair.a().asString()} and ${pair.b().asString()} for trigger "${pair.trigger().asString()}" have overlapping guards but contradictory effects: some state matches both rules, and no post-state satisfies both.`);
-      } else if (overlap.isUndecided() || joint.isUndecided()) {
-        const pending = [overlap, joint].find((v) => v.isMissing()) ?? (overlap.isUndecided() ? overlap : joint);
-        skipped.push(...pending.skipsFor(pair.targets(), `event-pair check for trigger "${pair.trigger().asString()}"`));
-      }
-    }
-    for (const [triggerName, eventIds] of [...this.#gapTriggers].sort((a, b) => a[0].asString() < b[0].asString() ? -1 : a[0].asString() > b[0].asString() ? 1 : 0)) {
-      const trigger = triggerName.asString();
-      const r = results.verdictOf(QueryLabel.of(`gap:${trigger}`));
-      if (r.isSat()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.completenessGap(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(eventIds),
-          targets: eventIds,
-          witness: VerificationWitness.model(r.witnessModel()),
-          detail: `No rule for trigger "${trigger}" applies to the witness state: the behavior of this input region is unspecified.`
-        }));
-      } else if (r.isUndecided()) {
-        skipped.push(...r.skipsFor(eventIds, `completeness check for trigger "${trigger}"`));
-      }
-    }
-    for (const sc of model.scenarios()) {
-      const qid = this.#scenarioQueries.get(sc.id());
-      if (!qid)
-        continue;
-      const r = results.verdictOf(qid);
-      if (r.isUndecided()) {
-        skipped.push(...r.skipsFor(TargetIdentifiers.of([sc.id().asTargetId()]), `scenario check for ${sc.id().asString()}`));
-        continue;
-      }
-      if (sc.isAccept() && r.isUnsat()) {
-        const targets = TargetIdentifiers.of([
-          sc.id().asTargetId(),
-          ...coreToTargets([...r.coreLabels()])
-        ]).sortedUniqueCanonically();
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
-          targets,
-          witness: VerificationWitness.core(r.sortedCore()),
-          detail: `Accept scenario ${sc.id().asString()} describes a state the obligations in the witness core rule out \u2014 the requirements reject an example that should be accepted.`
-        }));
-      }
-      if (sc.isReject() && r.isSat()) {
-        findings.push(VerificationFinding.of({
-          kind: FindingKind.scenarioViolation(),
-          functionalRequirementReferences: model.functionalRequirementReferencesOf(TargetIdentifiers.of([sc.id().asTargetId()])),
-          targets: TargetIdentifiers.of([sc.id().asTargetId()]),
-          witness: VerificationWitness.model(r.witnessModel()),
-          detail: `Reject scenario ${sc.id().asString()} is still satisfiable \u2014 the requirements do not exclude an example that should be rejected (witness state attached).`
-        }));
-      }
-    }
-    return { findings: VerificationFindings.of(findings), skipped: VerificationSkips.of(skipped) };
+    return { findings: VerificationFindings.of(findings).distinctConflicts(), skipped: VerificationSkips.of(skipped) };
   }
 }
 // src/requirements/domain/scenario.ts
 class Scenario {
   #id;
-  #kind;
+  #expectation;
   #functionalRequirementReferences;
   #bindings;
   #eventTrigger;
   #expect;
   constructor(props) {
     this.#id = props.id;
-    this.#kind = props.kind;
+    this.#expectation = props.expectation;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
@@ -4248,7 +4266,7 @@ class Scenario {
     return this.#id;
   }
   kind() {
-    return this.#kind;
+    return this.#expectation.asString();
   }
   functionalRequirementReferences() {
     return this.#functionalRequirementReferences;
@@ -4256,20 +4274,83 @@ class Scenario {
   eventTrigger() {
     return this.#eventTrigger;
   }
-  expectation() {
+  expectedExpression() {
     return this.#expect;
   }
   isAccept() {
-    return this.#kind === "accept";
+    return this.#expectation.isAccept();
   }
   isReject() {
-    return this.#kind === "reject";
+    return this.#expectation.isReject();
   }
   hasEvent() {
     return this.#eventTrigger !== undefined;
   }
   isViolatedBySatisfiability(satisfiable) {
-    return this.isAccept() && !satisfiable || this.isReject() && satisfiable;
+    return this.#expectation.isViolatedBySatisfiability(satisfiable);
+  }
+  interpretQuint(model, verdict, hasInitialState, components) {
+    const target = this.#id.asTargetId();
+    let skip = null;
+    if (this.hasEvent())
+      skip = VerificationSkipped.of({
+        target,
+        reason: SkipReason.capability(),
+        detail: "scenarios with a When-event are not checked by the quint backend in v1"
+      });
+    else if (!hasInitialState)
+      skip = VerificationSkipped.of({
+        target,
+        reason: SkipReason.capability(),
+        detail: "quint scenario evaluation requires bindings for every declared attribute"
+      });
+    else if (verdict === undefined)
+      skip = VerificationSkipped.of({
+        target,
+        reason: SkipReason.unavailable(),
+        detail: "quint returned no run for this scenario"
+      });
+    else
+      skip = verdict.skipFor(target);
+    if (skip !== null)
+      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([skip]) };
+    if (verdict === undefined || !this.isViolatedBySatisfiability(!verdict.isViolated()))
+      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) };
+    const accept = this.isAccept();
+    const violated = accept ? components.violatedBy(TraceState.fromBindings(this.#bindings)).ids().toTargetIds() : TargetIdentifiers.of([]);
+    const targets = TargetIdentifiers.of([target, ...violated]).sortedUniqueCanonically();
+    return {
+      findings: VerificationFindings.of([
+        VerificationFinding.of({
+          kind: FindingKind.scenarioViolation(),
+          functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+          targets,
+          witness: VerificationWitness.model(this.#bindings.toDocument()),
+          detail: accept ? `Accept scenario ${this.#id.asString()} describes a state the obligations rule out \u2014 the requirements reject an example that should be accepted.` : `Reject scenario ${this.#id.asString()} is accepted by every obligation \u2014 the requirements do not exclude an example that should be rejected.`
+        })
+      ]),
+      skipped: VerificationSkips.of([])
+    };
+  }
+  interpretSatisfiability(model, verdict, coreTargets) {
+    const target = this.#id.asTargetId();
+    if (verdict.isUndecided())
+      return {
+        findings: VerificationFindings.of([]),
+        skipped: verdict.skipsFor(TargetIdentifiers.of([target]), `scenario check for ${this.#id.asString()}`)
+      };
+    if (!this.isViolatedBySatisfiability(verdict.isSat()))
+      return { findings: VerificationFindings.of([]), skipped: VerificationSkips.of([]) };
+    const accept = this.isAccept();
+    const targets = accept ? TargetIdentifiers.of([target, ...coreTargets]).sortedUniqueCanonically() : TargetIdentifiers.of([target]);
+    const finding = VerificationFinding.of({
+      kind: FindingKind.scenarioViolation(),
+      functionalRequirementReferences: model.functionalRequirementReferencesOf(targets),
+      targets,
+      witness: accept ? VerificationWitness.core(verdict.sortedCore()) : VerificationWitness.model(verdict.witnessModel()),
+      detail: accept ? `Accept scenario ${this.#id.asString()} describes a state the obligations in the witness core rule out \u2014 the requirements reject an example that should be accepted.` : `Reject scenario ${this.#id.asString()} is still satisfiable \u2014 the requirements do not exclude an example that should be rejected (witness state attached).`
+    });
+    return { findings: VerificationFindings.of([finding]), skipped: VerificationSkips.of([]) };
   }
   bindings() {
     return this.#bindings;
@@ -4600,6 +4681,7 @@ function parseFormalModel(raw) {
       continue;
     const parsed = combineResults({
       id: ScenarioIdentifier.parse(sc.id),
+      expectation: ScenarioExpectation.parse(kind),
       bindings: decodeScenarioBindings(sc.bindings),
       frRefs: flatMapResult(traverseResult(strArr(sc.frRefs), RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
       trigger: isObject(sc.event) && typeof sc.event.trigger === "string" ? TriggerName.parse(sc.event.trigger) : ok(undefined)
@@ -4608,7 +4690,7 @@ function parseFormalModel(raw) {
       return err(JSON.stringify(parsed.error));
     const constructed = Scenario.parse({
       id: parsed.value.id,
-      kind,
+      expectation: parsed.value.expectation,
       functionalRequirementReferences: parsed.value.frRefs,
       bindings: parsed.value.bindings,
       event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },

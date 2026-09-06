@@ -5,13 +5,13 @@
 
 import type { KeyedIndex } from "@deep-spec-analysis/kernel-domain";
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
-import type { QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";
+import { QuintMachineRunVerdict } from "./quint-machine-run-verdict.ts";
 import type { QuintScenarioVerdict } from "./quint-scenario-verdict.ts";
 import type { QuintTemporalVerdict } from "./quint-temporal-verdict.ts";
 import type { ScenarioIdentifier } from "./scenario-identifier.ts";
 
 export class QuintRuns {
-  readonly #machine: QuintMachineRunVerdict | null;
+  readonly #machine: QuintMachineRunVerdict;
   readonly #temporals: KeyedIndex<ObligationIdentifier, QuintTemporalVerdict>;
   readonly #scenarios: KeyedIndex<ScenarioIdentifier, QuintScenarioVerdict>;
 
@@ -20,7 +20,7 @@ export class QuintRuns {
     readonly temporals: KeyedIndex<ObligationIdentifier, QuintTemporalVerdict>;
     readonly scenarios: KeyedIndex<ScenarioIdentifier, QuintScenarioVerdict>;
   }) {
-    this.#machine = seed.machine;
+    this.#machine = seed.machine ?? QuintMachineRunVerdict.missing();
     this.#temporals = seed.temporals;
     this.#scenarios = seed.scenarios;
   }
@@ -37,7 +37,7 @@ export class QuintRuns {
     });
   }
 
-  machineRun(): QuintMachineRunVerdict | null {
+  machineRun(): QuintMachineRunVerdict {
     return this.#machine;
   }
 

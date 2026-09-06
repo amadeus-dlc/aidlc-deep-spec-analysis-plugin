@@ -41,6 +41,19 @@ export class VerificationFindings {
     return this.#values.length === 0;
   }
 
+  distinctConflicts(): VerificationFindings {
+    const seen = new Set<string>();
+    return new VerificationFindings(
+      this.#values.filter((finding) => {
+        if (!finding.isConflict()) return true;
+        const key = finding.targets().joined(",");
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }),
+    );
+  }
+
   toArray(): readonly VerificationFinding[] {
     return this.#values;
   }

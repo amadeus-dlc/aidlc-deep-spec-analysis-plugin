@@ -2,6 +2,7 @@ import type {
   Expression,
   FunctionalRequirementReferences,
   ScenarioBindings,
+  ScenarioExpectation,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
@@ -16,7 +17,7 @@ import type { LoweredIdentifier } from "./lowered-identifier.ts";
 type LoweredScenarioParam = {
   id: LoweredIdentifier;
   origin: DesignScenarioIdentifier;
-  kind: "accept" | "reject";
+  expectation: ScenarioExpectation;
   functionalRequirementReferences: FunctionalRequirementReferences;
   bindings: ScenarioBindings;
   event?: { readonly trigger: TriggerName };
@@ -26,7 +27,7 @@ type LoweredScenarioParam = {
 export class LoweredScenario {
   readonly #id: LoweredIdentifier;
   readonly #origin: DesignScenarioIdentifier;
-  readonly #kind: "accept" | "reject";
+  readonly #expectation: ScenarioExpectation;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #bindings: ScenarioBindings;
   readonly #eventTrigger: TriggerName | undefined;
@@ -35,7 +36,7 @@ export class LoweredScenario {
   private constructor(props: LoweredScenarioParam) {
     this.#id = props.id;
     this.#origin = props.origin;
-    this.#kind = props.kind;
+    this.#expectation = props.expectation;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
@@ -59,7 +60,7 @@ export class LoweredScenario {
   }
 
   kind(): "accept" | "reject" {
-    return this.#kind;
+    return this.#expectation.asString();
   }
 
   functionalRequirementReferences(): FunctionalRequirementReferences {
@@ -74,11 +75,15 @@ export class LoweredScenario {
     return this.#eventTrigger === undefined ? undefined : { trigger: this.#eventTrigger.asString() };
   }
 
-  expectation(): Expression | undefined {
+  expectedExpression(): Expression | undefined {
     return this.#expect;
   }
 
+  isViolatedBySatisfiability(satisfiable: boolean): boolean {
+    return this.#expectation.isViolatedBySatisfiability(satisfiable);
+  }
+
   isAccept(): boolean {
-    return this.#kind === "accept";
+    return this.#expectation.isAccept();
   }
 }

@@ -1,4 +1,6 @@
+import { type KeySet, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import type { Obligation } from "./obligation.ts";
+import type { ObligationIdentifier } from "./obligation-identifier.ts";
 
 export class Obligations {
   readonly #values: readonly Obligation[];
@@ -17,6 +19,14 @@ export class Obligations {
 
   *[Symbol.iterator](): Iterator<Obligation> {
     yield* this.#values;
+  }
+
+  compiledInvariantTargets(compiled: KeySet<ObligationIdentifier>): TargetIdentifiers {
+    return TargetIdentifiers.of(
+      this.#values
+        .filter((obligation) => obligation.isInvariantLike() && compiled.has(obligation.id()))
+        .map((obligation) => obligation.id().asTargetId()),
+    );
   }
 
   byId(id: string): Obligation | undefined {

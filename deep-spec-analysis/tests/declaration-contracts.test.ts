@@ -18,6 +18,7 @@ import {
   FindingsSchema,
   FunctionalRequirementReferences,
   ScenarioBindings,
+  ScenarioExpectation,
   TargetIdentifier,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
@@ -178,7 +179,7 @@ test("lowered event data and sibling targets do not retain mutable argument cont
   const lowered = LoweredScenario.of({
     origin: DesignScenarioIdentifier.of("DSC-1"),
     id: LoweredIdentifier.of("SC-1"),
-    kind: "accept",
+    expectation: ScenarioExpectation.of("accept"),
     functionalRequirementReferences: FunctionalRequirementReferences.of([]),
     bindings: ScenarioBindings.of([]),
     event,

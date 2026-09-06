@@ -7,6 +7,7 @@ import {
   type Expression,
   FunctionalRequirementReferences,
   RequirementIdentifier,
+  ScenarioExpectation,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
@@ -193,6 +194,7 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
       if (sc.kind !== "accept" && sc.kind !== "reject") continue;
       const parsed = combineResults({
         id: ScenarioIdentifier.parse(sc.id),
+        expectation: ScenarioExpectation.parse(sc.kind),
         bindings: decodeScenarioBindings(sc.bindings),
         frRefs: flatMapResult(
           traverseResult(strArr(sc.frRefs), RequirementIdentifier.parse),
@@ -207,7 +209,7 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
       scenarios.push(
         RefinementScenario.of({
           id: parsed.value.id,
-          kind: sc.kind,
+          expectation: parsed.value.expectation,
           functionalRequirementReferences: parsed.value.frRefs,
           bindings: parsed.value.bindings,
           event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },

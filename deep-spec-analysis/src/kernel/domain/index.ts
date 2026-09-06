@@ -36,6 +36,7 @@ export { RequirementIdentifier } from "./requirement-identifier.ts";
 export { RequirementIdentifiers } from "./requirement-identifiers.ts";
 export { ScenarioBinding } from "./scenario-binding.ts";
 export { ScenarioBindings } from "./scenario-bindings.ts";
+export { ScenarioExpectation } from "./scenario-expectation.ts";
 export { SkipReason } from "./skip-reason.ts";
 export { TargetIdentifier } from "./target-identifier.ts";
 export { TargetIdentifiers } from "./target-identifiers.ts";

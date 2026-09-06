@@ -45,6 +45,10 @@ export class TargetIdentifier {
     return compareCanonically(this.#value, other.#value);
   }
 
+  isRequirementObligation(): boolean {
+    return this.#value.startsWith("OB-");
+  }
+
   asString(): string {
     return this.#value;
   }

@@ -1471,6 +1471,35 @@ class ScenarioBindings {
     return Object.fromEntries(this.entriesCanonically().map((binding) => [binding.path().asString(), binding.value().toDocument()]));
   }
 }
+// src/kernel/domain/scenario-expectation.ts
+class ScenarioExpectation {
+  #kind;
+  constructor(value) {
+    if (value.length > 6)
+      throw new IllegalArgumentException({ kind: "scenario-expectation-too-long", raw: value.length });
+    if (value !== "accept" && value !== "reject")
+      throw new IllegalArgumentException({ kind: "unknown-scenario-expectation", raw: value });
+    this.#kind = value;
+  }
+  static of(value) {
+    return new ScenarioExpectation(value);
+  }
+  static parse(value) {
+    return parseConstruction(() => new ScenarioExpectation(value));
+  }
+  isAccept() {
+    return this.#kind === "accept";
+  }
+  isReject() {
+    return this.#kind === "reject";
+  }
+  isViolatedBySatisfiability(satisfiable) {
+    return this.#kind === "accept" ? !satisfiable : satisfiable;
+  }
+  asString() {
+    return this.#kind;
+  }
+}
 // src/kernel/domain/skip-reason.ts
 var KNOWN_REASONS = new Set([
   "unavailable",
@@ -1561,6 +1590,9 @@ class TargetIdentifier {
   }
   compareTo(other) {
     return compareCanonically(this.#value, other.#value);
+  }
+  isRequirementObligation() {
+    return this.#value.startsWith("OB-");
   }
   asString() {
     return this.#value;
@@ -1689,6 +1721,9 @@ class VerificationMethod {
   }
   static parse(raw) {
     return parseConstruction(() => new VerificationMethod(raw));
+  }
+  isBounded() {
+    return this.#value === "bounded";
   }
   equals(other) {
     return this.#value === other.#value;

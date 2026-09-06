@@ -1,4 +1,9 @@
-import type { FunctionalRequirementReferences, ScenarioBindings, TriggerName } from "@deep-spec-analysis/kernel-domain";
+import type {
+  FunctionalRequirementReferences,
+  ScenarioBindings,
+  ScenarioExpectation,
+  TriggerName,
+} from "@deep-spec-analysis/kernel-domain";
 import type { ScenarioIdentifier } from "@deep-spec-analysis/requirements-domain";
 import { AttributePaths } from "./attribute-paths.ts";
 import { RefinementStatus } from "./refinement-status.ts";
@@ -7,7 +12,7 @@ import type { RefinementUnitMap } from "./refinement-unit-map.ts";
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type RefinementScenarioParam = {
   id: ScenarioIdentifier;
-  kind: "accept" | "reject";
+  expectation: ScenarioExpectation;
   functionalRequirementReferences: FunctionalRequirementReferences;
   bindings: ScenarioBindings;
   event?: { readonly trigger: TriggerName };
@@ -15,14 +20,14 @@ type RefinementScenarioParam = {
 
 export class RefinementScenario {
   readonly #id: ScenarioIdentifier;
-  readonly #kind: "accept" | "reject";
+  readonly #expectation: ScenarioExpectation;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #bindings: ScenarioBindings;
   readonly #eventTrigger: TriggerName | undefined;
 
   private constructor(props: RefinementScenarioParam) {
     this.#id = props.id;
-    this.#kind = props.kind;
+    this.#expectation = props.expectation;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#bindings = props.bindings;
     this.#eventTrigger = props.event?.trigger;
@@ -49,7 +54,7 @@ export class RefinementScenario {
     return this.#id;
   }
   kind(): "accept" | "reject" {
-    return this.#kind;
+    return this.#expectation.asString();
   }
   functionalRequirementReferences(): FunctionalRequirementReferences {
     return this.#functionalRequirementReferences;
@@ -57,11 +62,15 @@ export class RefinementScenario {
   eventTrigger(): TriggerName | undefined {
     return this.#eventTrigger;
   }
+  isViolatedBySatisfiability(satisfiable: boolean): boolean {
+    return this.#expectation.isViolatedBySatisfiability(satisfiable);
+  }
+
   isAccept(): boolean {
-    return this.#kind === "accept";
+    return this.#expectation.isAccept();
   }
   isReject(): boolean {
-    return this.#kind === "reject";
+    return this.#expectation.isReject();
   }
   hasEvent(): boolean {
     return this.#eventTrigger !== undefined;

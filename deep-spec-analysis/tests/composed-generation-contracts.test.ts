@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import * as Design from "@deep-spec-analysis/design-domain";
 import * as Kernel from "@deep-spec-analysis/kernel-domain";
+import { ScenarioExpectation } from "@deep-spec-analysis/kernel-domain";
 import { IllegalArgumentException, type ParseError, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import * as ReferenceCheck from "@deep-spec-analysis/refcheck-domain";
 import * as Requirements from "@deep-spec-analysis/requirements-domain";
@@ -41,7 +42,7 @@ rejects(Requirements.Obligation, {
 });
 rejects(Requirements.Scenario, {
   id: scenario,
-  kind: "accept",
+  expectation: ScenarioExpectation.of("accept"),
   functionalRequirementReferences: references,
   bindings,
   expect: badExpression,
@@ -74,7 +75,7 @@ rejects(Design.DesignObligation, {
 });
 rejects(Design.DesignScenario, {
   id: designScenario,
-  kind: "accept",
+  expectation: ScenarioExpectation.of("accept"),
   businessRuleReferences: rules,
   functionalRequirementReferences: references,
   bindings,
@@ -107,7 +108,7 @@ rejects(Design.LoweredObligation, {
 rejects(Design.LoweredScenario, {
   origin: Design.DesignScenarioIdentifier.of("DSC-1"),
   id: Design.LoweredIdentifier.of("SC-1"),
-  kind: "accept",
+  expectation: ScenarioExpectation.of("accept"),
   functionalRequirementReferences: references,
   bindings,
   expect: badExpression,

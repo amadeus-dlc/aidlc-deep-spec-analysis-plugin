@@ -24,6 +24,10 @@ export class VerificationMethod {
     return parseConstruction(() => new VerificationMethod(raw));
   }
 
+  isBounded(): boolean {
+    return this.#value === "bounded";
+  }
+
   equals(other: VerificationMethod): boolean {
     return this.#value === other.#value;
   }

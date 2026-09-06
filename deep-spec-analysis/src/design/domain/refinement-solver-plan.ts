@@ -1,13 +1,4 @@
-import {
-  FindingKind,
-  type FunctionalRequirementReferences,
-  type KeyedIndex,
-  type QueryLabel,
-  SkipReason,
-  TargetIdentifier,
-  TargetIdentifiers,
-  UnitName,
-} from "@deep-spec-analysis/kernel-domain";
+import { type KeyedIndex, type QueryLabel, UnitName } from "@deep-spec-analysis/kernel-domain";
 
 // refinement ソルバ実行の型付き判定と計画（対応表）。SMT-LIB スクリプト・z3 の生
 // 表現はアダプタ（第 2 コンパイラ＋クライアント）が持ち、ドメインへは
@@ -23,11 +14,10 @@ import {
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
-import { DesignFinding } from "./design-finding.ts";
+import type { DesignFinding } from "./design-finding.ts";
 import { DesignFindings } from "./design-findings.ts";
-import { DesignSkipped } from "./design-skipped.ts";
+import type { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
-import { DesignWitness } from "./design-witness.ts";
 import type { RefinementProbe } from "./refinement-probe.ts";
 import type { RefinementQueryVerdicts } from "./refinement-query-verdicts.ts";
 import type { UnitRefinementPlan } from "./unit-refinement-plan.ts";
@@ -53,6 +43,10 @@ export class RefinementSolverPlan {
     const targets = new Set(props.preparation.requirements().allTargetIds().toStrings());
     const unit = props.preparation.unit().name();
     for (const [, probe] of props.pending) {
+      if (!probe.belongsToRequirements(props.preparation.requirements()))
+        throw new IllegalArgumentException({ kind: "refinement-probe-outside-preparation" });
+      if (!probe.belongsTo(UnitName.of(unit)))
+        throw new IllegalArgumentException({ kind: "refinement-probe-unit-mismatch" });
       if (!targets.has(probe.reqTarget().asString()))
         throw new IllegalArgumentException({ kind: "refinement-probe-outside-preparation" });
     }
@@ -86,116 +80,13 @@ export class RefinementSolverPlan {
     yield* this.#pending;
   }
 
-  // 旧 interpretRefinementVerdicts の逐語移植。
-  interpret(results: RefinementQueryVerdicts): {
-    findings: DesignFindings;
-    skipped: DesignSkips;
-  } {
-    const plan = this.#preparation;
-    const req = plan.requirements();
-    const unitName = plan.unit().name();
+  interpret(results: RefinementQueryVerdicts): { findings: DesignFindings; skipped: DesignSkips } {
     const findings: DesignFinding[] = [];
     const skipped: DesignSkipped[] = [];
-    const functionalRequirementReferencesOf = (reqId: string): FunctionalRequirementReferences =>
-      req.functionalRequirementReferencesOf(reqId).sortedUnique();
-
-    for (const [queryId, p] of this.#pending) {
-      const r = results.verdictOf(queryId);
-      if (!r || r.isUndecided()) {
-        skipped.push(
-          DesignSkipped.of({
-            target: p.reqTarget(),
-            reason: SkipReason.timeout(),
-            unit: UnitName.of(unitName),
-            detail: `refinement query ${queryId.asString()} exceeded the solver budget or errored`,
-          }),
-        );
-        continue;
-      }
-      // 種類ごとの解釈は問いへ命じる（#71 波22）。
-      p.match({
-        invariant: (reqId) => {
-          if (r.isSat()) {
-            findings.push(
-              DesignFinding.of({
-                kind: FindingKind.refinementViolation(),
-                functionalRequirementReferences: functionalRequirementReferencesOf(reqId.asString()),
-                targets: TargetIdentifiers.of(Array.from([reqId.asString()], (raw) => TargetIdentifier.of(raw))),
-                witness: DesignWitness.model(r.witnessModel()),
-                unit: UnitName.of(unitName),
-                detail: `A design-legal state of unit ${unitName} violates requirements obligation ${reqId.asString()} under the refinement map (witness design state attached). The design admits what the verified requirements forbid.`,
-              }),
-            );
-          }
-        },
-        scenario: (reqId) => {
-          const sc = req.scenarioById(reqId.asString());
-          if (sc?.isAccept() === true && r.isUnsat()) {
-            findings.push(
-              DesignFinding.of({
-                kind: FindingKind.refinementViolation(),
-                functionalRequirementReferences: functionalRequirementReferencesOf(reqId.asString()),
-                targets: TargetIdentifiers.of(Array.from([reqId.asString()], (raw) => TargetIdentifier.of(raw))),
-                witness: DesignWitness.core(r.sortedCore()),
-                unit: UnitName.of(unitName),
-                detail: `Accept scenario ${reqId.asString()} has no design-legal counterpart in unit ${unitName} under the refinement map: the design excludes an example the requirements accept (witness core attached).`,
-              }),
-            );
-          }
-          if (sc?.isReject() === true && r.isSat()) {
-            findings.push(
-              DesignFinding.of({
-                kind: FindingKind.refinementViolation(),
-                functionalRequirementReferences: functionalRequirementReferencesOf(reqId.asString()),
-                targets: TargetIdentifiers.of(Array.from([reqId.asString()], (raw) => TargetIdentifier.of(raw))),
-                witness: DesignWitness.model(r.witnessModel()),
-                unit: UnitName.of(unitName),
-                detail: `Reject scenario ${reqId.asString()} is still admitted by unit ${unitName} under the refinement map: the design does not exclude an example the requirements reject (witness design state attached).`,
-              }),
-            );
-          }
-        },
-        enabledness: (reqId) => {
-          if (r.isSat()) {
-            findings.push(
-              DesignFinding.of({
-                kind: FindingKind.completenessGap(),
-                functionalRequirementReferences: functionalRequirementReferencesOf(reqId.asString()),
-                targets: TargetIdentifiers.of(
-                  Array.from(
-                    [reqId.asString(), ...plan.mappedTransitionsOf(reqId.asString()).map((t) => t.asString())],
-                    (raw) => TargetIdentifier.of(raw),
-                  ),
-                ).sortedUniqueCanonically(),
-                witness: DesignWitness.model(r.witnessModel()),
-                unit: UnitName.of(unitName),
-                detail: `The requirements event ${reqId.asString()} applies in the witness design state, but none of its mapped design transitions is enabled there: the design has no answer in a region the requirement covers.`,
-              }),
-            );
-          }
-        },
-        simulation: (reqId, designId) => {
-          if (r.isSat()) {
-            findings.push(
-              DesignFinding.of({
-                kind: FindingKind.refinementViolation(),
-                functionalRequirementReferences: functionalRequirementReferencesOf(reqId.asString()),
-                // simulation probe の designId は構築時に必須——旧 `?? ""` +空除去は
-                // designId 未設定の防御で、必須化により恒等（挙動保存）。
-                targets: TargetIdentifiers.of(
-                  Array.from(
-                    [reqId.asString(), designId.asString()].filter((t) => t !== ""),
-                    (raw) => TargetIdentifier.of(raw),
-                  ),
-                ).sortedUniqueCanonically(),
-                witness: DesignWitness.trace(r.witnessTrace()),
-                unit: UnitName.of(unitName),
-                detail: `Design step ${designId.asString()} of unit ${unitName}, taken where requirements event ${reqId.asString()} applies, produces an abstract post-state that violates the requirements effect or the abstract frame (pre/post design states attached).`,
-              }),
-            );
-          }
-        },
-      });
+    for (const [query, probe] of this.#pending) {
+      const interpreted = probe.interpret(query, results.verdictOf(query));
+      findings.push(...interpreted.findings);
+      skipped.push(...interpreted.skipped);
     }
     return { findings: DesignFindings.of(findings), skipped: DesignSkips.of(skipped) };
   }

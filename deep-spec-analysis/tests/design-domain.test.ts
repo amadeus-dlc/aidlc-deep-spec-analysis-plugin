@@ -66,6 +66,7 @@ import {
   FindingKind,
   FunctionalRequirementReferences,
   RequirementIdentifier,
+  ScenarioExpectation,
   SkipReason,
   TargetIdentifier,
   TargetIdentifiers,
@@ -167,7 +168,7 @@ describe("design scenario", () => {
   const scenario = (kind: "accept" | "reject") =>
     DesignScenario.of({
       id: DesignScenarioIdentifier.of("DSC-1"),
-      kind,
+      expectation: ScenarioExpectation.of(kind),
       businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR1.1"], (raw) => BusinessRuleReference.of(raw))),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       bindings: scenarioBindings({}),
@@ -183,7 +184,7 @@ describe("design scenario", () => {
   test("of round-trips every field through the accessors and bindings() hands out a copy", () => {
     const withEvent = DesignScenario.of({
       id: DesignScenarioIdentifier.of("DSC-2"),
-      kind: "reject",
+      expectation: ScenarioExpectation.of("reject"),
       businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR7.1"], (raw) => BusinessRuleReference.of(raw))),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-4"], (raw) => RequirementIdentifier.of(raw)),
@@ -197,7 +198,7 @@ describe("design scenario", () => {
     expect(withEvent.businessRuleReferences().toStrings()).toEqual(["BR7.1"]);
     expect(withEvent.functionalRequirementReferences().toStrings()).toEqual(["FR-4"]);
     expect(withEvent.eventTrigger()?.asString()).toBe("close");
-    expect(withEvent.expectation()).toEqual(lit(true));
+    expect(withEvent.expectedExpression()).toEqual(lit(true));
     expect(withEvent.isAccept()).toBe(false);
     expect(withEvent.isReject()).toBe(true);
     expect(withEvent.hasEvent()).toBe(true);
@@ -649,7 +650,7 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     const accept = LoweredScenario.of({
       origin: DesignScenarioIdentifier.of("DSC-1"),
       id: LoweredIdentifier.of("SC-1"),
-      kind: "accept",
+      expectation: ScenarioExpectation.of("accept"),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-2"], (raw) => RequirementIdentifier.of(raw)),
       ),
@@ -658,7 +659,7 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     const reject = LoweredScenario.of({
       origin: DesignScenarioIdentifier.of("DSC-1"),
       id: LoweredIdentifier.of("SC-2"),
-      kind: "reject",
+      expectation: ScenarioExpectation.of("reject"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       bindings: scenarioBindings({}),
       event: { trigger: TriggerName.of("go") },
@@ -672,7 +673,7 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     expect(accept.bindings().toDocument()).toEqual({ "T.x": 1 });
     expect(accept.event()).toBeUndefined();
     expect(reject.event()).toEqual({ trigger: "go" });
-    expect(reject.expectation()).toEqual({ op: "bool", value: true });
+    expect(reject.expectedExpression()).toEqual({ op: "bool", value: true });
     const bg = LoweredBackground.of({ id: LoweredIdentifier.of("BG-1"), assert: { op: "bool", value: true } });
     expect(bg.id().asString()).toBe("BG-1");
     expect(bg.assertion()).toEqual({ op: "bool", value: true });

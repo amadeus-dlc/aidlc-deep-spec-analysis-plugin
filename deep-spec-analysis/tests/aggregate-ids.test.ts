@@ -9,6 +9,7 @@ import {
   IntermediateRepresentationVersion,
   RequirementIdentifier,
   RequirementIdentifiers,
+  ScenarioExpectation,
   SkipReason,
   TargetIdentifier,
   TargetIdentifiers,
@@ -297,7 +298,7 @@ describe("requirements first-class collections", () => {
     const scs = Scenarios.of([]).add(
       Scenario.of({
         id: ScenarioIdentifier.of("SC-1"),
-        kind: "accept",
+        expectation: ScenarioExpectation.of("accept"),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
         bindings: scenarioBindings({}),
       }),
@@ -392,7 +393,7 @@ describe("design first-class collections", () => {
       DesignScenarios.of([
         DesignScenario.of({
           id: DesignScenarioIdentifier.of("DSC-9"),
-          kind: "reject",
+          expectation: ScenarioExpectation.of("reject"),
           businessRuleReferences: BusinessRuleReferences.of([]),
           functionalRequirementReferences: FunctionalRequirementReferences.of([]),
           bindings: scenarioBindings({}),
@@ -404,7 +405,7 @@ describe("design first-class collections", () => {
         .add(
           DesignScenario.of({
             id: DesignScenarioIdentifier.of("DSC-1"),
-            kind: "accept",
+            expectation: ScenarioExpectation.of("accept"),
             businessRuleReferences: BusinessRuleReferences.of([]),
             functionalRequirementReferences: FunctionalRequirementReferences.of([]),
             bindings: scenarioBindings({}),

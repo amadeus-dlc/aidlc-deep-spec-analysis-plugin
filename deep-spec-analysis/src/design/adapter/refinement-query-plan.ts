@@ -1,4 +1,17 @@
 import {
+  type DesignEvent,
+  DesignEventCatalog,
+  DesignSkipped,
+  DesignSkips,
+  type DesignUnit,
+  EffectAssignments,
+  RefinementMapDefect,
+  RefinementProbe,
+  RefinementSolverPlan,
+  TransitionReferences,
+  type UnitRefinementPlan,
+} from "@deep-spec-analysis/design-domain";
+import {
   type Expression,
   KeyedIndex,
   QueryLabel,
@@ -20,21 +33,6 @@ import type { RefinementAttributeParam } from "./refinement-attribute-param.ts";
 // compile-error skip（plan.compileSkips）に落ちる。
 // 旧 refinement-lib の designSmtCtx / smtOfExpr / designBase / assembleQuery /
 // decodeDesignModel とクエリ構築部からの逐語移植。
-
-import type { DesignUnit } from "@deep-spec-analysis/design-domain";
-import {
-  type DesignEvent,
-  DesignEventCatalog,
-  DesignSkipped,
-  DesignSkips,
-  EffectAssignments,
-  ObligationIdentifier,
-  RefinementMapDefect,
-  RefinementProbe,
-  RefinementSolverPlan,
-  ScenarioIdentifier,
-  type UnitRefinementPlan,
-} from "@deep-spec-analysis/design-domain";
 
 import { smtIntOf, smtLit, smtName, smtVar } from "@deep-spec-analysis/kernel-adapter";
 
@@ -291,7 +289,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
           modelVars,
         );
         queries.push(q);
-        pending.set(q.id, RefinementProbe.invariant(ObligationIdentifier.of(obId)));
+        pending.set(q.id, RefinementProbe.invariant(ob, UnitName.of(u.name())));
       } catch (err) {
         if (!(err instanceof SatisfiabilityModuloTheoriesCompileError)) throw err;
         alphaFail(obId, failureMessage(err));
@@ -325,7 +323,14 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
           modelVars,
         );
         queries.push(qe);
-        pending.set(qe.id, RefinementProbe.enabledness(ObligationIdentifier.of(obId)));
+        pending.set(
+          qe.id,
+          RefinementProbe.enabledness(
+            ob,
+            UnitName.of(u.name()),
+            TransitionReferences.of(plan.mappedTransitionsOf(obId)),
+          ),
+        );
 
         // 写像済み設計イベントごとのワンステップシミュレーション：alpha(guard)
         // が成り立つところで踏んだ 1 歩の抽象 post が、要件効果か抽象フレーム
@@ -385,7 +390,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
             modelVarsBoth,
           );
           queries.push(qs);
-          pending.set(qs.id, RefinementProbe.simulation(ObligationIdentifier.of(obId), designId));
+          pending.set(qs.id, RefinementProbe.simulation(ob, UnitName.of(u.name()), designId));
         }
       } catch (err) {
         if (!(err instanceof SatisfiabilityModuloTheoriesCompileError)) throw err;
@@ -426,7 +431,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
         modelVars,
       );
       queries.push(q);
-      pending.set(q.id, RefinementProbe.scenario(ScenarioIdentifier.of(scId)));
+      pending.set(q.id, RefinementProbe.scenario(sc, UnitName.of(u.name())));
     } catch (err) {
       if (!(err instanceof SatisfiabilityModuloTheoriesCompileError)) throw err;
       alphaFail(scId, failureMessage(err));

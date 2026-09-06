@@ -5,6 +5,7 @@ import {
   type Expression,
   IntermediateRepresentationVersion,
   RequirementIdentifier,
+  ScenarioExpectation,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 import { flatMapResult } from "@deep-spec-analysis/kernel-infrastructure";
@@ -117,6 +118,7 @@ export function parseFormalModel(
     if (kind === null || !isObject(sc.bindings)) continue;
     const parsed = combineResults({
       id: ScenarioIdentifier.parse(sc.id),
+      expectation: ScenarioExpectation.parse(kind),
       bindings: decodeScenarioBindings(sc.bindings),
       frRefs: flatMapResult(
         traverseResult(strArr(sc.frRefs), RequirementIdentifier.parse),
@@ -130,7 +132,7 @@ export function parseFormalModel(
     if (!parsed.ok) return err(JSON.stringify(parsed.error));
     const constructed = Scenario.parse({
       id: parsed.value.id,
-      kind,
+      expectation: parsed.value.expectation,
       functionalRequirementReferences: parsed.value.frRefs,
       bindings: parsed.value.bindings,
       event: parsed.value.trigger === undefined ? undefined : { trigger: parsed.value.trigger },

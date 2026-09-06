@@ -1,9 +1,9 @@
+import { type AttributePath, KeyedIndex, type ScenarioBindings } from "@deep-spec-analysis/kernel-domain";
 // TraceState — トレースの 1 状態（属性パス → 値）の値オブジェクト（種別規律の
 // 裁定 2、2026-09-03）。参照の解決（`valueAt`——無い参照は absent）は状態自身
 // の知識で、評価器はこれを問うだけ。挿入順は文書のキー順（復号器のソート順、
 // scenario binding の正準順）で、`toDocument` がその順で逐語に降りる。
 
-import { type AttributePath, KeyedIndex } from "@deep-spec-analysis/kernel-domain";
 import { TraceValue } from "./trace-value.ts";
 
 export class TraceState {
@@ -15,6 +15,14 @@ export class TraceState {
 
   static empty(): TraceState {
     return new TraceState(KeyedIndex.empty());
+  }
+
+  static fromBindings(bindings: ScenarioBindings): TraceState {
+    return TraceState.of(
+      bindings
+        .entriesCanonically()
+        .map((binding) => [binding.path(), TraceValue.of(binding.value().toDocument())] as const),
+    );
   }
 
   static of(entries: Iterable<readonly [AttributePath, TraceValue]>): TraceState {

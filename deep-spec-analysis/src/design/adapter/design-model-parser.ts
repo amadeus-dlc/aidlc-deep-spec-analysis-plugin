@@ -35,6 +35,7 @@ import {
   FunctionalRequirementReferences,
   IntermediateRepresentationVersion,
   RequirementIdentifier,
+  ScenarioExpectation,
   TriggerName,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
@@ -178,6 +179,7 @@ export function parseDesignModel(
       if (kind === null || !isObject(sc.bindings)) continue;
       const parsed = combineResults({
         id: DesignScenarioIdentifier.parse(sc.id),
+        expectation: ScenarioExpectation.parse(kind),
         bindings: decodeScenarioBindings(sc.bindings),
         brRefs: flatMapResult(
           traverseResult(strArr(sc.brRefs), BusinessRuleReference.parse),
@@ -195,7 +197,7 @@ export function parseDesignModel(
       if (!parsed.ok) return err(JSON.stringify(parsed.error));
       const constructed = DesignScenario.parse({
         id: parsed.value.id,
-        kind,
+        expectation: parsed.value.expectation,
         businessRuleReferences: parsed.value.brRefs,
         functionalRequirementReferences: parsed.value.frRefs,
         bindings: parsed.value.bindings,
