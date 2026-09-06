@@ -8,6 +8,9 @@
 |---|---|
 | [`design-rules.ja.md`](design-rules.ja.md) | 規則の本体。35 規則を 6 群（構造・ドメイン・境界・外界・失敗・命名）に分けて、規則／なぜ／実例／検査の 4 点で書く。新しい型を作るときの決定手続きと、このリポジトリに残っている逸脱も含む |
 | [`enforcement.ja.md`](enforcement.ja.md) | 機械検査 20 件の棚卸し。どの規則が機械で守られ、どれが人のレビュー頼りかの対応表。免除の表と、検査の既知の限界 |
+| [`usecase-getter-lint.ja.md`](usecase-getter-lint.ja.md) | カスタムリンター。ユースケース層からのドメイン getter・表現取得と `Result` の取り出しを、型情報で検出する |
+| [`doc-language-lint.ja.md`](doc-language-lint.ja.md) | カスタムリンター。Markdown 1 ファイルの散文が 1 言語であることを検査する |
+| [`package-namespace.ja.md`](package-namespace.ja.md) | ワークスペースのパッケージ名と import の規則 |
 
 ## この文書の位置づけ
 

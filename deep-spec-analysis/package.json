@@ -8,12 +8,13 @@
   ],
   "description": "Dev-only harness for the deep-spec-analysis AIDLC plugin: pinned solver backends for the conformance tests. Nothing here ships — plugin projections carry only the conventional content directories.",
   "scripts": {
-    "check": "bun run check:biome && bun run lint:usecase-getters",
+    "check": "bun run check:biome && bun run lint:usecase-getters && bun run lint:doc-language",
     "check:biome": "biome check --error-on-warnings .",
     "check:fix": "biome check --write --error-on-warnings .",
     "format": "biome format --write .",
-    "lint": "biome lint --error-on-warnings . && bun run lint:usecase-getters",
+    "lint": "biome lint --error-on-warnings . && bun run lint:usecase-getters && bun run lint:doc-language",
     "lint:usecase-getters": "bun scripts/lint-usecase-getters.ts",
+    "lint:doc-language": "bun scripts/lint-doc-language.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

@@ -74,6 +74,24 @@ bun install   # conformance 用に z3-solver + @informalsystems/quint を固定
 bun test
 ```
 
+Biome は Bun の開発依存としてバージョンを固定しています。`bun run check:fix` で
+フォーマット・import 整理・安全な lint 修正をまとめて適用できます。
+整形だけなら `bun run format`、lint の確認だけなら `bun run lint` を使います。
+CI も `bun run check` を実行し、警告を含む未解決の指摘があれば失敗します。
+
+対象は保守する `src/`・`scripts/`・`tests/` と開発用 JSON 設定です。
+配布用の `tools/` は原本から再生成し、公開契約スキーマと期待値 fixture は
+Biome の書換対象から除きます。整形規約は 2 スペース・120 桁・ダブルクォートです。
+
+`bun run lint:usecase-getters` は、TypeScript の型情報で呼び先を解決し、
+ユースケース層からのドメインgetter・表現取得と `Result.value` の取り出しを検出します。
+`bun run lint:usecase-getters --json` で、呼び出し行と定義行を含む一覧を取得できます。
+`bun run check`・`bun run lint` にも組み込んでいます。既存違反も失敗となり、
+免除リストや既存件数を差し引く仕組みはありません。
+
+`bun run check:fix` は Biome の安全な修正だけを行います。getterの責務移動は
+自動修正できません。検出範囲と限界は[カスタムリンターの説明](docs/architecture/usecase-getter-lint.ja.md)を参照してください。
+
 `tests/conformance.test.ts` は正典 fixture（`tests/fixtures/conformance/`）で両バックエンドを駆動し、期待 findings とバイト単位で 2 回照合する。劣化（ソルバー欠如・IR バージョン不一致）と偽造クロスチェック不一致も検査する。
 
 ソースと出荷物はツリーが分かれている。TypeScript は `src/` にあり、5 つの境界づけられたコンテキスト（kernel / requirements / design / refinement / refcheck）×4 層（infrastructure / domain / usecase / adapter）に層化され、これに合成ルート10 本（9 センサー + doctor の entry）の `src/entries/` が加わる。契約スキーマは entry と同階層の `src/entries/data/` に置く——entry は自ファイルからの相対で `data/` を引くので、ソースツリーと出荷物で相対関係が一致する。`tools/` は出荷物だけを置くツリーで、`bun scripts/build-tools.ts` が生成してコミットした `.ts` バンドル 10 本（entry ごとに 1 本）＋ `data/` のスキーマ 4 本ちょうどしか無い。出荷される `tools/<entry>.ts` は「`.ts` という名前を着た bundle 済み JavaScript」である——AI-DLC のセンサーディスパッチャが manifest の `command` から `.ts` で終わるトークンを探して起動スクリプトを決めるため、ファイル名は契約の一部だが中身は TypeScript ではない。`--check` が再生成してバイト比較するので、陳腐化したバンドルは CI で落ちる。層 DAG・スタイル規律（domain の private constructor・get/enum/非 null 表明の禁止など）は `tests/architecture.test.ts` が red example つきで強制し、移行基底とのバイトパリティは `tests/parity/` が固定する（詳細は `tests/README.ja.md` と `docs/decisions.ja.md`）。

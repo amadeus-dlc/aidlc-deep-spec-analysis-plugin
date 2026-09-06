@@ -8,6 +8,9 @@ Design rules for DDD and Clean Architecture in `deep-spec-analysis/src/`, writte
 |---|---|
 | [`design-rules.md`](design-rules.md) | The rules themselves. 35 rules across 6 groups (structure, domain, boundaries, the outside world, failure, naming), each written as rule / why / example / check. Includes the decision procedure for creating a new type, and the deviations that remain in this repository |
 | [`enforcement.md`](enforcement.md) | An inventory of the 20 mechanical checks. A mapping of which rules are mechanically enforced and which rely on human review. Also the exemption table and the checks' known limitations |
+| [`usecase-getter-lint.md`](usecase-getter-lint.md) | A custom linter: domain getters, representation conversions, and `Result` unwrapping reached from the use case layer, detected through type information |
+| [`doc-language-lint.md`](doc-language-lint.md) | A custom linter: the prose of a single Markdown file must be in one language |
+| [`package-namespace.md`](package-namespace.md) | The workspace package naming and import rules |
 
 ## Where this document sits
 

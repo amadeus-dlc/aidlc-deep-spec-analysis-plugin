@@ -1,70 +1,72 @@
-# 要件と設計の検証で使う言葉
+# Terms Used in Requirements and Design Verification
 
-要件と設計の宣言を検査し、両者の対応と検証結果を説明するための共通語彙。
+English | [日本語](CONTEXT.ja.md)
 
-## 用語
+Shared vocabulary for inspecting requirements and design declarations, explaining their correspondence, and describing verification results.
 
-**属性宣言**:
-実体に属する属性の名前・種類・値域などの宣言。誤りを含む宣言も検査対象として保持される。
+## Terms
 
-**属性カタログ**:
-実体名と属性名から、宣言された属性を一意に特定できる集まり。
-_区別する語_: 属性写像。写像は要件属性と設計属性の対応を定めるもの。
+**Attribute declaration**:
+A declaration of an attribute belonging to an entity, including its name, type, and value domain. Declarations containing errors are retained as inspection targets.
 
-**設計イベント規則**:
-入力トリガーに対する適用条件と効果を定めた設計上の規則。状態遷移とイベント型の義務を含む。
-_避ける呼び方_: イベント。実際に発生した出来事と混同しないため。
+**Attribute catalog**:
+A collection that uniquely identifies a declared attribute from an entity name and attribute name.
+_Distinguish from_: attribute mapping. A mapping defines correspondence between requirement and design attributes.
 
-**包摂候補**:
-同じトリガーと同じ効果を持つ異なる二規則について、一方が他方を包摂するかを検証する、方向のある問い。
+**Design event rule**:
+A design rule defining applicability conditions and effects for an input trigger. It includes state-transition and event-type obligations.
+_Avoid calling it_: event. This avoids confusing a declaration with an event that actually occurred.
 
-**規則の包摂**:
-Bの適用条件を満たすすべての状態がAの適用条件も満たし、両者のトリガーと効果が同じである関係。このときAがBを包摂する。
+**Subsumption candidate**:
+A directional question that checks whether one of two rules with the same trigger and effect subsumes the other.
 
-**包摂の証拠**:
-対象の包摂が成立することを裏付ける検証結果。証拠がないことだけでは、包摂が不成立であるとは断定しない。
+**Rule subsumption**:
+A relation in which every state satisfying B's applicability condition also satisfies A's, and both have the same trigger and effect. A subsumes B.
 
-**相互同値**:
-同じ二規則について両方向の包摂が成立すること。
+**Subsumption evidence**:
+A verification result supporting that the target subsumption holds. Absence of evidence alone does not establish that subsumption fails.
 
-**属性の被覆**:
-検証に必要な属性が、写像済み・明示免除・未被覆へ分類された状態。
+**Mutual equivalence**:
+Both directions of subsumption hold for the same two rules.
 
-**明示免除**:
-対象を写像または検証しないことを、理由とともに宣言したもの。
-_区別する語_: 未記載、能力不足。記載漏れや検証手段の制約は免除の宣言ではない。
+**Attribute coverage**:
+The state in which attributes required for verification are classified as mapped, explicitly exempted, or uncovered.
 
-**シナリオの受理期待**:
-具体例が規則によって許されるべきか、排除されるべきかという期待。
-_区別する語_: 期待式。期待式は事後状態などについて要求する性質を表す。
+**Explicit exemption**:
+A declaration, with a reason, that a target will not be mapped or verified.
+_Distinguish from_: omission and insufficient capability. Missing documentation and verification limitations are not exemption declarations.
 
-**検証問い**:
-目的・対象・判定の意味が定まった検証の単位。
-_区別する語_: クエリ文字列。問いの意味と、その表記を区別するため。
+**Scenario acceptance expectation**:
+An expectation of whether a concrete example should be allowed or rejected by the rules.
+_Distinguish from_: expectation expression. An expectation expression states a property required of a post-state or other result.
 
-**ライフサイクル対象の被覆**:
-実体について、明示された属性を優先して特定したライフサイクル属性が状態図で検査されること。別の実体の図や、属性が解決できない図では被覆されない。
+**Verification query**:
+A unit of verification whose purpose, target, and verdict meaning are defined.
+_Distinguish from_: query string. The meaning of a query and its notation are separate.
 
-**兄弟ユニットの宣言索引**:
-隣接するユニットが宣言した実体と属性を、同じ取得時点の情報として保持した集まり。所有元の重複・欠落と属性の被覆を照合するために使う。
+**Lifecycle target coverage**:
+For an entity, the lifecycle attribute selected with explicit attributes taking priority is checked by a state diagram. A diagram for another entity or one whose attribute cannot be resolved does not provide coverage.
 
-**シナリオ判定の比較**:
-同じ対象について異なるバックエンドが返した判定の合意を調べること。設計シナリオの対象にはユニットの帰属を含み、未検査や利用不能を判定済みとは扱わない。
+**Sibling unit declaration index**:
+A collection that holds entities and attributes declared by adjacent units as information from the same acquisition point. It is used to compare ownership duplicates or omissions and attribute coverage.
 
-**発行済みのlowering識別子**:
-一つの変換文書で実際に割り当てられた義務・シナリオ・背景の識別子。重複は許されず、応答の対象は発行済みの対応関係から解決する。
+**Scenario verdict comparison**:
+Checking agreement among verdicts returned by different backends for the same target. A design scenario target includes unit ownership; unchecked or unavailable results do not count as verified.
 
-**検証するモデルの版**:
-検証対象の内容を同定するハッシュ。シナリオ判定の比較では、この版とユニット・ローカルIDを合わせて対象を同定する。成果物としてのモデル識別子とは区別する。
+**Issued lowering identifier**:
+An obligation, scenario, or background identifier actually assigned in one lowering document. Duplicates are forbidden, and response targets are resolved from the issued correspondence.
 
-**式合成の不成立**:
-個々の入力式が有効でも、暗黙条件の追加や写像による展開の結果が表現予算を超え、検証用の式を構築できないこと。対象の未検証理由として記録する。
+**Verification model version**:
+A hash identifying the target content. Scenario verdict comparison identifies a target using this version together with the unit and local ID. It is distinct from the artifact model identifier.
 
-**診断対象**:
-一つの診断が指し示す対象の集まり。診断は少なくとも一つの対象を持つ。検査済み対象の一覧は空になり得るため区別する。
+**Expression synthesis failure**:
+The condition in which each input expression is valid, but adding implicit conditions or mapping expansions exceeds the representation budget and the verification expression cannot be built. It is recorded as the target's unverified reason.
 
-**効果の代入等式**:
-属性の次状態への参照と右辺を結ぶ等式。記述された左右の順序も保持する。
+**Diagnostic target**:
+A collection of targets pointed to by one diagnostic. A diagnostic has at least one target. The list of inspected targets may be empty, so the two must be distinguished.
 
-**設計属性への代入**:
-設計イベントが更新する属性と、その属性に与える右辺の組。代入の等式全体とは区別する。
+**Effect assignment equation**:
+An equation connecting an attribute's next-state reference with the right-hand side. The written left-to-right order is also preserved.
+
+**Assignment to a design attribute**:
+The pair consisting of the attribute updated by a design event and the right-hand side assigned to it. It is distinct from the full assignment equation.

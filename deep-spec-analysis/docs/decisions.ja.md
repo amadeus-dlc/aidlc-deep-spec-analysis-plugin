@@ -2390,3 +2390,10 @@ exit 1 し何も公開せず、design IR を読めなくすると凍結の降格
 - IssuedLoweredIdentifiersが発行IDの一意性・65,536件の予算・衝突しない追加採番を所有する。LoweredIdentifierはOB／SC／BGの形式、LoweringIndexは各コレクションの名前空間を保証する。再構成はof、想定内の不適合を扱う生成はparseを使う。未知のfinding／skip対象は通常のpassthroughへ補完せず、兄弟文書を不成立として扱う。
 - 設計のcrossCheckedはbackend・unit・targetsを保持し、backend→unit順に整列する。契約2は要件用のSC対象と、unit必須の設計用DSC対象を区別する。decoder・serializer・golden・配布スキーマを更新し、unitのない設計用記録を旧形式として補完しない。比較結果は派生物なので、不正な過去のcross-checkは再計算対象となる。
 - ScenarioVerdictはレポート自身のirHashを保持する。比較可能な判定はモデルの版・unit・対象が一致し、backendが異なる組に限る。レポートの文書契約がモデル内容を同定するirHashを持つため、この同一性を比較へ運ぶ。精緻化材料は成果物としてのModelIdentifierにも束縛されるため、prepare時に所属IDを照合し、別モデルの指定は契約違反として送出する。
+
+
+## ワークスペーススコープの統一（2026-09-06）
+
+現行のパッケージスコープをプロジェクト名と同じ `@deep-spec-analysis` に統一した。18パッケージのname/dependencies、import、Bun lockfile、境界検査を同時に変更した。パッケージ間は公開facadeのスコープ参照、同一パッケージ内は相対参照というL7の規則を適用し、内部をスコープ名で参照していた12件を是正した。旧スコープは実行時・型検査時とも拒否し、互換aliasは置かない。
+
+上の過去記録に含まれる旧スコープは当時の名称を示す。現行の規則と既存チェックアウトの更新手順は[パッケージ名の説明](architecture/package-namespace.ja.md)を参照する。

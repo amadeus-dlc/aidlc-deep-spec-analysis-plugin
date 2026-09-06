@@ -132,6 +132,8 @@
 | `tests/build-tools.test.ts` | 生成物 `tools/` の drift guard（再生成して byte 比較）、生成の決定論（2 回生成して byte 同一）、出荷形の固定数（バンドル 10 本＋`data/` 4 本＝14 ファイル）、バンドルサイズ上限 512 KiB、`.js` を置かない拡張子規律 |
 | `tests/coverage-gate.test.ts` | CI のカバレッジゲート（絶対 90%、base に対する相対、許容誤差 0.01） |
 | `tests/kind-rank.test.ts` | ドメイン型の出力契約（`FindingKind` の正準順 11 種）の凍結 |
+| `tests/usecase-getter-lint.test.ts` | ユースケース層からのドメイン getter・表現取得と `Result` の取り出しを、型情報で呼び先を解決して検出する（`bun run lint:usecase-getters`）。D8 の一部を機械化したもの。詳細は [`usecase-getter-lint.ja.md`](usecase-getter-lint.ja.md) |
+| `tests/doc-language-lint.test.ts` | Markdown 1 ファイルの散文に英語と日本語が混ざらないこと——`*.ja.md` 以外の散文に日本語が無いこと、`*.ja.md` の散文に日本語があること（`bun run lint:doc-language`）。どちらもコード除去後の本文で判定する。詳細は [`doc-language-lint.ja.md`](doc-language-lint.ja.md) |
 
 `tests/` の他のテストは golden 比較・ドメイン単体・永続化契約・ソルバー整合性で、設計規律の検査ではない。**命名・行数・公開型数を見る検査は `architecture.test.ts` にしか無い。**
 

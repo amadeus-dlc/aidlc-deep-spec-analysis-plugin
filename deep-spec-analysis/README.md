@@ -103,28 +103,33 @@ output (fixed seeds, canonical sorting, no timestamps).
 
 ```bash
 bun install --frozen-lockfile
-bun run check        # Biome + usecase getter checks (read-only)
+bun run check        # Biome + usecase getter + document-language checks (read-only)
 bun run typecheck    # TypeScript
 bun test --coverage
 ```
 
-Biome は Bun の開発依存としてバージョンを固定しています。`bun run check:fix` で
-フォーマット・import 整理・安全な lint 修正をまとめて適用できます。
-整形だけなら `bun run format`、lint の確認だけなら `bun run lint` を使います。
-CI も `bun run check` を実行し、警告を含む未解決の指摘があれば失敗します。
+Biome's version is pinned as a Bun dev dependency. `bun run check:fix` applies
+formatting, import organization, and safe lint fixes together. Use
+`bun run format` for formatting only, or `bun run lint` to just check lint.
+CI also runs `bun run check` and fails on any unresolved finding, warnings included.
 
-対象は保守する `src/`・`scripts/`・`tests/` と開発用 JSON 設定です。
-配布用の `tools/` は原本から再生成し、公開契約スキーマと期待値 fixture は
-Biome の書換対象から除きます。整形規約は 2 スペース・120 桁・ダブルクォートです。
+The formatting target is the maintained `src/`, `scripts/`, `tests/`, and
+the development JSON configs. The distributed `tools/` is regenerated from
+its source, and the public contract schemas and expected-value fixtures are
+excluded from Biome's rewrite target. The formatting convention is 2-space
+indentation, a 120-column width, and double quotes.
 
-`bun run lint:usecase-getters` は、TypeScript の型情報で呼び先を解決し、
-ユースケース層からのドメインgetter・表現取得と `Result.value` の取り出しを検出します。
-`bun run lint:usecase-getters --json` で、呼び出し行と定義行を含む一覧を取得できます。
-`bun run check`・`bun run lint` にも組み込んでいます。既存違反も失敗となり、
-免除リストや既存件数を差し引く仕組みはありません。
+`bun run lint:usecase-getters` resolves call targets from TypeScript type
+information and detects domain getter/representation extraction and
+`Result.value` unwrapping from the usecase layer. `bun run lint:usecase-getters --json`
+returns a list including the call-site and definition-site lines. It is also
+wired into `bun run check` and `bun run lint`. Existing violations fail too —
+there is no exemption list or grandfathered-count mechanism.
 
-`bun run check:fix` は Biome の安全な修正だけを行います。getterの責務移動は
-自動修正できません。検出範囲と限界は[カスタムリンターの説明](docs/architecture/usecase-getter-lint.md)を参照してください。
+`bun run check:fix` performs only Biome's safe fixes; relocating getter
+responsibility cannot be auto-fixed. See the
+[custom linter explanation](docs/architecture/usecase-getter-lint.md) for its
+detection scope and limits.
 
 `tests/conformance.test.ts` drives both backends over the canonical fixture
 (`tests/fixtures/conformance/`) and compares against expected findings

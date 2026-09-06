@@ -2713,8 +2713,8 @@ At the owner's request, `ReachabilityVerdict` replaces `boolean | null`. Named f
 
 Design rule D10 documents optional-field `undefined`, explicit aggregate absence as `null`, command success as `void`, failure as `Result`, and domain verdicts as value objects. JSON contracts and verdict behavior are unchanged. Regression tests cover all three verdicts through the use case and reject nullable or optional methods at the type boundary.
 
-## ワークスペーススコープの統一（2026-09-06）
+## Unify the workspace scope (2026-09-06)
 
-現行のパッケージスコープをプロジェクト名と同じ `@deep-spec-analysis` に統一した。18パッケージのname/dependencies、import、Bun lockfile、境界検査を同時に変更した。パッケージ間は公開facadeのスコープ参照、同一パッケージ内は相対参照というL7の規則を適用し、内部をスコープ名で参照していた12件を是正した。旧スコープは実行時・型検査時とも拒否し、互換aliasは置かない。
+The package scope was unified onto `@deep-spec-analysis`, matching the project name. The 18 packages' name/dependencies, imports, Bun lockfile, and boundary checks were all changed together. The L7 rule — a scoped reference to another package's public facade, a relative reference within the same package — was applied, correcting the 12 cases that had referenced their own package's internals by scope name. The old scope is rejected both at runtime and at type-checking time; no compatibility alias is provided.
 
-上の過去記録に含まれる旧スコープは当時の名称を示す。現行の規則と既存チェックアウトの更新手順は[パッケージ名の説明](architecture/package-namespace.md)を参照する。
+The old scope that appears in the historical records above reflects the name in use at that time. See [the package-name explanation](architecture/package-namespace.md) for the current rule and the steps to update an existing checkout.

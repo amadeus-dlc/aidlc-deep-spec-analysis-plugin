@@ -1,10 +1,16 @@
-# ユースケースのgetter検査
+# Usecase getter checks
 
-ユースケースにはフロー制御を置き、取得したモデルの判断・加工・演算は、その状態を所有するドメイン型へ依頼する。表示やプロトコルのための値の取り出しはadapterで行う。この規律を修正の途中でも確認できるよう、既存違反を含めて失敗するリンターを用意した。
+English | [日本語](usecase-getter-lint.ja.md)
 
-## 実行
+The usecase layer holds flow control; judgment, manipulation, and
+computation on a fetched model's data is delegated to the domain type that
+owns that state. Extracting values for display or protocol purposes
+belongs to the adapter. To let this discipline be checked even mid-fix, a
+linter was built that fails on existing violations too.
 
-`deep-spec-analysis/` で実行する。
+## Running it
+
+Run it from `deep-spec-analysis/`.
 
 ```sh
 bun run lint:usecase-getters
@@ -12,41 +18,96 @@ bun run lint:usecase-getters --json
 bun run check
 ```
 
-- `lint:usecase-getters`: 呼出箇所・規則名・呼び先の型/メソッド・宣言箇所を出力する。
-- `--json`: 同じ診断をJSONで出力する。調査対象の指定には `--project <tsconfig.json>` を使う。
-- `check`: Biomeが成功した後、この検査を実行する。CIも同じコマンドを使う。
-- 終了コードは、違反なしが0、違反/要確認ありは1、設定・型解決を妨げるエラーは2。
-- `check:biome` は整形・通常lintだけを確認する。`check:fix` はBiomeの安全な修正だけを適用する。
+- `lint:usecase-getters`: prints the call site, the rule name, the
+  callee's type/method, and the declaration site.
+- `--json`: prints the same diagnostics as JSON. Use
+  `--project <tsconfig.json>` to specify what to scan.
+- `check`: runs this check after Biome succeeds. CI uses the same command.
+- Exit code: 0 with no violations, 1 with violations or items needing
+  review, 2 for an error that blocks configuration or type resolution.
+- `check:biome` checks only formatting and ordinary lint. `check:fix`
+  applies only Biome's safe fixes.
 
-本番コードの是正前に導入して既存違反を記録し、その後の責務移譲で検出を解消した。現在も既存件数の差引き・ファイル単位の免除・抑制コメントは設けず、違反があれば失敗する。
+It was introduced before production code was remediated, to record
+existing violations, and those were then cleared by relocating
+responsibility. There is still no grandfathered-count subtraction, no
+per-file exemption, and no suppression comment — a violation fails the
+check.
 
-## 判定
+## Classification
 
-| 規則 | 対象 |
+| Rule | Target |
 | --- | --- |
-| `usecase-domain-getter` | ドメインの保持値を返すメソッド、表現のコピー/変換、その中継、公開データ属性の参照 |
-| `usecase-result-unwrapping` | 共通 `ResultSuccess.value` の参照・分割代入。成功値を解体する入口として別規則で扱う |
-| `unclassified-domain-access` | 循環や本体のない宣言などにより、取得用の公開面か判定できないドメインへの参照 |
-| `unclassified-usecase-call` | `any`への型消去・構造型への投影等で、呼び先の実装を確定できない呼出し/参照。portの契約とは区別する |
+| `usecase-domain-getter` | A method that returns a value the domain holds, a copy/conversion of its representation, relaying that, or a reference to a public data attribute |
+| `usecase-result-unwrapping` | A reference to or destructuring of the shared `ResultSuccess.value`. Handled as a separate rule, being the entry point that unpacks a success value |
+| `unclassified-domain-access` | A reference into the domain that can't be classified as a getter-style public surface, due to a cycle, a bodyless declaration, or similar |
+| `unclassified-usecase-call` | A call/reference whose callee implementation can't be pinned down — erased to `any`, projected onto a structural type, etc. Distinguished from a port's contract |
 
-呼び先はインストール済みTypeScript 7.0.2の非同期Compiler APIで解決する。`get`/`as`という名前や引数の数を禁止条件にはしない。private fieldを直接返すものだけでなく、ローカル変数経由、getterの中継、配列化、防御コピー、件数・文字列表現の導出も調べる。返値がVOでもgetterは検出対象である。
+Callees are resolved with the installed TypeScript 7.0.2's asynchronous
+Compiler API. Naming such as `get`/`as` or argument count is never used as
+the disqualifying condition. Beyond a method that directly returns a
+private field, it also examines access through a local variable, relaying
+a getter, turning a value into an array, defensive copies, and deriving a
+count or a string representation. A getter is still flagged even when its
+return value is a VO.
 
-別名import、継承、角括弧アクセス、optional chaining、関数の別名、分割代入、`call/apply/bind`は、呼び先の宣言とメンバー参照を調べて検出する。同名のportメソッドや無関係なオブジェクトは対象にしない。
+Aliased imports, inheritance, bracket access, optional chaining, function
+aliases, destructuring, and `call`/`apply`/`bind` are all detected by
+examining the callee's declaration and member reference. A same-named
+port method or an unrelated object is not in scope.
 
-比較・predicate、ドメイン値の不変変換、結果の解釈、callbackへのdispatchは単なるgetterと区別する。`supportsMajor()`・`passes()`・`lowered()`・`interpret()`を名前だけで拒否しない。`Result.ok`による成功失敗のフロー分岐はこの検査で禁止しない。
+A comparison/predicate, an immutable conversion of a domain value,
+interpreting a result, and dispatching to a callback are distinguished
+from a plain getter. `supportsMajor()`, `passes()`, `lowered()`, and
+`interpret()` are not rejected on name alone. Branching flow on
+success/failure via `Result.ok` is not prohibited by this check.
 
-走査対象はtsconfigに含まれる `src/<context>/usecase/**/*.ts` 全体である。`*UseCase`だけでなくFinalizer・Acquirer・read-modelも対象に含める。adapter/domain自身の変換は、この呼出元制約の対象外である。
+The scan target is the whole of `src/<context>/usecase/**/*.ts` included
+in tsconfig. This covers not only `*UseCase` but also Finalizer,
+Acquirer, and read-model. A conversion inside the adapter or domain
+itself is outside this caller-side constraint.
 
-## 限界と修正の判断
+## Limits and remediation judgment
 
-この検査は、getterの宣言に到達できる使用箇所を見つける静的検査であり、業務判断全般の正しさを証明するものではない。例えば、portの生データを数値演算して診断を決める処理は、ドメインgetterを呼ばずにも書ける。`match`のcallback内に業務判断を移しても、責務の移動にはならない。
+This check is a static analysis that finds usage sites reaching a
+getter's declaration; it does not prove the correctness of business
+judgment in general. For example, code that runs numeric operations on a
+port's raw data to decide a diagnosis can be written without calling a
+domain getter at all. Moving business judgment inside a `match` callback
+doesn't amount to relocating responsibility, either.
 
-構造型への投影・`any`・解決不能の呼出しを検出し、実装を確認できないまま成功にしない。可変ローカル変数、ループで作る配列、分割代入や引数を介するhelperの完全なデータフローは証明せず、取得か操作か確定できないものを分類保留として失敗させる。generator、fallback、Boolean変換、計算された分割代入やunionキーの使用にも回帰テストを置いている。
+It detects projection onto a structural type, `any`, and an unresolvable
+call, and never passes without confirming the implementation. It does
+not prove the complete data flow through a mutable local variable, an
+array built in a loop, or a helper reached via destructuring or an
+argument; anything that can't be pinned down as retrieval or manipulation
+fails as unclassified. There are also regression tests for generators,
+fallbacks, Boolean conversion, computed destructuring, and union-key
+usage.
 
-ドメイン型の入力結果をそのまま保持する場合と、初期値・全代入がドメインの不変操作である結果の蓄積は、getterとは区別する。helperの引数由来も伝播するため、`identity(this.#privateValue)`へ包んで内部値を取り出す回避は許可しない。
+Holding a domain type's input result as-is, and accumulating a result
+whose initial value and every assignment are immutable domain
+operations, are both distinguished from a getter. Provenance also
+propagates through a helper's arguments, so wrapping the internal value
+in `identity(this.#privateValue)` to extract it is not an allowed
+workaround.
 
-分類保留はgetter違反の断定ではない。要確認の診断を消すために型を失わせたり、getterを別名のhelperへ移したりせず、手動監査と突き合わせる。任意の反射・動的コード生成や、業務判断全般まで検出する検査ではない。
+Being unclassified is not a determination that it's a getter violation.
+Rather than erasing the type or moving the getter into a
+differently-named helper just to make a needs-review diagnostic
+disappear, cross-check it with a manual audit. This is not a check that
+detects arbitrary reflection, dynamic code generation, or business
+judgment in general.
 
-汎用ResultにQuint等の固有ロジックを入れない。取得の成否を扱う契約と、検証準備・検証結果を所有するドメイン型の操作を整え、ユースケースは取得・依頼・保存の順序を調整する。
+Backend-specific logic such as Quint's does not belong in the generic
+Result. Keep the contract that handles retrieval success/failure
+separate from the operations of the domain type that owns verification
+preparation and verification results; the usecase only orchestrates the
+order of retrieve, delegate, and store.
 
-リンター本体は `scripts/lint/`、CLIは `scripts/lint-usecase-getters.ts`、検出例・正常例・CLI終了コードのテストは `tests/usecase-getter-lint.test.ts` にある。Compiler APIはunstable公開面なので、TypeScript更新時にもこれらのテストと実ソース検査を必ず実行する。
+The linter itself lives under `scripts/lint/`, its CLI is
+`scripts/lint-usecase-getters.ts`, and the tests for detection examples,
+clean examples, and CLI exit codes live in
+`tests/usecase-getter-lint.test.ts`. Because the Compiler API is an
+unstable public surface, always run these tests and the real-source
+check again on a TypeScript upgrade.

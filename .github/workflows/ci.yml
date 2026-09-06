@@ -44,7 +44,7 @@ jobs:
       - name: Prepare pinned Quint Rust evaluator
         run: bun scripts/prepare-quint-evaluator.ts
 
-      - name: Format, lint, imports, and usecase boundaries
+      - name: Format, lint, imports, usecase boundaries, and doc language
         run: bun run check
 
       - name: Verify release tag matches plugin manifest

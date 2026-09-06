@@ -1,20 +1,33 @@
-# ワークスペースのパッケージ名
+# Workspace package names
 
-このプロジェクトのnpm形式のスコープ名は `@deep-spec-analysis` とする。ルートの `deep-spec-analysis-plugin-dev` は開発用ハーネス名であり、層パッケージとは区別する。
+English | [日本語](package-namespace.ja.md)
 
-| 対象 | 名前 |
+This project's npm-style scope name is `@deep-spec-analysis`. The root
+`deep-spec-analysis-plugin-dev` is the development-harness name and is
+distinct from the layer packages.
+
+| Target | Name |
 | --- | --- |
-| 層パッケージ | `@deep-spec-analysis/<context>-<layer>` |
-| 合成ルート | `@deep-spec-analysis/entries` |
-| テスト | `@deep-spec-analysis/tests` |
+| Layer packages | `@deep-spec-analysis/<context>-<layer>` |
+| Composition root | `@deep-spec-analysis/entries` |
+| Tests | `@deep-spec-analysis/tests` |
 
-18個のワークスペースパッケージはすべてprivateである。同じパッケージ内は相対import、別パッケージへは公開facadeをimportする。依存先は各package.jsonのdependenciesに `workspace:*` で宣言する。
+All 18 workspace packages are private. Imports within the same package are
+relative; imports to another package go through its public facade. A
+dependency is declared as `workspace:*` in the consuming package's
+`package.json` `dependencies`.
 
-同じパッケージをスコープ名で参照する例外12件も相対importへ統一した。`no-same-package-scoped-imports` と `no-cross-package-relative-imports` の両規則により、この使い分けを検査する。表記を合わせるために内部ファイルを外部へ公開することはしない。
+The 12 exceptions that referenced the same package by its scoped name were
+also unified onto relative imports. The `no-same-package-scoped-imports` and
+`no-cross-package-relative-imports` rules both check this split. An internal
+file is never exposed externally just to line up the notation.
 
-## 既存チェックアウトの更新
+## Updating an existing checkout
 
-旧スコープから更新したチェックアウトでは、Bun 1.3.13の通常の `bun install` や `--force` だけでは、各ワークスペースの古いリンクが残ることを確認した。旧名への互換リンクは提供しないため、`deep-spec-analysis/` で生成された依存リンクを再作成する。
+On a checkout updated from the old scope, a plain `bun install` or
+`--force` under Bun 1.3.13 was observed to leave each workspace's stale
+links in place. Since no compatibility links are provided for the old
+name, recreate the dependency links generated under `deep-spec-analysis/`.
 
 ```sh
 bun - <<'TS'
@@ -41,6 +54,15 @@ bun run typecheck
 bun test tests/package-boundaries.test.ts
 ```
 
-上記は旧スコープ配下の全要素がシンボリックリンクであることを先に確認し、そのリンクと空になったディレクトリだけを削除する。新しいスコープ・依存ストア・ソースは対象にしない。新しいチェックアウトでは通常の `bun install --frozen-lockfile` だけでよい。
+The script above first confirms that every element under the old scope is a
+symbolic link, then removes only those links and the directories left
+empty. It never touches the new scope, the dependency store, or source. On
+a fresh checkout, a plain `bun install --frozen-lockfile` is all that's
+needed.
 
-パッケージ境界テストは、新名での解決、旧名の拒否、未宣言依存の拒否、公開していない深いパスの拒否を、実行時と型検査時の両方で確認する。旧名が残る過去の監査・設計判断・学習記録は当時の記録であり、現行のimportや互換APIではない。
+The package-boundary tests confirm resolution under the new name,
+rejection of the old name, rejection of undeclared dependencies, and
+rejection of unexposed deep paths — both at runtime and at type-checking
+time. Past audits, design decisions, and learnings that still mention the
+old name are historical records from that time, not current imports or a
+compatibility API.
