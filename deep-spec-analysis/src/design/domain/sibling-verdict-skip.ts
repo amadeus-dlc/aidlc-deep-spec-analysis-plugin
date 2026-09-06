@@ -32,16 +32,4 @@ export class SiblingVerdictSkip {
       ...(this.#detail !== undefined ? { detail: index.rewriteLoweredIds(this.#detail) } : {}),
     });
   }
-
-  target(): LoweredIdentifier {
-    return this.#target;
-  }
-
-  reason(): string {
-    return this.#reason.asString();
-  }
-
-  detail(): string | undefined {
-    return this.#detail;
-  }
 }

@@ -9697,15 +9697,6 @@ class SiblingVerdictSkip {
       ...this.#detail !== undefined ? { detail: index.rewriteLoweredIds(this.#detail) } : {}
     });
   }
-  target() {
-    return this.#target;
-  }
-  reason() {
-    return this.#reason.asString();
-  }
-  detail() {
-    return this.#detail;
-  }
 }
 // src/design/domain/sibling-verdict-skips.ts
 class SiblingVerdictSkips {
