@@ -1,28 +1,7 @@
 import { parseBusinessRuleReferenceIndex } from "@deep-spec-analysis/design-adapter";
-import { type BusinessRuleReferenceIndex, InitialState } from "@deep-spec-analysis/design-domain";
-import {
-  AttributeKind,
-  EnumerationMember,
-  EnumerationMembers,
-  type Expression,
-  FindingKind,
-  FunctionalRequirementReferences,
-  RequirementIdentifier,
-  SkipReason,
-  TargetIdentifier,
-  TargetIdentifiers,
-  TriggerName,
-  UnitName,
-  VerificationMethod,
-} from "@deep-spec-analysis/kernel-domain";
-import { scenarioBindings } from "./binding-fixtures.ts";
-
-// design/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
-
-import { describe, expect, test } from "bun:test";
-
 import {
   BusinessRuleReference,
+  type BusinessRuleReferenceIndex,
   BusinessRuleReferences,
   CheckedUnits,
   DesignAttributeDeclaration,
@@ -36,6 +15,7 @@ import {
   DesignEntityDeclaration,
   DesignEntityDeclarations,
   DesignEntityName,
+  DesignEvent,
   DesignFinding,
   DesignIgnore,
   DesignIgnoreDeclaration,
@@ -63,6 +43,7 @@ import {
   DesignUnitDeclaration,
   DesignUnitIdentifier,
   DesignWitness,
+  InitialState,
   InitialStates,
   LoweredBackground,
   LoweredIdentifier,
@@ -70,12 +51,33 @@ import {
   LoweredOrigin,
   LoweredOriginReference,
   LoweredScenario,
+  RuleSubsumptionProbe,
   SiblingVerdictDocument,
   SiblingVerdictFinding,
   SiblingVerdictFindings,
   SiblingVerdictSkips,
   UnformalizedTargets,
 } from "@deep-spec-analysis/design-domain";
+import {
+  AttributeKind,
+  EnumerationMember,
+  EnumerationMembers,
+  type Expression,
+  FindingKind,
+  FunctionalRequirementReferences,
+  RequirementIdentifier,
+  SkipReason,
+  TargetIdentifier,
+  TargetIdentifiers,
+  TriggerName,
+  UnitName,
+  VerificationMethod,
+} from "@deep-spec-analysis/kernel-domain";
+import { scenarioBindings } from "./binding-fixtures.ts";
+
+// design/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
+
+import { describe, expect, test } from "bun:test";
 
 const lit = (value: boolean): Expression => ({ op: "lit", value });
 
@@ -612,6 +614,7 @@ describe("design skipped (a skip record owns its identity and canonical order)",
 describe("lowered records (the v1 payload the sibling backends receive)", () => {
   test("obligation knows whether it is an event and carries its optional parts", () => {
     const invariant = LoweredObligation.of({
+      origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of("DOB-1") }),
       id: LoweredIdentifier.of("OB-1"),
       nature: "invariant",
       functionalRequirementReferences: FunctionalRequirementReferences.of(
@@ -620,6 +623,7 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
       assert: { op: "bool", value: true },
     });
     const event = LoweredObligation.of({
+      origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of("DOB-1") }),
       id: LoweredIdentifier.of("OB-2"),
       nature: "event",
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
@@ -643,6 +647,7 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
 
   test("scenario knows accept from reject and carries its bindings, event, and expectation", () => {
     const accept = LoweredScenario.of({
+      origin: DesignScenarioIdentifier.of("DSC-1"),
       id: LoweredIdentifier.of("SC-1"),
       kind: "accept",
       functionalRequirementReferences: FunctionalRequirementReferences.of(
@@ -651,6 +656,7 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
       bindings: scenarioBindings({ "T.x": 1 }),
     });
     const reject = LoweredScenario.of({
+      origin: DesignScenarioIdentifier.of("DSC-1"),
       id: LoweredIdentifier.of("SC-2"),
       kind: "reject",
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
@@ -672,12 +678,24 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     expect(bg.assertion()).toEqual({ op: "bool", value: true });
   });
 
-  test("origin tells probes from attributions and pairs a shadow probe (a lone origin pairs with itself)", () => {
+  test("origins require a subsumption probe only for shadow attribution", () => {
     const dead = LoweredOrigin.of({ design: LoweredOriginReference.of("TR-1"), kind: "vac-dead" });
     const shadow = LoweredOrigin.of({
-      design: LoweredOriginReference.of("TR-1|TR-2"),
       kind: "vac-shadow",
-      pair: [LoweredOriginReference.of("TR-1"), LoweredOriginReference.of("TR-2")],
+      probe: RuleSubsumptionProbe.of({
+        subsumer: DesignEvent.of({
+          reference: LoweredOriginReference.of("TR-1"),
+          trigger: TriggerName.of("save"),
+          guard: { op: "bool", value: true },
+          effect: { op: "bool", value: true },
+        }),
+        subsumed: DesignEvent.of({
+          reference: LoweredOriginReference.of("TR-2"),
+          trigger: TriggerName.of("save"),
+          guard: { op: "bool", value: true },
+          effect: { op: "bool", value: true },
+        }),
+      }),
     });
     const plain = LoweredOrigin.of({ design: LoweredOriginReference.of("DOB-1"), kind: "passthrough" });
     expect(dead.isSyntheticProbe()).toBe(true);
@@ -685,8 +703,14 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     expect(plain.isSyntheticProbe()).toBe(false);
     expect(plain.isKind("passthrough")).toBe(true);
     expect(plain.isKind("passthrough")).toBe(true);
-    expect(shadow.pairRefs().map((r) => r.asString())).toEqual(["TR-1", "TR-2"]);
-    expect(plain.pairRefs().map((r) => r.asString())).toEqual(["DOB-1", "DOB-1"]);
+    expect(
+      shadow
+        .subsumptionProbe()
+        ?.references()
+        .map((r) => r.asString()),
+    ).toEqual(["TR-1", "TR-2"]);
+    expect(plain.subsumptionProbe()).toBeNull();
+    expect(LoweredOrigin.parse({ design: LoweredOriginReference.of("DOB-1"), kind: "passthrough" }).ok).toBe(true);
     expect(dead.design().asString()).toBe("TR-1");
   });
 });

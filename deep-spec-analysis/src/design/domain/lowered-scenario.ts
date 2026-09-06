@@ -6,6 +6,7 @@ import type {
 } from "@deep-spec-analysis/kernel-domain";
 import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 
@@ -14,6 +15,7 @@ import type { LoweredIdentifier } from "./lowered-identifier.ts";
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type LoweredScenarioParam = {
   id: LoweredIdentifier;
+  origin: DesignScenarioIdentifier;
   kind: "accept" | "reject";
   functionalRequirementReferences: FunctionalRequirementReferences;
   bindings: ScenarioBindings;
@@ -23,6 +25,7 @@ type LoweredScenarioParam = {
 
 export class LoweredScenario {
   readonly #id: LoweredIdentifier;
+  readonly #origin: DesignScenarioIdentifier;
   readonly #kind: "accept" | "reject";
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
   readonly #bindings: ScenarioBindings;
@@ -31,6 +34,7 @@ export class LoweredScenario {
 
   private constructor(props: LoweredScenarioParam) {
     this.#id = props.id;
+    this.#origin = props.origin;
     this.#kind = props.kind;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#bindings = props.bindings;
@@ -44,6 +48,10 @@ export class LoweredScenario {
 
   static of(props: LoweredScenarioParam): LoweredScenario {
     return new LoweredScenario(props);
+  }
+
+  origin(): DesignScenarioIdentifier {
+    return this.#origin;
   }
 
   id(): LoweredIdentifier {

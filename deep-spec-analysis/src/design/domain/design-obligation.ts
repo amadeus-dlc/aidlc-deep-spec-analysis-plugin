@@ -1,6 +1,7 @@
 import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec-analysis/kernel-domain";
 import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { DesignEvent } from "./design-event.ts";
 // 設計義務。分類、rules 起源の参照要件、event 完全性、式の役割を所有する。
 
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
@@ -120,6 +121,13 @@ export class DesignObligation {
     return { guard: this.#guard, effect: this.#effect };
   }
 
+  asEvent(): DesignEvent | null {
+    const event = this.eventDefinition();
+    return event === null
+      ? null
+      : DesignEvent.of({ reference: LoweredOriginReference.of(this.#id.asString()), ...event });
+  }
+
   eventDefinition(): { readonly trigger: TriggerName; readonly guard: Expression; readonly effect: Expression } | null {
     const behavior = this.guardedEffect();
     if (behavior === null || this.#trigger === undefined) return null;
@@ -131,6 +139,7 @@ export class DesignObligation {
   loweredAs(id: LoweredIdentifier): LoweredObligation {
     const lowered: Parameters<typeof LoweredObligation.of>[0] = {
       id,
+      origin: this.loweredOrigin(),
       nature: this.#nature.asString(),
       functionalRequirementReferences: this.#functionalRequirementReferences,
     };

@@ -1,3 +1,4 @@
+import type { AttributePath } from "@deep-spec-analysis/kernel-domain";
 // エンティティ属性ひとつを生涯とする状態機械（契約3）。deterministic: false は
 // 同一 (state, trigger) 重複の人間承認済み waiver 宣言。逐語移動。id と
 // 生涯属性の座標（entity / attribute）はドメインプリミティブで運ぶ。
@@ -45,6 +46,14 @@ export class DesignMachine {
 
   static of(props: DesignMachineParam): DesignMachine {
     return new DesignMachine(props);
+  }
+
+  ownsTransition(reference: LoweredOriginReference): boolean {
+    return [...this.#transitions].some((transition) => transition.id().asString() === reference.asString());
+  }
+
+  hasAttribute(path: AttributePath): boolean {
+    return path.asString() === `${this.#entity.asString()}.${this.#attribute.asString()}`;
   }
 
   id(): DesignMachineIdentifier {

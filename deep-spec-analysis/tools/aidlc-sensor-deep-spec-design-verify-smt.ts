@@ -1702,6 +1702,82 @@ class FunctionalRequirementReferenceIndex {
     });
   }
 }
+// src/requirements/domain/intermediate-representation-attribute-catalog.ts
+class IntermediateRepresentationAttributeCatalog {
+  #byPath;
+  constructor(declarations) {
+    let count = 0;
+    for (const entity of declarations) {
+      if (++count > 65536)
+        throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+      entity.inspectAttributes(() => {
+        if (++count > 65536)
+          throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
+      });
+    }
+    if (declarations.hasAmbiguousAttributes())
+      throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
+    const attributes = new Map;
+    for (const entity of declarations)
+      entity.inspectAttributes((path, attribute) => {
+        attributes.set(path, attribute);
+      });
+    this.#byPath = KeyedIndex.of([...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute]));
+  }
+  #attributeAt(path) {
+    const parsed = AttributePath.parse(path);
+    return parsed.ok ? this.#byPath.get(parsed.value) : undefined;
+  }
+  static of(declarations) {
+    return new IntermediateRepresentationAttributeCatalog(declarations);
+  }
+  static parse(declarations) {
+    return parseConstruction(() => new IntermediateRepresentationAttributeCatalog(declarations));
+  }
+  diagnostics() {
+    const errors = [];
+    const encoded = new Map;
+    for (const coordinate of this.#byPath.keys()) {
+      const path = coordinate.asString();
+      const key = path.replace(/\./g, "_");
+      const prior = encoded.get(key);
+      if (prior !== undefined) {
+        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
+      } else {
+        encoded.set(key, path);
+      }
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  expressionDiagnostics(expression, where, primesAllowed) {
+    const errors = [];
+    ExpressionTree.of(expression).inspectTerms({
+      reference: (path, primed) => {
+        if (!(this.#attributeAt(path) !== undefined))
+          errors.push(`${where}: unresolvable reference "${path}"`);
+        if (primed && !primesAllowed)
+          errors.push(`${where}: primed reference "${path}" is only legal in event effects and event-scenario expectations`);
+      },
+      enumLiteral: (value) => {
+        if (![...this.#byPath.values()].some((attribute) => attribute.admitsEnumLiteral(value)))
+          errors.push(`${where}: enum literal "${value}" is not a value of any declared enum attribute`);
+      }
+    });
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+  bindingDiagnostics(bindings, context) {
+    const errors = [];
+    for (const binding of bindings) {
+      const path = binding.path().asString();
+      const attribute = this.#attributeAt(path);
+      if (!attribute)
+        errors.push(`${context}: binding for unknown attribute "${path}"`);
+      else if (!attribute.fitsBinding(binding.value()))
+        errors.push(`${context}: binding value ${binding.value().describe()} does not fit ${attribute.kindLabel()} attribute "${path}"`);
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+}
 // src/requirements/domain/intermediate-representation-attribute-declaration.ts
 class IntermediateRepresentationAttributeDeclaration {
   #name;
@@ -1925,79 +2001,6 @@ class IntermediateRepresentationEntityName {
     return this.#value;
   }
 }
-// src/requirements/domain/intermediate-representation-attribute-catalog.ts
-class IntermediateRepresentationAttributeCatalog {
-  #byPath;
-  constructor(declarations) {
-    let count = 0;
-    for (const entity of declarations) {
-      if (++count > 65536)
-        throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
-      entity.inspectAttributes(() => {
-        if (++count > 65536)
-          throw new IllegalArgumentException({ kind: "attribute-catalog-too-large", raw: count });
-      });
-    }
-    if (declarations.hasAmbiguousAttributes())
-      throw new IllegalArgumentException({ kind: "ambiguous-requirement-attributes" });
-    const attributes = new Map;
-    for (const entity of declarations)
-      entity.inspectAttributes((path, attribute) => {
-        attributes.set(path, attribute);
-      });
-    this.#byPath = KeyedIndex.of([...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute]));
-  }
-  static of(declarations) {
-    return new IntermediateRepresentationAttributeCatalog(declarations);
-  }
-  static parse(declarations) {
-    return parseConstruction(() => new IntermediateRepresentationAttributeCatalog(declarations));
-  }
-  diagnostics() {
-    const errors = [];
-    const encoded = new Map;
-    for (const coordinate of this.#byPath.keys()) {
-      const path = coordinate.asString();
-      const key = path.replace(/\./g, "_");
-      const prior = encoded.get(key);
-      if (prior !== undefined) {
-        errors.push(`schema: attribute paths "${prior}" and "${path}" collide under the solver variable encoding (dots become underscores)`);
-      } else {
-        encoded.set(key, path);
-      }
-    }
-    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
-  }
-  expressionDiagnostics(expression, where, primesAllowed) {
-    const errors = [];
-    ExpressionTree.of(expression).inspectTerms({
-      reference: (path, primed) => {
-        if (!this.#byPath.has(AttributePath.of(path)))
-          errors.push(`${where}: unresolvable reference "${path}"`);
-        if (primed && !primesAllowed)
-          errors.push(`${where}: primed reference "${path}" is only legal in event effects and event-scenario expectations`);
-      },
-      enumLiteral: (value) => {
-        if (![...this.#byPath.values()].some((attribute) => attribute.admitsEnumLiteral(value)))
-          errors.push(`${where}: enum literal "${value}" is not a value of any declared enum attribute`);
-      }
-    });
-    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
-  }
-  bindingDiagnostics(bindings, context) {
-    const errors = [];
-    for (const binding of bindings) {
-      const path = binding.path().asString();
-      const attribute = this.#byPath.get(AttributePath.of(path));
-      if (!attribute)
-        errors.push(`${context}: binding for unknown attribute "${path}"`);
-      else if (!attribute.fitsBinding(binding.value()))
-        errors.push(`${context}: binding value ${binding.value().describe()} does not fit ${attribute.kindLabel()} attribute "${path}"`);
-    }
-    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
-  }
-}
-
 // src/requirements/domain/intermediate-representation-model-declaration.ts
 class IntermediateRepresentationModelDeclaration {
   #entities;
@@ -4547,10 +4550,12 @@ class DesignAttributeCatalog {
       entity.inspectAttributes((path, attribute) => {
         attributes.set(path, attribute);
       });
-    for (const path of attributes.keys())
-      AttributePath.of(path);
     this.#declarations = declarations;
     this.#byPath = KeyedIndex.of([...attributes].map(([path, attribute]) => [AttributePath.of(path), attribute]));
+  }
+  #attributeAt(path) {
+    const parsed = AttributePath.parse(path);
+    return parsed.ok ? this.#byPath.get(parsed.value) : undefined;
   }
   static of(declarations) {
     return new DesignAttributeCatalog(declarations);
@@ -4565,10 +4570,10 @@ class DesignAttributeCatalog {
     return AttributePaths.of([...this.#byPath.keys()]);
   }
   enumValuesAt(path) {
-    return this.#byPath.get(AttributePath.of(path))?.enumStates() ?? null;
+    return this.#attributeAt(path)?.enumStates() ?? null;
   }
   declares(path) {
-    return this.#byPath.has(AttributePath.of(path));
+    return this.#attributeAt(path) !== undefined;
   }
   encodingDiagnostics() {
     const errors = [];
@@ -4589,13 +4594,13 @@ class DesignAttributeCatalog {
     const errors = [];
     ExpressionTree.of(e).inspectTerms({
       reference: (path, primed) => {
-        if (!this.#byPath.has(AttributePath.of(path)))
+        if (!(this.#attributeAt(path) !== undefined))
           errors.push(`${ctx}: unresolvable reference "${path}"`);
         if (primed && !primesAllowed)
           errors.push(`${ctx}: primed reference "${path}" is only legal in effects and event-scenario expectations`);
       },
       enumLiteral: (value, sibling) => {
-        const attribute = sibling === undefined ? undefined : this.#byPath.get(AttributePath.of(sibling));
+        const attribute = sibling === undefined ? undefined : this.#attributeAt(sibling);
         if (attribute !== undefined) {
           if (!attribute.isEnum())
             errors.push(`${ctx}: enum literal "${value}" is compared against non-enum attribute "${sibling}"`);
@@ -4612,7 +4617,7 @@ class DesignAttributeCatalog {
     const errors = [];
     for (const binding of bindings) {
       const path = binding.path().asString();
-      const attribute = this.#byPath.get(AttributePath.of(path));
+      const attribute = this.#attributeAt(path);
       if (!attribute)
         errors.push(`${context}: binding for unknown attribute "${path}"`);
       else if (!attribute.fitsBinding(binding.value()))
@@ -5010,59 +5015,6 @@ class DesignEntityName {
     return this.#value;
   }
 }
-// src/design/domain/design-event.ts
-class DesignEvent {
-  #guard;
-  #effectAssign;
-  constructor(guard, effectAssign) {
-    this.#guard = ExpressionTree.of(guard).asExpression();
-    this.#effectAssign = effectAssign;
-  }
-  static parse(guard, effectAssign) {
-    return parseConstruction(() => new DesignEvent(guard, effectAssign));
-  }
-  static of(guard, effectAssign) {
-    return new DesignEvent(guard, effectAssign);
-  }
-  guard() {
-    return this.#guard;
-  }
-  assignedRhsOf(path) {
-    return this.#effectAssign.rhsOf(AttributePath.of(path));
-  }
-}
-// src/design/domain/design-machines.ts
-class DesignMachines {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new DesignMachines(values);
-  }
-  add(value) {
-    return new DesignMachines([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  transitionIds() {
-    return this.#values.flatMap((m) => [...m.transitions().ids()]);
-  }
-  sortedById() {
-    return new DesignMachines([...this.#values].sort((a, b) => a.id().asString() < b.id().asString() ? -1 : 1));
-  }
-  sortedCanonically() {
-    return new DesignMachines([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
-  }
-  static attrPathOf(sm) {
-    return `${sm.entity().asString()}.${sm.attribute().asString()}`;
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-
 // src/design/domain/effect-assignments.ts
 class EffectAssignments {
   #values;
@@ -5103,65 +5055,336 @@ class EffectAssignments {
   }
 }
 
-// src/design/domain/design-event-catalog.ts
-function rhsOf(term) {
-  const [a, b] = term.args ?? [];
-  return a?.op === "ref" && a.prime === true ? b : a;
+// src/design/domain/lowered-obligation.ts
+class LoweredObligation {
+  #id;
+  #origin;
+  #nature;
+  #functionalRequirementReferences;
+  #assert;
+  #trigger;
+  #guard;
+  #effect;
+  #temporal;
+  constructor(props) {
+    this.#id = props.id;
+    this.#origin = props.origin;
+    this.#nature = ObligationNature.of(props.nature);
+    this.#functionalRequirementReferences = props.functionalRequirementReferences;
+    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
+    this.#trigger = props.trigger === undefined ? undefined : TriggerName.of(props.trigger);
+    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
+    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
+    this.#temporal = props.temporal === undefined ? undefined : {
+      ...props.temporal,
+      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
+      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
+      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
+    };
+  }
+  static parse(props) {
+    return parseConstruction(() => new LoweredObligation(props));
+  }
+  static of(props) {
+    return new LoweredObligation(props);
+  }
+  origin() {
+    return this.#origin;
+  }
+  id() {
+    return this.#id;
+  }
+  nature() {
+    return this.#nature.asString();
+  }
+  functionalRequirementReferences() {
+    return this.#functionalRequirementReferences;
+  }
+  assertion() {
+    return this.#assert;
+  }
+  trigger() {
+    return this.#trigger?.asString();
+  }
+  guard() {
+    return this.#guard;
+  }
+  effect() {
+    return this.#effect;
+  }
+  temporal() {
+    return this.#temporal === undefined ? undefined : { ...this.#temporal };
+  }
+  isEvent() {
+    return this.#trigger !== undefined;
+  }
 }
 
+// src/design/domain/lowered-origin.ts
+class LoweredOrigin {
+  #value;
+  constructor(props) {
+    if (props.kind === "transition" && (!props.machine.ownsTransition(props.design) || !props.machine.hasAttribute(props.attribute)))
+      throw new IllegalArgumentException({ kind: "transition-origin-mismatch" });
+    this.#value = { ...props };
+  }
+  static of(props) {
+    return new LoweredOrigin(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new LoweredOrigin(props));
+  }
+  design() {
+    return this.#value.kind === "vac-shadow" ? this.#value.probe.labelReference() : this.#value.design;
+  }
+  isKind(kind) {
+    return this.#value.kind === kind;
+  }
+  isSyntheticProbe() {
+    return this.#value.kind === "vac-dead" || this.#value.kind === "vac-shadow";
+  }
+  subsumptionProbe() {
+    return this.#value.kind === "vac-shadow" ? this.#value.probe : null;
+  }
+  machine() {
+    return this.#value.kind === "transition" ? this.#value.machine : null;
+  }
+  attribute() {
+    return this.#value.kind === "transition" ? this.#value.attribute : null;
+  }
+}
+
+// src/design/domain/design-event.ts
+class DesignEvent {
+  #reference;
+  #trigger;
+  #guard;
+  #effect;
+  #assignments;
+  constructor(props) {
+    const effect = props.implicitEffect === undefined ? props.effect : props.effect === undefined ? props.implicitEffect : { op: "and", args: [props.implicitEffect, props.effect] };
+    if (effect === undefined)
+      throw new IllegalArgumentException({ kind: "event-effect-missing" });
+    this.#reference = props.reference;
+    this.#trigger = props.trigger;
+    this.#guard = ExpressionTree.of(props.guard);
+    this.#effect = ExpressionTree.of(effect);
+    const terms = [];
+    let interpretable = false;
+    for (const part of [props.implicitEffect, props.effect]) {
+      if (part === undefined)
+        continue;
+      const parsed = EffectAssignments.parse(part);
+      if (!parsed.ok)
+        continue;
+      interpretable = true;
+      for (const [path, term] of parsed.value) {
+        const [a, b] = term.args ?? [];
+        const rhs = a?.op === "ref" && a.prime === true ? b : a;
+        if (rhs !== undefined)
+          terms.push([path, rhs]);
+      }
+    }
+    this.#assignments = interpretable ? DesignAssignments.of(KeyedIndex.of(terms)) : null;
+  }
+  static of(props) {
+    return new DesignEvent(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new DesignEvent(props));
+  }
+  trigger() {
+    return this.#trigger;
+  }
+  reference() {
+    return this.#reference;
+  }
+  guard() {
+    return this.#guard.asExpression();
+  }
+  sameRuleAs(other) {
+    return this.#reference.asString() === other.#reference.asString();
+  }
+  sameTriggerAs(other) {
+    return this.#trigger.equals(other.#trigger);
+  }
+  sameEffectAs(other) {
+    return this.#effect.isCanonicallyEqual(other.#effect);
+  }
+  hasAssignments() {
+    return this.#assignments !== null;
+  }
+  assignedRhsOf(path) {
+    return this.#assignments?.rhsOf(AttributePath.of(path));
+  }
+  deadGuardProbe(id) {
+    return LoweredObligation.of({
+      id,
+      origin: LoweredOrigin.of({ kind: "vac-dead", design: this.#reference }),
+      nature: "invariant",
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      assert: { op: "implies", args: [this.guard(), { op: "bool", value: true }] }
+    });
+  }
+}
+// src/design/domain/design-machines.ts
+class DesignMachines {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new DesignMachines(values);
+  }
+  add(value) {
+    return new DesignMachines([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  transitionIds() {
+    return this.#values.flatMap((m) => [...m.transitions().ids()]);
+  }
+  sortedById() {
+    return new DesignMachines([...this.#values].sort((a, b) => a.id().asString() < b.id().asString() ? -1 : 1));
+  }
+  sortedCanonically() {
+    return new DesignMachines([...this.#values].sort((a, b) => a.id().compareTo(b.id())));
+  }
+  static attrPathOf(sm) {
+    return `${sm.entity().asString()}.${sm.attribute().asString()}`;
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/design/domain/lowered-origin-reference.ts
+class LoweredOriginReference {
+  #value;
+  constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "lowered-origin-ref-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-lowered-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new LoweredOriginReference(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new LoweredOriginReference(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
+// src/design/domain/rule-subsumption-probe.ts
+class RuleSubsumptionProbe {
+  #subsumer;
+  #subsumed;
+  constructor(props) {
+    if (props.subsumer.sameRuleAs(props.subsumed))
+      throw new IllegalArgumentException({ kind: "self-subsumption" });
+    if (!props.subsumer.sameTriggerAs(props.subsumed))
+      throw new IllegalArgumentException({ kind: "different-subsumption-triggers" });
+    if (!props.subsumer.sameEffectAs(props.subsumed))
+      throw new IllegalArgumentException({ kind: "different-subsumption-effects" });
+    this.#subsumer = props.subsumer;
+    this.#subsumed = props.subsumed;
+  }
+  static of(props) {
+    return new RuleSubsumptionProbe(props);
+  }
+  static parse(props) {
+    return parseConstruction(() => new RuleSubsumptionProbe(props));
+  }
+  references() {
+    return [this.#subsumer.reference(), this.#subsumed.reference()];
+  }
+  targets() {
+    return TargetIdentifiers.of(this.references().map((reference) => TargetIdentifier.of(reference.asString()))).sortedUniqueCanonically();
+  }
+  isReverseOf(other) {
+    return this.#subsumer.sameRuleAs(other.#subsumed) && this.#subsumed.sameRuleAs(other.#subsumer);
+  }
+  mentionsAny(targets) {
+    return this.references().some((reference) => [...targets].some((target) => target.asString() === reference.asString()));
+  }
+  description() {
+    const [a, b] = this.references();
+    return `${b.asString()} is subsumed by ${a.asString()}: same trigger, a provably narrower guard, and an identical effect \u2014 it can never apply where ${a.asString()} does not.`;
+  }
+  labelReference() {
+    return LoweredOriginReference.of(this.references().map((reference) => reference.asString()).join("|"));
+  }
+  loweredAs(id) {
+    return LoweredObligation.of({
+      id,
+      origin: LoweredOrigin.of({ kind: "vac-shadow", probe: this }),
+      nature: "invariant",
+      functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+      assert: {
+        op: "implies",
+        args: [
+          { op: "and", args: [this.#subsumed.guard(), { op: "not", args: [this.#subsumer.guard()] }] },
+          { op: "bool", value: true }
+        ]
+      }
+    });
+  }
+}
+
+// src/design/domain/design-event-catalog.ts
 class DesignEventCatalog {
   #events;
-  constructor(events) {
-    this.#events = events;
+  constructor(unit) {
+    const events = [];
+    for (const obligation of unit.obligations().sortedCanonically()) {
+      const event = obligation.asEvent();
+      if (event !== null)
+        events.push(event);
+    }
+    for (const machine of unit.machines().sortedCanonically())
+      for (const transition of machine.transitions().sortedCanonically())
+        events.push(transition.asEvent(DesignMachines.attrPathOf(machine)));
+    this.#events = KeyedIndex.of(events.map((event) => [TargetIdentifier.of(event.reference().asString()), event]));
   }
-  static of(u) {
-    const out = [];
-    for (const sm of u.machines()) {
-      const attrPath = DesignMachines.attrPathOf(sm);
-      for (const tr of sm.transitions()) {
-        const guard = tr.loweredGuard(attrPath);
-        const effectAssign = [];
-        const [statePath, stateRhs] = tr.stateAssignment(attrPath);
-        effectAssign.push([AttributePath.of(statePath), stateRhs]);
-        const explicitEffect = tr.effect();
-        if (explicitEffect !== undefined) {
-          const assigned = EffectAssignments.parse(explicitEffect);
-          if (assigned.ok) {
-            for (const [path, term] of assigned.value) {
-              const rhs = rhsOf(term);
-              if (rhs)
-                effectAssign.push([path, rhs]);
-            }
-          }
-        }
-        out.push([
-          TargetIdentifier.of(tr.id().asString()),
-          DesignEvent.of(guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))
-        ]);
-      }
-    }
-    for (const ob of u.obligations()) {
-      const event = ob.guardedEffect();
-      if (event === null)
-        continue;
-      const effectAssign = [];
-      const assigned = EffectAssignments.parse(event.effect);
-      if (!assigned.ok)
-        continue;
-      for (const [path, term] of assigned.value) {
-        const rhs = rhsOf(term);
-        if (rhs)
-          effectAssign.push([path, rhs]);
-      }
-      out.push([
-        TargetIdentifier.of(ob.id().asString()),
-        DesignEvent.of(event.guard, DesignAssignments.of(KeyedIndex.of(effectAssign)))
-      ]);
-    }
-    return new DesignEventCatalog(KeyedIndex.of(out));
+  static of(unit) {
+    return new DesignEventCatalog(unit);
+  }
+  static parse(unit) {
+    return parseConstruction(() => new DesignEventCatalog(unit));
   }
   eventOf(id) {
-    return this.#events.get(id) ?? null;
+    const event = this.#events.get(id);
+    return event?.hasAssignments() ? event : null;
+  }
+  *[Symbol.iterator]() {
+    yield* this.#events.values();
+  }
+  subsumptionProbes() {
+    const probes = [];
+    const events = [...this.#events.values()];
+    const byTrigger = new Map;
+    for (const event of events) {
+      const key = event.trigger().asString();
+      const list = byTrigger.get(key) ?? [];
+      list.push(event);
+      byTrigger.set(key, list);
+    }
+    for (const key of [...byTrigger.keys()].sort())
+      for (const subsumer of byTrigger.get(key) ?? [])
+        for (const subsumed of byTrigger.get(key) ?? []) {
+          const parsed = RuleSubsumptionProbe.parse({ subsumer, subsumed });
+          if (parsed.ok)
+            probes.push(parsed.value);
+        }
+    return probes;
   }
 }
 // src/design/domain/design-finding.ts
@@ -5276,66 +5499,6 @@ class DesignFindings {
     return this.#values;
   }
 }
-// src/design/domain/lowered-obligation.ts
-class LoweredObligation {
-  #id;
-  #nature;
-  #functionalRequirementReferences;
-  #assert;
-  #trigger;
-  #guard;
-  #effect;
-  #temporal;
-  constructor(props) {
-    this.#id = props.id;
-    this.#nature = ObligationNature.of(props.nature);
-    this.#functionalRequirementReferences = props.functionalRequirementReferences;
-    this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
-    this.#trigger = props.trigger === undefined ? undefined : TriggerName.of(props.trigger);
-    this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
-    this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
-    this.#temporal = props.temporal === undefined ? undefined : {
-      ...props.temporal,
-      ...props.temporal.assert !== undefined ? { assert: ExpressionTree.of(props.temporal.assert).asExpression() } : {},
-      ...props.temporal.from !== undefined ? { from: ExpressionTree.of(props.temporal.from).asExpression() } : {},
-      ...props.temporal.to !== undefined ? { to: ExpressionTree.of(props.temporal.to).asExpression() } : {}
-    };
-  }
-  static parse(props) {
-    return parseConstruction(() => new LoweredObligation(props));
-  }
-  static of(props) {
-    return new LoweredObligation(props);
-  }
-  id() {
-    return this.#id;
-  }
-  nature() {
-    return this.#nature.asString();
-  }
-  functionalRequirementReferences() {
-    return this.#functionalRequirementReferences;
-  }
-  assertion() {
-    return this.#assert;
-  }
-  trigger() {
-    return this.#trigger?.asString();
-  }
-  guard() {
-    return this.#guard;
-  }
-  effect() {
-    return this.#effect;
-  }
-  temporal() {
-    return this.#temporal === undefined ? undefined : { ...this.#temporal };
-  }
-  isEvent() {
-    return this.#trigger !== undefined;
-  }
-}
-
 // src/design/domain/design-ignore.ts
 class DesignIgnore {
   #state;
@@ -5371,9 +5534,10 @@ class DesignIgnore {
       ]
     };
   }
-  loweredAs(id, attrPath) {
+  loweredAs(id, attrPath, origin) {
     return LoweredObligation.of({
       id,
+      origin,
       nature: "event",
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       trigger: this.#trigger.asString(),
@@ -6058,57 +6222,6 @@ class DesignIntermediateRepresentationValidationMaterialsIdentifier {
     return this.#model;
   }
 }
-// src/design/domain/lowered-origin.ts
-class LoweredOrigin {
-  #design;
-  #kind;
-  #pair;
-  constructor(props) {
-    this.#design = props.design;
-    this.#kind = props.kind;
-    this.#pair = props.pair;
-  }
-  static of(props) {
-    return new LoweredOrigin(props);
-  }
-  design() {
-    return this.#design;
-  }
-  isKind(kind) {
-    return this.#kind === kind;
-  }
-  isSyntheticProbe() {
-    return this.#kind === "vac-dead" || this.#kind === "vac-shadow";
-  }
-  pairRefs() {
-    return this.#pair ?? [this.#design, this.#design];
-  }
-}
-
-// src/design/domain/lowered-origin-reference.ts
-class LoweredOriginReference {
-  #value;
-  constructor(raw) {
-    if (raw.length > 1024)
-      throw new IllegalArgumentException({ kind: "lowered-origin-ref-too-long", raw: raw.length });
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-lowered-token", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new LoweredOriginReference(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new LoweredOriginReference(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-
 // src/design/domain/design-machine.ts
 class DesignMachine {
   #id;
@@ -6129,6 +6242,12 @@ class DesignMachine {
   }
   static of(props) {
     return new DesignMachine(props);
+  }
+  ownsTransition(reference) {
+    return [...this.#transitions].some((transition) => transition.id().asString() === reference.asString());
+  }
+  hasAttribute(path) {
+    return path.asString() === `${this.#entity.asString()}.${this.#attribute.asString()}`;
   }
   id() {
     return this.#id;
@@ -6422,6 +6541,10 @@ class DesignObligation {
       return null;
     return { guard: this.#guard, effect: this.#effect };
   }
+  asEvent() {
+    const event = this.eventDefinition();
+    return event === null ? null : DesignEvent.of({ reference: LoweredOriginReference.of(this.#id.asString()), ...event });
+  }
   eventDefinition() {
     const behavior = this.guardedEffect();
     if (behavior === null || this.#trigger === undefined)
@@ -6431,6 +6554,7 @@ class DesignObligation {
   loweredAs(id) {
     const lowered = {
       id,
+      origin: this.loweredOrigin(),
       nature: this.#nature.asString(),
       functionalRequirementReferences: this.#functionalRequirementReferences
     };
@@ -6748,6 +6872,7 @@ class DesignReports {
 // src/design/domain/lowered-scenario.ts
 class LoweredScenario {
   #id;
+  #origin;
   #kind;
   #functionalRequirementReferences;
   #bindings;
@@ -6755,6 +6880,7 @@ class LoweredScenario {
   #expect;
   constructor(props) {
     this.#id = props.id;
+    this.#origin = props.origin;
     this.#kind = props.kind;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#bindings = props.bindings;
@@ -6766,6 +6892,9 @@ class LoweredScenario {
   }
   static of(props) {
     return new LoweredScenario(props);
+  }
+  origin() {
+    return this.#origin;
   }
   id() {
     return this.#id;
@@ -6850,6 +6979,7 @@ class DesignScenario {
   loweredAs(id) {
     return LoweredScenario.of({
       id,
+      origin: this.#id,
       kind: this.#kind,
       functionalRequirementReferences: this.#functionalRequirementReferences,
       bindings: this.#bindings,
@@ -7024,9 +7154,10 @@ class DesignTransition {
     const base = this.#stateEquality(attrPath, this.#to, true);
     return this.#effect === undefined ? base : { op: "and", args: [base, this.#effect] };
   }
-  loweredAs(id, attrPath) {
+  loweredAs(id, attrPath, machine) {
     return LoweredObligation.of({
       id,
+      origin: this.loweredOrigin(machine, AttributePath.of(attrPath)),
       nature: "event",
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       trigger: this.#trigger.asString(),
@@ -7034,8 +7165,22 @@ class DesignTransition {
       effect: this.loweredEffect(attrPath)
     });
   }
-  loweredOrigin() {
-    return LoweredOrigin.of({ design: LoweredOriginReference.of(this.#id.asString()), kind: "transition" });
+  loweredOrigin(machine, attribute) {
+    return LoweredOrigin.of({
+      design: LoweredOriginReference.of(this.#id.asString()),
+      kind: "transition",
+      machine,
+      attribute
+    });
+  }
+  asEvent(attrPath) {
+    return DesignEvent.of({
+      reference: LoweredOriginReference.of(this.#id.asString()),
+      trigger: this.#trigger,
+      guard: this.loweredGuard(attrPath),
+      implicitEffect: this.#stateEquality(attrPath, this.#to, true),
+      ...this.#effect !== undefined ? { effect: this.#effect } : {}
+    });
   }
   stateAssignment(attrPath) {
     return [attrPath, { op: "enum", value: this.#to }];
@@ -7292,47 +7437,6 @@ class LoweredScenarios {
   }
 }
 
-// src/design/domain/lowered-unit.ts
-class LoweredUnit {
-  #obligations;
-  #scenarios;
-  #background;
-  #index;
-  constructor(props) {
-    this.#obligations = props.obligations;
-    this.#scenarios = props.scenarios;
-    this.#background = props.background;
-    this.#index = props.index;
-  }
-  static of(props) {
-    return new LoweredUnit(props);
-  }
-  obligations() {
-    return this.#obligations;
-  }
-  scenarios() {
-    return this.#scenarios;
-  }
-  background() {
-    return this.#background;
-  }
-  index() {
-    return this.#index;
-  }
-  extendedWith(invariants) {
-    let obligations = this.#obligations;
-    let index = this.#index;
-    let sequence = obligations.count();
-    for (const invariant of invariants) {
-      sequence += 1;
-      const identifier = LoweredIdentifier.of(`OB-${sequence}`);
-      obligations = obligations.add(invariant.loweredAs(identifier));
-      index = index.withPassthrough(identifier.asString(), invariant.reqId().asString());
-    }
-    return new LoweredUnit({ obligations, scenarios: this.#scenarios, background: this.#background, index });
-  }
-}
-
 // src/design/domain/lowering-index.ts
 function designToken(id) {
   return id.replace(/[^A-Za-z0-9_]/g, "_");
@@ -7349,8 +7453,24 @@ class LoweringIndex {
     this.#machinesByTransition = props.machinesByTransition;
     this.#attrPathsByMachine = props.attrPathsByMachine;
   }
-  static of(props) {
-    return new LoweringIndex(props);
+  static fromLowered(obligations, scenarios, sourceMachines) {
+    const machines = [];
+    const attributes = [...sourceMachines].map((machine) => [machine.id(), AttributePath.of(DesignMachines.attrPathOf(machine))]);
+    for (const obligation of obligations) {
+      const origin = obligation.origin();
+      const machine = origin.machine();
+      const attribute = origin.attribute();
+      if (machine !== null && attribute !== null) {
+        machines.push([DesignTransitionIdentifier.of(origin.design().asString()), machine]);
+        attributes.push([machine.id(), attribute]);
+      }
+    }
+    return new LoweringIndex({
+      origins: KeyedIndex.of([...obligations].map((obligation) => [obligation.id(), obligation.origin()])),
+      scenarioDesignIds: KeyedIndex.of([...scenarios].map((scenario) => [scenario.id(), scenario.origin()])),
+      machinesByTransition: KeyedIndex.of(machines),
+      attrPathsByMachine: KeyedIndex.of(attributes)
+    });
   }
   originOf(loweredId) {
     return this.#origins.get(LoweredIdentifier.of(loweredId)) ?? null;
@@ -7385,16 +7505,54 @@ class LoweringIndex {
     const parsed = DesignMachineIdentifier.parse(machineId);
     return parsed.ok ? this.#attrPathsByMachine.get(parsed.value)?.asString() ?? null : null;
   }
-  withPassthrough(loweredId, designId) {
-    return new LoweringIndex({
-      origins: this.#origins.with(LoweredIdentifier.of(loweredId), LoweredOrigin.of({ design: LoweredOriginReference.of(designId), kind: "passthrough" })),
-      scenarioDesignIds: this.#scenarioDesignIds,
-      machinesByTransition: this.#machinesByTransition,
-      attrPathsByMachine: this.#attrPathsByMachine
-    });
-  }
   toOriginEntries() {
     return [...this.#origins].map(([id, origin]) => [id.asString(), origin]);
+  }
+}
+
+// src/design/domain/lowered-unit.ts
+class LoweredUnit {
+  #obligations;
+  #machines;
+  #scenarios;
+  #background;
+  #index;
+  constructor(props) {
+    this.#obligations = props.obligations;
+    this.#machines = props.machines;
+    this.#scenarios = props.scenarios;
+    this.#background = props.background;
+    this.#index = LoweringIndex.fromLowered(props.obligations, props.scenarios, props.machines);
+  }
+  static of(props) {
+    return new LoweredUnit(props);
+  }
+  obligations() {
+    return this.#obligations;
+  }
+  scenarios() {
+    return this.#scenarios;
+  }
+  background() {
+    return this.#background;
+  }
+  index() {
+    return this.#index;
+  }
+  extendedWith(invariants) {
+    let obligations = this.#obligations;
+    let sequence = obligations.count();
+    for (const invariant of invariants) {
+      sequence += 1;
+      const identifier = LoweredIdentifier.of(`OB-${sequence}`);
+      obligations = obligations.add(invariant.loweredAs(identifier));
+    }
+    return new LoweredUnit({
+      obligations,
+      machines: this.#machines,
+      scenarios: this.#scenarios,
+      background: this.#background
+    });
   }
 }
 
@@ -7449,10 +7607,6 @@ class DesignUnit {
   }
   lowered(opts) {
     const obligations = [];
-    const origins = [];
-    const machinesByTransition = [];
-    const attrPathsByMachine = [];
-    const candidates = [];
     let n = 0;
     const nextId = () => {
       n += 1;
@@ -7461,96 +7615,31 @@ class DesignUnit {
     for (const ob of this.#obligations.sortedCanonically()) {
       const id = nextId();
       obligations.push(ob.loweredAs(id));
-      origins.push([id, ob.loweredOrigin()]);
-      const event = ob.eventDefinition();
-      if (event !== null) {
-        candidates.push({
-          design: ob.id().asString(),
-          trigger: event.trigger.asString(),
-          guard: event.guard,
-          effect: event.effect
-        });
-      }
     }
     for (const sm of this.#machines.sortedCanonically()) {
       const attrPath = DesignMachines.attrPathOf(sm);
-      attrPathsByMachine.push([sm.id(), AttributePath.of(attrPath)]);
       for (const tr of sm.transitions().sortedCanonically()) {
         const id = nextId();
-        obligations.push(tr.loweredAs(id, attrPath));
-        origins.push([id, tr.loweredOrigin()]);
-        machinesByTransition.push([tr.id(), sm]);
-        candidates.push({
-          design: tr.id().asString(),
-          trigger: tr.trigger().asString(),
-          guard: tr.loweredGuard(attrPath),
-          effect: tr.loweredEffect(attrPath)
-        });
+        obligations.push(tr.loweredAs(id, attrPath, sm));
       }
       for (const ig of sm.ignores().sortedByStateTrigger()) {
         const id = nextId();
-        obligations.push(ig.loweredAs(id, attrPath));
-        origins.push([id, sm.loweredIgnoreOrigin()]);
+        obligations.push(ig.loweredAs(id, attrPath, sm.loweredIgnoreOrigin()));
       }
     }
     if (opts.synthetics) {
-      for (const c of candidates) {
-        const id = nextId();
-        obligations.push(LoweredObligation.of({
-          id,
-          nature: "invariant",
-          functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-          assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] }
-        }));
-        origins.push([id, LoweredOrigin.of({ design: LoweredOriginReference.of(c.design), kind: "vac-dead" })]);
-      }
-      const byTrigger = new Map;
-      for (const c of candidates) {
-        const list = byTrigger.get(c.trigger) ?? [];
-        list.push(c);
-        byTrigger.set(c.trigger, list);
-      }
-      for (const trigger of [...byTrigger.keys()].sort()) {
-        const list = byTrigger.get(trigger) ?? [];
-        for (const a of list) {
-          for (const b of list) {
-            if (a === b)
-              continue;
-            if (!ExpressionTree.of(a.effect).isCanonicallyEqual(ExpressionTree.of(b.effect)))
-              continue;
-            const id = nextId();
-            obligations.push(LoweredObligation.of({
-              id,
-              nature: "invariant",
-              functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-              assert: {
-                op: "implies",
-                args: [
-                  { op: "and", args: [b.guard, { op: "not", args: [a.guard] }] },
-                  { op: "bool", value: true }
-                ]
-              }
-            }));
-            origins.push([
-              id,
-              LoweredOrigin.of({
-                design: LoweredOriginReference.of(`${a.design}|${b.design}`),
-                kind: "vac-shadow",
-                pair: [LoweredOriginReference.of(a.design), LoweredOriginReference.of(b.design)]
-              })
-            ]);
-          }
-        }
-      }
+      const events = DesignEventCatalog.of(this);
+      for (const event of events)
+        obligations.push(event.deadGuardProbe(nextId()));
+      for (const probe of events.subsumptionProbes())
+        obligations.push(probe.loweredAs(nextId()));
     }
     const scenarios = [];
-    const scenarioDesignIds = [];
     let scN = 0;
     for (const sc of this.#scenarios.sortedCanonically()) {
       scN += 1;
       const id = LoweredIdentifier.of(`SC-${scN}`);
       scenarios.push(sc.loweredAs(id));
-      scenarioDesignIds.push([id, sc.id()]);
     }
     const background = [];
     let bgN = 0;
@@ -7559,15 +7648,10 @@ class DesignUnit {
       background.push(bg.loweredAs(LoweredIdentifier.of(`BG-${bgN}`)));
     }
     return LoweredUnit.of({
+      machines: this.#machines,
       obligations: LoweredObligations.of(obligations),
       scenarios: LoweredScenarios.of(scenarios),
-      background: LoweredBackgrounds.of(background),
-      index: LoweringIndex.of({
-        origins: KeyedIndex.of(origins),
-        scenarioDesignIds: KeyedIndex.of(scenarioDesignIds),
-        machinesByTransition: KeyedIndex.of(machinesByTransition),
-        attrPathsByMachine: KeyedIndex.of(attrPathsByMachine)
-      })
+      background: LoweredBackgrounds.of(background)
     });
   }
   declaredEnumValuesOf(attrPath) {
@@ -8208,6 +8292,7 @@ class RefinementQuintInvariant {
   loweredAs(id) {
     return LoweredObligation.of({
       id,
+      origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of(this.#reqId.asString()) }),
       nature: "invariant",
       functionalRequirementReferences: this.#functionalRequirementReferences,
       assert: this.#expr
@@ -9172,6 +9257,111 @@ class RefinementUnitMaps {
     return this.#values;
   }
 }
+// src/design/domain/rule-subsumption.ts
+class RuleSubsumption {
+  #probe;
+  #finding;
+  constructor(verdict) {
+    const finding = verdict.finding();
+    if (finding === null)
+      throw new IllegalArgumentException({ kind: "unproved-subsumption" });
+    this.#probe = verdict.probe();
+    this.#finding = finding;
+  }
+  static of(verdict) {
+    return new RuleSubsumption(verdict);
+  }
+  static parse(verdict) {
+    return parseConstruction(() => new RuleSubsumption(verdict));
+  }
+  isReverseOf(other) {
+    return this.#probe.isReverseOf(other.#probe);
+  }
+  mentionsAny(dead) {
+    return this.#probe.mentionsAny(dead);
+  }
+  targets() {
+    return this.#probe.targets();
+  }
+  finding() {
+    return this.#finding;
+  }
+  equivalenceFinding() {
+    const [a, b] = this.targets().toStrings();
+    return this.#finding.withDetail(`${a} and ${b} are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect \u2014 one of them can be removed.`);
+  }
+}
+// src/design/domain/rule-subsumption-verdict.ts
+class RuleSubsumptionVerdict {
+  #probe;
+  #finding;
+  #decided;
+  constructor(probe, finding, decided) {
+    this.#probe = probe;
+    this.#finding = finding;
+    this.#decided = decided;
+  }
+  static fromFinding(probe, source, witness, unit) {
+    const finding = source.isKind("conflict") ? DesignFinding.of({
+      kind: FindingKind.redundancy(),
+      functionalRequirementReferences: source.functionalRequirementReferences(),
+      targets: probe.targets(),
+      witness,
+      unit,
+      detail: probe.description()
+    }) : null;
+    return new RuleSubsumptionVerdict(probe, finding, true);
+  }
+  static undecided(probe) {
+    return new RuleSubsumptionVerdict(probe, null, false);
+  }
+  isProved() {
+    return this.#finding !== null;
+  }
+  isDecided() {
+    return this.#decided;
+  }
+  probe() {
+    return this.#probe;
+  }
+  finding() {
+    return this.#finding;
+  }
+}
+// src/design/domain/rule-subsumptions.ts
+class RuleSubsumptions {
+  #values;
+  constructor(values) {
+    if (values.length > 65536)
+      throw new IllegalArgumentException({ kind: "too-many-subsumptions", raw: values.length });
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new RuleSubsumptions(values);
+  }
+  static parse(values) {
+    return parseConstruction(() => new RuleSubsumptions(values));
+  }
+  findingsExcept(dead) {
+    const groups = new Map;
+    for (const relation of this.#values) {
+      if (relation.mentionsAny(dead))
+        continue;
+      const key = relation.targets().joined(",");
+      const group = groups.get(key) ?? [];
+      group.push(relation);
+      groups.set(key, group);
+    }
+    const findings = [];
+    for (const key of [...groups.keys()].sort()) {
+      const group = groups.get(key) ?? [];
+      const first = group[0];
+      if (first !== undefined)
+        findings.push(group.some((other) => first.isReverseOf(other)) ? first.equivalenceFinding() : first.finding());
+    }
+    return DesignFindings.of(findings);
+  }
+}
 // src/design/domain/sibling-verdict-document.ts
 class SiblingVerdictDocument {
   #state;
@@ -9244,7 +9434,7 @@ class SiblingVerdictDocument {
     const skipped = [];
     const waived = new Set;
     const deadDesignIds = new Set;
-    const shadowFindings = [];
+    const relations = [];
     for (const f of docFindings) {
       const mapped = f.targets().map((t) => mapTarget(t.asString()));
       const functionalRequirementReferences = f.functionalRequirementReferences();
@@ -9265,21 +9455,12 @@ class SiblingVerdictDocument {
         }));
         continue;
       }
-      if (synth?.entry?.isKind("vac-shadow") && f.isKind("conflict")) {
-        const pairRefs = synth.entry.pairRefs();
-        const pair = [pairRefs[0].asString(), pairRefs[1].asString()];
-        shadowFindings.push({
-          finding: DesignFinding.of({
-            kind: FindingKind.redundancy(),
-            functionalRequirementReferences,
-            targets: TargetIdentifiers.of(Array.from([pair[0], pair[1]], (raw) => TargetIdentifier.of(raw))).sortedUniqueCanonically(),
-            witness,
-            unit: UnitName.of(u.name()),
-            detail: `${pair[1]} is subsumed by ${pair[0]}: same trigger, a provably narrower guard, and an identical effect \u2014 it can never apply where ${pair[0]} does not.`
-          }),
-          subsumer: pair[0],
-          subsumed: pair[1]
-        });
+      const probe = synth?.entry?.subsumptionProbe();
+      if (probe != null) {
+        const verdict = RuleSubsumptionVerdict.fromFinding(probe, f, witness, UnitName.of(u.name()));
+        const relation = RuleSubsumption.parse(verdict);
+        if (relation.ok)
+          relations.push(relation.value);
         continue;
       }
       if (synth)
@@ -9312,27 +9493,15 @@ class SiblingVerdictDocument {
         detail
       }));
     }
-    const liveShadows = shadowFindings.filter((s) => !deadDesignIds.has(s.subsumed) && !deadDesignIds.has(s.subsumer));
-    const byPair = new Map;
-    for (const s of liveShadows) {
-      const key = s.finding.targets().joined(",");
-      const list = byPair.get(key) ?? [];
-      list.push(s);
-      byPair.set(key, list);
-    }
-    for (const key of [...byPair.keys()].sort()) {
-      const list = byPair.get(key) ?? [];
-      const directions = new Set(list.map((s) => `${s.subsumer}>${s.subsumed}`));
-      const first = list[0];
-      if (!first)
-        continue;
-      if (list.length >= 2 && directions.size >= 2) {
-        const [a, b] = first.finding.targets().toStrings();
-        findings.push(first.finding.withDetail(`${a} and ${b} are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect \u2014 one of them can be removed.`));
-      } else {
-        findings.push(first.finding);
-      }
-    }
+    const subsumptions = RuleSubsumptions.parse(relations);
+    if (!subsumptions.ok)
+      return {
+        findings: DesignFindings.of([]),
+        skipped: DesignSkips.of([]),
+        unavailable: `subsumption analysis failed: ${subsumptions.error.kind}`,
+        method
+      };
+    findings.push(...subsumptions.value.findingsExcept(TargetIdentifiers.of([...deadDesignIds].map(TargetIdentifier.of))));
     const seenSkip = new Set;
     for (const s of docSkipped) {
       const { design, entry } = mapTarget(s.target().asString());

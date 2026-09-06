@@ -996,6 +996,7 @@ describe("event catalog and effect assignments", () => {
       obligations: [
         {
           id: "DOB-1",
+          trigger: TriggerName.of("save"),
           nature: "event",
           origin: "",
           brRefs: [],
@@ -1022,6 +1023,7 @@ describe("event catalog and effect assignments", () => {
       ],
     });
     const catalog = DesignEventCatalog.of(u);
+    expect(DesignEventCatalog.parse(u).ok).toBe(true);
     expect(catalog.eventOf(TargetIdentifier.of("TR-1"))?.guard().op).toBe("and");
     expect(catalog.eventOf(TargetIdentifier.of("TR-1"))?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
     expect(catalog.eventOf(TargetIdentifier.of("TR-1"))?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 1 });

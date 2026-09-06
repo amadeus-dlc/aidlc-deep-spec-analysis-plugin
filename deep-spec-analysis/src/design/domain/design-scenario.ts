@@ -91,6 +91,7 @@ export class DesignScenario {
   loweredAs(id: LoweredIdentifier): LoweredScenario {
     return LoweredScenario.of({
       id,
+      origin: this.#id,
       kind: this.#kind,
       functionalRequirementReferences: this.#functionalRequirementReferences,
       bindings: this.#bindings,

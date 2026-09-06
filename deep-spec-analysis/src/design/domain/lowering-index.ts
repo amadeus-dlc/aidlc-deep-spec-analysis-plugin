@@ -1,16 +1,18 @@
+import { AttributePath, KeyedIndex } from "@deep-spec-analysis/kernel-domain";
+import { DesignMachines } from "./design-machines.ts";
+import type { LoweredObligations } from "./lowered-obligations.ts";
+import type { LoweredScenarios } from "./lowered-scenarios.ts";
 // LoweringIndex — lowering の対応表（lowered id → 由来、lowered scenario id →
 // design scenario id、遷移 id → 機械、機械 id → 属性パス）。キーは DP、内側は
 // KeyedIndex（裁定 3-1、2026-09-03）。lowered id の書き換え（文言中の `OB-n`、
 // SMT ラベル中の `OB_n`）は索引自身の知識。
 
-import type { AttributePath, KeyedIndex } from "@deep-spec-analysis/kernel-domain";
 import type { DesignMachine } from "./design-machine.ts";
 import { DesignMachineIdentifier } from "./design-machine-identifier.ts";
 import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 import { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
 import { LoweredIdentifier } from "./lowered-identifier.ts";
-import { LoweredOrigin } from "./lowered-origin.ts";
-import { LoweredOriginReference } from "./lowered-origin-reference.ts";
+import type { LoweredOrigin } from "./lowered-origin.ts";
 
 function designToken(id: string): string {
   return id.replace(/[^A-Za-z0-9_]/g, "_");
@@ -37,8 +39,30 @@ export class LoweringIndex {
     this.#attrPathsByMachine = props.attrPathsByMachine;
   }
 
-  static of(props: LoweringIndexParam): LoweringIndex {
-    return new LoweringIndex(props);
+  static fromLowered(
+    obligations: LoweredObligations,
+    scenarios: LoweredScenarios,
+    sourceMachines: DesignMachines,
+  ): LoweringIndex {
+    const machines: (readonly [DesignTransitionIdentifier, DesignMachine])[] = [];
+    const attributes: (readonly [DesignMachineIdentifier, AttributePath])[] = [...sourceMachines].map(
+      (machine) => [machine.id(), AttributePath.of(DesignMachines.attrPathOf(machine))] as const,
+    );
+    for (const obligation of obligations) {
+      const origin = obligation.origin();
+      const machine = origin.machine();
+      const attribute = origin.attribute();
+      if (machine !== null && attribute !== null) {
+        machines.push([DesignTransitionIdentifier.of(origin.design().asString()), machine]);
+        attributes.push([machine.id(), attribute]);
+      }
+    }
+    return new LoweringIndex({
+      origins: KeyedIndex.of([...obligations].map((obligation) => [obligation.id(), obligation.origin()] as const)),
+      scenarioDesignIds: KeyedIndex.of([...scenarios].map((scenario) => [scenario.id(), scenario.origin()] as const)),
+      machinesByTransition: KeyedIndex.of(machines),
+      attrPathsByMachine: KeyedIndex.of(attributes),
+    });
   }
 
   originOf(loweredId: string): LoweredOrigin | null {
@@ -84,18 +108,6 @@ export class LoweringIndex {
   attrPathOfMachine(machineId: string): string | null {
     const parsed = DesignMachineIdentifier.parse(machineId);
     return parsed.ok ? (this.#attrPathsByMachine.get(parsed.value)?.asString() ?? null) : null;
-  }
-
-  withPassthrough(loweredId: string, designId: string): LoweringIndex {
-    return new LoweringIndex({
-      origins: this.#origins.with(
-        LoweredIdentifier.of(loweredId),
-        LoweredOrigin.of({ design: LoweredOriginReference.of(designId), kind: "passthrough" }),
-      ),
-      scenarioDesignIds: this.#scenarioDesignIds,
-      machinesByTransition: this.#machinesByTransition,
-      attrPathsByMachine: this.#attrPathsByMachine,
-    });
   }
 
   // 境界: lowered id → 由来の対応（描画順は採番順）。

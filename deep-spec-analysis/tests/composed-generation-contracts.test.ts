@@ -98,12 +98,14 @@ rejects(Design.DesignScenarioDeclaration, {
 });
 rejects(Design.DesignBackgroundDeclaration, { id: designBackground, assert: badExpression });
 rejects(Design.LoweredObligation, {
+  origin: Design.LoweredOrigin.of({ kind: "passthrough", design: Design.LoweredOriginReference.of("DOB-1") }),
   id: Design.LoweredIdentifier.of("OB-1"),
   nature: "invariant",
   functionalRequirementReferences: references,
   assert: badExpression,
 });
 rejects(Design.LoweredScenario, {
+  origin: Design.DesignScenarioIdentifier.of("DSC-1"),
   id: Design.LoweredIdentifier.of("SC-1"),
   kind: "accept",
   functionalRequirementReferences: references,
@@ -125,12 +127,23 @@ rejects(Design.DesignUnit, {
 });
 rejects(Design.EffectAssignments, { op: "or", args: [] });
 
-const assignments = Design.DesignAssignments.of(Kernel.KeyedIndex.empty<Kernel.AttributePath, Kernel.Expression>());
 rejects(
   {
     name: "DesignEvent",
-    of: (value: Kernel.Expression) => Design.DesignEvent.of(value, assignments),
-    parse: (value: Kernel.Expression) => Design.DesignEvent.parse(value, assignments),
+    of: (value: Kernel.Expression) =>
+      Design.DesignEvent.of({
+        reference: Design.LoweredOriginReference.of("DOB-1"),
+        trigger: Kernel.TriggerName.of("save"),
+        guard: value,
+        effect: { op: "bool", value: true },
+      }),
+    parse: (value: Kernel.Expression) =>
+      Design.DesignEvent.parse({
+        reference: Design.LoweredOriginReference.of("DOB-1"),
+        trigger: Kernel.TriggerName.of("save"),
+        guard: value,
+        effect: { op: "bool", value: true },
+      }),
   },
   badExpression,
 );

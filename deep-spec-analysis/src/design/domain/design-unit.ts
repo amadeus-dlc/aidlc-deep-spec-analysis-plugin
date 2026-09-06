@@ -1,14 +1,6 @@
-import {
-  AttributePath,
-  type Expression,
-  ExpressionTree,
-  FunctionalRequirementReferences,
-  KeyedIndex,
-  TargetIdentifier,
-  TargetIdentifiers,
-  UnitName,
-} from "@deep-spec-analysis/kernel-domain";
+import { TargetIdentifier, TargetIdentifiers, UnitName } from "@deep-spec-analysis/kernel-domain";
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import { DesignEventCatalog } from "./design-event-catalog.ts";
 
 // 設計 IR の 1 ユニット。rawEntities は契約3 のエンティティスキーマ断片の
 // 素通し（lowering が契約1 文書へそのまま埋め込む）で、enum 値の照会だけを
@@ -31,25 +23,18 @@ import type { AttributePaths } from "./attribute-paths.ts";
 import type { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 import type { DesignBackgroundAssumptions } from "./design-background-assumptions.ts";
 import type { DesignEntityDeclarations } from "./design-entity-declarations.ts";
-import type { DesignMachine } from "./design-machine.ts";
-import type { DesignMachineIdentifier } from "./design-machine-identifier.ts";
 import { DesignMachines } from "./design-machines.ts";
 import type { DesignObligations } from "./design-obligations.ts";
-import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 import type { DesignScenarios } from "./design-scenarios.ts";
-import type { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
 import { DesignUnitIdentifier } from "./design-unit-identifier.ts";
 import type { LoweredBackground } from "./lowered-background.ts";
 import { LoweredBackgrounds } from "./lowered-backgrounds.ts";
 import { LoweredIdentifier } from "./lowered-identifier.ts";
-import { LoweredObligation } from "./lowered-obligation.ts";
+import type { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredObligations } from "./lowered-obligations.ts";
-import { LoweredOrigin } from "./lowered-origin.ts";
-import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 import type { LoweredScenario } from "./lowered-scenario.ts";
 import { LoweredScenarios } from "./lowered-scenarios.ts";
 import { LoweredUnit } from "./lowered-unit.ts";
-import { LoweringIndex } from "./lowering-index.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignUnitParam = {
@@ -135,21 +120,7 @@ export class DesignUnit {
   // このユニットの lowering。synthetics は設計だけの 2 検査（到達不能・包摂）を
   // 前件空虚クエリへ相乗りさせる合成トートロジーの生成可否（SMT のみ true）。
   lowered(opts: { synthetics: boolean }): LoweredUnit {
-    // 同トリガ・正準同一効果の包摂を測るための event 候補。この 1 手順の内側
-    // だけで生きる門の署名で、ドメインオブジェクトではない（旧 buildLowering
-    // の EventCandidate の逐語移管）。
-    interface EventCandidate {
-      design: string;
-      trigger: string;
-      guard: Expression;
-      effect: Expression;
-    }
-
     const obligations: LoweredObligation[] = [];
-    const origins: (readonly [LoweredIdentifier, LoweredOrigin])[] = [];
-    const machinesByTransition: (readonly [DesignTransitionIdentifier, DesignMachine])[] = [];
-    const attrPathsByMachine: (readonly [DesignMachineIdentifier, AttributePath])[] = [];
-    const candidates: EventCandidate[] = [];
     let n = 0;
     const nextId = (): LoweredIdentifier => {
       n += 1;
@@ -161,108 +132,37 @@ export class DesignUnit {
     for (const ob of this.#obligations.sortedCanonically()) {
       const id = nextId();
       obligations.push(ob.loweredAs(id));
-      origins.push([id, ob.loweredOrigin()]);
-      const event = ob.eventDefinition();
-      if (event !== null) {
-        candidates.push({
-          design: ob.id().asString(),
-          trigger: event.trigger.asString(),
-          guard: event.guard,
-          effect: event.effect,
-        });
-      }
     }
 
     // 2) 状態機械のコンパイルダウン：遷移 → 暗黙ガード・効果つき event 義務、
     //    ignores → 明示 no-op event。降ろし方は遷移／ignore 自身が知っている。
     for (const sm of this.#machines.sortedCanonically()) {
       const attrPath = DesignMachines.attrPathOf(sm);
-      attrPathsByMachine.push([sm.id(), AttributePath.of(attrPath)]);
       for (const tr of sm.transitions().sortedCanonically()) {
         const id = nextId();
-        obligations.push(tr.loweredAs(id, attrPath));
-        origins.push([id, tr.loweredOrigin()]);
-        machinesByTransition.push([tr.id(), sm]);
-        candidates.push({
-          design: tr.id().asString(),
-          trigger: tr.trigger().asString(),
-          guard: tr.loweredGuard(attrPath),
-          effect: tr.loweredEffect(attrPath),
-        });
+        obligations.push(tr.loweredAs(id, attrPath, sm));
       }
       for (const ig of sm.ignores().sortedByStateTrigger()) {
         const id = nextId();
-        obligations.push(ig.loweredAs(id, attrPath));
-        origins.push([id, sm.loweredIgnoreOrigin()]);
+        obligations.push(ig.loweredAs(id, attrPath, sm.loweredIgnoreOrigin()));
       }
     }
 
     // 3) 合成トートロジー（SMT lowering のみ）：死ガードと包摂が v1 の前件
     //    空虚検査に相乗りする。
     if (opts.synthetics) {
-      for (const c of candidates) {
-        const id = nextId();
-        obligations.push(
-          LoweredObligation.of({
-            id,
-            nature: "invariant",
-            functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-            assert: { op: "implies", args: [c.guard, { op: "bool", value: true }] },
-          }),
-        );
-        origins.push([id, LoweredOrigin.of({ design: LoweredOriginReference.of(c.design), kind: "vac-dead" })]);
-      }
-      const byTrigger = new Map<string, EventCandidate[]>();
-      for (const c of candidates) {
-        const list = byTrigger.get(c.trigger) ?? [];
-        list.push(c);
-        byTrigger.set(c.trigger, list);
-      }
-      for (const trigger of [...byTrigger.keys()].sort()) {
-        const list = byTrigger.get(trigger) ?? [];
-        for (const a of list) {
-          for (const b of list) {
-            if (a === b) continue;
-            if (!ExpressionTree.of(a.effect).isCanonicallyEqual(ExpressionTree.of(b.effect))) continue;
-            // (guardB and not guardA) の空虚性は guardB => guardA を証明する：
-            // b は a に包摂される（同トリガ・証明可能に狭いガード・同一効果）。
-            const id = nextId();
-            obligations.push(
-              LoweredObligation.of({
-                id,
-                nature: "invariant",
-                functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-                assert: {
-                  op: "implies",
-                  args: [
-                    { op: "and", args: [b.guard, { op: "not", args: [a.guard] }] },
-                    { op: "bool", value: true },
-                  ],
-                },
-              }),
-            );
-            origins.push([
-              id,
-              LoweredOrigin.of({
-                design: LoweredOriginReference.of(`${a.design}|${b.design}`),
-                kind: "vac-shadow",
-                pair: [LoweredOriginReference.of(a.design), LoweredOriginReference.of(b.design)],
-              }),
-            ]);
-          }
-        }
-      }
+      const events = DesignEventCatalog.of(this);
+      for (const event of events) obligations.push(event.deadGuardProbe(nextId()));
+      for (const probe of events.subsumptionProbes()) obligations.push(probe.loweredAs(nextId()));
     }
 
     // 4) シナリオと背景。
     const scenarios: LoweredScenario[] = [];
-    const scenarioDesignIds: (readonly [LoweredIdentifier, DesignScenarioIdentifier])[] = [];
     let scN = 0;
     for (const sc of this.#scenarios.sortedCanonically()) {
       scN += 1;
       const id = LoweredIdentifier.of(`SC-${scN}`);
       scenarios.push(sc.loweredAs(id));
-      scenarioDesignIds.push([id, sc.id()]);
     }
     const background: LoweredBackground[] = [];
     let bgN = 0;
@@ -272,15 +172,10 @@ export class DesignUnit {
     }
 
     return LoweredUnit.of({
+      machines: this.#machines,
       obligations: LoweredObligations.of(obligations),
       scenarios: LoweredScenarios.of(scenarios),
       background: LoweredBackgrounds.of(background),
-      index: LoweringIndex.of({
-        origins: KeyedIndex.of(origins),
-        scenarioDesignIds: KeyedIndex.of(scenarioDesignIds),
-        machinesByTransition: KeyedIndex.of(machinesByTransition),
-        attrPathsByMachine: KeyedIndex.of(attrPathsByMachine),
-      }),
     });
   }
 

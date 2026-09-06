@@ -14,6 +14,9 @@ import type { DesignUnit } from "./design-unit.ts";
 import type { LoweredOrigin } from "./lowered-origin.ts";
 import type { LoweringIndex } from "./lowering-index.ts";
 import { ReachabilityVerdict } from "./reachability-verdict.ts";
+import { RuleSubsumption } from "./rule-subsumption.ts";
+import { RuleSubsumptionVerdict } from "./rule-subsumption-verdict.ts";
+import { RuleSubsumptions } from "./rule-subsumptions.ts";
 import type { SiblingVerdictFindings } from "./sibling-verdict-findings.ts";
 import type { SiblingVerdictSkips } from "./sibling-verdict-skips.ts";
 
@@ -136,7 +139,7 @@ export class SiblingVerdictDocument {
     method: string,
     docFindings: SiblingVerdictFindings,
     docSkipped: SiblingVerdictSkips,
-  ): Extract<ReturnType<SiblingVerdictDocument["remapVerdicts"]>, { unavailable: null }> {
+  ): ReturnType<SiblingVerdictDocument["remapVerdicts"]> {
     const mapTarget = (t: string): { design: string; entry: LoweredOrigin | null } => index.resolveDesignTarget(t);
     const rewriteLabel = (label: string): string => index.rewriteLoweredIdTokens(label);
     const remapDetail = (detail: string): string => index.rewriteLoweredIds(detail);
@@ -145,7 +148,7 @@ export class SiblingVerdictDocument {
     const skipped: DesignSkipped[] = [];
     const waived = new Set<string>();
     const deadDesignIds = new Set<string>();
-    const shadowFindings: { finding: DesignFinding; subsumer: string; subsumed: string }[] = [];
+    const relations: RuleSubsumption[] = [];
 
     for (const f of docFindings) {
       const mapped = f.targets().map((t) => mapTarget(t.asString()));
@@ -170,23 +173,11 @@ export class SiblingVerdictDocument {
         );
         continue;
       }
-      if (synth?.entry?.isKind("vac-shadow") && f.isKind("conflict")) {
-        const pairRefs = synth.entry.pairRefs();
-        const pair = [pairRefs[0].asString(), pairRefs[1].asString()] as const;
-        shadowFindings.push({
-          finding: DesignFinding.of({
-            kind: FindingKind.redundancy(),
-            functionalRequirementReferences: functionalRequirementReferences,
-            targets: TargetIdentifiers.of(
-              Array.from([pair[0], pair[1]], (raw) => TargetIdentifier.of(raw)),
-            ).sortedUniqueCanonically(),
-            witness,
-            unit: UnitName.of(u.name()),
-            detail: `${pair[1]} is subsumed by ${pair[0]}: same trigger, a provably narrower guard, and an identical effect — it can never apply where ${pair[0]} does not.`,
-          }),
-          subsumer: pair[0],
-          subsumed: pair[1],
-        });
+      const probe = synth?.entry?.subsumptionProbe();
+      if (probe != null) {
+        const verdict = RuleSubsumptionVerdict.fromFinding(probe, f, witness, UnitName.of(u.name()));
+        const relation = RuleSubsumption.parse(verdict);
+        if (relation.ok) relations.push(relation.value);
         continue;
       }
       if (synth) continue; // 合成に触れる他の判定はノイズ
@@ -234,32 +225,17 @@ export class SiblingVerdictDocument {
       );
     }
 
-    // shadow の後段：死んだルール/遷移は既に unreachable——その空虚な包摂は何も
-    // 加えない。相互包摂（両方向証明）は 1 件の「等価」finding へ畳む。
-    const liveShadows = shadowFindings.filter((s) => !deadDesignIds.has(s.subsumed) && !deadDesignIds.has(s.subsumer));
-    const byPair = new Map<string, typeof liveShadows>();
-    for (const s of liveShadows) {
-      const key = s.finding.targets().joined(",");
-      const list = byPair.get(key) ?? [];
-      list.push(s);
-      byPair.set(key, list);
-    }
-    for (const key of [...byPair.keys()].sort()) {
-      const list = byPair.get(key) ?? [];
-      const directions = new Set(list.map((s) => `${s.subsumer}>${s.subsumed}`));
-      const first = list[0];
-      if (!first) continue;
-      if (list.length >= 2 && directions.size >= 2) {
-        const [a, b] = first.finding.targets().toStrings();
-        findings.push(
-          first.finding.withDetail(
-            `${a} and ${b} are mutually redundant: same trigger, provably equivalent guards (under the entity constraints), and an identical effect — one of them can be removed.`,
-          ),
-        );
-      } else {
-        findings.push(first.finding);
-      }
-    }
+    const subsumptions = RuleSubsumptions.parse(relations);
+    if (!subsumptions.ok)
+      return {
+        findings: DesignFindings.of([]),
+        skipped: DesignSkips.of([]),
+        unavailable: `subsumption analysis failed: ${subsumptions.error.kind}`,
+        method,
+      };
+    findings.push(
+      ...subsumptions.value.findingsExcept(TargetIdentifiers.of([...deadDesignIds].map(TargetIdentifier.of))),
+    );
 
     const seenSkip = new Set<string>();
     for (const s of docSkipped) {

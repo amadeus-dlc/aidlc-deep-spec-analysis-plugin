@@ -1,3 +1,4 @@
+import type { LoweredOrigin } from "./lowered-origin.ts";
 // 状態機械の ignore 宣言（契約3）。(state, trigger) での no-op を人間が承認
 // した証跡。compile-down（明示 no-op event——状態は動かない）は ignore 自身が
 // 所有する（#71 波5b）。承認理由（reason）は design IR 上の必須注記として
@@ -53,9 +54,10 @@ export class DesignIgnore {
   }
 
   // compile-down された明示 no-op event 義務（帰属は宣言元の機械が答える）。
-  loweredAs(id: LoweredIdentifier, attrPath: string): LoweredObligation {
+  loweredAs(id: LoweredIdentifier, attrPath: string, origin: LoweredOrigin): LoweredObligation {
     return LoweredObligation.of({
       id,
+      origin,
       nature: "event",
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       trigger: this.#trigger.asString(),

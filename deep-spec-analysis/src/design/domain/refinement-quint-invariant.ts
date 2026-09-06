@@ -4,6 +4,8 @@ import { type ParseError, parseConstruction, type Result } from "@deep-spec-anal
 import type { ObligationIdentifier } from "@deep-spec-analysis/requirements-domain";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
+import { LoweredOrigin } from "./lowered-origin.ts";
+import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 
 // quint 側の refinement 追加不変量——検査可能な要件義務の alpha 置換済み
 // 表明。quint ユースケースは対象 id を問い、lowering へ載せる義務を
@@ -51,6 +53,7 @@ export class RefinementQuintInvariant {
   loweredAs(id: LoweredIdentifier): LoweredObligation {
     return LoweredObligation.of({
       id,
+      origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of(this.#reqId.asString()) }),
       nature: "invariant",
       functionalRequirementReferences: this.#functionalRequirementReferences,
       assert: this.#expr,
