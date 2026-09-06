@@ -13,12 +13,8 @@ import {
 } from "@deep-spec-analysis/kernel-infrastructure";
 import type { RefinementStatus } from "./refinement-status.ts";
 
-// map 検査と被覆分類 — ソルバ不要の決定論部。閉包規則：要件の全義務・全
-// シナリオ・全属性は「写像済み／waive 済み／unmapped[] 記載」のどれかで、
-// それ以外は mapping-gap（沈黙は契約違反）。gap 文言・witness（map 成果物への
-// refs）は golden 凍結。旧 refinement-lib の planUnitRefinement / exprRefs
-// からの逐語移植——自由関数は UnitRefinementPlan.of（構築）と plan 自身の
-// 照会・skip 導出メソッドになった（OOUI 裁定）。
+// 写像と義務・シナリオが導いた診断、被覆状態、遷移対応を保持する精緻化計画。
+// 対象の分類は各対象が所有し、計画は検証方式ごとの実行準備を調整する。
 
 import { ObligationIdentifier, ScenarioIdentifier } from "@deep-spec-analysis/requirements-domain";
 import type { AttributeMappings } from "./attribute-mappings.ts";
@@ -35,8 +31,7 @@ import type { RefinementUnitMap } from "./refinement-unit-map.ts";
 import type { SiblingVerificationResult } from "./sibling-verification-result.ts";
 import type { TransitionReference } from "./transition-reference.ts";
 
-// map 検査の結果（被覆分類・alpha 文脈・写像索引・mapping-gap findings）を
-// 閉じ込めた計画。露出 Map は死に、照会・skip 導出は plan 自身の振る舞い。
+// 準備時に分類した対象と診断を、不変の索引として保持する。
 export class UnitRefinementPlan {
   readonly #unit: DesignUnit;
   readonly #requirements: RefinementRequirements;

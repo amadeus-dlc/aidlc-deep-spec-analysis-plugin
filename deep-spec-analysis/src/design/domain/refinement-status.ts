@@ -1,5 +1,12 @@
-import type { ArtifactPath, FunctionalRequirementReferences } from "@deep-spec-analysis/kernel-domain";
-import { SkipReason, type TargetIdentifier, TargetIdentifiers, UnitName } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  type FunctionalRequirementReferences,
+  SkipReason,
+  type TargetIdentifier,
+  TargetIdentifiers,
+  UnitName,
+} from "@deep-spec-analysis/kernel-domain";
+
 import type { DesignFinding } from "./design-finding.ts";
 import { DesignSkipped } from "./design-skipped.ts";
 import type { RefinementUnitMap } from "./refinement-unit-map.ts";

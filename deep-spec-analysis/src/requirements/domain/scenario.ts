@@ -80,7 +80,7 @@ export class Scenario {
   isReject(): boolean {
     return this.#expectation.isReject();
   }
-  hasEvent(): boolean {
+  hasEventRule(): boolean {
     return this.#eventTrigger !== undefined;
   }
 
@@ -96,7 +96,7 @@ export class Scenario {
   ): { findings: VerificationFindings; skipped: VerificationSkips } {
     const target = this.#id.asTargetId();
     let skip: VerificationSkipped | null = null;
-    if (this.hasEvent())
+    if (this.hasEventRule())
       skip = VerificationSkipped.of({
         target,
         reason: SkipReason.capability(),

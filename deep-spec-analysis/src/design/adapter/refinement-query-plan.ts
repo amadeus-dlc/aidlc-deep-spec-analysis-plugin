@@ -1,6 +1,6 @@
 import {
-  type DesignEvent,
-  DesignEventCatalog,
+  type DesignEventRule,
+  DesignEventRuleCatalog,
   DesignSkipped,
   DesignSkips,
   type DesignUnit,
@@ -251,7 +251,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
       sort: (a.kind === "bool" ? "Bool" : "Int") as "Int" | "Bool",
     })),
   ];
-  const catalog = DesignEventCatalog.of(u);
+  const catalog = DesignEventRuleCatalog.of(u);
   const queries: RefinementChildQuery[] = [];
   const pending = new Map<string, RefinementProbe>();
   const compileSkips: DesignSkipped[] = [];
@@ -309,7 +309,7 @@ export function buildRefinementQueries(plan: UnitRefinementPlan): RefinementQuer
         // ひとつも発火可能でない。
         const designGuards = mapped
           .map((id) => catalog.eventOf(TargetIdentifier.of(id.asString())))
-          .filter((d): d is DesignEvent => d !== null)
+          .filter((d): d is DesignEventRule => d !== null)
           .map((d) => smtOfExpr(ctx, d.guard()));
         const notEnabled = designGuards.length === 0 ? "true" : `(not (or ${designGuards.join(" ")}))`;
         const qe = assembleQuery(

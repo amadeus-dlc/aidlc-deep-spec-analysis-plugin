@@ -1,15 +1,16 @@
 import { expect, test } from "bun:test";
 import {
-  DesignEvent,
+  DesignEventRule,
+  DesignObligationIdentifier,
   DesignWitness,
   LoweredIdentifier,
-  LoweredOriginReference,
   RuleSubsumption,
   RuleSubsumptionProbe,
   RuleSubsumptions,
   RuleSubsumptionVerdict,
   SiblingVerdictFinding,
 } from "@deep-spec-analysis/design-domain";
+
 import {
   FindingKind,
   FunctionalRequirementReferences,
@@ -21,8 +22,8 @@ import {
 import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
 
 const event = (id: string, trigger = "save", value = true) =>
-  DesignEvent.of({
-    reference: LoweredOriginReference.of(id),
+  DesignEventRule.of({
+    reference: DesignObligationIdentifier.of(id),
     trigger: TriggerName.of(trigger),
     guard: { op: "bool", value: true },
     effect: { op: "bool", value },
@@ -67,10 +68,10 @@ const verdict = (probe: RuleSubsumptionProbe, conflict = true) =>
 test("an undecided or unproved question cannot become a subsumption relation", () => {
   const probe = RuleSubsumptionProbe.of({ subsumer: event("DOB-1"), subsumed: event("DOB-2") });
   const pending = RuleSubsumptionVerdict.undecided(probe);
-  expect(pending.isDecided()).toBe(false);
+  expect(pending.hasObservation()).toBe(false);
   expect(pending.isProved()).toBe(false);
   const rejected = verdict(probe, false);
-  expect(rejected.isDecided()).toBe(true);
+  expect(rejected.hasObservation()).toBe(true);
   expect(rejected.isProved()).toBe(false);
   for (const result of [pending, rejected]) {
     expect(() => RuleSubsumption.of(result)).toThrow(IllegalArgumentException);

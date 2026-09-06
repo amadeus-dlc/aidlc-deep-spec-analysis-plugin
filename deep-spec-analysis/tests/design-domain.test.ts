@@ -15,7 +15,7 @@ import {
   DesignEntityDeclaration,
   DesignEntityDeclarations,
   DesignEntityName,
-  DesignEvent,
+  DesignEventRule,
   DesignFinding,
   DesignIgnore,
   DesignIgnoreDeclaration,
@@ -28,7 +28,6 @@ import {
   DesignObligation,
   DesignObligationDeclarations,
   DesignObligationIdentifier,
-  DesignObligationNature,
   DesignObligationOrigin,
   DesignScenario,
   DesignScenarioDeclarations,
@@ -65,6 +64,7 @@ import {
   type Expression,
   FindingKind,
   FunctionalRequirementReferences,
+  ObligationNature,
   RequirementIdentifier,
   ScenarioExpectation,
   SkipReason,
@@ -74,6 +74,7 @@ import {
   UnitName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
+
 import { scenarioBindings } from "./binding-fixtures.ts";
 
 // design/domain の単体テスト（TDA 波3 — 90% カバレッジ床の維持）。
@@ -86,7 +87,7 @@ describe("design obligation", () => {
   test("inspectExpressions visits every held expression, primes allowed only on the effect", () => {
     const obligation = DesignObligation.of({
       id: DesignObligationIdentifier.of("DOB-1"),
-      nature: DesignObligationNature.of("event"),
+      nature: ObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
       businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR1.1"], (raw) => BusinessRuleReference.of(raw))),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
@@ -113,7 +114,7 @@ describe("design obligation", () => {
   test("eventDefinition requires a non-empty trigger on top of a complete guarded effect", () => {
     const complete = DesignObligation.of({
       id: DesignObligationIdentifier.of("DOB-2"),
-      nature: DesignObligationNature.of("event"),
+      nature: ObligationNature.of("event"),
       origin: DesignObligationOrigin.of("rules"),
       businessRuleReferences: BusinessRuleReferences.of([]),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
@@ -125,7 +126,7 @@ describe("design obligation", () => {
     expect(
       DesignObligation.of({
         id: DesignObligationIdentifier.of("DOB-3"),
-        nature: DesignObligationNature.of("event"),
+        nature: ObligationNature.of("event"),
         origin: DesignObligationOrigin.of("rules"),
         businessRuleReferences: BusinessRuleReferences.of([]),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
@@ -138,7 +139,7 @@ describe("design obligation", () => {
   test("of round-trips every field through the accessors, and temporal() hands out a copy", () => {
     const obligation = DesignObligation.of({
       id: DesignObligationIdentifier.of("DOB-4"),
-      nature: DesignObligationNature.of("invariant"),
+      nature: ObligationNature.of("invariant"),
       origin: DesignObligationOrigin.of("rules"),
       businessRuleReferences: BusinessRuleReferences.of(Array.from(["BR2.1"], (raw) => BusinessRuleReference.of(raw))),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
@@ -201,8 +202,8 @@ describe("design scenario", () => {
     expect(withEvent.expectedExpression()).toEqual(lit(true));
     expect(withEvent.isAccept()).toBe(false);
     expect(withEvent.isReject()).toBe(true);
-    expect(withEvent.hasEvent()).toBe(true);
-    expect(scenario("accept").hasEvent()).toBe(false);
+    expect(withEvent.hasEventRule()).toBe(true);
+    expect(scenario("accept").hasEventRule()).toBe(false);
     expect(
       withEvent
         .bindings()
@@ -373,7 +374,6 @@ describe("design transition and ignore (compile-down owners)", () => {
         { op: "enum", value: "closed" },
       ],
     });
-    expect(bare.stateAssignment("T.s")).toEqual(["T.s", { op: "enum", value: "closed" }]);
   });
 
   test("ignore lowers to an explicit no-op event and round-trips its fields", () => {
@@ -617,7 +617,7 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     const invariant = LoweredObligation.of({
       origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of("DOB-1") }),
       id: LoweredIdentifier.of("OB-1"),
-      nature: "invariant",
+      nature: ObligationNature.of("invariant"),
       functionalRequirementReferences: FunctionalRequirementReferences.of(
         Array.from(["FR-1"], (raw) => RequirementIdentifier.of(raw)),
       ),
@@ -626,9 +626,9 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     const event = LoweredObligation.of({
       origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of("DOB-1") }),
       id: LoweredIdentifier.of("OB-2"),
-      nature: "event",
+      nature: ObligationNature.of("event"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      trigger: "close",
+      trigger: TriggerName.of("close"),
       guard: { op: "bool", value: true },
       effect: { op: "bool", value: true },
       temporal: { pattern: "always", assert: { op: "bool", value: false } },
@@ -684,14 +684,14 @@ describe("lowered records (the v1 payload the sibling backends receive)", () => 
     const shadow = LoweredOrigin.of({
       kind: "vac-shadow",
       probe: RuleSubsumptionProbe.of({
-        subsumer: DesignEvent.of({
-          reference: LoweredOriginReference.of("TR-1"),
+        subsumer: DesignEventRule.of({
+          reference: DesignTransitionIdentifier.of("TR-1"),
           trigger: TriggerName.of("save"),
           guard: { op: "bool", value: true },
           effect: { op: "bool", value: true },
         }),
-        subsumed: DesignEvent.of({
-          reference: LoweredOriginReference.of("TR-2"),
+        subsumed: DesignEventRule.of({
+          reference: DesignTransitionIdentifier.of("TR-2"),
           trigger: TriggerName.of("save"),
           guard: { op: "bool", value: true },
           effect: { op: "bool", value: true },

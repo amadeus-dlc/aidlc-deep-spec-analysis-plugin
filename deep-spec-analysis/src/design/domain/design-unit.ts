@@ -1,15 +1,19 @@
-import { TargetIdentifier, TargetIdentifiers, UnitName } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
-import { DesignEventCatalog } from "./design-event-catalog.ts";
+import { TargetIdentifier, TargetIdentifiers, type UnitName } from "@deep-spec-analysis/kernel-domain";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
+import { DesignEventRuleCatalog } from "./design-event-rule-catalog.ts";
 
-// 設計 IR の 1 ユニット。rawEntities は契約3 のエンティティスキーマ断片の
-// 素通し（lowering が契約1 文書へそのまま埋め込む）で、enum 値の照会だけを
-// ドメインが行う。allUnitTargets / enumValuesOf は旧自由関数のメソッド化。
+// 一意な属性カタログと検証対象を持つ実行用の設計ユニット。
+// 各宣言、イベント規則、包摂候補へ変換を依頼し、変換順序と採番を所有する。
 //
 // lowering（設計ユニット＝契約3 を契約1 の要件 IR へ落とす COMPILE-DOWN
 // REUSE の中核）の意味はユニット自身が所有する——OB-n / SC-n / BG-n の採番、
 // event 候補の収集、合成トートロジー不変量、帰属索引の組成。各宣言の降ろし方
-// はその宣言に問う（旧 buildLowering 自由関数からの移管、BR6.2）。遷移は
+// はその宣言に問う。遷移は
 // state==from の暗黙ガードと state'=to の効果を持つ event 義務へ、ignores は
 // 明示 no-op event へ（意図された沈黙が gap / deadlock として読まれないように）。
 // 設計だけの 2 検査は合成トートロジー不変量で v1 の前件空虚クエリに相乗りする：
@@ -38,7 +42,7 @@ import { LoweredUnit } from "./lowered-unit.ts";
 
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignUnitParam = {
-  readonly unit: string;
+  readonly unit: UnitName;
   readonly catalog: DesignAttributeCatalog;
   readonly obligations: DesignObligations;
   readonly machines: DesignMachines;
@@ -56,7 +60,15 @@ export class DesignUnit {
   readonly #background: DesignBackgroundAssumptions;
 
   private constructor(seed: DesignUnitParam) {
-    this.#unit = UnitName.of(seed.unit);
+    const identifiers = [
+      ...seed.obligations.ids(),
+      ...seed.scenarios.ids(),
+      ...seed.machines.transitionIds(),
+      ...[...seed.machines].map((machine) => machine.id().asString()),
+    ];
+    if (new Set(identifiers).size !== identifiers.length)
+      throw new IllegalArgumentException({ kind: "duplicate-design-target" });
+    this.#unit = seed.unit;
     this.#catalog = seed.catalog;
     this.#obligations = seed.obligations;
     this.#machines = seed.machines;
@@ -151,7 +163,7 @@ export class DesignUnit {
     // 3) 合成トートロジー（SMT lowering のみ）：死ガードと包摂が v1 の前件
     //    空虚検査に相乗りする。
     if (opts.synthetics) {
-      const events = DesignEventCatalog.of(this);
+      const events = DesignEventRuleCatalog.of(this);
       for (const event of events) obligations.push(event.deadGuardProbe(nextId()));
       for (const probe of events.subsumptionProbes()) obligations.push(probe.loweredAs(nextId()));
     }

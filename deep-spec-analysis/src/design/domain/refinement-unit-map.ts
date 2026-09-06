@@ -1,4 +1,3 @@
-import type { TriggerName } from "@deep-spec-analysis/kernel-domain";
 import {
   type ArtifactPath,
   type AttributePath,
@@ -6,8 +5,10 @@ import {
   FunctionalRequirementReferences,
   TargetIdentifier,
   TargetIdentifiers,
+  type TriggerName,
   UnitName,
 } from "@deep-spec-analysis/kernel-domain";
+
 import type { AttributeMappings } from "./attribute-mappings.ts";
 import { DesignFinding } from "./design-finding.ts";
 import type { DesignUnitIdentifier } from "./design-unit-identifier.ts";
@@ -64,10 +65,6 @@ export class RefinementUnitMap {
       detail,
       artifact,
     );
-  }
-
-  unit(): DesignUnitIdentifier {
-    return this.#unit;
   }
 
   isForUnit(unit: DesignUnitIdentifier): boolean {

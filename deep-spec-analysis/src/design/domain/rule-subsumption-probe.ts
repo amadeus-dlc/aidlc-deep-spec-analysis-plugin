@@ -1,24 +1,26 @@
 import {
   FunctionalRequirementReferences,
+  ObligationNature,
   TargetIdentifier,
   TargetIdentifiers,
 } from "@deep-spec-analysis/kernel-domain";
+
 import {
   IllegalArgumentException,
   type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
-import type { DesignEvent } from "./design-event.ts";
+import type { DesignEventRule } from "./design-event-rule.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
 import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 
-type RuleSubsumptionProbeParam = { subsumer: DesignEvent; subsumed: DesignEvent };
+type RuleSubsumptionProbeParam = { subsumer: DesignEventRule; subsumed: DesignEventRule };
 export class RuleSubsumptionProbe {
-  readonly #subsumer: DesignEvent;
-  readonly #subsumed: DesignEvent;
+  readonly #subsumer: DesignEventRule;
+  readonly #subsumed: DesignEventRule;
   private constructor(props: RuleSubsumptionProbeParam) {
     if (props.subsumer.sameRuleAs(props.subsumed)) throw new IllegalArgumentException({ kind: "self-subsumption" });
     if (!props.subsumer.sameTriggerAs(props.subsumed))
@@ -66,7 +68,7 @@ export class RuleSubsumptionProbe {
     return LoweredObligation.of({
       id,
       origin: LoweredOrigin.of({ kind: "vac-shadow", probe: this }),
-      nature: "invariant",
+      nature: ObligationNature.of("invariant"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       assert: {
         op: "implies",

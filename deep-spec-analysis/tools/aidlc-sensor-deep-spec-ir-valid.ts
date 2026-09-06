@@ -3976,8 +3976,8 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
     return new SatisfiabilityModuloTheoriesEventPairProbe(props);
   }
   interpret(model, results) {
-    const overlap = this.overlapVerdictIn(results);
-    const joint = this.jointVerdictIn(results);
+    const overlap = this.#overlapVerdictIn(results);
+    const joint = this.#jointVerdictIn(results);
     if (overlap.isSat() && joint.isUnsat()) {
       const targets = this.targets().sortedUniqueCanonically();
       return {
@@ -3999,22 +3999,13 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
       skipped: overlap.isUndecided() || joint.isUndecided() ? pending.skipsFor(this.targets(), `event-pair check for trigger "${this.#trigger.asString()}"`) : VerificationSkips.of([])
     };
   }
-  a() {
-    return this.#a;
-  }
-  b() {
-    return this.#b;
-  }
-  trigger() {
-    return this.#trigger;
-  }
   targets() {
     return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
   }
-  overlapVerdictIn(results) {
+  #overlapVerdictIn(results) {
     return results.verdictOf(this.#qOverlap);
   }
-  jointVerdictIn(results) {
+  #jointVerdictIn(results) {
     return results.verdictOf(this.#qJoint);
   }
 }
@@ -4259,7 +4250,7 @@ class Scenario {
   isReject() {
     return this.#expectation.isReject();
   }
-  hasEvent() {
+  hasEventRule() {
     return this.#eventTrigger !== undefined;
   }
   isViolatedBySatisfiability(satisfiable) {
@@ -4268,7 +4259,7 @@ class Scenario {
   interpretQuint(model, verdict, hasInitialState, components) {
     const target = this.#id.asTargetId();
     let skip = null;
-    if (this.hasEvent())
+    if (this.hasEventRule())
       skip = VerificationSkipped.of({
         target,
         reason: SkipReason.capability(),
@@ -5146,7 +5137,7 @@ function compile(model) {
   const scenarioInitActions = new Map;
   const scenariosWithInit = [];
   for (const sc of model.scenarios()) {
-    if (sc.hasEvent())
+    if (sc.hasEventRule())
       continue;
     const bindings = sc.bindings();
     if (!bindings.covers(attrs.map((a) => a.path())))
@@ -5770,7 +5761,7 @@ function buildSmtPlan(model) {
   }
   const scenarioQueries = new Map;
   for (const sc of model.scenarios()) {
-    if (sc.hasEvent()) {
+    if (sc.hasEventRule()) {
       skipped.push(VerificationSkipped.of({
         target: sc.id().asTargetId(),
         reason: SkipReason.of("capability"),

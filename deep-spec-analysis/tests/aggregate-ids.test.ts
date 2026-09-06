@@ -1,32 +1,8 @@
-import { DesignAttributeCatalog, InitialState } from "@deep-spec-analysis/design-domain";
-import {
-  ArtifactPath,
-  BackendName,
-  ContentHash,
-  EnumerationMember,
-  EnumerationMembers,
-  FindingKind,
-  IntermediateRepresentationVersion,
-  RequirementIdentifier,
-  RequirementIdentifiers,
-  ScenarioExpectation,
-  SkipReason,
-  TargetIdentifier,
-  TargetIdentifiers,
-  TriggerName,
-  UnitName,
-} from "@deep-spec-analysis/kernel-domain";
-import { scenarioBindings } from "./binding-fixtures.ts";
-
-// 集約 ID と ArtifactPath の DP 検査（Repository 裁定・補遺の証人）。
-// 通常の生成はparse、再構成はofに揃え、
-// equals は値による恒等比較。domain 90% 床のための分岐網羅。
-
-import { describe, expect, test } from "bun:test";
 import {
   AttributePaths,
   BusinessRuleReferences,
   CheckedUnits,
+  DesignAttributeCatalog,
   DesignAttributeName,
   DesignBackgroundAssumption,
   DesignBackgroundAssumptions,
@@ -47,7 +23,6 @@ import {
   DesignModelIdentifier,
   DesignObligation,
   DesignObligationIdentifier,
-  DesignObligationNature,
   DesignObligationOrigin,
   DesignObligations,
   DesignReports,
@@ -63,12 +38,40 @@ import {
   DesignUnitIdentifier,
   DesignUnits,
   DesignWitness,
+  InitialState,
   InitialStates,
   LoweredIdentifier,
   LoweredOriginReference,
   RefinementMapIdentifier,
   RefinementMaterialsIdentifier,
 } from "@deep-spec-analysis/design-domain";
+import {
+  ArtifactPath,
+  BackendName,
+  ContentHash,
+  EnumerationMember,
+  EnumerationMembers,
+  FindingKind,
+  IntermediateRepresentationVersion,
+  ObligationNature,
+  RequirementIdentifier,
+  RequirementIdentifiers,
+  ScenarioExpectation,
+  SkipReason,
+  TargetIdentifier,
+  TargetIdentifiers,
+  TriggerName,
+  UnitName,
+} from "@deep-spec-analysis/kernel-domain";
+
+import { scenarioBindings } from "./binding-fixtures.ts";
+
+// 集約 ID と ArtifactPath の DP 検査（Repository 裁定・補遺の証人）。
+// 通常の生成はparse、再構成はofに揃え、
+// equals は値による恒等比較。domain 90% 床のための分岐網羅。
+
+import { describe, expect, test } from "bun:test";
+
 import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
 import { DesignRecordIdentifier } from "@deep-spec-analysis/refcheck-domain";
 import {
@@ -84,7 +87,6 @@ import {
   Obligation,
   ObligationIdentifier,
   ObligationIdentifiers,
-  ObligationNature,
   Obligations,
   RequirementAttributeDeclaration,
   RequirementAttributeDeclarations,
@@ -358,7 +360,7 @@ describe("requirements first-class collections", () => {
 describe("design first-class collections", () => {
   const ob = DesignObligation.of({
     id: DesignObligationIdentifier.of("DOB-1"),
-    nature: DesignObligationNature.of("invariant"),
+    nature: ObligationNature.of("invariant"),
     origin: DesignObligationOrigin.of(""),
     businessRuleReferences: BusinessRuleReferences.of([]),
     functionalRequirementReferences: FunctionalRequirementReferences.of([]),
@@ -431,7 +433,7 @@ describe("design first-class collections", () => {
     expect([...AttributePaths.of([]).toArray()]).toEqual([]);
 
     const u = DesignUnit.of({
-      unit: "u2",
+      unit: UnitName.of("u2"),
       catalog: DesignAttributeCatalog.of(DesignEntityDeclarations.of([])),
       obligations: DesignObligations.of([ob]),
       machines: DesignMachines.of([machine]),
@@ -664,13 +666,13 @@ describe("design identity primitives (issue #46 wave 5b)", () => {
     expect(an.value.asString()).toBe("status");
   });
 
-  test("DesignObligationNature owns event/invariant predicates; unknown natures pass through", () => {
-    expect(DesignObligationNature.of("event").isEvent()).toBe(true);
-    expect(DesignObligationNature.of("invariant").isInvariant()).toBe(true);
-    const mystery = DesignObligationNature.of("mystery");
+  test("ObligationNature owns event/invariant predicates; unknown natures pass through", () => {
+    expect(ObligationNature.of("event").isEvent()).toBe(true);
+    expect(ObligationNature.of("invariant").isInvariant()).toBe(true);
+    const mystery = ObligationNature.of("mystery");
     expect(mystery.isEvent() || mystery.isInvariant()).toBe(false);
     expect(mystery.asString()).toBe("mystery");
-    expect(mystery.equals(DesignObligationNature.of("mystery"))).toBe(true);
+    expect(mystery.equals(ObligationNature.of("mystery"))).toBe(true);
   });
 
   test("DesignObligationOrigin owns the rules predicate; the empty origin passes through", () => {
@@ -699,11 +701,11 @@ describe("DesignMachines frozen probe order (PR#55 review)", () => {
   });
 });
 
-describe("DesignObligationNature closed set (tell-don't-ask consolidation)", () => {
+describe("ObligationNature closed set (tell-don't-ask consolidation)", () => {
   test("owns all four nature predicates; unknown natures pass through", () => {
-    expect(DesignObligationNature.of("numeric").isNumeric()).toBe(true);
-    expect(DesignObligationNature.of("state-temporal").isStateTemporal()).toBe(true);
-    const mystery = DesignObligationNature.of("mystery");
+    expect(ObligationNature.of("numeric").isNumeric()).toBe(true);
+    expect(ObligationNature.of("state-temporal").isStateTemporal()).toBe(true);
+    const mystery = ObligationNature.of("mystery");
     expect(mystery.isNumeric() || mystery.isStateTemporal()).toBe(false);
   });
 });

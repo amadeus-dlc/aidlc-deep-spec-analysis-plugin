@@ -4,6 +4,7 @@ import {
   ExpressionTree,
   FunctionalRequirementReferences,
   KeyedIndex,
+  ObligationNature,
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
 import {
@@ -13,26 +14,28 @@ import {
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
 import { DesignAssignments } from "./design-assignments.ts";
+import type { DesignObligationIdentifier } from "./design-obligation-identifier.ts";
+import type { DesignTransitionIdentifier } from "./design-transition-identifier.ts";
 import { EffectAssignments } from "./effect-assignments.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 import { LoweredOrigin } from "./lowered-origin.ts";
-import type { LoweredOriginReference } from "./lowered-origin-reference.ts";
+import { LoweredOriginReference } from "./lowered-origin-reference.ts";
 
-type DesignEventParam = {
-  reference: LoweredOriginReference;
+type DesignEventRuleParam = {
+  reference: DesignObligationIdentifier | DesignTransitionIdentifier;
   trigger: TriggerName;
   guard: Expression;
 } & ({ effect: Expression; implicitEffect?: Expression } | { effect?: Expression; implicitEffect: Expression });
 
-export class DesignEvent {
-  readonly #reference: LoweredOriginReference;
+export class DesignEventRule {
+  readonly #reference: DesignObligationIdentifier | DesignTransitionIdentifier;
   readonly #trigger: TriggerName;
   readonly #guard: ExpressionTree;
   readonly #effect: ExpressionTree;
   readonly #assignments: DesignAssignments | null;
 
-  private constructor(props: DesignEventParam) {
+  private constructor(props: DesignEventRuleParam) {
     const effect =
       props.implicitEffect === undefined
         ? props.effect
@@ -59,28 +62,28 @@ export class DesignEvent {
     }
     this.#assignments = interpretable ? DesignAssignments.of(KeyedIndex.of(terms)) : null;
   }
-  static of(props: DesignEventParam): DesignEvent {
-    return new DesignEvent(props);
+  static of(props: DesignEventRuleParam): DesignEventRule {
+    return new DesignEventRule(props);
   }
-  static parse(props: DesignEventParam): Result<DesignEvent, ParseError> {
-    return parseConstruction(() => new DesignEvent(props));
+  static parse(props: DesignEventRuleParam): Result<DesignEventRule, ParseError> {
+    return parseConstruction(() => new DesignEventRule(props));
   }
   trigger(): TriggerName {
     return this.#trigger;
   }
   reference(): LoweredOriginReference {
-    return this.#reference;
+    return LoweredOriginReference.of(this.#reference.asString());
   }
   guard(): Expression {
     return this.#guard.asExpression();
   }
-  sameRuleAs(other: DesignEvent): boolean {
+  sameRuleAs(other: DesignEventRule): boolean {
     return this.#reference.asString() === other.#reference.asString();
   }
-  sameTriggerAs(other: DesignEvent): boolean {
+  sameTriggerAs(other: DesignEventRule): boolean {
     return this.#trigger.equals(other.#trigger);
   }
-  sameEffectAs(other: DesignEvent): boolean {
+  sameEffectAs(other: DesignEventRule): boolean {
     return this.#effect.isCanonicallyEqual(other.#effect);
   }
   hasAssignments(): boolean {
@@ -92,8 +95,8 @@ export class DesignEvent {
   deadGuardProbe(id: LoweredIdentifier): LoweredObligation {
     return LoweredObligation.of({
       id,
-      origin: LoweredOrigin.of({ kind: "vac-dead", design: this.#reference }),
-      nature: "invariant",
+      origin: LoweredOrigin.of({ kind: "vac-dead", design: this.reference() }),
+      nature: ObligationNature.of("invariant"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       assert: { op: "implies", args: [this.guard(), { op: "bool", value: true }] },
     });

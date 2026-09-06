@@ -1,15 +1,32 @@
 import { expect, test } from "bun:test";
 import {
+  BusinessRuleReferences,
   DesignAttributeCatalog,
   DesignAttributeDeclaration,
   DesignAttributeDeclarations,
   DesignAttributeName,
+  DesignBackgroundAssumptions,
   DesignEntityDeclaration,
   DesignEntityDeclarations,
   DesignEntityName,
+  DesignMachines,
+  DesignObligation,
+  DesignObligationIdentifier,
+  DesignObligationOrigin,
+  DesignObligations,
+  DesignScenarios,
+  DesignUnit,
 } from "@deep-spec-analysis/design-domain";
-import { AttributeKind, EnumerationMember, EnumerationMembers } from "@deep-spec-analysis/kernel-domain";
+import {
+  AttributeKind,
+  EnumerationMember,
+  EnumerationMembers,
+  FunctionalRequirementReferences,
+  ObligationNature,
+  UnitName,
+} from "@deep-spec-analysis/kernel-domain";
 import { IllegalArgumentException } from "@deep-spec-analysis/kernel-infrastructure";
+
 import {
   IntermediateRepresentationAttributeCatalog,
   IntermediateRepresentationAttributeDeclarations,
@@ -81,4 +98,25 @@ test("requirements catalogs apply the same construction contract to ambiguous de
   expect([
     ...IntermediateRepresentationAttributeCatalog.of(IntermediateRepresentationEntityDeclarations.of([])).diagnostics(),
   ]).toHaveLength(0);
+});
+
+test("an executable unit rejects repeated verification targets", () => {
+  const obligation = DesignObligation.of({
+    id: DesignObligationIdentifier.of("DOB-1"),
+    nature: ObligationNature.of("invariant"),
+    origin: DesignObligationOrigin.of(""),
+    businessRuleReferences: BusinessRuleReferences.of([]),
+    functionalRequirementReferences: FunctionalRequirementReferences.of([]),
+    assert: { op: "bool", value: true },
+  });
+  const input = {
+    unit: UnitName.of("u1"),
+    catalog: DesignAttributeCatalog.of(DesignEntityDeclarations.of([])),
+    obligations: DesignObligations.of([obligation, obligation]),
+    machines: DesignMachines.of([]),
+    scenarios: DesignScenarios.of([]),
+    background: DesignBackgroundAssumptions.of([]),
+  };
+  expect(() => DesignUnit.of(input)).toThrow(IllegalArgumentException);
+  expect(DesignUnit.parse(input)).toEqual({ ok: false, error: { kind: "duplicate-design-target" } });
 });

@@ -1,12 +1,18 @@
-import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec-analysis/kernel-domain";
-import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
+import {
+  type Expression,
+  ExpressionTree,
+  type FunctionalRequirementReferences,
+  type ObligationNature,
+  type TriggerName,
+} from "@deep-spec-analysis/kernel-domain";
+
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
-import { DesignEvent } from "./design-event.ts";
+import { DesignEventRule } from "./design-event-rule.ts";
 // 設計義務。分類、rules 起源の参照要件、event 完全性、式の役割を所有する。
 
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
 import type { DesignObligationIdentifier } from "./design-obligation-identifier.ts";
-import type { DesignObligationNature } from "./design-obligation-nature.ts";
+
 import type { DesignObligationOrigin } from "./design-obligation-origin.ts";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
@@ -23,7 +29,7 @@ type DesignTemporalExpressions = {
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignObligationParam = {
   id: DesignObligationIdentifier;
-  nature: DesignObligationNature;
+  nature: ObligationNature;
   origin: DesignObligationOrigin;
   businessRuleReferences: BusinessRuleReferences;
   functionalRequirementReferences: FunctionalRequirementReferences;
@@ -36,7 +42,7 @@ type DesignObligationParam = {
 
 export class DesignObligation {
   readonly #id: DesignObligationIdentifier;
-  readonly #nature: DesignObligationNature;
+  readonly #nature: ObligationNature;
   readonly #origin: DesignObligationOrigin;
   readonly #businessRuleReferences: BusinessRuleReferences;
   readonly #functionalRequirementReferences: FunctionalRequirementReferences;
@@ -82,7 +88,7 @@ export class DesignObligation {
   id(): DesignObligationIdentifier {
     return this.#id;
   }
-  nature(): DesignObligationNature {
+  nature(): ObligationNature {
     return this.#nature;
   }
   origin(): DesignObligationOrigin {
@@ -121,11 +127,9 @@ export class DesignObligation {
     return { guard: this.#guard, effect: this.#effect };
   }
 
-  asEvent(): DesignEvent | null {
+  asEventRule(): DesignEventRule | null {
     const event = this.eventDefinition();
-    return event === null
-      ? null
-      : DesignEvent.of({ reference: LoweredOriginReference.of(this.#id.asString()), ...event });
+    return event === null ? null : DesignEventRule.of({ reference: this.#id, ...event });
   }
 
   eventDefinition(): { readonly trigger: TriggerName; readonly guard: Expression; readonly effect: Expression } | null {
@@ -140,12 +144,12 @@ export class DesignObligation {
     const lowered: Parameters<typeof LoweredObligation.of>[0] = {
       id,
       origin: this.loweredOrigin(),
-      nature: this.#nature.asString(),
+      nature: this.#nature,
       functionalRequirementReferences: this.#functionalRequirementReferences,
     };
     const temporal = this.temporal();
     if (this.#assert !== undefined) lowered.assert = this.#assert;
-    if (this.#trigger !== undefined) lowered.trigger = this.#trigger.asString();
+    if (this.#trigger !== undefined) lowered.trigger = this.#trigger;
     if (this.#guard !== undefined) lowered.guard = this.#guard;
     if (this.#effect !== undefined) lowered.effect = this.#effect;
     if (temporal !== undefined) lowered.temporal = temporal;

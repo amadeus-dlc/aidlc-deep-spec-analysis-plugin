@@ -3620,8 +3620,8 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
     return new SatisfiabilityModuloTheoriesEventPairProbe(props);
   }
   interpret(model, results) {
-    const overlap = this.overlapVerdictIn(results);
-    const joint = this.jointVerdictIn(results);
+    const overlap = this.#overlapVerdictIn(results);
+    const joint = this.#jointVerdictIn(results);
     if (overlap.isSat() && joint.isUnsat()) {
       const targets = this.targets().sortedUniqueCanonically();
       return {
@@ -3643,22 +3643,13 @@ class SatisfiabilityModuloTheoriesEventPairProbe {
       skipped: overlap.isUndecided() || joint.isUndecided() ? pending.skipsFor(this.targets(), `event-pair check for trigger "${this.#trigger.asString()}"`) : VerificationSkips.of([])
     };
   }
-  a() {
-    return this.#a;
-  }
-  b() {
-    return this.#b;
-  }
-  trigger() {
-    return this.#trigger;
-  }
   targets() {
     return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
   }
-  overlapVerdictIn(results) {
+  #overlapVerdictIn(results) {
     return results.verdictOf(this.#qOverlap);
   }
-  jointVerdictIn(results) {
+  #jointVerdictIn(results) {
     return results.verdictOf(this.#qJoint);
   }
 }
@@ -3903,7 +3894,7 @@ class Scenario {
   isReject() {
     return this.#expectation.isReject();
   }
-  hasEvent() {
+  hasEventRule() {
     return this.#eventTrigger !== undefined;
   }
   isViolatedBySatisfiability(satisfiable) {
@@ -3912,7 +3903,7 @@ class Scenario {
   interpretQuint(model, verdict, hasInitialState, components) {
     const target = this.#id.asTargetId();
     let skip = null;
-    if (this.hasEvent())
+    if (this.hasEventRule())
       skip = VerificationSkipped.of({
         target,
         reason: SkipReason.capability(),
@@ -4734,6 +4725,18 @@ class BusinessRuleReferenceIndex {
   static of(ids) {
     return new BusinessRuleReferenceIndex(KeySet.of(ids));
   }
+  diagnostics(used, unformalized) {
+    const errors = [];
+    for (const reference of [...used].sort((a, b) => a.asString() < b.asString() ? -1 : a.asString() > b.asString() ? 1 : 0)) {
+      if (!this.has(reference))
+        errors.push(`brRef "${reference.asString()}" does not exist in rules.md`);
+    }
+    for (const reference of [...this.#ids].sort((a, b) => a.asString() < b.asString() ? -1 : a.asString() > b.asString() ? 1 : 0)) {
+      if (!used.has(reference) && !unformalized.covers(TargetIdentifier.of(reference.asString())))
+        errors.push(`BR coverage: rule ${reference.asString()} in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] \u2014 silence is a contract violation`);
+    }
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
   has(br) {
     return this.#ids.has(br);
   }
@@ -5352,10 +5355,10 @@ class LoweredObligation {
   constructor(props) {
     this.#id = props.id;
     this.#origin = props.origin;
-    this.#nature = ObligationNature.of(props.nature);
+    this.#nature = props.nature;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
-    this.#trigger = props.trigger === undefined ? undefined : TriggerName.of(props.trigger);
+    this.#trigger = props.trigger;
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#temporal = props.temporal === undefined ? undefined : {
@@ -5437,8 +5440,32 @@ class LoweredOrigin {
   }
 }
 
-// src/design/domain/design-event.ts
-class DesignEvent {
+// src/design/domain/lowered-origin-reference.ts
+class LoweredOriginReference {
+  #value;
+  constructor(raw) {
+    if (raw.length > 1024)
+      throw new IllegalArgumentException({ kind: "lowered-origin-ref-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-lowered-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new LoweredOriginReference(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new LoweredOriginReference(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
+// src/design/domain/design-event-rule.ts
+class DesignEventRule {
   #reference;
   #trigger;
   #guard;
@@ -5471,16 +5498,16 @@ class DesignEvent {
     this.#assignments = interpretable ? DesignAssignments.of(KeyedIndex.of(terms)) : null;
   }
   static of(props) {
-    return new DesignEvent(props);
+    return new DesignEventRule(props);
   }
   static parse(props) {
-    return parseConstruction(() => new DesignEvent(props));
+    return parseConstruction(() => new DesignEventRule(props));
   }
   trigger() {
     return this.#trigger;
   }
   reference() {
-    return this.#reference;
+    return LoweredOriginReference.of(this.#reference.asString());
   }
   guard() {
     return this.#guard.asExpression();
@@ -5503,8 +5530,8 @@ class DesignEvent {
   deadGuardProbe(id) {
     return LoweredObligation.of({
       id,
-      origin: LoweredOrigin.of({ kind: "vac-dead", design: this.#reference }),
-      nature: "invariant",
+      origin: LoweredOrigin.of({ kind: "vac-dead", design: this.reference() }),
+      nature: ObligationNature.of("invariant"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       assert: { op: "implies", args: [this.guard(), { op: "bool", value: true }] }
     });
@@ -5539,30 +5566,6 @@ class DesignMachines {
   }
   toArray() {
     return this.#values;
-  }
-}
-
-// src/design/domain/lowered-origin-reference.ts
-class LoweredOriginReference {
-  #value;
-  constructor(raw) {
-    if (raw.length > 1024)
-      throw new IllegalArgumentException({ kind: "lowered-origin-ref-too-long", raw: raw.length });
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-lowered-token", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new LoweredOriginReference(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new LoweredOriginReference(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
   }
 }
 
@@ -5609,7 +5612,7 @@ class RuleSubsumptionProbe {
     return LoweredObligation.of({
       id,
       origin: LoweredOrigin.of({ kind: "vac-shadow", probe: this }),
-      nature: "invariant",
+      nature: ObligationNature.of("invariant"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       assert: {
         op: "implies",
@@ -5622,26 +5625,26 @@ class RuleSubsumptionProbe {
   }
 }
 
-// src/design/domain/design-event-catalog.ts
-class DesignEventCatalog {
+// src/design/domain/design-event-rule-catalog.ts
+class DesignEventRuleCatalog {
   #events;
   constructor(unit) {
     const events = [];
     for (const obligation of unit.obligations().sortedCanonically()) {
-      const event = obligation.asEvent();
+      const event = obligation.asEventRule();
       if (event !== null)
         events.push(event);
     }
     for (const machine of unit.machines().sortedCanonically())
       for (const transition of machine.transitions().sortedCanonically())
-        events.push(transition.asEvent(DesignMachines.attrPathOf(machine)));
+        events.push(transition.asEventRule(DesignMachines.attrPathOf(machine)));
     this.#events = KeyedIndex.of(events.map((event) => [TargetIdentifier.of(event.reference().asString()), event]));
   }
   static of(unit) {
-    return new DesignEventCatalog(unit);
+    return new DesignEventRuleCatalog(unit);
   }
   static parse(unit) {
-    return parseConstruction(() => new DesignEventCatalog(unit));
+    return parseConstruction(() => new DesignEventRuleCatalog(unit));
   }
   eventOf(id) {
     const event = this.#events.get(id);
@@ -5778,9 +5781,9 @@ class DesignIgnore {
     return LoweredObligation.of({
       id,
       origin,
-      nature: "event",
+      nature: ObligationNature.of("event"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      trigger: this.#trigger.asString(),
+      trigger: this.#trigger,
       guard: this.loweredGuard(attrPath),
       effect: this.loweredEffect(attrPath)
     });
@@ -6781,9 +6784,9 @@ class DesignObligation {
       return null;
     return { guard: this.#guard, effect: this.#effect };
   }
-  asEvent() {
+  asEventRule() {
     const event = this.eventDefinition();
-    return event === null ? null : DesignEvent.of({ reference: LoweredOriginReference.of(this.#id.asString()), ...event });
+    return event === null ? null : DesignEventRule.of({ reference: this.#id, ...event });
   }
   eventDefinition() {
     const behavior = this.guardedEffect();
@@ -6795,14 +6798,14 @@ class DesignObligation {
     const lowered = {
       id,
       origin: this.loweredOrigin(),
-      nature: this.#nature.asString(),
+      nature: this.#nature,
       functionalRequirementReferences: this.#functionalRequirementReferences
     };
     const temporal = this.temporal();
     if (this.#assert !== undefined)
       lowered.assert = this.#assert;
     if (this.#trigger !== undefined)
-      lowered.trigger = this.#trigger.asString();
+      lowered.trigger = this.#trigger;
     if (this.#guard !== undefined)
       lowered.guard = this.#guard;
     if (this.#effect !== undefined)
@@ -6925,39 +6928,6 @@ class DesignObligationIdentifier {
   }
   asString() {
     return this.#value;
-  }
-}
-// src/design/domain/design-obligation-nature.ts
-class DesignObligationNature {
-  #value;
-  constructor(value) {
-    if (value.length > 128)
-      throw new IllegalArgumentException({ kind: "design-obligation-nature-too-long", raw: value.length });
-    this.#value = value;
-  }
-  static parse(value) {
-    return parseConstruction(() => new DesignObligationNature(value));
-  }
-  static of(raw) {
-    return new DesignObligationNature(raw);
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-  isEvent() {
-    return this.#value === "event";
-  }
-  isInvariant() {
-    return this.#value === "invariant";
-  }
-  isNumeric() {
-    return this.#value === "numeric";
-  }
-  isStateTemporal() {
-    return this.#value === "state-temporal";
   }
 }
 // src/design/domain/design-obligation-origin.ts
@@ -7154,9 +7124,6 @@ class LoweredScenario {
   expectedExpression() {
     return this.#expect;
   }
-  isViolatedBySatisfiability(satisfiable) {
-    return this.#expectation.isViolatedBySatisfiability(satisfiable);
-  }
   isAccept() {
     return this.#expectation.isAccept();
   }
@@ -7210,7 +7177,7 @@ class DesignScenario {
   isReject() {
     return this.#expectation.isReject();
   }
-  hasEvent() {
+  hasEventRule() {
     return this.#eventTrigger !== undefined;
   }
   isViolatedBySatisfiability(satisfiable) {
@@ -7401,9 +7368,9 @@ class DesignTransition {
     return LoweredObligation.of({
       id,
       origin: this.loweredOrigin(machine, AttributePath.of(attrPath)),
-      nature: "event",
+      nature: ObligationNature.of("event"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      trigger: this.#trigger.asString(),
+      trigger: this.#trigger,
       guard: this.loweredGuard(attrPath),
       effect: this.loweredEffect(attrPath)
     });
@@ -7416,17 +7383,14 @@ class DesignTransition {
       attribute
     });
   }
-  asEvent(attrPath) {
-    return DesignEvent.of({
-      reference: LoweredOriginReference.of(this.#id.asString()),
+  asEventRule(attrPath) {
+    return DesignEventRule.of({
+      reference: this.#id,
       trigger: this.#trigger,
       guard: this.loweredGuard(attrPath),
       implicitEffect: this.#stateEquality(attrPath, this.#to, true),
       ...this.#effect !== undefined ? { effect: this.#effect } : {}
     });
-  }
-  stateAssignment(attrPath) {
-    return [attrPath, { op: "enum", value: this.#to }];
   }
 }
 // src/design/domain/design-transition-declaration.ts
@@ -7808,7 +7772,15 @@ class DesignUnit {
   #scenarios;
   #background;
   constructor(seed) {
-    this.#unit = UnitName.of(seed.unit);
+    const identifiers = [
+      ...seed.obligations.ids(),
+      ...seed.scenarios.ids(),
+      ...seed.machines.transitionIds(),
+      ...[...seed.machines].map((machine) => machine.id().asString())
+    ];
+    if (new Set(identifiers).size !== identifiers.length)
+      throw new IllegalArgumentException({ kind: "duplicate-design-target" });
+    this.#unit = seed.unit;
     this.#catalog = seed.catalog;
     this.#obligations = seed.obligations;
     this.#machines = seed.machines;
@@ -7871,7 +7843,7 @@ class DesignUnit {
       }
     }
     if (opts.synthetics) {
-      const events = DesignEventCatalog.of(this);
+      const events = DesignEventRuleCatalog.of(this);
       for (const event of events)
         obligations.push(event.deadGuardProbe(nextId()));
       for (const probe of events.subsumptionProbes())
@@ -7978,12 +7950,12 @@ class DesignUnitDeclaration {
         errors.push(where(`${ctx}: duplicate id "${id}"`));
       seenIds.add(id);
     };
-    const businessRuleReferencesUsed = new Set;
+    const businessRuleReferencesUsed = [];
     const collectBr = (refs) => {
       if (refs === undefined)
         return;
       for (const b of refs)
-        businessRuleReferencesUsed.add(b.asString());
+        businessRuleReferencesUsed.push(b);
     };
     for (const ob of this.#obligations) {
       const ctx = `obligation ${ob.id().asString()}`;
@@ -8024,20 +7996,12 @@ class DesignUnitDeclaration {
     }
     const known = this.#rules;
     if (known === null) {
-      if (businessRuleReferencesUsed.size > 0) {
+      if (businessRuleReferencesUsed.length > 0) {
         errors.push(where(`brRefs are used but construction/${unitName}/functional-design/rules.md was not found \u2014 they cannot be reverse-verified`));
       }
     } else {
-      for (const br of [...businessRuleReferencesUsed].sort()) {
-        if (!known.has(BusinessRuleReference.of(br)))
-          errors.push(where(`brRef "${br}" does not exist in rules.md`));
-      }
-      const unformalizedTargets = this.#unformalizedTargets;
-      for (const br of known.sortedIds()) {
-        if (!businessRuleReferencesUsed.has(br) && !unformalizedTargets.covers(TargetIdentifier.of(br))) {
-          errors.push(where(`BR coverage: rule ${br} in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] \u2014 silence is a contract violation`));
-        }
-      }
+      for (const message of known.diagnostics(KeySet.of(businessRuleReferencesUsed), this.#unformalizedTargets))
+        errors.push(where(message.asString()));
     }
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
@@ -8544,7 +8508,7 @@ class RefinementQuintInvariant {
     return LoweredObligation.of({
       id,
       origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of(this.#reqId.asString()) }),
-      nature: "invariant",
+      nature: ObligationNature.of("invariant"),
       functionalRequirementReferences: this.#functionalRequirementReferences,
       assert: this.#expr
     });
@@ -8957,23 +8921,11 @@ class RefinementObligation {
   id() {
     return this.#id;
   }
-  nature() {
-    return this.#nature;
-  }
   functionalRequirementReferences() {
     return this.#functionalRequirementReferences;
   }
   assertion() {
     return this.#assert;
-  }
-  trigger() {
-    return this.#trigger;
-  }
-  guard() {
-    return this.#guard;
-  }
-  effect() {
-    return this.#effect;
   }
   isInvariantLike() {
     return this.#nature.isInvariant() || this.#nature.isNumeric();
@@ -9194,9 +9146,6 @@ class RefinementRequirements {
       ...this.#scenarios.toArray().map((s) => s.id().asTargetId())
     ]);
   }
-  functionalRequirementReferencesOf(id) {
-    return this.#obligations.byId(id)?.functionalRequirementReferences() ?? this.#scenarios.byId(id)?.functionalRequirementReferences() ?? FunctionalRequirementReferences.of([]);
-  }
 }
 // src/design/domain/refinement-scenario.ts
 class RefinementScenario {
@@ -9218,7 +9167,7 @@ class RefinementScenario {
   coverageIn(map) {
     if (map.unmapped().covers(this.#id))
       return RefinementStatus.waived(map.unmapped().reasonOf(this.#id) ?? "listed in unmapped[]");
-    if (this.hasEvent())
+    if (this.hasEventRule())
       return RefinementStatus.capability("event scenarios are not replayed in v1");
     return map.attrMap().coverageOf(AttributePaths.of(this.#bindings.entriesCanonically().map((binding) => binding.path())), map.unmapped()).forScenario();
   }
@@ -9231,19 +9180,13 @@ class RefinementScenario {
   functionalRequirementReferences() {
     return this.#functionalRequirementReferences;
   }
-  eventTrigger() {
-    return this.#eventTrigger;
-  }
   isViolatedBySatisfiability(satisfiable) {
     return this.#expectation.isViolatedBySatisfiability(satisfiable);
   }
   isAccept() {
     return this.#expectation.isAccept();
   }
-  isReject() {
-    return this.#expectation.isReject();
-  }
-  hasEvent() {
+  hasEventRule() {
     return this.#eventTrigger !== undefined;
   }
   bindings() {
@@ -9289,15 +9232,12 @@ class RefinementSolverPlan {
     if (props.pending.size() > 65536 || props.compileSkips.count() > 65536) {
       throw new IllegalArgumentException({ kind: "refinement-solver-plan-too-large" });
     }
-    const targets = new Set(props.preparation.requirements().allTargetIds().toStrings());
     const unit = props.preparation.unit().name();
     for (const [, probe] of props.pending) {
       if (!probe.belongsToRequirements(props.preparation.requirements()))
         throw new IllegalArgumentException({ kind: "refinement-probe-outside-preparation" });
       if (!probe.belongsTo(UnitName.of(unit)))
         throw new IllegalArgumentException({ kind: "refinement-probe-unit-mismatch" });
-      if (!targets.has(probe.reqTarget().asString()))
-        throw new IllegalArgumentException({ kind: "refinement-probe-outside-preparation" });
     }
     for (const skipped of props.compileSkips) {
       if (skipped.unit() !== unit)
@@ -9360,9 +9300,6 @@ class RefinementUnitMap {
   }
   attributeGap(path, detail, artifact) {
     return this.gapFor(TargetIdentifiers.of([TargetIdentifier.of(`attr:${path.asString().replace(/[^A-Za-z0-9_./-]/g, "-")}`)]), detail, artifact);
-  }
-  unit() {
-    return this.#unit;
   }
   isForUnit(unit) {
     return this.#unit.equals(unit);
@@ -9435,13 +9372,9 @@ class RuleSubsumption {
 }
 // src/design/domain/rule-subsumption-verdict.ts
 class RuleSubsumptionVerdict {
-  #probe;
-  #finding;
-  #decided;
-  constructor(probe, finding, decided) {
-    this.#probe = probe;
-    this.#finding = finding;
-    this.#decided = decided;
+  #state;
+  constructor(state) {
+    this.#state = { ...state };
   }
   static fromFinding(probe, source, witness, unit) {
     const finding = source.isKind("conflict") ? DesignFinding.of({
@@ -9452,22 +9385,22 @@ class RuleSubsumptionVerdict {
       unit,
       detail: probe.description()
     }) : null;
-    return new RuleSubsumptionVerdict(probe, finding, true);
+    return new RuleSubsumptionVerdict({ kind: "observed", probe, finding });
   }
   static undecided(probe) {
-    return new RuleSubsumptionVerdict(probe, null, false);
+    return new RuleSubsumptionVerdict({ kind: "unobserved", probe });
   }
   isProved() {
-    return this.#finding !== null;
+    return this.#state.kind === "observed" && this.#state.finding !== null;
   }
-  isDecided() {
-    return this.#decided;
+  hasObservation() {
+    return this.#state.kind === "observed";
   }
   probe() {
-    return this.#probe;
+    return this.#state.probe;
   }
   finding() {
-    return this.#finding;
+    return this.#state.kind === "observed" ? this.#state.finding : null;
   }
 }
 // src/design/domain/rule-subsumptions.ts
@@ -10723,7 +10656,7 @@ function parseDesignModel(raw) {
       const parsed = combineResults({
         id: DesignObligationIdentifier.parse(ob.id),
         origin: DesignObligationOrigin.parse(typeof ob.origin === "string" ? ob.origin : ""),
-        nature: DesignObligationNature.parse(ob.nature),
+        nature: ObligationNature.parse(ob.nature),
         brRefs: flatMapResult(traverseResult(strArr(ob.brRefs), BusinessRuleReference.parse), BusinessRuleReferences.parse),
         frRefs: flatMapResult(traverseResult(strArr(ob.frRefs), RequirementIdentifier.parse), FunctionalRequirementReferences.parse),
         trigger: typeof ob.trigger === "string" ? TriggerName.parse(ob.trigger) : ok(undefined)
@@ -10849,7 +10782,7 @@ function parseDesignModel(raw) {
       background.push(constructed.value);
     }
     units.push(DesignUnit.of({
-      unit: unit.value.asString(),
+      unit: unit.value,
       catalog: catalog.value,
       obligations: DesignObligations.of(obligations),
       machines: DesignMachines.of(machines),
@@ -11717,7 +11650,7 @@ function buildRefinementQueries(plan) {
       sort: a.kind === "bool" ? "Bool" : "Int"
     }))
   ];
-  const catalog = DesignEventCatalog.of(u);
+  const catalog = DesignEventRuleCatalog.of(u);
   const queries = [];
   const pending = new Map;
   const compileSkips = [];

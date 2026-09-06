@@ -1,5 +1,11 @@
-import type { Expression, FunctionalRequirementReferences, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
-import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
+import {
+  type Expression,
+  ExpressionTree,
+  type FunctionalRequirementReferences,
+  ObligationNature,
+  type TargetIdentifier,
+} from "@deep-spec-analysis/kernel-domain";
+
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { ObligationIdentifier } from "@deep-spec-analysis/requirements-domain";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
@@ -54,7 +60,7 @@ export class RefinementQuintInvariant {
     return LoweredObligation.of({
       id,
       origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of(this.#reqId.asString()) }),
-      nature: "invariant",
+      nature: ObligationNature.of("invariant"),
       functionalRequirementReferences: this.#functionalRequirementReferences,
       assert: this.#expr,
     });

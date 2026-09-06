@@ -1,12 +1,7 @@
 import type { DesignMachines } from "./design-machines.ts";
-// lowering の結果（3 コレクション + 帰属索引）。lowered 値と索引の一貫性、
-// および refinement 追加パスによる不変な組み直しだけを所有する（BR6.1）。
-// 設計モデルからの build は `DesignUnit.lowered`（BR6.2）、兄弟バックエンド
-// 判定の設計語彙への写し替えは `SiblingVerdictDocument.remapVerdicts`
-// （BR6.3）が持つ——この値オブジェクトの変更理由はコレクションと索引の形
-// だけである。
-// OB-n / SC-n / BG-n の採番順は文書バイト（子の処理順）に効く凍結面で、
-// コレクション自身が順序を保って運ぶ。
+// 変換済みの義務・シナリオ・背景と元の機械を保持する。
+// 帰属索引は要素と機械から導出し、追加不変量にも同じ構築契約を適用する。
+// 採番・配列順は子バックエンドへの文書に影響するため維持する。
 
 import type { LoweredBackgrounds } from "./lowered-backgrounds.ts";
 import { LoweredIdentifier } from "./lowered-identifier.ts";

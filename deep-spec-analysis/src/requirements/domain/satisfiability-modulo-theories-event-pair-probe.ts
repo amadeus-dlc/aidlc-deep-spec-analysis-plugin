@@ -42,8 +42,8 @@ export class SatisfiabilityModuloTheoriesEventPairProbe {
     model: RequirementsModel,
     results: SatisfiabilityModuloTheoriesQueryVerdicts,
   ): { findings: VerificationFindings; skipped: VerificationSkips } {
-    const overlap = this.overlapVerdictIn(results);
-    const joint = this.jointVerdictIn(results);
+    const overlap = this.#overlapVerdictIn(results);
+    const joint = this.#jointVerdictIn(results);
     if (overlap.isSat() && joint.isUnsat()) {
       const targets = this.targets().sortedUniqueCanonically();
       return {
@@ -70,30 +70,18 @@ export class SatisfiabilityModuloTheoriesEventPairProbe {
     };
   }
 
-  a(): ObligationIdentifier {
-    return this.#a;
-  }
-
-  b(): ObligationIdentifier {
-    return this.#b;
-  }
-
-  trigger(): TriggerName {
-    return this.#trigger;
-  }
-
   // 対の 2 対象（発行順）。
   targets(): TargetIdentifiers {
     return TargetIdentifiers.of([this.#a.asTargetId(), this.#b.asTargetId()]);
   }
 
-  overlapVerdictIn(
+  #overlapVerdictIn(
     results: SatisfiabilityModuloTheoriesQueryVerdicts,
   ): ReturnType<SatisfiabilityModuloTheoriesQueryVerdicts["verdictOf"]> {
     return results.verdictOf(this.#qOverlap);
   }
 
-  jointVerdictIn(
+  #jointVerdictIn(
     results: SatisfiabilityModuloTheoriesQueryVerdicts,
   ): ReturnType<SatisfiabilityModuloTheoriesQueryVerdicts["verdictOf"]> {
     return results.verdictOf(this.#qJoint);

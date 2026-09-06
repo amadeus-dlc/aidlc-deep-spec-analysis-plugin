@@ -13,7 +13,7 @@ import {
   DesignEntityDeclaration,
   type DesignEntityDeclarations,
   DesignEntityName,
-  DesignEventCatalog,
+  DesignEventRuleCatalog,
   DesignFindings,
   DesignIgnore,
   DesignIgnores,
@@ -23,7 +23,6 @@ import {
   DesignModelIdentifier,
   DesignObligation,
   DesignObligationIdentifier,
-  DesignObligationNature,
   DesignObligationOrigin,
   DesignObligations,
   DesignReport,
@@ -83,6 +82,7 @@ import {
   FunctionalRequirementReferences,
   IntermediateRepresentationVersion,
   KeyedIndex,
+  ObligationNature,
   QueryLabel,
   RequirementIdentifier,
   ScenarioExpectation,
@@ -117,7 +117,6 @@ import {
   AttributePath,
   FormalModelIdentifier,
   ObligationIdentifier,
-  ObligationNature,
   ScenarioIdentifier,
 } from "@deep-spec-analysis/requirements-domain";
 
@@ -373,14 +372,14 @@ function unit(seed: {
   background?: { id: string; assert: Expression }[];
 }): DesignUnitType {
   return DesignUnit.of({
-    unit: seed.unit ?? "u1",
+    unit: UnitName.of(seed.unit ?? "u1"),
     catalog: DesignAttributeCatalog.of(entitiesOf(seed.rawEntities ?? [], seed.attrPaths ?? new Set<string>())),
     obligations: DesignObligations.of(
       (seed.obligations ?? []).map((o) =>
         DesignObligation.of({
           ...o,
           id: DesignObligationIdentifier.of(o.id),
-          nature: DesignObligationNature.of(o.nature),
+          nature: ObligationNature.of(o.nature),
           origin: DesignObligationOrigin.of(o.origin),
           businessRuleReferences: BusinessRuleReferences.of(
             Array.from(o.brRefs, (raw) => BusinessRuleReference.of(raw)),
@@ -1028,8 +1027,8 @@ describe("event catalog and effect assignments", () => {
         { id: "DOB-3", nature: "invariant", origin: "", brRefs: [], frRefs: [] },
       ],
     });
-    const catalog = DesignEventCatalog.of(u);
-    expect(DesignEventCatalog.parse(u).ok).toBe(true);
+    const catalog = DesignEventRuleCatalog.of(u);
+    expect(DesignEventRuleCatalog.parse(u).ok).toBe(true);
     expect(catalog.eventOf(TargetIdentifier.of("TR-1"))?.guard().op).toBe("and");
     expect(catalog.eventOf(TargetIdentifier.of("TR-1"))?.assignedRhsOf("D.s")).toEqual({ op: "enum", value: "b" });
     expect(catalog.eventOf(TargetIdentifier.of("TR-1"))?.assignedRhsOf("D.n")).toEqual({ op: "int", value: 1 });
@@ -1324,7 +1323,7 @@ describe("refinement collections (first-class operations)", () => {
       .add(rob("OB-1", "event"))
       .add(rob("OB-1", "numeric"));
     expect([...obs].length).toBe(3);
-    expect(obs.byId("OB-1")?.nature().asString()).toBe("numeric");
+    expect(obs.byId("OB-1")?.isInvariantLike()).toBe(true);
     expect(obs.byId("OB-9")).toBe(undefined);
     expect(
       obs

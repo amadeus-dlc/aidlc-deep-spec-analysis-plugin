@@ -40,7 +40,7 @@ export class RefinementScenario {
   coverageIn(map: RefinementUnitMap): RefinementStatus {
     if (map.unmapped().covers(this.#id))
       return RefinementStatus.waived(map.unmapped().reasonOf(this.#id) ?? "listed in unmapped[]");
-    if (this.hasEvent()) return RefinementStatus.capability("event scenarios are not replayed in v1");
+    if (this.hasEventRule()) return RefinementStatus.capability("event scenarios are not replayed in v1");
     return map
       .attrMap()
       .coverageOf(
@@ -59,9 +59,6 @@ export class RefinementScenario {
   functionalRequirementReferences(): FunctionalRequirementReferences {
     return this.#functionalRequirementReferences;
   }
-  eventTrigger(): TriggerName | undefined {
-    return this.#eventTrigger;
-  }
   isViolatedBySatisfiability(satisfiable: boolean): boolean {
     return this.#expectation.isViolatedBySatisfiability(satisfiable);
   }
@@ -69,10 +66,7 @@ export class RefinementScenario {
   isAccept(): boolean {
     return this.#expectation.isAccept();
   }
-  isReject(): boolean {
-    return this.#expectation.isReject();
-  }
-  hasEvent(): boolean {
+  hasEventRule(): boolean {
     return this.#eventTrigger !== undefined;
   }
   bindings(): ScenarioBindings {

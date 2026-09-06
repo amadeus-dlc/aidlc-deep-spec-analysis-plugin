@@ -8,15 +8,8 @@ import type {
 } from "@deep-spec-analysis/kernel-domain";
 import { SatisfiabilityModuloTheoriesProbe } from "./satisfiability-modulo-theories-probe.ts";
 
-// SMT 検証計画——コンパイラが要件モデルを SMT クエリに変換したときの対応表
-// （形式 SMT-LIB を含まない面）。計画は値オブジェクト（種別規律の裁定 7、
-// 2026-09-02——「事実」の名はドメインイベントに取っておく）。
-// クエリ id（"global" / "vac:OB-x" / "evo:a:b" / "evj:a:b" / "gap:trigger" /
-// "sc:SC-x"）とラベル→対象の対応、コンパイル時 skip がここに載る。
-// スクリプト本体はアダプタの計画ビルダが所有する。判定の解釈（旧
-// interpretSmtVerdicts——detail 文言は golden 凍結・返り値は未ソートで正準
-// ソートは VerificationReport.compose の不変条件）は plan 自身の振る舞い
-// （OOUI 裁定）。
+// コンパイルされた問いと対象の対応を保持する検証計画。
+// 問いが返す診断を集め、大域矛盾から派生する診断の抑止と重複排除を調整する。
 
 import type { ObligationIdentifier } from "./obligation-identifier.ts";
 import type { RequirementsModel } from "./requirements-model.ts";

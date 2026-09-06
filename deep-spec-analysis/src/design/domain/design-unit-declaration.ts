@@ -1,5 +1,5 @@
-import { ErrorMessage, ErrorMessages, type Expression, TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
-import { BusinessRuleReference } from "./business-rule-reference.ts";
+import { ErrorMessage, ErrorMessages, type Expression, KeySet } from "@deep-spec-analysis/kernel-domain";
+import type { BusinessRuleReference } from "./business-rule-reference.ts";
 import type { BusinessRuleReferenceIndex } from "./business-rule-reference-index.ts";
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
 import { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
@@ -11,14 +11,8 @@ import type { DesignScenarioDeclarations } from "./design-scenario-declarations.
 import type { DesignUnitIdentifier } from "./design-unit-identifier.ts";
 import type { UnformalizedTargets } from "./unformalized-targets.ts";
 
-// 契約3 設計 IR の well-formedness 検査材料。スキーマ検証を通過した設計 IR を、
-// アダプタの寛容パースが型付きに解体したもの。ユニットごとの BR 材料
-// （construction ディレクトリの有無と rules.md 本文）も、探索と読み込みを
-// 済ませた形でここに載る——ドメインは I/O を持たない。
-//
-// 旧 design-ir-valid センサーの semanticErrors が生 Json を走査していた
-// ときの黙殺条件（isObject / typeof チェック）はパーサ側へ移った。
-// construction ディレクトリ欠落の判定は宣言自身の知識（#71 波13）。
+// 設計ユニットの入力宣言。属性と状態機械の診断を各所有者へ依頼し、
+// ユニット内の識別子、成果物の存在、業務規則の被覆を合わせて評価する。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
 type DesignUnitDeclarationParam = {
   unit: DesignUnitIdentifier;
@@ -43,7 +37,7 @@ export class DesignUnitDeclaration {
   // construction/<unit>/ が記録配下に存在するか（記録ルート未解決なら true 扱い
   // ——旧実装は recordRoot === null のときこの検査を出さない）。
   readonly #directoryExists: boolean;
-  // construction/<unit>/functional-design/rules.md の本文。無ければ null。
+  // アダプタが規則文書から取得した索引。文書がなければnull。
   readonly #rules: BusinessRuleReferenceIndex | null;
 
   private constructor(props: DesignUnitDeclarationParam) {
@@ -95,12 +89,7 @@ export class DesignUnitDeclaration {
     return !this.#directoryExists;
   }
 
-  // 契約3 設計 IR のスキーマを超えた意味的整合性——ユニット自身の不変条件
-  // （種別規律の裁定 6、2026-09-02——旧自由関数 designWellFormednessErrors を
-  // 吸収）。id の一意性（DOB/DSC/DBG/SM/TR 横断）、属性参照の解決、enum リテラル
-  // の所属（兄弟 ref への束縛つき）、prime の合法性、状態機械の整合、brRefs の
-  // 逆検証と BR カバレッジ。文言と発生順序はそのまま観測面に出る（凍結）。
-  // 部分の判断は各宣言に問い、ここは順序と文言（凍結面）だけを所有する。
+  // 型付き診断を宣言順で集める。曖昧な属性カタログに依存する検査は実行しない。
   diagnostics(): ErrorMessages {
     const errors: string[] = [];
     const unitName = this.#unit.asString();
@@ -122,10 +111,10 @@ export class DesignUnitDeclaration {
       if (seenIds.has(id)) errors.push(where(`${ctx}: duplicate id "${id}"`));
       seenIds.add(id);
     };
-    const businessRuleReferencesUsed = new Set<string>();
+    const businessRuleReferencesUsed: BusinessRuleReference[] = [];
     const collectBr = (refs: BusinessRuleReferences | undefined): void => {
       if (refs === undefined) return;
-      for (const b of refs) businessRuleReferencesUsed.add(b.asString());
+      for (const b of refs) businessRuleReferencesUsed.push(b);
     };
 
     for (const ob of this.#obligations) {
@@ -176,7 +165,7 @@ export class DesignUnitDeclaration {
     }
     const known = this.#rules;
     if (known === null) {
-      if (businessRuleReferencesUsed.size > 0) {
+      if (businessRuleReferencesUsed.length > 0) {
         errors.push(
           where(
             `brRefs are used but construction/${unitName}/functional-design/rules.md was not found — they cannot be reverse-verified`,
@@ -184,20 +173,10 @@ export class DesignUnitDeclaration {
         );
       }
     } else {
-      for (const br of [...businessRuleReferencesUsed].sort()) {
-        if (!known.has(BusinessRuleReference.of(br))) errors.push(where(`brRef "${br}" does not exist in rules.md`));
-      }
-      const unformalizedTargets = this.#unformalizedTargets;
-      for (const br of known.sortedIds()) {
-        if (!businessRuleReferencesUsed.has(br) && !unformalizedTargets.covers(TargetIdentifier.of(br))) {
-          errors.push(
-            where(
-              `BR coverage: rule ${br} in rules.md is neither referenced by any obligation/transition/scenario nor listed in unformalized[] — silence is a contract violation`,
-            ),
-          );
-        }
-      }
+      for (const message of known.diagnostics(KeySet.of(businessRuleReferencesUsed), this.#unformalizedTargets))
+        errors.push(where(message.asString()));
     }
+
     return ErrorMessages.collect(errors.map(ErrorMessage.parse));
   }
 }

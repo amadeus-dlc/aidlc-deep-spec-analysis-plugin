@@ -1,15 +1,8 @@
 import { KeySet, TargetIdentifiers, type VerificationMethod } from "@deep-spec-analysis/kernel-domain";
 
-// Quint 状態機械の計画——コンパイラが機械を組んだときの対応表で、形式
-// （Quint テキスト）を含まない面（種別規律の裁定 8——値オブジェクト）。旧名
-// QuintMachineFacts の「事実」はドメインイベントに取っておく。判定解釈に必要な、形式（Quint テキスト）を
-// 含まない面。不変量成分（帰属評価に使う式つき）・イベント義務 id・
-// 全属性が束縛された init 可能シナリオの集合がここに載る。
-// モジュール本文と変数名対応はアダプタのコンパイラが所有する。判定の解釈
-// （旧 interpretQuintVerdicts——detail 文言は golden 凍結・返り値は未ソートで
-// 正準ソートは VerificationReport.compose の不変条件、phase 2 の「既に skip
-// 済みの義務は走らせない」ガードも逐語）は plan 自身の振る舞い（OOUI 裁定）。
-// 対象 id は TargetIdentifier / TargetIdentifiers で運ぶ（#71 波10——生 string の列ではない）。
+// 機械成分・イベント義務・初期化可能シナリオを保持する検証計画。
+// 判定の意味は機械結果、義務、シナリオが所有する。計画は実行順と
+// 既にskipされた対象の再評価抑止を調整する。
 
 import type { ObligationIdentifiers } from "./obligation-identifiers.ts";
 import type { QuintMachineComponents } from "./quint-machine-components.ts";

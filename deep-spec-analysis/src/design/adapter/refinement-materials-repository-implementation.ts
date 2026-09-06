@@ -6,12 +6,25 @@ import {
   EnumerationMembers,
   type Expression,
   FunctionalRequirementReferences,
+  ObligationNature,
   RequirementIdentifier,
   ScenarioExpectation,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
-import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
-import { flatMapResult } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  canonicalStringify,
+  combineResults,
+  err,
+  flatMapResult,
+  isObject,
+  type Json,
+  ok,
+  type ParseError,
+  type Result,
+  strArr,
+  traverseResult,
+  validateSchema,
+} from "@deep-spec-analysis/kernel-infrastructure";
 
 // RefinementMaterialsRepository の実 Gateway 実装。レコードルート歩行・要件形式
 // モデルの取得（不在のみ inactive、取得失敗・不正入力は Result）・refinement map の fence/JSON/
@@ -32,7 +45,6 @@ import {
   EventMappings,
   FormalModelIdentifier,
   ObligationIdentifier,
-  ObligationNature,
   RefinementAttribute,
   RefinementAttributes,
   RefinementMap,
@@ -55,18 +67,7 @@ import {
   UnmappedTargetReference,
 } from "@deep-spec-analysis/design-domain";
 import type { RefinementMaterialsRepository } from "@deep-spec-analysis/design-usecase";
-import {
-  canonicalStringify,
-  combineResults,
-  err,
-  isObject,
-  type Json,
-  ok,
-  type Result,
-  strArr,
-  traverseResult,
-  validateSchema,
-} from "@deep-spec-analysis/kernel-infrastructure";
+
 import type { RepositoryError } from "@deep-spec-analysis/kernel-usecase";
 import type { RefinementMapParse } from "./refinement-map-parse.ts";
 

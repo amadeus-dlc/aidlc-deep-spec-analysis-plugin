@@ -3,10 +3,12 @@ import {
   type Expression,
   ExpressionTree,
   FunctionalRequirementReferences,
+  ObligationNature,
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
+
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
-import { DesignEvent } from "./design-event.ts";
+import { DesignEventRule } from "./design-event-rule.ts";
 import type { DesignMachine } from "./design-machine.ts";
 // 状態機械の遷移（契約3）。id はドメインプリミティブで運ぶ。
 // compile-down の暗黙部（ガード = state==from ∧ 明示ガード、効果 = state'=to
@@ -109,9 +111,9 @@ export class DesignTransition {
     return LoweredObligation.of({
       id,
       origin: this.loweredOrigin(machine, AttributePath.of(attrPath)),
-      nature: "event",
+      nature: ObligationNature.of("event"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      trigger: this.#trigger.asString(),
+      trigger: this.#trigger,
       guard: this.loweredGuard(attrPath),
       effect: this.loweredEffect(attrPath),
     });
@@ -127,9 +129,9 @@ export class DesignTransition {
     });
   }
 
-  asEvent(attrPath: string): DesignEvent {
-    return DesignEvent.of({
-      reference: LoweredOriginReference.of(this.#id.asString()),
+  asEventRule(attrPath: string): DesignEventRule {
+    return DesignEventRule.of({
+      reference: this.#id,
       trigger: this.#trigger,
       guard: this.loweredGuard(attrPath),
       implicitEffect: this.#stateEquality(attrPath, this.#to, true),
@@ -137,8 +139,5 @@ export class DesignTransition {
     });
   }
 
-  // 代入表（DesignEventCatalog）用の state 遷移代入: attrPath ← enum(to)。
-  stateAssignment(attrPath: string): readonly [string, Expression] {
-    return [attrPath, { op: "enum", value: this.#to }];
-  }
+  // 代入表（DesignEventRuleCatalog）用の state 遷移代入: attrPath ← enum(to)。
 }

@@ -1,5 +1,11 @@
-import type { FunctionalRequirementReferences } from "@deep-spec-analysis/kernel-domain";
-import { type Expression, ExpressionTree, ObligationNature, TriggerName } from "@deep-spec-analysis/kernel-domain";
+import {
+  type Expression,
+  ExpressionTree,
+  type FunctionalRequirementReferences,
+  type ObligationNature,
+  type TriggerName,
+} from "@deep-spec-analysis/kernel-domain";
+
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import type { LoweredOrigin } from "./lowered-origin.ts";
@@ -12,10 +18,10 @@ import type { LoweredOrigin } from "./lowered-origin.ts";
 type LoweredObligationParam = {
   id: LoweredIdentifier;
   origin: LoweredOrigin;
-  nature: string;
+  nature: ObligationNature;
   functionalRequirementReferences: FunctionalRequirementReferences;
   assert?: Expression;
-  trigger?: string;
+  trigger?: TriggerName;
   guard?: Expression;
   effect?: Expression;
   temporal?: {
@@ -42,10 +48,10 @@ export class LoweredObligation {
   private constructor(props: LoweredObligationParam) {
     this.#id = props.id;
     this.#origin = props.origin;
-    this.#nature = ObligationNature.of(props.nature);
+    this.#nature = props.nature;
     this.#functionalRequirementReferences = props.functionalRequirementReferences;
     this.#assert = props.assert === undefined ? undefined : ExpressionTree.of(props.assert).asExpression();
-    this.#trigger = props.trigger === undefined ? undefined : TriggerName.of(props.trigger);
+    this.#trigger = props.trigger;
     this.#guard = props.guard === undefined ? undefined : ExpressionTree.of(props.guard).asExpression();
     this.#effect = props.effect === undefined ? undefined : ExpressionTree.of(props.effect).asExpression();
     this.#temporal =

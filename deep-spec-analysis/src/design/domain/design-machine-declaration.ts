@@ -1,5 +1,5 @@
-import type { EnumerationMembers } from "@deep-spec-analysis/kernel-domain";
-import { ErrorMessage, ErrorMessages } from "@deep-spec-analysis/kernel-domain";
+import { type EnumerationMembers, ErrorMessage, ErrorMessages } from "@deep-spec-analysis/kernel-domain";
+
 import type { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 
 import type { DesignIgnoreDeclarations } from "./design-ignore-declarations.ts";

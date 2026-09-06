@@ -1,11 +1,12 @@
-import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   boundedValueSnapshot,
   canonicalStringify,
   IllegalArgumentException,
+  type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";
+
 import type { Expression } from "./expression.ts";
 
 // 式の木——published language の `Expression`（JSON の形、恒久除外）を包む

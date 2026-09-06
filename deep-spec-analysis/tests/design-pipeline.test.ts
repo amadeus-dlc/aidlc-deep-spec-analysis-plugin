@@ -25,7 +25,6 @@ import {
   DesignModelIdentifier,
   DesignObligation,
   DesignObligationIdentifier,
-  DesignObligationNature,
   DesignObligationOrigin,
   DesignObligations,
   DesignReport,
@@ -68,6 +67,7 @@ import {
   FindingsSchema,
   FunctionalRequirementReferences,
   IntermediateRepresentationVersion,
+  ObligationNature,
   RequirementIdentifier,
   ScenarioExpectation,
   SkipReason,
@@ -77,6 +77,7 @@ import {
   UnitName,
   VerificationMethod,
 } from "@deep-spec-analysis/kernel-domain";
+
 import { scenarioBindings } from "./binding-fixtures.ts";
 
 // レイヤード design パイプラインの in-process 検証（PR5、#18）。
@@ -283,14 +284,14 @@ function unit(seed: {
   background?: { id: string; assert: Expression }[];
 }): DesignUnit {
   return DesignUnit.of({
-    unit: seed.unit ?? "u1",
+    unit: UnitName.of(seed.unit ?? "u1"),
     catalog: DesignAttributeCatalog.of(entitiesOf(seed.rawEntities ?? [], seed.attrPaths ?? new Set<string>())),
     obligations: DesignObligations.of(
       (seed.obligations ?? []).map((o) =>
         DesignObligation.of({
           ...o,
           id: DesignObligationIdentifier.of(o.id),
-          nature: DesignObligationNature.of(o.nature),
+          nature: ObligationNature.of(o.nature),
           origin: DesignObligationOrigin.of(o.origin),
           businessRuleReferences: BusinessRuleReferences.of(
             Array.from(o.brRefs, (raw) => BusinessRuleReference.of(raw)),
@@ -1052,7 +1053,7 @@ describe("lowered collections and the lowering index (first-class operations)", 
       LoweredObligation.of({
         origin: LoweredOrigin.of({ kind: "passthrough", design: LoweredOriginReference.of("DOB-1") }),
         id: LoweredIdentifier.of("OB-99"),
-        nature: "invariant",
+        nature: ObligationNature.of("invariant"),
         functionalRequirementReferences: FunctionalRequirementReferences.of([]),
       }),
     );

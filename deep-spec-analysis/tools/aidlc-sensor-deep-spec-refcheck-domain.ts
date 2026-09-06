@@ -2197,6 +2197,152 @@ class AppliesTo {
     return this.#value.toLowerCase().includes(name.asString().toLowerCase());
   }
 }
+// src/refcheck/domain/check-families.ts
+class CheckFamilies {
+  #values;
+  constructor(values) {
+    this.#values = Object.freeze([...values]);
+  }
+  static of(values) {
+    return new CheckFamilies(values);
+  }
+  add(value) {
+    return new CheckFamilies([...this.#values, value]);
+  }
+  *[Symbol.iterator]() {
+    yield* this.#values;
+  }
+  checkTargets() {
+    return TargetIdentifiers.of(Array.from(this.#values.map((f) => f.asCheckTarget()), (raw) => TargetIdentifier.of(raw)));
+  }
+  toArray() {
+    return this.#values;
+  }
+}
+
+// src/refcheck/domain/check-family.ts
+class CheckFamily {
+  #value;
+  constructor(raw) {
+    if (raw.length > 128)
+      throw new IllegalArgumentException({ kind: "check-family-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-family", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new CheckFamily(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new CheckFamily(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+  prefixedDetail(detail) {
+    return `${this.#value}: ${detail}`;
+  }
+  asCheckTarget() {
+    return `check:${this.#value}`;
+  }
+}
+
+// src/refcheck/domain/functional-check-families.ts
+var FD_E1 = CheckFamily.of("FD-E1");
+var FD_E2 = CheckFamily.of("FD-E2");
+var FD_E3 = CheckFamily.of("FD-E3");
+var FD_E4 = CheckFamily.of("FD-E4");
+var FD_E5 = CheckFamily.of("FD-E5");
+var FD_E6 = CheckFamily.of("FD-E6");
+var FD_R1 = CheckFamily.of("FD-R1");
+var FD_R2 = CheckFamily.of("FD-R2");
+var FD_R3 = CheckFamily.of("FD-R3");
+var FD_R4 = CheckFamily.of("FD-R4");
+var FD_R5 = CheckFamily.of("FD-R5");
+var FD_S1 = CheckFamily.of("FD-S1");
+var FD_S2 = CheckFamily.of("FD-S2");
+var XS_1 = CheckFamily.of("XS-1");
+var XS_2 = CheckFamily.of("XS-2");
+var XS_3 = CheckFamily.of("XS-3");
+var FUNCTIONAL_FAMILIES = CheckFamilies.of([
+  FD_E1,
+  FD_E2,
+  FD_E3,
+  FD_E4,
+  FD_E5,
+  FD_E6,
+  FD_R1,
+  FD_R2,
+  FD_R3,
+  FD_R4,
+  FD_R5,
+  FD_S1,
+  FD_S2,
+  XS_1,
+  XS_2,
+  XS_3
+]);
+
+// src/refcheck/domain/element-path.ts
+class ElementPath {
+  #value;
+  constructor(raw) {
+    if (raw.length > 4096)
+      throw new IllegalArgumentException({ kind: "element-path-too-long", raw: raw.length });
+    if (raw === "")
+      throw new IllegalArgumentException({ kind: "empty-token", raw });
+    this.#value = raw;
+  }
+  static of(raw) {
+    return new ElementPath(raw);
+  }
+  static parse(raw) {
+    return parseConstruction(() => new ElementPath(raw));
+  }
+  equals(other) {
+    return this.#value === other.#value;
+  }
+  asString() {
+    return this.#value;
+  }
+}
+
+// src/refcheck/domain/witness-reference.ts
+class WitnessReference {
+  #artifact;
+  #element;
+  #value;
+  constructor(props) {
+    this.#artifact = ArtifactPath.of(props.artifact);
+    this.#element = ElementPath.of(props.element);
+    this.#value = props.value;
+  }
+  static parse(props) {
+    return parseConstruction(() => new WitnessReference(props));
+  }
+  static of(props) {
+    return new WitnessReference(props);
+  }
+  artifact() {
+    return this.#artifact.asString();
+  }
+  element() {
+    return this.#element.asString();
+  }
+  value() {
+    return this.#value;
+  }
+  pointsAt(artifact, element) {
+    return this.#artifact.asString() === artifact && this.#element.asString() === element;
+  }
+  static at(artifact, element, value) {
+    return new WitnessReference(value === undefined ? { artifact, element } : { artifact, element, value });
+  }
+}
+
 // src/refcheck/domain/attribute-declaration.ts
 class AttributeDeclaration {
   #name;
@@ -2226,23 +2372,40 @@ class AttributeDeclaration {
   static of(seed) {
     return new AttributeDeclaration(seed);
   }
+  #record(report, family, entity, artifact, value, detail, kind = FindingKind.structureInvalid()) {
+    const label = `${entity.asString()}.${this.#name.asString()}`;
+    report.finding(family, kind, [TargetIdentifiers.safe("attr", label)], [WitnessReference.at(artifact.asString(), this.#element.asString(), value)], detail);
+  }
+  checkType(report, entity, artifact) {
+    const label = `${entity.asString()}.${this.#name.asString()}`;
+    if (this.declaresAllowedValuesOnNonEnumerableType())
+      this.#record(report, FD_E2, entity, artifact, this.typeToken(), `"${label}" declares allowed values but its type "${this.typeText()}" is not an enumerable type`);
+    if (this.declaresBoundsOnNonNumericType())
+      this.#record(report, FD_E2, entity, artifact, this.typeToken(), `"${label}" declares min/max but its type "${this.typeText()}" is not numeric or date-like`);
+    if (this.declaresUniqueOnCollectionType())
+      this.#record(report, FD_E2, entity, artifact, this.typeToken(), `"${label}" declares unique but its type "${this.typeText()}" is not scalar`);
+  }
+  checkBounds(report, entity, artifact) {
+    const label = `${entity.asString()}.${this.#name.asString()}`;
+    if (this.boundsInverted())
+      this.#record(report, FD_E3, entity, artifact, `min ${this.#min?.asNumber()} > max ${this.#max?.asNumber()}`, `"${label}": min ${this.#min?.asNumber()} exceeds max ${this.#max?.asNumber()}`);
+    if (this.defaultBelowMin())
+      this.#record(report, FD_E3, entity, artifact, this.#def?.render(), `"${label}": default ${this.#def?.render()} is below min ${this.#min?.asNumber()}`);
+    if (this.defaultAboveMax())
+      this.#record(report, FD_E3, entity, artifact, this.#def?.render(), `"${label}": default ${this.#def?.render()} is above max ${this.#max?.asNumber()}`);
+    if (this.defaultOutsideAllowed())
+      this.#record(report, FD_E3, entity, artifact, this.#def?.render(), `"${label}": default "${this.#def?.render()}" is not one of the allowed values`);
+  }
+  checkReference(entities, report, entity, artifact) {
+    const reference = this.#references;
+    if (reference !== null && !entities.resolvesReference(reference))
+      this.#record(report, FD_E6, entity, artifact, reference.asString(), `"${entity.asString()}.${this.#name.asString()}" references "${reference.asString()}" which is not a declared entity`, FindingKind.referenceBroken());
+  }
   name() {
     return this.#name;
   }
   element() {
     return this.#element;
-  }
-  references() {
-    return this.#references;
-  }
-  def() {
-    return this.#def;
-  }
-  min() {
-    return this.#min;
-  }
-  max() {
-    return this.#max;
   }
   hasAllowedValues() {
     return this.#allowed !== null;
@@ -2512,57 +2675,17 @@ class CardinalityNotation {
 }
 // src/refcheck/domain/catalog-version.ts
 var CATALOG_VERSION = "1.0.0";
-// src/refcheck/domain/check-families.ts
-class CheckFamilies {
-  #values;
-  constructor(values) {
-    this.#values = Object.freeze([...values]);
-  }
-  static of(values) {
-    return new CheckFamilies(values);
-  }
-  add(value) {
-    return new CheckFamilies([...this.#values, value]);
-  }
-  *[Symbol.iterator]() {
-    yield* this.#values;
-  }
-  checkTargets() {
-    return TargetIdentifiers.of(Array.from(this.#values.map((f) => f.asCheckTarget()), (raw) => TargetIdentifier.of(raw)));
-  }
-  toArray() {
-    return this.#values;
-  }
-}
-// src/refcheck/domain/check-family.ts
-class CheckFamily {
-  #value;
-  constructor(raw) {
-    if (raw.length > 128)
-      throw new IllegalArgumentException({ kind: "check-family-too-long", raw: raw.length });
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-family", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new CheckFamily(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new CheckFamily(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-  prefixedDetail(detail) {
-    return `${this.#value}: ${detail}`;
-  }
-  asCheckTarget() {
-    return `check:${this.#value}`;
-  }
-}
+// src/refcheck/domain/component-check-families.ts
+var DD_0 = CheckFamily.of("DD-0");
+var DD_1 = CheckFamily.of("DD-1");
+var DD_2 = CheckFamily.of("DD-2");
+var DD_3 = CheckFamily.of("DD-3");
+var DD_4 = CheckFamily.of("DD-4");
+var DD_5 = CheckFamily.of("DD-5");
+var DD_6 = CheckFamily.of("DD-6");
+var DD_7 = CheckFamily.of("DD-7");
+var COMPONENT_FAMILIES = CheckFamilies.of([DD_0, DD_1, DD_2, DD_3, DD_4, DD_5, DD_6, DD_7]);
+
 // src/refcheck/domain/component.ts
 class Component {
   #name;
@@ -2579,6 +2702,34 @@ class Component {
   }
   static of(props) {
     return new Component(props);
+  }
+  checkName(report, artifact) {
+    const name = this.#name.asString();
+    if (!this.nameIsPascalCase())
+      report.finding(DD_1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", name)], [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.name`, name)], `component name "${name}" is not PascalCase`);
+  }
+  checkReferences(components, report, artifact) {
+    for (const reference of [...this.#dependsOn, ...this.#dependents]) {
+      if (!components.declares(reference.component()))
+        report.finding(DD_2, FindingKind.referenceBroken(), [TargetIdentifiers.safe("component", reference.component().asString())], [WitnessReference.at(artifact.asString(), reference.element().asString(), reference.component().asString())], `"${this.#name.asString()}" references undeclared component "${reference.component().asString()}"`);
+    }
+    for (const entity of this.#entities)
+      entity.checkReferenceOwners(components, report, artifact);
+  }
+  checkSelfReferences(report, artifact) {
+    for (const reference of this.selfReferences())
+      report.finding(DD_3, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", this.#name.asString())], [WitnessReference.at(artifact.asString(), reference.element().asString(), this.#name.asString())], `component "${this.#name.asString()}" lists itself as a dependency`);
+  }
+  checkIdentifiers(report, artifact) {
+    for (const entity of this.#entities)
+      entity.checkIdentifier(report, artifact);
+  }
+  checkEntityReferences(components, report, artifact) {
+    for (const entity of this.#entities)
+      entity.checkReferenceTargets(components, report, artifact);
+  }
+  declaresEntity(name) {
+    return this.#entities.declaresEntity(name);
   }
   name() {
     return this.#name;
@@ -2602,17 +2753,6 @@ class Component {
     return [...this.#dependsOn, ...this.#dependents].filter((r) => r.pointsAt(this.#name));
   }
 }
-// src/refcheck/domain/component-check-families.ts
-var DD_0 = CheckFamily.of("DD-0");
-var DD_1 = CheckFamily.of("DD-1");
-var DD_2 = CheckFamily.of("DD-2");
-var DD_3 = CheckFamily.of("DD-3");
-var DD_4 = CheckFamily.of("DD-4");
-var DD_5 = CheckFamily.of("DD-5");
-var DD_6 = CheckFamily.of("DD-6");
-var DD_7 = CheckFamily.of("DD-7");
-var COMPONENT_FAMILIES = CheckFamilies.of([DD_0, DD_1, DD_2, DD_3, DD_4, DD_5, DD_6, DD_7]);
-
 // src/refcheck/domain/fence-count.ts
 class FenceCount {
   #value;
@@ -2629,63 +2769,6 @@ class FenceCount {
   }
   asNumber() {
     return this.#value;
-  }
-}
-
-// src/refcheck/domain/element-path.ts
-class ElementPath {
-  #value;
-  constructor(raw) {
-    if (raw.length > 4096)
-      throw new IllegalArgumentException({ kind: "element-path-too-long", raw: raw.length });
-    if (raw === "")
-      throw new IllegalArgumentException({ kind: "empty-token", raw });
-    this.#value = raw;
-  }
-  static of(raw) {
-    return new ElementPath(raw);
-  }
-  static parse(raw) {
-    return parseConstruction(() => new ElementPath(raw));
-  }
-  equals(other) {
-    return this.#value === other.#value;
-  }
-  asString() {
-    return this.#value;
-  }
-}
-
-// src/refcheck/domain/witness-reference.ts
-class WitnessReference {
-  #artifact;
-  #element;
-  #value;
-  constructor(props) {
-    this.#artifact = ArtifactPath.of(props.artifact);
-    this.#element = ElementPath.of(props.element);
-    this.#value = props.value;
-  }
-  static parse(props) {
-    return parseConstruction(() => new WitnessReference(props));
-  }
-  static of(props) {
-    return new WitnessReference(props);
-  }
-  artifact() {
-    return this.#artifact.asString();
-  }
-  element() {
-    return this.#element.asString();
-  }
-  value() {
-    return this.#value;
-  }
-  pointsAt(artifact, element) {
-    return this.#artifact.asString() === artifact && this.#element.asString() === element;
-  }
-  static at(artifact, element, value) {
-    return new WitnessReference(value === undefined ? { artifact, element } : { artifact, element, value });
   }
 }
 
@@ -2807,6 +2890,27 @@ class ComponentEntity {
   }
   static of(props) {
     return new ComponentEntity(props);
+  }
+  checkIdentifier(report, artifact) {
+    if (!this.hasIdentifier())
+      report.finding(DD_5, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", this.#name.asString())], [WitnessReference.at(artifact.asString(), `${this.#element.asString()}.identifier`)], `entity "${this.#name.asString()}" has no identifier`);
+  }
+  checkReferenceOwners(components, report, artifact) {
+    for (const reference of this.#references) {
+      if (!components.declares(reference.ownedBy()))
+        report.finding(DD_2, FindingKind.referenceBroken(), [TargetIdentifiers.safe("component", reference.ownedBy().asString())], [
+          WitnessReference.at(artifact.asString(), `${reference.element().asString()}.owned_by`, reference.ownedBy().asString())
+        ], `entity "${this.#name.asString()}" references owner component "${reference.ownedBy().asString()}" which is not declared`);
+    }
+  }
+  checkReferenceTargets(components, report, artifact) {
+    for (const reference of this.#references) {
+      const owner = components.byName(reference.ownedBy());
+      if (owner !== null && !owner.declaresEntity(reference.entity()))
+        report.finding(DD_6, FindingKind.referenceBroken(), [TargetIdentifiers.safe("entity", reference.entity().asString())], [
+          WitnessReference.at(artifact.asString(), `${reference.element().asString()}.entity`, reference.entity().asString())
+        ], `entity "${this.#name.asString()}" references "${reference.entity().asString()}" as owned by "${reference.ownedBy().asString()}", but "${reference.ownedBy().asString()}" declares no such entity`);
+    }
   }
   name() {
     return this.#name;
@@ -3056,13 +3160,23 @@ class Components {
     return this.#values;
   }
   check(report, artifact) {
+    for (const component of this.#values)
+      component.checkName(report, artifact);
+    this.#checkDuplicateNames(report, artifact);
+    for (const component of this.#values)
+      component.checkReferences(this, report, artifact);
+    for (const component of this.#values)
+      component.checkSelfReferences(report, artifact);
+    this.#checkSymmetry(report, artifact);
+    for (const component of this.#values)
+      component.checkIdentifiers(report, artifact);
+    this.#checkOwnership(report, artifact);
+    for (const component of this.#values)
+      component.checkEntityReferences(this, report, artifact);
+    this.#checkCycles(report, artifact);
+  }
+  #checkDuplicateNames(report, artifact) {
     const art = artifact.asString();
-    for (const c of this) {
-      if (!c.nameIsPascalCase()) {
-        const cName = c.name().asString();
-        report.finding(DD_1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", cName)], [WitnessReference.at(art, `${c.element().asString()}.name`, cName)], `component name "${cName}" is not PascalCase`);
-      }
-    }
     for (const { prior, current } of this.duplicateNamePairs()) {
       const cName = current.name().asString();
       report.finding(DD_1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", cName)], [
@@ -3070,25 +3184,9 @@ class Components {
         WitnessReference.at(art, `${current.element().asString()}.name`, cName)
       ], `component name "${cName}" is declared more than once`);
     }
-    for (const c of this) {
-      for (const r of [...c.dependsOn(), ...c.dependents()]) {
-        if (!this.declares(r.component())) {
-          report.finding(DD_2, FindingKind.referenceBroken(), [TargetIdentifiers.safe("component", r.component().asString())], [WitnessReference.at(art, r.element().asString(), r.component().asString())], `"${c.name().asString()}" references undeclared component "${r.component().asString()}"`);
-        }
-      }
-      for (const e of c.entities()) {
-        for (const r of e.references()) {
-          if (!this.declares(r.ownedBy())) {
-            report.finding(DD_2, FindingKind.referenceBroken(), [TargetIdentifiers.safe("component", r.ownedBy().asString())], [WitnessReference.at(art, `${r.element().asString()}.owned_by`, r.ownedBy().asString())], `entity "${e.name().asString()}" references owner component "${r.ownedBy().asString()}" which is not declared`);
-          }
-        }
-      }
-    }
-    for (const c of this) {
-      for (const r of c.selfReferences()) {
-        report.finding(DD_3, FindingKind.structureInvalid(), [TargetIdentifiers.safe("component", c.name().asString())], [WitnessReference.at(art, r.element().asString(), c.name().asString())], `component "${c.name().asString()}" lists itself as a dependency`);
-      }
-    }
+  }
+  #checkSymmetry(report, artifact) {
+    const art = artifact.asString();
     for (const c of this) {
       for (const r of c.dependsOn()) {
         const other = this.byName(r.component());
@@ -3119,29 +3217,16 @@ class Components {
         }
       }
     }
-    for (const c of this) {
-      for (const e of c.entities()) {
-        if (!e.hasIdentifier()) {
-          report.finding(DD_5, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", e.name().asString())], [WitnessReference.at(art, `${e.element().asString()}.identifier`)], `entity "${e.name().asString()}" has no identifier`);
-        }
-      }
-    }
+  }
+  #checkOwnership(report, artifact) {
+    const art = artifact.asString();
     for (const conflict of this.ownershipConflicts()) {
       const name = conflict.name.asString();
       report.finding(DD_5, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", name)], conflict.owners.map((o) => WitnessReference.at(art, o.entity.element().asString(), o.component.name().asString())), `entity "${name}" is owned by ${conflict.owners.length} components (${conflict.owners.map((o) => o.component.name().asString()).join(", ")}) \u2014 must be exactly one`);
     }
-    for (const c of this) {
-      for (const e of c.entities()) {
-        for (const r of e.references()) {
-          const owner = this.byName(r.ownedBy());
-          if (!owner)
-            continue;
-          if (!owner.entities().declaresEntity(r.entity())) {
-            report.finding(DD_6, FindingKind.referenceBroken(), [TargetIdentifiers.safe("entity", r.entity().asString())], [WitnessReference.at(art, `${r.element().asString()}.entity`, r.entity().asString())], `entity "${e.name().asString()}" references "${r.entity().asString()}" as owned by "${r.ownedBy().asString()}", but "${r.ownedBy().asString()}" declares no such entity`);
-          }
-        }
-      }
-    }
+  }
+  #checkCycles(report, artifact) {
+    const art = artifact.asString();
     for (const cycle of this.dependencyCycles().filter((c) => c.length > 1)) {
       report.finding(DD_7, FindingKind.structureInvalid(), cycle.map((n) => TargetIdentifiers.safe("component", n)), cycle.map((n, i) => WitnessReference.at(art, `${this.byName(ComponentName.of(n))?.element().asString() ?? "components"}.depends_on`, cycle[(i + 1) % cycle.length])), `dependency cycle: ${[...cycle, cycle[0]].join(" -> ")}`);
     }
@@ -3314,42 +3399,6 @@ class ContractsTableOutcome {
     });
   }
 }
-// src/refcheck/domain/functional-check-families.ts
-var FD_E1 = CheckFamily.of("FD-E1");
-var FD_E2 = CheckFamily.of("FD-E2");
-var FD_E3 = CheckFamily.of("FD-E3");
-var FD_E4 = CheckFamily.of("FD-E4");
-var FD_E5 = CheckFamily.of("FD-E5");
-var FD_E6 = CheckFamily.of("FD-E6");
-var FD_R1 = CheckFamily.of("FD-R1");
-var FD_R2 = CheckFamily.of("FD-R2");
-var FD_R3 = CheckFamily.of("FD-R3");
-var FD_R4 = CheckFamily.of("FD-R4");
-var FD_R5 = CheckFamily.of("FD-R5");
-var FD_S1 = CheckFamily.of("FD-S1");
-var FD_S2 = CheckFamily.of("FD-S2");
-var XS_1 = CheckFamily.of("XS-1");
-var XS_2 = CheckFamily.of("XS-2");
-var XS_3 = CheckFamily.of("XS-3");
-var FUNCTIONAL_FAMILIES = CheckFamilies.of([
-  FD_E1,
-  FD_E2,
-  FD_E3,
-  FD_E4,
-  FD_E5,
-  FD_E6,
-  FD_R1,
-  FD_R2,
-  FD_R3,
-  FD_R4,
-  FD_R5,
-  FD_S1,
-  FD_S2,
-  XS_1,
-  XS_2,
-  XS_3
-]);
-
 // src/refcheck/domain/declared-entities.ts
 class DeclaredEntities {
   #entities;
@@ -3366,9 +3415,6 @@ class DeclaredEntities {
   entities() {
     return this.#entities;
   }
-  shapeErrors() {
-    return this.#shapeErrors;
-  }
   allRels() {
     let all = this.#rels;
     for (const e of this.#entities)
@@ -3376,64 +3422,15 @@ class DeclaredEntities {
     return all;
   }
   check(report, artifact) {
-    const art = artifact.asString();
-    for (const e of this.shapeErrors()) {
-      report.finding(FD_E1, FindingKind.structureInvalid(), [FD_E1.asCheckTarget()], [WitnessReference.at(art, e.element().asString())], e.detail());
-    }
-    for (const dup of this.entities().duplicatesByName()) {
-      report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", dup.name().asString())], [WitnessReference.at(art, `${dup.element().asString()}.name`, dup.name().asString())], `entity "${dup.name().asString()}" is declared more than once`);
-    }
-    for (const e of this.entities()) {
-      for (const dup of e.attrs().duplicatesByName()) {
-        report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("attr", `${e.name().asString()}.${dup.name().asString()}`)], [WitnessReference.at(art, `${dup.element().asString()}.name`, dup.name().asString())], `attribute "${e.name().asString()}.${dup.name().asString()}" is declared more than once`);
-      }
-    }
-    for (const e of this.entities()) {
-      for (const a of e.attrs()) {
-        const attrId = TargetIdentifiers.safe("attr", `${e.name().asString()}.${a.name().asString()}`);
-        const label = `${e.name().asString()}.${a.name().asString()}`;
-        if (a.declaresAllowedValuesOnNonEnumerableType()) {
-          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.typeToken())], `"${label}" declares allowed values but its type "${a.typeText()}" is not an enumerable type`);
-        }
-        if (a.declaresBoundsOnNonNumericType()) {
-          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.typeToken())], `"${label}" declares min/max but its type "${a.typeText()}" is not numeric or date-like`);
-        }
-        if (a.declaresUniqueOnCollectionType()) {
-          report.finding(FD_E2, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.typeToken())], `"${label}" declares unique but its type "${a.typeText()}" is not scalar`);
-        }
-        if (a.boundsInverted()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [
-            WitnessReference.at(art, a.element().asString(), `min ${a.min()?.asNumber()} > max ${a.max()?.asNumber()}`)
-          ], `"${label}": min ${a.min()?.asNumber()} exceeds max ${a.max()?.asNumber()}`);
-        }
-        if (a.defaultBelowMin()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default ${a.def()?.render()} is below min ${a.min()?.asNumber()}`);
-        }
-        if (a.defaultAboveMax()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default ${a.def()?.render()} is above max ${a.max()?.asNumber()}`);
-        }
-        if (a.defaultOutsideAllowed()) {
-          report.finding(FD_E3, FindingKind.structureInvalid(), [attrId], [WitnessReference.at(art, a.element().asString(), a.def()?.render() ?? "")], `"${label}": default "${a.def()?.render()}" is not one of the allowed values`);
-        }
-        const reference = a.references();
-        if (reference !== null && !this.entities().resolvesReference(reference)) {
-          report.finding(FD_E6, FindingKind.referenceBroken(), [attrId], [WitnessReference.at(art, a.element().asString(), reference.asString())], `"${label}" references "${reference.asString()}" which is not a declared entity`);
-        }
-      }
-    }
-    for (const r of this.allRels()) {
-      for (const endpoint of [r.from(), r.to()]) {
-        if (endpoint !== null && !this.entities().containsNamed(endpoint)) {
-          report.finding(FD_E4, FindingKind.referenceBroken(), [TargetIdentifiers.safe("entity", endpoint.asString())], [WitnessReference.at(art, r.element().asString(), endpoint.asString())], `relationship endpoint "${endpoint.asString()}" is not a declared entity`);
-        }
-      }
-      if (r.cardinalityOutsideClosedSet()) {
-        report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessReference.at(art, r.element().asString(), r.cardinality()?.asString() ?? "")], `cardinality "${r.cardinality()?.asString()}" is not in the closed set 1:1 | 1:N | N:1 | N:M`);
-      }
-      if (r.cardinalityWithoutDirection()) {
-        report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessReference.at(art, r.element().asString())], "relationship declares a cardinality but no direction (from/to or direction key)");
-      }
-    }
+    for (const error of this.#shapeErrors)
+      error.recordIn(FD_E1, report, artifact);
+    this.#entities.checkDuplicates(report, artifact);
+    for (const entity of this.#entities)
+      entity.checkDuplicateAttributes(report, artifact);
+    for (const entity of this.#entities)
+      entity.checkAttributes(this.#entities, report, artifact);
+    for (const relationship of this.allRels())
+      relationship.checkAgainst(this.#entities, report, artifact);
   }
 }
 // src/refcheck/domain/declared-rule-identifier.ts
@@ -4253,6 +4250,19 @@ class EntityDeclaration {
   static of(seed) {
     return new EntityDeclaration(seed);
   }
+  checkDuplicateAttributes(report, artifact) {
+    for (const duplicate of this.#attrs.duplicatesByName())
+      report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("attr", `${this.#name.asString()}.${duplicate.name().asString()}`)], [
+        WitnessReference.at(artifact.asString(), `${duplicate.element().asString()}.name`, duplicate.name().asString())
+      ], `attribute "${this.#name.asString()}.${duplicate.name().asString()}" is declared more than once`);
+  }
+  checkAttributes(entities, report, artifact) {
+    for (const attribute of this.#attrs) {
+      attribute.checkType(report, this.#name, artifact);
+      attribute.checkBounds(report, this.#name, artifact);
+      attribute.checkReference(entities, report, this.#name, artifact);
+    }
+  }
   name() {
     return this.#name;
   }
@@ -4298,6 +4308,12 @@ class EntityDeclarations {
       seen.add(e.name().asString());
     }
     return dups;
+  }
+  checkDuplicates(report, artifact) {
+    for (const duplicate of this.duplicatesByName())
+      report.finding(FD_E1, FindingKind.structureInvalid(), [TargetIdentifiers.safe("entity", duplicate.name().asString())], [
+        WitnessReference.at(artifact.asString(), `${duplicate.element().asString()}.name`, duplicate.name().asString())
+      ], `entity "${duplicate.name().asString()}" is declared more than once`);
   }
   containsNamed(name) {
     return this.#names.has(name);
@@ -4516,17 +4532,15 @@ class RelationshipDeclaration {
   static of(seed) {
     return new RelationshipDeclaration(seed);
   }
-  element() {
-    return this.#element;
-  }
-  from() {
-    return this.#from;
-  }
-  to() {
-    return this.#to;
-  }
-  cardinality() {
-    return this.#cardinality;
+  checkAgainst(entities, report, artifact) {
+    for (const endpoint of [this.#from, this.#to]) {
+      if (endpoint !== null && !entities.containsNamed(endpoint))
+        report.finding(FD_E4, FindingKind.referenceBroken(), [TargetIdentifiers.safe("entity", endpoint.asString())], [WitnessReference.at(artifact.asString(), this.#element.asString(), endpoint.asString())], `relationship endpoint "${endpoint.asString()}" is not a declared entity`);
+    }
+    if (this.cardinalityOutsideClosedSet())
+      report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessReference.at(artifact.asString(), this.#element.asString(), this.#cardinality?.asString())], `cardinality "${this.#cardinality?.asString()}" is not in the closed set 1:1 | 1:N | N:1 | N:M`);
+    if (this.cardinalityWithoutDirection())
+      report.finding(FD_E5, FindingKind.structureInvalid(), [FD_E5.asCheckTarget()], [WitnessReference.at(artifact.asString(), this.#element.asString())], "relationship declares a cardinality but no direction (from/to or direction key)");
   }
   cardinalityOutsideClosedSet() {
     return this.#cardinality !== null && !this.#cardinality.isInClosedSet();
@@ -4711,11 +4725,8 @@ class ShapeError {
   static of(props) {
     return new ShapeError(props.element, props.detail);
   }
-  element() {
-    return this.#element;
-  }
-  detail() {
-    return this.#detail;
+  recordIn(family, report, artifact) {
+    report.finding(family, FindingKind.structureInvalid(), [family.asCheckTarget()], [WitnessReference.at(artifact.asString(), this.#element.asString())], this.#detail);
   }
 }
 // src/refcheck/domain/shape-errors.ts

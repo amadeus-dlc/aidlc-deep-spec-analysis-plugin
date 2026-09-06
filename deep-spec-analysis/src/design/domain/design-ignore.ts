@@ -1,10 +1,15 @@
+import {
+  type Expression,
+  FunctionalRequirementReferences,
+  ObligationNature,
+  type TriggerName,
+} from "@deep-spec-analysis/kernel-domain";
 import type { LoweredOrigin } from "./lowered-origin.ts";
 // 状態機械の ignore 宣言（契約3）。(state, trigger) での no-op を人間が承認
 // した証跡。compile-down（明示 no-op event——状態は動かない）は ignore 自身が
 // 所有する（#71 波5b）。承認理由（reason）は design IR 上の必須注記として
 // 文書に残るが、domain から読む者はいないので運ばない（#71 波9）。
 
-import { type Expression, FunctionalRequirementReferences, type TriggerName } from "@deep-spec-analysis/kernel-domain";
 import type { LoweredIdentifier } from "./lowered-identifier.ts";
 import { LoweredObligation } from "./lowered-obligation.ts";
 
@@ -58,9 +63,9 @@ export class DesignIgnore {
     return LoweredObligation.of({
       id,
       origin,
-      nature: "event",
+      nature: ObligationNature.of("event"),
       functionalRequirementReferences: FunctionalRequirementReferences.of([]),
-      trigger: this.#trigger.asString(),
+      trigger: this.#trigger,
       guard: this.loweredGuard(attrPath),
       effect: this.loweredEffect(attrPath),
     });

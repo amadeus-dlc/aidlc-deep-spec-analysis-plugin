@@ -2,6 +2,7 @@ import {
   AttributeKind,
   type Expression,
   FunctionalRequirementReferences,
+  ObligationNature,
   RequirementIdentifier,
   ScenarioExpectation,
   TargetIdentifier,
@@ -26,7 +27,6 @@ import {
   IntermediateRepresentationTemporalDeclaration,
   Obligation,
   ObligationIdentifier,
-  ObligationNature,
   QuintMachineRunVerdict,
   QuintScenarioVerdict,
   QuintTemporalVerdict,
@@ -182,10 +182,10 @@ describe("scenario", () => {
     expect(withEvent.expectedExpression()).toEqual(lit(true));
     expect(withEvent.isAccept()).toBe(true);
     expect(withEvent.isReject()).toBe(false);
-    expect(withEvent.hasEvent()).toBe(true);
+    expect(withEvent.hasEventRule()).toBe(true);
     expect(scenario("reject").isAccept()).toBe(false);
     expect(scenario("reject").isReject()).toBe(true);
-    expect(scenario("reject").hasEvent()).toBe(false);
+    expect(scenario("reject").hasEventRule()).toBe(false);
     expect(scenario("reject").eventTrigger()).toBeUndefined();
     expect(scenario("reject").expectedExpression()).toBeUndefined();
   });

@@ -1,11 +1,12 @@
-import type {
-  Expression,
-  FunctionalRequirementReferences,
-  ScenarioBindings,
-  ScenarioExpectation,
-  TriggerName,
+import {
+  type Expression,
+  ExpressionTree,
+  type FunctionalRequirementReferences,
+  type ScenarioBindings,
+  type ScenarioExpectation,
+  type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
-import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
+
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { DesignScenarioIdentifier } from "./design-scenario-identifier.ts";
 
@@ -77,10 +78,6 @@ export class LoweredScenario {
 
   expectedExpression(): Expression | undefined {
     return this.#expect;
-  }
-
-  isViolatedBySatisfiability(satisfiable: boolean): boolean {
-    return this.#expectation.isViolatedBySatisfiability(satisfiable);
   }
 
   isAccept(): boolean {

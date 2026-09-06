@@ -1,12 +1,7 @@
 import { type KeyedIndex, type QueryLabel, UnitName } from "@deep-spec-analysis/kernel-domain";
 
-// refinement ソルバ実行の型付き判定と計画（対応表）。SMT-LIB スクリプト・z3 の生
-// 表現はアダプタ（第 2 コンパイラ＋クライアント）が持ち、ドメインへは
-// クエリ id（"rv:OB-x" / "re:OB-x" / "rs2:OB-x:TR-y" / "rs:SC-x"）ごとの
-// 判定と、その id が何の検査だったか（Pending）だけが届く。decoded モデルは
-// pre / post（primed）の両状態。判定の解釈（4 種の検査 → findings / skips、
-// detail 文言は golden 凍結）は plan 自身の振る舞い（OOUI 裁定——旧
-// interpretRefinementVerdicts の逐語移植）。
+// 準備元に属する問いと発行順を固定するソルバ計画。
+// 各問いが判定を解釈し、計画は診断を収集する。
 
 import {
   IllegalArgumentException,
@@ -40,15 +35,12 @@ export class RefinementSolverPlan {
     if (props.pending.size() > 65_536 || props.compileSkips.count() > 65_536) {
       throw new IllegalArgumentException({ kind: "refinement-solver-plan-too-large" });
     }
-    const targets = new Set(props.preparation.requirements().allTargetIds().toStrings());
     const unit = props.preparation.unit().name();
     for (const [, probe] of props.pending) {
       if (!probe.belongsToRequirements(props.preparation.requirements()))
         throw new IllegalArgumentException({ kind: "refinement-probe-outside-preparation" });
       if (!probe.belongsTo(UnitName.of(unit)))
         throw new IllegalArgumentException({ kind: "refinement-probe-unit-mismatch" });
-      if (!targets.has(probe.reqTarget().asString()))
-        throw new IllegalArgumentException({ kind: "refinement-probe-outside-preparation" });
     }
     for (const skipped of props.compileSkips) {
       if (skipped.unit() !== unit) throw new IllegalArgumentException({ kind: "refinement-solver-unit-mismatch" });

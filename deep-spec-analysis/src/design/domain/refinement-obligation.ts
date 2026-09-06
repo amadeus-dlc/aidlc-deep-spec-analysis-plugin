@@ -1,5 +1,12 @@
-import type { Expression, FunctionalRequirementReferences, TriggerName } from "@deep-spec-analysis/kernel-domain";
-import { AttributePath, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
+import {
+  AttributePath,
+  type Expression,
+  ExpressionTree,
+  type FunctionalRequirementReferences,
+  type ObligationNature,
+  type TriggerName,
+} from "@deep-spec-analysis/kernel-domain";
+
 import {
   ok,
   type ParseError,
@@ -7,7 +14,7 @@ import {
   type Result,
   traverseResult,
 } from "@deep-spec-analysis/kernel-infrastructure";
-import type { ObligationIdentifier, ObligationNature } from "@deep-spec-analysis/requirements-domain";
+import type { ObligationIdentifier } from "@deep-spec-analysis/requirements-domain";
 import type { AttributeCoverage } from "./attribute-coverage.ts";
 import { AttributePaths } from "./attribute-paths.ts";
 import type { DesignUnit } from "./design-unit.ts";
@@ -102,23 +109,11 @@ export class RefinementObligation {
   id(): ObligationIdentifier {
     return this.#id;
   }
-  nature(): ObligationNature {
-    return this.#nature;
-  }
   functionalRequirementReferences(): FunctionalRequirementReferences {
     return this.#functionalRequirementReferences;
   }
   assertion(): Expression | undefined {
     return this.#assert;
-  }
-  trigger(): TriggerName | undefined {
-    return this.#trigger;
-  }
-  guard(): Expression | undefined {
-    return this.#guard;
-  }
-  effect(): Expression | undefined {
-    return this.#effect;
   }
   isInvariantLike(): boolean {
     return this.#nature.isInvariant() || this.#nature.isNumeric();

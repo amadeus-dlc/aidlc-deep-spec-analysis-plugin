@@ -1,8 +1,8 @@
 import { TargetIdentifier } from "@deep-spec-analysis/kernel-domain";
-import type { ParseError } from "@deep-spec-analysis/kernel-infrastructure";
 import {
   compareCanonically,
   IllegalArgumentException,
+  type ParseError,
   parseConstruction,
   type Result,
 } from "@deep-spec-analysis/kernel-infrastructure";

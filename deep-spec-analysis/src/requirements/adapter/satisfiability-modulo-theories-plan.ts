@@ -401,7 +401,7 @@ export function buildSmtPlan(model: RequirementsModel): SatisfiabilityModuloTheo
   // (c) シナリオ検査 — v1 はイベントなしシナリオのみ。
   const scenarioQueries = new Map<string, string>();
   for (const sc of model.scenarios()) {
-    if (sc.hasEvent()) {
+    if (sc.hasEventRule()) {
       skipped.push(
         VerificationSkipped.of({
           target: sc.id().asTargetId(),

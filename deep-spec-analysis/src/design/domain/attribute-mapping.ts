@@ -4,6 +4,8 @@ import {
   EnumerationMembers,
   ErrorMessage,
   ErrorMessages,
+  type Expression,
+  ExpressionTree,
 } from "@deep-spec-analysis/kernel-domain";
 import type { DesignUnit } from "./design-unit.ts";
 import type { RefinementAttributes } from "./refinement-attributes.ts";
@@ -15,7 +17,6 @@ import type { RefinementAttributes } from "./refinement-attributes.ts";
 // gap 文言（凍結面）だけを担う（主従の裁定・#71 波5、裁定 10）。
 // 写像は要件属性パスで識別されるローカルエンティティ（識別規律、2026-09-02）。
 
-import { type Expression, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
 import {
   boundedValueSnapshot,
   err,

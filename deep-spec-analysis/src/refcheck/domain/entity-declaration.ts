@@ -1,8 +1,13 @@
+import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
 import type { AttributeDeclaration } from "./attribute-declaration.ts";
 import type { AttributeDeclarations } from "./attribute-declarations.ts";
 import type { ElementPath } from "./element-path.ts";
+import type { EntityDeclarations } from "./entity-declarations.ts";
 import type { EntityName } from "./entity-name.ts";
+import { FD_E1 } from "./functional-check-families.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
 import type { RelationshipDeclarations } from "./relationship-declarations.ts";
+import { WitnessReference } from "./witness-reference.ts";
 
 // エンティティ宣言。属性の重複・選定・解決は属性コレクションに委ねる。
 // 未検証の構築引数。VO・エンティティ本体とは区別する。
@@ -28,6 +33,31 @@ export class EntityDeclaration {
 
   static of(seed: EntityDeclarationParam): EntityDeclaration {
     return new EntityDeclaration(seed);
+  }
+
+  checkDuplicateAttributes(report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const duplicate of this.#attrs.duplicatesByName())
+      report.finding(
+        FD_E1,
+        FindingKind.structureInvalid(),
+        [TargetIdentifiers.safe("attr", `${this.#name.asString()}.${duplicate.name().asString()}`)],
+        [
+          WitnessReference.at(
+            artifact.asString(),
+            `${duplicate.element().asString()}.name`,
+            duplicate.name().asString(),
+          ),
+        ],
+        `attribute "${this.#name.asString()}.${duplicate.name().asString()}" is declared more than once`,
+      );
+  }
+
+  checkAttributes(entities: EntityDeclarations, report: ReferenceCheckReport, artifact: ArtifactPath): void {
+    for (const attribute of this.#attrs) {
+      attribute.checkType(report, this.#name, artifact);
+      attribute.checkBounds(report, this.#name, artifact);
+      attribute.checkReference(entities, report, this.#name, artifact);
+    }
   }
 
   name(): EntityName {

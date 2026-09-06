@@ -1,11 +1,12 @@
-import type {
-  Expression,
-  FunctionalRequirementReferences,
-  ScenarioBindings,
-  ScenarioExpectation,
-  TriggerName,
+import {
+  type Expression,
+  ExpressionTree,
+  type FunctionalRequirementReferences,
+  type ScenarioBindings,
+  type ScenarioExpectation,
+  type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
-import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
+
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
 // 設計シナリオ。accept/reject の意味、binding の正準列挙、BR/FR 帰属を所有する。
 
@@ -76,7 +77,7 @@ export class DesignScenario {
   isReject(): boolean {
     return this.#expectation.isReject();
   }
-  hasEvent(): boolean {
+  hasEventRule(): boolean {
     return this.#eventTrigger !== undefined;
   }
 

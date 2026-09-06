@@ -4,20 +4,15 @@ import {
   EnumerationMembers,
   type Expression,
   IntermediateRepresentationVersion,
+  ObligationNature,
   RequirementIdentifier,
   ScenarioExpectation,
   TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
-import { flatMapResult } from "@deep-spec-analysis/kernel-infrastructure";
-
-// 契約1 IR（生 Json）→ Parameters<typeof RequirementsModel.of>[0] の寛容パース。欠損・型不一致の
-// エントリは黙って落とす（旧 parseIr の凍結挙動——ir-valid センサーが別途
-// 厳密検査を担う）。集約として成立しない形はResultのエラーで返す。
-// 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
-
 import {
   combineResults,
   err,
+  flatMapResult,
   isObject,
   type Json,
   ok,
@@ -25,6 +20,11 @@ import {
   strArr,
   traverseResult,
 } from "@deep-spec-analysis/kernel-infrastructure";
+
+// 契約1 IR（生 Json）→ Parameters<typeof RequirementsModel.of>[0] の寛容パース。欠損・型不一致の
+// エントリは黙って落とす（旧 parseIr の凍結挙動——ir-valid センサーが別途
+// 厳密検査を担う）。集約として成立しない形はResultのエラーで返す。
+// 旧 aidlc-sensor-deep-spec-verify-smt.ts の parseIr からの逐語移植。
 
 import {
   AttributeBound,
@@ -35,7 +35,6 @@ import {
   FunctionalRequirementReferences,
   Obligation,
   ObligationIdentifier,
-  ObligationNature,
   Obligations,
   RequirementAttributeDeclaration,
   RequirementAttributeDeclarations,
