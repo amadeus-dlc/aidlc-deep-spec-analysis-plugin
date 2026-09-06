@@ -4,12 +4,18 @@ import {
   FindingKind,
   type FunctionalRequirementReferences,
   type ScenarioBindings,
+  type ScenarioComparison,
   type ScenarioExpectation,
   SkipReason,
   TargetIdentifiers,
   type TriggerName,
 } from "@deep-spec-analysis/kernel-domain";
-import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
+import {
+  IllegalArgumentException,
+  type ParseError,
+  parseConstruction,
+  type Result,
+} from "@deep-spec-analysis/kernel-infrastructure";
 import type { QuintMachineComponents } from "./quint-machine-components.ts";
 import type { QuintScenarioVerdict } from "./quint-scenario-verdict.ts";
 import type { RequirementsModel } from "./requirements-model.ts";
@@ -57,6 +63,19 @@ export class Scenario {
 
   static of(props: ScenarioParam): Scenario {
     return new Scenario(props);
+  }
+
+  crossCheckFinding(comparison: ScenarioComparison): VerificationFinding | null {
+    if (!comparison.isFor(this.#id.asTargetId(), null))
+      throw new IllegalArgumentException({ kind: "different-cross-check-subject" });
+    if (!comparison.disagrees()) return null;
+    return VerificationFinding.of({
+      kind: FindingKind.crossCheckDisagreement(),
+      functionalRequirementReferences: this.#functionalRequirementReferences.sortedUnique(),
+      targets: TargetIdentifiers.of([this.#id.asTargetId()]),
+      witness: VerificationWitness.verdicts(comparison.toVerdictTable()),
+      detail: `${comparison.description()} disagree on scenario ${this.#id.asString()}. This signals a defect in the formalization or in a backend compiler, not in the requirements themselves.`,
+    });
   }
 
   id(): ScenarioIdentifier {

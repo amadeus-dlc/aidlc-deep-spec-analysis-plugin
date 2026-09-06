@@ -1,5 +1,6 @@
 import {
   ArtifactPath,
+  BackendName,
   ContentHash,
   EnumerationMember,
   EnumerationMembers,
@@ -13,7 +14,9 @@ import {
   ObligationNature,
   QueryLabel,
   RequirementIdentifier,
+  ScenarioComparison,
   ScenarioExpectation,
+  ScenarioVerdict,
   SkipReason,
   TargetIdentifier,
   TargetIdentifiers,
@@ -781,6 +784,24 @@ describe("cross-check computation", () => {
       { backend: "quint", targets: ["SC-2"] },
       { backend: "smt", targets: ["SC-2"] },
     ]);
+  });
+
+  test("同じバックエンドの重複報告を合意や不一致として公開しない", () => {
+    const duplicate = VerificationReports.of([sibling("smt", {}), sibling("smt", { violated: ["SC-1"] })]).crossChecked(
+      id,
+      m,
+      ContentHash.ofText("h1"),
+    );
+    expect(duplicate.isUnavailable()).toBe(true);
+    expect(duplicate.unavailableReason()).toContain("duplicate-scenario-backend");
+    expect(duplicate.findingsCount()).toBe(0);
+    const scenario = [...m.scenarios()][0];
+    const other = TargetIdentifier.of("SC-9");
+    const comparison = ScenarioComparison.of(
+      ScenarioVerdict.clean(BackendName.of("smt"), other, null),
+      ScenarioVerdict.violated(BackendName.of("quint"), other, null),
+    );
+    expect(() => scenario.crossCheckFinding(comparison)).toThrow("different-cross-check-subject");
   });
 
   test("fewer than two comparable documents produce an empty cross-check", () => {

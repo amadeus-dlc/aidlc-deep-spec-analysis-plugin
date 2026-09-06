@@ -28,6 +28,8 @@ import {
   AttributeName,
   AttributeNames,
   CardinalityNotation,
+  CheckFamilies,
+  CheckFamily,
   ComponentName,
   DeclaredEntities,
   DeclaredRuleIdentifier,
@@ -39,6 +41,8 @@ import {
   LineNumber,
   MachineSpecification,
   NumericBound,
+  ReferenceCheckReport,
+  ReferenceCheckReportIdentifier,
   RelationshipDeclaration,
   RelationshipDeclarations,
   RuleCategory,
@@ -300,8 +304,13 @@ describe("declarations own their state", () => {
     const rule = RuleDeclaration.of(seed);
     missing.push("statement");
     seed.id = DeclaredRuleIdentifier.of("BR2.1");
-    expect(rule.missing()).toEqual([]);
-    expect(rule.id()?.asString()).toBe("BR1.1");
+    const output = ReferenceCheckReport.open(
+      ReferenceCheckReportIdentifier.of(ArtifactPath.of("/review"), "functional-design"),
+      CheckFamilies.of([CheckFamily.of("FD-R1")]),
+    );
+    rule.checkRequiredKeys(output, ArtifactPath.of("rules.md"));
+    expect(output.findingsCount()).toBe(0);
+    expect(rule.identifierForUniqueness()?.asString()).toBe("BR1.1");
   });
 
   test("entity declarations and sketches keep their captured identities", () => {
@@ -333,7 +342,22 @@ describe("declarations own their state", () => {
     };
     const machine = StateMachineSketch.of(seed);
     seed.unsupported = "changed";
-    expect(machine.unsupported()).toBeNull();
+    const output = ReferenceCheckReport.open(
+      ReferenceCheckReportIdentifier.of(ArtifactPath.of("/review"), "functional-design"),
+      CheckFamilies.of([CheckFamily.of("FD-S1"), CheckFamily.of("FD-S2")]),
+    );
+    machine.check(
+      output,
+      ArtifactPath.of("spec.md"),
+      ArtifactPath.of("entities.md"),
+      DeclaredEntities.of({
+        entities: EntityDeclarations.of([]),
+        rels: RelationshipDeclarations.of([]),
+        shapeErrors: ShapeErrors.of([]),
+      }),
+    );
+    expect(output.skippedCount()).toBe(0);
+    expect(output.findingsCount()).toBe(1);
     const declaredSeed = {
       entities: EntityDeclarations.of([]),
       rels: RelationshipDeclarations.of([]),

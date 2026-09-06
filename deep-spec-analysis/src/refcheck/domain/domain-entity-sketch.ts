@@ -1,6 +1,11 @@
+import { type ArtifactPath, FindingKind, TargetIdentifiers, type UnitName } from "@deep-spec-analysis/kernel-domain";
 import type { AttributeNames } from "./attribute-names.ts";
 import type { ComponentName } from "./component-name.ts";
 import type { EntityName } from "./entity-name.ts";
+import { XS_1, XS_2, XS_3 } from "./functional-check-families.ts";
+import type { ReferenceCheckReport } from "./reference-check-report.ts";
+import type { SiblingUnitIndex } from "./sibling-unit-index.ts";
+import { WitnessReference } from "./witness-reference.ts";
 
 // domain-design 側エンティティの素描。functional-design 側との被覆差分と
 // カタログ位置ラベル（凍結書式）を所有する。
@@ -24,6 +29,58 @@ export class DomainEntitySketch {
 
   static of(seed: DomainEntitySketchParam): DomainEntitySketch {
     return new DomainEntitySketch(seed);
+  }
+
+  checkAgainst(
+    unitEntities: SiblingUnitIndex,
+    unit: UnitName | undefined,
+    report: ReferenceCheckReport,
+    componentsArtifact: ArtifactPath,
+  ): void {
+    const compArt = componentsArtifact.asString();
+    const key = this.#name.normalized();
+    const definers = unitEntities.definersOf(key).toArray();
+    if (definers.length >= 2) {
+      report.finding(
+        XS_1,
+        FindingKind.consistencyMismatch(),
+        [TargetIdentifiers.safe("entity", this.#name.asString())],
+        [
+          WitnessReference.at(compArt, this.catalogLabel()),
+          ...definers.map((u) =>
+            WitnessReference.at(
+              `construction/${u.asString()}/functional-design/entities.md`,
+              `entity ${this.#name.asString()}`,
+            ),
+          ),
+        ],
+        `domain entity "${this.#name.asString()}" is defined in ${definers.length} units (${definers.map((unit) => unit.asString()).join(", ")}) — ownership is duplicated`,
+      );
+    } else if (definers.length === 0 && unitEntities.hasAnyUnit()) {
+      report.finding(
+        XS_2,
+        FindingKind.consistencyMismatch(),
+        [TargetIdentifiers.safe("entity", this.#name.asString())],
+        [WitnessReference.at(compArt, this.catalogLabel())],
+        `domain entity "${this.#name.asString()}" is defined in no unit's entities.md — it was dropped on the way to functional design`,
+      );
+    }
+    // XS-3: 属性の取り落としは素描が自分で告げる（このユニットの定義に対してのみ）。
+    if (unit !== undefined) {
+      const mine = unitEntities.entityDeclaredIn(unit, key);
+      if (mine) {
+        const dropped = this.attributesDroppedIn(mine.attributeNames());
+        if (dropped.length > 0) {
+          report.finding(
+            XS_3,
+            FindingKind.consistencyMismatch(),
+            [TargetIdentifiers.safe("entity", this.#name.asString())],
+            dropped.map((a) => WitnessReference.at(compArt, `entity ${this.#name.asString()}.attributes`, a)),
+            `domain-design declares attribute(s) ${dropped.join(", ")} on "${this.#name.asString()}" that this unit's entities.md does not carry`,
+          );
+        }
+      }
+    }
   }
 
   name(): EntityName {

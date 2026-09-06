@@ -1,4 +1,5 @@
 import type { ArtifactPath, UnitName } from "@deep-spec-analysis/kernel-domain";
+import type { ParseError, Result } from "@deep-spec-analysis/kernel-infrastructure";
 import type { DomainEntitySketches } from "./domain-entity-sketches.ts";
 import { XS_1, XS_2, XS_3 } from "./functional-check-families.ts";
 import type { ReferenceCheckReport } from "./reference-check-report.ts";
@@ -54,7 +55,7 @@ export class DomainEntitiesOutcome {
   check(
     report: ReferenceCheckReport,
     componentsArtifact: ArtifactPath,
-    siblingUnits: SiblingUnitIndex,
+    siblingUnits: Result<SiblingUnitIndex, ParseError>,
     unit: UnitName | undefined,
   ): void {
     this.match<void>({
@@ -69,7 +70,12 @@ export class DomainEntitiesOutcome {
         }
       },
       extracted: (domainEntities) => {
-        domainEntities.check(report, componentsArtifact, siblingUnits, unit);
+        if (!siblingUnits.ok) {
+          for (const family of [XS_1, XS_2, XS_3])
+            report.skip(family, "unrecognized-format", `sibling unit index is unusable (${siblingUnits.error.kind})`);
+          return;
+        }
+        domainEntities.check(report, componentsArtifact, siblingUnits.value, unit);
       },
     });
   }

@@ -4,7 +4,6 @@
 // Repository port の Result で運び、この集約の正当な状態に混ぜない。
 
 import { SkipReason, UnitName } from "@deep-spec-analysis/kernel-domain";
-import { DesignInputAnchors } from "./design-input-anchors.ts";
 import type { DesignModel } from "./design-model.ts";
 import { DesignSkipped } from "./design-skipped.ts";
 import { DesignSkips } from "./design-skips.ts";
@@ -100,7 +99,7 @@ export class RefinementMaterials {
               }),
             );
         }
-        return RefinementPreparation.of(plans, skipped, DesignInputAnchors.of(inputs));
+        return RefinementPreparation.of(plans, skipped, inputs);
       },
     });
   }

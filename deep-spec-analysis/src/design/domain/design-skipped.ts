@@ -38,6 +38,10 @@ export class DesignSkipped {
     return this.#detail;
   }
 
+  appliesTo(unit: UnitName, target: TargetIdentifier): boolean {
+    return this.#unit.equals(unit) && this.isFor(target);
+  }
+
   isFor(target: TargetIdentifier): boolean {
     return this.#target.equals(target);
   }

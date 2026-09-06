@@ -40,6 +40,7 @@ import {
   AttributeMappings,
   AttributePath,
   DesignInputAnchor,
+  DesignInputAnchors,
   DesignUnitIdentifier,
   EventMapping,
   EventMappings,
@@ -262,7 +263,7 @@ export class RefinementMaterialsRepositoryImplementation implements RefinementMa
         sha256: ContentHash.ofText(Buffer.from(requirementsBytes).toString("utf-8")),
       }),
     ];
-    return ok(RefinementMapAcquisition.loaded(parsed.map, ArtifactPath.of(mapArtifact), inputs));
+    return ok(RefinementMapAcquisition.loaded(parsed.map, ArtifactPath.of(mapArtifact), DesignInputAnchors.of(inputs)));
   }
 }
 

@@ -2,6 +2,8 @@ import {
   ContentHash,
   FindingKind,
   FunctionalRequirementReferences,
+  KeyedIndex,
+  NormalizedName,
   RequirementIdentifier,
   SkipReason,
   TargetIdentifier,
@@ -202,8 +204,8 @@ describe("functional-design vocabulary domain primitives", () => {
 
     const spec = MachineSpecification.of("Order.status");
     expect(spec.entityToken().asString()).toBe("Order");
-    expect(spec.attributeToken()).toBe("status");
-    expect(MachineSpecification.of("Order").attributeToken()).toBe(undefined);
+    expect(spec.attributeToken()?.asString()).toBe("status");
+    expect(MachineSpecification.of("Order").attributeToken()).toBe(null);
     expect(spec.asString()).toBe("Order.status");
 
     const numDef = AttributeDefault.of(5);
@@ -315,7 +317,7 @@ describe("first-class collections", () => {
     const attrs = AttributeDeclarations.of([attr("status", ["open"]), attr("qty"), attr("status")]);
     expect(attrs.names().map((n) => n.asString())).toEqual(["status", "qty", "status"]);
     expect(attrs.duplicatesByName().map((a) => a.name().asString())).toEqual(["status"]);
-    expect(attrs.named("qty")?.name().asString()).toBe("qty");
+    expect(attrs.named(AttributeName.of("qty"))?.name().asString()).toBe("qty");
     expect(attrs.lifecycleAttr()?.name().asString()).toBe("status");
 
     const decls = EntityDeclarations.of([entity("Order"), entity("Order")]);
@@ -337,18 +339,18 @@ describe("first-class collections", () => {
     expect(rels.toArray().length).toBe(1);
 
     const index = SiblingUnitIndex.of(
-      new Map([
-        [
-          "u1",
-          new Map([["order", { name: EntityName.of("Order"), attrs: AttributeNames.of([AttributeName.of("qty")]) }]]),
-        ],
-      ]),
+      KeyedIndex.of([[UnitName.of("u1"), EntityDeclarations.of([entity("Order", [attr("qty")])])]]),
     );
     expect(index.hasAnyUnit()).toBe(true);
-    expect(index.definersOf("order")).toEqual(["u1"]);
-    expect(index.entityDeclaredIn("u1", "order")?.name.asString()).toBe("Order");
-    expect(index.entityDeclaredIn("u9", "order")).toBe(undefined);
-    expect(SiblingUnitIndex.of(new Map()).hasAnyUnit()).toBe(false);
+    expect(
+      index
+        .definersOf(NormalizedName.of("order"))
+        .toArray()
+        .map((unit) => unit.asString()),
+    ).toEqual(["u1"]);
+    expect(index.entityDeclaredIn(UnitName.of("u1"), NormalizedName.of("order"))?.name().asString()).toBe("Order");
+    expect(index.entityDeclaredIn(UnitName.of("u9"), NormalizedName.of("order"))).toBe(undefined);
+    expect(SiblingUnitIndex.of(KeyedIndex.empty()).hasAnyUnit()).toBe(false);
 
     const sketches = DomainEntitySketches.of([
       DomainEntitySketch.of({

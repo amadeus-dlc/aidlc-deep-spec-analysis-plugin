@@ -1,5 +1,11 @@
-import { type ArtifactPath, FindingKind, TargetIdentifiers } from "@deep-spec-analysis/kernel-domain";
+import {
+  type ArtifactPath,
+  type ErrorMessage,
+  FindingKind,
+  TargetIdentifiers,
+} from "@deep-spec-analysis/kernel-domain";
 import type { DeclaredEntities } from "./declared-entities.ts";
+import type { EntityDeclaration } from "./entity-declaration.ts";
 import { FD_S1, FD_S2 } from "./functional-check-families.ts";
 import type { LineNumber } from "./line-number.ts";
 import type { MachineSpecification } from "./machine-specification.ts";
@@ -16,38 +22,38 @@ type StateMachineSketchParam = {
   readonly unsupported: string | null; // 文言材料（理由のプローズ）
 };
 
-export class StateMachineSketch {
-  readonly #spec: MachineSpecification;
-  readonly #states: StateNames;
-  readonly #fenceLine: LineNumber;
-  readonly #unsupported: string | null;
+type StateMachineSketchState =
+  | { readonly kind: "declared"; readonly declaration: StateMachineSketchParam }
+  | { readonly kind: "unrecognized"; readonly line: LineNumber; readonly reason: ErrorMessage };
 
-  private constructor(seed: StateMachineSketchParam) {
-    this.#spec = seed.spec;
-    this.#states = seed.states;
-    this.#fenceLine = seed.fenceLine;
-    this.#unsupported = seed.unsupported;
+export class StateMachineSketch {
+  readonly #state: StateMachineSketchState;
+
+  private constructor(state: StateMachineSketchState) {
+    this.#state =
+      state.kind === "declared" ? { kind: "declared", declaration: { ...state.declaration } } : { ...state };
   }
 
   static of(seed: StateMachineSketchParam): StateMachineSketch {
-    return new StateMachineSketch(seed);
+    return new StateMachineSketch({ kind: "declared", declaration: seed });
   }
 
-  spec(): MachineSpecification {
-    return this.#spec;
+  static unrecognized(line: LineNumber, reason: ErrorMessage): StateMachineSketch {
+    return new StateMachineSketch({ kind: "unrecognized", line, reason });
   }
 
-  states(): StateNames {
-    return this.#states;
-  }
-
-  unsupported(): string | null {
-    return this.#unsupported;
+  coversLifecycleOf(entity: EntityDeclaration): boolean {
+    if (this.#state.kind === "unrecognized") return false;
+    const specification = this.#state.declaration.spec;
+    return entity.lifecycleIsNamedBy(specification.entityToken(), specification.attributeToken());
   }
 
   // 境界: witness と skip 文言に載る位置ラベル（凍結書式）。
   locationLabel(): string {
-    return `State Machine: ${this.#spec.asString()} (fence line ${this.#fenceLine.asNumber()})`;
+    const state = this.#state;
+    return state.kind === "unrecognized"
+      ? `State Machine heading (line ${state.line.asNumber()})`
+      : `State Machine: ${state.declaration.spec.asString()} (fence line ${state.declaration.fenceLine.asNumber()})`;
   }
 
   // FD-S1／S2 の不変条件（種別規律の裁定 13）: 図の状態は実体のライフサイクル
@@ -59,15 +65,20 @@ export class StateMachineSketch {
     entitiesArtifact: ArtifactPath,
     entities: DeclaredEntities,
   ): void {
+    if (this.#state.kind === "unrecognized") {
+      for (const family of [FD_S1, FD_S2])
+        report.skip(family, "unrecognized-format", `${this.locationLabel()}: ${this.#state.reason.asString()}`);
+      return;
+    }
+    const declaration = this.#state.declaration;
     const specArt = specArtifact.asString();
-    const entitiesArt = entitiesArtifact.asString();
-    const entity = this.spec().entityToken();
+    const entity = declaration.spec.entityToken();
     const entName = entity.asString();
-    const attrName = this.spec().attributeToken();
+    const attrName = declaration.spec.attributeToken();
     const el = this.locationLabel();
-    if (this.unsupported() !== null) {
-      report.skip(FD_S1, "unrecognized-format", `${el}: ${this.unsupported()}`);
-      report.skip(FD_S2, "unrecognized-format", `${el}: ${this.unsupported()}`);
+    if (declaration.unsupported !== null) {
+      report.skip(FD_S1, "unrecognized-format", `${el}: ${declaration.unsupported}`);
+      report.skip(FD_S2, "unrecognized-format", `${el}: ${declaration.unsupported}`);
       return;
     }
     const ent = entities.entities().byNormalizedName(entity.normalized());
@@ -81,7 +92,7 @@ export class StateMachineSketch {
       );
       return;
     }
-    const attr = attrName !== undefined ? ent.attrNamed(attrName) : ent.lifecycleAttr();
+    const attr = ent.lifecycleAttribute(attrName);
     if (!attr?.hasAllowedValues()) {
       report.skip(
         FD_S1,
@@ -95,27 +106,6 @@ export class StateMachineSketch {
       );
       return;
     }
-    // FD-S1/S2: 図と allowed の差分は属性宣言が自分で告げる。
-    const attrId = TargetIdentifiers.safe("attr", `${ent.name().asString()}.${attr.name().asString()}`);
-    const rogue = attr.rogueDiagramStates(this.states());
-    if (rogue.length > 0) {
-      report.finding(
-        FD_S1,
-        FindingKind.consistencyMismatch(),
-        [attrId],
-        rogue.map((v) => WitnessReference.at(specArt, el, v)),
-        `diagram state(s) ${rogue.join(", ")} are not allowed values of ${ent.name().asString()}.${attr.name().asString()} in entities.md`,
-      );
-    }
-    const dangling = attr.allowedValuesAbsentFrom(this.states());
-    if (dangling.length > 0) {
-      report.finding(
-        FD_S2,
-        FindingKind.consistencyMismatch(),
-        [attrId],
-        dangling.map((v) => WitnessReference.at(entitiesArt, attr.element().asString(), v)),
-        `allowed value(s) ${dangling.join(", ")} of ${ent.name().asString()}.${attr.name().asString()} appear in no diagram state`,
-      );
-    }
+    attr.checkDiagramStates(declaration.states, report, ent.name(), specArtifact, entitiesArtifact, el);
   }
 }

@@ -42,8 +42,8 @@ export class AttributeDeclarations {
     return withAllowed.length === 1 ? (withAllowed[0] ?? null) : null;
   }
 
-  named(token: string): AttributeDeclaration | null {
-    return this.#values.find((a) => a.name().asString() === token) ?? null;
+  named(name: AttributeName): AttributeDeclaration | null {
+    return this.#values.find((a) => a.name().equals(name)) ?? null;
   }
 
   names(): AttributeName[] {

@@ -1,8 +1,8 @@
 import type { Expression } from "@deep-spec-analysis/kernel-domain";
-import { ExpressionTree } from "@deep-spec-analysis/kernel-domain";
+import { ErrorMessage, ErrorMessages, ExpressionTree } from "@deep-spec-analysis/kernel-domain";
 import { type ParseError, parseConstruction, type Result } from "@deep-spec-analysis/kernel-infrastructure";
-
 import type { BusinessRuleReferences } from "./business-rule-references.ts";
+import type { DesignAttributeCatalog } from "./design-attribute-catalog.ts";
 import type { DesignObligationIdentifier } from "./design-obligation-identifier.ts";
 import type { DesignObligationOrigin } from "./design-obligation-origin.ts";
 
@@ -58,6 +58,19 @@ export class DesignObligationDeclaration {
     return new DesignObligationDeclaration(props);
   }
 
+  diagnostics(catalog: DesignAttributeCatalog | null): ErrorMessages {
+    const context = `obligation ${this.#id.asString()}`;
+    const errors: string[] = [];
+    if (this.#origin?.isRules() === true && this.#businessRuleReferences === undefined)
+      errors.push(`${context}: origin "rules" requires brRefs`);
+    if (catalog !== null)
+      this.#inspectExpressions((expression, primesAllowed) => {
+        for (const message of catalog.expressionDiagnostics(expression, context, primesAllowed))
+          errors.push(message.asString());
+      });
+    return ErrorMessages.collect(errors.map(ErrorMessage.parse));
+  }
+
   id(): DesignObligationIdentifier {
     return this.#id;
   }
@@ -65,11 +78,7 @@ export class DesignObligationDeclaration {
     return this.#businessRuleReferences;
   }
 
-  missesRequiredBusinessRuleReferences(): boolean {
-    return this.#origin?.isRules() === true && this.#businessRuleReferences === undefined;
-  }
-
-  inspectExpressions(visitor: (expression: Expression, primesAllowed: boolean) => void): void {
+  #inspectExpressions(visitor: (expression: Expression, primesAllowed: boolean) => void): void {
     if (this.#assert !== undefined) visitor(this.#assert, false);
     if (this.#guard !== undefined) visitor(this.#guard, false);
     if (this.#effect !== undefined) visitor(this.#effect, true);
